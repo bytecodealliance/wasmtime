@@ -34,7 +34,8 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.mathjax',
     'sphinx.ext.ifconfig',
-    'cton_domain'
+    'cton_domain',
+    'cton_lexer',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
