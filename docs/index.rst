@@ -15,3 +15,7 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 
+Todo list
+=========
+
+.. todolist::
