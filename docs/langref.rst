@@ -21,61 +21,52 @@ multiple functions, and the programmatic API can create multiple function
 handles at the same time, but the functions don't share any data or reference
 each other directly.
 
-This is a C function that computes the average of an array of floats:
+This is a simple C function that computes the average of an array of floats:
 
-.. code-block:: c
+.. literalinclude:: example.c
+    :language: c
 
-    float average(const float *array, size_t count) {
-        double sum = 0;
-        for (size_t i = 0; i < count; i++)
-            sum += array[i];
-        return sum / count;
-    }
+Here is the same function compiled into Cretonne IL:
 
-Here it is compiled into Cretonne IL::
+.. literalinclude:: example.cton
+    :language: cton
+    :linenos:
+    :emphasize-lines: 2
 
-    function average(i32, i32) -> f32 {
-        ; Preamble.
-        ss1 = local 8, align 4
+The first line of a function definition provides the function *name* and
+the :term:`function signature` which declares the argument and return types.
+Then follows the :term:`function preample` which declares a number of entities
+that can be referenced inside the function. In the example above, the preample
+declares a single local variable, ``ss1``.
 
-    entry ebb1(v1: i32, v2: i32):
-        v3 = fconst.f64 0.0
-        stack_store v3, ss1
-        brz v2, ebb3              ; Handle count == 0.
-        v4 = iconst.i32 0
-        br ebb2(v4)
+After the preample follows the :term:`function body` which consists of
+:term:`extended basic block`\s, one of which is marked as the :term:`entry
+block`. Every EBB ends with a :term:`terminator instruction`, and execution
+can never fall through to the next EBB without an explicit branch.
 
-    ebb2(v5: i32):
-        ; Compute address of array element.
-        v6 = imul_imm v5, 4
-        v7 = iadd v1, v6
-        v8 = heap_load.f32 v7     ; array[i]
-        v9 = fext.f64 v8
-        ; Add to accumulator in ss1.
-        v10 = stack_load.f64 ss1
-        v11 = fadd v9, v10
-        stack_store v11, ss1
-        ; Increment loop counter.
-        v12 = iadd_imm v5, 1
-        v13 = icmp ult v12, v2
-        brnz v13, ebb2(v12)       ; Loop backedge.
-        ; Compute average from sum.
-        v14 = stack_load.f64 ss1
-        v15 = cvt_utof.f64 v2
-        v16 = fdiv v14, v15
-        v17 = ftrunc.f32 v16
-        return v17
+Static single assignment form
+-----------------------------
 
-    ebb3:
-        v100 = fconst.f32 0x7f800000 ; Inf
-        return v100
-    }
-        
+The instructions in the function body use and produce *values* in SSA form. This
+means that every value is defined exactly once, and every use of a value must be
+dominated by the definition.
 
+Cretonne does not have phi instructions but uses *EBB arguments* instead. An EBB
+can be defined with a list of typed arguments. Whenever control is transferred
+to the EBB, values for the arguments must be provided. When entering a function,
+the incoming function arguments are passed as arguments to the entry EBB.
 
-Type system
+Instructions define zero, one, or more result values. All SSA values are either
+EBB arguments or instruction results.
+
+In the example above, the loop induction variable ``i`` is represented as three
+SSA values: In the entry block, ``v4`` is the initial value. In the loop block
+``ebb2``, the EBB argument ``v5`` represents the value of the induction
+variable during each iteration. Finally, ``v12`` is computed as the induction
+variable value for the next iteration.
+
+Value types
 ===========
-
 
 All SSA values have a type which determines the size and shape (for SIMD
 vectors) of the value. Many instructions are polymorphic -- they can operate on
@@ -653,3 +644,66 @@ Conversion operations
 .. inst:: a = cvt_utof x
 .. inst:: a = cvt_stof x
 
+Glossary
+========
+
+.. glossary::
+
+    function signature
+        A function signature describes how to call a function. It consists of:
+
+        - The calling convention.
+        - The number of arguments and return values. (Functions can return
+          multiple values.)
+        - Type and flags of each argument.
+        - Type and flags of each return value.
+
+        Not all function atributes are part of the signature. For example, a
+        function that never returns could be marked as ``noreturn``, but that
+        is not necessary to know when calling it, so it is just an attribute,
+        and not part of the signature.
+
+    function preample
+        A list of declarations of entities that are used by the function body.
+        Some of the entities that can be declared in the preample are:
+
+        - Local variables.
+        - Functions that are called directly.
+        - Function signatures for indirect function calls.
+        - Function flags and attributes that are not part of the signature.
+
+    basic block
+        A maximal sequence of instructions that can only be entered from the
+        top, and that contains no branch or terminator instructions except for
+        the last instruction.
+
+    extended basic block
+    EBB
+        A maximal sequence of instructions that can only be entered from the
+        top, and that contains no :term:`terminator instruction`s except for
+        the last one. An EBB can contain conditional branches that can fall
+        through to the following instructions in the block, but only the first
+        instruction in the EBB can be a branch target.
+
+        The last instrution in an EBB must be a :term:`terminator instruction`,
+        so execion cannot flow through to the next EBB in the function. (But
+        there may be a branch to the next EBB.)
+
+        Note that some textbooks define an EBB as a maximal *subtree* in the
+        control flow graph where only the root can be a join node. This
+        definition is not equivalent to Cretonne EBBs.
+
+    terminator instruction
+        A control flow instruction that unconditionally directs the flow of
+        execution somewhere else. Execution never continues at the instruction
+        following a terminator instruction.
+
+        The basic terminator instructions are :inst:`br`, :inst:`return`, and
+        :inst:`trap`. Conditional branches and instructions that trap
+        conditionally are not terminator instructions.
+
+    entry block
+        The :term:`EBB` that is executed first in a function. Currently, a
+        Cretonne function must have exactly one entry block. The types of the
+        entry block arguments must match the types of arguments in the function
+        signature.
