@@ -2,10 +2,80 @@
 Cretonne Intermediate Language Reference
 ****************************************
 
+.. default-domain:: cton
+.. highlight:: cton
+
+The Cretonne intermediate language has two equivalent representations: an
+*in-memory data structure* that the code generator library is using, and
+a *text format* which is used for test cases and debug output. Files containing
+Cretonne textual IL have the ``.cton`` filename extension.
+
+This reference uses the text format to describe IL semantics but glosses over
+the details of the lexical and syntactic structure of the test format.
+
+Overall structure
+=================
+
+Cretonne compiles functions independently. A ``.cton`` IL file may contain
+multiple functions, and the programmatic API can create multiple function
+handles at the same time, but the functions don't share any data or reference
+each other directly.
+
+This is a C function that computes the average of an array of floats:
+
+.. code-block:: c
+
+    float average(const float *array, size_t count) {
+        double sum = 0;
+        for (size_t i = 0; i < count; i++)
+            sum += array[i];
+        return sum / count;
+    }
+
+Here it is compiled into Cretonne IL::
+
+    function average(i32, i32) -> f32 {
+        ; Preamble.
+        ss1 = local 8, align 4
+
+    entry ebb1(v1: i32, v2: i32):
+        v3 = fconst.f64 0.0
+        stack_store v3, ss1
+        brz v2, ebb3              ; Handle count == 0.
+        v4 = iconst.i32 0
+        br ebb2(v4)
+
+    ebb2(v5: i32):
+        ; Compute address of array element.
+        v6 = imul_imm v5, 4
+        v7 = iadd v1, v6
+        v8 = heap_load.f32 v7     ; array[i]
+        v9 = fext.f64 v8
+        ; Add to accumulator in ss1.
+        v10 = stack_load.f64 ss1
+        v11 = fadd v9, v10
+        stack_store v11, ss1
+        ; Increment loop counter.
+        v12 = iadd_imm v5, 1
+        v13 = icmp ult v12, v2
+        brnz v13, ebb2(v12)       ; Loop backedge.
+        ; Compute average from sum.
+        v14 = stack_load.f64 ss1
+        v15 = cvt_utof.f64 v2
+        v16 = fdiv v14, v15
+        v17 = ftrunc.f32 v16
+        return v17
+
+    ebb3:
+        v100 = fconst.f32 0x7f800000 ; Inf
+        return v100
+    }
+        
+
+
 Type system
 ===========
 
-.. default-domain:: cton
 
 All SSA values have a type which determines the size and shape (for SIMD
 vectors) of the value. Many instructions are polymorphic -- they can operate on
