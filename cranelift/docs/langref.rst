@@ -11,7 +11,8 @@ a *text format* which is used for test cases and debug output. Files containing
 Cretonne textual IL have the ``.cton`` filename extension.
 
 This reference uses the text format to describe IL semantics but glosses over
-the details of the lexical and syntactic structure of the test format.
+the finer details of the lexical and syntactic structure of the format.
+
 
 Overall structure
 =================
@@ -41,8 +42,8 @@ declares a single local variable, ``ss1``.
 
 After the preample follows the :term:`function body` which consists of
 :term:`extended basic block`\s, one of which is marked as the :term:`entry
-block`. Every EBB ends with a :term:`terminator instruction`, and execution
-can never fall through to the next EBB without an explicit branch.
+block`. Every EBB ends with a :term:`terminator instruction`, so execution can
+never fall through to the next EBB without an explicit branch.
 
 Static single assignment form
 -----------------------------
@@ -64,6 +65,20 @@ SSA values: In the entry block, ``v4`` is the initial value. In the loop block
 ``ebb2``, the EBB argument ``v5`` represents the value of the induction
 variable during each iteration. Finally, ``v12`` is computed as the induction
 variable value for the next iteration.
+
+It can be difficult to generate correct SSA form if the program being converted
+into Cretonne IL contains multiple assignments to the same variables. Such
+variables can be presented to Cretonne as :term:`stack slot`\s instead. Stack
+slots are accessed with the :inst:`stack_store` and :inst:`stack_load`
+instructions which behave more like variable accesses in a typical programming
+language. Cretonne can perform the necessary dataflow analysis to convert stack
+slots to SSA form.
+
+If all values are only used in the same EBB where they are defined, the
+function is said to be in :term:`local SSA form`. It is much faster for
+Cretonne to verify the correctness of a function in local SSA form since no
+complicated control flow analysis is required.
+
 
 Value types
 ===========
@@ -180,7 +195,7 @@ Control flow
 .. inst:: brz x, EBB(args...)
 
     Branch when zero.
-    
+
     If ``x`` is a :type:`bool` value, take the branch when ``x`` is false. If
     ``x`` is an integer value, take the branch when ``x = 0``.
 
@@ -191,7 +206,7 @@ Control flow
 .. inst:: brnz x, EBB(args...)
 
     Branch when non-zero.
-    
+
     If ``x`` is a :type:`bool` value, take the branch when ``x`` is true. If
     ``x`` is an integer value, take the branch when ``x != 0``.
 
@@ -776,3 +791,20 @@ Glossary
         Cretonne function must have exactly one entry block. The types of the
         entry block arguments must match the types of arguments in the function
         signature.
+
+    stack slot
+        A fixed size memory allocation in the current function's activation
+        frame. Also called a local variable.
+
+    local SSA form
+        A restricted version of SSA form where all values are defined and used
+        in the same EBB. A function is in local SSA form iff it is in SSA form
+        and:
+
+        - No branches pass arguments to their target EBB.
+        - Only the entry EBB may have arguments.
+
+        This also implies that there are no branches to the entry EBB.
+
+        Local SSA form is easy to generate and fast to verify. It passes data
+        between EBBs by using stack slots.
