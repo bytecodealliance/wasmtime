@@ -28,7 +28,7 @@ class CretonneLexer(RegexLexer):
             # Reserved words.
             (keywords('function', 'entry'), Keyword),
             # Known attributes.
-            (keywords('align', 'uext', 'sext', 'inreg'), Name.Attribute),
+            (keywords('align', 'aligntrap', 'uext', 'sext', 'inreg'), Name.Attribute),
             # Well known value types.
             (r'\b(bool|i\d+|f32|f64)(x\d+)?\b', Keyword.Type),
             # v<nn> = value
@@ -38,7 +38,7 @@ class CretonneLexer(RegexLexer):
             (r'(ebb)\d+', Name.Label),
             # Match instruction names in context.
             (r'(=)( *)([a-z]\w*)', bygroups(Operator, Whitespace, Name.Function)),
-            (r'^( +)([a-z]\w*\b)(?! *[,=])', bygroups(Whitespace, Name.Function)),
+            (r'^( *)([a-z]\w*\b)(?! *[,=])', bygroups(Whitespace, Name.Function)),
             # Other names: results and arguments
             (r'[a-z]\w*', Name),
             (r'->|=|:', Operator),
