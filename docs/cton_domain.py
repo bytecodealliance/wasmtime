@@ -57,6 +57,33 @@ class CtonObject(ObjectDescription):
             self.indexnode['entries'].append(('single', indextext,
                                               targetname, ''))
 
+# Type variables are indicated as %T.
+typevar = re.compile('(\%[A-Z])')
+
+def parse_type(name, signode):
+    """
+    Parse a type with embedded type vars and append to signode.
+    
+    Return a a string that can be compiled into a regular expression matching
+    the type.
+    """
+
+    re_str = ''
+
+    for part in typevar.split(name):
+        if part == '':
+            continue
+        if len(part) == 2 and part[0] == '%':
+            # This is a type parameter. Don't display the %, use emphasis
+            # instead.
+            part = part[1]
+            signode += nodes.emphasis(part, part)
+            re_str += r'\w+'
+        else:
+            signode += addnodes.desc_name(part, part)
+            re_str += re.escape(part)
+    return re_str
+
 class CtonType(CtonObject):
     """A Cretonne IL type description."""
 
@@ -68,7 +95,7 @@ class CtonType(CtonObject):
         """
 
         name = sig.strip()
-        signode += addnodes.desc_name(name, name)
+        re_str = parse_type(name, signode)
         return name
 
     def get_index_text(self, name):

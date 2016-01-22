@@ -109,13 +109,13 @@ double-double formats.
 
 .. type:: f32
 
-    A 32-bit floating point type represented in the IEEE 754 *Single precision*
+    A 32-bit floating point type represented in the IEEE 754 *single precision*
     format. This corresponds to the :c:type:`float` type in most C
     implementations.
 
 .. type:: f64
 
-    A 64-bit floating point type represented in the IEEE 754 *Double precision*
+    A 64-bit floating point type represented in the IEEE 754 *double precision*
     format. This corresponds to the :c:type:`double` type in most C
     implementations.
 
@@ -126,40 +126,42 @@ A SIMD vector type represents a vector of values from one of the scalar types
 (:type:`bool`, integer, and floating point). Each scalar value in a SIMD type is
 called a *lane*. The number of lanes must be a power of two in the range 2-256.
 
-.. type:: vNiB
+.. type:: i%Bx%N
 
-    A SIMD vector of integers. The lane type :type:`iB` must be one of the
-    integer types :type:`i8` ... :type:`i64`.
+    A SIMD vector of integers. The lane type :type:`iB` is one of the integer
+    types :type:`i8` ... :type:`i64`.
 
-    Some concrete integer vector types are :type:`v4i32`, :type:`v8i64`, and
-    :type:`v4i16`.
+    Some concrete integer vector types are :type:`i32x4`, :type:`i64x8`, and
+    :type:`i16x4`.
 
     The size of a SIMD integer vector in memory is :math:`N B\over 8` bytes.
 
-.. type:: vNf32
+.. type:: f32x%N
 
     A SIMD vector of single precision floating point numbers.
 
-    Some concrete :type:`f32` vector types are: :type:`v2f32`, :type:`v4f32`,
-    and :type:`v8f32`.
+    Some concrete :type:`f32` vector types are: :type:`f32x2`, :type:`f32x4`,
+    and :type:`f32x8`.
 
     The size of a :type:`f32` vector in memory is :math:`4N` bytes.
 
-.. type:: vNf64
+.. type:: f64x%N
 
     A SIMD vector of double precision floating point numbers.
 
-    Some concrete :type:`f64` vector types are: :type:`v2f64`, :type:`v4f64`,
-    and :type:`v8f64`.
+    Some concrete :type:`f64` vector types are: :type:`f64x2`, :type:`f64x4`,
+    and :type:`f64x8`.
 
     The size of a :type:`f64` vector in memory is :math:`8N` bytes.
 
-.. type:: vNbool
+.. type:: boolx%N
 
     A boolean SIMD vector.
 
-    Like the :type:`bool` type, a boolean vector cannot be stored in memory. It
-    can only be used for ephemeral SSA values.
+    Boolean vectors are used when comparing SIMD vectors. For example,
+    comparing two :type:`i32x4` values would produce a :type:`boolx4` result.
+
+    Like the :type:`bool` type, a boolean vector cannot be stored in memory.
 
 Instructions
 ============
@@ -175,6 +177,9 @@ Control flow instructions
     EBB arguments. The number and types of arguments must match the destination
     EBB.
 
+    :arg EBB: Destination extended basic block.
+    :result: None. This is a terminator instruction.
+
 .. inst:: brz x, EBB(args...)
 
     Branch when zero.
@@ -182,8 +187,9 @@ Control flow instructions
     If ``x`` is a :type:`bool` value, take the branch when ``x`` is false. If
     ``x`` is an integer value, take the branch when ``x = 0``.
 
-    :param iN/bool x: Value to test.
-    :param EBB: Destination extended basic block.
+    :arg iN / bool x: Value to test.
+    :arg EBB: Destination extended basic block.
+    :result: None.
 
 .. inst:: brnz x, EBB(args...)
 
@@ -192,14 +198,12 @@ Control flow instructions
     If ``x`` is a :type:`bool` value, take the branch when ``x`` is true. If
     ``x`` is an integer value, take the branch when ``x != 0``.
 
-    :param iN/bool x: Value to test.
-    :param EBB: Destination extended basic block.
+    :arg iN / bool x: Value to test.
+    :arg EBB: Destination extended basic block.
+    :result: None.
 
 Special operations
 ==================
-
-Most operations are easily classified as arithmetic or control flow. These
-instructions are not so easily classified.
 
 .. inst:: a = iconst n
 
@@ -217,13 +221,13 @@ instructions are not so easily classified.
 
     Conditional select.
 
-    :param c bool: Controlling flag.
-    :param x: Value to return when ``c`` is true.
-    :param y: Value to return when ``c`` is false. Must be same type as ``x``.
-    :rtype: Same type as ``x`` and ``y``.
+    :arg bool c: Controlling flag.
+    :arg T x: Value to return when ``c`` is true.
+    :arg T y: Value to return when ``c`` is false. Must be same type as ``x``.
+    :rtype: T. Same type as ``x`` and ``y``.
 
-    This instruction selects whole values. Use :inst:`vselect` for
-    lane-wise selection.
+    This instruction selects whole values. Use :inst:`vselect` for lane-wise
+    selection.
 
 Vector operations
 =================
@@ -235,7 +239,7 @@ Vector operations
     Select lanes from ``x`` or ``y`` controlled by the lanes of the boolean
     vector ``c``.
 
-    :arg vNbool c: Controlling flag vector.
+    :arg boolx%N c: Controlling flag vector.
     :arg x: Vector with lanes selected by the true lanes of ``c``.
               Must be a vector type with the same number of lanes as ``c``.
     :arg y: Vector with lanes selected by the false lanes of ``c``.
@@ -277,7 +281,7 @@ Integer operations
 
     :param cond: Condition code determining how ``x`` and ``y`` are compared.
     :param x, y: Integer scalar or vector values of the same type.
-    :rtype: :type:`bool` or :type:`vNbool` with the same number of lanes as
+    :rtype: :type:`bool` or :type:`boolxN` with the same number of lanes as
             ``x`` and ``y``.
 
     The condition code determines if the operands are interpreted as signed or
@@ -385,25 +389,25 @@ Bitwise operations
 
     Bitwise and.
 
-    :rtype: bool, iB, vNiB, vNfB?
+    :rtype: bool, iB, iBxN, fBxN?
 
 .. inst:: a = or x, y
 
     Bitwise or.
 
-    :rtype: bool, iB, vNiB, vNfB?
+    :rtype: bool, iB, iBxN, fBxN?
 
 .. inst:: a = xor x, y
 
     Bitwise xor.
 
-    :rtype: bool, iB, vNiB, vNfB?
+    :rtype: bool, iB, iBxN, fBxN?
 
 .. inst:: a = not x
 
     Bitwise not.
 
-    :rtype: bool, iB, vNiB, vNfB?
+    :rtype: bool, iB, iBxN, fBxN?
 
 .. todo:: Redundant bitwise operators.
 
@@ -538,7 +542,7 @@ Floating point operations
 
     :param cond: Condition code determining how ``x`` and ``y`` are compared.
     :param x, y: Floating point scalar or vector values of the same type.
-    :rtype: :type:`bool` or :type:`vNbool` with the same number of lanes as
+    :rtype: :type:`bool` or :type:`boolxN` with the same number of lanes as
             ``x`` and ``y``.
 
     An 'ordered' condition code yields ``false`` if either operand is Nan.
@@ -672,6 +676,10 @@ Glossary
         - Function signatures for indirect function calls.
         - Function flags and attributes that are not part of the signature.
 
+    function body
+        The extended basic blocks which contain all the executable code in a
+        function. The function body follows the function preample.
+
     basic block
         A maximal sequence of instructions that can only be entered from the
         top, and that contains no branch or terminator instructions except for
@@ -680,7 +688,7 @@ Glossary
     extended basic block
     EBB
         A maximal sequence of instructions that can only be entered from the
-        top, and that contains no :term:`terminator instruction`s except for
+        top, and that contains no :term:`terminator instruction`\s except for
         the last one. An EBB can contain conditional branches that can fall
         through to the following instructions in the block, but only the first
         instruction in the EBB can be a branch target.
