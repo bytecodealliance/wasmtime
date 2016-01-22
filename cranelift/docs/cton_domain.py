@@ -19,7 +19,7 @@ from sphinx.directives import ObjectDescription
 from sphinx.domains import Domain, ObjType
 from sphinx.locale import l_, _
 from sphinx.roles import XRefRole
-from sphinx.util.docfields import Field, TypedField
+from sphinx.util.docfields import Field, GroupedField, TypedField
 from sphinx.util.nodes import make_refnode
 
 class CtonObject(ObjectDescription):
@@ -120,6 +120,7 @@ class CtonInst(CtonObject):
         TypedField('result', label=l_('Results'),
                    names=('out', 'result'),
                    typerolename='type', typenames=('type',)),
+        GroupedField('flag', names=('flag',), label=l_('Flags')),
         Field('resulttype', label=l_('Result type'), has_arg=False,
               names=('rtype',)),
     ]

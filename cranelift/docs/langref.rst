@@ -390,6 +390,130 @@ Indirect function calls use a signature declared in the preample.
     :inst:`br_table`.
 
 
+Memory
+======
+
+Cretonne provides fully general :inst:`load` and :inst:`store` instructions for
+accessing memory. However, it can be very complicated to verify the safety of
+general loads and stores when compiling code for a sandboxed environment, so
+Cretonne also provides more restricted memory operations that are always safe.
+
+.. inst:: a = load p, Offset, Flags...
+
+    Load from memory at ``p + Offset``.
+
+    This is a polymorphic instruction that can load any value type which has a
+    memory representation (i.e., everything except :type:`bool` and boolean
+    vectors).
+
+    :arg iPtr p: Base address.
+    :arg Offset: Immediate signed offset.
+    :flag align(N): Expected alignment of ``p + Offset``. Power of two.
+    :flag aligntrap: Always trap if the memory access is misaligned.
+    :result T a: Loaded value.
+
+.. inst:: store x, p, Offset, Flags...
+
+    Store ``x`` to memory at ``p + Offset``.
+
+    This is a polymorphic instruction that can store any value type with a
+    memory representation.
+
+    :arg T x: Value to store.
+    :arg iPtr p: Base address.
+    :arg Offset: Immediate signed offset.
+    :flag align(N): Expected alignment of ``p + Offset``. Power of two.
+    :flag aligntrap: Always trap if the memory access is misaligned.
+
+Loads and stores are *misaligned* if the resultant address is not a multiple of
+the expected alignment. Depending on the target architecture, misaligned memory
+accesses may trap, or they may work. Sometimes, operating systems catch
+alignment traps and emulate the misaligned memory access.
+
+On target architectures like x86 that don't check alignment, Cretonne expands
+the aligntrap flag into a conditional trap instruction::
+
+    v5 = load.i32 v1, 4, align(4), aligntrap
+    ; Becomes:
+    v10 = and_imm v1, 3
+    trapnz v10
+    v5 = load.i32 v1, 4
+
+
+Local variables
+---------------
+
+One set of restricted memory operations access the current function's stack
+frame. The stack frame is divided into fixed-size stack slots that are
+allocated in the :term:`function preample`. Stack slots are not typed, they
+simply represent a contiguous sequence of bytes in the stack frame.
+
+.. inst:: SS = stack_slot Bytes, Flags...
+
+    Allocate a stack slot in the preample.
+
+    If no alignment is specified, Cretonne will pick an appropriate alignment
+    for the stack slot based on its size and access patterns.
+
+    :arg Bytes: Stack slot size on bytes.
+    :flag align(N): Request at least N bytes alignment.
+    :result SS: Stack slot index.
+
+.. inst:: a = stack_load SS, Offset
+
+    Load a value from a stack slot at the constant offset.
+
+    This is a polymorphic instruction that can load any value type which has a
+    memory representation.
+
+    The offset is an immediate constant, not an SSA value. The memory access
+    cannot go out of bounds, i.e. ``sizeof(a) + Offset <= sizeof(SS)``.
+
+    :arg SS: Stack slot declared with :inst:`stack_slot`.
+    :arg Offset: Immediate non-negative offset.
+    :result T a: Value loaded.
+
+.. inst:: stack_store x, SS, Offset
+
+    Store a value to a stack slot at a constant offset.
+
+    This is a polymorphic instruction that can store any value type with a
+    memory representation.
+
+    The offset is an immediate constant, not an SSA value. The memory access
+    cannot go out of bounds, i.e. ``sizeof(a) + Offset <= sizeof(SS)``.
+
+    :arg T x: Value to be stored.
+    :arg SS: Stack slot declared with :inst:`stack_slot`.
+    :arg Offset: Immediate non-negative offset.
+
+The dedicated stack access instructions are easy ofr the compiler to reason
+about because stack slots and offsets are fixed at compile time. For example,
+the alignment of these stack memory accesses can be inferred from the offsets
+and stack slot alignments.
+
+It can be necessary to escape from the safety of the restricted instructions by
+taking the address of a stack slot.
+
+.. inst:: a = stack_addr SS, Offset
+
+    Get the address of a stack slot.
+
+    Compute the absolute address of a byte in a stack slot. The offset must
+    refer to a byte inside the stack slot: ``0 <= Offset < sizeof(SS)``.
+
+    :arg SS: Stack slot declared with :inst:`stack_slot`.
+    :arg Offset: Immediate non-negative offset.
+    :result iPtr a: Address.
+
+The :inst:`stack_addr` instruction can be used to macro-expand the stack access
+instructions before instruction selection::
+
+    v1 = stack_load.f64 ss3, 16
+    ; Expands to:
+    v9 = stack_addr ss3, 16
+    v1 = load.f64 v9
+
 
 Operations
 ==========
