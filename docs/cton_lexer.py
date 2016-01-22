@@ -28,7 +28,7 @@ class CretonneLexer(RegexLexer):
             # Reserved words.
             (keywords('function', 'entry'), Keyword),
             # Known attributes.
-            (keywords('align'), Name.Attribute),
+            (keywords('align', 'uext', 'sext', 'inreg'), Name.Attribute),
             # Well known value types.
             (r'\b(bool|i\d+|f32|f64)(x\d+)?\b', Keyword.Type),
             # v<nn> = value
