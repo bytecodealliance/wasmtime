@@ -178,8 +178,26 @@ called a *lane*. The number of lanes must be a power of two in the range 2-256.
 
     Like the :type:`bool` type, a boolean vector cannot be stored in memory.
 
+Pseudo-types
+------------
+
+These are not concrete types, but convenient names uses to refer to real types
+in this reference.
+
+.. type:: iPtr
+
+    A Pointer-sized integer.
+
+    This is either :type:`i32`, or :type:`i64`, depending on whether the target
+    platform has 32-bit or 64-bit pointers.
+
 Control flow
 ============
+
+Branches transfer control to a new EBB and provide values for the target EBB's
+arguments, if it has any. Conditional branches only take the branch if their
+condition is satisfied, otherwise execution continues at the following
+instruction in the EBB.
 
 .. inst:: br EBB(args...)
 
@@ -190,6 +208,7 @@ Control flow
     EBB.
 
     :arg EBB: Destination extended basic block.
+    :arg args...: Zero or more arguments passed to EBB.
     :result: None. This is a terminator instruction.
 
 .. inst:: brz x, EBB(args...)
@@ -201,6 +220,7 @@ Control flow
 
     :arg iN/bool x: Value to test.
     :arg EBB: Destination extended basic block.
+    :arg args...: Arguments passed to EBB.
     :result: None.
 
 .. inst:: brnz x, EBB(args...)
@@ -212,15 +232,16 @@ Control flow
 
     :arg iN/bool x: Value to test.
     :arg EBB: Destination extended basic block.
+    :arg args...: Zero or more arguments passed to EBB.
     :result: None.
 
 .. inst:: br_table x, JT
 
     Jump table branch.
 
-    Use ``x`` as an index into the jump table ``JT``. If a jump table entry is
-    found, branch to the corresponding EBB. If no entry was found fall through
-    to the next instruction.
+    Use ``x`` as an unsigned index into the jump table ``JT``. If a jump table
+    entry is found, branch to the corresponding EBB. If no entry was found fall
+    through to the next instruction.
 
     Note that this branch instruction can't pass arguments to the targeted
     blocks. Split critical edges as needed to work around this.
@@ -229,20 +250,31 @@ Control flow
     :arg JT: Jump table which was declared in the preample.
     :result: None.
 
-.. inst:: return args...
+.. inst:: JT = jump_table EBB0, EBB1, ..., EBBn
 
-    Return from function.
+    Declare a jump table in the :term:`function preample`.
 
-    Unconditionally transfer control to the calling function, passing the
-    provided return values.
+    This declares a jump table for use by the :inst:`br_table` indirect branch
+    instruction. Entries in the table are either EBB names, or ``0`` which
+    indicates an absent entry.
 
-    :arg args: Return values. The list of retur values must match the list if
-               return value types in the function signature.
-    :result: None. This is a terminator instruction.
+    The EBBs listed must belong to the current function, and they can't have
+    any arguments.
+
+    :arg EBB0: Target EBB when ``x = 0``.
+    :arg EBB1: Target EBB when ``x = 1``.
+    :arg EBBn: Target EBB when ``x = n``.
+    :result: A jump table identifier. (Not an SSA value).
+
+Traps stop the program because something went wrong. The exact behavior depends
+on the target instruction set architecture and operating system. There are
+explicit trap instructions defined below, but some instructions may also cause
+traps for certain input value. For example, :inst:`udiv` traps when the divisor
+is zero.
 
 .. inst:: trap
 
-    Terminate execution.
+    Terminate execution unconditionally.
 
     :result: None. This is a terminator instruction.
 
@@ -264,12 +296,98 @@ Control flow
     :arg iN/bool x: Value to test.
     :result: None.
 
+
 Function calls
 ==============
 
 A function call needs a target function and a :term:`function signature`. The
 target function may be determined dynamically at runtime, but the signature
-must be known when the function call is compiled.
+must be known when the function call is compiled. The function signature
+describes how to call the function, including arguments, return values, and the
+calling convention:
+
+.. productionlist::
+    signature : "(" [arglist] ")" ["->" retlist] [call_conv]
+    arglist   : arg
+              : arglist "," arg
+    retlist   : arglist
+    arg       : type
+              : arg flag
+    flag      : "uext" | "sext" | "inreg"
+    callconv  : `string`
+
+Arguments and return values have flags whose meaning is mostly target
+dependent. They make it possible to call native functions on the target
+platform. When calling other Cretonne functions, the flags are not necessary.
+
+Functions that are called directly must be declared in the :term:`function
+preample`:
+
+.. inst:: F = function NAME signature
+
+    Declare a function so it can be called directly.
+
+    :arg NAME: Name of the function, passed to the linker for resolution.
+    :arg signature: Function signature. See below.
+    :result F: A function identifier that can be used with :inst:`call`.
+
+.. inst:: a, b, ... = call F(args...)
+
+    Direct function call.
+
+    :arg F: Function identifier to call, declared by :inst:`function`.
+    :arg args...: Function arguments matching the signature of F.
+    :result a,b,...: Return values matching the signature of F.
+
+.. inst:: return args...
+
+    Return from function.
+
+    Unconditionally transfer control to the calling function, passing the
+    provided return values.
+
+    :arg args: Return values. The list of return values must match the list of
+               return value types in the function signature.
+    :result: None. This is a terminator instruction.
+
+This simple example illustrates direct function calls and signatures::
+
+    function gcd(i32 uext, i32 uext) -> i32 uext "C" {
+        f1 = function divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
+
+    entry ebb1(v1: i32, v2: i32):
+        brz v2, ebb2
+        v3, v4 = call f1(v1, v2)
+        br ebb1(v2, v4)
+
+    ebb2:
+        return v1
+    }
+
+Indirect function calls use a signature declared in the preample.
+
+.. inst:: SIG = signature signature
+
+    Declare a function signature for use with indirect calls.
+
+    :arg signature: Function signature. See :token:`signature`.
+    :result SIG: A signature identifier.
+
+.. inst:: a, b, ... = call_indirect SIG, x(args...)
+
+    Indirect function call.
+
+    :arg SIG: A function signature identifier declared with :inst:`signature`.
+    :arg iPtr x: The address of the function to call.
+    :arg args...: Function arguments matching SIG.
+    :result a,b,...: Return values matching SIG.
+
+.. todo:: Define safe indirect function calls.
+
+    The :inst:`call_indirect` instruction is dangerous to use in a sandboxed
+    environment since it is not easy to verify the callee address.
+    We need a table-driven indirect call instruction, similar to
+    :inst:`br_table`.
 
 
 
