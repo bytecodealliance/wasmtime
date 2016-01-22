@@ -163,11 +163,8 @@ called a *lane*. The number of lanes must be a power of two in the range 2-256.
 
     Like the :type:`bool` type, a boolean vector cannot be stored in memory.
 
-Instructions
+Control flow
 ============
-
-Control flow instructions
--------------------------
 
 .. inst:: br EBB(args...)
 
@@ -187,7 +184,7 @@ Control flow instructions
     If ``x`` is a :type:`bool` value, take the branch when ``x`` is false. If
     ``x`` is an integer value, take the branch when ``x = 0``.
 
-    :arg iN / bool x: Value to test.
+    :arg iN/bool x: Value to test.
     :arg EBB: Destination extended basic block.
     :result: None.
 
@@ -198,12 +195,76 @@ Control flow instructions
     If ``x`` is a :type:`bool` value, take the branch when ``x`` is true. If
     ``x`` is an integer value, take the branch when ``x != 0``.
 
-    :arg iN / bool x: Value to test.
+    :arg iN/bool x: Value to test.
     :arg EBB: Destination extended basic block.
     :result: None.
 
+.. inst:: br_table x, JT
+
+    Jump table branch.
+
+    Use ``x`` as an index into the jump table ``JT``. If a jump table entry is
+    found, branch to the corresponding EBB. If no entry was found fall through
+    to the next instruction.
+
+    Note that this branch instruction can't pass arguments to the targeted
+    blocks. Split critical edges as needed to work around this.
+
+    :arg iN x: Integer index into jump table.
+    :arg JT: Jump table which was declared in the preample.
+    :result: None.
+
+.. inst:: return args...
+
+    Return from function.
+
+    Unconditionally transfer control to the calling function, passing the
+    provided return values.
+
+    :arg args: Return values. The list of retur values must match the list if
+               return value types in the function signature.
+    :result: None. This is a terminator instruction.
+
+.. inst:: trap
+
+    Terminate execution.
+
+    :result: None. This is a terminator instruction.
+
+.. inst:: trapz x
+
+    Trap when zero.
+
+    if ``x`` is non-zero, execution continues at the following instruction.
+
+    :arg iN/bool x: Value to test.
+    :result: None.
+
+.. inst:: trapnz x
+
+    Trap when non-zero.
+
+    if ``x`` is zero, execution continues at the following instruction.
+
+    :arg iN/bool x: Value to test.
+    :result: None.
+
+Function calls
+==============
+
+A function call needs a target function and a :term:`function signature`. The
+target function may be determined dynamically at runtime, but the signature
+must be known when the function call is compiled.
+
+
+
+Operations
+==========
+
+
+
 Special operations
-==================
+------------------
 
 .. inst:: a = iconst n
 
@@ -230,7 +291,7 @@ Special operations
     selection.
 
 Vector operations
-=================
+-----------------
 
 .. inst:: a  = vselect c, x, y
 
@@ -273,7 +334,7 @@ Vector operations
     indicate a valid lane index for the type of ``x``.
 
 Integer operations
-==================
+------------------
 
 .. inst:: a = icmp cond, x, y
 
@@ -383,7 +444,7 @@ Integer operations
     good start.
 
 Bitwise operations
-==================
+------------------
 
 .. inst:: a = and x, y
 
@@ -534,7 +595,7 @@ Bitwise operations
 
 
 Floating point operations
-=========================
+-------------------------
 
 .. inst:: a = fcmp cond, x, y
 
@@ -628,7 +689,7 @@ Floating point operations
     product.
 
 Conversion operations
-=====================
+---------------------
 
 .. inst:: a = bitcast x
 
