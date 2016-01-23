@@ -191,6 +191,10 @@ in this reference.
     This is either :type:`i32`, or :type:`i64`, depending on whether the target
     platform has 32-bit or 64-bit pointers.
 
+.. type:: iN
+
+    Any of the scalar integer types :type:`i8` -- :type:`i64`.
+
 Control flow
 ============
 
@@ -513,6 +517,89 @@ instructions before instruction selection::
     ; Expands to:
     v9 = stack_addr ss3, 16
     v1 = load.f64 v9
+
+Heaps
+-----
+
+Code compiled from WebAssembly or asm.js runs in a sandbox where it can't access
+all process memory. Instead, it is given a small set of memory areas to work
+in, and all accesses are bounds checked. Cretonne models this through the
+concept of *heaps*.
+
+A heap is declared in the function preample and can be accessed with restricted
+instructions that trap on out-of-bounds accesses. Heap addresses can be smaller
+than the native pointer size, for example unsigned :type:`i32` offsets on a
+64-bit architecture.
+
+.. inst:: H = heap Name
+
+    Declare a heap in the function preample.
+
+    This doesn't allocate memory, it just retrieves a handle to a sandbox from
+    the runtime environment.
+
+    :arg Name: String identifying the heap in the runtime environment.
+    :result H: Heap identifier.
+
+.. inst:: a = heap_load H, p, Offset
+
+    Load a value at the address ``p + Offset`` in the heap H.
+
+    Trap if the heap access would be out of bounds.
+
+    :arg H: Heap identifier created by :inst:`heap`.
+    :arg iN p: Unsigned base address in heap.
+    :arg Offset: Immediate signed offset.
+    :flag align(N): Expected alignment of ``p + Offset``. Power of two.
+    :flag aligntrap: Always trap if the memory access is misaligned.
+    :result T a: Loaded value.
+
+.. inst:: a = heap_store H, x, p, Offset
+
+    Store a value at the address ``p + Offset`` in the heap H.
+
+    Trap if the heap access would be out of bounds.
+
+    :arg H: Heap indetifier created by :inst:`heap`.
+    :arg T x: Value to be stored.
+    :arg iN p: Unsigned base address in heap.
+    :arg Offset: Immediate signed offset.
+    :flag align(N): Expected alignment of ``p + Offset``. Power of two.
+    :flag aligntrap: Always trap if the memory access is misaligned.
+
+When optimizing heap accesses, Cretonne may separate the heap bounds checking
+and address computations from the memory accesses.
+
+.. inst:: a = heap_addr H, p, Size
+
+    Bounds check and compute absolute address of heap memory.
+
+    Verify that the address range ``p .. p + Size - 1`` is valid in the heap H,
+    and trap if not.
+
+    Convert the heap-relative address in ``p`` to a real absolute address and
+    return it.
+
+    :arg H: Heap identifier created by :inst:`heap`.
+    :arg iN p: Unsigned base address in heap.
+    :arg Size: Immediate unsigned byte count for range to verify.
+    :result iPtr a: Absolute address corresponding to ``p``.
+
+A small example using heaps::
+
+    function vdup(i32, i32) {
+        h1 = heap "main"
+
+    entry ebb1(v1: i32, v2: i32):
+        v3 = heap_load.i32x4 h1, v1, 0
+        v4 = heap_addr h1, v2, 32      ; Shared range check for two stores.
+        store v3, v4, 0
+        store v3, v4, 16
+        return
+    }
+
+The final expansion of the :inst:`heap_addr` range check and address conversion
+depends on the runtime environment.
 
 
 Operations
