@@ -605,22 +605,31 @@ depends on the runtime environment.
 Operations
 ==========
 
+The remaining instruction set is mostly arithmetic.
 
+A few instructions have variants that take immediate operands (e.g.,
+:inst:`and` / :inst:`and_imm`), but in general an instruction is required to
+load a constant into an SSA value.
 
-Special operations
-------------------
-
-.. inst:: a = iconst n
+.. inst:: a = iconst N
 
     Integer constant.
 
-.. inst:: a = fconst n
+    Create a scalar integer SSA value with an immediate constant value, or an
+    integer vector where all the lanes have the same value.
+
+.. inst:: a = fconst N
 
     Floating point constant.
 
-.. inst:: a = vconst n
+    Create a :type:`f32` or :type:`f64` SSA value with an immediate constant
+    value, or a floating point vector where all the lanes have the same value.
+
+.. inst:: a = vconst N
 
     Vector constant (floating point or integer).
+
+    Create a SIMD vector value where the lanes don't have to be identical.
 
 .. inst:: a = select c, x, y
 
@@ -680,12 +689,13 @@ Vector operations
 Integer operations
 ------------------
 
-.. inst:: a = icmp cond, x, y
+.. inst:: a = icmp Cond, x, y
 
     Integer comparison.
 
-    :param cond: Condition code determining how ``x`` and ``y`` are compared.
-    :param x, y: Integer scalar or vector values of the same type.
+    :arg Cond: Condition code determining how ``x`` and ``y`` are compared.
+    :arg x: First value to compare.
+    :arg y: Second value to compare.
     :rtype: :type:`bool` or :type:`boolxN` with the same number of lanes as
             ``x`` and ``y``.
 
@@ -708,28 +718,58 @@ Integer operations
     Wrapping integer addition: :math:`a := x + y \pmod{2^B}`. This instruction
     does not depend on the signed/unsigned interpretation of the operands.
 
+    Polymorphic over all integer types (vector and scalar).
+
+.. inst:: a = iadd_imm x, Imm
+
+    Add immediate integer.
+
+    Same as :inst:`iadd`, but one operand is an immediate constant.
+
+    :arg iN x: Dynamic addend.
+    :arg Imm: Immediate addend.
+
+    Polymorphic over all scalar integer types.
+
 .. inst:: a = isub x, y
 
     Wrapping integer subtraction: :math:`a := x - y \pmod{2^B}`. This
     instruction does not depend on the signed/unsigned interpretation of the
     operands.
 
-.. todo:: Overflow arithmetic
+    Polymorphic over all integer types (vector and scalar).
+
+.. inst:: a = isub_imm Imm, x
+
+    Immediate subtraction.
+
+    Also works as integer negation when :math:`Imm = 0`. Use :inst:`iadd_imm` with a
+    negative immediate operand for the reverse immediate subtraction.
+
+    :arg Imm: Immediate minuend.
+    :arg iN x: Dynamic subtrahend.
+
+    Polymorphic over all scalar integer types.
+
+.. todo:: Integer overflow arithmetic
 
     Add instructions for add with carry out / carry in and so on. Enough to
     implement larger integer types efficiently. It should also be possible to
     legalize :type:`i64` arithmetic to terms of :type:`i32` operations.
-
-.. inst:: a = ineg x
-
-    Wrapping integer negation: :math:`a := -x \pmod{2^B}`. This instruction does
-    not depend on the signed/unsigned interpretation of the operand.
 
 .. inst:: a = imul x, y
 
     Wrapping integer multiplication: :math:`a := x y \pmod{2^B}`. This
     instruction does not depend on the signed/unsigned interpretation of the
     operands.
+
+    Polymorphic over all integer types (vector and scalar).
+
+.. inst:: a = imul_imm x, Imm
+
+    Integer multiplication by immediate constant.
+
+    Polymorphic over all scalar integer types.
 
 .. todo:: Larger multiplication results.
 
@@ -741,10 +781,11 @@ Integer operations
     Unsigned integer division: :math:`a := \lfloor {x \over y} \rfloor`. This
     operation traps if the divisor is zero.
 
-    .. todo::
-        Add a ``udiv_imm`` variant with an immediate divisor greater than 1.
-        This is useful for pattern-matching divide-by-constant, and this
-        instruction would be non-trapping.
+.. inst:: a = udiv_imm x, Imm
+
+    Unsigned integer division by an immediate constant.
+
+    This instruction never traps because a divisor of zero is not allowed.
 
 .. inst:: a = sdiv x, y
 
@@ -753,37 +794,52 @@ Integer operations
     the result is not representable in :math:`B` bits two's complement. This only
     happens when :math:`x = -2^{B-1}, y = -1`.
 
-    .. todo::
-        Add a ``sdiv_imm`` variant with an immediate non-zero divisor. This is
-        useful for pattern-matching divide-by-constant, and this instruction
-        would be non-trapping. Don't allow divisors 0, 1, or -1.
+.. inst:: a = sdiv_imm x, Imm
+
+    Signed integer division by an immediate constant.
+
+    This instruction never traps because a divisor of -1 or 0 is not allowed.
 
 .. inst:: a = urem x, y
 
-    Unsigned integer remainder. This operation traps if the divisor is zero.
+    Unsigned integer remainder.
 
-    .. todo::
-        Add a ``urem_imm`` non-trapping variant.
+    This operation traps if the divisor is zero.
+
+.. inst:: a = urem_imm x, Imm
+
+    Unsigned integer remainder with immediate divisor.
+
+    This instruction never traps because a divisor of zero is not allowed.
 
 .. inst:: a = srem x, y
 
-    Signed integer remainder. This operation traps if the divisor is zero.
+    Signed integer remainder.
 
-    .. todo::
+    This operation traps if the divisor is zero.
+
+    .. todo:: Integer remainder vs modulus.
+
         Clarify whether the result has the sign of the divisor or the dividend.
         Should we add a ``smod`` instruction for the case where the result has
         the same sign as the divisor?
+
+.. inst:: a = srem_imm x, Imm
+
+    Signed integer remainder with immediate divisor.
+
+    This instruction never traps because a divisor of 0 or -1 is not allowed.
 
 .. todo:: Minimum / maximum.
 
     NEON has ``smin``, ``smax``, ``umin``, and ``umax`` instructions. We should
     replicate those for both scalar and vector integer types. Even if the
-    target ISA doesn't have scalar operations, these are good pattern mtching
+    target ISA doesn't have scalar operations, these are good pattern matching
     targets.
 
 .. todo:: Saturating arithmetic.
 
-    Mostly for SIMD use, but again these are good paterns to contract.
+    Mostly for SIMD use, but again these are good patterns for contraction.
     Something like ``usatadd``, ``usatsub``, ``ssatadd``, and ``ssatsub`` is a
     good start.
 
@@ -825,9 +881,9 @@ Bitwise operations
 
     Rotate the bits in ``x`` by ``y`` places.
 
-    :param x: Integer value to be rotated.
-    :param y: Number of bits to shift. Any integer type, not necessarily the
-              same type as ``x``.
+    :arg T x: Integer value to be rotated.
+    :arg iN y: Number of bits to shift. Any scalar integer type, not necessarily
+               the same type as ``x``.
     :rtype: Same type as ``x``.
 
 .. inst:: a = rotr x, y
@@ -836,9 +892,9 @@ Bitwise operations
 
     Rotate the bits in ``x`` by ``y`` places.
 
-    :param x: Integer value to be rotated.
-    :param y: Number of bits to shift. Any integer type, not necessarily the
-              same type as ``x``.
+    :arg T x: Integer value to be rotated.
+    :arg iN y: Number of bits to shift. Any scalar integer type, not necessarily
+               the same type as ``x``.
     :rtype: Same type as ``x``.
 
 .. inst:: a = ishl x, y
@@ -848,9 +904,9 @@ Bitwise operations
 
     The shift amount is masked to the size of ``x``.
 
-    :param x: Integer value to be shifted.
-    :param y: Number of bits to shift. Any integer type, not necessarily the
-              same type as ``x``.
+    :arg T x: Integer value to be shifted.
+    :arg iN y: Number of bits to shift. Any scalar integer type, not necessarily
+               the same type as ``x``.
     :rtype: Same type as ``x``.
 
     When shifting a B-bits integer type, this instruction computes:
@@ -868,9 +924,9 @@ Bitwise operations
 
     The shift amount is masked to the size of the register.
 
-    :param x: Integer value to be shifted.
-    :param y: Number of bits to shift. Can be any integer type, not necessarily
-              the same type as ``x``.
+    :arg T x: Integer value to be shifted.
+    :arg iN y: Number of bits to shift. Can be any scalar integer type, not
+               necessarily the same type as ``x``.
     :rtype: Same type as ``x``.
 
     When shifting a B-bits integer type, this instruction computes:
@@ -888,9 +944,9 @@ Bitwise operations
 
     The shift amount is masked to the size of the register.
 
-    :param x: Integer value to be shifted.
-    :param y: Number of bits to shift. Can be any integer type, not necessarily
-              the same type as ``x``.
+    :arg T x: Integer value to be shifted.
+    :arg iN y: Number of bits to shift. Can be any scalar integer type, not
+               necessarily the same type as ``x``.
     :rtype: Same type as ``x``.
 
     .. todo:: Add ``sshr_imm`` variant with an immediate ``y``.
@@ -899,7 +955,7 @@ Bitwise operations
 
     Count leading zero bits.
 
-    :param x: Integer value.
+    :arg x: Integer value.
     :rtype: :type:`i8`
 
     Starting from the MSB in ``x``, count the number of zero bits before
@@ -910,7 +966,7 @@ Bitwise operations
 
     Count leading sign bits.
 
-    :param x: Integer value.
+    :arg x: Integer value.
     :rtype: :type:`i8`
 
     Starting from the MSB after the sign bit in ``x``, count the number of
@@ -921,7 +977,7 @@ Bitwise operations
 
     Count trailing zeros.
 
-    :param x: Integer value.
+    :arg x: Integer value.
     :rtype: :type:`i8`
 
     Starting from the LSB in ``x``, count the number of zero bits before
@@ -932,7 +988,7 @@ Bitwise operations
 
     Population count
 
-    :param x: Integer value.
+    :arg x: Integer value.
     :rtype: :type:`i8`
 
     Count the number of one bits in ``x``.
@@ -941,12 +997,14 @@ Bitwise operations
 Floating point operations
 -------------------------
 
-.. inst:: a = fcmp cond, x, y
+These operations generally follow IEEE 754-2008 semantics.
+
+.. inst:: a = fcmp Cond, x, y
 
     Floating point comparison.
 
-    :param cond: Condition code determining how ``x`` and ``y`` are compared.
-    :param x, y: Floating point scalar or vector values of the same type.
+    :arg Cond: Condition code determining how ``x`` and ``y`` are compared.
+    :arg x,y: Floating point scalar or vector values of the same type.
     :rtype: :type:`bool` or :type:`boolxN` with the same number of lanes as
             ``x`` and ``y``.
 
@@ -978,7 +1036,7 @@ Floating point operations
 
     Floating point negation.
 
-    :returns: ``x`` with its sign bit inverted.
+    :result: ``x`` with its sign bit inverted.
 
     Note that this is a pure bitwise operation.
 
@@ -986,7 +1044,7 @@ Floating point operations
 
     Floating point absolute value.
 
-    :returns: ``x`` with its sign bit cleared.
+    :result: ``x`` with its sign bit cleared.
 
     Note that this is a pure bitwise operation.
 
@@ -994,18 +1052,19 @@ Floating point operations
 
     Floating point copy sign.
 
-    :returns: ``x`` with its sign changed to that of ``y``.
+    :result: ``x`` with its sign changed to that of ``y``.
 
     Note that this is a pure bitwise operation. The sign bit from ``y`` is
     copied to the sign bit of ``x``.
 
-.. inst:: fmul x, y
-.. inst:: fdiv x, y
-.. inst:: fmin x, y
-.. inst:: fminnum x, y
-.. inst:: fmax x, y
-.. inst:: fmaxnum x, y
-.. inst:: ceil x
+.. inst:: a = fmul x, y
+.. inst:: a = fdiv x, y
+.. inst:: a = fmin x, y
+.. inst:: a = fminnum x, y
+.. inst:: a = fmax x, y
+.. inst:: a = fmaxnum x, y
+
+.. inst:: a = ceil x
 
     Round floating point round to integral, towards positive infinity.
 
@@ -1052,6 +1111,7 @@ Conversion operations
 .. inst:: a = cvt_ftos x
 .. inst:: a = cvt_utof x
 .. inst:: a = cvt_stof x
+
 
 Glossary
 ========
