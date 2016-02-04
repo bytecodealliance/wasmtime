@@ -178,8 +178,8 @@ called a *lane*. The number of lanes must be a power of two in the range 2-256.
 
     Like the :type:`bool` type, a boolean vector cannot be stored in memory.
 
-Pseudo-types
-------------
+Pseudo-types and type classes
+-----------------------------
 
 These are not concrete types, but convenient names uses to refer to real types
 in this reference.
@@ -191,9 +191,37 @@ in this reference.
     This is either :type:`i32`, or :type:`i64`, depending on whether the target
     platform has 32-bit or 64-bit pointers.
 
-.. type:: iN
+.. type:: iB
 
     Any of the scalar integer types :type:`i8` -- :type:`i64`.
+
+.. type:: Int
+
+    Any scalar *or vector* integer type: :type:`iB` or :type:`iBxN`.
+
+.. type:: fB
+
+    Either of the floating point scalar types: :type:`f32` or :type:`f64.
+
+.. type:: Float
+
+    Any scalar *or vector* floating point type: :type:`fB` or :type:`fBxN`.
+
+.. type:: %Tx%N
+
+    Any SIMD vector type.
+
+.. type:: Mem
+
+    Any type that can be stored in memory: :type:`Int` or :type:`Float`.
+
+.. type:: Logic
+
+    Either :type:`bool` or :type:`boolxN`.
+
+.. type:: Testable
+
+    Either :type:`bool` or :type:`iN`.
 
 Control flow
 ============
@@ -222,7 +250,7 @@ instruction in the EBB.
     If ``x`` is a :type:`bool` value, take the branch when ``x`` is false. If
     ``x`` is an integer value, take the branch when ``x = 0``.
 
-    :arg iN/bool x: Value to test.
+    :arg Testable x: Value to test.
     :arg EBB: Destination extended basic block.
     :arg args...: Arguments passed to EBB.
     :result: None.
@@ -234,7 +262,7 @@ instruction in the EBB.
     If ``x`` is a :type:`bool` value, take the branch when ``x`` is true. If
     ``x`` is an integer value, take the branch when ``x != 0``.
 
-    :arg iN/bool x: Value to test.
+    :arg Testable x: Value to test.
     :arg EBB: Destination extended basic block.
     :arg args...: Zero or more arguments passed to EBB.
     :result: None.
@@ -288,7 +316,7 @@ is zero.
 
     if ``x`` is non-zero, execution continues at the following instruction.
 
-    :arg iN/bool x: Value to test.
+    :arg Testable x: Value to test.
     :result: None.
 
 .. inst:: trapnz x
@@ -297,7 +325,7 @@ is zero.
 
     if ``x`` is zero, execution continues at the following instruction.
 
-    :arg iN/bool x: Value to test.
+    :arg Testable x: Value to test.
     :result: None.
 
 
@@ -618,6 +646,8 @@ load a constant into an SSA value.
     Create a scalar integer SSA value with an immediate constant value, or an
     integer vector where all the lanes have the same value.
 
+    :result Int a: Constant value.
+
 .. inst:: a = fconst N
 
     Floating point constant.
@@ -625,11 +655,15 @@ load a constant into an SSA value.
     Create a :type:`f32` or :type:`f64` SSA value with an immediate constant
     value, or a floating point vector where all the lanes have the same value.
 
+    :result Float a: Constant value.
+
 .. inst:: a = vconst N
 
     Vector constant (floating point or integer).
 
     Create a SIMD vector value where the lanes don't have to be identical.
+
+    :result TxN a: Constant value.
 
 .. inst:: a = select c, x, y
 
@@ -638,7 +672,7 @@ load a constant into an SSA value.
     :arg bool c: Controlling flag.
     :arg T x: Value to return when ``c`` is true.
     :arg T y: Value to return when ``c`` is false. Must be same type as ``x``.
-    :rtype: T. Same type as ``x`` and ``y``.
+    :result T a: Same type as ``x`` and ``y``.
 
     This instruction selects whole values. Use :inst:`vselect` for lane-wise
     selection.
@@ -653,12 +687,12 @@ Vector operations
     Select lanes from ``x`` or ``y`` controlled by the lanes of the boolean
     vector ``c``.
 
-    :arg boolx%N c: Controlling flag vector.
-    :arg x: Vector with lanes selected by the true lanes of ``c``.
+    :arg boolxN c: Controlling flag vector.
+    :arg TxN x: Vector with lanes selected by the true lanes of ``c``.
               Must be a vector type with the same number of lanes as ``c``.
-    :arg y: Vector with lanes selected by the false lanes of ``c``.
+    :arg TxN y: Vector with lanes selected by the false lanes of ``c``.
               Must be same type as ``x``.
-    :rtype: Same type as ``x`` and ``y``.
+    :result TxN a: Same type as ``x`` and ``y``.
 
 .. inst:: a = vbuild x, y, z, ...
 
@@ -672,19 +706,31 @@ Vector operations
 
     Return a vector whose lanes are all ``x``.
 
-.. inst:: a = insertlane x, idx, y
+    :arg T x: Scalar value to be replicated.
+    :result TxN a: Vector with identical lanes.
 
-    Insert ``y`` as lane ``idx`` in x.
+.. inst:: a = insertlane x, Idx, y
 
-    The lane index, ``idx``, is an immediate value, not an SSA value. It must
+    Insert ``y`` as lane ``Idx`` in x.
+
+    The lane index, ``Idx``, is an immediate value, not an SSA value. It must
     indicate a valid lane index for the type of ``x``.
 
-.. inst:: a = extractlane x, idx
+    :arg TxN x: Vector to modify.
+    :arg Idx: Lane index smaller than N.
+    :arg T y: New lane value.
+    :result TxN y: Updated vector.
 
-    Extract lane ``idx`` from ``x``.
+.. inst:: a = extractlane x, Idx
 
-    The lane index, ``idx``, is an immediate value, not an SSA value. It must
+    Extract lane ``Idx`` from ``x``.
+
+    The lane index, ``Idx``, is an immediate value, not an SSA value. It must
     indicate a valid lane index for the type of ``x``.
+
+    :arg TxN x: Source vector
+    :arg Idx: Lane index
+    :result T a: Lane value.
 
 Integer operations
 ------------------
@@ -694,10 +740,9 @@ Integer operations
     Integer comparison.
 
     :arg Cond: Condition code determining how ``x`` and ``y`` are compared.
-    :arg x: First value to compare.
-    :arg y: Second value to compare.
-    :rtype: :type:`bool` or :type:`boolxN` with the same number of lanes as
-            ``x`` and ``y``.
+    :arg Int x: First value to compare.
+    :arg Int y: Second value to compare.
+    :result Logic a: With the same number of lanes as ``x`` and ``y``.
 
     The condition code determines if the operands are interpreted as signed or
     unsigned integers.
