@@ -5,6 +5,10 @@ Cretonne Code Generator
 Cretonne is a low-level retargetable code generator. It translates a
 target-independent intermediate language into executable machine code.
 
+.. image:: https://readthedocs.org/projects/cretonne/badge/?version=latest
+    :target: http://cretonne.readthedocs.org/en/latest/?badge=latest
+    :alt: Documentation Status
+
 Cretonne is designed to be a code generator for WebAssembly with these design
 goals:
 
