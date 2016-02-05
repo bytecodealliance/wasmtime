@@ -21,6 +21,10 @@ import shlex
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath('.'))
 
+# Also add the meta directory to sys.path so autodoc can find the Cretonne meta
+# language definitions.
+sys.path.insert(0, os.path.abspath('../meta'))
+
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.

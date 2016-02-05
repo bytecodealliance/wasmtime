@@ -7,6 +7,7 @@ Contents:
    :maxdepth: 2
 
    langref
+   metaref
 
 Indices and tables
 ==================
