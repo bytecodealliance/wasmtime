@@ -38,6 +38,8 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.mathjax',
     'sphinx.ext.ifconfig',
+    'sphinx.ext.graphviz',
+    'sphinx.ext.inheritance_diagram',
     'cton_domain',
     'cton_lexer',
 ]
@@ -293,3 +295,10 @@ texinfo_documents = [
 
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 #texinfo_no_detailmenu = False
+
+
+# -- Options for Graphviz -------------------------------------------------
+
+graphviz_output_format = 'svg'
+
+inheritance_graph_attrs = dict(rankdir='TD')

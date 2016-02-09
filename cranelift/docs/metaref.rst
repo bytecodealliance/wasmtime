@@ -13,21 +13,28 @@ directory that has a global variable called ``instructions``. The basic
 Cretonne instruction set described in :doc:`langref` is defined by the Python
 module :mod:`cretonne.instrs`.
 
+.. module:: cretonne
+
 Types
 =====
 
 Concrete value types are represented as instances of :class:`cretonne.Type`. There are
 subclasses to represent scalar and vector types.
 
-.. autoclass:: cretonne.Type
-.. autoclass:: cretonne.ScalarType
+.. inheritance-diagram:: Type ScalarType VectorType IntType FloatType
+    :parts: 1
+.. autoclass:: Type
+.. autoclass:: ScalarType
     :members:
-.. autoclass:: cretonne.VectorType
+.. autoclass:: VectorType
     :members:
-.. autoclass:: cretonne.IntType
+.. autoclass:: IntType
     :members:
-.. autoclass:: cretonne.FloatType
+.. autoclass:: FloatType
     :members:
+
+Predefined types
+----------------
 .. automodule:: cretonne.types
     :members:
 
