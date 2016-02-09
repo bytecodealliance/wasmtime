@@ -87,10 +87,7 @@ All SSA values have a type which determines the size and shape (for SIMD
 vectors) of the value. Many instructions are polymorphic -- they can operate on
 different types.
 
-.. type:: bool
-
-    A boolean value that is either true or false. Booleans can't be stored in
-    memory.
+.. autoctontype:: bool
 
 Integer types
 -------------
@@ -99,21 +96,10 @@ Integer values have a fixed size and can be interpreted as either signed or
 unsigned. Some instructions will interpret an operand as a signed or unsigned
 number, others don't care.
 
-.. type:: i8
-
-    A 8-bit integer value taking up 1 byte in memory.
-
-.. type:: i16
-
-    A 16-bit integer value taking up 2 bytes in memory.
-
-.. type:: i32
-
-    A 32-bit integer value taking up 4 bytes in memory.
-
-.. type:: i64
-
-    A 64-bit integer value taking up 8 bytes in memory.
+.. autoctontype:: i8
+.. autoctontype:: i16
+.. autoctontype:: i32
+.. autoctontype:: i64
 
 Floating point types
 --------------------
@@ -122,17 +108,8 @@ The floating point types have the IEEE semantics that are supported by most
 hardware. There is no support for higher-precision types like quads or
 double-double formats.
 
-.. type:: f32
-
-    A 32-bit floating point type represented in the IEEE 754 *single precision*
-    format. This corresponds to the :c:type:`float` type in most C
-    implementations.
-
-.. type:: f64
-
-    A 64-bit floating point type represented in the IEEE 754 *double precision*
-    format. This corresponds to the :c:type:`double` type in most C
-    implementations.
+.. autoctontype:: f32
+.. autoctontype:: f64
 
 SIMD vector types
 -----------------
@@ -201,7 +178,7 @@ in this reference.
 
 .. type:: fB
 
-    Either of the floating point scalar types: :type:`f32` or :type:`f64.
+    Either of the floating point scalar types: :type:`f32` or :type:`f64`.
 
 .. type:: Float
 
