@@ -13,6 +13,7 @@
 import re
 
 from docutils import nodes
+from docutils.parsers.rst import directives
 
 from sphinx import addnodes
 from sphinx.directives import ObjectDescription
@@ -22,6 +23,8 @@ from sphinx.roles import XRefRole
 from sphinx.util.docfields import Field, GroupedField, TypedField
 from sphinx.util.nodes import make_refnode
 
+import sphinx.ext.autodoc
+
 class CtonObject(ObjectDescription):
     """
     Any kind of Cretonne IL object.
@@ -29,6 +32,11 @@ class CtonObject(ObjectDescription):
     This is a shared base class for the different kinds of indexable objects
     in the Cretonne IL reference.
     """
+    option_spec = {
+        'noindex': directives.flag,
+        'module': directives.unchanged,
+        'annotation': directives.unchanged,
+    }
 
     def add_target_and_index(self, name, sig, signode):
         """
@@ -209,7 +217,33 @@ class CretonneDomain(Domain):
                  make_refnode(builder, fromdocname, obj[0],
                               obj[1] + '-' + target, contnode, target))]
 
+
+class TypeDocumenter(sphinx.ext.autodoc.Documenter):
+    # Invoke with .. autoctontype::
+    objtype = 'ctontype'
+    # Convert into cton:type directives
+    domain = 'cton'
+    directivetype = 'type'
+
+    @classmethod
+    def can_document_member(cls, member, membername, isattr, parent):
+        return False
+
+    def resolve_name(self, modname, parents, path, base):
+        return 'cretonne.types', [ base ]
+
+    def add_content(self, more_content, no_docstring=False):
+        super(TypeDocumenter, self).add_content(more_content, no_docstring)
+        sourcename = self.get_sourcename()
+        membytes = self.object.membytes
+        if membytes:
+            self.add_line(u':bytes: {}'.format(membytes), sourcename)
+        else:
+            self.add_line(u':bytes: Can\'t be stored in memory', sourcename)
+
+
 def setup(app):
     app.add_domain(CretonneDomain)
+    app.add_autodocumenter(TypeDocumenter)
 
     return { 'version' : '0.1' }
