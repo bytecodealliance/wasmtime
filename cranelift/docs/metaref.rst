@@ -38,3 +38,13 @@ Predefined types
 .. automodule:: cretonne.types
     :members:
 
+Parametric polymorphism
+-----------------------
+.. currentmodule:: cretonne
+
+Instruction operands can be defined with *type variables* instead of concrete
+types for their operands. This makes the instructions polymorphic.
+
+.. autoclass:: TypeVar
+
+
