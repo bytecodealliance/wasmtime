@@ -107,8 +107,9 @@ class TypeVar(object):
     instructions. This makes the instructions *polymorphic*.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, doc):
         self.name = name
+        self.__doc__ = doc
 
 #
 # Immediate operands.
@@ -130,3 +131,72 @@ class ImmediateType(object):
 
     def __repr__(self):
         return 'ImmediateType({})'.format(self.name)
+
+#
+# Defining instructions.
+#
+
+class Operand(object):
+    """
+    An instruction operand.
+
+    An instruction operand can be either an *immediate* or an *SSA value*. The
+    type of the operand is one of:
+
+    1. A :py:class:`Type` instance indicates an SSA value operand with a
+       concrete type.
+
+    2. A :py:class:`TypeVar` instance indicates an SSA value operand, and the
+       instruction is polymorphic over the possible concrete types that the type
+       variable can assume.
+
+    3. An :py:class:`ImmediateType` instance indicates an immediate operand
+       whose value is encoded in the instruction itself rather than being passed
+       as an SSA value.
+
+    """
+    def __init__(self, name, typ, doc=''):
+        self.name = name
+        self.typ = typ
+        self.__doc__ = doc
+
+    def get_doc(self):
+        if self.__doc__:
+            return self.__doc__
+        else:
+            return self.typ.__doc__
+
+class Instruction(object):
+    """
+    An instruction.
+
+    The operands to the instruction are specified as two tuples: ``ins`` and
+    ``outs``. Since the Python singleton tuple syntax is a bit awkward, it is
+    allowed to specify a singleton as just the operand itself, i.e., `ins=x` and
+    `ins=(x,)` are both allowed and mean the same thing.
+
+    :param name: Instruction mnemonic, also becomes opcode name.
+    :param doc: Documentation string.
+    :param ins: Tuple of input operands. This can be a mix of SSA value operands
+                and immediate operands.
+    :param outs: Tuple of output operands. The output operands can't be
+                 immediates.
+    """
+
+    def __init__(self, name, doc, ins=(), outs=(), **kwargs):
+        self.name = name
+        self.__doc__ = doc
+        self.ins = self._to_operand_tuple(ins)
+        self.outs = self._to_operand_tuple(outs)
+
+    @staticmethod
+    def _to_operand_tuple(x):
+        # Allow a single Operand instance instead of the awkward singleton tuple
+        # syntax.
+        if isinstance(x, Operand):
+            x = (x,)
+        else:
+            x = tuple(x)
+        for op in x:
+            assert isinstance(op, Operand)
+        return x
