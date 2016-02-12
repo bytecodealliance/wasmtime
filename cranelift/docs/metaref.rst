@@ -63,3 +63,12 @@ indicated with an instance of :class:`ImmediateType`.
     :members:
 
 .. currentmodule:: cretonne
+
+Instructions
+============
+
+New instructions are defined as instances of the :class:`cretonne.Instruction`
+class.
+
+.. autoclass:: Operand
+.. autoclass:: Instruction

@@ -242,8 +242,52 @@ class TypeDocumenter(sphinx.ext.autodoc.Documenter):
             self.add_line(u':bytes: Can\'t be stored in memory', sourcename)
 
 
+class InstDocumenter(sphinx.ext.autodoc.Documenter):
+    # Invoke with .. autoinst::
+    objtype = 'inst'
+    # Convert into cton:inst directives
+    domain = 'cton'
+    directivetype = 'inst'
+
+    @classmethod
+    def can_document_member(cls, member, membername, isattr, parent):
+        return False
+
+    def resolve_name(self, modname, parents, path, base):
+        return 'cretonne.base', [ base ]
+
+    def format_signature(self):
+        inst = self.object
+        sig = self.format_name()
+        if len(inst.outs) > 0:
+            sig = ', '.join([op.name for op in inst.outs]) + ' = ' + sig
+        if len(inst.ins) > 0:
+            sig = sig + ' ' + ', '.join([op.name for op in inst.ins])
+        return sig
+
+    def add_directive_header(self, sig):
+        """Add the directive header and options to the generated content."""
+        domain = getattr(self, 'domain', 'cton')
+        directive = getattr(self, 'directivetype', self.objtype)
+        sourcename = self.get_sourcename()
+        self.add_line(u'.. %s:%s:: %s' % (domain, directive, sig), sourcename)
+        if self.options.noindex:
+            self.add_line(u'   :noindex:', sourcename)
+
+    def add_content(self, more_content, no_docstring=False):
+        super(InstDocumenter, self).add_content(more_content, no_docstring)
+        sourcename = self.get_sourcename()
+
+        # Add inputs and outputs.
+        for op in self.object.ins:
+            self.add_line(u':in {} {}: {}'.format(op.typ.name, op.name, op.get_doc()), sourcename)
+        for op in self.object.outs:
+            self.add_line(u':out {} {}: {}'.format(op.typ.name, op.name, op.get_doc()), sourcename)
+
+
 def setup(app):
     app.add_domain(CretonneDomain)
     app.add_autodocumenter(TypeDocumenter)
+    app.add_autodocumenter(InstDocumenter)
 
     return { 'version' : '0.1' }
