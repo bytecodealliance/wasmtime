@@ -94,3 +94,19 @@ class FloatType(ScalarType):
 
     def __repr__(self):
         return 'FloatType(bits={})'.format(self.bits)
+
+#
+# Parametric polymorphism.
+#
+
+class TypeVar(object):
+    """
+    A Type Variable.
+
+    Type variables can be used in place of concrete types when defining
+    instructions. This makes the instructions *polymorphic*.
+    """
+
+    def __init__(self, name):
+        self.name = name
+
