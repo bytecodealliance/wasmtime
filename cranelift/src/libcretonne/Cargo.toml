@@ -1,0 +1,10 @@
+[package]
+authors = ["The cwCretonneRust Project Developers"]
+name = "cretonne"
+version = "0.0.0"
+
+[lib]
+name = "cretonne"
+path = "lib.rs"
+
+[dependencies]
