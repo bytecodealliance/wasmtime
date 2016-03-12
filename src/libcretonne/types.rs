@@ -5,7 +5,7 @@ use std::fmt::{self, Display, Formatter, Write};
 
 /// The type of an SSA value.
 ///
-/// The VOID type is only used for instructions that produce no value. It can't be part of a SIMD
+/// The `VOID` type is only used for instructions that produce no value. It can't be part of a SIMD
 /// vector.
 ///
 /// Basic integer types: `I8`, `I16`, `I32`, and `I64`. These types are sign-agnostic.
@@ -20,20 +20,41 @@ use std::fmt::{self, Display, Formatter, Write};
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Type(u8);
 
+/// No type. Used for functions without a return value. Can't be loaded or stored. Can't be part of
+/// a SIMD vector.
 pub const VOID: Type = Type(0);
 
+/// Integer type with 8 bits.
 pub const I8: Type = Type(1);
+
+/// Integer type with 16 bits.
 pub const I16: Type = Type(2);
+
+/// Integer type with 32 bits.
 pub const I32: Type = Type(3);
+
+/// Integer type with 64 bits.
 pub const I64: Type = Type(4);
 
+/// IEEE single precision floating point type.
 pub const F32: Type = Type(5);
+
+/// IEEE double precision floating point type.
 pub const F64: Type = Type(6);
 
+/// Boolean type. Can't be loaded or stored, but can be used to form SIMD vectors.
 pub const B1: Type = Type(7);
+
+/// Boolean type using 8 bits to represent true/false.
 pub const B8: Type = Type(8);
+
+/// Boolean type using 16 bits to represent true/false.
 pub const B16: Type = Type(9);
+
+/// Boolean type using 32 bits to represent true/false.
 pub const B32: Type = Type(10);
+
+/// Boolean type using 64 bits to represent true/false.
 pub const B64: Type = Type(11);
 
 impl Type {
