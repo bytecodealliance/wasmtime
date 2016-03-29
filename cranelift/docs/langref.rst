@@ -625,7 +625,7 @@ Operations
 The remaining instruction set is mostly arithmetic.
 
 A few instructions have variants that take immediate operands (e.g.,
-:inst:`and` / :inst:`and_imm`), but in general an instruction is required to
+:inst:`band` / :inst:`band_imm`), but in general an instruction is required to
 load a constant into an SSA value.
 
 .. inst:: a = iconst N
@@ -747,43 +747,10 @@ Integer operations
     sle    ule      Less than or equal
     ====== ======== =========
 
-.. inst:: a = iadd x, y
-
-    Wrapping integer addition: :math:`a := x + y \pmod{2^B}`. This instruction
-    does not depend on the signed/unsigned interpretation of the operands.
-
-    Polymorphic over all integer types (vector and scalar).
-
-.. inst:: a = iadd_imm x, Imm
-
-    Add immediate integer.
-
-    Same as :inst:`iadd`, but one operand is an immediate constant.
-
-    :arg iN x: Dynamic addend.
-    :arg Imm: Immediate addend.
-
-    Polymorphic over all scalar integer types.
-
-.. inst:: a = isub x, y
-
-    Wrapping integer subtraction: :math:`a := x - y \pmod{2^B}`. This
-    instruction does not depend on the signed/unsigned interpretation of the
-    operands.
-
-    Polymorphic over all integer types (vector and scalar).
-
-.. inst:: a = isub_imm Imm, x
-
-    Immediate subtraction.
-
-    Also works as integer negation when :math:`Imm = 0`. Use :inst:`iadd_imm` with a
-    negative immediate operand for the reverse immediate subtraction.
-
-    :arg Imm: Immediate minuend.
-    :arg iN x: Dynamic subtrahend.
-
-    Polymorphic over all scalar integer types.
+.. autoinst:: iadd
+.. autoinst:: iadd_imm
+.. autoinst:: isub
+.. autoinst:: isub_imm
 
 .. todo:: Integer overflow arithmetic
 
@@ -791,78 +758,22 @@ Integer operations
     implement larger integer types efficiently. It should also be possible to
     legalize :type:`i64` arithmetic to terms of :type:`i32` operations.
 
-.. inst:: a = imul x, y
-
-    Wrapping integer multiplication: :math:`a := x y \pmod{2^B}`. This
-    instruction does not depend on the signed/unsigned interpretation of the
-    operands.
-
-    Polymorphic over all integer types (vector and scalar).
-
-.. inst:: a = imul_imm x, Imm
-
-    Integer multiplication by immediate constant.
-
-    Polymorphic over all scalar integer types.
+.. autoinst:: imul
+.. autoinst:: imul_imm
 
 .. todo:: Larger multiplication results.
 
     For example, ``smulx`` which multiplies :type:`i32` operands to produce a
     :type:`i64` result. Alternatively, ``smulhi`` and ``smullo`` pairs.
 
-.. inst:: a = udiv x, y
-
-    Unsigned integer division: :math:`a := \lfloor {x \over y} \rfloor`. This
-    operation traps if the divisor is zero.
-
-.. inst:: a = udiv_imm x, Imm
-
-    Unsigned integer division by an immediate constant.
-
-    This instruction never traps because a divisor of zero is not allowed.
-
-.. inst:: a = sdiv x, y
-
-    Signed integer division rounded toward zero: :math:`a := sign(xy) \lfloor
-    {|x| \over |y|}\rfloor`. This operation traps if the divisor is zero, or if
-    the result is not representable in :math:`B` bits two's complement. This only
-    happens when :math:`x = -2^{B-1}, y = -1`.
-
-.. inst:: a = sdiv_imm x, Imm
-
-    Signed integer division by an immediate constant.
-
-    This instruction never traps because a divisor of -1 or 0 is not allowed.
-
-.. inst:: a = urem x, y
-
-    Unsigned integer remainder.
-
-    This operation traps if the divisor is zero.
-
-.. inst:: a = urem_imm x, Imm
-
-    Unsigned integer remainder with immediate divisor.
-
-    This instruction never traps because a divisor of zero is not allowed.
-
-.. inst:: a = srem x, y
-
-    Signed integer remainder.
-
-    This operation traps if the divisor is zero.
-
-    .. todo:: Integer remainder vs modulus.
-
-        Clarify whether the result has the sign of the divisor or the dividend.
-        Should we add a ``smod`` instruction for the case where the result has
-        the same sign as the divisor?
-
-.. inst:: a = srem_imm x, Imm
-
-    Signed integer remainder with immediate divisor.
-
-    This instruction never traps because a divisor of 0 or -1 is not allowed.
+.. autoinst:: udiv
+.. autoinst:: udiv_imm
+.. autoinst:: sdiv
+.. autoinst:: sdiv_imm
+.. autoinst:: urem
+.. autoinst:: urem_imm
+.. autoinst:: srem
+.. autoinst:: srem_imm
 
 .. todo:: Minimum / maximum.
 
@@ -880,153 +791,41 @@ Integer operations
 Bitwise operations
 ------------------
 
-.. inst:: a = and x, y
+The bitwise operations and operate on any value type: Integers, floating point
+numbers, and booleans. When operating on integer or floating point types, the
+bitwise operations are working on the binary representation of the values. When
+operating on boolean values, the bitwise operations work as logical operators.
 
-    Bitwise and.
-
-    :rtype: bool, iB, iBxN, fBxN?
-
-.. inst:: a = or x, y
-
-    Bitwise or.
-
-    :rtype: bool, iB, iBxN, fBxN?
-
-.. inst:: a = xor x, y
-
-    Bitwise xor.
-
-    :rtype: bool, iB, iBxN, fBxN?
-
-.. inst:: a = not x
-
-    Bitwise not.
-
-    :rtype: bool, iB, iBxN, fBxN?
+.. autoinst:: band
+.. autoinst:: bor
+.. autoinst:: bxor
+.. autoinst:: bnot
 
 .. todo:: Redundant bitwise operators.
 
     ARM has instructions like ``bic(x,y) = x & ~y``, ``orn(x,y) = x | ~y``, and
     ``eon(x,y) = x ^ ~y``.
 
-.. inst:: a = rotl x, y
+The shift and rotate operations only work on integer types (scalar and vector).
+The shift amount does not have to be the same type as the value being shifted.
+Only the low `B` bits of the shift amount is significant.
 
-    Rotate left.
+When operating on an integer vector type, the shift amount is still a scalar
+type, and all the lanes are shifted the same amount. The shift amount is masked
+to the number of bits in a *lane*, not the full size of the vector type.
 
-    Rotate the bits in ``x`` by ``y`` places.
+.. autoinst:: rotl
+.. autoinst:: rotr
+.. autoinst:: ishl
+.. autoinst:: ushr
+.. autoinst:: sshr
 
-    :arg T x: Integer value to be rotated.
-    :arg iN y: Number of bits to shift. Any scalar integer type, not necessarily
-               the same type as ``x``.
-    :rtype: Same type as ``x``.
+The bit-counting instructions below are scalar only.
 
-.. inst:: a = rotr x, y
-
-    Rotate right.
-
-    Rotate the bits in ``x`` by ``y`` places.
-
-    :arg T x: Integer value to be rotated.
-    :arg iN y: Number of bits to shift. Any scalar integer type, not necessarily
-               the same type as ``x``.
-    :rtype: Same type as ``x``.
-
-.. inst:: a = ishl x, y
-
-    Integer shift left. Shift the bits in ``x`` towards the MSB by ``y``
-    places. Shift in zero bits to the LSB.
-
-    The shift amount is masked to the size of ``x``.
-
-    :arg T x: Integer value to be shifted.
-    :arg iN y: Number of bits to shift. Any scalar integer type, not necessarily
-               the same type as ``x``.
-    :rtype: Same type as ``x``.
-
-    When shifting a B-bits integer type, this instruction computes:
-
-    .. math::
-        s &:= y \pmod B,                \\
-        a &:= x \cdot 2^s \pmod{2^B}.
-
-    .. todo:: Add ``ishl_imm`` variant with an immediate ``y``.
-
-.. inst:: a = ushr x, y
-
-    Unsigned shift right. Shift bits in ``x`` towards the LSB by ``y`` places,
-    shifting in zero bits to the MSB. Also called a *logical shift*.
-
-    The shift amount is masked to the size of the register.
-
-    :arg T x: Integer value to be shifted.
-    :arg iN y: Number of bits to shift. Can be any scalar integer type, not
-               necessarily the same type as ``x``.
-    :rtype: Same type as ``x``.
-
-    When shifting a B-bits integer type, this instruction computes:
-
-    .. math::
-        s &:= y \pmod B,                \\
-        a &:= \lfloor x \cdot 2^{-s} \rfloor.
-
-    .. todo:: Add ``ushr_imm`` variant with an immediate ``y``.
-
-.. inst:: a = sshr x, y
-
-    Signed shift right. Shift bits in ``x`` towards the LSB by ``y`` places,
-    shifting in sign bits to the MSB. Also called an *arithmetic shift*.
-
-    The shift amount is masked to the size of the register.
-
-    :arg T x: Integer value to be shifted.
-    :arg iN y: Number of bits to shift. Can be any scalar integer type, not
-               necessarily the same type as ``x``.
-    :rtype: Same type as ``x``.
-
-    .. todo:: Add ``sshr_imm`` variant with an immediate ``y``.
-
-.. inst:: a = clz x
-
-    Count leading zero bits.
-
-    :arg x: Integer value.
-    :rtype: :type:`i8`
-
-    Starting from the MSB in ``x``, count the number of zero bits before
-    reaching the first one bit. When ``x`` is zero, returns the size of x in
-    bits.
-
-.. inst:: a = cls x
-
-    Count leading sign bits.
-
-    :arg x: Integer value.
-    :rtype: :type:`i8`
-
-    Starting from the MSB after the sign bit in ``x``, count the number of
-    consecutive bits identical to the sign bit. When ``x`` is 0 or -1, returns
-    one less than the size of x in bits.
-
-.. inst:: a = ctz x
-
-    Count trailing zeros.
-
-    :arg x: Integer value.
-    :rtype: :type:`i8`
-
-    Starting from the LSB in ``x``, count the number of zero bits before
-    reaching the first one bit. When ``x`` is zero, returns the size of x in
-    bits.
-
-.. inst:: a = popcnt x
-
-    Population count
-
-    :arg x: Integer value.
-    :rtype: :type:`i8`
-
-    Count the number of one bits in ``x``.
-
+.. autoinst:: clz
+.. autoinst:: cls
+.. autoinst:: ctz
+.. autoinst:: popcnt
 
 Floating point operations
 -------------------------
