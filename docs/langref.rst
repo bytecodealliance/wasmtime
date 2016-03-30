@@ -200,6 +200,18 @@ in this reference.
 
     Either :type:`bool` or :type:`iN`.
 
+Immediate operand types
+-----------------------
+
+These types are not part of the normal SSA type system. They are used to
+indicate the different kinds of immediate operands on an instruction.
+
+.. type:: imm64
+
+    A 64-bit immediate integer. The value of this operand is interpreted as a
+    signed two's complement integer. Instruction encodings may limit the valid
+    range.
+
 Control flow
 ============
 

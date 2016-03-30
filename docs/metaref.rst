@@ -38,13 +38,28 @@ Predefined types
 .. automodule:: cretonne.types
     :members:
 
+.. currentmodule:: cretonne
+
 Parametric polymorphism
 -----------------------
-.. currentmodule:: cretonne
 
 Instruction operands can be defined with *type variables* instead of concrete
 types for their operands. This makes the instructions polymorphic.
 
 .. autoclass:: TypeVar
 
+Immediates
+----------
 
+Immediate instruction operands don't correspond to SSA values, but have values
+that are encoded directly in the instruction. Immediate operands don't
+have types from the :class:`cretonne.Type` type system; they often have
+enumerated values of a specific type. The type of an immediate operand is
+indicated with an instance of :class:`ImmediateType`.
+
+.. autoclass:: ImmediateType
+
+.. automodule:: cretonne.immediates
+    :members:
+
+.. currentmodule:: cretonne
