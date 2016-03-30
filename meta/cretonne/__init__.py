@@ -110,3 +110,23 @@ class TypeVar(object):
     def __init__(self, name):
         self.name = name
 
+#
+# Immediate operands.
+#
+# Instances of immediate operand types are provided in the cretonne.immediates
+# module.
+
+class ImmediateType(object):
+    """
+    The type of an immediate instruction operand.
+    """
+
+    def __init__(self, name, doc):
+        self.name = name
+        self.__doc__ = doc
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return 'ImmediateType({})'.format(self.name)
