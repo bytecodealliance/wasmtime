@@ -23,7 +23,7 @@ class CretonneLexer(RegexLexer):
             # Numbers.
             (r'[-+]?0[xX][0-9a-fA-F]+', Number.Hex),
             (r'[-+]?0[xX][0-9a-fA-F]*\.[0-9a-fA-F]*([pP]\d+)?', Number.Hex),
-            (r'[-+]?\d+\.\d+([eE]\d+)?', Number.Float),
+            (r'[-+]?(\d+\.\d+([eE]\d+)?|[sq]NaN|Inf)', Number.Float),
             (r'[-+]?\d+', Number.Integer),
             # Reserved words.
             (keywords('function', 'entry'), Keyword),

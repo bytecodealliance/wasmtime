@@ -212,6 +212,23 @@ indicate the different kinds of immediate operands on an instruction.
     signed two's complement integer. Instruction encodings may limit the valid
     range.
 
+.. type:: ieee32
+
+    A 32-bit immediate floating point number in the IEEE 754-2008 binary32
+    interchange format. All bit patterns are allowed.
+
+.. type:: ieee64
+
+    A 64-bit immediate floating point number in the IEEE 754-2008 binary64
+    interchange format. All bit patterns are allowed.
+
+.. type:: immvector
+
+    An immediate SIMD vector. This operand supplies all the bits of a SIMD
+    type, so it can have different sizes depending on the type produced. The
+    bits of the operand are interpreted as if the SIMD vector was loaded from
+    memory containing the immediate.
+
 Control flow
 ============
 
@@ -628,31 +645,10 @@ A few instructions have variants that take immediate operands (e.g.,
 :inst:`band` / :inst:`band_imm`), but in general an instruction is required to
 load a constant into an SSA value.
 
-.. inst:: a = iconst N
-
-    Integer constant.
-
-    Create a scalar integer SSA value with an immediate constant value, or an
-    integer vector where all the lanes have the same value.
-
-    :result Int a: Constant value.
-
-.. inst:: a = fconst N
-
-    Floating point constant.
-
-    Create a :type:`f32` or :type:`f64` SSA value with an immediate constant
-    value, or a floating point vector where all the lanes have the same value.
-
-    :result Float a: Constant value.
-
-.. inst:: a = vconst N
-
-    Vector constant (floating point or integer).
-
-    Create a SIMD vector value where the lanes don't have to be identical.
-
-    :result TxN a: Constant value.
+.. autoinst:: iconst
+.. autoinst:: f32const
+.. autoinst:: f64const
+.. autoinst:: vconst
 
 .. inst:: a = select c, x, y
 
