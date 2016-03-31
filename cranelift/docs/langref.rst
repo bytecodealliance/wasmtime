@@ -212,6 +212,9 @@ indicate the different kinds of immediate operands on an instruction.
     signed two's complement integer. Instruction encodings may limit the valid
     range.
 
+    In the textual format, :type:`imm64` immediates appear as decimal or
+    hexadecimal literals using the same syntax as C.
+
 .. type:: ieee32
 
     A 32-bit immediate floating point number in the IEEE 754-2008 binary32
@@ -228,6 +231,38 @@ indicate the different kinds of immediate operands on an instruction.
     type, so it can have different sizes depending on the type produced. The
     bits of the operand are interpreted as if the SIMD vector was loaded from
     memory containing the immediate.
+
+The two IEEE floating point immediate types :type:`ieee32` and :type:`ieee64`
+are displayed as hexadecimal floating point literals in the textual IL format.
+Decimal floating point literals are not allowed because some computer systems
+can round differently when converting to binary. The hexadecimal floating point
+format is mostly the same as the one used by C99, but extended to represent all
+NaN bit patterns:
+
+Normal numbers
+    Compatible with C99: ``-0x1.Tpe`` where ``T`` are the trailing
+    significand bits encoded as hexadecimal, and ``e`` is the unbiased exponent
+    as a decimal number. :type:`ieee32` has 23 trailing significand bits. They
+    are padded with an extra LSB to produce 6 hexadecimal digits. This is not
+    necessary for :type:`ieee64` which has 52 trailing significand bits
+    forming 13 hexadecimal digits with no padding.
+
+Subnormal numbers
+    Compatible with C99: ``-0x0.Tpemin`` where ``T`` are the trailing
+    significand bits encoded as hexadecimal, and ``emin`` is the minimum exponent
+    as a decimal number.
+
+Infinities
+    Either ``-Inf`` or ``Inf``.
+
+Quiet NaNs
+    Quiet NaNs have the MSB of the trailing significand set. If the remaining
+    bits of the trailing significand are all zero, the value is displayed as
+    ``-qNaN`` or ``qNaN``. Otherwise, ``-qNaN:0xT`` where ``T`` are the
+    trailing significand bits encoded as hexadecimal.
+
+Signaling NaNs
+    Displayed as ``-sNaN:0xT``.
 
 Control flow
 ============
