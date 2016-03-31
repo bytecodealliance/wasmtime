@@ -4,11 +4,59 @@ Cretonne base instruction set.
 This module defines the basic Cretonne instruction set that all targets support.
 """
 from . import TypeVar, Operand, Instruction
-from types import i8
-from immediates import imm64
+from types import i8, f32, f64
+from immediates import imm64, ieee32, ieee64, immvector
 
 Int = TypeVar('Int', 'A scalar or vector integer type')
 iB = TypeVar('iB', 'A scalar integer type')
+TxN = TypeVar('%Tx%N', 'A SIMD vector type')
+
+#
+# Materializing constants.
+#
+
+N = Operand('N', imm64)
+a = Operand('a', Int, doc='A constant integer scalar or vector value')
+iconst = Instruction('iconst', r"""
+    Integer constant.
+
+    Create a scalar integer SSA value with an immediate constant value, or an
+    integer vector where all the lanes have the same value.
+    """,
+    ins=N, outs=a)
+
+N = Operand('N', ieee32)
+a = Operand('a', f32, doc='A constant integer scalar or vector value')
+f32const = Instruction('f32const', r"""
+    Floating point constant.
+
+    Create a :type:`f32` SSA value with an immediate constant value, or a
+    floating point vector where all the lanes have the same value.
+    """,
+    ins=N, outs=a)
+
+N = Operand('N', ieee64)
+a = Operand('a', f64, doc='A constant integer scalar or vector value')
+f64const = Instruction('f64const', r"""
+    Floating point constant.
+
+    Create a :type:`f64` SSA value with an immediate constant value, or a
+    floating point vector where all the lanes have the same value.
+    """,
+    ins=N, outs=a)
+
+N = Operand('N', immvector)
+a = Operand('a', TxN, doc='A constant vector value')
+vconst = Instruction('vconst', r"""
+    Vector constant (floating point or integer).
+
+    Create a SIMD vector value where the lanes don't have to be identical.
+    """,
+    ins=N, outs=a)
+
+#
+# Integer arithmetic
+#
 
 a = Operand('a', Int)
 x = Operand('x', Int)

@@ -2,7 +2,7 @@ function average(i32, i32) -> f32 {
     ss1 = stack_slot 8, align 4   ; Stack slot for ``sum``.
 
 entry ebb1(v1: i32, v2: i32):
-    v3 = fconst.f64 0.0
+    v3 = f64const 0x0.0
     stack_store v3, ss1
     brz v2, ebb3                  ; Handle count == 0.
     v4 = iconst.i32 0
@@ -26,6 +26,6 @@ ebb2(v5: i32):
     return v17
 
 ebb3:
-    v100 = fconst.f32 0x7fc00000  ; 0/0 = NaN
+    v100 = f32const qNaN
     return v100
 }
