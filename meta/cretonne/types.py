@@ -2,13 +2,18 @@
 The cretonne.types module predefines all the Cretonne scalar types.
 """
 
-from . import ScalarType, IntType, FloatType
+from . import ScalarType, IntType, FloatType, BoolType
 
 #: Boolean.
-bool = ScalarType('bool', 0,
+b1 = ScalarType('b1', 0,
         """
         A boolean value that is either true or false.
         """)
+
+b8  = BoolType(8)  #: 8-bit bool.
+b16 = BoolType(16) #: 16-bit bool.
+b32 = BoolType(32) #: 32-bit bool.
+b64 = BoolType(64) #: 64-bit bool.
 
 i8  = IntType(8)  #: 8-bit int.
 i16 = IntType(16) #: 16-bit int.

@@ -87,7 +87,36 @@ All SSA values have a type which determines the size and shape (for SIMD
 vectors) of the value. Many instructions are polymorphic -- they can operate on
 different types.
 
-.. autoctontype:: bool
+Boolean types
+-------------
+
+Boolean values are either true or false. While this only requires a single bit
+to represent, more bits are often used when holding a boolean value in a
+register or in memory. The :type:`b1` type represents an abstract boolean
+value. It can only exist as an SSA value, it can't be stored in memory or
+converted to another type. The larger boolean types can be stored in memory.
+
+.. todo:: Clarify the representation of larger boolean types.
+
+    The multi-bit boolean types can be interpreted in different ways. We could
+    declare that zero means false and non-zero means true. This may require
+    unwanted normalization code in some places.
+
+    We could specify a fixed encoding like all ones for true. This would then
+    lead to undefined behavior if untrusted code uses the multibit booleans
+    incorrectly.
+
+    Something like this:
+
+    - External code is not allowed to load/store multi-bit booleans or
+      otherwise expose the representation.
+    - Each target specifies the exact representation of a multi-bit boolean.
+
+.. autoctontype:: b1
+.. autoctontype:: b8
+.. autoctontype:: b16
+.. autoctontype:: b32
+.. autoctontype:: b64
 
 Integer types
 -------------
@@ -115,7 +144,7 @@ SIMD vector types
 -----------------
 
 A SIMD vector type represents a vector of values from one of the scalar types
-(:type:`bool`, integer, and floating point). Each scalar value in a SIMD type is
+(boolean, integer, and floating point). Each scalar value in a SIMD type is
 called a *lane*. The number of lanes must be a power of two in the range 2-256.
 
 .. type:: i%Bx%N
@@ -146,14 +175,14 @@ called a *lane*. The number of lanes must be a power of two in the range 2-256.
 
     The size of a :type:`f64` vector in memory is :math:`8N` bytes.
 
-.. type:: boolx%N
+.. type:: b1x%N
 
     A boolean SIMD vector.
 
     Boolean vectors are used when comparing SIMD vectors. For example,
-    comparing two :type:`i32x4` values would produce a :type:`boolx4` result.
+    comparing two :type:`i32x4` values would produce a :type:`b1x4` result.
 
-    Like the :type:`bool` type, a boolean vector cannot be stored in memory.
+    Like the :type:`b1` type, a boolean vector cannot be stored in memory.
 
 Pseudo-types and type classes
 -----------------------------
@@ -194,11 +223,11 @@ in this reference.
 
 .. type:: Logic
 
-    Either :type:`bool` or :type:`boolxN`.
+    Either :type:`b1` or :type:`b1xN`.
 
 .. type:: Testable
 
-    Either :type:`bool` or :type:`iN`.
+    Either :type:`b1` or :type:`iN`.
 
 Immediate operand types
 -----------------------
@@ -291,7 +320,7 @@ instruction in the EBB.
 
     Branch when zero.
 
-    If ``x`` is a :type:`bool` value, take the branch when ``x`` is false. If
+    If ``x`` is a :type:`b1` value, take the branch when ``x`` is false. If
     ``x`` is an integer value, take the branch when ``x = 0``.
 
     :arg Testable x: Value to test.
@@ -303,7 +332,7 @@ instruction in the EBB.
 
     Branch when non-zero.
 
-    If ``x`` is a :type:`bool` value, take the branch when ``x`` is true. If
+    If ``x`` is a :type:`b1` value, take the branch when ``x`` is true. If
     ``x`` is an integer value, take the branch when ``x != 0``.
 
     :arg Testable x: Value to test.
@@ -479,8 +508,7 @@ Cretonne also provides more restricted memory operations that are always safe.
     Load from memory at ``p + Offset``.
 
     This is a polymorphic instruction that can load any value type which has a
-    memory representation (i.e., everything except :type:`bool` and boolean
-    vectors).
+    memory representation.
 
     :arg iPtr p: Base address.
     :arg Offset: Immediate signed offset.
@@ -692,7 +720,7 @@ load a constant into an SSA value.
 
     Conditional select.
 
-    :arg bool c: Controlling flag.
+    :arg b1 c: Controlling flag.
     :arg T x: Value to return when ``c`` is true.
     :arg T y: Value to return when ``c`` is false. Must be same type as ``x``.
     :result T a: Same type as ``x`` and ``y``.
@@ -710,7 +738,7 @@ Vector operations
     Select lanes from ``x`` or ``y`` controlled by the lanes of the boolean
     vector ``c``.
 
-    :arg boolxN c: Controlling flag vector.
+    :arg b1xN c: Controlling flag vector.
     :arg TxN x: Vector with lanes selected by the true lanes of ``c``.
               Must be a vector type with the same number of lanes as ``c``.
     :arg TxN y: Vector with lanes selected by the false lanes of ``c``.
@@ -872,7 +900,7 @@ These operations generally follow IEEE 754-2008 semantics.
 
     :arg Cond: Condition code determining how ``x`` and ``y`` are compared.
     :arg x,y: Floating point scalar or vector values of the same type.
-    :rtype: :type:`bool` or :type:`boolxN` with the same number of lanes as
+    :rtype: :type:`b1` or :type:`b1xN` with the same number of lanes as
             ``x`` and ``y``.
 
     An 'ordered' condition code yields ``false`` if either operand is Nan.
