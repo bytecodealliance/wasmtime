@@ -30,7 +30,7 @@ class CretonneLexer(RegexLexer):
             # Known attributes.
             (keywords('align', 'aligntrap', 'uext', 'sext', 'inreg'), Name.Attribute),
             # Well known value types.
-            (r'\b(bool|i\d+|f32|f64)(x\d+)?\b', Keyword.Type),
+            (r'\b(b\d+|i\d+|f32|f64)(x\d+)?\b', Keyword.Type),
             # v<nn> = value
             # ss<nn> = stack slot
             (r'(v|ss)\d+', Name.Variable),

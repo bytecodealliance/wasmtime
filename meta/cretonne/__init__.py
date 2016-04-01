@@ -95,6 +95,20 @@ class FloatType(ScalarType):
     def __repr__(self):
         return 'FloatType(bits={})'.format(self.bits)
 
+class BoolType(ScalarType):
+    """A concrete scalar boolean type."""
+
+    def __init__(self, bits):
+        assert bits > 0, 'BoolType must have positive number of bits'
+        super(BoolType, self).__init__(
+                name='b{:d}'.format(bits),
+                membytes=bits/8,
+                doc="A boolean type with {} bits.".format(bits))
+        self.bits = bits
+
+    def __repr__(self):
+        return 'BoolType(bits={})'.format(self.bits)
+
 #
 # Parametric polymorphism.
 #
