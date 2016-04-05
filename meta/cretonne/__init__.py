@@ -150,6 +150,50 @@ class ImmediateType(object):
 # Defining instructions.
 #
 
+class InstructionGroup(object):
+    """
+    An instruction group.
+
+    Every instruction must belong to exactly one instruction group. A given
+    target architecture can support instructions from multiple groups, and it
+    does not necessarily support all instructions in a group.
+
+    New instructions are automatically added to the currently open instruction
+    group.
+    """
+
+    # The currently open instruction group.
+    _current = None
+
+    def open(self):
+        """
+        Open this instruction group such that future new instructions are
+        added to this group.
+        """
+        assert InstructionGroup._current is None, (
+                "Can't open {} since {} is already open".format(self, _current))
+        InstructionGroup._current = self
+
+    def close(self):
+        """
+        Close this instruction group. This function should be called before
+        opening another instruction group.
+        """
+        assert InstructionGroup._current is self, (
+                "Can't close {}, the open instuction group is {}".format(self, _current))
+        InstructionGroup._current = None
+
+    def __init__(self, name, doc):
+        self.name = name
+        self.__doc__ = doc
+        self.instructions = []
+        self.open()
+
+    @staticmethod
+    def append(inst):
+        assert InstructionGroup._current, "Open an instruction group before defining instructions."
+        InstructionGroup._current.instructions.append(inst)
+
 class Operand(object):
     """
     An instruction operand.
@@ -202,6 +246,7 @@ class Instruction(object):
         self.__doc__ = doc
         self.ins = self._to_operand_tuple(ins)
         self.outs = self._to_operand_tuple(outs)
+        InstructionGroup.append(self)
 
     @staticmethod
     def _to_operand_tuple(x):

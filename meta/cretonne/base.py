@@ -3,9 +3,11 @@ Cretonne base instruction set.
 
 This module defines the basic Cretonne instruction set that all targets support.
 """
-from . import TypeVar, Operand, Instruction
+from . import TypeVar, Operand, Instruction, InstructionGroup
 from types import i8, f32, f64
 from immediates import imm64, ieee32, ieee64, immvector
+
+instructions = InstructionGroup("base", "Shared base instruction set")
 
 Int = TypeVar('Int', 'A scalar or vector integer type')
 iB = TypeVar('iB', 'A scalar integer type')
@@ -321,3 +323,5 @@ popcnt = Instruction('popcnt', r"""
     Count the number of one bits in ``x``.
     """,
     ins=x, outs=a)
+
+instructions.close()
