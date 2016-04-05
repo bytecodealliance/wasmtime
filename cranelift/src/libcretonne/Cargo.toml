@@ -2,6 +2,7 @@
 authors = ["The cwCretonneRust Project Developers"]
 name = "cretonne"
 version = "0.0.0"
+build = "build.rs"
 
 [lib]
 name = "cretonne"
