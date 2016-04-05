@@ -72,3 +72,5 @@ class.
 
 .. autoclass:: Operand
 .. autoclass:: Instruction
+.. autoclass:: InstructionGroup
+    :members:
