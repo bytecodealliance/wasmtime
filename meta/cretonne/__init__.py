@@ -5,6 +5,13 @@ This module provides classes and functions used to describe Cretonne
 instructions.
 """
 
+import re
+
+camel_re = re.compile('(^|_)([a-z])')
+def camel_case(s):
+    """Convert the string s to CamelCase"""
+    return camel_re.sub(lambda m: m.group(2).upper(), s)
+
 # Concrete types.
 #
 # Instances (i8, i32, ...) are provided in the cretonne.types module.
@@ -243,6 +250,7 @@ class Instruction(object):
 
     def __init__(self, name, doc, ins=(), outs=(), **kwargs):
         self.name = name
+        self.camel_name = camel_case(name)
         self.__doc__ = doc
         self.ins = self._to_operand_tuple(ins)
         self.outs = self._to_operand_tuple(outs)
