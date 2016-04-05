@@ -99,9 +99,9 @@ fn format_float(bits: u64, w: u8, t: u8, f: &mut Formatter) -> fmt::Result {
             if t_bits & (1 << (t - 1)) != 0 {
                 // Quiet NaN.
                 if payload != 0 {
-                    write!(f, "qNaN:0x{:x}", payload)
+                    write!(f, "NaN:0x{:x}", payload)
                 } else {
-                    write!(f, "qNaN")
+                    write!(f, "NaN")
                 }
             } else {
                 // Signaling NaN.
@@ -186,12 +186,12 @@ mod tests {
                    "0x0.000002p-126");
         assert_eq!(format!("{}", Ieee32::new(f32::INFINITY)), "Inf");
         assert_eq!(format!("{}", Ieee32::new(f32::NEG_INFINITY)), "-Inf");
-        assert_eq!(format!("{}", Ieee32::new(f32::NAN)), "qNaN");
-        assert_eq!(format!("{}", Ieee32::new(-f32::NAN)), "-qNaN");
+        assert_eq!(format!("{}", Ieee32::new(f32::NAN)), "NaN");
+        assert_eq!(format!("{}", Ieee32::new(-f32::NAN)), "-NaN");
         // Construct some qNaNs with payloads.
-        assert_eq!(format!("{}", Ieee32::new_from_bits(0x7fc00001)), "qNaN:0x1");
+        assert_eq!(format!("{}", Ieee32::new_from_bits(0x7fc00001)), "NaN:0x1");
         assert_eq!(format!("{}", Ieee32::new_from_bits(0x7ff00001)),
-                   "qNaN:0x300001");
+                   "NaN:0x300001");
         // Signaling NaNs.
         assert_eq!(format!("{}", Ieee32::new_from_bits(0x7f800001)), "sNaN:0x1");
         assert_eq!(format!("{}", Ieee32::new_from_bits(0x7fa00001)),
@@ -221,13 +221,13 @@ mod tests {
                    "0x0.0000000000001p-1022");
         assert_eq!(format!("{}", Ieee64::new(f64::INFINITY)), "Inf");
         assert_eq!(format!("{}", Ieee64::new(f64::NEG_INFINITY)), "-Inf");
-        assert_eq!(format!("{}", Ieee64::new(f64::NAN)), "qNaN");
-        assert_eq!(format!("{}", Ieee64::new(-f64::NAN)), "-qNaN");
+        assert_eq!(format!("{}", Ieee64::new(f64::NAN)), "NaN");
+        assert_eq!(format!("{}", Ieee64::new(-f64::NAN)), "-NaN");
         // Construct some qNaNs with payloads.
         assert_eq!(format!("{}", Ieee64::new_from_bits(0x7ff8000000000001)),
-                   "qNaN:0x1");
+                   "NaN:0x1");
         assert_eq!(format!("{}", Ieee64::new_from_bits(0x7ffc000000000001)),
-                   "qNaN:0x4000000000001");
+                   "NaN:0x4000000000001");
         // Signaling NaNs.
         assert_eq!(format!("{}", Ieee64::new_from_bits(0x7ff0000000000001)),
                    "sNaN:0x1");

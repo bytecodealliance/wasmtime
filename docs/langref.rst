@@ -247,6 +247,9 @@ Normal numbers
     necessary for :type:`ieee64` which has 52 trailing significand bits
     forming 13 hexadecimal digits with no padding.
 
+Zeros
+    Positive and negative zero are displayed as ``0.0`` and ``-0.0`` respectively.
+
 Subnormal numbers
     Compatible with C99: ``-0x0.Tpemin`` where ``T`` are the trailing
     significand bits encoded as hexadecimal, and ``emin`` is the minimum exponent
@@ -258,8 +261,8 @@ Infinities
 Quiet NaNs
     Quiet NaNs have the MSB of the trailing significand set. If the remaining
     bits of the trailing significand are all zero, the value is displayed as
-    ``-qNaN`` or ``qNaN``. Otherwise, ``-qNaN:0xT`` where ``T`` are the
-    trailing significand bits encoded as hexadecimal.
+    ``-NaN`` or ``NaN``. Otherwise, ``-NaN:0xT`` where ``T`` are the trailing
+    significand bits encoded as hexadecimal.
 
 Signaling NaNs
     Displayed as ``-sNaN:0xT``.
