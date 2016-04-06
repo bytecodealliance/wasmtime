@@ -17,13 +17,31 @@ def collect_instr_groups(targets):
 def gen_opcodes(groups, out_dir):
     """Generate opcode enumerations."""
     fmt = srcgen.Formatter()
-    fmt.line('enum Opcode {')
-    fmt.indent_push()
-    for g in groups:
-        for i in g.instructions:
-            fmt.line(i.camel_name + ',')
-    fmt.indent_pop()
-    fmt.line('}')
+
+    fmt.doc_comment('An instruction opcode.')
+    fmt.doc_comment('')
+    fmt.doc_comment('All instructions from all supported targets are present.')
+    fmt.line('#[derive(Copy, Clone, PartialEq, Eq, Debug)]')
+    instrs = []
+    with fmt.indented('pub enum Opcode {', '}'):
+        for g in groups:
+            for i in g.instructions:
+                instrs.append(i)
+                # Build a doc comment.
+                prefix = ', '.join(o.name for o in i.outs)
+                if prefix:
+                    prefix = prefix + ' = '
+                suffix = ', '.join(o.name for o in i.ins)
+                fmt.doc_comment('`{}{} {}`.'.format(prefix, i.name, suffix))
+                # Enum variant itself.
+                fmt.line(i.camel_name + ',')
+
+    with fmt.indented('impl Display for Opcode {', '}'):
+        with fmt.indented('fn fmt(&self, f: &mut Formatter) -> fmt::Result {', '}'):
+            with fmt.indented('f.write_str(match *self {', '})'):
+                for i in instrs:
+                    fmt.format('Opcode::{} => "{}",', i.camel_name, i.name)
+
     fmt.update_file('opcodes.rs', out_dir)
 
 def generate(targets, out_dir):

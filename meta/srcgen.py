@@ -25,15 +25,15 @@ class Formatter(object):
         >>> f.indent_push()
         >>> f.comment('Nested comment')
         >>> f.indent_pop()
-        >>> f.line('Back again')
+        >>> f.format('Back {} again', 'home')
         >>> f.writelines()
         Hello line 1
-          // Nested comment
-        Back again
+            // Nested comment
+        Back home again
 
     """
 
-    shiftwidth = 2
+    shiftwidth = 4
 
     def __init__(self):
         self.indent = ''
@@ -64,9 +64,48 @@ class Formatter(object):
         with open(filename, 'w') as f:
             self.writelines(f)
 
+    class _IndentedScope(object):
+        def __init__(self, fmt, after):
+            self.fmt = fmt
+            self.after = after
+
+        def __enter__(self):
+            self.fmt.indent_push();
+
+        def __exit__(self, t, v, tb):
+            self.fmt.indent_pop()
+            if self.after:
+                self.fmt.line(self.after)
+
+    def indented(self, before=None, after=None):
+        """
+        Return a scope object for use with a `with` statement:
+
+            >>> f = Formatter()
+            >>> with f.indented('prefix {', '} suffix'):
+            ...     f.line('hello')
+            >>> f.writelines()
+            prefix {
+                hello
+            } suffix
+
+        The optional `before` and `after` parameters are surrounding lines
+        which are *not* indented.
+        """
+        if before:
+            self.line(before)
+        return self._IndentedScope(self, after)
+
+    def format(self, fmt, *args):
+        self.line(fmt.format(*args))
+
     def comment(self, s):
         """Add a comment line."""
         self.line('// ' + s)
+
+    def doc_comment(self, s):
+        """Add a documentation comment line."""
+        self.line('/// ' + s)
 
 if __name__ == "__main__":
     import doctest
