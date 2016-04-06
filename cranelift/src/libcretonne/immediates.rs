@@ -8,6 +8,9 @@
 use std::fmt::{self, Display, Formatter};
 use std::mem;
 
+// The `Opcode` enum is generated from the meta instruction descriptions.
+include!(concat!(env!("OUT_DIR"), "/opcodes.rs"));
+
 /// 64-bit immediate integer operand.
 ///
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -41,11 +44,13 @@ impl Display for Imm64 {
 /// An IEEE binary32 immediate floating point value.
 ///
 /// All bit patterns are allowed.
+#[derive(Copy, Clone, Debug)]
 pub struct Ieee32(f32);
 
 /// An IEEE binary64 immediate floating point value.
 ///
 /// All bit patterns are allowed.
+#[derive(Copy, Clone, Debug)]
 pub struct Ieee64(f64);
 
 // Format a floating point number in a way that is reasonably human-readable, and that can be
@@ -154,6 +159,19 @@ impl Display for Ieee64 {
 mod tests {
     use super::*;
     use std::{f32, f64};
+
+    #[test]
+    fn opcodes() {
+        let x = Opcode::Iadd;
+        let mut y = Opcode::Isub;
+
+        assert!(x != y);
+        y = Opcode::Iadd;
+        assert_eq!(x, y);
+
+        assert_eq!(format!("{:?}", Opcode::IaddImm), "IaddImm");
+        assert_eq!(format!("{}", Opcode::IaddImm), "iadd_imm");
+    }
 
     #[test]
     fn format_imm64() {
