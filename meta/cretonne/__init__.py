@@ -267,3 +267,21 @@ class Instruction(object):
         for op in x:
             assert isinstance(op, Operand)
         return x
+
+#
+# Defining targets
+#
+class Target(object):
+    """
+    A target instruction set architecture.
+
+    The `Target` class collects everything known about a target ISA.
+
+    :param name: Short mnemonic name for the ISA.
+    :param instruction_groups: List of `InstructionGroup` instances that are
+        relevant for this ISA.
+    """
+
+    def __init__(self, name, instrution_groups):
+        self.name = name
+        self.instruction_groups = instrution_groups

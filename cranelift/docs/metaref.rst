@@ -11,7 +11,7 @@ domain specific language embedded in Python.
 An instruction set is described by a Python module under the :file:`meta`
 directory that has a global variable called ``instructions``. The basic
 Cretonne instruction set described in :doc:`langref` is defined by the Python
-module :mod:`cretonne.instrs`.
+module :mod:`cretonne.base`.
 
 .. module:: cretonne
 
@@ -74,3 +74,19 @@ class.
 .. autoclass:: Instruction
 .. autoclass:: InstructionGroup
     :members:
+
+Targets
+=======
+
+Cretonne can be compiled with support for multiple target instruction set
+architectures. Each ISA is represented by a :py:class`cretonne.Target` instance.
+
+.. autoclass:: Target
+
+The definitions for each supported target live in a package under
+:file:`meta/target`.
+
+.. automodule:: target
+    :members:
+
+.. automodule:: target.riscv
