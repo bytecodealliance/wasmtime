@@ -8,8 +8,15 @@
 use std::fmt::{self, Display, Formatter};
 use std::mem;
 
-// The `Opcode` enum is generated from the meta instruction descriptions.
+// The `Opcode` enum and the `opcode_name` function are generated from the meta instruction
+// descriptions.
 include!(concat!(env!("OUT_DIR"), "/opcodes.rs"));
+
+impl Display for Opcode {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", opcode_name(*self))
+    }
+}
 
 /// 64-bit immediate integer operand.
 ///

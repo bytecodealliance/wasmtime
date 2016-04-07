@@ -36,11 +36,11 @@ def gen_opcodes(groups, out_dir):
                 # Enum variant itself.
                 fmt.line(i.camel_name + ',')
 
-    with fmt.indented('impl Display for Opcode {', '}'):
-        with fmt.indented('fn fmt(&self, f: &mut Formatter) -> fmt::Result {', '}'):
-            with fmt.indented('f.write_str(match *self {', '})'):
-                for i in instrs:
-                    fmt.format('Opcode::{} => "{}",', i.camel_name, i.name)
+    # Generate a private opcode_name function.
+    with fmt.indented('fn opcode_name(opc: Opcode) -> &\'static str {', '}'):
+        with fmt.indented('match opc {', '}'):
+            for i in instrs:
+                fmt.format('Opcode::{} => "{}",', i.camel_name, i.name)
 
     fmt.update_file('opcodes.rs', out_dir)
 
