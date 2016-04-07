@@ -7,3 +7,4 @@
 
 pub mod types;
 pub mod immediates;
+pub mod repr;
