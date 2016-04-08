@@ -1,0 +1,12 @@
+[package]
+authors = ["The Cretonne Project Developers"]
+name = "ctonfile"
+version = "0.0.0"
+publish = false
+
+[lib]
+name = "ctonfile"
+path = "lib.rs"
+
+[dependencies]
+cretonne = { path = "../libcretonne" }

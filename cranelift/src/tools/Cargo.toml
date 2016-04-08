@@ -1,0 +1,14 @@
+[package]
+authors = ["The Cretonne Project Developers"]
+name = "cretonne-tools"
+version = "0.0.0"
+description = "Binaries for testing the Cretonne library"
+publish = false
+
+[[bin]]
+name = "cretonne"
+path = "main.rs"
+
+[dependencies]
+cretonne = { path = "../libcretonne" }
+ctonfile = { path = "../libctonfile" }

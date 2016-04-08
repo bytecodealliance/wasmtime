@@ -1,0 +1,19 @@
+[root]
+name = "cretonne-tools"
+version = "0.0.0"
+dependencies = [
+ "cretonne 0.0.0",
+ "ctonfile 0.0.0",
+]
+
+[[package]]
+name = "cretonne"
+version = "0.0.0"
+
+[[package]]
+name = "ctonfile"
+version = "0.0.0"
+dependencies = [
+ "cretonne 0.0.0",
+]
+
