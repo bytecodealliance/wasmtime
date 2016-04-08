@@ -3,6 +3,7 @@ Generate sources with instruction info.
 """
 
 import srcgen
+import constant_hash
 
 def collect_instr_groups(targets):
     seen = set()
@@ -24,6 +25,7 @@ def gen_opcodes(groups, out_dir):
     fmt.line('#[derive(Copy, Clone, PartialEq, Eq, Debug)]')
     instrs = []
     with fmt.indented('pub enum Opcode {', '}'):
+        fmt.line('NotAnOpcode,')
         for g in groups:
             for i in g.instructions:
                 instrs.append(i)
@@ -39,8 +41,19 @@ def gen_opcodes(groups, out_dir):
     # Generate a private opcode_name function.
     with fmt.indented('fn opcode_name(opc: Opcode) -> &\'static str {', '}'):
         with fmt.indented('match opc {', '}'):
+            fmt.line('Opcode::NotAnOpcode => "<not an opcode>",')
             for i in instrs:
                 fmt.format('Opcode::{} => "{}",', i.camel_name, i.name)
+
+    # Generate an opcode hash table for looking up opcodes by name.
+    hash_table = constant_hash.compute_quadratic(instrs,
+            lambda i: constant_hash.simple_hash(i.name))
+    with fmt.indented('const OPCODE_HASH_TABLE: [Opcode; {}] = ['.format(len(hash_table)), '];'):
+        for i in hash_table:
+            if i is None:
+                fmt.line('Opcode::NotAnOpcode,')
+            else:
+                fmt.format('Opcode::{},', i.camel_name)
 
     fmt.update_file('opcodes.rs', out_dir)
 
