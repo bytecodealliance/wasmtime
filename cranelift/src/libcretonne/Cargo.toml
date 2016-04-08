@@ -1,5 +1,5 @@
 [package]
-authors = ["The cwCretonneRust Project Developers"]
+authors = ["The Cretonne Project Developers"]
 name = "cretonne"
 version = "0.0.0"
 build = "build.rs"
