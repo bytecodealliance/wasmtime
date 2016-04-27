@@ -147,21 +147,26 @@ impl Type {
     ///
     /// If this is already a SIMD vector type, this produces a SIMD vector type with `n *
     /// self.lane_count()` lanes.
-    pub fn by(self, n: u16) -> Type {
-        debug_assert!(self.lane_bits() > 0,
-                      "Can't make SIMD vectors with void lanes.");
-        debug_assert!(n.is_power_of_two(),
-                      "Number of SIMD lanes must be a power of two");
+    pub fn by(self, n: u16) -> Option<Type> {
+        if self.lane_bits() == 0 || !n.is_power_of_two() {
+            return None;
+        }
         let log2_lanes: u32 = n.trailing_zeros();
         let new_type = self.0 as u32 + (log2_lanes << 4);
-        assert!(new_type < 0x90, "No more than 256 SIMD lanes supported");
-        Type(new_type as u8)
+        if new_type < 0x90 {
+            Some(Type(new_type as u8))
+        } else {
+            None
+        }
     }
 
     /// Get a SIMD vector with half the number of lanes.
-    pub fn half_vector(self) -> Type {
-        assert!(!self.is_scalar(), "Expecting a proper SIMD vector type.");
-        Type(self.0 - 0x10)
+    pub fn half_vector(self) -> Option<Type> {
+        if self.is_scalar() {
+            None
+        } else {
+            Some(Type(self.0 - 0x10))
+        }
     }
 }
 
@@ -320,13 +325,16 @@ mod tests {
 
     #[test]
     fn vectors() {
-        let big = F64.by(256);
+        let big = F64.by(256).unwrap();
         assert_eq!(big.lane_bits(), 64);
         assert_eq!(big.lane_count(), 256);
         assert_eq!(big.bits(), 64 * 256);
 
-        assert_eq!(format!("{}", big.half_vector()), "f64x128");
-        assert_eq!(format!("{}", B1.by(2).half_vector()), "b1");
+        assert_eq!(format!("{}", big.half_vector().unwrap()), "f64x128");
+        assert_eq!(format!("{}", B1.by(2).unwrap().half_vector().unwrap()),
+                   "b1");
+        assert_eq!(I32.half_vector(), None);
+        assert_eq!(VOID.half_vector(), None);
     }
 
     #[test]
@@ -347,13 +355,16 @@ mod tests {
 
     #[test]
     fn format_vectors() {
-        assert_eq!(format!("{}", B1.by(8)), "b1x8");
-        assert_eq!(format!("{}", B8.by(1)), "b8");
-        assert_eq!(format!("{}", B16.by(256)), "b16x256");
-        assert_eq!(format!("{}", B32.by(4).by(2)), "b32x8");
-        assert_eq!(format!("{}", B64.by(8)), "b64x8");
-        assert_eq!(format!("{}", I8.by(64)), "i8x64");
-        assert_eq!(format!("{}", F64.by(2)), "f64x2");
+        assert_eq!(format!("{}", B1.by(8).unwrap()), "b1x8");
+        assert_eq!(format!("{}", B8.by(1).unwrap()), "b8");
+        assert_eq!(format!("{}", B16.by(256).unwrap()), "b16x256");
+        assert_eq!(format!("{}", B32.by(4).unwrap().by(2).unwrap()), "b32x8");
+        assert_eq!(format!("{}", B64.by(8).unwrap()), "b64x8");
+        assert_eq!(format!("{}", I8.by(64).unwrap()), "i8x64");
+        assert_eq!(format!("{}", F64.by(2).unwrap()), "f64x2");
+        assert_eq!(I8.by(3), None);
+        assert_eq!(I8.by(512), None);
+        assert_eq!(VOID.by(4), None);
     }
 
     #[test]
@@ -374,7 +385,7 @@ mod tests {
         assert_eq!(format!("{}", sig), "(i32)");
         sig.return_types.push(ArgumentType::new(F32));
         assert_eq!(format!("{}", sig), "(i32) -> f32");
-        sig.argument_types.push(ArgumentType::new(I32.by(4)));
+        sig.argument_types.push(ArgumentType::new(I32.by(4).unwrap()));
         assert_eq!(format!("{}", sig), "(i32, i32x4) -> f32");
         sig.return_types.push(ArgumentType::new(B8));
         assert_eq!(format!("{}", sig), "(i32, i32x4) -> f32, b8");
