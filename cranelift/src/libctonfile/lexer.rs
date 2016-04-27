@@ -6,6 +6,7 @@
 // ====--------------------------------------------------------------------------------------====//
 
 use std::str::CharIndices;
+use cretonne::types;
 
 /// The location of a `Token` or `Error`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +34,7 @@ pub enum Token<'a> {
     Entry, // 'entry'
     Float(&'a str), // Floating point immediate
     Integer(&'a str), // Integer immediate
+    Type(types::Type), // i32, f32, b32x4, ...
     ValueDirect(u32), // v12
     ValueExtended(u32), // vx7
     Ebb(u32), // ebb3
@@ -257,7 +259,7 @@ impl<'a> Lexer<'a> {
         } else {
             // Look for numbered well-known entities like ebb15, v45, ...
             let (prefix, suffix) = text.split_at(text.len() - trailing_digits);
-            Self::numbered_entity(prefix, suffix)
+            Self::numbered_entity(prefix, suffix).or_else(|| Self::value_type(text, prefix, suffix))
         } {
             Some(t) => token(t, loc),
             None => token(Token::Identifier(text), loc),
@@ -292,6 +294,39 @@ impl<'a> Lexer<'a> {
             "ebb" => Some(Token::Ebb(value)),
             "ss" => Some(Token::StackSlot(value)),
             _ => None,
+        }
+    }
+
+    // Recognize a scalar or vector type.
+    fn value_type(text: &str, prefix: &str, suffix: &str) -> Option<Token<'a>> {
+        let is_vector = prefix.ends_with('x');
+        let scalar = if is_vector {
+            &prefix[0..prefix.len() - 1]
+        } else {
+            text
+        };
+        let base_type = match scalar {
+            "i8" => types::I8,
+            "i16" => types::I16,
+            "i32" => types::I32,
+            "i64" => types::I64,
+            "f32" => types::F32,
+            "f64" => types::F64,
+            "b1" => types::B1,
+            "b8" => types::B8,
+            "b16" => types::B16,
+            "b32" => types::B32,
+            "b64" => types::B64,
+            _ => return None,
+        };
+        if is_vector {
+            let lanes: u16 = match suffix.parse() {
+                Ok(v) => v,
+                _ => return None,
+            };
+            base_type.by(lanes).map(|t| Token::Type(t))
+        } else {
+            Some(Token::Type(base_type))
         }
     }
 
@@ -338,6 +373,7 @@ impl<'a> Lexer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cretonne::types;
 
     fn token<'a>(token: Token<'a>, line: usize) -> Option<Result<LocatedToken<'a>, LocatedError>> {
         Some(super::token(token, Location { line_number: line }))
@@ -408,7 +444,7 @@ mod tests {
     #[test]
     fn lex_identifiers() {
         let mut lex = Lexer::new("v0 v00 vx01 ebb1234567890 ebb5234567890 entry v1x vx1 vxvx4 \
-                                  function0 function");
+                                  function0 function b1 i32x4 f32x5");
         assert_eq!(lex.next(), token(Token::ValueDirect(0), 1));
         assert_eq!(lex.next(), token(Token::Identifier("v00"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("vx01"), 1));
@@ -420,6 +456,9 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Identifier("vxvx4"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("function0"), 1));
         assert_eq!(lex.next(), token(Token::Function, 1));
+        assert_eq!(lex.next(), token(Token::Type(types::B1), 1));
+        assert_eq!(lex.next(), token(Token::Type(types::I32.by(4).unwrap()), 1));
+        assert_eq!(lex.next(), token(Token::Identifier("f32x5"), 1));
         assert_eq!(lex.next(), None);
     }
 }
