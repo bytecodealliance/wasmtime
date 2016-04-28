@@ -8,7 +8,8 @@
 use std::result;
 use std::fmt::{self, Display, Formatter, Write};
 use lexer::{self, Lexer, Token};
-use cretonne::{types, repr};
+use cretonne::types::{FunctionName, Signature, ArgumentType, ArgumentExtension};
+use cretonne::repr::Function;
 
 pub use lexer::Location;
 
@@ -51,7 +52,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the entire string into a list of functions.
-    pub fn parse(text: &'a str) -> Result<Vec<repr::Function>> {
+    pub fn parse(text: &'a str) -> Result<Vec<Function>> {
         Self::new(text).parse_function_list()
     }
 
@@ -113,7 +114,7 @@ impl<'a> Parser<'a> {
     /// Parse a list of function definitions.
     ///
     /// This is the top-level parse function matching the whole contents of a file.
-    pub fn parse_function_list(&mut self) -> Result<Vec<repr::Function>> {
+    pub fn parse_function_list(&mut self) -> Result<Vec<Function>> {
         let mut list = Vec::new();
         while self.token().is_some() {
             list.push(try!(self.parse_function()));
@@ -123,23 +124,34 @@ impl<'a> Parser<'a> {
 
     // Parse a whole function definition.
     //
-    // function ::= * "function" name signature { ... }
+    // function ::= * function-spec "{" preample function-body "}"
     //
-    fn parse_function(&mut self) -> Result<repr::Function> {
-        try!(self.match_token(Token::Function, "expected 'function' keyword"));
+    fn parse_function(&mut self) -> Result<Function> {
+        let (name, sig) = try!(self.parse_function_spec());
+        let mut func = Function::with_name_signature(name, sig);
 
-        // function ::= "function" * name signature { ... }
-        let name = try!(self.parse_function_name());
-
-        // function ::= "function" name * signature { ... }
-        let sig = try!(self.parse_signature());
-
-        let mut func = repr::Function::new();
-
+        // function ::= function-spec * "{" preample function-body "}"
         try!(self.match_token(Token::LBrace, "expected '{' before function body"));
+        // function ::= function-spec "{" preample function-body * "}"
         try!(self.match_token(Token::RBrace, "expected '}' after function body"));
 
         Ok(func)
+    }
+
+    // Parse a function spec.
+    //
+    // function-spec ::= * "function" name signature
+    //
+    fn parse_function_spec(&mut self) -> Result<(FunctionName, Signature)> {
+        try!(self.match_token(Token::Function, "expected 'function' keyword"));
+
+        // function-spec ::= "function" * name signature
+        let name = try!(self.parse_function_name());
+
+        // function-spec ::= "function" name * signature
+        let sig = try!(self.parse_signature());
+
+        Ok((name, sig))
     }
 
     // Parse a function name.
@@ -160,8 +172,8 @@ impl<'a> Parser<'a> {
     //
     // signature ::=  * "(" [arglist] ")" ["->" retlist] [call_conv]
     //
-    fn parse_signature(&mut self) -> Result<types::Signature> {
-        let mut sig = types::Signature::new();
+    fn parse_signature(&mut self) -> Result<Signature> {
+        let mut sig = Signature::new();
 
         try!(self.match_token(Token::LPar, "expected function signature: ( args... )"));
         // signature ::=  "(" * [arglist] ")" ["->" retlist] [call_conv]
@@ -182,7 +194,7 @@ impl<'a> Parser<'a> {
     //
     // arglist ::= * arg { "," arg }
     //
-    fn parse_argument_list(&mut self) -> Result<Vec<types::ArgumentType>> {
+    fn parse_argument_list(&mut self) -> Result<Vec<ArgumentType>> {
         let mut list = Vec::new();
 
         // arglist ::= * arg { "," arg }
@@ -198,10 +210,10 @@ impl<'a> Parser<'a> {
     }
 
     // Parse a single argument type with flags.
-    fn parse_argument_type(&mut self) -> Result<types::ArgumentType> {
+    fn parse_argument_type(&mut self) -> Result<ArgumentType> {
         // arg ::= * type { flag }
         let mut arg = if let Some(Token::Type(t)) = self.token() {
-            types::ArgumentType::new(t)
+            ArgumentType::new(t)
         } else {
             return Err(self.error("expected argument type"));
         };
@@ -210,8 +222,8 @@ impl<'a> Parser<'a> {
         // arg ::= type * { flag }
         while let Some(Token::Identifier(s)) = self.token() {
             match s {
-                "uext" => arg.extension = types::ArgumentExtension::Uext,
-                "sext" => arg.extension = types::ArgumentExtension::Sext,
+                "uext" => arg.extension = ArgumentExtension::Uext,
+                "sext" => arg.extension = ArgumentExtension::Sext,
                 "inreg" => arg.inreg = true,
                 _ => break,
             }
