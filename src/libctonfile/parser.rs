@@ -70,20 +70,20 @@ impl<'a> Parser<'a> {
 
     // Match and consume a token without payload.
     fn match_token(&mut self, want: Token<'a>, err_msg: &str) -> Result<Token<'a>> {
-        match self.token() {
-            Some(ref t) if *t == want => Ok(self.consume()),
-            _ => Err(self.error(err_msg)),
+        if self.token() == Some(want) {
+            Ok(self.consume())
+        } else {
+            Err(self.error(err_msg))
         }
     }
 
-    // if the next token is a `want`, consume it, otherwise do nothing.
+    // If the next token is a `want`, consume it, otherwise do nothing.
     fn optional(&mut self, want: Token<'a>) -> bool {
-        match self.token() {
-            Some(t) if t == want => {
-                self.consume();
-                true
-            }
-            _ => false,
+        if self.token() == Some(want) {
+            self.consume();
+            true
+        } else {
+            false
         }
     }
 
@@ -124,23 +124,19 @@ impl<'a> Parser<'a> {
 
     // Parse a function signature.
     //
-    // signature ::=  * "(" arglist ")" ["->" retlist] [call_conv]
-    // callconv  ::=  string
-    //
-    // function ::= "function" * name signature { ... }
+    // signature ::=  * "(" [arglist] ")" ["->" retlist] [call_conv]
     //
     fn parse_signature(&mut self) -> Result<types::Signature> {
         let mut sig = types::Signature::new();
 
         try!(self.match_token(Token::LPar, "Expected function signature: '(' args... ')'"));
-        // signature ::=  "(" * arglist ")" ["->" retlist] [call_conv]
-        sig.argument_types = try!(self.parse_argument_list());
+        // signature ::=  "(" * [arglist] ")" ["->" retlist] [call_conv]
+        if self.token() != Some(Token::RPar) {
+            sig.argument_types = try!(self.parse_argument_list());
+        }
         try!(self.match_token(Token::RPar, "Expected ')' after function arguments"));
         if self.optional(Token::Arrow) {
             sig.return_types = try!(self.parse_argument_list());
-            if sig.return_types.is_empty() {
-                return Err(self.error("Missing return type after '->'"));
-            }
         }
 
         // TBD: calling convention.
@@ -148,26 +144,19 @@ impl<'a> Parser<'a> {
         Ok(sig)
     }
 
-    // Parse (possibly empty) list of function argument / return value types.
+    // Parse list of function argument / return value types.
     //
-    // arglist ::= * <empty>
-    //             * arg
-    //             * arglist "," arg
+    // arglist ::= * arg { "," arg }
+    //
     fn parse_argument_list(&mut self) -> Result<Vec<types::ArgumentType>> {
         let mut list = Vec::new();
-        // arglist   ::= * <empty>
-        //               * arg
-        match self.token() {
-            Some(Token::Type(_)) => list.push(try!(self.parse_argument_type())),
-            _ => return Ok(list),
-        }
 
-        // arglist ::= arg *
-        //             arglist * "," arg
-        while self.token() == Some(Token::Comma) {
-            // arglist ::= arglist * "," arg
-            self.consume();
-            // arglist ::= arglist "," * arg
+        // arglist ::= * arg { "," arg }
+        list.push(try!(self.parse_argument_type()));
+
+        // arglist ::= arg * { "," arg }
+        while self.optional(Token::Comma) {
+            // arglist ::= arg { "," * arg }
             list.push(try!(self.parse_argument_type()));
         }
 
@@ -176,27 +165,25 @@ impl<'a> Parser<'a> {
 
     // Parse a single argument type with flags.
     fn parse_argument_type(&mut self) -> Result<types::ArgumentType> {
-        // arg ::= * type
-        //         * arg flag
-        let mut arg = match self.token() {
-            Some(Token::Type(t)) => types::ArgumentType::new(t),
-            _ => return Err(self.error("Expected argument type")),
+        // arg ::= * type { flag }
+        let mut arg = if let Some(Token::Type(t)) = self.token() {
+            types::ArgumentType::new(t)
+        } else {
+            return Err(self.error("Expected argument type"));
         };
-        loop {
-            self.consume();
-            // arg ::= arg * flag
-            match self.token() {
-                Some(Token::Identifier(s)) => {
-                    match s {
-                        "uext" => arg.extension = types::ArgumentExtension::Uext,
-                        "sext" => arg.extension = types::ArgumentExtension::Sext,
-                        "inreg" => arg.inreg = true,
-                        _ => break,
-                    }
-                }
+        self.consume();
+
+        // arg ::= type * { flag }
+        while let Some(Token::Identifier(s)) = self.token() {
+            match s {
+                "uext" => arg.extension = types::ArgumentExtension::Uext,
+                "sext" => arg.extension = types::ArgumentExtension::Sext,
+                "inreg" => arg.inreg = true,
                 _ => break,
             }
+            self.consume();
         }
+
         Ok(arg)
     }
 }
