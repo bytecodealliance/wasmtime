@@ -413,11 +413,9 @@ calling convention:
 
 .. productionlist::
     signature : "(" [arglist] ")" ["->" retlist] [call_conv]
-    arglist   : arg
-              : arglist "," arg
+    arglist   : arg { "," arg }
     retlist   : arglist
-    arg       : type
-              : arg flag
+    arg       : type { flag }
     flag      : "uext" | "sext" | "inreg"
     callconv  : `string`
 
