@@ -1,7 +1,7 @@
 
 //! Representation of Cretonne IL functions.
 
-use types::Type;
+use types::{Type, FunctionName, Signature};
 use immediates::*;
 use std::fmt::{self, Display, Formatter, Write};
 use std::u32;
@@ -39,6 +39,12 @@ pub const NO_VALUE: Value = Value(u32::MAX);
 /// container for those objects by implementing both `Index<Inst>` and `Index<Ebb>`.
 ///
 pub struct Function {
+    /// Name of this function. Mostly used by `.cton` files.
+    name: FunctionName,
+
+    /// Signature of this function.
+    signature: Signature,
+
     /// Data about all of the instructions in the function. The instructions in this vector is not
     /// necessarily in program order. The `Inst` reference indexes into this vector.
     instructions: Vec<InstructionData>,
@@ -269,14 +275,21 @@ impl InstructionData {
 }
 
 impl Function {
-    /// Create a new empty function.
-    pub fn new() -> Function {
+    /// Create a function with the given name and signature.
+    pub fn with_name_signature(name: FunctionName, sig: Signature) -> Function {
         Function {
+            name: name,
+            signature: sig,
             instructions: Vec::new(),
             extended_basic_blocks: Vec::new(),
             extended_values: Vec::new(),
             return_types: Vec::new(),
         }
+    }
+
+    /// Create a new empty, anomymous function.
+    pub fn new() -> Function {
+        Self::with_name_signature(FunctionName::new(), Signature::new())
     }
 
     /// Resolve an instruction reference.
