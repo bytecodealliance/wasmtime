@@ -6,6 +6,7 @@
 // ====--------------------------------------------------------------------------------------====//
 
 use std::result;
+use std::fmt::{self, Display, Formatter, Write};
 use lexer::{self, Lexer, Token};
 use cretonne::{types, repr};
 
@@ -16,6 +17,12 @@ pub use lexer::Location;
 pub struct Error {
     pub location: Location,
     pub message: String,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}: {}", self.location.line_number, self.message)
+    }
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -156,7 +163,7 @@ impl<'a> Parser<'a> {
     fn parse_signature(&mut self) -> Result<types::Signature> {
         let mut sig = types::Signature::new();
 
-        try!(self.match_token(Token::LPar, "expected function signature: '(' args... ')'"));
+        try!(self.match_token(Token::LPar, "expected function signature: ( args... )"));
         // signature ::=  "(" * [arglist] ")" ["->" retlist] [call_conv]
         if self.token() != Some(Token::RPar) {
             sig.argument_types = try!(self.parse_argument_list());
@@ -233,5 +240,28 @@ mod tests {
         let Error { location, message } = p.parse_argument_type().unwrap_err();
         assert_eq!(location.line_number, 1);
         assert_eq!(message, "expected argument type");
+    }
+
+    #[test]
+    fn signature() {
+        let sig = Parser::new("()").parse_signature().unwrap();
+        assert_eq!(sig.argument_types.len(), 0);
+        assert_eq!(sig.return_types.len(), 0);
+
+        let sig2 = Parser::new("(i8 inreg uext, f32, f64) -> i32 sext, f64")
+                       .parse_signature()
+                       .unwrap();
+        assert_eq!(format!("{}", sig2),
+                   "(i8 uext inreg, f32, f64) -> i32 sext, f64");
+
+        // `void` is not recognized as a type by the lexer. It should not appear in files.
+        assert_eq!(format!("{}",
+                           Parser::new("() -> void").parse_signature().unwrap_err()),
+                   "1: expected argument type");
+        assert_eq!(format!("{}", Parser::new("i8 -> i8").parse_signature().unwrap_err()),
+                   "1: expected function signature: ( args... )");
+        assert_eq!(format!("{}",
+                           Parser::new("(i8 -> i8").parse_signature().unwrap_err()),
+                   "1: expected ')' after function arguments");
     }
 }
