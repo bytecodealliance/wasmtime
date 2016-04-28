@@ -12,6 +12,7 @@ use cretonne::{types, repr};
 pub use lexer::Location;
 
 /// A parse error is returned when the parse failed.
+#[derive(Debug)]
 pub struct Error {
     pub location: Location,
     pub message: String,
@@ -32,6 +33,21 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    /// Create a new `Parser` which reads `text`. The referenced text must outlive the parser.
+    pub fn new(text: &'a str) -> Parser {
+        Parser {
+            lex: Lexer::new(text),
+            lex_error: None,
+            lookahead: None,
+            location: Location { line_number: 0 },
+        }
+    }
+
+    /// Parse the entire string into a list of functions.
+    pub fn parse(text: &'a str) -> Result<Vec<repr::Function>> {
+        Self::new(text).parse_function_list()
+    }
+
     // Consume the current lookahead token and return it.
     fn consume(&mut self) -> Token<'a> {
         self.lookahead.take().expect("No token to consume")
@@ -62,7 +78,7 @@ impl<'a> Parser<'a> {
             message:
                 // If we have a lexer error latched, report that.
                 match self.lex_error {
-                    Some(lexer::Error::InvalidChar) => "Invalid character".to_string(),
+                    Some(lexer::Error::InvalidChar) => "invalid character".to_string(),
                     None => message.to_string(),
                 }
         }
@@ -87,12 +103,23 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a list of function definitions.
+    ///
+    /// This is the top-level parse function matching the whole contents of a file.
+    pub fn parse_function_list(&mut self) -> Result<Vec<repr::Function>> {
+        let mut list = Vec::new();
+        while self.token().is_some() {
+            list.push(try!(self.parse_function()));
+        }
+        Ok(list)
+    }
+
     // Parse a whole function definition.
     //
     // function ::= * "function" name signature { ... }
     //
     fn parse_function(&mut self) -> Result<repr::Function> {
-        try!(self.match_token(Token::Function, "Expected 'function' keyword"));
+        try!(self.match_token(Token::Function, "expected 'function' keyword"));
 
         // function ::= "function" * name signature { ... }
         let name = try!(self.parse_function_name());
@@ -102,8 +129,8 @@ impl<'a> Parser<'a> {
 
         let mut func = repr::Function::new();
 
-        try!(self.match_token(Token::LBrace, "Expected '{' before function body"));
-        try!(self.match_token(Token::RBrace, "Expected '}' after function body"));
+        try!(self.match_token(Token::LBrace, "expected '{' before function body"));
+        try!(self.match_token(Token::RBrace, "expected '}' after function body"));
 
         Ok(func)
     }
@@ -118,7 +145,7 @@ impl<'a> Parser<'a> {
                 self.consume();
                 Ok(s.to_string())
             }
-            _ => Err(self.error("Expected function name")),
+            _ => Err(self.error("expected function name")),
         }
     }
 
@@ -129,12 +156,12 @@ impl<'a> Parser<'a> {
     fn parse_signature(&mut self) -> Result<types::Signature> {
         let mut sig = types::Signature::new();
 
-        try!(self.match_token(Token::LPar, "Expected function signature: '(' args... ')'"));
+        try!(self.match_token(Token::LPar, "expected function signature: '(' args... ')'"));
         // signature ::=  "(" * [arglist] ")" ["->" retlist] [call_conv]
         if self.token() != Some(Token::RPar) {
             sig.argument_types = try!(self.parse_argument_list());
         }
-        try!(self.match_token(Token::RPar, "Expected ')' after function arguments"));
+        try!(self.match_token(Token::RPar, "expected ')' after function arguments"));
         if self.optional(Token::Arrow) {
             sig.return_types = try!(self.parse_argument_list());
         }
@@ -169,7 +196,7 @@ impl<'a> Parser<'a> {
         let mut arg = if let Some(Token::Type(t)) = self.token() {
             types::ArgumentType::new(t)
         } else {
-            return Err(self.error("Expected argument type"));
+            return Err(self.error("expected argument type"));
         };
         self.consume();
 
@@ -185,5 +212,26 @@ impl<'a> Parser<'a> {
         }
 
         Ok(arg)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cretonne::types::{self, ArgumentType, ArgumentExtension};
+
+    #[test]
+    fn argument_type() {
+        let mut p = Parser::new("i32 sext");
+        let arg = p.parse_argument_type().unwrap();
+        assert_eq!(arg,
+                   ArgumentType {
+                       value_type: types::I32,
+                       extension: ArgumentExtension::Sext,
+                       inreg: false,
+                   });
+        let Error { location, message } = p.parse_argument_type().unwrap_err();
+        assert_eq!(location.line_number, 1);
+        assert_eq!(message, "expected argument type");
     }
 }
