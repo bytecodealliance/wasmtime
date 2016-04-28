@@ -224,6 +224,7 @@ pub struct ArgumentType {
 ///
 /// The function signature describes the types of arguments and return values along with other
 /// details that are needed to call a function correctly.
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Signature {
     pub argument_types: Vec<ArgumentType>,
     pub return_types: Vec<ArgumentType>,
