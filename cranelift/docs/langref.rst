@@ -1,6 +1,6 @@
-****************************************
-Cretonne Intermediate Language Reference
-****************************************
+***************************
+Cretonne Language Reference
+***************************
 
 .. default-domain:: cton
 .. highlight:: cton
@@ -44,6 +44,15 @@ After the preample follows the :term:`function body` which consists of
 :term:`extended basic block`\s, one of which is marked as the :term:`entry
 block`. Every EBB ends with a :term:`terminator instruction`, so execution can
 never fall through to the next EBB without an explicit branch.
+
+A ``.cton`` file consists of a sequence of independent function definitions:
+
+.. productionlist::
+    function-list : { function }
+    function      : function-spec "{" preample function-body "}"
+    function-spec : "function" function-name signature
+    preamble      : { preamble-decl }
+    function-body : { extended-basic-block }
 
 Static single assignment form
 -----------------------------
