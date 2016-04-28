@@ -5,11 +5,14 @@
 //
 // ====--------------------------------------------------------------------------------------====//
 
+use std::collections::HashMap;
 use std::result;
 use std::fmt::{self, Display, Formatter, Write};
+use std::u32;
 use lexer::{self, Lexer, Token};
 use cretonne::types::{FunctionName, Signature, ArgumentType, ArgumentExtension};
-use cretonne::repr::Function;
+use cretonne::immediates::Imm64;
+use cretonne::repr::{Function, StackSlot, StackSlotData};
 
 pub use lexer::Location;
 
@@ -38,6 +41,35 @@ pub struct Parser<'a> {
 
     // Location of lookahead.
     location: Location,
+}
+
+// Context for resolving references when parsing a single function.
+//
+// Many entities like values, stack slots, and function signatures are referenced in the `.cton`
+// file by number. We need to map these numbers to real references.
+struct Context {
+    function: Function,
+    stack_slots: HashMap<u32, StackSlot>,
+}
+
+impl Context {
+    fn new(f: Function) -> Context {
+        Context {
+            function: f,
+            stack_slots: HashMap::new(),
+        }
+    }
+
+    fn add(&mut self, number: u32, data: StackSlotData, loc: &Location) -> Result<()> {
+        if self.stack_slots.insert(number, self.function.make_stack_slot(data)).is_some() {
+            Err(Error {
+                location: loc.clone(),
+                message: format!("duplicate stack slot: ss{}", number),
+            })
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl<'a> Parser<'a> {
@@ -111,6 +143,38 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume a specific identifier string.
+    // Used for pseudo-keywords like "stack_slot" that only appear in certain contexts.
+    fn match_identifier(&mut self, want: &'static str, err_msg: &str) -> Result<Token<'a>> {
+        if self.token() == Some(Token::Identifier(want)) {
+            Ok(self.consume())
+        } else {
+            Err(self.error(err_msg))
+        }
+    }
+
+    // Match and consume a stack slot reference.
+    fn match_ss(&mut self, err_msg: &str) -> Result<u32> {
+        if let Some(Token::StackSlot(ss)) = self.token() {
+            self.consume();
+            Ok(ss)
+        } else {
+            Err(self.error(err_msg))
+        }
+    }
+
+    // Match and consume an Imm64 immediate.
+    fn match_imm64(&mut self, err_msg: &str) -> Result<Imm64> {
+        if let Some(Token::Integer(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like an integer.
+            // Parse it as an Imm64 to check for overflow and other issues.
+            text.parse().map_err(|e| self.error(e))
+        } else {
+            Err(self.error(err_msg))
+        }
+    }
+
     /// Parse a list of function definitions.
     ///
     /// This is the top-level parse function matching the whole contents of a file.
@@ -128,14 +192,16 @@ impl<'a> Parser<'a> {
     //
     fn parse_function(&mut self) -> Result<Function> {
         let (name, sig) = try!(self.parse_function_spec());
-        let mut func = Function::with_name_signature(name, sig);
+        let mut ctx = Context::new(Function::with_name_signature(name, sig));
 
         // function ::= function-spec * "{" preample function-body "}"
         try!(self.match_token(Token::LBrace, "expected '{' before function body"));
+        // function ::= function-spec "{" * preample function-body "}"
+        try!(self.parse_preamble(&mut ctx));
         // function ::= function-spec "{" preample function-body * "}"
         try!(self.match_token(Token::RBrace, "expected '}' after function body"));
 
-        Ok(func)
+        Ok(ctx.function)
     }
 
     // Parse a function spec.
@@ -232,6 +298,46 @@ impl<'a> Parser<'a> {
 
         Ok(arg)
     }
+
+    // Parse the function preamble.
+    //
+    // preamble      ::= * { preamble-decl }
+    // preamble-decl ::= * stack-slot-decl
+    //                   * function-decl
+    //                   * signature-decl
+    //
+    // The parsed decls are added to `ctx` rather than returned.
+    fn parse_preamble(&mut self, ctx: &mut Context) -> Result<()> {
+        loop {
+            try!(match self.token() {
+                Some(Token::StackSlot(..)) => {
+                    self.parse_stack_slot_decl()
+                        .and_then(|(num, dat)| ctx.add(num, dat, &self.location))
+                }
+                // More to come..
+                _ => return Ok(()),
+            });
+        }
+    }
+
+    // Parse a stack slot decl, add to `func`.
+    //
+    // stack-slot-decl ::= * StackSlot(ss) "=" "stack_slot" Bytes {"," stack-slot-flag}
+    fn parse_stack_slot_decl(&mut self) -> Result<(u32, StackSlotData)> {
+        let number = try!(self.match_ss("expected stack slot number: ss«n»"));
+        try!(self.match_token(Token::Equal, "expected '=' in stack_slot decl"));
+        try!(self.match_identifier("stack_slot", "expected 'stack_slot'"));
+
+        // stack-slot-decl ::= StackSlot(ss) "=" "stack_slot" * Bytes {"," stack-slot-flag}
+        let bytes = try!(self.match_imm64("expected byte-size in stack_slot decl")).to_bits();
+        if bytes > u32::MAX as u64 {
+            return Err(self.error("stack slot too large"));
+        }
+        let data = StackSlotData::new(bytes as u32);
+
+        // TBD: stack-slot-decl ::= StackSlot(ss) "=" "stack_slot" Bytes * {"," stack-slot-flag}
+        Ok((number, data))
+    }
 }
 
 #[cfg(test)]
@@ -275,5 +381,34 @@ mod tests {
         assert_eq!(format!("{}",
                            Parser::new("(i8 -> i8").parse_signature().unwrap_err()),
                    "1: expected ')' after function arguments");
+    }
+
+    #[test]
+    fn stack_slot_decl() {
+        let func = Parser::new("function foo() {
+                                  ss3 = stack_slot 13
+                                  ss1 = stack_slot 1
+                                }")
+                       .parse_function()
+                       .unwrap();
+        assert_eq!(func.name, "foo");
+        let mut iter = func.stack_slot_iter();
+        let ss0 = iter.next().unwrap();
+        assert_eq!(format!("{}", ss0), "ss0");
+        assert_eq!(func[ss0].size, 13);
+        let ss1 = iter.next().unwrap();
+        assert_eq!(format!("{}", ss1), "ss1");
+        assert_eq!(func[ss1].size, 1);
+        assert_eq!(iter.next(), None);
+
+        // Catch suplicate definitions.
+        assert_eq!(format!("{}",
+                           Parser::new("function bar() {
+                                  ss1  = stack_slot 13
+                                  ss1  = stack_slot 1
+                                }")
+                               .parse_function()
+                               .unwrap_err()),
+                   "3: duplicate stack slot: ss1");
     }
 }

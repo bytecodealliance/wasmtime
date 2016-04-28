@@ -4,6 +4,7 @@
 use types::{Type, FunctionName, Signature};
 use immediates::*;
 use std::fmt::{self, Display, Formatter, Write};
+use std::ops::Index;
 use std::u32;
 
 // ====--------------------------------------------------------------------------------------====//
@@ -33,17 +34,28 @@ pub struct Value(u32);
 /// A guaranteed invalid value reference.
 pub const NO_VALUE: Value = Value(u32::MAX);
 
+/// An opaque reference to a stack slot.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct StackSlot(u32);
+
+/// A guaranteed invalid stack slot reference.
+pub const NO_STACK_SLOT: StackSlot = StackSlot(u32::MAX);
+
 /// A function.
 ///
 /// The `Function` struct owns all of its instructions and extended basic blocks, and it works as a
 /// container for those objects by implementing both `Index<Inst>` and `Index<Ebb>`.
 ///
+#[derive(Debug)]
 pub struct Function {
     /// Name of this function. Mostly used by `.cton` files.
-    name: FunctionName,
+    pub name: FunctionName,
 
     /// Signature of this function.
     signature: Signature,
+
+    /// Stack slots allocated in this function.
+    stack_slots: Vec<StackSlotData>,
 
     /// Data about all of the instructions in the function. The instructions in this vector is not
     /// necessarily in program order. The `Inst` reference indexes into this vector.
@@ -61,7 +73,15 @@ pub struct Function {
     pub return_types: Vec<Type>,
 }
 
+/// Contents of a stack slot.
+#[derive(Debug)]
+pub struct StackSlotData {
+    /// Size of stack slot in bytes.
+    pub size: u32,
+}
+
 /// Contents of an extended basic block.
+#[derive(Debug)]
 pub struct EbbData {
     /// Arguments for this extended basic block. These values dominate everything in the EBB.
     /// All branches to this EBB must provide matching arguments, and the arguments to the entry
@@ -75,6 +95,7 @@ pub struct EbbData {
 /// value should have its `ty` field set to `VOID`. The size of `InstructionData` should be kept at
 /// 16 bytes on 64-bit architectures. If more space is needed to represent an instruction, use a
 /// `Box<AuxData>` to store the additional information out of line.
+#[derive(Debug)]
 pub enum InstructionData {
     Nullary {
         opcode: Opcode,
@@ -109,6 +130,7 @@ pub enum InstructionData {
 }
 
 /// Payload of a call instruction.
+#[derive(Debug)]
 pub struct CallData {
     // Number of result values.
     results: u8,
@@ -118,6 +140,72 @@ pub struct CallData {
     values: Vec<Value>,
 }
 
+
+// ====--------------------------------------------------------------------------------------====//
+//
+// Stack slot implementation.
+//
+// ====--------------------------------------------------------------------------------------====//
+
+impl StackSlot {
+    fn new(index: usize) -> StackSlot {
+        assert!(index < (u32::MAX as usize));
+        StackSlot(index as u32)
+    }
+
+    pub fn index(&self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// Display a `StackSlot` reference as "ss12".
+impl Display for StackSlot {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        write!(fmt, "ss{}", self.0)
+    }
+}
+
+impl StackSlotData {
+    /// Create a stack slot with the specified byte size.
+    pub fn new(size: u32) -> StackSlotData {
+        StackSlotData { size: size }
+    }
+}
+
+impl Display for StackSlotData {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        write!(fmt, "stack_slot {}", self.size)
+    }
+}
+
+/// Allow immutable access to stack slots via function indexing.
+impl Index<StackSlot> for Function {
+    type Output = StackSlotData;
+
+    fn index<'a>(&'a self, ss: StackSlot) -> &'a StackSlotData {
+        &self.stack_slots[ss.index()]
+    }
+}
+
+/// Stack slot iterator visits all stack slots in a function, returning `StackSlot` references.
+pub struct StackSlotIter {
+    cur: usize,
+    end: usize,
+}
+
+impl Iterator for StackSlotIter {
+    type Item = StackSlot;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cur < self.end {
+            let ss = StackSlot::new(self.cur);
+            self.cur += 1;
+            Some(ss)
+        } else {
+            None
+        }
+    }
+}
 
 // ====--------------------------------------------------------------------------------------====//
 //
@@ -227,6 +315,7 @@ impl Display for Value {
 
 // Most values are simply the first value produced by an instruction.
 // Other values have an entry in the value table.
+#[derive(Debug)]
 enum ValueData {
     // An unused entry in the value table. No instruction should be defining or using this value.
     Unused,
@@ -280,6 +369,7 @@ impl Function {
         Function {
             name: name,
             signature: sig,
+            stack_slots: Vec::new(),
             instructions: Vec::new(),
             extended_basic_blocks: Vec::new(),
             extended_values: Vec::new(),
@@ -290,6 +380,21 @@ impl Function {
     /// Create a new empty, anomymous function.
     pub fn new() -> Function {
         Self::with_name_signature(FunctionName::new(), Signature::new())
+    }
+
+    /// Allocate a new stack slot.
+    pub fn make_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
+        let ss = StackSlot::new(self.stack_slots.len());
+        self.stack_slots.push(data);
+        ss
+    }
+
+    /// Iterate over all stack slots in function.
+    pub fn stack_slot_iter(&self) -> StackSlotIter {
+        StackSlotIter {
+            cur: 0,
+            end: self.stack_slots.len(),
+        }
     }
 
     /// Resolve an instruction reference.
@@ -351,4 +456,18 @@ mod tests {
         assert_eq!(ins.opcode(), Opcode::Iconst);
         assert_eq!(ins.first_type(), types::I32);
     }
+
+    #[test]
+    fn stack_slot() {
+        let mut func = Function::new();
+
+        let ss0 = func.make_stack_slot(StackSlotData::new(4));
+        let ss1 = func.make_stack_slot(StackSlotData::new(8));
+        assert_eq!(format!("{}", ss0), "ss0");
+        assert_eq!(format!("{}", ss1), "ss1");
+
+        assert_eq!(func[ss0].size, 4);
+        assert_eq!(func[ss1].size, 8);
+    }
+
 }

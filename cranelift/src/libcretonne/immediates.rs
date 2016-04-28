@@ -74,6 +74,10 @@ impl Imm64 {
     pub fn from_bits(x: u64) -> Imm64 {
         Imm64(x as i64)
     }
+
+    pub fn to_bits(&self) -> u64 {
+        self.0 as u64
+    }
 }
 
 impl Display for Imm64 {
