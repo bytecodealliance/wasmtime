@@ -9,6 +9,10 @@ target-independent intermediate language into executable machine code.
     :target: https://cretonne.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
 
+.. image:: https://travis-ci.org/stoklund/cretonne.svg?branch=master
+    :target: https://travis-ci.org/stoklund/cretonne
+    :alt: Build Status
+
 Cretonne is designed to be a code generator for WebAssembly with these design
 goals:
 
