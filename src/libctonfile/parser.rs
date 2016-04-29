@@ -369,17 +369,15 @@ mod tests {
         let sig2 = Parser::new("(i8 inreg uext, f32, f64) -> i32 sext, f64")
                        .parse_signature()
                        .unwrap();
-        assert_eq!(format!("{}", sig2),
+        assert_eq!(sig2.to_string(),
                    "(i8 uext inreg, f32, f64) -> i32 sext, f64");
 
         // `void` is not recognized as a type by the lexer. It should not appear in files.
-        assert_eq!(format!("{}",
-                           Parser::new("() -> void").parse_signature().unwrap_err()),
+        assert_eq!(Parser::new("() -> void").parse_signature().unwrap_err().to_string(),
                    "1: expected argument type");
-        assert_eq!(format!("{}", Parser::new("i8 -> i8").parse_signature().unwrap_err()),
+        assert_eq!(Parser::new("i8 -> i8").parse_signature().unwrap_err().to_string(),
                    "1: expected function signature: ( args... )");
-        assert_eq!(format!("{}",
-                           Parser::new("(i8 -> i8").parse_signature().unwrap_err()),
+        assert_eq!(Parser::new("(i8 -> i8").parse_signature().unwrap_err().to_string(),
                    "1: expected ')' after function arguments");
     }
 
@@ -394,21 +392,21 @@ mod tests {
         assert_eq!(func.name, "foo");
         let mut iter = func.stack_slot_iter();
         let ss0 = iter.next().unwrap();
-        assert_eq!(format!("{}", ss0), "ss0");
+        assert_eq!(ss0.to_string(), "ss0");
         assert_eq!(func[ss0].size, 13);
         let ss1 = iter.next().unwrap();
-        assert_eq!(format!("{}", ss1), "ss1");
+        assert_eq!(ss1.to_string(), "ss1");
         assert_eq!(func[ss1].size, 1);
         assert_eq!(iter.next(), None);
 
         // Catch suplicate definitions.
-        assert_eq!(format!("{}",
-                           Parser::new("function bar() {
-                                  ss1  = stack_slot 13
-                                  ss1  = stack_slot 1
+        assert_eq!(Parser::new("function bar() {
+                                    ss1  = stack_slot 13
+                                    ss1  = stack_slot 1
                                 }")
-                               .parse_function()
-                               .unwrap_err()),
+                       .parse_function()
+                       .unwrap_err()
+                       .to_string(),
                    "3: duplicate stack slot: ss1");
     }
 }

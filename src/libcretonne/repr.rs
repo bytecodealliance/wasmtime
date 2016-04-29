@@ -449,7 +449,7 @@ mod tests {
             ty: types::I32,
         };
         let inst = func.make_inst(idata);
-        assert_eq!(format!("{}", inst), "inst0");
+        assert_eq!(inst.to_string(), "inst0");
 
         // Immutable reference resolution.
         let ins = func.inst(inst);
@@ -463,8 +463,8 @@ mod tests {
 
         let ss0 = func.make_stack_slot(StackSlotData::new(4));
         let ss1 = func.make_stack_slot(StackSlotData::new(8));
-        assert_eq!(format!("{}", ss0), "ss0");
-        assert_eq!(format!("{}", ss1), "ss1");
+        assert_eq!(ss0.to_string(), "ss0");
+        assert_eq!(ss1.to_string(), "ss1");
 
         assert_eq!(func[ss0].size, 4);
         assert_eq!(func[ss1].size, 8);

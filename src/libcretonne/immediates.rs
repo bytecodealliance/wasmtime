@@ -493,7 +493,7 @@ mod tests {
         assert_eq!(x, y);
 
         assert_eq!(format!("{:?}", Opcode::IaddImm), "IaddImm");
-        assert_eq!(format!("{}", Opcode::IaddImm), "iadd_imm");
+        assert_eq!(Opcode::IaddImm.to_string(), "iadd_imm");
 
         // Check the matcher.
         assert_eq!("iadd".parse::<Opcode>(), Ok(Opcode::Iadd));
@@ -505,13 +505,13 @@ mod tests {
 
     #[test]
     fn format_imm64() {
-        assert_eq!(format!("{}", Imm64(0)), "0");
-        assert_eq!(format!("{}", Imm64(9999)), "9999");
-        assert_eq!(format!("{}", Imm64(10000)), "0x2710");
-        assert_eq!(format!("{}", Imm64(-9999)), "-9999");
-        assert_eq!(format!("{}", Imm64(-10000)), "0xffff_ffff_ffff_d8f0");
-        assert_eq!(format!("{}", Imm64(0xffff)), "0xffff");
-        assert_eq!(format!("{}", Imm64(0x10000)), "0x0001_0000");
+        assert_eq!(Imm64(0).to_string(), "0");
+        assert_eq!(Imm64(9999).to_string(), "9999");
+        assert_eq!(Imm64(10000).to_string(), "0x2710");
+        assert_eq!(Imm64(-9999).to_string(), "-9999");
+        assert_eq!(Imm64(-10000).to_string(), "0xffff_ffff_ffff_d8f0");
+        assert_eq!(Imm64(0xffff).to_string(), "0xffff");
+        assert_eq!(Imm64(0x10000).to_string(), "0x0001_0000");
     }
 
     // Verify that `text` can be parsed as a `T` into a value that displays as `want`.
@@ -520,7 +520,7 @@ mod tests {
     {
         match text.parse::<T>() {
             Err(s) => panic!("\"{}\".parse() error: {}", text, s),
-            Ok(x) => assert_eq!(format!("{}", x), want),
+            Ok(x) => assert_eq!(x.to_string(), want),
         }
     }
 
@@ -529,7 +529,7 @@ mod tests {
         where <T as FromStr>::Err: Display
     {
         match text.parse::<T>() {
-            Err(s) => assert_eq!(format!("{}", s), msg),
+            Err(s) => assert_eq!(s.to_string(), msg),
             Ok(x) => panic!("Wanted Err({}), but got {}", msg, x),
         }
     }
@@ -584,33 +584,32 @@ mod tests {
 
     #[test]
     fn format_ieee32() {
-        assert_eq!(format!("{}", Ieee32::new(0.0)), "0.0");
-        assert_eq!(format!("{}", Ieee32::new(-0.0)), "-0.0");
-        assert_eq!(format!("{}", Ieee32::new(1.0)), "0x1.000000p0");
-        assert_eq!(format!("{}", Ieee32::new(1.5)), "0x1.800000p0");
-        assert_eq!(format!("{}", Ieee32::new(0.5)), "0x1.000000p-1");
-        assert_eq!(format!("{}", Ieee32::new(f32::EPSILON)), "0x1.000000p-23");
-        assert_eq!(format!("{}", Ieee32::new(f32::MIN)), "-0x1.fffffep127");
-        assert_eq!(format!("{}", Ieee32::new(f32::MAX)), "0x1.fffffep127");
+        assert_eq!(Ieee32::new(0.0).to_string(), "0.0");
+        assert_eq!(Ieee32::new(-0.0).to_string(), "-0.0");
+        assert_eq!(Ieee32::new(1.0).to_string(), "0x1.000000p0");
+        assert_eq!(Ieee32::new(1.5).to_string(), "0x1.800000p0");
+        assert_eq!(Ieee32::new(0.5).to_string(), "0x1.000000p-1");
+        assert_eq!(Ieee32::new(f32::EPSILON).to_string(), "0x1.000000p-23");
+        assert_eq!(Ieee32::new(f32::MIN).to_string(), "-0x1.fffffep127");
+        assert_eq!(Ieee32::new(f32::MAX).to_string(), "0x1.fffffep127");
         // Smallest positive normal number.
-        assert_eq!(format!("{}", Ieee32::new(f32::MIN_POSITIVE)),
+        assert_eq!(Ieee32::new(f32::MIN_POSITIVE).to_string(),
                    "0x1.000000p-126");
         // Subnormals.
-        assert_eq!(format!("{}", Ieee32::new(f32::MIN_POSITIVE / 2.0)),
+        assert_eq!(Ieee32::new(f32::MIN_POSITIVE / 2.0).to_string(),
                    "0x0.800000p-126");
-        assert_eq!(format!("{}", Ieee32::new(f32::MIN_POSITIVE * f32::EPSILON)),
+        assert_eq!(Ieee32::new(f32::MIN_POSITIVE * f32::EPSILON).to_string(),
                    "0x0.000002p-126");
-        assert_eq!(format!("{}", Ieee32::new(f32::INFINITY)), "Inf");
-        assert_eq!(format!("{}", Ieee32::new(f32::NEG_INFINITY)), "-Inf");
-        assert_eq!(format!("{}", Ieee32::new(f32::NAN)), "NaN");
-        assert_eq!(format!("{}", Ieee32::new(-f32::NAN)), "-NaN");
+        assert_eq!(Ieee32::new(f32::INFINITY).to_string(), "Inf");
+        assert_eq!(Ieee32::new(f32::NEG_INFINITY).to_string(), "-Inf");
+        assert_eq!(Ieee32::new(f32::NAN).to_string(), "NaN");
+        assert_eq!(Ieee32::new(-f32::NAN).to_string(), "-NaN");
         // Construct some qNaNs with payloads.
-        assert_eq!(format!("{}", Ieee32::from_bits(0x7fc00001)), "NaN:0x1");
-        assert_eq!(format!("{}", Ieee32::from_bits(0x7ff00001)), "NaN:0x300001");
+        assert_eq!(Ieee32::from_bits(0x7fc00001).to_string(), "NaN:0x1");
+        assert_eq!(Ieee32::from_bits(0x7ff00001).to_string(), "NaN:0x300001");
         // Signaling NaNs.
-        assert_eq!(format!("{}", Ieee32::from_bits(0x7f800001)), "sNaN:0x1");
-        assert_eq!(format!("{}", Ieee32::from_bits(0x7fa00001)),
-                   "sNaN:0x200001");
+        assert_eq!(Ieee32::from_bits(0x7f800001).to_string(), "sNaN:0x1");
+        assert_eq!(Ieee32::from_bits(0x7fa00001).to_string(), "sNaN:0x200001");
     }
 
     #[test]
@@ -682,38 +681,35 @@ mod tests {
 
     #[test]
     fn format_ieee64() {
-        assert_eq!(format!("{}", Ieee64::new(0.0)), "0.0");
-        assert_eq!(format!("{}", Ieee64::new(-0.0)), "-0.0");
-        assert_eq!(format!("{}", Ieee64::new(1.0)), "0x1.0000000000000p0");
-        assert_eq!(format!("{}", Ieee64::new(1.5)), "0x1.8000000000000p0");
-        assert_eq!(format!("{}", Ieee64::new(0.5)), "0x1.0000000000000p-1");
-        assert_eq!(format!("{}", Ieee64::new(f64::EPSILON)),
+        assert_eq!(Ieee64::new(0.0).to_string(), "0.0");
+        assert_eq!(Ieee64::new(-0.0).to_string(), "-0.0");
+        assert_eq!(Ieee64::new(1.0).to_string(), "0x1.0000000000000p0");
+        assert_eq!(Ieee64::new(1.5).to_string(), "0x1.8000000000000p0");
+        assert_eq!(Ieee64::new(0.5).to_string(), "0x1.0000000000000p-1");
+        assert_eq!(Ieee64::new(f64::EPSILON).to_string(),
                    "0x1.0000000000000p-52");
-        assert_eq!(format!("{}", Ieee64::new(f64::MIN)),
-                   "-0x1.fffffffffffffp1023");
-        assert_eq!(format!("{}", Ieee64::new(f64::MAX)),
-                   "0x1.fffffffffffffp1023");
+        assert_eq!(Ieee64::new(f64::MIN).to_string(), "-0x1.fffffffffffffp1023");
+        assert_eq!(Ieee64::new(f64::MAX).to_string(), "0x1.fffffffffffffp1023");
         // Smallest positive normal number.
-        assert_eq!(format!("{}", Ieee64::new(f64::MIN_POSITIVE)),
+        assert_eq!(Ieee64::new(f64::MIN_POSITIVE).to_string(),
                    "0x1.0000000000000p-1022");
         // Subnormals.
-        assert_eq!(format!("{}", Ieee64::new(f64::MIN_POSITIVE / 2.0)),
+        assert_eq!(Ieee64::new(f64::MIN_POSITIVE / 2.0).to_string(),
                    "0x0.8000000000000p-1022");
-        assert_eq!(format!("{}", Ieee64::new(f64::MIN_POSITIVE * f64::EPSILON)),
+        assert_eq!(Ieee64::new(f64::MIN_POSITIVE * f64::EPSILON).to_string(),
                    "0x0.0000000000001p-1022");
-        assert_eq!(format!("{}", Ieee64::new(f64::INFINITY)), "Inf");
-        assert_eq!(format!("{}", Ieee64::new(f64::NEG_INFINITY)), "-Inf");
-        assert_eq!(format!("{}", Ieee64::new(f64::NAN)), "NaN");
-        assert_eq!(format!("{}", Ieee64::new(-f64::NAN)), "-NaN");
+        assert_eq!(Ieee64::new(f64::INFINITY).to_string(), "Inf");
+        assert_eq!(Ieee64::new(f64::NEG_INFINITY).to_string(), "-Inf");
+        assert_eq!(Ieee64::new(f64::NAN).to_string(), "NaN");
+        assert_eq!(Ieee64::new(-f64::NAN).to_string(), "-NaN");
         // Construct some qNaNs with payloads.
-        assert_eq!(format!("{}", Ieee64::from_bits(0x7ff8000000000001)),
-                   "NaN:0x1");
-        assert_eq!(format!("{}", Ieee64::from_bits(0x7ffc000000000001)),
+        assert_eq!(Ieee64::from_bits(0x7ff8000000000001).to_string(), "NaN:0x1");
+        assert_eq!(Ieee64::from_bits(0x7ffc000000000001).to_string(),
                    "NaN:0x4000000000001");
         // Signaling NaNs.
-        assert_eq!(format!("{}", Ieee64::from_bits(0x7ff0000000000001)),
+        assert_eq!(Ieee64::from_bits(0x7ff0000000000001).to_string(),
                    "sNaN:0x1");
-        assert_eq!(format!("{}", Ieee64::from_bits(0x7ff4000000000001)),
+        assert_eq!(Ieee64::from_bits(0x7ff4000000000001).to_string(),
                    "sNaN:0x4000000000001");
     }
 
