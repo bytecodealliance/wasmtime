@@ -11,4 +11,4 @@ path = "main.rs"
 
 [dependencies]
 cretonne = { path = "../libcretonne" }
-ctonfile = { path = "../libctonfile" }
+cretonne-reader = { path = "../libreader" }
