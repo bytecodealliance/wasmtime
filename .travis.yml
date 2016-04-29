@@ -1,0 +1,6 @@
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+script: src/test-all.sh
