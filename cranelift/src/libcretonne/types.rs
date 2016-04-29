@@ -337,38 +337,37 @@ mod tests {
         assert_eq!(big.lane_count(), 256);
         assert_eq!(big.bits(), 64 * 256);
 
-        assert_eq!(format!("{}", big.half_vector().unwrap()), "f64x128");
-        assert_eq!(format!("{}", B1.by(2).unwrap().half_vector().unwrap()),
-                   "b1");
+        assert_eq!(big.half_vector().unwrap().to_string(), "f64x128");
+        assert_eq!(B1.by(2).unwrap().half_vector().unwrap().to_string(), "b1");
         assert_eq!(I32.half_vector(), None);
         assert_eq!(VOID.half_vector(), None);
     }
 
     #[test]
     fn format_scalars() {
-        assert_eq!(format!("{}", VOID), "void");
-        assert_eq!(format!("{}", B1), "b1");
-        assert_eq!(format!("{}", B8), "b8");
-        assert_eq!(format!("{}", B16), "b16");
-        assert_eq!(format!("{}", B32), "b32");
-        assert_eq!(format!("{}", B64), "b64");
-        assert_eq!(format!("{}", I8), "i8");
-        assert_eq!(format!("{}", I16), "i16");
-        assert_eq!(format!("{}", I32), "i32");
-        assert_eq!(format!("{}", I64), "i64");
-        assert_eq!(format!("{}", F32), "f32");
-        assert_eq!(format!("{}", F64), "f64");
+        assert_eq!(VOID.to_string(), "void");
+        assert_eq!(B1.to_string(), "b1");
+        assert_eq!(B8.to_string(), "b8");
+        assert_eq!(B16.to_string(), "b16");
+        assert_eq!(B32.to_string(), "b32");
+        assert_eq!(B64.to_string(), "b64");
+        assert_eq!(I8.to_string(), "i8");
+        assert_eq!(I16.to_string(), "i16");
+        assert_eq!(I32.to_string(), "i32");
+        assert_eq!(I64.to_string(), "i64");
+        assert_eq!(F32.to_string(), "f32");
+        assert_eq!(F64.to_string(), "f64");
     }
 
     #[test]
     fn format_vectors() {
-        assert_eq!(format!("{}", B1.by(8).unwrap()), "b1x8");
-        assert_eq!(format!("{}", B8.by(1).unwrap()), "b8");
-        assert_eq!(format!("{}", B16.by(256).unwrap()), "b16x256");
-        assert_eq!(format!("{}", B32.by(4).unwrap().by(2).unwrap()), "b32x8");
-        assert_eq!(format!("{}", B64.by(8).unwrap()), "b64x8");
-        assert_eq!(format!("{}", I8.by(64).unwrap()), "i8x64");
-        assert_eq!(format!("{}", F64.by(2).unwrap()), "f64x2");
+        assert_eq!(B1.by(8).unwrap().to_string(), "b1x8");
+        assert_eq!(B8.by(1).unwrap().to_string(), "b8");
+        assert_eq!(B16.by(256).unwrap().to_string(), "b16x256");
+        assert_eq!(B32.by(4).unwrap().by(2).unwrap().to_string(), "b32x8");
+        assert_eq!(B64.by(8).unwrap().to_string(), "b64x8");
+        assert_eq!(I8.by(64).unwrap().to_string(), "i8x64");
+        assert_eq!(F64.by(2).unwrap().to_string(), "f64x2");
         assert_eq!(I8.by(3), None);
         assert_eq!(I8.by(512), None);
         assert_eq!(VOID.by(4), None);
@@ -377,24 +376,24 @@ mod tests {
     #[test]
     fn argument_type() {
         let mut t = ArgumentType::new(I32);
-        assert_eq!(format!("{}", t), "i32");
+        assert_eq!(t.to_string(), "i32");
         t.extension = ArgumentExtension::Uext;
-        assert_eq!(format!("{}", t), "i32 uext");
+        assert_eq!(t.to_string(), "i32 uext");
         t.inreg = true;
-        assert_eq!(format!("{}", t), "i32 uext inreg");
+        assert_eq!(t.to_string(), "i32 uext inreg");
     }
 
     #[test]
     fn signatures() {
         let mut sig = Signature::new();
-        assert_eq!(format!("{}", sig), "()");
+        assert_eq!(sig.to_string(), "()");
         sig.argument_types.push(ArgumentType::new(I32));
-        assert_eq!(format!("{}", sig), "(i32)");
+        assert_eq!(sig.to_string(), "(i32)");
         sig.return_types.push(ArgumentType::new(F32));
-        assert_eq!(format!("{}", sig), "(i32) -> f32");
+        assert_eq!(sig.to_string(), "(i32) -> f32");
         sig.argument_types.push(ArgumentType::new(I32.by(4).unwrap()));
-        assert_eq!(format!("{}", sig), "(i32, i32x4) -> f32");
+        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32");
         sig.return_types.push(ArgumentType::new(B8));
-        assert_eq!(format!("{}", sig), "(i32, i32x4) -> f32, b8");
+        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8");
     }
 }
