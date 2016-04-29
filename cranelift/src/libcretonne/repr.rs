@@ -382,6 +382,11 @@ impl Function {
         Self::with_name_signature(FunctionName::new(), Signature::new())
     }
 
+    /// Get the signature of this function.
+    pub fn own_signature(&self) -> &Signature {
+        &self.signature
+    }
+
     /// Allocate a new stack slot.
     pub fn make_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
         let ss = StackSlot::new(self.stack_slots.len());
