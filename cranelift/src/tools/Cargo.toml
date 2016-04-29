@@ -6,7 +6,7 @@ description = "Binaries for testing the Cretonne library"
 publish = false
 
 [[bin]]
-name = "cretonne"
+name = "cton-util"
 path = "main.rs"
 
 [dependencies]
