@@ -1,5 +1,5 @@
 
 extern crate cretonne;
-extern crate ctonfile;
+extern crate cton_reader;
 
 fn main() {}

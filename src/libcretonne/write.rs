@@ -2,7 +2,7 @@
 //!
 //! The `write` module provides the `write_function` function which converts an IL `Function` to an
 //! equivalent textual representation. This textual representation can be read back by the
-//! `ctonfile` crate.
+//! `cretonne-reader` crate.
 
 use std::io::{self, Write};
 use repr::Function;

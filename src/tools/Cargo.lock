@@ -3,7 +3,7 @@ name = "cretonne-tools"
 version = "0.0.0"
 dependencies = [
  "cretonne 0.0.0",
- "ctonfile 0.0.0",
+ "cretonne-reader 0.0.0",
 ]
 
 [[package]]
@@ -11,7 +11,7 @@ name = "cretonne"
 version = "0.0.0"
 
 [[package]]
-name = "ctonfile"
+name = "cretonne-reader"
 version = "0.0.0"
 dependencies = [
  "cretonne 0.0.0",
