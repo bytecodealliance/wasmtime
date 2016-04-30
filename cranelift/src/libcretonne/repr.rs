@@ -261,6 +261,15 @@ impl Display for Inst {
     }
 }
 
+/// Allow immutable access to instructions via function indexing.
+impl Index<Inst> for Function {
+    type Output = InstructionData;
+
+    fn index<'a>(&'a self, inst: Inst) -> &'a InstructionData {
+        &self.instructions[inst.index()]
+    }
+}
+
 // ====--------------------------------------------------------------------------------------====//
 //
 // Value implementation.
@@ -402,11 +411,6 @@ impl Function {
         }
     }
 
-    /// Resolve an instruction reference.
-    pub fn inst(&self, i: Inst) -> &InstructionData {
-        &self.instructions[i.0 as usize]
-    }
-
     /// Create a new instruction.
     pub fn make_inst(&mut self, data: InstructionData) -> Inst {
         let iref = Inst::new(self.instructions.len());
@@ -427,7 +431,7 @@ impl Function {
         use self::ExpandedValue::*;
         use self::ValueData::*;
         match v.expand() {
-            Direct(i) => self.inst(i).first_type(),
+            Direct(i) => self[i].first_type(),
             Table(i) => {
                 match self.extended_values[i] {
                     Unused => panic!("Can't get type of Unused value {}", v),
@@ -457,7 +461,7 @@ mod tests {
         assert_eq!(inst.to_string(), "inst0");
 
         // Immutable reference resolution.
-        let ins = func.inst(inst);
+        let ins = &func[inst];
         assert_eq!(ins.opcode(), Opcode::Iconst);
         assert_eq!(ins.first_type(), types::I32);
     }
