@@ -510,7 +510,7 @@ impl Function {
     ///
     /// The instruction is allowed to produce at most one result as indicated by `data.ty`. Use
     /// `make_multi_inst()` to create instructions with multiple results.
-    pub fn make_inst(&mut self, data: InstructionData, extra_result_types: &[Type]) -> Inst {
+    pub fn make_inst(&mut self, data: InstructionData) -> Inst {
         let inst = Inst::new(self.instructions.len());
         self.instructions.push(data);
         inst
@@ -661,7 +661,7 @@ mod tests {
             opcode: Opcode::Iconst,
             ty: types::I32,
         };
-        let inst = func.make_inst(idata, &[]);
+        let inst = func.make_inst(idata);
         assert_eq!(inst.to_string(), "inst0");
 
         // Immutable reference resolution.
@@ -676,7 +676,7 @@ mod tests {
         let mut func = Function::new();
 
         let idata = InstructionData::call(Opcode::Vconst, I64);
-        let inst = func.make_inst(idata, &[I8, F64]);
+        let inst = func.make_multi_inst(idata, &[I8, F64]);
         assert_eq!(inst.to_string(), "inst0");
         let results: Vec<Value> = func.inst_results(inst).collect();
         assert_eq!(results.len(), 3);
