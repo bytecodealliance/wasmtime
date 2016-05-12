@@ -15,15 +15,15 @@ module :mod:`cretonne.base`.
 
 .. module:: cretonne
 
-Types
-=====
+Value Types
+===========
 
-Concrete value types are represented as instances of :class:`cretonne.Type`. There are
+Concrete value types are represented as instances of :class:`cretonne.ValueType`. There are
 subclasses to represent scalar and vector types.
 
-.. inheritance-diagram:: Type ScalarType VectorType IntType FloatType
+.. inheritance-diagram:: ValueType ScalarType VectorType IntType FloatType
     :parts: 1
-.. autoclass:: Type
+.. autoclass:: ValueType
 .. autoclass:: ScalarType
     :members:
 .. autoclass:: VectorType
@@ -48,32 +48,34 @@ types for their operands. This makes the instructions polymorphic.
 
 .. autoclass:: TypeVar
 
-Immediates
-----------
-
-Immediate instruction operands don't correspond to SSA values, but have values
-that are encoded directly in the instruction. Immediate operands don't
-have types from the :class:`cretonne.Type` type system; they often have
-enumerated values of a specific type. The type of an immediate operand is
-indicated with an instance of :class:`ImmediateType`.
-
-.. autoclass:: ImmediateType
-
-.. automodule:: cretonne.immediates
-    :members:
-
-.. currentmodule:: cretonne
-
 Instructions
 ============
 
 New instructions are defined as instances of the :class:`cretonne.Instruction`
 class.
 
-.. autoclass:: Operand
 .. autoclass:: Instruction
+.. autoclass:: Operand
+.. autoclass:: OperandKind
 .. autoclass:: InstructionGroup
     :members:
+
+
+Immediates
+----------
+
+Immediate instruction operands don't correspond to SSA values, but have values
+that are encoded directly in the instruction. Immediate operands don't
+have types from the :class:`cretonne.ValueType` type system; they often have
+enumerated values of a specific type. The type of an immediate operand is
+indicated with an instance of :class:`ImmediateKind`.
+
+.. autoclass:: ImmediateKind
+
+.. automodule:: cretonne.immediates
+    :members:
+
+.. currentmodule:: cretonne
 
 Targets
 =======

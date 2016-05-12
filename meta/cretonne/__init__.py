@@ -16,13 +16,75 @@ def camel_case(s):
     return camel_re.sub(lambda m: m.group(2).upper(), s)
 
 
-# Concrete types.
+# Kinds of operands.
 #
-# Instances (i8, i32, ...) are provided in the cretonne.types module.
+# Each instruction has an opcode and a number of operands. The opcode
+# determines the instruction format, and the format determines the number of
+# operands and the kind of each operand.
+class OperandKind(object):
+    """
+    The kind of an operand.
+
+    An instance of the `OperandKind` class corresponds to a kind of operand.
+    Each operand kind has a corresponding type in the Rust representation of an
+    instruction.
+    """
+
+    def __init__(self, name, doc):
+        self.name = name
+        self.__doc__ = doc
+        # The camel-cased name of an operand kind is also the Rust type used to
+        # represent it.
+        self.camel_name = camel_case(name)
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return 'OperandKind({})'.format(self.name)
 
 
-class Type(object):
-    """A concrete value type."""
+#: An SSA value operand. This is a value defined by another instruction.
+value = OperandKind(
+        'value', """
+        An SSA value defined by another instruction.
+
+        This kind of operand can represent any SSA value type, but the
+        instruction format may restrict the valid value types for a given
+        operand.
+        """)
+
+
+# Instances of immediate operand types are provided in the cretonne.immediates
+# module.
+class ImmediateKind(OperandKind):
+    """
+    The type of an immediate instruction operand.
+    """
+
+    def __init__(self, name, doc):
+        self.name = name
+        self.__doc__ = doc
+
+    def __repr__(self):
+        return 'ImmediateKind({})'.format(self.name)
+
+    def operand_kind(self):
+        """
+        An `ImmediateKind` instance can be used directly as the type of an
+        `Operand` when defining an instruction.
+        """
+        return self
+
+
+# ValueType instances (i8, i32, ...) are provided in the cretonne.types module.
+class ValueType(object):
+    """
+    A concrete SSA value type.
+
+    All SSA values have a type that is described by an instance of `ValueType`
+    or one of its subclasses.
+    """
 
     def __init__(self, name, membytes, doc):
         self.name = name
@@ -32,8 +94,15 @@ class Type(object):
     def __str__(self):
         return self.name
 
+    def operand_kind(self):
+        """
+        When a `ValueType` object is used to describe the type of an `Operand`
+        in an instruction definition, the kind of that operand is an SSA value.
+        """
+        return value
 
-class ScalarType(Type):
+
+class ScalarType(ValueType):
     """
     A concrete scalar (not vector) type.
 
@@ -62,7 +131,7 @@ class ScalarType(Type):
             return v
 
 
-class VectorType(Type):
+class VectorType(ValueType):
     """
     A concrete SIMD vector type.
 
@@ -144,27 +213,12 @@ class TypeVar(object):
         self.name = name
         self.__doc__ = doc
 
-
-# Immediate operands.
-#
-# Instances of immediate operand types are provided in the cretonne.immediates
-# module.
-
-
-class ImmediateType(object):
-    """
-    The type of an immediate instruction operand.
-    """
-
-    def __init__(self, name, doc):
-        self.name = name
-        self.__doc__ = doc
-
-    def __str__(self):
-        return self.name
-
-    def __repr__(self):
-        return 'ImmediateType({})'.format(self.name)
+    def operand_kind(self):
+        """
+        When a `TypeVar` object is used to describe the type of an `Operand`
+        in an instruction definition, the kind of that operand is an SSA value.
+        """
+        return value
 
 
 # Defining instructions.
@@ -225,14 +279,14 @@ class Operand(object):
     An instruction operand can be either an *immediate* or an *SSA value*. The
     type of the operand is one of:
 
-    1. A :py:class:`Type` instance indicates an SSA value operand with a
+    1. A :py:class:`ValueType` instance indicates an SSA value operand with a
        concrete type.
 
     2. A :py:class:`TypeVar` instance indicates an SSA value operand, and the
        instruction is polymorphic over the possible concrete types that the
        type variable can assume.
 
-    3. An :py:class:`ImmediateType` instance indicates an immediate operand
+    3. An :py:class:`ImmediateKind` instance indicates an immediate operand
        whose value is encoded in the instruction itself rather than being
        passed as an SSA value.
 
@@ -241,6 +295,7 @@ class Operand(object):
         self.name = name
         self.typ = typ
         self.__doc__ = doc
+        self.kind = typ.operand_kind()
 
     def get_doc(self):
         if self.__doc__:
@@ -251,7 +306,7 @@ class Operand(object):
 
 class Instruction(object):
     """
-    An instruction.
+    An instruction description.
 
     The operands to the instruction are specified as two tuples: ``ins`` and
     ``outs``. Since the Python singleton tuple syntax is a bit awkward, it is

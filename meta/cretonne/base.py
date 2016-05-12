@@ -277,10 +277,11 @@ ishl = Instruction(
         When shifting a B-bits integer type, this instruction computes:
 
         .. math::
-        s &:= y \pmod B,                \\
-        a &:= x \cdot 2^s \pmod{2^B}.
+            s &:= y \pmod B,                \\
+            a &:= x \cdot 2^s \pmod{2^B}.
 
         .. todo:: Add ``ishl_imm`` variant with an immediate ``y``.
+
         """,
         ins=(x, y), outs=a)
 
@@ -295,8 +296,8 @@ ushr = Instruction(
         When shifting a B-bits integer type, this instruction computes:
 
         .. math::
-        s &:= y \pmod B,                \\
-        a &:= \lfloor x \cdot 2^{-s} \rfloor.
+            s &:= y \pmod B,                \\
+            a &:= \lfloor x \cdot 2^{-s} \rfloor.
 
         .. todo:: Add ``ushr_imm`` variant with an immediate ``y``.
         """,
