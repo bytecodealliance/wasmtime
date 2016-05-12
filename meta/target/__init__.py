@@ -8,6 +8,7 @@ set architecture supported by Cretonne.
 
 from . import riscv
 
+
 def all_targets():
     """
     Get a list of all the supported targets. Each target is represented as a

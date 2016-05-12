@@ -5,6 +5,7 @@ Generate sources with instruction info.
 import srcgen
 import constant_hash
 
+
 def collect_instr_groups(targets):
     seen = set()
     groups = []
@@ -14,6 +15,7 @@ def collect_instr_groups(targets):
                 groups.append(g)
                 seen.add(g)
     return groups
+
 
 def gen_opcodes(groups, out_dir):
     """Generate opcode enumerations."""
@@ -46,9 +48,12 @@ def gen_opcodes(groups, out_dir):
                 fmt.format('Opcode::{} => "{}",', i.camel_name, i.name)
 
     # Generate an opcode hash table for looking up opcodes by name.
-    hash_table = constant_hash.compute_quadratic(instrs,
+    hash_table = constant_hash.compute_quadratic(
+            instrs,
             lambda i: constant_hash.simple_hash(i.name))
-    with fmt.indented('const OPCODE_HASH_TABLE: [Opcode; {}] = ['.format(len(hash_table)), '];'):
+    with fmt.indented(
+            'const OPCODE_HASH_TABLE: [Opcode; {}] = ['
+            .format(len(hash_table)), '];'):
         for i in hash_table:
             if i is None:
                 fmt.line('Opcode::NotAnOpcode,')
@@ -56,6 +61,7 @@ def gen_opcodes(groups, out_dir):
                 fmt.format('Opcode::{},', i.camel_name)
 
     fmt.update_file('opcodes.rs', out_dir)
+
 
 def generate(targets, out_dir):
     groups = collect_instr_groups(targets)

@@ -6,6 +6,7 @@ don't attempt parfect hashing, but simply generate an open addressed
 quadratically probed hash table.
 """
 
+
 def simple_hash(s):
     """
     Compute a primitive hash of a string.
@@ -20,6 +21,7 @@ def simple_hash(s):
     for c in s:
         h = ((h ^ ord(c)) + ((h >> 6) + (h << 26))) & 0xffffffff
     return h
+
 
 def next_power_of_two(x):
     """
@@ -40,6 +42,7 @@ def next_power_of_two(x):
         x |= x >> s
         s *= 2
     return x + 1
+
 
 def compute_quadratic(items, hash_function):
     """

@@ -9,6 +9,7 @@ source code.
 import sys
 import os
 
+
 class Formatter(object):
     """
     Source code formatter class.
@@ -70,7 +71,7 @@ class Formatter(object):
             self.after = after
 
         def __enter__(self):
-            self.fmt.indent_push();
+            self.fmt.indent_push()
 
         def __exit__(self, t, v, tb):
             self.fmt.indent_pop()

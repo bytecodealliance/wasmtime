@@ -7,14 +7,19 @@ instructions.
 
 import re
 
+
 camel_re = re.compile('(^|_)([a-z])')
+
+
 def camel_case(s):
     """Convert the string s to CamelCase"""
     return camel_re.sub(lambda m: m.group(2).upper(), s)
 
+
 # Concrete types.
 #
 # Instances (i8, i32, ...) are provided in the cretonne.types module.
+
 
 class Type(object):
     """A concrete value type."""
@@ -26,6 +31,7 @@ class Type(object):
 
     def __str__(self):
         return self.name
+
 
 class ScalarType(Type):
     """
@@ -55,6 +61,7 @@ class ScalarType(Type):
             self._vectors[lanes] = v
             return v
 
+
 class VectorType(Type):
     """
     A concrete SIMD vector type.
@@ -75,7 +82,9 @@ class VectorType(Type):
         self.lanes = lanes
 
     def __repr__(self):
-        return 'VectorType(base={}, lanes={})'.format(self.base.name, self.lanes)
+        return ('VectorType(base={}, lanes={})'
+                .format(self.base.name, self.lanes))
+
 
 class IntType(ScalarType):
     """A concrete scalar integer type."""
@@ -91,16 +100,19 @@ class IntType(ScalarType):
     def __repr__(self):
         return 'IntType(bits={})'.format(self.bits)
 
+
 class FloatType(ScalarType):
     """A concrete scalar floating point type."""
 
     def __init__(self, bits, doc):
         assert bits > 0, 'FloatType must have positive number of bits'
-        super(FloatType, self).__init__( name='f{:d}'.format(bits), membytes=bits/8, doc=doc)
+        super(FloatType, self).__init__(name='f{:d}'.format(bits),
+                                        membytes=bits/8, doc=doc)
         self.bits = bits
 
     def __repr__(self):
         return 'FloatType(bits={})'.format(self.bits)
+
 
 class BoolType(ScalarType):
     """A concrete scalar boolean type."""
@@ -116,9 +128,9 @@ class BoolType(ScalarType):
     def __repr__(self):
         return 'BoolType(bits={})'.format(self.bits)
 
-#
+
 # Parametric polymorphism.
-#
+
 
 class TypeVar(object):
     """
@@ -132,11 +144,12 @@ class TypeVar(object):
         self.name = name
         self.__doc__ = doc
 
-#
+
 # Immediate operands.
 #
 # Instances of immediate operand types are provided in the cretonne.immediates
 # module.
+
 
 class ImmediateType(object):
     """
@@ -153,9 +166,9 @@ class ImmediateType(object):
     def __repr__(self):
         return 'ImmediateType({})'.format(self.name)
 
-#
+
 # Defining instructions.
-#
+
 
 class InstructionGroup(object):
     """
@@ -178,7 +191,8 @@ class InstructionGroup(object):
         added to this group.
         """
         assert InstructionGroup._current is None, (
-                "Can't open {} since {} is already open".format(self, _current))
+                "Can't open {} since {} is already open"
+                .format(self, InstructionGroup._current))
         InstructionGroup._current = self
 
     def close(self):
@@ -187,7 +201,8 @@ class InstructionGroup(object):
         opening another instruction group.
         """
         assert InstructionGroup._current is self, (
-                "Can't close {}, the open instuction group is {}".format(self, _current))
+                "Can't close {}, the open instuction group is {}"
+                .format(self, InstructionGroup._current))
         InstructionGroup._current = None
 
     def __init__(self, name, doc):
@@ -198,8 +213,10 @@ class InstructionGroup(object):
 
     @staticmethod
     def append(inst):
-        assert InstructionGroup._current, "Open an instruction group before defining instructions."
+        assert InstructionGroup._current, \
+                "Open an instruction group before defining instructions."
         InstructionGroup._current.instructions.append(inst)
+
 
 class Operand(object):
     """
@@ -212,12 +229,12 @@ class Operand(object):
        concrete type.
 
     2. A :py:class:`TypeVar` instance indicates an SSA value operand, and the
-       instruction is polymorphic over the possible concrete types that the type
-       variable can assume.
+       instruction is polymorphic over the possible concrete types that the
+       type variable can assume.
 
     3. An :py:class:`ImmediateType` instance indicates an immediate operand
-       whose value is encoded in the instruction itself rather than being passed
-       as an SSA value.
+       whose value is encoded in the instruction itself rather than being
+       passed as an SSA value.
 
     """
     def __init__(self, name, typ, doc=''):
@@ -231,19 +248,20 @@ class Operand(object):
         else:
             return self.typ.__doc__
 
+
 class Instruction(object):
     """
     An instruction.
 
     The operands to the instruction are specified as two tuples: ``ins`` and
     ``outs``. Since the Python singleton tuple syntax is a bit awkward, it is
-    allowed to specify a singleton as just the operand itself, i.e., `ins=x` and
-    `ins=(x,)` are both allowed and mean the same thing.
+    allowed to specify a singleton as just the operand itself, i.e., `ins=x`
+    and `ins=(x,)` are both allowed and mean the same thing.
 
     :param name: Instruction mnemonic, also becomes opcode name.
     :param doc: Documentation string.
-    :param ins: Tuple of input operands. This can be a mix of SSA value operands
-                and immediate operands.
+    :param ins: Tuple of input operands. This can be a mix of SSA value
+                operands and immediate operands.
     :param outs: Tuple of output operands. The output operands can't be
                  immediates.
     """
@@ -258,8 +276,8 @@ class Instruction(object):
 
     @staticmethod
     def _to_operand_tuple(x):
-        # Allow a single Operand instance instead of the awkward singleton tuple
-        # syntax.
+        # Allow a single Operand instance instead of the awkward singleton
+        # tuple syntax.
         if isinstance(x, Operand):
             x = (x,)
         else:
@@ -268,9 +286,10 @@ class Instruction(object):
             assert isinstance(op, Operand)
         return x
 
-#
+
 # Defining targets
-#
+
+
 class Target(object):
     """
     A target instruction set architecture.
