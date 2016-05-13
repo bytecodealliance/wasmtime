@@ -36,7 +36,9 @@ def gen_opcodes(groups, out_dir):
                 if prefix:
                     prefix = prefix + ' = '
                 suffix = ', '.join(o.name for o in i.ins)
-                fmt.doc_comment('`{}{} {}`.'.format(prefix, i.name, suffix))
+                fmt.doc_comment(
+                        '`{}{} {}`. ({})'
+                        .format(prefix, i.name, suffix, i.format.name))
                 # Enum variant itself.
                 fmt.line(i.camel_name + ',')
 
