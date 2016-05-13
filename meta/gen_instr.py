@@ -4,6 +4,22 @@ Generate sources with instruction info.
 
 import srcgen
 import constant_hash
+import cretonne
+
+
+def gen_formats(fmt):
+    """Generate an instruction format enumeration"""
+
+    fmt.doc_comment('An instruction format')
+    fmt.doc_comment('')
+    fmt.doc_comment('Every opcode has a corresponding instruction format')
+    fmt.doc_comment('which is represented by both the `InstructionFormat`')
+    fmt.doc_comment('and the `InstructionData` enums.')
+    fmt.line('#[derive(Copy, Clone, PartialEq, Eq, Debug)]')
+    with fmt.indented('pub enum InstructionFormat {', '}'):
+        for f in cretonne.InstructionFormat.all_formats:
+            fmt.line(f.name + ',')
+    fmt.line()
 
 
 def collect_instr_groups(targets):
@@ -17,9 +33,8 @@ def collect_instr_groups(targets):
     return groups
 
 
-def gen_opcodes(groups, out_dir):
+def gen_opcodes(groups, fmt):
     """Generate opcode enumerations."""
-    fmt = srcgen.Formatter()
 
     fmt.doc_comment('An instruction opcode.')
     fmt.doc_comment('')
@@ -41,6 +56,18 @@ def gen_opcodes(groups, out_dir):
                         .format(prefix, i.name, suffix, i.format.name))
                 # Enum variant itself.
                 fmt.line(i.camel_name + ',')
+    fmt.line()
+
+    # Generate a private opcode_format table.
+    with fmt.indented(
+            'const OPCODE_FORMAT: [InstructionFormat; {}] = ['
+            .format(len(instrs)),
+            '];'):
+        for i in instrs:
+            fmt.format(
+                    'InstructionFormat::{}, // {}',
+                    i.format.name, i.name)
+    fmt.line()
 
     # Generate a private opcode_name function.
     with fmt.indented('fn opcode_name(opc: Opcode) -> &\'static str {', '}'):
@@ -48,6 +75,7 @@ def gen_opcodes(groups, out_dir):
             fmt.line('Opcode::NotAnOpcode => "<not an opcode>",')
             for i in instrs:
                 fmt.format('Opcode::{} => "{}",', i.camel_name, i.name)
+    fmt.line()
 
     # Generate an opcode hash table for looking up opcodes by name.
     hash_table = constant_hash.compute_quadratic(
@@ -61,10 +89,13 @@ def gen_opcodes(groups, out_dir):
                 fmt.line('Opcode::NotAnOpcode,')
             else:
                 fmt.format('Opcode::{},', i.camel_name)
-
-    fmt.update_file('opcodes.rs', out_dir)
+    fmt.line()
 
 
 def generate(targets, out_dir):
     groups = collect_instr_groups(targets)
-    gen_opcodes(groups, out_dir)
+    # opcodes.rs
+    fmt = srcgen.Formatter()
+    gen_formats(fmt)
+    gen_opcodes(groups, fmt)
+    fmt.update_file('opcodes.rs', out_dir)

@@ -49,9 +49,12 @@ class Formatter(object):
         assert self.indent != '', 'Already at top level indentation'
         self.indent = self.indent[0:-self.shiftwidth]
 
-    def line(self, s):
+    def line(self, s=None):
         """And an indented line."""
-        self.lines.append('{}{}\n'.format(self.indent, s))
+        if s:
+            self.lines.append('{}{}\n'.format(self.indent, s))
+        else:
+            self.lines.append('\n')
 
     def writelines(self, f=None):
         """Write all lines to `f`."""

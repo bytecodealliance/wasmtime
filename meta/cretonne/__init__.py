@@ -335,6 +335,9 @@ class InstructionFormat(object):
     # Map (multiple_results, kind, kind, ...) -> InstructionFormat
     _registry = dict()
 
+    # All existing formats.
+    all_formats = list()
+
     def __init__(self, *kinds, **kwargs):
         self.name = kwargs.get('name', None)
         self.kinds = kinds
@@ -346,6 +349,7 @@ class InstructionFormat(object):
                 "Format '{}' has the same signature as existing format '{}'"
                 .format(self.name, InstructionFormat._registry[sig]))
         InstructionFormat._registry[sig] = self
+        InstructionFormat.all_formats.append(self)
 
     @staticmethod
     def lookup(ins, outs):

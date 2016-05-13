@@ -23,6 +23,17 @@ impl Display for Opcode {
     }
 }
 
+impl Opcode {
+    /// Get the instruction format for this opcode.
+    pub fn format(self) -> Option<InstructionFormat> {
+        if self == Opcode::NotAnOpcode {
+            None
+        } else {
+            Some(OPCODE_FORMAT[self as usize - 1])
+        }
+    }
+}
+
 // A primitive hash function for matching opcodes.
 // Must match `meta/constant_hash.py`.
 fn simple_hash(s: &str) -> u32 {
@@ -491,6 +502,7 @@ mod tests {
         assert!(x != y);
         y = Opcode::Iadd;
         assert_eq!(x, y);
+        assert_eq!(x.format(), Some(InstructionFormat::Binary));
 
         assert_eq!(format!("{:?}", Opcode::IaddImm), "IaddImm");
         assert_eq!(Opcode::IaddImm.to_string(), "iadd_imm");
