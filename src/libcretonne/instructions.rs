@@ -108,6 +108,20 @@ pub enum InstructionData {
         ty: Type,
         imm: Imm64,
     },
+    UnaryIeee32 {
+        opcode: Opcode,
+        ty: Type,
+        imm: Ieee32,
+    },
+    UnaryIeee64 {
+        opcode: Opcode,
+        ty: Type,
+        imm: Ieee64,
+    },
+    UnaryImmVector {
+        opcode: Opcode,
+        ty: Type, // TBD: imm: Box<ImmVectorData>
+    },
     Binary {
         opcode: Opcode,
         ty: Type,
@@ -117,7 +131,14 @@ pub enum InstructionData {
         opcode: Opcode,
         ty: Type,
         arg: Value,
-        imm: Imm64,
+        rhs: Imm64,
+    },
+    // Same as BinaryImm, but the imediate is the lhs operand.
+    BinaryImmRev {
+        opcode: Opcode,
+        ty: Type,
+        arg: Value,
+        lhs: Imm64,
     },
     Call {
         opcode: Opcode,
@@ -157,8 +178,12 @@ impl InstructionData {
             Nullary { opcode, .. } => opcode,
             Unary { opcode, .. } => opcode,
             UnaryImm { opcode, .. } => opcode,
+            UnaryIeee32 { opcode, .. } => opcode,
+            UnaryIeee64 { opcode, .. } => opcode,
+            UnaryImmVector { opcode, .. } => opcode,
             Binary { opcode, .. } => opcode,
             BinaryImm { opcode, .. } => opcode,
+            BinaryImmRev { opcode, .. } => opcode,
             Call { opcode, .. } => opcode,
         }
     }
@@ -170,8 +195,12 @@ impl InstructionData {
             Nullary { ty, .. } => ty,
             Unary { ty, .. } => ty,
             UnaryImm { ty, .. } => ty,
+            UnaryIeee32 { ty, .. } => ty,
+            UnaryIeee64 { ty, .. } => ty,
+            UnaryImmVector { ty, .. } => ty,
             Binary { ty, .. } => ty,
             BinaryImm { ty, .. } => ty,
+            BinaryImmRev { ty, .. } => ty,
             Call { ty, .. } => ty,
         }
     }
@@ -183,8 +212,12 @@ impl InstructionData {
             Nullary { .. } => None,
             Unary { .. } => None,
             UnaryImm { .. } => None,
+            UnaryIeee32 { .. } => None,
+            UnaryIeee64 { .. } => None,
+            UnaryImmVector { .. } => None,
             Binary { .. } => None,
             BinaryImm { .. } => None,
+            BinaryImmRev { .. } => None,
             Call { ref data, .. } => Some(data.second_result),
         }
     }
@@ -195,8 +228,12 @@ impl InstructionData {
             Nullary { .. } => None,
             Unary { .. } => None,
             UnaryImm { .. } => None,
+            UnaryIeee32 { .. } => None,
+            UnaryIeee64 { .. } => None,
+            UnaryImmVector { .. } => None,
             Binary { .. } => None,
             BinaryImm { .. } => None,
+            BinaryImmRev { .. } => None,
             Call { ref mut data, .. } => Some(&mut data.second_result),
         }
     }

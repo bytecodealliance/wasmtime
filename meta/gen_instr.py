@@ -21,6 +21,20 @@ def gen_formats(fmt):
             fmt.line(f.name + ',')
     fmt.line()
 
+    # Emit a From<InstructionData> which also serves to verify that
+    # InstructionFormat and InstructionData are in sync.
+    with fmt.indented(
+            "impl<'a> From<&'a InstructionData> for InstructionFormat {", '}'):
+        with fmt.indented(
+                "fn from(inst: &'a InstructionData) -> InstructionFormat {",
+                '}'):
+            with fmt.indented('match *inst {', '}'):
+                for f in cretonne.InstructionFormat.all_formats:
+                    fmt.line(('InstructionData::{} {{ .. }} => ' +
+                              'InstructionFormat::{},')
+                             .format(f.name, f.name))
+    fmt.line()
+
 
 def collect_instr_groups(targets):
     seen = set()

@@ -55,6 +55,17 @@ value = OperandKind(
         operand.
         """)
 
+#: A variable-sizes list of value operands. Use for Ebb and function call
+#: arguemnts.
+args = OperandKind(
+        'args', """
+        A variable size list of `value` operands.
+
+        Use this to represent arguemtns passed to a function call, arguments
+        passed to an extended basic block, or a variable number of results
+        returned from an instruction.
+        """)
+
 
 # Instances of immediate operand types are provided in the cretonne.immediates
 # module.
