@@ -32,9 +32,6 @@ fn main() {
     let meta_dir = top_dir.join("meta");
     let build_script = meta_dir.join("build.py");
 
-    // Let Cargo known that this script should be rerun if anything changes in the meta directory.
-    println!("cargo:rerun-if-changed={}", meta_dir.display());
-
     // Launch build script with Python. We'll just find python in the path.
     let status = process::Command::new("python")
                      .current_dir(top_dir)
