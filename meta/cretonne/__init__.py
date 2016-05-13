@@ -6,6 +6,7 @@ instructions.
 """
 
 import re
+import importlib
 
 
 camel_re = re.compile('(^|_)([a-z])')
@@ -304,6 +305,80 @@ class Operand(object):
             return self.typ.__doc__
 
 
+class InstructionFormat(object):
+    """
+    An instruction format.
+
+    Every instruction opcode has a corresponding instruction format which
+    determines the number of operands and their kinds. Instruction formats are
+    identified structurally, i.e., the format of an instruction is derived from
+    the kinds of operands used in its declaration.
+
+    Most instruction formats produce a single result, or no result at all. If
+    an instruction can produce more than one result, the `multiple_results`
+    flag must be set on its format. All results are of the `value` kind, and
+    the instruction format does not keep track of how many results are
+    produced. Some instructions, like `call`, may have a variable number of
+    results.
+
+    All instruction formats must be predefined in the
+    :py:mod:`cretonne.formats` module.
+
+    :param kinds: List of `OperandKind` objects describing the operands.
+    :param name: Instruction format name in CamelCase. This is used as a Rust
+        variant name in both the `InstructionData` and `InstructionFormat`
+        enums.
+    :param multiple_results: Set to `True` if this instruction format allows
+        more than one result to be produced.
+    """
+
+    # Map (multiple_results, kind, kind, ...) -> InstructionFormat
+    _registry = dict()
+
+    def __init__(self, *kinds, **kwargs):
+        self.name = kwargs.get('name', None)
+        self.kinds = kinds
+        self.multiple_results = kwargs.get('multiple_results', False)
+        # Compute a signature for the global registry.
+        sig = (self.multiple_results,) + kinds
+        if sig in InstructionFormat._registry:
+            raise RuntimeError(
+                "Format '{}' has the same signature as existing format '{}'"
+                .format(self.name, InstructionFormat._registry[sig]))
+        InstructionFormat._registry[sig] = self
+
+    @staticmethod
+    def lookup(ins, outs):
+        """
+        Find an existing instruction format that matches the given lists of
+        instruction inputs and outputs.
+
+        The `ins` and `outs` arguments correspond to the
+        :py:class:`Instruction` arguments of the same name, except they must be
+        tuples of :py:`Operand` objects.
+        """
+        multiple_results = len(outs) > 1
+        sig = (multiple_results,) + tuple(op.kind for op in ins)
+        if sig not in InstructionFormat._registry:
+            raise RuntimeError(
+                    "No instruction format matches ins = ({}){}".format(
+                        ", ".join(map(str, sig[1:])),
+                        "[multiple results]" if multiple_results else ""))
+        return InstructionFormat._registry[sig]
+
+    @staticmethod
+    def extract_names(globs):
+        """
+        Given a dict mapping name -> object as returned by `globals()`, find
+        all the InstructionFormat objects and set their name from the dict key.
+        This is used to name a bunch of global variables in a module.
+        """
+        for name, obj in globs.iteritems():
+            if isinstance(obj, InstructionFormat):
+                assert obj.name is None
+                obj.name = name
+
+
 class Instruction(object):
     """
     An instruction description.
@@ -327,6 +402,7 @@ class Instruction(object):
         self.__doc__ = doc
         self.ins = self._to_operand_tuple(ins)
         self.outs = self._to_operand_tuple(outs)
+        self.format = InstructionFormat.lookup(self.ins, self.outs)
         InstructionGroup.append(self)
 
     @staticmethod
@@ -359,3 +435,7 @@ class Target(object):
     def __init__(self, name, instrution_groups):
         self.name = name
         self.instruction_groups = instrution_groups
+
+# Import the fixed instruction formats now so they can be added to the
+# registry.
+importlib.import_module('cretonne.formats')
