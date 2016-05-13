@@ -6,6 +6,7 @@
 
 use std::io::{self, Write};
 use repr::Function;
+use entities::{Inst, Ebb, Value};
 
 pub type Result = io::Result<()>;
 
@@ -13,7 +14,14 @@ pub type Result = io::Result<()>;
 pub fn write_function(w: &mut Write, func: &Function) -> Result {
     try!(write_spec(w, func));
     try!(writeln!(w, " {{"));
-    try!(write_preamble(w, func));
+    let mut any = try!(write_preamble(w, func));
+    for ebb in func.ebbs_numerically() {
+        if !any {
+            try!(writeln!(w, ""));
+        }
+        try!(write_ebb(w, func, ebb));
+        any = true;
+    }
     writeln!(w, "}}")
 }
 
@@ -58,7 +66,7 @@ fn write_spec(w: &mut Write, func: &Function) -> Result {
     }
 }
 
-fn write_preamble(w: &mut Write, func: &Function) -> Result {
+fn write_preamble(w: &mut Write, func: &Function) -> io::Result<bool> {
     let mut any = false;
 
     for ss in func.stack_slot_iter() {
@@ -66,11 +74,88 @@ fn write_preamble(w: &mut Write, func: &Function) -> Result {
         try!(writeln!(w, "    {} = {}", ss, func[ss]));
     }
 
-    // Put a blank line after the preamble unless it was empty.
-    if any {
-        writeln!(w, "")
-    } else {
-        Ok(())
+    Ok(any)
+}
+
+// ====--------------------------------------------------------------------------------------====//
+//
+// Basic blocks
+//
+// ====--------------------------------------------------------------------------------------====//
+
+pub fn write_arg(w: &mut Write, func: &Function, arg: Value) -> Result {
+    write!(w, "{}: {}", arg, func.value_type(arg))
+}
+
+pub fn write_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
+    // Write out the basic block header, outdented:
+    //
+    //    ebb1:
+    //    ebb1(vx1: i32):
+    //    ebb10(vx4: f64, vx5: b1):
+    //
+
+    let mut args = func.ebb_args(ebb);
+    match args.next() {
+        None => return writeln!(w, "{}:", ebb),
+        Some(arg) => {
+            try!(write!(w, "{}(", ebb));
+            try!(write_arg(w, func, arg));
+        }
+    }
+    // Remaining args.
+    for arg in args {
+        try!(write!(w, ", "));
+        try!(write_arg(w, func, arg));
+    }
+    writeln!(w, "):")
+}
+
+pub fn write_ebb(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
+    try!(write_ebb_header(w, func, ebb));
+    for inst in func.ebb_insts(ebb) {
+        try!(write_instruction(w, func, inst));
+    }
+    Ok(())
+}
+
+
+// ====--------------------------------------------------------------------------------------====//
+//
+// Instructions
+//
+// ====--------------------------------------------------------------------------------------====//
+
+pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
+    try!(write!(w, "    "));
+
+    // First write out the result values, if any.
+    let mut has_results = false;
+    for r in func.inst_results(inst) {
+        if !has_results {
+            has_results = true;
+            try!(write!(w, "{}", r));
+        } else {
+            try!(write!(w, ", {}", r));
+        }
+    }
+    if has_results {
+        try!(write!(w, " = "));
+    }
+
+    // Then the opcode and operands, depending on format.
+    use instructions::InstructionData::*;
+    match func[inst] {
+        Nullary { opcode, .. } => writeln!(w, "{}", opcode),
+        Unary { opcode, arg, .. } => writeln!(w, "{} {}", opcode, arg),
+        UnaryImm { opcode, imm, .. } => writeln!(w, "{} {}", opcode, imm),
+        UnaryIeee32 { opcode, imm, .. } => writeln!(w, "{} {}", opcode, imm),
+        UnaryIeee64 { opcode, imm, .. } => writeln!(w, "{} {}", opcode, imm),
+        UnaryImmVector { opcode, .. } => writeln!(w, "{} [...]", opcode),
+        Binary { opcode, args, .. } => writeln!(w, "{} {}, {}", opcode, args[0], args[1]),
+        BinaryImm { opcode, lhs, rhs, .. } => writeln!(w, "{} {}, {}", opcode, lhs, rhs),
+        BinaryImmRev { opcode, lhs, rhs, .. } => writeln!(w, "{} {}, {}", opcode, lhs, rhs),
+        Call { opcode, .. } => writeln!(w, "{} [...]", opcode),
     }
 }
 
@@ -79,6 +164,7 @@ mod tests {
     use super::*;
     use super::{needs_quotes, escaped};
     use repr::{Function, StackSlotData};
+    use types;
 
     #[test]
     fn quoting() {
@@ -108,6 +194,18 @@ mod tests {
 
         f.make_stack_slot(StackSlotData::new(4));
         assert_eq!(function_to_string(&f),
-                   "function foo() {\n    ss0 = stack_slot 4\n\n}\n");
+                   "function foo() {\n    ss0 = stack_slot 4\n}\n");
+
+        let ebb = f.make_ebb();
+        assert_eq!(function_to_string(&f),
+                   "function foo() {\n    ss0 = stack_slot 4\nebb0:\n}\n");
+
+        f.append_ebb_arg(ebb, types::I8);
+        assert_eq!(function_to_string(&f),
+                   "function foo() {\n    ss0 = stack_slot 4\nebb0(vx0: i8):\n}\n");
+
+        f.append_ebb_arg(ebb, types::F32.by(4).unwrap());
+        assert_eq!(function_to_string(&f),
+                   "function foo() {\n    ss0 = stack_slot 4\nebb0(vx0: i8, vx1: f32x4):\n}\n");
     }
 }

@@ -130,14 +130,14 @@ pub enum InstructionData {
     BinaryImm {
         opcode: Opcode,
         ty: Type,
-        arg: Value,
+        lhs: Value,
         rhs: Imm64,
     },
     // Same as BinaryImm, but the imediate is the lhs operand.
     BinaryImmRev {
         opcode: Opcode,
         ty: Type,
-        arg: Value,
+        rhs: Value,
         lhs: Imm64,
     },
     Call {
