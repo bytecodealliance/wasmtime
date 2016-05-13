@@ -12,7 +12,8 @@ use std::u32;
 use lexer::{self, Lexer, Token};
 use cretonne::types::{FunctionName, Signature, ArgumentType, ArgumentExtension};
 use cretonne::immediates::Imm64;
-use cretonne::repr::{Function, StackSlot, StackSlotData};
+use cretonne::entities::StackSlot;
+use cretonne::repr::{Function, StackSlotData};
 
 pub use lexer::Location;
 

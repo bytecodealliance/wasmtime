@@ -2,45 +2,16 @@
 //! Representation of Cretonne IL functions.
 
 use types::{Type, FunctionName, Signature};
-use immediates::*;
-use std::default::Default;
-use std::fmt::{self, Display, Formatter, Write};
+use entities::*;
+use instructions::*;
+use std::fmt::{self, Display, Formatter};
 use std::ops::Index;
-use std::u32;
 
 // ====--------------------------------------------------------------------------------------====//
 //
 // Public data types.
 //
 // ====--------------------------------------------------------------------------------------====//
-
-/// An opaque reference to an extended basic block in a function.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct Ebb(u32);
-
-/// A guaranteed invalid EBB reference.
-pub const NO_EBB: Ebb = Ebb(u32::MAX);
-
-/// An opaque reference to an instruction in a function.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct Inst(u32);
-
-/// A guaranteed invalid instruction reference.
-pub const NO_INST: Inst = Inst(u32::MAX);
-
-/// An opaque reference to an SSA value.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct Value(u32);
-
-/// A guaranteed invalid value reference.
-pub const NO_VALUE: Value = Value(u32::MAX);
-
-/// An opaque reference to a stack slot.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct StackSlot(u32);
-
-/// A guaranteed invalid stack slot reference.
-pub const NO_STACK_SLOT: StackSlot = StackSlot(u32::MAX);
 
 /// A function.
 ///
@@ -98,80 +69,11 @@ pub struct EbbData {
     last_arg: Value,
 }
 
-/// Contents on an instruction.
-///
-/// Every variant must contain `opcode` and `ty` fields. An instruction that doesn't produce a
-/// value should have its `ty` field set to `VOID`. The size of `InstructionData` should be kept at
-/// 16 bytes on 64-bit architectures. If more space is needed to represent an instruction, use a
-/// `Box<AuxData>` to store the additional information out of line.
-#[derive(Debug)]
-pub enum InstructionData {
-    Nullary {
-        opcode: Opcode,
-        ty: Type,
-    },
-    Unary {
-        opcode: Opcode,
-        ty: Type,
-        arg: Value,
-    },
-    UnaryImm {
-        opcode: Opcode,
-        ty: Type,
-        imm: Imm64,
-    },
-    Binary {
-        opcode: Opcode,
-        ty: Type,
-        args: [Value; 2],
-    },
-    BinaryImm {
-        opcode: Opcode,
-        ty: Type,
-        arg: Value,
-        imm: Imm64,
-    },
-    Call {
-        opcode: Opcode,
-        ty: Type,
-        data: Box<CallData>,
-    },
-}
-
-/// Payload of a call instruction.
-#[derive(Debug)]
-pub struct CallData {
-    /// Second result value for a call producing multiple return values.
-    second_result: Value,
-
-    // Dynamically sized array containing call argument values.
-    arguments: Vec<Value>,
-}
-
-
 // ====--------------------------------------------------------------------------------------====//
 //
 // Stack slot implementation.
 //
 // ====--------------------------------------------------------------------------------------====//
-
-impl StackSlot {
-    fn new(index: usize) -> StackSlot {
-        assert!(index < (u32::MAX as usize));
-        StackSlot(index as u32)
-    }
-
-    pub fn index(&self) -> usize {
-        self.0 as usize
-    }
-}
-
-/// Display a `StackSlot` reference as "ss12".
-impl Display for StackSlot {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write!(fmt, "ss{}", self.0)
-    }
-}
 
 impl StackSlotData {
     /// Create a stack slot with the specified byte size.
@@ -221,24 +123,6 @@ impl Iterator for StackSlotIter {
 //
 // ====--------------------------------------------------------------------------------------====//
 
-impl Ebb {
-    fn new(index: usize) -> Ebb {
-        assert!(index < (u32::MAX as usize));
-        Ebb(index as u32)
-    }
-
-    pub fn index(&self) -> usize {
-        self.0 as usize
-    }
-}
-
-/// Display an `Ebb` reference as "ebb12".
-impl Display for Ebb {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write!(fmt, "ebb{}", self.0)
-    }
-}
-
 impl EbbData {
     fn new() -> EbbData {
         EbbData {
@@ -254,24 +138,6 @@ impl EbbData {
 //
 // ====--------------------------------------------------------------------------------------====//
 
-impl Inst {
-    fn new(index: usize) -> Inst {
-        assert!(index < (u32::MAX as usize));
-        Inst(index as u32)
-    }
-
-    pub fn index(&self) -> usize {
-        self.0 as usize
-    }
-}
-
-/// Display an `Inst` reference as "inst7".
-impl Display for Inst {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write!(fmt, "inst{}", self.0)
-    }
-}
-
 /// Allow immutable access to instructions via function indexing.
 impl Index<Inst> for Function {
     type Output = InstructionData;
@@ -286,65 +152,6 @@ impl Index<Inst> for Function {
 // Value implementation.
 //
 // ====--------------------------------------------------------------------------------------====//
-
-// Value references can either reference an instruction directly, or they can refer to the
-// extended value table.
-enum ExpandedValue {
-    // This is the first value produced by the referenced instruction.
-    Direct(Inst),
-
-    // This value is described in the extended value table.
-    Table(usize),
-
-    // This is NO_VALUE.
-    None,
-}
-
-impl Value {
-    fn new_direct(i: Inst) -> Value {
-        let encoding = i.index() * 2;
-        assert!(encoding < u32::MAX as usize);
-        Value(encoding as u32)
-    }
-
-    fn new_table(index: usize) -> Value {
-        let encoding = index * 2 + 1;
-        assert!(encoding < u32::MAX as usize);
-        Value(encoding as u32)
-    }
-
-    // Expand the internal representation into something useful.
-    fn expand(&self) -> ExpandedValue {
-        use self::ExpandedValue::*;
-        if *self == NO_VALUE {
-            return None;
-        }
-        let index = (self.0 / 2) as usize;
-        if self.0 % 2 == 0 {
-            Direct(Inst::new(index))
-        } else {
-            Table(index)
-        }
-    }
-}
-
-impl Default for Value {
-    fn default() -> Value {
-        NO_VALUE
-    }
-}
-
-/// Display a `Value` reference as "v7" or "v2x".
-impl Display for Value {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        use self::ExpandedValue::*;
-        match self.expand() {
-            Direct(i) => write!(fmt, "v{}", i.0),
-            Table(i) => write!(fmt, "vx{}", i),
-            None => write!(fmt, "NO_VALUE"),
-        }
-    }
-}
 
 // Most values are simply the first value produced by an instruction.
 // Other values have an entry in the value table.
@@ -395,71 +202,6 @@ impl<'a> Iterator for Values<'a> {
         };
 
         Some(prev)
-    }
-}
-
-impl InstructionData {
-    /// Create data for a call instruction.
-    pub fn call(opc: Opcode, return_type: Type) -> InstructionData {
-        InstructionData::Call {
-            opcode: opc,
-            ty: return_type,
-            data: Box::new(CallData {
-                second_result: NO_VALUE,
-                arguments: Vec::new(),
-            }),
-        }
-    }
-
-    /// Get the opcode of this instruction.
-    pub fn opcode(&self) -> Opcode {
-        use self::InstructionData::*;
-        match *self {
-            Nullary { opcode, .. } => opcode,
-            Unary { opcode, .. } => opcode,
-            UnaryImm { opcode, .. } => opcode,
-            Binary { opcode, .. } => opcode,
-            BinaryImm { opcode, .. } => opcode,
-            Call { opcode, .. } => opcode,
-        }
-    }
-
-    /// Type of the first result.
-    pub fn first_type(&self) -> Type {
-        use self::InstructionData::*;
-        match *self {
-            Nullary { ty, .. } => ty,
-            Unary { ty, .. } => ty,
-            UnaryImm { ty, .. } => ty,
-            Binary { ty, .. } => ty,
-            BinaryImm { ty, .. } => ty,
-            Call { ty, .. } => ty,
-        }
-    }
-
-    /// Second result value, if any.
-    fn second_result(&self) -> Option<Value> {
-        use self::InstructionData::*;
-        match *self {
-            Nullary { .. } => None,
-            Unary { .. } => None,
-            UnaryImm { .. } => None,
-            Binary { .. } => None,
-            BinaryImm { .. } => None,
-            Call { ref data, .. } => Some(data.second_result),
-        }
-    }
-
-    fn second_result_mut<'a>(&'a mut self) -> Option<&'a mut Value> {
-        use self::InstructionData::*;
-        match *self {
-            Nullary { .. } => None,
-            Unary { .. } => None,
-            UnaryImm { .. } => None,
-            Binary { .. } => None,
-            BinaryImm { .. } => None,
-            Call { ref mut data, .. } => Some(&mut data.second_result),
-        }
     }
 }
 
@@ -632,7 +374,7 @@ impl Function {
 
     /// Get the type of a value.
     pub fn value_type(&self, v: Value) -> Type {
-        use self::ExpandedValue::*;
+        use entities::ExpandedValue::*;
         use self::ValueData::*;
         match v.expand() {
             Direct(i) => self[i].first_type(),
@@ -651,7 +393,8 @@ impl Function {
 mod tests {
     use super::*;
     use types;
-    use immediates::*;
+    use entities::*;
+    use instructions::*;
 
     #[test]
     fn make_inst() {
