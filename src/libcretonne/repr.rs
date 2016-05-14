@@ -1,17 +1,10 @@
-
 //! Representation of Cretonne IL functions.
 
 use types::{Type, FunctionName, Signature};
 use entities::*;
 use instructions::*;
 use std::fmt::{self, Display, Formatter};
-use std::ops::Index;
-
-// ====--------------------------------------------------------------------------------------====//
-//
-// Public data types.
-//
-// ====--------------------------------------------------------------------------------------====//
+use std::ops::{Index, IndexMut};
 
 /// A function.
 ///
@@ -41,168 +34,9 @@ pub struct Function {
     /// Others index into this table.
     extended_values: Vec<ValueData>,
 
-    /// Return type(s). A function may return zero or more values.
-    pub return_types: Vec<Type>,
-}
-
-/// Contents of a stack slot.
-#[derive(Debug)]
-pub struct StackSlotData {
-    /// Size of stack slot in bytes.
-    pub size: u32,
-}
-
-/// Contents of an extended basic block.
-///
-/// Arguments for an extended basic block are values that dominate everything in the EBB. All
-/// branches to this EBB must provide matching arguments, and the arguments to the entry EBB must
-/// match the function arguments.
-#[derive(Debug)]
-pub struct EbbData {
-    /// First argument to this EBB, or `NO_VALUE` if the block has no arguments.
-    ///
-    /// The arguments are all ValueData::Argument entries that form a linked list from `first_arg`
-    /// to `last_arg`.
-    first_arg: Value,
-
-    /// Last argument to this EBB, or `NO_VALUE` if the block has no arguments.
-    last_arg: Value,
-}
-
-// ====--------------------------------------------------------------------------------------====//
-//
-// Stack slot implementation.
-//
-// ====--------------------------------------------------------------------------------------====//
-
-impl StackSlotData {
-    /// Create a stack slot with the specified byte size.
-    pub fn new(size: u32) -> StackSlotData {
-        StackSlotData { size: size }
-    }
-}
-
-impl Display for StackSlotData {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write!(fmt, "stack_slot {}", self.size)
-    }
-}
-
-/// Allow immutable access to stack slots via function indexing.
-impl Index<StackSlot> for Function {
-    type Output = StackSlotData;
-
-    fn index<'a>(&'a self, ss: StackSlot) -> &'a StackSlotData {
-        &self.stack_slots[ss.index()]
-    }
-}
-
-/// Stack slot iterator visits all stack slots in a function, returning `StackSlot` references.
-pub struct StackSlotIter {
-    cur: usize,
-    end: usize,
-}
-
-impl Iterator for StackSlotIter {
-    type Item = StackSlot;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.cur < self.end {
-            let ss = StackSlot::new(self.cur);
-            self.cur += 1;
-            Some(ss)
-        } else {
-            None
-        }
-    }
-}
-
-// ====--------------------------------------------------------------------------------------====//
-//
-// Extended basic block implementation.
-//
-// ====--------------------------------------------------------------------------------------====//
-
-impl EbbData {
-    fn new() -> EbbData {
-        EbbData {
-            first_arg: NO_VALUE,
-            last_arg: NO_VALUE,
-        }
-    }
-}
-
-// ====--------------------------------------------------------------------------------------====//
-//
-// Instruction implementation.
-//
-// ====--------------------------------------------------------------------------------------====//
-
-/// Allow immutable access to instructions via function indexing.
-impl Index<Inst> for Function {
-    type Output = InstructionData;
-
-    fn index<'a>(&'a self, inst: Inst) -> &'a InstructionData {
-        &self.instructions[inst.index()]
-    }
-}
-
-// ====--------------------------------------------------------------------------------------====//
-//
-// Value implementation.
-//
-// ====--------------------------------------------------------------------------------------====//
-
-// Most values are simply the first value produced by an instruction.
-// Other values have an entry in the value table.
-#[derive(Debug)]
-enum ValueData {
-    // Value is defined by an instruction, but it is not the first result.
-    Def {
-        ty: Type,
-        def: Inst,
-        next: Value, // Next result defined by `def`.
-    },
-
-    // Value is an EBB argument.
-    Argument {
-        ty: Type,
-        ebb: Ebb,
-        next: Value, // Next argument to `ebb`.
-    },
-}
-
-/// Iterate through a list of related value references, such as:
-///
-/// - All results defined by an instruction.
-/// - All arguments to an EBB
-///
-/// A value iterator borrows a Function reference.
-pub struct Values<'a> {
-    func: &'a Function,
-    cur: Value,
-}
-
-impl<'a> Iterator for Values<'a> {
-    type Item = Value;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let prev = self.cur;
-
-        // Advance self.cur to the next value, or NO_VALUE.
-        self.cur = match prev.expand() {
-            ExpandedValue::Direct(inst) => self.func[inst].second_result().unwrap_or_default(),
-            ExpandedValue::Table(index) => {
-                match self.func.extended_values[index] {
-                    ValueData::Def { next, .. } => next,
-                    ValueData::Argument { next, .. } => next,
-                }
-            }
-            ExpandedValue::None => return None,
-        };
-
-        Some(prev)
-    }
+    // Linked list nodes for the layout order of instructions. Forms a double linked list per EBB,
+    // terminated in both ends by NO_INST.
+    inst_order: Vec<InstNode>,
 }
 
 impl Function {
@@ -215,7 +49,7 @@ impl Function {
             instructions: Vec::new(),
             extended_basic_blocks: Vec::new(),
             extended_values: Vec::new(),
-            return_types: Vec::new(),
+            inst_order: Vec::new(),
         }
     }
 
@@ -255,6 +89,11 @@ impl Function {
     pub fn make_inst(&mut self, data: InstructionData) -> Inst {
         let inst = Inst::new(self.instructions.len());
         self.instructions.push(data);
+        self.inst_order.push(InstNode {
+            prev: NO_INST,
+            next: NO_INST,
+        });
+        debug_assert_eq!(self.instructions.len(), self.inst_order.len());
         inst
     }
 
@@ -328,6 +167,14 @@ impl Function {
         &mut self.extended_basic_blocks[ebb.index()]
     }
 
+    /// Iterate over all the EBBs in order of creation.
+    pub fn ebbs_numerically(&self) -> NumericalEbbs {
+        NumericalEbbs {
+            cur: 0,
+            limit: self.extended_basic_blocks.len(),
+        }
+    }
+
     /// Append an argument with type `ty` to `ebb`.
     pub fn append_ebb_arg(&mut self, ebb: Ebb, ty: Type) -> Value {
         let val = self.make_value(ValueData::Argument {
@@ -363,6 +210,32 @@ impl Function {
         }
     }
 
+    /// Append an instruction to a basic block.
+    pub fn append_inst(&mut self, ebb: Ebb, inst: Inst) {
+        let old_last = self[ebb].last_inst;
+
+        self.inst_order[inst.index()] = InstNode {
+            prev: old_last,
+            next: NO_INST,
+        };
+
+        if old_last == NO_INST {
+            assert!(self[ebb].first_inst == NO_INST);
+            self[ebb].first_inst = inst;
+        } else {
+            self.inst_order[old_last.index()].next = inst;
+        }
+        self[ebb].last_inst = inst;
+    }
+
+    /// Iterate through the instructions in `ebb`.
+    pub fn ebb_insts<'a>(&'a self, ebb: Ebb) -> EbbInsts<'a> {
+        EbbInsts {
+            func: self,
+            cur: self[ebb].first_inst,
+        }
+    }
+
     // Values.
 
     /// Allocate an extended value entry.
@@ -386,6 +259,238 @@ impl Function {
             }
             None => panic!("NO_VALUE has no type"),
         }
+    }
+}
+
+// ====--------------------------------------------------------------------------------------====//
+//
+// Stack slot implementation.
+//
+// ====--------------------------------------------------------------------------------------====//
+
+/// Contents of a stack slot.
+#[derive(Debug)]
+pub struct StackSlotData {
+    /// Size of stack slot in bytes.
+    pub size: u32,
+}
+
+impl StackSlotData {
+    /// Create a stack slot with the specified byte size.
+    pub fn new(size: u32) -> StackSlotData {
+        StackSlotData { size: size }
+    }
+}
+
+impl Display for StackSlotData {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        write!(fmt, "stack_slot {}", self.size)
+    }
+}
+
+/// Allow immutable access to stack slots via function indexing.
+impl Index<StackSlot> for Function {
+    type Output = StackSlotData;
+
+    fn index<'a>(&'a self, ss: StackSlot) -> &'a StackSlotData {
+        &self.stack_slots[ss.index()]
+    }
+}
+
+/// Stack slot iterator visits all stack slots in a function, returning `StackSlot` references.
+pub struct StackSlotIter {
+    cur: usize,
+    end: usize,
+}
+
+impl Iterator for StackSlotIter {
+    type Item = StackSlot;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cur < self.end {
+            let ss = StackSlot::new(self.cur);
+            self.cur += 1;
+            Some(ss)
+        } else {
+            None
+        }
+    }
+}
+
+// ====--------------------------------------------------------------------------------------====//
+//
+// Extended basic block implementation.
+//
+// ====--------------------------------------------------------------------------------------====//
+
+/// Contents of an extended basic block.
+///
+/// Arguments for an extended basic block are values that dominate everything in the EBB. All
+/// branches to this EBB must provide matching arguments, and the arguments to the entry EBB must
+/// match the function arguments.
+#[derive(Debug)]
+pub struct EbbData {
+    /// First argument to this EBB, or `NO_VALUE` if the block has no arguments.
+    ///
+    /// The arguments are all ValueData::Argument entries that form a linked list from `first_arg`
+    /// to `last_arg`.
+    first_arg: Value,
+
+    /// Last argument to this EBB, or `NO_VALUE` if the block has no arguments.
+    last_arg: Value,
+
+    /// First instruction in this block, or `NO_INST`.
+    first_inst: Inst,
+
+    /// Last instruction in this block, or `NO_INST`.
+    last_inst: Inst,
+}
+
+impl EbbData {
+    fn new() -> EbbData {
+        EbbData {
+            first_arg: NO_VALUE,
+            last_arg: NO_VALUE,
+            first_inst: NO_INST,
+            last_inst: NO_INST,
+        }
+    }
+}
+
+impl Index<Ebb> for Function {
+    type Output = EbbData;
+
+    fn index<'a>(&'a self, ebb: Ebb) -> &'a EbbData {
+        &self.extended_basic_blocks[ebb.index()]
+    }
+}
+
+impl IndexMut<Ebb> for Function {
+    fn index_mut<'a>(&'a mut self, ebb: Ebb) -> &'a mut EbbData {
+        &mut self.extended_basic_blocks[ebb.index()]
+    }
+}
+
+pub struct EbbInsts<'a> {
+    func: &'a Function,
+    cur: Inst,
+}
+
+impl<'a> Iterator for EbbInsts<'a> {
+    type Item = Inst;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let prev = self.cur;
+        if prev == NO_INST {
+            None
+        } else {
+            // Advance self.cur to the next inst.
+            self.cur = self.func.inst_order[prev.index()].next;
+            Some(prev)
+        }
+    }
+}
+
+/// Iterate through all EBBs in a function in numerical order.
+/// This order is stable, but has little significance to the semantics of the function.
+pub struct NumericalEbbs {
+    cur: usize,
+    limit: usize,
+}
+
+impl Iterator for NumericalEbbs {
+    type Item = Ebb;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cur < self.limit {
+            let prev = Ebb::new(self.cur);
+            self.cur += 1;
+            Some(prev)
+        } else {
+            None
+        }
+    }
+}
+
+// ====--------------------------------------------------------------------------------------====//
+//
+// Instruction implementation.
+//
+// The InstructionData layout is defined in the `instructions` module.
+//
+// ====--------------------------------------------------------------------------------------====//
+
+/// Allow immutable access to instructions via function indexing.
+impl Index<Inst> for Function {
+    type Output = InstructionData;
+
+    fn index<'a>(&'a self, inst: Inst) -> &'a InstructionData {
+        &self.instructions[inst.index()]
+    }
+}
+
+/// A node in a double linked list of instructions is a basic block.
+#[derive(Debug)]
+struct InstNode {
+    prev: Inst,
+    next: Inst,
+}
+
+// ====--------------------------------------------------------------------------------------====//
+//
+// Value implementation.
+//
+// ====--------------------------------------------------------------------------------------====//
+
+// Most values are simply the first value produced by an instruction.
+// Other values have an entry in the value table.
+#[derive(Debug)]
+enum ValueData {
+    // Value is defined by an instruction, but it is not the first result.
+    Def {
+        ty: Type,
+        def: Inst,
+        next: Value, // Next result defined by `def`.
+    },
+
+    // Value is an EBB argument.
+    Argument {
+        ty: Type,
+        ebb: Ebb,
+        next: Value, // Next argument to `ebb`.
+    },
+}
+
+/// Iterate through a list of related value references, such as:
+///
+/// - All results defined by an instruction.
+/// - All arguments to an EBB
+///
+/// A value iterator borrows a Function reference.
+pub struct Values<'a> {
+    func: &'a Function,
+    cur: Value,
+}
+
+impl<'a> Iterator for Values<'a> {
+    type Item = Value;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let prev = self.cur;
+
+        // Advance self.cur to the next value, or NO_VALUE.
+        self.cur = match prev.expand() {
+            ExpandedValue::Direct(inst) => self.func[inst].second_result().unwrap_or_default(),
+            ExpandedValue::Table(index) => {
+                match self.func.extended_values[index] {
+                    ValueData::Def { next, .. } => next,
+                    ValueData::Argument { next, .. } => next,
+                }
+            }
+            ExpandedValue::None => return None,
+        };
+
+        Some(prev)
     }
 }
 
@@ -445,6 +550,8 @@ mod tests {
     fn ebb() {
         let mut func = Function::new();
 
+        assert_eq!(func.ebbs_numerically().next(), None);
+
         let ebb = func.make_ebb();
         assert_eq!(ebb.to_string(), "ebb0");
         assert_eq!(func.ebb_args(ebb).next(), None);
@@ -464,5 +571,39 @@ mod tests {
             assert_eq!(args2.next(), Some(arg2));
             assert_eq!(args2.next(), None);
         }
+
+        // The numerical ebb iterator doesn't capture the function.
+        let mut ebbs = func.ebbs_numerically();
+        assert_eq!(ebbs.next(), Some(ebb));
+        assert_eq!(ebbs.next(), None);
+
+        assert_eq!(func.ebb_insts(ebb).next(), None);
+
+        let inst = func.make_inst(InstructionData::Nullary {
+            opcode: Opcode::Iconst,
+            ty: types::I32,
+        });
+        func.append_inst(ebb, inst);
+        {
+            let mut ii = func.ebb_insts(ebb);
+            assert_eq!(ii.next(), Some(inst));
+            assert_eq!(ii.next(), None);
+        }
+        assert_eq!(func[ebb].first_inst, inst);
+        assert_eq!(func[ebb].last_inst, inst);
+
+        let inst2 = func.make_inst(InstructionData::Nullary {
+            opcode: Opcode::Iconst,
+            ty: types::I32,
+        });
+        func.append_inst(ebb, inst2);
+        {
+            let mut ii = func.ebb_insts(ebb);
+            assert_eq!(ii.next(), Some(inst));
+            assert_eq!(ii.next(), Some(inst2));
+            assert_eq!(ii.next(), None);
+        }
+        assert_eq!(func[ebb].first_inst, inst);
+        assert_eq!(func[ebb].last_inst, inst2);
     }
 }
