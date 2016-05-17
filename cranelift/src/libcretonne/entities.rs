@@ -105,6 +105,12 @@ pub enum ExpandedValue {
 }
 
 impl Value {
+    pub fn direct_from_number(n: u32) -> Value {
+        let encoding = n * 2;
+        assert!(encoding < u32::MAX);
+        Value(encoding)
+    }
+
     pub fn new_direct(i: Inst) -> Value {
         let encoding = i.index() * 2;
         assert!(encoding < u32::MAX as usize);

@@ -19,6 +19,9 @@ pub struct Function {
     /// Signature of this function.
     signature: Signature,
 
+    /// The entry block.
+    pub entry_block: Ebb,
+
     /// Stack slots allocated in this function.
     stack_slots: Vec<StackSlotData>,
 
@@ -45,6 +48,7 @@ impl Function {
         Function {
             name: name,
             signature: sig,
+            entry_block: NO_EBB,
             stack_slots: Vec::new(),
             instructions: Vec::new(),
             extended_basic_blocks: Vec::new(),
