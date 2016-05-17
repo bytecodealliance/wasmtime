@@ -10,9 +10,10 @@ use std::result;
 use std::fmt::{self, Display, Formatter, Write};
 use std::u32;
 use lexer::{self, Lexer, Token};
-use cretonne::types::{FunctionName, Signature, ArgumentType, ArgumentExtension};
-use cretonne::immediates::Imm64;
-use cretonne::entities::StackSlot;
+use cretonne::types::{Type, VOID, FunctionName, Signature, ArgumentType, ArgumentExtension};
+use cretonne::immediates::{Imm64, Ieee32, Ieee64};
+use cretonne::entities::*;
+use cretonne::instructions::{Opcode, InstructionFormat, InstructionData};
 use cretonne::repr::{Function, StackSlotData};
 
 pub use lexer::Location;
@@ -50,7 +51,10 @@ pub struct Parser<'a> {
 // file by number. We need to map these numbers to real references.
 struct Context {
     function: Function,
-    stack_slots: HashMap<u32, StackSlot>,
+    stack_slots: HashMap<u32, StackSlot>, // ssNN
+    ebbs: HashMap<u32, Ebb>, // ebbNN
+    value_directs: HashMap<u32, Value>, // vNN
+    value_tables: HashMap<u32, Value>, // vxNN
 }
 
 impl Context {
@@ -58,14 +62,55 @@ impl Context {
         Context {
             function: f,
             stack_slots: HashMap::new(),
+            ebbs: HashMap::new(),
+            value_directs: HashMap::new(),
+            value_tables: HashMap::new(),
         }
     }
 
-    fn add(&mut self, number: u32, data: StackSlotData, loc: &Location) -> Result<()> {
+    // Allocate a new stack slot and add a mapping number -> StackSlot.
+    fn add_ss(&mut self, number: u32, data: StackSlotData, loc: &Location) -> Result<()> {
         if self.stack_slots.insert(number, self.function.make_stack_slot(data)).is_some() {
             Err(Error {
                 location: loc.clone(),
                 message: format!("duplicate stack slot: ss{}", number),
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    // Allocate a new EBB and add a mapping number -> Ebb.
+    fn add_ebb(&mut self, number: u32, loc: &Location) -> Result<Ebb> {
+        let ebb = self.function.make_ebb();
+        if self.ebbs.insert(number, ebb).is_some() {
+            Err(Error {
+                location: loc.clone(),
+                message: format!("duplicate EBB: ebb{}", number),
+            })
+        } else {
+            Ok(ebb)
+        }
+    }
+
+    // Add a value mapping number -> data for a direct value (vNN).
+    fn add_v(&mut self, number: u32, data: Value, loc: &Location) -> Result<()> {
+        if self.value_directs.insert(number, data).is_some() {
+            Err(Error {
+                location: loc.clone(),
+                message: format!("duplicate value: v{}", number),
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    // Add a value mapping number -> data for a table value (vxNN).
+    fn add_vx(&mut self, number: u32, data: Value, loc: &Location) -> Result<()> {
+        if self.value_tables.insert(number, data).is_some() {
+            Err(Error {
+                location: loc.clone(),
+                message: format!("duplicate value: vx{}", number),
             })
         } else {
             Ok(())
@@ -154,6 +199,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume a type.
+    fn match_type(&mut self, err_msg: &str) -> Result<Type> {
+        if let Some(Token::Type(t)) = self.token() {
+            self.consume();
+            Ok(t)
+        } else {
+            Err(self.error(err_msg))
+        }
+    }
+
     // Match and consume a stack slot reference.
     fn match_ss(&mut self, err_msg: &str) -> Result<u32> {
         if let Some(Token::StackSlot(ss)) = self.token() {
@@ -164,12 +219,68 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume an ebb reference.
+    fn match_ebb(&mut self, err_msg: &str) -> Result<u32> {
+        if let Some(Token::Ebb(ebb)) = self.token() {
+            self.consume();
+            Ok(ebb)
+        } else {
+            Err(self.error(err_msg))
+        }
+    }
+
+    // Match and consume a vx reference.
+    fn match_vx(&mut self, err_msg: &str) -> Result<u32> {
+        if let Some(Token::ValueTable(vx)) = self.token() {
+            self.consume();
+            Ok(vx)
+        } else {
+            Err(self.error(err_msg))
+        }
+    }
+
+    // Match and consume a value reference, direct or vtable.
+    // This does not convert from the source value numbering to our in-memory value numbering.
+    fn match_value(&mut self, err_msg: &str) -> Result<Value> {
+        let val = match self.token() {
+            Some(Token::ValueDirect(v)) => Value::direct_from_number(v),
+            Some(Token::ValueTable(vx)) => Value::new_table(vx as usize),
+            _ => return Err(self.error(err_msg)),
+        };
+        self.consume();
+        Ok(val)
+    }
+
     // Match and consume an Imm64 immediate.
     fn match_imm64(&mut self, err_msg: &str) -> Result<Imm64> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
             // Parse it as an Imm64 to check for overflow and other issues.
+            text.parse().map_err(|e| self.error(e))
+        } else {
+            Err(self.error(err_msg))
+        }
+    }
+
+    // Match and consume an Ieee32 immediate.
+    fn match_ieee32(&mut self, err_msg: &str) -> Result<Ieee32> {
+        if let Some(Token::Float(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like a float.
+            // Parse it as an Ieee32 to check for the right number of digits and other issues.
+            text.parse().map_err(|e| self.error(e))
+        } else {
+            Err(self.error(err_msg))
+        }
+    }
+
+    // Match and consume an Ieee64 immediate.
+    fn match_ieee64(&mut self, err_msg: &str) -> Result<Ieee64> {
+        if let Some(Token::Float(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like a float.
+            // Parse it as an Ieee64 to check for the right number of digits and other issues.
             text.parse().map_err(|e| self.error(e))
         } else {
             Err(self.error(err_msg))
@@ -199,6 +310,8 @@ impl<'a> Parser<'a> {
         try!(self.match_token(Token::LBrace, "expected '{' before function body"));
         // function ::= function-spec "{" * preample function-body "}"
         try!(self.parse_preamble(&mut ctx));
+        // function ::= function-spec "{"  preample * function-body "}"
+        try!(self.parse_function_body(&mut ctx));
         // function ::= function-spec "{" preample function-body * "}"
         try!(self.match_token(Token::RBrace, "expected '}' after function body"));
 
@@ -279,12 +392,7 @@ impl<'a> Parser<'a> {
     // Parse a single argument type with flags.
     fn parse_argument_type(&mut self) -> Result<ArgumentType> {
         // arg ::= * type { flag }
-        let mut arg = if let Some(Token::Type(t)) = self.token() {
-            ArgumentType::new(t)
-        } else {
-            return Err(self.error("expected argument type"));
-        };
-        self.consume();
+        let mut arg = ArgumentType::new(try!(self.match_type("expected argument type")));
 
         // arg ::= type * { flag }
         while let Some(Token::Identifier(s)) = self.token() {
@@ -313,7 +421,7 @@ impl<'a> Parser<'a> {
             try!(match self.token() {
                 Some(Token::StackSlot(..)) => {
                     self.parse_stack_slot_decl()
-                        .and_then(|(num, dat)| ctx.add(num, dat, &self.location))
+                        .and_then(|(num, dat)| ctx.add_ss(num, dat, &self.location))
                 }
                 // More to come..
                 _ => return Ok(()),
@@ -338,6 +446,221 @@ impl<'a> Parser<'a> {
 
         // TBD: stack-slot-decl ::= StackSlot(ss) "=" "stack_slot" Bytes * {"," stack-slot-flag}
         Ok((number, data))
+    }
+
+    // Parse a function body, add contents to `ctx`.
+    //
+    // function-body ::= * { extended-basic-block }
+    //
+    fn parse_function_body(&mut self, ctx: &mut Context) -> Result<()> {
+        while self.token() != Some(Token::RBrace) {
+            try!(self.parse_extended_basic_block(ctx));
+        }
+        Ok(())
+    }
+
+    // Parse an extended basic block, add contents to `ctx`.
+    //
+    // extended-basic-block ::= * ebb-header { instruction }
+    // ebb-header           ::= ["entry"] Ebb(ebb) [ebb-args] ":"
+    //
+    fn parse_extended_basic_block(&mut self, ctx: &mut Context) -> Result<()> {
+        let is_entry = self.optional(Token::Entry);
+        let ebb_num = try!(self.match_ebb("expected EBB header"));
+        let ebb = try!(ctx.add_ebb(ebb_num, &self.location));
+
+        if is_entry {
+            if ctx.function.entry_block != NO_EBB {
+                return Err(self.error("multiple entry blocks in function"));
+            }
+            ctx.function.entry_block = ebb;
+        }
+
+        if !self.optional(Token::Colon) {
+            // ebb-header ::= ["entry"] Ebb(ebb) [ * ebb-args ] ":"
+            try!(self.parse_ebb_args(ctx, ebb));
+            try!(self.match_token(Token::Colon, "expected ':' after EBB arguments"));
+        }
+
+        // extended-basic-block ::= ebb-header * { instruction }
+        while match self.token() {
+            Some(Token::ValueDirect(_)) => true,
+            Some(Token::Identifier(_)) => true,
+            _ => false,
+        } {
+            try!(self.parse_instruction(ctx, ebb));
+        }
+
+        Ok(())
+    }
+
+    // Parse parenthesized list of EBB arguments. Returns a vector of (u32, Type) pairs with the
+    // source vx numbers of the defined values and the defined types.
+    //
+    // ebb-args ::= * "(" ebb-arg { "," ebb-arg } ")"
+    fn parse_ebb_args(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
+        // ebb-args ::= * "(" ebb-arg { "," ebb-arg } ")"
+        try!(self.match_token(Token::LPar, "expected '(' before EBB arguments"));
+
+        // ebb-args ::= "(" * ebb-arg { "," ebb-arg } ")"
+        try!(self.parse_ebb_arg(ctx, ebb));
+
+        // ebb-args ::= "(" ebb-arg * { "," ebb-arg } ")"
+        while self.optional(Token::Comma) {
+            // ebb-args ::= "(" ebb-arg { "," * ebb-arg } ")"
+            try!(self.parse_ebb_arg(ctx, ebb));
+        }
+
+        // ebb-args ::= "(" ebb-arg { "," ebb-arg } * ")"
+        try!(self.match_token(Token::RPar, "expected ')' after EBB arguments"));
+
+        Ok(())
+    }
+
+    // Parse a single EBB argument declaration, and append it to `ebb`.
+    //
+    // ebb-arg ::= * ValueTable(vx) ":" Type(t)
+    //
+    fn parse_ebb_arg(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
+        // ebb-arg ::= * ValueTable(vx) ":" Type(t)
+        let vx = try!(self.match_vx("EBB argument must be a vx value"));
+        let vx_location = self.location;
+        // ebb-arg ::= ValueTable(vx) * ":" Type(t)
+        try!(self.match_token(Token::Colon, "expected ':' after EBB argument"));
+        // ebb-arg ::= ValueTable(vx) ":" * Type(t)
+        let t = try!(self.match_type("expected EBB argument type"));
+        // Allocate the EBB argument and add the mapping.
+        let value = ctx.function.append_ebb_arg(ebb, t);
+        ctx.add_vx(vx, value, &vx_location)
+    }
+
+    // Parse an instruction, append it to `ebb`.
+    //
+    // instruction ::= [inst-results "="] Opcode(opc) ...
+    // inst-results ::= ValueDirect(v) { "," ValueTable(vx) }
+    //
+    fn parse_instruction(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
+        // Result value numbers. First is a ValueDirect, remaining are ValueTable.
+        let mut results = Vec::new();
+
+        // instruction ::=  * [inst-results "="] Opcode(opc) ...
+        if let Some(Token::ValueDirect(v)) = self.token() {
+            self.consume();
+            results.push(v);
+
+            // inst-results ::= ValueDirect(v) * { "," ValueTable(vx) }
+            while self.optional(Token::Comma) {
+                // inst-results ::= ValueDirect(v) { "," * ValueTable(vx) }
+                results.push(try!(self.match_vx("expected vx result value")));
+            }
+
+            try!(self.match_token(Token::Equal, "expected '=' before opcode"));
+        }
+
+        // instruction ::=  [inst-results "="] * Opcode(opc) ...
+        let opcode = if let Some(Token::Identifier(text)) = self.token() {
+            match text.parse() {
+                Ok(opc) => opc,
+                Err(msg) => return Err(self.error(msg)),
+            }
+        } else {
+            return Err(self.error("expected instruction opcode"));
+        };
+
+        // instruction ::=  [inst-results "="] Opcode(opc) * ...
+        let inst_data = try!(self.parse_inst_operands(opcode));
+        let inst = ctx.function.make_inst(inst_data);
+
+        // TODO: Check that results.len() matches the opcode.
+        // TODO: Multiple results.
+        if !results.is_empty() {
+            assert!(results.len() == 1, "Multiple results not implemented");
+            let result = ctx.function.first_result(inst);
+            try!(ctx.add_v(results[0], result, &self.location));
+        }
+
+        ctx.function.append_inst(ebb, inst);
+
+        Ok(())
+    }
+
+    // Parse the operands following the instruction opcode.
+    // This depends on the format of the opcode.
+    fn parse_inst_operands(&mut self, opcode: Opcode) -> Result<InstructionData> {
+        Ok(match opcode.format().unwrap() {
+            InstructionFormat::Nullary => {
+                InstructionData::Nullary {
+                    opcode: opcode,
+                    ty: VOID,
+                }
+            }
+            InstructionFormat::Unary => {
+                InstructionData::Unary {
+                    opcode: opcode,
+                    ty: VOID,
+                    arg: try!(self.match_value("expected SSA value operand")),
+                }
+            }
+            InstructionFormat::UnaryImm => {
+                InstructionData::UnaryImm {
+                    opcode: opcode,
+                    ty: VOID,
+                    imm: try!(self.match_imm64("expected immediate integer operand")),
+                }
+            }
+            InstructionFormat::UnaryIeee32 => {
+                InstructionData::UnaryIeee32 {
+                    opcode: opcode,
+                    ty: VOID,
+                    imm: try!(self.match_ieee32("expected immediate 32-bit float operand")),
+                }
+            }
+            InstructionFormat::UnaryIeee64 => {
+                InstructionData::UnaryIeee64 {
+                    opcode: opcode,
+                    ty: VOID,
+                    imm: try!(self.match_ieee64("expected immediate 64-bit float operand")),
+                }
+            }
+            InstructionFormat::UnaryImmVector => {
+                unimplemented!();
+            }
+            InstructionFormat::Binary => {
+                let lhs = try!(self.match_value("expected SSA value first operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let rhs = try!(self.match_value("expected SSA value second operand"));
+                InstructionData::Binary {
+                    opcode: opcode,
+                    ty: VOID,
+                    args: [lhs, rhs],
+                }
+            }
+            InstructionFormat::BinaryImm => {
+                let lhs = try!(self.match_value("expected SSA value first operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let rhs = try!(self.match_imm64("expected immediate integer second operand"));
+                InstructionData::BinaryImm {
+                    opcode: opcode,
+                    ty: VOID,
+                    lhs: lhs,
+                    rhs: rhs,
+                }
+            }
+            InstructionFormat::BinaryImmRev => {
+                let lhs = try!(self.match_imm64("expected immediate integer first operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let rhs = try!(self.match_value("expected SSA value second operand"));
+                InstructionData::BinaryImmRev {
+                    opcode: opcode,
+                    ty: VOID,
+                    lhs: lhs,
+                    rhs: rhs,
+                }
+            }
+            InstructionFormat::Call => {
+                unimplemented!();
+            }
+        })
     }
 }
 
@@ -400,7 +723,7 @@ mod tests {
         assert_eq!(func[ss1].size, 1);
         assert_eq!(iter.next(), None);
 
-        // Catch suplicate definitions.
+        // Catch duplicate definitions.
         assert_eq!(Parser::new("function bar() {
                                     ss1  = stack_slot 13
                                     ss1  = stack_slot 1
@@ -409,5 +732,27 @@ mod tests {
                        .unwrap_err()
                        .to_string(),
                    "3: duplicate stack slot: ss1");
+    }
+
+    #[test]
+    fn ebb_header() {
+        let func = Parser::new("function ebbs() {
+                                ebb0:
+                                ebb4(vx3: i32):
+                                }")
+                       .parse_function()
+                       .unwrap();
+        assert_eq!(func.name, "ebbs");
+
+        let mut ebbs = func.ebbs_numerically();
+
+        let ebb0 = ebbs.next().unwrap();
+        assert_eq!(func.ebb_args(ebb0).next(), None);
+
+        let ebb4 = ebbs.next().unwrap();
+        let mut ebb4_args = func.ebb_args(ebb4);
+        let arg0 = ebb4_args.next().unwrap();
+        assert_eq!(func.value_type(arg0), types::I32);
+        assert_eq!(ebb4_args.next(), None);
     }
 }
