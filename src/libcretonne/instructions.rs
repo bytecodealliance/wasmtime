@@ -140,11 +140,87 @@ pub enum InstructionData {
         rhs: Value,
         lhs: Imm64,
     },
+    Jump {
+        opcode: Opcode,
+        ty: Type,
+        data: Box<JumpData>,
+    },
+    Branch {
+        opcode: Opcode,
+        ty: Type,
+        data: Box<BranchData>,
+    },
+    BranchTable {
+        opcode: Opcode,
+        ty: Type,
+        arg: Value,
+        table: JumpTable,
+    },
     Call {
         opcode: Opcode,
         ty: Type,
         data: Box<CallData>,
     },
+}
+
+/// A variable list of `Value` operands used for function call arguments and passing arguments to
+/// basic blocks.
+#[derive(Debug)]
+pub struct VariableArgs(Vec<Value>);
+
+impl VariableArgs {
+    pub fn new() -> VariableArgs {
+        VariableArgs(Vec::new())
+    }
+}
+
+impl Display for VariableArgs {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        try!(write!(fmt, "("));
+        for (i, val) in self.0.iter().enumerate() {
+            if i == 0 {
+                try!(write!(fmt, "{}", val));
+            } else {
+                try!(write!(fmt, ", {}", val));
+            }
+        }
+        write!(fmt, ")")
+    }
+}
+
+impl Default for VariableArgs {
+    fn default() -> VariableArgs {
+        VariableArgs::new()
+    }
+}
+
+/// Payload data for jump instructions. These need to carry lists of EBB arguments that won't fit
+/// in the allowed InstructionData size.
+#[derive(Debug)]
+pub struct JumpData {
+    destination: Ebb,
+    arguments: VariableArgs,
+}
+
+impl Display for JumpData {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}{}", self.destination, self.arguments)
+    }
+}
+
+/// Payload data for branch instructions. These need to carry lists of EBB arguments that won't fit
+/// in the allowed InstructionData size.
+#[derive(Debug)]
+pub struct BranchData {
+    arg: Value,
+    destination: Ebb,
+    arguments: VariableArgs,
+}
+
+impl Display for BranchData {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}, {}{}", self.arg, self.destination, self.arguments)
+    }
 }
 
 /// Payload of a call instruction.
@@ -154,9 +230,14 @@ pub struct CallData {
     second_result: Value,
 
     // Dynamically sized array containing call argument values.
-    arguments: Vec<Value>,
+    arguments: VariableArgs,
 }
 
+impl Display for CallData {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "TBD{}", self.arguments)
+    }
+}
 
 impl InstructionData {
     /// Create data for a call instruction.
@@ -166,7 +247,7 @@ impl InstructionData {
             ty: return_type,
             data: Box::new(CallData {
                 second_result: NO_VALUE,
-                arguments: Vec::new(),
+                arguments: VariableArgs::new(),
             }),
         }
     }
@@ -184,6 +265,9 @@ impl InstructionData {
             Binary { opcode, .. } => opcode,
             BinaryImm { opcode, .. } => opcode,
             BinaryImmRev { opcode, .. } => opcode,
+            Jump { opcode, .. } => opcode,
+            Branch { opcode, .. } => opcode,
+            BranchTable { opcode, .. } => opcode,
             Call { opcode, .. } => opcode,
         }
     }
@@ -201,6 +285,9 @@ impl InstructionData {
             Binary { ty, .. } => ty,
             BinaryImm { ty, .. } => ty,
             BinaryImmRev { ty, .. } => ty,
+            Jump { ty, .. } => ty,
+            Branch { ty, .. } => ty,
+            BranchTable { ty, .. } => ty,
             Call { ty, .. } => ty,
         }
     }
@@ -218,6 +305,9 @@ impl InstructionData {
             Binary { .. } => None,
             BinaryImm { .. } => None,
             BinaryImmRev { .. } => None,
+            Jump { .. } => None,
+            Branch { .. } => None,
+            BranchTable { .. } => None,
             Call { ref data, .. } => Some(data.second_result),
         }
     }
@@ -234,6 +324,9 @@ impl InstructionData {
             Binary { .. } => None,
             BinaryImm { .. } => None,
             BinaryImmRev { .. } => None,
+            Jump { .. } => None,
+            Branch { .. } => None,
+            BranchTable { .. } => None,
             Call { ref mut data, .. } => Some(&mut data.second_result),
         }
     }
@@ -262,5 +355,16 @@ mod tests {
         assert_eq!("iadd\0".parse::<Opcode>(), Err("Unknown opcode"));
         assert_eq!("".parse::<Opcode>(), Err("Unknown opcode"));
         assert_eq!("\0".parse::<Opcode>(), Err("Unknown opcode"));
+    }
+
+    #[test]
+    fn instruction_data() {
+        use std::mem;
+        // The size of the InstructionData enum is important for performance. It should not exceed
+        // 16 bytes. Use `Box<FooData>` out-of-line payloads for instruction formats that require
+        // more space than that.
+        // It would be fine with a data structure smaller than 16 bytes, but what are the odds of
+        // that?
+        assert_eq!(mem::size_of::<InstructionData>(), 16);
     }
 }

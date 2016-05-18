@@ -189,3 +189,34 @@ impl Default for StackSlot {
         NO_STACK_SLOT
     }
 }
+
+/// An opaque reference to a jump table.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct JumpTable(u32);
+
+impl JumpTable {
+    pub fn new(index: usize) -> JumpTable {
+        assert!(index < (u32::MAX as usize));
+        JumpTable(index as u32)
+    }
+
+    pub fn index(&self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// Display a `JumpTable` reference as "jt12".
+impl Display for JumpTable {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        write!(fmt, "jt{}", self.0)
+    }
+}
+
+/// A guaranteed invalid jump table reference.
+pub const NO_JUMP_TABLE: JumpTable = JumpTable(u32::MAX);
+
+impl Default for JumpTable {
+    fn default() -> JumpTable {
+        NO_JUMP_TABLE
+    }
+}

@@ -450,6 +450,8 @@ class Instruction(object):
                 operands and other operand kinds.
     :param outs: Tuple of output operands. The output operands must be SSA
                 values.
+    :param is_terminator: This is a terminator instruction.
+    :param is_branch: This is a branch instruction.
     """
 
     def __init__(self, name, doc, ins=(), outs=(), **kwargs):

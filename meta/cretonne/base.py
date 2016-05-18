@@ -4,17 +4,93 @@ Cretonne base instruction set.
 This module defines the basic Cretonne instruction set that all targets
 support.
 """
-from . import TypeVar, Operand, Instruction, InstructionGroup
+from . import TypeVar, Operand, Instruction, InstructionGroup, variable_args
 from types import i8, f32, f64
 from immediates import imm64, ieee32, ieee64, immvector
+import entities
 
 instructions = InstructionGroup("base", "Shared base instruction set")
 
 Int = TypeVar('Int', 'A scalar or vector integer type', ints=True, simd=True)
 iB = TypeVar('iB', 'A scalar integer type', ints=True)
+Testable = TypeVar(
+        'Testable', 'A scalar boolean or integer type',
+        ints=True, bools=True)
 TxN = TypeVar(
         '%Tx%N', 'A SIMD vector type',
         ints=True, floats=True, bools=True, scalars=False, simd=True)
+
+#
+# Control flow
+#
+c = Operand('c', Testable, doc='Controlling value to test')
+EBB = Operand('EBB', entities.ebb, doc='Destination extended basic block')
+args = Operand('args', variable_args, doc='EBB arguments')
+
+jump = Instruction(
+        'jump', r"""
+        Jump.
+
+        Unconditionally jump to an extended basic block, passing the specified
+        EBB arguments. The number and types of arguments must match the
+        destination EBB.
+        """,
+        ins=(EBB, args), is_terminator=True)
+
+brz = Instruction(
+        'brz', r"""
+        Branch when zero.
+
+        If ``c`` is a :type:`b1` value, take the branch when ``c`` is false. If
+        ``c`` is an integer value, take the branch when ``c = 0``.
+        """,
+        ins=(c, EBB, args), is_branch=True)
+
+brnz = Instruction(
+        'brnz', r"""
+        Branch when non-zero.
+
+        If ``c`` is a :type:`b1` value, take the branch when ``c`` is true. If
+        ``c`` is an integer value, take the branch when ``c != 0``.
+        """,
+        ins=(c, EBB, args), is_branch=True)
+
+x = Operand('x', iB, doc='index into jump table')
+JT = Operand('JT', entities.jump_table)
+br_table = Instruction(
+        'br_table', r"""
+        Indirect branch via jump table.
+
+        Use ``x`` as an unsigned index into the jump table ``JT``. If a jump table
+        entry is found, branch to the corresponding EBB. If no entry was found fall
+        through to the next instruction.
+
+        Note that this branch instruction can't pass arguments to the targeted
+        blocks. Split critical edges as needed to work around this.
+        """,
+        ins=(x, JT), is_branch=True)
+
+trap = Instruction(
+        'trap', r"""
+        Terminate execution unconditionally.
+        """,
+        is_terminator=True)
+
+trapz = Instruction(
+        'trapz', r"""
+        Trap when zero.
+
+        if ``c`` is non-zero, execution continues at the following instruction.
+        """,
+        ins=c)
+
+trapnz = Instruction(
+        'trapnz', r"""
+        Trap when non-zero.
+
+        if ``c`` is zero, execution continues at the following instruction.
+        """,
+        ins=c)
 
 #
 # Materializing constants.
