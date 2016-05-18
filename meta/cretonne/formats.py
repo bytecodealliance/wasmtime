@@ -9,7 +9,7 @@ in this module.
 
 from . import InstructionFormat, value, variable_args
 from immediates import imm64, ieee32, ieee64, immvector
-from entities import function
+from entities import ebb, function, jump_table
 
 Nullary = InstructionFormat()
 
@@ -22,6 +22,10 @@ UnaryImmVector = InstructionFormat(immvector)
 Binary = InstructionFormat(value, value)
 BinaryImm = InstructionFormat(value, imm64)
 BinaryImmRev = InstructionFormat(imm64, value)
+
+Jump = InstructionFormat(ebb, variable_args)
+Branch = InstructionFormat(value, ebb, variable_args)
+BranchTable = InstructionFormat(value, jump_table)
 
 Call = InstructionFormat(function, variable_args, multiple_results=True)
 

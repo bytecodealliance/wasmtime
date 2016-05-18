@@ -21,3 +21,6 @@ signature = EntityRefKind('signature', 'A function signature.')
 #: A reference to an external function declared in the function preamble.
 #: This is used to provide the callee and signature in a call instruction.
 function = EntityRefKind('function', 'An external function.')
+
+#: A reference to a jump table declared in the function preamble.
+jump_table = EntityRefKind('jump_table', 'A jump table.')

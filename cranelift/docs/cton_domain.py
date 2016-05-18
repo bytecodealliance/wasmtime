@@ -262,7 +262,12 @@ class InstDocumenter(sphinx.ext.autodoc.Documenter):
         if len(inst.outs) > 0:
             sig = ', '.join([op.name for op in inst.outs]) + ' = ' + sig
         if len(inst.ins) > 0:
-            sig = sig + ' ' + ', '.join([op.name for op in inst.ins])
+            sig = sig + ' ' + inst.ins[0].name
+            for op in inst.ins[1:]:
+                if op.typ.operand_kind().name == 'variable_args':
+                    sig += '({}...)'.format(op.name)
+                else:
+                    sig += ', ' + op.name
         return sig
 
     def add_directive_header(self, sig):

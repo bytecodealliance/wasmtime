@@ -657,6 +657,9 @@ impl<'a> Parser<'a> {
                     rhs: rhs,
                 }
             }
+            InstructionFormat::Jump |
+            InstructionFormat::Branch |
+            InstructionFormat::BranchTable |
             InstructionFormat::Call => {
                 unimplemented!();
             }

@@ -313,56 +313,10 @@ arguments, if it has any. Conditional branches only take the branch if their
 condition is satisfied, otherwise execution continues at the following
 instruction in the EBB.
 
-.. inst:: br EBB(args...)
-
-    Branch.
-
-    Unconditionally branch to an extended basic block, passing the specified
-    EBB arguments. The number and types of arguments must match the destination
-    EBB.
-
-    :arg EBB: Destination extended basic block.
-    :arg args...: Zero or more arguments passed to EBB.
-    :result: None. This is a terminator instruction.
-
-.. inst:: brz x, EBB(args...)
-
-    Branch when zero.
-
-    If ``x`` is a :type:`b1` value, take the branch when ``x`` is false. If
-    ``x`` is an integer value, take the branch when ``x = 0``.
-
-    :arg Testable x: Value to test.
-    :arg EBB: Destination extended basic block.
-    :arg args...: Arguments passed to EBB.
-    :result: None.
-
-.. inst:: brnz x, EBB(args...)
-
-    Branch when non-zero.
-
-    If ``x`` is a :type:`b1` value, take the branch when ``x`` is true. If
-    ``x`` is an integer value, take the branch when ``x != 0``.
-
-    :arg Testable x: Value to test.
-    :arg EBB: Destination extended basic block.
-    :arg args...: Zero or more arguments passed to EBB.
-    :result: None.
-
-.. inst:: br_table x, JT
-
-    Jump table branch.
-
-    Use ``x`` as an unsigned index into the jump table ``JT``. If a jump table
-    entry is found, branch to the corresponding EBB. If no entry was found fall
-    through to the next instruction.
-
-    Note that this branch instruction can't pass arguments to the targeted
-    blocks. Split critical edges as needed to work around this.
-
-    :arg iN x: Integer index into jump table.
-    :arg JT: Jump table which was declared in the preamble.
-    :result: None.
+.. autoinst:: jump
+.. autoinst:: brz
+.. autoinst:: brnz
+.. autoinst:: br_table
 
 .. inst:: JT = jump_table EBB0, EBB1, ..., EBBn
 
@@ -386,29 +340,9 @@ explicit trap instructions defined below, but some instructions may also cause
 traps for certain input value. For example, :inst:`udiv` traps when the divisor
 is zero.
 
-.. inst:: trap
-
-    Terminate execution unconditionally.
-
-    :result: None. This is a terminator instruction.
-
-.. inst:: trapz x
-
-    Trap when zero.
-
-    if ``x`` is non-zero, execution continues at the following instruction.
-
-    :arg Testable x: Value to test.
-    :result: None.
-
-.. inst:: trapnz x
-
-    Trap when non-zero.
-
-    if ``x`` is zero, execution continues at the following instruction.
-
-    :arg Testable x: Value to test.
-    :result: None.
+.. autoinst:: trap
+.. autoinst:: trapz
+.. autoinst:: trapnz
 
 
 Function calls
