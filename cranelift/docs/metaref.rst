@@ -58,6 +58,7 @@ Polymorphism only works for SSA value operands. Immediate operands have a fixed
 operand kind.
 
 .. autoclass:: TypeVar
+    :members:
 
 If multiple operands refer to the same type variable they will be required to
 have the same concrete type. For example, this defines an integer addition
@@ -74,6 +75,9 @@ The type variable `Int` is allowed to vary over all scalar and vector integer
 value types, but in a given instance of the `iadd` instruction, the two
 operands must have the same type, and the result will be the same type as the
 inputs.
+
+There are some practical restrictions on the use of type variables, see
+:ref:`restricted-polymorphism`.
 
 Immediate operands
 ------------------
@@ -142,6 +146,41 @@ predefined instruction format which is an instance of
 :class:`InstructionFormat`:
 
 .. autoclass:: InstructionFormat
+
+
+.. _restricted-polymorphism:
+
+Restricted polymorphism
+-----------------------
+
+The instruction format strictly controls the kinds of operands on an
+instruction, but it does not constrain value types at all. A given instruction
+description typically does constrain the allowed value types for its value
+operands. The type variables give a lot of freedom in describing the value type
+constraints, in practice more freedom than what is needed for normal instruction
+set architectures. In order to simplify the Rust representation of value type
+constraints, some restrictions are imposed on the use of type variables.
+
+A polymorphic instruction has a single *controlling type variable*. The value
+types of instruction results must be one of the following:
+
+1. A concrete value type.
+2. The controlling type variable.
+3. A type variable derived from the controlling type variable.
+
+This means that all result types can be computed from the controlling type
+variable.
+
+Input values to the instruction are allowed a bit more freedom. Input value
+types must be one of:
+
+1. A concrete value type.
+2. The controlling type variable.
+3. A type variable derived from the controlling type variable.
+4. A free type variable that is not used by any other operands.
+
+This means that the type of an input operand can either be computed from the
+controlling type variable, or it can vary independently of the other operands.
 
 
 Targets
