@@ -24,8 +24,6 @@ def camel_case(s):
 # operands and the kind of each operand.
 class OperandKind(object):
     """
-    The kind of an operand.
-
     An instance of the `OperandKind` class corresponds to a kind of operand.
     Each operand kind has a corresponding type in the Rust representation of an
     instruction.
@@ -55,8 +53,8 @@ value = OperandKind(
         operand.
         """)
 
-#: A variable-sizes list of value operands. Use for Ebb and function call
-#: arguemnts.
+#: A variable-sized list of value operands. Use for Ebb and function call
+#: arguments.
 args = OperandKind(
         'args', """
         A variable size list of `value` operands.
@@ -71,7 +69,7 @@ args = OperandKind(
 # module.
 class ImmediateKind(OperandKind):
     """
-    The type of an immediate instruction operand.
+    The kind of an immediate instruction operand.
     """
 
     def __init__(self, name, doc):
@@ -215,13 +213,30 @@ class BoolType(ScalarType):
 
 class TypeVar(object):
     """
-    A Type Variable.
-
     Type variables can be used in place of concrete types when defining
     instructions. This makes the instructions *polymorphic*.
+
+    A type variable is restricted to vary over a subset of the value types.
+    This subset is specified by a set of flags that control the permitted base
+    types and whether the type variable can assume scalar or vector types, or
+    both.
+
+    :param name: Short name of type variable used in instruction descriptions.
+    :param doc: Documentation string.
+    :param base: Single base type or list of base types. Use this to specify an
+        exact set of base types if the general categories below are not good
+        enough.
+    :param ints: Allow all integer base types.
+    :param floats: Allow all floating point base types.
+    :param bools: Allow all boolean base types.
+    :param scalars: Allow type variable to assume scalar types.
+    :param simd: Allow type variable to assume vector types.
     """
 
-    def __init__(self, name, doc):
+    def __init__(
+            self, name, doc, base=None,
+            ints=False, floats=False, bools=False,
+            scalars=True, simd=False):
         self.name = name
         self.__doc__ = doc
 
@@ -238,8 +253,6 @@ class TypeVar(object):
 
 class InstructionGroup(object):
     """
-    An instruction group.
-
     Every instruction must belong to exactly one instruction group. A given
     target architecture can support instructions from multiple groups, and it
     does not necessarily support all instructions in a group.
@@ -286,8 +299,6 @@ class InstructionGroup(object):
 
 class Operand(object):
     """
-    An instruction operand.
-
     An instruction operand can be either an *immediate* or an *SSA value*. The
     type of the operand is one of:
 
@@ -318,8 +329,6 @@ class Operand(object):
 
 class InstructionFormat(object):
     """
-    An instruction format.
-
     Every instruction opcode has a corresponding instruction format which
     determines the number of operands and their kinds. Instruction formats are
     identified structurally, i.e., the format of an instruction is derived from
@@ -396,8 +405,6 @@ class InstructionFormat(object):
 
 class Instruction(object):
     """
-    An instruction description.
-
     The operands to the instruction are specified as two tuples: ``ins`` and
     ``outs``. Since the Python singleton tuple syntax is a bit awkward, it is
     allowed to specify a singleton as just the operand itself, i.e., `ins=x`
