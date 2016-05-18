@@ -36,11 +36,11 @@ Here is the same function compiled into Cretonne IL:
 
 The first line of a function definition provides the function *name* and
 the :term:`function signature` which declares the argument and return types.
-Then follows the :term:`function preample` which declares a number of entities
-that can be referenced inside the function. In the example above, the preample
+Then follows the :term:`function preamble` which declares a number of entities
+that can be referenced inside the function. In the example above, the preamble
 declares a single local variable, ``ss1``.
 
-After the preample follows the :term:`function body` which consists of
+After the preamble follows the :term:`function body` which consists of
 :term:`extended basic block`\s, one of which is marked as the :term:`entry
 block`. Every EBB ends with a :term:`terminator instruction`, so execution can
 never fall through to the next EBB without an explicit branch.
@@ -49,7 +49,7 @@ A ``.cton`` file consists of a sequence of independent function definitions:
 
 .. productionlist::
     function-list : { function }
-    function      : function-spec "{" preample function-body "}"
+    function      : function-spec "{" preamble function-body "}"
     function-spec : "function" function-name signature
     preamble      : { preamble-decl }
     function-body : { extended-basic-block }
@@ -361,12 +361,12 @@ instruction in the EBB.
     blocks. Split critical edges as needed to work around this.
 
     :arg iN x: Integer index into jump table.
-    :arg JT: Jump table which was declared in the preample.
+    :arg JT: Jump table which was declared in the preamble.
     :result: None.
 
 .. inst:: JT = jump_table EBB0, EBB1, ..., EBBn
 
-    Declare a jump table in the :term:`function preample`.
+    Declare a jump table in the :term:`function preamble`.
 
     This declares a jump table for use by the :inst:`br_table` indirect branch
     instruction. Entries in the table are either EBB names, or ``0`` which
@@ -433,7 +433,7 @@ dependent. They make it possible to call native functions on the target
 platform. When calling other Cretonne functions, the flags are not necessary.
 
 Functions that are called directly must be declared in the :term:`function
-preample`:
+preamble`:
 
 .. inst:: F = function NAME signature
 
@@ -476,7 +476,7 @@ This simple example illustrates direct function calls and signatures::
         return v1
     }
 
-Indirect function calls use a signature declared in the preample.
+Indirect function calls use a signature declared in the preamble.
 
 .. inst:: SIG = signature signature
 
@@ -556,12 +556,12 @@ Local variables
 
 One set of restricted memory operations access the current function's stack
 frame. The stack frame is divided into fixed-size stack slots that are
-allocated in the :term:`function preample`. Stack slots are not typed, they
+allocated in the :term:`function preamble`. Stack slots are not typed, they
 simply represent a contiguous sequence of bytes in the stack frame.
 
 .. inst:: SS = stack_slot Bytes, Flags...
 
-    Allocate a stack slot in the preample.
+    Allocate a stack slot in the preamble.
 
     If no alignment is specified, Cretonne will pick an appropriate alignment
     for the stack slot based on its size and access patterns.
@@ -633,14 +633,14 @@ all process memory. Instead, it is given a small set of memory areas to work
 in, and all accesses are bounds checked. Cretonne models this through the
 concept of *heaps*.
 
-A heap is declared in the function preample and can be accessed with restricted
+A heap is declared in the function preamble and can be accessed with restricted
 instructions that trap on out-of-bounds accesses. Heap addresses can be smaller
 than the native pointer size, for example unsigned :type:`i32` offsets on a
 64-bit architecture.
 
 .. inst:: H = heap Name
 
-    Declare a heap in the function preample.
+    Declare a heap in the function preamble.
 
     This doesn't allocate memory, it just retrieves a handle to a sandbox from
     the runtime environment.
@@ -1034,9 +1034,9 @@ Glossary
         is not necessary to know when calling it, so it is just an attribute,
         and not part of the signature.
 
-    function preample
+    function preamble
         A list of declarations of entities that are used by the function body.
-        Some of the entities that can be declared in the preample are:
+        Some of the entities that can be declared in the preamble are:
 
         - Local variables.
         - Functions that are called directly.
@@ -1045,7 +1045,7 @@ Glossary
 
     function body
         The extended basic blocks which contain all the executable code in a
-        function. The function body follows the function preample.
+        function. The function body follows the function preamble.
 
     basic block
         A maximal sequence of instructions that can only be entered from the

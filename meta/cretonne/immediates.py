@@ -1,5 +1,5 @@
 """
-The cretonne.immediates module predefines all the Cretonne immediate operand
+The `cretonne.immediates` module predefines all the Cretonne immediate operand
 types.
 """
 

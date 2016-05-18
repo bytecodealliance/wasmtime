@@ -7,8 +7,9 @@ in this module.
 """
 
 
-from . import InstructionFormat, value, args
+from . import InstructionFormat, value, variable_args
 from immediates import imm64, ieee32, ieee64, immvector
+from entities import function
 
 Nullary = InstructionFormat()
 
@@ -22,7 +23,7 @@ Binary = InstructionFormat(value, value)
 BinaryImm = InstructionFormat(value, imm64)
 BinaryImmRev = InstructionFormat(imm64, value)
 
-Call = InstructionFormat(args, multiple_results=True)
+Call = InstructionFormat(function, variable_args, multiple_results=True)
 
 # Finally extract the names of global variables in this module.
 InstructionFormat.extract_names(globals())
