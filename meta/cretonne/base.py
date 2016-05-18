@@ -10,9 +10,11 @@ from immediates import imm64, ieee32, ieee64, immvector
 
 instructions = InstructionGroup("base", "Shared base instruction set")
 
-Int = TypeVar('Int', 'A scalar or vector integer type')
-iB = TypeVar('iB', 'A scalar integer type')
-TxN = TypeVar('%Tx%N', 'A SIMD vector type')
+Int = TypeVar('Int', 'A scalar or vector integer type', ints=True, simd=True)
+iB = TypeVar('iB', 'A scalar integer type', ints=True)
+TxN = TypeVar(
+        '%Tx%N', 'A SIMD vector type',
+        ints=True, floats=True, bools=True, scalars=False, simd=True)
 
 #
 # Materializing constants.
@@ -217,7 +219,10 @@ isub_imm = Instruction(
 #
 
 # TODO: Which types should permit boolean operations? Any reason to restrict?
-bits = TypeVar('bits', 'Any integer, float, or boolean scalar or vector type')
+bits = TypeVar(
+        'bits', 'Any integer, float, or boolean scalar or vector type',
+        ints=True, floats=True, bools=True, scalars=True, simd=True)
+
 x = Operand('x', bits)
 y = Operand('y', bits)
 a = Operand('a', bits)
