@@ -42,6 +42,12 @@ class OperandKind(object):
     def __repr__(self):
         return 'OperandKind({})'.format(self.name)
 
+    def operand_kind(self):
+        """
+        An `OperandKind` instance can be used directly as the type of an
+        `Operand` when defining an instruction.
+        """
+        return self
 
 #: An SSA value operand. This is a value defined by another instruction.
 value = OperandKind(
@@ -55,8 +61,8 @@ value = OperandKind(
 
 #: A variable-sized list of value operands. Use for Ebb and function call
 #: arguments.
-args = OperandKind(
-        'args', """
+variable_args = OperandKind(
+        'variable_args', """
         A variable size list of `value` operands.
 
         Use this to represent arguemtns passed to a function call, arguments
@@ -65,8 +71,8 @@ args = OperandKind(
         """)
 
 
-# Instances of immediate operand types are provided in the cretonne.immediates
-# module.
+# Instances of immediate operand types are provided in the
+# `cretonne.immediates` module.
 class ImmediateKind(OperandKind):
     """
     The kind of an immediate instruction operand.
@@ -79,12 +85,20 @@ class ImmediateKind(OperandKind):
     def __repr__(self):
         return 'ImmediateKind({})'.format(self.name)
 
-    def operand_kind(self):
-        """
-        An `ImmediateKind` instance can be used directly as the type of an
-        `Operand` when defining an instruction.
-        """
-        return self
+
+# Instances of entity reference operand types are provided in the
+# `cretonne.entities` module.
+class EntityRefKind(OperandKind):
+    """
+    The kind of an entity reference instruction operand.
+    """
+
+    def __init__(self, name, doc):
+        self.name = name
+        self.__doc__ = doc
+
+    def __repr__(self):
+        return 'EntityRefKind({})'.format(self.name)
 
 
 # ValueType instances (i8, i32, ...) are provided in the cretonne.types module.
@@ -315,8 +329,8 @@ class InstructionGroup(object):
 
 class Operand(object):
     """
-    An instruction operand can be either an *immediate* or an *SSA value*. The
-    type of the operand is one of:
+    An instruction operand can be an *immediate*, an *SSA value*, or an *entity
+    reference*. The type of the operand is one of:
 
     1. A :py:class:`ValueType` instance indicates an SSA value operand with a
        concrete type.
@@ -328,6 +342,10 @@ class Operand(object):
     3. An :py:class:`ImmediateKind` instance indicates an immediate operand
        whose value is encoded in the instruction itself rather than being
        passed as an SSA value.
+
+    4. An :py:class:`EntityRefKind` instance indicates an operand that
+       references another entity in the function, typically something declared
+       in the function preamble.
 
     """
     def __init__(self, name, typ, doc=''):
@@ -429,9 +447,9 @@ class Instruction(object):
     :param name: Instruction mnemonic, also becomes opcode name.
     :param doc: Documentation string.
     :param ins: Tuple of input operands. This can be a mix of SSA value
-                operands and immediate operands.
-    :param outs: Tuple of output operands. The output operands can't be
-                 immediates.
+                operands and other operand kinds.
+    :param outs: Tuple of output operands. The output operands must be SSA
+                values.
     """
 
     def __init__(self, name, doc, ins=(), outs=(), **kwargs):

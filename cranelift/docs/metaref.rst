@@ -47,14 +47,14 @@ must be instances of the :class:`Operand` class.
 
 .. autoclass:: Operand
 
-Cretonne uses two separate type systems for immediate operands and SSA values.
+Cretonne uses two separate type systems for operand kinds and SSA values.
 
 Type variables
 --------------
 
 Instruction descriptions can be made polymorphic by using :class:`Operand`
 instances that refer to a *type variable* instead of a concrete value type.
-Polymorphism only works for SSA value operands. Immediate operands have a fixed
+Polymorphism only works for SSA value operands. Other operands have a fixed
 operand kind.
 
 .. autoclass:: TypeVar
@@ -95,6 +95,18 @@ indicated with an instance of :class:`ImmediateKind`.
 
 .. currentmodule:: cretonne
 
+Entity references
+-----------------
+
+Instruction operands can also refer to other entties in the same function. This
+can be extended basic blocks, or entities declared in the function preamble.
+
+.. autoclass:: EntityRefKind
+
+.. automodule:: cretonne.entities
+    :members:
+
+.. currentmodule:: cretonne
 
 Value types
 -----------
@@ -133,13 +145,14 @@ representation depends on the input operand kinds and whether the instruction
 can produce multiple results.
 
 .. autoclass:: OperandKind
+.. inheritance-diagram:: OperandKind ImmediateKind EntityRefkind
 
 Since all SSA value operands are represented as a `Value` in Rust code, value
 types don't affect the representation. Two special operand kinds are used to
 represent SSA values:
 
 .. autodata:: value
-.. autodata:: args
+.. autodata:: variable_args
 
 When an instruction description is created, it is automatically assigned a
 predefined instruction format which is an instance of

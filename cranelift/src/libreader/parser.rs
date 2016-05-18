@@ -300,19 +300,19 @@ impl<'a> Parser<'a> {
 
     // Parse a whole function definition.
     //
-    // function ::= * function-spec "{" preample function-body "}"
+    // function ::= * function-spec "{" preamble function-body "}"
     //
     fn parse_function(&mut self) -> Result<Function> {
         let (name, sig) = try!(self.parse_function_spec());
         let mut ctx = Context::new(Function::with_name_signature(name, sig));
 
-        // function ::= function-spec * "{" preample function-body "}"
+        // function ::= function-spec * "{" preamble function-body "}"
         try!(self.match_token(Token::LBrace, "expected '{' before function body"));
-        // function ::= function-spec "{" * preample function-body "}"
+        // function ::= function-spec "{" * preamble function-body "}"
         try!(self.parse_preamble(&mut ctx));
-        // function ::= function-spec "{"  preample * function-body "}"
+        // function ::= function-spec "{"  preamble * function-body "}"
         try!(self.parse_function_body(&mut ctx));
-        // function ::= function-spec "{" preample function-body * "}"
+        // function ::= function-spec "{" preamble function-body * "}"
         try!(self.match_token(Token::RBrace, "expected '}' after function body"));
 
         Ok(ctx.function)
