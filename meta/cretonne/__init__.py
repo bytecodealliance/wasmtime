@@ -240,11 +240,27 @@ class TypeVar(object):
         self.name = name
         self.__doc__ = doc
 
+    def lane(self):
+        """
+        Return a derived type variable that is the scalar lane type of this
+        type variable.
+
+        When this type variable assumes a scalar type, the derived type will be
+        the same scalar type.
+        """
+        return TypeVar("Lane type of " + self.name, '', base=self, simd=False)
+
+    def as_bool(self):
+        """
+        Return a derived type variable that has the same vector geometry as
+        this type variable, but with boolean lanes. Scalar types map to `b1`.
+        """
+        return TypeVar(self.name + " as boolean", '', base=self, bools=True)
+
     def operand_kind(self):
-        """
-        When a `TypeVar` object is used to describe the type of an `Operand`
-        in an instruction definition, the kind of that operand is an SSA value.
-        """
+        # When a `TypeVar` object is used to describe the type of an `Operand`
+        # in an instruction definition, the kind of that operand is an SSA
+        # value.
         return value
 
 
