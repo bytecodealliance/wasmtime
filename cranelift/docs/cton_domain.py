@@ -18,12 +18,13 @@ from docutils.parsers.rst import directives
 from sphinx import addnodes
 from sphinx.directives import ObjectDescription
 from sphinx.domains import Domain, ObjType
-from sphinx.locale import l_, _
+from sphinx.locale import l_
 from sphinx.roles import XRefRole
 from sphinx.util.docfields import Field, GroupedField, TypedField
 from sphinx.util.nodes import make_refnode
 
 import sphinx.ext.autodoc
+
 
 class CtonObject(ObjectDescription):
     """
@@ -68,10 +69,11 @@ class CtonObject(ObjectDescription):
 # Type variables are indicated as %T.
 typevar = re.compile('(\%[A-Z])')
 
+
 def parse_type(name, signode):
     """
     Parse a type with embedded type vars and append to signode.
-    
+
     Return a a string that can be compiled into a regular expression matching
     the type.
     """
@@ -92,6 +94,7 @@ def parse_type(name, signode):
             re_str += re.escape(part)
     return re_str
 
+
 class CtonType(CtonObject):
     """A Cretonne IL type description."""
 
@@ -103,7 +106,7 @@ class CtonType(CtonObject):
         """
 
         name = sig.strip()
-        re_str = parse_type(name, signode)
+        parse_type(name, signode)
         return name
 
     def get_index_text(self, name):
@@ -112,11 +115,13 @@ class CtonType(CtonObject):
 sep_equal = re.compile('\s*=\s*')
 sep_comma = re.compile('\s*,\s*')
 
+
 def parse_params(s, signode):
-    for i,p in enumerate(sep_comma.split(s)):
+    for i, p in enumerate(sep_comma.split(s)):
         if i != 0:
             signode += nodes.Text(', ')
         signode += nodes.emphasis(p, p)
+
 
 class CtonInst(CtonObject):
     """A Cretonne IL instruction."""
@@ -128,6 +133,7 @@ class CtonInst(CtonObject):
         TypedField('result', label=l_('Results'),
                    names=('out', 'result'),
                    typerolename='type', typenames=('type',)),
+        GroupedField('typevar', names=('typevar',), label=l_('Type Variables')),
         GroupedField('flag', names=('flag',), label=l_('Flags')),
         Field('resulttype', label=l_('Result type'), has_arg=False,
               names=('rtype',)),
@@ -164,24 +170,25 @@ class CtonInst(CtonObject):
     def get_index_text(self, name):
         return name
 
+
 class CretonneDomain(Domain):
     """Cretonne domain for intermediate language objects."""
     name = 'cton'
     label = 'Cretonne'
 
     object_types = {
-        'type' : ObjType(l_('type'), 'type'),
-        'inst' : ObjType(l_('instruction'), 'inst')
+        'type': ObjType(l_('type'), 'type'),
+        'inst': ObjType(l_('instruction'), 'inst')
     }
 
     directives = {
-        'type' : CtonType,
-        'inst' : CtonInst,
+        'type': CtonType,
+        'inst': CtonInst,
     }
 
     roles = {
-        'type' : XRefRole(),
-        'inst' : XRefRole(),
+        'type': XRefRole(),
+        'inst': XRefRole(),
     }
 
     initial_data = {
@@ -230,7 +237,7 @@ class TypeDocumenter(sphinx.ext.autodoc.Documenter):
         return False
 
     def resolve_name(self, modname, parents, path, base):
-        return 'cretonne.types', [ base ]
+        return 'cretonne.types', [base]
 
     def add_content(self, more_content, no_docstring=False):
         super(TypeDocumenter, self).add_content(more_content, no_docstring)
@@ -254,7 +261,7 @@ class InstDocumenter(sphinx.ext.autodoc.Documenter):
         return False
 
     def resolve_name(self, modname, parents, path, base):
-        return 'cretonne.base', [ base ]
+        return 'cretonne.base', [base]
 
     def format_signature(self):
         inst = self.object
@@ -285,9 +292,32 @@ class InstDocumenter(sphinx.ext.autodoc.Documenter):
 
         # Add inputs and outputs.
         for op in self.object.ins:
-            self.add_line(u':in {} {}: {}'.format(op.typ.name, op.name, op.get_doc()), sourcename)
+            self.add_line(u':in {} {}: {}'.format(
+                op.typ.name, op.name, op.get_doc()), sourcename)
         for op in self.object.outs:
-            self.add_line(u':out {} {}: {}'.format(op.typ.name, op.name, op.get_doc()), sourcename)
+            self.add_line(u':out {} {}: {}'.format(
+                op.typ.name, op.name, op.get_doc()), sourcename)
+
+        # Document type inference for polymorphic instructions.
+        if self.object.is_polymorphic:
+            if self.object.ctrl_typevar is not None:
+                if self.object.use_typevar_operand:
+                    self.add_line(
+                            u':typevar {}: inferred from {}'
+                            .format(
+                                self.object.ctrl_typevar.name,
+                                self.object.ins[
+                                    self.object.format.typevar_operand]),
+                            sourcename)
+                else:
+                    self.add_line(
+                            u':typevar {}: explicitly provided'
+                            .format(self.object.ctrl_typevar.name),
+                            sourcename)
+            for tv in self.object.other_typevars:
+                self.add_line(
+                        u':typevar {}: from input operand'.format(tv.name),
+                        sourcename)
 
 
 def setup(app):
@@ -295,4 +325,4 @@ def setup(app):
     app.add_autodocumenter(TypeDocumenter)
     app.add_autodocumenter(InstDocumenter)
 
-    return { 'version' : '0.1' }
+    return {'version': '0.1'}

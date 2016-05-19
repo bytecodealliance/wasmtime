@@ -49,6 +49,10 @@ class OperandKind(object):
         """
         return self
 
+    def free_typevar(self):
+        # Return the free typevariable controlling the type of this operand.
+        return None
+
 #: An SSA value operand. This is a value defined by another instruction.
 value = OperandKind(
         'value', """
@@ -124,6 +128,9 @@ class ValueType(object):
         in an instruction definition, the kind of that operand is an SSA value.
         """
         return value
+
+    def free_typevar(self):
+        return None
 
 
 class ScalarType(ValueType):
@@ -253,6 +260,10 @@ class TypeVar(object):
             scalars=True, simd=False):
         self.name = name
         self.__doc__ = doc
+        self.base = base
+
+    def __str__(self):
+        return "`{}`".format(self.name)
 
     def lane(self):
         """
@@ -277,6 +288,11 @@ class TypeVar(object):
         # value.
         return value
 
+    def free_typevar(self):
+        if isinstance(self.base, TypeVar):
+            return self.base
+        else:
+            return self
 
 # Defining instructions.
 
@@ -360,6 +376,9 @@ class Operand(object):
         else:
             return self.typ.__doc__
 
+    def __str__(self):
+        return "`{}`".format(self.name)
+
 
 class InstructionFormat(object):
     """
@@ -387,6 +406,9 @@ class InstructionFormat(object):
     :param boxed_storage: Set to `True` is this instruction format requires a
         `data: Box<...>` pointer to additional storage in its `InstructionData`
         variant.
+    :param typevar_operand: Index of the input operand that is used to infer
+        the controlling type variable. By default, this is the first `value`
+        operand.
     """
 
     # Map (multiple_results, kind, kind, ...) -> InstructionFormat
@@ -400,6 +422,20 @@ class InstructionFormat(object):
         self.kinds = kinds
         self.multiple_results = kwargs.get('multiple_results', False)
         self.boxed_storage = kwargs.get('boxed_storage', False)
+
+        # Which of self.kinds are `value`?
+        self.value_operands = tuple(
+                i for i, k in enumerate(self.kinds) if k is value)
+
+        # The typevar_operand argument must point to a 'value' operand.
+        self.typevar_operand = kwargs.get('typevar_operand', None)
+        if self.typevar_operand is not None:
+            assert self.kinds[self.typevar_operand] is value, \
+                    "typevar_operand must indicate a 'value' operand"
+        elif len(self.value_operands) > 0:
+            # Default to the first 'value' operand, if there is one.
+            self.typevar_operand = self.value_operands[0]
+
         # Compute a signature for the global registry.
         sig = (self.multiple_results,) + kinds
         if sig in InstructionFormat._registry:
@@ -453,7 +489,7 @@ class Instruction(object):
     :param ins: Tuple of input operands. This can be a mix of SSA value
                 operands and other operand kinds.
     :param outs: Tuple of output operands. The output operands must be SSA
-                values.
+                values or `variable_args`.
     :param is_terminator: This is a terminator instruction.
     :param is_branch: This is a branch instruction.
     """
@@ -465,7 +501,98 @@ class Instruction(object):
         self.ins = self._to_operand_tuple(ins)
         self.outs = self._to_operand_tuple(outs)
         self.format = InstructionFormat.lookup(self.ins, self.outs)
+        # Indexes into outs for value results. Others are `variable_args`.
+        self.value_results = tuple(
+                i for i, o in enumerate(self.outs) if o.kind is value)
+        self._verify_polymorphic()
         InstructionGroup.append(self)
+
+    def _verify_polymorphic(self):
+        """
+        Check if this instruction is polymorphic, and verify its use of type
+        variables.
+        """
+        poly_ins = [
+                i for i in self.format.value_operands
+                if self.ins[i].typ.free_typevar()]
+        poly_outs = [
+                i for i, o in enumerate(self.outs)
+                if o.typ.free_typevar()]
+        self.is_polymorphic = len(poly_ins) > 0 or len(poly_outs) > 0
+        if not self.is_polymorphic:
+            return
+
+        # Prefer to use the typevar_operand to infer the controlling typevar.
+        self.use_typevar_operand = False
+        typevar_error = None
+        if self.format.typevar_operand is not None:
+            try:
+                tv = self.ins[self.format.typevar_operand].typ
+                if tv is tv.free_typevar():
+                    self.other_typevars = self._verify_ctrl_typevar(tv)
+                    self.ctrl_typevar = tv
+                    self.use_typevar_operand = True
+            except RuntimeError as e:
+                typevar_error = e
+
+        if not self.use_typevar_operand:
+            # The typevar_operand argument doesn't work. Can we infer from the
+            # first result instead?
+            if len(self.outs) == 0:
+                if typevar_error:
+                    raise typevar_error
+                else:
+                    raise RuntimeError(
+                            "typevar_operand must be a free type variable")
+            tv = self.outs[0].typ
+            if tv is not tv.free_typevar():
+                raise RuntimeError("first result must be a free type variable")
+            self.other_typevars = self._verify_ctrl_typevar(tv)
+            self.ctrl_typevar = tv
+
+    def _verify_ctrl_typevar(self, ctrl_typevar):
+        """
+        Verify that the use of TypeVars is consistent with `ctrl_typevar` as
+        the controlling type variable.
+
+        All polymorhic inputs must either be derived from `ctrl_typevar` or be
+        independent free type variables only used once.
+
+        All polymorphic results must be derived from `ctrl_typevar`.
+
+        Return list of other type variables used, or raise an error.
+        """
+        other_tvs = []
+        # Check value inputs.
+        for opidx in self.format.value_operands:
+            typ = self.ins[opidx].typ
+            tv = typ.free_typevar()
+            # Non-polymorphic or derived form ctrl_typevar is OK.
+            if tv is None or tv is ctrl_typevar:
+                continue
+            # No other derived typevars allowed.
+            if typ is not tv:
+                raise RuntimeError(
+                        "type variable {} must not be derived from {}"
+                        .format(typ.name, tv.name))
+            # Other free type variables can only be used once each.
+            if tv in other_tvs:
+                raise RuntimeError(
+                        "type variable {} can't be used more than once"
+                        .format(tv.name))
+            other_tvs.append(tv)
+
+        # Check outputs.
+        for result in self.outs:
+            typ = result.typ
+            tv = typ.free_typevar()
+            # Non-polymorphic or derived from ctrl_typevar is OK.
+            if tv is None or tv is ctrl_typevar:
+                continue
+            raise RuntimeError(
+                    "type variable in output not derived from ctrl_typevar")
+
+        return other_tvs
 
     @staticmethod
     def _to_operand_tuple(x):
