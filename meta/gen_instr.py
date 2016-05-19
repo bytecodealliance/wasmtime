@@ -151,6 +151,12 @@ def gen_opcodes(groups, fmt):
                 fmt.doc_comment(
                         '`{}{} {}`. ({})'
                         .format(prefix, i.name, suffix, i.format.name))
+                # Document polymorphism.
+                if i.is_polymorphic:
+                    if i.use_typevar_operand:
+                        fmt.doc_comment(
+                                'Type inferred from {}.'
+                                .format(i.ins[i.format.typevar_operand]))
                 # Enum variant itself.
                 fmt.line(i.camel_name + ',')
     fmt.line()

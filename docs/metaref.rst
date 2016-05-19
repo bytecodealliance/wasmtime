@@ -145,7 +145,7 @@ representation depends on the input operand kinds and whether the instruction
 can produce multiple results.
 
 .. autoclass:: OperandKind
-.. inheritance-diagram:: OperandKind ImmediateKind EntityRefkind
+.. inheritance-diagram:: OperandKind ImmediateKind EntityRefKind
 
 Since all SSA value operands are represented as a `Value` in Rust code, value
 types don't affect the representation. Two special operand kinds are used to
@@ -174,8 +174,13 @@ constraints, in practice more freedom than what is needed for normal instruction
 set architectures. In order to simplify the Rust representation of value type
 constraints, some restrictions are imposed on the use of type variables.
 
-A polymorphic instruction has a single *controlling type variable*. The value
-types of instruction results must be one of the following:
+A polymorphic instruction has a single *controlling type variable*. For a given
+opcode, this type variable must be the type of the first result or the type of
+the input value operand designated by the `typevar_operand` argument to the
+:py:class:`InstructionFormat` constructor. By default, this is the first value
+operand, which works most of the time.
+
+The value types of instruction results must be one of the following:
 
 1. A concrete value type.
 2. The controlling type variable.
