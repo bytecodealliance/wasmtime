@@ -23,6 +23,9 @@ Binary = InstructionFormat(value, value)
 BinaryImm = InstructionFormat(value, imm64)
 BinaryImmRev = InstructionFormat(imm64, value)
 
+# Generate result + overflow flag.
+BinaryOverflow = InstructionFormat(value, value, multiple_results=True)
+
 Jump = InstructionFormat(ebb, variable_args, boxed_storage=True)
 Branch = InstructionFormat(value, ebb, variable_args, boxed_storage=True)
 BranchTable = InstructionFormat(value, jump_table)

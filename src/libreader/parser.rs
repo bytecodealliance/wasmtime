@@ -657,6 +657,17 @@ impl<'a> Parser<'a> {
                     rhs: rhs,
                 }
             }
+            InstructionFormat::BinaryOverflow => {
+                let lhs = try!(self.match_value("expected SSA value first operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let rhs = try!(self.match_value("expected SSA value second operand"));
+                InstructionData::BinaryOverflow {
+                    opcode: opcode,
+                    ty: VOID,
+                    second_result: NO_VALUE,
+                    args: [lhs, rhs],
+                }
+            }
             InstructionFormat::Jump |
             InstructionFormat::Branch |
             InstructionFormat::BranchTable |
