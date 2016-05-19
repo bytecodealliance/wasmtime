@@ -133,12 +133,18 @@ pub enum InstructionData {
         lhs: Value,
         rhs: Imm64,
     },
-    // Same as BinaryImm, but the imediate is the lhs operand.
+    // Same as BinaryImm, but the immediate is the lhs operand.
     BinaryImmRev {
         opcode: Opcode,
         ty: Type,
         rhs: Value,
         lhs: Imm64,
+    },
+    BinaryOverflow {
+        opcode: Opcode,
+        ty: Type,
+        second_result: Value,
+        args: [Value; 2],
     },
     Jump {
         opcode: Opcode,
