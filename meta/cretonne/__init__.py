@@ -384,6 +384,9 @@ class InstructionFormat(object):
         enums.
     :param multiple_results: Set to `True` if this instruction format allows
         more than one result to be produced.
+    :param boxed_storage: Set to `True` is this instruction format requires a
+        `data: Box<...>` pointer to additional storage in its `InstructionData`
+        variant.
     """
 
     # Map (multiple_results, kind, kind, ...) -> InstructionFormat
@@ -396,6 +399,7 @@ class InstructionFormat(object):
         self.name = kwargs.get('name', None)
         self.kinds = kinds
         self.multiple_results = kwargs.get('multiple_results', False)
+        self.boxed_storage = kwargs.get('boxed_storage', False)
         # Compute a signature for the global registry.
         sig = (self.multiple_results,) + kinds
         if sig in InstructionFormat._registry:

@@ -23,11 +23,12 @@ Binary = InstructionFormat(value, value)
 BinaryImm = InstructionFormat(value, imm64)
 BinaryImmRev = InstructionFormat(imm64, value)
 
-Jump = InstructionFormat(ebb, variable_args)
-Branch = InstructionFormat(value, ebb, variable_args)
+Jump = InstructionFormat(ebb, variable_args, boxed_storage=True)
+Branch = InstructionFormat(value, ebb, variable_args, boxed_storage=True)
 BranchTable = InstructionFormat(value, jump_table)
 
-Call = InstructionFormat(function, variable_args, multiple_results=True)
+Call = InstructionFormat(
+        function, variable_args, multiple_results=True, boxed_storage=True)
 
 # Finally extract the names of global variables in this module.
 InstructionFormat.extract_names(globals())
