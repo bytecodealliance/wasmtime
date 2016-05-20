@@ -7,6 +7,7 @@ instructions.
 
 import re
 import importlib
+from collections import namedtuple
 
 
 camel_re = re.compile('(^|_)([a-z])')
@@ -148,6 +149,9 @@ class ScalarType(ValueType):
     def __repr__(self):
         return 'ScalarType({})'.format(self.name)
 
+    def rust_name(self):
+        return 'types::' + self.name.upper()
+
     def by(self, lanes):
         """
         Get a vector type with this type as the lane type.
@@ -232,6 +236,19 @@ class BoolType(ScalarType):
 # Parametric polymorphism.
 
 
+#: A `TypeSet` represents a set of types. We don't allow arbitrary subsets of
+#: types, but use a parametrized approach instead.
+#: This is represented as a named tuple so it can be used as a dictionary key.
+TypeSet = namedtuple(
+        'TypeSet', [
+            'allow_scalars',
+            'allow_simd',
+            'base',
+            'all_ints',
+            'all_floats',
+            'all_bools'])
+
+
 class TypeVar(object):
     """
     Type variables can be used in place of concrete types when defining
@@ -257,10 +274,23 @@ class TypeVar(object):
     def __init__(
             self, name, doc, base=None,
             ints=False, floats=False, bools=False,
-            scalars=True, simd=False):
+            scalars=True, simd=False,
+            derived_func=None):
         self.name = name
         self.__doc__ = doc
         self.base = base
+        self.is_derived = isinstance(base, TypeVar)
+        if self.is_derived:
+            assert derived_func
+            self.derived_func = derived_func
+        else:
+            self.type_set = TypeSet(
+                    allow_scalars=scalars,
+                    allow_simd=simd,
+                    base=base,
+                    all_ints=ints,
+                    all_floats=floats,
+                    all_bools=bools)
 
     def __str__(self):
         return "`{}`".format(self.name)
@@ -273,14 +303,18 @@ class TypeVar(object):
         When this type variable assumes a scalar type, the derived type will be
         the same scalar type.
         """
-        return TypeVar("Lane type of " + self.name, '', base=self, simd=False)
+        return TypeVar(
+                "Lane type of " + self.name, '',
+                base=self, derived_func='Lane')
 
     def as_bool(self):
         """
         Return a derived type variable that has the same vector geometry as
         this type variable, but with boolean lanes. Scalar types map to `b1`.
         """
-        return TypeVar(self.name + " as boolean", '', base=self, bools=True)
+        return TypeVar(
+                self.name + " as boolean", '',
+                base=self, derived_func='AsBool')
 
     def operand_kind(self):
         # When a `TypeVar` object is used to describe the type of an `Operand`

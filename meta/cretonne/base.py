@@ -61,9 +61,9 @@ br_table = Instruction(
         'br_table', r"""
         Indirect branch via jump table.
 
-        Use ``x`` as an unsigned index into the jump table ``JT``. If a jump table
-        entry is found, branch to the corresponding EBB. If no entry was found fall
-        through to the next instruction.
+        Use ``x`` as an unsigned index into the jump table ``JT``. If a jump
+        table entry is found, branch to the corresponding EBB. If no entry was
+        found fall through to the next instruction.
 
         Note that this branch instruction can't pass arguments to the targeted
         blocks. Split critical edges as needed to work around this.
