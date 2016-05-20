@@ -19,6 +19,9 @@ Testable = TypeVar(
 TxN = TypeVar(
         '%Tx%N', 'A SIMD vector type',
         ints=True, floats=True, bools=True, scalars=False, simd=True)
+Any = TypeVar(
+        'Any', 'Any integer, float, or boolean scalar or vector type',
+        ints=True, floats=True, bools=True, scalars=True, simd=True)
 
 #
 # Control flow
@@ -139,6 +142,41 @@ vconst = Instruction(
         """,
         ins=N, outs=a)
 
+#
+# Generics.
+#
+
+c = Operand('c', Testable, doc='Controlling value to test')
+x = Operand('x', Any, doc='Value to use when `c` is true')
+y = Operand('y', Any, doc='Value to use when `c` is false')
+a = Operand('a', Any)
+
+select = Instruction(
+        'select', r"""
+        Conditional select.
+
+        This instruction selects whole values. Use :inst:`vselect` for
+        lane-wise selection.
+        """,
+        ins=(c, x, y), outs=a)
+
+#
+# Vector operations
+#
+
+c = Operand('c', TxN.as_bool(), doc='Controlling vector')
+x = Operand('x', TxN, doc='Value to use where `c` is true')
+y = Operand('y', TxN, doc='Value to use where `c` is false')
+a = Operand('a', TxN)
+
+vselect = Instruction(
+        'vselect', r"""
+        Vector lane select.
+
+        Select lanes from ``x`` or ``y`` controlled by the lanes of the boolean
+        vector ``c``.
+        """,
+        ins=(c, x, y), outs=a)
 #
 # Integer arithmetic
 #

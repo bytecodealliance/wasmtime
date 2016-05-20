@@ -156,6 +156,9 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
         BinaryImm { opcode, lhs, rhs, .. } => writeln!(w, "{} {}, {}", opcode, lhs, rhs),
         BinaryImmRev { opcode, lhs, rhs, .. } => writeln!(w, "{} {}, {}", opcode, lhs, rhs),
         BinaryOverflow { opcode, args, .. } => writeln!(w, "{} {}, {}", opcode, args[0], args[1]),
+        Select { opcode, args, .. } => {
+            writeln!(w, "{} {}, {}, {}", opcode, args[0], args[1], args[2])
+        }
         Jump { opcode, ref data, .. } => writeln!(w, "{} {}", opcode, data),
         Branch { opcode, ref data, .. } => writeln!(w, "{} {}", opcode, data),
         BranchTable { opcode, arg, table, .. } => writeln!(w, "{} {}, {}", opcode, arg, table),

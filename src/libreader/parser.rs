@@ -668,6 +668,7 @@ impl<'a> Parser<'a> {
                     args: [lhs, rhs],
                 }
             }
+            InstructionFormat::Select |
             InstructionFormat::Jump |
             InstructionFormat::Branch |
             InstructionFormat::BranchTable |
