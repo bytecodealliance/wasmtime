@@ -163,6 +163,18 @@ pub enum InstructionData {
         ty: Type,
         args: [Value; 3],
     },
+    InsertLane {
+        opcode: Opcode,
+        ty: Type,
+        lane: u8,
+        args: [Value; 2],
+    },
+    ExtractLane {
+        opcode: Opcode,
+        ty: Type,
+        lane: u8,
+        arg: Value,
+    },
     Jump {
         opcode: Opcode,
         ty: Type,
@@ -401,7 +413,7 @@ enum OperandConstraint {
     Same,
 
     /// This operand is `ctrlType.lane_type()`.
-    Lane,
+    LaneOf,
 
     /// This operand is `ctrlType.as_bool()`.
     AsBool,
@@ -418,7 +430,7 @@ impl OperandConstraint {
             Concrete(t) => Some(t),
             Free(_) => None,
             Same => Some(ctrl_type),
-            Lane => Some(ctrl_type.lane_type()),
+            LaneOf => Some(ctrl_type.lane_type()),
             AsBool => Some(ctrl_type.as_bool()),
         }
     }
