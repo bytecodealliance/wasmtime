@@ -83,6 +83,20 @@ impl Type {
         }
     }
 
+    /// Get a type with the same number of lanes as this type, but with the lanes replaces by
+    /// booleans of the same size.
+    pub fn as_bool(self) -> Type {
+        // Replace the low 4 bits with the boolean version, preserve the high 4 bits.
+        let lane = match self.lane_type() {
+            B8 | I8 => B8,
+            B16 | I16 => B16,
+            B32 | I32 | F32 => B32,
+            B64 | I64 | F64 => B64,
+            _ => B1,
+        };
+        Type(lane.0 | (self.0 & 0xf0))
+    }
+
     /// Is this the VOID type?
     pub fn is_void(self) -> bool {
         self == VOID
