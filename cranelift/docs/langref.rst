@@ -656,35 +656,12 @@ load a constant into an SSA value.
 .. autoinst:: f32const
 .. autoinst:: f64const
 .. autoinst:: vconst
-
-.. inst:: a = select c, x, y
-
-    Conditional select.
-
-    :arg b1 c: Controlling flag.
-    :arg T x: Value to return when ``c`` is true.
-    :arg T y: Value to return when ``c`` is false. Must be same type as ``x``.
-    :result T a: Same type as ``x`` and ``y``.
-
-    This instruction selects whole values. Use :inst:`vselect` for lane-wise
-    selection.
+.. autoinst:: select
 
 Vector operations
 -----------------
 
-.. inst:: a  = vselect c, x, y
-
-    Vector lane select.
-
-    Select lanes from ``x`` or ``y`` controlled by the lanes of the boolean
-    vector ``c``.
-
-    :arg b1xN c: Controlling flag vector.
-    :arg TxN x: Vector with lanes selected by the true lanes of ``c``.
-              Must be a vector type with the same number of lanes as ``c``.
-    :arg TxN y: Vector with lanes selected by the false lanes of ``c``.
-              Must be same type as ``x``.
-    :result TxN a: Same type as ``x`` and ``y``.
+.. autoinst:: vselect
 
 .. inst:: a = vbuild x, y, z, ...
 

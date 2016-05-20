@@ -26,6 +26,10 @@ BinaryImmRev = InstructionFormat(imm64, value)
 # Generate result + overflow flag.
 BinaryOverflow = InstructionFormat(value, value, multiple_results=True)
 
+# The select instructions are controlled by the second value operand.
+# The first value operand is the controlling flag whisch has a derived type.
+Select = InstructionFormat(value, value, value, typevar_operand=1)
+
 Jump = InstructionFormat(ebb, variable_args, boxed_storage=True)
 Branch = InstructionFormat(value, ebb, variable_args, boxed_storage=True)
 BranchTable = InstructionFormat(value, jump_table)

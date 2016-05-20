@@ -283,6 +283,7 @@ class TypeVar(object):
         if self.is_derived:
             assert derived_func
             self.derived_func = derived_func
+            self.name = '{}({})'.format(derived_func, base.name)
         else:
             self.type_set = TypeSet(
                     allow_scalars=scalars,
@@ -303,18 +304,14 @@ class TypeVar(object):
         When this type variable assumes a scalar type, the derived type will be
         the same scalar type.
         """
-        return TypeVar(
-                "Lane type of " + self.name, '',
-                base=self, derived_func='Lane')
+        return TypeVar(None, None, base=self, derived_func='Lane')
 
     def as_bool(self):
         """
         Return a derived type variable that has the same vector geometry as
         this type variable, but with boolean lanes. Scalar types map to `b1`.
         """
-        return TypeVar(
-                self.name + " as boolean", '',
-                base=self, derived_func='AsBool')
+        return TypeVar(None, None, base=self, derived_func='AsBool')
 
     def operand_kind(self):
         # When a `TypeVar` object is used to describe the type of an `Operand`
@@ -607,8 +604,8 @@ class Instruction(object):
             # No other derived typevars allowed.
             if typ is not tv:
                 raise RuntimeError(
-                        "type variable {} must not be derived from {}"
-                        .format(typ.name, tv.name))
+                        "{}: type variable {} must be derived from {}"
+                        .format(self.ins[opidx], typ.name, ctrl_typevar))
             # Other free type variables can only be used once each.
             if tv in other_tvs:
                 raise RuntimeError(

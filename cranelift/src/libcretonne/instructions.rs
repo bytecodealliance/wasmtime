@@ -158,6 +158,11 @@ pub enum InstructionData {
         second_result: Value,
         args: [Value; 2],
     },
+    Select {
+        opcode: Opcode,
+        ty: Type,
+        args: [Value; 3],
+    },
     Jump {
         opcode: Opcode,
         ty: Type,
@@ -295,13 +300,13 @@ impl InstructionData {
 ///
 /// Bits 4-7:
 ///     Permitted set of types for the controlling type variable as an index into `TYPE_SETS`.
-/// 
+///
 /// Bits 8-15:
 ///     Offset into `OPERAND_CONSTRAINT` table of the descriptors for this opcode. The first
 ///     `fixed_results()` entries describe the result constraints, then follows constraints for the
 ///     fixed `Value` input operands. The number of `Value` inputs isdetermined by the instruction
 ///     format.
-///   
+///
 #[derive(Clone, Copy)]
 pub struct OpcodeConstraints(u16);
 
