@@ -11,6 +11,12 @@ from . import ImmediateKind
 #: :py:class:`cretonne.IntType` type.
 imm64 = ImmediateKind('imm64', 'A 64-bit immediate integer.')
 
+#: An unsigned 8-bit immediate integer operand.
+#:
+#: This small operand is used to indicate lane indexes in SIMD vectors and
+#: immediate bit counts on shift instructions.
+uimm8 = ImmediateKind('uimm8', 'An 8-bit immediate unsigned integer.')
+
 #: A 32-bit immediate floating point operand.
 #:
 #: IEEE 754-2008 binary32 interchange format.

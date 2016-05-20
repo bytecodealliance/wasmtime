@@ -6,7 +6,7 @@ support.
 """
 from . import TypeVar, Operand, Instruction, InstructionGroup, variable_args
 from types import i8, f32, f64
-from immediates import imm64, ieee32, ieee64, immvector
+from immediates import imm64, uimm8, ieee32, ieee64, immvector
 import entities
 
 instructions = InstructionGroup("base", "Shared base instruction set")
@@ -17,7 +17,7 @@ Testable = TypeVar(
         'Testable', 'A scalar boolean or integer type',
         ints=True, bools=True)
 TxN = TypeVar(
-        '%Tx%N', 'A SIMD vector type',
+        'TxN', 'A SIMD vector type',
         ints=True, floats=True, bools=True, scalars=False, simd=True)
 Any = TypeVar(
         'Any', 'Any integer, float, or boolean scalar or vector type',
@@ -177,6 +177,42 @@ vselect = Instruction(
         vector ``c``.
         """,
         ins=(c, x, y), outs=a)
+
+x = Operand('x', TxN.lane_of())
+
+splat = Instruction(
+        'splat', r"""
+        Vector splat.
+
+        Return a vector whose lanes are all ``x``.
+        """,
+        ins=x, outs=a)
+
+x = Operand('x', TxN, doc='SIMD vector to modify')
+y = Operand('y', TxN.lane_of(), doc='New lane value')
+Idx = Operand('Idx', uimm8, doc='Lane index')
+
+insertlane = Instruction(
+        'insertlane', r"""
+        Insert ``y`` as lane ``Idx`` in x.
+
+        The lane index, ``Idx``, is an immediate value, not an SSA value. It
+        must indicate a valid lane index for the type of ``x``.
+        """,
+        ins=(x, Idx, y), outs=a)
+
+x = Operand('x', TxN)
+a = Operand('a', TxN.lane_of())
+
+extractlane = Instruction(
+        'extractlane', r"""
+        Extract lane ``Idx`` from ``x``.
+
+        The lane index, ``Idx``, is an immediate value, not an SSA value. It
+        must indicate a valid lane index for the type of ``x``.
+        """,
+        ins=(x, Idx), outs=a)
+
 #
 # Integer arithmetic
 #

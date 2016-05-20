@@ -669,37 +669,9 @@ Vector operations
 
     Build a vector value from the provided lanes.
 
-.. inst:: a = splat x
-
-    Vector splat.
-
-    Return a vector whose lanes are all ``x``.
-
-    :arg T x: Scalar value to be replicated.
-    :result TxN a: Vector with identical lanes.
-
-.. inst:: a = insertlane x, Idx, y
-
-    Insert ``y`` as lane ``Idx`` in x.
-
-    The lane index, ``Idx``, is an immediate value, not an SSA value. It must
-    indicate a valid lane index for the type of ``x``.
-
-    :arg TxN x: Vector to modify.
-    :arg Idx: Lane index smaller than N.
-    :arg T y: New lane value.
-    :result TxN y: Updated vector.
-
-.. inst:: a = extractlane x, Idx
-
-    Extract lane ``Idx`` from ``x``.
-
-    The lane index, ``Idx``, is an immediate value, not an SSA value. It must
-    indicate a valid lane index for the type of ``x``.
-
-    :arg TxN x: Source vector
-    :arg Idx: Lane index
-    :result T a: Lane value.
+.. autoinst:: splat
+.. autoinst:: insertlane
+.. autoinst:: extractlane
 
 Integer operations
 ------------------

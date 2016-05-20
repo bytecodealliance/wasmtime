@@ -669,6 +669,8 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::Select |
+            InstructionFormat::InsertLane |
+            InstructionFormat::ExtractLane |
             InstructionFormat::Jump |
             InstructionFormat::Branch |
             InstructionFormat::BranchTable |

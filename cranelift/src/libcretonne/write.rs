@@ -159,6 +159,10 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
         Select { opcode, args, .. } => {
             writeln!(w, "{} {}, {}, {}", opcode, args[0], args[1], args[2])
         }
+        InsertLane { opcode, lane, args, .. } => {
+            writeln!(w, "{} {}, {}, {}", opcode, args[0], lane, args[1])
+        }
+        ExtractLane { opcode, lane, arg, .. } => writeln!(w, "{} {}, {}", opcode, arg, lane),
         Jump { opcode, ref data, .. } => writeln!(w, "{} {}", opcode, data),
         Branch { opcode, ref data, .. } => writeln!(w, "{} {}", opcode, data),
         BranchTable { opcode, arg, table, .. } => writeln!(w, "{} {}, {}", opcode, arg, table),

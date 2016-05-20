@@ -296,7 +296,7 @@ class TypeVar(object):
     def __str__(self):
         return "`{}`".format(self.name)
 
-    def lane(self):
+    def lane_of(self):
         """
         Return a derived type variable that is the scalar lane type of this
         type variable.
@@ -304,7 +304,7 @@ class TypeVar(object):
         When this type variable assumes a scalar type, the derived type will be
         the same scalar type.
         """
-        return TypeVar(None, None, base=self, derived_func='Lane')
+        return TypeVar(None, None, base=self, derived_func='LaneOf')
 
     def as_bool(self):
         """
