@@ -153,8 +153,8 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
         UnaryIeee64 { opcode, imm, .. } => writeln!(w, "{} {}", opcode, imm),
         UnaryImmVector { opcode, .. } => writeln!(w, "{} [...]", opcode),
         Binary { opcode, args, .. } => writeln!(w, "{} {}, {}", opcode, args[0], args[1]),
-        BinaryImm { opcode, lhs, rhs, .. } => writeln!(w, "{} {}, {}", opcode, lhs, rhs),
-        BinaryImmRev { opcode, lhs, rhs, .. } => writeln!(w, "{} {}, {}", opcode, lhs, rhs),
+        BinaryImm { opcode, arg, imm, .. } => writeln!(w, "{} {}, {}", opcode, arg, imm),
+        BinaryImmRev { opcode, imm, arg, .. } => writeln!(w, "{} {}, {}", opcode, imm, arg),
         BinaryOverflow { opcode, args, .. } => writeln!(w, "{} {}, {}", opcode, args[0], args[1]),
         Select { opcode, args, .. } => {
             writeln!(w, "{} {}, {}, {}", opcode, args[0], args[1], args[2])

@@ -88,8 +88,8 @@ impl Function {
 
     /// Create a new instruction.
     ///
-    /// The instruction is allowed to produce at most one result as indicated by `data.ty`. Use
-    /// `make_multi_inst()` to create instructions with multiple results.
+    /// The type of the first result is indicated by `data.ty`. If the instruction produces
+    /// multiple results, also call `make_inst_results` to allocate value table entries.
     pub fn make_inst(&mut self, data: InstructionData) -> Inst {
         let inst = Inst::new(self.instructions.len());
         self.instructions.push(data);
@@ -101,40 +101,59 @@ impl Function {
         inst
     }
 
-    /// Make an instruction that may produce multiple results.
-    ///
-    /// The type of the first result is `data.ty`. If the instruction generates more than one
-    /// result, additional result types are in `extra_result_types`.
-    ///
-    /// Not all instruction formats can represent multiple result values. This function will panic
-    /// if the format of `data` is insufficient.
-    pub fn make_multi_inst(&mut self, data: InstructionData, extra_result_types: &[Type]) -> Inst {
-        let inst = self.make_inst(data);
+    fn inst_mut(&mut self, inst: Inst) -> &mut InstructionData {
+        &mut self.instructions[inst.index()]
+    }
 
-        if !extra_result_types.is_empty() {
-            // Additional values form a linked list starting from the second result value. Generate
-            // the list backwards so we don't have to modify value table entries in place. (This
-            // causes additional result values to be numbered backwards which is not the aestetic
-            // choice, but since it is only visible in extremely rare instructions with 3+ results,
-            // we don't care).
-            let mut head = NO_VALUE;
-            for ty in extra_result_types.into_iter().rev() {
+    /// Create result values for an instruction that produces multiple results.
+    ///
+    /// Instructions that produce 0 or 1 result values only need to be created with `make_inst`. If
+    /// the instruction may produce more than 1 result, call `make_inst_results` to allocate
+    /// `Value` table entries for the additional results.
+    ///
+    /// The result value types are determined from the instruction's value type constraints and the
+    /// provided `ctrl_typevar` type for polymorphic instructions. For non-polymorphic
+    /// instructions, `ctrl_typevar` is ignored, and `VOID` can be used.
+    ///
+    /// The type of the first result value is also set, even if it was already set in the
+    /// `InstructionData` passed to `make_inst`. If this function is called with a single-result
+    /// instruction, that is the only effect.
+    ///
+    /// Returns the number of results produced by the instruction.
+    pub fn make_inst_results(&mut self, inst: Inst, ctrl_typevar: Type) -> usize {
+        let constraints = self[inst].opcode().constraints();
+        let fixed_results = constraints.fixed_results();
+
+        // Additional values form a linked list starting from the second result value. Generate
+        // the list backwards so we don't have to modify value table entries in place. (This
+        // causes additional result values to be numbered backwards which is not the aestetic
+        // choice, but since it is only visible in extremely rare instructions with 3+ results,
+        // we don't care).
+        let mut head = NO_VALUE;
+        let mut first_type = Type::default();
+
+        // TBD: Function call return values for direct and indirect function calls.
+
+        if fixed_results > 0 {
+            for res_idx in (1..fixed_results).rev() {
                 head = self.make_value(ValueData::Def {
-                    ty: *ty,
+                    ty: constraints.result_type(res_idx, ctrl_typevar),
                     def: inst,
                     next: head,
                 });
             }
-
-            // Update the second_result pointer in `inst`.
-            if let Some(second_result_ref) = self.instructions[inst.index()].second_result_mut() {
-                *second_result_ref = head;
-            } else {
-                panic!("Instruction format doesn't allow multiple results.");
-            }
+            first_type = constraints.result_type(0, ctrl_typevar);
         }
 
-        inst
+        // Update the second_result pointer in `inst`.
+        if head != NO_VALUE {
+            *self.inst_mut(inst)
+                 .second_result_mut()
+                 .expect("instruction format doesn't allow multiple results") = head;
+        }
+        *self.inst_mut(inst).first_type_mut() = first_type;
+
+        fixed_results
     }
 
     /// Get the first result of an instruction.
@@ -519,21 +538,6 @@ mod tests {
         let ins = &func[inst];
         assert_eq!(ins.opcode(), Opcode::Iconst);
         assert_eq!(ins.first_type(), types::I32);
-    }
-
-    #[test]
-    fn multiple_results() {
-        use types::*;
-        let mut func = Function::new();
-
-        let idata = InstructionData::call(Opcode::Vconst, I64);
-        let inst = func.make_multi_inst(idata, &[I8, F64]);
-        assert_eq!(inst.to_string(), "inst0");
-        let results: Vec<Value> = func.inst_results(inst).collect();
-        assert_eq!(results.len(), 3);
-        assert_eq!(func.value_type(results[0]), I64);
-        assert_eq!(func.value_type(results[1]), I8);
-        assert_eq!(func.value_type(results[2]), F64);
     }
 
     #[test]

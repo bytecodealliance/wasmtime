@@ -1,6 +1,7 @@
 
 //! Common types for the Cretonne code generator.
 
+use std::default::Default;
 use std::fmt::{self, Display, Formatter, Write};
 
 // ====--------------------------------------------------------------------------------------====//
@@ -199,6 +200,12 @@ impl Display for Type {
         } else {
             panic!("Invalid Type(0x{:x})", self.0)
         }
+    }
+}
+
+impl Default for Type {
+    fn default() -> Type {
+        VOID
     }
 }
 
