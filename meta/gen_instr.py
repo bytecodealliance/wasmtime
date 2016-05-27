@@ -70,6 +70,14 @@ def gen_instruction_data_impl(fmt):
                             'InstructionData::{} {{ ty, .. }} => ty,'
                             .format(f.name))
 
+        fmt.doc_comment('Mutable reference to the type of the first result.')
+        with fmt.indented('pub fn first_type_mut(&mut self) -> &mut Type {', '}'):
+            with fmt.indented('match *self {', '}'):
+                for f in cretonne.InstructionFormat.all_formats:
+                    fmt.line(
+                            'InstructionData::{} {{ ref mut ty, .. }} => ty,'
+                            .format(f.name))
+
         # Generate shared and mutable accessors for `second_result` which only
         # applies to instruction formats that can produce multiple results.
         # Everything else returns `None`.
@@ -119,6 +127,38 @@ def gen_instruction_data_impl(fmt):
                                 'InstructionData::' + f.name +
                                 ' { ref mut second_result, .. }' +
                                 ' => Some(second_result),')
+
+        fmt.doc_comment('Get the controlling type variable operand.')
+        with fmt.indented(
+                'pub fn typevar_operand(&self) -> Option<Value> {', '}'):
+            with fmt.indented('match *self {', '}'):
+                for f in cretonne.InstructionFormat.all_formats:
+                    n = 'InstructionData::' + f.name
+                    if f.typevar_operand is None:
+                        fmt.line(n + ' { .. } => None,')
+                    elif len(f.value_operands) == 1:
+                        # We have a single value operand called 'arg'.
+                        if f.boxed_storage:
+                            fmt.line(
+                                    n + ' { ref data, .. } => Some(data.arg),')
+                        else:
+                            fmt.line(n + ' { arg, .. } => Some(arg),')
+                    else:
+                        # We have multiple value operands and an array `args`.
+                        # Which `args` index to use?
+                        # Map from index into f.kinds into f.value_operands
+                        # index.
+                        i = f.value_operands.index(f.typevar_operand)
+                        if f.boxed_storage:
+                            fmt.line(
+                                    n +
+                                    ' {{ ref data, .. }} => Some(data.args[{}]),'
+                                    .format(i))
+                        else:
+                            fmt.line(
+                                    n +
+                                    ' {{ ref args, .. }} => Some(args[{}]),'
+                                    .format(i))
 
 
 def collect_instr_groups(targets):

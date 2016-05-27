@@ -142,15 +142,15 @@ pub enum InstructionData {
     BinaryImm {
         opcode: Opcode,
         ty: Type,
-        lhs: Value,
-        rhs: Imm64,
+        arg: Value,
+        imm: Imm64,
     },
     // Same as BinaryImm, but the immediate is the lhs operand.
     BinaryImmRev {
         opcode: Opcode,
         ty: Type,
-        rhs: Value,
-        lhs: Imm64,
+        arg: Value,
+        imm: Imm64,
     },
     BinaryOverflow {
         opcode: Opcode,
@@ -365,6 +365,11 @@ impl OpcodeConstraints {
     /// instruction.
     pub fn ctrl_typeset(self) -> Option<ValueTypeSet> {
         self.typeset_offset().map(|offset| TYPE_SETS[offset])
+    }
+
+    /// Is this instruction polymorphic?
+    pub fn is_polymorphic(self) -> bool {
+        self.ctrl_typeset().is_some()
     }
 }
 

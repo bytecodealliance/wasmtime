@@ -144,16 +144,20 @@ impl<'a> Parser<'a> {
     }
 
     // Generate an error.
-    fn error(&self, message: &str) -> Error {
+    fn error_string(&self, message: String) -> Error {
         Error {
             location: self.location,
             message:
                 // If we have a lexer error latched, report that.
                 match self.lex_error {
                     Some(lexer::Error::InvalidChar) => "invalid character".to_string(),
-                    None => message.to_string(),
+                    None => message,
                 }
         }
+    }
+
+    fn error(&self, message: &str) -> Error {
+        self.error_string(message.to_string())
     }
 
     // Match and consume a token without payload.
@@ -511,14 +515,15 @@ impl<'a> Parser<'a> {
 
     // Parse an instruction, append it to `ebb`.
     //
-    // instruction ::= [inst-results "="] Opcode(opc) ...
+    // instruction ::= [inst-results "="] Opcode(opc) ["." Type] ...
     // inst-results ::= Value(v) { "," Value(vx) }
     //
     fn parse_instruction(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
         // Result value numbers.
         let mut results = Vec::new();
 
-        // instruction ::=  * [inst-results "="] Opcode(opc) ...
+        // instruction  ::=  * [inst-results "="] Opcode(opc) ["." Type] ...
+        // inst-results ::= * Value(v) { "," Value(vx) }
         if let Some(Token::Value(v)) = self.token() {
             self.consume();
             results.push(v);
@@ -532,7 +537,7 @@ impl<'a> Parser<'a> {
             try!(self.match_token(Token::Equal, "expected '=' before opcode"));
         }
 
-        // instruction ::=  [inst-results "="] * Opcode(opc) ...
+        // instruction ::=  [inst-results "="] * Opcode(opc) ["." Type] ...
         let opcode = if let Some(Token::Identifier(text)) = self.token() {
             match text.parse() {
                 Ok(opc) => opc,
@@ -541,22 +546,108 @@ impl<'a> Parser<'a> {
         } else {
             return Err(self.error("expected instruction opcode"));
         };
+        self.consume();
 
-        // instruction ::=  [inst-results "="] Opcode(opc) * ...
+        // Look for a controlling type variable annotation.
+        // instruction ::=  [inst-results "="] Opcode(opc) * ["." Type] ...
+        let explicit_ctrl_type = if self.optional(Token::Dot) {
+            Some(try!(self.match_type("expected type after 'opcode.'")))
+        } else {
+            None
+        };
+
+        // instruction ::=  [inst-results "="] Opcode(opc) ["." Type] * ...
         let inst_data = try!(self.parse_inst_operands(opcode));
+
+        // We're done parsing the instruction now.
+        //
+        // We still need to check that the number of result values in the source matches the opcode
+        // or function call signature. We also need to create values with the right type for all
+        // the instruction results.
+        let ctrl_typevar = try!(self.infer_typevar(ctx, opcode, explicit_ctrl_type, &inst_data));
         let inst = ctx.function.make_inst(inst_data);
-
-        // TODO: Check that results.len() matches the opcode.
-        // TODO: Multiple results.
-        if !results.is_empty() {
-            assert!(results.len() == 1, "Multiple results not implemented");
-            let result = ctx.function.first_result(inst);
-            try!(ctx.add_value(results[0], result, &self.location));
-        }
-
+        let num_results = ctx.function.make_inst_results(inst, ctrl_typevar);
         ctx.function.append_inst(ebb, inst);
 
+        if results.len() != num_results {
+            let m = format!("instruction produces {} result values, {} given",
+                            num_results,
+                            results.len());
+            return Err(self.error_string(m));
+        }
+
+        // Now map the source result values to the just created instruction results.
+        // We need to copy the list of result values to avoid fighting the borrow checker.
+        let new_results: Vec<Value> = ctx.function.inst_results(inst).collect();
+        for (src, val) in results.iter().zip(new_results) {
+            try!(ctx.add_value(*src, val, &self.location));
+        }
+
         Ok(())
+    }
+
+    // Type inference for polymorphic instructions.
+    //
+    // The controlling type variable can be specified explicitly as 'splat.i32x4 v5', or it can be
+    // inferred from `inst_data.typevar_operand` for some opcodes.
+    //
+    // The value operands in `inst_data` are expected to use source numbering.
+    //
+    // Returns the controlling typevar for a polymorphic opcode, or `VOID` for a non-polymorphic
+    // opcode.
+    fn infer_typevar(&self,
+                     ctx: &Context,
+                     opcode: Opcode,
+                     explicit_ctrl_type: Option<Type>,
+                     inst_data: &InstructionData)
+                     -> Result<Type> {
+        let constraints = opcode.constraints();
+        let ctrl_type = match explicit_ctrl_type {
+            Some(t) => t,
+            None => {
+                if constraints.use_typevar_operand() {
+                    // This is an opcode that supports type inference, AND there was no explicit
+                    // type specified. Look up `ctrl_value` to see if it was defined already.
+                    // TBD: If it is defined in another block, the type should have been specified
+                    // explicitly. It is unfortunate that the correctness of IL depends on the
+                    // layout of the blocks.
+                    let ctrl_src_value = inst_data.typevar_operand()
+                                                  .expect("Constraints <-> Format inconsistency");
+                    ctx.function.value_type(match ctx.values.get(&ctrl_src_value) {
+                        Some(&v) => v,
+                        None => {
+                            let m = format!("cannot determine type of operand {}", ctrl_src_value);
+                            return Err(self.error_string(m));
+                        }
+                    })
+                } else if constraints.is_polymorphic() {
+                    // This opcode does not support type inference, so the explicit type variable
+                    // is required.
+                    return Err(self.error("type variable required for polymorphic opcode"));
+                } else {
+                    // This is a non-polymorphic opcode. No typevar needed.
+                    VOID
+                }
+            }
+        };
+
+        // Verify that `ctrl_type` is valid for the controlling type variable. We don't want to
+        // attempt deriving types from an incorrect basis.
+        // This is not a complete type check. The verifier does that.
+        if let Some(typeset) = constraints.ctrl_typeset() {
+            // This is a polymorphic opcode.
+            if !typeset.contains(ctrl_type) {
+                let m = format!("{} is not a valid typevar for {}", ctrl_type, opcode);
+                return Err(self.error_string(m));
+            }
+        } else {
+            // Treat it as a syntax error to speficy a typevar on a non-polymorphic opcode.
+            if ctrl_type != VOID {
+                return Err(self.error_string(format!("{} does not take a typevar", opcode)));
+            }
+        }
+
+        Ok(ctrl_type)
     }
 
     // Parse the operands following the instruction opcode.
@@ -617,8 +708,8 @@ impl<'a> Parser<'a> {
                 InstructionData::BinaryImm {
                     opcode: opcode,
                     ty: VOID,
-                    lhs: lhs,
-                    rhs: rhs,
+                    arg: lhs,
+                    imm: rhs,
                 }
             }
             InstructionFormat::BinaryImmRev => {
@@ -628,8 +719,8 @@ impl<'a> Parser<'a> {
                 InstructionData::BinaryImmRev {
                     opcode: opcode,
                     ty: VOID,
-                    lhs: lhs,
-                    rhs: rhs,
+                    imm: lhs,
+                    arg: rhs,
                 }
             }
             InstructionFormat::BinaryOverflow => {
