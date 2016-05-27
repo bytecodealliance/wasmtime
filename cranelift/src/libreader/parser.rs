@@ -52,9 +52,8 @@ pub struct Parser<'a> {
 struct Context {
     function: Function,
     stack_slots: HashMap<u32, StackSlot>, // ssNN
-    ebbs: HashMap<u32, Ebb>, // ebbNN
-    value_directs: HashMap<u32, Value>, // vNN
-    value_tables: HashMap<u32, Value>, // vxNN
+    ebbs: HashMap<Ebb, Ebb>, // ebbNN
+    values: HashMap<Value, Value>, // vNN, vxNN
 }
 
 impl Context {
@@ -63,8 +62,7 @@ impl Context {
             function: f,
             stack_slots: HashMap::new(),
             ebbs: HashMap::new(),
-            value_directs: HashMap::new(),
-            value_tables: HashMap::new(),
+            values: HashMap::new(),
         }
     }
 
@@ -80,37 +78,25 @@ impl Context {
         }
     }
 
-    // Allocate a new EBB and add a mapping number -> Ebb.
-    fn add_ebb(&mut self, number: u32, loc: &Location) -> Result<Ebb> {
+    // Allocate a new EBB and add a mapping src_ebb -> Ebb.
+    fn add_ebb(&mut self, src_ebb: Ebb, loc: &Location) -> Result<Ebb> {
         let ebb = self.function.make_ebb();
-        if self.ebbs.insert(number, ebb).is_some() {
+        if self.ebbs.insert(src_ebb, ebb).is_some() {
             Err(Error {
                 location: loc.clone(),
-                message: format!("duplicate EBB: ebb{}", number),
+                message: format!("duplicate EBB: {}", src_ebb),
             })
         } else {
             Ok(ebb)
         }
     }
 
-    // Add a value mapping number -> data for a direct value (vNN).
-    fn add_v(&mut self, number: u32, data: Value, loc: &Location) -> Result<()> {
-        if self.value_directs.insert(number, data).is_some() {
+    // Add a value mapping src_val -> data.
+    fn add_value(&mut self, src_val: Value, data: Value, loc: &Location) -> Result<()> {
+        if self.values.insert(src_val, data).is_some() {
             Err(Error {
                 location: loc.clone(),
-                message: format!("duplicate value: v{}", number),
-            })
-        } else {
-            Ok(())
-        }
-    }
-
-    // Add a value mapping number -> data for a table value (vxNN).
-    fn add_vx(&mut self, number: u32, data: Value, loc: &Location) -> Result<()> {
-        if self.value_tables.insert(number, data).is_some() {
-            Err(Error {
-                location: loc.clone(),
-                message: format!("duplicate value: vx{}", number),
+                message: format!("duplicate value: {}", src_val),
             })
         } else {
             Ok(())
@@ -220,7 +206,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume an ebb reference.
-    fn match_ebb(&mut self, err_msg: &str) -> Result<u32> {
+    fn match_ebb(&mut self, err_msg: &str) -> Result<Ebb> {
         if let Some(Token::Ebb(ebb)) = self.token() {
             self.consume();
             Ok(ebb)
@@ -229,26 +215,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a vx reference.
-    fn match_vx(&mut self, err_msg: &str) -> Result<u32> {
-        if let Some(Token::ValueTable(vx)) = self.token() {
-            self.consume();
-            Ok(vx)
-        } else {
-            Err(self.error(err_msg))
-        }
-    }
-
     // Match and consume a value reference, direct or vtable.
     // This does not convert from the source value numbering to our in-memory value numbering.
     fn match_value(&mut self, err_msg: &str) -> Result<Value> {
-        let val = match self.token() {
-            Some(Token::ValueDirect(v)) => Value::direct_from_number(v),
-            Some(Token::ValueTable(vx)) => Value::new_table(vx as usize),
-            _ => return Err(self.error(err_msg)),
-        };
-        self.consume();
-        Ok(val)
+        if let Some(Token::Value(v)) = self.token() {
+            self.consume();
+            Ok(v)
+        } else {
+            Err(self.error(err_msg))
+        }
     }
 
     // Match and consume an Imm64 immediate.
@@ -484,7 +459,7 @@ impl<'a> Parser<'a> {
 
         // extended-basic-block ::= ebb-header * { instruction }
         while match self.token() {
-            Some(Token::ValueDirect(_)) => true,
+            Some(Token::Value(_)) => true,
             Some(Token::Identifier(_)) => true,
             _ => false,
         } {
@@ -519,39 +494,39 @@ impl<'a> Parser<'a> {
 
     // Parse a single EBB argument declaration, and append it to `ebb`.
     //
-    // ebb-arg ::= * ValueTable(vx) ":" Type(t)
+    // ebb-arg ::= * Value(vx) ":" Type(t)
     //
     fn parse_ebb_arg(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
-        // ebb-arg ::= * ValueTable(vx) ":" Type(t)
-        let vx = try!(self.match_vx("EBB argument must be a vx value"));
+        // ebb-arg ::= * Value(vx) ":" Type(t)
+        let vx = try!(self.match_value("EBB argument must be a value"));
         let vx_location = self.location;
-        // ebb-arg ::= ValueTable(vx) * ":" Type(t)
+        // ebb-arg ::= Value(vx) * ":" Type(t)
         try!(self.match_token(Token::Colon, "expected ':' after EBB argument"));
-        // ebb-arg ::= ValueTable(vx) ":" * Type(t)
+        // ebb-arg ::= Value(vx) ":" * Type(t)
         let t = try!(self.match_type("expected EBB argument type"));
         // Allocate the EBB argument and add the mapping.
         let value = ctx.function.append_ebb_arg(ebb, t);
-        ctx.add_vx(vx, value, &vx_location)
+        ctx.add_value(vx, value, &vx_location)
     }
 
     // Parse an instruction, append it to `ebb`.
     //
     // instruction ::= [inst-results "="] Opcode(opc) ...
-    // inst-results ::= ValueDirect(v) { "," ValueTable(vx) }
+    // inst-results ::= Value(v) { "," Value(vx) }
     //
     fn parse_instruction(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
-        // Result value numbers. First is a ValueDirect, remaining are ValueTable.
+        // Result value numbers.
         let mut results = Vec::new();
 
         // instruction ::=  * [inst-results "="] Opcode(opc) ...
-        if let Some(Token::ValueDirect(v)) = self.token() {
+        if let Some(Token::Value(v)) = self.token() {
             self.consume();
             results.push(v);
 
-            // inst-results ::= ValueDirect(v) * { "," ValueTable(vx) }
+            // inst-results ::= Value(v) * { "," Value(vx) }
             while self.optional(Token::Comma) {
-                // inst-results ::= ValueDirect(v) { "," * ValueTable(vx) }
-                results.push(try!(self.match_vx("expected vx result value")));
+                // inst-results ::= Value(v) { "," * Value(vx) }
+                results.push(try!(self.match_value("expected result value")));
             }
 
             try!(self.match_token(Token::Equal, "expected '=' before opcode"));
@@ -576,7 +551,7 @@ impl<'a> Parser<'a> {
         if !results.is_empty() {
             assert!(results.len() == 1, "Multiple results not implemented");
             let result = ctx.function.first_result(inst);
-            try!(ctx.add_v(results[0], result, &self.location));
+            try!(ctx.add_value(results[0], result, &self.location));
         }
 
         ctx.function.append_inst(ebb, inst);

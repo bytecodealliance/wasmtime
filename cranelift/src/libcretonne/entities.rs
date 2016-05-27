@@ -24,13 +24,22 @@ use std::fmt::{self, Display, Formatter, Write};
 use std::u32;
 
 /// An opaque reference to an extended basic block in a function.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Ebb(u32);
 
 impl Ebb {
     pub fn new(index: usize) -> Ebb {
         assert!(index < (u32::MAX as usize));
         Ebb(index as u32)
+    }
+
+    /// Create a new EBB reference from its number. This corresponds to the ebbNN representation.
+    pub fn with_number(n: u32) -> Option<Ebb> {
+        if n < u32::MAX {
+            Some(Ebb(n))
+        } else {
+            None
+        }
     }
 
     pub fn index(&self) -> usize {
@@ -54,9 +63,8 @@ impl Default for Ebb {
     }
 }
 
-
 /// An opaque reference to an instruction in a function.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Inst(u32);
 
 impl Inst {
@@ -88,7 +96,7 @@ impl Default for Inst {
 
 
 /// An opaque reference to an SSA value.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Value(u32);
 
 // Value references can either reference an instruction directly, or they can refer to the extended
@@ -105,12 +113,29 @@ pub enum ExpandedValue {
 }
 
 impl Value {
-    pub fn direct_from_number(n: u32) -> Value {
-        let encoding = n * 2;
-        assert!(encoding < u32::MAX);
-        Value(encoding)
+    /// Create a `Direct` value from its number representation.
+    /// This is the number in the vNN notation.
+    pub fn direct_with_number(n: u32) -> Option<Value> {
+        if n < u32::MAX / 2 {
+            let encoding = n * 2;
+            assert!(encoding < u32::MAX);
+            Some(Value(encoding))
+        } else {
+            None
+        }
     }
 
+    /// Create a `Table` value from its number representation.
+    /// This is the number in the vxNN notation.
+    pub fn table_with_number(n: u32) -> Option<Value> {
+        if n < u32::MAX / 2 {
+            let encoding = n * 2 + 1;
+            assert!(encoding < u32::MAX);
+            Some(Value(encoding))
+        } else {
+            None
+        }
+    }
     pub fn new_direct(i: Inst) -> Value {
         let encoding = i.index() * 2;
         assert!(encoding < u32::MAX as usize);
@@ -160,7 +185,7 @@ impl Default for Value {
 }
 
 /// An opaque reference to a stack slot.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct StackSlot(u32);
 
 impl StackSlot {
@@ -191,7 +216,7 @@ impl Default for StackSlot {
 }
 
 /// An opaque reference to a jump table.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct JumpTable(u32);
 
 impl JumpTable {
@@ -218,5 +243,33 @@ pub const NO_JUMP_TABLE: JumpTable = JumpTable(u32::MAX);
 impl Default for JumpTable {
     fn default() -> JumpTable {
         NO_JUMP_TABLE
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::u32;
+
+    #[test]
+    fn value_with_number() {
+        assert_eq!(Value::direct_with_number(0).unwrap().to_string(), "v0");
+        assert_eq!(Value::direct_with_number(1).unwrap().to_string(), "v1");
+        assert_eq!(Value::table_with_number(0).unwrap().to_string(), "vx0");
+        assert_eq!(Value::table_with_number(1).unwrap().to_string(), "vx1");
+
+        assert_eq!(Value::direct_with_number(u32::MAX / 2), None);
+        assert_eq!(match Value::direct_with_number(u32::MAX / 2 - 1).unwrap().expand() {
+                       ExpandedValue::Direct(i) => i.index() as u32,
+                       _ => u32::MAX,
+                   },
+                   u32::MAX / 2 - 1);
+
+        assert_eq!(Value::table_with_number(u32::MAX / 2), None);
+        assert_eq!(match Value::table_with_number(u32::MAX / 2 - 1).unwrap().expand() {
+                       ExpandedValue::Table(i) => i as u32,
+                       _ => u32::MAX,
+                   },
+                   u32::MAX / 2 - 1);
     }
 }

@@ -7,6 +7,7 @@
 
 use std::str::CharIndices;
 use cretonne::types;
+use cretonne::entities::{Value, Ebb};
 
 /// The location of a `Token` or `Error`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,9 +36,8 @@ pub enum Token<'a> {
     Float(&'a str), // Floating point immediate
     Integer(&'a str), // Integer immediate
     Type(types::Type), // i32, f32, b32x4, ...
-    ValueDirect(u32), // v12
-    ValueTable(u32), // vx7
-    Ebb(u32), // ebb3
+    Value(Value), // v12, vx7
+    Ebb(Ebb), // ebb3
     StackSlot(u32), // ss3
     Identifier(&'a str), // Unrecognized identifier (opcode, enumerator, ...)
 }
@@ -289,9 +289,9 @@ impl<'a> Lexer<'a> {
         };
 
         match prefix {
-            "v" => Some(Token::ValueDirect(value)),
-            "vx" => Some(Token::ValueTable(value)),
-            "ebb" => Some(Token::Ebb(value)),
+            "v" => Value::direct_with_number(value).map(|v| Token::Value(v)),
+            "vx" => Value::table_with_number(value).map(|v| Token::Value(v)),
+            "ebb" => Ebb::with_number(value).map(|ebb| Token::Ebb(ebb)),
             "ss" => Some(Token::StackSlot(value)),
             _ => None,
         }
@@ -374,6 +374,7 @@ impl<'a> Lexer<'a> {
 mod tests {
     use super::*;
     use cretonne::types;
+    use cretonne::entities::{Value, Ebb};
 
     fn token<'a>(token: Token<'a>, line: usize) -> Option<Result<LocatedToken<'a>, LocatedError>> {
         Some(super::token(token, Location { line_number: line }))
@@ -445,14 +446,17 @@ mod tests {
     fn lex_identifiers() {
         let mut lex = Lexer::new("v0 v00 vx01 ebb1234567890 ebb5234567890 entry v1x vx1 vxvx4 \
                                   function0 function b1 i32x4 f32x5");
-        assert_eq!(lex.next(), token(Token::ValueDirect(0), 1));
+        assert_eq!(lex.next(),
+                   token(Token::Value(Value::direct_with_number(0).unwrap()), 1));
         assert_eq!(lex.next(), token(Token::Identifier("v00"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("vx01"), 1));
-        assert_eq!(lex.next(), token(Token::Ebb(1234567890), 1));
+        assert_eq!(lex.next(),
+                   token(Token::Ebb(Ebb::with_number(1234567890).unwrap()), 1));
         assert_eq!(lex.next(), token(Token::Identifier("ebb5234567890"), 1));
         assert_eq!(lex.next(), token(Token::Entry, 1));
         assert_eq!(lex.next(), token(Token::Identifier("v1x"), 1));
-        assert_eq!(lex.next(), token(Token::ValueTable(1), 1));
+        assert_eq!(lex.next(),
+                   token(Token::Value(Value::table_with_number(1).unwrap()), 1));
         assert_eq!(lex.next(), token(Token::Identifier("vxvx4"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("function0"), 1));
         assert_eq!(lex.next(), token(Token::Function, 1));
