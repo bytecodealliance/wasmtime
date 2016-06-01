@@ -1,7 +1,7 @@
 //! Representation of Cretonne IL functions.
 
 use types::{Type, FunctionName, Signature};
-use entities::*;
+use entities::{Ebb, NO_EBB, Inst, NO_INST, Value, NO_VALUE, ExpandedValue, StackSlot};
 use instructions::*;
 use std::fmt::{self, Display, Formatter};
 use std::ops::{Index, IndexMut};
@@ -502,7 +502,6 @@ impl<'a> Iterator for Values<'a> {
 mod tests {
     use super::*;
     use types;
-    use entities::*;
     use instructions::*;
 
     #[test]
