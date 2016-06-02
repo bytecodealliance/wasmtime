@@ -577,13 +577,11 @@ impl<'a> Parser<'a> {
         }
 
         // Now map the source result values to the just created instruction results.
-        // We need to copy the list of result values to avoid fighting the borrow checker.
-        let new_results: Vec<Value> = ctx.function.inst_results(inst).collect();
-        for (src, val) in results.iter().zip(new_results) {
-            try!(ctx.add_value(*src, val, &self.location));
-        }
-
-        Ok(())
+        // Pass a reference to `ctx.values` instead of `ctx` itself since the `Values` iterator
+        // holds a reference to `ctx.function`.
+        self.add_values(&mut ctx.values,
+                        results.into_iter(),
+                        ctx.function.inst_results(inst))
     }
 
     // Type inference for polymorphic instructions.
@@ -649,6 +647,24 @@ impl<'a> Parser<'a> {
 
         Ok(ctrl_type)
     }
+
+    // Add mappings for a list of source values to their corresponding new values.
+    fn add_values<S, V>(&self,
+                        values: &mut HashMap<Value, Value>,
+                        results: S,
+                        new_results: V)
+                        -> Result<()>
+        where S: Iterator<Item = Value>,
+              V: Iterator<Item = Value>
+    {
+        for (src, val) in results.zip(new_results) {
+            if values.insert(src, val).is_some() {
+                return Err(self.error_string(format!("duplicate result value: {}", src)));
+            }
+        }
+        Ok(())
+    }
+
 
     // Parse the operands following the instruction opcode.
     // This depends on the format of the opcode.
