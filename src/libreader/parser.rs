@@ -33,6 +33,23 @@ impl Display for Error {
 
 pub type Result<T> = result::Result<T, Error>;
 
+// Create an `Err` variant of `Result<X>` from a location and `format!` args.
+macro_rules! err {
+    ( $loc:expr, $msg:expr ) => {
+        Err(Error {
+            location: $loc.clone(),
+            message: String::from($msg),
+        })
+    };
+
+    ( $loc:expr, $fmt:expr, $( $arg:expr ),+ ) => {
+        Err(Error {
+            location: $loc.clone(),
+            message: format!( $fmt, $( $arg ),+ ),
+        })
+    };
+}
+
 pub struct Parser<'a> {
     lex: Lexer<'a>,
 
@@ -42,7 +59,7 @@ pub struct Parser<'a> {
     lookahead: Option<Token<'a>>,
 
     // Location of lookahead.
-    location: Location,
+    loc: Location,
 }
 
 // Context for resolving references when parsing a single function.
@@ -69,10 +86,7 @@ impl Context {
     // Allocate a new stack slot and add a mapping number -> StackSlot.
     fn add_ss(&mut self, number: u32, data: StackSlotData, loc: &Location) -> Result<()> {
         if self.stack_slots.insert(number, self.function.make_stack_slot(data)).is_some() {
-            Err(Error {
-                location: loc.clone(),
-                message: format!("duplicate stack slot: ss{}", number),
-            })
+            err!(loc, "duplicate stack slot: ss{}", number)
         } else {
             Ok(())
         }
@@ -82,10 +96,7 @@ impl Context {
     fn add_ebb(&mut self, src_ebb: Ebb, loc: &Location) -> Result<Ebb> {
         let ebb = self.function.make_ebb();
         if self.ebbs.insert(src_ebb, ebb).is_some() {
-            Err(Error {
-                location: loc.clone(),
-                message: format!("duplicate EBB: {}", src_ebb),
-            })
+            err!(loc, "duplicate EBB: {}", src_ebb)
         } else {
             Ok(ebb)
         }
@@ -94,10 +105,7 @@ impl Context {
     // Add a value mapping src_val -> data.
     fn add_value(&mut self, src_val: Value, data: Value, loc: &Location) -> Result<()> {
         if self.values.insert(src_val, data).is_some() {
-            Err(Error {
-                location: loc.clone(),
-                message: format!("duplicate value: {}", src_val),
-            })
+            err!(loc, "duplicate value: {}", src_val)
         } else {
             Ok(())
         }
@@ -111,7 +119,7 @@ impl<'a> Parser<'a> {
             lex: Lexer::new(text),
             lex_error: None,
             lookahead: None,
-            location: Location { line_number: 0 },
+            loc: Location { line_number: 0 },
         }
     }
 
@@ -131,11 +139,11 @@ impl<'a> Parser<'a> {
             match self.lex.next() {
                 Some(Ok(lexer::LocatedToken { token, location })) => {
                     self.lookahead = Some(token);
-                    self.location = location;
+                    self.loc = location;
                 }
                 Some(Err(lexer::LocatedError { error, location })) => {
                     self.lex_error = Some(error);
-                    self.location = location;
+                    self.loc = location;
                 }
                 None => {}
             }
@@ -143,29 +151,12 @@ impl<'a> Parser<'a> {
         return self.lookahead;
     }
 
-    // Generate an error.
-    fn error_string(&self, message: String) -> Error {
-        Error {
-            location: self.location,
-            message:
-                // If we have a lexer error latched, report that.
-                match self.lex_error {
-                    Some(lexer::Error::InvalidChar) => "invalid character".to_string(),
-                    None => message,
-                }
-        }
-    }
-
-    fn error(&self, message: &str) -> Error {
-        self.error_string(message.to_string())
-    }
-
     // Match and consume a token without payload.
     fn match_token(&mut self, want: Token<'a>, err_msg: &str) -> Result<Token<'a>> {
         if self.token() == Some(want) {
             Ok(self.consume())
         } else {
-            Err(self.error(err_msg))
+            err!(self.loc, err_msg)
         }
     }
 
@@ -185,7 +176,7 @@ impl<'a> Parser<'a> {
         if self.token() == Some(Token::Identifier(want)) {
             Ok(self.consume())
         } else {
-            Err(self.error(err_msg))
+            err!(self.loc, err_msg)
         }
     }
 
@@ -195,7 +186,7 @@ impl<'a> Parser<'a> {
             self.consume();
             Ok(t)
         } else {
-            Err(self.error(err_msg))
+            err!(self.loc, err_msg)
         }
     }
 
@@ -205,7 +196,7 @@ impl<'a> Parser<'a> {
             self.consume();
             Ok(ss)
         } else {
-            Err(self.error(err_msg))
+            err!(self.loc, err_msg)
         }
     }
 
@@ -215,7 +206,7 @@ impl<'a> Parser<'a> {
             self.consume();
             Ok(ebb)
         } else {
-            Err(self.error(err_msg))
+            err!(self.loc, err_msg)
         }
     }
 
@@ -226,7 +217,14 @@ impl<'a> Parser<'a> {
             self.consume();
             Ok(v)
         } else {
-            Err(self.error(err_msg))
+            err!(self.loc, err_msg)
+        }
+    }
+
+    fn error(&self, message: &str) -> Error {
+        Error {
+            location: self.loc.clone(),
+            message: message.to_string(),
         }
     }
 
@@ -238,7 +236,7 @@ impl<'a> Parser<'a> {
             // Parse it as an Imm64 to check for overflow and other issues.
             text.parse().map_err(|e| self.error(e))
         } else {
-            Err(self.error(err_msg))
+            err!(self.loc, err_msg)
         }
     }
 
@@ -250,7 +248,7 @@ impl<'a> Parser<'a> {
             // Parse it as an Ieee32 to check for the right number of digits and other issues.
             text.parse().map_err(|e| self.error(e))
         } else {
-            Err(self.error(err_msg))
+            err!(self.loc, err_msg)
         }
     }
 
@@ -262,7 +260,7 @@ impl<'a> Parser<'a> {
             // Parse it as an Ieee64 to check for the right number of digits and other issues.
             text.parse().map_err(|e| self.error(e))
         } else {
-            Err(self.error(err_msg))
+            err!(self.loc, err_msg)
         }
     }
 
@@ -323,7 +321,7 @@ impl<'a> Parser<'a> {
                 self.consume();
                 Ok(s.to_string())
             }
-            _ => Err(self.error("expected function name")),
+            _ => err!(self.loc, "expected function name"),
         }
     }
 
@@ -400,7 +398,7 @@ impl<'a> Parser<'a> {
             try!(match self.token() {
                 Some(Token::StackSlot(..)) => {
                     self.parse_stack_slot_decl()
-                        .and_then(|(num, dat)| ctx.add_ss(num, dat, &self.location))
+                        .and_then(|(num, dat)| ctx.add_ss(num, dat, &self.loc))
                 }
                 // More to come..
                 _ => return Ok(()),
@@ -419,7 +417,7 @@ impl<'a> Parser<'a> {
         // stack-slot-decl ::= StackSlot(ss) "=" "stack_slot" * Bytes {"," stack-slot-flag}
         let bytes = try!(self.match_imm64("expected byte-size in stack_slot decl")).to_bits();
         if bytes > u32::MAX as u64 {
-            return Err(self.error("stack slot too large"));
+            return err!(self.loc, "stack slot too large");
         }
         let data = StackSlotData::new(bytes as u32);
 
@@ -446,11 +444,11 @@ impl<'a> Parser<'a> {
     fn parse_extended_basic_block(&mut self, ctx: &mut Context) -> Result<()> {
         let is_entry = self.optional(Token::Entry);
         let ebb_num = try!(self.match_ebb("expected EBB header"));
-        let ebb = try!(ctx.add_ebb(ebb_num, &self.location));
+        let ebb = try!(ctx.add_ebb(ebb_num, &self.loc));
 
         if is_entry {
             if ctx.function.entry_block != NO_EBB {
-                return Err(self.error("multiple entry blocks in function"));
+                return err!(self.loc, "multiple entry blocks in function");
             }
             ctx.function.entry_block = ebb;
         }
@@ -503,7 +501,7 @@ impl<'a> Parser<'a> {
     fn parse_ebb_arg(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
         // ebb-arg ::= * Value(vx) ":" Type(t)
         let vx = try!(self.match_value("EBB argument must be a value"));
-        let vx_location = self.location;
+        let vx_location = self.loc;
         // ebb-arg ::= Value(vx) * ":" Type(t)
         try!(self.match_token(Token::Colon, "expected ':' after EBB argument"));
         // ebb-arg ::= Value(vx) ":" * Type(t)
@@ -541,10 +539,10 @@ impl<'a> Parser<'a> {
         let opcode = if let Some(Token::Identifier(text)) = self.token() {
             match text.parse() {
                 Ok(opc) => opc,
-                Err(msg) => return Err(self.error(msg)),
+                Err(msg) => return err!(self.loc, msg),
             }
         } else {
-            return Err(self.error("expected instruction opcode"));
+            return err!(self.loc, "expected instruction opcode");
         };
         self.consume();
 
@@ -570,10 +568,10 @@ impl<'a> Parser<'a> {
         ctx.function.append_inst(ebb, inst);
 
         if results.len() != num_results {
-            let m = format!("instruction produces {} result values, {} given",
-                            num_results,
-                            results.len());
-            return Err(self.error_string(m));
+            return err!(self.loc,
+                        "instruction produces {} result values, {} given",
+                        num_results,
+                        results.len());
         }
 
         // Now map the source result values to the just created instruction results.
@@ -614,14 +612,15 @@ impl<'a> Parser<'a> {
                     ctx.function.value_type(match ctx.values.get(&ctrl_src_value) {
                         Some(&v) => v,
                         None => {
-                            let m = format!("cannot determine type of operand {}", ctrl_src_value);
-                            return Err(self.error_string(m));
+                            return err!(self.loc,
+                                        "cannot determine type of operand {}",
+                                        ctrl_src_value);
                         }
                     })
                 } else if constraints.is_polymorphic() {
                     // This opcode does not support type inference, so the explicit type variable
                     // is required.
-                    return Err(self.error("type variable required for polymorphic opcode"));
+                    return err!(self.loc, "type variable required for polymorphic opcode");
                 } else {
                     // This is a non-polymorphic opcode. No typevar needed.
                     VOID
@@ -635,13 +634,15 @@ impl<'a> Parser<'a> {
         if let Some(typeset) = constraints.ctrl_typeset() {
             // This is a polymorphic opcode.
             if !typeset.contains(ctrl_type) {
-                let m = format!("{} is not a valid typevar for {}", ctrl_type, opcode);
-                return Err(self.error_string(m));
+                return err!(self.loc,
+                            "{} is not a valid typevar for {}",
+                            ctrl_type,
+                            opcode);
             }
         } else {
             // Treat it as a syntax error to speficy a typevar on a non-polymorphic opcode.
             if ctrl_type != VOID {
-                return Err(self.error_string(format!("{} does not take a typevar", opcode)));
+                return err!(self.loc, "{} does not take a typevar", opcode);
             }
         }
 
@@ -659,7 +660,7 @@ impl<'a> Parser<'a> {
     {
         for (src, val) in results.zip(new_results) {
             if values.insert(src, val).is_some() {
-                return Err(self.error_string(format!("duplicate result value: {}", src)));
+                return err!(self.loc, "duplicate result value: {}", src);
             }
         }
         Ok(())
