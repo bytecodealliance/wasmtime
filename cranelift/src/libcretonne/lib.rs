@@ -5,6 +5,8 @@
 //
 // ====------------------------------------------------------------------------------------==== //
 
+pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 pub mod types;
 pub mod immediates;
 pub mod entities;

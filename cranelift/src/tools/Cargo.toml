@@ -12,3 +12,5 @@ path = "main.rs"
 [dependencies]
 cretonne = { path = "../libcretonne" }
 cretonne-reader = { path = "../libreader" }
+docopt = "0.6.80"
+rustc-serialize = "0.3.19"
