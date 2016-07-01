@@ -66,7 +66,7 @@ pub const B64: Type = Type(11);
 
 impl Type {
     /// Get the lane type of this SIMD vector type.
-    /// 
+    ///
     /// A scalar type is the same as a SIMD vector type with one lane, so it returns itself.
     pub fn lane_type(self) -> Type {
         Type(self.0 & 0x0f)
