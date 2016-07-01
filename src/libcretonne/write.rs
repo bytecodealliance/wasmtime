@@ -16,7 +16,7 @@ pub fn write_function(w: &mut Write, func: &Function) -> Result {
     try!(writeln!(w, " {{"));
     let mut any = try!(write_preamble(w, func));
     for ebb in func.ebbs_numerically() {
-        if !any {
+        if any {
             try!(writeln!(w, ""));
         }
         try!(write_ebb(w, func, ebb));
@@ -209,14 +209,14 @@ mod tests {
 
         let ebb = f.make_ebb();
         assert_eq!(function_to_string(&f),
-                   "function foo() {\n    ss0 = stack_slot 4\nebb0:\n}\n");
+                   "function foo() {\n    ss0 = stack_slot 4\n\nebb0:\n}\n");
 
         f.append_ebb_arg(ebb, types::I8);
         assert_eq!(function_to_string(&f),
-                   "function foo() {\n    ss0 = stack_slot 4\nebb0(vx0: i8):\n}\n");
+                   "function foo() {\n    ss0 = stack_slot 4\n\nebb0(vx0: i8):\n}\n");
 
         f.append_ebb_arg(ebb, types::F32.by(4).unwrap());
         assert_eq!(function_to_string(&f),
-                   "function foo() {\n    ss0 = stack_slot 4\nebb0(vx0: i8, vx1: f32x4):\n}\n");
+                   "function foo() {\n    ss0 = stack_slot 4\n\nebb0(vx0: i8, vx1: f32x4):\n}\n");
     }
 }
