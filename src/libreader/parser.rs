@@ -539,7 +539,7 @@ impl<'a> Parser<'a> {
         let opcode = if let Some(Token::Identifier(text)) = self.token() {
             match text.parse() {
                 Ok(opc) => opc,
-                Err(msg) => return err!(self.loc, msg),
+                Err(msg) => return err!(self.loc, "{}: '{}'", msg, text),
             }
         } else {
             return err!(self.loc, "expected instruction opcode");
