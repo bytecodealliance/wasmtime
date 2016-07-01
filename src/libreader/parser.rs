@@ -608,7 +608,7 @@ impl<'a> Parser<'a> {
                     // explicitly. It is unfortunate that the correctness of IL depends on the
                     // layout of the blocks.
                     let ctrl_src_value = inst_data.typevar_operand()
-                                                  .expect("Constraints <-> Format inconsistency");
+                        .expect("Constraints <-> Format inconsistency");
                     ctx.function.value_type(match ctx.values.get(&ctrl_src_value) {
                         Some(&v) => v,
                         None => {
@@ -791,8 +791,8 @@ mod tests {
         assert_eq!(sig.return_types.len(), 0);
 
         let sig2 = Parser::new("(i8 inreg uext, f32, f64) -> i32 sext, f64")
-                       .parse_signature()
-                       .unwrap();
+            .parse_signature()
+            .unwrap();
         assert_eq!(sig2.to_string(),
                    "(i8 uext inreg, f32, f64) -> i32 sext, f64");
 
@@ -811,8 +811,8 @@ mod tests {
                                   ss3 = stack_slot 13
                                   ss1 = stack_slot 1
                                 }")
-                       .parse_function()
-                       .unwrap();
+            .parse_function()
+            .unwrap();
         assert_eq!(func.name, "foo");
         let mut iter = func.stack_slot_iter();
         let ss0 = iter.next().unwrap();
@@ -840,8 +840,8 @@ mod tests {
                                 ebb0:
                                 ebb4(vx3: i32):
                                 }")
-                       .parse_function()
-                       .unwrap();
+            .parse_function()
+            .unwrap();
         assert_eq!(func.name, "ebbs");
 
         let mut ebbs = func.ebbs_numerically();

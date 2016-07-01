@@ -148,8 +148,8 @@ impl Function {
         // Update the second_result pointer in `inst`.
         if head != NO_VALUE {
             *self.inst_mut(inst)
-                 .second_result_mut()
-                 .expect("instruction format doesn't allow multiple results") = head;
+                .second_result_mut()
+                .expect("instruction format doesn't allow multiple results") = head;
         }
         *self.inst_mut(inst).first_type_mut() = first_type;
 
