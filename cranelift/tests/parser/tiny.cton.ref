@@ -1,0 +1,4 @@
+function minimal() {
+ebb0:
+    trap
+}
