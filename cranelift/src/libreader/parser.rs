@@ -135,17 +135,23 @@ impl<'a> Parser<'a> {
 
     // Get the current lookahead token, after making sure there is one.
     fn token(&mut self) -> Option<Token<'a>> {
-        if self.lookahead == None {
+        while self.lookahead == None {
             match self.lex.next() {
                 Some(Ok(lexer::LocatedToken { token, location })) => {
-                    self.lookahead = Some(token);
+                    match token {
+                        Token::Comment(_) => {
+                            // Ignore comments.
+                        }
+                        _ => self.lookahead = Some(token),
+                    }
                     self.loc = location;
                 }
                 Some(Err(lexer::LocatedError { error, location })) => {
                     self.lex_error = Some(error);
                     self.loc = location;
+                    break;
                 }
-                None => {}
+                None => break,
             }
         }
         return self.lookahead;
