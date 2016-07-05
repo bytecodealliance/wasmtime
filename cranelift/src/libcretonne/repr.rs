@@ -1,6 +1,6 @@
 //! Representation of Cretonne IL functions.
 
-use types::{Type, FunctionName, Signature};
+use types::{Type, FunctionName, Signature, VOID};
 use entities::{Ebb, NO_EBB, Inst, NO_INST, Value, NO_VALUE, ExpandedValue, StackSlot};
 use instructions::*;
 use std::fmt::{self, Display, Formatter};
@@ -167,7 +167,11 @@ impl Function {
     pub fn inst_results<'a>(&'a self, inst: Inst) -> Values<'a> {
         Values {
             func: self,
-            cur: Value::new_direct(inst),
+            cur: if self[inst].first_type() == VOID {
+                NO_VALUE
+            } else {
+                Value::new_direct(inst)
+            },
         }
     }
 
@@ -538,6 +542,26 @@ mod tests {
         let ins = &func[inst];
         assert_eq!(ins.opcode(), Opcode::Iconst);
         assert_eq!(ins.first_type(), types::I32);
+
+        // Result iterator.
+        let mut res = func.inst_results(inst);
+        assert!(res.next().is_some());
+        assert!(res.next().is_none());
+    }
+
+    #[test]
+    fn no_results() {
+        let mut func = Function::new();
+
+        let idata = InstructionData::Nullary {
+            opcode: Opcode::Trap,
+            ty: types::VOID,
+        };
+        let inst = func.make_inst(idata);
+
+        // Result iterator should be empty.
+        let mut res = func.inst_results(inst);
+        assert_eq!(res.next(), None);
     }
 
     #[test]
