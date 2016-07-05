@@ -13,7 +13,8 @@ use lexer::{self, Lexer, Token};
 use cretonne::types::{Type, VOID, FunctionName, Signature, ArgumentType, ArgumentExtension};
 use cretonne::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::entities::*;
-use cretonne::instructions::{Opcode, InstructionFormat, InstructionData};
+use cretonne::instructions::{Opcode, InstructionFormat, InstructionData, VariableArgs, JumpData,
+                             BranchData};
 use cretonne::repr::{Function, StackSlotData};
 
 pub use lexer::Location;
@@ -672,6 +673,39 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    // Parse comma-separated value list into a VariableArgs struct.
+    //
+    // value_list ::= [ value { "," value } ]
+    //
+    fn parse_value_list(&mut self) -> Result<VariableArgs> {
+        let mut args = VariableArgs::new();
+
+        if let Some(Token::Value(v)) = self.token() {
+            args.push(v);
+            self.consume();
+        } else {
+            return Ok(args);
+        }
+
+        while self.optional(Token::Comma) {
+            args.push(try!(self.match_value("expected value in argument list")));
+        }
+
+        Ok(args)
+    }
+
+    // Parse an optional value list enclosed in parantheses.
+    fn parse_opt_value_list(&mut self) -> Result<VariableArgs> {
+        if !self.optional(Token::LPar) {
+            return Ok(VariableArgs::new());
+        }
+
+        let args = try!(self.parse_value_list());
+
+        try!(self.match_token(Token::RPar, "expected ')' after arguments"));
+
+        Ok(args)
+    }
 
     // Parse the operands following the instruction opcode.
     // This depends on the format of the opcode.
@@ -757,11 +791,37 @@ impl<'a> Parser<'a> {
                     args: [lhs, rhs],
                 }
             }
+            InstructionFormat::Jump => {
+                // Parse the destination EBB number. Don't translate source to local numbers yet.
+                let ebb_num = try!(self.match_ebb("expected jump destination EBB"));
+                let args = try!(self.parse_opt_value_list());
+                InstructionData::Jump {
+                    opcode: opcode,
+                    ty: VOID,
+                    data: Box::new(JumpData {
+                        destination: ebb_num,
+                        arguments: args,
+                    }),
+                }
+            }
+            InstructionFormat::Branch => {
+                let ctrl_arg = try!(self.match_value("expected SSA value control operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let ebb_num = try!(self.match_ebb("expected branch destination EBB"));
+                let args = try!(self.parse_opt_value_list());
+                InstructionData::Branch {
+                    opcode: opcode,
+                    ty: VOID,
+                    data: Box::new(BranchData {
+                        arg: ctrl_arg,
+                        destination: ebb_num,
+                        arguments: args,
+                    }),
+                }
+            }
             InstructionFormat::Select |
             InstructionFormat::InsertLane |
             InstructionFormat::ExtractLane |
-            InstructionFormat::Jump |
-            InstructionFormat::Branch |
             InstructionFormat::BranchTable |
             InstructionFormat::Call => {
                 unimplemented!();

@@ -1,0 +1,39 @@
+function minimal() {
+ebb0:
+    jump ebb1
+
+ebb1:
+    jump ebb0
+}
+
+function onearg(i32) {
+ebb0(vx0: i32):
+    jump ebb1(vx0)
+
+ebb1(vx1: i32):
+    jump ebb0(vx1)
+}
+
+function twoargs(i32, f32) {
+ebb0(vx0: i32, vx1: f32):
+    jump ebb1(vx0, vx1)
+
+ebb1(vx2: i32, vx3: f32):
+    jump ebb0(vx2, vx3)
+}
+
+function minimal(i32) {
+ebb0(vx0: i32):
+    brz vx0, ebb1
+
+ebb1:
+    brnz vx0, ebb1
+}
+
+function twoargs(i32, f32) {
+ebb0(vx0: i32, vx1: f32):
+    brz vx0, ebb1(vx0, vx1)
+
+ebb1(vx2: i32, vx3: f32):
+    brnz vx0, ebb0(vx2, vx3)
+}

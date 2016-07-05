@@ -207,6 +207,14 @@ impl VariableArgs {
     pub fn new() -> VariableArgs {
         VariableArgs(Vec::new())
     }
+
+    pub fn push(&mut self, v: Value) {
+        self.0.push(v)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl Display for VariableArgs {
@@ -233,13 +241,17 @@ impl Default for VariableArgs {
 /// in the allowed InstructionData size.
 #[derive(Debug)]
 pub struct JumpData {
-    destination: Ebb,
-    arguments: VariableArgs,
+    pub destination: Ebb,
+    pub arguments: VariableArgs,
 }
 
 impl Display for JumpData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}{}", self.destination, self.arguments)
+        if self.arguments.is_empty() {
+            write!(f, "{}", self.destination)
+        } else {
+            write!(f, "{}{}", self.destination, self.arguments)
+        }
     }
 }
 
@@ -247,14 +259,18 @@ impl Display for JumpData {
 /// in the allowed InstructionData size.
 #[derive(Debug)]
 pub struct BranchData {
-    arg: Value,
-    destination: Ebb,
-    arguments: VariableArgs,
+    pub arg: Value,
+    pub destination: Ebb,
+    pub arguments: VariableArgs,
 }
 
 impl Display for BranchData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}, {}{}", self.arg, self.destination, self.arguments)
+        try!(write!(f, "{}, {}", self.arg, self.destination));
+        if !self.arguments.is_empty() {
+            try!(write!(f, "{}", self.arguments));
+        }
+        Ok(())
     }
 }
 
