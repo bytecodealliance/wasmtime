@@ -1,0 +1,5 @@
+; The smallest possible function.
+function minimal() {
+ebb0:
+    trap
+}
