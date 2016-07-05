@@ -791,6 +791,18 @@ impl<'a> Parser<'a> {
                     args: [lhs, rhs],
                 }
             }
+            InstructionFormat::Select => {
+                let ctrl_arg = try!(self.match_value("expected SSA value control operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let true_arg = try!(self.match_value("expected SSA value true operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let false_arg = try!(self.match_value("expected SSA value false operand"));
+                InstructionData::Select {
+                    opcode: opcode,
+                    ty: VOID,
+                    args: [ctrl_arg, true_arg, false_arg],
+                }
+            }
             InstructionFormat::Jump => {
                 // Parse the destination EBB number. Don't translate source to local numbers yet.
                 let ebb_num = try!(self.match_ebb("expected jump destination EBB"));
@@ -819,7 +831,6 @@ impl<'a> Parser<'a> {
                     }),
                 }
             }
-            InstructionFormat::Select |
             InstructionFormat::InsertLane |
             InstructionFormat::ExtractLane |
             InstructionFormat::BranchTable |
