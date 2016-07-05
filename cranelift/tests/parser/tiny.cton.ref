@@ -2,3 +2,10 @@ function minimal() {
 ebb0:
     trap
 }
+
+function ivalues() {
+ebb0:
+    v0 = iconst.i32 2
+    v1 = iconst.i8 6
+    v2 = ishl v0, v1
+}

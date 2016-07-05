@@ -7,6 +7,7 @@
 use std::io::{self, Write};
 use repr::Function;
 use entities::{Inst, Ebb, Value};
+use types::Type;
 
 pub type Result = io::Result<()>;
 
@@ -126,6 +127,35 @@ pub fn write_ebb(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
 //
 // ====--------------------------------------------------------------------------------------====//
 
+// Should `inst` be printed with a type suffix?
+//
+// Polymorphic instructions may need a suffix indicating the value of the controlling type variable
+// if it can't be trivially inferred.
+//
+fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
+    let constraints = func[inst].opcode().constraints();
+
+    if !constraints.is_polymorphic() {
+        return None;
+    }
+
+    // If the controlling type variable can be inferred from the type of the designated value input
+    // operand, we don't need the type suffix.
+    // TODO: Should we include the suffix when the input value is defined in another block? The
+    // parser needs to know the type of the value, so it must be defined in a block that lexically
+    // comes before this one.
+    if constraints.use_typevar_operand() {
+        return None;
+    }
+
+    // This polymorphic instruction doesn't support basic type inference.
+    // The controlling type variable is required to be the type of the first result.
+    let rtype = func.value_type(func.first_result(inst));
+    assert!(!rtype.is_void(),
+            "Polymorphic instruction must produce a result");
+    Some(rtype)
+}
+
 pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
     try!(write!(w, "    "));
 
@@ -143,30 +173,34 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
         try!(write!(w, " = "));
     }
 
-    // Then the opcode and operands, depending on format.
+    // Then the opcode, possibly with a '.type' suffix.
+    let opcode = func[inst].opcode();
+
+    match type_suffix(func, inst) {
+        Some(suf) => try!(write!(w, "{}.{}", opcode, suf)),
+        None => try!(write!(w, "{}", opcode)),
+    }
+
+    // Then the operands, depending on format.
     use instructions::InstructionData::*;
     match func[inst] {
-        Nullary { opcode, .. } => writeln!(w, "{}", opcode),
-        Unary { opcode, arg, .. } => writeln!(w, "{} {}", opcode, arg),
-        UnaryImm { opcode, imm, .. } => writeln!(w, "{} {}", opcode, imm),
-        UnaryIeee32 { opcode, imm, .. } => writeln!(w, "{} {}", opcode, imm),
-        UnaryIeee64 { opcode, imm, .. } => writeln!(w, "{} {}", opcode, imm),
-        UnaryImmVector { opcode, .. } => writeln!(w, "{} [...]", opcode),
-        Binary { opcode, args, .. } => writeln!(w, "{} {}, {}", opcode, args[0], args[1]),
-        BinaryImm { opcode, arg, imm, .. } => writeln!(w, "{} {}, {}", opcode, arg, imm),
-        BinaryImmRev { opcode, imm, arg, .. } => writeln!(w, "{} {}, {}", opcode, imm, arg),
-        BinaryOverflow { opcode, args, .. } => writeln!(w, "{} {}, {}", opcode, args[0], args[1]),
-        Select { opcode, args, .. } => {
-            writeln!(w, "{} {}, {}, {}", opcode, args[0], args[1], args[2])
-        }
-        InsertLane { opcode, lane, args, .. } => {
-            writeln!(w, "{} {}, {}, {}", opcode, args[0], lane, args[1])
-        }
-        ExtractLane { opcode, lane, arg, .. } => writeln!(w, "{} {}, {}", opcode, arg, lane),
-        Jump { opcode, ref data, .. } => writeln!(w, "{} {}", opcode, data),
-        Branch { opcode, ref data, .. } => writeln!(w, "{} {}", opcode, data),
-        BranchTable { opcode, arg, table, .. } => writeln!(w, "{} {}, {}", opcode, arg, table),
-        Call { opcode, ref data, .. } => writeln!(w, "{} {}", opcode, data),
+        Nullary { .. } => writeln!(w, ""),
+        Unary { arg, .. } => writeln!(w, " {}", arg),
+        UnaryImm { imm, .. } => writeln!(w, " {}", imm),
+        UnaryIeee32 { imm, .. } => writeln!(w, " {}", imm),
+        UnaryIeee64 { imm, .. } => writeln!(w, " {}", imm),
+        UnaryImmVector { .. } => writeln!(w, " [...]"),
+        Binary { args, .. } => writeln!(w, " {}, {}", args[0], args[1]),
+        BinaryImm { arg, imm, .. } => writeln!(w, " {}, {}", arg, imm),
+        BinaryImmRev { imm, arg, .. } => writeln!(w, " {}, {}", imm, arg),
+        BinaryOverflow { args, .. } => writeln!(w, " {}, {}", args[0], args[1]),
+        Select { args, .. } => writeln!(w, " {}, {}, {}", args[0], args[1], args[2]),
+        InsertLane { lane, args, .. } => writeln!(w, " {}, {}, {}", args[0], lane, args[1]),
+        ExtractLane { lane, arg, .. } => writeln!(w, " {}, {}", arg, lane),
+        Jump { ref data, .. } => writeln!(w, " {}", data),
+        Branch { ref data, .. } => writeln!(w, " {}", data),
+        BranchTable { arg, table, .. } => writeln!(w, " {}, {}", arg, table),
+        Call { ref data, .. } => writeln!(w, " {}", data),
     }
 }
 
