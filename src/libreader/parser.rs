@@ -247,6 +247,19 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume a u8 immediate.
+    // This is used for lane numbers in SIMD vectors.
+    fn match_u8(&mut self, err_msg: &str) -> Result<u8> {
+        if let Some(Token::Integer(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like an integer.
+            // Parse it as a u8 to check for overflow and other issues.
+            text.parse().map_err(|_| self.error("expected u8 decimal immediate"))
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
     // Match and consume an Ieee32 immediate.
     fn match_ieee32(&mut self, err_msg: &str) -> Result<Ieee32> {
         if let Some(Token::Float(text)) = self.token() {
@@ -831,8 +844,30 @@ impl<'a> Parser<'a> {
                     }),
                 }
             }
-            InstructionFormat::InsertLane |
-            InstructionFormat::ExtractLane |
+            InstructionFormat::InsertLane => {
+                let lhs = try!(self.match_value("expected SSA value first operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let lane = try!(self.match_u8("expected lane number"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let rhs = try!(self.match_value("expected SSA value last operand"));
+                InstructionData::InsertLane {
+                    opcode: opcode,
+                    ty: VOID,
+                    lane: lane,
+                    args: [lhs, rhs],
+                }
+            }
+            InstructionFormat::ExtractLane => {
+                let arg = try!(self.match_value("expected SSA value last operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let lane = try!(self.match_u8("expected lane number"));
+                InstructionData::ExtractLane {
+                    opcode: opcode,
+                    ty: VOID,
+                    lane: lane,
+                    arg: arg,
+                }
+            }
             InstructionFormat::BranchTable |
             InstructionFormat::Call => {
                 unimplemented!();

@@ -14,3 +14,10 @@ function select() {
 ebb0(vx0: i32, vx1: i32, vx2: b1):
     v0 = select vx2, vx0, vx1
 }
+
+function lanes() {
+ebb0:
+    v0 = iconst.i32x4 2
+    v1 = extractlane v0, 3
+    v2 = insertlane v0, 1, v1
+}
