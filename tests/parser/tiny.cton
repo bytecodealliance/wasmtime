@@ -42,3 +42,11 @@ ebb0(vx0: f32, vx1: f32):
     v1 = fcmp uno, vx0, vx1
     v2 = fcmp lt, vx0, vx1
 }
+
+; The bitcast instruction has two type variables: The controlling type variable
+; controls the outout type, and the input type is a free variable.
+function bitcast(i32, f32) {
+ebb0(vx0: i32, vx1: f32):
+    v0 = bitcast.i8x4 vx0
+    v1 = bitcast.i32 vx1
+}
