@@ -194,7 +194,7 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
         BinaryImm { arg, imm, .. } => writeln!(w, " {}, {}", arg, imm),
         BinaryImmRev { imm, arg, .. } => writeln!(w, " {}, {}", imm, arg),
         BinaryOverflow { args, .. } => writeln!(w, " {}, {}", args[0], args[1]),
-        Select { args, .. } => writeln!(w, " {}, {}, {}", args[0], args[1], args[2]),
+        Ternary { args, .. } => writeln!(w, " {}, {}, {}", args[0], args[1], args[2]),
         InsertLane { lane, args, .. } => writeln!(w, " {}, {}, {}", args[0], lane, args[1]),
         ExtractLane { lane, arg, .. } => writeln!(w, " {}, {}", arg, lane),
         IntCompare { cond, args, .. } => writeln!(w, " {}, {}, {}", cond, args[0], args[1]),
