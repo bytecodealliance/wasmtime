@@ -159,7 +159,7 @@ pub enum InstructionData {
         second_result: Value,
         args: [Value; 2],
     },
-    Select {
+    Ternary {
         opcode: Opcode,
         ty: Type,
         args: [Value; 3],

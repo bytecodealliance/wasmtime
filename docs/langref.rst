@@ -771,73 +771,48 @@ Floating point operations
 These operations generally follow IEEE 754-2008 semantics.
 
 .. autoinst:: fcmp
+.. autoinst:: fadd
+.. autoinst:: fsub
+.. autoinst:: fmul
+.. autoinst:: fdiv
+.. autoinst:: sqrt
+.. autoinst:: fma
 
-.. inst:: fadd x,y
+Sign bit manipulations
+~~~~~~~~~~~~~~~~~~~~~~
 
-    Floating point addition.
+The sign manipulating instructions work as bitwise operations, so they don't
+have special behavior for signaling NaN operands. The exponent and trailing
+significand bits are always preserved.
 
-.. inst:: fsub x,y
+.. autoinst:: fneg
+.. autoinst:: fabs
+.. autoinst:: fcopysign
 
-    Floating point subtraction.
+Minimum and maximum
+~~~~~~~~~~~~~~~~~~~
 
-.. inst:: fneg x
+These instructions return the larger or smaller of their operands. They differ
+in their handling of quiet NaN inputs. Note that signaling NaN operands always
+cause a NaN result.
 
-    Floating point negation.
+When comparing zeroes, these instructions behave as if :math:`-0.0 < 0.0`.
 
-    :result: ``x`` with its sign bit inverted.
+.. autoinst:: fmin
+.. autoinst:: fminnum
+.. autoinst:: fmax
+.. autoinst:: fmaxnum
 
-    Note that this is a pure bitwise operation.
+Rounding
+~~~~~~~~
 
-.. inst:: fabs x
+These instructions round their argument to a nearby integral value, still
+represented as a floating point number.
 
-    Floating point absolute value.
-
-    :result: ``x`` with its sign bit cleared.
-
-    Note that this is a pure bitwise operation.
-
-.. inst::  a = fcopysign x, y
-
-    Floating point copy sign.
-
-    :result: ``x`` with its sign changed to that of ``y``.
-
-    Note that this is a pure bitwise operation. The sign bit from ``y`` is
-    copied to the sign bit of ``x``.
-
-.. inst:: a = fmul x, y
-.. inst:: a = fdiv x, y
-.. inst:: a = fmin x, y
-.. inst:: a = fminnum x, y
-.. inst:: a = fmax x, y
-.. inst:: a = fmaxnum x, y
-
-.. inst:: a = ceil x
-
-    Round floating point round to integral, towards positive infinity.
-
-.. inst:: floor x
-
-    Round floating point round to integral, towards negative infinity.
-
-.. inst:: trunc x
-
-    Round floating point round to integral, towards zero.
-
-.. inst:: nearest x
-
-    Round floating point round to integral, towards nearest with ties to even.
-
-.. inst:: sqrt x
-
-    Floating point square root.
-
-.. inst:: a = fma x, y, z
-
-    Floating point fused multiply-and-add.
-
-    Computes :math:`a := xy+z` wihtout any intermediate rounding of the
-    product.
+.. autoinst:: ceil
+.. autoinst:: floor
+.. autoinst:: trunc
+.. autoinst:: nearest
 
 Conversion operations
 ---------------------

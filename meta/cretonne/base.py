@@ -548,7 +548,7 @@ popcnt = Instruction(
 #
 
 Float = TypeVar(
-        'Float', 'A scalar or vector floating point type type',
+        'Float', 'A scalar or vector floating point number',
         floats=True, simd=True)
 
 Cond = Operand('Cond', floatcc)
@@ -619,5 +619,146 @@ fcmp = Instruction(
         boolean vector with the results of lane-wise comparisons.
         """,
         ins=(Cond, x, y), outs=a)
+
+x = Operand('x', Float)
+y = Operand('y', Float)
+z = Operand('z', Float)
+a = Operand('a', Float, 'Result of applying operator to each lane')
+
+fadd = Instruction(
+        'fadd', r"""
+        Floating point addition.
+        """,
+        ins=(x, y), outs=a)
+
+fsub = Instruction(
+        'fsub', r"""
+        Floating point subtraction.
+        """,
+        ins=(x, y), outs=a)
+
+fmul = Instruction(
+        'fmul', r"""
+        Floating point multiplication.
+        """,
+        ins=(x, y), outs=a)
+
+fdiv = Instruction(
+        'fdiv', r"""
+        Floating point division.
+
+        Unlike the integer division instructions :cton:inst:`sdiv` and
+        :cton:inst:`udiv`, this can't trap. Division by zero is infinity or
+        NaN, depending on the dividend.
+        """,
+        ins=(x, y), outs=a)
+
+sqrt = Instruction(
+        'sqrt', r"""
+        Floating point square root.
+        """,
+        ins=x, outs=a)
+
+fma = Instruction(
+        'fma', r"""
+        Floating point fused multiply-and-add.
+
+        Computes :math:`a := xy+z` wihtout any intermediate rounding of the
+        product.
+        """,
+        ins=(x, y, z), outs=a)
+
+a = Operand('a', Float, '``x`` with its sign bit inverted')
+fneg = Instruction(
+        'fneg', r"""
+        Floating point negation.
+
+        Note that this is a pure bitwise operation.
+        """,
+        ins=x, outs=a)
+
+a = Operand('a', Float, '``x`` with its sign bit cleared')
+fabs = Instruction(
+        'fabs', r"""
+        Floating point absolute value.
+
+        Note that this is a pure bitwise operation.
+        """,
+        ins=x, outs=a)
+
+a = Operand('a', Float, '``x`` with its sign bit changed to that of ``y``')
+fcopysign = Instruction(
+        'fcopysign', r"""
+        Floating point copy sign.
+
+        Note that this is a pure bitwise operation. The sign bit from ``y`` is
+        copied to the sign bit of ``x``.
+        """,
+        ins=(x, y), outs=a)
+
+a = Operand('a', Float, 'The smaller of ``x`` and ``y``')
+
+fmin = Instruction(
+        'fmin', r"""
+        Floating point minimum, propagating NaNs.
+
+        If either operand is NaN, this returns a NaN.
+        """,
+        ins=(x, y), outs=a)
+
+fminnum = Instruction(
+        'fminnum', r"""
+        Floating point minimum, suppressing quiet NaNs.
+
+        If either operand is a quiet NaN, the other operand is returned. If
+        either operand is a signaling NaN, NaN is returned.
+        """,
+        ins=(x, y), outs=a)
+
+a = Operand('a', Float, 'The larger of ``x`` and ``y``')
+
+fmax = Instruction(
+        'fmax', r"""
+        Floating point maximum, propagating NaNs.
+
+        If either operand is NaN, this returns a NaN.
+        """,
+        ins=(x, y), outs=a)
+
+fmaxnum = Instruction(
+        'fmaxnum', r"""
+        Floating point maximum, suppressing quiet NaNs.
+
+        If either operand is a quiet NaN, the other operand is returned. If
+        either operand is a signaling NaN, NaN is returned.
+        """,
+        ins=(x, y), outs=a)
+
+a = Operand('a', Float, '``x`` rounded to integral value')
+
+ceil = Instruction(
+        'ceil', r"""
+        Round floating point round to integral, towards positive infinity.
+        """,
+        ins=x, outs=a)
+
+floor = Instruction(
+        'floor', r"""
+        Round floating point round to integral, towards negative infinity.
+        """,
+        ins=x, outs=a)
+
+trunc = Instruction(
+        'trunc', r"""
+        Round floating point round to integral, towards zero.
+        """,
+        ins=x, outs=a)
+
+nearest = Instruction(
+        'nearest', r"""
+        Round floating point round to integral, towards nearest with ties to
+        even.
+        """,
+        ins=x, outs=a)
 
 instructions.close()

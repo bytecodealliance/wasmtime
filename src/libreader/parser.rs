@@ -815,13 +815,15 @@ impl<'a> Parser<'a> {
                     args: [lhs, rhs],
                 }
             }
-            InstructionFormat::Select => {
+            InstructionFormat::Ternary => {
+                // Names here refer to the `select` instruction.
+                // This format is also use by `fma`.
                 let ctrl_arg = try!(self.match_value("expected SSA value control operand"));
                 try!(self.match_token(Token::Comma, "expected ',' between operands"));
                 let true_arg = try!(self.match_value("expected SSA value true operand"));
                 try!(self.match_token(Token::Comma, "expected ',' between operands"));
                 let false_arg = try!(self.match_value("expected SSA value false operand"));
-                InstructionData::Select {
+                InstructionData::Ternary {
                     opcode: opcode,
                     ty: VOID,
                     args: [ctrl_arg, true_arg, false_arg],
