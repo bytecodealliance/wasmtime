@@ -761,4 +761,29 @@ nearest = Instruction(
         """,
         ins=x, outs=a)
 
+
+#
+# Conversions
+#
+
+Mem = TypeVar(
+        'Mem', 'Any type that can be stored in memory',
+        ints=True, floats=True, simd=True)
+MemTo = TypeVar(
+        'MemTo', 'Any type that can be stored in memory',
+        ints=True, floats=True, simd=True)
+
+x = Operand('x', Mem)
+a = Operand('a', MemTo, 'Bits of `x` reinterpreted')
+
+bitcast = Instruction(
+        'bitcast', r"""
+        Reinterpret the bits in `x` as a different type.
+
+        The input and output types must be storable to memory and of the same
+        size. A bitcast is equivalent to storing one type and loading the other
+        type from the same address.
+        """,
+        ins=x, outs=a)
+
 instructions.close()

@@ -817,14 +817,7 @@ represented as a floating point number.
 Conversion operations
 ---------------------
 
-.. inst:: a = bitcast x
-
-    Reinterpret the bits in ``x`` as a different type.
-
-    The input and output types must be storable to memory and of the same size.
-    A bitcast is equivalent to storing one type and loading the other type from
-    the same address.
-
+.. autoinst:: bitcast
 .. inst:: a = itrunc x
 .. inst:: a = uext x
 .. inst:: a = sext x

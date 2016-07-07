@@ -651,7 +651,10 @@ impl<'a> Parser<'a> {
                 } else if constraints.is_polymorphic() {
                     // This opcode does not support type inference, so the explicit type variable
                     // is required.
-                    return err!(self.loc, "type variable required for polymorphic opcode");
+                    return err!(self.loc,
+                                "type variable required for polymorphic opcode, e.g. '{}.{}'",
+                                opcode,
+                                constraints.ctrl_typeset().unwrap().example());
                 } else {
                     // This is a non-polymorphic opcode. No typevar needed.
                     VOID

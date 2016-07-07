@@ -432,6 +432,30 @@ impl ValueTypeSet {
         };
         allowed && self.is_base_type(typ.lane_type())
     }
+
+    /// Get an example member of this type set.
+    ///
+    /// This is used for error messages to avoid suggesting invalid types.
+    pub fn example(&self) -> Type {
+        if self.base != types::VOID {
+            return self.base;
+        }
+        let t = if self.all_ints {
+            types::I32
+        } else if self.all_floats {
+            types::F32
+        } else if self.allow_scalars {
+            types::B1
+        } else {
+            types::B32
+        };
+
+        if self.allow_scalars {
+            t
+        } else {
+            t.by(4).unwrap()
+        }
+    }
 }
 
 /// Operand constraints. This describes the value type constraints on a single `Value` operand.
@@ -505,5 +529,50 @@ mod tests {
         // It would be fine with a data structure smaller than 16 bytes, but what are the odds of
         // that?
         assert_eq!(mem::size_of::<InstructionData>(), 16);
+    }
+
+    #[test]
+    fn value_set() {
+        use types::*;
+
+        let vts = ValueTypeSet {
+            allow_scalars: true,
+            allow_simd: true,
+            base: VOID,
+            all_ints: true,
+            all_floats: false,
+            all_bools: true,
+        };
+        assert_eq!(vts.example().to_string(), "i32");
+
+        let vts = ValueTypeSet {
+            allow_scalars: true,
+            allow_simd: true,
+            base: VOID,
+            all_ints: false,
+            all_floats: true,
+            all_bools: true,
+        };
+        assert_eq!(vts.example().to_string(), "f32");
+
+        let vts = ValueTypeSet {
+            allow_scalars: false,
+            allow_simd: true,
+            base: VOID,
+            all_ints: false,
+            all_floats: true,
+            all_bools: true,
+        };
+        assert_eq!(vts.example().to_string(), "f32x4");
+
+        let vts = ValueTypeSet {
+            allow_scalars: false,
+            allow_simd: true,
+            base: VOID,
+            all_ints: false,
+            all_floats: false,
+            all_bools: true,
+        };
+        assert_eq!(vts.example().to_string(), "b32x4");
     }
 }
