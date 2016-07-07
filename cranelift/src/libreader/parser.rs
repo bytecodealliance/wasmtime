@@ -8,6 +8,7 @@
 use std::collections::HashMap;
 use std::result;
 use std::fmt::{self, Display, Formatter, Write};
+use std::str::FromStr;
 use std::u32;
 use lexer::{self, Lexer, Token};
 use cretonne::types::{Type, VOID, FunctionName, Signature, ArgumentType, ArgumentExtension};
@@ -249,7 +250,7 @@ impl<'a> Parser<'a> {
 
     // Match and consume a u8 immediate.
     // This is used for lane numbers in SIMD vectors.
-    fn match_u8(&mut self, err_msg: &str) -> Result<u8> {
+    fn match_uimm8(&mut self, err_msg: &str) -> Result<u8> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
@@ -279,6 +280,16 @@ impl<'a> Parser<'a> {
             // Lexer just gives us raw text that looks like a float.
             // Parse it as an Ieee64 to check for the right number of digits and other issues.
             text.parse().map_err(|e| self.error(e))
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume an enumerated immediate, like one of the condition codes.
+    fn match_enum<T: FromStr>(&mut self, err_msg: &str) -> Result<T> {
+        if let Some(Token::Identifier(text)) = self.token() {
+            self.consume();
+            text.parse().map_err(|_| self.error(err_msg))
         } else {
             err!(self.loc, err_msg)
         }
@@ -847,7 +858,7 @@ impl<'a> Parser<'a> {
             InstructionFormat::InsertLane => {
                 let lhs = try!(self.match_value("expected SSA value first operand"));
                 try!(self.match_token(Token::Comma, "expected ',' between operands"));
-                let lane = try!(self.match_u8("expected lane number"));
+                let lane = try!(self.match_uimm8("expected lane number"));
                 try!(self.match_token(Token::Comma, "expected ',' between operands"));
                 let rhs = try!(self.match_value("expected SSA value last operand"));
                 InstructionData::InsertLane {
@@ -860,12 +871,38 @@ impl<'a> Parser<'a> {
             InstructionFormat::ExtractLane => {
                 let arg = try!(self.match_value("expected SSA value last operand"));
                 try!(self.match_token(Token::Comma, "expected ',' between operands"));
-                let lane = try!(self.match_u8("expected lane number"));
+                let lane = try!(self.match_uimm8("expected lane number"));
                 InstructionData::ExtractLane {
                     opcode: opcode,
                     ty: VOID,
                     lane: lane,
                     arg: arg,
+                }
+            }
+            InstructionFormat::IntCompare => {
+                let cond = try!(self.match_enum("expected intcc condition code"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let lhs = try!(self.match_value("expected SSA value first operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let rhs = try!(self.match_value("expected SSA value second operand"));
+                InstructionData::IntCompare {
+                    opcode: opcode,
+                    ty: VOID,
+                    cond: cond,
+                    args: [lhs, rhs],
+                }
+            }
+            InstructionFormat::FloatCompare => {
+                let cond = try!(self.match_enum("expected floatcc condition code"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let lhs = try!(self.match_value("expected SSA value first operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let rhs = try!(self.match_value("expected SSA value second operand"));
+                InstructionData::FloatCompare {
+                    opcode: opcode,
+                    ty: VOID,
+                    cond: cond,
+                    args: [lhs, rhs],
                 }
             }
             InstructionFormat::BranchTable |

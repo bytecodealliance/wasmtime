@@ -6,7 +6,7 @@ support.
 """
 from . import TypeVar, Operand, Instruction, InstructionGroup, variable_args
 from types import i8, f32, f64
-from immediates import imm64, uimm8, ieee32, ieee64, immvector
+from immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
 import entities
 
 instructions = InstructionGroup("base", "Shared base instruction set")
@@ -216,6 +216,34 @@ extractlane = Instruction(
 #
 # Integer arithmetic
 #
+
+a = Operand('a', Int.as_bool())
+Cond = Operand('Cond', intcc)
+x = Operand('x', Int)
+y = Operand('y', Int)
+
+icmp = Instruction(
+        'icmp', r"""
+        Integer comparison.
+
+        The condition code determines if the operands are interpreted as signed
+        or unsigned integers.
+
+        ====== ======== =========
+        Signed Unsigned Condition
+        ====== ======== =========
+        eq     eq       Equal
+        ne     ne       Not equal
+        slt    ult      Less than
+        sge    uge      Greater than or equal
+        sgt    ugt      Greater than
+        sle    ule      Less than or equal
+        ====== ======== =========
+
+        When this instruction compares integer vectors, it returns a boolean
+        vector of lane-wise comparisons.
+        """,
+        ins=(Cond, x, y), outs=a)
 
 a = Operand('a', Int)
 x = Operand('x', Int)
@@ -514,5 +542,82 @@ popcnt = Instruction(
         Count the number of one bits in ``x``.
         """,
         ins=x, outs=a)
+
+#
+# Floating point.
+#
+
+Float = TypeVar(
+        'Float', 'A scalar or vector floating point type type',
+        floats=True, simd=True)
+
+Cond = Operand('Cond', floatcc)
+x = Operand('x', Float)
+y = Operand('y', Float)
+a = Operand('a', Float.as_bool())
+
+fcmp = Instruction(
+        'fcmp', r"""
+        Floating point comparison.
+
+        Two IEEE 754-2008 floating point numbers, `x` and `y`, relate to each
+        other in exactly one of four ways:
+
+        == ==========================================
+        UN Unordered when one or both numbers is NaN.
+        EQ When :math:`x = y`. (And :math:`0.0 = -0.0`).
+        LT When :math:`x < y`.
+        GT When :math:`x > y`.
+        == ==========================================
+
+        The 14 :type:`floatcc` condition codes each correspond to a subset of
+        the four relations, except for the empty set which would always be
+        false, and the full set which would always be true.
+
+        The condition codes are divided into 7 'ordered' conditions which don't
+        include UN, and 7 unordered conditions which all include UN.
+
+        +-------+------------+---------+------------+-------------------------+
+        |Ordered             |Unordered             |Condition                |
+        +=======+============+=========+============+=========================+
+        |ord    |EQ | LT | GT|uno      |UN          |NaNs absent / present.   |
+        +-------+------------+---------+------------+-------------------------+
+        |eq     |EQ          |ueq      |UN | EQ     |Equal                    |
+        +-------+------------+---------+------------+-------------------------+
+        |one    |LT | GT     |ne       |UN | LT | GT|Not equal                |
+        +-------+------------+---------+------------+-------------------------+
+        |lt     |LT          |ult      |UN | LT     |Less than                |
+        +-------+------------+---------+------------+-------------------------+
+        |le     |LT | EQ     |ule      |UN | LT | EQ|Less than or equal       |
+        +-------+------------+---------+------------+-------------------------+
+        |gt     |GT          |ugt      |UN | GT     |Greater than             |
+        +-------+------------+---------+------------+-------------------------+
+        |ge     |GT | EQ     |uge      |UN | GT | EQ|Greater than or equal    |
+        +-------+------------+---------+------------+-------------------------+
+
+        The standard C comparison operators, `<, <=, >, >=`, are all ordered,
+        so they are false if either operand is NaN. The C equality operator,
+        `==`, is ordered, and since inequality is defined as the logical
+        inverse it is *unordered*. They map to the :type:`floatcc` condition
+        codes as follows:
+
+        ==== ====== ============
+        C    `Cond` Subset
+        ==== ====== ============
+        `==` eq     EQ
+        `!=` ne     UN | LT | GT
+        `<`  lt     LT
+        `<=` le     LT | EQ
+        `>`  gt     GT
+        `>=` ge     GT | EQ
+        ==== ====== ============
+
+        This subset of condition codes also corresponds to the WebAssembly
+        floating point comparisons of the same name.
+
+        When this instruction compares floating point vectors, it returns a
+        boolean vector with the results of lane-wise comparisons.
+        """,
+        ins=(Cond, x, y), outs=a)
 
 instructions.close()

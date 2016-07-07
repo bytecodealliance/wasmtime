@@ -270,6 +270,14 @@ indicate the different kinds of immediate operands on an instruction.
     bits of the operand are interpreted as if the SIMD vector was loaded from
     memory containing the immediate.
 
+.. type:: intcc
+
+    An integer condition code. See the :inst:`icmp` instruction for details.
+
+.. type:: floatcc
+
+    A floating point condition code. See the :inst:`fcmp` instruction for details.
+
 The two IEEE floating point immediate types :type:`ieee32` and :type:`ieee64`
 are displayed as hexadecimal floating point literals in the textual IL format.
 Decimal floating point literals are not allowed because some computer systems
@@ -676,29 +684,7 @@ Vector operations
 Integer operations
 ------------------
 
-.. inst:: a = icmp Cond, x, y
-
-    Integer comparison.
-
-    :arg Cond: Condition code determining how ``x`` and ``y`` are compared.
-    :arg Int x: First value to compare.
-    :arg Int y: Second value to compare.
-    :result Logic a: With the same number of lanes as ``x`` and ``y``.
-
-    The condition code determines if the operands are interpreted as signed or
-    unsigned integers.
-
-    ====== ======== =========
-    Signed Unsigned Condition
-    ====== ======== =========
-    eq     eq       Equal
-    ne     ne       Not equal
-    slt    ult      Less than
-    sge    uge      Greater than or equal
-    sgt    ugt      Greater than
-    sle    ule      Less than or equal
-    ====== ======== =========
-
+.. autoinst:: icmp
 .. autoinst:: iadd
 .. autoinst:: iadd_imm
 .. autoinst:: isub
@@ -784,30 +770,7 @@ Floating point operations
 
 These operations generally follow IEEE 754-2008 semantics.
 
-.. inst:: a = fcmp Cond, x, y
-
-    Floating point comparison.
-
-    :arg Cond: Condition code determining how ``x`` and ``y`` are compared.
-    :arg x,y: Floating point scalar or vector values of the same type.
-    :rtype: :type:`b1` or :type:`b1xN` with the same number of lanes as
-            ``x`` and ``y``.
-
-    An 'ordered' condition code yields ``false`` if either operand is Nan.
-
-    An 'unordered' condition code yields ``true`` if either operand is Nan.
-
-    ======= ========= =========
-    Ordered Unordered Condition
-    ======= ========= =========
-    ord     uno       None (ord = no NaNs, uno = some NaNs)
-    oeq     ueq       Equal
-    one     une       Not equal
-    olt     ult       Less than
-    oge     uge       Greater than or equal
-    ogt     ugt       Greater than
-    ole     ule       Less than or equal
-    ======= ========= =========
+.. autoinst:: fcmp
 
 .. inst:: fadd x,y
 

@@ -26,3 +26,19 @@ ebb0:
     v1 = extractlane v0, 3
     v2 = insertlane v0, 1, v1
 }
+
+; Integer condition codes.
+function icmp(i32, i32) {
+ebb0(vx0: i32, vx1: i32):
+    v0 = icmp eq, vx0, vx1
+    v1 = icmp ult, vx0, vx1
+    v2 = icmp sge, vx0, vx1
+}
+
+; Floating condition codes.
+function fcmp(f32, f32) {
+ebb0(vx0: f32, vx1: f32):
+    v0 = fcmp eq, vx0, vx1
+    v1 = fcmp uno, vx0, vx1
+    v2 = fcmp lt, vx0, vx1
+}

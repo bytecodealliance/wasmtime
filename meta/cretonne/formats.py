@@ -8,7 +8,7 @@ in this module.
 
 
 from . import InstructionFormat, value, variable_args
-from immediates import imm64, uimm8, ieee32, ieee64, immvector
+from immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
 from entities import ebb, function, jump_table
 
 Nullary = InstructionFormat()
@@ -32,6 +32,9 @@ Select = InstructionFormat(value, value, value, typevar_operand=1)
 
 InsertLane = InstructionFormat(value, uimm8, value)
 ExtractLane = InstructionFormat(value, uimm8)
+
+IntCompare = InstructionFormat(intcc, value, value)
+FloatCompare = InstructionFormat(floatcc, value, value)
 
 Jump = InstructionFormat(ebb, variable_args, boxed_storage=True)
 Branch = InstructionFormat(value, ebb, variable_args, boxed_storage=True)

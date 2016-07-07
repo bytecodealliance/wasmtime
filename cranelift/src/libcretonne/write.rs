@@ -197,6 +197,8 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
         Select { args, .. } => writeln!(w, " {}, {}, {}", args[0], args[1], args[2]),
         InsertLane { lane, args, .. } => writeln!(w, " {}, {}, {}", args[0], lane, args[1]),
         ExtractLane { lane, arg, .. } => writeln!(w, " {}, {}", arg, lane),
+        IntCompare { cond, args, .. } => writeln!(w, " {}, {}, {}", cond, args[0], args[1]),
+        FloatCompare { cond, args, .. } => writeln!(w, " {}, {}, {}", cond, args[0], args[1]),
         Jump { ref data, .. } => writeln!(w, " {}", data),
         Branch { ref data, .. } => writeln!(w, " {}", data),
         BranchTable { arg, table, .. } => writeln!(w, " {}, {}", arg, table),

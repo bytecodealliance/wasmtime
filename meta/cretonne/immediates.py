@@ -29,3 +29,16 @@ ieee64 = ImmediateKind('ieee64', 'A 64-bit immediate floating point number.')
 
 #: A large SIMD vector constant.
 immvector = ImmediateKind('immvector', 'An immediate SIMD vector.')
+
+#: A condition code for comparing integer values.
+#:
+#: This enumerated operand kind is used for the :cton:inst:`icmp` instruction
+#: and corresponds to the `condcodes::IntCC` Rust type.
+intcc = ImmediateKind('intcc', 'An integer comparison condition code.')
+
+#: A condition code for comparing floating point values.
+#:
+#: This enumerated operand kind is used for the :cton:inst:`fcmp` instruction
+#: and corresponds to the `condcodes::FloatCC` Rust type.
+floatcc = ImmediateKind(
+        'floatcc', 'A floating point comparison condition code.')
