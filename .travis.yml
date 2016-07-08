@@ -3,4 +3,4 @@ rust:
   - stable
   - beta
   - nightly
-script: test-all.sh
+script: ./test-all.sh
