@@ -15,7 +15,7 @@ use cretonne::types::{Type, VOID, FunctionName, Signature, ArgumentType, Argumen
 use cretonne::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::entities::*;
 use cretonne::instructions::{Opcode, InstructionFormat, InstructionData, VariableArgs, JumpData,
-                             BranchData};
+                             BranchData, ReturnData};
 use cretonne::repr::{Function, StackSlotData};
 
 pub use lexer::Location;
@@ -201,7 +201,11 @@ impl Context {
                 }
 
                 InstructionData::Call { ref mut data, .. } => {
-                    try!(Self::rewrite_values(&self.values, &mut data.arguments, &loc));
+                    try!(Self::rewrite_values(&self.values, &mut data.args, &loc));
+                }
+
+                InstructionData::Return { ref mut data, .. } => {
+                    try!(Self::rewrite_values(&self.values, &mut data.args, &loc));
                 }
             }
         }
@@ -1013,6 +1017,14 @@ impl<'a> Parser<'a> {
                     ty: VOID,
                     cond: cond,
                     args: [lhs, rhs],
+                }
+            }
+            InstructionFormat::Return => {
+                let args = try!(self.parse_value_list());
+                InstructionData::Return {
+                    opcode: opcode,
+                    ty: VOID,
+                    data: Box::new(ReturnData { args: args }),
                 }
             }
             InstructionFormat::BranchTable |

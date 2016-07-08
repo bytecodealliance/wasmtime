@@ -43,6 +43,8 @@ BranchTable = InstructionFormat(value, jump_table)
 
 Call = InstructionFormat(
         function, variable_args, multiple_results=True, boxed_storage=True)
+Return = InstructionFormat(variable_args, boxed_storage=True)
+
 
 # Finally extract the names of global variables in this module.
 InstructionFormat.extract_names(globals())

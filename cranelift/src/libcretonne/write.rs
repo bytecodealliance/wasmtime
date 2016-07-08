@@ -203,6 +203,13 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
         Branch { ref data, .. } => writeln!(w, " {}", data),
         BranchTable { arg, table, .. } => writeln!(w, " {}, {}", arg, table),
         Call { ref data, .. } => writeln!(w, " {}", data),
+        Return { ref data, .. } => {
+            if data.args.is_empty() {
+                writeln!(w, "")
+            } else {
+                writeln!(w, " {}", data.args)
+            }
+        }
     }
 }
 

@@ -393,16 +393,7 @@ preamble`:
     :arg args...: Function arguments matching the signature of F.
     :result a,b,...: Return values matching the signature of F.
 
-.. inst:: return args...
-
-    Return from function.
-
-    Unconditionally transfer control to the calling function, passing the
-    provided return values.
-
-    :arg args: Return values. The list of return values must match the list of
-               return value types in the function signature.
-    :result: None. This is a terminator instruction.
+.. autoinst:: x_return
 
 This simple example illustrates direct function calls and signatures::
 

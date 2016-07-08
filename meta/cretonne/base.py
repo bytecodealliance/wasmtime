@@ -95,6 +95,18 @@ trapnz = Instruction(
         """,
         ins=c)
 
+rvals = Operand('rvals', variable_args, doc='return values')
+
+x_return = Instruction(
+        'return', r"""
+        Return from the function.
+
+        Unconditionally transfer control to the calling function, passing the
+        provided return values. The list of return values must match the
+        function signature's return types.
+        """,
+        ins=rvals)
+
 #
 # Materializing constants.
 #

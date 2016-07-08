@@ -210,6 +210,11 @@ pub enum InstructionData {
         ty: Type,
         data: Box<CallData>,
     },
+    Return {
+        opcode: Opcode,
+        ty: Type,
+        data: Box<ReturnData>,
+    },
 }
 
 /// A variable list of `Value` operands used for function call arguments and passing arguments to
@@ -248,7 +253,6 @@ impl DerefMut for VariableArgs {
 
 impl Display for VariableArgs {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        try!(write!(fmt, "("));
         for (i, val) in self.0.iter().enumerate() {
             if i == 0 {
                 try!(write!(fmt, "{}", val));
@@ -256,7 +260,7 @@ impl Display for VariableArgs {
                 try!(write!(fmt, ", {}", val));
             }
         }
-        write!(fmt, ")")
+        Ok(())
     }
 }
 
@@ -279,7 +283,7 @@ impl Display for JumpData {
         if self.arguments.is_empty() {
             write!(f, "{}", self.destination)
         } else {
-            write!(f, "{}{}", self.destination, self.arguments)
+            write!(f, "{}({})", self.destination, self.arguments)
         }
     }
 }
@@ -297,7 +301,7 @@ impl Display for BranchData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         try!(write!(f, "{}, {}", self.arg, self.destination));
         if !self.arguments.is_empty() {
-            try!(write!(f, "{}", self.arguments));
+            try!(write!(f, "({})", self.arguments));
         }
         Ok(())
     }
@@ -310,13 +314,20 @@ pub struct CallData {
     second_result: Value,
 
     // Dynamically sized array containing call argument values.
-    pub arguments: VariableArgs,
+    pub args: VariableArgs,
 }
 
 impl Display for CallData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "TBD{}", self.arguments)
+        write!(f, "TBD({})", self.args)
     }
+}
+
+/// Payload of a return instruction.
+#[derive(Debug)]
+pub struct ReturnData {
+    // Dynamically sized array containing return values.
+    pub args: VariableArgs,
 }
 
 impl InstructionData {
@@ -327,7 +338,7 @@ impl InstructionData {
             ty: return_type,
             data: Box::new(CallData {
                 second_result: NO_VALUE,
-                arguments: VariableArgs::new(),
+                args: VariableArgs::new(),
             }),
         }
     }
