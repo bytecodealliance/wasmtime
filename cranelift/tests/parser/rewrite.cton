@@ -1,0 +1,24 @@
+; The .cton parser can't preserve the actual entity numbers in the input file
+; since entities are numbered as they are created. For entities declared in the
+; preamble, this is no problem, but for EBB and value references, mapping
+; source numbers to real numbers can be a problem.
+;
+; It is possible to refer to instructions and EBBs that have not yet been
+; defined in the lexical order, so the parser needs to rewrite these references
+; after the fact.
+
+; Check that defining numbers are rewritten.
+function defs() {
+ebb100(v20: i32):
+    v1000 = iconst.i32x8 5
+    vx200 = f64const 0x4.0p0
+    trap
+}
+
+; Using values.
+function use_value() {
+ebb100(v20: i32):
+    v1000 = iadd_imm v20, 5
+    vx200 = iadd v20, v1000
+    jump ebb100(v1000)
+}

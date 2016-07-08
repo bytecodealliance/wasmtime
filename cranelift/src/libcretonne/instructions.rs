@@ -8,6 +8,7 @@
 
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
+use std::ops::{Deref, DerefMut};
 
 use entities::*;
 use immediates::*;
@@ -230,6 +231,21 @@ impl VariableArgs {
     }
 }
 
+// Coerce VariableArgs into a &[Value] slice.
+impl Deref for VariableArgs {
+    type Target = [Value];
+
+    fn deref<'a>(&'a self) -> &'a [Value] {
+        &self.0
+    }
+}
+
+impl DerefMut for VariableArgs {
+    fn deref_mut<'a>(&'a mut self) -> &'a mut [Value] {
+        &mut self.0
+    }
+}
+
 impl Display for VariableArgs {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         try!(write!(fmt, "("));
@@ -294,7 +310,7 @@ pub struct CallData {
     second_result: Value,
 
     // Dynamically sized array containing call argument values.
-    arguments: VariableArgs,
+    pub arguments: VariableArgs,
 }
 
 impl Display for CallData {
