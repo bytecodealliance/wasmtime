@@ -265,12 +265,17 @@ class InstDocumenter(sphinx.ext.autodoc.Documenter):
 
     def format_signature(self):
         inst = self.object
-        sig = self.format_name()
+        sig = inst.name
         if len(inst.outs) > 0:
             sig = ', '.join([op.name for op in inst.outs]) + ' = ' + sig
         if len(inst.ins) > 0:
-            sig = sig + ' ' + inst.ins[0].name
+            op = inst.ins[0]
+            sig += ' ' + op.name
+            # If the first input is variable-args, this is 'return'. No parens.
+            if op.typ.operand_kind().name == 'variable_args':
+                sig += '...'.format(op.name)
             for op in inst.ins[1:]:
+                # This is a call or branch with args in (...).
                 if op.typ.operand_kind().name == 'variable_args':
                     sig += '({}...)'.format(op.name)
                 else:
