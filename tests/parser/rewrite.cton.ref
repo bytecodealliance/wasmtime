@@ -1,0 +1,13 @@
+function defs() {
+ebb0(vx0: i32):
+    v0 = iconst.i32x8 5
+    v1 = f64const 0x1.0000000000000p2
+    trap
+}
+
+function "use_value"() {
+ebb0(vx0: i32):
+    v0 = iadd_imm vx0, 5
+    v1 = iadd vx0, v0
+    jump ebb0(v0)
+}

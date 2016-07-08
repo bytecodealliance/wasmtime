@@ -101,10 +101,6 @@ impl Function {
         inst
     }
 
-    fn inst_mut(&mut self, inst: Inst) -> &mut InstructionData {
-        &mut self.instructions[inst.index()]
-    }
-
     /// Create result values for an instruction that produces multiple results.
     ///
     /// Instructions that produce 0 or 1 result values only need to be created with `make_inst`. If
@@ -147,11 +143,11 @@ impl Function {
 
         // Update the second_result pointer in `inst`.
         if head != NO_VALUE {
-            *self.inst_mut(inst)
+            *self[inst]
                 .second_result_mut()
                 .expect("instruction format doesn't allow multiple results") = head;
         }
-        *self.inst_mut(inst).first_type_mut() = first_type;
+        *self[inst].first_type_mut() = first_type;
 
         fixed_results
     }
@@ -453,6 +449,13 @@ impl Index<Inst> for Function {
 
     fn index<'a>(&'a self, inst: Inst) -> &'a InstructionData {
         &self.instructions[inst.index()]
+    }
+}
+
+/// Allow mutable access to instructions via function indexing.
+impl IndexMut<Inst> for Function {
+    fn index_mut<'a>(&'a mut self, inst: Inst) -> &'a mut InstructionData {
+        &mut self.instructions[inst.index()]
     }
 }
 

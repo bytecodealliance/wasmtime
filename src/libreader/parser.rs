@@ -73,6 +73,9 @@ struct Context {
     stack_slots: HashMap<u32, StackSlot>, // ssNN
     ebbs: HashMap<Ebb, Ebb>, // ebbNN
     values: HashMap<Value, Value>, // vNN, vxNN
+
+    // Remember the location of every instruction.
+    inst_locs: Vec<(Inst, Location)>,
 }
 
 impl Context {
@@ -82,6 +85,7 @@ impl Context {
             stack_slots: HashMap::new(),
             ebbs: HashMap::new(),
             values: HashMap::new(),
+            inst_locs: Vec::new(),
         }
     }
 
@@ -111,6 +115,101 @@ impl Context {
         } else {
             Ok(())
         }
+    }
+
+    // Record the location of an instuction.
+    fn add_inst_loc(&mut self, inst: Inst, loc: &Location) {
+        self.inst_locs.push((inst, *loc));
+    }
+
+    // The parser creates all instructions with Ebb and Value references using the source file
+    // numbering. These references need to be rewritten after parsing is complete since forward
+    // references are allowed.
+
+    // Rewrite an Ebb reference.
+    fn rewrite_ebb(map: &HashMap<Ebb, Ebb>, ebb: &mut Ebb, loc: &Location) -> Result<()> {
+        match map.get(ebb) {
+            Some(&new) => {
+                *ebb = new;
+                Ok(())
+            }
+            None => err!(loc, "undefined reference: {}", ebb),
+        }
+    }
+
+    // Rewrite a value reference.
+    fn rewrite_value(map: &HashMap<Value, Value>, val: &mut Value, loc: &Location) -> Result<()> {
+        match map.get(val) {
+            Some(&new) => {
+                *val = new;
+                Ok(())
+            }
+            None => err!(loc, "undefined reference: {}", val),
+        }
+    }
+
+    // Rewrite a slice of value references.
+    fn rewrite_values(map: &HashMap<Value, Value>,
+                      vals: &mut [Value],
+                      loc: &Location)
+                      -> Result<()> {
+        for val in vals {
+            try!(Self::rewrite_value(map, val, loc));
+        }
+        Ok(())
+    }
+
+    // Rewrite all EBB and value references in the function.
+    fn rewrite_references(&mut self) -> Result<()> {
+        for &(inst, loc) in &self.inst_locs {
+            match self.function[inst] {
+                InstructionData::Nullary { .. } |
+                InstructionData::UnaryImm { .. } |
+                InstructionData::UnaryIeee32 { .. } |
+                InstructionData::UnaryIeee64 { .. } |
+                InstructionData::UnaryImmVector { .. } => {}
+
+                InstructionData::Unary { ref mut arg, .. } |
+                InstructionData::BinaryImm { ref mut arg, .. } |
+                InstructionData::BinaryImmRev { ref mut arg, .. } |
+                InstructionData::ExtractLane { ref mut arg, .. } |
+                InstructionData::BranchTable { ref mut arg, .. } => {
+                    try!(Self::rewrite_value(&self.values, arg, &loc));
+                }
+
+                InstructionData::Binary { ref mut args, .. } |
+                InstructionData::BinaryOverflow { ref mut args, .. } |
+                InstructionData::InsertLane { ref mut args, .. } |
+                InstructionData::IntCompare { ref mut args, .. } |
+                InstructionData::FloatCompare { ref mut args, .. } => {
+                    try!(Self::rewrite_values(&self.values, args, &loc));
+                }
+
+                InstructionData::Ternary { ref mut args, .. } => {
+                    try!(Self::rewrite_values(&self.values, args, &loc));
+                }
+
+                InstructionData::Jump { ref mut data, .. } => {
+                    try!(Self::rewrite_ebb(&self.ebbs, &mut data.destination, &loc));
+                    try!(Self::rewrite_values(&self.values, &mut data.arguments, &loc));
+                }
+
+                InstructionData::Branch { ref mut data, .. } => {
+                    try!(Self::rewrite_value(&self.values, &mut data.arg, &loc));
+                    try!(Self::rewrite_ebb(&self.ebbs, &mut data.destination, &loc));
+                    try!(Self::rewrite_values(&self.values, &mut data.arguments, &loc));
+                }
+
+                InstructionData::Call { ref mut data, .. } => {
+                    try!(Self::rewrite_values(&self.values, &mut data.arguments, &loc));
+                }
+            }
+        }
+
+        // TODO: Rewrite EBB references in jump tables. (Once jump table data structures are
+        // defined).
+
+        Ok(())
     }
 }
 
@@ -322,6 +421,10 @@ impl<'a> Parser<'a> {
         try!(self.parse_function_body(&mut ctx));
         // function ::= function-spec "{" preamble function-body * "}"
         try!(self.match_token(Token::RBrace, "expected '}' after function body"));
+
+        // Rewrite references to values and EBBs after parsing everuthing to allow forward
+        // references.
+        try!(ctx.rewrite_references());
 
         Ok(ctx.function)
     }
@@ -575,6 +678,7 @@ impl<'a> Parser<'a> {
         } else {
             return err!(self.loc, "expected instruction opcode");
         };
+        let opcode_loc = self.loc;
         self.consume();
 
         // Look for a controlling type variable annotation.
@@ -597,6 +701,7 @@ impl<'a> Parser<'a> {
         let inst = ctx.function.make_inst(inst_data);
         let num_results = ctx.function.make_inst_results(inst, ctrl_typevar);
         ctx.function.append_inst(ebb, inst);
+        ctx.add_inst_loc(inst, &opcode_loc);
 
         if results.len() != num_results {
             return err!(self.loc,
