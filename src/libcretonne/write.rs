@@ -63,7 +63,7 @@ fn write_spec(w: &mut Write, func: &Function) -> Result {
     if !needs_quotes(&func.name) {
         write!(w, "function {}{}", func.name, sig)
     } else {
-        write!(w, "function \"{}\" {}", escaped(&func.name), sig)
+        write!(w, "function \"{}\"{}", escaped(&func.name), sig)
     }
 }
 
@@ -234,7 +234,7 @@ mod tests {
     #[test]
     fn basic() {
         let mut f = Function::new();
-        assert_eq!(function_to_string(&f), "function \"\" () {\n}\n");
+        assert_eq!(function_to_string(&f), "function \"\"() {\n}\n");
 
         f.name.push_str("foo");
         assert_eq!(function_to_string(&f), "function foo() {\n}\n");
