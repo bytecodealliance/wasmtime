@@ -2,7 +2,7 @@
 //! Common types for the Cretonne code generator.
 
 use std::default::Default;
-use std::fmt::{self, Display, Formatter, Write};
+use std::fmt::{self, Display, Formatter};
 
 // ====--------------------------------------------------------------------------------------====//
 //

@@ -20,7 +20,7 @@
 //! format.
 
 use std::default::Default;
-use std::fmt::{self, Display, Formatter, Write};
+use std::fmt::{self, Display, Formatter};
 use std::u32;
 
 /// An opaque reference to an extended basic block in a function.

@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 use std::result;
-use std::fmt::{self, Display, Formatter, Write};
+use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use std::u32;
 use lexer::{self, Lexer, Token};
