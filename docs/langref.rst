@@ -818,9 +818,9 @@ Conversion operations
 ---------------------
 
 .. autoinst:: bitcast
-.. inst:: a = itrunc x
-.. inst:: a = uext x
-.. inst:: a = sext x
+.. autoinst:: ireduce
+.. autoinst:: uextend
+.. autoinst:: sextend
 .. inst:: a = ftrunc x
 .. inst:: a = fext x
 .. inst:: a = cvt_ftou x
