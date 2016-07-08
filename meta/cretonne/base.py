@@ -787,7 +787,9 @@ bitcast = Instruction(
         ins=x, outs=a)
 
 Int = TypeVar('Int', 'A scalar or vector integer type', ints=True, simd=True)
-IntTo = TypeVar('IntTo', 'A smaller integer type with the same number of lanes', ints=True, simd=True)
+IntTo = TypeVar(
+        'IntTo', 'A smaller integer type with the same number of lanes',
+        ints=True, simd=True)
 
 x = Operand('x', Int)
 a = Operand('a', IntTo)
@@ -801,22 +803,30 @@ ireduce = Instruction(
         :math:`2^n`.
 
         The result type must have the same number of vector lanes as the input,
-        and each lane must not have more bits that the input lanes. If the input
-        and output types are the same, this is a no-op.
+        and each lane must not have more bits that the input lanes. If the
+        input and output types are the same, this is a no-op.
         """,
         ins=x, outs=a)
+
+
+IntTo = TypeVar(
+        'IntTo', 'A larger integer type with the same number of lanes',
+        ints=True, simd=True)
+
+x = Operand('x', Int)
+a = Operand('a', IntTo)
 
 uextend = Instruction(
         'uextend', r"""
         Convert `x` to a larger integer type by zero-extending.
 
-        Each lane in `x` is converted to a larger integer type by adding zeroes.
-        The result has the same numerical value as `x` when both are interpreted
-        as unsigned integers.
+        Each lane in `x` is converted to a larger integer type by adding
+        zeroes. The result has the same numerical value as `x` when both are
+        interpreted as unsigned integers.
 
         The result type must have the same number of vector lanes as the input,
-        and each lane must not have fewer bits that the input lanes. If the input
-        and output types are the same, this is a no-op.
+        and each lane must not have fewer bits that the input lanes. If the
+        input and output types are the same, this is a no-op.
         """,
         ins=x, outs=a)
 
@@ -829,8 +839,97 @@ sextend = Instruction(
         are interpreted as signed integers.
 
         The result type must have the same number of vector lanes as the input,
-        and each lane must not have fewer bits that the input lanes. If the input
-        and output types are the same, this is a no-op.
+        and each lane must not have fewer bits that the input lanes. If the
+        input and output types are the same, this is a no-op.
         """,
         ins=x, outs=a)
+
+FloatTo = TypeVar(
+        'FloatTo', 'A scalar or vector floating point number',
+        floats=True, simd=True)
+
+x = Operand('x', Float)
+a = Operand('a', FloatTo)
+
+fpromote = Instruction(
+        'fcvt_ftof', r"""
+        Convert `x` to a larger floating point format.
+
+        Each lane in `x` is converted to the destination floating point format.
+        This is an exact operation.
+
+        Since Cretonne currently only supports two floating point formats, this
+        instruction always converts :type:`f32` to :type:`f64`. This may change
+        in the future.
+
+        The result type must have the same number of vector lanes as the input,
+        and the result lanes must be larger than the input lanes.
+        """,
+        ins=x, outs=a)
+
+fdemote = Instruction(
+        'fdemote', r"""
+        Convert `x` to a smaller floating point format.
+
+        Each lane in `x` is converted to the destination floating point format
+        by rounding to nearest, ties to even.
+
+        Since Cretonne currently only supports two floating point formats, this
+        instruction always converts :type:`f64` to :type:`f32`. This may change
+        in the future.
+
+        The result type must have the same number of vector lanes as the input,
+        and the result lanes must be smaller than the input lanes.
+        """,
+        ins=x, outs=a)
+
+x = Operand('x', Float)
+a = Operand('a', Int)
+
+fcvt_to_uint = Instruction(
+        'fcvt_to_uint', r"""
+        Convert floating point to unsigned integer.
+
+        Each lane in `x` is converted to an unsigned integer by rounding
+        towards zero. If `x` is NaN or if the unsigned integral value cannot be
+        represented in the result type, this instruction traps.
+
+        The result type must have the same number of vector lanes as the input.
+        """,
+        ins=x, outs=a)
+
+fcvt_to_sint = Instruction(
+        'fcvt_to_sint', r"""
+        Convert floating point to signed integer.
+
+        Each lane in `x` is converted to a signed integer by rounding towards
+        zero. If `x` is NaN or if the signed integral value cannot be
+        represented in the result type, this instruction traps.
+
+        The result type must have the same number of vector lanes as the input.
+        """,
+        ins=x, outs=a)
+
+fcvt_from_uint = Instruction(
+        'fcvt_from_uint', r"""
+        Convert unsigned integer to floating point.
+
+        Each lane in `x` is interpreted as an unsigned integer and converted to
+        floating point using round to nearest, ties to even.
+
+        The result type must have the same number of vector lanes as the input.
+        """,
+        ins=x, outs=a)
+
+fcvt_from_sint = Instruction(
+        'fcvt_from_sint', r"""
+        Convert signed integer to floating point.
+
+        Each lane in `x` is interpreted as a signed integer and converted to
+        floating point using round to nearest, ties to even.
+
+        The result type must have the same number of vector lanes as the input.
+        """,
+        ins=x, outs=a)
+
 instructions.close()
