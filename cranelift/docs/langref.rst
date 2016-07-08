@@ -83,11 +83,6 @@ instructions which behave more like variable accesses in a typical programming
 language. Cretonne can perform the necessary dataflow analysis to convert stack
 slots to SSA form.
 
-If all values are only used in the same EBB where they are defined, the
-function is said to be in :term:`local SSA form`. It is much faster for
-Cretonne to verify the correctness of a function in local SSA form since no
-complicated control flow analysis is required.
-
 
 Value types
 ===========
@@ -890,16 +885,3 @@ Glossary
     stack slot
         A fixed size memory allocation in the current function's activation
         frame. Also called a local variable.
-
-    local SSA form
-        A restricted version of SSA form where all values are defined and used
-        in the same EBB. A function is in local SSA form iff it is in SSA form
-        and:
-
-        - No branches pass arguments to their target EBB.
-        - Only the entry EBB may have arguments.
-
-        This also implies that there are no branches to the entry EBB.
-
-        Local SSA form is easy to generate and fast to verify. It passes data
-        between EBBs by using stack slots.
