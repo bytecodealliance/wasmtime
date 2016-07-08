@@ -786,4 +786,51 @@ bitcast = Instruction(
         """,
         ins=x, outs=a)
 
+Int = TypeVar('Int', 'A scalar or vector integer type', ints=True, simd=True)
+IntTo = TypeVar('IntTo', 'A smaller integer type with the same number of lanes', ints=True, simd=True)
+
+x = Operand('x', Int)
+a = Operand('a', IntTo)
+
+ireduce = Instruction(
+        'ireduce', r"""
+        Convert `x` to a smaller integer type by dropping high bits.
+
+        Each lane in `x` is converted to a smaller integer type by discarding
+        the most significant bits. This is the same as reducing modulo
+        :math:`2^n`.
+
+        The result type must have the same number of vector lanes as the input,
+        and each lane must not have more bits that the input lanes. If the input
+        and output types are the same, this is a no-op.
+        """,
+        ins=x, outs=a)
+
+uextend = Instruction(
+        'uextend', r"""
+        Convert `x` to a larger integer type by zero-extending.
+
+        Each lane in `x` is converted to a larger integer type by adding zeroes.
+        The result has the same numerical value as `x` when both are interpreted
+        as unsigned integers.
+
+        The result type must have the same number of vector lanes as the input,
+        and each lane must not have fewer bits that the input lanes. If the input
+        and output types are the same, this is a no-op.
+        """,
+        ins=x, outs=a)
+
+sextend = Instruction(
+        'sextend', r"""
+        Convert `x` to a larger integer type by sign-extending.
+
+        Each lane in `x` is converted to a larger integer type by replicating
+        the sign bit. The result has the same numerical value as `x` when both
+        are interpreted as signed integers.
+
+        The result type must have the same number of vector lanes as the input,
+        and each lane must not have fewer bits that the input lanes. If the input
+        and output types are the same, this is a no-op.
+        """,
+        ins=x, outs=a)
 instructions.close()
