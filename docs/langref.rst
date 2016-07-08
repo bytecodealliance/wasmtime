@@ -821,13 +821,12 @@ Conversion operations
 .. autoinst:: ireduce
 .. autoinst:: uextend
 .. autoinst:: sextend
-.. inst:: a = ftrunc x
-.. inst:: a = fext x
-.. inst:: a = cvt_ftou x
-.. inst:: a = cvt_ftos x
-.. inst:: a = cvt_utof x
-.. inst:: a = cvt_stof x
-
+.. autoinst:: fpromote
+.. autoinst:: fdemote
+.. autoinst:: fcvt_to_uint
+.. autoinst:: fcvt_to_sint
+.. autoinst:: fcvt_from_uint
+.. autoinst:: fcvt_from_sint
 
 Glossary
 ========
