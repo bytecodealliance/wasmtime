@@ -1,0 +1,13 @@
+; Parser tests for call and return syntax.
+
+function mini() {
+ebb1:
+    return
+}
+
+function r1() -> i32, f32 {
+ebb1:
+    v1 = iconst.i32 3
+    v2 = f32const 0.0
+    return v1, v2
+}
