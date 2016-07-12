@@ -24,7 +24,7 @@ use std::fmt::{self, Display, Formatter};
 use std::u32;
 
 /// An opaque reference to an extended basic block in a function.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Ebb(u32);
 
 impl Ebb {
@@ -64,7 +64,7 @@ impl Default for Ebb {
 }
 
 /// An opaque reference to an instruction in a function.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Inst(u32);
 
 impl Inst {
