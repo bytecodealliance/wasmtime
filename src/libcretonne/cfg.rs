@@ -202,8 +202,6 @@ mod tests {
         let nullary_inst = nullary(&mut func);
         func.append_inst(ebb1_malformed, nullary_inst);
 
-        // This jump should not be recorded since a nullary takes place
-        // before it appears.
         let jmp_ebb1_ebb0 = jump(&mut func, ebb0);
         func.append_inst(ebb1_malformed, jmp_ebb1_ebb0);
 
@@ -228,8 +226,6 @@ mod tests {
         let jmp_ebb1_ebb2 = jump(&mut func, ebb2);
         func.append_inst(ebb1_malformed, jmp_ebb1_ebb2);
 
-        // This branch should not be recorded since a jump takes place
-        // before it appears.
         let br_ebb1_ebb0 = branch(&mut func, ebb0);
         func.append_inst(ebb1_malformed, br_ebb1_ebb0);
 
