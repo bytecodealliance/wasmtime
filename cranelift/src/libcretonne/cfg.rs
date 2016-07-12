@@ -2,7 +2,7 @@
 //! Predecessors are denoted by tuples of EBB and branch/jump instructions. Each predecessor
 //! tuple corresponds to the end of a basic block.
 //!
-//!```c
+//! ```c
 //!     Ebb0:
 //!         ...          ; beginning of basic block
 //!
@@ -15,7 +15,7 @@
 //!         ...
 //!
 //!         jmp Ebb2     ; end of basic block
-//!```
+//! ```
 //!
 //! Here Ebb1 and Ebb2 would each have a single predecessor denoted as (Ebb0, `brz vx, Ebb1`)
 //! and (Ebb0, `jmp Ebb2`) respectively.
@@ -40,12 +40,11 @@ pub struct ControlFlowGraph {
 }
 
 impl ControlFlowGraph {
-
     /// During initialization mappings will be generated for any existing
     /// blocks within the CFG's associated function. Basic sanity checks will
     /// also be performed to ensure that the blocks are well formed.
     pub fn new(func: &Function) -> Result<ControlFlowGraph, String> {
-        let mut cfg = ControlFlowGraph{data: BTreeMap::new()};
+        let mut cfg = ControlFlowGraph { data: BTreeMap::new() };
 
         // Even ebbs without predecessors should show up in the CFG, albeit
         // with no entires.
@@ -76,7 +75,7 @@ impl ControlFlowGraph {
                     InstructionData::Nullary { ty: _, opcode: _ } => {
                         terminated = true;
                     }
-                    _ => ()
+                    _ => (),
                 }
             }
         }
@@ -89,16 +88,19 @@ impl ControlFlowGraph {
         self.data.insert(ebb, BTreeSet::new());
         match self.data.get_mut(&ebb) {
             Some(predecessors) => Ok(predecessors),
-            None => Err("Ebb initialization failed.")
+            None => Err("Ebb initialization failed."),
         }
     }
 
     /// Attempts to add a predecessor for some ebb, attempting to initialize
     /// any ebb which has no entry.
-    pub fn add_predecessor(&mut self, ebb: Ebb, predecessor: Predecessor) -> Result<(), &'static str> {
+    pub fn add_predecessor(&mut self,
+                           ebb: Ebb,
+                           predecessor: Predecessor)
+                           -> Result<(), &'static str> {
         let success = match self.data.get_mut(&ebb) {
             Some(predecessors) => predecessors.insert(predecessor),
-            None => false
+            None => false,
         };
 
         if success {
@@ -120,7 +122,7 @@ impl ControlFlowGraph {
 
     /// An iterator over all of the ebb to predecessor mappings in the CFG.
     pub fn iter<'a>(&'a self) -> btree_map::Iter<'a, Ebb, PredecessorSet> {
-       self.data.iter()
+        self.data.iter()
     }
 }
 
