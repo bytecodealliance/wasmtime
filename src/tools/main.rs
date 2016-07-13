@@ -11,12 +11,14 @@ use std::process;
 
 
 mod cat;
+mod print_cfg;
 
 const USAGE: &'static str = "
 Cretonne code generator utility
 
 Usage:
     cton-util cat <file>...
+    cton-util print-cfg <file>...
     cton-util --help | --version
 
 Options:
@@ -28,6 +30,7 @@ Options:
 #[derive(RustcDecodable, Debug)]
 struct Args {
     cmd_cat: bool,
+    cmd_print_cfg: bool,
     arg_file: Vec<String>,
 }
 
@@ -48,6 +51,8 @@ fn cton_util() -> CommandResult {
     // Find the sub-command to execute.
     if args.cmd_cat {
         cat::run(args.arg_file)
+    } else if args.cmd_print_cfg {
+        print_cfg::run(args.arg_file)
     } else {
         // Debugging / shouldn't happen with proper command line handling above.
         Err(format!("Unhandled args: {:?}", args))
