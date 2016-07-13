@@ -1,1 +1,5 @@
 *.pyc
+*.bk
+*.swp
+*.swo
+tags
