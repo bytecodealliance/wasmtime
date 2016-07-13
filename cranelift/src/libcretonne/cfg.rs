@@ -43,76 +43,42 @@ impl ControlFlowGraph {
     /// During initialization mappings will be generated for any existing
     /// blocks within the CFG's associated function. Basic sanity checks will
     /// also be performed to ensure that the blocks are well formed.
-    pub fn new(func: &Function) -> Result<ControlFlowGraph, String> {
+    pub fn new(func: &Function) -> ControlFlowGraph {
         let mut cfg = ControlFlowGraph { data: BTreeMap::new() };
 
         // Even ebbs without predecessors should show up in the CFG, albeit
         // with no entires.
         for ebb in func.ebbs_numerically() {
-            try!(cfg.init_ebb(ebb));
+            cfg.init_ebb(ebb);
         }
 
         for ebb in func.ebbs_numerically() {
             // Flips to true when a terminating instruction is seen. So that if additional
             // instructions occur an error may be returned.
-            let mut terminated = false;
             for inst in func.ebb_insts(ebb) {
-                if terminated {
-                    return Err(format!("{} contains unreachable instructions.", ebb));
-                }
-
                 match func[inst] {
                     InstructionData::Branch { ty: _, opcode: _, ref data } => {
-                        try!(cfg.add_predecessor(data.destination, (ebb, inst)));
+                        cfg.add_predecessor(data.destination, (ebb, inst));
                     }
                     InstructionData::Jump { ty: _, opcode: _, ref data } => {
-                        try!(cfg.add_predecessor(data.destination, (ebb, inst)));
-                        terminated = true;
-                    }
-                    InstructionData::Return { ty: _, opcode: _, data: _ } => {
-                        terminated = true;
-                    }
-                    InstructionData::Nullary { ty: _, opcode: _ } => {
-                        terminated = true;
+                        cfg.add_predecessor(data.destination, (ebb, inst));
                     }
                     _ => (),
                 }
             }
         }
-        Ok(cfg)
+        cfg
     }
 
     /// Initializes a predecessor set for some ebb. If an ebb already has an
     /// entry it will be clobbered.
-    pub fn init_ebb(&mut self, ebb: Ebb) -> Result<&mut PredecessorSet, &'static str> {
+    pub fn init_ebb(&mut self, ebb: Ebb) -> &mut PredecessorSet {
         self.data.insert(ebb, BTreeSet::new());
-        match self.data.get_mut(&ebb) {
-            Some(predecessors) => Ok(predecessors),
-            None => Err("Ebb initialization failed."),
-        }
+        self.data.get_mut(&ebb).unwrap()
     }
 
-    /// Attempts to add a predecessor for some ebb, attempting to initialize
-    /// any ebb which has no entry.
-    pub fn add_predecessor(&mut self,
-                           ebb: Ebb,
-                           predecessor: Predecessor)
-                           -> Result<(), &'static str> {
-        let success = match self.data.get_mut(&ebb) {
-            Some(predecessors) => predecessors.insert(predecessor),
-            None => false,
-        };
-
-        if success {
-            Ok(())
-        } else {
-            let mut predecessors = try!(self.init_ebb(ebb));
-            if predecessors.insert(predecessor) {
-                return Ok(());
-            }
-            Err("Predecessor insertion failed.")
-        }
-
+    pub fn add_predecessor(&mut self, ebb: Ebb, predecessor: Predecessor) {
+        self.data.get_mut(&ebb).unwrap().insert(predecessor);
     }
 
     /// Returns all of the predecessors for some ebb, if it has an entry.
@@ -135,13 +101,6 @@ mod tests {
     use types;
 
     // Some instructions will be re-used in several tests.
-
-    fn nullary(func: &mut Function) -> Inst {
-        func.make_inst(InstructionData::Nullary {
-            opcode: Opcode::Iconst,
-            ty: types::I32,
-        })
-    }
 
     fn jump(func: &mut Function, dest: Ebb) -> Inst {
         func.make_inst(InstructionData::Jump {
@@ -169,7 +128,7 @@ mod tests {
     #[test]
     fn empty() {
         let func = Function::new();
-        let cfg = ControlFlowGraph::new(&func).unwrap();
+        let cfg = ControlFlowGraph::new(&func);
         assert_eq!(None, cfg.iter().next());
     }
 
@@ -179,7 +138,7 @@ mod tests {
         func.make_ebb();
         func.make_ebb();
         func.make_ebb();
-        let cfg = ControlFlowGraph::new(&func).unwrap();
+        let cfg = ControlFlowGraph::new(&func);
         let nodes = cfg.iter().collect::<Vec<_>>();
         assert_eq!(nodes.len(), 3);
 
@@ -188,48 +147,6 @@ mod tests {
             assert_eq!(ebb.index(), fun_ebbs.next().unwrap().index());
             assert_eq!(predecessors.len(), 0);
         }
-    }
-
-    #[test]
-    #[should_panic(expected = "instructions")]
-    fn nullable_before_branch() {
-        // Ensure that branching after a nullary, within an ebb, triggers an error.
-        let mut func = Function::new();
-        let ebb0 = func.make_ebb();
-        let ebb1_malformed = func.make_ebb();
-        let ebb2 = func.make_ebb();
-
-        let nullary_inst = nullary(&mut func);
-        func.append_inst(ebb1_malformed, nullary_inst);
-
-        let jmp_ebb1_ebb0 = jump(&mut func, ebb0);
-        func.append_inst(ebb1_malformed, jmp_ebb1_ebb0);
-
-        let jmp_ebb0_ebb2 = jump(&mut func, ebb2);
-        func.append_inst(ebb0, jmp_ebb0_ebb2);
-
-        ControlFlowGraph::new(&func).unwrap();
-    }
-
-    #[test]
-    #[should_panic(expected = "instructions")]
-    fn jump_before_branch() {
-        // Ensure that branching after a jump, within an ebb, triggers an error.
-        let mut func = Function::new();
-        let ebb0 = func.make_ebb();
-        let ebb1_malformed = func.make_ebb();
-        let ebb2 = func.make_ebb();
-
-        let jmp_ebb0_ebb1 = jump(&mut func, ebb2);
-        func.append_inst(ebb0, jmp_ebb0_ebb1);
-
-        let jmp_ebb1_ebb2 = jump(&mut func, ebb2);
-        func.append_inst(ebb1_malformed, jmp_ebb1_ebb2);
-
-        let br_ebb1_ebb0 = branch(&mut func, ebb0);
-        func.append_inst(ebb1_malformed, br_ebb1_ebb0);
-
-        ControlFlowGraph::new(&func).unwrap();
     }
 
     #[test]
@@ -251,7 +168,7 @@ mod tests {
         let jmp_ebb1_ebb2 = jump(&mut func, ebb2);
         func.append_inst(ebb1, jmp_ebb1_ebb2);
 
-        let cfg = ControlFlowGraph::new(&func).unwrap();
+        let cfg = ControlFlowGraph::new(&func);
         let ebb0_predecessors = cfg.get_predecessors(ebb0).unwrap();
         let ebb1_predecessors = cfg.get_predecessors(ebb1).unwrap();
         let ebb2_predecessors = cfg.get_predecessors(ebb2).unwrap();
