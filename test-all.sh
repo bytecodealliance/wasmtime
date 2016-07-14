@@ -7,7 +7,7 @@
 # - Make a debug build of all crates.
 # - Make a release build of cton-util.
 # - Run file-level tests with the release build of cton-util.
-# 
+#
 # All tests run by this script should be passing at all times.
 
 # Exit immediately on errors.
@@ -35,5 +35,6 @@ export CTONUTIL="$topdir/src/tools/target/release/cton-util"
 echo ====== Parser tests ======
 cd "$topdir/tests"
 parser/run.sh
+cfg/run.sh
 
 echo ====== OK ======
