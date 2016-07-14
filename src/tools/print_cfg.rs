@@ -35,7 +35,7 @@ impl<T: Write> CFGPrinter<T> {
 
     pub fn print(&mut self, func: &Function) -> Result<(), String> {
         self.level = 0;
-        self.header();
+        self.header(func);
         self.push_indent();
         self.ebb_subgraphs(func);
         let cfg = ControlFlowGraph::new(&func);
@@ -87,8 +87,8 @@ impl<T: Write> CFGPrinter<T> {
         self.append("\n");
     }
 
-    fn header(&mut self) {
-        self.append("digraph ");
+    fn header(&mut self, func: &Function) {
+        self.append(&format!("digraph {} ", func.name));
         self.open_paren();
         self.newline();
         self.push_indent();
