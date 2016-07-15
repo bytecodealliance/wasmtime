@@ -13,6 +13,7 @@ pub mod immediates;
 pub mod entities;
 pub mod instructions;
 pub mod repr;
+pub mod layout;
 pub mod write;
 pub mod cfg;
 
