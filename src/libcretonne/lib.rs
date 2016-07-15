@@ -15,3 +15,5 @@ pub mod instructions;
 pub mod repr;
 pub mod write;
 pub mod cfg;
+
+pub mod entity_map;
