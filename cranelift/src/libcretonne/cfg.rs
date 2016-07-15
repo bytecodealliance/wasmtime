@@ -95,6 +95,7 @@ impl ControlFlowGraph {
 #[cfg(test)]
 mod tests {
     use instructions::*;
+    use entity_map::EntityRef;
     use entities::{Ebb, Inst, NO_VALUE};
     use repr::Function;
     use super::*;

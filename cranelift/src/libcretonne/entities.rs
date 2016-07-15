@@ -19,6 +19,7 @@
 //! The entity references all implement the `Display` trait in a way that matches the textual IL
 //! format.
 
+use entity_map::EntityRef;
 use std::default::Default;
 use std::fmt::{self, Display, Formatter};
 use std::u32;
@@ -27,12 +28,18 @@ use std::u32;
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Ebb(u32);
 
-impl Ebb {
-    pub fn new(index: usize) -> Ebb {
+impl EntityRef for Ebb {
+    fn new(index: usize) -> Self {
         assert!(index < (u32::MAX as usize));
         Ebb(index as u32)
     }
 
+    fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl Ebb {
     /// Create a new EBB reference from its number. This corresponds to the ebbNN representation.
     pub fn with_number(n: u32) -> Option<Ebb> {
         if n < u32::MAX {
@@ -40,10 +47,6 @@ impl Ebb {
         } else {
             None
         }
-    }
-
-    pub fn index(&self) -> usize {
-        self.0 as usize
     }
 }
 
@@ -67,13 +70,13 @@ impl Default for Ebb {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Inst(u32);
 
-impl Inst {
-    pub fn new(index: usize) -> Inst {
+impl EntityRef for Inst {
+    fn new(index: usize) -> Self {
         assert!(index < (u32::MAX as usize));
         Inst(index as u32)
     }
 
-    pub fn index(&self) -> usize {
+    fn index(self) -> usize {
         self.0 as usize
     }
 }
@@ -188,13 +191,13 @@ impl Default for Value {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct StackSlot(u32);
 
-impl StackSlot {
-    pub fn new(index: usize) -> StackSlot {
+impl EntityRef for StackSlot {
+    fn new(index: usize) -> StackSlot {
         assert!(index < (u32::MAX as usize));
         StackSlot(index as u32)
     }
 
-    pub fn index(&self) -> usize {
+    fn index(self) -> usize {
         self.0 as usize
     }
 }
@@ -219,13 +222,13 @@ impl Default for StackSlot {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct JumpTable(u32);
 
-impl JumpTable {
-    pub fn new(index: usize) -> JumpTable {
+impl EntityRef for JumpTable {
+    fn new(index: usize) -> JumpTable {
         assert!(index < (u32::MAX as usize));
         JumpTable(index as u32)
     }
 
-    pub fn index(&self) -> usize {
+    fn index(self) -> usize {
         self.0 as usize
     }
 }
@@ -250,6 +253,7 @@ impl Default for JumpTable {
 mod tests {
     use super::*;
     use std::u32;
+    use entity_map::EntityRef;
 
     #[test]
     fn value_with_number() {
