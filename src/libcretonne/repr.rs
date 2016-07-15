@@ -1,6 +1,7 @@
 //! Representation of Cretonne IL functions.
 
 use types::{Type, FunctionName, Signature, VOID};
+use entity_map::EntityRef;
 use entities::{Ebb, NO_EBB, Inst, NO_INST, Value, NO_VALUE, ExpandedValue, StackSlot};
 use instructions::*;
 use std::fmt::{self, Display, Formatter};

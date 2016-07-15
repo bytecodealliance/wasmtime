@@ -41,11 +41,15 @@ impl<K, V> EntityMap<K, V>
         }
     }
 
+    /// Check if `k` is a valid key in the map.
+    pub fn is_valid(&self, k: K) -> bool {
+        k.index() < self.elems.len()
+    }
+
     /// Ensure that `k` is a valid key but adding default entries if necesssary.
     pub fn ensure(&mut self, k: K) {
-        let idx = k.index();
-        if idx >= self.elems.len() {
-            self.elems.resize(idx + 1, V::default())
+        if !self.is_valid(k) {
+            self.elems.resize(k.index() + 1, V::default())
         }
     }
 
@@ -106,7 +110,9 @@ mod tests {
         let r2 = E(2);
         let mut m = EntityMap::new();
 
+        assert!(!m.is_valid(r0));
         m[r2] = 3;
+        assert!(m.is_valid(r1));
         m[r1] = 5;
 
         assert_eq!(m[r1], 5);
