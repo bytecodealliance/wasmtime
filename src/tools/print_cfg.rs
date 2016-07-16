@@ -21,7 +21,6 @@ pub fn run(files: Vec<String>) -> CommandResult {
     Ok(())
 }
 
-
 struct CFGPrinter<T: Write> {
     level: usize,
     writer: T,
