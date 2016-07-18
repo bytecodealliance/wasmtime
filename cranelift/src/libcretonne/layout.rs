@@ -139,32 +139,53 @@ impl Layout {
     /// Get the EBB containing `inst`, or `None` if `inst` is not inserted in the layout.
     pub fn inst_ebb(&self, inst: Inst) -> Option<Ebb> {
         if self.insts.is_valid(inst) {
-            let ebb = self.insts[inst].ebb;
-            if ebb == NO_EBB {
-                None
-            } else {
-                Some(ebb)
-            }
+            self.insts[inst].ebb.wrap()
         } else {
             None
         }
     }
 
     /// Append `inst` to the end of `ebb`.
-    pub fn append_inst(&self, inst: Inst, ebb: Ebb) {
+    pub fn append_inst(&mut self, inst: Inst, ebb: Ebb) {
         assert_eq!(self.inst_ebb(inst), None);
         assert!(self.is_ebb_inserted(ebb),
                 "Cannot append instructions to EBB not in layout");
-        unimplemented!();
+        let ebb_node = &mut self.ebbs[ebb];
+        let inst_node = &mut self.insts[inst];
+        inst_node.ebb = ebb;
+        inst_node.prev = ebb_node.last_inst;
+        assert_eq!(inst_node.next, NO_INST);
+        if ebb_node.first_inst == NO_INST {
+            ebb_node.first_inst = inst;
+        }
     }
 
     /// Insert `inst` before the instruction `before` in the same EBB.
-    pub fn insert_inst(&self, inst: Inst, before: Inst) {
+    pub fn insert_inst(&mut self, inst: Inst, before: Inst) {
         assert_eq!(self.inst_ebb(inst), None);
         let ebb = self.inst_ebb(before)
             .expect("Instruction before insertion point not in the layout");
-        assert!(ebb != NO_EBB);
-        unimplemented!();
+        let after = self.insts[before].prev;
+        {
+            let inst_node = &mut self.insts[inst];
+            inst_node.ebb = ebb;
+            inst_node.next = before;
+            inst_node.prev = after;
+        }
+        self.insts[before].prev = inst;
+        if after == NO_INST {
+            self.ebbs[ebb].first_inst = inst;
+        } else {
+            self.insts[after].next = inst;
+        }
+    }
+
+    /// Iterate over the instructions in `ebb` in layout order.
+    pub fn ebb_insts<'a>(&'a self, ebb: Ebb) -> Insts<'a> {
+        Insts {
+            layout: self,
+            next: self.ebbs[ebb].first_inst.wrap(),
+        }
     }
 }
 
@@ -175,11 +196,31 @@ struct InstNode {
     next: Inst,
 }
 
+/// Iterate over instructions in an EBB in layout order. See `Layout::ebb_insts()`.
+pub struct Insts<'a> {
+    layout: &'a Layout,
+    next: Option<Inst>,
+}
+
+impl<'a> Iterator for Insts<'a> {
+    type Item = Inst;
+
+    fn next(&mut self) -> Option<Inst> {
+        match self.next {
+            Some(inst) => {
+                self.next = self.layout.insts[inst].next.wrap();
+                Some(inst)
+            }
+            None => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Layout;
     use entity_map::EntityRef;
-    use entities::Ebb;
+    use entities::{Ebb, Inst};
 
     #[test]
     fn insert_ebb() {
@@ -217,5 +258,44 @@ mod tests {
         assert!(layout.is_ebb_inserted(e2));
         let v: Vec<Ebb> = layout.ebbs().collect();
         assert_eq!(v, [e2, e0, e1]);
+    }
+
+    #[test]
+    fn insert_inst() {
+        let mut layout = Layout::new();
+        let e1 = Ebb::new(1);
+
+        layout.append_ebb(e1);
+        let v: Vec<Inst> = layout.ebb_insts(e1).collect();
+        assert_eq!(v, []);
+
+        let i0 = Inst::new(0);
+        let i1 = Inst::new(1);
+        let i2 = Inst::new(2);
+
+        assert_eq!(layout.inst_ebb(i0), None);
+        assert_eq!(layout.inst_ebb(i1), None);
+        assert_eq!(layout.inst_ebb(i2), None);
+
+        layout.append_inst(i1, e1);
+        assert_eq!(layout.inst_ebb(i0), None);
+        assert_eq!(layout.inst_ebb(i1), Some(e1));
+        assert_eq!(layout.inst_ebb(i2), None);
+        let v: Vec<Inst> = layout.ebb_insts(e1).collect();
+        assert_eq!(v, [i1]);
+
+        layout.insert_inst(i2, i1);
+        assert_eq!(layout.inst_ebb(i0), None);
+        assert_eq!(layout.inst_ebb(i1), Some(e1));
+        assert_eq!(layout.inst_ebb(i2), Some(e1));
+        let v: Vec<Inst> = layout.ebb_insts(e1).collect();
+        assert_eq!(v, [i2, i1]);
+
+        layout.insert_inst(i0, i1);
+        assert_eq!(layout.inst_ebb(i0), Some(e1));
+        assert_eq!(layout.inst_ebb(i1), Some(e1));
+        assert_eq!(layout.inst_ebb(i2), Some(e1));
+        let v: Vec<Inst> = layout.ebb_insts(e1).collect();
+        assert_eq!(v, [i2, i0, i1]);
     }
 }
