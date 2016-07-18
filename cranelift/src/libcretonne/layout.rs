@@ -3,7 +3,8 @@
 //! The order of extended basic blocks in a function and the order of instructions in an EBB is
 //! determined by the `Layout` data structure defined in this module.
 
-use entity_map::EntityMap;
+use std::iter::Iterator;
+use entity_map::{EntityMap, EntityRef};
 use entities::{Ebb, NO_EBB, Inst, NO_INST};
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
@@ -28,11 +29,11 @@ pub struct Layout {
     // terminated in both ends by NO_INST.
     insts: EntityMap<Inst, InstNode>,
 
-    // First EBB in the layout order, or `NO_EBB` when no EBBs have been laid out.
-    first_ebb: Ebb,
+    // First EBB in the layout order, or `None` when no EBBs have been laid out.
+    first_ebb: Option<Ebb>,
 
-    // Last EBB in the layout order, or `NO_EBB` when no EBBs have been laid out.
-    last_ebb: Ebb,
+    // Last EBB in the layout order, or `None` when no EBBs have been laid out.
+    last_ebb: Option<Ebb>,
 }
 
 impl Layout {
@@ -41,8 +42,8 @@ impl Layout {
         Layout {
             ebbs: EntityMap::new(),
             insts: EntityMap::new(),
-            first_ebb: NO_EBB,
-            last_ebb: NO_EBB,
+            first_ebb: None,
+            last_ebb: None,
         }
     }
 }
@@ -59,7 +60,7 @@ impl Layout {
 impl Layout {
     /// Is `ebb` currently part of the layout?
     pub fn is_ebb_inserted(&self, ebb: Ebb) -> bool {
-        ebb != self.first_ebb && self.ebbs.is_valid(ebb) && self.ebbs[ebb].prev == NO_EBB
+        Some(ebb) == self.first_ebb || (self.ebbs.is_valid(ebb) && self.ebbs[ebb].prev != NO_EBB)
     }
 
     /// Insert `ebb` as the last EBB in the layout.
@@ -68,9 +69,12 @@ impl Layout {
                 "Cannot append EBB that is already in the layout");
         let node = &mut self.ebbs[ebb];
         assert!(node.first_inst == NO_INST && node.last_inst == NO_INST);
-        node.prev = self.last_ebb;
+        node.prev = self.last_ebb.unwrap_or_default();
         node.next = NO_EBB;
-        self.last_ebb = ebb;
+        self.last_ebb = Some(ebb);
+        if self.first_ebb.is_none() {
+            self.first_ebb = Some(ebb);
+        }
     }
 
     /// Insert `ebb` in the layout before the existing EBB `before`.
@@ -83,8 +87,18 @@ impl Layout {
         self.ebbs[ebb].next = before;
         self.ebbs[ebb].prev = after;
         self.ebbs[before].prev = ebb;
-        if after != NO_EBB {
+        if after == NO_EBB {
+            self.first_ebb = Some(ebb);
+        } else {
             self.ebbs[after].next = ebb;
+        }
+    }
+
+    /// Return an iterator over all EBBs in layout order.
+    pub fn ebbs<'a>(&'a self) -> Ebbs<'a> {
+        Ebbs {
+            layout: self,
+            next: self.first_ebb,
         }
     }
 }
@@ -95,6 +109,26 @@ struct EbbNode {
     next: Ebb,
     first_inst: Inst,
     last_inst: Inst,
+}
+
+/// Iterate over EBBs in layout order. See `Layout::ebbs()`.
+pub struct Ebbs<'a> {
+    layout: &'a Layout,
+    next: Option<Ebb>,
+}
+
+impl<'a> Iterator for Ebbs<'a> {
+    type Item = Ebb;
+
+    fn next(&mut self) -> Option<Ebb> {
+        match self.next {
+            Some(ebb) => {
+                self.next = self.layout.ebbs[ebb].next.wrap();
+                Some(ebb)
+            }
+            None => None,
+        }
+    }
 }
 
 /// Methods for arranging instructions.
@@ -139,4 +173,49 @@ struct InstNode {
     ebb: Ebb,
     prev: Inst,
     next: Inst,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Layout;
+    use entity_map::EntityRef;
+    use entities::Ebb;
+
+    #[test]
+    fn insert_ebb() {
+        let mut layout = Layout::new();
+        let e0 = Ebb::new(0);
+        let e1 = Ebb::new(1);
+        let e2 = Ebb::new(2);
+
+        {
+            let imm = &layout;
+            assert!(!imm.is_ebb_inserted(e0));
+            assert!(!imm.is_ebb_inserted(e1));
+
+            let v: Vec<Ebb> = layout.ebbs().collect();
+            assert_eq!(v, []);
+        }
+
+        layout.append_ebb(e1);
+        assert!(!layout.is_ebb_inserted(e0));
+        assert!(layout.is_ebb_inserted(e1));
+        assert!(!layout.is_ebb_inserted(e2));
+        let v: Vec<Ebb> = layout.ebbs().collect();
+        assert_eq!(v, [e1]);
+
+        layout.insert_ebb(e2, e1);
+        assert!(!layout.is_ebb_inserted(e0));
+        assert!(layout.is_ebb_inserted(e1));
+        assert!(layout.is_ebb_inserted(e2));
+        let v: Vec<Ebb> = layout.ebbs().collect();
+        assert_eq!(v, [e2, e1]);
+
+        layout.insert_ebb(e0, e1);
+        assert!(layout.is_ebb_inserted(e0));
+        assert!(layout.is_ebb_inserted(e1));
+        assert!(layout.is_ebb_inserted(e2));
+        let v: Vec<Ebb> = layout.ebbs().collect();
+        assert_eq!(v, [e2, e0, e1]);
+    }
 }
