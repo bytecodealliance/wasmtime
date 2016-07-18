@@ -94,37 +94,10 @@ impl ControlFlowGraph {
 
 #[cfg(test)]
 mod tests {
-    use instructions::*;
-    use entity_map::EntityRef;
-    use entities::{Ebb, Inst, NO_VALUE};
-    use repr::Function;
     use super::*;
-    use types;
+    use repr::Function;
 
-    // Some instructions will be re-used in several tests.
-
-    fn jump(func: &mut Function, dest: Ebb) -> Inst {
-        func.make_inst(InstructionData::Jump {
-            opcode: Opcode::Jump,
-            ty: types::VOID,
-            data: Box::new(JumpData {
-                destination: dest,
-                arguments: VariableArgs::new(),
-            }),
-        })
-    }
-
-    fn branch(func: &mut Function, dest: Ebb) -> Inst {
-        func.make_inst(InstructionData::Branch {
-            opcode: Opcode::Brz,
-            ty: types::VOID,
-            data: Box::new(BranchData {
-                arg: NO_VALUE,
-                destination: dest,
-                arguments: VariableArgs::new(),
-            }),
-        })
-    }
+    use test_utils::make_inst;
 
     #[test]
     fn empty() {
@@ -145,7 +118,7 @@ mod tests {
 
         let mut fun_ebbs = func.ebbs_numerically();
         for (ebb, predecessors) in nodes {
-            assert_eq!(ebb.index(), fun_ebbs.next().unwrap().index());
+            assert_eq!(*ebb, fun_ebbs.next().unwrap());
             assert_eq!(predecessors.len(), 0);
         }
     }
@@ -157,16 +130,16 @@ mod tests {
         let ebb1 = func.make_ebb();
         let ebb2 = func.make_ebb();
 
-        let br_ebb0_ebb2 = branch(&mut func, ebb2);
+        let br_ebb0_ebb2 = make_inst::branch(&mut func, ebb2);
         func.append_inst(ebb0, br_ebb0_ebb2);
 
-        let jmp_ebb0_ebb1 = jump(&mut func, ebb1);
+        let jmp_ebb0_ebb1 = make_inst::jump(&mut func, ebb1);
         func.append_inst(ebb0, jmp_ebb0_ebb1);
 
-        let br_ebb1_ebb1 = branch(&mut func, ebb1);
+        let br_ebb1_ebb1 = make_inst::branch(&mut func, ebb1);
         func.append_inst(ebb1, br_ebb1_ebb1);
 
-        let jmp_ebb1_ebb2 = jump(&mut func, ebb2);
+        let jmp_ebb1_ebb2 = make_inst::jump(&mut func, ebb2);
         func.append_inst(ebb1, jmp_ebb1_ebb2);
 
         let cfg = ControlFlowGraph::new(&func);
