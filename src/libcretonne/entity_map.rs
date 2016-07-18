@@ -11,13 +11,31 @@ use std::ops::{Index, IndexMut};
 
 /// A type wrapping a small integer index should implement `EntityRef` so it can be used as the key
 /// of an `EntityMap`.
-pub trait EntityRef: Copy {
+pub trait EntityRef: Copy + Eq {
     /// Create a new entity reference from a small integer.
     /// This should crash if the requested index is not representable.
     fn new(usize) -> Self;
 
     /// Get the index that was used to create this entity reference.
     fn index(self) -> usize;
+
+    /// Convert an `EntityRef` to an `Optional<EntityRef>` by using the default value as the null
+    /// reference.
+    ///
+    /// Entity references are often used in compact data structures like linked lists where a
+    /// sentinel 'null' value is needed. Normally we would use an `Optional` for that, but
+    /// currently that uses twice the memory of a plain `EntityRef`.
+    ///
+    /// This method is called `wrap()` because it is the inverse of `unwrap()`.
+    fn wrap(self) -> Option<Self>
+        where Self: Default
+    {
+        if self == Self::default() {
+            None
+        } else {
+            Some(self)
+        }
+    }
 }
 
 /// A mapping `K -> V` for densely indexed entity references.
@@ -91,7 +109,7 @@ mod tests {
     use super::*;
 
     // EntityRef impl for testing.
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, PartialEq, Eq)]
     struct E(u32);
 
     impl EntityRef for E {
