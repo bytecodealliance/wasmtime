@@ -1,9 +1,9 @@
 //! Helper functions for generating dummy instructions.
 
 use repr::Function;
-use entities::{Ebb, Inst, NO_VALUE};
-use instructions::{InstructionData, Opcode, VariableArgs, JumpData, BranchData};
-use types;
+use repr::entities::{Ebb, Inst, NO_VALUE};
+use repr::instructions::{InstructionData, Opcode, VariableArgs, JumpData, BranchData};
+use repr::types;
 
 pub fn jump(func: &mut Function, dest: Ebb) -> Inst {
     func.dfg.make_inst(InstructionData::Jump {

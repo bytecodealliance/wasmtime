@@ -11,11 +11,11 @@ use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use std::u32;
 use lexer::{self, Lexer, Token};
-use cretonne::types::{Type, VOID, FunctionName, Signature, ArgumentType, ArgumentExtension};
-use cretonne::immediates::{Imm64, Ieee32, Ieee64};
-use cretonne::entities::*;
-use cretonne::instructions::{Opcode, InstructionFormat, InstructionData, VariableArgs, JumpData,
-                             BranchData, ReturnData};
+use cretonne::repr::types::{Type, VOID, FunctionName, Signature, ArgumentType, ArgumentExtension};
+use cretonne::repr::immediates::{Imm64, Ieee32, Ieee64};
+use cretonne::repr::entities::*;
+use cretonne::repr::instructions::{Opcode, InstructionFormat, InstructionData, VariableArgs,
+                                   JumpData, BranchData, ReturnData};
 use cretonne::repr::{Function, StackSlotData};
 
 pub use lexer::Location;
@@ -1039,7 +1039,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne::types::{self, ArgumentType, ArgumentExtension};
+    use cretonne::repr::types::{self, ArgumentType, ArgumentExtension};
 
     #[test]
     fn argument_type() {

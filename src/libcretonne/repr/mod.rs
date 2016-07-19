@@ -1,10 +1,18 @@
 //! Representation of Cretonne IL functions.
 
-use types::{FunctionName, Signature};
+pub mod entities;
+pub mod types;
+pub mod condcodes;
+pub mod immediates;
+pub mod instructions;
+pub mod dfg;
+pub mod layout;
+
+use repr::types::{FunctionName, Signature};
 use entity_map::EntityRef;
-use entities::{Ebb, NO_EBB, StackSlot};
-use dfg::DataFlowGraph;
-use layout::Layout;
+use repr::entities::{Ebb, NO_EBB, StackSlot};
+use repr::dfg::DataFlowGraph;
+use repr::layout::Layout;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::Index;
 

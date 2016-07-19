@@ -8,7 +8,7 @@ use std::io::{Read, Write, stdout};
 use CommandResult;
 use cretonne::repr::Function;
 use cretonne::cfg::ControlFlowGraph;
-use cretonne::instructions::InstructionData;
+use cretonne::repr::instructions::InstructionData;
 use cton_reader::parser::Parser;
 
 pub fn run(files: Vec<String>) -> CommandResult {

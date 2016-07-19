@@ -21,8 +21,8 @@
 //! and (Ebb0, `jmp Ebb2`) respectively.
 
 use repr::Function;
-use entities::{Inst, Ebb};
-use instructions::InstructionData;
+use repr::entities::{Inst, Ebb};
+use repr::instructions::InstructionData;
 use std::collections::{BTreeSet, BTreeMap, btree_map};
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
