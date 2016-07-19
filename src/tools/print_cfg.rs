@@ -110,14 +110,14 @@ impl<T: Write> CFGPrinter<T> {
             let inst_data = func.layout
                 .ebb_insts(ebb)
                 .filter(|inst| {
-                    match func[*inst] {
+                    match func.dfg[*inst] {
                         InstructionData::Branch { ty: _, opcode: _, data: _ } => true,
                         InstructionData::Jump { ty: _, opcode: _, data: _ } => true,
                         _ => false,
                     }
                 })
                 .map(|inst| {
-                    let op = match func[inst] {
+                    let op = match func.dfg[inst] {
                         InstructionData::Branch { ty: _, opcode, ref data } => {
                             Some((opcode, data.destination))
                         }

@@ -85,7 +85,7 @@ fn write_preamble(w: &mut Write, func: &Function) -> io::Result<bool> {
 // ====--------------------------------------------------------------------------------------====//
 
 pub fn write_arg(w: &mut Write, func: &Function, arg: Value) -> Result {
-    write!(w, "{}: {}", arg, func.value_type(arg))
+    write!(w, "{}: {}", arg, func.dfg.value_type(arg))
 }
 
 pub fn write_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
@@ -96,7 +96,7 @@ pub fn write_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
     //    ebb10(vx4: f64, vx5: b1):
     //
 
-    let mut args = func.ebb_args(ebb);
+    let mut args = func.dfg.ebb_args(ebb);
     match args.next() {
         None => return writeln!(w, "{}:", ebb),
         Some(arg) => {
@@ -133,7 +133,7 @@ pub fn write_ebb(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
 // if it can't be trivially inferred.
 //
 fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
-    let constraints = func[inst].opcode().constraints();
+    let constraints = func.dfg[inst].opcode().constraints();
 
     if !constraints.is_polymorphic() {
         return None;
@@ -150,7 +150,7 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
 
     // This polymorphic instruction doesn't support basic type inference.
     // The controlling type variable is required to be the type of the first result.
-    let rtype = func.value_type(func.first_result(inst));
+    let rtype = func.dfg.value_type(func.dfg.first_result(inst));
     assert!(!rtype.is_void(),
             "Polymorphic instruction must produce a result");
     Some(rtype)
@@ -161,7 +161,7 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
 
     // First write out the result values, if any.
     let mut has_results = false;
-    for r in func.inst_results(inst) {
+    for r in func.dfg.inst_results(inst) {
         if !has_results {
             has_results = true;
             try!(write!(w, "{}", r));
@@ -174,7 +174,7 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
     }
 
     // Then the opcode, possibly with a '.type' suffix.
-    let opcode = func[inst].opcode();
+    let opcode = func.dfg[inst].opcode();
 
     match type_suffix(func, inst) {
         Some(suf) => try!(write!(w, "{}.{}", opcode, suf)),
@@ -183,7 +183,7 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
 
     // Then the operands, depending on format.
     use instructions::InstructionData::*;
-    match func[inst] {
+    match func.dfg[inst] {
         Nullary { .. } => writeln!(w, ""),
         Unary { arg, .. } => writeln!(w, " {}", arg),
         UnaryImm { imm, .. } => writeln!(w, " {}", imm),
@@ -250,16 +250,16 @@ mod tests {
         assert_eq!(function_to_string(&f),
                    "function foo() {\n    ss0 = stack_slot 4\n}\n");
 
-        let ebb = f.make_ebb();
+        let ebb = f.dfg.make_ebb();
         f.layout.append_ebb(ebb);
         assert_eq!(function_to_string(&f),
                    "function foo() {\n    ss0 = stack_slot 4\n\nebb0:\n}\n");
 
-        f.append_ebb_arg(ebb, types::I8);
+        f.dfg.append_ebb_arg(ebb, types::I8);
         assert_eq!(function_to_string(&f),
                    "function foo() {\n    ss0 = stack_slot 4\n\nebb0(vx0: i8):\n}\n");
 
-        f.append_ebb_arg(ebb, types::F32.by(4).unwrap());
+        f.dfg.append_ebb_arg(ebb, types::F32.by(4).unwrap());
         assert_eq!(function_to_string(&f),
                    "function foo() {\n    ss0 = stack_slot 4\n\nebb0(vx0: i8, vx1: f32x4):\n}\n");
     }

@@ -6,7 +6,7 @@ use instructions::{InstructionData, Opcode, VariableArgs, JumpData, BranchData};
 use types;
 
 pub fn jump(func: &mut Function, dest: Ebb) -> Inst {
-    func.make_inst(InstructionData::Jump {
+    func.dfg.make_inst(InstructionData::Jump {
         opcode: Opcode::Jump,
         ty: types::VOID,
         data: Box::new(JumpData {
@@ -17,7 +17,7 @@ pub fn jump(func: &mut Function, dest: Ebb) -> Inst {
 }
 
 pub fn branch(func: &mut Function, dest: Ebb) -> Inst {
-    func.make_inst(InstructionData::Branch {
+    func.dfg.make_inst(InstructionData::Branch {
         opcode: Opcode::Brz,
         ty: types::VOID,
         data: Box::new(BranchData {
