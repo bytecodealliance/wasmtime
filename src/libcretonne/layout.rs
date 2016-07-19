@@ -68,7 +68,7 @@ impl Layout {
         assert!(!self.is_ebb_inserted(ebb),
                 "Cannot append EBB that is already in the layout");
         {
-            let node = &mut self.ebbs[ebb];
+            let node = self.ebbs.ensure(ebb);
             assert!(node.first_inst == NO_INST && node.last_inst == NO_INST);
             node.prev = self.last_ebb.unwrap_or_default();
             node.next = NO_EBB;
@@ -88,8 +88,11 @@ impl Layout {
         assert!(self.is_ebb_inserted(before),
                 "EBB Insertion point not in the layout");
         let after = self.ebbs[before].prev;
-        self.ebbs[ebb].next = before;
-        self.ebbs[ebb].prev = after;
+        {
+            let node = self.ebbs.ensure(ebb);
+            node.next = before;
+            node.prev = after;
+        }
         self.ebbs[before].prev = ebb;
         if after == NO_EBB {
             self.first_ebb = Some(ebb);
@@ -166,7 +169,7 @@ impl Layout {
                 "Cannot append instructions to EBB not in layout");
         let ebb_node = &mut self.ebbs[ebb];
         {
-            let inst_node = &mut self.insts[inst];
+            let inst_node = self.insts.ensure(inst);
             inst_node.ebb = ebb;
             inst_node.prev = ebb_node.last_inst;
             assert_eq!(inst_node.next, NO_INST);
@@ -186,7 +189,7 @@ impl Layout {
             .expect("Instruction before insertion point not in the layout");
         let after = self.insts[before].prev;
         {
-            let inst_node = &mut self.insts[inst];
+            let inst_node = self.insts.ensure(inst);
             inst_node.ebb = ebb;
             inst_node.next = before;
             inst_node.prev = after;
