@@ -1,14 +1,8 @@
-///! Helper functions for generating dummy instructions.
+//! Helper functions for generating dummy instructions.
 
 use repr::Function;
 use entities::{Ebb, Inst, NO_VALUE};
-use instructions::{
-    InstructionData,
-    Opcode,
-    VariableArgs,
-    JumpData,
-    BranchData,
-};
+use instructions::{InstructionData, Opcode, VariableArgs, JumpData, BranchData};
 use types;
 
 pub fn jump(func: &mut Function, dest: Ebb) -> Inst {
