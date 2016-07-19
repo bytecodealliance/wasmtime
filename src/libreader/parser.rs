@@ -1116,7 +1116,7 @@ mod tests {
             .unwrap();
         assert_eq!(func.name, "ebbs");
 
-        let mut ebbs = func.ebbs_numerically();
+        let mut ebbs = func.layout.ebbs();
 
         let ebb0 = ebbs.next().unwrap();
         assert_eq!(func.ebb_args(ebb0).next(), None);
