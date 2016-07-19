@@ -101,6 +101,7 @@ impl Context {
     // Allocate a new EBB and add a mapping src_ebb -> Ebb.
     fn add_ebb(&mut self, src_ebb: Ebb, loc: &Location) -> Result<Ebb> {
         let ebb = self.function.make_ebb();
+        self.function.layout.append_ebb(ebb);
         if self.ebbs.insert(src_ebb, ebb).is_some() {
             err!(loc, "duplicate EBB: {}", src_ebb)
         } else {
@@ -704,7 +705,7 @@ impl<'a> Parser<'a> {
         let ctrl_typevar = try!(self.infer_typevar(ctx, opcode, explicit_ctrl_type, &inst_data));
         let inst = ctx.function.make_inst(inst_data);
         let num_results = ctx.function.make_inst_results(inst, ctrl_typevar);
-        ctx.function.append_inst(ebb, inst);
+        ctx.function.layout.append_inst(inst, ebb);
         ctx.add_inst_loc(inst, &opcode_loc);
 
         if results.len() != num_results {

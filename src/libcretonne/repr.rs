@@ -2,9 +2,10 @@
 
 use types::{Type, FunctionName, Signature, VOID};
 use entity_map::EntityRef;
-use entities::{Ebb, NO_EBB, Inst, NO_INST, Value, NO_VALUE, ExpandedValue, StackSlot};
+use entities::{Ebb, NO_EBB, Inst, Value, NO_VALUE, ExpandedValue, StackSlot};
 use instructions::*;
-use std::fmt::{self, Display, Formatter};
+use layout::Layout;
+use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::{Index, IndexMut};
 
 /// A function.
@@ -12,7 +13,6 @@ use std::ops::{Index, IndexMut};
 /// The `Function` struct owns all of its instructions and extended basic blocks, and it works as a
 /// container for those objects by implementing both `Index<Inst>` and `Index<Ebb>`.
 ///
-#[derive(Debug)]
 pub struct Function {
     /// Name of this function. Mostly used by `.cton` files.
     pub name: FunctionName,
@@ -38,9 +38,8 @@ pub struct Function {
     /// Others index into this table.
     extended_values: Vec<ValueData>,
 
-    // Linked list nodes for the layout order of instructions. Forms a double linked list per EBB,
-    // terminated in both ends by NO_INST.
-    inst_order: Vec<InstNode>,
+    /// Layout of EBBs and instructions in the function body.
+    pub layout: Layout,
 }
 
 impl Function {
@@ -54,7 +53,7 @@ impl Function {
             instructions: Vec::new(),
             extended_basic_blocks: Vec::new(),
             extended_values: Vec::new(),
-            inst_order: Vec::new(),
+            layout: Layout::new(),
         }
     }
 
@@ -94,11 +93,6 @@ impl Function {
     pub fn make_inst(&mut self, data: InstructionData) -> Inst {
         let inst = Inst::new(self.instructions.len());
         self.instructions.push(data);
-        self.inst_order.push(InstNode {
-            prev: NO_INST,
-            next: NO_INST,
-        });
-        debug_assert_eq!(self.instructions.len(), self.inst_order.len());
         inst
     }
 
@@ -234,32 +228,6 @@ impl Function {
         }
     }
 
-    /// Append an instruction to a basic block.
-    pub fn append_inst(&mut self, ebb: Ebb, inst: Inst) {
-        let old_last = self[ebb].last_inst;
-
-        self.inst_order[inst.index()] = InstNode {
-            prev: old_last,
-            next: NO_INST,
-        };
-
-        if old_last == NO_INST {
-            assert!(self[ebb].first_inst == NO_INST);
-            self[ebb].first_inst = inst;
-        } else {
-            self.inst_order[old_last.index()].next = inst;
-        }
-        self[ebb].last_inst = inst;
-    }
-
-    /// Iterate through the instructions in `ebb`.
-    pub fn ebb_insts<'a>(&'a self, ebb: Ebb) -> EbbInsts<'a> {
-        EbbInsts {
-            func: self,
-            cur: self[ebb].first_inst,
-        }
-    }
-
     // Values.
 
     /// Allocate an extended value entry.
@@ -283,6 +251,13 @@ impl Function {
             }
             None => panic!("NO_VALUE has no type"),
         }
+    }
+}
+
+impl Debug for Function {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        use write::function_to_string;
+        fmt.write_str(&function_to_string(self))
     }
 }
 
@@ -362,12 +337,6 @@ pub struct EbbData {
 
     /// Last argument to this EBB, or `NO_VALUE` if the block has no arguments.
     last_arg: Value,
-
-    /// First instruction in this block, or `NO_INST`.
-    first_inst: Inst,
-
-    /// Last instruction in this block, or `NO_INST`.
-    last_inst: Inst,
 }
 
 impl EbbData {
@@ -375,8 +344,6 @@ impl EbbData {
         EbbData {
             first_arg: NO_VALUE,
             last_arg: NO_VALUE,
-            first_inst: NO_INST,
-            last_inst: NO_INST,
         }
     }
 }
@@ -392,26 +359,6 @@ impl Index<Ebb> for Function {
 impl IndexMut<Ebb> for Function {
     fn index_mut<'a>(&'a mut self, ebb: Ebb) -> &'a mut EbbData {
         &mut self.extended_basic_blocks[ebb.index()]
-    }
-}
-
-pub struct EbbInsts<'a> {
-    func: &'a Function,
-    cur: Inst,
-}
-
-impl<'a> Iterator for EbbInsts<'a> {
-    type Item = Inst;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let prev = self.cur;
-        if prev == NO_INST {
-            None
-        } else {
-            // Advance self.cur to the next inst.
-            self.cur = self.func.inst_order[prev.index()].next;
-            Some(prev)
-        }
     }
 }
 
@@ -458,13 +405,6 @@ impl IndexMut<Inst> for Function {
     fn index_mut<'a>(&'a mut self, inst: Inst) -> &'a mut InstructionData {
         &mut self.instructions[inst.index()]
     }
-}
-
-/// A node in a double linked list of instructions is a basic block.
-#[derive(Debug)]
-struct InstNode {
-    prev: Inst,
-    next: Inst,
 }
 
 // ====--------------------------------------------------------------------------------------====//
@@ -590,6 +530,7 @@ mod tests {
         let ebb = func.make_ebb();
         assert_eq!(ebb.to_string(), "ebb0");
         assert_eq!(func.ebb_args(ebb).next(), None);
+        func.layout.append_ebb(ebb);
 
         let arg1 = func.append_ebb_arg(ebb, types::F32);
         assert_eq!(arg1.to_string(), "vx0");
@@ -612,33 +553,29 @@ mod tests {
         assert_eq!(ebbs.next(), Some(ebb));
         assert_eq!(ebbs.next(), None);
 
-        assert_eq!(func.ebb_insts(ebb).next(), None);
+        assert_eq!(func.layout.ebb_insts(ebb).next(), None);
 
         let inst = func.make_inst(InstructionData::Nullary {
             opcode: Opcode::Iconst,
             ty: types::I32,
         });
-        func.append_inst(ebb, inst);
+        func.layout.append_inst(inst, ebb);
         {
-            let mut ii = func.ebb_insts(ebb);
+            let mut ii = func.layout.ebb_insts(ebb);
             assert_eq!(ii.next(), Some(inst));
             assert_eq!(ii.next(), None);
         }
-        assert_eq!(func[ebb].first_inst, inst);
-        assert_eq!(func[ebb].last_inst, inst);
 
         let inst2 = func.make_inst(InstructionData::Nullary {
             opcode: Opcode::Iconst,
             ty: types::I32,
         });
-        func.append_inst(ebb, inst2);
+        func.layout.append_inst(inst2, ebb);
         {
-            let mut ii = func.ebb_insts(ebb);
+            let mut ii = func.layout.ebb_insts(ebb);
             assert_eq!(ii.next(), Some(inst));
             assert_eq!(ii.next(), Some(inst2));
             assert_eq!(ii.next(), None);
         }
-        assert_eq!(func[ebb].first_inst, inst);
-        assert_eq!(func[ebb].last_inst, inst2);
     }
 }

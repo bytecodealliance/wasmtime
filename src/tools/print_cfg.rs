@@ -29,7 +29,11 @@ struct CFGPrinter<T: Write> {
 
 impl<T: Write> CFGPrinter<T> {
     pub fn new(writer: T) -> CFGPrinter<T> {
-        CFGPrinter{level: 0, writer: writer, buffer: String::new()}
+        CFGPrinter {
+            level: 0,
+            writer: writer,
+            buffer: String::new(),
+        }
     }
 
     pub fn print(&mut self, func: &Function) -> Result<(), String> {
@@ -58,7 +62,7 @@ impl<T: Write> CFGPrinter<T> {
 
     fn append(&mut self, s: &str) {
         let mut indent = String::new();
-        for _ in 0 .. self.level {
+        for _ in 0..self.level {
             indent = indent + "    ";
         }
         self.buffer.push_str(&(indent + s));
@@ -103,23 +107,24 @@ impl<T: Write> CFGPrinter<T> {
 
     fn ebb_subgraphs(&mut self, func: &Function) {
         for ebb in func.ebbs_numerically() {
-            let inst_data = func.ebb_insts(ebb)
+            let inst_data = func.layout
+                .ebb_insts(ebb)
                 .filter(|inst| {
                     match func[*inst] {
-                        InstructionData::Branch{ ty: _, opcode: _, data: _ } => true,
-                        InstructionData::Jump{ ty: _, opcode: _, data: _ } => true,
-                        _ => false
+                        InstructionData::Branch { ty: _, opcode: _, data: _ } => true,
+                        InstructionData::Jump { ty: _, opcode: _, data: _ } => true,
+                        _ => false,
                     }
                 })
                 .map(|inst| {
                     let op = match func[inst] {
-                        InstructionData::Branch{ ty: _, opcode, ref data } => {
+                        InstructionData::Branch { ty: _, opcode, ref data } => {
                             Some((opcode, data.destination))
-                        },
-                        InstructionData::Jump{ ty: _, opcode, ref data } => {
+                        }
+                        InstructionData::Jump { ty: _, opcode, ref data } => {
                             Some((opcode, data.destination))
-                        },
-                        _ => None
+                        }
+                        _ => None,
                     };
                     (inst, op)
                 })
@@ -132,7 +137,10 @@ impl<T: Write> CFGPrinter<T> {
             }
 
             self.append(&format!("{} [shape=record, label=\"{}{}{}\"]",
-                                ebb, "{", insts.join(" | "), "}"));
+                                 ebb,
+                                 "{",
+                                 insts.join(" | "),
+                                 "}"));
             self.newline();
         }
     }
@@ -145,7 +153,6 @@ impl<T: Write> CFGPrinter<T> {
             }
         }
     }
-
 }
 
 fn print_cfg(filename: String) -> CommandResult {

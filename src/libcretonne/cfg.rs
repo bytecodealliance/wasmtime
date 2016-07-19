@@ -55,7 +55,7 @@ impl ControlFlowGraph {
         for ebb in func.ebbs_numerically() {
             // Flips to true when a terminating instruction is seen. So that if additional
             // instructions occur an error may be returned.
-            for inst in func.ebb_insts(ebb) {
+            for inst in func.layout.ebb_insts(ebb) {
                 match func[inst] {
                     InstructionData::Branch { ty: _, opcode: _, ref data } => {
                         cfg.add_predecessor(data.destination, (ebb, inst));
@@ -109,9 +109,13 @@ mod tests {
     #[test]
     fn no_predecessors() {
         let mut func = Function::new();
-        func.make_ebb();
-        func.make_ebb();
-        func.make_ebb();
+        let ebb0 = func.make_ebb();
+        let ebb1 = func.make_ebb();
+        let ebb2 = func.make_ebb();
+        func.layout.append_ebb(ebb0);
+        func.layout.append_ebb(ebb1);
+        func.layout.append_ebb(ebb2);
+
         let cfg = ControlFlowGraph::new(&func);
         let nodes = cfg.iter().collect::<Vec<_>>();
         assert_eq!(nodes.len(), 3);
@@ -129,18 +133,21 @@ mod tests {
         let ebb0 = func.make_ebb();
         let ebb1 = func.make_ebb();
         let ebb2 = func.make_ebb();
+        func.layout.append_ebb(ebb0);
+        func.layout.append_ebb(ebb1);
+        func.layout.append_ebb(ebb2);
 
         let br_ebb0_ebb2 = make_inst::branch(&mut func, ebb2);
-        func.append_inst(ebb0, br_ebb0_ebb2);
+        func.layout.append_inst(br_ebb0_ebb2, ebb0);
 
         let jmp_ebb0_ebb1 = make_inst::jump(&mut func, ebb1);
-        func.append_inst(ebb0, jmp_ebb0_ebb1);
+        func.layout.append_inst(jmp_ebb0_ebb1, ebb0);
 
         let br_ebb1_ebb1 = make_inst::branch(&mut func, ebb1);
-        func.append_inst(ebb1, br_ebb1_ebb1);
+        func.layout.append_inst(br_ebb1_ebb1, ebb1);
 
         let jmp_ebb1_ebb2 = make_inst::jump(&mut func, ebb2);
-        func.append_inst(ebb1, jmp_ebb1_ebb2);
+        func.layout.append_inst(jmp_ebb1_ebb2, ebb1);
 
         let cfg = ControlFlowGraph::new(&func);
         let ebb0_predecessors = cfg.get_predecessors(ebb0).unwrap();
