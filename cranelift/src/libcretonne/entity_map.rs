@@ -39,17 +39,23 @@ pub trait EntityRef: Copy + Eq {
 }
 
 /// A mapping `K -> V` for densely indexed entity references.
+///
+/// A *primary* `EntityMap` contains the main definition of an entity, and it can be used to
+/// allocate new entity references with the `push` method.
+///
+/// A *secondary* `EntityMap` contains additional data about entities kept in a primary map. The
+/// values need to implement `Clone + Default` traits so the map can be grown with `ensure`.
+///
 pub struct EntityMap<K, V>
-    where K: EntityRef,
-          V: Clone + Default
+    where K: EntityRef
 {
     elems: Vec<V>,
     unused: PhantomData<K>,
 }
 
+/// Shared `EntityMap` implementation for all value types.
 impl<K, V> EntityMap<K, V>
-    where K: EntityRef,
-          V: Clone + Default
+    where K: EntityRef
 {
     /// Create a new empty map.
     pub fn new() -> Self {
@@ -64,13 +70,6 @@ impl<K, V> EntityMap<K, V>
         k.index() < self.elems.len()
     }
 
-    /// Ensure that `k` is a valid key but adding default entries if necesssary.
-    pub fn ensure(&mut self, k: K) {
-        if !self.is_valid(k) {
-            self.elems.resize(k.index() + 1, V::default())
-        }
-    }
-
     /// Append `v` to the mapping, assigning a new key which is returned.
     pub fn push(&mut self, v: V) -> K {
         let k = K::new(self.elems.len());
@@ -79,11 +78,32 @@ impl<K, V> EntityMap<K, V>
     }
 }
 
-/// Immutable indexing into an `EntityMap`.
-/// The indexed value must have been accessed mutably previously, or the key passed to `ensure()`.
-impl<K, V> Index<K> for EntityMap<K, V>
+/// Additional methods for value types that implement `Clone` and `Default`.
+///
+/// When the value type implements these additional traits, the `EntityMap` can be resized
+/// explicitly with the `ensure` method.
+///
+/// Use this for secondary maps that are mapping keys created by another primary map.
+impl<K, V> EntityMap<K, V>
     where K: EntityRef,
           V: Clone + Default
+{
+    /// Ensure that `k` is a valid key but adding default entries if necesssary.
+    ///
+    /// Return a mutable reference to the corresponding entry.
+    pub fn ensure(&mut self, k: K) -> &mut V {
+        if !self.is_valid(k) {
+            self.elems.resize(k.index() + 1, V::default())
+        }
+        &mut self.elems[k.index()]
+    }
+}
+
+/// Immutable indexing into an `EntityMap`.
+/// The indexed value must be in the map, either because it was created by `push`, or the key was
+/// passed to `ensure`.
+impl<K, V> Index<K> for EntityMap<K, V>
+    where K: EntityRef
 {
     type Output = V;
 
@@ -93,13 +113,11 @@ impl<K, V> Index<K> for EntityMap<K, V>
 }
 
 /// Mutable indexing into an `EntityMap`.
-/// The map is resized automatically if the key has not been used before.
+/// Use `ensure` instead if the key is not known to be valid.
 impl<K, V> IndexMut<K> for EntityMap<K, V>
-    where K: EntityRef,
-          V: Clone + Default
+    where K: EntityRef
 {
     fn index_mut(&mut self, k: K) -> &mut V {
-        self.ensure(k);
         &mut self.elems[k.index()]
     }
 }
@@ -129,6 +147,7 @@ mod tests {
         let mut m = EntityMap::new();
 
         assert!(!m.is_valid(r0));
+        m.ensure(r2);
         m[r2] = 3;
         assert!(m.is_valid(r1));
         m[r1] = 5;
