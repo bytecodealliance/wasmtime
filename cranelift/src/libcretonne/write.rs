@@ -114,7 +114,7 @@ pub fn write_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
 
 pub fn write_ebb(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
     try!(write_ebb_header(w, func, ebb));
-    for inst in func.ebb_insts(ebb) {
+    for inst in func.layout.ebb_insts(ebb) {
         try!(write_instruction(w, func, inst));
     }
     Ok(())
@@ -251,6 +251,7 @@ mod tests {
                    "function foo() {\n    ss0 = stack_slot 4\n}\n");
 
         let ebb = f.make_ebb();
+        f.layout.append_ebb(ebb);
         assert_eq!(function_to_string(&f),
                    "function foo() {\n    ss0 = stack_slot 4\n\nebb0:\n}\n");
 
