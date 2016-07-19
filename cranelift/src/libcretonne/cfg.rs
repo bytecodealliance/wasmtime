@@ -56,7 +56,7 @@ impl ControlFlowGraph {
             // Flips to true when a terminating instruction is seen. So that if additional
             // instructions occur an error may be returned.
             for inst in func.layout.ebb_insts(ebb) {
-                match func[inst] {
+                match func.dfg[inst] {
                     InstructionData::Branch { ty: _, opcode: _, ref data } => {
                         cfg.add_predecessor(data.destination, (ebb, inst));
                     }
@@ -109,9 +109,9 @@ mod tests {
     #[test]
     fn no_predecessors() {
         let mut func = Function::new();
-        let ebb0 = func.make_ebb();
-        let ebb1 = func.make_ebb();
-        let ebb2 = func.make_ebb();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
         func.layout.append_ebb(ebb0);
         func.layout.append_ebb(ebb1);
         func.layout.append_ebb(ebb2);
@@ -130,9 +130,9 @@ mod tests {
     #[test]
     fn branches_and_jumps() {
         let mut func = Function::new();
-        let ebb0 = func.make_ebb();
-        let ebb1 = func.make_ebb();
-        let ebb2 = func.make_ebb();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
         func.layout.append_ebb(ebb0);
         func.layout.append_ebb(ebb1);
         func.layout.append_ebb(ebb2);

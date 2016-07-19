@@ -100,7 +100,7 @@ impl Context {
 
     // Allocate a new EBB and add a mapping src_ebb -> Ebb.
     fn add_ebb(&mut self, src_ebb: Ebb, loc: &Location) -> Result<Ebb> {
-        let ebb = self.function.make_ebb();
+        let ebb = self.function.dfg.make_ebb();
         self.function.layout.append_ebb(ebb);
         if self.ebbs.insert(src_ebb, ebb).is_some() {
             err!(loc, "duplicate EBB: {}", src_ebb)
@@ -163,7 +163,7 @@ impl Context {
     // Rewrite all EBB and value references in the function.
     fn rewrite_references(&mut self) -> Result<()> {
         for &(inst, loc) in &self.inst_locs {
-            match self.function[inst] {
+            match self.function.dfg[inst] {
                 InstructionData::Nullary { .. } |
                 InstructionData::UnaryImm { .. } |
                 InstructionData::UnaryIeee32 { .. } |
@@ -646,7 +646,7 @@ impl<'a> Parser<'a> {
         // ebb-arg ::= Value(vx) ":" * Type(t)
         let t = try!(self.match_type("expected EBB argument type"));
         // Allocate the EBB argument and add the mapping.
-        let value = ctx.function.append_ebb_arg(ebb, t);
+        let value = ctx.function.dfg.append_ebb_arg(ebb, t);
         ctx.add_value(vx, value, &vx_location)
     }
 
@@ -703,8 +703,8 @@ impl<'a> Parser<'a> {
         // or function call signature. We also need to create values with the right type for all
         // the instruction results.
         let ctrl_typevar = try!(self.infer_typevar(ctx, opcode, explicit_ctrl_type, &inst_data));
-        let inst = ctx.function.make_inst(inst_data);
-        let num_results = ctx.function.make_inst_results(inst, ctrl_typevar);
+        let inst = ctx.function.dfg.make_inst(inst_data);
+        let num_results = ctx.function.dfg.make_inst_results(inst, ctrl_typevar);
         ctx.function.layout.append_inst(inst, ebb);
         ctx.add_inst_loc(inst, &opcode_loc);
 
@@ -720,7 +720,7 @@ impl<'a> Parser<'a> {
         // holds a reference to `ctx.function`.
         self.add_values(&mut ctx.values,
                         results.into_iter(),
-                        ctx.function.inst_results(inst))
+                        ctx.function.dfg.inst_results(inst))
     }
 
     // Type inference for polymorphic instructions.
@@ -750,7 +750,7 @@ impl<'a> Parser<'a> {
                     // layout of the blocks.
                     let ctrl_src_value = inst_data.typevar_operand()
                         .expect("Constraints <-> Format inconsistency");
-                    ctx.function.value_type(match ctx.values.get(&ctrl_src_value) {
+                    ctx.function.dfg.value_type(match ctx.values.get(&ctrl_src_value) {
                         Some(&v) => v,
                         None => {
                             return err!(self.loc,
@@ -1119,12 +1119,12 @@ mod tests {
         let mut ebbs = func.layout.ebbs();
 
         let ebb0 = ebbs.next().unwrap();
-        assert_eq!(func.ebb_args(ebb0).next(), None);
+        assert_eq!(func.dfg.ebb_args(ebb0).next(), None);
 
         let ebb4 = ebbs.next().unwrap();
-        let mut ebb4_args = func.ebb_args(ebb4);
+        let mut ebb4_args = func.dfg.ebb_args(ebb4);
         let arg0 = ebb4_args.next().unwrap();
-        assert_eq!(func.value_type(arg0), types::I32);
+        assert_eq!(func.dfg.value_type(arg0), types::I32);
         assert_eq!(ebb4_args.next(), None);
     }
 }
