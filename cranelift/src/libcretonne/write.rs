@@ -16,7 +16,7 @@ pub fn write_function(w: &mut Write, func: &Function) -> Result {
     try!(write_spec(w, func));
     try!(writeln!(w, " {{"));
     let mut any = try!(write_preamble(w, func));
-    for ebb in func.ebbs_numerically() {
+    for ebb in &func.layout {
         if any {
             try!(writeln!(w, ""));
         }

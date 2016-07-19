@@ -48,11 +48,11 @@ impl ControlFlowGraph {
 
         // Even ebbs without predecessors should show up in the CFG, albeit
         // with no entires.
-        for ebb in func.ebbs_numerically() {
+        for ebb in &func.layout {
             cfg.init_ebb(ebb);
         }
 
-        for ebb in func.ebbs_numerically() {
+        for ebb in &func.layout {
             // Flips to true when a terminating instruction is seen. So that if additional
             // instructions occur an error may be returned.
             for inst in func.layout.ebb_insts(ebb) {
@@ -120,7 +120,7 @@ mod tests {
         let nodes = cfg.iter().collect::<Vec<_>>();
         assert_eq!(nodes.len(), 3);
 
-        let mut fun_ebbs = func.ebbs_numerically();
+        let mut fun_ebbs = func.layout.ebbs();
         for (ebb, predecessors) in nodes {
             assert_eq!(*ebb, fun_ebbs.next().unwrap());
             assert_eq!(predecessors.len(), 0);

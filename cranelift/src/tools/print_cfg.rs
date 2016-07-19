@@ -106,7 +106,7 @@ impl<T: Write> CFGPrinter<T> {
     }
 
     fn ebb_subgraphs(&mut self, func: &Function) {
-        for ebb in func.ebbs_numerically() {
+        for ebb in &func.layout {
             let inst_data = func.layout
                 .ebb_insts(ebb)
                 .filter(|inst| {
