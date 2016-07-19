@@ -3,7 +3,7 @@
 //! The order of extended basic blocks in a function and the order of instructions in an EBB is
 //! determined by the `Layout` data structure defined in this module.
 
-use std::iter::Iterator;
+use std::iter::{Iterator, IntoIterator};
 use entity_map::{EntityMap, EntityRef};
 use entities::{Ebb, NO_EBB, Inst, NO_INST};
 
@@ -132,6 +132,16 @@ impl<'a> Iterator for Ebbs<'a> {
             }
             None => None,
         }
+    }
+}
+
+/// Use a layout reference in a for loop.
+impl<'a> IntoIterator for &'a Layout {
+    type Item = Ebb;
+    type IntoIter = Ebbs<'a>;
+
+    fn into_iter(self) -> Ebbs<'a> {
+        self.ebbs()
     }
 }
 
@@ -267,6 +277,15 @@ mod tests {
         assert!(layout.is_ebb_inserted(e2));
         let v: Vec<Ebb> = layout.ebbs().collect();
         assert_eq!(v, [e1, e2, e0]);
+
+        {
+            let imm = &layout;
+            let mut v = Vec::new();
+            for e in imm {
+                v.push(e);
+            }
+            assert_eq!(v, [e1, e2, e0]);
+        }
     }
 
     #[test]
