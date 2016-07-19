@@ -6,8 +6,8 @@
 
 use std::io::{self, Write};
 use repr::Function;
-use entities::{Inst, Ebb, Value};
-use types::Type;
+use repr::entities::{Inst, Ebb, Value};
+use repr::types::Type;
 
 pub type Result = io::Result<()>;
 
@@ -182,7 +182,7 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
     }
 
     // Then the operands, depending on format.
-    use instructions::InstructionData::*;
+    use repr::instructions::InstructionData::*;
     match func.dfg[inst] {
         Nullary { .. } => writeln!(w, ""),
         Unary { arg, .. } => writeln!(w, " {}", arg),
@@ -218,7 +218,7 @@ mod tests {
     use super::*;
     use super::{needs_quotes, escaped};
     use repr::{Function, StackSlotData};
-    use types;
+    use repr::types;
 
     #[test]
     fn quoting() {
