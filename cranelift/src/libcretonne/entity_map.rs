@@ -46,6 +46,7 @@ pub trait EntityRef: Copy + Eq {
 /// A *secondary* `EntityMap` contains additional data about entities kept in a primary map. The
 /// values need to implement `Clone + Default` traits so the map can be grown with `ensure`.
 ///
+#[derive(Debug)]
 pub struct EntityMap<K, V>
     where K: EntityRef
 {
@@ -75,6 +76,10 @@ impl<K, V> EntityMap<K, V>
         let k = K::new(self.elems.len());
         self.elems.push(v);
         k
+    }
+
+    pub fn len(&self) -> usize {
+        self.elems.len()
     }
 }
 

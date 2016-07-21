@@ -1,5 +1,5 @@
 //! A control flow graph represented as mappings of extended basic blocks to their predecessors.
-//! Predecessors are denoted by tuples of EBB and branch/jump instructions. Each predecessor
+//! BasicBlocks are denoted by tuples of EBB and branch/jump instructions. Each predecessor
 //! tuple corresponds to the end of a basic block.
 //!
 //! ```c
@@ -23,20 +23,21 @@
 use repr::Function;
 use repr::entities::{Inst, Ebb};
 use repr::instructions::InstructionData;
-use std::collections::{BTreeSet, BTreeMap, btree_map};
+use entity_map::EntityMap;
+use std::collections::BTreeSet;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
-pub type Predecessor = (Ebb, Inst);
+pub type BasicBlock = (Ebb, Inst);
 
 /// Storing predecessors in a BTreeSet ensures that their ordering is
 /// stable with no duplicates.
-pub type PredecessorSet = BTreeSet<Predecessor>;
+pub type BasicBlockSet = BTreeSet<BasicBlock>;
 
 /// The Control Flow Graph maintains a mapping of ebbs to their predecessors
 /// where predecessors are basic blocks.
 #[derive(Debug)]
 pub struct ControlFlowGraph {
-    data: BTreeMap<Ebb, PredecessorSet>,
+    data: EntityMap<Ebb, BasicBlockSet>,
 }
 
 impl ControlFlowGraph {
@@ -44,12 +45,12 @@ impl ControlFlowGraph {
     /// blocks within the CFG's associated function. Basic sanity checks will
     /// also be performed to ensure that the blocks are well formed.
     pub fn new(func: &Function) -> ControlFlowGraph {
-        let mut cfg = ControlFlowGraph { data: BTreeMap::new() };
+        let mut cfg = ControlFlowGraph { data: EntityMap::new() };
 
         // Even ebbs without predecessors should show up in the CFG, albeit
         // with no entires.
-        for ebb in &func.layout {
-            cfg.init_ebb(ebb);
+        for _ in &func.layout {
+            cfg.push_ebb();
         }
 
         for ebb in &func.layout {
@@ -70,25 +71,48 @@ impl ControlFlowGraph {
         cfg
     }
 
-    /// Initializes a predecessor set for some ebb. If an ebb already has an
-    /// entry it will be clobbered.
-    pub fn init_ebb(&mut self, ebb: Ebb) -> &mut PredecessorSet {
-        self.data.insert(ebb, BTreeSet::new());
-        self.data.get_mut(&ebb).unwrap()
+    pub fn push_ebb(&mut self) {
+        self.data.push(BTreeSet::new());
     }
 
-    pub fn add_predecessor(&mut self, ebb: Ebb, predecessor: Predecessor) {
-        self.data.get_mut(&ebb).unwrap().insert(predecessor);
+    pub fn add_predecessor(&mut self, ebb: Ebb, predecessor: BasicBlock) {
+        self.data[ebb].insert(predecessor);
     }
 
     /// Returns all of the predecessors for some ebb, if it has an entry.
-    pub fn get_predecessors(&self, ebb: Ebb) -> Option<&PredecessorSet> {
-        self.data.get(&ebb)
+    pub fn get_predecessors(&self, ebb: Ebb) -> &BasicBlockSet {
+        &self.data[ebb]
     }
 
-    /// An iterator over all of the ebb to predecessor mappings in the CFG.
-    pub fn iter<'a>(&'a self) -> btree_map::Iter<'a, Ebb, PredecessorSet> {
-        self.data.iter()
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn iter(&self) -> CFGIter {
+        CFGIter {
+            cur: 0,
+            cfg: &self,
+        }
+    }
+}
+
+pub struct CFGIter<'a> {
+    cfg: &'a ControlFlowGraph,
+    cur: usize,
+}
+
+impl<'a> Iterator for CFGIter<'a> {
+    type Item = (Ebb, &'a BasicBlockSet);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cur < self.cfg.len() {
+            let ebb = Ebb::with_number(self.cur as u32).unwrap();
+            let bbs = self.cfg.get_predecessors(ebb);
+            self.cur += 1;
+            Some((ebb, bbs))
+        } else {
+            None
+        }
     }
 }
 
@@ -122,7 +146,7 @@ mod tests {
 
         let mut fun_ebbs = func.layout.ebbs();
         for (ebb, predecessors) in nodes {
-            assert_eq!(*ebb, fun_ebbs.next().unwrap());
+            assert_eq!(ebb, fun_ebbs.next().unwrap());
             assert_eq!(predecessors.len(), 0);
         }
     }
@@ -150,9 +174,9 @@ mod tests {
         func.layout.append_inst(jmp_ebb1_ebb2, ebb1);
 
         let cfg = ControlFlowGraph::new(&func);
-        let ebb0_predecessors = cfg.get_predecessors(ebb0).unwrap();
-        let ebb1_predecessors = cfg.get_predecessors(ebb1).unwrap();
-        let ebb2_predecessors = cfg.get_predecessors(ebb2).unwrap();
+        let ebb0_predecessors = cfg.get_predecessors(ebb0);
+        let ebb1_predecessors = cfg.get_predecessors(ebb1);
+        let ebb2_predecessors = cfg.get_predecessors(ebb2);
         assert_eq!(ebb0_predecessors.len(), 0);
         assert_eq!(ebb1_predecessors.len(), 2);
         assert_eq!(ebb2_predecessors.len(), 2);
@@ -162,5 +186,4 @@ mod tests {
         assert_eq!(ebb2_predecessors.contains(&(ebb0, br_ebb0_ebb2)), true);
         assert_eq!(ebb2_predecessors.contains(&(ebb1, jmp_ebb1_ebb2)), true);
     }
-
 }
