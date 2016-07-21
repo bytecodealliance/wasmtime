@@ -1,4 +1,6 @@
-//! A control flow graph represented as mappings of extended basic blocks to their predecessors.
+//! A control flow graph represented as mappings of extended basic blocks to their predecessors
+//! and successors. Successors are represented as extended basic blocks while predecessors are
+//! represented by basic blocks.
 //! BasicBlocks are denoted by tuples of EBB and branch/jump instructions. Each predecessor
 //! tuple corresponds to the end of a basic block.
 //!
@@ -33,17 +35,33 @@ pub type BasicBlock = (Ebb, Inst);
 /// stable with no duplicates.
 pub type BasicBlockSet = BTreeSet<BasicBlock>;
 
+/// A container for the successors and predecessors of some Ebb.
+#[derive(Debug)]
+pub struct CFGNode {
+    pub successors: BTreeSet<Ebb>,
+    pub predecessors: BasicBlockSet,
+}
+
+impl CFGNode {
+    pub fn new() -> CFGNode {
+        CFGNode {
+            successors: BTreeSet::new(),
+            predecessors: BTreeSet::new(),
+        }
+    }
+}
+
 /// The Control Flow Graph maintains a mapping of ebbs to their predecessors
-/// where predecessors are basic blocks.
+/// and successors where predecessors are basic blocks and successors are
+/// extended basic blocks.
 #[derive(Debug)]
 pub struct ControlFlowGraph {
-    data: EntityMap<Ebb, BasicBlockSet>,
+    data: EntityMap<Ebb, CFGNode>,
 }
 
 impl ControlFlowGraph {
     /// During initialization mappings will be generated for any existing
-    /// blocks within the CFG's associated function. Basic sanity checks will
-    /// also be performed to ensure that the blocks are well formed.
+    /// blocks within the CFG's associated function.
     pub fn new(func: &Function) -> ControlFlowGraph {
         let mut cfg = ControlFlowGraph { data: EntityMap::new() };
 
@@ -54,14 +72,14 @@ impl ControlFlowGraph {
         }
 
         for ebb in &func.layout {
-            // Flips to true when a terminating instruction is seen. So that if additional
-            // instructions occur an error may be returned.
             for inst in func.layout.ebb_insts(ebb) {
                 match func.dfg[inst] {
                     InstructionData::Branch { ty: _, opcode: _, ref data } => {
+                        cfg.add_successor(ebb, data.destination);
                         cfg.add_predecessor(data.destination, (ebb, inst));
                     }
                     InstructionData::Jump { ty: _, opcode: _, ref data } => {
+                        cfg.add_successor(ebb, data.destination);
                         cfg.add_predecessor(data.destination, (ebb, inst));
                     }
                     _ => (),
@@ -72,36 +90,44 @@ impl ControlFlowGraph {
     }
 
     pub fn push_ebb(&mut self) {
-        self.data.push(BTreeSet::new());
+        self.data.push(CFGNode::new());
+    }
+
+    pub fn add_successor(&mut self, from: Ebb, to: Ebb) {
+        self.data[from].successors.insert(to);
     }
 
     pub fn add_predecessor(&mut self, ebb: Ebb, predecessor: BasicBlock) {
-        self.data[ebb].insert(predecessor);
+        self.data[ebb].predecessors.insert(predecessor);
     }
 
-    /// Returns all of the predecessors for some ebb, if it has an entry.
     pub fn get_predecessors(&self, ebb: Ebb) -> &BasicBlockSet {
-        &self.data[ebb]
+        &self.data[ebb].predecessors
+    }
+
+    pub fn get_successors(&self, ebb: Ebb) -> &BTreeSet<Ebb> {
+        &self.data[ebb].successors
     }
 
     pub fn len(&self) -> usize {
         self.data.len()
     }
 
-    pub fn iter(&self) -> CFGIter {
-        CFGIter {
+    pub fn predecessors_iter(&self) -> CFGPredecessorsIter {
+        CFGPredecessorsIter {
             cur: 0,
             cfg: &self,
         }
     }
 }
 
-pub struct CFGIter<'a> {
+/// Iterate through every mapping of ebb to predecessors in the CFG
+pub struct CFGPredecessorsIter<'a> {
     cfg: &'a ControlFlowGraph,
     cur: usize,
 }
 
-impl<'a> Iterator for CFGIter<'a> {
+impl<'a> Iterator for CFGPredecessorsIter<'a> {
     type Item = (Ebb, &'a BasicBlockSet);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -127,7 +153,7 @@ mod tests {
     fn empty() {
         let func = Function::new();
         let cfg = ControlFlowGraph::new(&func);
-        assert_eq!(None, cfg.iter().next());
+        assert_eq!(None, cfg.predecessors_iter().next());
     }
 
     #[test]
@@ -141,13 +167,15 @@ mod tests {
         func.layout.append_ebb(ebb2);
 
         let cfg = ControlFlowGraph::new(&func);
-        let nodes = cfg.iter().collect::<Vec<_>>();
+        let nodes = cfg.predecessors_iter().collect::<Vec<_>>();
         assert_eq!(nodes.len(), 3);
 
         let mut fun_ebbs = func.layout.ebbs();
         for (ebb, predecessors) in nodes {
             assert_eq!(ebb, fun_ebbs.next().unwrap());
             assert_eq!(predecessors.len(), 0);
+            assert_eq!(predecessors.len(), 0);
+            assert_eq!(cfg.get_successors(ebb).len(), 0);
         }
     }
 
@@ -174,9 +202,15 @@ mod tests {
         func.layout.append_inst(jmp_ebb1_ebb2, ebb1);
 
         let cfg = ControlFlowGraph::new(&func);
+
         let ebb0_predecessors = cfg.get_predecessors(ebb0);
         let ebb1_predecessors = cfg.get_predecessors(ebb1);
         let ebb2_predecessors = cfg.get_predecessors(ebb2);
+
+        let ebb0_successors = cfg.get_successors(ebb0);
+        let ebb1_successors = cfg.get_successors(ebb1);
+        let ebb2_successors = cfg.get_successors(ebb2);
+
         assert_eq!(ebb0_predecessors.len(), 0);
         assert_eq!(ebb1_predecessors.len(), 2);
         assert_eq!(ebb2_predecessors.len(), 2);
@@ -185,5 +219,14 @@ mod tests {
         assert_eq!(ebb1_predecessors.contains(&(ebb1, br_ebb1_ebb1)), true);
         assert_eq!(ebb2_predecessors.contains(&(ebb0, br_ebb0_ebb2)), true);
         assert_eq!(ebb2_predecessors.contains(&(ebb1, jmp_ebb1_ebb2)), true);
+
+        assert_eq!(ebb0_successors.len(), 2);
+        assert_eq!(ebb1_successors.len(), 2);
+        assert_eq!(ebb2_successors.len(), 0);
+
+        assert_eq!(ebb0_successors.contains(&ebb1), true);
+        assert_eq!(ebb0_successors.contains(&ebb2), true);
+        assert_eq!(ebb1_successors.contains(&ebb1), true);
+        assert_eq!(ebb1_successors.contains(&ebb2), true);
     }
 }
