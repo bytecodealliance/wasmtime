@@ -43,6 +43,15 @@ pub struct CFGNode {
 }
 
 impl CFGNode {
+    /// CFG Node successors stripped of loop edges.
+    pub fn children(&self) -> Vec<Ebb> {
+        let pred_ebbs = self.predecessors.iter().map(|&(ebb, _)| { ebb }).collect();
+        let children = self.successors.difference(&pred_ebbs).cloned().collect();
+        children
+    }
+}
+
+impl CFGNode {
     pub fn new() -> CFGNode {
         CFGNode {
             successors: BTreeSet::new(),
@@ -107,6 +116,26 @@ impl ControlFlowGraph {
 
     pub fn get_successors(&self, ebb: Ebb) -> &BTreeSet<Ebb> {
         &self.data[ebb].successors
+    }
+
+    pub fn get_children(&self, ebb: Ebb) -> Vec<Ebb> {
+        self.data[ebb].children()
+    }
+
+    pub fn postorder_ebbs(&self) -> Vec<Ebb> {
+        if self.len() < 1 {
+            return Vec::new();
+        }
+        let mut stack_a = vec![Ebb::with_number(0).unwrap()];
+        let mut stack_b = Vec::new();
+        while stack_a.len() > 0 {
+            let cur = stack_a.pop().unwrap();
+            for child in self.get_children(cur) {
+                stack_a.push(child);
+            }
+            stack_b.push(cur);
+        }
+        stack_b
     }
 
     pub fn len(&self) -> usize {
@@ -228,5 +257,45 @@ mod tests {
         assert_eq!(ebb0_successors.contains(&ebb2), true);
         assert_eq!(ebb1_successors.contains(&ebb1), true);
         assert_eq!(ebb1_successors.contains(&ebb2), true);
+
+        assert_eq!(cfg.get_children(ebb0), vec![ebb1, ebb2]);
+        assert_eq!(cfg.get_children(ebb1), vec![ebb2]);
+        assert_eq!(cfg.get_children(ebb2), Vec::new());
+    }
+
+    #[test]
+    fn postorder_traversal() {
+        let mut func = Function::new();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
+        let ebb3 = func.dfg.make_ebb();
+        let ebb4 = func.dfg.make_ebb();
+        let ebb5 = func.dfg.make_ebb();
+
+        func.layout.append_ebb(ebb0);
+        func.layout.append_ebb(ebb1);
+        func.layout.append_ebb(ebb2);
+        func.layout.append_ebb(ebb3);
+        func.layout.append_ebb(ebb4);
+        func.layout.append_ebb(ebb5);
+
+        let br_ebb0_ebb1 = make_inst::branch(&mut func, ebb1);
+        func.layout.append_inst(br_ebb0_ebb1, ebb0);
+
+        let jmp_ebb0_ebb2 = make_inst::jump(&mut func, ebb2);
+        func.layout.append_inst(jmp_ebb0_ebb2, ebb0);
+
+        let jmp_ebb1_ebb3 = make_inst::jump(&mut func, ebb3);
+        func.layout.append_inst(jmp_ebb1_ebb3, ebb1);
+
+        let br_ebb2_ebb4 = make_inst::branch(&mut func, ebb4);
+        func.layout.append_inst(br_ebb2_ebb4, ebb2);
+
+        let jmp_ebb2_ebb5 = make_inst::jump(&mut func, ebb5);
+        func.layout.append_inst(jmp_ebb2_ebb5, ebb2);
+
+        let cfg = ControlFlowGraph::new(&func);
+        assert_eq!(cfg.postorder_ebbs(), vec![ebb0, ebb2, ebb5, ebb4, ebb1, ebb3]);
     }
 }
