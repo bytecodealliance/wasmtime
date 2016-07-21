@@ -45,7 +45,7 @@ pub struct CFGNode {
 impl CFGNode {
     /// CFG Node successors stripped of loop edges.
     pub fn children(&self) -> Vec<Ebb> {
-        let pred_ebbs = self.predecessors.iter().map(|&(ebb, _)| { ebb }).collect();
+        let pred_ebbs = self.predecessors.iter().map(|&(ebb, _)| ebb).collect();
         let children = self.successors.difference(&pred_ebbs).cloned().collect();
         children
     }
@@ -296,6 +296,7 @@ mod tests {
         func.layout.append_inst(jmp_ebb2_ebb5, ebb2);
 
         let cfg = ControlFlowGraph::new(&func);
-        assert_eq!(cfg.postorder_ebbs(), vec![ebb0, ebb2, ebb5, ebb4, ebb1, ebb3]);
+        assert_eq!(cfg.postorder_ebbs(),
+                   vec![ebb0, ebb2, ebb5, ebb4, ebb1, ebb3]);
     }
 }
