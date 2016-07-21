@@ -146,7 +146,7 @@ impl<T: Write> CFGPrinter<T> {
     }
 
     fn cfg_connections(&mut self, cfg: &ControlFlowGraph) {
-        for (ref ebb, ref predecessors) in cfg.iter() {
+        for (ref ebb, ref predecessors) in cfg.predecessors_iter() {
             for &(parent, inst) in *predecessors {
                 self.append(&format!("{}:{} -> {}", parent, inst, ebb));
                 self.newline();
