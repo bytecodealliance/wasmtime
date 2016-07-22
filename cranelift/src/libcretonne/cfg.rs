@@ -24,7 +24,7 @@
 
 use ir::Function;
 use ir::entities::{Inst, Ebb};
-use ir::instructions::InstructionData;
+use ir::instructions::BranchInfo;
 use entity_map::EntityMap;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
@@ -68,16 +68,18 @@ impl ControlFlowGraph {
 
         for ebb in &func.layout {
             for inst in func.layout.ebb_insts(ebb) {
-                match func.dfg[inst] {
-                    InstructionData::Branch { ty: _, opcode: _, ref data } => {
-                        cfg.add_successor(ebb, data.destination);
-                        cfg.add_predecessor(data.destination, (ebb, inst));
+                match func.dfg[inst].analyze_branch() {
+                    BranchInfo::SingleDest(dest, _) => {
+                        cfg.add_successor(ebb, dest);
+                        cfg.add_predecessor(dest, (ebb, inst));
                     }
-                    InstructionData::Jump { ty: _, opcode: _, ref data } => {
-                        cfg.add_successor(ebb, data.destination);
-                        cfg.add_predecessor(data.destination, (ebb, inst));
+                    BranchInfo::Table(jt) => {
+                        for (_, dest) in func.jump_tables[jt].entries() {
+                            cfg.add_successor(ebb, dest);
+                            cfg.add_predecessor(dest, (ebb, inst));
+                        }
                     }
-                    _ => (),
+                    BranchInfo::NotABranch => {}
                 }
             }
         }
