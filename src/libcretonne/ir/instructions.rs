@@ -344,6 +344,42 @@ impl InstructionData {
     }
 }
 
+/// Analyzing an instruction.
+///
+/// Avoid large matches on instruction formats by using the methods efined here to examine
+/// instructions.
+impl InstructionData {
+    /// Return information about the destination of a branch or jump instruction.
+    ///
+    /// Any instruction that can transfer control to another EBB reveals its possible destinations
+    /// here.
+    pub fn analyze_branch<'a>(&'a self) -> BranchInfo<'a> {
+        match self {
+            &InstructionData::Jump { ref data, .. } => {
+                BranchInfo::SingleDest(data.destination, &data.arguments)
+            }
+            &InstructionData::Branch { ref data, .. } => {
+                BranchInfo::SingleDest(data.destination, &data.arguments)
+            }
+            &InstructionData::BranchTable { table, .. } => BranchInfo::Table(table),
+            _ => BranchInfo::NotABranch,
+        }
+    }
+}
+
+/// Information about branch and jump instructions.
+pub enum BranchInfo<'a> {
+    /// This is not a branch or jump instruction.
+    /// This instruction will not transfer control to another EBB in the function, but it may still
+    /// affect control flow by returning or trapping.
+    NotABranch,
+
+    /// This is a branch or jump to a single destination EBB, possibly taking value arguments.
+    SingleDest(Ebb, &'a [Value]),
+
+    /// This is a jump table branch which can have many destination EBBs.
+    Table(JumpTable),
+}
 
 /// Value type constraints for a given opcode.
 ///
