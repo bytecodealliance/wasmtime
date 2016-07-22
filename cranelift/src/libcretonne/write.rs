@@ -75,6 +75,11 @@ fn write_preamble(w: &mut Write, func: &Function) -> io::Result<bool> {
         try!(writeln!(w, "    {} = {}", ss, func[ss]));
     }
 
+    for jt in func.jump_tables.keys() {
+        any = true;
+        try!(writeln!(w, "    {} = {}", jt, func.jump_tables[jt]));
+    }
+
     Ok(any)
 }
 

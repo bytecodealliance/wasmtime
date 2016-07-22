@@ -5,12 +5,14 @@ pub mod types;
 pub mod condcodes;
 pub mod immediates;
 pub mod instructions;
+pub mod jumptable;
 pub mod dfg;
 pub mod layout;
 
 use ir::types::{FunctionName, Signature};
-use entity_map::EntityRef;
-use ir::entities::StackSlot;
+use entity_map::{EntityRef, EntityMap};
+use ir::entities::{StackSlot, JumpTable};
+use ir::jumptable::JumpTableData;
 use ir::dfg::DataFlowGraph;
 use ir::layout::Layout;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -27,6 +29,9 @@ pub struct Function {
     /// Stack slots allocated in this function.
     stack_slots: Vec<StackSlotData>,
 
+    /// Jump tables used in this function.
+    pub jump_tables: EntityMap<JumpTable, JumpTableData>,
+
     /// Data flow graph containing the primary definition of all instructions, EBBs and values.
     pub dfg: DataFlowGraph,
 
@@ -41,6 +46,7 @@ impl Function {
             name: name,
             signature: sig,
             stack_slots: Vec::new(),
+            jump_tables: EntityMap::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),
         }
