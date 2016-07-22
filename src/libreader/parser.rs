@@ -17,6 +17,7 @@ use cretonne::ir::entities::*;
 use cretonne::ir::instructions::{Opcode, InstructionFormat, InstructionData, VariableArgs,
                                  JumpData, BranchData, ReturnData};
 use cretonne::ir::{Function, StackSlotData};
+use cretonne::ir::jumptable::JumpTableData;
 
 pub use lexer::Location;
 
@@ -71,6 +72,7 @@ pub struct Parser<'a> {
 struct Context {
     function: Function,
     stack_slots: HashMap<u32, StackSlot>, // ssNN
+    jump_tables: HashMap<u32, JumpTable>, // jtNN
     ebbs: HashMap<Ebb, Ebb>, // ebbNN
     values: HashMap<Value, Value>, // vNN, vxNN
 
@@ -83,6 +85,7 @@ impl Context {
         Context {
             function: f,
             stack_slots: HashMap::new(),
+            jump_tables: HashMap::new(),
             ebbs: HashMap::new(),
             values: HashMap::new(),
             inst_locs: Vec::new(),
@@ -93,6 +96,15 @@ impl Context {
     fn add_ss(&mut self, number: u32, data: StackSlotData, loc: &Location) -> Result<()> {
         if self.stack_slots.insert(number, self.function.make_stack_slot(data)).is_some() {
             err!(loc, "duplicate stack slot: ss{}", number)
+        } else {
+            Ok(())
+        }
+    }
+
+    // Allocate a new jump table and add a mapping number -> JumpTable.
+    fn add_jt(&mut self, number: u32, data: JumpTableData, loc: &Location) -> Result<()> {
+        if self.jump_tables.insert(number, self.function.jump_tables.push(data)).is_some() {
+            err!(loc, "duplicate jump table: jt{}", number)
         } else {
             Ok(())
         }
@@ -211,8 +223,15 @@ impl Context {
             }
         }
 
-        // TODO: Rewrite EBB references in jump tables. (Once jump table data structures are
-        // defined).
+        // Rewrite EBB references in jump tables.
+        let loc = Location { line_number: 0 };
+        for jt in self.function.jump_tables.keys() {
+            for ebb in self.function.jump_tables[jt].as_mut_slice() {
+                if *ebb != NO_EBB {
+                    try!(Self::rewrite_ebb(&self.ebbs, ebb, &loc));
+                }
+            }
+        }
 
         Ok(())
     }
@@ -307,6 +326,16 @@ impl<'a> Parser<'a> {
         if let Some(Token::StackSlot(ss)) = self.token() {
             self.consume();
             Ok(ss)
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume a jump table reference.
+    fn match_jt(&mut self, err_msg: &str) -> Result<u32> {
+        if let Some(Token::JumpTable(jt)) = self.token() {
+            self.consume();
+            Ok(jt)
         } else {
             err!(self.loc, err_msg)
         }
@@ -530,6 +559,7 @@ impl<'a> Parser<'a> {
     // preamble-decl ::= * stack-slot-decl
     //                   * function-decl
     //                   * signature-decl
+    //                   * jump-table-decl
     //
     // The parsed decls are added to `ctx` rather than returned.
     fn parse_preamble(&mut self, ctx: &mut Context) -> Result<()> {
@@ -539,13 +569,17 @@ impl<'a> Parser<'a> {
                     self.parse_stack_slot_decl()
                         .and_then(|(num, dat)| ctx.add_ss(num, dat, &self.loc))
                 }
+                Some(Token::JumpTable(..)) => {
+                    self.parse_jump_table_decl()
+                        .and_then(|(num, dat)| ctx.add_jt(num, dat, &self.loc))
+                }
                 // More to come..
                 _ => return Ok(()),
             });
         }
     }
 
-    // Parse a stack slot decl, add to `func`.
+    // Parse a stack slot decl.
     //
     // stack-slot-decl ::= * StackSlot(ss) "=" "stack_slot" Bytes {"," stack-slot-flag}
     fn parse_stack_slot_decl(&mut self) -> Result<(u32, StackSlotData)> {
@@ -562,6 +596,48 @@ impl<'a> Parser<'a> {
 
         // TBD: stack-slot-decl ::= StackSlot(ss) "=" "stack_slot" Bytes * {"," stack-slot-flag}
         Ok((number, data))
+    }
+
+    // Parse a jump table decl.
+    //
+    // jump-table-decl ::= * JumpTable(jt) "=" "jump_table" jt-entry {"," jt-entry}
+    fn parse_jump_table_decl(&mut self) -> Result<(u32, JumpTableData)> {
+        let number = try!(self.match_jt("expected jump table number: jt«n»"));
+        try!(self.match_token(Token::Equal, "expected '=' in jump_table decl"));
+        try!(self.match_identifier("jump_table", "expected 'jump_table'"));
+
+        let mut data = JumpTableData::new();
+
+        // jump-table-decl ::= JumpTable(jt) "=" "jump_table" * jt-entry {"," jt-entry}
+        for idx in 0usize.. {
+            if let Some(dest) = try!(self.parse_jump_table_entry()) {
+                data.set_entry(idx, dest);
+            }
+            if !self.optional(Token::Comma) {
+                return Ok((number, data));
+            }
+        }
+
+        err!(self.loc, "jump_table too long")
+    }
+
+    // jt-entry ::= * Ebb(dest) | "0"
+    fn parse_jump_table_entry(&mut self) -> Result<Option<Ebb>> {
+        match self.token() {
+            Some(Token::Integer(s)) => {
+                if s == "0" {
+                    self.consume();
+                    Ok(None)
+                } else {
+                    err!(self.loc, "invalid jump_table entry '{}'", s)
+                }
+            }
+            Some(Token::Ebb(dest)) => {
+                self.consume();
+                Ok(Some(dest))
+            }
+            _ => err!(self.loc, "expected jump_table entry"),
+        }
     }
 
     // Parse a function body, add contents to `ctx`.

@@ -38,6 +38,7 @@ pub enum Token<'a> {
     Value(Value), // v12, vx7
     Ebb(Ebb), // ebb3
     StackSlot(u32), // ss3
+    JumpTable(u32), // jt2
     Identifier(&'a str), // Unrecognized identifier (opcode, enumerator, ...)
 }
 
@@ -291,6 +292,7 @@ impl<'a> Lexer<'a> {
             "vx" => Value::table_with_number(value).map(|v| Token::Value(v)),
             "ebb" => Ebb::with_number(value).map(|ebb| Token::Ebb(ebb)),
             "ss" => Some(Token::StackSlot(value)),
+            "jt" => Some(Token::JumpTable(value)),
             _ => None,
         }
     }
