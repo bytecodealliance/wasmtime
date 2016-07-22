@@ -5,9 +5,9 @@
 //! `cretonne-reader` crate.
 
 use std::io::{self, Write};
-use repr::Function;
-use repr::entities::{Inst, Ebb, Value};
-use repr::types::Type;
+use ir::Function;
+use ir::entities::{Inst, Ebb, Value};
+use ir::types::Type;
 
 pub type Result = io::Result<()>;
 
@@ -182,7 +182,7 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
     }
 
     // Then the operands, depending on format.
-    use repr::instructions::InstructionData::*;
+    use ir::instructions::InstructionData::*;
     match func.dfg[inst] {
         Nullary { .. } => writeln!(w, ""),
         Unary { arg, .. } => writeln!(w, " {}", arg),
@@ -217,8 +217,8 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
 mod tests {
     use super::*;
     use super::{needs_quotes, escaped};
-    use repr::{Function, StackSlotData};
-    use repr::types;
+    use ir::{Function, StackSlotData};
+    use ir::types;
 
     #[test]
     fn quoting() {

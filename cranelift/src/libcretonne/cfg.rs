@@ -22,9 +22,9 @@
 //! Here Ebb1 and Ebb2 would each have a single predecessor denoted as (Ebb0, `brz vx, Ebb1`)
 //! and (Ebb0, `jmp Ebb2`) respectively.
 
-use repr::Function;
-use repr::entities::{Inst, Ebb};
-use repr::instructions::InstructionData;
+use ir::Function;
+use ir::entities::{Inst, Ebb};
+use ir::instructions::InstructionData;
 use entity_map::EntityMap;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
@@ -158,7 +158,7 @@ impl<'a> Iterator for CFGPredecessorsIter<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use repr::Function;
+    use ir::Function;
 
     use test_utils::make_inst;
 

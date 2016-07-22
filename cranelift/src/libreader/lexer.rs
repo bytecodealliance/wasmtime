@@ -6,8 +6,8 @@
 // ====--------------------------------------------------------------------------------------====//
 
 use std::str::CharIndices;
-use cretonne::repr::types;
-use cretonne::repr::entities::{Value, Ebb};
+use cretonne::ir::types;
+use cretonne::ir::entities::{Value, Ebb};
 
 /// The location of a `Token` or `Error`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -373,8 +373,8 @@ impl<'a> Lexer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne::repr::types;
-    use cretonne::repr::entities::{Value, Ebb};
+    use cretonne::ir::types;
+    use cretonne::ir::entities::{Value, Ebb};
 
     fn token<'a>(token: Token<'a>, line: usize) -> Option<Result<LocatedToken<'a>, LocatedError>> {
         Some(super::token(token, Location { line_number: line }))

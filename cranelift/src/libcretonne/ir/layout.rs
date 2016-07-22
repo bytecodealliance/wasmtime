@@ -5,7 +5,7 @@
 
 use std::iter::{Iterator, IntoIterator};
 use entity_map::{EntityMap, EntityRef};
-use repr::entities::{Ebb, NO_EBB, Inst, NO_INST};
+use ir::entities::{Ebb, NO_EBB, Inst, NO_INST};
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
 /// contain definitions of instructions or EBBs, but depends on `Inst` and `Ebb` entity references
@@ -242,7 +242,7 @@ impl<'a> Iterator for Insts<'a> {
 mod tests {
     use super::Layout;
     use entity_map::EntityRef;
-    use repr::entities::{Ebb, Inst};
+    use ir::entities::{Ebb, Inst};
 
     #[test]
     fn append_ebb() {
