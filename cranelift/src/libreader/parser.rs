@@ -15,7 +15,7 @@ use cretonne::ir::types::{Type, VOID, FunctionName, Signature, ArgumentType, Arg
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::*;
 use cretonne::ir::instructions::{Opcode, InstructionFormat, InstructionData, VariableArgs,
-                                   JumpData, BranchData, ReturnData};
+                                 JumpData, BranchData, ReturnData};
 use cretonne::ir::{Function, StackSlotData};
 
 pub use lexer::Location;
@@ -578,22 +578,14 @@ impl<'a> Parser<'a> {
     // Parse an extended basic block, add contents to `ctx`.
     //
     // extended-basic-block ::= * ebb-header { instruction }
-    // ebb-header           ::= ["entry"] Ebb(ebb) [ebb-args] ":"
+    // ebb-header           ::= Ebb(ebb) [ebb-args] ":"
     //
     fn parse_extended_basic_block(&mut self, ctx: &mut Context) -> Result<()> {
-        let is_entry = self.optional(Token::Entry);
         let ebb_num = try!(self.match_ebb("expected EBB header"));
         let ebb = try!(ctx.add_ebb(ebb_num, &self.loc));
 
-        if is_entry {
-            if ctx.function.entry_block != NO_EBB {
-                return err!(self.loc, "multiple entry blocks in function");
-            }
-            ctx.function.entry_block = ebb;
-        }
-
         if !self.optional(Token::Colon) {
-            // ebb-header ::= ["entry"] Ebb(ebb) [ * ebb-args ] ":"
+            // ebb-header ::= Ebb(ebb) [ * ebb-args ] ":"
             try!(self.parse_ebb_args(ctx, ebb));
             try!(self.match_token(Token::Colon, "expected ':' after EBB arguments"));
         }

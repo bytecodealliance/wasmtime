@@ -32,7 +32,6 @@ pub enum Token<'a> {
     Equal, // '='
     Arrow, // '->'
     Function, // 'function'
-    Entry, // 'entry'
     Float(&'a str), // Floating point immediate
     Integer(&'a str), // Integer immediate
     Type(types::Type), // i32, f32, b32x4, ...
@@ -270,7 +269,6 @@ impl<'a> Lexer<'a> {
     fn keyword(text: &str) -> Option<Token<'a>> {
         match text {
             "function" => Some(Token::Function),
-            "entry" => Some(Token::Entry),
             _ => None,
         }
     }
@@ -444,7 +442,7 @@ mod tests {
 
     #[test]
     fn lex_identifiers() {
-        let mut lex = Lexer::new("v0 v00 vx01 ebb1234567890 ebb5234567890 entry v1x vx1 vxvx4 \
+        let mut lex = Lexer::new("v0 v00 vx01 ebb1234567890 ebb5234567890 v1x vx1 vxvx4 \
                                   function0 function b1 i32x4 f32x5");
         assert_eq!(lex.next(),
                    token(Token::Value(Value::direct_with_number(0).unwrap()), 1));
@@ -453,7 +451,6 @@ mod tests {
         assert_eq!(lex.next(),
                    token(Token::Ebb(Ebb::with_number(1234567890).unwrap()), 1));
         assert_eq!(lex.next(), token(Token::Identifier("ebb5234567890"), 1));
-        assert_eq!(lex.next(), token(Token::Entry, 1));
         assert_eq!(lex.next(), token(Token::Identifier("v1x"), 1));
         assert_eq!(lex.next(),
                    token(Token::Value(Value::table_with_number(1).unwrap()), 1));

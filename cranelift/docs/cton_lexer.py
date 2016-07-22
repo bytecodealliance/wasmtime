@@ -26,7 +26,7 @@ class CretonneLexer(RegexLexer):
             (r'[-+]?(\d+\.\d+([eE]\d+)?|[sq]NaN|Inf)', Number.Float),
             (r'[-+]?\d+', Number.Integer),
             # Reserved words.
-            (keywords('function', 'entry'), Keyword),
+            (keywords('function'), Keyword),
             # Known attributes.
             (keywords('align', 'aligntrap', 'uext', 'sext', 'inreg'), Name.Attribute),
             # Well known value types.

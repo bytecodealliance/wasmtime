@@ -41,9 +41,9 @@ that can be referenced inside the function. In the example above, the preamble
 declares a single local variable, ``ss1``.
 
 After the preamble follows the :term:`function body` which consists of
-:term:`extended basic block`\s, one of which is marked as the :term:`entry
-block`. Every EBB ends with a :term:`terminator instruction`, so execution can
-never fall through to the next EBB without an explicit branch.
+:term:`extended basic block`\s, the first of which is the :term:`entry block`.
+Every EBB ends with a :term:`terminator instruction`, so execution can never
+fall through to the next EBB without an explicit branch.
 
 A ``.cton`` file consists of a sequence of independent function definitions:
 
@@ -395,7 +395,7 @@ This simple example illustrates direct function calls and signatures::
     function gcd(i32 uext, i32 uext) -> i32 uext "C" {
         f1 = function divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
 
-    entry ebb1(v1: i32, v2: i32):
+    ebb1(v1: i32, v2: i32):
         brz v2, ebb2
         v3, v4 = call f1(v1, v2)
         br ebb1(v2, v4)
@@ -625,7 +625,7 @@ A small example using heaps::
     function vdup(i32, i32) {
         h1 = heap "main"
 
-    entry ebb1(v1: i32, v2: i32):
+    ebb1(v1: i32, v2: i32):
         v3 = heap_load.i32x4 h1, v1, 0
         v4 = heap_addr h1, v2, 32      ; Shared range check for two stores.
         store v3, v4, 0
@@ -878,9 +878,9 @@ Glossary
 
     entry block
         The :term:`EBB` that is executed first in a function. Currently, a
-        Cretonne function must have exactly one entry block. The types of the
-        entry block arguments must match the types of arguments in the function
-        signature.
+        Cretonne function must have exactly one entry block which must be the
+        first block in the function. The types of the entry block arguments must
+        match the types of arguments in the function signature.
 
     stack slot
         A fixed size memory allocation in the current function's activation

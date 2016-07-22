@@ -10,7 +10,7 @@ pub mod layout;
 
 use ir::types::{FunctionName, Signature};
 use entity_map::EntityRef;
-use ir::entities::{Ebb, NO_EBB, StackSlot};
+use ir::entities::StackSlot;
 use ir::dfg::DataFlowGraph;
 use ir::layout::Layout;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -23,9 +23,6 @@ pub struct Function {
 
     /// Signature of this function.
     signature: Signature,
-
-    /// The entry block.
-    pub entry_block: Ebb,
 
     /// Stack slots allocated in this function.
     stack_slots: Vec<StackSlotData>,
@@ -43,7 +40,6 @@ impl Function {
         Function {
             name: name,
             signature: sig,
-            entry_block: NO_EBB,
             stack_slots: Vec::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),
