@@ -81,6 +81,15 @@ impl<K, V> EntityMap<K, V>
     pub fn len(&self) -> usize {
         self.elems.len()
     }
+
+    /// Iterate over all the keys in this map.
+    pub fn keys(&self) -> Keys<K> {
+        Keys {
+            pos: 0,
+            len: self.elems.len(),
+            unused: PhantomData,
+        }
+    }
 }
 
 /// Additional methods for value types that implement `Clone` and `Default`.
@@ -127,12 +136,37 @@ impl<K, V> IndexMut<K> for EntityMap<K, V>
     }
 }
 
+/// Iterate over all keys in order.
+pub struct Keys<K>
+    where K: EntityRef
+{
+    pos: usize,
+    len: usize,
+    unused: PhantomData<K>,
+}
+
+impl<K> Iterator for Keys<K>
+    where K: EntityRef
+{
+    type Item = K;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos < self.len {
+            let k = K::new(self.pos);
+            self.pos += 1;
+            Some(k)
+        } else {
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     // EntityRef impl for testing.
-    #[derive(Clone, Copy, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     struct E(u32);
 
     impl EntityRef for E {
@@ -151,6 +185,9 @@ mod tests {
         let r2 = E(2);
         let mut m = EntityMap::new();
 
+        let v: Vec<E> = m.keys().collect();
+        assert_eq!(v, []);
+
         assert!(!m.is_valid(r0));
         m.ensure(r2);
         m[r2] = 3;
@@ -159,6 +196,9 @@ mod tests {
 
         assert_eq!(m[r1], 5);
         assert_eq!(m[r2], 3);
+
+        let v: Vec<E> = m.keys().collect();
+        assert_eq!(v, [r0, r1, r2]);
 
         let shared = &m;
         assert_eq!(shared[r0], 0);
