@@ -1,9 +1,9 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
 use entity_map::EntityMap;
-use repr::entities::{Ebb, Inst, Value, NO_VALUE, ExpandedValue};
-use repr::instructions::InstructionData;
-use repr::types::Type;
+use ir::entities::{Ebb, Inst, Value, NO_VALUE, ExpandedValue};
+use ir::instructions::InstructionData;
+use ir::types::Type;
 use std::ops::{Index, IndexMut};
 use std::u16;
 
@@ -57,7 +57,7 @@ impl DataFlowGraph {
 
     /// Get the type of a value.
     pub fn value_type(&self, v: Value) -> Type {
-        use repr::entities::ExpandedValue::*;
+        use ir::entities::ExpandedValue::*;
         match v.expand() {
             Direct(i) => self.insts[i].first_type(),
             Table(i) => {
@@ -75,7 +75,7 @@ impl DataFlowGraph {
     /// This is either the instruction that defined it or the Ebb that has the value as an
     /// argument.
     pub fn value_def(&self, v: Value) -> ValueDef {
-        use repr::entities::ExpandedValue::*;
+        use ir::entities::ExpandedValue::*;
         match v.expand() {
             Direct(inst) => ValueDef::Res(inst, 0),
             Table(idx) => {
@@ -339,8 +339,8 @@ impl EbbData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use repr::types;
-    use repr::instructions::{Opcode, InstructionData};
+    use ir::types;
+    use ir::instructions::{Opcode, InstructionData};
 
     #[test]
     fn make_inst() {

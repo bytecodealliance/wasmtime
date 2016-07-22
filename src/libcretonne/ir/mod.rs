@@ -8,11 +8,11 @@ pub mod instructions;
 pub mod dfg;
 pub mod layout;
 
-use repr::types::{FunctionName, Signature};
+use ir::types::{FunctionName, Signature};
 use entity_map::EntityRef;
-use repr::entities::{Ebb, NO_EBB, StackSlot};
-use repr::dfg::DataFlowGraph;
-use repr::layout::Layout;
+use ir::entities::{Ebb, NO_EBB, StackSlot};
+use ir::dfg::DataFlowGraph;
+use ir::layout::Layout;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::Index;
 
