@@ -104,11 +104,8 @@ impl ControlFlowGraph {
         &self.data[ebb].successors
     }
 
-    pub fn postorder_ebbs(&self) -> Vec<Ebb> {
-        if self.len() < 1 {
-            return Vec::new();
-        }
-        let mut stack_a = vec![Ebb::with_number(0).unwrap()];
+    pub fn postorder_ebbs(&self, entry: Ebb) -> Vec<Ebb> {
+        let mut stack_a = vec![entry];
         let mut stack_b = Vec::new();
         while stack_a.len() > 0 {
             let cur = stack_a.pop().unwrap();
@@ -282,7 +279,7 @@ mod tests {
         func.layout.append_inst(jmp_ebb2_ebb5, ebb2);
 
         let cfg = ControlFlowGraph::new(&func);
-        assert_eq!(cfg.postorder_ebbs(),
+        assert_eq!(cfg.postorder_ebbs(func.layout.entry_block().unwrap()),
                    vec![ebb0, ebb2, ebb5, ebb4, ebb1, ebb3]);
     }
 
@@ -309,6 +306,7 @@ mod tests {
         func.layout.append_inst(jmp_ebb2_ebb3, ebb2);
 
         let cfg = ControlFlowGraph::new(&func);
-        assert_eq!(cfg.postorder_ebbs(), vec![ebb0, ebb1, ebb2, ebb3]);
+        assert_eq!(cfg.postorder_ebbs(func.layout.entry_block().unwrap()),
+                   vec![ebb0, ebb1, ebb2, ebb3]);
     }
 }

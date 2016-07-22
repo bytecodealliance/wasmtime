@@ -108,6 +108,12 @@ impl Layout {
             next: self.first_ebb,
         }
     }
+
+    /// Get the function's entry block.
+    /// This is simply the first EBB in the layout order.
+    pub fn entry_block(&self) -> Option<Ebb> {
+        self.first_ebb
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -414,8 +420,11 @@ mod tests {
         let e0 = Ebb::new(0);
         let e1 = Ebb::new(1);
 
+        assert_eq!(layout.entry_block(), None);
         layout.append_ebb(e0);
+        assert_eq!(layout.entry_block(), Some(e0));
         layout.append_ebb(e1);
+        assert_eq!(layout.entry_block(), Some(e0));
 
         let i0 = Inst::new(0);
         let i1 = Inst::new(1);
