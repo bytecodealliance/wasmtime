@@ -110,6 +110,14 @@ impl Context {
         }
     }
 
+    // Resolve a reference to a jump table.
+    fn get_jt(&self, number: u32, loc: &Location) -> Result<JumpTable> {
+        match self.jump_tables.get(&number) {
+            Some(&jt) => Ok(jt),
+            None => err!(loc, "undefined jump table jt{}", number),
+        }
+    }
+
     // Allocate a new EBB and add a mapping src_ebb -> Ebb.
     fn add_ebb(&mut self, src_ebb: Ebb, loc: &Location) -> Result<Ebb> {
         let ebb = self.function.dfg.make_ebb();
@@ -332,12 +340,12 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a jump table reference.
-    fn match_jt(&mut self, err_msg: &str) -> Result<u32> {
+    fn match_jt(&mut self) -> Result<u32> {
         if let Some(Token::JumpTable(jt)) = self.token() {
             self.consume();
             Ok(jt)
         } else {
-            err!(self.loc, err_msg)
+            err!(self.loc, "expected jump table number: jt«n»")
         }
     }
 
@@ -602,7 +610,7 @@ impl<'a> Parser<'a> {
     //
     // jump-table-decl ::= * JumpTable(jt) "=" "jump_table" jt-entry {"," jt-entry}
     fn parse_jump_table_decl(&mut self) -> Result<(u32, JumpTableData)> {
-        let number = try!(self.match_jt("expected jump table number: jt«n»"));
+        let number = try!(self.match_jt());
         try!(self.match_token(Token::Equal, "expected '=' in jump_table decl"));
         try!(self.match_identifier("jump_table", "expected 'jump_table'"));
 
@@ -763,7 +771,7 @@ impl<'a> Parser<'a> {
         };
 
         // instruction ::=  [inst-results "="] Opcode(opc) ["." Type] * ...
-        let inst_data = try!(self.parse_inst_operands(opcode));
+        let inst_data = try!(self.parse_inst_operands(ctx, opcode));
 
         // We're done parsing the instruction now.
         //
@@ -914,7 +922,7 @@ impl<'a> Parser<'a> {
 
     // Parse the operands following the instruction opcode.
     // This depends on the format of the opcode.
-    fn parse_inst_operands(&mut self, opcode: Opcode) -> Result<InstructionData> {
+    fn parse_inst_operands(&mut self, ctx: &Context, opcode: Opcode) -> Result<InstructionData> {
         Ok(match opcode.format().unwrap() {
             InstructionFormat::Nullary => {
                 InstructionData::Nullary {
@@ -1096,7 +1104,17 @@ impl<'a> Parser<'a> {
                     data: Box::new(ReturnData { args: args }),
                 }
             }
-            InstructionFormat::BranchTable |
+            InstructionFormat::BranchTable => {
+                let arg = try!(self.match_value("expected SSA value operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let table = try!(self.match_jt().and_then(|num| ctx.get_jt(num, &self.loc)));
+                InstructionData::BranchTable {
+                    opcode: opcode,
+                    ty: VOID,
+                    arg: arg,
+                    table: table,
+                }
+            }
             InstructionFormat::Call => {
                 unimplemented!();
             }

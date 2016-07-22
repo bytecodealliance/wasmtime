@@ -38,11 +38,12 @@ ebb1(vx2: i32, vx3: f32):
     brnz vx0, ebb0(vx2, vx3)
 }
 
-function jumptable() {
+function jumptable(i32) {
     jt0 = jump_table 0
     jt1 = jump_table 0, 0, ebb0, ebb3, ebb1, ebb2
 
-ebb0:
+ebb0(vx0: i32):
+    br_table vx0, jt1
     trap
 
 ebb1:
