@@ -24,8 +24,9 @@
 
 use ir::Function;
 use ir::entities::{Inst, Ebb};
-use ir::instructions::BranchInfo;
+use ir::instructions::InstructionData;
 use entity_map::EntityMap;
+use std::collections::{HashSet, BTreeMap};
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 pub type BasicBlock = (Ebb, Inst);
@@ -51,6 +52,7 @@ impl CFGNode {
 /// extended basic blocks.
 #[derive(Debug)]
 pub struct ControlFlowGraph {
+    entry_block: Option<Ebb>,
     data: EntityMap<Ebb, CFGNode>,
 }
 
@@ -58,7 +60,11 @@ impl ControlFlowGraph {
     /// During initialization mappings will be generated for any existing
     /// blocks within the CFG's associated function.
     pub fn new(func: &Function) -> ControlFlowGraph {
-        let mut cfg = ControlFlowGraph { data: EntityMap::new() };
+
+        let mut cfg = ControlFlowGraph {
+            data: EntityMap::new(),
+            entry_block: func.layout.entry_block(),
+        };
 
         // Even ebbs without predecessors should show up in the CFG, albeit
         // with no entires.
@@ -68,18 +74,16 @@ impl ControlFlowGraph {
 
         for ebb in &func.layout {
             for inst in func.layout.ebb_insts(ebb) {
-                match func.dfg[inst].analyze_branch() {
-                    BranchInfo::SingleDest(dest, _) => {
-                        cfg.add_successor(ebb, dest);
-                        cfg.add_predecessor(dest, (ebb, inst));
+                match func.dfg[inst] {
+                    InstructionData::Branch { ty: _, opcode: _, ref data } => {
+                        cfg.add_successor(ebb, data.destination);
+                        cfg.add_predecessor(data.destination, (ebb, inst));
                     }
-                    BranchInfo::Table(jt) => {
-                        for (_, dest) in func.jump_tables[jt].entries() {
-                            cfg.add_successor(ebb, dest);
-                            cfg.add_predecessor(dest, (ebb, inst));
-                        }
+                    InstructionData::Jump { ty: _, opcode: _, ref data } => {
+                        cfg.add_successor(ebb, data.destination);
+                        cfg.add_predecessor(data.destination, (ebb, inst));
                     }
-                    BranchInfo::NotABranch => {}
+                    _ => (),
                 }
             }
         }
@@ -106,19 +110,30 @@ impl ControlFlowGraph {
         &self.data[ebb].successors
     }
 
-    pub fn postorder_ebbs(&self, entry: Ebb) -> Vec<Ebb> {
-        let mut stack_a = vec![entry];
-        let mut stack_b = Vec::new();
+    /// Return ebbs in reverse postorder along with a mapping of
+    /// the ebb to its order of visitation.
+    pub fn reverse_postorder_ebbs(&self) -> BTreeMap<Ebb, usize> {
+        let entry_block = match self.entry_block {
+            None => {
+                return BTreeMap::new();
+            }
+            Some(eb) => eb,
+        };
+        let mut seen = HashSet::new();
+        let mut stack_a = vec![entry_block];
+        let mut finished = BTreeMap::new();
         while stack_a.len() > 0 {
             let cur = stack_a.pop().unwrap();
             for child in &self.data[cur].successors {
-                if *child != cur && !stack_a.contains(child) {
+                if *child != cur && !seen.contains(&child) {
+                    seen.insert(child);
                     stack_a.push(child.clone());
                 }
             }
-            stack_b.push(cur);
+            let index = finished.len();
+            finished.insert(cur, index);
         }
-        stack_b
+        finished
     }
 
     pub fn len(&self) -> usize {
@@ -281,12 +296,15 @@ mod tests {
         func.layout.append_inst(jmp_ebb2_ebb5, ebb2);
 
         let cfg = ControlFlowGraph::new(&func);
-        assert_eq!(cfg.postorder_ebbs(func.layout.entry_block().unwrap()),
-                   vec![ebb0, ebb2, ebb5, ebb4, ebb1, ebb3]);
+        let mut postorder = vec![ebb3, ebb1, ebb4, ebb5, ebb2, ebb0];
+        postorder.reverse();
+        for (ebb, key) in cfg.reverse_postorder_ebbs() {
+            assert_eq!(ebb, postorder[key]);
+        }
     }
 
     #[test]
-    fn loop_edge() {
+    fn loops_one() {
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();
         let ebb1 = func.dfg.make_ebb();
@@ -308,7 +326,55 @@ mod tests {
         func.layout.append_inst(jmp_ebb2_ebb3, ebb2);
 
         let cfg = ControlFlowGraph::new(&func);
-        assert_eq!(cfg.postorder_ebbs(func.layout.entry_block().unwrap()),
-                   vec![ebb0, ebb1, ebb2, ebb3]);
+        let mut postorder = vec![ebb3, ebb2, ebb1, ebb0];
+        postorder.reverse();
+        for (ebb, key) in cfg.reverse_postorder_ebbs() {
+            assert_eq!(ebb, postorder[key]);
+        }
+    }
+
+    #[test]
+    fn loops_two() {
+        let mut func = Function::new();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
+        let ebb3 = func.dfg.make_ebb();
+        let ebb4 = func.dfg.make_ebb();
+        let ebb5 = func.dfg.make_ebb();
+
+        func.layout.append_ebb(ebb0);
+        func.layout.append_ebb(ebb1);
+        func.layout.append_ebb(ebb2);
+        func.layout.append_ebb(ebb3);
+        func.layout.append_ebb(ebb4);
+        func.layout.append_ebb(ebb5);
+
+        let jmp_ebb0_ebb1 = make_inst::jump(&mut func, ebb1);
+        let jmp_ebb0_ebb2 = make_inst::jump(&mut func, ebb2);
+        let jmp_ebb1_ebb3 = make_inst::jump(&mut func, ebb3);
+        let br_ebb2_ebb4 = make_inst::jump(&mut func, ebb4);
+        let jmp_ebb2_ebb5 = make_inst::jump(&mut func, ebb5);
+        let jmp_ebb3_ebb4 = make_inst::jump(&mut func, ebb4);
+        let br_ebb4_ebb3 = make_inst::branch(&mut func, ebb3);
+        let jmp_ebb4_ebb5 = make_inst::jump(&mut func, ebb5);
+        let jmp_ebb5_ebb4 = make_inst::jump(&mut func, ebb4);
+
+        func.layout.append_inst(jmp_ebb0_ebb1, ebb0);
+        func.layout.append_inst(jmp_ebb0_ebb2, ebb0);
+        func.layout.append_inst(jmp_ebb1_ebb3, ebb1);
+        func.layout.append_inst(br_ebb2_ebb4, ebb2);
+        func.layout.append_inst(jmp_ebb2_ebb5, ebb2);
+        func.layout.append_inst(jmp_ebb3_ebb4, ebb3);
+        func.layout.append_inst(br_ebb4_ebb3, ebb4);
+        func.layout.append_inst(jmp_ebb4_ebb5, ebb4);
+        func.layout.append_inst(jmp_ebb5_ebb4, ebb5);
+
+        let cfg = ControlFlowGraph::new(&func);
+        let mut postorder = vec![ebb1, ebb3, ebb4, ebb5, ebb2, ebb0];
+        postorder.reverse();
+        for (ebb, key) in cfg.reverse_postorder_ebbs() {
+            assert_eq!(ebb, postorder[key]);
+        }
     }
 }
