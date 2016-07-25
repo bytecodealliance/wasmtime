@@ -120,14 +120,14 @@ impl ControlFlowGraph {
             Some(eb) => eb,
         };
         let mut seen = HashSet::new();
-        let mut stack_a = vec![entry_block];
+        let mut open_nodes = vec![entry_block];
         let mut finished = BTreeMap::new();
-        while stack_a.len() > 0 {
-            let cur = stack_a.pop().unwrap();
+        while open_nodes.len() > 0 {
+            let cur = open_nodes.pop().unwrap();
             for child in &self.data[cur].successors {
                 if *child != cur && !seen.contains(&child) {
                     seen.insert(child);
-                    stack_a.push(child.clone());
+                    open_nodes.push(child.clone());
                 }
             }
             let index = finished.len();
