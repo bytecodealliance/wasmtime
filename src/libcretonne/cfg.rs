@@ -26,7 +26,7 @@ use ir::Function;
 use ir::entities::{Inst, Ebb};
 use ir::instructions::InstructionData;
 use entity_map::EntityMap;
-use std::collections::{HashSet, BTreeMap};
+use std::collections::{HashMap, BTreeMap};
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 pub type BasicBlock = (Ebb, Inst);
@@ -111,7 +111,7 @@ impl ControlFlowGraph {
     }
 
     /// Return ebbs in reverse postorder along with a mapping of
-    /// the ebb to its order of visitation.
+    /// the ebb to its [post]order of visitation.
     pub fn reverse_postorder_ebbs(&self) -> BTreeMap<Ebb, usize> {
         let entry_block = match self.entry_block {
             None => {
@@ -119,21 +119,14 @@ impl ControlFlowGraph {
             }
             Some(eb) => eb,
         };
-        let mut seen = HashSet::new();
-        let mut open_nodes = vec![entry_block];
-        let mut finished = BTreeMap::new();
-        while open_nodes.len() > 0 {
-            let cur = open_nodes.pop().unwrap();
-            for child in &self.data[cur].successors {
-                if *child != cur && !seen.contains(&child) {
-                    seen.insert(child);
-                    open_nodes.push(child.clone());
-                }
-            }
-            let index = finished.len();
-            finished.insert(cur, index);
+        let mut postorder = CFGPostorderWalker::new(&self, entry_block).walk();
+        postorder.reverse();
+        let mut result = BTreeMap::new();
+        for (offset, ebb) in postorder.iter().enumerate() {
+            let i = postorder.len() - offset;
+            result.insert(ebb.clone(), i);
         }
-        finished
+        result
     }
 
     pub fn len(&self) -> usize {
@@ -145,6 +138,92 @@ impl ControlFlowGraph {
             cur: 0,
             cfg: &self,
         }
+    }
+}
+
+/// A helper for iteratively walking a CFG in postorder.
+pub struct CFGPostorderWalker<'a> {
+    cfg: &'a ControlFlowGraph,
+    start: Ebb,
+    // Ebbs are mapped to a tuple of booleans where the first bool
+    // is true if the node has been visited, and the second is
+    // true if its children have been visited.
+    visited: HashMap<Ebb, (bool, bool)>,
+    levels: Vec<Vec<Ebb>>,
+    // Our node index within the current level.
+    level_index: usize,
+}
+
+impl<'a> CFGPostorderWalker<'a> {
+    fn new(cfg: &ControlFlowGraph, start: Ebb) -> CFGPostorderWalker {
+        CFGPostorderWalker {
+            cfg: cfg,
+            start: start,
+            visited: HashMap::new(),
+            levels: Vec::new(),
+            level_index: 0,
+        }
+    }
+
+    fn visited(&self, ebb: Ebb) -> bool {
+        match self.visited.get(&ebb) {
+            Some(b) => b.0,
+            None => false,
+        }
+    }
+
+    fn children_visited(&self, ebb: Ebb) -> bool {
+        match self.visited.get(&ebb) {
+            Some(b) => b.1,
+            None => false,
+        }
+    }
+
+    fn mark_visited(&mut self, ebb: Ebb) {
+        let status = self.visited.entry(ebb).or_insert((false, false)).1;
+        self.visited.insert(ebb, (true, status));
+    }
+
+    fn mark_children_visited(&mut self, ebb: Ebb) {
+        let status = self.visited.entry(ebb).or_insert((false, false)).0;
+        self.visited.insert(ebb, (status, true));
+    }
+
+    fn walk(&mut self) -> Vec<Ebb> {
+        let mut postorder = Vec::new();
+
+        self.levels.push(vec![self.start.clone()]);
+        while self.levels.len() > 0 {
+            let level = &self.levels[self.levels.len() - 1].clone();
+
+            if self.level_index >= level.len() {
+                self.levels.pop();
+                self.level_index = 0;
+                continue;
+            }
+
+            let node = level[self.level_index].clone();
+            if !self.visited(node) {
+                if self.children_visited(node) {
+                    self.mark_visited(node);
+                    postorder.push(node.clone());
+                    self.level_index += 1;
+                } else {
+                    let edges = self.cfg.get_successors(node);
+                    let outgoing = edges.iter()
+                        .filter(|e| !self.children_visited(**e))
+                        .cloned()
+                        .collect::<Vec<Ebb>>();
+                    if outgoing.len() > 0 {
+                        self.levels.push(outgoing);
+                    }
+                    self.mark_children_visited(node);
+                }
+            } else {
+                self.level_index += 1;
+            }
+        }
+        postorder
     }
 }
 
