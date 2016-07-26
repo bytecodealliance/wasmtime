@@ -12,4 +12,7 @@ build = "build.rs"
 name = "cretonne"
 path = "lib.rs"
 
+[dev-dependencies]
+cretonne-reader = { path = "../libreader" }
+
 [dependencies]
