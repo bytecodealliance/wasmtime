@@ -11,11 +11,10 @@ fn test_reverse_postorder_traversal(function_source: &str, ebb_order: Vec<u32>) 
     let ebbs = ebb_order.iter().map(|n| Ebb::with_number(*n).unwrap())
                                .collect::<Vec<Ebb>>();
 
-    let reverse_order_ebbs = cfg.reverse_postorder_ebbs();
+    let reverse_postorder_ebbs = cfg.reverse_postorder_ebbs();
 
-    assert_eq!(reverse_order_ebbs.len(), ebbs.len());
-
-    for (ebb, key) in reverse_order_ebbs {
+    assert_eq!(reverse_postorder_ebbs.len(), ebbs.len());
+    for (ebb, key) in reverse_postorder_ebbs {
         assert_eq!(ebb, ebbs[ebbs.len() - key]);
     }
 }
@@ -87,4 +86,33 @@ fn loops_two() {
                 return
         }
     ", vec![0, 2, 1, 3, 4, 5]);
+}
+
+#[test]
+fn loops_three() {
+    test_reverse_postorder_traversal("
+        function test(i32) {
+            ebb0(v0: i32):
+                brz v0, ebb1
+                jump ebb2
+            ebb1:
+                jump ebb3
+            ebb2:
+                brz v0, ebb4
+                jump ebb5
+            ebb3:
+                jump ebb4
+            ebb4:
+                brz v0, ebb3
+                jump ebb6
+                brz v0, ebb5
+            ebb5:
+                brz v0, ebb4
+                trap
+            ebb6:
+                jump ebb7
+            ebb7:
+                return
+        }
+    ", vec![0, 2, 1, 3, 4, 5, 6, 7]);
 }
