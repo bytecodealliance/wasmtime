@@ -17,16 +17,20 @@ set -e
 cd $(dirname "$0")
 topdir=$(pwd)
 
-# Run cargo from the src/tools directory which includes all our crates for
-# building cton-util.
-cd "$topdir/src/tools"
-PKGS="-p cretonne -p cretonne-reader -p cretonne-tools"
-echo ====== Rust unit tests and debug build ======
-cargo test $PKGS
-cargo build $PKGS
-cargo doc
+PKGS="libcretonne libreader tools"
+echo ====== Rust unit tests and debug builds ======
+for PKG in $PKGS
+do
+    pushd $topdir/src/$PKG
+    cargo test
+    cargo build
+    popd
+done
 
-echo ====== Rust release build ======
+# Build cton-util for parser testing.
+echo ====== Rust release build and documentation ======
+cd "$topdir/src/tools"
+cargo doc
 cargo build --release
 
 export CTONUTIL="$topdir/src/tools/target/release/cton-util"
