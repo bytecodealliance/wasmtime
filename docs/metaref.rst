@@ -19,7 +19,7 @@ top-level directory. The descriptions are processed in two steps:
    and other properties.
 
 2. The static data structures are processed to produce Rust source code and
-   constant dables tables.
+   constant tables.
 
 The main driver for this source code generation process is the
 :file:`meta/build.py` script which is invoked as part of the build process if
@@ -115,7 +115,7 @@ Concrete value types are represented as instances of :class:`cretonne.ValueType`
 subclasses to represent scalar and vector types.
 
 .. autoclass:: ValueType
-.. inheritance-diagram:: ValueType ScalarType VectorType IntType FloatType
+.. inheritance-diagram:: ValueType ScalarType VectorType IntType FloatType BoolType
     :parts: 1
 .. autoclass:: ScalarType
     :members:
@@ -124,6 +124,8 @@ subclasses to represent scalar and vector types.
 .. autoclass:: IntType
     :members:
 .. autoclass:: FloatType
+    :members:
+.. autoclass:: BoolType
     :members:
 
 .. automodule:: cretonne.types
