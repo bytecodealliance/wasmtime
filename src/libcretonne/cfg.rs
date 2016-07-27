@@ -142,7 +142,7 @@ impl ControlFlowGraph {
 }
 
 /// A helper for iteratively walking a CFG in postorder.
-pub struct CFGPostorderWalker<'a> {
+struct CFGPostorderWalker<'a> {
     cfg: &'a ControlFlowGraph,
     start: Ebb,
     // Ebbs are mapped to a tuple of booleans where the first bool
@@ -194,15 +194,14 @@ impl<'a> CFGPostorderWalker<'a> {
 
         self.levels.push(vec![self.start.clone()]);
         while self.levels.len() > 0 {
-            let level = &self.levels[self.levels.len() - 1].clone();
-
-            if self.level_index >= level.len() {
+            let level_len = self.levels[self.levels.len() - 1].len();
+            if self.level_index >= level_len {
                 self.levels.pop();
                 self.level_index = 0;
                 continue;
             }
 
-            let node = level[self.level_index].clone();
+            let node = self.levels[self.levels.len() - 1][self.level_index].clone();
             if !self.visited(node) {
                 if self.children_visited(node) {
                     self.mark_visited(node);
