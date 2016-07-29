@@ -21,10 +21,11 @@ PKGS="libcretonne libreader tools"
 echo ====== Rust unit tests and debug builds ======
 for PKG in $PKGS
 do
-    pushd $topdir/src/$PKG
+    (
+    cd $topdir/src/$PKG
     cargo test
     cargo build
-    popd
+    )
 done
 
 # Build cton-util for parser testing.
