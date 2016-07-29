@@ -42,6 +42,22 @@ impl DataFlowGraph {
             extended_values: Vec::new(),
         }
     }
+
+    /// Get the total number of instructions created in this function, whether they are currently
+    /// inserted in the layout or not.
+    ///
+    /// This is intended for use with `EntityMap::with_capacity`.
+    pub fn num_insts(&self) -> usize {
+        self.insts.len()
+    }
+
+    /// Get the total number of extended basic blocks created in this function, whether they are
+    /// currently inserted in the layout or not.
+    ///
+    /// This is intended for use with `EntityMap::with_capacity`.
+    pub fn num_ebbs(&self) -> usize {
+        self.ebbs.len()
+    }
 }
 
 /// Handling values.

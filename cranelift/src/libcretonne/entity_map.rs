@@ -102,6 +102,21 @@ impl<K, V> EntityMap<K, V>
     where K: EntityRef,
           V: Clone + Default
 {
+    /// Create a new secondary `EntityMap` that is prepared to hold `n` elements.
+    ///
+    /// Use this when the length of the primary map is known:
+    /// ```
+    /// let secondary_map = EntityMap::with_capacity(primary_map.len());
+    /// ```
+    pub fn with_capacity(n: usize) -> Self {
+        let mut map = EntityMap {
+            elems: Vec::with_capacity(n),
+            unused: PhantomData,
+        };
+        map.elems.resize(n, V::default());
+        map
+    }
+
     /// Ensure that `k` is a valid key but adding default entries if necesssary.
     ///
     /// Return a mutable reference to the corresponding entry.
