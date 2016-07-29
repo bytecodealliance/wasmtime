@@ -203,11 +203,99 @@ This means that the type of an input operand can either be computed from the
 controlling type variable, or it can vary independently of the other operands.
 
 
+Encodings
+=========
+
+Encodings describe how Cretonne instructions are mapped to binary machine code
+for the target architecture. After the lealization pass, all remaining
+instructions are expected to map 1-1 to native instruction encodings. Cretonne
+instructions that can't be encoded for the current architecture are called
+:term:`illegal instruction`\s.
+
+Some instruction set architectures have different :term:`CPU mode`\s with
+incompatible encodings. For example, a modern ARMv8 CPU might support three
+different CPU modes: *A64* where instructions are encoded in 32 bits, *A32*
+where all instuctions are 32 bits, and *T32* which has a mix of 16-bit and
+32-bit instruction encodings. These are incompatible encoding spaces, and while
+an :cton:inst:`iadd` instruction can be encoded in 32 bits in each of them, it's
+not the same 32 bits. It's a judgement call if CPU modes should be modelled as
+separate targets, or as sub-modes of the same target. In the ARMv8 case, the
+different register banks means that it makes sense to model A64 as a separate
+target architecture, while A32 and T32 are CPU modes of the 32-bit ARM target.
+
+In a given CPU mode, there may be multiple valid encodings of the same
+instruction. Both RISC-V and ARMv8's T32 mode have 32-bit encodings of all
+instructions with 16-bit encodings available for some opcodes if certain
+constraints are satisfied.
+
+Encodings are guarded by :term:`sub-target predicate`\s. For example, the RISC-V
+"C" extension which specifies the compressed encodings may not be supported, and
+a predicate would be used to disable all of the 16-bit encodings in that case.
+This can also affect whether an instruction is legal. For example, x86 has a
+predicate that controls the SSE 4.1 instruction encodings. When that predicate
+is false, the SSE 4.1 instructions are not available.
+
+Encodings also have a :term:`instruction predicate` which depends on the
+specific values of the instruction's immediate fields. This is used to ensure
+that immediate address offsets are within range, for example. The instructions
+in the base Cretonne instruction set can often represent a wider range of
+immediates than any specific encoding. The fixed-size RISC-style encodings tend
+to have more range limitations than CISC-style variable length encodings like
+x86.
+
+The diagram below shows the relationship between the classes involved in
+specifying instruction encodings:
+
+.. digraph:: encoding
+
+    node [shape=record]
+    CPUMode -> Target
+    EncRecipe -> CPUMode
+    EncRecipe -> SubtargetPred
+    EncRecipe -> InstrFormat
+    EncRecipe -> InstrPred
+    Encoding [label="{Encoding|Opcode+TypeVars}"]
+    Encoding -> EncRecipe [label="+EncBits"]
+    Encoding -> SubtargetPred
+    Encoding -> InstrPred
+    Encoding -> Opcode
+    Opcode -> InstrFormat
+
+An :py:class:`Encoding` instance specifies the encoding of a concrete
+instruction. The following properties are used to select instructions to be
+encoded:
+
+- An opcode, i.e. :cton:inst:`iadd_imm`, that must match the instruction's
+  opcode.
+- Values for any type variables if the opcode represents a polymorphic
+  instruction.
+- An :term:`instruction predicate` that must be satisfied by the instruction's
+  immediate operands.
+- A :term:`sub-target predicate` that must be satisfied by the currently active
+  sub-target.
+- :term:`Register constraint`\s that must be satisfied by the instruction's value
+  operands and results.
+
+An encoding specifies an *encoding recipe* along with some *encoding bits* that
+the recipe can use for native opcode fields etc. The encoding recipe has
+additional constraints that must be satisfied:
+
+- The CPU mode that must be active to enable encodings.
+- An :py:class:`InstructionFormat` that must match the format required by the
+  opcodes of any encodings that use this recipe.
+- An additional :term:`instruction predicate`.
+- An additional :term:`sub-target predicate`.
+
+The additional predicates in the :py:class:`EncRecipe` are merged with the
+per-encoding predicates when generating the encoding matcher code. Often
+encodings only need the recipe predicates.
+
+
 Targets
 =======
 
 Cretonne can be compiled with support for multiple target instruction set
-architectures. Each ISA is represented by a :py:class`cretonne.Target` instance.
+architectures. Each ISA is represented by a :py:class:`cretonne.Target` instance.
 
 .. autoclass:: Target
 
@@ -218,3 +306,40 @@ The definitions for each supported target live in a package under
     :members:
 
 .. automodule:: target.riscv
+
+
+Glossary
+========
+
+.. glossary::
+
+    Illegal instruction
+        An instruction is considered illegal if there is no encoding available
+        for the current CPU mode. The legality of an instruction depends on the
+        value of :term:`sub-target predicate`\s, so it can't always be
+        determined ahead of time.
+
+    CPU mode
+        Every target defines one or more CPU modes that determine how the CPU
+        decodes binary instructions. Some CPUs can switch modes dynamically with
+        a branch instruction (like ARM/Thumb), while other modes are
+        process-wide (like x86 32/64-bit).
+
+    Sub-target predicate
+        A predicate that depends on the current sub-target configuration.
+        Examples are "Use SSE 4.1 instructions", "Use RISC-V compressed
+        encodings". Sub-target predicates can depend on both detected CPU
+        features and configuration settings.
+
+    Instruction predicate
+        A predicate that depends on the immediate fields of an instruction. An
+        example is "the load address offset must be a 10-bit signed integer".
+        Instruction predicates do not depend on the registers selected for value
+        operands.
+
+    Register constraint
+        Value operands and results correspond to machine registers. Encodings may
+        constrain operands to either a fixed register or a register class. There
+        may also be register constraints between operands, for example some
+        encodings require that the result register is one of the input
+        registers.
