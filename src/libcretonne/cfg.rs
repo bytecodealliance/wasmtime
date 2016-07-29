@@ -140,8 +140,6 @@ impl ControlFlowGraph {
                     }
                 }
             } else if !black.contains(&node) {
-                // This is a gray node, now becoming black.
-                // We don’t need to mark it since we won’t see it again.
                 postorder.push(node.clone());
                 black.insert(node.clone());
             }
