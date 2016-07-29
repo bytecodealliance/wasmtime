@@ -44,7 +44,7 @@ fn simple_traversal() {
             ebb5:
                 trap
         }
-    ", vec![0, 2, 5, 4, 1, 3]);
+    ", vec![0, 2, 1, 3, 4, 5]);
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn loops_two() {
                 brz v0, ebb4
                 return
         }
-    ", vec![0, 2, 1, 3, 4, 5]);
+    ", vec![0, 1, 2, 5, 4, 3]);
 }
 
 #[test]
@@ -104,8 +104,8 @@ fn loops_three() {
                 jump ebb4
             ebb4:
                 brz v0, ebb3
+                brnz v0, ebb5
                 jump ebb6
-                brz v0, ebb5
             ebb5:
                 brz v0, ebb4
                 trap
@@ -114,5 +114,27 @@ fn loops_three() {
             ebb7:
                 return
         }
-    ", vec![0, 2, 1, 3, 4, 5, 6, 7]);
+    ", vec![0, 1, 2, 5, 4, 3, 6, 7]);
+}
+
+#[test]
+fn back_edge_one() {
+    test_reverse_postorder_traversal("
+        function test(i32) {
+            ebb0(v0: i32):
+                brz v0, ebb1
+                jump ebb2
+            ebb1:
+                jump ebb3
+            ebb2:
+                brz v0, ebb0
+                jump ebb4
+            ebb3:
+                brz v0, ebb2
+                brnz v0, ebb0
+                return
+            ebb4:
+                trap
+        }
+    ", vec![0, 1, 3, 2, 4]);
 }

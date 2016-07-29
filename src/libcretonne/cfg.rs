@@ -24,9 +24,9 @@
 
 use ir::Function;
 use ir::entities::{Inst, Ebb};
-use ir::instructions::InstructionData;
+use ir::instructions::BranchInfo;
 use entity_map::EntityMap;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{HashSet, BTreeMap};
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 pub type BasicBlock = (Ebb, Inst);
@@ -74,16 +74,18 @@ impl ControlFlowGraph {
 
         for ebb in &func.layout {
             for inst in func.layout.ebb_insts(ebb) {
-                match func.dfg[inst] {
-                    InstructionData::Branch { ty: _, opcode: _, ref data } => {
-                        cfg.add_successor(ebb, data.destination);
-                        cfg.add_predecessor(data.destination, (ebb, inst));
+                match func.dfg[inst].analyze_branch() {
+                    BranchInfo::SingleDest(dest, _) => {
+                        cfg.add_successor(ebb, dest);
+                        cfg.add_predecessor(dest, (ebb, inst));
                     }
-                    InstructionData::Jump { ty: _, opcode: _, ref data } => {
-                        cfg.add_successor(ebb, data.destination);
-                        cfg.add_predecessor(data.destination, (ebb, inst));
+                    BranchInfo::Table(jt) => {
+                        for (_, dest) in func.jump_tables[jt].entries() {
+                            cfg.add_successor(ebb, dest);
+                            cfg.add_predecessor(dest, (ebb, inst));
+                        }
                     }
-                    _ => (),
+                    BranchInfo::NotABranch => {}
                 }
             }
         }
@@ -119,8 +121,33 @@ impl ControlFlowGraph {
             }
             Some(eb) => eb,
         };
-        let mut postorder = CFGPostorderWalker::new(&self, entry_block).walk();
+
+        let mut grey = HashSet::new();
+        let mut black = HashSet::new();
+        let mut stack = vec![entry_block.clone()];
+        let mut postorder = Vec::new();
+
+        while !stack.is_empty() {
+            let node = stack.pop().unwrap();
+            if !grey.contains(&node) {
+                // This is a white node. Mark it as gray.
+                grey.insert(node);
+                stack.push(node);
+                // Get any children we’ve never seen before.
+                for child in self.get_successors(node) {
+                    if !grey.contains(child) {
+                        stack.push(child.clone());
+                    }
+                }
+            } else if !black.contains(&node) {
+                // This is a gray node, now becoming black.
+                // We don’t need to mark it since we won’t see it again.
+                postorder.push(node.clone());
+                black.insert(node.clone());
+            }
+        }
         postorder.reverse();
+
         let mut result = BTreeMap::new();
         for (offset, ebb) in postorder.iter().enumerate() {
             let i = postorder.len() - offset;
@@ -138,91 +165,6 @@ impl ControlFlowGraph {
             cur: 0,
             cfg: &self,
         }
-    }
-}
-
-/// A helper for iteratively walking a CFG in postorder.
-struct CFGPostorderWalker<'a> {
-    cfg: &'a ControlFlowGraph,
-    start: Ebb,
-    // Ebbs are mapped to a tuple of booleans where the first bool
-    // is true if the node has been visited, and the second is
-    // true if its children have been visited.
-    visited: HashMap<Ebb, (bool, bool)>,
-    levels: Vec<Vec<Ebb>>,
-    // Our node index within the current level.
-    level_index: usize,
-}
-
-impl<'a> CFGPostorderWalker<'a> {
-    fn new(cfg: &ControlFlowGraph, start: Ebb) -> CFGPostorderWalker {
-        CFGPostorderWalker {
-            cfg: cfg,
-            start: start,
-            visited: HashMap::new(),
-            levels: Vec::new(),
-            level_index: 0,
-        }
-    }
-
-    fn visited(&self, ebb: Ebb) -> bool {
-        match self.visited.get(&ebb) {
-            Some(b) => b.0,
-            None => false,
-        }
-    }
-
-    fn children_visited(&self, ebb: Ebb) -> bool {
-        match self.visited.get(&ebb) {
-            Some(b) => b.1,
-            None => false,
-        }
-    }
-
-    fn mark_visited(&mut self, ebb: Ebb) {
-        let status = self.visited.entry(ebb).or_insert((false, false)).1;
-        self.visited.insert(ebb, (true, status));
-    }
-
-    fn mark_children_visited(&mut self, ebb: Ebb) {
-        let status = self.visited.entry(ebb).or_insert((false, false)).0;
-        self.visited.insert(ebb, (status, true));
-    }
-
-    fn walk(&mut self) -> Vec<Ebb> {
-        let mut postorder = Vec::new();
-
-        self.levels.push(vec![self.start.clone()]);
-        while self.levels.len() > 0 {
-            let level_len = self.levels[self.levels.len() - 1].len();
-            if self.level_index >= level_len {
-                self.levels.pop();
-                self.level_index = 0;
-                continue;
-            }
-
-            let node = self.levels[self.levels.len() - 1][self.level_index].clone();
-            if !self.visited(node) {
-                if self.children_visited(node) {
-                    self.mark_visited(node);
-                    postorder.push(node.clone());
-                    self.level_index += 1;
-                } else {
-                    let edges = self.cfg.get_successors(node);
-                    let outgoing = edges.iter()
-                        .filter(|e| !self.children_visited(**e))
-                        .cloned()
-                        .collect::<Vec<Ebb>>();
-                    if outgoing.len() > 0 {
-                        self.levels.push(outgoing);
-                    }
-                    self.mark_children_visited(node);
-                }
-            } else {
-                self.level_index += 1;
-            }
-        }
-        postorder
     }
 }
 
