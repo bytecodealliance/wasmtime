@@ -10,25 +10,25 @@ pub struct DominatorTree {
 
 impl DominatorTree {
     pub fn new(cfg: &ControlFlowGraph) -> DominatorTree {
-        let mut dt = DominatorTree { data: EntityMap::new() };
+        let mut dt = DominatorTree { data: EntityMap::with_capacity(cfg.len()) };
         dt.build(cfg);
         dt
     }
 
-    pub fn build(&mut self, cfg: &ControlFlowGraph) {
+
+    /// Build a dominator tree from a control flow graph using Keith D. Cooper's
+    /// "Simple, Fast Dominator Algorithm."
+    fn build(&mut self, cfg: &ControlFlowGraph) {
         let reverse_postorder_map = cfg.reverse_postorder_ebbs();
         let ebbs = reverse_postorder_map.keys().collect::<Vec<Ebb>>();
         let len = reverse_postorder_map.len();
 
-        for (i, ebb) in ebbs.iter().enumerate() {
-            if i > 0 {
-                self.data.push(None);
-            } else {
-                self.data.push(Some(ebb.clone()));
-            }
-        }
+        let mut changed = false;
 
-        let mut changed = len > 0;
+        if len > 0 {
+            self.data[ebbs[0]] = Some(ebbs[0]);
+            changed = true;
+        }
 
         while changed {
             changed = false;
@@ -42,9 +42,15 @@ impl DominatorTree {
                         new_idom = Some(p);
                         continue;
                     }
+                    // If this predecessor `p` has an idom available find its common
+                    // ancestor with the current value of new_idom.
                     if let Some(_) = self.data[p] {
-                        new_idom =
-                            Some(self.intersect(&reverse_postorder_map, p, new_idom.unwrap()));
+                        new_idom = match new_idom {
+                            Some(cur_idom) => {
+                                Some(self.intersect(&reverse_postorder_map, p, cur_idom))
+                            }
+                            None => panic!("A 'current idom' should have been set!"),
+                        }
                     }
                 }
                 match self.data[ebb] {
@@ -64,9 +70,15 @@ impl DominatorTree {
         }
     }
 
+    /// Find the common dominator of two ebbs.
     fn intersect(&self, ordering: &EntityMap<Ebb, usize>, first: Ebb, second: Ebb) -> Ebb {
         let mut a = first;
         let mut b = second;
+
+        // Here we use 'ordering', a mapping of ebbs to their postorder
+        // visitation number, to ensure that we move upward through the tree.
+        // Walking upward means that we may always expect self.data[a] and
+        // self.data[b] to contain non-None entries.
         while a != b {
             while ordering[a] < ordering[b] {
                 a = self.data[a].unwrap();
@@ -78,10 +90,13 @@ impl DominatorTree {
         a
     }
 
+    /// Returns the immediate dominator of some ebb or None if the
+    /// node is unreachable.
     pub fn idom(&self, ebb: Ebb) -> Option<Ebb> {
         self.data[ebb].clone()
     }
 
+    /// The total number of nodes in the tree.
     pub fn len(&self) -> usize {
         self.data.len()
     }
