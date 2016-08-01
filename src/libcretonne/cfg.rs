@@ -142,34 +142,6 @@ impl ControlFlowGraph {
     pub fn len(&self) -> usize {
         self.data.len()
     }
-
-    pub fn predecessors_iter(&self) -> CFGPredecessorsIter {
-        CFGPredecessorsIter {
-            cur: 0,
-            cfg: &self,
-        }
-    }
-}
-
-/// Iterate through every mapping of ebb to predecessors in the CFG
-pub struct CFGPredecessorsIter<'a> {
-    cfg: &'a ControlFlowGraph,
-    cur: usize,
-}
-
-impl<'a> Iterator for CFGPredecessorsIter<'a> {
-    type Item = (Ebb, &'a Vec<BasicBlock>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.cur < self.cfg.len() {
-            let ebb = Ebb::with_number(self.cur as u32).unwrap();
-            let bbs = self.cfg.get_predecessors(ebb);
-            self.cur += 1;
-            Some((ebb, bbs))
-        } else {
-            None
-        }
-    }
 }
 
 #[cfg(test)]
@@ -183,7 +155,7 @@ mod tests {
     fn empty() {
         let func = Function::new();
         let cfg = ControlFlowGraph::new(&func);
-        assert_eq!(None, cfg.predecessors_iter().next());
+        assert_eq!(cfg.reverse_postorder_ebbs().keys().count(), 0);
     }
 
     #[test]
@@ -197,7 +169,8 @@ mod tests {
         func.layout.append_ebb(ebb2);
 
         let cfg = ControlFlowGraph::new(&func);
-        let nodes = cfg.predecessors_iter().collect::<Vec<_>>();
+        let nodes =
+            [ebb0, ebb1, ebb2].iter().map(|&e| (e, cfg.get_predecessors(e))).collect::<Vec<_>>();
         assert_eq!(nodes.len(), 3);
 
         let mut fun_ebbs = func.layout.ebbs();
