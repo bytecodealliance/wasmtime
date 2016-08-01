@@ -10,7 +10,7 @@ pub mod dfg;
 pub mod layout;
 
 use ir::types::{FunctionName, Signature};
-use entity_map::{EntityRef, EntityMap};
+use entity_map::{EntityRef, EntityMap, PrimaryEntityData};
 use ir::entities::{StackSlot, JumpTable};
 use ir::jumptable::JumpTableData;
 use ir::dfg::DataFlowGraph;
@@ -38,6 +38,9 @@ pub struct Function {
     /// Layout of EBBs and instructions in the function body.
     pub layout: Layout,
 }
+
+// Tag JumpTableData as a primary entity so jump_tables above .
+impl PrimaryEntityData for JumpTableData {}
 
 impl Function {
     /// Create a function with the given name and signature.

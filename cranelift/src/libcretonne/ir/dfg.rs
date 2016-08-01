@@ -1,6 +1,6 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use entity_map::EntityMap;
+use entity_map::{EntityMap, PrimaryEntityData};
 use ir::entities::{Ebb, Inst, Value, NO_VALUE, ExpandedValue};
 use ir::instructions::InstructionData;
 use ir::types::Type;
@@ -32,6 +32,9 @@ pub struct DataFlowGraph {
     /// the Value entity references can refer to two things -- an instruction or an extended value.
     extended_values: Vec<ValueData>,
 }
+
+impl PrimaryEntityData for InstructionData {}
+impl PrimaryEntityData for EbbData {}
 
 impl DataFlowGraph {
     /// Create a new empty `DataFlowGraph`.
