@@ -2,7 +2,13 @@
 //!
 //! This module defines an `EntityRef` trait that should be implemented by reference types wrapping
 //! a small integer index. The `EntityMap` data structure uses the dense index space to implement a
-//! map with a vector.
+//! map with a vector. There are primary and secondary entity maps:
+//!
+//! - A *primary* `EntityMap` contains the main definition of an entity, and it can be used to
+//!   allocate new entity references with the `push` method. The values stores in a primary map
+//!   must implement the `PrimaryEntityData` marker trait.
+//! - A *secondary* `EntityMap` contains additional data about entities kept in a primary map. The
+//!   values need to implement `Clone + Default` traits so the map can be grown with `ensure`.
 
 use std::vec::Vec;
 use std::default::Default;
@@ -39,13 +45,6 @@ pub trait EntityRef: Copy + Eq {
 }
 
 /// A mapping `K -> V` for densely indexed entity references.
-///
-/// A *primary* `EntityMap` contains the main definition of an entity, and it can be used to
-/// allocate new entity references with the `push` method.
-///
-/// A *secondary* `EntityMap` contains additional data about entities kept in a primary map. The
-/// values need to implement `Clone + Default` traits so the map can be grown with `ensure`.
-///
 #[derive(Debug)]
 pub struct EntityMap<K, V>
     where K: EntityRef
@@ -71,17 +70,6 @@ impl<K, V> EntityMap<K, V>
         k.index() < self.elems.len()
     }
 
-    /// Append `v` to the mapping, assigning a new key which is returned.
-    pub fn push(&mut self, v: V) -> K {
-        let k = K::new(self.elems.len());
-        self.elems.push(v);
-        k
-    }
-
-    pub fn len(&self) -> usize {
-        self.elems.len()
-    }
-
     /// Iterate over all the keys in this map.
     pub fn keys(&self) -> Keys<K> {
         Keys {
@@ -89,6 +77,33 @@ impl<K, V> EntityMap<K, V>
             len: self.elems.len(),
             unused: PhantomData,
         }
+    }
+}
+
+/// A marker trait for data stored in primary entity maps.
+///
+/// A primary entity map can be used to allocate new entity references with the `push` method. It
+/// is important that entity references can't be created anywhere else, so the data stored in a
+/// primary entity map must be tagged as `PrimaryEntityData` to unlock the `push` method.
+pub trait PrimaryEntityData {}
+
+/// Additional methods for primary entry maps only.
+///
+/// These are identified by the `PrimaryEntityData` marker trait.
+impl<K, V> EntityMap<K, V>
+    where K: EntityRef,
+          V: PrimaryEntityData
+{
+    /// Append `v` to the mapping, assigning a new key which is returned.
+    pub fn push(&mut self, v: V) -> K {
+        let k = K::new(self.elems.len());
+        self.elems.push(v);
+        k
+    }
+
+    /// Get the total number of entity references created.
+    pub fn len(&self) -> usize {
+        self.elems.len()
     }
 }
 
@@ -192,6 +207,8 @@ mod tests {
             self.0 as usize
         }
     }
+
+    impl PrimaryEntityData for isize {}
 
     #[test]
     fn basic() {
