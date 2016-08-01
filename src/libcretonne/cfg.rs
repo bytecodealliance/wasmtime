@@ -89,7 +89,7 @@ impl ControlFlowGraph {
         self.data[to].predecessors.push(from);
     }
 
-    fn get_predecessors(&self, ebb: Ebb) -> &Vec<BasicBlock> {
+    pub fn get_predecessors(&self, ebb: Ebb) -> &Vec<BasicBlock> {
         &self.data[ebb].predecessors
     }
 
