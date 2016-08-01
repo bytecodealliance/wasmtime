@@ -14,8 +14,8 @@ fn test_reverse_postorder_traversal(function_source: &str, ebb_order: Vec<u32>) 
     let reverse_postorder_ebbs = cfg.reverse_postorder_ebbs();
 
     assert_eq!(reverse_postorder_ebbs.len(), ebbs.len());
-    for (ebb, key) in reverse_postorder_ebbs {
-        assert_eq!(ebb, ebbs[ebbs.len() - key]);
+    for ebb in reverse_postorder_ebbs.keys() {
+        assert_eq!(ebb, ebbs[ebbs.len() - reverse_postorder_ebbs[ebb]]);
     }
 }
 

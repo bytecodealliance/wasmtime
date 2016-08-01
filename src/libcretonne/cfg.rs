@@ -26,13 +26,13 @@ use ir::Function;
 use ir::entities::{Inst, Ebb};
 use ir::instructions::BranchInfo;
 use entity_map::EntityMap;
-use std::collections::{HashSet, BTreeMap};
+use std::collections::HashSet;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 pub type BasicBlock = (Ebb, Inst);
 
 /// A container for the successors and predecessors of some Ebb.
-#[derive(Debug)]
+#[derive(Debug, Clone, Default)]
 pub struct CFGNode {
     pub successors: Vec<Ebb>,
     pub predecessors: Vec<BasicBlock>,
@@ -62,27 +62,19 @@ impl ControlFlowGraph {
     pub fn new(func: &Function) -> ControlFlowGraph {
 
         let mut cfg = ControlFlowGraph {
-            data: EntityMap::new(),
+            data: EntityMap::with_capacity(func.dfg.num_ebbs()),
             entry_block: func.layout.entry_block(),
         };
-
-        // Even ebbs without predecessors should show up in the CFG, albeit
-        // with no entires.
-        for _ in &func.layout {
-            cfg.push_ebb();
-        }
 
         for ebb in &func.layout {
             for inst in func.layout.ebb_insts(ebb) {
                 match func.dfg[inst].analyze_branch() {
                     BranchInfo::SingleDest(dest, _) => {
-                        cfg.add_successor(ebb, dest);
-                        cfg.add_predecessor(dest, (ebb, inst));
+                        cfg.add_edge((ebb, inst), dest);
                     }
                     BranchInfo::Table(jt) => {
                         for (_, dest) in func.jump_tables[jt].entries() {
-                            cfg.add_successor(ebb, dest);
-                            cfg.add_predecessor(dest, (ebb, inst));
+                            cfg.add_edge((ebb, inst), dest);
                         }
                     }
                     BranchInfo::NotABranch => {}
@@ -92,19 +84,12 @@ impl ControlFlowGraph {
         cfg
     }
 
-    pub fn push_ebb(&mut self) {
-        self.data.push(CFGNode::new());
+    fn add_edge(&mut self, from: BasicBlock, to: Ebb) {
+        self.data[from.0].successors.push(to);
+        self.data[to].predecessors.push(from);
     }
 
-    pub fn add_successor(&mut self, from: Ebb, to: Ebb) {
-        self.data[from].successors.push(to);
-    }
-
-    pub fn add_predecessor(&mut self, ebb: Ebb, predecessor: BasicBlock) {
-        self.data[ebb].predecessors.push(predecessor);
-    }
-
-    pub fn get_predecessors(&self, ebb: Ebb) -> &Vec<BasicBlock> {
+    fn get_predecessors(&self, ebb: Ebb) -> &Vec<BasicBlock> {
         &self.data[ebb].predecessors
     }
 
@@ -114,10 +99,10 @@ impl ControlFlowGraph {
 
     /// Return ebbs in reverse postorder along with a mapping of
     /// the ebb to its [post]order of visitation.
-    pub fn reverse_postorder_ebbs(&self) -> BTreeMap<Ebb, usize> {
+    pub fn reverse_postorder_ebbs(&self) -> EntityMap<Ebb, usize> {
         let entry_block = match self.entry_block {
             None => {
-                return BTreeMap::new();
+                return EntityMap::new();
             }
             Some(eb) => eb,
         };
@@ -146,10 +131,10 @@ impl ControlFlowGraph {
         }
         postorder.reverse();
 
-        let mut result = BTreeMap::new();
+        let mut result = EntityMap::with_capacity(postorder.len());
         for (offset, ebb) in postorder.iter().enumerate() {
             let i = postorder.len() - offset;
-            result.insert(ebb.clone(), i);
+            result[ebb.clone()] = i;
         }
         result
     }
