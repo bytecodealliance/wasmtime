@@ -41,8 +41,8 @@ impl<T: Write> CFGPrinter<T> {
         self.header(func);
         self.push_indent();
         self.ebb_subgraphs(func);
-        let cfg = ControlFlowGraph::new(&func);
-        self.cfg_connections(&cfg);
+        let cfg = ControlFlowGraph::new(func);
+        self.cfg_connections(func, &cfg);
         self.pop_indent();
         self.footer();
         self.write()
@@ -145,9 +145,9 @@ impl<T: Write> CFGPrinter<T> {
         }
     }
 
-    fn cfg_connections(&mut self, cfg: &ControlFlowGraph) {
-        for (ref ebb, ref predecessors) in cfg.predecessors_iter() {
-            for &(parent, inst) in *predecessors {
+    fn cfg_connections(&mut self, func: &Function, cfg: &ControlFlowGraph) {
+        for ebb in &func.layout {
+            for &(parent, inst) in cfg.get_predecessors(ebb) {
                 self.append(&format!("{}:{} -> {}", parent, inst, ebb));
                 self.newline();
             }
