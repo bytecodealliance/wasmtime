@@ -65,7 +65,6 @@ impl DominatorTree {
     }
 
     fn intersect(&self, ordering: &EntityMap<Ebb, usize>, first: Ebb, second: Ebb) -> Ebb {
-        println!("A {} B {}", first, second);
         let mut a = first;
         let mut b = second;
         while a != b {
