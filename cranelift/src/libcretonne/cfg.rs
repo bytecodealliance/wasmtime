@@ -25,7 +25,7 @@
 use ir::Function;
 use ir::entities::{Inst, Ebb};
 use ir::instructions::BranchInfo;
-use entity_map::EntityMap;
+use entity_map::{EntityMap, Keys};
 use std::collections::HashSet;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
@@ -97,12 +97,11 @@ impl ControlFlowGraph {
         &self.data[ebb].successors
     }
 
-    /// Return ebbs in reverse postorder along with a mapping of
-    /// the ebb to its [post]order of visitation.
-    pub fn reverse_postorder_ebbs(&self) -> EntityMap<Ebb, usize> {
+    /// Return [reachable] ebbs in postorder.
+    pub fn postorder_ebbs(&self) -> Vec<Ebb> {
         let entry_block = match self.entry_block {
             None => {
-                return EntityMap::new();
+                return Vec::new();
             }
             Some(eb) => eb,
         };
@@ -129,46 +128,12 @@ impl ControlFlowGraph {
                 black.insert(node.clone());
             }
         }
-        postorder.reverse();
-
-        let mut result = EntityMap::with_capacity(postorder.len());
-        for (offset, ebb) in postorder.iter().enumerate() {
-            let i = postorder.len() - offset;
-            result[ebb.clone()] = i;
-        }
-        result
+        postorder
     }
 
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    pub fn predecessors_iter(&self) -> CFGPredecessorsIter {
-        CFGPredecessorsIter {
-            cur: 0,
-            cfg: &self,
-        }
-    }
-}
-
-/// Iterate through every mapping of ebb to predecessors in the CFG
-pub struct CFGPredecessorsIter<'a> {
-    cfg: &'a ControlFlowGraph,
-    cur: usize,
-}
-
-impl<'a> Iterator for CFGPredecessorsIter<'a> {
-    type Item = (Ebb, &'a Vec<BasicBlock>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.cur < self.cfg.len() {
-            let ebb = Ebb::with_number(self.cur as u32).unwrap();
-            let bbs = self.cfg.get_predecessors(ebb);
-            self.cur += 1;
-            Some((ebb, bbs))
-        } else {
-            None
-        }
+    /// An iterator across all of the ebbs stored in the cfg.
+    pub fn ebbs(&self) -> Keys<Ebb> {
+        self.data.keys()
     }
 }
 
@@ -183,7 +148,7 @@ mod tests {
     fn empty() {
         let func = Function::new();
         let cfg = ControlFlowGraph::new(&func);
-        assert_eq!(None, cfg.predecessors_iter().next());
+        assert_eq!(None, cfg.ebbs().next());
     }
 
     #[test]
@@ -197,14 +162,13 @@ mod tests {
         func.layout.append_ebb(ebb2);
 
         let cfg = ControlFlowGraph::new(&func);
-        let nodes = cfg.predecessors_iter().collect::<Vec<_>>();
+        let nodes = cfg.ebbs().collect::<Vec<_>>();
         assert_eq!(nodes.len(), 3);
 
         let mut fun_ebbs = func.layout.ebbs();
-        for (ebb, predecessors) in nodes {
+        for ebb in nodes {
             assert_eq!(ebb, fun_ebbs.next().unwrap());
-            assert_eq!(predecessors.len(), 0);
-            assert_eq!(predecessors.len(), 0);
+            assert_eq!(cfg.get_predecessors(ebb).len(), 0);
             assert_eq!(cfg.get_successors(ebb).len(), 0);
         }
     }

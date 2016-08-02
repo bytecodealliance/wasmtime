@@ -2,31 +2,33 @@
 
 use cfg::*;
 use ir::entities::Ebb;
-use entity_map::EntityMap;
+use entity_map::{EntityMap, Keys};
 
 pub struct DominatorTree {
     data: EntityMap<Ebb, Option<Ebb>>,
 }
 
 impl DominatorTree {
-    pub fn new(cfg: &ControlFlowGraph) -> DominatorTree {
-        let mut dt = DominatorTree { data: EntityMap::with_capacity(cfg.len()) };
-        dt.build(cfg);
-        dt
-    }
-
-
     /// Build a dominator tree from a control flow graph using Keith D. Cooper's
     /// "Simple, Fast Dominator Algorithm."
-    fn build(&mut self, cfg: &ControlFlowGraph) {
-        let reverse_postorder_map = cfg.reverse_postorder_ebbs();
-        let ebbs = reverse_postorder_map.keys().collect::<Vec<Ebb>>();
-        let len = reverse_postorder_map.len();
+    pub fn new(cfg: &ControlFlowGraph) -> DominatorTree {
+        let mut ebbs = cfg.postorder_ebbs();
+        ebbs.reverse();
+
+        let len = ebbs.len();
+
+        // The mappings which designate the dominator tree.
+        let mut data = EntityMap::with_capacity(len);
+
+        let mut postorder_map = EntityMap::with_capacity(len);
+        for (i, ebb) in ebbs.iter().enumerate() {
+            postorder_map[ebb.clone()] = len - i;
+        }
 
         let mut changed = false;
 
         if len > 0 {
-            self.data[ebbs[0]] = Some(ebbs[0]);
+            data[ebbs[0]] = Some(ebbs[0]);
             changed = true;
         }
 
@@ -44,34 +46,42 @@ impl DominatorTree {
                     }
                     // If this predecessor `p` has an idom available find its common
                     // ancestor with the current value of new_idom.
-                    if let Some(_) = self.data[p] {
+                    if let Some(_) = data[p] {
                         new_idom = match new_idom {
                             Some(cur_idom) => {
-                                Some(self.intersect(&reverse_postorder_map, p, cur_idom))
+                                Some(DominatorTree::intersect(&mut data,
+                                                              &postorder_map,
+                                                              p,
+                                                              cur_idom))
                             }
                             None => panic!("A 'current idom' should have been set!"),
                         }
                     }
                 }
-                match self.data[ebb] {
+                match data[ebb] {
                     None => {
-                        self.data[ebb] = new_idom;
+                        data[ebb] = new_idom;
                         changed = true;
                     }
                     Some(idom) => {
                         // Old idom != New idom
                         if idom != new_idom.unwrap() {
-                            self.data[ebb] = new_idom;
+                            data[ebb] = new_idom;
                             changed = true;
                         }
                     }
                 }
             }
         }
+        DominatorTree { data: data }
     }
 
     /// Find the common dominator of two ebbs.
-    fn intersect(&self, ordering: &EntityMap<Ebb, usize>, first: Ebb, second: Ebb) -> Ebb {
+    fn intersect(data: &EntityMap<Ebb, Option<Ebb>>,
+                 ordering: &EntityMap<Ebb, usize>,
+                 first: Ebb,
+                 second: Ebb)
+                 -> Ebb {
         let mut a = first;
         let mut b = second;
 
@@ -81,10 +91,10 @@ impl DominatorTree {
         // self.data[b] to contain non-None entries.
         while a != b {
             while ordering[a] < ordering[b] {
-                a = self.data[a].unwrap();
+                a = data[a].unwrap();
             }
             while ordering[b] < ordering[a] {
-                b = self.data[b].unwrap();
+                b = data[b].unwrap();
             }
         }
         a
@@ -96,9 +106,9 @@ impl DominatorTree {
         self.data[ebb].clone()
     }
 
-    /// The total number of nodes in the tree.
-    pub fn len(&self) -> usize {
-        self.data.len()
+    /// An iterator across all of the ebbs stored in the tree.
+    pub fn ebbs(&self) -> Keys<Ebb> {
+        self.data.keys()
     }
 }
 
@@ -114,7 +124,7 @@ mod test {
         let func = Function::new();
         let cfg = ControlFlowGraph::new(&func);
         let dtree = DominatorTree::new(&cfg);
-        assert_eq!(dtree.len(), 0);
+        assert_eq!(None, dtree.ebbs().next());
     }
 
     #[test]
@@ -143,7 +153,6 @@ mod test {
         let dt = DominatorTree::new(&cfg);
 
         assert_eq!(func.layout.entry_block().unwrap(), ebb3);
-        assert_eq!(dt.len(), cfg.len());
         assert_eq!(dt.idom(ebb3).unwrap(), ebb3);
         assert_eq!(dt.idom(ebb1).unwrap(), ebb3);
         assert_eq!(dt.idom(ebb2).unwrap(), ebb1);
