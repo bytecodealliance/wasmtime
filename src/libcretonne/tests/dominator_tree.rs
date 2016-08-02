@@ -10,7 +10,7 @@ fn test_dominator_tree(function_source: &str, idoms: Vec<u32>) {
     let func = &Parser::parse(function_source).unwrap()[0];
     let cfg = ControlFlowGraph::new(&func);
     let dtree = DominatorTree::new(&cfg);
-    assert_eq!(dtree.len(), idoms.len());
+    assert_eq!(dtree.ebbs().collect::<Vec<_>>().len(), idoms.len());
     for (i, j) in idoms.iter().enumerate() {
         let ebb = Ebb::with_number(i.clone() as u32);
         let idom = Ebb::with_number(*j);

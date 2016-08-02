@@ -4,6 +4,7 @@ extern crate cton_reader;
 use self::cton_reader::parser::Parser;
 use self::cretonne::ir::entities::Ebb;
 use self::cretonne::cfg::ControlFlowGraph;
+use self::cretonne::entity_map::EntityMap;
 
 fn test_reverse_postorder_traversal(function_source: &str, ebb_order: Vec<u32>) {
     let func = &Parser::parse(function_source).unwrap()[0];
@@ -11,11 +12,16 @@ fn test_reverse_postorder_traversal(function_source: &str, ebb_order: Vec<u32>) 
     let ebbs = ebb_order.iter().map(|n| Ebb::with_number(*n).unwrap())
                                .collect::<Vec<Ebb>>();
 
-    let reverse_postorder_ebbs = cfg.reverse_postorder_ebbs();
+    let mut postorder_ebbs = cfg.postorder_ebbs();
+    let mut postorder_map = EntityMap::with_capacity(postorder_ebbs.len());
+    for (i, ebb) in postorder_ebbs.iter().enumerate() {
+        postorder_map[ebb.clone()] = i + 1;
+    }
+    postorder_ebbs.reverse();
 
-    assert_eq!(reverse_postorder_ebbs.len(), ebbs.len());
-    for ebb in reverse_postorder_ebbs.keys() {
-        assert_eq!(ebb, ebbs[ebbs.len() - reverse_postorder_ebbs[ebb]]);
+    assert_eq!(postorder_ebbs.len(), ebbs.len());
+    for ebb in postorder_ebbs {
+        assert_eq!(ebb, ebbs[ebbs.len() - postorder_map[ebb]]);
     }
 }
 
