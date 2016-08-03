@@ -656,6 +656,23 @@ class Target(object):
         self.name = name
         self.instruction_groups = instrution_groups
 
+
+class CPUMode(object):
+    """
+    A CPU mode determines which instruction encodings are active.
+
+    All instruction encodings are associated with exactly one `CPUMode`, and
+    all CPU modes are associated with exactly one `Target`.
+
+    :param name: Short mnemonic name for the CPU mode.
+    :param target: Associated `Target`.
+    """
+
+    def __init__(self, name, target):
+        self.name = name
+        self.target = target
+
+
 # Import the fixed instruction formats now so they can be added to the
 # registry.
 importlib.import_module('cretonne.formats')
