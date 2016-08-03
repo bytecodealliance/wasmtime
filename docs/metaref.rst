@@ -228,6 +228,8 @@ instruction. Both RISC-V and ARMv8's T32 mode have 32-bit encodings of all
 instructions with 16-bit encodings available for some opcodes if certain
 constraints are satisfied.
 
+.. autoclass:: CPUMode
+
 Encodings are guarded by :term:`sub-target predicate`\s. For example, the RISC-V
 "C" extension which specifies the compressed encodings may not be supported, and
 a predicate would be used to disable all of the 16-bit encodings in that case.
