@@ -673,6 +673,22 @@ class CPUMode(object):
         self.target = target
 
 
+class EncRecipe(object):
+    """
+    A recipe for encoding instructions with a given format.
+
+    Many different instructions can be encoded by the same recipe, but they
+    must all have the same instruction format.
+
+    :param name: Short mnemonic name for this recipe.
+    :param format: All encoded instructions must have this
+            :py:class:`InstructionFormat`.
+    """
+
+    def __init__(self, name, format):
+        self.name = name
+        self.format = format
+
 # Import the fixed instruction formats now so they can be added to the
 # registry.
 importlib.import_module('cretonne.formats')
