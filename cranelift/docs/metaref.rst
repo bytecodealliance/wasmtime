@@ -251,17 +251,17 @@ specifying instruction encodings:
 .. digraph:: encoding
 
     node [shape=record]
-    CPUMode -> Target
-    EncRecipe -> CPUMode
     EncRecipe -> SubtargetPred
     EncRecipe -> InstrFormat
     EncRecipe -> InstrPred
     Encoding [label="{Encoding|Opcode+TypeVars}"]
     Encoding -> EncRecipe [label="+EncBits"]
+    Encoding -> CPUMode
     Encoding -> SubtargetPred
     Encoding -> InstrPred
     Encoding -> Opcode
     Opcode -> InstrFormat
+    CPUMode -> Target
 
 An :py:class:`Encoding` instance specifies the encoding of a concrete
 instruction. The following properties are used to select instructions to be
@@ -273,6 +273,7 @@ encoded:
   instruction.
 - An :term:`instruction predicate` that must be satisfied by the instruction's
   immediate operands.
+- The CPU mode that must be active.
 - A :term:`sub-target predicate` that must be satisfied by the currently active
   sub-target.
 - :term:`Register constraint`\s that must be satisfied by the instruction's value
@@ -282,7 +283,6 @@ An encoding specifies an *encoding recipe* along with some *encoding bits* that
 the recipe can use for native opcode fields etc. The encoding recipe has
 additional constraints that must be satisfied:
 
-- The CPU mode that must be active to enable encodings.
 - An :py:class:`InstructionFormat` that must match the format required by the
   opcodes of any encodings that use this recipe.
 - An additional :term:`instruction predicate`.
@@ -291,6 +291,8 @@ additional constraints that must be satisfied:
 The additional predicates in the :py:class:`EncRecipe` are merged with the
 per-encoding predicates when generating the encoding matcher code. Often
 encodings only need the recipe predicates.
+
+.. autoclass:: EncRecipe
 
 
 Targets
