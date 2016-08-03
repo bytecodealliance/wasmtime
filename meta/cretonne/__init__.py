@@ -115,10 +115,15 @@ class ValueType(object):
     or one of its subclasses.
     """
 
+    # map name -> ValueType.
+    _registry = dict()
+
     def __init__(self, name, membytes, doc):
         self.name = name
         self.membytes = membytes
         self.__doc__ = doc
+        assert name not in ValueType._registry
+        ValueType._registry[name] = self
 
     def __str__(self):
         return self.name
@@ -132,6 +137,13 @@ class ValueType(object):
 
     def free_typevar(self):
         return None
+
+    @staticmethod
+    def by_name(name):
+        if name in ValueType._registry:
+            return ValueType._registry[name]
+        else:
+            raise AttributeError("No type named '{}'".format(name))
 
 
 class ScalarType(ValueType):
@@ -637,6 +649,47 @@ class Instruction(object):
             assert isinstance(op, Operand)
         return x
 
+    def bind(self, *args):
+        """
+        Bind a polymorphic instruction to a concrete list of type variable
+        values.
+        """
+        assert self.is_polymorphic
+        return BoundInstruction(self, args)
+
+    def __getattr__(self, name):
+        """
+        Bind a polymorphic instruction to a single type variable with dot
+        syntax:
+
+        >>> iadd.i32
+        """
+        return self.bind(ValueType.by_name(name))
+
+
+class BoundInstruction(object):
+    """
+    A polymorphic `Instruction` bound to concrete type variables.
+    """
+
+    def __init__(self, inst, typevars):
+        self.inst = inst
+        self.typevars = typevars
+
+    def bind(self, *args):
+        """
+        Bind additional typevars.
+        """
+        return BoundInstruction(self.inst, self.typevars + args)
+
+    def __getattr__(self, name):
+        """
+        Bind an additional typevar dot syntax:
+
+        >>> uext.i32.i8
+        """
+        return self.bind(ValueType.by_name(name))
+
 
 # Defining targets
 
@@ -708,22 +761,25 @@ class Encoding(object):
     variables together with and encoding recipe and encoding bits.
 
     :param cpumode: The CPU mode where the encoding is active.
-    :param inst: The :py:class:`Instruction` being encoded.
-    :param typevars: Concete types for `inst`'s type variables, if any.
+    :param inst: The :py:class:`Instruction` or :py:class:`BoundInstruction`
+                 being encoded.
     :param recipe: The :py:class:`EncRecipe` to use.
     :param encbits: Additional encoding bits to be interpreted by `recipe`.
     """
 
-    def __init__(self, cpumode, inst, typevars, recipe, encbits):
+    def __init__(self, cpumode, inst, recipe, encbits):
         assert isinstance(cpumode, CPUMode)
-        assert isinstance(inst, Instruction)
+        if isinstance(inst, BoundInstruction):
+            real_inst = inst.inst
+        else:
+            real_inst = inst
+        assert isinstance(real_inst, Instruction)
         assert isinstance(recipe, EncRecipe)
         self.cpumode = cpumode
-        assert inst.format == recipe.format, (
+        assert real_inst.format == recipe.format, (
                 "Format {} must match recipe: {}".format(
                     inst.format, recipe.format))
         self.inst = inst
-        self.typevars = self._to_type_tuple(typevars)
         self.recipe = recipe
         self.encbits = encbits
 
