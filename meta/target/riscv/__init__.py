@@ -25,11 +25,9 @@ RV32G / RV64G
 
 """
 
-from cretonne import Target, CPUMode
-import cretonne.base
+import defs
+import encodings
 
-target = Target('riscv', [cretonne.base.instructions])
+# Re-export the primary target definition.
+target = defs.target
 
-# CPU modes for 32-bit and 64-bit operation.
-RV32 = CPUMode('RV32', target)
-RV64 = CPUMode('RV64', target)

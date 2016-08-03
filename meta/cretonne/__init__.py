@@ -671,6 +671,16 @@ class CPUMode(object):
     def __init__(self, name, target):
         self.name = name
         self.target = target
+        self.encodings = []
+
+    def enc(self, *args, **kwargs):
+        """
+        Add a new encoding to this CPU mode.
+
+        Arguments are the `Encoding constructor arguments, except for the first
+        `CPUMode argument which is implied.
+        """
+        self.encodings.append(Encoding(self, *args, **kwargs))
 
 
 class EncRecipe(object):
@@ -688,6 +698,46 @@ class EncRecipe(object):
     def __init__(self, name, format):
         self.name = name
         self.format = format
+
+
+class Encoding(object):
+    """
+    Encoding for a concrete instruction.
+
+    An `Encoding` object ties an instruction opcode with concrete type
+    variables together with and encoding recipe and encoding bits.
+
+    :param cpumode: The CPU mode where the encoding is active.
+    :param inst: The :py:class:`Instruction` being encoded.
+    :param typevars: Concete types for `inst`'s type variables, if any.
+    :param recipe: The :py:class:`EncRecipe` to use.
+    :param encbits: Additional encoding bits to be interpreted by `recipe`.
+    """
+
+    def __init__(self, cpumode, inst, typevars, recipe, encbits):
+        assert isinstance(cpumode, CPUMode)
+        assert isinstance(inst, Instruction)
+        assert isinstance(recipe, EncRecipe)
+        self.cpumode = cpumode
+        assert inst.format == recipe.format, (
+                "Format {} must match recipe: {}".format(
+                    inst.format, recipe.format))
+        self.inst = inst
+        self.typevars = self._to_type_tuple(typevars)
+        self.recipe = recipe
+        self.encbits = encbits
+
+    @staticmethod
+    def _to_type_tuple(x):
+        # Allow a single ValueType instance instead of the awkward singleton
+        # tuple syntax.
+        if isinstance(x, ValueType):
+            x = (x,)
+        else:
+            x = tuple(x)
+        for ty in x:
+            assert isinstance(ty, ValueType)
+        return x
 
 # Import the fixed instruction formats now so they can be added to the
 # registry.
