@@ -17,5 +17,5 @@ for inst,           f3,    f7 in [
         (base.bor,  0b110, 0b0000000),
         (base.band, 0b111, 0b0000000)
         ]:
-    RV32.enc(inst, i32, R, OP(f3, f7))
-    RV64.enc(inst, i64, R, OP(f3, f7))
+    RV32.enc(inst.i32, R, OP(f3, f7))
+    RV64.enc(inst.i64, R, OP(f3, f7))
