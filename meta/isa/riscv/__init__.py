@@ -28,6 +28,6 @@ RV32G / RV64G
 import defs
 import encodings
 
-# Re-export the primary target definition.
-target = defs.target
+# Re-export the primary target ISA definition.
+isa = defs.isa
 

@@ -3,7 +3,7 @@
 # This script is run from src/libcretonne/build.rs to generate Rust files.
 
 import argparse
-import target
+import isa
 import gen_instr
 import gen_build_deps
 
@@ -13,7 +13,7 @@ parser.add_argument('--out-dir', help='set output directory')
 args = parser.parse_args()
 out_dir = args.out_dir
 
-targets = target.all_targets()
+isas = isa.all_isas()
 
-gen_instr.generate(targets, out_dir)
+gen_instr.generate(isas, out_dir)
 gen_build_deps.generate()

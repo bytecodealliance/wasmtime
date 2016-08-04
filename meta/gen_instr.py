@@ -161,11 +161,11 @@ def gen_instruction_data_impl(fmt):
                                     .format(i))
 
 
-def collect_instr_groups(targets):
+def collect_instr_groups(isas):
     seen = set()
     groups = []
-    for t in targets:
-        for g in t.instruction_groups:
+    for isa in isas:
+        for g in isa.instruction_groups:
             if g not in seen:
                 groups.append(g)
                 seen.add(g)
@@ -181,7 +181,7 @@ def gen_opcodes(groups, fmt):
 
     fmt.doc_comment('An instruction opcode.')
     fmt.doc_comment('')
-    fmt.doc_comment('All instructions from all supported targets are present.')
+    fmt.doc_comment('All instructions from all supported ISAs are present.')
     fmt.line('#[derive(Copy, Clone, PartialEq, Eq, Debug)]')
     instrs = []
     with fmt.indented('pub enum Opcode {', '}'):
@@ -360,8 +360,8 @@ def gen_type_constraints(fmt, instrs):
             fmt.line('OperandConstraint::{},'.format(c))
 
 
-def generate(targets, out_dir):
-    groups = collect_instr_groups(targets)
+def generate(isas, out_dir):
+    groups = collect_instr_groups(isas)
 
     # opcodes.rs
     fmt = srcgen.Formatter()
