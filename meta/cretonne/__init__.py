@@ -666,6 +666,17 @@ class Instruction(object):
         """
         return self.bind(ValueType.by_name(name))
 
+    def fully_bound(self):
+        """
+        Verify that all typevars have been bound, and return a
+        `(inst, typevars)` pair.
+
+        This version in `Instruction` itself allows non-polymorphic
+        instructions to duck-type as `BoundInstruction`\s.
+        """
+        assert not self.is_polymorphic, self
+        return (self, ())
+
 
 class BoundInstruction(object):
     """
@@ -675,6 +686,10 @@ class BoundInstruction(object):
     def __init__(self, inst, typevars):
         self.inst = inst
         self.typevars = typevars
+        assert len(typevars) <= 1 + len(inst.other_typevars)
+
+    def __str__(self):
+        return '.'.join([self.inst.name,] + map(str, self.typevars))
 
     def bind(self, *args):
         """
@@ -689,6 +704,17 @@ class BoundInstruction(object):
         >>> uext.i32.i8
         """
         return self.bind(ValueType.by_name(name))
+
+    def fully_bound(self):
+        """
+        Verify that all typevars have been bound, and return a
+        `(inst, typevars)` pair.
+        """
+        if len(self.typevars) < 1 + len(self.inst.other_typevars):
+            unb = ', '.join(str(tv) for tv in self.inst.other_typevars[len(self.typevars) - 1:])
+            raise AssertionError("Unbound typevar {} in {}".format(unb, self))
+        assert len(self.typevars) == 1 + len(self.inst.other_typevars)
+        return (self.inst, self.typevars)
 
 
 # Defining targets
@@ -769,17 +795,12 @@ class Encoding(object):
 
     def __init__(self, cpumode, inst, recipe, encbits):
         assert isinstance(cpumode, CPUMode)
-        if isinstance(inst, BoundInstruction):
-            real_inst = inst.inst
-        else:
-            real_inst = inst
-        assert isinstance(real_inst, Instruction)
         assert isinstance(recipe, EncRecipe)
+        self.inst, self.typevars = inst.fully_bound()
         self.cpumode = cpumode
-        assert real_inst.format == recipe.format, (
+        assert self.inst.format == recipe.format, (
                 "Format {} must match recipe: {}".format(
-                    inst.format, recipe.format))
-        self.inst = inst
+                    self.inst.format, recipe.format))
         self.recipe = recipe
         self.encbits = encbits
 
