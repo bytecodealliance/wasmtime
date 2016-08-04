@@ -299,17 +299,17 @@ Targets
 =======
 
 Cretonne can be compiled with support for multiple target instruction set
-architectures. Each ISA is represented by a :py:class:`cretonne.Target` instance.
+architectures. Each ISA is represented by a :py:class:`cretonne.TargetISA` instance.
 
-.. autoclass:: Target
+.. autoclass:: TargetISA
 
 The definitions for each supported target live in a package under
-:file:`meta/target`.
+:file:`meta/isa`.
 
-.. automodule:: target
+.. automodule:: isa
     :members:
 
-.. automodule:: target.riscv
+.. automodule:: isa.riscv
 
 
 Glossary

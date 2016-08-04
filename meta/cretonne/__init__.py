@@ -717,14 +717,14 @@ class BoundInstruction(object):
         return (self.inst, self.typevars)
 
 
-# Defining targets
+# Defining target ISAs.
 
 
-class Target(object):
+class TargetISA(object):
     """
     A target instruction set architecture.
 
-    The `Target` class collects everything known about a target ISA.
+    The `TargetISA` class collects everything known about a target ISA.
 
     :param name: Short mnemonic name for the ISA.
     :param instruction_groups: List of `InstructionGroup` instances that are
@@ -741,15 +741,15 @@ class CPUMode(object):
     A CPU mode determines which instruction encodings are active.
 
     All instruction encodings are associated with exactly one `CPUMode`, and
-    all CPU modes are associated with exactly one `Target`.
+    all CPU modes are associated with exactly one `TargetISA`.
 
     :param name: Short mnemonic name for the CPU mode.
-    :param target: Associated `Target`.
+    :param target: Associated `TargetISA`.
     """
 
-    def __init__(self, name, target):
+    def __init__(self, name, isa):
         self.name = name
-        self.target = target
+        self.isa = isa
         self.encodings = []
 
     def enc(self, *args, **kwargs):
