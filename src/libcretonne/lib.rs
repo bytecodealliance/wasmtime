@@ -8,6 +8,7 @@
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 pub mod ir;
+pub mod isa;
 pub mod write;
 pub mod cfg;
 pub mod dominator_tree;
