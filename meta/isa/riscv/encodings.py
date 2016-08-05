@@ -2,7 +2,6 @@
 RISC-V Encodings.
 """
 from cretonne import base
-from cretonne.types import i32, i64
 from defs import RV32, RV64
 from recipes import OP, R
 

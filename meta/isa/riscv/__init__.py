@@ -27,7 +27,7 @@ RV32G / RV64G
 
 import defs
 import encodings
+import settings
 
 # Re-export the primary target ISA definition.
 isa = defs.isa
-
