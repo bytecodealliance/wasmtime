@@ -5,6 +5,7 @@
 import argparse
 import isa
 import gen_instr
+import gen_settings
 import gen_build_deps
 
 parser = argparse.ArgumentParser(description='Generate sources for Cretonne.')
@@ -16,4 +17,5 @@ out_dir = args.out_dir
 isas = isa.all_isas()
 
 gen_instr.generate(isas, out_dir)
+gen_settings.generate(isas, out_dir)
 gen_build_deps.generate()

@@ -13,5 +13,6 @@ pub mod write;
 pub mod cfg;
 pub mod dominator_tree;
 pub mod entity_map;
+pub mod settings;
 
 #[cfg(test)]pub mod test_utils;
