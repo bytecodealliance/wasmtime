@@ -18,6 +18,146 @@ def camel_case(s):
     return camel_re.sub(lambda m: m.group(2).upper(), s)
 
 
+class Setting(object):
+    """
+    A named setting variable that can be configured externally to Cretonne.
+
+    Settings are normally not named when they are created. They get their name
+    from the `extract_names` method.
+    """
+
+    def __init__(self, doc):
+        self.name = None  # Assigned later by `extract_names()`.
+        self.__doc__ = doc
+        # Offset of byte in settings vector containing this setting.
+        self.byte_offset = None
+        SettingGroup.append(self)
+
+    @staticmethod
+    def extract_names(globs):
+        """
+        Given a dict mapping name -> object as returned by `globals()`, find
+        all the Setting objects and set their name from the dict key. This is
+        used to name a bunch of global variables in a module.
+        """
+        for name, obj in globs.iteritems():
+            if isinstance(obj, Setting):
+                assert obj.name is None
+                obj.name = name
+
+
+class BoolSetting(Setting):
+    """
+    A named setting with a boolean on/off value.
+
+    :param doc: Documentation string.
+    :param default: The default value of this setting.
+    """
+
+    def __init__(self, doc, default=False):
+        super(BoolSetting, self).__init__(doc)
+        self.default = default
+
+    def default_byte(self):
+        """
+        Get the default value of this setting, as a byte that can be bitwise
+        or'ed with the other booleans sharing the same byte.
+        """
+        if self.default:
+            return 1 << self.bit_offset
+        else:
+            return 0
+
+
+class NumSetting(Setting):
+    """
+    A named setting with an integral value in the range 0--255.
+
+    :param doc: Documentation string.
+    :param default: The default value of this setting.
+    """
+
+    def __init__(self, doc, default=0):
+        super(NumSetting, self).__init__(doc)
+        assert default == int(default)
+        assert default >= 0 and default <= 255
+        self.default = default
+
+    def default_byte(self):
+        return self.default
+
+
+class EnumSetting(Setting):
+    """
+    A named setting with an enumerated set of possible values.
+
+    The default value is always the first enumerator.
+
+    :param doc: Documentation string.
+    :param args: Tuple of unique strings representing the possible values.
+    """
+
+    def __init__(self, doc, *args):
+        super(EnumSetting, self).__init__(doc)
+        assert len(args) > 0, "EnumSetting must have at least one value"
+        self.values = tuple(str(x) for x in args)
+        self.default = self.values[0]
+
+    def default_byte(self):
+        return 0
+
+
+class SettingGroup(object):
+    """
+    A group of settings.
+
+    Whenever a :class:`Setting` object is created, it is added to the currently
+    open group. A setting group must be closed explicitly before another can be
+    opened.
+
+    :param name: Short mnemonic name for setting group.
+    """
+
+    # The currently open setting group.
+    _current = None
+
+    def __init__(self, name):
+        self.name = name
+        self.settings = []
+        self.open()
+
+    def open(self):
+        """
+        Open this setting group such that future new settings are added to this
+        group.
+        """
+        assert SettingGroup._current is None, (
+                "Can't open {} since {} is already open"
+                .format(self, SettingGroup._current))
+        SettingGroup._current = self
+
+    def close(self, globs=None):
+        """
+        Close this setting group. This function must be called before opening
+        another setting group.
+
+        :param globs: Pass in `globals()` to run `extract_names` on all
+            settings defined in the module.
+        """
+        assert SettingGroup._current is self, (
+                "Can't close {}, the open setting group is {}"
+                .format(self, SettingGroup._current))
+        SettingGroup._current = None
+        if globs:
+            Setting.extract_names(globs)
+
+    @staticmethod
+    def append(setting):
+        assert SettingGroup._current, \
+                "Open a setting group before defining settings."
+        SettingGroup._current.settings.append(setting)
+
+
 # Kinds of operands.
 #
 # Each instruction has an opcode and a number of operands. The opcode
@@ -689,7 +829,7 @@ class BoundInstruction(object):
         assert len(typevars) <= 1 + len(inst.other_typevars)
 
     def __str__(self):
-        return '.'.join([self.inst.name,] + map(str, self.typevars))
+        return '.'.join([self.inst.name, ] + map(str, self.typevars))
 
     def bind(self, *args):
         """
@@ -711,7 +851,9 @@ class BoundInstruction(object):
         `(inst, typevars)` pair.
         """
         if len(self.typevars) < 1 + len(self.inst.other_typevars):
-            unb = ', '.join(str(tv) for tv in self.inst.other_typevars[len(self.typevars) - 1:])
+            unb = ', '.join(
+                    str(tv) for tv in
+                    self.inst.other_typevars[len(self.typevars) - 1:])
             raise AssertionError("Unbound typevar {} in {}".format(unb, self))
         assert len(self.typevars) == 1 + len(self.inst.other_typevars)
         return (self.inst, self.typevars)

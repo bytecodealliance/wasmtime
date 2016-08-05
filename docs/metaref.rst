@@ -25,6 +25,45 @@ The main driver for this source code generation process is the
 :file:`meta/build.py` script which is invoked as part of the build process if
 anything in the :file:`meta` directory has changed since the last build.
 
+
+Settings
+========
+
+Settings are used by the environment embedding Cretonne to control the details
+of code generation. Each setting is defined in the meta language so a compact
+and consistent Rust representation can be generated. Shared settings are defined
+in the :mod:`cretonne.settings` module. Some settings are specific to a target
+ISA, and defined in a `settings` module under the appropriate :file:`meta/isa/*`
+directory.
+
+Settings can take boolean on/off values, small numbers, or explicitly enumerated
+symbolic values. Each type is represented by a sub-class of :class:`Setting`:
+
+.. inheritance-diagram:: Setting BoolSetting NumSetting EnumSetting
+    :parts: 1
+
+.. autoclass:: Setting
+.. autoclass:: BoolSetting
+.. autoclass:: NumSetting
+.. autoclass:: EnumSetting
+
+All settings must belong to a *group*, represented by a :class:`SettingGroup`
+object.
+
+.. autoclass:: SettingGroup
+
+Normally, a setting group corresponds to all settings defined in a module. Such
+a module looks like this::
+
+    group = SettingGroup('example')
+
+    foo = BoolSetting('use the foo')
+    bar = BoolSetting('enable bars', True)
+    opt = EnumSetting('optimization level', 'Debug', 'Release')
+
+    group.close(globals())
+
+
 Instruction descriptions
 ========================
 
