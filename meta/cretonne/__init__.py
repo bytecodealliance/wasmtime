@@ -875,6 +875,7 @@ class TargetISA(object):
 
     def __init__(self, name, instrution_groups):
         self.name = name
+        self.settings = None
         self.instruction_groups = instrution_groups
 
 

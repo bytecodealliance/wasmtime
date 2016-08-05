@@ -99,6 +99,14 @@ def gen_group(sgrp, fmt):
 
 
 def generate(isas, out_dir):
+    # Generate shared settings.
     fmt = srcgen.Formatter()
     gen_group(settings.group, fmt)
     fmt.update_file('settings.rs', out_dir)
+
+    # Generate ISA-specific settings.
+    for isa in isas:
+        if isa.settings:
+            fmt = srcgen.Formatter()
+            gen_group(isa.settings, fmt)
+            fmt.update_file('settings-{}.rs'.format(isa.name), out_dir)
