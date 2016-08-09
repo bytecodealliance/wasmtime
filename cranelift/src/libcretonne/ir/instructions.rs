@@ -54,16 +54,6 @@ impl Opcode {
     }
 }
 
-// A primitive hash function for matching opcodes.
-// Must match `meta/constant_hash.py`.
-fn simple_hash(s: &str) -> u32 {
-    let mut h: u32 = 5381;
-    for c in s.chars() {
-        h = (h ^ c as u32).wrapping_add(h.rotate_right(6));
-    }
-    h
-}
-
 // This trait really belongs in libreader where it is used by the .cton file parser, but since it
 // critically depends on the `opcode_name()` function which is needed here anyway, it lives in this
 // module. This also saves us from runing the build script twice to generate code for the two
@@ -73,6 +63,7 @@ impl FromStr for Opcode {
 
     /// Parse an Opcode name from a string.
     fn from_str(s: &str) -> Result<Opcode, &'static str> {
+        use simple_hash::simple_hash;
         let tlen = OPCODE_HASH_TABLE.len();
         assert!(tlen.is_power_of_two());
         let mut idx = simple_hash(s) as usize;

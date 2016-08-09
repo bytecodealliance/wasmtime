@@ -15,4 +15,6 @@ pub mod dominator_tree;
 pub mod entity_map;
 pub mod settings;
 
+mod simple_hash;
+
 #[cfg(test)]pub mod test_utils;
