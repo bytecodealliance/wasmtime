@@ -59,16 +59,26 @@ pub enum Error {
 
 pub type Result<T> = result::Result<T, Error>;
 
+fn parse_bool_value(value: &str) -> Result<bool> {
+    match value {
+        "true" | "on" | "yes" | "1" => Ok(true),
+        "false" | "off" | "no" | "0" => Ok(false),
+        _ => Err(Error::BadValue),
+    }
+}
+
 /// Interface for working with a group of settings as strings.
 pub trait Stringwise {
-    /// Look up a setting by name, return the details of the setting along with a reference to the
-    /// byte holding the value of the setting.
-    fn lookup_mut(&mut self, name: &str) -> Result<(Detail, &mut u8)>;
+    /// Look up a setting by name, return the byte offset and details of the setting.
+    fn lookup(&self, name: &str) -> Result<(usize, Detail)>;
 
     /// Get an enumerator string from the `Detail::enumerators` value and an offset.
     fn enumerator(&self, enums: u16, value: u8) -> &'static str;
 
-    /// Format a setting value as a TOML string. This is mostly for use by the generateed `Display`
+    /// Get the underlying byte array used to store settings.
+    fn raw_bytes_mut(&mut self) -> &mut [u8];
+
+    /// Format a setting value as a TOML string. This is mostly for use by the generated `Display`
     /// implementation.
     fn format_toml_value(&self, detail: Detail, byte: u8, f: &mut fmt::Formatter) -> fmt::Result {
         match detail {
@@ -86,9 +96,10 @@ pub trait Stringwise {
 
     /// Set a boolean setting by name.
     fn set_bool(&mut self, name: &str, value: bool) -> Result<()> {
-        let (detail, byte) = try!(self.lookup_mut(name));
+        let (offset, detail) = try!(self.lookup(name));
         if let Detail::Bool { bit } = detail {
             let mask = 1 << bit;
+            let byte = &mut self.raw_bytes_mut()[offset];
             if value {
                 *byte |= mask;
             } else {
@@ -98,6 +109,43 @@ pub trait Stringwise {
         } else {
             Err(Error::BadType)
         }
+    }
+
+    /// Set the string value of a named setting.
+    ///
+    /// For boolean settings, any of the values accepted by `parse_bool_value` above are accepted
+    /// (true/false, on/off, yes/no, 1/0).
+    ///
+    /// For enumerated settings, the value must match one of the allowed values exactly.
+    fn set(&mut self, name: &str, value: &str) -> Result<()> {
+        let (offset, detail) = try!(self.lookup(name));
+        match detail {
+            Detail::Bool { bit } => {
+                let mask = 1 << bit;
+                let byte = &mut self.raw_bytes_mut()[offset];
+                if try!(parse_bool_value(value)) {
+                    *byte |= mask;
+                } else {
+                    *byte &= !mask;
+                }
+            }
+            Detail::Num => {
+                self.raw_bytes_mut()[offset] = try!(value.parse().map_err(|_| Error::BadValue));
+            }
+            Detail::Enum { last, enumerators } => {
+                // Linear search..
+                for i in 0.. {
+                    if value == self.enumerator(enumerators, i) {
+                        self.raw_bytes_mut()[offset] = i;
+                        break;
+                    }
+                    if i == last {
+                        return Err(Error::BadValue);
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -116,6 +164,7 @@ mod tests {
         let s = Settings::default();
         assert_eq!(s.to_string(),
                    "[shared]\n\
+                    opt_level = \"default\"\n\
                     enable_simd = true\n");
     }
 
@@ -130,5 +179,23 @@ mod tests {
 
         assert_eq!(s.set_bool("enable_simd", false), Ok(()));
         assert_eq!(s.enable_simd(), false);
+    }
+
+    #[test]
+    fn modify_string() {
+        let mut s = Settings::default();
+        assert_eq!(s.enable_simd(), true);
+        assert_eq!(s.opt_level(), super::OptLevel::Default);
+
+        assert_eq!(s.set("not_there", "true"), Err(BadName));
+        assert_eq!(s.set("enable_simd", ""), Err(BadValue));
+        assert_eq!(s.set("enable_simd", "best"), Err(BadValue));
+        assert_eq!(s.set("opt_level", "true"), Err(BadValue));
+
+        assert_eq!(s.set("enable_simd", "no"), Ok(()));
+        assert_eq!(s.enable_simd(), false);
+
+        assert_eq!(s.set("opt_level", "best"), Ok(()));
+        assert_eq!(s.opt_level(), super::OptLevel::Best);
     }
 }

@@ -5,7 +5,7 @@ Generate sources with settings.
 import srcgen
 from unique_table import UniqueSeqTable
 import constant_hash
-from cretonne import BoolSetting, NumSetting, settings
+from cretonne import camel_case, BoolSetting, NumSetting, EnumSetting, settings
 
 
 def layout_group(sgrp):
@@ -40,11 +40,25 @@ def layout_group(sgrp):
     return next_byte
 
 
+def gen_enum_types(sgrp, fmt):
+    """
+    Emit enum types for any enum settings.
+    """
+    for setting in sgrp.settings:
+        if not isinstance(setting, EnumSetting):
+            continue
+        ty = camel_case(setting.name)
+        fmt.line('#[derive(Debug, PartialEq, Eq)]')
+        fmt.line(
+                'pub enum {} {{ {} }}'
+                .format(ty, ", ".join(camel_case(v) for v in setting.values)))
+
+
 def gen_getter(setting, fmt):
     """
     Emit a getter function for `setting`.
     """
-    fmt.doc_comment(setting.__doc__ + '.')
+    fmt.doc_comment(setting.__doc__)
 
     if isinstance(setting, BoolSetting):
         proto = 'pub fn {}(&self) -> bool'.format(setting.name)
@@ -56,6 +70,15 @@ def gen_getter(setting, fmt):
         proto = 'pub fn {}(&self) -> u8'.format(setting.name)
         with fmt.indented(proto + ' {', '}'):
             fmt.line('self.bytes[{}]'.format(setting.byte_offset))
+    elif isinstance(setting, EnumSetting):
+        ty = camel_case(setting.name)
+        proto = 'pub fn {}(&self) -> {}'.format(setting.name, ty)
+        with fmt.indented(proto + ' {', '}'):
+            with fmt.indented(
+                'match self.bytes[{}] {{'.format(setting.byte_offset), '}'):
+                for i, v in enumerate(setting.values):
+                    fmt.line( '{} => {}::{},'.format(i, ty, camel_case(v)))
+                fmt.line( '_ => panic!("Invalid enum value")')
     else:
         raise AssertionError("Unknown setting kind")
 
@@ -108,6 +131,11 @@ def gen_descriptors(sgrp, fmt):
                             .format(setting.bit_offset))
                 elif isinstance(setting, NumSetting):
                     fmt.line('detail: Detail::Num,')
+                elif isinstance(setting, EnumSetting):
+                    offs = enums.add(setting.values)
+                    fmt.line(
+                            'detail: Detail::Enum {{ last: {}, enumerators: {} }},'
+                            .format(len(setting.values)-1, offs))
                 else:
                     raise AssertionError("Unknown setting kind")
 
@@ -147,8 +175,8 @@ def gen_stringwise(sgrp, fmt):
 
     with fmt.indented('impl Stringwise for Settings {', '}'):
         with fmt.indented(
-                'fn lookup_mut(&mut self, name: &str)' +
-                '-> Result<(Detail, &mut u8)> {',
+                'fn lookup(&self, name: &str)' +
+                '-> Result<(usize, Detail)> {',
                 '}'):
             fmt.line('use simple_hash::simple_hash;')
             fmt.line('let tlen = HASH_TABLE.len();')
@@ -162,9 +190,8 @@ def gen_stringwise(sgrp, fmt):
                     fmt.line('return Err(Error::BadName)')
                 with fmt.indented('if DESCRIPTORS[entry].name == name {', '}'):
                     fmt.line(
-                            'return Ok((DESCRIPTORS[entry].detail, ' +
-                            '&mut self.bytes[DESCRIPTORS[entry].offset ' +
-                            'as usize]))')
+                            'return Ok((DESCRIPTORS[entry].offset as usize, ' +
+                            'DESCRIPTORS[entry].detail))')
                 fmt.line('step += 1;')
                 fmt.line('assert!(step < tlen);')
                 fmt.line('idx += step;')
@@ -175,6 +202,8 @@ def gen_stringwise(sgrp, fmt):
                 '}'):
             fmt.line('ENUMERATORS[enums as usize + value as usize]')
 
+        with fmt.indented('fn raw_bytes_mut(&mut self) -> &mut [u8] {', '}'):
+            fmt.line('&mut self.bytes')
 
 def gen_display(sgrp, fmt):
     """
@@ -204,6 +233,7 @@ def gen_group(sgrp, fmt):
     with fmt.indented('pub struct Settings {', '}'):
         fmt.line('bytes: [u8; {}],'.format(byte_size))
 
+    gen_enum_types(sgrp, fmt)
     gen_getters(sgrp, fmt)
     gen_default(sgrp, byte_size, fmt)
     gen_descriptors(sgrp, fmt)

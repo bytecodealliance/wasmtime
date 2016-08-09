@@ -8,6 +8,7 @@ source code.
 
 import sys
 import os
+import re
 
 
 class Formatter(object):
@@ -108,8 +109,9 @@ class Formatter(object):
         self.line('// ' + s)
 
     def doc_comment(self, s):
-        """Add a documentation comment line."""
-        self.line('/// ' + s)
+        """Add a (multi-line) documentation comment."""
+        s = re.sub('^', self.indent + '/// ', s, flags=re.M) + '\n'
+        self.lines.append(s)
 
 if __name__ == "__main__":
     import doctest
