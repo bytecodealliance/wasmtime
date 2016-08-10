@@ -75,10 +75,11 @@ def gen_getter(setting, fmt):
         proto = 'pub fn {}(&self) -> {}'.format(setting.name, ty)
         with fmt.indented(proto + ' {', '}'):
             with fmt.indented(
-                'match self.bytes[{}] {{'.format(setting.byte_offset), '}'):
+                    'match self.bytes[{}] {{'
+                    .format(setting.byte_offset), '}'):
                 for i, v in enumerate(setting.values):
-                    fmt.line( '{} => {}::{},'.format(i, ty, camel_case(v)))
-                fmt.line( '_ => panic!("Invalid enum value")')
+                    fmt.line('{} => {}::{},'.format(i, ty, camel_case(v)))
+                fmt.line('_ => panic!("Invalid enum value")')
     else:
         raise AssertionError("Unknown setting kind")
 
@@ -88,25 +89,9 @@ def gen_getters(sgrp, fmt):
     Emit getter functions for all the settings in fmt.
     """
     fmt.doc_comment("User-defined settings.")
-    with fmt.indented('impl Settings {', '}'):
+    with fmt.indented('impl Flags {', '}'):
         for setting in sgrp.settings:
             gen_getter(setting, fmt)
-
-
-def gen_default(sgrp, byte_size, fmt):
-    """
-    Emit a Default impl for Settings.
-    """
-    v = [0] * byte_size
-    for setting in sgrp.settings:
-        v[setting.byte_offset] |= setting.default_byte()
-
-    with fmt.indented('impl Default for Settings {', '}'):
-        fmt.doc_comment('Return a `Settings` object with default values.')
-        with fmt.indented('fn default() -> Settings {', '}'):
-            with fmt.indented('Settings {', '}'):
-                vs = ', '.join('{:#04x}'.format(x) for x in v)
-                fmt.line('bytes: [ {} ],'.format(vs))
 
 
 def gen_descriptors(sgrp, fmt):
@@ -117,30 +102,31 @@ def gen_descriptors(sgrp, fmt):
     enums = UniqueSeqTable()
 
     with fmt.indented(
-            'const DESCRIPTORS: [Descriptor; {}] = ['
+            'static DESCRIPTORS: [detail::Descriptor; {}] = ['
             .format(len(sgrp.settings)),
             '];'):
         for idx, setting in enumerate(sgrp.settings):
             setting.descriptor_index = idx
-            with fmt.indented('Descriptor {', '},'):
+            with fmt.indented('detail::Descriptor {', '},'):
                 fmt.line('name: "{}",'.format(setting.name))
                 fmt.line('offset: {},'.format(setting.byte_offset))
                 if isinstance(setting, BoolSetting):
                     fmt.line(
-                            'detail: Detail::Bool {{ bit: {} }},'
+                            'detail: detail::Detail::Bool {{ bit: {} }},'
                             .format(setting.bit_offset))
                 elif isinstance(setting, NumSetting):
-                    fmt.line('detail: Detail::Num,')
+                    fmt.line('detail: detail::Detail::Num,')
                 elif isinstance(setting, EnumSetting):
                     offs = enums.add(setting.values)
                     fmt.line(
-                            'detail: Detail::Enum {{ last: {}, enumerators: {} }},'
+                            'detail: detail::Detail::Enum ' +
+                            '{{ last: {}, enumerators: {} }},'
                             .format(len(setting.values)-1, offs))
                 else:
                     raise AssertionError("Unknown setting kind")
 
     with fmt.indented(
-            'const ENUMERATORS: [&\'static str; {}] = ['
+            'static ENUMERATORS: [&\'static str; {}] = ['
             .format(len(enums.table)),
             '];'):
         for txt in enums.table:
@@ -150,66 +136,46 @@ def gen_descriptors(sgrp, fmt):
         return constant_hash.simple_hash(s.name)
 
     hash_table = constant_hash.compute_quadratic(sgrp.settings, hash_setting)
-    if len(sgrp.settings) > 0xffff:
-        ty = 'u32'
-    elif len(sgrp.settings) > 0xff:
-        ty = 'u16'
-    else:
-        ty = 'u8'
-
     with fmt.indented(
-            'const HASH_TABLE: [{}; {}] = ['
-            .format(ty, len(hash_table)),
+            'static HASH_TABLE: [u16; {}] = ['
+            .format(len(hash_table)),
             '];'):
         for h in hash_table:
             if h is None:
-                fmt.line('{},'.format(len(sgrp.settings)))
+                fmt.line('0xffff,')
             else:
                 fmt.line('{},'.format(h.descriptor_index))
 
 
-def gen_stringwise(sgrp, fmt):
+def gen_template(sgrp, byte_size, fmt):
     """
-    Generate the Stringwise implementation and supporting tables.
+    Emit a Template constant.
     """
+    v = [0] * byte_size
+    for setting in sgrp.settings:
+        v[setting.byte_offset] |= setting.default_byte()
 
-    with fmt.indented('impl Stringwise for Settings {', '}'):
-        with fmt.indented(
-                'fn lookup(&self, name: &str)' +
-                '-> Result<(usize, Detail)> {',
-                '}'):
-            fmt.line('use simple_hash::simple_hash;')
-            fmt.line('let tlen = HASH_TABLE.len();')
-            fmt.line('assert!(tlen.is_power_of_two());')
-            fmt.line('let mut idx = simple_hash(name) as usize;')
-            fmt.line('let mut step: usize = 0;')
-            with fmt.indented('loop {', '}'):
-                fmt.line('idx = idx % tlen;')
-                fmt.line('let entry = HASH_TABLE[idx] as usize;')
-                with fmt.indented('if entry >= DESCRIPTORS.len() {', '}'):
-                    fmt.line('return Err(Error::BadName)')
-                with fmt.indented('if DESCRIPTORS[entry].name == name {', '}'):
-                    fmt.line(
-                            'return Ok((DESCRIPTORS[entry].offset as usize, ' +
-                            'DESCRIPTORS[entry].detail))')
-                fmt.line('step += 1;')
-                fmt.line('assert!(step < tlen);')
-                fmt.line('idx += step;')
+    with fmt.indented(
+            'static TEMPLATE: detail::Template = detail::Template {', '};'):
+        fmt.line('name: "{}",'.format(sgrp.name))
+        fmt.line('descriptors: &DESCRIPTORS,')
+        fmt.line('enumerators: &ENUMERATORS,')
+        fmt.line('hash_table: &HASH_TABLE,')
+        vs = ', '.join('{:#04x}'.format(x) for x in v)
+        fmt.line('defaults: &[ {} ],'.format(vs))
 
-        with fmt.indented(
-                'fn enumerator(&self, enums: u16, value: u8)' +
-                '-> &\'static str {',
-                '}'):
-            fmt.line('ENUMERATORS[enums as usize + value as usize]')
+    fmt.doc_comment(
+            'Create a `settings::Builder` for the {} settings group.'
+            .format(sgrp.name))
+    with fmt.indented('pub fn builder() -> Builder {', '}'):
+        fmt.line('Builder::new(&TEMPLATE)')
 
-        with fmt.indented('fn raw_bytes_mut(&mut self) -> &mut [u8] {', '}'):
-            fmt.line('&mut self.bytes')
 
 def gen_display(sgrp, fmt):
     """
-    Generate the Display impl for Settings.
+    Generate the Display impl for Flags.
     """
-    with fmt.indented('impl fmt::Display for Settings {', '}'):
+    with fmt.indented('impl fmt::Display for Flags {', '}'):
         with fmt.indented(
                 'fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {',
                 '}'):
@@ -217,27 +183,43 @@ def gen_display(sgrp, fmt):
             with fmt.indented('for d in &DESCRIPTORS {', '}'):
                 fmt.line('try!(write!(f, "{} = ", d.name));')
                 fmt.line(
-                        'try!(self.format_toml_value(d.detail,' +
+                        'try!(TEMPLATE.format_toml_value(d.detail,' +
                         'self.bytes[d.offset as usize], f));')
                 fmt.line('try!(writeln!(f, ""));')
             fmt.line('Ok(())')
 
 
+def gen_constructor(sgrp, byte_size, parent, fmt):
+    """
+    Generate a Flags constructor.
+    """
+
+    with fmt.indented('impl Flags {', '}'):
+        with fmt.indented('pub fn new(builder: Builder) -> Flags {', '}'):
+            fmt.line('let bvec = builder.finish("{}");'.format(sgrp.name))
+            fmt.line('let mut bytes = [0; {}];'.format(byte_size))
+            fmt.line('assert_eq!(bytes.len(), bvec.len());')
+            with fmt.indented(
+                    'for (i, b) in bvec.into_iter().enumerate() {', '}'):
+                fmt.line('bytes[i] = b;')
+            fmt.line('Flags { bytes: bytes }')
+
+
 def gen_group(sgrp, fmt):
     """
-    Generate a Settings struct representing `sgrp`.
+    Generate a Flags struct representing `sgrp`.
     """
     byte_size = layout_group(sgrp)
 
-    fmt.doc_comment('Settings group `{}`.'.format(sgrp.name))
-    with fmt.indented('pub struct Settings {', '}'):
+    fmt.doc_comment('Flags group `{}`.'.format(sgrp.name))
+    with fmt.indented('pub struct Flags {', '}'):
         fmt.line('bytes: [u8; {}],'.format(byte_size))
 
+    gen_constructor(sgrp, byte_size, None, fmt)
     gen_enum_types(sgrp, fmt)
     gen_getters(sgrp, fmt)
-    gen_default(sgrp, byte_size, fmt)
     gen_descriptors(sgrp, fmt)
-    gen_stringwise(sgrp, fmt)
+    gen_template(sgrp, byte_size, fmt)
     gen_display(sgrp, fmt)
 
 
