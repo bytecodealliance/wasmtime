@@ -1,10 +1,30 @@
 //! Instruction Set Architectures.
 //!
 //! The `isa` module provides a `TargetIsa` trait which provides the behavior specialization needed
-//! by the ISA-independent code generator.
+//! by the ISA-independent code generator. The sub-modules of this module provide definitions for
+//! the instruction sets that Cretonne can target. Each sub-module has it's own implementation of
+//! `TargetIsa`.
 //!
-//! The sub-modules of this module provide definitions for the instruction sets that Cretonne
-//! can target. Each sub-module has it's own implementation of `TargetIsa`.
+//! # Constructing a `TargetIsa` instance
+//!
+//! The target ISA is build from the following information:
+//!
+//! - The name of the target ISA as a string. Cretonne is a cross-compiler, so the ISA to target
+//!   can be selected dynamically. Individual ISAs can be left out when Cretonne is compiled, so a
+//!   string is used to identify the proper sub-module.
+//! - Values for settings that apply to all ISAs. This is represented by a `settings::Flags`
+//!   instance.
+//! - Values for ISA-specific settings.
+//!
+//! The `isa::lookup()` function is the main entry point which returns an `isa::Builder`
+//! appropriate for the requested ISA:
+//!
+//! ```ignore
+//! let isa_builder = isa::lookup("riscv").unwrap();
+//! adjust_isa_settings(&mut isa_builder.settings);
+//! let isa = builder.finish(shared_settings());
+//! ```
+//!
 
 pub mod riscv;
 
