@@ -31,19 +31,14 @@ class Setting(object):
         self.__doc__ = doc
         # Offset of byte in settings vector containing this setting.
         self.byte_offset = None
-        SettingGroup.append(self)
+        self.group = SettingGroup.append(self)
 
-    @staticmethod
-    def extract_names(globs):
+    def predicate_context(self):
         """
-        Given a dict mapping name -> object as returned by `globals()`, find
-        all the Setting objects and set their name from the dict key. This is
-        used to name a bunch of global variables in a module.
+        Return the context where this setting can be evaluated as a (leaf)
+        predicate.
         """
-        for name, obj in globs.iteritems():
-            if isinstance(obj, Setting):
-                assert obj.name is None
-                obj.name = name
+        return self.group
 
 
 class BoolSetting(Setting):
@@ -116,14 +111,17 @@ class SettingGroup(object):
     opened.
 
     :param name: Short mnemonic name for setting group.
+    :param parent: Parent settings group.
     """
 
     # The currently open setting group.
     _current = None
 
-    def __init__(self, name):
+    def __init__(self, name, parent=None):
         self.name = name
+        self.parent = parent
         self.settings = []
+        self.predicates = []
         self.open()
 
     def open(self):
@@ -149,13 +147,22 @@ class SettingGroup(object):
                 .format(self, SettingGroup._current))
         SettingGroup._current = None
         if globs:
-            Setting.extract_names(globs)
+            from predicates import Predicate
+            for name, obj in globs.iteritems():
+                if isinstance(obj, Setting):
+                    assert obj.name is None, obj.name
+                    obj.name = name
+                if isinstance(obj, Predicate):
+                    assert obj.name is None
+                    obj.name = name
+                    self.predicates.append(obj)
 
     @staticmethod
     def append(setting):
-        assert SettingGroup._current, \
-                "Open a setting group before defining settings."
-        SettingGroup._current.settings.append(setting)
+        g = SettingGroup._current
+        assert g, "Open a setting group before defining settings."
+        g.settings.append(setting)
+        return g
 
 
 # Kinds of operands.
