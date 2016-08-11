@@ -211,6 +211,7 @@ def gen_group(sgrp, fmt):
     """
     byte_size = layout_group(sgrp)
 
+    fmt.line('#[derive(Clone)]')
     fmt.doc_comment('Flags group `{}`.'.format(sgrp.name))
     with fmt.indented('pub struct Flags {', '}'):
         fmt.line('bytes: [u8; {}],'.format(byte_size))
