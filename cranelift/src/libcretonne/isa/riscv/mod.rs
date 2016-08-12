@@ -25,8 +25,8 @@ fn isa_constructor(shared_flags: shared_settings::Flags,
                    builder: shared_settings::Builder)
                    -> Box<TargetIsa> {
     Box::new(Isa {
+        isa_flags: settings::Flags::new(&shared_flags, builder),
         shared_flags: shared_flags,
-        isa_flags: settings::Flags::new(builder),
     })
 }
 
