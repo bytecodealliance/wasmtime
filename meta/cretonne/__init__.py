@@ -63,6 +63,15 @@ class BoolSetting(Setting):
         else:
             return 0
 
+    def rust_predicate(self, prec):
+        """
+        Return the Rust code to compute the value of this setting.
+
+        The emitted code assumes that the setting group exists as a local
+        variable.
+        """
+        return '{}.{}()'.format(self.group.name, self.name)
+
 
 class NumSetting(Setting):
     """

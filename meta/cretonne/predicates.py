@@ -72,8 +72,26 @@ class And(Predicate):
     Computed predicate that is true if all parts are true.
     """
 
+    precedence = 2
+
     def __init__(self, *args):
         super(And, self).__init__(args)
+
+    def rust_predicate(self, prec):
+        """
+        Return a Rust expression computing the value of this predicate.
+
+        The surrounding precedence determines whether parentheses are needed:
+
+        0. An `if` statement.
+        1. An `||` expression.
+        2. An `&&` expression.
+        3. A `!` expression.
+        """
+        s = ' && '.join(p.rust_predicate(And.precedence) for p in self.parts)
+        if prec > And.precedence:
+            s = '({})'.format(s)
+        return s
 
 
 class Or(Predicate):
@@ -81,8 +99,16 @@ class Or(Predicate):
     Computed predicate that is true if any parts are true.
     """
 
+    precedence = 1
+
     def __init__(self, *args):
         super(Or, self).__init__(args)
+
+    def rust_predicate(self, prec):
+        s = ' || '.join(p.rust_predicate(Or.precedence) for p in self.parts)
+        if prec > Or.precedence:
+            s = '({})'.format(s)
+        return s
 
 
 class Not(Predicate):
@@ -90,5 +116,10 @@ class Not(Predicate):
     Computed predicate that is true if its single part is false.
     """
 
+    precedence = 3
+
     def __init__(self, part):
         super(Not, self).__init__((part,))
+
+    def rust_predicate(self, prec):
+        return '!' + self.parts[0].rust_predicate(Not.precedence)
