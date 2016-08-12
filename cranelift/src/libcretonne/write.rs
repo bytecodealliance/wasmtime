@@ -68,9 +68,9 @@ fn write_spec(w: &mut Write, func: &Function) -> Result {
 fn write_preamble(w: &mut Write, func: &Function) -> io::Result<bool> {
     let mut any = false;
 
-    for ss in func.stack_slot_iter() {
+    for ss in func.stack_slots.keys() {
         any = true;
-        try!(writeln!(w, "    {} = {}", ss, func[ss]));
+        try!(writeln!(w, "    {} = {}", ss, func.stack_slots[ss]));
     }
 
     for jt in func.jump_tables.keys() {
@@ -249,7 +249,7 @@ mod tests {
         f.name.push_str("foo");
         assert_eq!(function_to_string(&f), "function foo() {\n}\n");
 
-        f.make_stack_slot(StackSlotData::new(4));
+        f.stack_slots.push(StackSlotData::new(4));
         assert_eq!(function_to_string(&f),
                    "function foo() {\n    ss0 = stack_slot 4\n}\n");
 
