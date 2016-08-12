@@ -11,14 +11,13 @@ use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use std::u32;
 use lexer::{self, Lexer, Token};
-use cretonne::ir::{Function, Ebb, Inst, Opcode, Value, Type, FunctionName, StackSlotData,
-                   JumpTable, StackSlot};
+use cretonne::ir::{Function, Ebb, Inst, Opcode, Value, Type, FunctionName, StackSlot,
+                   StackSlotData, JumpTable, JumpTableData};
 use cretonne::ir::types::{VOID, Signature, ArgumentType, ArgumentExtension};
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::{NO_EBB, NO_VALUE};
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs, JumpData,
                                  BranchData, ReturnData};
-use cretonne::ir::jumptable::JumpTableData;
 
 pub use lexer::Location;
 
@@ -95,7 +94,7 @@ impl Context {
 
     // Allocate a new stack slot and add a mapping number -> StackSlot.
     fn add_ss(&mut self, number: u32, data: StackSlotData, loc: &Location) -> Result<()> {
-        if self.stack_slots.insert(number, self.function.make_stack_slot(data)).is_some() {
+        if self.stack_slots.insert(number, self.function.stack_slots.push(data)).is_some() {
             err!(loc, "duplicate stack slot: ss{}", number)
         } else {
             Ok(())
@@ -1173,13 +1172,13 @@ mod tests {
             .parse_function()
             .unwrap();
         assert_eq!(func.name, "foo");
-        let mut iter = func.stack_slot_iter();
+        let mut iter = func.stack_slots.keys();
         let ss0 = iter.next().unwrap();
         assert_eq!(ss0.to_string(), "ss0");
-        assert_eq!(func[ss0].size, 13);
+        assert_eq!(func.stack_slots[ss0].size, 13);
         let ss1 = iter.next().unwrap();
         assert_eq!(ss1.to_string(), "ss1");
-        assert_eq!(func[ss1].size, 1);
+        assert_eq!(func.stack_slots[ss1].size, 1);
         assert_eq!(iter.next(), None);
 
         // Catch duplicate definitions.
