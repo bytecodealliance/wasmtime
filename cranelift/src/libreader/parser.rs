@@ -11,12 +11,13 @@ use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use std::u32;
 use lexer::{self, Lexer, Token};
-use cretonne::ir::types::{Type, VOID, FunctionName, Signature, ArgumentType, ArgumentExtension};
+use cretonne::ir::{Function, Ebb, Inst, Opcode, Value, Type, FunctionName, StackSlotData,
+                   JumpTable, StackSlot};
+use cretonne::ir::types::{VOID, Signature, ArgumentType, ArgumentExtension};
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
-use cretonne::ir::entities::*;
-use cretonne::ir::instructions::{Opcode, InstructionFormat, InstructionData, VariableArgs,
-                                 JumpData, BranchData, ReturnData};
-use cretonne::ir::{Function, StackSlotData};
+use cretonne::ir::entities::{NO_EBB, NO_VALUE};
+use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs, JumpData,
+                                 BranchData, ReturnData};
 use cretonne::ir::jumptable::JumpTableData;
 
 pub use lexer::Location;

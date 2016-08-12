@@ -2,7 +2,7 @@ extern crate cretonne;
 extern crate cton_reader;
 
 use self::cton_reader::parser::Parser;
-use self::cretonne::ir::entities::Ebb;
+use self::cretonne::ir::Ebb;
 use self::cretonne::cfg::ControlFlowGraph;
 use self::cretonne::entity_map::EntityMap;
 

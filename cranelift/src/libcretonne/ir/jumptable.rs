@@ -120,7 +120,7 @@ impl Display for JumpTableData {
 #[cfg(test)]
 mod tests {
     use super::JumpTableData;
-    use ir::entities::Ebb;
+    use ir::Ebb;
     use entity_map::EntityRef;
 
     #[test]

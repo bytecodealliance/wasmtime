@@ -43,8 +43,7 @@
 pub mod riscv;
 
 use settings;
-use ir::dfg::DataFlowGraph;
-use ir::entities::Inst;
+use ir::{Inst, DataFlowGraph};
 
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.

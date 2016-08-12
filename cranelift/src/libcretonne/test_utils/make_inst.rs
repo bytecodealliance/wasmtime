@@ -1,8 +1,8 @@
 //! Helper functions for generating dummy instructions.
 
-use ir::Function;
-use ir::entities::{Ebb, Inst, NO_VALUE};
-use ir::instructions::{InstructionData, Opcode, VariableArgs, JumpData, BranchData};
+use ir::{Function, Ebb, Inst, Opcode};
+use ir::entities::NO_VALUE;
+use ir::instructions::{InstructionData, VariableArgs, JumpData, BranchData};
 use ir::types;
 
 pub fn jump(func: &mut Function, dest: Ebb) -> Inst {

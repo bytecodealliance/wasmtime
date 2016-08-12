@@ -1,9 +1,10 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use entity_map::{EntityMap, PrimaryEntityData};
-use ir::entities::{Ebb, Inst, Value, NO_VALUE, ExpandedValue};
+use ir::{Ebb, Inst, Value, Type};
+use ir::entities::{NO_VALUE, ExpandedValue};
 use ir::instructions::InstructionData;
-use ir::types::Type;
+use entity_map::{EntityMap, PrimaryEntityData};
+
 use std::ops::{Index, IndexMut};
 use std::u16;
 
@@ -359,7 +360,7 @@ impl EbbData {
 mod tests {
     use super::*;
     use ir::types;
-    use ir::instructions::{Opcode, InstructionData};
+    use ir::{Opcode, InstructionData};
 
     #[test]
     fn make_inst() {
