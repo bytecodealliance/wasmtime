@@ -17,29 +17,33 @@ set -e
 cd $(dirname "$0")
 topdir=$(pwd)
 
-PKGS="libcretonne libreader tools"
-echo ====== Rust unit tests and debug builds ======
+function banner() {
+    echo "======  $@  ======"
+}
+
+PKGS="cretonne cretonne-reader cretonne-tools"
+cd "$topdir/src/tools"
 for PKG in $PKGS
 do
-    (
-    cd $topdir/src/$PKG
-    cargo test
-    cargo build
-    )
+    banner "Rust $PKG unit tests"
+    cargo test -p $PKG
 done
 
 # Build cton-util for parser testing.
-echo ====== Rust release build and documentation ======
 cd "$topdir/src/tools"
+banner "Rust documentation"
+echo "open $topdir/src/tools/target/doc/cretonne/index.html"
 cargo doc
+banner "Rust release build"
 cargo build --release
 
 export CTONUTIL="$topdir/src/tools/target/release/cton-util"
 
 # Run the parser tests.
-echo ====== Parser tests ======
 cd "$topdir/tests"
+banner "Parser tests"
 parser/run.sh
+banner "CFG tests"
 cfg/run.sh
 
-echo ====== OK ======
+banner "OK"
