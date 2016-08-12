@@ -1,7 +1,7 @@
 /// ! A Dominator Tree represented as mappings of Ebbs to their immediate dominator.
 
 use cfg::*;
-use ir::entities::Ebb;
+use ir::Ebb;
 use entity_map::{EntityMap, Keys};
 
 pub struct DominatorTree {

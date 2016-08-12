@@ -22,8 +22,7 @@
 //! Here Ebb1 and Ebb2 would each have a single predecessor denoted as (Ebb0, `brz vx, Ebb1`)
 //! and (Ebb0, `jmp Ebb2`) respectively.
 
-use ir::Function;
-use ir::entities::{Inst, Ebb};
+use ir::{Function, Inst, Ebb};
 use ir::instructions::BranchInfo;
 use entity_map::{EntityMap, Keys};
 use std::collections::HashSet;

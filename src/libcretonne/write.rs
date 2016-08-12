@@ -4,10 +4,8 @@
 //! equivalent textual representation. This textual representation can be read back by the
 //! `cretonne-reader` crate.
 
+use ir::{Function, Ebb, Inst, Value, Type};
 use std::io::{self, Write};
-use ir::Function;
-use ir::entities::{Inst, Ebb, Value};
-use ir::types::Type;
 
 pub type Result = io::Result<()>;
 

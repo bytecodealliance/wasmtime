@@ -248,7 +248,7 @@ impl<'a> Iterator for Insts<'a> {
 mod tests {
     use super::Layout;
     use entity_map::EntityRef;
-    use ir::entities::{Ebb, Inst};
+    use ir::{Ebb, Inst};
 
     #[test]
     fn append_ebb() {

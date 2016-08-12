@@ -9,14 +9,16 @@ pub mod jumptable;
 pub mod dfg;
 pub mod layout;
 
-use ir::types::{FunctionName, Signature};
-use entity_map::{EntityRef, EntityMap, PrimaryEntityData};
-use ir::entities::{StackSlot, JumpTable};
+pub use ir::types::{Type, FunctionName, Signature};
+pub use ir::entities::{Ebb, Inst, Value, StackSlot, JumpTable};
+pub use ir::instructions::{Opcode, InstructionData};
+pub use ir::dfg::DataFlowGraph;
+pub use ir::layout::Layout;
+
 use ir::jumptable::JumpTableData;
-use ir::dfg::DataFlowGraph;
-use ir::layout::Layout;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::Index;
+use entity_map::{EntityRef, EntityMap, PrimaryEntityData};
 
 /// A function.
 pub struct Function {

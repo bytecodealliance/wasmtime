@@ -5,8 +5,7 @@ pub mod settings;
 use super::super::settings as shared_settings;
 use super::Builder as IsaBuilder;
 use super::{TargetIsa, Encoding};
-use ir::dfg::DataFlowGraph;
-use ir::entities::Inst;
+use ir::{Inst, DataFlowGraph};
 
 #[allow(dead_code)]
 struct Isa {
