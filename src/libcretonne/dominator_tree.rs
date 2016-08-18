@@ -2,10 +2,11 @@
 
 use cfg::*;
 use ir::Ebb;
+use ir::entities::NO_INST;
 use entity_map::{EntityMap, Keys};
 
 pub struct DominatorTree {
-    data: EntityMap<Ebb, Option<Ebb>>,
+    data: EntityMap<Ebb, Option<BasicBlock>>,
 }
 
 impl DominatorTree {
@@ -28,7 +29,7 @@ impl DominatorTree {
         let mut changed = false;
 
         if len > 0 {
-            data[ebbs[0]] = Some(ebbs[0]);
+            data[ebbs[0]] = Some((ebbs[0], NO_INST));
             changed = true;
         }
 
@@ -39,20 +40,21 @@ impl DominatorTree {
                 let preds = cfg.get_predecessors(ebb);
                 let mut new_idom = None;
 
-                for &(p, _) in preds {
+                for &(p_ebb, _) in preds {
                     if new_idom == None {
-                        new_idom = Some(p);
+                        new_idom = Some((p_ebb, NO_INST));
                         continue;
                     }
-                    // If this predecessor `p` has an idom available find its common
+                    // If this predecessor has an idom available find its common
                     // ancestor with the current value of new_idom.
-                    if let Some(_) = data[p] {
+                    if let Some(_) = data[p_ebb] {
                         new_idom = match new_idom {
                             Some(cur_idom) => {
-                                Some(DominatorTree::intersect(&mut data,
-                                                              &postorder_map,
-                                                              p,
-                                                              cur_idom))
+                                Some((DominatorTree::intersect(&mut data,
+                                                               &postorder_map,
+                                                               p_ebb,
+                                                               cur_idom.0),
+                                      NO_INST))
                             }
                             None => panic!("A 'current idom' should have been set!"),
                         }
@@ -73,11 +75,36 @@ impl DominatorTree {
                 }
             }
         }
+
+        // At this point the basic blocks in the tree are incomplete
+        // since they have all been set with NO_INST. Here we add instructions
+        // by iterating through each Ebb -> BasicBlock mapping in the dominator
+        // tree and replacing the basic block with a corresponding predecessor
+        // from the Ebb (on the left hand side).
+        //
+        // The predecessor chosen should have the lowest instruction number and
+        // an Ebb which matches the Ebb from the dummy basic block. Because
+        // extended basic blocks have a single entry point this will always
+        // result in the correct basic block being chosen.
+        for lhs_ebb in ebbs {
+            let rhs_bb = data[lhs_ebb].unwrap();
+            for pred_bb in cfg.get_predecessors(lhs_ebb) {
+                if rhs_bb.0 == pred_bb.0 {
+                    // Predecessors are added in order while iterating through
+                    // instructions from lowest to highest. Because of this,
+                    // the first match we encounter will have the lowest instruction
+                    // number.
+                    data[lhs_ebb] = Some(pred_bb.clone());
+                    break;
+                }
+            }
+        }
+
         DominatorTree { data: data }
     }
 
     /// Find the common dominator of two ebbs.
-    fn intersect(data: &EntityMap<Ebb, Option<Ebb>>,
+    fn intersect(data: &EntityMap<Ebb, Option<BasicBlock>>,
                  ordering: &EntityMap<Ebb, usize>,
                  first: Ebb,
                  second: Ebb)
@@ -91,10 +118,10 @@ impl DominatorTree {
         // self.data[b] to contain non-None entries.
         while a != b {
             while ordering[a] < ordering[b] {
-                a = data[a].unwrap();
+                a = data[a].unwrap().0;
             }
             while ordering[b] < ordering[a] {
-                b = data[b].unwrap();
+                b = data[b].unwrap().0;
             }
         }
         a
@@ -102,7 +129,7 @@ impl DominatorTree {
 
     /// Returns the immediate dominator of some ebb or None if the
     /// node is unreachable.
-    pub fn idom(&self, ebb: Ebb) -> Option<Ebb> {
+    pub fn idom(&self, ebb: Ebb) -> Option<BasicBlock> {
         self.data[ebb].clone()
     }
 
@@ -116,6 +143,7 @@ impl DominatorTree {
 mod test {
     use super::*;
     use ir::Function;
+    use ir::entities::NO_INST;
     use cfg::ControlFlowGraph;
     use test_utils::make_inst;
 
@@ -153,9 +181,9 @@ mod test {
         let dt = DominatorTree::new(&cfg);
 
         assert_eq!(func.layout.entry_block().unwrap(), ebb3);
-        assert_eq!(dt.idom(ebb3).unwrap(), ebb3);
-        assert_eq!(dt.idom(ebb1).unwrap(), ebb3);
-        assert_eq!(dt.idom(ebb2).unwrap(), ebb1);
-        assert_eq!(dt.idom(ebb0).unwrap(), ebb1);
+        assert_eq!(dt.idom(ebb3).unwrap(), (ebb3, NO_INST));
+        assert_eq!(dt.idom(ebb1).unwrap(), (ebb3, jmp_ebb3_ebb1));
+        assert_eq!(dt.idom(ebb2).unwrap(), (ebb1, jmp_ebb1_ebb2));
+        assert_eq!(dt.idom(ebb0).unwrap(), (ebb1, br_ebb1_ebb0));
     }
 }
