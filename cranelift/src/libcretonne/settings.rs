@@ -23,7 +23,7 @@
 use std::fmt;
 use std::result;
 
-use constant_hash::simple_hash;
+use constant_hash::{probe, simple_hash};
 
 /// A string-based configurator for settings groups.
 ///
@@ -75,27 +75,12 @@ impl Builder {
 
     /// Look up a descriptor by name.
     fn lookup(&self, name: &str) -> Result<(usize, detail::Detail)> {
-        let table = self.template.hash_table;
-        let descs = self.template.descriptors;
-        let mask = table.len() - 1;
-        assert!((mask + 1).is_power_of_two());
-
-        let mut idx = simple_hash(name) as usize;
-        let mut step: usize = 0;
-
-        loop {
-            idx = idx & mask;
-            let entry = table[idx] as usize;
-            if entry >= descs.len() {
-                return Err(Error::BadName);
+        match probe(self.template, name, simple_hash(name)) {
+            None => Err(Error::BadName),
+            Some(entry) => {
+                let d = &self.template.descriptors[self.template.hash_table[entry] as usize];
+                Ok((d.offset as usize, d.detail))
             }
-            let desc = &descs[entry];
-            if desc.name == name {
-                return Ok((desc.offset as usize, desc.detail));
-            }
-            step += 1;
-            assert!(step <= mask);
-            idx += step;
         }
     }
 }
@@ -167,6 +152,7 @@ pub type Result<T> = result::Result<T, Error>;
 /// code in other modules.
 pub mod detail {
     use std::fmt;
+    use constant_hash;
 
     /// An instruction group template.
     pub struct Template {
@@ -203,6 +189,22 @@ pub mod detail {
                         write!(f, "{}", byte)
                     }
                 }
+            }
+        }
+    }
+
+    /// The template contains a hash table for by-name lookup.
+    impl<'a> constant_hash::Table<&'a str> for Template {
+        fn len(&self) -> usize {
+            self.hash_table.len()
+        }
+
+        fn key(&self, idx: usize) -> Option<&'a str> {
+            let e = self.hash_table[idx] as usize;
+            if e < self.descriptors.len() {
+                Some(self.descriptors[e].name)
+            } else {
+                None
             }
         }
     }
