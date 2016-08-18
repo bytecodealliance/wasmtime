@@ -1,9 +1,11 @@
 extern crate cretonne;
 extern crate cton_reader;
 
-use self::cton_reader::parser::Parser;
 use self::cretonne::ir::Ebb;
+use self::cton_reader::parser::Parser;
+use self::cretonne::ir::entities::NO_INST;
 use self::cretonne::cfg::ControlFlowGraph;
+use self::cretonne::ir::instructions::BranchInfo;
 use self::cretonne::dominator_tree::DominatorTree;
 
 fn test_dominator_tree(function_source: &str, idoms: Vec<u32>) {
@@ -12,9 +14,36 @@ fn test_dominator_tree(function_source: &str, idoms: Vec<u32>) {
     let dtree = DominatorTree::new(&cfg);
     assert_eq!(dtree.ebbs().collect::<Vec<_>>().len(), idoms.len());
     for (i, j) in idoms.iter().enumerate() {
-        let ebb = Ebb::with_number(i.clone() as u32);
-        let idom = Ebb::with_number(*j);
-        assert_eq!(dtree.idom(ebb.unwrap()), idom);
+        let ebb = Ebb::with_number(i.clone() as u32).unwrap();
+        let idom_ebb = Ebb::with_number(*j).unwrap();
+        let mut idom_inst = NO_INST;
+
+        // Find the first branch/jump instruction which points to the idom_ebb
+        // and use it to denote our idom basic block.
+        for inst in func.layout.ebb_insts(idom_ebb) {
+           match func.dfg[inst].analyze_branch() {
+                BranchInfo::SingleDest(dest, _) => {
+                    if dest == ebb {
+                        idom_inst = inst;
+                        break;
+                    }
+                }
+                BranchInfo::Table(jt) => {
+                    for (_, dest) in func.jump_tables[jt].entries() {
+                        if dest == ebb {
+                            idom_inst = inst;
+                            break;
+                        }
+                    }
+                    // We already found our inst!
+                    if idom_inst != NO_INST {
+                        break;
+                    }
+                }
+                BranchInfo::NotABranch => {}
+            }
+        }
+        assert_eq!(dtree.idom(ebb).unwrap(), (idom_ebb, idom_inst));
     }
 }
 
