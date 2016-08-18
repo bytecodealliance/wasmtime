@@ -64,30 +64,25 @@ impl FromStr for Opcode {
 
     /// Parse an Opcode name from a string.
     fn from_str(s: &str) -> Result<Opcode, &'static str> {
-        use simple_hash::simple_hash;
-        let tlen = OPCODE_HASH_TABLE.len();
-        assert!(tlen.is_power_of_two());
-        let mut idx = simple_hash(s) as usize;
-        let mut step: usize = 0;
-        loop {
-            idx = idx % tlen;
-            let entry = OPCODE_HASH_TABLE[idx];
+        use constant_hash::{Table, simple_hash, probe};
 
-            if entry == Opcode::NotAnOpcode {
-                return Err("Unknown opcode");
+        impl<'a> Table<&'a str> for [Opcode] {
+            fn len(&self) -> usize {
+                self.len()
             }
 
-            if *opcode_name(entry) == *s {
-                return Ok(entry);
+            fn key(&self, idx: usize) -> Option<&'a str> {
+                if self[idx] == Opcode::NotAnOpcode {
+                    None
+                } else {
+                    Some(opcode_name(self[idx]))
+                }
             }
+        }
 
-            // Quadratic probing.
-            step += 1;
-            // When `tlen` is a power of two, it can be proven that idx will visit all entries.
-            // This means that this loop will always terminate if the hash table has even one
-            // unused entry.
-            assert!(step < tlen);
-            idx += step;
+        match probe::<&str, [Opcode]>(&OPCODE_HASH_TABLE, s, simple_hash(s)) {
+            None => Err("Unknown opcode"),
+            Some(i) => Ok(OPCODE_HASH_TABLE[i]),
         }
     }
 }

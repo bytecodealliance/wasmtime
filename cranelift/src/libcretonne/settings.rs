@@ -23,7 +23,7 @@
 use std::fmt;
 use std::result;
 
-use simple_hash::simple_hash;
+use constant_hash::simple_hash;
 
 /// A string-based configurator for settings groups.
 ///
