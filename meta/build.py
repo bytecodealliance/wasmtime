@@ -8,6 +8,7 @@ import isa
 import gen_instr
 import gen_settings
 import gen_build_deps
+import gen_encoding
 
 parser = argparse.ArgumentParser(description='Generate sources for Cretonne.')
 parser.add_argument('--out-dir', help='set output directory')
@@ -19,4 +20,5 @@ isas = isa.all_isas()
 
 gen_instr.generate(isas, out_dir)
 gen_settings.generate(isas, out_dir)
+gen_encoding.generate(isas, out_dir)
 gen_build_deps.generate()
