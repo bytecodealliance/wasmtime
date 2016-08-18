@@ -51,11 +51,20 @@ class Formatter(object):
         self.indent = self.indent[0:-self.shiftwidth]
 
     def line(self, s=None):
-        """And an indented line."""
+        """Add an indented line."""
         if s:
             self.lines.append('{}{}\n'.format(self.indent, s))
         else:
             self.lines.append('\n')
+
+    def outdented_line(self, s):
+        """
+        Emit a line outdented one level.
+
+        This is used for '} else {' and similar things inside a single indented
+        block.
+        """
+        self.lines.append('{}{}\n'.format(self.indent[0:-self.shiftwidth], s))
 
     def writelines(self, f=None):
         """Write all lines to `f`."""
