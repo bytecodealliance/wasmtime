@@ -444,6 +444,8 @@ bnot = Instruction(
 # Shift/rotate.
 x = Operand('x', Int, doc='Scalar or vector value to shift')
 y = Operand('y', iB, doc='Number of bits to shift')
+Y = Operand('Y', imm64)
+
 a = Operand('a', Int)
 
 rotl = Instruction(
@@ -462,6 +464,18 @@ rotr = Instruction(
         """,
         ins=(x, y), outs=a)
 
+rotl_imm = Instruction(
+        'rotl_imm', r"""
+        Rotate left by immediate.
+        """,
+        ins=(x, Y), outs=a)
+
+rotr_imm = Instruction(
+        'rotr_imm', r"""
+        Rotate right by immediate.
+        """,
+        ins=(x, Y), outs=a)
+
 ishl = Instruction(
         'ishl', r"""
         Integer shift left. Shift the bits in ``x`` towards the MSB by ``y``
@@ -474,9 +488,6 @@ ishl = Instruction(
         .. math::
             s &:= y \pmod B,                \\
             a &:= x \cdot 2^s \pmod{2^B}.
-
-        .. todo:: Add ``ishl_imm`` variant with an immediate ``y``.
-
         """,
         ins=(x, y), outs=a)
 
@@ -493,8 +504,6 @@ ushr = Instruction(
         .. math::
             s &:= y \pmod B,                \\
             a &:= \lfloor x \cdot 2^{-s} \rfloor.
-
-        .. todo:: Add ``ushr_imm`` variant with an immediate ``y``.
         """,
         ins=(x, y), outs=a)
 
@@ -505,10 +514,32 @@ sshr = Instruction(
         shift*.
 
         The shift amount is masked to the size of the register.
-
-        .. todo:: Add ``sshr_imm`` variant with an immediate ``y``.
         """,
         ins=(x, y), outs=a)
+
+ishl_imm = Instruction(
+        'ishl_imm', r"""
+        Integer shift left by immediate.
+
+        The shift amount is masked to the size of ``x``.
+        """,
+        ins=(x, Y), outs=a)
+
+ushr_imm = Instruction(
+        'ushr_imm', r"""
+        Unsigned shift right by immediate.
+
+        The shift amount is masked to the size of the register.
+        """,
+        ins=(x, Y), outs=a)
+
+sshr_imm = Instruction(
+        'sshr_imm', r"""
+        Signed shift right by immediate.
+
+        The shift amount is masked to the size of the register.
+        """,
+        ins=(x, Y), outs=a)
 
 #
 # Bit counting.
