@@ -95,10 +95,7 @@ impl FromStr for Opcode {
 /// `Box<AuxData>` to store the additional information out of line.
 #[derive(Debug)]
 pub enum InstructionData {
-    Nullary {
-        opcode: Opcode,
-        ty: Type,
-    },
+    Nullary { opcode: Opcode, ty: Type },
     Unary {
         opcode: Opcode,
         ty: Type,
