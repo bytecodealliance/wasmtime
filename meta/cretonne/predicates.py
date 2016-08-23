@@ -125,3 +125,79 @@ class Not(Predicate):
 
     def rust_predicate(self, prec):
         return '!' + self.parts[0].rust_predicate(Not.precedence)
+
+
+class FieldPredicate(object):
+    """
+    An instruction predicate that performs a test on a single `FormatField`.
+
+    :param field: The `FormatField` to be tested.
+    :param method: Boolean predicate method to call.
+    :param args: Arguments for the predicate method.
+    """
+
+    def __init__(self, field, method, args):
+        self.field = field
+        self.method = method
+        self.args = args
+
+    def predicate_context(self):
+        """
+        This predicate can be evaluated in the context of an instruction
+        format.
+        """
+        return self.field.format
+
+    def rust_predicate(self, prec):
+        """
+        Return a string of Rust code that evaluates this predicate.
+        """
+        return '{}.{}({})'.format(
+                self.field.rust_name(),
+                self.method,
+                ', '.join(self.args))
+
+
+class IsSignedInt(FieldPredicate):
+    """
+    Instruction predicate that checks if an immediate instruction format field
+    is representable as an n-bit two's complement integer.
+
+    :param field: `FormatField` to be checked.
+    :param width: Number of bits in the allowed range.
+    :param scale: Number of low bits that must be 0.
+
+    The predicate is true if the field is in the range:
+    `-2^(width-1) -- 2^(width-1)-1`
+    and a multiple of `2^scale`.
+    """
+
+    def __init__(self, field, width, scale=0):
+        super(IsSignedInt, self).__init__(
+                field, 'is_signed_int', (width, scale))
+        self.width = width
+        self.scale = scale
+        assert width >= 0 and width <= 64
+        assert scale >= 0 and scale < width
+
+
+class IsUnsignedInt(FieldPredicate):
+    """
+    Instruction predicate that checks if an immediate instruction format field
+    is representable as an n-bit unsigned complement integer.
+
+    :param field: `FormatField` to be checked.
+    :param width: Number of bits in the allowed range.
+    :param scale: Number of low bits that must be 0.
+
+    The predicate is true if the field is in the range:
+    `0 -- 2^width - 1` and a multiple of `2^scale`.
+    """
+
+    def __init__(self, field, width, scale=0):
+        super(IsUnsignedInt, self).__init__(
+                field, 'is_unsigned_int', (width, scale))
+        self.width = width
+        self.scale = scale
+        assert width >= 0 and width <= 64
+        assert scale >= 0 and scale < width
