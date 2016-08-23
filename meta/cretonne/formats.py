@@ -30,8 +30,8 @@ BinaryOverflow = InstructionFormat(value, value, multiple_results=True)
 # The fma instruction has the same constraint on all inputs.
 Ternary = InstructionFormat(value, value, value, typevar_operand=1)
 
-InsertLane = InstructionFormat(value, uimm8, value)
-ExtractLane = InstructionFormat(value, uimm8)
+InsertLane = InstructionFormat(value, ('lane', uimm8), value)
+ExtractLane = InstructionFormat(value, ('lane', uimm8))
 
 IntCompare = InstructionFormat(intcc, value, value)
 FloatCompare = InstructionFormat(floatcc, value, value)

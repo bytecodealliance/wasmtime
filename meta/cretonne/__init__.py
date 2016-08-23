@@ -622,9 +622,9 @@ class InstructionFormat(object):
 
     def __init__(self, *kinds, **kwargs):
         self.name = kwargs.get('name', None)
-        self.kinds = kinds
         self.multiple_results = kwargs.get('multiple_results', False)
         self.boxed_storage = kwargs.get('boxed_storage', False)
+        self.kinds = tuple(self._process_member_names(kinds))
 
         # Which of self.kinds are `value`?
         self.value_operands = tuple(
@@ -640,13 +640,38 @@ class InstructionFormat(object):
             self.typevar_operand = self.value_operands[0]
 
         # Compute a signature for the global registry.
-        sig = (self.multiple_results,) + kinds
+        sig = (self.multiple_results,) + self.kinds
         if sig in InstructionFormat._registry:
             raise RuntimeError(
                 "Format '{}' has the same signature as existing format '{}'"
                 .format(self.name, InstructionFormat._registry[sig]))
         InstructionFormat._registry[sig] = self
         InstructionFormat.all_formats.append(self)
+
+    def _process_member_names(self, kinds):
+        """
+        Extract names of all the immediate operands in the kinds tuple.
+
+        Each entry is either an `OperandKind` instance, or a `(member, kind)`
+        pair. The member names correspond to members in the Rust
+        `InstructionData` data structure.
+
+        Yields the operand kinds.
+        """
+        for i, k in enumerate(kinds):
+            if isinstance(k, tuple):
+                member, k = k
+            else:
+                member = None
+            yield k
+
+            # Create `FormatField` instances for the immediates.
+            if isinstance(k, ImmediateKind):
+                if not member:
+                    member = k.default_member
+                assert not hasattr(self, member), "Duplicate member name"
+                field = FormatField(self, i, member)
+                setattr(self, member, field)
 
     @staticmethod
     def lookup(ins, outs):
@@ -678,6 +703,27 @@ class InstructionFormat(object):
             if isinstance(obj, InstructionFormat):
                 assert obj.name is None
                 obj.name = name
+
+
+class FormatField(object):
+    """
+    A field in an instruction format.
+
+    This corresponds to a single member of a variant of the `InstructionData`
+    data type.
+
+    :param format: Parent `InstructionFormat`.
+    :param operand: Operand number in parent.
+    :param name: Member name in `InstructionData` variant.
+    """
+
+    def __init__(self, format, operand, name):
+        self.format = format
+        self.operand = operand
+        self.name = name
+
+    def __str__(self):
+        return '{}.{}'.format(self.format.name, self.name)
 
 
 class Instruction(object):
