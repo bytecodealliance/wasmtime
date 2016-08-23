@@ -34,11 +34,16 @@ immvector = ImmediateKind('immvector', 'An immediate SIMD vector.')
 #:
 #: This enumerated operand kind is used for the :cton:inst:`icmp` instruction
 #: and corresponds to the `condcodes::IntCC` Rust type.
-intcc = ImmediateKind('intcc', 'An integer comparison condition code.')
+intcc = ImmediateKind(
+        'intcc',
+        'An integer comparison condition code.',
+        default_member='cond')
 
 #: A condition code for comparing floating point values.
 #:
 #: This enumerated operand kind is used for the :cton:inst:`fcmp` instruction
 #: and corresponds to the `condcodes::FloatCC` Rust type.
 floatcc = ImmediateKind(
-        'floatcc', 'A floating point comparison condition code.')
+        'floatcc',
+        'A floating point comparison condition code.',
+        default_member='cond')
