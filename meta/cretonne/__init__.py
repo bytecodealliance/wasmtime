@@ -725,6 +725,12 @@ class FormatField(object):
     def __str__(self):
         return '{}.{}'.format(self.format.name, self.name)
 
+    def rust_name(self):
+        if self.format.boxed_storage:
+            return 'data.' + self.name
+        else:
+            return self.name
+
 
 class Instruction(object):
     """
@@ -983,9 +989,13 @@ class EncRecipe(object):
             :py:class:`InstructionFormat`.
     """
 
-    def __init__(self, name, format):
+    def __init__(self, name, format, instp=None, isap=None):
         self.name = name
         self.format = format
+        self.instp = instp
+        self.isap = isap
+        if instp:
+            assert instp.predicate_context() == format
 
 
 class Encoding(object):

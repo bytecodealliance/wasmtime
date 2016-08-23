@@ -11,6 +11,7 @@ instruction formats described in the reference:
 from __future__ import absolute_import
 from cretonne import EncRecipe
 from cretonne.formats import Binary, BinaryImm
+from cretonne.predicates import IsSignedInt
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
 # instructions have 11 as the two low bits, with bits 6:2 determining the base
@@ -63,3 +64,5 @@ R = EncRecipe('R', Binary)
 
 # R-type with an immediate shift amount instead of rs2.
 Rshamt = EncRecipe('Rshamt', BinaryImm)
+
+I = EncRecipe('I', BinaryImm, instp=IsSignedInt(BinaryImm.imm, 12))
