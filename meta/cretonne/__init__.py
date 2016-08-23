@@ -237,11 +237,15 @@ variable_args = OperandKind(
 class ImmediateKind(OperandKind):
     """
     The kind of an immediate instruction operand.
+
+    :param default_member: The default member name of this kind the
+                           `InstructionData` data structure.
     """
 
-    def __init__(self, name, doc):
+    def __init__(self, name, doc, default_member='imm'):
         self.name = name
         self.__doc__ = doc
+        self.default_member = default_member
 
     def __repr__(self):
         return 'ImmediateKind({})'.format(self.name)
