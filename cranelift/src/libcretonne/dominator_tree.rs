@@ -10,6 +10,11 @@ pub struct DominatorTree {
 }
 
 impl DominatorTree {
+    /// Insert data directly into a dominator tree.
+    pub fn from_data(data: EntityMap<Ebb, Option<BasicBlock>>) -> DominatorTree {
+        DominatorTree { data: data }
+    }
+
     /// Build a dominator tree from a control flow graph using Keith D. Cooper's
     /// "Simple, Fast Dominator Algorithm."
     pub fn new(cfg: &ControlFlowGraph) -> DominatorTree {
@@ -40,21 +45,20 @@ impl DominatorTree {
                 let preds = cfg.get_predecessors(ebb);
                 let mut new_idom = None;
 
-                for &(p_ebb, _) in preds {
+                for pred in preds {
                     if new_idom == None {
-                        new_idom = Some((p_ebb, NO_INST));
+                        new_idom = Some(pred.clone());
                         continue;
                     }
                     // If this predecessor has an idom available find its common
                     // ancestor with the current value of new_idom.
-                    if let Some(_) = data[p_ebb] {
+                    if let Some(_) = data[pred.0] {
                         new_idom = match new_idom {
                             Some(cur_idom) => {
                                 Some((DominatorTree::intersect(&mut data,
                                                                &postorder_map,
-                                                               p_ebb,
-                                                               cur_idom.0),
-                                      NO_INST))
+                                                               *pred,
+                                                               cur_idom)))
                             }
                             None => panic!("A 'current idom' should have been set!"),
                         }
@@ -67,35 +71,11 @@ impl DominatorTree {
                     }
                     Some(idom) => {
                         // Old idom != New idom
-                        if idom != new_idom.unwrap() {
+                        if idom.0 != new_idom.unwrap().0 {
                             data[ebb] = new_idom;
                             changed = true;
                         }
                     }
-                }
-            }
-        }
-
-        // At this point the basic blocks in the tree are incomplete
-        // since they have all been set with NO_INST. Here we add instructions
-        // by iterating through each Ebb -> BasicBlock mapping in the dominator
-        // tree and replacing the basic block with a corresponding predecessor
-        // from the Ebb (on the left hand side).
-        //
-        // The predecessor chosen should have the lowest instruction number and
-        // an Ebb which matches the Ebb from the dummy basic block. Because
-        // extended basic blocks have a single entry point this will always
-        // result in the correct basic block being chosen.
-        for lhs_ebb in ebbs {
-            let rhs_bb = data[lhs_ebb].unwrap();
-            for pred_bb in cfg.get_predecessors(lhs_ebb) {
-                if rhs_bb.0 == pred_bb.0 {
-                    // Predecessors are added in order while iterating through
-                    // instructions from lowest to highest. Because of this,
-                    // the first match we encounter will have the lowest instruction
-                    // number.
-                    data[lhs_ebb] = Some(pred_bb.clone());
-                    break;
                 }
             }
         }
@@ -106,9 +86,9 @@ impl DominatorTree {
     /// Find the common dominator of two ebbs.
     fn intersect(data: &EntityMap<Ebb, Option<BasicBlock>>,
                  ordering: &EntityMap<Ebb, usize>,
-                 first: Ebb,
-                 second: Ebb)
-                 -> Ebb {
+                 first: BasicBlock,
+                 second: BasicBlock)
+                 -> BasicBlock {
         let mut a = first;
         let mut b = second;
 
@@ -116,15 +96,23 @@ impl DominatorTree {
         // visitation number, to ensure that we move upward through the tree.
         // Walking upward means that we may always expect self.data[a] and
         // self.data[b] to contain non-None entries.
-        while a != b {
-            while ordering[a] < ordering[b] {
-                a = data[a].unwrap().0;
+        while a.0 != b.0 {
+            while ordering[a.0] < ordering[b.0] {
+                a = data[a.0].unwrap();
             }
-            while ordering[b] < ordering[a] {
-                b = data[b].unwrap().0;
+            while ordering[b.0] < ordering[a.0] {
+                b = data[b.0].unwrap();
             }
         }
-        a
+
+        // TODO: we can't rely on instruction numbers to always be ordered
+        // from lowest to highest. Given that, it will be necessary to create
+        // an abolute mapping to determine the instruction order in the future.
+        if a.1 == NO_INST || a.1 < b.1 {
+            a
+        } else {
+            b
+        }
     }
 
     /// Returns the immediate dominator of some ebb or None if the
