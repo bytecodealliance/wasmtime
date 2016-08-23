@@ -442,6 +442,29 @@ bnot = Instruction(
         """,
         ins=x, outs=a)
 
+# Bitwise binary ops with immediate arg.
+x = Operand('x', iB)
+Y = Operand('Y', imm64)
+a = Operand('a', iB)
+
+band_imm = Instruction(
+        'band_imm', """
+        Bitwise and with immediate.
+        """,
+        ins=(x, Y), outs=a)
+
+bor_imm = Instruction(
+        'bor_imm', """
+        Bitwise or with immediate.
+        """,
+        ins=(x, Y), outs=a)
+
+bxor_imm = Instruction(
+        'bxor_imm', """
+        Bitwise xor with immediate.
+        """,
+        ins=(x, Y), outs=a)
+
 # Shift/rotate.
 x = Operand('x', Int, doc='Scalar or vector value to shift')
 y = Operand('y', iB, doc='Number of bits to shift')
