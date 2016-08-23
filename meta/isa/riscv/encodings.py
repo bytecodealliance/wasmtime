@@ -1,9 +1,10 @@
 """
 RISC-V Encodings.
 """
+from __future__ import absolute_import
 from cretonne import base
-from defs import RV32, RV64
-from recipes import OPIMM, OPIMM32, OP, OP32, R, Rshamt
+from .defs import RV32, RV64
+from .recipes import OPIMM, OPIMM32, OP, OP32, R, Rshamt
 
 # Basic arithmetic binary instructions are encoded in an R-type instruction.
 for inst,           f3,    f7 in [

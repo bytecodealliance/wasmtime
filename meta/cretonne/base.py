@@ -4,10 +4,11 @@ Cretonne base instruction set.
 This module defines the basic Cretonne instruction set that all targets
 support.
 """
+from __future__ import absolute_import
 from . import TypeVar, Operand, Instruction, InstructionGroup, variable_args
-from types import i8, f32, f64
-from immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
-import entities
+from .types import i8, f32, f64
+from .immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
+from . import entities
 
 instructions = InstructionGroup("base", "Shared base instruction set")
 

@@ -5,7 +5,7 @@ The `srcgen` module contains generic helper routines and classes for generating
 source code.
 
 """
-
+from __future__ import absolute_import
 import sys
 import os
 import re

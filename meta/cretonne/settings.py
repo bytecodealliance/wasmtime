@@ -3,7 +3,7 @@ Cretonne shared settings.
 
 This module defines settings are are relevant for all code generators.
 """
-
+from __future__ import absolute_import
 from . import SettingGroup, BoolSetting, EnumSetting
 
 group = SettingGroup('shared')

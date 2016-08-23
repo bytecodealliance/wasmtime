@@ -1,7 +1,7 @@
 """
 Generate sources with settings.
 """
-
+from __future__ import absolute_import
 import srcgen
 from unique_table import UniqueSeqTable
 import constant_hash
@@ -102,7 +102,7 @@ def gen_pred_getter(pred, fmt):
     """
     Emit a getter for a pre-computed predicate.
     """
-    fmt.doc_comment('Computed predicate `{}`.'.format(pred.rust_predicate(0)));
+    fmt.doc_comment('Computed predicate `{}`.'.format(pred.rust_predicate(0)))
     proto = 'pub fn {}(&self) -> bool'.format(pred.name)
     with fmt.indented(proto + ' {', '}'):
         fmt.line('(self.bytes[{}] & (1 << {})) != 0'.format(

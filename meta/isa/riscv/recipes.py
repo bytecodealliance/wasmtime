@@ -8,6 +8,7 @@ instruction formats described in the reference:
     Volume I: User-Level ISA
     Version 2.1
 """
+from __future__ import absolute_import
 from cretonne import EncRecipe
 from cretonne.formats import Binary, BinaryImm
 

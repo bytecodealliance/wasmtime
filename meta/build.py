@@ -2,6 +2,7 @@
 #
 # This script is run from src/libcretonne/build.rs to generate Rust files.
 
+from __future__ import absolute_import
 import argparse
 import isa
 import gen_instr
