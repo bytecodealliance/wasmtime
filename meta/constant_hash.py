@@ -5,6 +5,7 @@ The `constant_hash` module can generate constant pre-populated hash tables. We
 don't attempt parfect hashing, but simply generate an open addressed
 quadratically probed hash table.
 """
+from __future__ import absolute_import
 
 
 def simple_hash(s):

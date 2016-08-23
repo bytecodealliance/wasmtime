@@ -24,10 +24,10 @@ RV32G / RV64G
     F, and D instruction sets listed above.
 
 """
-
-import defs
-import encodings
-import settings
+from __future__ import absolute_import
+from . import defs
+from . import encodings
+from . import settings
 
 # Re-export the primary target ISA definition.
 isa = defs.isa

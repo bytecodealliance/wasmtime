@@ -21,6 +21,8 @@ All predicates have a *context* which determines where they can be evaluated.
 For an ISA predicate, the context is the ISA settings group. For an instruction
 predicate, the context is the instruction format.
 """
+from __future__ import absolute_import
+from functools import reduce
 
 
 def _is_parent(a, b):

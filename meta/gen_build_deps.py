@@ -12,7 +12,7 @@ If the build script outputs lines of the form:
 cargo will rerun the build script when those files have changed since the last
 build.
 """
-
+from __future__ import absolute_import, print_function
 import os
 from os.path import dirname, abspath, join
 
@@ -30,7 +30,7 @@ def source_files(top):
 
 
 def generate():
-    print "Dependencies from meta language directory:"
+    print("Dependencies from meta language directory:")
     meta = dirname(abspath(__file__))
     for path in source_files(meta):
-        print "cargo:rerun-if-changed=" + path
+        print("cargo:rerun-if-changed=" + path)

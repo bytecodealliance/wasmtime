@@ -1,7 +1,7 @@
 """
 Generate sources with instruction info.
 """
-
+from __future__ import absolute_import
 import srcgen
 import constant_hash
 from unique_table import UniqueTable, UniqueSeqTable

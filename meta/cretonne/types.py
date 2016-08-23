@@ -1,7 +1,7 @@
 """
 The cretonne.types module predefines all the Cretonne scalar types.
 """
-
+from __future__ import absolute_import
 from . import ScalarType, IntType, FloatType, BoolType
 
 #: Boolean.

@@ -5,11 +5,10 @@ Every instruction format has a corresponding `InstructionData` variant in the
 Rust representation of cretonne IL, so all instruction formats must be defined
 in this module.
 """
-
-
+from __future__ import absolute_import
 from . import InstructionFormat, value, variable_args
-from immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
-from entities import ebb, function, jump_table
+from .immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
+from .entities import ebb, function, jump_table
 
 Nullary = InstructionFormat()
 

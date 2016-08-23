@@ -4,7 +4,7 @@ Cretonne meta language module.
 This module provides classes and functions used to describe Cretonne
 instructions.
 """
-
+from __future__ import absolute_import
 import re
 import importlib
 from collections import namedtuple
@@ -156,7 +156,7 @@ class SettingGroup(object):
                 .format(self, SettingGroup._current))
         SettingGroup._current = None
         if globs:
-            from predicates import Predicate
+            from .predicates import Predicate
             for name, obj in globs.iteritems():
                 if isinstance(obj, Setting):
                     assert obj.name is None, obj.name
@@ -365,7 +365,7 @@ class IntType(ScalarType):
         assert bits > 0, 'IntType must have positive number of bits'
         super(IntType, self).__init__(
                 name='i{:d}'.format(bits),
-                membytes=bits/8,
+                membytes=bits // 8,
                 doc="An integer type with {} bits.".format(bits))
         self.bits = bits
 
@@ -379,7 +379,7 @@ class FloatType(ScalarType):
     def __init__(self, bits, doc):
         assert bits > 0, 'FloatType must have positive number of bits'
         super(FloatType, self).__init__(name='f{:d}'.format(bits),
-                                        membytes=bits/8, doc=doc)
+                                        membytes=bits // 8, doc=doc)
         self.bits = bits
 
     def __repr__(self):
@@ -393,7 +393,7 @@ class BoolType(ScalarType):
         assert bits > 0, 'BoolType must have positive number of bits'
         super(BoolType, self).__init__(
                 name='b{:d}'.format(bits),
-                membytes=bits/8,
+                membytes=bits // 8,
                 doc="A boolean type with {} bits.".format(bits))
         self.bits = bits
 
@@ -845,7 +845,7 @@ class BoundInstruction(object):
         assert len(typevars) <= 1 + len(inst.other_typevars)
 
     def __str__(self):
-        return '.'.join([self.inst.name, ] + map(str, self.typevars))
+        return '.'.join([self.inst.name, ] + list(map(str, self.typevars)))
 
     def bind(self, *args):
         """

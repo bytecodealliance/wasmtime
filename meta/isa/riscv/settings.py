@@ -1,11 +1,11 @@
 """
 RISC-V settings.
 """
-
+from __future__ import absolute_import
 from cretonne import SettingGroup, BoolSetting
 from cretonne.predicates import And
 import cretonne.settings as shared
-from defs import isa
+from .defs import isa
 
 isa.settings = SettingGroup('riscv', parent=shared.group)
 

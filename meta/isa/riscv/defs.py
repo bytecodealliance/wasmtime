@@ -3,7 +3,7 @@ RISC-V definitions.
 
 Commonly used definitions.
 """
-
+from __future__ import absolute_import
 from cretonne import TargetISA, CPUMode
 import cretonne.base
 
