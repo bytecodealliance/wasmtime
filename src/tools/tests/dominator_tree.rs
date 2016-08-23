@@ -1,8 +1,13 @@
 extern crate cretonne;
 extern crate cton_reader;
+extern crate glob;
 extern crate regex;
 
+use std::env;
+use glob::glob;
 use regex::Regex;
+use std::fs::File;
+use std::io::Read;
 use self::cretonne::ir::Ebb;
 use self::cton_reader::parser::Parser;
 use self::cretonne::ir::function::Function;
@@ -76,42 +81,16 @@ fn test_dominator_tree(function_source: &str) {
 }
 
 #[test]
-fn basic() {
-    test_dominator_tree("
-        function test(i32) {
-            ebb0(v0: i32):    ; dominates(0)
-                jump ebb1     ; dominates(1)
-            ebb1:
-                brz v0, ebb3  ; dominates(3)
-                jump ebb2     ; dominates(2)
-            ebb2:
-                jump ebb3
-            ebb3:
-                return
-        }
-    ");
-}
+fn test_all() {
+    let testdir = format!("{}/tests/dominator_tree_testdata/*.cton",
+                          env::current_dir().unwrap().display());
 
-#[test]
-fn loops() {
-    test_dominator_tree("
-        function test(i32) {
-            ebb0(v0: i32):    ; dominates(0)
-                brz v0, ebb1  ; dominates(1,3,4,5)
-                jump ebb2     ; dominates(2)
-            ebb1:
-                jump ebb3
-            ebb2:
-                brz v0, ebb4
-                jump ebb5
-            ebb3:
-                jump ebb4
-            ebb4:
-                brz v0, ebb3
-                jump ebb5
-            ebb5:
-                brz v0, ebb4
-                return
-        }
-    ");
+    for entry in glob(&testdir).unwrap() {
+        let path = entry.unwrap();
+        println!("Testing {:?}", path);
+        let mut file = File::open(&path).unwrap();
+        let mut buffer = String::new();
+        file.read_to_string(&mut buffer).unwrap();
+        test_dominator_tree(&buffer);
+    }
 }
