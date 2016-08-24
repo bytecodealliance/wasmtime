@@ -16,6 +16,7 @@ pub mod entity_map;
 pub mod settings;
 
 mod constant_hash;
+mod predicates;
 
 #[cfg(test)]
 pub mod test_utils;
