@@ -10,5 +10,5 @@ src=$(pwd)
 
 for crate in $(find "$src" -name Cargo.toml); do
     cd $(dirname "$crate")
-    cargo fmt
+    cargo fmt -- "$@"
 done
