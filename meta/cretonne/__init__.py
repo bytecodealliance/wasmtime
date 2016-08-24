@@ -8,6 +8,7 @@ from __future__ import absolute_import
 import re
 import importlib
 from collections import namedtuple
+from .predicates import And
 
 
 camel_re = re.compile('(^|_)([a-z])')
@@ -1010,9 +1011,11 @@ class Encoding(object):
                  being encoded.
     :param recipe: The :py:class:`EncRecipe` to use.
     :param encbits: Additional encoding bits to be interpreted by `recipe`.
+    :param instp: Instruction predicate, or `None`.
+    :param isap: ISA predicate, or `None`.
     """
 
-    def __init__(self, cpumode, inst, recipe, encbits):
+    def __init__(self, cpumode, inst, recipe, encbits, instp=None, isap=None):
         assert isinstance(cpumode, CPUMode)
         assert isinstance(recipe, EncRecipe)
         self.inst, self.typevars = inst.fully_bound()
@@ -1022,6 +1025,9 @@ class Encoding(object):
                     self.inst.format, recipe.format))
         self.recipe = recipe
         self.encbits = encbits
+        # Combine recipe predicates with the manually specified ones.
+        self.instp = And.combine(recipe.instp, instp)
+        self.isap = And.combine(recipe.isap, instp)
 
     @staticmethod
     def _to_type_tuple(x):
