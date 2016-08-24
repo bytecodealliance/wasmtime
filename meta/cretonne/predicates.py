@@ -95,6 +95,22 @@ class And(Predicate):
             s = '({})'.format(s)
         return s
 
+    @staticmethod
+    def combine(*args):
+        """
+        Combine a sequence of predicates, allowing for `None` members.
+
+        Return a predicate that is true when all non-`None` arguments are true,
+        or `None` if all of the arguments are `None`.
+        """
+        args = tuple(p for p in args if p)
+        if args == ():
+            return None
+        if len(args) == 1:
+            return args[0]
+        # We have multiple predicate args. Combine with `And`.
+        return And(*args)
+
 
 class Or(Predicate):
     """
