@@ -11,16 +11,20 @@ use std::str::FromStr;
 
 /// 64-bit immediate integer operand.
 ///
+/// An `Imm64` operand can also be used to represent immediate values of smaller integer types by
+/// sign-extending to `i64`.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Imm64(i64);
 
 impl Imm64 {
-    pub fn from_bits(x: u64) -> Imm64 {
-        Imm64(x as i64)
+    pub fn new(x: i64) -> Imm64 {
+        Imm64(x)
     }
+}
 
-    pub fn to_bits(&self) -> u64 {
-        self.0 as u64
+impl Into<i64> for Imm64 {
+    fn into(self) -> i64 {
+        self.0
     }
 }
 
@@ -115,7 +119,7 @@ impl FromStr for Imm64 {
                 return Err("Negative number too small for Imm64");
             }
         }
-        Ok(Imm64::from_bits(value))
+        Ok(Imm64::new(value as i64))
     }
 }
 

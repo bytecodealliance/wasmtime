@@ -596,8 +596,11 @@ impl<'a> Parser<'a> {
         try!(self.match_identifier("stack_slot", "expected 'stack_slot'"));
 
         // stack-slot-decl ::= StackSlot(ss) "=" "stack_slot" * Bytes {"," stack-slot-flag}
-        let bytes = try!(self.match_imm64("expected byte-size in stack_slot decl")).to_bits();
-        if bytes > u32::MAX as u64 {
+        let bytes: i64 = try!(self.match_imm64("expected byte-size in stack_slot decl")).into();
+        if bytes < 0 {
+            return err!(self.loc, "negative stack slot size");
+        }
+        if bytes > u32::MAX as i64 {
             return err!(self.loc, "stack slot too large");
         }
         let data = StackSlotData::new(bytes as u32);
