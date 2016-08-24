@@ -1,0 +1,31 @@
+function test(i32) {
+    ebb0(v0: i32):      ; dominates(0)
+        brz v0, ebb1    ; dominates(1)
+        brnz v0, ebb2   ; dominates(2,5)
+        jump ebb3       ; dominates(3)
+    ebb1:
+        jump ebb4       ; dominates(4)
+    ebb2:
+        jump ebb5
+    ebb3:
+        jump ebb5
+    ebb4:
+        brz v0, ebb6    ; dominates(6,10)
+        jump ebb7       ; dominates(7)
+    ebb5:
+        return
+    ebb6:
+        brz v0, ebb8    ; dominates(11,8)
+        brnz v0, ebb9   ; dominates(9)
+        jump ebb10
+    ebb7:
+        jump ebb10
+    ebb8:
+        jump ebb11
+    ebb9:
+        jump ebb11
+    ebb10:
+        return
+    ebb11:
+        return
+}
