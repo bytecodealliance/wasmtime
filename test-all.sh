@@ -21,6 +21,12 @@ function banner() {
     echo "======  $@  ======"
 }
 
+# Run rustfmt if we have it. (Travis probably won't).
+if cargo install --list | grep -q '^rustfmt '; then
+    banner "Rust formatting"
+    $topdir/src/format-all.sh --write-mode=diff
+fi
+
 PKGS="cretonne cretonne-reader cretonne-tools"
 cd "$topdir/src/tools"
 for PKG in $PKGS
