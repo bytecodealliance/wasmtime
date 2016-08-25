@@ -41,6 +41,9 @@ class Setting(object):
         """
         return self.group
 
+    def predicate_leafs(self, leafs):
+        leafs.add(self)
+
 
 class BoolSetting(Setting):
     """

@@ -68,6 +68,13 @@ class Predicate(object):
     def predicate_context(self):
         return self.context
 
+    def predicate_leafs(self, leafs):
+        """
+        Collect all leaf predicates into the `leafs` set.
+        """
+        for part in self.parts:
+            part.predicate_leafs(leafs)
+
 
 class And(Predicate):
     """
@@ -163,6 +170,9 @@ class FieldPredicate(object):
         format.
         """
         return self.field.format
+
+    def predicate_leafs(self, leafs):
+        leafs.add(self)
 
     def rust_predicate(self, prec):
         """
