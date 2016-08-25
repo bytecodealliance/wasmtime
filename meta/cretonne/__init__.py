@@ -949,10 +949,11 @@ class TargetISA(object):
         relevant for this ISA.
     """
 
-    def __init__(self, name, instrution_groups):
+    def __init__(self, name, instruction_groups):
         self.name = name
         self.settings = None
-        self.instruction_groups = instrution_groups
+        self.instruction_groups = instruction_groups
+        self.cpumodes = list()
 
 
 class CPUMode(object):
@@ -970,6 +971,7 @@ class CPUMode(object):
         self.name = name
         self.isa = isa
         self.encodings = []
+        isa.cpumodes.append(self)
 
     def enc(self, *args, **kwargs):
         """
@@ -1032,17 +1034,15 @@ class Encoding(object):
         self.instp = And.combine(recipe.instp, instp)
         self.isap = And.combine(recipe.isap, instp)
 
-    @staticmethod
-    def _to_type_tuple(x):
-        # Allow a single ValueType instance instead of the awkward singleton
-        # tuple syntax.
-        if isinstance(x, ValueType):
-            x = (x,)
+    def ctrl_typevar(self):
+        """
+        Get the controlling type variable for this encoding or `None`.
+        """
+        if self.typevars:
+            return self.typevars[0]
         else:
-            x = tuple(x)
-        for ty in x:
-            assert isinstance(ty, ValueType)
-        return x
+            return None
+
 
 # Import the fixed instruction formats now so they can be added to the
 # registry.
