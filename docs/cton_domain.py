@@ -9,6 +9,7 @@
 # .. cton:inst:: v1, v2 = inst op1, op2
 #     Document an IR instruction.
 #
+from __future__ import absolute_import
 
 import re
 
@@ -133,7 +134,8 @@ class CtonInst(CtonObject):
         TypedField('result', label=l_('Results'),
                    names=('out', 'result'),
                    typerolename='type', typenames=('type',)),
-        GroupedField('typevar', names=('typevar',), label=l_('Type Variables')),
+        GroupedField(
+            'typevar', names=('typevar',), label=l_('Type Variables')),
         GroupedField('flag', names=('flag',), label=l_('Flags')),
         Field('resulttype', label=l_('Result type'), has_arg=False,
               names=('rtype',)),

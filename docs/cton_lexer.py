@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 #
 # Pygments lexer for Cretonne.
+from __future__ import absolute_import
 
 from pygments.lexer import RegexLexer, bygroups, words
-from pygments.token import *
+from pygments.token import Comment, String, Keyword, Whitespace, Number, Name
+from pygments.token import Operator, Punctuation, Text
+
 
 def keywords(*args):
     return words(args, prefix=r'\b', suffix=r'\b')
+
 
 class CretonneLexer(RegexLexer):
     name = 'Cretonne'
@@ -19,7 +23,8 @@ class CretonneLexer(RegexLexer):
             # Strings are in double quotes, support \xx escapes only.
             (r'"([^"\\]+|\\[0-9a-fA-F]{2})*"', String),
             # A naked function name following 'function' is also a string.
-            (r'\b(function)([ \t]+)(\w+)\b', bygroups(Keyword, Whitespace, String.Symbol)),
+            (r'\b(function)([ \t]+)(\w+)\b',
+                bygroups(Keyword, Whitespace, String.Symbol)),
             # Numbers.
             (r'[-+]?0[xX][0-9a-fA-F]+', Number.Hex),
             (r'[-+]?0[xX][0-9a-fA-F]*\.[0-9a-fA-F]*([pP]\d+)?', Number.Hex),
@@ -28,7 +33,8 @@ class CretonneLexer(RegexLexer):
             # Reserved words.
             (keywords('function'), Keyword),
             # Known attributes.
-            (keywords('align', 'aligntrap', 'uext', 'sext', 'inreg'), Name.Attribute),
+            (keywords('align', 'aligntrap', 'uext', 'sext', 'inreg'),
+                Name.Attribute),
             # Well known value types.
             (r'\b(b\d+|i\d+|f32|f64)(x\d+)?\b', Keyword.Type),
             # v<nn> = value
@@ -37,8 +43,10 @@ class CretonneLexer(RegexLexer):
             # ebb<nn> = extended basic block
             (r'(ebb)\d+', Name.Label),
             # Match instruction names in context.
-            (r'(=)( *)([a-z]\w*)', bygroups(Operator, Whitespace, Name.Function)),
-            (r'^( *)([a-z]\w*\b)(?! *[,=])', bygroups(Whitespace, Name.Function)),
+            (r'(=)( *)([a-z]\w*)',
+                bygroups(Operator, Whitespace, Name.Function)),
+            (r'^( *)([a-z]\w*\b)(?! *[,=])',
+                bygroups(Whitespace, Name.Function)),
             # Other names: results and arguments
             (r'[a-z]\w*', Name),
             (r'->|=|:', Operator),
@@ -47,8 +55,9 @@ class CretonneLexer(RegexLexer):
         ]
     }
 
+
 def setup(app):
     """Setup Sphinx extension."""
     app.add_lexer('cton', CretonneLexer())
 
-    return { 'version' : '0.1' }
+    return {'version': '0.1'}
