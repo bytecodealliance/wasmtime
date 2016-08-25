@@ -155,13 +155,13 @@ class FieldPredicate(object):
     An instruction predicate that performs a test on a single `FormatField`.
 
     :param field: The `FormatField` to be tested.
-    :param method: Boolean predicate method to call.
-    :param args: Arguments for the predicate method.
+    :param function: Boolean predicate function to call.
+    :param args: Additional arguments for the predicate function.
     """
 
-    def __init__(self, field, method, args):
+    def __init__(self, field, function, args):
         self.field = field
-        self.method = method
+        self.function = function
         self.args = args
 
     def predicate_context(self):
@@ -178,10 +178,9 @@ class FieldPredicate(object):
         """
         Return a string of Rust code that evaluates this predicate.
         """
-        return '{}.{}({})'.format(
-                self.field.rust_name(),
-                self.method,
-                ', '.join(self.args))
+        # Prepend `field` to the predicate function arguments.
+        args = (self.field.rust_name(),) + tuple(map(str, self.args))
+        return 'predicates::{}({})'.format(self.function, ', '.join(args))
 
 
 class IsSignedInt(FieldPredicate):
