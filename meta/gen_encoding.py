@@ -75,10 +75,11 @@ def emit_instp(instp, fmt):
         # the field names.
         fields = ', '.join(sorted(set(p.field.name for p in leafs)))
 
-    with fmt.indented(
-            'if let {} {{ {}, .. }} = *inst {{'
-            .format(iform.name, fields), '}'):
-        fmt.line('return {};'.format(instp.rust_predicate(0)))
+    with fmt.indented('{} => {{'.format(instp.number), '}'):
+        with fmt.indented(
+                'if let {} {{ {}, .. }} = *inst {{'
+                .format(iform.name, fields), '}'):
+            fmt.line('return {};'.format(instp.rust_predicate(0)))
 
 
 def emit_instps(instps, fmt):
@@ -90,9 +91,8 @@ def emit_instps(instps, fmt):
             'fn check_instp(inst: &InstructionData, instp_idx: u16) -> bool {',
             '}'):
         with fmt.indented('match instp_idx {', '}'):
-            for (instp, idx) in instps.items():
-                with fmt.indented('{} => {{'.format(idx), '}'):
-                    emit_instp(instp, fmt)
+            for instp in instps:
+                emit_instp(instp, fmt)
             fmt.line('_ => panic!("Invalid instruction predicate")')
 
         # The match cases will fall through if the instruction format is wrong.
@@ -100,17 +100,6 @@ def emit_instps(instps, fmt):
         fmt.line('       InstructionFormat::from(inst),')
         fmt.line('       inst.opcode(),')
         fmt.line('       instp_idx);')
-
-
-def collect_instps(cpumodes):
-    # Map instp -> number
-    instps = OrderedDict()
-    for cpumode in cpumodes:
-        for enc in cpumode.encodings:
-            instp = enc.instp
-            if instp and instp not in instps:
-                instps[instp] = 1 + len(instps)
-    return instps
 
 
 class EncList(object):
@@ -192,13 +181,12 @@ def make_tables(cpumode):
     return table
 
 
-def gen_isa(cpumodes, fmt):
+def gen_isa(isa, fmt):
     # First assign numbers to relevant instruction predicates and generate the
     # check_instp() function..
-    instps = collect_instps(cpumodes)
-    emit_instps(instps, fmt)
+    emit_instps(isa.all_instps, fmt)
 
-    for cpumode in cpumodes:
+    for cpumode in isa.cpumodes:
         level1 = make_tables(cpumode)
         for level2 in level1:
             for enclist in level2:
@@ -210,5 +198,5 @@ def gen_isa(cpumodes, fmt):
 def generate(isas, out_dir):
     for isa in isas:
         fmt = srcgen.Formatter()
-        gen_isa(isa.cpumodes, fmt)
+        gen_isa(isa, fmt)
         fmt.update_file('encoding-{}.rs'.format(isa.name), out_dir)

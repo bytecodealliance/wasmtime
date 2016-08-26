@@ -955,6 +955,37 @@ class TargetISA(object):
         self.instruction_groups = instruction_groups
         self.cpumodes = list()
 
+    def finish(self):
+        """
+        Finish the definition of a target ISA after adding all CPU modes and
+        settings.
+
+        This computes some derived properties that are used in multilple
+        places.
+
+        :returns self:
+        """
+        self._collect_instruction_predicates()
+        return self
+
+    def _collect_instruction_predicates(self):
+        """
+        Collect and number all instruction predicates in use.
+
+        Sets `instp.number` for all used instruction predicates and places them
+        in `self.all_instps` in numerical order.
+        """
+        self.all_instps = list()
+        instps = set()
+        for cpumode in self.cpumodes:
+            for enc in cpumode.encodings:
+                instp = enc.instp
+                if instp and instp not in instps:
+                    # assign predicate number starting from 0.
+                    instp.number = len(instps)
+                    instps.add(instp)
+                    self.all_instps.append(instp)
+
 
 class CPUMode(object):
     """
