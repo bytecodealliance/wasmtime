@@ -1003,6 +1003,9 @@ class EncRecipe(object):
         if instp:
             assert instp.predicate_context() == format
 
+    def __str__(self):
+        return self.name
+
 
 class Encoding(object):
     """
@@ -1033,6 +1036,9 @@ class Encoding(object):
         # Combine recipe predicates with the manually specified ones.
         self.instp = And.combine(recipe.instp, instp)
         self.isap = And.combine(recipe.isap, instp)
+
+    def __str__(self):
+        return '[{}/{:02x}]'.format(self.recipe, self.encbits)
 
     def ctrl_typevar(self):
         """
