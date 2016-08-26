@@ -976,8 +976,23 @@ class TargetISA(object):
 
         :returns self:
         """
+        self._collect_encoding_recipes()
         self._collect_instruction_predicates()
         return self
+
+    def _collect_encoding_recipes(self):
+        """
+        Collect and number all encoding recipes in use.
+        """
+        self.all_recipes = list()
+        rcps = set()
+        for cpumode in self.cpumodes:
+            for enc in cpumode.encodings:
+                recipe = enc.recipe
+                if recipe not in rcps:
+                    recipe.number = len(rcps)
+                    rcps.add(recipe)
+                    self.all_recipes.append(recipe)
 
     def _collect_instruction_predicates(self):
         """
