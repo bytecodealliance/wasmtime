@@ -203,6 +203,8 @@ def gen_isa(cpumodes, fmt):
         for level2 in level1:
             for enclist in level2:
                 fmt.comment(enclist.name())
+                for enc in enclist.encodings:
+                    fmt.comment('{} when {}'.format(enc, enc.instp))
 
 
 def generate(isas, out_dir):

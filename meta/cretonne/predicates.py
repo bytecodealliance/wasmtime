@@ -65,6 +65,14 @@ class Predicate(object):
                 (p.predicate_context() for p in parts))
         assert self.context, "Incompatible predicate parts"
 
+    def __str__(self):
+        s = '{}({})'.format(
+                type(self).__name__,
+                ' ,'.join(map(str, self.parts)))
+        if self.name:
+            s = '{}={}'.format(self.name, s)
+        return s
+
     def predicate_context(self):
         return self.context
 
@@ -163,6 +171,10 @@ class FieldPredicate(object):
         self.field = field
         self.function = function
         self.args = args
+
+    def __str__(self):
+        args = (self.field.name,) + tuple(map(str, self.args))
+        return '{}({})'.format(self.function, ', '.join(args))
 
     def predicate_context(self):
         """
