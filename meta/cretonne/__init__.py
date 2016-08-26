@@ -1030,6 +1030,9 @@ class CPUMode(object):
         self.encodings = []
         isa.cpumodes.append(self)
 
+    def __str__(self):
+        return self.name
+
     def enc(self, *args, **kwargs):
         """
         Add a new encoding to this CPU mode.
