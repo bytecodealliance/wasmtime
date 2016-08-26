@@ -71,7 +71,8 @@ def gen_instruction_data_impl(fmt):
                             .format(f.name))
 
         fmt.doc_comment('Mutable reference to the type of the first result.')
-        with fmt.indented('pub fn first_type_mut(&mut self) -> &mut Type {', '}'):
+        with fmt.indented(
+                'pub fn first_type_mut(&mut self) -> &mut Type {', '}'):
             with fmt.indented('match *self {', '}'):
                 for f in cretonne.InstructionFormat.all_formats:
                     fmt.line(
@@ -152,7 +153,8 @@ def gen_instruction_data_impl(fmt):
                         if f.boxed_storage:
                             fmt.line(
                                     n +
-                                    ' {{ ref data, .. }} => Some(data.args[{}]),'
+                                    ' {{ ref data, .. }} => ' +
+                                    'Some(data.args[{}]),'
                                     .format(i))
                         else:
                             fmt.line(
