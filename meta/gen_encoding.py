@@ -51,7 +51,8 @@ instructions with different types for secondary type variables.
 """
 from __future__ import absolute_import
 import srcgen
-from collections import OrderedDict
+from unique_table import UniqueSeqTable
+from collections import OrderedDict, defaultdict
 
 
 def emit_instp(instp, fmt):
@@ -102,6 +103,43 @@ def emit_instps(instps, fmt):
         fmt.line('       instp_idx);')
 
 
+# Encoding lists are represented as u16 arrays.
+CODE_BITS = 16
+PRED_BITS = 12
+PRED_MASK = (1 << PRED_BITS) - 1
+
+# 0..CODE_ALWAYS means: Check instruction predicate and use the next two
+# entries as a (recipe, encbits) pair if true. CODE_ALWAYS is the always-true
+# predicate, smaller numbers refer to instruction predicates.
+CODE_ALWAYS = PRED_MASK
+
+# Codes above CODE_ALWAYS indicate an ISA predicate to be tested.
+# `x & PRED_MASK` is the ISA predicate number to test.
+# `(x >> PRED_BITS)*3` is the number of u16 table entries to skip if the ISA
+# predicate is false. (The factor of three corresponds to the (inst-pred,
+# recipe, encbits) triples.
+#
+# Finally, CODE_FAIL indicates the end of the list.
+CODE_FAIL = (1 << CODE_BITS) - 1
+
+
+def seq_doc(enc):
+    """
+    Return a tuple containing u16 representations of the instruction predicate
+    an recipe / encbits.
+
+    Also return a doc string.
+    """
+    if enc.instp:
+        p = enc.instp.number
+        doc = '--> {} when {}'.format(enc, enc.instp)
+    else:
+        p = CODE_ALWAYS
+        doc = '--> {}'.format(enc)
+    assert p <= CODE_ALWAYS
+    return ((p, enc.recipe.number, enc.encbits), doc)
+
+
 class EncList(object):
     """
     List of instructions for encoding a given type + opcode pair.
@@ -121,10 +159,38 @@ class EncList(object):
         self.encodings = []
 
     def name(self):
+        name = self.inst.name
         if self.ty:
-            return '{}.{}'.format(self.inst.name, self.ty.name)
-        else:
-            return self.inst.name
+            name = '{}.{}'.format(name, self.ty.name)
+        if self.encodings:
+            name += ' ({})'.format(self.encodings[0].cpumode)
+        return name
+
+    def encode(self, seq_table, doc_table):
+        """
+        Encode this list as a sequence of u16 numbers.
+
+        Adds the sequence to `seq_table` and records the returned offset as
+        `self.offset`.
+
+        Adds comment lines to `doc_table` keyed by seq_table offsets.
+        """
+        words = list()
+        docs = list()
+
+        for idx, enc in enumerate(self.encodings):
+            seq, doc = seq_doc(enc)
+            docs.append((len(words), doc))
+            words.extend(seq)
+        words.append(CODE_FAIL)
+
+        self.offset = seq_table.add(words)
+
+        # Add doc comments.
+        doc_table[self.offset].append(
+                '{:06x}: {}'.format(self.offset, self.name()))
+        for pos, doc in docs:
+            doc_table[self.offset + pos].append(doc)
 
 
 class Level2Table(object):
@@ -181,18 +247,46 @@ def make_tables(cpumode):
     return table
 
 
+def encode_enclists(level1, seq_table, doc_table):
+    """
+    Compute encodings and doc comments for encoding lists in `level1`.
+    """
+    for level2 in level1:
+        for enclist in level2:
+            enclist.encode(seq_table, doc_table)
+
+
+def emit_enclists(seq_table, doc_table, fmt):
+    with fmt.indented(
+            'const ENCLISTS: [u16; {}] = ['.format(len(seq_table.table)),
+            '];'):
+        line = ''
+        for idx, entry in enumerate(seq_table.table):
+            if idx in doc_table:
+                if line:
+                    fmt.line(line)
+                    line = ''
+                for doc in doc_table[idx]:
+                    fmt.comment(doc)
+            line += '{:#06x}, '.format(entry)
+        if line:
+            fmt.line(line)
+
+
 def gen_isa(isa, fmt):
     # First assign numbers to relevant instruction predicates and generate the
     # check_instp() function..
     emit_instps(isa.all_instps, fmt)
 
+    # Tables for enclists with comments.
+    seq_table = UniqueSeqTable()
+    doc_table = defaultdict(list)
+
     for cpumode in isa.cpumodes:
         level1 = make_tables(cpumode)
-        for level2 in level1:
-            for enclist in level2:
-                fmt.comment(enclist.name())
-                for enc in enclist.encodings:
-                    fmt.comment('{} when {}'.format(enc, enc.instp))
+        encode_enclists(level1, seq_table, doc_table)
+
+    emit_enclists(seq_table, doc_table, fmt)
 
 
 def generate(isas, out_dir):
