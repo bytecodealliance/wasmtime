@@ -22,6 +22,9 @@ for inst,           inst_imm,      f3,    f7 in [
         RV32.enc(inst_imm.i32, I, OPIMM(f3))
         RV64.enc(inst_imm.i64, I, OPIMM(f3))
 
+# 32-bit ops in RV64.
+RV64.enc(base.iadd.i32, R, OP32(0b000, 0b0000000))
+RV64.enc(base.isub.i32, R, OP32(0b000, 0b0100000))
 # There are no andiw/oriw/xoriw variations.
 RV64.enc(base.iadd_imm.i32, I, OPIMM32(0b000))
 
