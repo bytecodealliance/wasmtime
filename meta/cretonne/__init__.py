@@ -6,6 +6,7 @@ instructions.
 """
 from __future__ import absolute_import
 import re
+import math
 import importlib
 from collections import namedtuple
 from .predicates import And
@@ -279,8 +280,11 @@ class ValueType(object):
     or one of its subclasses.
     """
 
-    # map name -> ValueType.
+    # Map name -> ValueType.
     _registry = dict()
+
+    # List of all the scalar types.
+    all_scalars = list()
 
     def __init__(self, name, membytes, doc):
         self.name = name
@@ -321,6 +325,10 @@ class ScalarType(ValueType):
     def __init__(self, name, membytes, doc):
         super(ScalarType, self).__init__(name, membytes, doc)
         self._vectors = dict()
+        # Assign numbers starting from 1. (0 is VOID).
+        ValueType.all_scalars.append(self)
+        self.number = len(ValueType.all_scalars)
+        assert self.number < 16, 'Too many scalar types'
 
     def __repr__(self):
         return 'ScalarType({})'.format(self.name)
@@ -356,10 +364,11 @@ class VectorType(ValueType):
                 name='{}x{}'.format(base.name, lanes),
                 membytes=lanes*base.membytes,
                 doc="""
-                A SIMD vector with {} lanes containing a {} each.
+                A SIMD vector with {} lanes containing a `{}` each.
                 """.format(lanes, base.name))
         self.base = base
         self.lanes = lanes
+        self.number = 16*int(math.log(lanes, 2)) + base.number
 
     def __repr__(self):
         return ('VectorType(base={}, lanes={})'
@@ -386,8 +395,10 @@ class FloatType(ScalarType):
 
     def __init__(self, bits, doc):
         assert bits > 0, 'FloatType must have positive number of bits'
-        super(FloatType, self).__init__(name='f{:d}'.format(bits),
-                                        membytes=bits // 8, doc=doc)
+        super(FloatType, self).__init__(
+                name='f{:d}'.format(bits),
+                membytes=bits // 8,
+                doc=doc)
         self.bits = bits
 
     def __repr__(self):
