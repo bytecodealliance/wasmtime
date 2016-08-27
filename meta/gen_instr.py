@@ -191,6 +191,7 @@ def gen_opcodes(groups, fmt):
         for g in groups:
             for i in g.instructions:
                 instrs.append(i)
+                i.number = len(instrs)
                 # Build a doc comment.
                 prefix = ', '.join(o.name for o in i.outs)
                 if prefix:
