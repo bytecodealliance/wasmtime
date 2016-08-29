@@ -54,6 +54,7 @@ import srcgen
 from constant_hash import compute_quadratic
 from unique_table import UniqueSeqTable
 from collections import OrderedDict, defaultdict
+import math
 
 
 def emit_instp(instp, fmt):
@@ -79,7 +80,7 @@ def emit_instp(instp, fmt):
 
     with fmt.indented('{} => {{'.format(instp.number), '}'):
         with fmt.indented(
-                'if let {} {{ {}, .. }} = *inst {{'
+                'if let InstructionData::{} {{ {}, .. }} = *inst {{'
                 .format(iform.name, fields), '}'):
             fmt.line('return {};'.format(instp.rust_predicate(0)))
 
@@ -90,15 +91,15 @@ def emit_instps(instps, fmt):
     """
 
     with fmt.indented(
-            'fn check_instp(inst: &InstructionData, instp_idx: u16) -> bool {',
-            '}'):
+            'pub fn check_instp(inst: &InstructionData, instp_idx: u16) ' +
+            '-> bool {', '}'):
         with fmt.indented('match instp_idx {', '}'):
             for instp in instps:
                 emit_instp(instp, fmt)
             fmt.line('_ => panic!("Invalid instruction predicate")')
 
         # The match cases will fall through if the instruction format is wrong.
-        fmt.line('panic!("Bad format {}/{} for instp {}",')
+        fmt.line('panic!("Bad format {:?}/{} for instp {}",')
         fmt.line('       InstructionFormat::from(inst),')
         fmt.line('       inst.opcode(),')
         fmt.line('       instp_idx);')
@@ -279,7 +280,7 @@ def encode_enclists(level1, seq_table, doc_table):
 
 def emit_enclists(seq_table, doc_table, fmt):
     with fmt.indented(
-            'const ENCLISTS: [u16; {}] = ['.format(len(seq_table.table)),
+            'pub static ENCLISTS: [u16; {}] = ['.format(len(seq_table.table)),
             '];'):
         line = ''
         for idx, entry in enumerate(seq_table.table):
@@ -299,13 +300,13 @@ def encode_level2_hashtables(level1, level2_hashtables, level2_doc):
         level2.layout_hashtable(level2_hashtables, level2_doc)
 
 
-def emit_level2_hashtables(level2_hashtables, level2_doc, fmt):
+def emit_level2_hashtables(level2_hashtables, offt, level2_doc, fmt):
     """
     Emit the big concatenation of level 2 hash tables.
     """
     with fmt.indented(
-            'const LEVEL2: [(Opcode, u32); {}] = ['
-            .format(len(level2_hashtables)),
+            'pub static LEVEL2: [Level2Entry<{}>; {}] = ['
+            .format(offt, len(level2_hashtables)),
             '];'):
         for offset, entry in enumerate(level2_hashtables):
             if offset in level2_doc:
@@ -313,16 +314,63 @@ def emit_level2_hashtables(level2_hashtables, level2_doc, fmt):
                     fmt.comment(doc)
             if entry:
                 fmt.line(
-                        '(Opcode::{}, {:#08x}),'
+                        'Level2Entry ' +
+                        '{{ opcode: Opcode::{}, offset: {:#08x} }},'
                         .format(entry.inst.camel_name, entry.offset))
             else:
-                fmt.line('(Opcode::NotAnOpcode, 0),')
+                fmt.line(
+                        'Level2Entry ' +
+                        '{ opcode: Opcode::NotAnOpcode, offset: 0 },')
+
+
+def emit_level1_hashtable(cpumode, level1, offt, fmt):
+    """
+    Emit a level 1 hash table for `cpumode`.
+    """
+    hash_table = compute_quadratic(
+            level1.tables.values(),
+            lambda level2: level2.ty.number)
+
+    with fmt.indented(
+            'pub static LEVEL1_{}: [Level1Entry<{}>; {}] = ['
+            .format(cpumode.name.upper(), offt, len(hash_table)), '];'):
+        for level2 in hash_table:
+            if level2:
+                l2l = int(math.log(level2.hash_table_len, 2))
+                assert l2l > 0, "Hash table too small"
+                fmt.line(
+                        'Level1Entry ' +
+                        '{{ ty: types::{}, log2len: {}, offset: {:#08x} }},'
+                        .format(
+                            level2.ty.name.upper(),
+                            l2l,
+                            level2.hash_table_offset))
+            else:
+                # Empty entry.
+                fmt.line(
+                        'Level1Entry ' +
+                        '{ ty: types::VOID, log2len: 0, offset: 0 },')
+
+
+def offset_type(length):
+    """
+    Compute an appropriate Rust integer type to use for offsets into a table of
+    the given length.
+    """
+    if length <= 0x10000:
+        return 'u16'
+    else:
+        assert length <= 0x100000000, "Table too big"
+        return 'u32'
 
 
 def gen_isa(isa, fmt):
     # First assign numbers to relevant instruction predicates and generate the
     # check_instp() function..
     emit_instps(isa.all_instps, fmt)
+
+    # Level1 tables, one per CPU mode
+    level1_tables = dict()
 
     # Tables for enclists with comments.
     seq_table = UniqueSeqTable()
@@ -335,11 +383,20 @@ def gen_isa(isa, fmt):
     for cpumode in isa.cpumodes:
         level2_doc[len(level2_hashtables)].append(cpumode.name)
         level1 = make_tables(cpumode)
+        level1_tables[cpumode] = level1
         encode_enclists(level1, seq_table, doc_table)
         encode_level2_hashtables(level1, level2_hashtables, level2_doc)
 
+    # Level 1 table encodes offsets into the level 2 table.
+    level1_offt = offset_type(len(level2_hashtables))
+    # Level 2 tables encodes offsets into seq_table.
+    level2_offt = offset_type(len(seq_table.table))
+
     emit_enclists(seq_table, doc_table, fmt)
-    emit_level2_hashtables(level2_hashtables, level2_doc, fmt)
+    emit_level2_hashtables(level2_hashtables, level2_offt, level2_doc, fmt)
+    for cpumode in isa.cpumodes:
+        emit_level1_hashtable(
+                cpumode, level1_tables[cpumode], level1_offt, fmt)
 
 
 def generate(isas, out_dir):
