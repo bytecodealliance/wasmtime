@@ -100,18 +100,11 @@ pub trait TargetIsa {
 /// encoding *bits*. The recipe determines the native instruction format and the mapping of
 /// operands to encoded bits. The encoding bits provide additional information to the recipe,
 /// typically parts of the opcode.
-pub struct Encoding(u32);
+pub struct Encoding(u16, u16);
 
 impl Encoding {
-    /// Create a new `Encoding` containing `(recipe, bits)`. The `num_bits` parameter is the
-    /// ISA-dependent size of `bits`.
-    pub fn new(recipe: u32, bits: u32, num_bits: u8) -> Encoding {
-        Encoding((recipe << num_bits) | bits)
-    }
-
-    /// Split the encoding into two parts: `(recipe, bits)`. Only the target ISA knows how many
-    /// bits are in each part.
-    pub fn split(&self, num_bits: u8) -> (u32, u32) {
-        (self.0 >> num_bits, self.0 & ((1 << num_bits) - 1))
+    /// Create a new `Encoding` containing `(recipe, bits)`.
+    pub fn new(recipe: u16, bits: u16) -> Encoding {
+        Encoding(recipe, bits)
     }
 }
