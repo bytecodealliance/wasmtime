@@ -18,6 +18,8 @@ opt_level = EnumSetting(
         """,
         'default', 'best', 'fastest')
 
+is_64bit = BoolSetting("Enable 64-bit code generation")
+
 enable_simd = BoolSetting(
         """Enable the use of SIMD instructions.""",
         default=True)
