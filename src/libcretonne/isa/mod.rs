@@ -41,9 +41,10 @@
 //! concurrent function compilations.
 
 pub mod riscv;
+mod encoding;
 
 use settings;
-use ir::{Inst, DataFlowGraph};
+use ir::{InstructionData, DataFlowGraph};
 
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
@@ -91,7 +92,7 @@ pub trait TargetIsa {
     /// Otherwise, return `None`.
     ///
     /// This is also the main entry point for determining if an instruction is legal.
-    fn encode(&self, dfg: &DataFlowGraph, inst: &Inst) -> Option<Encoding>;
+    fn encode(&self, dfg: &DataFlowGraph, inst: &InstructionData) -> Option<Encoding>;
 }
 
 /// Bits needed to encode an instruction as binary machine code.
