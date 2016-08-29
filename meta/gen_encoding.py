@@ -216,7 +216,7 @@ class Level2Table(object):
     def __iter__(self):
         return iter(self.lists.values())
 
-    def layout_hashtable(self, level2_hashtables):
+    def layout_hashtable(self, level2_hashtables, level2_doc):
         """
         Compute the hash table mapping opcode -> enclist.
 
@@ -229,6 +229,11 @@ class Level2Table(object):
         self.hash_table_offset = len(level2_hashtables)
         self.hash_table_len = len(hash_table)
 
+        level2_doc[self.hash_table_offset].append(
+                '{:06x}: {}, {} entries'.format(
+                    self.hash_table_offset,
+                    self.ty.name,
+                    self.hash_table_len))
         level2_hashtables.extend(hash_table)
 
 
@@ -289,12 +294,12 @@ def emit_enclists(seq_table, doc_table, fmt):
             fmt.line(line)
 
 
-def encode_level2_hashtables(level1, level2_hashtables):
+def encode_level2_hashtables(level1, level2_hashtables, level2_doc):
     for level2 in level1:
-        level2.layout_hashtable(level2_hashtables)
+        level2.layout_hashtable(level2_hashtables, level2_doc)
 
 
-def emit_level2_hashtables(level2_hashtables, fmt):
+def emit_level2_hashtables(level2_hashtables, level2_doc, fmt):
     """
     Emit the big concatenation of level 2 hash tables.
     """
@@ -302,7 +307,10 @@ def emit_level2_hashtables(level2_hashtables, fmt):
             'const LEVEL2: [(Opcode, u32); {}] = ['
             .format(len(level2_hashtables)),
             '];'):
-        for entry in level2_hashtables:
+        for offset, entry in enumerate(level2_hashtables):
+            if offset in level2_doc:
+                for doc in level2_doc[offset]:
+                    fmt.comment(doc)
             if entry:
                 fmt.line(
                         '(Opcode::{}, {:#08x}),'
@@ -322,14 +330,16 @@ def gen_isa(isa, fmt):
 
     # Single table containing all the level2 hash tables.
     level2_hashtables = list()
+    level2_doc = defaultdict(list)
 
     for cpumode in isa.cpumodes:
+        level2_doc[len(level2_hashtables)].append(cpumode.name)
         level1 = make_tables(cpumode)
         encode_enclists(level1, seq_table, doc_table)
-        encode_level2_hashtables(level1, level2_hashtables)
+        encode_level2_hashtables(level1, level2_hashtables, level2_doc)
 
     emit_enclists(seq_table, doc_table, fmt)
-    emit_level2_hashtables(level2_hashtables, fmt)
+    emit_level2_hashtables(level2_hashtables, level2_doc, fmt)
 
 
 def generate(isas, out_dir):
