@@ -60,7 +60,11 @@ impl FromStr for Imm64 {
         let mut value: u64 = 0;
         let mut digits = 0;
         let negative = s.starts_with('-');
-        let s2 = if negative { &s[1..] } else { s };
+        let s2 = if negative {
+            &s[1..]
+        } else {
+            s
+        };
 
         if s2.starts_with("0x") {
             // Hexadecimal.
