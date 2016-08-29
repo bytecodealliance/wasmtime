@@ -108,7 +108,11 @@ impl DominatorTree {
         // TODO: we can't rely on instruction numbers to always be ordered
         // from lowest to highest. Given that, it will be necessary to create
         // an abolute mapping to determine the instruction order in the future.
-        if a.1 == NO_INST || a.1 < b.1 { a } else { b }
+        if a.1 == NO_INST || a.1 < b.1 {
+            a
+        } else {
+            b
+        }
     }
 
     /// Returns the immediate dominator of some ebb or None if the

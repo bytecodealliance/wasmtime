@@ -42,7 +42,11 @@ impl EntityRef for Ebb {
 impl Ebb {
     /// Create a new EBB reference from its number. This corresponds to the ebbNN representation.
     pub fn with_number(n: u32) -> Option<Ebb> {
-        if n < u32::MAX { Some(Ebb(n)) } else { None }
+        if n < u32::MAX {
+            Some(Ebb(n))
+        } else {
+            None
+        }
     }
 }
 

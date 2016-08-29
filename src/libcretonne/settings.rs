@@ -227,7 +227,9 @@ pub mod detail {
     #[derive(Clone, Copy)]
     pub enum Detail {
         /// A boolean setting only uses one bit, numbered from LSB.
-        Bool { bit: u8 },
+        Bool {
+            bit: u8,
+        },
 
         /// A numerical setting uses the whole byte.
         Num,
