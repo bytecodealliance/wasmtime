@@ -93,6 +93,12 @@ pub trait TargetIsa {
     ///
     /// This is also the main entry point for determining if an instruction is legal.
     fn encode(&self, dfg: &DataFlowGraph, inst: &InstructionData) -> Option<Encoding>;
+
+    /// Get a static array of names associated with encoding recipes in this ISA. Encoding recipes
+    /// are numbered starting from 0, corresponding to indexes into th name array.
+    ///
+    /// This is just used for printing and parsing encodings in the textual IL format.
+    fn recipe_names(&self) -> &'static [&'static str];
 }
 
 /// Bits needed to encode an instruction as binary machine code.

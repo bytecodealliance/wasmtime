@@ -52,4 +52,8 @@ impl TargetIsa for Isa {
                                                   |isap| isap != 17)
             })
     }
+
+    fn recipe_names(&self) -> &'static [&'static str] {
+        &encoding::RECIPE_NAMES[..]
+    }
 }
