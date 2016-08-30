@@ -22,7 +22,8 @@ mod tests {
                     supports_m = false\n\
                     supports_a = false\n\
                     supports_f = false\n\
-                    supports_d = false\n");
+                    supports_d = false\n\
+                    enable_m = true\n");
         // Predicates are not part of the Display output.
         assert_eq!(f.full_float(), false);
     }
