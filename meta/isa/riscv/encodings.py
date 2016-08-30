@@ -5,6 +5,7 @@ from __future__ import absolute_import
 from cretonne import base
 from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, R, Rshamt, I
+from .settings import use_m
 
 # Basic arithmetic binary instructions are encoded in an R-type instruction.
 for inst,           inst_imm,      f3,    f7 in [
@@ -45,3 +46,9 @@ for inst,           inst_imm,      f3,    f7 in [
     RV32.enc(inst_imm.i32, Rshamt, OPIMM(f3, f7))
     RV64.enc(inst_imm.i64, Rshamt, OPIMM(f3, f7))
     RV64.enc(inst_imm.i32, Rshamt, OPIMM32(f3, f7))
+
+# "M" Standard Extension for Integer Multiplication and Division.
+# Gated by the `use_m` flag.
+RV32.enc(base.imul.i32, R, OP(0b000, 0b0000001), isap=use_m)
+RV64.enc(base.imul.i64, R, OP(0b000, 0b0000001), isap=use_m)
+RV64.enc(base.imul.i32, R, OP32(0b000, 0b0000001), isap=use_m)
