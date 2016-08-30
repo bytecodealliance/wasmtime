@@ -364,6 +364,19 @@ def offset_type(length):
         return 'u32'
 
 
+def emit_recipe_names(isa, fmt):
+    """
+    Emit a table of encoding recipe names keyed by recipe number.
+
+    This is used for pretty-printing encodings.
+    """
+    with fmt.indented(
+            'pub static RECIPE_NAMES: [&\'static str; {}] = ['
+            .format(len(isa.all_recipes)), '];'):
+        for r in isa.all_recipes:
+            fmt.line('"{}",'.format(r.name))
+
+
 def gen_isa(isa, fmt):
     # First assign numbers to relevant instruction predicates and generate the
     # check_instp() function..
@@ -397,6 +410,8 @@ def gen_isa(isa, fmt):
     for cpumode in isa.cpumodes:
         emit_level1_hashtable(
                 cpumode, level1_tables[cpumode], level1_offt, fmt)
+
+    emit_recipe_names(isa, fmt)
 
 
 def generate(isas, out_dir):
