@@ -20,8 +20,16 @@ opt_level = EnumSetting(
 
 is_64bit = BoolSetting("Enable 64-bit code generation")
 
+enable_float = BoolSetting(
+        """Enable the use of floating-point instructions""",
+        default=True)
+
 enable_simd = BoolSetting(
         """Enable the use of SIMD instructions.""",
+        default=True)
+
+enable_atomics = BoolSetting(
+        """Enable the use of atomic instructions""",
         default=True)
 
 group.close(globals())

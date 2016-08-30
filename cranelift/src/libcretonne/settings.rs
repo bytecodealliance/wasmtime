@@ -261,7 +261,9 @@ mod tests {
                    "[shared]\n\
                     opt_level = \"default\"\n\
                     is_64bit = false\n\
-                    enable_simd = true\n");
+                    enable_float = true\n\
+                    enable_simd = true\n\
+                    enable_atomics = true\n");
         assert_eq!(f.opt_level(), super::OptLevel::Default);
         assert_eq!(f.enable_simd(), true);
     }
