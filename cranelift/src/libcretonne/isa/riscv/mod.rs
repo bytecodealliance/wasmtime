@@ -57,3 +57,61 @@ impl TargetIsa for Isa {
         &encoding::RECIPE_NAMES[..]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use settings::{self, Configurable};
+    use isa;
+    use ir::{DataFlowGraph, InstructionData, Opcode};
+    use ir::{types, immediates};
+
+    fn encstr(isa: &isa::TargetIsa, enc: isa::Encoding) -> String {
+        format!("{}/{:02x}", isa.recipe_names()[enc.recipe()], enc.bits())
+    }
+
+    #[test]
+    fn test_64bitenc() {
+        let mut shared_builder = settings::builder();
+        shared_builder.set_bool("is_64bit", true).unwrap();
+        let shared_flags = settings::Flags::new(shared_builder);
+        let isa = isa::lookup("riscv").unwrap().finish(shared_flags);
+
+        let mut dfg = DataFlowGraph::new();
+        let ebb = dfg.make_ebb();
+        let arg64 = dfg.append_ebb_arg(ebb, types::I64);
+        let arg32 = dfg.append_ebb_arg(ebb, types::I32);
+
+        // Try to encode iadd_imm.i64 vx1, -10.
+        let inst64 = InstructionData::BinaryImm {
+            opcode: Opcode::IaddImm,
+            ty: types::I64,
+            arg: arg64,
+            imm: immediates::Imm64::new(-10),
+        };
+
+        // ADDI is I/0b00100
+        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst64).unwrap()), "I/04");
+
+        // Try to encode iadd_imm.i64 vx1, -10000.
+        let inst64_large = InstructionData::BinaryImm {
+            opcode: Opcode::IaddImm,
+            ty: types::I64,
+            arg: arg64,
+            imm: immediates::Imm64::new(-10000),
+        };
+
+        // Immediate is out of range for ADDI.
+        assert_eq!(isa.encode(&dfg, &inst64_large), None);
+
+        // Create an iadd_imm.i32 which is encodable in RV64.
+        let inst32 = InstructionData::BinaryImm {
+            opcode: Opcode::IaddImm,
+            ty: types::I32,
+            arg: arg32,
+            imm: immediates::Imm64::new(10),
+        };
+
+        // ADDIW is I/0b00110
+        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst32).unwrap()), "I/06");
+    }
+}
