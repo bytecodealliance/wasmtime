@@ -21,10 +21,23 @@ function banner() {
     echo "======  $@  ======"
 }
 
-# Run rustfmt if we have it. (Travis probably won't).
-if cargo install --list | grep -q '^rustfmt '; then
+# Run rustfmt if we have it.
+#
+# Rustfmt is still immature enough that its formatting decisions can change
+# between versions. This makes it difficult to enforce a certain style in a
+# test script since not all developers will upgrade rustfmt at the same time.
+# To work around this, we only verify formatting when a specific version of
+# rustfmt is installed.
+#
+# This version should always be bumped to the newest version available.
+RUSTFMT_VERSION="0.5.0"
+
+if cargo install --list | grep -q "^rustfmt v$RUSTFMT_VERSION"; then
     banner "Rust formatting"
     $topdir/src/format-all.sh --write-mode=diff
+else
+    echo "Please install rustfmt v$RUSTFMT_VERSION to verify formatting."
+    echo "If a newer version of rustfmt is available, update this script."
 fi
 
 PKGS="cretonne cretonne-reader cretonne-tools"
