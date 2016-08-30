@@ -231,7 +231,7 @@ def gen_constructor(sgrp, settings_size, byte_size, parent, fmt):
                 'pub fn new({}) -> Flags {{'.format(args), '}'):
             fmt.line('let bvec = builder.finish("{}");'.format(sgrp.name))
             fmt.line('let mut bytes = [0; {}];'.format(byte_size))
-            fmt.line('assert_eq!(bytes.len(), {});'.format(settings_size))
+            fmt.line('assert_eq!(bvec.len(), {});'.format(settings_size))
             with fmt.indented(
                     'for (i, b) in bvec.into_iter().enumerate() {', '}'):
                 fmt.line('bytes[i] = b;')
@@ -268,7 +268,7 @@ def gen_group(sgrp, fmt):
     fmt.line('#[derive(Clone)]')
     fmt.doc_comment('Flags group `{}`.'.format(sgrp.name))
     with fmt.indented('pub struct Flags {', '}'):
-        fmt.line('bytes: [u8; {}],'.format(settings_size))
+        fmt.line('bytes: [u8; {}],'.format(byte_size))
 
     gen_constructor(sgrp, settings_size, byte_size, None, fmt)
     gen_enum_types(sgrp, fmt)
