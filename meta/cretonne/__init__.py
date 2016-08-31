@@ -1095,7 +1095,7 @@ class Encoding(object):
         self.encbits = encbits
         # Combine recipe predicates with the manually specified ones.
         self.instp = And.combine(recipe.instp, instp)
-        self.isap = And.combine(recipe.isap, instp)
+        self.isap = And.combine(recipe.isap, isap)
 
     def __str__(self):
         return '[{}/{:02x}]'.format(self.recipe, self.encbits)
