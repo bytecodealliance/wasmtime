@@ -40,16 +40,16 @@ fn isa_constructor(shared_flags: shared_settings::Flags,
 
 impl TargetIsa for Isa {
     fn encode(&self, _: &DataFlowGraph, inst: &InstructionData) -> Option<Encoding> {
-        shared_encoding::lookup_enclist(inst.first_type(),
-                                        inst.opcode(),
-                                        self.cpumode,
-                                        &encoding::LEVEL2[..])
+        use isa::encoding::{lookup_enclist, general_encoding};
+        lookup_enclist(inst.first_type(),
+                       inst.opcode(),
+                       self.cpumode,
+                       &encoding::LEVEL2[..])
             .and_then(|enclist_offset| {
-                shared_encoding::general_encoding(enclist_offset,
-                                                  &encoding::ENCLISTS[..],
-                                                  |instp| encoding::check_instp(inst, instp),
-                                                  // TODO: Implement ISA predicates properly.
-                                                  |isap| isap != 17)
+                general_encoding(enclist_offset,
+                                 &encoding::ENCLISTS[..],
+                                 |instp| encoding::check_instp(inst, instp),
+                                 |isap| self.isa_flags.numbered_predicate(isap as usize))
             })
     }
 
@@ -160,5 +160,40 @@ mod tests {
 
         // ADDI is I/0b00100
         assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst32).unwrap()), "I/04");
+
+        // Create an imul.i32 which is encodable in RV32, but only when use_m is true.
+        let mul32 = InstructionData::Binary {
+            opcode: Opcode::Imul,
+            ty: types::I32,
+            args: [arg32, arg32],
+        };
+
+        assert_eq!(isa.encode(&dfg, &mul32), None);
+    }
+
+    #[test]
+    fn test_rv32m() {
+        let mut shared_builder = settings::builder();
+        shared_builder.set_bool("is_64bit", false).unwrap();
+        let shared_flags = settings::Flags::new(shared_builder);
+
+        // Set the supports_m stting which in turn enables the use_m predicate that unlocks
+        // encodings for imul.
+        let mut isa_builder = isa::lookup("riscv").unwrap();
+        isa_builder.set_bool("supports_m", true).unwrap();
+
+        let isa = isa_builder.finish(shared_flags);
+
+        let mut dfg = DataFlowGraph::new();
+        let ebb = dfg.make_ebb();
+        let arg32 = dfg.append_ebb_arg(ebb, types::I32);
+
+        // Create an imul.i32 which is encodable in RV32M.
+        let mul32 = InstructionData::Binary {
+            opcode: Opcode::Imul,
+            ty: types::I32,
+            args: [arg32, arg32],
+        };
+        assert_eq!(encstr(&*isa, isa.encode(&dfg, &mul32).unwrap()), "R/10c");
     }
 }

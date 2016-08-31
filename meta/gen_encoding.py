@@ -55,6 +55,7 @@ from constant_hash import compute_quadratic
 from unique_table import UniqueSeqTable
 from collections import OrderedDict, defaultdict
 import math
+import itertools
 
 
 def emit_instp(instp, fmt):
@@ -168,7 +169,26 @@ class EncList(object):
             name += ' ({})'.format(self.encodings[0].cpumode)
         return name
 
-    def encode(self, seq_table, doc_table):
+    def by_isap(self):
+        """
+        Group the encodings by ISA predicate without reordering them.
+
+        Yield a sequence of `(isap, (encs...))` tuples where `isap` is the ISA
+        predicate or `None`, and `(encs...)` is a tuple of encodings that all
+        have the same ISA predicate.
+        """
+        maxlen = CODE_FAIL >> PRED_BITS
+        for isap, group in itertools.groupby(
+                self.encodings, lambda enc: enc.isap):
+            group = tuple(group)
+            # This probably never happens, but we can't express more than
+            # maxlen encodings per isap.
+            while len(group) > maxlen:
+                yield (isap, group[0..maxlen])
+                group = group[maxlen:]
+            yield (isap, group)
+
+    def encode(self, seq_table, doc_table, isa):
         """
         Encode this list as a sequence of u16 numbers.
 
@@ -180,10 +200,22 @@ class EncList(object):
         words = list()
         docs = list()
 
-        for idx, enc in enumerate(self.encodings):
-            seq, doc = seq_doc(enc)
-            docs.append((len(words), doc))
-            words.extend(seq)
+        # Group our encodings by isap.
+        for isap, group in self.by_isap():
+            if isap:
+                # We have an ISA predicate covering `glen` encodings.
+                pnum = isa.settings.predicate_number[isap]
+                glen = len(group)
+                doc = 'skip {}x3 unless {}'.format(glen, isap)
+                docs.append((len(words), doc))
+                words.append((glen << PRED_BITS) | pnum)
+
+            for enc in group:
+                seq, doc = seq_doc(enc)
+                docs.append((len(words), doc))
+                words.extend(seq)
+
+        # Terminate the list.
         words.append(CODE_FAIL)
 
         self.offset = seq_table.add(words)
@@ -269,13 +301,13 @@ def make_tables(cpumode):
     return table
 
 
-def encode_enclists(level1, seq_table, doc_table):
+def encode_enclists(level1, seq_table, doc_table, isa):
     """
     Compute encodings and doc comments for encoding lists in `level1`.
     """
     for level2 in level1:
         for enclist in level2:
-            enclist.encode(seq_table, doc_table)
+            enclist.encode(seq_table, doc_table, isa)
 
 
 def emit_enclists(seq_table, doc_table, fmt):
@@ -397,7 +429,7 @@ def gen_isa(isa, fmt):
         level2_doc[len(level2_hashtables)].append(cpumode.name)
         level1 = make_tables(cpumode)
         level1_tables[cpumode] = level1
-        encode_enclists(level1, seq_table, doc_table)
+        encode_enclists(level1, seq_table, doc_table, isa)
         encode_level2_hashtables(level1, level2_hashtables, level2_doc)
 
     # Level 1 table encodes offsets into the level 2 table.
