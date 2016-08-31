@@ -8,7 +8,7 @@ from __future__ import absolute_import
 import re
 import math
 import importlib
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 from .predicates import And
 
 
@@ -135,7 +135,17 @@ class SettingGroup(object):
         self.name = name
         self.parent = parent
         self.settings = []
-        self.predicates = []
+        # Named predicates computed from settings in this group or its
+        # parents.
+        self.named_predicates = []
+        # All boolean predicates that can be accessed by number. This includes:
+        # - All boolean settings in this group.
+        # - All named predicates.
+        # - Added anonymous predicates, see `number_predicate()`.
+        # - Added parent predicates that are replicated in this group.
+        # Maps predicate -> number.
+        self.predicate_number = OrderedDict()
+
         self.open()
 
     def open(self):
@@ -169,7 +179,8 @@ class SettingGroup(object):
                 if isinstance(obj, Predicate):
                     assert obj.name is None
                     obj.name = name
-                    self.predicates.append(obj)
+                    self.named_predicates.append(obj)
+        self.layout()
 
     @staticmethod
     def append(setting):
@@ -177,6 +188,90 @@ class SettingGroup(object):
         assert g, "Open a setting group before defining settings."
         g.settings.append(setting)
         return g
+
+    def number_predicate(self, pred):
+        """
+        Make sure that `pred` has an assigned number, and will be included in
+        this group's bit vector.
+
+        The numbered predicates include:
+        - `BoolSetting` settings that belong to this group.
+        - `Predicate` instances in `named_predicates`.
+        - `Predicate` instances without a name.
+        - Settings or computed predicates that belong to the parent group, but
+          need to be accessible by number in this group.
+
+        The numbered predicates are referenced by the encoding tables as ISA
+        predicates. See the `isap` field on `Encoding`.
+
+        :returns: The assigned predicate number in this group.
+        """
+        if pred in self.predicate_number:
+            return self.predicate_number[pred]
+        else:
+            number = len(self.predicate_number)
+            self.predicate_number[pred] = number
+            return number
+
+    def layout(self):
+        """
+        Compute the layout of the byte vector used to represent this settings
+        group.
+
+        The byte vector contains the following entries in order:
+
+        1. Byte-sized settings like `NumSetting` and `EnumSetting`.
+        2. `BoolSetting` settings.
+        3. Precomputed named predicates.
+        4. Other numbered predicates, including anonymous predicates and parent
+           predicates that need to be accessible by number.
+
+        Set `self.settings_size` to the length of the byte vector prefix that
+        contains the settings. All bytes after that are computed, not
+        configured.
+
+        Set `self.boolean_offset` to the beginning of the numbered predicates,
+        2. in the list above.
+
+        Assign `byte_offset` and `bit_offset` fields in all settings.
+
+        After calling this method, no more settings can be added, but
+        additional predicates can be made accessible with `number_predicate()`.
+        """
+        assert len(self.predicate_number) == 0, "Too late for layout"
+
+        # Assign the non-boolean settings.
+        byte_offset = 0
+        for s in self.settings:
+            if not isinstance(s, BoolSetting):
+                s.byte_offset = byte_offset
+                byte_offset += 1
+
+        # Then the boolean settings.
+        self.boolean_offset = byte_offset
+        for s in self.settings:
+            if isinstance(s, BoolSetting):
+                number = self.number_predicate(s)
+                s.byte_offset = byte_offset + number // 8
+                s.bit_offset = number % 8
+
+        # This is the end of the settings. Round up to a whole number of bytes.
+        self.boolean_settings = len(self.predicate_number)
+        self.settings_size = self.byte_size()
+
+        # Now assign numbers to all our named predicates.
+        for p in self.named_predicates:
+            self.number_predicate(p)
+
+    def byte_size(self):
+        """
+        Compute the number of bytes required to hold all settings and
+        precomputed predicates.
+
+        This is the size of the byte-sized settings plus all the numbered
+        predcate bits rounded up to a whole number of bytes.
+        """
+        return self.boolean_offset + (len(self.predicate_number) + 7) // 8
 
 
 # Kinds of operands.
@@ -977,7 +1072,7 @@ class TargetISA(object):
         :returns self:
         """
         self._collect_encoding_recipes()
-        self._collect_instruction_predicates()
+        self._collect_predicates()
         return self
 
     def _collect_encoding_recipes(self):
@@ -994,12 +1089,15 @@ class TargetISA(object):
                     rcps.add(recipe)
                     self.all_recipes.append(recipe)
 
-    def _collect_instruction_predicates(self):
+    def _collect_predicates(self):
         """
-        Collect and number all instruction predicates in use.
+        Collect and number all predicates in use.
 
         Sets `instp.number` for all used instruction predicates and places them
         in `self.all_instps` in numerical order.
+
+        Ensures that all ISA predicates have an assigned bit number in
+        `self.settings`.
         """
         self.all_instps = list()
         instps = set()
@@ -1011,6 +1109,12 @@ class TargetISA(object):
                     instp.number = len(instps)
                     instps.add(instp)
                     self.all_instps.append(instp)
+
+                # All referenced ISA predicates must have a number in
+                # `self.settings`. This may cause some parent predicates to be
+                # replicated here, which is OK.
+                if enc.isap:
+                    self.settings.number_predicate(enc.isap)
 
 
 class CPUMode(object):

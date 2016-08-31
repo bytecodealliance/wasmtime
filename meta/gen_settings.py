@@ -8,52 +8,6 @@ import constant_hash
 from cretonne import camel_case, BoolSetting, NumSetting, EnumSetting, settings
 
 
-def layout_group(sgrp):
-    """
-    Layout the settings in sgrp, assigning byte and bit offsets.
-
-    Return the number of bytes needed for settings and the total number of
-    bytes needed when including predicates.
-    """
-    # Byte offset where booleans are allocated.
-    bool_byte = -1
-    # Next available bit number in bool_byte.
-    bool_bit = 10
-    # Next available whole byte.
-    next_byte = 0
-
-    for setting in sgrp.settings:
-        if isinstance(setting, BoolSetting):
-            # Allocate a bit from bool_byte.
-            if bool_bit > 7:
-                bool_byte = next_byte
-                next_byte += 1
-                bool_bit = 0
-            setting.byte_offset = bool_byte
-            setting.bit_offset = bool_bit
-            bool_bit += 1
-        else:
-            # This is a numerical or enumerated setting. Allocate a single
-            # byte.
-            setting.byte_offset = next_byte
-            next_byte += 1
-
-    settings_size = next_byte
-
-    # Allocate bits for all the precomputed predicates.
-    for pred in sgrp.predicates:
-        # Allocate a bit from bool_byte.
-        if bool_bit > 7:
-            bool_byte = next_byte
-            next_byte += 1
-            bool_bit = 0
-        pred.byte_offset = bool_byte
-        pred.bit_offset = bool_bit
-        bool_bit += 1
-
-    return (settings_size, next_byte)
-
-
 def gen_enum_types(sgrp, fmt):
     """
     Emit enum types for any enum settings.
@@ -68,7 +22,7 @@ def gen_enum_types(sgrp, fmt):
                 .format(ty, ", ".join(camel_case(v) for v in setting.values)))
 
 
-def gen_getter(setting, fmt):
+def gen_getter(setting, sgrp, fmt):
     """
     Emit a getter function for `setting`.
     """
@@ -77,9 +31,9 @@ def gen_getter(setting, fmt):
     if isinstance(setting, BoolSetting):
         proto = 'pub fn {}(&self) -> bool'.format(setting.name)
         with fmt.indented(proto + ' {', '}'):
-            fmt.line('(self.bytes[{}] & (1 << {})) != 0'.format(
-                setting.byte_offset,
-                setting.bit_offset))
+            fmt.line(
+                    'self.numbered_predicate({})'
+                    .format(sgrp.predicate_number[setting]))
     elif isinstance(setting, NumSetting):
         proto = 'pub fn {}(&self) -> u8'.format(setting.name)
         with fmt.indented(proto + ' {', '}'):
@@ -98,16 +52,16 @@ def gen_getter(setting, fmt):
         raise AssertionError("Unknown setting kind")
 
 
-def gen_pred_getter(pred, fmt):
+def gen_pred_getter(pred, sgrp, fmt):
     """
     Emit a getter for a pre-computed predicate.
     """
     fmt.doc_comment('Computed predicate `{}`.'.format(pred.rust_predicate(0)))
     proto = 'pub fn {}(&self) -> bool'.format(pred.name)
     with fmt.indented(proto + ' {', '}'):
-        fmt.line('(self.bytes[{}] & (1 << {})) != 0'.format(
-            pred.byte_offset,
-            pred.bit_offset))
+        fmt.line(
+                'self.numbered_predicate({})'
+                .format(sgrp.predicate_number[pred]))
 
 
 def gen_getters(sgrp, fmt):
@@ -116,10 +70,16 @@ def gen_getters(sgrp, fmt):
     """
     fmt.doc_comment("User-defined settings.")
     with fmt.indented('impl Flags {', '}'):
+        # Dynamic numbered predicate getter.
+        with fmt.indented(
+                'pub fn numbered_predicate(&self, p: usize) -> bool {', '}'):
+            fmt.line(
+                    'self.bytes[{} + p/8] & (1 << (p%8)) != 0'
+                    .format(sgrp.boolean_offset))
         for setting in sgrp.settings:
-            gen_getter(setting, fmt)
-        for pred in sgrp.predicates:
-            gen_pred_getter(pred, fmt)
+            gen_getter(setting, sgrp, fmt)
+        for pred in sgrp.named_predicates:
+            gen_pred_getter(pred, sgrp, fmt)
 
 
 def gen_descriptors(sgrp, fmt):
@@ -175,11 +135,11 @@ def gen_descriptors(sgrp, fmt):
                 fmt.line('{},'.format(h.descriptor_index))
 
 
-def gen_template(sgrp, settings_size, fmt):
+def gen_template(sgrp, fmt):
     """
     Emit a Template constant.
     """
-    v = [0] * settings_size
+    v = [0] * sgrp.settings_size
     for setting in sgrp.settings:
         v[setting.byte_offset] |= setting.default_byte()
 
@@ -217,7 +177,7 @@ def gen_display(sgrp, fmt):
             fmt.line('Ok(())')
 
 
-def gen_constructor(sgrp, settings_size, byte_size, parent, fmt):
+def gen_constructor(sgrp, parent, fmt):
     """
     Generate a Flags constructor.
     """
@@ -230,14 +190,14 @@ def gen_constructor(sgrp, settings_size, byte_size, parent, fmt):
         with fmt.indented(
                 'pub fn new({}) -> Flags {{'.format(args), '}'):
             fmt.line('let bvec = builder.finish("{}");'.format(sgrp.name))
-            fmt.line('let mut bytes = [0; {}];'.format(byte_size))
-            fmt.line('assert_eq!(bvec.len(), {});'.format(settings_size))
+            fmt.line('let mut bytes = [0; {}];'.format(sgrp.byte_size()))
+            fmt.line('assert_eq!(bvec.len(), {});'.format(sgrp.settings_size))
             with fmt.indented(
                     'for (i, b) in bvec.into_iter().enumerate() {', '}'):
                 fmt.line('bytes[i] = b;')
 
             # Stop here without predicates.
-            if len(sgrp.predicates) == 0:
+            if len(sgrp.predicate_number) == sgrp.boolean_settings:
                 fmt.line('Flags { bytes: bytes }')
                 return
 
@@ -246,15 +206,24 @@ def gen_constructor(sgrp, settings_size, byte_size, parent, fmt):
                     'let mut {} = Flags {{ bytes: bytes }};'
                     .format(sgrp.name))
 
-            for pred in sgrp.predicates:
-                fmt.comment('Precompute: {}.'.format(pred.name))
+            for pred, number in sgrp.predicate_number.items():
+                # Don't compute our own settings.
+                if number < sgrp.boolean_settings:
+                    continue
+                if pred.name:
+                    fmt.comment(
+                            'Precompute #{} ({}).'.format(number, pred.name))
+                else:
+                    fmt.comment('Precompute #{}.'.format(number))
                 with fmt.indented(
                         'if {} {{'.format(pred.rust_predicate(0)),
                         '}'):
                     fmt.line(
                             '{}.bytes[{}] |= 1 << {};'
                             .format(
-                                sgrp.name, pred.byte_offset, pred.bit_offset))
+                                sgrp.name,
+                                sgrp.boolean_offset + number // 8,
+                                number % 8))
 
             fmt.line(sgrp.name)
 
@@ -263,18 +232,16 @@ def gen_group(sgrp, fmt):
     """
     Generate a Flags struct representing `sgrp`.
     """
-    settings_size, byte_size = layout_group(sgrp)
-
     fmt.line('#[derive(Clone)]')
     fmt.doc_comment('Flags group `{}`.'.format(sgrp.name))
     with fmt.indented('pub struct Flags {', '}'):
-        fmt.line('bytes: [u8; {}],'.format(byte_size))
+        fmt.line('bytes: [u8; {}],'.format(sgrp.byte_size()))
 
-    gen_constructor(sgrp, settings_size, byte_size, None, fmt)
+    gen_constructor(sgrp, None, fmt)
     gen_enum_types(sgrp, fmt)
     gen_getters(sgrp, fmt)
     gen_descriptors(sgrp, fmt)
-    gen_template(sgrp, settings_size, fmt)
+    gen_template(sgrp, fmt)
     gen_display(sgrp, fmt)
 
 
