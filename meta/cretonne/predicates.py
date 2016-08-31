@@ -66,12 +66,12 @@ class Predicate(object):
         assert self.context, "Incompatible predicate parts"
 
     def __str__(self):
-        s = '{}({})'.format(
-                type(self).__name__,
-                ' ,'.join(map(str, self.parts)))
         if self.name:
-            s = '{}={}'.format(self.name, s)
-        return s
+            return '{}.{}'.format(self.context.name, self.name)
+        else:
+            return '{}({})'.format(
+                    type(self).__name__,
+                    ', '.join(map(str, self.parts)))
 
     def predicate_context(self):
         return self.context

@@ -35,6 +35,9 @@ class Setting(object):
         self.byte_offset = None
         self.group = SettingGroup.append(self)
 
+    def __str__(self):
+        return '{}.{}'.format(self.group.name, self.name)
+
     def predicate_context(self):
         """
         Return the context where this setting can be evaluated as a (leaf)
