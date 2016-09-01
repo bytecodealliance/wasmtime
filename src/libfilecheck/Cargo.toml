@@ -1,0 +1,12 @@
+[package]
+authors = ["The Cretonne Project Developers"]
+name = "filecheck"
+version = "0.0.0"
+publish = false
+
+[lib]
+name = "filecheck"
+path = "lib.rs"
+
+[dependencies]
+regex = "0.1.71"
