@@ -16,6 +16,6 @@ pub use ir::entities::{Ebb, Inst, Value, StackSlot, JumpTable};
 pub use ir::instructions::{Opcode, InstructionData};
 pub use ir::stackslot::StackSlotData;
 pub use ir::jumptable::JumpTableData;
-pub use ir::dfg::DataFlowGraph;
+pub use ir::dfg::{DataFlowGraph, ValueDef};
 pub use ir::layout::Layout;
 pub use ir::function::Function;

@@ -2,7 +2,7 @@
 
 use ir::{Function, Ebb, Inst, Opcode};
 use ir::entities::NO_VALUE;
-use ir::instructions::{InstructionData, VariableArgs, JumpData, BranchData};
+use ir::instructions::{InstructionData, ReturnData, VariableArgs, JumpData, BranchData};
 use ir::types;
 
 pub fn jump(func: &mut Function, dest: Ebb) -> Inst {
@@ -25,5 +25,13 @@ pub fn branch(func: &mut Function, dest: Ebb) -> Inst {
             destination: dest,
             arguments: VariableArgs::new(),
         }),
+    })
+}
+
+pub fn ret(func: &mut Function) -> Inst {
+    func.dfg.make_inst(InstructionData::Return {
+        opcode: Opcode::Return,
+        ty: types::VOID,
+        data: Box::new(ReturnData { args: VariableArgs::new() }),
     })
 }

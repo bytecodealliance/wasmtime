@@ -11,3 +11,6 @@ build = "build.rs"
 [lib]
 name = "cretonne"
 path = "lib.rs"
+
+[dependencies]
+regex = "0.1.71"

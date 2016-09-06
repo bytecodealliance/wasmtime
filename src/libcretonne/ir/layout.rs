@@ -55,7 +55,7 @@ impl Layout {
 /// can only be removed from the layout when it is empty.
 ///
 /// Since every EBB must end with a terminator instruction which cannot fall through, the layout of
-/// EBBs does not affect the semantics of the program.
+/// EBBs do not affect the semantics of the program.
 ///
 impl Layout {
     /// Is `ebb` currently part of the layout?
@@ -186,6 +186,11 @@ impl Layout {
             self.insts[ebb_node.last_inst].next = inst;
         }
         ebb_node.last_inst = inst;
+    }
+
+    /// Fetch an ebb's last instruction.
+    pub fn last_inst(&self, ebb: Ebb) -> Inst {
+        self.ebbs[ebb].last_inst
     }
 
     /// Insert `inst` before the instruction `before` in the same EBB.

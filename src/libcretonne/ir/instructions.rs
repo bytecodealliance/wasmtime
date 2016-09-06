@@ -349,6 +349,16 @@ impl InstructionData {
             _ => BranchInfo::NotABranch,
         }
     }
+
+    /// Return true if an instruction is terminating, or false otherwise.
+    pub fn is_terminating<'a>(&'a self) -> bool {
+        match self {
+            &InstructionData::Jump { .. } => true,
+            &InstructionData::Return { .. } => true,
+            &InstructionData::Nullary { .. } => true,
+            _ => false,
+        }
+    }
 }
 
 /// Information about branch and jump instructions.
