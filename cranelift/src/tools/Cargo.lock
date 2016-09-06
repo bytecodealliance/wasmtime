@@ -21,6 +21,9 @@ dependencies = [
 [[package]]
 name = "cretonne"
 version = "0.0.0"
+dependencies = [
+ "regex 0.1.71 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "cretonne-reader"
