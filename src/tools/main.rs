@@ -3,6 +3,7 @@ extern crate cretonne;
 extern crate cton_reader;
 extern crate docopt;
 extern crate rustc_serialize;
+extern crate filecheck;
 
 use cretonne::VERSION;
 use docopt::Docopt;
@@ -12,26 +13,31 @@ use std::process;
 
 mod cat;
 mod print_cfg;
+mod rsfilecheck;
 
 const USAGE: &'static str = "
 Cretonne code generator utility
 
 Usage:
     cton-util cat <file>...
+    cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
     cton-util --help | --version
 
 Options:
-    -h, --help  print this help message
-    --version   print the Cretonne version
+    -v, --verbose  be more verbose
+    -h, --help     print this help message
+    --version      print the Cretonne version
 
 ";
 
 #[derive(RustcDecodable, Debug)]
 struct Args {
     cmd_cat: bool,
+    cmd_filecheck: bool,
     cmd_print_cfg: bool,
     arg_file: Vec<String>,
+    flag_verbose: bool,
 }
 
 /// A command either succeeds or fails with an error message.
@@ -51,6 +57,8 @@ fn cton_util() -> CommandResult {
     // Find the sub-command to execute.
     if args.cmd_cat {
         cat::run(args.arg_file)
+    } else if args.cmd_filecheck {
+        rsfilecheck::run(args.arg_file, args.flag_verbose)
     } else if args.cmd_print_cfg {
         print_cfg::run(args.arg_file)
     } else {

@@ -5,6 +5,7 @@ dependencies = [
  "cretonne 0.0.0",
  "cretonne-reader 0.0.0",
  "docopt 0.6.80 (registry+https://github.com/rust-lang/crates.io-index)",
+ "filecheck 0.0.0",
  "glob 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 0.1.71 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.19 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -40,6 +41,13 @@ dependencies = [
  "regex 0.1.71 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "strsim 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "filecheck"
+version = "0.0.0"
+dependencies = [
+ "regex 0.1.71 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

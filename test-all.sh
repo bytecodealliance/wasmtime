@@ -40,7 +40,7 @@ else
     echo "If a newer version of rustfmt is available, update this script."
 fi
 
-PKGS="cretonne cretonne-reader cretonne-tools"
+PKGS="cretonne cretonne-reader cretonne-tools filecheck"
 cd "$topdir/src/tools"
 for PKG in $PKGS
 do
