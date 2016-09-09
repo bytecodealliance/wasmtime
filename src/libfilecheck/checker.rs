@@ -5,6 +5,7 @@ use regex::{Regex, Captures};
 use std::collections::HashMap;
 use std::cmp::max;
 use std::fmt::{self, Display, Formatter};
+use MatchRange;
 
 // The different kinds of directives we support.
 enum Directive {
@@ -259,19 +260,19 @@ impl<'a> State<'a> {
     }
 
     // Get the range in text to be matched by a `check:`.
-    fn check(&self) -> (usize, usize) {
+    fn check(&self) -> MatchRange {
         (self.max_match, self.text.len())
     }
 
     // Get the range in text to be matched by a `sameln:`.
-    fn sameln(&self) -> (usize, usize) {
+    fn sameln(&self) -> MatchRange {
         let b = self.max_match;
         let e = self.bol(b);
         (b, e)
     }
 
     // Get the range in text to be matched by a `nextln:`.
-    fn nextln(&self) -> (usize, usize) {
+    fn nextln(&self) -> MatchRange {
         let b = self.bol(self.max_match);
         let e = self.bol(b);
         (b, e)
@@ -290,16 +291,13 @@ impl<'a> State<'a> {
     }
 
     // Get the range in text to be matched by a `unordered:` directive.
-    fn unordered(&self, pat: &Pattern) -> (usize, usize) {
+    fn unordered(&self, pat: &Pattern) -> MatchRange {
         (self.unordered_begin(pat), self.text.len())
     }
 
     // Search for `pat` in `range`, return the range matched.
     // After a positive match, update variable definitions, if any.
-    fn match_positive(&mut self,
-                      pat: &Pattern,
-                      range: (usize, usize))
-                      -> Result<Option<(usize, usize)>> {
+    fn match_positive(&mut self, pat: &Pattern, range: MatchRange) -> Result<Option<MatchRange>> {
         let rx = try!(pat.resolve(self));
         let txt = &self.text[range.0..range.1];
         let defs = pat.defs();
