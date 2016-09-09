@@ -246,4 +246,4 @@ mod pattern;
 mod checker;
 
 /// The range of a match in the input text.
-type MatchRange = (usize, usize);
+pub type MatchRange = (usize, usize);
