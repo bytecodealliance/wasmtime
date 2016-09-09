@@ -16,9 +16,7 @@ fi
 declare -a fails
 
 for testcase in $(find cfg -name '*.cton'); do
-    annotations=$(cat $testcase | awk /';;;;'/ | awk -F ";;;;" '{print $2}' | sort)
-    connections=$("${CTONUTIL}" print-cfg "$testcase" | awk /"->"/ | sort)
-    if diff -u <(echo $annotations) <(echo $connections); then
+    if "${CTONUTIL}" print-cfg "$testcase" | "${CTONUTIL}" filecheck "$testcase"; then
         echo OK $testcase
     else
         fails=(${fails[@]} "$testcase")

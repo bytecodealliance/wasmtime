@@ -1,12 +1,13 @@
 ; For testing cfg generation. This code is nonsense.
 
 function nonsense(i32, i32) -> f32 {
+; check: digraph nonsense {
 
 ebb0(v1: i32, v2: i32):
     v3 = f64const 0x0.0
-    brz v2, ebb2            ;;;; ebb0:inst1 -> ebb2
+    brz v2, ebb2            ; unordered: ebb0:inst1 -> ebb2
     v4 = iconst.i32 0
-    jump ebb1(v4)           ;;;; ebb0:inst3 -> ebb1
+    jump ebb1(v4)           ; unordered: ebb0:inst3 -> ebb1
 
 ebb1(v5: i32):
     v6 = imul_imm v5, 4
@@ -17,7 +18,7 @@ ebb1(v5: i32):
     v11 = fadd v9, v10
     v12 = iadd_imm v5, 1
     v13 = icmp ult, v12, v2
-    brnz v13, ebb1(v12)     ;;;; ebb1:inst12 -> ebb1
+    brnz v13, ebb1(v12)     ; unordered: ebb1:inst12 -> ebb1
     v14 = f64const 0.0
     v15 = f64const 0.0
     v16 = fdiv v14, v15
