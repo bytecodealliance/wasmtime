@@ -244,3 +244,6 @@ mod error;
 mod variable;
 mod pattern;
 mod checker;
+
+/// The range of a match in the input text.
+type MatchRange = (usize, usize);
