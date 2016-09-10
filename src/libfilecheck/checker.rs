@@ -302,13 +302,11 @@ impl<'a> State<'a> {
     // Get the beginning of the range in text to be matched by a `unordered:` or `not:` directive.
     // The unordered directive must match after the directives that define the variables used.
     fn unordered_begin(&self, pat: &Pattern) -> usize {
-        let mut from = self.last_ordered;
-        for part in pat.parts() {
-            if let Some(var) = part.ref_var() {
-                from = max(from, self.def_offset(var));
-            }
-        }
-        from
+        pat.parts()
+            .iter()
+            .filter_map(|part| part.ref_var())
+            .map(|var| self.def_offset(var))
+            .fold(self.last_ordered, max)
     }
 
     // Get the range in text to be matched by a `unordered:` directive.
