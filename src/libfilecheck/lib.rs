@@ -244,6 +244,7 @@ mod error;
 mod variable;
 mod pattern;
 mod checker;
+mod explain;
 
 /// The range of a match in the input text.
 pub type MatchRange = (usize, usize);

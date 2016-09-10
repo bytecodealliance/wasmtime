@@ -20,10 +20,21 @@ pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
     let mut buffer = String::new();
     try!(io::stdin().read_to_string(&mut buffer).map_err(|e| format!("stdin: {}", e)));
 
-    if try!(checker.check(&buffer, NO_VARIABLES).map_err(|e| e.to_string())) {
+    if verbose {
+        let (success, explain) = try!(checker.explain(&buffer, NO_VARIABLES)
+            .map_err(|e| e.to_string()));
+        print!("{}", explain);
+        if success {
+            println!("OK");
+            Ok(())
+        } else {
+            Err("Check failed".to_string())
+        }
+    } else if try!(checker.check(&buffer, NO_VARIABLES).map_err(|e| e.to_string())) {
         Ok(())
     } else {
-        // TODO: We need to do better than this.
+        let (_, explain) = try!(checker.explain(&buffer, NO_VARIABLES).map_err(|e| e.to_string()));
+        print!("{}", explain);
         Err("Check failed".to_string())
     }
 }
