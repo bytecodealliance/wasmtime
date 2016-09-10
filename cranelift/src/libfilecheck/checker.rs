@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::cmp::max;
 use std::fmt::{self, Display, Formatter};
 use MatchRange;
+use explain::{Recorder, Explainer};
 
 // The different kinds of directives we support.
 enum Directive {
@@ -146,12 +147,24 @@ impl Checker {
     /// This returns `true` if the text matches all the directives, `false` if it doesn't.
     /// An error is only returned if there is a problem with the directives.
     pub fn check(&self, text: &str, vars: &VariableMap) -> Result<bool> {
-        let mut state = State::new(text, vars);
+        self.run(text, vars, &mut ())
+    }
+
+    /// Explain how directives are matched against the input text.
+    pub fn explain(&self, text: &str, vars: &VariableMap) -> Result<(bool, String)> {
+        let mut expl = Explainer::new(text);
+        let success = try!(self.run(text, vars, &mut expl));
+        expl.finish();
+        Ok((success, expl.to_string()))
+    }
+
+    fn run(&self, text: &str, vars: &VariableMap, recorder: &mut Recorder) -> Result<bool> {
+        let mut state = State::new(text, vars, recorder);
 
         // For each pending `not:` check, store (begin-offset, regex).
         let mut nots = Vec::new();
 
-        for dct in &self.directives {
+        for (dct_idx, dct) in self.directives.iter().enumerate() {
             let (pat, range) = match *dct {
                 Directive::Check(ref pat) => (pat, state.check()),
                 Directive::SameLn(ref pat) => (pat, state.sameln()),
@@ -164,7 +177,7 @@ impl Checker {
                     // The `not:` directives test the same range as `unordered:` directives. In
                     // particular, if they refer to defined variables, their range is restricted to
                     // the text following the match that defined the variable.
-                    nots.push((state.unordered_begin(pat), try!(pat.resolve(&state))));
+                    nots.push((dct_idx, state.unordered_begin(pat), try!(pat.resolve(&state))));
                     continue;
                 }
                 Directive::Regex(ref var, ref rx) => {
@@ -177,6 +190,7 @@ impl Checker {
                 }
             };
             // Check if `pat` matches in `range`.
+            state.recorder.directive(dct_idx);
             if let Some((match_begin, match_end)) = try!(state.match_positive(pat, range)) {
                 if let &Directive::Unordered(_) = dct {
                     // This was an unordered unordered match.
@@ -188,11 +202,14 @@ impl Checker {
                     state.max_match = match_end;
 
                     // Verify any pending `not:` directives now that we know their range.
-                    for (not_begin, rx) in nots.drain(..) {
-                        if let Some(_) = rx.find(&text[not_begin..match_begin]) {
+                    for (not_idx, not_begin, rx) in nots.drain(..) {
+                        state.recorder.directive(not_idx);
+                        if let Some((s, e)) = rx.find(&text[not_begin..match_begin]) {
                             // Matched `not:` pattern.
-                            // TODO: Use matched range for an error message.
+                            state.recorder.matched_not(rx.as_str(), (not_begin + s, not_begin + e));
                             return Ok(false);
+                        } else {
+                            state.recorder.missed_not(rx.as_str(), (not_begin, match_begin));
                         }
                     }
                 }
@@ -203,7 +220,8 @@ impl Checker {
         }
 
         // Verify any pending `not:` directives after the last ordered directive.
-        for (not_begin, rx) in nots.drain(..) {
+        for (not_idx, not_begin, rx) in nots.drain(..) {
+            state.recorder.directive(not_idx);
             if let Some(_) = rx.find(&text[not_begin..]) {
                 // Matched `not:` pattern.
                 // TODO: Use matched range for an error message.
@@ -224,8 +242,10 @@ pub struct VarDef {
 }
 
 struct State<'a> {
-    env_vars: &'a VariableMap,
     text: &'a str,
+    env_vars: &'a VariableMap,
+    recorder: &'a mut Recorder,
+
     vars: HashMap<String, VarDef>,
     // Offset after the last ordered match. This does not include recent unordered matches.
     last_ordered: usize,
@@ -234,10 +254,11 @@ struct State<'a> {
 }
 
 impl<'a> State<'a> {
-    fn new(text: &'a str, env_vars: &'a VariableMap) -> State<'a> {
+    fn new(text: &'a str, env_vars: &'a VariableMap, recorder: &'a mut Recorder) -> State<'a> {
         State {
             text: text,
             env_vars: env_vars,
+            recorder: recorder,
             vars: HashMap::new(),
             last_ordered: 0,
             max_match: 0,
@@ -309,8 +330,10 @@ impl<'a> State<'a> {
             rx.captures(txt).map(|caps| {
                 let matched_range = caps.pos(0).expect("whole expression must match");
                 for var in defs {
+                    let txtval = caps.name(var).unwrap_or("");
+                    self.recorder.defined_var(var, txtval);
                     let vardef = VarDef {
-                        value: Value::Text(caps.name(var).unwrap_or("").to_string()),
+                        value: Value::Text(txtval.to_string()),
                         // This offset is the end of the whole matched pattern, not just the text
                         // defining the variable.
                         offset: range.0 + matched_range.1,
@@ -320,7 +343,14 @@ impl<'a> State<'a> {
                 matched_range
             })
         };
-        Ok(matched_range.map(|(b, e)| (range.0 + b, range.0 + e)))
+        Ok(if let Some((b, e)) = matched_range {
+            let r = (range.0 + b, range.0 + e);
+            self.recorder.matched_check(rx.as_str(), r);
+            Some(r)
+        } else {
+            self.recorder.missed_check(rx.as_str(), range);
+            None
+        })
     }
 }
 

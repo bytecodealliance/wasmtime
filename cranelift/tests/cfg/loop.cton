@@ -2,12 +2,14 @@
 
 function nonsense(i32, i32) -> f32 {
 ; check: digraph nonsense {
+; regex: I=\binst\d+\b
+; check: label="{ebb0 | <$(BRZ=$I)>brz ebb2 | <$(JUMP=$I)>jump ebb1}"]
 
 ebb0(v1: i32, v2: i32):
     v3 = f64const 0x0.0
-    brz v2, ebb2            ; unordered: ebb0:inst1 -> ebb2
+    brz v2, ebb2            ; unordered: ebb0:$BRZ -> ebb2
     v4 = iconst.i32 0
-    jump ebb1(v4)           ; unordered: ebb0:inst3 -> ebb1
+    jump ebb1(v4)           ; unordered: ebb0:$JUMP -> ebb1
 
 ebb1(v5: i32):
     v6 = imul_imm v5, 4
