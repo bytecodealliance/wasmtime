@@ -54,8 +54,43 @@
 
 use ir::{Function, ValueDef, Ebb, Inst};
 use ir::instructions::InstructionFormat;
+use ir::entities::AnyEntity;
+use std::fmt::{self, Display, Formatter};
+use std::result;
 
-pub fn verify_function(func: &Function) -> Result<(), String> {
+/// A verifier error.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Error {
+    pub location: AnyEntity,
+    pub message: String,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}: {}", self.location, self.message)
+    }
+}
+
+pub type Result<T> = result::Result<T, Error>;
+
+// Create an `Err` variant of `Result<X>` from a location and `format!` args.
+macro_rules! err {
+    ( $loc:expr, $msg:expr ) => {
+        Err(Error {
+            location: $loc.into(),
+            message: String::from($msg),
+        })
+    };
+
+    ( $loc:expr, $fmt:expr, $( $arg:expr ),+ ) => {
+        Err(Error {
+            location: $loc.into(),
+            message: format!( $fmt, $( $arg ),+ ),
+        })
+    };
+}
+
+pub fn verify_function(func: &Function) -> Result<()> {
     Verifier::new(func).run()
 }
 
@@ -68,25 +103,25 @@ impl<'a> Verifier<'a> {
         Verifier { func: func }
     }
 
-    fn ebb_integrity(&self, ebb: Ebb, inst: Inst) -> Result<(), String> {
+    fn ebb_integrity(&self, ebb: Ebb, inst: Inst) -> Result<()> {
 
         let is_terminator = self.func.dfg[inst].is_terminating();
         let is_last_inst = self.func.layout.last_inst(ebb) == inst;
 
         if is_terminator && !is_last_inst {
             // Terminating instructions only occur at the end of blocks.
-            return Err(format!("A terminating instruction was encountered before the \
-                                end of ebb {:?}!",
-                               ebb));
+            return err!(inst,
+                        "a terminator instruction was encountered before the end of {}",
+                        ebb);
         }
         if is_last_inst && !is_terminator {
-            return Err(format!("Block {:?} does not end in a terminating instruction!", ebb));
+            return err!(ebb, "block does not end in a terminator instruction!");
         }
 
         // Instructions belong to the correct ebb.
         let inst_ebb = self.func.layout.inst_ebb(inst);
         if inst_ebb != Some(ebb) {
-            return Err(format!("{:?} should belong to {:?} not {:?}", inst, ebb, inst_ebb));
+            return err!(inst, "should belong to {} not {:?}", ebb, inst_ebb);
         }
 
         // Arguments belong to the correct ebb.
@@ -94,11 +129,11 @@ impl<'a> Verifier<'a> {
             match self.func.dfg.value_def(arg) {
                 ValueDef::Arg(arg_ebb, _) => {
                     if ebb != arg_ebb {
-                        return Err(format!("{:?} does not belong to {:?}", arg, ebb));
+                        return err!(arg, "does not belong to {}", ebb);
                     }
                 }
                 _ => {
-                    return Err("Expected an argument, found a result!".to_string());
+                    return err!(arg, "expected an argument, found a result");
                 }
             }
         }
@@ -106,18 +141,18 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn instruction_integrity(&self, inst: Inst) -> Result<(), String> {
+    fn instruction_integrity(&self, inst: Inst) -> Result<()> {
         let inst_data = &self.func.dfg[inst];
 
         // The instruction format matches the opcode
         if inst_data.opcode().format() != Some(InstructionFormat::from(inst_data)) {
-            return Err("Instruction opcode doesn't match instruction format!".to_string());
+            return err!(inst, "instruction opcode doesn't match instruction format");
         }
 
         Ok(())
     }
 
-    pub fn run(&self) -> Result<(), String> {
+    pub fn run(&self) -> Result<()> {
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
                 try!(self.ebb_integrity(ebb, inst));
@@ -143,9 +178,9 @@ mod tests {
             let err_re = Regex::new($msg).unwrap();
             match $e {
                 Ok(_) => { panic!("Expected an error!") },
-                Err(err_msg) => {
-                    if !err_re.is_match(&err_msg) {
-                       panic!(format!("'{}' did not contain the pattern '{}'", err_msg, $msg));
+                Err(Error { location, message } ) => {
+                    if !err_re.is_match(&message) {
+                       panic!(format!("'{}' did not contain the pattern '{}'", message, $msg));
                     }
                 }
             }

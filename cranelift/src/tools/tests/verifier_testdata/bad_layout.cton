@@ -1,4 +1,4 @@
-function test(i32) {    ; Err(terminating)
+function test(i32) {    ; Err(terminator)
     ebb0(v0: i32):
         jump ebb1
         return

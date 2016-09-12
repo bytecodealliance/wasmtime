@@ -259,7 +259,7 @@ impl Job {
 
         // Should we run the verifier before this test?
         if !context.verified && test.needs_verifier() {
-            try!(verify_function(&func));
+            try!(verify_function(&func).map_err(|e| e.to_string()));
             context.verified = true;
         }
 

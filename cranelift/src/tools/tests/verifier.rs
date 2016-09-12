@@ -41,7 +41,7 @@ fn verifier_tests_from_source(function_source: &str) {
         let result = Verifier::new(&func).run();
         match verifier_results[i] {
             Some(ref re) => {
-                assert_eq!(re.is_match(&result.err().unwrap()), true);
+                assert_eq!(re.is_match(&result.err().unwrap().message), true);
             },
             None => {
                 assert_eq!(result, Ok(()));
