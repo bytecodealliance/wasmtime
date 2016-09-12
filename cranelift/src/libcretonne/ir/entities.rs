@@ -245,6 +245,61 @@ impl Default for JumpTable {
     }
 }
 
+/// A reference to any of the entities defined in this module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum AnyEntity {
+    /// The whole function.
+    Function,
+    Ebb(Ebb),
+    Inst(Inst),
+    Value(Value),
+    StackSlot(StackSlot),
+    JumpTable(JumpTable),
+}
+
+impl Display for AnyEntity {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        match *self {
+            AnyEntity::Function => write!(fmt, "function"),
+            AnyEntity::Ebb(r) => r.fmt(fmt),
+            AnyEntity::Inst(r) => r.fmt(fmt),
+            AnyEntity::Value(r) => r.fmt(fmt),
+            AnyEntity::StackSlot(r) => r.fmt(fmt),
+            AnyEntity::JumpTable(r) => r.fmt(fmt),
+        }
+    }
+}
+
+impl From<Ebb> for AnyEntity {
+    fn from(r: Ebb) -> AnyEntity {
+        AnyEntity::Ebb(r)
+    }
+}
+
+impl From<Inst> for AnyEntity {
+    fn from(r: Inst) -> AnyEntity {
+        AnyEntity::Inst(r)
+    }
+}
+
+impl From<Value> for AnyEntity {
+    fn from(r: Value) -> AnyEntity {
+        AnyEntity::Value(r)
+    }
+}
+
+impl From<StackSlot> for AnyEntity {
+    fn from(r: StackSlot) -> AnyEntity {
+        AnyEntity::StackSlot(r)
+    }
+}
+
+impl From<JumpTable> for AnyEntity {
+    fn from(r: JumpTable) -> AnyEntity {
+        AnyEntity::JumpTable(r)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
