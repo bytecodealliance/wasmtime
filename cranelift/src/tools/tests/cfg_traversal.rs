@@ -1,13 +1,13 @@
 extern crate cretonne;
 extern crate cton_reader;
 
-use self::cton_reader::parser::Parser;
+use self::cton_reader::parse_functions;
 use self::cretonne::ir::Ebb;
 use self::cretonne::cfg::ControlFlowGraph;
 use self::cretonne::entity_map::EntityMap;
 
 fn test_reverse_postorder_traversal(function_source: &str, ebb_order: Vec<u32>) {
-    let func = &Parser::parse(function_source).unwrap()[0];
+    let func = &parse_functions(function_source).unwrap()[0];
     let cfg = ControlFlowGraph::new(&func);
     let ebbs = ebb_order.iter().map(|n| Ebb::with_number(*n).unwrap())
                                .collect::<Vec<Ebb>>();

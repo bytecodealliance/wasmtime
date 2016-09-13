@@ -21,6 +21,13 @@ use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArg
 
 pub use lexer::Location;
 
+/// Parse the entire `text` into a list of functions.
+///
+/// Any test commands or ISA declarations are ignored.
+pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
+    Parser::new(text).parse_function_list()
+}
+
 /// A parse error is returned when the parse failed.
 #[derive(Debug)]
 pub struct Error {
@@ -254,11 +261,6 @@ impl<'a> Parser<'a> {
             lookahead: None,
             loc: Location { line_number: 0 },
         }
-    }
-
-    /// Parse the entire string into a list of functions.
-    pub fn parse(text: &'a str) -> Result<Vec<Function>> {
-        Self::new(text).parse_function_list()
     }
 
     // Consume the current lookahead token and return it.

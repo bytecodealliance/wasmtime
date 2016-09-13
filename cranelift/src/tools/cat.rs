@@ -8,7 +8,7 @@ use std::io::{self, Read};
 
 use CommandResult;
 
-use cton_reader::parser::Parser;
+use cton_reader::parse_functions;
 use cretonne::write::write_function;
 
 pub fn run(files: Vec<String>) -> CommandResult {
@@ -26,7 +26,7 @@ fn cat_one(filename: String) -> CommandResult {
     let mut buffer = String::new();
     try!(file.read_to_string(&mut buffer)
         .map_err(|e| format!("Couldn't read {}: {}", filename, e)));
-    let items = try!(Parser::parse(&buffer).map_err(|e| format!("{}: {}", filename, e)));
+    let items = try!(parse_functions(&buffer).map_err(|e| format!("{}: {}", filename, e)));
 
     for (idx, func) in items.into_iter().enumerate() {
         if idx != 0 {
