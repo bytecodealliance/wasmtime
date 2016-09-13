@@ -94,9 +94,14 @@ impl<K, V> EntityMap<K, V>
     where K: EntityRef,
           V: PrimaryEntityData
 {
+    /// Get the key that will be assigned to the next pushed value.
+    pub fn next_key(&self) -> K {
+        K::new(self.elems.len())
+    }
+
     /// Append `v` to the mapping, assigning a new key which is returned.
     pub fn push(&mut self, v: V) -> K {
-        let k = K::new(self.elems.len());
+        let k = self.next_key();
         self.elems.push(v);
         k
     }
