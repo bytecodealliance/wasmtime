@@ -18,6 +18,7 @@ use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::{NO_EBB, NO_VALUE};
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs, JumpData,
                                  BranchData, ReturnData};
+use testfile::TestFile;
 
 pub use lexer::Location;
 
@@ -26,6 +27,14 @@ pub use lexer::Location;
 /// Any test commands or ISA declarations are ignored.
 pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
     Parser::new(text).parse_function_list()
+}
+
+/// Parse the entire `text` as a test case file.
+///
+/// The returned `TestFile` contains direct references to substrings of `text`.
+pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
+    Parser::new(text);
+    unimplemented!()
 }
 
 /// A parse error is returned when the parse failed.
