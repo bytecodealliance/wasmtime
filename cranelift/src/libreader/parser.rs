@@ -10,15 +10,16 @@ use std::result;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use std::u32;
+use std::mem;
 use lexer::{self, Lexer, Token};
 use cretonne::ir::{Function, Ebb, Inst, Opcode, Value, Type, FunctionName, StackSlot,
                    StackSlotData, JumpTable, JumpTableData};
 use cretonne::ir::types::{VOID, Signature, ArgumentType, ArgumentExtension};
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
-use cretonne::ir::entities::{NO_EBB, NO_VALUE};
+use cretonne::ir::entities::{AnyEntity, NO_EBB, NO_INST, NO_VALUE};
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs, JumpData,
                                  BranchData, ReturnData};
-use testfile::TestFile;
+use testfile::{TestFile, DetailedFunction, Comment};
 
 pub use lexer::Location;
 
@@ -26,7 +27,9 @@ pub use lexer::Location;
 ///
 /// Any test commands or ISA declarations are ignored.
 pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
-    Parser::new(text).parse_function_list()
+    Parser::new(text)
+        .parse_function_list()
+        .map(|list| list.into_iter().map(|dfunc| dfunc.function).collect())
 }
 
 /// Parse the entire `text` as a test case file.
@@ -79,6 +82,13 @@ pub struct Parser<'a> {
 
     // Location of lookahead.
     loc: Location,
+
+    // The currently active entity that should be associated with collected comments, or `None` if
+    // comments are ignored.
+    comment_entity: Option<AnyEntity>,
+
+    // Comments collected so far.
+    comments: Vec<Comment<'a>>,
 }
 
 // Context for resolving references when parsing a single function.
@@ -269,6 +279,8 @@ impl<'a> Parser<'a> {
             lex_error: None,
             lookahead: None,
             loc: Location { line_number: 0 },
+            comment_entity: None,
+            comments: Vec::new(),
         }
     }
 
@@ -283,8 +295,14 @@ impl<'a> Parser<'a> {
             match self.lex.next() {
                 Some(Ok(lexer::LocatedToken { token, location })) => {
                     match token {
-                        Token::Comment(_) => {
-                            // Ignore comments.
+                        Token::Comment(text) => {
+                            // Gather comments, associate them with `comment_entity`.
+                            if let Some(entity) = self.comment_entity {
+                                self.comments.push(Comment {
+                                    entity: entity,
+                                    text: text,
+                                });
+                            }
                         }
                         _ => self.lookahead = Some(token),
                     }
@@ -299,6 +317,22 @@ impl<'a> Parser<'a> {
             }
         }
         return self.lookahead;
+    }
+
+    // Begin gathering comments associated with `entity`.
+    fn gather_comments<E: Into<AnyEntity>>(&mut self, entity: E) {
+        self.comment_entity = Some(entity.into());
+    }
+
+    // Rewrite the entity of the last added comments from `old` to `new`.
+    // Also switch to collecting future comments for `new`.
+    fn rewrite_last_comment_entities<E: Into<AnyEntity>>(&mut self, old: E, new: E) {
+        let old = old.into();
+        let new = new.into();
+        for comment in (&mut self.comments).into_iter().rev().take_while(|c| c.entity == old) {
+            comment.entity = new;
+        }
+        self.comment_entity = Some(new);
     }
 
     // Match and consume a token without payload.
@@ -450,7 +484,7 @@ impl<'a> Parser<'a> {
     /// Parse a list of function definitions.
     ///
     /// This is the top-level parse function matching the whole contents of a file.
-    pub fn parse_function_list(&mut self) -> Result<Vec<Function>> {
+    pub fn parse_function_list(&mut self) -> Result<Vec<DetailedFunction<'a>>> {
         let mut list = Vec::new();
         while self.token().is_some() {
             list.push(try!(self.parse_function()));
@@ -462,7 +496,13 @@ impl<'a> Parser<'a> {
     //
     // function ::= * function-spec "{" preamble function-body "}"
     //
-    fn parse_function(&mut self) -> Result<Function> {
+    fn parse_function(&mut self) -> Result<DetailedFunction<'a>> {
+        // Begin gathering comments.
+        // Make sure we don't include any comments before the `function` keyword.
+        self.token();
+        self.comments.clear();
+        self.gather_comments(AnyEntity::Function);
+
         let (name, sig) = try!(self.parse_function_spec());
         let mut ctx = Context::new(Function::with_name_signature(name, sig));
 
@@ -475,11 +515,19 @@ impl<'a> Parser<'a> {
         // function ::= function-spec "{" preamble function-body * "}"
         try!(self.match_token(Token::RBrace, "expected '}' after function body"));
 
+        // Collect any comments following the end of the function, then stop gathering comments.
+        self.gather_comments(AnyEntity::Function);
+        self.token();
+        self.comment_entity = None;
+
         // Rewrite references to values and EBBs after parsing everuthing to allow forward
         // references.
         try!(ctx.rewrite_references());
 
-        Ok(ctx.function)
+        Ok(DetailedFunction {
+            function: ctx.function,
+            comments: mem::replace(&mut self.comments, Vec::new()),
+        })
     }
 
     // Parse a function spec.
@@ -585,10 +633,12 @@ impl<'a> Parser<'a> {
         loop {
             try!(match self.token() {
                 Some(Token::StackSlot(..)) => {
+                    self.gather_comments(ctx.function.stack_slots.next_key());
                     self.parse_stack_slot_decl()
                         .and_then(|(num, dat)| ctx.add_ss(num, dat, &self.loc))
                 }
                 Some(Token::JumpTable(..)) => {
+                    self.gather_comments(ctx.function.jump_tables.next_key());
                     self.parse_jump_table_decl()
                         .and_then(|(num, dat)| ctx.add_jt(num, dat, &self.loc))
                 }
@@ -681,6 +731,7 @@ impl<'a> Parser<'a> {
     fn parse_extended_basic_block(&mut self, ctx: &mut Context) -> Result<()> {
         let ebb_num = try!(self.match_ebb("expected EBB header"));
         let ebb = try!(ctx.add_ebb(ebb_num, &self.loc));
+        self.gather_comments(ebb);
 
         if !self.optional(Token::Colon) {
             // ebb-header ::= Ebb(ebb) [ * ebb-args ] ":"
@@ -746,6 +797,10 @@ impl<'a> Parser<'a> {
     // inst-results ::= Value(v) { "," Value(vx) }
     //
     fn parse_instruction(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
+        // Collect comments for `NO_INST` while parsing the instruction, then rewrite after we
+        // allocate an instruction number.
+        self.gather_comments(NO_INST);
+
         // Result value numbers.
         let mut results = Vec::new();
 
@@ -804,6 +859,10 @@ impl<'a> Parser<'a> {
                         num_results,
                         results.len());
         }
+
+        // If we saw any comments while parsing the instruction, they will have been recorded as
+        // belonging to `NO_INST`.
+        self.rewrite_last_comment_entities(NO_INST, inst);
 
         // Now map the source result values to the just created instruction results.
         // Pass a reference to `ctx.values` instead of `ctx` itself since the `Values` iterator
@@ -1140,6 +1199,8 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
     use cretonne::ir::types::{self, ArgumentType, ArgumentExtension};
+    use cretonne::ir::entities::AnyEntity;
+    use testfile::Comment;
 
     #[test]
     fn argument_type() {
@@ -1184,7 +1245,8 @@ mod tests {
                                   ss1 = stack_slot 1
                                 }")
             .parse_function()
-            .unwrap();
+            .unwrap()
+            .function;
         assert_eq!(func.name, "foo");
         let mut iter = func.stack_slots.keys();
         let ss0 = iter.next().unwrap();
@@ -1213,7 +1275,8 @@ mod tests {
                                 ebb4(vx3: i32):
                                 }")
             .parse_function()
-            .unwrap();
+            .unwrap()
+            .function;
         assert_eq!(func.name, "ebbs");
 
         let mut ebbs = func.layout.ebbs();
@@ -1226,5 +1289,41 @@ mod tests {
         let arg0 = ebb4_args.next().unwrap();
         assert_eq!(func.dfg.value_type(arg0), types::I32);
         assert_eq!(ebb4_args.next(), None);
+    }
+
+    #[test]
+    fn comments() {
+        let dfunc = Parser::new("; before
+                                 function comment() { ; decl
+                                    ss10  = stack_slot 13 ; stackslot.
+                                    ; Still stackslot.
+                                    jt10 = jump_table ebb0
+                                    ; Jumptable
+                                 ebb0: ; Basic block
+                                 trap ; Instruction
+                                 } ; Trailing.
+                                 ; More trailing.")
+            .parse_function()
+            .unwrap();
+        assert_eq!(&dfunc.function.name, "comment");
+        assert_eq!(dfunc.comments.len(), 8); // no 'before' comment.
+        assert_eq!(dfunc.comments[0],
+                   Comment {
+                       entity: AnyEntity::Function,
+                       text: "; decl",
+                   });
+        assert_eq!(dfunc.comments[1].entity.to_string(), "ss0");
+        assert_eq!(dfunc.comments[2].entity.to_string(), "ss0");
+        assert_eq!(dfunc.comments[2].text, "; Still stackslot.");
+        assert_eq!(dfunc.comments[3].entity.to_string(), "jt0");
+        assert_eq!(dfunc.comments[3].text, "; Jumptable");
+        assert_eq!(dfunc.comments[4].entity.to_string(), "ebb0");
+        assert_eq!(dfunc.comments[4].text, "; Basic block");
+
+        assert_eq!(dfunc.comments[5].entity.to_string(), "inst0");
+        assert_eq!(dfunc.comments[5].text, "; Instruction");
+
+        assert_eq!(dfunc.comments[6].entity, AnyEntity::Function);
+        assert_eq!(dfunc.comments[7].entity, AnyEntity::Function);
     }
 }
