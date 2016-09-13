@@ -9,7 +9,7 @@ use regex::Regex;
 use std::fs::File;
 use std::io::Read;
 use self::cretonne::ir::Ebb;
-use self::cton_reader::parser::Parser;
+use self::cton_reader::parse_functions;
 use self::cretonne::ir::function::Function;
 use self::cretonne::entity_map::EntityMap;
 use self::cretonne::ir::entities::NO_INST;
@@ -69,7 +69,7 @@ fn dominator_tree_from_source(func: &Function, function_source: &str) -> Dominat
 
 fn test_dominator_tree(function_source: &str) {
 
-    let func = &Parser::parse(function_source).unwrap()[0];
+    let func = &parse_functions(function_source).unwrap()[0];
     let src_dtree = dominator_tree_from_source(&func, function_source);
 
     let cfg = ControlFlowGraph::new(&func);

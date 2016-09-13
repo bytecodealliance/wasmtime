@@ -5,8 +5,9 @@
 
 extern crate cretonne;
 
+pub use parser::{Result, parse_functions};
 pub use testcommand::{TestCommand, TestOption};
 
-pub mod lexer;
-pub mod parser;
+mod lexer;
+mod parser;
 mod testcommand;

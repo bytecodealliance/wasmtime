@@ -9,7 +9,7 @@ use CommandResult;
 use cretonne::ir::Function;
 use cretonne::cfg::ControlFlowGraph;
 use cretonne::ir::instructions::InstructionData;
-use cton_reader::parser::Parser;
+use cton_reader::parse_functions;
 
 pub fn run(files: Vec<String>) -> CommandResult {
     for (i, f) in files.into_iter().enumerate() {
@@ -160,7 +160,7 @@ fn print_cfg(filename: String) -> CommandResult {
     let mut buffer = String::new();
     try!(file.read_to_string(&mut buffer)
         .map_err(|e| format!("Couldn't read {}: {}", filename, e)));
-    let items = try!(Parser::parse(&buffer).map_err(|e| format!("{}: {}", filename, e)));
+    let items = try!(parse_functions(&buffer).map_err(|e| format!("{}: {}", filename, e)));
 
     let mut cfg_printer = CFGPrinter::new(stdout());
     for (idx, func) in items.into_iter().enumerate() {

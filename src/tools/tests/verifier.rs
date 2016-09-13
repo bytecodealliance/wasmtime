@@ -8,7 +8,7 @@ use glob::glob;
 use regex::Regex;
 use std::fs::File;
 use std::io::Read;
-use self::cton_reader::parser::Parser;
+use self::cton_reader::parse_functions;
 use self::cretonne::verifier::Verifier;
 
 /// Compile a function and run verifier tests based on specially formatted
@@ -37,7 +37,7 @@ fn verifier_tests_from_source(function_source: &str) {
 
     // Run the verifier against each function and compare the output
     // with the expected result (as determined above).
-    for (i, func) in Parser::parse(function_source).unwrap().into_iter().enumerate() {
+    for (i, func) in parse_functions(function_source).unwrap().into_iter().enumerate() {
         let result = Verifier::new(&func).run();
         match verifier_results[i] {
             Some(ref re) => {
