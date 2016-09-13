@@ -166,19 +166,23 @@ impl<'a> Lexer<'a> {
         token(tok, loc)
     }
 
-    // Scan a comment extending to the end of the current line.
-    fn scan_comment(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
+    /// Get the rest of the current line.
+    /// The next token returned by `next()` will be from the following lines.
+    pub fn rest_of_line(&mut self) -> &'a str {
         let begin = self.pos;
-        let loc = self.loc();
         loop {
             match self.next_ch() {
-                None | Some('\n') => {
-                    let text = &self.source[begin..self.pos];
-                    return token(Token::Comment(text), loc);
-                }
+                None | Some('\n') => return &self.source[begin..self.pos],
                 _ => {}
             }
         }
+    }
+
+    // Scan a comment extending to the end of the current line.
+    fn scan_comment(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
+        let loc = self.loc();
+        let text = self.rest_of_line();
+        return token(Token::Comment(text), loc);
     }
 
     // Scan a number token which can represent either an integer or floating point number.
