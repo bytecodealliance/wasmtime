@@ -20,6 +20,7 @@ use cretonne::ir::entities::{AnyEntity, NO_EBB, NO_INST, NO_VALUE};
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs, JumpData,
                                  BranchData, ReturnData};
 use testfile::{TestFile, DetailedFunction, Comment};
+use testcommand::TestCommand;
 
 pub use lexer::Location;
 
@@ -36,8 +37,11 @@ pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
 ///
 /// The returned `TestFile` contains direct references to substrings of `text`.
 pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
-    Parser::new(text);
-    unimplemented!()
+    let mut parser = Parser::new(text);
+    Ok(TestFile {
+        commands: parser.parse_test_commands(),
+        functions: try!(parser.parse_function_list()),
+    })
 }
 
 /// A parse error is returned when the parse failed.
@@ -289,6 +293,14 @@ impl<'a> Parser<'a> {
         self.lookahead.take().expect("No token to consume")
     }
 
+    // Consume the whole line following the current lookahead token.
+    // Return the text of the line tail.
+    fn consume_line(&mut self) -> &'a str {
+        let rest = self.lex.rest_of_line();
+        self.consume();
+        rest
+    }
+
     // Get the current lookahead token, after making sure there is one.
     fn token(&mut self) -> Option<Token<'a>> {
         while self.lookahead == None {
@@ -479,6 +491,15 @@ impl<'a> Parser<'a> {
         } else {
             err!(self.loc, err_msg)
         }
+    }
+
+    /// Parse a list of test commands.
+    pub fn parse_test_commands(&mut self) -> Vec<TestCommand<'a>> {
+        let mut list = Vec::new();
+        while self.token() == Some(Token::Identifier("test")) {
+            list.push(TestCommand::new(self.consume_line()));
+        }
+        list
     }
 
     /// Parse a list of function definitions.
@@ -1325,5 +1346,19 @@ mod tests {
 
         assert_eq!(dfunc.comments[6].entity, AnyEntity::Function);
         assert_eq!(dfunc.comments[7].entity, AnyEntity::Function);
+    }
+
+    #[test]
+    fn test_file() {
+        let tf = parse_test("; before
+                             test cfg option=5
+                             test verify
+                             function comment() {}")
+            .unwrap();
+        assert_eq!(tf.commands.len(), 2);
+        assert_eq!(tf.commands[0].command, "cfg");
+        assert_eq!(tf.commands[1].command, "verify");
+        assert_eq!(tf.functions.len(), 1);
+        assert_eq!(tf.functions[0].function.name, "comment");
     }
 }
