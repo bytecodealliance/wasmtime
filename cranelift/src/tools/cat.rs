@@ -3,11 +3,9 @@
 //! Read a sequence of Cretonne IL files and print them again to stdout. This has the effect of
 //! normalizing formatting and removing comments.
 
-use std::fs::File;
-use std::io::{self, Read};
-
+use std::io;
 use CommandResult;
-
+use utils::read_to_string;
 use cton_reader::parse_functions;
 use cretonne::write::write_function;
 
@@ -22,10 +20,7 @@ pub fn run(files: Vec<String>) -> CommandResult {
 }
 
 fn cat_one(filename: String) -> CommandResult {
-    let mut file = try!(File::open(&filename).map_err(|e| format!("{}: {}", filename, e)));
-    let mut buffer = String::new();
-    try!(file.read_to_string(&mut buffer)
-        .map_err(|e| format!("Couldn't read {}: {}", filename, e)));
+    let buffer = try!(read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e)));
     let items = try!(parse_functions(&buffer).map_err(|e| format!("{}: {}", filename, e)));
 
     for (idx, func) in items.into_iter().enumerate() {

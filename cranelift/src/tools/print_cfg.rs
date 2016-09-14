@@ -2,10 +2,10 @@
 //!
 //! Read a series of Cretonne IL files and print their control flow graphs
 //! in graphviz format.
-use std::fs::File;
-use std::io::{Read, Write, stdout};
+use std::io::{Write, stdout};
 
 use CommandResult;
+use utils::read_to_string;
 use cretonne::ir::Function;
 use cretonne::cfg::ControlFlowGraph;
 use cretonne::ir::instructions::InstructionData;
@@ -156,10 +156,7 @@ impl<T: Write> CFGPrinter<T> {
 }
 
 fn print_cfg(filename: String) -> CommandResult {
-    let mut file = try!(File::open(&filename).map_err(|e| format!("{}: {}", filename, e)));
-    let mut buffer = String::new();
-    try!(file.read_to_string(&mut buffer)
-        .map_err(|e| format!("Couldn't read {}: {}", filename, e)));
+    let buffer = try!(read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e)));
     let items = try!(parse_functions(&buffer).map_err(|e| format!("{}: {}", filename, e)));
 
     let mut cfg_printer = CFGPrinter::new(stdout());
