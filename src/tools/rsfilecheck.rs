@@ -1,6 +1,6 @@
 use CommandResult;
+use utils::read_to_string;
 use filecheck::{CheckerBuilder, Checker, NO_VARIABLES};
-use std::fs::File;
 use std::io::{self, Read};
 
 pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
@@ -40,11 +40,7 @@ pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
 }
 
 fn read_checkfile(filename: &str) -> Result<Checker, String> {
-    let mut file = try!(File::open(&filename).map_err(|e| format!("{}: {}", filename, e)));
-    let mut buffer = String::new();
-    try!(file.read_to_string(&mut buffer)
-        .map_err(|e| format!("Couldn't read {}: {}", filename, e)));
-
+    let buffer = try!(read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e)));
     let mut builder = CheckerBuilder::new();
     try!(builder.text(&buffer).map_err(|e| format!("{}: {}", filename, e)));
     Ok(builder.finish())

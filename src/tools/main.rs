@@ -10,6 +10,7 @@ use docopt::Docopt;
 use std::io::{self, Write};
 use std::process;
 
+mod utils;
 mod filetest;
 mod cat;
 mod print_cfg;
