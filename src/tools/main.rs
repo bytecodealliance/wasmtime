@@ -10,7 +10,7 @@ use docopt::Docopt;
 use std::io::{self, Write};
 use std::process;
 
-
+mod filetest;
 mod cat;
 mod print_cfg;
 mod rsfilecheck;
@@ -19,6 +19,7 @@ const USAGE: &'static str = "
 Cretonne code generator utility
 
 Usage:
+    cton-util test <file>...
     cton-util cat <file>...
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
@@ -33,6 +34,7 @@ Options:
 
 #[derive(RustcDecodable, Debug)]
 struct Args {
+    cmd_test: bool,
     cmd_cat: bool,
     cmd_filecheck: bool,
     cmd_print_cfg: bool,
@@ -55,7 +57,9 @@ fn cton_util() -> CommandResult {
         .unwrap_or_else(|e| e.exit());
 
     // Find the sub-command to execute.
-    if args.cmd_cat {
+    if args.cmd_test {
+        filetest::run(args.arg_file)
+    } else if args.cmd_cat {
         cat::run(args.arg_file)
     } else if args.cmd_filecheck {
         rsfilecheck::run(args.arg_file, args.flag_verbose)
