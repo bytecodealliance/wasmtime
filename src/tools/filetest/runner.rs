@@ -4,16 +4,36 @@
 //! scanning directories for tests.
 
 use std::ffi::OsStr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::error::Error;
+use std::mem;
+use std::panic::catch_unwind;
+use std::time;
 use CommandResult;
+use utils::read_to_string;
+use cton_reader::parse_test;
+
+type TestResult = Result<time::Duration, String>;
+
+#[derive(PartialEq, Eq, Debug)]
+enum QueueEntry {
+    New(PathBuf),
+    Running,
+    Done(PathBuf, TestResult),
+}
 
 pub struct TestRunner {
     // Directories that have not yet been scanned.
     dir_stack: Vec<PathBuf>,
 
     // Filenames of tests to run.
-    test_list: Vec<PathBuf>,
+    tests: Vec<QueueEntry>,
+
+    // Pointer into `tests` where the `New` entries begin.
+    new_tests: usize,
+
+    // Number of contiguous finished tests at the front of `tests`.
+    finished_tests: usize,
 
     errors: usize,
 }
@@ -23,7 +43,9 @@ impl TestRunner {
     pub fn new() -> TestRunner {
         TestRunner {
             dir_stack: Vec::new(),
-            test_list: Vec::new(),
+            tests: Vec::new(),
+            new_tests: 0,
+            finished_tests: 0,
             errors: 0,
         }
     }
@@ -40,7 +62,40 @@ impl TestRunner {
     ///
     /// Any problems reading `file` as a test case file will be reported as a test failure.
     pub fn push_test<P: Into<PathBuf>>(&mut self, file: P) {
-        self.test_list.push(file.into());
+        self.tests.push(QueueEntry::New(file.into()));
+    }
+
+    /// Take a new test for running as a job.
+    /// Leaves the queue entry marked as `Runnning`.
+    fn take_job(&mut self) -> Option<Job> {
+        let index = self.new_tests;
+        if index == self.tests.len() {
+            return None;
+        }
+        self.new_tests += 1;
+
+        let entry = mem::replace(&mut self.tests[index], QueueEntry::Running);
+        if let QueueEntry::New(path) = entry {
+            Some(Job::new(index, path))
+        } else {
+            // Oh, sorry about that. Put the entry back.
+            self.tests[index] = entry;
+            None
+        }
+    }
+
+    /// Report the end of a job.
+    fn finish_job(&mut self, job: Job, result: TestResult) {
+        assert_eq!(self.tests[job.index], QueueEntry::Running);
+        if let Err(ref e) = result {
+            self.job_error(&job.path, e);
+        }
+        self.tests[job.index] = QueueEntry::Done(job.path, result);
+        if job.index == self.finished_tests {
+            while let Some(&QueueEntry::Done(_, _)) = self.tests.get(self.finished_tests) {
+                self.finished_tests += 1;
+            }
+        }
     }
 
     /// Scan any directories pushed so far.
@@ -91,22 +146,75 @@ impl TestRunner {
                     }
                 }
             }
+            // Get the new jobs running before moving on to the next directory.
+            self.schedule_jobs();
         }
     }
 
     /// Report an error related to a path.
     fn path_error<E: Error>(&mut self, path: PathBuf, err: E) {
         self.errors += 1;
-        println!("path-error {}: {}", path.to_string_lossy(), err);
+        println!("{}: {}", path.to_string_lossy(), err);
+    }
+
+    /// Report an error related to a job.
+    fn job_error(&mut self, path: &Path, err: &str) {
+        self.errors += 1;
+        println!("FAIL {}: {}", path.to_string_lossy(), err);
+    }
+
+    /// Schedule and new jobs to run.
+    fn schedule_jobs(&mut self) {
+        while let Some(job) = self.take_job() {
+            let result = job.run();
+            self.finish_job(job, result);
+        }
     }
 
     /// Scan pushed directories for tests and run them.
     pub fn run(&mut self) -> CommandResult {
         self.scan_dirs();
+        self.schedule_jobs();
         match self.errors {
             0 => Ok(()),
             1 => Err("1 failure".to_string()),
             n => Err(format!("{} failures", n)),
         }
+    }
+}
+
+/// A test file waiting to be run.
+struct Job {
+    index: usize,
+    path: PathBuf,
+}
+
+impl Job {
+    pub fn new(index: usize, path: PathBuf) -> Job {
+        Job {
+            index: index,
+            path: path,
+        }
+    }
+
+    pub fn run(&self) -> TestResult {
+        match catch_unwind(|| self.run_or_panic()) {
+            Err(msg) => Err(format!("panic: {:?}", msg)),
+            Ok(result) => result,
+        }
+    }
+
+    fn run_or_panic(&self) -> TestResult {
+        let started = time::Instant::now();
+        let buffer = try!(read_to_string(&self.path).map_err(|e| e.to_string()));
+        let testfile = try!(parse_test(&buffer).map_err(|e| e.to_string()));
+        if testfile.commands.is_empty() {
+            return Err("no test commands found".to_string());
+        }
+        if testfile.functions.is_empty() {
+            return Err("no functions found".to_string());
+        }
+        // TODO: Actually run the tests.
+        Ok(started.elapsed())
     }
 }
