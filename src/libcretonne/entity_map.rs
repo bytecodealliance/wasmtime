@@ -45,7 +45,7 @@ pub trait EntityRef: Copy + Eq {
 }
 
 /// A mapping `K -> V` for densely indexed entity references.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EntityMap<K, V>
     where K: EntityRef
 {

@@ -93,7 +93,7 @@ impl FromStr for Opcode {
 /// value should have its `ty` field set to `VOID`. The size of `InstructionData` should be kept at
 /// 16 bytes on 64-bit architectures. If more space is needed to represent an instruction, use a
 /// `Box<AuxData>` to store the additional information out of line.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum InstructionData {
     Nullary { opcode: Opcode, ty: Type },
     Unary {
@@ -203,7 +203,7 @@ pub enum InstructionData {
 
 /// A variable list of `Value` operands used for function call arguments and passing arguments to
 /// basic blocks.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct VariableArgs(Vec<Value>);
 
 impl VariableArgs {
@@ -256,7 +256,7 @@ impl Default for VariableArgs {
 
 /// Payload data for jump instructions. These need to carry lists of EBB arguments that won't fit
 /// in the allowed InstructionData size.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct JumpData {
     pub destination: Ebb,
     pub arguments: VariableArgs,
@@ -274,7 +274,7 @@ impl Display for JumpData {
 
 /// Payload data for branch instructions. These need to carry lists of EBB arguments that won't fit
 /// in the allowed InstructionData size.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BranchData {
     pub arg: Value,
     pub destination: Ebb,
@@ -292,7 +292,7 @@ impl Display for BranchData {
 }
 
 /// Payload of a call instruction.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CallData {
     /// Second result value for a call producing multiple return values.
     second_result: Value,
@@ -308,7 +308,7 @@ impl Display for CallData {
 }
 
 /// Payload of a return instruction.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ReturnData {
     // Dynamically sized array containing return values.
     pub args: VariableArgs,

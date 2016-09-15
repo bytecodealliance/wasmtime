@@ -12,6 +12,7 @@ use std::fmt::{self, Display, Formatter};
 ///
 /// All jump tables use 0-based indexing and are expected to be densely populated. They don't need
 /// to be completely populated, though. Individual entries can be missing.
+#[derive(Clone)]
 pub struct JumpTableData {
     // Table entries, using NO_EBB as a placeholder for missing entries.
     table: Vec<Ebb>,
