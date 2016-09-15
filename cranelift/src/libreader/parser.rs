@@ -19,7 +19,7 @@ use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::{AnyEntity, NO_EBB, NO_INST, NO_VALUE};
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs, JumpData,
                                  BranchData, ReturnData};
-use testfile::{TestFile, DetailedFunction, Comment};
+use testfile::{TestFile, Details, Comment};
 use testcommand::TestCommand;
 
 pub use lexer::Location;
@@ -30,7 +30,7 @@ pub use lexer::Location;
 pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
     Parser::new(text)
         .parse_function_list()
-        .map(|list| list.into_iter().map(|dfunc| dfunc.function).collect())
+        .map(|list| list.into_iter().map(|(func, _)| func).collect())
 }
 
 /// Parse the entire `text` as a test case file.
@@ -505,7 +505,7 @@ impl<'a> Parser<'a> {
     /// Parse a list of function definitions.
     ///
     /// This is the top-level parse function matching the whole contents of a file.
-    pub fn parse_function_list(&mut self) -> Result<Vec<DetailedFunction<'a>>> {
+    pub fn parse_function_list(&mut self) -> Result<Vec<(Function, Details<'a>)>> {
         let mut list = Vec::new();
         while self.token().is_some() {
             list.push(try!(self.parse_function()));
@@ -517,7 +517,7 @@ impl<'a> Parser<'a> {
     //
     // function ::= * function-spec "{" preamble function-body "}"
     //
-    fn parse_function(&mut self) -> Result<DetailedFunction<'a>> {
+    fn parse_function(&mut self) -> Result<(Function, Details<'a>)> {
         // Begin gathering comments.
         // Make sure we don't include any comments before the `function` keyword.
         self.token();
@@ -545,10 +545,7 @@ impl<'a> Parser<'a> {
         // references.
         try!(ctx.rewrite_references());
 
-        Ok(DetailedFunction {
-            function: ctx.function,
-            comments: mem::replace(&mut self.comments, Vec::new()),
-        })
+        Ok((ctx.function, Details { comments: mem::replace(&mut self.comments, Vec::new()) }))
     }
 
     // Parse a function spec.
@@ -1221,7 +1218,7 @@ mod tests {
     use super::*;
     use cretonne::ir::types::{self, ArgumentType, ArgumentExtension};
     use cretonne::ir::entities::AnyEntity;
-    use testfile::Comment;
+    use testfile::{Details, Comment};
 
     #[test]
     fn argument_type() {
@@ -1261,13 +1258,12 @@ mod tests {
 
     #[test]
     fn stack_slot_decl() {
-        let func = Parser::new("function foo() {
-                                  ss3 = stack_slot 13
-                                  ss1 = stack_slot 1
-                                }")
+        let (func, _) = Parser::new("function foo() {
+                                       ss3 = stack_slot 13
+                                       ss1 = stack_slot 1
+                                     }")
             .parse_function()
-            .unwrap()
-            .function;
+            .unwrap();
         assert_eq!(func.name, "foo");
         let mut iter = func.stack_slots.keys();
         let ss0 = iter.next().unwrap();
@@ -1291,13 +1287,12 @@ mod tests {
 
     #[test]
     fn ebb_header() {
-        let func = Parser::new("function ebbs() {
-                                ebb0:
-                                ebb4(vx3: i32):
-                                }")
+        let (func, _) = Parser::new("function ebbs() {
+                                     ebb0:
+                                     ebb4(vx3: i32):
+                                     }")
             .parse_function()
-            .unwrap()
-            .function;
+            .unwrap();
         assert_eq!(func.name, "ebbs");
 
         let mut ebbs = func.layout.ebbs();
@@ -1314,38 +1309,39 @@ mod tests {
 
     #[test]
     fn comments() {
-        let dfunc = Parser::new("; before
-                                 function comment() { ; decl
-                                    ss10  = stack_slot 13 ; stackslot.
-                                    ; Still stackslot.
-                                    jt10 = jump_table ebb0
-                                    ; Jumptable
-                                 ebb0: ; Basic block
-                                 trap ; Instruction
-                                 } ; Trailing.
-                                 ; More trailing.")
-            .parse_function()
-            .unwrap();
-        assert_eq!(&dfunc.function.name, "comment");
-        assert_eq!(dfunc.comments.len(), 8); // no 'before' comment.
-        assert_eq!(dfunc.comments[0],
+        let (func, Details { comments }) =
+            Parser::new("; before
+                         function comment() { ; decl
+                            ss10  = stack_slot 13 ; stackslot.
+                            ; Still stackslot.
+                            jt10 = jump_table ebb0
+                            ; Jumptable
+                         ebb0: ; Basic block
+                         trap ; Instruction
+                         } ; Trailing.
+                         ; More trailing.")
+                .parse_function()
+                .unwrap();
+        assert_eq!(&func.name, "comment");
+        assert_eq!(comments.len(), 8); // no 'before' comment.
+        assert_eq!(comments[0],
                    Comment {
                        entity: AnyEntity::Function,
                        text: "; decl",
                    });
-        assert_eq!(dfunc.comments[1].entity.to_string(), "ss0");
-        assert_eq!(dfunc.comments[2].entity.to_string(), "ss0");
-        assert_eq!(dfunc.comments[2].text, "; Still stackslot.");
-        assert_eq!(dfunc.comments[3].entity.to_string(), "jt0");
-        assert_eq!(dfunc.comments[3].text, "; Jumptable");
-        assert_eq!(dfunc.comments[4].entity.to_string(), "ebb0");
-        assert_eq!(dfunc.comments[4].text, "; Basic block");
+        assert_eq!(comments[1].entity.to_string(), "ss0");
+        assert_eq!(comments[2].entity.to_string(), "ss0");
+        assert_eq!(comments[2].text, "; Still stackslot.");
+        assert_eq!(comments[3].entity.to_string(), "jt0");
+        assert_eq!(comments[3].text, "; Jumptable");
+        assert_eq!(comments[4].entity.to_string(), "ebb0");
+        assert_eq!(comments[4].text, "; Basic block");
 
-        assert_eq!(dfunc.comments[5].entity.to_string(), "inst0");
-        assert_eq!(dfunc.comments[5].text, "; Instruction");
+        assert_eq!(comments[5].entity.to_string(), "inst0");
+        assert_eq!(comments[5].text, "; Instruction");
 
-        assert_eq!(dfunc.comments[6].entity, AnyEntity::Function);
-        assert_eq!(dfunc.comments[7].entity, AnyEntity::Function);
+        assert_eq!(comments[6].entity, AnyEntity::Function);
+        assert_eq!(comments[7].entity, AnyEntity::Function);
     }
 
     #[test]
@@ -1359,6 +1355,6 @@ mod tests {
         assert_eq!(tf.commands[0].command, "cfg");
         assert_eq!(tf.commands[1].command, "verify");
         assert_eq!(tf.functions.len(), 1);
-        assert_eq!(tf.functions[0].function.name, "comment");
+        assert_eq!(tf.functions[0].0.name, "comment");
     }
 }
