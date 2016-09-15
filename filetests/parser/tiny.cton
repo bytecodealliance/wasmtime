@@ -1,8 +1,14 @@
+test cat
+
 ; The smallest possible function.
 function minimal() {
 ebb0:
     trap
 }
+; sameln: function minimal() {
+; nextln: ebb0:
+; nextln:     trap
+; nextln: }
 
 ; Create and use values.
 ; Polymorphic instructions with type suffix.
@@ -12,12 +18,22 @@ ebb0:
     v1 = iconst.i8 6
     v2 = ishl v0, v1
 }
+; sameln: function ivalues() {
+; nextln: ebb0:
+; nextln:     v0 = iconst.i32 2
+; nextln:     v1 = iconst.i8 6
+; nextln:     v2 = ishl v0, v1
+; nextln: }
 
 ; Polymorphic istruction controlled by second operand.
 function select() {
 ebb0(vx0: i32, vx1: i32, vx2: b1):
     v0 = select vx2, vx0, vx1
 }
+; sameln: function select() {
+; nextln: ebb0(vx0: i32, vx1: i32, vx2: b1):
+; nextln:     v0 = select vx2, vx0, vx1
+; nextln: }
 
 ; Lane indexes.
 function lanes() {
@@ -26,6 +42,12 @@ ebb0:
     v1 = extractlane v0, 3
     v2 = insertlane v0, 1, v1
 }
+; sameln: function lanes() {
+; nextln: ebb0:
+; nextln:     v0 = iconst.i32x4 2
+; nextln:     v1 = extractlane v0, 3
+; nextln:     v2 = insertlane v0, 1, v1
+; nextln: }
 
 ; Integer condition codes.
 function icmp(i32, i32) {
@@ -34,6 +56,12 @@ ebb0(vx0: i32, vx1: i32):
     v1 = icmp ult, vx0, vx1
     v2 = icmp sge, vx0, vx1
 }
+; sameln: function icmp(i32, i32) {
+; nextln: ebb0(vx0: i32, vx1: i32):
+; nextln:     v0 = icmp eq, vx0, vx1
+; nextln:     v1 = icmp ult, vx0, vx1
+; nextln:     v2 = icmp sge, vx0, vx1
+; nextln: }
 
 ; Floating condition codes.
 function fcmp(f32, f32) {
@@ -42,6 +70,12 @@ ebb0(vx0: f32, vx1: f32):
     v1 = fcmp uno, vx0, vx1
     v2 = fcmp lt, vx0, vx1
 }
+; sameln: function fcmp(f32, f32) {
+; nextln: ebb0(vx0: f32, vx1: f32):
+; nextln:     v0 = fcmp eq, vx0, vx1
+; nextln:     v1 = fcmp uno, vx0, vx1
+; nextln:     v2 = fcmp lt, vx0, vx1
+; nextln: }
 
 ; The bitcast instruction has two type variables: The controlling type variable
 ; controls the outout type, and the input type is a free variable.
@@ -50,3 +84,8 @@ ebb0(vx0: i32, vx1: f32):
     v0 = bitcast.i8x4 vx0
     v1 = bitcast.i32 vx1
 }
+; sameln: function bitcast(i32, f32) {
+; nextln: ebb0(vx0: i32, vx1: f32):
+; nextln:     v0 = bitcast.i8x4 vx0
+; nextln:     v1 = bitcast.i32 vx1
+; nextln: }

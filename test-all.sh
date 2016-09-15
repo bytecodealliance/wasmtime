@@ -58,10 +58,12 @@ cargo build --release
 
 export CTONUTIL="$topdir/src/tools/target/release/cton-util"
 
+cd "$topdir"
+banner "File tests"
+"$CTONUTIL" test filetests
+
 # Run the parser tests.
 cd "$topdir/tests"
-banner "Parser tests"
-parser/run.sh
 banner "CFG tests"
 cfg/run.sh
 

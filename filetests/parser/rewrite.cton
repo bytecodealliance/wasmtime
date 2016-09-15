@@ -6,6 +6,7 @@
 ; It is possible to refer to instructions and EBBs that have not yet been
 ; defined in the lexical order, so the parser needs to rewrite these references
 ; after the fact.
+test cat
 
 ; Check that defining numbers are rewritten.
 function defs() {
@@ -14,6 +15,12 @@ ebb100(v20: i32):
     vx200 = f64const 0x4.0p0
     trap
 }
+; sameln: function defs() {
+; nextln: ebb0(vx0: i32):
+; nextln:     v0 = iconst.i32x8 5
+; nextln:     v1 = f64const 0x1.0000000000000p2
+; nextln:     trap
+; nextln: }
 
 ; Using values.
 function use_value() {
@@ -22,3 +29,9 @@ ebb100(v20: i32):
     vx200 = iadd v20, v1000
     jump ebb100(v1000)
 }
+; sameln: function "use_value"() {
+; nextln: ebb0(vx0: i32):
+; nextln:     v0 = iadd_imm vx0, 5
+; nextln:     v1 = iadd vx0, v0
+; nextln:     jump ebb0(v0)
+; nextln: }
