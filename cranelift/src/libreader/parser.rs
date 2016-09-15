@@ -28,9 +28,7 @@ pub use lexer::Location;
 ///
 /// Any test commands or ISA declarations are ignored.
 pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
-    Parser::new(text)
-        .parse_function_list()
-        .map(|list| list.into_iter().map(|(func, _)| func).collect())
+    parse_test(text).map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
 }
 
 /// Parse the entire `text` as a test case file.
