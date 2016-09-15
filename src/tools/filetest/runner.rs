@@ -7,11 +7,15 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::error::Error;
 use std::mem;
+use std::borrow::{Borrow, Cow};
 use std::panic::catch_unwind;
 use std::time;
 use CommandResult;
 use utils::read_to_string;
 use cton_reader::parse_test;
+use cretonne::ir::Function;
+use cretonne::verify_function;
+use filetest::subtest::{self, SubTest, Context};
 
 type TestResult = Result<time::Duration, String>;
 
@@ -208,13 +212,56 @@ impl Job {
         let started = time::Instant::now();
         let buffer = try!(read_to_string(&self.path).map_err(|e| e.to_string()));
         let testfile = try!(parse_test(&buffer).map_err(|e| e.to_string()));
-        if testfile.commands.is_empty() {
-            return Err("no test commands found".to_string());
-        }
         if testfile.functions.is_empty() {
             return Err("no functions found".to_string());
         }
+        // Parse the test commands.
+        let mut tests =
+            try!(testfile.commands.iter().map(subtest::new).collect::<subtest::Result<Vec<_>>>());
+
+        // Sort the tests so the mutators are at the end, and those that
+        // don't need the verifier are at the front
+        tests.sort_by_key(|st| (st.is_mutating(), st.needs_verifier()));
+
+        // Isolate the last test in the hope that this is the only mutating test.
+        // If so, we can completely avoid cloning functions.
+        let last_test = match tests.pop() {
+            None => return Err("no test commands found".to_string()),
+            Some(t) => t,
+        };
+
+        for (func, details) in testfile.functions {
+            let mut context = subtest::Context {
+                details: details,
+                verified: false,
+            };
+
+            for test in &tests {
+                try!(self.run_one_test(test.borrow(), Cow::Borrowed(&func), &mut context));
+            }
+            // Run the last test with an owned function which means it won't need to clone it
+            // before mutating.
+            try!(self.run_one_test(last_test.borrow(), Cow::Owned(func), &mut context));
+        }
+
+
         // TODO: Actually run the tests.
         Ok(started.elapsed())
+    }
+
+    fn run_one_test(&self,
+                    test: &SubTest,
+                    func: Cow<Function>,
+                    context: &mut Context)
+                    -> subtest::Result<()> {
+        let name = format!("{}({})", test.name(), func.name);
+
+        // Should we run the verifier before this test?
+        if !context.verified && test.needs_verifier() {
+            try!(verify_function(&func));
+            context.verified = true;
+        }
+
+        test.run(func, context).map_err(|e| format!("{}: {}", name, e))
     }
 }

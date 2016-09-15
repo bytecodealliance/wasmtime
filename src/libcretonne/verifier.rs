@@ -55,6 +55,10 @@
 use ir::{Function, ValueDef, Ebb, Inst};
 use ir::instructions::InstructionFormat;
 
+pub fn verify_function(func: &Function) -> Result<(), String> {
+    Verifier::new(func).run()
+}
+
 pub struct Verifier<'a> {
     func: &'a Function,
 }

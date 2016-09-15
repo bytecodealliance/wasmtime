@@ -7,6 +7,7 @@ use std::path::Path;
 use CommandResult;
 use filetest::runner::TestRunner;
 
+pub mod subtest;
 mod runner;
 
 /// Main entry point for `cton-util test`.
