@@ -15,6 +15,7 @@ use std::u16;
 /// The layout of EBBs in the function and of instructions in each EBB is recorded by the
 /// `FunctionLayout` data structure which form the other half of the function representation.
 ///
+#[derive(Clone)]
 pub struct DataFlowGraph {
     /// Data about all of the instructions in the function, including opcodes and operands.
     /// The instructions in this map are not in program order. That is tracked by `Layout`, along
@@ -119,6 +120,7 @@ pub enum ValueDef {
 }
 
 // Internal table storage for extended values.
+#[derive(Clone)]
 enum ValueData {
     // Value is defined by an instruction, but it is not the first result.
     Inst {
@@ -336,6 +338,7 @@ impl DataFlowGraph {
 // Arguments for an extended basic block are values that dominate everything in the EBB. All
 // branches to this EBB must provide matching arguments, and the arguments to the entry EBB must
 // match the function arguments.
+#[derive(Clone)]
 struct EbbData {
     // First argument to this EBB, or `NO_VALUE` if the block has no arguments.
     //

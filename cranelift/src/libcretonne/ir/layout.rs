@@ -20,6 +20,7 @@ use ir::entities::{Ebb, NO_EBB, Inst, NO_INST};
 /// While data dependencies are not recorded, instruction ordering does affect control
 /// dependencies, so part of the semantics of the program are determined by the layout.
 ///
+#[derive(Clone)]
 pub struct Layout {
     // Linked list nodes for the layout order of EBBs Forms a doubly linked list, terminated in
     // both ends by NO_EBB.

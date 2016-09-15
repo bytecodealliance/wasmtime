@@ -6,7 +6,7 @@
 use std::fmt::{self, Display, Formatter};
 
 /// Contents of a stack slot.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct StackSlotData {
     /// Size of stack slot in bytes.
     pub size: u32,

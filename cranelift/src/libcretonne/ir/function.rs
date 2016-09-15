@@ -9,6 +9,10 @@ use entity_map::{EntityMap, PrimaryEntityData};
 use std::fmt::{self, Debug, Formatter};
 
 /// A function.
+///
+/// Functions can be cloned, but it is not a very fast operation.
+/// The clone will have all the same entity numbers as the original.
+#[derive(Clone)]
 pub struct Function {
     /// Name of this function. Mostly used by `.cton` files.
     pub name: FunctionName,
