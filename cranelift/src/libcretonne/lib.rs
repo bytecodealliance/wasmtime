@@ -5,6 +5,8 @@
 //
 // ====------------------------------------------------------------------------------------==== //
 
+pub use verifier::verify_function;
+
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 pub mod ir;
