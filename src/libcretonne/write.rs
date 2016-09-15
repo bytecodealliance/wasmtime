@@ -5,9 +5,8 @@
 //! `cretonne-reader` crate.
 
 use ir::{Function, Ebb, Inst, Value, Type};
-use std::io::{self, Write};
-
-pub type Result = io::Result<()>;
+use std::fmt::{Result, Error, Write};
+use std::result;
 
 /// Write `func` to `w` as equivalent text.
 pub fn write_function(w: &mut Write, func: &Function) -> Result {
@@ -22,15 +21,6 @@ pub fn write_function(w: &mut Write, func: &Function) -> Result {
         any = true;
     }
     writeln!(w, "}}")
-}
-
-/// Convert `func` to a string.
-pub fn function_to_string(func: &Function) -> String {
-    let mut buffer: Vec<u8> = Vec::new();
-    // Any errors here would be out-of-memory, which should not happen with normal functions.
-    write_function(&mut buffer, func).unwrap();
-    // A UTF-8 conversion error is a real bug.
-    String::from_utf8(buffer).unwrap()
 }
 
 // ====--------------------------------------------------------------------------------------====//
@@ -65,7 +55,7 @@ fn write_spec(w: &mut Write, func: &Function) -> Result {
     }
 }
 
-fn write_preamble(w: &mut Write, func: &Function) -> io::Result<bool> {
+fn write_preamble(w: &mut Write, func: &Function) -> result::Result<bool, Error> {
     let mut any = false;
 
     for ss in func.stack_slots.keys() {
@@ -218,7 +208,6 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::{needs_quotes, escaped};
     use ir::{Function, StackSlotData};
     use ir::types;
@@ -244,26 +233,26 @@ mod tests {
     #[test]
     fn basic() {
         let mut f = Function::new();
-        assert_eq!(function_to_string(&f), "function \"\"() {\n}\n");
+        assert_eq!(f.to_string(), "function \"\"() {\n}\n");
 
         f.name.push_str("foo");
-        assert_eq!(function_to_string(&f), "function foo() {\n}\n");
+        assert_eq!(f.to_string(), "function foo() {\n}\n");
 
         f.stack_slots.push(StackSlotData::new(4));
-        assert_eq!(function_to_string(&f),
+        assert_eq!(f.to_string(),
                    "function foo() {\n    ss0 = stack_slot 4\n}\n");
 
         let ebb = f.dfg.make_ebb();
         f.layout.append_ebb(ebb);
-        assert_eq!(function_to_string(&f),
+        assert_eq!(f.to_string(),
                    "function foo() {\n    ss0 = stack_slot 4\n\nebb0:\n}\n");
 
         f.dfg.append_ebb_arg(ebb, types::I8);
-        assert_eq!(function_to_string(&f),
+        assert_eq!(f.to_string(),
                    "function foo() {\n    ss0 = stack_slot 4\n\nebb0(vx0: i8):\n}\n");
 
         f.dfg.append_ebb_arg(ebb, types::F32.by(4).unwrap());
-        assert_eq!(function_to_string(&f),
+        assert_eq!(f.to_string(),
                    "function foo() {\n    ss0 = stack_slot 4\n\nebb0(vx0: i8, vx1: f32x4):\n}\n");
     }
 }

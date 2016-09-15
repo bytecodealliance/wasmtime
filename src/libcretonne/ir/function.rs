@@ -6,7 +6,8 @@
 use ir::{FunctionName, Signature, StackSlot, StackSlotData, JumpTable, JumpTableData,
          DataFlowGraph, Layout};
 use entity_map::{EntityMap, PrimaryEntityData};
-use std::fmt::{self, Debug, Formatter};
+use std::fmt::{self, Display, Debug, Formatter};
+use write::write_function;
 
 /// A function.
 ///
@@ -60,9 +61,14 @@ impl Function {
     }
 }
 
+impl Display for Function {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        write_function(fmt, self)
+    }
+}
+
 impl Debug for Function {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        use write::function_to_string;
-        fmt.write_str(&function_to_string(self))
+        write_function(fmt, self)
     }
 }
