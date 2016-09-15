@@ -1,0 +1,24 @@
+; Parser tests for call and return syntax.
+test cat
+
+function mini() {
+ebb1:
+    return
+}
+; sameln: function mini() {
+; nextln: ebb0:
+; nextln:     return
+; nextln: }
+
+function r1() -> i32, f32 {
+ebb1:
+    v1 = iconst.i32 3
+    v2 = f32const 0.0
+    return v1, v2
+}
+; sameln: function r1() -> i32, f32 {
+; nextln: ebb0:
+; nextln:     v0 = iconst.i32 3
+; nextln:     v1 = f32const 0.0
+; nextln:     return v0, v1
+; nextln: }
