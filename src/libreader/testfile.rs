@@ -15,14 +15,14 @@ use testcommand::TestCommand;
 #[derive(Debug)]
 pub struct TestFile<'a> {
     pub commands: Vec<TestCommand<'a>>,
-    pub functions: Vec<DetailedFunction<'a>>,
+    pub functions: Vec<(Function, Details<'a>)>,
 }
 
-/// A function parsed from a text string along with other details that are useful for running
-/// tests.
+/// Additional details about a function parsed from a text string.
+/// These are useful for detecting test commands embedded in comments etc.
+/// The details to not affect the semantics of the function.
 #[derive(Debug)]
-pub struct DetailedFunction<'a> {
-    pub function: Function,
+pub struct Details<'a> {
     pub comments: Vec<Comment<'a>>,
 }
 
