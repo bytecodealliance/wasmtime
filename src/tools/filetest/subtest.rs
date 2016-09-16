@@ -4,7 +4,7 @@ use std::result;
 use std::borrow::Cow;
 use cretonne::ir::Function;
 use cton_reader::{TestCommand, Details};
-use filecheck::{CheckerBuilder, Checker, NO_VARIABLES};
+use filecheck::{self, CheckerBuilder, Checker, Value as FCValue};
 
 pub type Result<T> = result::Result<T, String>;
 
@@ -51,14 +51,27 @@ pub trait SubTest {
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()>;
 }
 
+/// Make the parser's source map available as filecheck variables.
+///
+/// This means that the filecheck directives can refer to entities like `jump $ebb3`, where `$ebb3`
+/// will expand to the EBB number that was assigned to `ebb3` in the input source.
+///
+/// The expanded entity names are wrapped in word boundary regex guards so that 'inst1' doesn't
+/// match 'inst10'.
+impl<'a> filecheck::VariableMap for Context<'a> {
+    fn lookup(&self, varname: &str) -> Option<FCValue> {
+        self.details.map.lookup_str(varname).map(|e| FCValue::Regex(format!(r"\b{}\b", e).into()))
+    }
+}
+
 /// Run filecheck on `text`, using directives extracted from `context`.
 pub fn run_filecheck(text: &str, context: &Context) -> Result<()> {
     let checker = try!(build_filechecker(&context.details));
-    if try!(checker.check(&text, NO_VARIABLES).map_err(|e| format!("filecheck: {}", e))) {
+    if try!(checker.check(&text, context).map_err(|e| format!("filecheck: {}", e))) {
         Ok(())
     } else {
         // Filecheck mismatch. Emit an explanation as output.
-        let (_, explain) = try!(checker.explain(&text, NO_VARIABLES)
+        let (_, explain) = try!(checker.explain(&text, context)
             .map_err(|e| format!("explain: {}", e)));
         Err(format!("filecheck failed:\n{}{}", checker, explain))
     }
