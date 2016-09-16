@@ -179,6 +179,7 @@ impl TestRunner {
     pub fn run(&mut self) -> CommandResult {
         self.scan_dirs();
         self.schedule_jobs();
+        println!("{} tests", self.tests.len());
         match self.errors {
             0 => Ok(()),
             1 => Err("1 failure".to_string()),
