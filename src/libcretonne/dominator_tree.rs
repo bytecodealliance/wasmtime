@@ -3,18 +3,13 @@
 use cfg::*;
 use ir::Ebb;
 use ir::entities::NO_INST;
-use entity_map::{EntityMap, Keys};
+use entity_map::EntityMap;
 
 pub struct DominatorTree {
     data: EntityMap<Ebb, Option<BasicBlock>>,
 }
 
 impl DominatorTree {
-    /// Insert data directly into a dominator tree.
-    pub fn from_data(data: EntityMap<Ebb, Option<BasicBlock>>) -> DominatorTree {
-        DominatorTree { data: data }
-    }
-
     /// Build a dominator tree from a control flow graph using Keith D. Cooper's
     /// "Simple, Fast Dominator Algorithm."
     pub fn new(cfg: &ControlFlowGraph) -> DominatorTree {
@@ -116,11 +111,6 @@ impl DominatorTree {
     pub fn idom(&self, ebb: Ebb) -> Option<BasicBlock> {
         self.data[ebb].clone()
     }
-
-    /// An iterator across all of the ebbs stored in the tree.
-    pub fn ebbs(&self) -> Keys<Ebb> {
-        self.data.keys()
-    }
 }
 
 #[cfg(test)]
@@ -136,7 +126,7 @@ mod test {
         let func = Function::new();
         let cfg = ControlFlowGraph::new(&func);
         let dtree = DominatorTree::new(&cfg);
-        assert_eq!(None, dtree.ebbs().next());
+        assert_eq!(0, dtree.data.keys().count());
     }
 
     #[test]
