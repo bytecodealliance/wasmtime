@@ -6,8 +6,6 @@ dependencies = [
  "cretonne-reader 0.0.0",
  "docopt 0.6.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "filecheck 0.0.0",
- "glob 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "regex 0.1.71 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.19 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -22,9 +20,6 @@ dependencies = [
 [[package]]
 name = "cretonne"
 version = "0.0.0"
-dependencies = [
- "regex 0.1.71 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "cretonne-reader"
@@ -49,11 +44,6 @@ version = "0.0.0"
 dependencies = [
  "regex 0.1.71 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
-
-[[package]]
-name = "glob"
-version = "0.2.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "kernel32-sys"

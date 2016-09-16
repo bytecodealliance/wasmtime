@@ -13,4 +13,7 @@ name = "cretonne"
 path = "lib.rs"
 
 [dependencies]
-regex = "0.1.71"
+# It is a goal of the cretonne crate to have minimal external dependencies.
+# Please don't add any unless they are essential to the task of creating binary
+# machine code. Integration tests that need external dependencies can be
+# accomodated in src/tools/tests.
