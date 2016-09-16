@@ -165,22 +165,18 @@ impl<'a> Verifier<'a> {
 
 #[cfg(test)]
 mod tests {
-    extern crate regex;
-
     use super::*;
     use ir::Function;
     use ir::instructions::{InstructionData, Opcode};
     use ir::types;
-    use self::regex::Regex;
 
     macro_rules! assert_err_with_msg {
         ($e:expr, $msg:expr) => (
-            let err_re = Regex::new($msg).unwrap();
             match $e {
                 Ok(_) => { panic!("Expected an error!") },
-                Err(Error { location, message } ) => {
-                    if !err_re.is_match(&message) {
-                       panic!(format!("'{}' did not contain the pattern '{}'", message, $msg));
+                Err(Error { message, .. } ) => {
+                    if !message.contains($msg) {
+                       panic!(format!("'{}' did not contain the substring '{}'", message, $msg));
                     }
                 }
             }
