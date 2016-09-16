@@ -1,7 +1,9 @@
+test domtree
+
 function test(i32) {
-    ebb0(v0: i32):    ; dominates(0)
-        brz v0, ebb1  ; dominates(1,3,4,5)
-        jump ebb2     ; dominates(2)
+    ebb0(v0: i32):
+        brz v0, ebb1  ; dominates: ebb1 ebb3 ebb4 ebb5
+        jump ebb2     ; dominates: ebb2
     ebb1:
         jump ebb3
     ebb2:
