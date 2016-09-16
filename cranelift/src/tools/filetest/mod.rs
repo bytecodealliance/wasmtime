@@ -10,6 +10,7 @@ use filetest::runner::TestRunner;
 pub mod subtest;
 mod runner;
 mod domtree;
+mod verifier;
 
 /// Main entry point for `cton-util test`.
 ///
