@@ -1,5 +1,6 @@
 ; For testing cfg generation. This code explores the implications of encountering
 ; a terminating instruction before any connections have been made.
+test print-cfg
 
 function nonsense(i32) {
 ; check: digraph nonsense {
