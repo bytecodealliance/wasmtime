@@ -2,6 +2,7 @@ use error::{Error, Result};
 use variable::{VariableMap, Value, varname_prefix};
 use pattern::Pattern;
 use regex::{Regex, Captures};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::cmp::max;
 use std::fmt::{self, Display, Formatter};
@@ -183,7 +184,7 @@ impl Checker {
                 Directive::Regex(ref var, ref rx) => {
                     state.vars.insert(var.clone(),
                                       VarDef {
-                                          value: Value::Regex(rx.clone()),
+                                          value: Value::Regex(Cow::Borrowed(rx)),
                                           offset: 0,
                                       });
                     continue;
@@ -234,9 +235,9 @@ impl Checker {
 }
 
 /// A local definition of a variable.
-pub struct VarDef {
+pub struct VarDef<'a> {
     /// The value given to the variable.
-    value: Value,
+    value: Value<'a>,
     /// Offset in input text from where the variable is available.
     offset: usize,
 }
@@ -246,7 +247,7 @@ struct State<'a> {
     env_vars: &'a VariableMap,
     recorder: &'a mut Recorder,
 
-    vars: HashMap<String, VarDef>,
+    vars: HashMap<String, VarDef<'a>>,
     // Offset after the last ordered match. This does not include recent unordered matches.
     last_ordered: usize,
     // Largest offset following a positive match, including unordered matches.
@@ -331,7 +332,7 @@ impl<'a> State<'a> {
                     let txtval = caps.name(var).unwrap_or("");
                     self.recorder.defined_var(var, txtval);
                     let vardef = VarDef {
-                        value: Value::Text(txtval.to_string()),
+                        value: Value::Text(Cow::Borrowed(txtval)),
                         // This offset is the end of the whole matched pattern, not just the text
                         // defining the variable.
                         offset: range.0 + matched_range.1,

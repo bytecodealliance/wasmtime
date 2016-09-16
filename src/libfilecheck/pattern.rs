@@ -330,19 +330,14 @@ impl Pattern {
                 Part::DefLit { ref regex, .. } => out.push_str(regex),
                 Part::DefVar { def, ref var } => {
                     // Wrap regex in a named capture group.
-                    write!(out,
-                           "(?P<{}>{})",
-                           self.defs[def],
-                           match vmap.lookup(var) {
-                               None => {
-                                   return Err(Error::UndefVariable(format!("undefined variable \
-                                                                            ${}",
-                                                                           var)))
-                               }
-                               Some(Value::Text(s)) => quote(&s),
-                               Some(Value::Regex(rx)) => rx,
-                           })
-                        .unwrap()
+                    write!(out, "(?P<{}>", self.defs[def]).unwrap();
+                    match vmap.lookup(var) {
+                        None => {
+                            return Err(Error::UndefVariable(format!("undefined variable ${}", var)))
+                        }
+                        Some(Value::Text(s)) => write!(out, "{})", quote(&s[..])).unwrap(),
+                        Some(Value::Regex(rx)) => write!(out, "{})", rx).unwrap(),
+                    }
                 }
             }
 
