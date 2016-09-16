@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 /// A variable name is one or more ASCII alphanumerical characters, including underscore.
 /// Note that numerical variable names like `$45` are allowed too.
 ///
@@ -16,9 +18,9 @@ pub fn varname_prefix(s: &str) -> usize {
 
 /// A variable can contain either a regular expression or plain text.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Value {
-    Text(String),
-    Regex(String),
+pub enum Value<'a> {
+    Text(Cow<'a, str>),
+    Regex(Cow<'a, str>),
 }
 
 /// Resolve variables by name.
