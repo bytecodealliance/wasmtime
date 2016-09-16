@@ -21,6 +21,7 @@ use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArg
                                  BranchData, ReturnData};
 use testfile::{TestFile, Details, Comment};
 use testcommand::TestCommand;
+use sourcemap;
 
 pub use lexer::Location;
 
@@ -539,11 +540,16 @@ impl<'a> Parser<'a> {
         self.token();
         self.comment_entity = None;
 
-        // Rewrite references to values and EBBs after parsing everuthing to allow forward
+        // Rewrite references to values and EBBs after parsing everything to allow forward
         // references.
         try!(ctx.rewrite_references());
 
-        Ok((ctx.function, Details { comments: mem::replace(&mut self.comments, Vec::new()) }))
+        let details = Details {
+            comments: mem::replace(&mut self.comments, Vec::new()),
+            map: sourcemap::new(ctx.values, ctx.ebbs, ctx.stack_slots, ctx.jump_tables),
+        };
+
+        Ok((ctx.function, details))
     }
 
     // Parse a function spec.
@@ -1307,7 +1313,7 @@ mod tests {
 
     #[test]
     fn comments() {
-        let (func, Details { comments }) =
+        let (func, Details { comments, .. }) =
             Parser::new("; before
                          function comment() { ; decl
                             ss10  = stack_slot 13 ; stackslot.
