@@ -2,14 +2,17 @@
 //!
 //! Read a series of Cretonne IL files and print their control flow graphs
 //! in graphviz format.
+
+use std::borrow::Cow;
 use std::fmt::{Result, Write, Display, Formatter};
 
 use CommandResult;
 use utils::read_to_string;
+use filetest::subtest::{self, SubTest, Context, Result as STResult};
 use cretonne::ir::Function;
 use cretonne::cfg::ControlFlowGraph;
 use cretonne::ir::instructions::BranchInfo;
-use cton_reader::parse_functions;
+use cton_reader::{parse_functions, TestCommand};
 
 pub fn run(files: Vec<String>) -> CommandResult {
     for (i, f) in files.into_iter().enumerate() {
@@ -99,4 +102,30 @@ fn print_cfg(filename: String) -> CommandResult {
     }
 
     Ok(())
+}
+
+/// Object implementing the `test print-cfg` sub-test.
+struct TestPrintCfg;
+
+pub fn subtest(parsed: &TestCommand) -> STResult<Box<SubTest>> {
+    assert_eq!(parsed.command, "print-cfg");
+    if !parsed.options.is_empty() {
+        Err(format!("No options allowed on {}", parsed))
+    } else {
+        Ok(Box::new(TestPrintCfg))
+    }
+}
+
+impl SubTest for TestPrintCfg {
+    fn name(&self) -> Cow<str> {
+        Cow::from("print-cfg")
+    }
+
+    fn needs_verifier(&self) -> bool {
+        false
+    }
+
+    fn run(&self, func: Cow<Function>, context: &Context) -> STResult<()> {
+        subtest::run_filecheck(&CFGPrinter::new(&func).to_string(), context)
+    }
 }

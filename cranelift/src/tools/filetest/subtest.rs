@@ -11,8 +11,10 @@ pub type Result<T> = result::Result<T, String>;
 /// Create a new subcommand trait object to match `parsed.command`.
 pub fn new(parsed: &TestCommand) -> Result<Box<SubTest>> {
     use cat;
+    use print_cfg;
     match parsed.command {
         "cat" => cat::subtest(parsed),
+        "print-cfg" => print_cfg::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }

@@ -1,4 +1,5 @@
 ; For testing cfg generation where some block is never reached.
+test print-cfg
 
 function not_reached(i32) -> i32 {
 ; check: digraph not_reached {

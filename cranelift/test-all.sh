@@ -62,9 +62,4 @@ cd "$topdir"
 banner "File tests"
 "$CTONUTIL" test filetests
 
-# Run the parser tests.
-cd "$topdir/tests"
-banner "CFG tests"
-cfg/run.sh
-
 banner "OK"
