@@ -12,9 +12,11 @@ pub type Result<T> = result::Result<T, String>;
 pub fn new(parsed: &TestCommand) -> Result<Box<SubTest>> {
     use cat;
     use print_cfg;
+    use filetest::domtree;
     match parsed.command {
         "cat" => cat::subtest(parsed),
         "print-cfg" => print_cfg::subtest(parsed),
+        "domtree" => domtree::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }

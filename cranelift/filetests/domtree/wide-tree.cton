@@ -1,0 +1,41 @@
+test domtree
+
+function test(i32) {
+    ebb0(v0: i32):
+        brz v0, ebb13   ; dominates: ebb13
+        jump ebb1       ; dominates: ebb1
+    ebb1:
+        brz v0, ebb2    ; dominates: ebb2 ebb7
+        brnz v0, ebb3   ; dominates: ebb3
+        brz v0, ebb4    ; dominates: ebb4
+        brnz v0, ebb5   ; dominates: ebb5
+        jump ebb6       ; dominates: ebb6
+    ebb2:
+        jump ebb7
+    ebb3:
+        jump ebb7
+    ebb4:
+        jump ebb7
+    ebb5:
+        jump ebb7
+    ebb6:
+        jump ebb7
+    ebb7:
+        brnz v0, ebb8   ; dominates: ebb8 ebb12
+        brz v0, ebb9    ; dominates: ebb9
+        brnz v0, ebb10  ; dominates: ebb10
+        jump ebb11      ; dominates: ebb11
+    ebb8:
+        jump ebb12
+    ebb9:
+        jump ebb12
+    ebb10:
+        brz v0, ebb13
+        jump ebb12
+    ebb11:
+        jump ebb13
+    ebb12:
+        return
+    ebb13:
+        return
+}
