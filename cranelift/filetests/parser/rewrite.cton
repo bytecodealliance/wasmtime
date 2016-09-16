@@ -16,9 +16,9 @@ ebb100(v20: i32):
     trap
 }
 ; sameln: function defs() {
-; nextln: ebb0(vx0: i32):
-; nextln:     v0 = iconst.i32x8 5
-; nextln:     v1 = f64const 0x1.0000000000000p2
+; nextln: $ebb100($v20: i32):
+; nextln:     $v1000 = iconst.i32x8 5
+; nextln:     $vx200 = f64const 0x1.0000000000000p2
 ; nextln:     trap
 ; nextln: }
 
