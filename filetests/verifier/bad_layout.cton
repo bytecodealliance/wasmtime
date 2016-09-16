@@ -1,6 +1,8 @@
-function test(i32) {    ; Err(terminator)
+test verifier
+
+function test(i32) {
     ebb0(v0: i32):
-        jump ebb1
+        jump ebb1       ; error: terminator
         return
     ebb1:
         jump ebb2

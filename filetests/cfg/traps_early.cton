@@ -1,12 +1,13 @@
 ; For testing cfg generation. This code explores the implications of encountering
 ; a terminating instruction before any connections have been made.
 test print-cfg
+test verifier
 
 function nonsense(i32) {
 ; check: digraph nonsense {
 
 ebb0(v1: i32):
-    trap
+    trap            ; error: terminator instruction was encountered before the end
     brnz v1, ebb2   ; unordered: ebb0:inst1 -> ebb2
     jump ebb1       ; unordered: ebb0:inst2 -> ebb1
 

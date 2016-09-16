@@ -1,5 +1,6 @@
 ; For testing cfg generation. This code is nonsense.
 test print-cfg
+test verifier
 
 function nonsense(i32, i32) -> f32 {
 ; check: digraph nonsense {
