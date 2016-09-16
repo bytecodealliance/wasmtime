@@ -2,13 +2,13 @@
 //!
 //! Read a series of Cretonne IL files and print their control flow graphs
 //! in graphviz format.
-use std::io::{Write, stdout};
+use std::fmt::{Result, Write, Display, Formatter};
 
 use CommandResult;
 use utils::read_to_string;
 use cretonne::ir::Function;
 use cretonne::cfg::ControlFlowGraph;
-use cretonne::ir::instructions::InstructionData;
+use cretonne::ir::instructions::BranchInfo;
 use cton_reader::parse_functions;
 
 pub fn run(files: Vec<String>) -> CommandResult {
@@ -21,137 +21,69 @@ pub fn run(files: Vec<String>) -> CommandResult {
     Ok(())
 }
 
-struct CFGPrinter<T: Write> {
-    level: usize,
-    writer: T,
-    buffer: String,
+struct CFGPrinter<'a> {
+    func: &'a Function,
+    cfg: ControlFlowGraph,
 }
 
-impl<T: Write> CFGPrinter<T> {
-    pub fn new(writer: T) -> CFGPrinter<T> {
+impl<'a> CFGPrinter<'a> {
+    pub fn new(func: &'a Function) -> CFGPrinter<'a> {
         CFGPrinter {
-            level: 0,
-            writer: writer,
-            buffer: String::new(),
+            func: func,
+            cfg: ControlFlowGraph::new(func),
         }
     }
 
-    pub fn print(&mut self, func: &Function) -> Result<(), String> {
-        self.level = 0;
-        self.header(func);
-        self.push_indent();
-        self.ebb_subgraphs(func);
-        let cfg = ControlFlowGraph::new(func);
-        self.cfg_connections(func, &cfg);
-        self.pop_indent();
-        self.footer();
-        self.write()
+    /// Write the CFG for this function to `w`.
+    pub fn write(&self, w: &mut Write) -> Result {
+        try!(self.header(w));
+        try!(self.ebb_nodes(w));
+        try!(self.cfg_connections(w));
+        writeln!(w, "}}")
     }
 
-    fn write(&mut self) -> Result<(), String> {
-        match self.writer.write(self.buffer.as_bytes()) {
-            Err(_) => return Err("Write failed!".to_string()),
-            _ => (),
-        };
-        match self.writer.flush() {
-            Err(_) => return Err("Flush failed!".to_string()),
-            _ => (),
-        };
+    fn header(&self, w: &mut Write) -> Result {
+        try!(writeln!(w, "digraph {} {{", self.func.name));
+        if let Some(entry) = self.func.layout.entry_block() {
+            try!(writeln!(w, "    {{rank=min; {}}}", entry));
+        }
         Ok(())
     }
 
-    fn append(&mut self, s: &str) {
-        let mut indent = String::new();
-        for _ in 0..self.level {
-            indent = indent + "    ";
-        }
-        self.buffer.push_str(&(indent + s));
-    }
-
-    fn push_indent(&mut self) {
-        self.level += 1;
-    }
-
-    fn pop_indent(&mut self) {
-        if self.level > 0 {
-            self.level -= 1;
-        }
-    }
-
-    fn open_paren(&mut self) {
-        self.append("{");
-    }
-
-    fn close_paren(&mut self) {
-        self.append("}");
-    }
-
-    fn newline(&mut self) {
-        self.append("\n");
-    }
-
-    fn header(&mut self, func: &Function) {
-        self.append(&format!("digraph {} ", func.name));
-        self.open_paren();
-        self.newline();
-        self.push_indent();
-        self.append("{rank=min; ebb0}");
-        self.pop_indent();
-        self.newline();
-    }
-
-    fn footer(&mut self) {
-        self.close_paren();
-        self.newline();
-    }
-
-    fn ebb_subgraphs(&mut self, func: &Function) {
-        for ebb in &func.layout {
-            let inst_data = func.layout
-                .ebb_insts(ebb)
-                .filter(|inst| {
-                    match func.dfg[*inst] {
-                        InstructionData::Branch { ty: _, opcode: _, data: _ } => true,
-                        InstructionData::Jump { ty: _, opcode: _, data: _ } => true,
-                        _ => false,
+    fn ebb_nodes(&self, w: &mut Write) -> Result {
+        for ebb in &self.func.layout {
+            try!(write!(w, "    {} [shape=record, label=\"{{{}", ebb, ebb));
+            // Add all outgoing branch instructions to the label.
+            for inst in self.func.layout.ebb_insts(ebb) {
+                let idata = &self.func.dfg[inst];
+                match idata.analyze_branch() {
+                    BranchInfo::SingleDest(dest, _) => {
+                        try!(write!(w, " | <{}>{} {}", inst, idata.opcode(), dest))
                     }
-                })
-                .map(|inst| {
-                    let op = match func.dfg[inst] {
-                        InstructionData::Branch { ty: _, opcode, ref data } => {
-                            Some((opcode, data.destination))
-                        }
-                        InstructionData::Jump { ty: _, opcode, ref data } => {
-                            Some((opcode, data.destination))
-                        }
-                        _ => None,
-                    };
-                    (inst, op)
-                })
-                .collect::<Vec<_>>();
-
-            let mut insts = vec![format!("{}", ebb)];
-            for (inst, data) in inst_data {
-                let (op, dest) = data.unwrap();
-                insts.push(format!("<{}>{} {}", inst, op, dest));
+                    BranchInfo::Table(table) => {
+                        try!(write!(w, " | <{}>{} {}", inst, idata.opcode(), table))
+                    }
+                    BranchInfo::NotABranch => {}
+                }
             }
-
-            self.append(&format!("{} [shape=record, label=\"{}{}{}\"]",
-                                 ebb,
-                                 "{",
-                                 insts.join(" | "),
-                                 "}"));
-            self.newline();
+            try!(writeln!(w, "}}\"]"))
         }
+        Ok(())
     }
 
-    fn cfg_connections(&mut self, func: &Function, cfg: &ControlFlowGraph) {
-        for ebb in &func.layout {
-            for &(parent, inst) in cfg.get_predecessors(ebb) {
-                self.append(&format!("{}:{} -> {}", parent, inst, ebb));
-                self.newline();
+    fn cfg_connections(&self, w: &mut Write) -> Result {
+        for ebb in &self.func.layout {
+            for &(parent, inst) in self.cfg.get_predecessors(ebb) {
+                try!(writeln!(w, "    {}:{} -> {}", parent, inst, ebb));
             }
         }
+        Ok(())
+    }
+}
+
+impl<'a> Display for CFGPrinter<'a> {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        self.write(f)
     }
 }
 
@@ -159,13 +91,11 @@ fn print_cfg(filename: String) -> CommandResult {
     let buffer = try!(read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e)));
     let items = try!(parse_functions(&buffer).map_err(|e| format!("{}: {}", filename, e)));
 
-    let mut cfg_printer = CFGPrinter::new(stdout());
     for (idx, func) in items.into_iter().enumerate() {
         if idx != 0 {
             println!("");
         }
-
-        try!(cfg_printer.print(&func));
+        print!("{}", CFGPrinter::new(&func));
     }
 
     Ok(())
