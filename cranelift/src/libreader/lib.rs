@@ -8,8 +8,10 @@ extern crate cretonne;
 pub use parser::{Result, parse_functions, parse_test};
 pub use testcommand::{TestCommand, TestOption};
 pub use testfile::{TestFile, Details};
+pub use sourcemap::SourceMap;
 
 mod lexer;
 mod parser;
 mod testcommand;
 mod testfile;
+mod sourcemap;
