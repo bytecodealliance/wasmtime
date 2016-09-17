@@ -523,7 +523,7 @@ impl<'a> Parser<'a> {
         self.comments.clear();
         self.gather_comments(AnyEntity::Function);
 
-        let (name, sig) = try!(self.parse_function_spec());
+        let (location, name, sig) = try!(self.parse_function_spec());
         let mut ctx = Context::new(Function::with_name_signature(name, sig));
 
         // function ::= function-spec * "{" preamble function-body "}"
@@ -545,6 +545,7 @@ impl<'a> Parser<'a> {
         try!(ctx.rewrite_references());
 
         let details = Details {
+            location: location,
             comments: mem::replace(&mut self.comments, Vec::new()),
             map: sourcemap::new(ctx.values, ctx.ebbs, ctx.stack_slots, ctx.jump_tables),
         };
@@ -556,8 +557,9 @@ impl<'a> Parser<'a> {
     //
     // function-spec ::= * "function" name signature
     //
-    fn parse_function_spec(&mut self) -> Result<(FunctionName, Signature)> {
+    fn parse_function_spec(&mut self) -> Result<(Location, FunctionName, Signature)> {
         try!(self.match_token(Token::Function, "expected 'function' keyword"));
+        let location = self.loc;
 
         // function-spec ::= "function" * name signature
         let name = try!(self.parse_function_name());
@@ -565,7 +567,7 @@ impl<'a> Parser<'a> {
         // function-spec ::= "function" name * signature
         let sig = try!(self.parse_signature());
 
-        Ok((name, sig))
+        Ok((location, name, sig))
     }
 
     // Parse a function name.

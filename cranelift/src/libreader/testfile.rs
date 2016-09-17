@@ -8,6 +8,7 @@ use cretonne::ir::Function;
 use cretonne::ir::entities::AnyEntity;
 use testcommand::TestCommand;
 use sourcemap::SourceMap;
+use parser::Location;
 
 /// A parsed test case.
 ///
@@ -24,6 +25,7 @@ pub struct TestFile<'a> {
 /// The details to not affect the semantics of the function.
 #[derive(Debug)]
 pub struct Details<'a> {
+    pub location: Location,
     pub comments: Vec<Comment<'a>>,
     pub map: SourceMap,
 }
