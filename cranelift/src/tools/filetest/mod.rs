@@ -4,6 +4,7 @@
 //! available test commands.
 
 use std::path::Path;
+use std::time;
 use cton_reader::TestCommand;
 use CommandResult;
 use cat;
@@ -12,8 +13,12 @@ use filetest::runner::TestRunner;
 
 pub mod subtest;
 mod runner;
+mod runone;
 mod domtree;
 mod verifier;
+
+/// The result of running the test in a file.
+pub type TestResult = Result<time::Duration, String>;
 
 /// Main entry point for `cton-util test`.
 ///
