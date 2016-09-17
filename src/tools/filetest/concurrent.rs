@@ -127,20 +127,17 @@ fn worker_thread(thread_num: usize,
                     })
                     .unwrap();
 
-                let result = match catch_unwind(|| runone::run(path.as_path())) {
-                    Ok(r) => r,
-                    Err(e) => {
-                        // The test panicked, leaving us a `Box<Any>`.
-                        // Panics are usually strings.
-                        if let Some(msg) = e.downcast_ref::<String>() {
-                            Err(format!("panicked in worker #{}: {}", thread_num, msg))
-                        } else if let Some(msg) = e.downcast_ref::<&'static str>() {
-                            Err(format!("panicked in worker #{}: {}", thread_num, msg))
-                        } else {
-                            Err(format!("panicked in worker #{}", thread_num))
-                        }
+                let result = catch_unwind(|| runone::run(path.as_path())).unwrap_or_else(|e| {
+                    // The test panicked, leaving us a `Box<Any>`.
+                    // Panics are usually strings.
+                    if let Some(msg) = e.downcast_ref::<String>() {
+                        Err(format!("panicked in worker #{}: {}", thread_num, msg))
+                    } else if let Some(msg) = e.downcast_ref::<&'static str>() {
+                        Err(format!("panicked in worker #{}: {}", thread_num, msg))
+                    } else {
+                        Err(format!("panicked in worker #{}", thread_num))
                     }
-                };
+                });
 
                 replies.send(Reply::Done {
                         jobid: jobid,
