@@ -4,3 +4,7 @@ rust:
   - beta
   - nightly
 script: ./test-all.sh
+cache:
+  - cargo
+  - directories:
+    - src/tools/target
