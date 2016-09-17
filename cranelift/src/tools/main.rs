@@ -4,6 +4,7 @@ extern crate cton_reader;
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate filecheck;
+extern crate num_cpus;
 
 use cretonne::VERSION;
 use docopt::Docopt;
