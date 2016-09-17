@@ -5,17 +5,26 @@
 
 use std::error::Error;
 use std::ffi::OsStr;
-use std::mem;
-use std::panic::catch_unwind;
 use std::path::{Path, PathBuf};
 use filetest::{TestResult, runone};
 use CommandResult;
 
+struct QueueEntry {
+    path: PathBuf,
+    state: State,
+}
+
 #[derive(PartialEq, Eq, Debug)]
-enum QueueEntry {
-    New(PathBuf),
+enum State {
+    New,
     Running,
-    Done(PathBuf, TestResult),
+    Done(TestResult),
+}
+
+impl QueueEntry {
+    pub fn path(&self) -> &Path {
+        self.path.as_path()
+    }
 }
 
 pub struct TestRunner {
@@ -58,37 +67,35 @@ impl TestRunner {
     ///
     /// Any problems reading `file` as a test case file will be reported as a test failure.
     pub fn push_test<P: Into<PathBuf>>(&mut self, file: P) {
-        self.tests.push(QueueEntry::New(file.into()));
+        self.tests.push(QueueEntry {
+            path: file.into(),
+            state: State::New,
+        });
     }
 
     /// Take a new test for running as a job.
     /// Leaves the queue entry marked as `Runnning`.
-    fn take_job(&mut self) -> Option<Job> {
-        let index = self.new_tests;
-        if index == self.tests.len() {
+    fn take_job(&mut self) -> Option<usize> {
+        let jobid = self.new_tests;
+        if jobid == self.tests.len() {
             return None;
         }
         self.new_tests += 1;
-
-        let entry = mem::replace(&mut self.tests[index], QueueEntry::Running);
-        if let QueueEntry::New(path) = entry {
-            Some(Job::new(index, path))
-        } else {
-            // Oh, sorry about that. Put the entry back.
-            self.tests[index] = entry;
-            None
-        }
+        assert_eq!(self.tests[jobid].state, State::New);
+        self.tests[jobid].state = State::Running;
+        Some(jobid)
     }
 
     /// Report the end of a job.
-    fn finish_job(&mut self, job: Job, result: TestResult) {
-        assert_eq!(self.tests[job.index], QueueEntry::Running);
+    fn finish_job(&mut self, jobid: usize, result: TestResult) {
+        assert_eq!(self.tests[jobid].state, State::Running);
         if let Err(ref e) = result {
-            self.job_error(&job.path, e);
+            self.job_error(jobid, e);
         }
-        self.tests[job.index] = QueueEntry::Done(job.path, result);
-        if job.index == self.finished_tests {
-            while let Some(&QueueEntry::Done(_, _)) = self.tests.get(self.finished_tests) {
+        self.tests[jobid].state = State::Done(result);
+        if jobid == self.finished_tests {
+            while let Some(&QueueEntry { state: State::Done(_), .. }) = self.tests
+                .get(self.finished_tests) {
                 self.finished_tests += 1;
             }
         }
@@ -154,16 +161,16 @@ impl TestRunner {
     }
 
     /// Report an error related to a job.
-    fn job_error(&mut self, path: &Path, err: &str) {
+    fn job_error(&mut self, jobid: usize, err: &str) {
         self.errors += 1;
-        println!("FAIL {}: {}", path.to_string_lossy(), err);
+        println!("FAIL {}: {}", self.tests[jobid].path.to_string_lossy(), err);
     }
 
     /// Schedule and new jobs to run.
     fn schedule_jobs(&mut self) {
-        while let Some(job) = self.take_job() {
-            let result = job.run();
-            self.finish_job(job, result);
+        while let Some(jobid) = self.take_job() {
+            let result = runone::run(self.tests[jobid].path());
+            self.finish_job(jobid, result);
         }
     }
 
@@ -176,28 +183,6 @@ impl TestRunner {
             0 => Ok(()),
             1 => Err("1 failure".to_string()),
             n => Err(format!("{} failures", n)),
-        }
-    }
-}
-
-/// A test file waiting to be run.
-struct Job {
-    index: usize,
-    path: PathBuf,
-}
-
-impl Job {
-    pub fn new(index: usize, path: PathBuf) -> Job {
-        Job {
-            index: index,
-            path: path,
-        }
-    }
-
-    pub fn run(&self) -> TestResult {
-        match catch_unwind(|| runone::run(self.path.as_path())) {
-            Err(msg) => Err(format!("panic: {:?}", msg)),
-            Ok(result) => result,
         }
     }
 }
