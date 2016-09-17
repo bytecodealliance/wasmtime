@@ -15,6 +15,7 @@ use utils::read_to_string;
 use cton_reader::parse_test;
 use cretonne::ir::Function;
 use cretonne::verify_function;
+use filetest::new_subtest;
 use filetest::subtest::{self, SubTest, Context};
 
 type TestResult = Result<time::Duration, String>;
@@ -218,7 +219,7 @@ impl Job {
         }
         // Parse the test commands.
         let mut tests =
-            try!(testfile.commands.iter().map(subtest::new).collect::<subtest::Result<Vec<_>>>());
+            try!(testfile.commands.iter().map(new_subtest).collect::<subtest::Result<Vec<_>>>());
 
         // Sort the tests so the mutators are at the end, and those that
         // don't need the verifier are at the front

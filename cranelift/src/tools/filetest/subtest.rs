@@ -3,25 +3,10 @@
 use std::result;
 use std::borrow::Cow;
 use cretonne::ir::Function;
-use cton_reader::{TestCommand, Details};
+use cton_reader::Details;
 use filecheck::{self, CheckerBuilder, Checker, Value as FCValue};
 
 pub type Result<T> = result::Result<T, String>;
-
-/// Create a new subcommand trait object to match `parsed.command`.
-pub fn new(parsed: &TestCommand) -> Result<Box<SubTest>> {
-    use cat;
-    use print_cfg;
-    use filetest::domtree;
-    use filetest::verifier;
-    match parsed.command {
-        "cat" => cat::subtest(parsed),
-        "print-cfg" => print_cfg::subtest(parsed),
-        "domtree" => domtree::subtest(parsed),
-        "verifier" => verifier::subtest(parsed),
-        _ => Err(format!("unknown test command '{}'", parsed.command)),
-    }
-}
 
 /// Context for running a a test on a single function.
 pub struct Context<'a> {
