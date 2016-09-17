@@ -7,7 +7,14 @@ use std::error::Error;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use filetest::{TestResult, runone};
+use filetest::concurrent::{ConcurrentRunner, Reply};
 use CommandResult;
+
+// Timeout in seconds when we're not making progress.
+const TIMEOUT_PANIC: usize = 10;
+
+// Timeout for reporting slow tests without panicking.
+const TIMEOUT_SLOW: usize = 3;
 
 struct QueueEntry {
     path: PathBuf,
@@ -17,6 +24,7 @@ struct QueueEntry {
 #[derive(PartialEq, Eq, Debug)]
 enum State {
     New,
+    Queued,
     Running,
     Done(TestResult),
 }
@@ -40,7 +48,13 @@ pub struct TestRunner {
     // Number of contiguous finished tests at the front of `tests`.
     finished_tests: usize,
 
+    // Number of errors seen so far.
     errors: usize,
+
+    // Number of ticks received since we saw any progress.
+    ticks_since_progress: usize,
+
+    threads: Option<ConcurrentRunner>,
 }
 
 impl TestRunner {
@@ -52,6 +66,8 @@ impl TestRunner {
             new_tests: 0,
             finished_tests: 0,
             errors: 0,
+            ticks_since_progress: 0,
+            threads: None,
         }
     }
 
@@ -73,32 +89,10 @@ impl TestRunner {
         });
     }
 
-    /// Take a new test for running as a job.
-    /// Leaves the queue entry marked as `Runnning`.
-    fn take_job(&mut self) -> Option<usize> {
-        let jobid = self.new_tests;
-        if jobid == self.tests.len() {
-            return None;
-        }
-        self.new_tests += 1;
-        assert_eq!(self.tests[jobid].state, State::New);
-        self.tests[jobid].state = State::Running;
-        Some(jobid)
-    }
-
-    /// Report the end of a job.
-    fn finish_job(&mut self, jobid: usize, result: TestResult) {
-        assert_eq!(self.tests[jobid].state, State::Running);
-        if let Err(ref e) = result {
-            self.job_error(jobid, e);
-        }
-        self.tests[jobid].state = State::Done(result);
-        if jobid == self.finished_tests {
-            while let Some(&QueueEntry { state: State::Done(_), .. }) = self.tests
-                .get(self.finished_tests) {
-                self.finished_tests += 1;
-            }
-        }
+    /// Begin running tests concurrently.
+    pub fn start_threads(&mut self) {
+        assert!(self.threads.is_none());
+        self.threads = Some(ConcurrentRunner::new());
     }
 
     /// Scan any directories pushed so far.
@@ -166,11 +160,87 @@ impl TestRunner {
         println!("FAIL {}: {}", self.tests[jobid].path.to_string_lossy(), err);
     }
 
-    /// Schedule and new jobs to run.
+    /// Schedule any new jobs to run.
     fn schedule_jobs(&mut self) {
-        while let Some(jobid) = self.take_job() {
-            let result = runone::run(self.tests[jobid].path());
-            self.finish_job(jobid, result);
+        for jobid in self.new_tests..self.tests.len() {
+            assert_eq!(self.tests[jobid].state, State::New);
+            if let Some(ref mut conc) = self.threads {
+                // Queue test for concurrent execution.
+                self.tests[jobid].state = State::Queued;
+                conc.put(jobid, self.tests[jobid].path());
+            } else {
+                // Run test synchronously.
+                self.tests[jobid].state = State::Running;
+                let result = runone::run(self.tests[jobid].path());
+                self.finish_job(jobid, result);
+            }
+            self.new_tests = jobid + 1;
+        }
+
+        // Check for any asynchronous replies without blocking.
+        while let Some(reply) = self.threads.as_mut().and_then(ConcurrentRunner::try_get) {
+            self.handle_reply(reply);
+        }
+    }
+
+    /// Report the end of a job.
+    fn finish_job(&mut self, jobid: usize, result: TestResult) {
+        assert_eq!(self.tests[jobid].state, State::Running);
+        if let Err(ref e) = result {
+            self.job_error(jobid, e);
+        }
+        self.tests[jobid].state = State::Done(result);
+        if jobid == self.finished_tests {
+            while let Some(&QueueEntry { state: State::Done(_), .. }) = self.tests
+                .get(self.finished_tests) {
+                self.finished_tests += 1;
+            }
+        }
+    }
+
+    /// Handle a reply from the async threads.
+    fn handle_reply(&mut self, reply: Reply) {
+        match reply {
+            Reply::Starting { jobid, .. } => {
+                assert_eq!(self.tests[jobid].state, State::Queued);
+                self.tests[jobid].state = State::Running;
+            }
+            Reply::Done { jobid, result } => {
+                self.ticks_since_progress = 0;
+                self.finish_job(jobid, result)
+            }
+            Reply::Tick => {
+                self.ticks_since_progress += 1;
+                if self.ticks_since_progress == TIMEOUT_SLOW {
+                    println!("STALLED for {} seconds with {}/{} tests finished",
+                             self.ticks_since_progress,
+                             self.finished_tests,
+                             self.tests.len());
+                    for jobid in self.finished_tests..self.tests.len() {
+                        if self.tests[jobid].state == State::Running {
+                            println!("slow: {}", self.tests[jobid].path.to_string_lossy());
+                        }
+                    }
+                }
+                if self.ticks_since_progress >= TIMEOUT_PANIC {
+                    panic!("worker threads stalled for {} seconds.",
+                           self.ticks_since_progress);
+                }
+            }
+        }
+    }
+
+    /// Drain the async jobs and shut down the threads.
+    fn drain_threads(&mut self) {
+        if let Some(mut conc) = self.threads.take() {
+            conc.shutdown();
+            while self.finished_tests < self.tests.len() {
+                match conc.get() {
+                    Some(reply) => self.handle_reply(reply),
+                    None => break,
+                }
+            }
+            conc.join();
         }
     }
 
@@ -178,6 +248,7 @@ impl TestRunner {
     pub fn run(&mut self) -> CommandResult {
         self.scan_dirs();
         self.schedule_jobs();
+        self.drain_threads();
         println!("{} tests", self.tests.len());
         match self.errors {
             0 => Ok(()),

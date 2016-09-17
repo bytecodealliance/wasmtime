@@ -14,6 +14,7 @@ use filetest::runner::TestRunner;
 pub mod subtest;
 mod runner;
 mod runone;
+mod concurrent;
 mod domtree;
 mod verifier;
 
@@ -40,6 +41,7 @@ pub fn run(files: Vec<String>) -> CommandResult {
         }
     }
 
+    runner.start_threads();
     runner.run()
 }
 
