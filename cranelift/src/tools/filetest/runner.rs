@@ -271,11 +271,55 @@ impl TestRunner {
         }
     }
 
+    /// Print out a report of slow tests.
+    fn report_slow_tests(&self) {
+        // Collect runtimes of succeeded tests.
+        let mut times = self.tests
+            .iter()
+            .filter_map(|entry| match *entry {
+                QueueEntry { state: State::Done(Ok(dur)), .. } => Some(dur),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        // Get me some real data, kid.
+        let len = times.len();
+        if len < 4 {
+            return;
+        }
+
+        // Compute quartiles.
+        times.sort();
+        let qlen = len / 4;
+        let q1 = times[qlen];
+        let q3 = times[len - 1 - qlen];
+        // Inter-quartile range.
+        let iqr = q3 - q1;
+
+        // Cut-off for what we consider a 'slow' test: 1.5 IQR from the 75% quartile.
+        // These are the data points that would be plotted as outliers outside a box plot.
+        let cut = q3 + iqr * 2 / 3;
+        if cut > *times.last().unwrap() {
+            return;
+        }
+
+        for t in self.tests
+            .iter()
+            .filter(|entry| match **entry {
+                QueueEntry { state: State::Done(Ok(dur)), .. } => dur > cut,
+                _ => false,
+            }) {
+            println!("slow: {}", t)
+        }
+
+    }
+
     /// Scan pushed directories for tests and run them.
     pub fn run(&mut self) -> CommandResult {
         self.scan_dirs();
         self.schedule_jobs();
         self.drain_threads();
+        self.report_slow_tests();
         println!("{} tests", self.tests.len());
         match self.errors {
             0 => Ok(()),
