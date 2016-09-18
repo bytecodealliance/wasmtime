@@ -30,8 +30,8 @@ pub type TestResult = Result<time::Duration, String>;
 /// Directories are scanned recursively for test cases ending in `.cton`. These test cases are
 /// executed on background threads.
 ///
-pub fn run(files: Vec<String>) -> CommandResult {
-    let mut runner = TestRunner::new();
+pub fn run(verbose: bool, files: Vec<String>) -> CommandResult {
+    let mut runner = TestRunner::new(verbose);
 
     for path in files.iter().map(Path::new) {
         if path.is_file() {
