@@ -4,6 +4,7 @@
 //! scanning directories for tests.
 
 use std::error::Error;
+use std::fmt::{self, Display};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use filetest::{TestResult, runone};
@@ -35,7 +36,26 @@ impl QueueEntry {
     }
 }
 
+impl Display for QueueEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let p = self.path.to_string_lossy();
+        match self.state {
+            State::Done(Ok(dur)) => {
+                write!(f,
+                       "{}.{:03} {}",
+                       dur.as_secs(),
+                       dur.subsec_nanos() / 1000000,
+                       p)
+            }
+            State::Done(Err(ref e)) => write!(f, "FAIL {}: {}", p, e),
+            _ => write!(f, "{}", p),
+        }
+    }
+}
+
 pub struct TestRunner {
+    verbose: bool,
+
     // Directories that have not yet been scanned.
     dir_stack: Vec<PathBuf>,
 
@@ -45,8 +65,8 @@ pub struct TestRunner {
     // Pointer into `tests` where the `New` entries begin.
     new_tests: usize,
 
-    // Number of contiguous finished tests at the front of `tests`.
-    finished_tests: usize,
+    // Number of contiguous reported tests at the front of `tests`.
+    reported_tests: usize,
 
     // Number of errors seen so far.
     errors: usize,
@@ -59,12 +79,13 @@ pub struct TestRunner {
 
 impl TestRunner {
     /// Create a new blank TrstRunner.
-    pub fn new() -> TestRunner {
+    pub fn new(verbose: bool) -> TestRunner {
         TestRunner {
+            verbose: verbose,
             dir_stack: Vec::new(),
             tests: Vec::new(),
             new_tests: 0,
-            finished_tests: 0,
+            reported_tests: 0,
             errors: 0,
             ticks_since_progress: 0,
             threads: None,
@@ -154,10 +175,17 @@ impl TestRunner {
         println!("{}: {}", path.to_string_lossy(), err);
     }
 
-    /// Report an error related to a job.
-    fn job_error(&mut self, jobid: usize, err: &str) {
-        self.errors += 1;
-        println!("FAIL {}: {}", self.tests[jobid].path.to_string_lossy(), err);
+    /// Report on the next in-order job, if it's done.
+    fn report_job(&self) -> bool {
+        let jobid = self.reported_tests;
+        if let Some(&QueueEntry { state: State::Done(ref result), .. }) = self.tests.get(jobid) {
+            if self.verbose || result.is_err() {
+                println!("{}", self.tests[jobid]);
+            }
+            true
+        } else {
+            false
+        }
     }
 
     /// Schedule any new jobs to run.
@@ -186,15 +214,14 @@ impl TestRunner {
     /// Report the end of a job.
     fn finish_job(&mut self, jobid: usize, result: TestResult) {
         assert_eq!(self.tests[jobid].state, State::Running);
-        if let Err(ref e) = result {
-            self.job_error(jobid, e);
+        if result.is_err() {
+            self.errors += 1;
         }
         self.tests[jobid].state = State::Done(result);
-        if jobid == self.finished_tests {
-            while let Some(&QueueEntry { state: State::Done(_), .. }) = self.tests
-                .get(self.finished_tests) {
-                self.finished_tests += 1;
-            }
+
+        // Rports jobs in order.
+        while self.report_job() {
+            self.reported_tests += 1;
         }
     }
 
@@ -214,11 +241,11 @@ impl TestRunner {
                 if self.ticks_since_progress == TIMEOUT_SLOW {
                     println!("STALLED for {} seconds with {}/{} tests finished",
                              self.ticks_since_progress,
-                             self.finished_tests,
+                             self.reported_tests,
                              self.tests.len());
-                    for jobid in self.finished_tests..self.tests.len() {
+                    for jobid in self.reported_tests..self.tests.len() {
                         if self.tests[jobid].state == State::Running {
-                            println!("slow: {}", self.tests[jobid].path.to_string_lossy());
+                            println!("slow: {}", self.tests[jobid]);
                         }
                     }
                 }
@@ -234,7 +261,7 @@ impl TestRunner {
     fn drain_threads(&mut self) {
         if let Some(mut conc) = self.threads.take() {
             conc.shutdown();
-            while self.finished_tests < self.tests.len() {
+            while self.reported_tests < self.tests.len() {
                 match conc.get() {
                     Some(reply) => self.handle_reply(reply),
                     None => break,

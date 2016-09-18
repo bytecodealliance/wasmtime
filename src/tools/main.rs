@@ -21,7 +21,7 @@ const USAGE: &'static str = "
 Cretonne code generator utility
 
 Usage:
-    cton-util test <file>...
+    cton-util test [-v] <file>...
     cton-util cat <file>...
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
@@ -60,7 +60,7 @@ fn cton_util() -> CommandResult {
 
     // Find the sub-command to execute.
     if args.cmd_test {
-        filetest::run(args.arg_file)
+        filetest::run(args.flag_verbose, args.arg_file)
     } else if args.cmd_cat {
         cat::run(args.arg_file)
     } else if args.cmd_filecheck {
