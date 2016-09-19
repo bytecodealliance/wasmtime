@@ -8,12 +8,7 @@
 use std::str::CharIndices;
 use cretonne::ir::types;
 use cretonne::ir::{Value, Ebb};
-
-/// The location of a `Token` or `Error`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Location {
-    pub line_number: usize,
-}
+use error::Location;
 
 /// A Token returned from the `Lexer`.
 ///
@@ -379,6 +374,7 @@ mod tests {
     use super::*;
     use cretonne::ir::types;
     use cretonne::ir::{Value, Ebb};
+    use error::Location;
 
     fn token<'a>(token: Token<'a>, line: usize) -> Option<Result<LocatedToken<'a>, LocatedError>> {
         Some(super::token(token, Location { line_number: line }))
