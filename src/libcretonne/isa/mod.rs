@@ -41,7 +41,7 @@
 //! concurrent function compilations.
 
 pub mod riscv;
-mod encoding;
+mod enc_tables;
 
 use settings;
 use ir::{InstructionData, DataFlowGraph};
