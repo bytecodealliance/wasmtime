@@ -6,7 +6,7 @@ use std::fmt;
 use std::result;
 
 /// The location of a `Token` or `Error`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Location {
     pub line_number: usize,
 }
