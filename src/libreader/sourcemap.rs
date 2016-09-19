@@ -8,7 +8,7 @@
 //! clients.
 
 use std::collections::HashMap;
-use cretonne::ir::{StackSlot, JumpTable, Ebb, Value};
+use cretonne::ir::{StackSlot, JumpTable, Ebb, Value, Inst};
 use cretonne::ir::entities::AnyEntity;
 use error::{Result, Location};
 
@@ -19,6 +19,9 @@ pub struct SourceMap {
     ebbs: HashMap<Ebb, Ebb>, // ebbNN
     stack_slots: HashMap<u32, StackSlot>, // ssNN
     jump_tables: HashMap<u32, JumpTable>, // jtNN
+
+    // Store locations for entities, including instructions.
+    locations: HashMap<AnyEntity, Location>,
 }
 
 /// Read-only interface which is exposed outside the parser crate.
@@ -64,6 +67,12 @@ impl SourceMap {
                 _ => None,
             }
         })
+    }
+
+    /// Get the source location where an entity was defined.
+    /// This looks up entities in the parsed function, not the source entity numbers.
+    pub fn location(&self, entity: AnyEntity) -> Option<Location> {
+        self.locations.get(&entity).cloned()
     }
 
     /// Rewrite an Ebb reference.
@@ -126,6 +135,10 @@ pub trait MutableSourceMap {
     fn def_ebb(&mut self, src: Ebb, entity: Ebb, loc: &Location) -> Result<()>;
     fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()>;
     fn def_jt(&mut self, src_num: u32, entity: JumpTable, loc: &Location) -> Result<()>;
+
+    /// Define an instruction. Since instruction numbers never appear in source, only the location
+    /// is recorded.
+    fn def_inst(&mut self, entity: Inst, loc: &Location) -> Result<()>;
 }
 
 impl MutableSourceMap for SourceMap {
@@ -135,12 +148,15 @@ impl MutableSourceMap for SourceMap {
             ebbs: HashMap::new(),
             stack_slots: HashMap::new(),
             jump_tables: HashMap::new(),
+            locations: HashMap::new(),
         }
     }
 
     fn def_value(&mut self, src: Value, entity: Value, loc: &Location) -> Result<()> {
         if self.values.insert(src, entity).is_some() {
             err!(loc, "duplicate value: {}", src)
+        } else if self.locations.insert(entity.into(), loc.clone()).is_some() {
+            err!(loc, "duplicate entity: {}", entity)
         } else {
             Ok(())
         }
@@ -149,6 +165,8 @@ impl MutableSourceMap for SourceMap {
     fn def_ebb(&mut self, src: Ebb, entity: Ebb, loc: &Location) -> Result<()> {
         if self.ebbs.insert(src, entity).is_some() {
             err!(loc, "duplicate EBB: {}", src)
+        } else if self.locations.insert(entity.into(), loc.clone()).is_some() {
+            err!(loc, "duplicate entity: {}", entity)
         } else {
             Ok(())
         }
@@ -157,6 +175,8 @@ impl MutableSourceMap for SourceMap {
     fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()> {
         if self.stack_slots.insert(src_num, entity).is_some() {
             err!(loc, "duplicate stack slot: ss{}", src_num)
+        } else if self.locations.insert(entity.into(), loc.clone()).is_some() {
+            err!(loc, "duplicate entity: {}", entity)
         } else {
             Ok(())
         }
@@ -165,6 +185,16 @@ impl MutableSourceMap for SourceMap {
     fn def_jt(&mut self, src_num: u32, entity: JumpTable, loc: &Location) -> Result<()> {
         if self.jump_tables.insert(src_num, entity).is_some() {
             err!(loc, "duplicate jump table: jt{}", src_num)
+        } else if self.locations.insert(entity.into(), loc.clone()).is_some() {
+            err!(loc, "duplicate entity: {}", entity)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn def_inst(&mut self, entity: Inst, loc: &Location) -> Result<()> {
+        if self.locations.insert(entity.into(), loc.clone()).is_some() {
+            err!(loc, "duplicate entity: {}", entity)
         } else {
             Ok(())
         }
