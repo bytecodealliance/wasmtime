@@ -65,7 +65,7 @@ mod tests {
     use ir::{types, immediates};
 
     fn encstr(isa: &isa::TargetIsa, enc: isa::Encoding) -> String {
-        format!("{}/{:02x}", isa.recipe_names()[enc.recipe()], enc.bits())
+        isa.display_enc(enc).to_string()
     }
 
     #[test]
