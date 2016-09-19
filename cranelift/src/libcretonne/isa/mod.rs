@@ -101,4 +101,12 @@ pub trait TargetIsa {
     ///
     /// This is just used for printing and parsing encodings in the textual IL format.
     fn recipe_names(&self) -> &'static [&'static str];
+
+    /// Create an object that can display an ISA-dependent encoding properly.
+    fn display_enc(&self, enc: Encoding) -> encoding::DisplayEncoding {
+        encoding::DisplayEncoding {
+            encoding: enc,
+            recipe_names: self.recipe_names(),
+        }
+    }
 }
