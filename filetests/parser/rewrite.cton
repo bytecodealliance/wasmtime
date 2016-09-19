@@ -29,7 +29,7 @@ ebb100(v20: i32):
     vx200 = iadd v20, v1000
     jump ebb100(v1000)
 }
-; sameln: function "use_value"() {
+; sameln: function use_value() {
 ; nextln: ebb0(vx0: i32):
 ; nextln:     v0 = iadd_imm vx0, 5
 ; nextln:     v1 = iadd vx0, v0

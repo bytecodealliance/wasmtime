@@ -470,11 +470,11 @@ impl<'a> Parser<'a> {
     //
     // function ::= "function" * name signature { ... }
     //
-    fn parse_function_name(&mut self) -> Result<String> {
+    fn parse_function_name(&mut self) -> Result<FunctionName> {
         match self.token() {
             Some(Token::Identifier(s)) => {
                 self.consume();
-                Ok(s.to_string())
+                Ok(FunctionName::new(s))
             }
             _ => err!(self.loc, "expected function name"),
         }
@@ -1161,7 +1161,7 @@ mod tests {
                                      }")
             .parse_function()
             .unwrap();
-        assert_eq!(func.name, "foo");
+        assert_eq!(func.name.to_string(), "foo");
         let mut iter = func.stack_slots.keys();
         let ss0 = iter.next().unwrap();
         assert_eq!(ss0.to_string(), "ss0");
@@ -1190,7 +1190,7 @@ mod tests {
                                      }")
             .parse_function()
             .unwrap();
-        assert_eq!(func.name, "ebbs");
+        assert_eq!(func.name.to_string(), "ebbs");
 
         let mut ebbs = func.layout.ebbs();
 
@@ -1219,7 +1219,7 @@ mod tests {
                          ; More trailing.")
                 .parse_function()
                 .unwrap();
-        assert_eq!(&func.name, "comment");
+        assert_eq!(func.name.to_string(), "comment");
         assert_eq!(comments.len(), 8); // no 'before' comment.
         assert_eq!(comments[0],
                    Comment {
@@ -1252,6 +1252,6 @@ mod tests {
         assert_eq!(tf.commands[0].command, "cfg");
         assert_eq!(tf.commands[1].command, "verify");
         assert_eq!(tf.functions.len(), 1);
-        assert_eq!(tf.functions[0].0.name, "comment");
+        assert_eq!(tf.functions[0].0.name.to_string(), "comment");
     }
 }

@@ -191,12 +191,6 @@ impl Default for Type {
 //
 // ====--------------------------------------------------------------------------------------====//
 
-/// The name of a function can be any UTF-8 string.
-///
-/// Function names are mostly a testing and debugging tool. In partucular, `.cton` files use
-/// function names to identify functions.
-pub type FunctionName = String;
-
 /// Function argument extension options.
 ///
 /// On some architectures, small integer function arguments are extended to the width of a
