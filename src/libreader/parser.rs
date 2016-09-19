@@ -5,12 +5,11 @@
 //
 // ====--------------------------------------------------------------------------------------====//
 
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::u32;
 use std::mem;
-use cretonne::ir::{Function, Ebb, Inst, Opcode, Value, Type, FunctionName, StackSlot,
-                   StackSlotData, JumpTable, JumpTableData};
+use cretonne::ir::{Function, Ebb, Inst, Opcode, Value, Type, FunctionName, StackSlotData,
+                   JumpTable, JumpTableData};
 use cretonne::ir::types::{VOID, Signature, ArgumentType, ArgumentExtension};
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::{AnyEntity, NO_EBB, NO_INST, NO_VALUE};
@@ -20,7 +19,7 @@ use testfile::{TestFile, Details, Comment};
 use error::{Location, Error, Result};
 use lexer::{self, Lexer, Token};
 use testcommand::TestCommand;
-use sourcemap;
+use sourcemap::{SourceMap, MutableSourceMap};
 
 /// Parse the entire `text` into a list of functions.
 ///
@@ -65,10 +64,7 @@ pub struct Parser<'a> {
 // file by number. We need to map these numbers to real references.
 struct Context {
     function: Function,
-    stack_slots: HashMap<u32, StackSlot>, // ssNN
-    jump_tables: HashMap<u32, JumpTable>, // jtNN
-    ebbs: HashMap<Ebb, Ebb>, // ebbNN
-    values: HashMap<Value, Value>, // vNN, vxNN
+    map: SourceMap,
 
     // Remember the location of every instruction.
     inst_locs: Vec<(Inst, Location)>,
@@ -78,36 +74,25 @@ impl Context {
     fn new(f: Function) -> Context {
         Context {
             function: f,
-            stack_slots: HashMap::new(),
-            jump_tables: HashMap::new(),
-            ebbs: HashMap::new(),
-            values: HashMap::new(),
+            map: SourceMap::new(),
             inst_locs: Vec::new(),
         }
     }
 
     // Allocate a new stack slot and add a mapping number -> StackSlot.
     fn add_ss(&mut self, number: u32, data: StackSlotData, loc: &Location) -> Result<()> {
-        if self.stack_slots.insert(number, self.function.stack_slots.push(data)).is_some() {
-            err!(loc, "duplicate stack slot: ss{}", number)
-        } else {
-            Ok(())
-        }
+        self.map.def_ss(number, self.function.stack_slots.push(data), loc)
     }
 
     // Allocate a new jump table and add a mapping number -> JumpTable.
     fn add_jt(&mut self, number: u32, data: JumpTableData, loc: &Location) -> Result<()> {
-        if self.jump_tables.insert(number, self.function.jump_tables.push(data)).is_some() {
-            err!(loc, "duplicate jump table: jt{}", number)
-        } else {
-            Ok(())
-        }
+        self.map.def_jt(number, self.function.jump_tables.push(data), loc)
     }
 
     // Resolve a reference to a jump table.
     fn get_jt(&self, number: u32, loc: &Location) -> Result<JumpTable> {
-        match self.jump_tables.get(&number) {
-            Some(&jt) => Ok(jt),
+        match self.map.get_jt(number) {
+            Some(jt) => Ok(jt),
             None => err!(loc, "undefined jump table jt{}", number),
         }
     }
@@ -116,20 +101,7 @@ impl Context {
     fn add_ebb(&mut self, src_ebb: Ebb, loc: &Location) -> Result<Ebb> {
         let ebb = self.function.dfg.make_ebb();
         self.function.layout.append_ebb(ebb);
-        if self.ebbs.insert(src_ebb, ebb).is_some() {
-            err!(loc, "duplicate EBB: {}", src_ebb)
-        } else {
-            Ok(ebb)
-        }
-    }
-
-    // Add a value mapping src_val -> data.
-    fn add_value(&mut self, src_val: Value, data: Value, loc: &Location) -> Result<()> {
-        if self.values.insert(src_val, data).is_some() {
-            err!(loc, "duplicate value: {}", src_val)
-        } else {
-            Ok(())
-        }
+        self.map.def_ebb(src_ebb, ebb, loc).and(Ok(ebb))
     }
 
     // Record the location of an instuction.
@@ -140,41 +112,6 @@ impl Context {
     // The parser creates all instructions with Ebb and Value references using the source file
     // numbering. These references need to be rewritten after parsing is complete since forward
     // references are allowed.
-
-    // Rewrite an Ebb reference.
-    fn rewrite_ebb(map: &HashMap<Ebb, Ebb>, ebb: &mut Ebb, loc: &Location) -> Result<()> {
-        match map.get(ebb) {
-            Some(&new) => {
-                *ebb = new;
-                Ok(())
-            }
-            None => err!(loc, "undefined reference: {}", ebb),
-        }
-    }
-
-    // Rewrite a value reference.
-    fn rewrite_value(map: &HashMap<Value, Value>, val: &mut Value, loc: &Location) -> Result<()> {
-        match map.get(val) {
-            Some(&new) => {
-                *val = new;
-                Ok(())
-            }
-            None => err!(loc, "undefined reference: {}", val),
-        }
-    }
-
-    // Rewrite a slice of value references.
-    fn rewrite_values(map: &HashMap<Value, Value>,
-                      vals: &mut [Value],
-                      loc: &Location)
-                      -> Result<()> {
-        for val in vals {
-            try!(Self::rewrite_value(map, val, loc));
-        }
-        Ok(())
-    }
-
-    // Rewrite all EBB and value references in the function.
     fn rewrite_references(&mut self) -> Result<()> {
         for &(inst, loc) in &self.inst_locs {
             match self.function.dfg[inst] {
@@ -189,7 +126,7 @@ impl Context {
                 InstructionData::BinaryImmRev { ref mut arg, .. } |
                 InstructionData::ExtractLane { ref mut arg, .. } |
                 InstructionData::BranchTable { ref mut arg, .. } => {
-                    try!(Self::rewrite_value(&self.values, arg, &loc));
+                    try!(self.map.rewrite_value(arg, &loc));
                 }
 
                 InstructionData::Binary { ref mut args, .. } |
@@ -197,30 +134,30 @@ impl Context {
                 InstructionData::InsertLane { ref mut args, .. } |
                 InstructionData::IntCompare { ref mut args, .. } |
                 InstructionData::FloatCompare { ref mut args, .. } => {
-                    try!(Self::rewrite_values(&self.values, args, &loc));
+                    try!(self.map.rewrite_values(args, &loc));
                 }
 
                 InstructionData::Ternary { ref mut args, .. } => {
-                    try!(Self::rewrite_values(&self.values, args, &loc));
+                    try!(self.map.rewrite_values(args, &loc));
                 }
 
                 InstructionData::Jump { ref mut data, .. } => {
-                    try!(Self::rewrite_ebb(&self.ebbs, &mut data.destination, &loc));
-                    try!(Self::rewrite_values(&self.values, &mut data.arguments, &loc));
+                    try!(self.map.rewrite_ebb(&mut data.destination, &loc));
+                    try!(self.map.rewrite_values(&mut data.arguments, &loc));
                 }
 
                 InstructionData::Branch { ref mut data, .. } => {
-                    try!(Self::rewrite_value(&self.values, &mut data.arg, &loc));
-                    try!(Self::rewrite_ebb(&self.ebbs, &mut data.destination, &loc));
-                    try!(Self::rewrite_values(&self.values, &mut data.arguments, &loc));
+                    try!(self.map.rewrite_value(&mut data.arg, &loc));
+                    try!(self.map.rewrite_ebb(&mut data.destination, &loc));
+                    try!(self.map.rewrite_values(&mut data.arguments, &loc));
                 }
 
                 InstructionData::Call { ref mut data, .. } => {
-                    try!(Self::rewrite_values(&self.values, &mut data.args, &loc));
+                    try!(self.map.rewrite_values(&mut data.args, &loc));
                 }
 
                 InstructionData::Return { ref mut data, .. } => {
-                    try!(Self::rewrite_values(&self.values, &mut data.args, &loc));
+                    try!(self.map.rewrite_values(&mut data.args, &loc));
                 }
             }
         }
@@ -230,7 +167,7 @@ impl Context {
         for jt in self.function.jump_tables.keys() {
             for ebb in self.function.jump_tables[jt].as_mut_slice() {
                 if *ebb != NO_EBB {
-                    try!(Self::rewrite_ebb(&self.ebbs, ebb, &loc));
+                    try!(self.map.rewrite_ebb(ebb, &loc));
                 }
             }
         }
@@ -512,7 +449,7 @@ impl<'a> Parser<'a> {
         let details = Details {
             location: location,
             comments: mem::replace(&mut self.comments, Vec::new()),
-            map: sourcemap::new(ctx.values, ctx.ebbs, ctx.stack_slots, ctx.jump_tables),
+            map: ctx.map,
         };
 
         Ok((ctx.function, details))
@@ -777,7 +714,7 @@ impl<'a> Parser<'a> {
         let t = try!(self.match_type("expected EBB argument type"));
         // Allocate the EBB argument and add the mapping.
         let value = ctx.function.dfg.append_ebb_arg(ebb, t);
-        ctx.add_value(vx, value, &vx_location)
+        ctx.map.def_value(vx, value, &vx_location)
     }
 
     // Parse an instruction, append it to `ebb`.
@@ -856,7 +793,7 @@ impl<'a> Parser<'a> {
         // Now map the source result values to the just created instruction results.
         // Pass a reference to `ctx.values` instead of `ctx` itself since the `Values` iterator
         // holds a reference to `ctx.function`.
-        self.add_values(&mut ctx.values,
+        self.add_values(&mut ctx.map,
                         results.into_iter(),
                         ctx.function.dfg.inst_results(inst))
     }
@@ -888,8 +825,8 @@ impl<'a> Parser<'a> {
                     // layout of the blocks.
                     let ctrl_src_value = inst_data.typevar_operand()
                         .expect("Constraints <-> Format inconsistency");
-                    ctx.function.dfg.value_type(match ctx.values.get(&ctrl_src_value) {
-                        Some(&v) => v,
+                    ctx.function.dfg.value_type(match ctx.map.get_value(ctrl_src_value) {
+                        Some(v) => v,
                         None => {
                             return err!(self.loc,
                                         "cannot determine type of operand {}",
@@ -932,18 +869,12 @@ impl<'a> Parser<'a> {
     }
 
     // Add mappings for a list of source values to their corresponding new values.
-    fn add_values<S, V>(&self,
-                        values: &mut HashMap<Value, Value>,
-                        results: S,
-                        new_results: V)
-                        -> Result<()>
+    fn add_values<S, V>(&self, map: &mut SourceMap, results: S, new_results: V) -> Result<()>
         where S: Iterator<Item = Value>,
               V: Iterator<Item = Value>
     {
         for (src, val) in results.zip(new_results) {
-            if values.insert(src, val).is_some() {
-                return err!(self.loc, "duplicate result value: {}", src);
-            }
+            try!(map.def_value(src, val, &self.loc));
         }
         Ok(())
     }

@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 use cretonne::ir::{StackSlot, JumpTable, Ebb, Value};
 use cretonne::ir::entities::AnyEntity;
+use error::{Result, Location};
 
 /// Mapping from source entity names to entity references that are valid in the parsed function.
 #[derive(Debug)]
@@ -22,6 +23,26 @@ pub struct SourceMap {
 
 /// Read-only interface which is exposed outside the parser crate.
 impl SourceMap {
+    /// Look up a value entity by its source number.
+    pub fn get_value(&self, src: Value) -> Option<Value> {
+        self.values.get(&src).cloned()
+    }
+
+    /// Look up a EBB entity by its source number.
+    pub fn get_ebb(&self, src: Ebb) -> Option<Ebb> {
+        self.ebbs.get(&src).cloned()
+    }
+
+    /// Look up a stack slot entity by its source number.
+    pub fn get_ss(&self, src_num: u32) -> Option<StackSlot> {
+        self.stack_slots.get(&src_num).cloned()
+    }
+
+    /// Look up a jump table entity by its source number.
+    pub fn get_jt(&self, src_num: u32) -> Option<JumpTable> {
+        self.jump_tables.get(&src_num).cloned()
+    }
+
     /// Look up an entity by source name.
     /// Returns the entity reference corresponding to `name`, if it exists.
     pub fn lookup_str(&self, name: &str) -> Option<AnyEntity> {
@@ -29,24 +50,50 @@ impl SourceMap {
             match ent {
                 "v" => {
                     Value::direct_with_number(num)
-                        .and_then(|v| self.values.get(&v).cloned())
+                        .and_then(|v| self.get_value(v))
                         .map(AnyEntity::Value)
                 }
                 "vx" => {
                     Value::table_with_number(num)
-                        .and_then(|v| self.values.get(&v).cloned())
+                        .and_then(|v| self.get_value(v))
                         .map(AnyEntity::Value)
                 }
-                "ebb" => {
-                    Ebb::with_number(num)
-                        .and_then(|e| self.ebbs.get(&e).cloned())
-                        .map(AnyEntity::Ebb)
-                }
-                "ss" => self.stack_slots.get(&num).cloned().map(AnyEntity::StackSlot),
-                "jt" => self.jump_tables.get(&num).cloned().map(AnyEntity::JumpTable),
+                "ebb" => Ebb::with_number(num).and_then(|e| self.get_ebb(e)).map(AnyEntity::Ebb),
+                "ss" => self.get_ss(num).map(AnyEntity::StackSlot),
+                "jt" => self.get_jt(num).map(AnyEntity::JumpTable),
                 _ => None,
             }
         })
+    }
+
+    /// Rewrite an Ebb reference.
+    pub fn rewrite_ebb(&self, ebb: &mut Ebb, loc: &Location) -> Result<()> {
+        match self.get_ebb(*ebb) {
+            Some(new) => {
+                *ebb = new;
+                Ok(())
+            }
+            None => err!(loc, "undefined reference: {}", ebb),
+        }
+    }
+
+    /// Rewrite a value reference.
+    pub fn rewrite_value(&self, val: &mut Value, loc: &Location) -> Result<()> {
+        match self.get_value(*val) {
+            Some(new) => {
+                *val = new;
+                Ok(())
+            }
+            None => err!(loc, "undefined reference: {}", val),
+        }
+    }
+
+    /// Rewrite a slice of value references.
+    pub fn rewrite_values(&self, vals: &mut [Value], loc: &Location) -> Result<()> {
+        for val in vals {
+            try!(self.rewrite_value(val, loc));
+        }
+        Ok(())
     }
 }
 
@@ -67,17 +114,60 @@ fn split_entity_name(name: &str) -> Option<(&str, u32)> {
     }
 }
 
-/// Create a new SourceMap from all the individual mappings.
-pub fn new(values: HashMap<Value, Value>,
-           ebbs: HashMap<Ebb, Ebb>,
-           stack_slots: HashMap<u32, StackSlot>,
-           jump_tables: HashMap<u32, JumpTable>)
-           -> SourceMap {
-    SourceMap {
-        values: values,
-        ebbs: ebbs,
-        stack_slots: stack_slots,
-        jump_tables: jump_tables,
+
+/// Interface for mutating a source map.
+///
+/// This interface is provided for the parser itself, it is not made available outside the crate.
+pub trait MutableSourceMap {
+    fn new() -> Self;
+
+    /// Define a value mapping from the source name `src` to the final `entity`.
+    fn def_value(&mut self, src: Value, entity: Value, loc: &Location) -> Result<()>;
+    fn def_ebb(&mut self, src: Ebb, entity: Ebb, loc: &Location) -> Result<()>;
+    fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()>;
+    fn def_jt(&mut self, src_num: u32, entity: JumpTable, loc: &Location) -> Result<()>;
+}
+
+impl MutableSourceMap for SourceMap {
+    fn new() -> SourceMap {
+        SourceMap {
+            values: HashMap::new(),
+            ebbs: HashMap::new(),
+            stack_slots: HashMap::new(),
+            jump_tables: HashMap::new(),
+        }
+    }
+
+    fn def_value(&mut self, src: Value, entity: Value, loc: &Location) -> Result<()> {
+        if self.values.insert(src, entity).is_some() {
+            err!(loc, "duplicate value: {}", src)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn def_ebb(&mut self, src: Ebb, entity: Ebb, loc: &Location) -> Result<()> {
+        if self.ebbs.insert(src, entity).is_some() {
+            err!(loc, "duplicate EBB: {}", src)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()> {
+        if self.stack_slots.insert(src_num, entity).is_some() {
+            err!(loc, "duplicate stack slot: ss{}", src_num)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn def_jt(&mut self, src_num: u32, entity: JumpTable, loc: &Location) -> Result<()> {
+        if self.jump_tables.insert(src_num, entity).is_some() {
+            err!(loc, "duplicate jump table: jt{}", src_num)
+        } else {
+            Ok(())
+        }
     }
 }
 
