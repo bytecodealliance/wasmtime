@@ -8,8 +8,8 @@
 use std::str::FromStr;
 use std::u32;
 use std::mem;
-use cretonne::ir::{Function, Ebb, Inst, Opcode, Value, Type, FunctionName, StackSlotData,
-                   JumpTable, JumpTableData};
+use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotData, JumpTable,
+                   JumpTableData};
 use cretonne::ir::types::{VOID, Signature, ArgumentType, ArgumentExtension};
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::{AnyEntity, NO_EBB, NO_INST, NO_VALUE};
@@ -65,9 +65,6 @@ pub struct Parser<'a> {
 struct Context {
     function: Function,
     map: SourceMap,
-
-    // Remember the location of every instruction.
-    inst_locs: Vec<(Inst, Location)>,
 }
 
 impl Context {
@@ -75,7 +72,6 @@ impl Context {
         Context {
             function: f,
             map: SourceMap::new(),
-            inst_locs: Vec::new(),
         }
     }
 
@@ -104,70 +100,68 @@ impl Context {
         self.map.def_ebb(src_ebb, ebb, loc).and(Ok(ebb))
     }
 
-    // Record the location of an instuction.
-    fn add_inst_loc(&mut self, inst: Inst, loc: &Location) {
-        self.inst_locs.push((inst, *loc));
-    }
-
     // The parser creates all instructions with Ebb and Value references using the source file
     // numbering. These references need to be rewritten after parsing is complete since forward
     // references are allowed.
     fn rewrite_references(&mut self) -> Result<()> {
-        for &(inst, loc) in &self.inst_locs {
-            match self.function.dfg[inst] {
-                InstructionData::Nullary { .. } |
-                InstructionData::UnaryImm { .. } |
-                InstructionData::UnaryIeee32 { .. } |
-                InstructionData::UnaryIeee64 { .. } |
-                InstructionData::UnaryImmVector { .. } => {}
+        for ebb in self.function.layout.ebbs() {
+            for inst in self.function.layout.ebb_insts(ebb) {
+                let loc = inst.into();
+                match self.function.dfg[inst] {
+                    InstructionData::Nullary { .. } |
+                    InstructionData::UnaryImm { .. } |
+                    InstructionData::UnaryIeee32 { .. } |
+                    InstructionData::UnaryIeee64 { .. } |
+                    InstructionData::UnaryImmVector { .. } => {}
 
-                InstructionData::Unary { ref mut arg, .. } |
-                InstructionData::BinaryImm { ref mut arg, .. } |
-                InstructionData::BinaryImmRev { ref mut arg, .. } |
-                InstructionData::ExtractLane { ref mut arg, .. } |
-                InstructionData::BranchTable { ref mut arg, .. } => {
-                    try!(self.map.rewrite_value(arg, &loc));
-                }
+                    InstructionData::Unary { ref mut arg, .. } |
+                    InstructionData::BinaryImm { ref mut arg, .. } |
+                    InstructionData::BinaryImmRev { ref mut arg, .. } |
+                    InstructionData::ExtractLane { ref mut arg, .. } |
+                    InstructionData::BranchTable { ref mut arg, .. } => {
+                        try!(self.map.rewrite_value(arg, loc));
+                    }
 
-                InstructionData::Binary { ref mut args, .. } |
-                InstructionData::BinaryOverflow { ref mut args, .. } |
-                InstructionData::InsertLane { ref mut args, .. } |
-                InstructionData::IntCompare { ref mut args, .. } |
-                InstructionData::FloatCompare { ref mut args, .. } => {
-                    try!(self.map.rewrite_values(args, &loc));
-                }
+                    InstructionData::Binary { ref mut args, .. } |
+                    InstructionData::BinaryOverflow { ref mut args, .. } |
+                    InstructionData::InsertLane { ref mut args, .. } |
+                    InstructionData::IntCompare { ref mut args, .. } |
+                    InstructionData::FloatCompare { ref mut args, .. } => {
+                        try!(self.map.rewrite_values(args, loc));
+                    }
 
-                InstructionData::Ternary { ref mut args, .. } => {
-                    try!(self.map.rewrite_values(args, &loc));
-                }
+                    InstructionData::Ternary { ref mut args, .. } => {
+                        try!(self.map.rewrite_values(args, loc));
+                    }
 
-                InstructionData::Jump { ref mut data, .. } => {
-                    try!(self.map.rewrite_ebb(&mut data.destination, &loc));
-                    try!(self.map.rewrite_values(&mut data.arguments, &loc));
-                }
+                    InstructionData::Jump { ref mut data, .. } => {
+                        try!(self.map.rewrite_ebb(&mut data.destination, loc));
+                        try!(self.map.rewrite_values(&mut data.arguments, loc));
+                    }
 
-                InstructionData::Branch { ref mut data, .. } => {
-                    try!(self.map.rewrite_value(&mut data.arg, &loc));
-                    try!(self.map.rewrite_ebb(&mut data.destination, &loc));
-                    try!(self.map.rewrite_values(&mut data.arguments, &loc));
-                }
+                    InstructionData::Branch { ref mut data, .. } => {
+                        try!(self.map.rewrite_value(&mut data.arg, loc));
+                        try!(self.map.rewrite_ebb(&mut data.destination, loc));
+                        try!(self.map.rewrite_values(&mut data.arguments, loc));
+                    }
 
-                InstructionData::Call { ref mut data, .. } => {
-                    try!(self.map.rewrite_values(&mut data.args, &loc));
-                }
+                    InstructionData::Call { ref mut data, .. } => {
+                        try!(self.map.rewrite_values(&mut data.args, loc));
+                    }
 
-                InstructionData::Return { ref mut data, .. } => {
-                    try!(self.map.rewrite_values(&mut data.args, &loc));
+                    InstructionData::Return { ref mut data, .. } => {
+                        try!(self.map.rewrite_values(&mut data.args, loc));
+                    }
                 }
             }
         }
 
         // Rewrite EBB references in jump tables.
-        let loc = Location { line_number: 0 };
         for jt in self.function.jump_tables.keys() {
+            let loc = jt.into();
             for ebb in self.function.jump_tables[jt].as_mut_slice() {
                 if *ebb != NO_EBB {
-                    try!(self.map.rewrite_ebb(ebb, &loc));
+                    try!(self.map.rewrite_ebb(ebb, loc));
                 }
             }
         }
@@ -777,7 +771,7 @@ impl<'a> Parser<'a> {
         let inst = ctx.function.dfg.make_inst(inst_data);
         let num_results = ctx.function.dfg.make_inst_results(inst, ctrl_typevar);
         ctx.function.layout.append_inst(inst, ebb);
-        ctx.add_inst_loc(inst, &opcode_loc);
+        ctx.map.def_inst(inst, &opcode_loc).expect("duplicate inst references created");
 
         if results.len() != num_results {
             return err!(self.loc,

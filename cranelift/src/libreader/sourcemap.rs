@@ -76,29 +76,37 @@ impl SourceMap {
     }
 
     /// Rewrite an Ebb reference.
-    pub fn rewrite_ebb(&self, ebb: &mut Ebb, loc: &Location) -> Result<()> {
+    pub fn rewrite_ebb(&self, ebb: &mut Ebb, loc: AnyEntity) -> Result<()> {
         match self.get_ebb(*ebb) {
             Some(new) => {
                 *ebb = new;
                 Ok(())
             }
-            None => err!(loc, "undefined reference: {}", ebb),
+            None => {
+                err!(self.location(loc).unwrap_or_default(),
+                     "undefined reference: {}",
+                     ebb)
+            }
         }
     }
 
     /// Rewrite a value reference.
-    pub fn rewrite_value(&self, val: &mut Value, loc: &Location) -> Result<()> {
+    pub fn rewrite_value(&self, val: &mut Value, loc: AnyEntity) -> Result<()> {
         match self.get_value(*val) {
             Some(new) => {
                 *val = new;
                 Ok(())
             }
-            None => err!(loc, "undefined reference: {}", val),
+            None => {
+                err!(self.location(loc).unwrap_or_default(),
+                     "undefined reference: {}",
+                     val)
+            }
         }
     }
 
     /// Rewrite a slice of value references.
-    pub fn rewrite_values(&self, vals: &mut [Value], loc: &Location) -> Result<()> {
+    pub fn rewrite_values(&self, vals: &mut [Value], loc: AnyEntity) -> Result<()> {
         for val in vals {
             try!(self.rewrite_value(val, loc));
         }
