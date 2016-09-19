@@ -29,30 +29,8 @@ pub fn write_function(w: &mut Write, func: &Function) -> Result {
 //
 // ====--------------------------------------------------------------------------------------====//
 
-// The function name may need quotes if it doesn't parse as an identifier.
-fn needs_quotes(name: &str) -> bool {
-    let mut iter = name.chars();
-    if let Some(ch) = iter.next() {
-        !ch.is_alphabetic() || !iter.all(char::is_alphanumeric)
-    } else {
-        // A blank function name needs quotes.
-        true
-    }
-}
-
-// Use Rust's escape_default which provides a few simple \t \r \n \' \" \\ escapes and uses
-// \u{xxxx} for anything else outside the ASCII printable range.
-fn escaped(name: &str) -> String {
-    name.chars().flat_map(char::escape_default).collect()
-}
-
 fn write_spec(w: &mut Write, func: &Function) -> Result {
-    let sig = func.own_signature();
-    if !needs_quotes(&func.name) {
-        write!(w, "function {}{}", func.name, sig)
-    } else {
-        write!(w, "function \"{}\"{}", escaped(&func.name), sig)
-    }
+    write!(w, "function {}{}", func.name, func.own_signature())
 }
 
 fn write_preamble(w: &mut Write, func: &Function) -> result::Result<bool, Error> {
@@ -208,34 +186,15 @@ pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
 
 #[cfg(test)]
 mod tests {
-    use super::{needs_quotes, escaped};
-    use ir::{Function, StackSlotData};
+    use ir::{Function, FunctionName, StackSlotData};
     use ir::types;
-
-    #[test]
-    fn quoting() {
-        assert_eq!(needs_quotes(""), true);
-        assert_eq!(needs_quotes("x"), false);
-        assert_eq!(needs_quotes(" "), true);
-        assert_eq!(needs_quotes("0"), true);
-        assert_eq!(needs_quotes("x0"), false);
-    }
-
-    #[test]
-    fn escaping() {
-        assert_eq!(escaped(""), "");
-        assert_eq!(escaped("x"), "x");
-        assert_eq!(escaped(" "), " ");
-        assert_eq!(escaped(" \n"), " \\n");
-        assert_eq!(escaped("a\u{1000}v"), "a\\u{1000}v");
-    }
 
     #[test]
     fn basic() {
         let mut f = Function::new();
         assert_eq!(f.to_string(), "function \"\"() {\n}\n");
 
-        f.name.push_str("foo");
+        f.name = FunctionName::new("foo".to_string());
         assert_eq!(f.to_string(), "function foo() {\n}\n");
 
         f.stack_slots.push(StackSlotData::new(4));

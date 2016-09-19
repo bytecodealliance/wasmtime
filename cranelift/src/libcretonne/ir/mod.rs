@@ -10,8 +10,10 @@ pub mod jumptable;
 pub mod dfg;
 pub mod layout;
 pub mod function;
+mod funcname;
 
-pub use ir::types::{Type, FunctionName, Signature};
+pub use ir::funcname::FunctionName;
+pub use ir::types::{Type, Signature};
 pub use ir::entities::{Ebb, Inst, Value, StackSlot, JumpTable};
 pub use ir::instructions::{Opcode, InstructionData};
 pub use ir::stackslot::StackSlotData;

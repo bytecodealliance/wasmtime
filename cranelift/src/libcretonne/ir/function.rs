@@ -52,7 +52,7 @@ impl Function {
 
     /// Create a new empty, anomymous function.
     pub fn new() -> Function {
-        Self::with_name_signature(FunctionName::new(), Signature::new())
+        Self::with_name_signature(FunctionName::default(), Signature::new())
     }
 
     /// Get the signature of this function.
