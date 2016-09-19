@@ -40,11 +40,13 @@
 //! The configured target ISA trait object is a `Box<TargetIsa>` which can be used for multiple
 //! concurrent function compilations.
 
-pub mod riscv;
-mod enc_tables;
-
+pub use isa::encoding::Encoding;
 use settings;
 use ir::{InstructionData, DataFlowGraph};
+
+pub mod riscv;
+mod encoding;
+mod enc_tables;
 
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
@@ -99,36 +101,4 @@ pub trait TargetIsa {
     ///
     /// This is just used for printing and parsing encodings in the textual IL format.
     fn recipe_names(&self) -> &'static [&'static str];
-}
-
-/// Bits needed to encode an instruction as binary machine code.
-///
-/// The encoding consists of two parts, both specific to the target ISA: An encoding *recipe*, and
-/// encoding *bits*. The recipe determines the native instruction format and the mapping of
-/// operands to encoded bits. The encoding bits provide additional information to the recipe,
-/// typically parts of the opcode.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Encoding {
-    recipe: u16,
-    bits: u16,
-}
-
-impl Encoding {
-    /// Create a new `Encoding` containing `(recipe, bits)`.
-    pub fn new(recipe: u16, bits: u16) -> Encoding {
-        Encoding {
-            recipe: recipe,
-            bits: bits,
-        }
-    }
-
-    /// Get the recipe number in this encoding.
-    pub fn recipe(self) -> usize {
-        self.recipe as usize
-    }
-
-    /// Get the recipe-specific encoding bits.
-    pub fn bits(self) -> u16 {
-        self.bits
-    }
 }
