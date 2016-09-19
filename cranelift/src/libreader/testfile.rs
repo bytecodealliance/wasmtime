@@ -8,7 +8,7 @@ use cretonne::ir::Function;
 use cretonne::ir::entities::AnyEntity;
 use testcommand::TestCommand;
 use sourcemap::SourceMap;
-use parser::Location;
+use error::Location;
 
 /// A parsed test case.
 ///

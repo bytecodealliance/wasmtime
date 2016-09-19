@@ -6,12 +6,9 @@
 // ====--------------------------------------------------------------------------------------====//
 
 use std::collections::HashMap;
-use std::result;
-use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use std::u32;
 use std::mem;
-use lexer::{self, Lexer, Token};
 use cretonne::ir::{Function, Ebb, Inst, Opcode, Value, Type, FunctionName, StackSlot,
                    StackSlotData, JumpTable, JumpTableData};
 use cretonne::ir::types::{VOID, Signature, ArgumentType, ArgumentExtension};
@@ -20,10 +17,10 @@ use cretonne::ir::entities::{AnyEntity, NO_EBB, NO_INST, NO_VALUE};
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs, JumpData,
                                  BranchData, ReturnData};
 use testfile::{TestFile, Details, Comment};
+use error::{Location, Error, Result};
+use lexer::{self, Lexer, Token};
 use testcommand::TestCommand;
 use sourcemap;
-
-pub use lexer::Location;
 
 /// Parse the entire `text` into a list of functions.
 ///
@@ -41,38 +38,6 @@ pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
         commands: parser.parse_test_commands(),
         functions: try!(parser.parse_function_list()),
     })
-}
-
-/// A parse error is returned when the parse failed.
-#[derive(Debug)]
-pub struct Error {
-    pub location: Location,
-    pub message: String,
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}: {}", self.location.line_number, self.message)
-    }
-}
-
-pub type Result<T> = result::Result<T, Error>;
-
-// Create an `Err` variant of `Result<X>` from a location and `format!` args.
-macro_rules! err {
-    ( $loc:expr, $msg:expr ) => {
-        Err(Error {
-            location: $loc.clone(),
-            message: String::from($msg),
-        })
-    };
-
-    ( $loc:expr, $fmt:expr, $( $arg:expr ),+ ) => {
-        Err(Error {
-            location: $loc.clone(),
-            message: format!( $fmt, $( $arg ),+ ),
-        })
-    };
 }
 
 pub struct Parser<'a> {
@@ -1225,6 +1190,7 @@ mod tests {
     use cretonne::ir::types::{self, ArgumentType, ArgumentExtension};
     use cretonne::ir::entities::AnyEntity;
     use testfile::{Details, Comment};
+    use error::Error;
 
     #[test]
     fn argument_type() {

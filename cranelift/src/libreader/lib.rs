@@ -5,11 +5,13 @@
 
 extern crate cretonne;
 
-pub use parser::{Result, parse_functions, parse_test};
+pub use error::{Location, Result, Error};
+pub use parser::{parse_functions, parse_test};
 pub use testcommand::{TestCommand, TestOption};
 pub use testfile::{TestFile, Details};
 pub use sourcemap::SourceMap;
 
+mod error;
 mod lexer;
 mod parser;
 mod testcommand;
