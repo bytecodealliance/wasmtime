@@ -16,7 +16,7 @@
 //! let mut b = settings::builder();
 //! b.set("opt_level", "fastest");
 //!
-//! let f = settings::Flags::new(b);
+//! let f = settings::Flags::new(&b);
 //! assert_eq!(f.opt_level(), settings::OptLevel::Fastest);
 //! ```
 
@@ -57,9 +57,9 @@ impl Builder {
     }
 
     /// Extract contents of builder once everything is configured.
-    pub fn finish(self, name: &str) -> Vec<u8> {
+    pub fn state_for(&self, name: &str) -> &[u8] {
         assert_eq!(name, self.template.name);
-        self.bytes
+        &self.bytes[..]
     }
 
     /// Set the value of a single bit.
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn display_default() {
         let b = builder();
-        let f = Flags::new(b);
+        let f = Flags::new(&b);
         assert_eq!(f.to_string(),
                    "[shared]\n\
                     opt_level = \"default\"\n\
@@ -275,7 +275,7 @@ mod tests {
         assert_eq!(b.set_bool("enable_simd", true), Ok(()));
         assert_eq!(b.set_bool("enable_simd", false), Ok(()));
 
-        let f = Flags::new(b);
+        let f = Flags::new(&b);
         assert_eq!(f.enable_simd(), false);
     }
 
@@ -289,7 +289,7 @@ mod tests {
         assert_eq!(b.set("opt_level", "best"), Ok(()));
         assert_eq!(b.set("enable_simd", "0"), Ok(()));
 
-        let f = Flags::new(b);
+        let f = Flags::new(&b);
         assert_eq!(f.enable_simd(), false);
         assert_eq!(f.opt_level(), super::OptLevel::Best);
     }

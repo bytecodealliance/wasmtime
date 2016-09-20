@@ -24,7 +24,7 @@
 //! use cretonne::isa;
 //!
 //! let shared_builder = settings::builder();
-//! let shared_flags = settings::Flags::new(shared_builder);
+//! let shared_flags = settings::Flags::new(&shared_builder);
 //!
 //! match isa::lookup("riscv") {
 //!     None => {
@@ -66,14 +66,14 @@ fn riscv_builder() -> Option<Builder> {
 /// Modify the ISA-specific settings before creating the `TargetIsa` trait object with `finish`.
 pub struct Builder {
     setup: settings::Builder,
-    constructor: fn(settings::Flags, settings::Builder) -> Box<TargetIsa>,
+    constructor: fn(settings::Flags, &settings::Builder) -> Box<TargetIsa>,
 }
 
 impl Builder {
     /// Combine the ISA-specific settings with the provided ISA-independent settings and allocate a
     /// fully configured `TargetIsa` trait object.
     pub fn finish(self, shared_flags: settings::Flags) -> Box<TargetIsa> {
-        (self.constructor)(shared_flags, self.setup)
+        (self.constructor)(shared_flags, &self.setup)
     }
 }
 
