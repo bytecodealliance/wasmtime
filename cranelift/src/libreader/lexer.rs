@@ -26,7 +26,6 @@ pub enum Token<'a> {
     Colon, // ':'
     Equal, // '='
     Arrow, // '->'
-    Function, // 'function'
     Float(&'a str), // Floating point immediate
     Integer(&'a str), // Integer immediate
     Type(types::Type), // i32, f32, b32x4, ...
@@ -235,8 +234,6 @@ impl<'a> Lexer<'a> {
 
     // Scan a 'word', which is an identifier-like sequence of characters beginning with '_' or an
     // alphabetic char, followed by zero or more alphanumeric or '_' characters.
-    //
-    //
     fn scan_word(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
         let begin = self.pos;
         let loc = self.loc();
@@ -252,25 +249,13 @@ impl<'a> Lexer<'a> {
             }
         }
         let text = &self.source[begin..self.pos];
+        let (prefix, suffix) = text.split_at(text.len() - trailing_digits);
 
-        match if trailing_digits == 0 {
-            Self::keyword(text)
-        } else {
-            // Look for numbered well-known entities like ebb15, v45, ...
-            let (prefix, suffix) = text.split_at(text.len() - trailing_digits);
-            Self::numbered_entity(prefix, suffix).or_else(|| Self::value_type(text, prefix, suffix))
-        } {
-            Some(t) => token(t, loc),
-            None => token(Token::Identifier(text), loc),
-        }
-    }
-
-    // Recognize a keyword.
-    fn keyword(text: &str) -> Option<Token<'a>> {
-        match text {
-            "function" => Some(Token::Function),
-            _ => None,
-        }
+        // Look for numbered well-known entities like ebb15, v45, ...
+        token(Self::numbered_entity(prefix, suffix)
+                  .or_else(|| Self::value_type(text, prefix, suffix))
+                  .unwrap_or(Token::Identifier(text)),
+              loc)
     }
 
     // If prefix is a well-known entity prefix and suffix is a valid entity number, return the
@@ -458,7 +443,7 @@ mod tests {
                    token(Token::Value(Value::table_with_number(1).unwrap()), 1));
         assert_eq!(lex.next(), token(Token::Identifier("vxvx4"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("function0"), 1));
-        assert_eq!(lex.next(), token(Token::Function, 1));
+        assert_eq!(lex.next(), token(Token::Identifier("function"), 1));
         assert_eq!(lex.next(), token(Token::Type(types::B1), 1));
         assert_eq!(lex.next(), token(Token::Type(types::I32.by(4).unwrap()), 1));
         assert_eq!(lex.next(), token(Token::Identifier("f32x5"), 1));
