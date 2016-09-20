@@ -70,6 +70,16 @@ impl<K, V> EntityMap<K, V>
         k.index() < self.elems.len()
     }
 
+    /// Is this map completely empty?
+    pub fn is_empty(&self) -> bool {
+        self.elems.is_empty()
+    }
+
+    /// Remove all entries from this map.
+    pub fn clear(&mut self) {
+        self.elems.clear()
+    }
+
     /// Iterate over all the keys in this map.
     pub fn keys(&self) -> Keys<K> {
         Keys {
@@ -137,12 +147,17 @@ impl<K, V> EntityMap<K, V>
         map
     }
 
+    /// Resize the map to have `n` entries by adding default entries as needed.
+    pub fn resize(&mut self, n: usize) {
+        self.elems.resize(n, V::default());
+    }
+
     /// Ensure that `k` is a valid key but adding default entries if necesssary.
     ///
     /// Return a mutable reference to the corresponding entry.
     pub fn ensure(&mut self, k: K) -> &mut V {
         if !self.is_valid(k) {
-            self.elems.resize(k.index() + 1, V::default())
+            self.resize(k.index() + 1)
         }
         &mut self.elems[k.index()]
     }
