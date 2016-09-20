@@ -6,6 +6,7 @@
 // ====--------------------------------------------------------------------------------------====//
 
 use std::str::CharIndices;
+use std::u16;
 use cretonne::ir::types;
 use cretonne::ir::{Value, Ebb};
 use error::Location;
@@ -70,6 +71,23 @@ fn error<'a>(error: Error, loc: Location) -> Result<LocatedToken<'a>, LocatedErr
         error: error,
         location: loc,
     })
+}
+
+/// Get the number of decimal digits at the end of `s`.
+fn trailing_digits(s: &str) -> usize {
+    // It's faster to iterate backwards over bytes, and we're only counting ASCII digits.
+    s.as_bytes().iter().rev().cloned().take_while(|&b| b'0' <= b && b <= b'9').count()
+}
+
+/// Pre-parse a supposed entity name by splitting it into two parts: A head of lowercase ASCII
+/// letters and numeric tail.
+pub fn split_entity_name(name: &str) -> Option<(&str, u32)> {
+    let (head, tail) = name.split_at(name.len() - trailing_digits(name));
+    if tail.len() > 1 && tail.starts_with('0') {
+        None
+    } else {
+        tail.parse().ok().map(|n| (head, n))
+    }
 }
 
 /// Lexical analysis.
@@ -237,52 +255,42 @@ impl<'a> Lexer<'a> {
     fn scan_word(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
         let begin = self.pos;
         let loc = self.loc();
-        let mut trailing_digits = 0usize;
 
         assert!(self.lookahead == Some('_') || self.lookahead.unwrap().is_alphabetic());
         loop {
             match self.next_ch() {
-                Some(ch) if ch.is_digit(10) => trailing_digits += 1,
-                Some('_') => trailing_digits = 0,
-                Some(ch) if ch.is_alphabetic() => trailing_digits = 0,
+                Some('_') => {}
+                Some(ch) if ch.is_alphanumeric() => {}
                 _ => break,
             }
         }
         let text = &self.source[begin..self.pos];
-        let (prefix, suffix) = text.split_at(text.len() - trailing_digits);
 
         // Look for numbered well-known entities like ebb15, v45, ...
-        token(Self::numbered_entity(prefix, suffix)
-                  .or_else(|| Self::value_type(text, prefix, suffix))
+        token(split_entity_name(text)
+                  .and_then(|(prefix, number)| {
+                      Self::numbered_entity(prefix, number)
+                          .or_else(|| Self::value_type(text, prefix, number))
+                  })
                   .unwrap_or(Token::Identifier(text)),
               loc)
     }
 
     // If prefix is a well-known entity prefix and suffix is a valid entity number, return the
     // decoded token.
-    fn numbered_entity(prefix: &str, suffix: &str) -> Option<Token<'a>> {
-        // Reject non-canonical numbers like v0001.
-        if suffix.len() > 1 && suffix.starts_with('0') {
-            return None;
-        }
-
-        let value: u32 = match suffix.parse() {
-            Ok(v) => v,
-            _ => return None,
-        };
-
+    fn numbered_entity(prefix: &str, number: u32) -> Option<Token<'a>> {
         match prefix {
-            "v" => Value::direct_with_number(value).map(|v| Token::Value(v)),
-            "vx" => Value::table_with_number(value).map(|v| Token::Value(v)),
-            "ebb" => Ebb::with_number(value).map(|ebb| Token::Ebb(ebb)),
-            "ss" => Some(Token::StackSlot(value)),
-            "jt" => Some(Token::JumpTable(value)),
+            "v" => Value::direct_with_number(number).map(|v| Token::Value(v)),
+            "vx" => Value::table_with_number(number).map(|v| Token::Value(v)),
+            "ebb" => Ebb::with_number(number).map(|ebb| Token::Ebb(ebb)),
+            "ss" => Some(Token::StackSlot(number)),
+            "jt" => Some(Token::JumpTable(number)),
             _ => None,
         }
     }
 
     // Recognize a scalar or vector type.
-    fn value_type(text: &str, prefix: &str, suffix: &str) -> Option<Token<'a>> {
+    fn value_type(text: &str, prefix: &str, number: u32) -> Option<Token<'a>> {
         let is_vector = prefix.ends_with('x');
         let scalar = if is_vector {
             &prefix[0..prefix.len() - 1]
@@ -304,11 +312,11 @@ impl<'a> Lexer<'a> {
             _ => return None,
         };
         if is_vector {
-            let lanes: u16 = match suffix.parse() {
-                Ok(v) => v,
-                _ => return None,
-            };
-            base_type.by(lanes).map(|t| Token::Type(t))
+            if number <= u16::MAX as u32 {
+                base_type.by(number as u16).map(|t| Token::Type(t))
+            } else {
+                None
+            }
         } else {
             Some(Token::Type(base_type))
         }
@@ -356,10 +364,35 @@ impl<'a> Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
+    use super::trailing_digits;
     use super::*;
     use cretonne::ir::types;
     use cretonne::ir::{Value, Ebb};
     use error::Location;
+
+    #[test]
+    fn digits() {
+        assert_eq!(trailing_digits(""), 0);
+        assert_eq!(trailing_digits("x"), 0);
+        assert_eq!(trailing_digits("0x"), 0);
+        assert_eq!(trailing_digits("x1"), 1);
+        assert_eq!(trailing_digits("1x1"), 1);
+        assert_eq!(trailing_digits("1x01"), 2);
+    }
+
+    #[test]
+    fn entity_name() {
+        assert_eq!(split_entity_name(""), None);
+        assert_eq!(split_entity_name("x"), None);
+        assert_eq!(split_entity_name("x+"), None);
+        assert_eq!(split_entity_name("x+1"), Some(("x+", 1)));
+        assert_eq!(split_entity_name("x-1"), Some(("x-", 1)));
+        assert_eq!(split_entity_name("1"), Some(("", 1)));
+        assert_eq!(split_entity_name("x1"), Some(("x", 1)));
+        assert_eq!(split_entity_name("xy0"), Some(("xy", 0)));
+        // Reject this non-canonical form.
+        assert_eq!(split_entity_name("inst01"), None);
+    }
 
     fn token<'a>(token: Token<'a>, line: usize) -> Option<Result<LocatedToken<'a>, LocatedError>> {
         Some(super::token(token, Location { line_number: line }))

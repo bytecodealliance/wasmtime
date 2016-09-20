@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use cretonne::ir::{StackSlot, JumpTable, Ebb, Value, Inst};
 use cretonne::ir::entities::AnyEntity;
 use error::{Result, Location};
+use lexer::split_entity_name;
 
 /// Mapping from source entity names to entity references that are valid in the parsed function.
 #[derive(Debug)]
@@ -114,23 +115,6 @@ impl SourceMap {
     }
 }
 
-/// Get the number of decimal digits at the end of `s`.
-fn trailing_digits(s: &str) -> usize {
-    // It's faster to iterate backwards over bytes, and we're only counting ASCII digits.
-    s.as_bytes().iter().rev().cloned().take_while(|&b| b'0' <= b && b <= b'9').count()
-}
-
-/// Pre-parse a supposed entity name by splitting it into two parts: A head of lowercase ASCII
-/// letters and numeric tail.
-fn split_entity_name(name: &str) -> Option<(&str, u32)> {
-    let (head, tail) = name.split_at(name.len() - trailing_digits(name));
-    if tail.len() > 1 && tail.starts_with('0') {
-        None
-    } else {
-        tail.parse().ok().map(|n| (head, n))
-    }
-}
-
 
 /// Interface for mutating a source map.
 ///
@@ -211,32 +195,7 @@ impl MutableSourceMap for SourceMap {
 
 #[cfg(test)]
 mod tests {
-    use super::{trailing_digits, split_entity_name};
     use parse_test;
-
-    #[test]
-    fn digits() {
-        assert_eq!(trailing_digits(""), 0);
-        assert_eq!(trailing_digits("x"), 0);
-        assert_eq!(trailing_digits("0x"), 0);
-        assert_eq!(trailing_digits("x1"), 1);
-        assert_eq!(trailing_digits("1x1"), 1);
-        assert_eq!(trailing_digits("1x01"), 2);
-    }
-
-    #[test]
-    fn entity_name() {
-        assert_eq!(split_entity_name(""), None);
-        assert_eq!(split_entity_name("x"), None);
-        assert_eq!(split_entity_name("x+"), None);
-        assert_eq!(split_entity_name("x+1"), Some(("x+", 1)));
-        assert_eq!(split_entity_name("x-1"), Some(("x-", 1)));
-        assert_eq!(split_entity_name("1"), Some(("", 1)));
-        assert_eq!(split_entity_name("x1"), Some(("x", 1)));
-        assert_eq!(split_entity_name("xy0"), Some(("xy", 0)));
-        // Reject this non-canonical form.
-        assert_eq!(split_entity_name("inst01"), None);
-    }
 
     #[test]
     fn details() {
