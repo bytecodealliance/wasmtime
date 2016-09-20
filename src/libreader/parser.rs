@@ -15,10 +15,13 @@ use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::{AnyEntity, NO_EBB, NO_INST, NO_VALUE};
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs, JumpData,
                                  BranchData, ReturnData};
+use cretonne::isa;
+use cretonne::settings;
 use testfile::{TestFile, Details, Comment};
 use error::{Location, Error, Result};
 use lexer::{self, Lexer, Token};
 use testcommand::TestCommand;
+use isaspec;
 use sourcemap::{SourceMap, MutableSourceMap};
 
 /// Parse the entire `text` into a list of functions.
@@ -35,6 +38,7 @@ pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
     let mut parser = Parser::new(text);
     Ok(TestFile {
         commands: parser.parse_test_commands(),
+        isa_spec: try!(parser.parse_isa_specs()),
         functions: try!(parser.parse_function_list()),
     })
 }
@@ -395,6 +399,63 @@ impl<'a> Parser<'a> {
             list.push(TestCommand::new(self.consume_line()));
         }
         list
+    }
+
+    /// Parse a list of ISA specs.
+    ///
+    /// Accept a mix of `isa` and `set` command lines. The `set` commands are cumulative.
+    ///
+    pub fn parse_isa_specs(&mut self) -> Result<isaspec::IsaSpec> {
+        // Was there any `isa` commands?
+        let mut seen_isa = false;
+        // Location of last `set` command since the last `isa`.
+        let mut last_set_loc = None;
+
+        let mut isas = Vec::new();
+        let mut flag_builder = settings::builder();
+
+        while let Some(Token::Identifier(command)) = self.token() {
+            match command {
+                "set" => {
+                    last_set_loc = Some(self.loc);
+                    try!(isaspec::parse_options(self.consume_line().trim().split_whitespace(),
+                                                &mut flag_builder,
+                                                &self.loc));
+                }
+                "isa" => {
+                    last_set_loc = None;
+                    seen_isa = true;
+                    let loc = self.loc;
+                    // Grab the whole line so the lexer won't go looking for tokens on the
+                    // following lines.
+                    let mut words = self.consume_line().trim().split_whitespace();
+                    // Look for `isa foo`.
+                    let isa_name = match words.next() {
+                        None => return err!(loc, "expected ISA name"),
+                        Some(w) => w,
+                    };
+                    let mut isa_builder = match isa::lookup(isa_name) {
+                        None => return err!(loc, "unknown ISA '{}'", isa_name),
+                        Some(b) => b,
+                    };
+                    // Apply the ISA-specific settings to `isa_builder`.
+                    try!(isaspec::parse_options(words, &mut isa_builder, &self.loc));
+
+                    // Construct a trait object with the aggregrate settings.
+                    isas.push(isa_builder.finish(settings::Flags::new(&flag_builder)));
+                }
+                _ => break,
+            }
+        }
+        if !seen_isa {
+            // No `isa` commands, but we allow for `set` commands.
+            Ok(isaspec::IsaSpec::None(settings::Flags::new(&flag_builder)))
+        } else if let Some(loc) = last_set_loc {
+            err!(loc,
+                 "dangling 'set' command after ISA specification has no effect.")
+        } else {
+            Ok(isaspec::IsaSpec::Some(isas))
+        }
     }
 
     /// Parse a list of function definitions.
@@ -1115,6 +1176,7 @@ mod tests {
     use cretonne::ir::types::{self, ArgumentType, ArgumentExtension};
     use cretonne::ir::entities::AnyEntity;
     use testfile::{Details, Comment};
+    use isaspec::IsaSpec;
     use error::Error;
 
     #[test]
@@ -1246,12 +1308,41 @@ mod tests {
         let tf = parse_test("; before
                              test cfg option=5
                              test verify
+                             set enable_float=false
                              function comment() {}")
             .unwrap();
         assert_eq!(tf.commands.len(), 2);
         assert_eq!(tf.commands[0].command, "cfg");
         assert_eq!(tf.commands[1].command, "verify");
+        match tf.isa_spec {
+            IsaSpec::None(s) => assert!(!s.enable_float()),
+            _ => panic!("unexpected ISAs"),
+        }
         assert_eq!(tf.functions.len(), 1);
         assert_eq!(tf.functions[0].0.name.to_string(), "comment");
+    }
+
+    #[test]
+    fn isa_spec() {
+        assert!(parse_test("isa
+                            function foo() {}")
+            .is_err());
+
+        assert!(parse_test("isa riscv
+                            set enable_float=false
+                            function foo() {}")
+            .is_err());
+
+        match parse_test("set enable_float=false
+                          isa riscv
+                          function foo() {}")
+            .unwrap()
+            .isa_spec {
+            IsaSpec::None(_) => panic!("Expected some ISA"),
+            IsaSpec::Some(v) => {
+                assert_eq!(v.len(), 1);
+                assert_eq!(v[0].name(), "riscv");
+            }
+        }
     }
 }

@@ -15,5 +15,6 @@ mod error;
 mod lexer;
 mod parser;
 mod testcommand;
+mod isaspec;
 mod testfile;
 mod sourcemap;
