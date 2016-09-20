@@ -3,10 +3,11 @@
 //! The `Function` struct defined in this module owns all of its extended basic blocks and
 //! instructions.
 
-use ir::{FunctionName, Signature, StackSlot, StackSlotData, JumpTable, JumpTableData,
-         DataFlowGraph, Layout};
-use entity_map::{EntityMap, PrimaryEntityData};
 use std::fmt::{self, Display, Debug, Formatter};
+use ir::{FunctionName, Signature, Inst, StackSlot, StackSlotData, JumpTable, JumpTableData,
+         DataFlowGraph, Layout};
+use isa::Encoding;
+use entity_map::{EntityMap, PrimaryEntityData};
 use write::write_function;
 
 /// A function.
@@ -32,6 +33,10 @@ pub struct Function {
 
     /// Layout of EBBs and instructions in the function body.
     pub layout: Layout,
+
+    /// Encoding recipe and bits for the legal instructions.
+    /// Illegal instructions have the `Encoding::default()` value.
+    pub encodings: EntityMap<Inst, Encoding>,
 }
 
 impl PrimaryEntityData for StackSlotData {}
@@ -47,6 +52,7 @@ impl Function {
             jump_tables: EntityMap::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),
+            encodings: EntityMap::new(),
         }
     }
 
