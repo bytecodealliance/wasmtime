@@ -14,9 +14,9 @@ mod tests {
 
     #[test]
     fn display_default() {
-        let shared = settings::Flags::new(settings::builder());
+        let shared = settings::Flags::new(&settings::builder());
         let b = builder();
-        let f = Flags::new(&shared, b);
+        let f = Flags::new(&shared, &b);
         assert_eq!(f.to_string(),
                    "[riscv]\n\
                     supports_m = false\n\
@@ -30,20 +30,20 @@ mod tests {
 
     #[test]
     fn predicates() {
-        let shared = settings::Flags::new(settings::builder());
+        let shared = settings::Flags::new(&settings::builder());
         let mut b = builder();
         b.set_bool("supports_f", true).unwrap();
         b.set_bool("supports_d", true).unwrap();
-        let f = Flags::new(&shared, b);
+        let f = Flags::new(&shared, &b);
         assert_eq!(f.full_float(), true);
 
         let mut sb = settings::builder();
         sb.set_bool("enable_simd", false).unwrap();
-        let shared = settings::Flags::new(sb);
+        let shared = settings::Flags::new(&sb);
         let mut b = builder();
         b.set_bool("supports_f", true).unwrap();
         b.set_bool("supports_d", true).unwrap();
-        let f = Flags::new(&shared, b);
+        let f = Flags::new(&shared, &b);
         assert_eq!(f.full_float(), false);
     }
 }

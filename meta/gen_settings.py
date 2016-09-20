@@ -183,18 +183,18 @@ def gen_constructor(sgrp, parent, fmt):
     """
 
     with fmt.indented('impl Flags {', '}'):
-        args = 'builder: Builder'
+        args = 'builder: &Builder'
         if sgrp.parent:
             p = sgrp.parent
             args = '{}: &{}::Flags, {}'.format(p.name, p.qual_mod, args)
         with fmt.indented(
                 'pub fn new({}) -> Flags {{'.format(args), '}'):
-            fmt.line('let bvec = builder.finish("{}");'.format(sgrp.name))
+            fmt.line('let bvec = builder.state_for("{}");'.format(sgrp.name))
             fmt.line('let mut bytes = [0; {}];'.format(sgrp.byte_size()))
             fmt.line('assert_eq!(bvec.len(), {});'.format(sgrp.settings_size))
             with fmt.indented(
-                    'for (i, b) in bvec.into_iter().enumerate() {', '}'):
-                fmt.line('bytes[i] = b;')
+                    'for (i, b) in bvec.iter().enumerate() {', '}'):
+                fmt.line('bytes[i] = *b;')
 
             # Stop here without predicates.
             if len(sgrp.predicate_number) == sgrp.boolean_settings:
