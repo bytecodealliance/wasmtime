@@ -454,7 +454,7 @@ impl<'a> Parser<'a> {
     // function-spec ::= * "function" name signature
     //
     fn parse_function_spec(&mut self) -> Result<(Location, FunctionName, Signature)> {
-        try!(self.match_token(Token::Function, "expected 'function' keyword"));
+        try!(self.match_identifier("function", "expected 'function'"));
         let location = self.loc;
 
         // function-spec ::= "function" * name signature
