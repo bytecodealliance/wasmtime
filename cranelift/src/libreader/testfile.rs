@@ -7,16 +7,19 @@
 use cretonne::ir::Function;
 use cretonne::ir::entities::AnyEntity;
 use testcommand::TestCommand;
+use isaspec::IsaSpec;
 use sourcemap::SourceMap;
 use error::Location;
 
 /// A parsed test case.
 ///
-/// This is the result of parsing a `.cton` file which contains a number of test commands followed
-/// by the functions that should be tested.
-#[derive(Debug)]
+/// This is the result of parsing a `.cton` file which contains a number of test commands and ISA
+/// specs followed by the functions that should be tested.
 pub struct TestFile<'a> {
+    /// `test foo ...` lines.
     pub commands: Vec<TestCommand<'a>>,
+    /// `isa bar ...` lines.
+    pub isa_spec: IsaSpec,
     pub functions: Vec<(Function, Details<'a>)>,
 }
 

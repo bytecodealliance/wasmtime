@@ -39,6 +39,10 @@ fn isa_constructor(shared_flags: shared_settings::Flags,
 }
 
 impl TargetIsa for Isa {
+    fn name(&self) -> &'static str {
+        "riscv"
+    }
+
     fn encode(&self, _: &DataFlowGraph, inst: &InstructionData) -> Option<Encoding> {
         lookup_enclist(inst.first_type(),
                        inst.opcode(),

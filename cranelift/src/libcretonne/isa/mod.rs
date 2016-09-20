@@ -88,6 +88,9 @@ impl settings::Configurable for Builder {
 }
 
 pub trait TargetIsa {
+    /// Get the name of this ISA.
+    fn name(&self) -> &'static str;
+
     /// Encode an instruction after determining it is legal.
     ///
     /// If `inst` can legally be encoded in this ISA, produce the corresponding `Encoding` object.
