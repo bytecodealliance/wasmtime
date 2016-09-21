@@ -97,7 +97,7 @@ mod tests {
         };
 
         // ADDI is I/0b00100
-        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst64).unwrap()), "I/04");
+        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst64).unwrap()), "I#04");
 
         // Try to encode iadd_imm.i64 vx1, -10000.
         let inst64_large = InstructionData::BinaryImm {
@@ -119,7 +119,7 @@ mod tests {
         };
 
         // ADDIW is I/0b00110
-        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst32).unwrap()), "I/06");
+        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst32).unwrap()), "I#06");
     }
 
     // Same as above, but for RV32.
@@ -166,7 +166,7 @@ mod tests {
         };
 
         // ADDI is I/0b00100
-        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst32).unwrap()), "I/04");
+        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst32).unwrap()), "I#04");
 
         // Create an imul.i32 which is encodable in RV32, but only when use_m is true.
         let mul32 = InstructionData::Binary {
@@ -201,6 +201,6 @@ mod tests {
             ty: types::I32,
             args: [arg32, arg32],
         };
-        assert_eq!(encstr(&*isa, isa.encode(&dfg, &mul32).unwrap()), "R/10c");
+        assert_eq!(encstr(&*isa, isa.encode(&dfg, &mul32).unwrap()), "R#10c");
     }
 }
