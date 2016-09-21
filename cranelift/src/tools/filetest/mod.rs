@@ -17,6 +17,7 @@ mod runone;
 mod concurrent;
 mod domtree;
 mod verifier;
+mod legalizer;
 
 /// The result of running the test in a file.
 pub type TestResult = Result<time::Duration, String>;
@@ -55,6 +56,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::Result<Box<subtest::SubTest>> {
         "print-cfg" => print_cfg::subtest(parsed),
         "domtree" => domtree::subtest(parsed),
         "verifier" => verifier::subtest(parsed),
+        "legalizer" => legalizer::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }
