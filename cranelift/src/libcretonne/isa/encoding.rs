@@ -50,7 +50,7 @@ impl Default for Encoding {
 impl fmt::Display for Encoding {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.is_legal() {
-            write!(f, "#{}/{:02x}", self.recipe, self.bits)
+            write!(f, "{}#{:02x}", self.recipe, self.bits)
         } else {
             write!(f, "-")
         }
@@ -68,7 +68,7 @@ impl fmt::Display for DisplayEncoding {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.encoding.is_legal() {
             write!(f,
-                   "{}/{:02x}",
+                   "{}#{:02x}",
                    self.recipe_names[self.encoding.recipe()],
                    self.encoding.bits)
         } else {

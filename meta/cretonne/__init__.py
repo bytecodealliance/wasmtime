@@ -1205,7 +1205,7 @@ class Encoding(object):
         self.isap = And.combine(recipe.isap, isap)
 
     def __str__(self):
-        return '[{}/{:02x}]'.format(self.recipe, self.encbits)
+        return '[{}#{:02x}]'.format(self.recipe, self.encbits)
 
     def ctrl_typevar(self):
         """
