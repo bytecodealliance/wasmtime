@@ -43,6 +43,10 @@ impl TargetIsa for Isa {
         "riscv"
     }
 
+    fn flags(&self) -> &shared_settings::Flags {
+        &self.shared_flags
+    }
+
     fn encode(&self, _: &DataFlowGraph, inst: &InstructionData) -> Option<Encoding> {
         lookup_enclist(inst.first_type(),
                        inst.opcode(),

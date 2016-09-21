@@ -3,6 +3,8 @@
 use std::result;
 use std::borrow::Cow;
 use cretonne::ir::Function;
+use cretonne::isa::TargetIsa;
+use cretonne::settings::Flags;
 use cton_reader::Details;
 use filecheck::{self, CheckerBuilder, Checker, Value as FCValue};
 
@@ -15,6 +17,13 @@ pub struct Context<'a> {
 
     /// Was the function verified before running this test?
     pub verified: bool,
+
+    /// ISA-independent flags for this test.
+    pub flags: &'a Flags,
+
+    /// Target ISA to test against. Only present for sub-tests whose `needs_isa` method returned
+    /// true.
+    pub isa: Option<&'a TargetIsa>,
 }
 
 /// Common interface for implementations of test commands.
@@ -33,6 +42,11 @@ pub trait SubTest {
     /// Does this test mutate the function when it runs?
     /// This is used as a hint to avoid cloning the function needlessly.
     fn is_mutating(&self) -> bool {
+        false
+    }
+
+    /// Does this test need a `TargetIsa` trait object?
+    fn needs_isa(&self) -> bool {
         false
     }
 
