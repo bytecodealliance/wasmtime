@@ -70,6 +70,11 @@ impl<K, V> EntityMap<K, V>
         k.index() < self.elems.len()
     }
 
+    /// Get the element at `k` if it exists.
+    pub fn get(&self, k: K) -> Option<&V> {
+        self.elems.get(k.index())
+    }
+
     /// Is this map completely empty?
     pub fn is_empty(&self) -> bool {
         self.elems.is_empty()
