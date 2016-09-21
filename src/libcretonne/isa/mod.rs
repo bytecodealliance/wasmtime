@@ -91,6 +91,9 @@ pub trait TargetIsa {
     /// Get the name of this ISA.
     fn name(&self) -> &'static str;
 
+    /// Get the ISA-independent flags that were used to make this trait object.
+    fn flags(&self) -> &settings::Flags;
+
     /// Encode an instruction after determining it is legal.
     ///
     /// If `inst` can legally be encoded in this ISA, produce the corresponding `Encoding` object.
