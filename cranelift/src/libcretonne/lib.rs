@@ -6,6 +6,7 @@
 // ====------------------------------------------------------------------------------------==== //
 
 pub use verifier::verify_function;
+pub use write::write_function;
 
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 

@@ -5,11 +5,13 @@
 //! `cretonne-reader` crate.
 
 use ir::{Function, Ebb, Inst, Value, Type};
+use isa::TargetIsa;
 use std::fmt::{Result, Error, Write};
 use std::result;
 
 /// Write `func` to `w` as equivalent text.
-pub fn write_function(w: &mut Write, func: &Function) -> Result {
+/// Use `isa` to emit ISA-dependent annotations.
+pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -> Result {
     try!(write_spec(w, func));
     try!(writeln!(w, " {{"));
     let mut any = try!(write_preamble(w, func));
@@ -17,7 +19,7 @@ pub fn write_function(w: &mut Write, func: &Function) -> Result {
         if any {
             try!(writeln!(w, ""));
         }
-        try!(write_ebb(w, func, ebb));
+        try!(write_ebb(w, func, isa, ebb));
         any = true;
     }
     writeln!(w, "}}")
@@ -67,6 +69,11 @@ pub fn write_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
     //    ebb10(vx4: f64, vx5: b1):
     //
 
+    // If we're writing encoding annotations, shift by 20.
+    if !func.encodings.is_empty() {
+        try!(write!(w, "                    "));
+    }
+
     let mut args = func.dfg.ebb_args(ebb);
     match args.next() {
         None => return writeln!(w, "{}:", ebb),
@@ -83,10 +90,10 @@ pub fn write_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
     writeln!(w, "):")
 }
 
-pub fn write_ebb(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
+pub fn write_ebb(w: &mut Write, func: &Function, isa: Option<&TargetIsa>, ebb: Ebb) -> Result {
     try!(write_ebb_header(w, func, ebb));
     for inst in func.layout.ebb_insts(ebb) {
-        try!(write_instruction(w, func, inst));
+        try!(write_instruction(w, func, isa, inst));
     }
     Ok(())
 }
@@ -127,10 +134,27 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
     Some(rtype)
 }
 
-pub fn write_instruction(w: &mut Write, func: &Function, inst: Inst) -> Result {
-    try!(write!(w, "    "));
+fn write_instruction(w: &mut Write,
+                     func: &Function,
+                     isa: Option<&TargetIsa>,
+                     inst: Inst)
+                     -> Result {
+    // Write out encoding info.
+    if let Some(enc) = func.encodings.get(inst).cloned() {
+        let mut s = String::with_capacity(16);
+        if let Some(isa) = isa {
+            try!(write!(s, "[{}]", isa.display_enc(enc)));
+        } else {
+            try!(write!(s, "[{}]", enc));
+        }
+        // Align instruction following ISA annotation to col 24.
+        try!(write!(w, "{:23} ", s));
+    } else {
+        // No annotations, simply indent by 4.
+        try!(write!(w, "    "));
+    }
 
-    // First write out the result values, if any.
+    // Write out the result values, if any.
     let mut has_results = false;
     for r in func.dfg.inst_results(inst) {
         if !has_results {

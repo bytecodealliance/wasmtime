@@ -69,12 +69,12 @@ impl Function {
 
 impl Display for Function {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write_function(fmt, self)
+        write_function(fmt, self, None)
     }
 }
 
 impl Debug for Function {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write_function(fmt, self)
+        write_function(fmt, self, None)
     }
 }
