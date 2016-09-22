@@ -10,6 +10,7 @@ import math
 import importlib
 from collections import OrderedDict
 from .predicates import And
+from .ast import Apply
 
 
 camel_re = re.compile('(^|_)([a-z])')
@@ -603,6 +604,12 @@ class Operand(object):
     def __str__(self):
         return "`{}`".format(self.name)
 
+    def is_value(self):
+        """
+        Is this an SSA value operand?
+        """
+        return self.kind is value
+
 
 class InstructionFormat(object):
     """
@@ -779,9 +786,12 @@ class Instruction(object):
         self.format = InstructionFormat.lookup(self.ins, self.outs)
         # Indexes into outs for value results. Others are `variable_args`.
         self.value_results = tuple(
-                i for i, o in enumerate(self.outs) if o.kind is value)
+                i for i, o in enumerate(self.outs) if o.is_value())
         self._verify_polymorphic()
         InstructionGroup.append(self)
+
+    def __str__(self):
+        return self.name
 
     def _verify_polymorphic(self):
         """
@@ -910,6 +920,13 @@ class Instruction(object):
         assert not self.is_polymorphic, self
         return (self, ())
 
+    def __call__(self, *args):
+        """
+        Create an `ast.Apply` AST node representing the application of this
+        instruction to the arguments.
+        """
+        return Apply(self, args)
+
 
 class BoundInstruction(object):
     """
@@ -950,6 +967,13 @@ class BoundInstruction(object):
             raise AssertionError("Unbound typevar {} in {}".format(unb, self))
         assert len(self.typevars) == 1 + len(self.inst.other_typevars)
         return (self.inst, self.typevars)
+
+    def __call__(self, *args):
+        """
+        Create an `ast.Apply` AST node representing the application of this
+        instruction to the arguments.
+        """
+        return Apply(self, args)
 
 
 # Defining target ISAs.
