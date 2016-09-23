@@ -153,9 +153,8 @@ def gen_instruction_data_impl(fmt):
                         if f.boxed_storage:
                             fmt.line(
                                     n +
-                                    ' {{ ref data, .. }} => ' +
-                                    'Some(data.args[{}]),'
-                                    .format(i))
+                                    ' { ref data, .. } => ' +
+                                    ('Some(data.args[{}]),'.format(i)))
                         else:
                             fmt.line(
                                     n +

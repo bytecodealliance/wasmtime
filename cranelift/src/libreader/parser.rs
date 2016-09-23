@@ -13,8 +13,8 @@ use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotDa
 use cretonne::ir::types::{VOID, Signature, ArgumentType, ArgumentExtension};
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::{AnyEntity, NO_EBB, NO_INST, NO_VALUE};
-use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs, JumpData,
-                                 BranchData, ReturnData};
+use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs,
+                                 TernaryOverflowData, JumpData, BranchData, ReturnData};
 use cretonne::isa;
 use cretonne::settings;
 use testfile::{TestFile, Details, Comment};
@@ -136,6 +136,10 @@ impl Context {
 
                     InstructionData::Ternary { ref mut args, .. } => {
                         try!(self.map.rewrite_values(args, loc));
+                    }
+
+                    InstructionData::TernaryOverflow { ref mut data, .. } => {
+                        try!(self.map.rewrite_values(&mut data.args, loc));
                     }
 
                     InstructionData::Jump { ref mut data, .. } => {
@@ -1064,6 +1068,22 @@ impl<'a> Parser<'a> {
                     opcode: opcode,
                     ty: VOID,
                     args: [ctrl_arg, true_arg, false_arg],
+                }
+            }
+            InstructionFormat::TernaryOverflow => {
+                // Names here refer to the `iadd_carry` instruction.
+                let lhs = try!(self.match_value("expected SSA value first operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let rhs = try!(self.match_value("expected SSA value second operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let cin = try!(self.match_value("expected SSA value third operand"));
+                InstructionData::TernaryOverflow {
+                    opcode: opcode,
+                    ty: VOID,
+                    data: Box::new(TernaryOverflowData {
+                        second_result: NO_VALUE,
+                        args: [lhs, rhs, cin],
+                    }),
                 }
             }
             InstructionFormat::Jump => {
