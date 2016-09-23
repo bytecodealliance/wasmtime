@@ -149,6 +149,11 @@ pub enum InstructionData {
         ty: Type,
         args: [Value; 3],
     },
+    TernaryOverflow {
+        opcode: Opcode,
+        ty: Type,
+        data: Box<TernaryOverflowData>,
+    },
     InsertLane {
         opcode: Opcode,
         ty: Type,
@@ -251,6 +256,19 @@ impl Display for VariableArgs {
 impl Default for VariableArgs {
     fn default() -> VariableArgs {
         VariableArgs::new()
+    }
+}
+
+/// Payload data for ternary instructions with multiple results, such as `iadd_carry`.
+#[derive(Clone, Debug)]
+pub struct TernaryOverflowData {
+    pub second_result: Value,
+    pub args: [Value; 3],
+}
+
+impl Display for TernaryOverflowData {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}, {}, {}", self.args[0], self.args[1], self.args[2])
     }
 }
 

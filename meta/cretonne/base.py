@@ -6,7 +6,7 @@ support.
 """
 from __future__ import absolute_import
 from . import TypeVar, Operand, Instruction, InstructionGroup, variable_args
-from .types import i8, f32, f64
+from .types import i8, f32, f64, b1
 from .immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
 from . import entities
 
@@ -404,6 +404,48 @@ isub_imm = Instruction(
         types.
         """,
         ins=(X, y), outs=a)
+
+#
+# Integer arithmetic with carry.
+#
+a = Operand('a', iB)
+x = Operand('x', iB)
+y = Operand('y', iB)
+cin = Operand('cin', b1, doc="Input carry flag")
+cout = Operand('cout', b1, doc="Output carry flag")
+
+iadd_cin = Instruction(
+        'iadd_cin', """
+        Add integers with carry in.
+
+        Same as :inst:`iadd` with an additional carry input.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(x, y, cin), outs=a)
+
+iadd_cout = Instruction(
+        'iadd_cout', """
+        Add integers with carry out.
+
+        Same as :inst:`iadd` with an additional carry output.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(x, y), outs=(a, cout))
+
+iadd_carry = Instruction(
+        'iadd_carry', """
+        Add integers with carry in and out.
+
+        Same as :inst:`iadd` with an additional carry output.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(x, y, cin), outs=(a, cout))
 
 #
 # Bitwise operations.

@@ -30,6 +30,10 @@ BinaryOverflow = InstructionFormat(value, value, multiple_results=True)
 # The fma instruction has the same constraint on all inputs.
 Ternary = InstructionFormat(value, value, value, typevar_operand=1)
 
+# Carry in *and* carry out for `iadd_carry` and friends.
+TernaryOverflow = InstructionFormat(
+        value, value, value, multiple_results=True, boxed_storage=True)
+
 InsertLane = InstructionFormat(value, ('lane', uimm8), value)
 ExtractLane = InstructionFormat(value, ('lane', uimm8))
 
