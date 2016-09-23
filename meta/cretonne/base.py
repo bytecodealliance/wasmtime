@@ -406,24 +406,30 @@ isub_imm = Instruction(
         ins=(X, y), outs=a)
 
 #
-# Integer arithmetic with carry.
+# Integer arithmetic with carry and/or borrow.
 #
 a = Operand('a', iB)
 x = Operand('x', iB)
 y = Operand('y', iB)
-cin = Operand('cin', b1, doc="Input carry flag")
-cout = Operand('cout', b1, doc="Output carry flag")
+c_in = Operand('c_in', b1, doc="Input carry flag")
+c_out = Operand('c_out', b1, doc="Output carry flag")
+b_in = Operand('b_in', b1, doc="Input borrow flag")
+b_out = Operand('b_out', b1, doc="Output borrow flag")
 
 iadd_cin = Instruction(
         'iadd_cin', """
         Add integers with carry in.
 
-        Same as :inst:`iadd` with an additional carry input.
+        Same as :inst:`iadd` with an additional carry input. Computes:
+
+        .. math::
+
+            a = x + y + c_{in} \pmod 2^B
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
         """,
-        ins=(x, y, cin), outs=a)
+        ins=(x, y, c_in), outs=a)
 
 iadd_cout = Instruction(
         'iadd_cout', """
@@ -431,21 +437,78 @@ iadd_cout = Instruction(
 
         Same as :inst:`iadd` with an additional carry output.
 
+        .. math::
+
+            a &= x + y \pmod 2^B \\
+            c_{out} &= x+y >= 2^B
+
         Polymorphic over all scalar integer types, but does not support vector
         types.
         """,
-        ins=(x, y), outs=(a, cout))
+        ins=(x, y), outs=(a, c_out))
 
 iadd_carry = Instruction(
         'iadd_carry', """
         Add integers with carry in and out.
 
-        Same as :inst:`iadd` with an additional carry output.
+        Same as :inst:`iadd` with an additional carry input and output.
+
+        .. math::
+
+            a &= x + y + c_{in} \pmod 2^B \\
+            c_{out} &= x + y + c_{in} >= 2^B
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
         """,
-        ins=(x, y, cin), outs=(a, cout))
+        ins=(x, y, c_in), outs=(a, c_out))
+
+isub_bin = Instruction(
+        'isub_bin', """
+        Subtract integers with borrow in.
+
+        Same as :inst:`isub` with an additional borrow flag input. Computes:
+
+        .. math::
+
+            a = x - (y + b_{in}) \pmod 2^B
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(x, y, b_in), outs=a)
+
+isub_bout = Instruction(
+        'isub_bout', """
+        Subtract integers with borrow out.
+
+        Same as :inst:`isub` with an additional borrow flag output.
+
+        .. math::
+
+            a &= x - y \pmod 2^B \\
+            b_{out} &= x < y
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(x, y), outs=(a, b_out))
+
+isub_borrow = Instruction(
+        'isub_borrow', """
+        Subtract integers with borrow in and out.
+
+        Same as :inst:`isub` with an additional borrow flag input and output.
+
+        .. math::
+
+            a &= x - (y + b_{in}) \pmod 2^B \\
+            b_{out} &= x < y + b_{in}
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(x, y, b_in), outs=(a, b_out))
 
 #
 # Bitwise operations.
