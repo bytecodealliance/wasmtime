@@ -308,6 +308,7 @@ Quiet NaNs
 Signaling NaNs
     Displayed as ``-sNaN:0xT``.
 
+
 Control flow
 ============
 
@@ -813,6 +814,18 @@ Conversion operations
 .. autoinst:: fcvt_to_sint
 .. autoinst:: fcvt_from_uint
 .. autoinst:: fcvt_from_sint
+
+
+Base instruction group
+======================
+
+All of the shared instructions are part of the :instgroup:`base` instruction
+group.
+
+.. autoinstgroup:: cretonne.base.instructions
+
+Target ISAs may define further instructions in their own instruction groups.
+
 
 Glossary
 ========

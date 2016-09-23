@@ -173,6 +173,10 @@ class CtonInst(CtonObject):
         return name
 
 
+class CtonInstGroup(CtonObject):
+    """A Cretonne IL instruction group."""
+
+
 class CretonneDomain(Domain):
     """Cretonne domain for intermediate language objects."""
     name = 'cton'
@@ -186,11 +190,13 @@ class CretonneDomain(Domain):
     directives = {
         'type': CtonType,
         'inst': CtonInst,
+        'instgroup': CtonInstGroup,
     }
 
     roles = {
         'type': XRefRole(),
         'inst': XRefRole(),
+        'instgroup': XRefRole(),
     }
 
     initial_data = {
@@ -327,9 +333,39 @@ class InstDocumenter(sphinx.ext.autodoc.Documenter):
                         sourcename)
 
 
+class InstGroupDocumenter(sphinx.ext.autodoc.ModuleLevelDocumenter):
+    # Invoke with .. autoinstgroup::
+    objtype = 'instgroup'
+    # Convert into cton:instgroup directives
+    domain = 'cton'
+    directivetype = 'instgroup'
+
+    @classmethod
+    def can_document_member(cls, member, membername, isattr, parent):
+        return False
+
+    def format_name(self):
+        return "{}.{}".format(self.modname, ".".join(self.objpath))
+
+    def add_content(self, more_content, no_docstring=False):
+        super(InstGroupDocumenter, self).add_content(
+                more_content, no_docstring)
+        sourcename = self.get_sourcename()
+        indexed = self.env.domaindata['cton']['objects']
+
+        names = [inst.name for inst in self.object.instructions]
+        names.sort()
+        for name in names:
+            if name in indexed:
+                self.add_line(u':cton:inst:`{}`'.format(name), sourcename)
+            else:
+                self.add_line(u'``{}``'.format(name), sourcename)
+
+
 def setup(app):
     app.add_domain(CretonneDomain)
     app.add_autodocumenter(TypeDocumenter)
     app.add_autodocumenter(InstDocumenter)
+    app.add_autodocumenter(InstGroupDocumenter)
 
     return {'version': '0.1'}
