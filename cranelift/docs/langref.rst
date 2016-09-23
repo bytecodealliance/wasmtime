@@ -674,14 +674,14 @@ Integer operations
 .. autoinst:: icmp
 .. autoinst:: iadd
 .. autoinst:: iadd_imm
+.. autoinst:: iadd_cin
+.. autoinst:: iadd_cout
+.. autoinst:: iadd_carry
 .. autoinst:: isub
 .. autoinst:: isub_imm
-
-.. todo:: Integer overflow arithmetic
-
-    Add instructions for add with carry out / carry in and so on. Enough to
-    implement larger integer types efficiently. It should also be possible to
-    legalize :type:`i64` arithmetic to terms of :type:`i32` operations.
+.. autoinst:: isub_bin
+.. autoinst:: isub_bout
+.. autoinst:: isub_borrow
 
 .. autoinst:: imul
 .. autoinst:: imul_imm
@@ -722,8 +722,11 @@ bitwise operations are working on the binary representation of the values. When
 operating on boolean values, the bitwise operations work as logical operators.
 
 .. autoinst:: band
+.. autoinst:: band_imm
 .. autoinst:: bor
+.. autoinst:: bor_imm
 .. autoinst:: bxor
+.. autoinst:: bxor_imm
 .. autoinst:: bnot
 
 .. todo:: Redundant bitwise operators.
@@ -740,10 +743,15 @@ type, and all the lanes are shifted the same amount. The shift amount is masked
 to the number of bits in a *lane*, not the full size of the vector type.
 
 .. autoinst:: rotl
+.. autoinst:: rotl_imm
 .. autoinst:: rotr
+.. autoinst:: rotr_imm
 .. autoinst:: ishl
+.. autoinst:: ishl_imm
 .. autoinst:: ushr
+.. autoinst:: ushr_imm
 .. autoinst:: sshr
+.. autoinst:: sshr_imm
 
 The bit-counting instructions below are scalar only.
 
