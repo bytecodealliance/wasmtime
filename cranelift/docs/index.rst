@@ -4,10 +4,11 @@ Cretonne Code Generator
 Contents:
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    langref
    metaref
+   testing
 
 Indices and tables
 ==================

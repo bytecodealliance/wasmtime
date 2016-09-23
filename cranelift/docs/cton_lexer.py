@@ -19,6 +19,17 @@ class CretonneLexer(RegexLexer):
 
     tokens = {
         'root': [
+            # Test header lines.
+            (r'^(test|isa|set)(?:( +)([-\w]+)' +
+             r'(?:(=)(?:(\d+)|(yes|no|true|false|on|off)|(\w+)))?)*' +
+             r'( *)$',
+                bygroups(Keyword.Namespace, Whitespace, Name.Attribute,
+                         Operator, Number.Integer, Keyword.Constant,
+                         Name.Constant, Whitespace)),
+            # Comments with filecheck or other test directive.
+            (r'(; *)([a-z]+:)(.*?)$',
+                bygroups(Comment.Single, Comment.Special, Comment.Single)),
+            # Plain comments.
             (r';.*?$', Comment.Single),
             # Strings are in double quotes, support \xx escapes only.
             (r'"([^"\\]+|\\[0-9a-fA-F]{2})*"', String),
@@ -30,16 +41,16 @@ class CretonneLexer(RegexLexer):
             (r'[-+]?0[xX][0-9a-fA-F]*\.[0-9a-fA-F]*([pP]\d+)?', Number.Hex),
             (r'[-+]?(\d+\.\d+([eE]\d+)?|[sq]NaN|Inf)', Number.Float),
             (r'[-+]?\d+', Number.Integer),
-            # Reserved words.
-            (keywords('function'), Keyword),
             # Known attributes.
             (keywords('align', 'aligntrap', 'uext', 'sext', 'inreg'),
                 Name.Attribute),
             # Well known value types.
             (r'\b(b\d+|i\d+|f32|f64)(x\d+)?\b', Keyword.Type),
             # v<nn> = value
+            # vx<nn> = value
             # ss<nn> = stack slot
-            (r'(v|ss)\d+', Name.Variable),
+            # jt<nn> = jump table
+            (r'(vx?|ss|jt)\d+', Name.Variable),
             # ebb<nn> = extended basic block
             (r'(ebb)\d+', Name.Label),
             # Match instruction names in context.
@@ -52,7 +63,7 @@ class CretonneLexer(RegexLexer):
             (r'->|=|:', Operator),
             (r'[{}(),.]', Punctuation),
             (r'[ \t]+', Text),
-        ]
+        ],
     }
 
 

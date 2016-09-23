@@ -48,11 +48,11 @@ fall through to the next EBB without an explicit branch.
 A ``.cton`` file consists of a sequence of independent function definitions:
 
 .. productionlist::
-    function-list : { function }
-    function      : function-spec "{" preamble function-body "}"
-    function-spec : "function" function-name signature
-    preamble      : { preamble-decl }
-    function-body : { extended-basic-block }
+    function_list : { function }
+    function      : function_spec "{" preamble function_body "}"
+    function_spec : "function" function_name signature
+    preamble      : { preamble_decl }
+    function_body : { extended_basic_block }
 
 Static single assignment form
 -----------------------------
