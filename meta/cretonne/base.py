@@ -417,7 +417,7 @@ b_in = Operand('b_in', b1, doc="Input borrow flag")
 b_out = Operand('b_out', b1, doc="Output borrow flag")
 
 iadd_cin = Instruction(
-        'iadd_cin', """
+        'iadd_cin', r"""
         Add integers with carry in.
 
         Same as :inst:`iadd` with an additional carry input. Computes:
@@ -432,7 +432,7 @@ iadd_cin = Instruction(
         ins=(x, y, c_in), outs=a)
 
 iadd_cout = Instruction(
-        'iadd_cout', """
+        'iadd_cout', r"""
         Add integers with carry out.
 
         Same as :inst:`iadd` with an additional carry output.
@@ -448,7 +448,7 @@ iadd_cout = Instruction(
         ins=(x, y), outs=(a, c_out))
 
 iadd_carry = Instruction(
-        'iadd_carry', """
+        'iadd_carry', r"""
         Add integers with carry in and out.
 
         Same as :inst:`iadd` with an additional carry input and output.
@@ -464,7 +464,7 @@ iadd_carry = Instruction(
         ins=(x, y, c_in), outs=(a, c_out))
 
 isub_bin = Instruction(
-        'isub_bin', """
+        'isub_bin', r"""
         Subtract integers with borrow in.
 
         Same as :inst:`isub` with an additional borrow flag input. Computes:
@@ -479,7 +479,7 @@ isub_bin = Instruction(
         ins=(x, y, b_in), outs=a)
 
 isub_bout = Instruction(
-        'isub_bout', """
+        'isub_bout', r"""
         Subtract integers with borrow out.
 
         Same as :inst:`isub` with an additional borrow flag output.
@@ -495,7 +495,7 @@ isub_bout = Instruction(
         ins=(x, y), outs=(a, b_out))
 
 isub_borrow = Instruction(
-        'isub_borrow', """
+        'isub_borrow', r"""
         Subtract integers with borrow in and out.
 
         Same as :inst:`isub` with an additional borrow flag input and output.
