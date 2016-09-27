@@ -547,6 +547,12 @@ enum OperandConstraint {
 
     /// This operand is `ctrlType.as_bool()`.
     AsBool,
+
+    /// This operand is `ctrlType.half_width()`.
+    HalfWidth,
+
+    /// This operand is `ctrlType.double_width()`.
+    DoubleWidth,
 }
 
 impl OperandConstraint {
@@ -562,6 +568,8 @@ impl OperandConstraint {
             Same => Some(ctrl_type),
             LaneOf => Some(ctrl_type.lane_type()),
             AsBool => Some(ctrl_type.as_bool()),
+            HalfWidth => Some(ctrl_type.half_width().expect("invalid type for half_width")),
+            DoubleWidth => Some(ctrl_type.double_width().expect("invalid type for double_width")),
         }
     }
 }

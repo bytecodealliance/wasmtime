@@ -2,7 +2,7 @@ from __future__ import absolute_import
 from unittest import TestCase
 from doctest import DocTestSuite
 from . import typevar
-from .typevar import TypeSet
+from .typevar import TypeSet, TypeVar
 
 
 def load_tests(loader, tests, ignore):
@@ -43,3 +43,22 @@ class TestTypeSet(TestCase):
         # Can't rehash after modification.
         with self.assertRaises(AssertionError):
             a in s
+
+
+class TestTypeVar(TestCase):
+    def test_functions(self):
+        x = TypeVar('x', 'all ints', ints=True)
+        with self.assertRaises(AssertionError):
+            x.double_width()
+        with self.assertRaises(AssertionError):
+            x.half_width()
+
+        x2 = TypeVar('x2', 'i16 and up', ints=(16, 64))
+        with self.assertRaises(AssertionError):
+            x2.double_width()
+        self.assertEqual(str(x2.half_width()), '`HalfWidth(x2)`')
+
+        x3 = TypeVar('x3', 'up to i32', ints=(8, 32))
+        self.assertEqual(str(x3.double_width()), '`DoubleWidth(x3)`')
+        with self.assertRaises(AssertionError):
+            x3.half_width()

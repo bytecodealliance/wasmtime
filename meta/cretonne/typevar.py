@@ -274,6 +274,36 @@ class TypeVar(object):
         """
         return TypeVar(None, None, base=self, derived_func='AsBool')
 
+    def half_width(self):
+        """
+        Return a derived type variable that has the same number of vector lanes
+        as this one, but the lanes are half the width.
+        """
+        ts = self.type_set
+        if ts.min_int:
+            assert ts.min_int > 8, "Can't halve all integer types"
+        if ts.min_float:
+            assert ts.min_float > 32, "Can't halve all float types"
+        if ts.min_bool:
+            assert ts.min_bool > 8, "Can't halve all boolean types"
+
+        return TypeVar(None, None, base=self, derived_func='HalfWidth')
+
+    def double_width(self):
+        """
+        Return a derived type variable that has the same number of vector lanes
+        as this one, but the lanes are double the width.
+        """
+        ts = self.type_set
+        if ts.max_int:
+            assert ts.max_int < MAX_BITS, "Can't double all integer types."
+        if ts.max_float:
+            assert ts.max_float < MAX_BITS, "Can't double all float types."
+        if ts.max_bool:
+            assert ts.max_bool < MAX_BITS, "Can't double all boolean types."
+
+        return TypeVar(None, None, base=self, derived_func='DoubleWidth')
+
     def operand_kind(self):
         # When a `TypeVar` object is used to describe the type of an `Operand`
         # in an instruction definition, the kind of that operand is an SSA
