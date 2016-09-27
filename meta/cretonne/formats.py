@@ -17,6 +17,7 @@ UnaryImm = InstructionFormat(imm64)
 UnaryIeee32 = InstructionFormat(ieee32)
 UnaryIeee64 = InstructionFormat(ieee64)
 UnaryImmVector = InstructionFormat(immvector)
+UnarySplit = InstructionFormat(value, multiple_results=True)
 
 Binary = InstructionFormat(value, value)
 BinaryImm = InstructionFormat(value, imm64)

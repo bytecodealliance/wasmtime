@@ -119,6 +119,7 @@ impl Context {
                     InstructionData::UnaryImmVector { .. } => {}
 
                     InstructionData::Unary { ref mut arg, .. } |
+                    InstructionData::UnarySplit { ref mut arg, .. } |
                     InstructionData::BinaryImm { ref mut arg, .. } |
                     InstructionData::BinaryImmRev { ref mut arg, .. } |
                     InstructionData::ExtractLane { ref mut arg, .. } |
@@ -1012,6 +1013,14 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::UnaryImmVector => {
                 unimplemented!();
+            }
+            InstructionFormat::UnarySplit => {
+                InstructionData::UnarySplit {
+                    opcode: opcode,
+                    ty: VOID,
+                    second_result: NO_VALUE,
+                    arg: try!(self.match_value("expected SSA value operand")),
+                }
             }
             InstructionFormat::Binary => {
                 let lhs = try!(self.match_value("expected SSA value first operand"));

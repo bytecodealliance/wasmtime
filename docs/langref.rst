@@ -823,6 +823,14 @@ Conversion operations
 .. autoinst:: fcvt_from_uint
 .. autoinst:: fcvt_from_sint
 
+Legalization operations
+-----------------------
+
+These instructions are used as helpers when legalizing types and operations for
+the target ISA.
+
+.. autoinst:: isplit_lohi
+.. autoinst:: iconcat_lohi
 
 Base instruction group
 ======================
