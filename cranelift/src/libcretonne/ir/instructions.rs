@@ -480,13 +480,14 @@ impl OpcodeConstraints {
 /// A value type set describes the permitted set of types for a type variable.
 #[derive(Clone, Copy)]
 pub struct ValueTypeSet {
-    allow_scalars: bool,
-    allow_simd: bool,
-
-    base: Type,
-    all_ints: bool,
-    all_floats: bool,
-    all_bools: bool,
+    min_lanes: u8,
+    max_lanes: u8,
+    min_int: u8,
+    max_int: u8,
+    min_float: u8,
+    max_float: u8,
+    min_bool: u8,
+    max_bool: u8,
 }
 
 impl ValueTypeSet {
@@ -494,42 +495,38 @@ impl ValueTypeSet {
     ///
     /// Note that the base type set does not have to be included in the type set proper.
     fn is_base_type(&self, scalar: Type) -> bool {
-        scalar == self.base || (self.all_ints && scalar.is_int()) ||
-        (self.all_floats && scalar.is_float()) || (self.all_bools && scalar.is_bool())
+        let l2b = scalar.log2_lane_bits();
+        if scalar.is_int() {
+            self.min_int <= l2b && l2b < self.max_int
+        } else if scalar.is_float() {
+            self.min_float <= l2b && l2b < self.max_float
+        } else if scalar.is_bool() {
+            self.min_bool <= l2b && l2b < self.max_bool
+        } else {
+            false
+        }
     }
 
     /// Does `typ` belong to this set?
     pub fn contains(&self, typ: Type) -> bool {
-        let allowed = if typ.is_scalar() {
-            self.allow_scalars
-        } else {
-            self.allow_simd
-        };
-        allowed && self.is_base_type(typ.lane_type())
+        let l2l = typ.log2_lane_count();
+        self.min_lanes <= l2l && l2l < self.max_lanes && self.is_base_type(typ.lane_type())
     }
 
     /// Get an example member of this type set.
     ///
     /// This is used for error messages to avoid suggesting invalid types.
     pub fn example(&self) -> Type {
-        if self.base != types::VOID {
-            return self.base;
-        }
-        let t = if self.all_ints {
+        let t = if self.max_int > 5 {
             types::I32
-        } else if self.all_floats {
+        } else if self.max_float > 5 {
             types::F32
-        } else if self.allow_scalars {
-            types::B1
-        } else {
+        } else if self.max_bool > 5 {
             types::B32
-        };
-
-        if self.allow_scalars {
-            t
         } else {
-            t.by(4).unwrap()
-        }
+            types::B1
+        };
+        t.by(1 << self.min_lanes).unwrap()
     }
 }
 
@@ -611,43 +608,74 @@ mod tests {
         use ir::types::*;
 
         let vts = ValueTypeSet {
-            allow_scalars: true,
-            allow_simd: true,
-            base: VOID,
-            all_ints: true,
-            all_floats: false,
-            all_bools: true,
+            min_lanes: 0,
+            max_lanes: 8,
+            min_int: 3,
+            max_int: 7,
+            min_float: 0,
+            max_float: 0,
+            min_bool: 3,
+            max_bool: 7,
         };
+        assert!(vts.contains(I32));
+        assert!(vts.contains(I64));
+        assert!(vts.contains(I32X4));
+        assert!(!vts.contains(F32));
+        assert!(!vts.contains(B1));
+        assert!(vts.contains(B8));
+        assert!(vts.contains(B64));
         assert_eq!(vts.example().to_string(), "i32");
 
         let vts = ValueTypeSet {
-            allow_scalars: true,
-            allow_simd: true,
-            base: VOID,
-            all_ints: false,
-            all_floats: true,
-            all_bools: true,
+            min_lanes: 0,
+            max_lanes: 8,
+            min_int: 0,
+            max_int: 0,
+            min_float: 5,
+            max_float: 7,
+            min_bool: 3,
+            max_bool: 7,
         };
         assert_eq!(vts.example().to_string(), "f32");
 
         let vts = ValueTypeSet {
-            allow_scalars: false,
-            allow_simd: true,
-            base: VOID,
-            all_ints: false,
-            all_floats: true,
-            all_bools: true,
+            min_lanes: 1,
+            max_lanes: 8,
+            min_int: 0,
+            max_int: 0,
+            min_float: 5,
+            max_float: 7,
+            min_bool: 3,
+            max_bool: 7,
         };
-        assert_eq!(vts.example().to_string(), "f32x4");
+        assert_eq!(vts.example().to_string(), "f32x2");
 
         let vts = ValueTypeSet {
-            allow_scalars: false,
-            allow_simd: true,
-            base: VOID,
-            all_ints: false,
-            all_floats: false,
-            all_bools: true,
+            min_lanes: 2,
+            max_lanes: 8,
+            min_int: 0,
+            max_int: 0,
+            min_float: 0,
+            max_float: 0,
+            min_bool: 3,
+            max_bool: 7,
         };
+        assert!(!vts.contains(B32X2));
+        assert!(vts.contains(B32X4));
         assert_eq!(vts.example().to_string(), "b32x4");
+
+        let vts = ValueTypeSet {
+            // TypeSet(lanes=(1, 256), ints=(8, 64))
+            min_lanes: 0,
+            max_lanes: 9,
+            min_int: 3,
+            max_int: 7,
+            min_float: 0,
+            max_float: 0,
+            min_bool: 0,
+            max_bool: 0,
+        };
+        assert!(vts.contains(I32));
+        assert!(vts.contains(I32X4));
     }
 }
