@@ -344,15 +344,7 @@ def gen_type_constraints(fmt, instrs):
             .format(len(type_sets.table)), '];'):
         for ts in type_sets.table:
             with fmt.indented('ValueTypeSet {', '},'):
-                if ts.base:
-                    fmt.line('base: {},'.format(ts.base.rust_name()))
-                else:
-                    fmt.line('base: types::VOID,')
-                for field in ts._fields:
-                    if field == 'base':
-                        continue
-                    fmt.line('{}: {},'.format(
-                        field, str(getattr(ts, field)).lower()))
+                ts.emit_fields(fmt)
 
     fmt.comment('Table of operand constraint sequences.')
     with fmt.indented(

@@ -5,20 +5,127 @@ Cretonne instructions and instruction transformations can be specified to be
 polymorphic by using type variables.
 """
 from __future__ import absolute_import
-from collections import namedtuple
+import math
 from . import value
 
-#: A `TypeSet` represents a set of types. We don't allow arbitrary subsets of
-#: types, but use a parametrized approach instead.
-#: This is represented as a named tuple so it can be used as a dictionary key.
-TypeSet = namedtuple(
-        'TypeSet', [
-            'allow_scalars',
-            'allow_simd',
-            'base',
-            'all_ints',
-            'all_floats',
-            'all_bools'])
+
+MAX_LANES = 256
+MAX_BITS = 64
+
+
+def is_power_of_two(x):
+    return x > 0 and x & (x-1) == 0
+
+
+def int_log2(x):
+    return int(math.log(x, 2))
+
+
+class TypeSet(object):
+    """
+    A set of types.
+
+    We don't allow arbitrary subsets of types, but use a parametrized approach
+    instead.
+
+    Objects of this class can be used as dictionary keys.
+
+    Parametrized type sets are specified in terms of ranges:
+
+    - The permitted range of vector lanes, where 1 indicates a scalar type.
+    - The permitted range of integer types.
+    - The permitted range of floating point types, and
+    - The permitted range of boolean types.
+
+    The ranges are inclusive from smallest bit-width to largest bit-width.
+
+    :param lanes: `(min, max)` inclusive range of permitted vector lane counts.
+    :param ints: `(min, max)` inclusive range of permitted scalar integer
+                 widths.
+    :param floats: `(min, max)` inclusive range of permitted scalar floating
+                   point widths.
+    :param bools: `(min, max)` inclusive range of permitted scalar boolean
+                  widths.
+    """
+
+    def __init__(self, lanes, ints=None, floats=None, bools=None):
+        self.min_lanes, self.max_lanes = lanes
+        assert is_power_of_two(self.min_lanes)
+        assert is_power_of_two(self.max_lanes)
+        assert self.max_lanes <= MAX_LANES
+
+        if ints:
+            if ints is True:
+                ints = (8, MAX_BITS)
+            self.min_int, self.max_int = ints
+            assert is_power_of_two(self.min_int)
+            assert is_power_of_two(self.max_int)
+            assert self.max_int <= MAX_BITS
+        else:
+            self.min_int = None
+            self.max_int = None
+
+        if floats:
+            if floats is True:
+                floats = (32, 64)
+            self.min_float, self.max_float = floats
+            assert is_power_of_two(self.min_float)
+            assert self.min_float >= 32
+            assert is_power_of_two(self.max_float)
+            assert self.max_float <= 64
+        else:
+            self.min_float = None
+            self.max_float = None
+
+        if bools:
+            if bools is True:
+                bools = (1, MAX_BITS)
+            self.min_bool, self.max_bool = bools
+            assert is_power_of_two(self.min_bool)
+            assert is_power_of_two(self.max_bool)
+            assert self.max_bool <= MAX_BITS
+        else:
+            self.min_bool = None
+            self.max_bool = None
+
+    def typeset_key(self):
+        """Key tuple used for hashing and equality."""
+        return (self.min_lanes, self.max_lanes,
+                self.min_int, self.max_int,
+                self.min_float, self.max_float,
+                self.min_bool, self.max_bool)
+
+    def __hash__(self):
+        return hash(self.typeset_key())
+
+    def __eq__(self, other):
+        return self.typeset_key() == other.typeset_key()
+
+    def __repr__(self):
+        s = 'TypeSet(lanes=({}, {})'.format(self.min_lanes, self.max_lanes)
+        if self.min_int is not None:
+            s += ', ints=({}, {})'.format(self.min_int, self.max_int)
+        if self.min_float is not None:
+            s += ', floats=({}, {})'.format(self.min_float, self.max_float)
+        if self.min_bool is not None:
+            s += ', bools=({}, {})'.format(self.min_bool, self.max_bool)
+        return s + ')'
+
+    def emit_fields(self, fmt):
+        """Emit field initializers for this typeset."""
+        fmt.comment(repr(self))
+        fields = ('lanes', 'int', 'float', 'bool')
+        for field in fields:
+            min_val = getattr(self, 'min_' + field)
+            max_val = getattr(self, 'max_' + field)
+            if min_val is None:
+                fmt.line('min_{}: 0,'.format(field))
+                fmt.line('max_{}: 0,'.format(field))
+            else:
+                fmt.line('min_{}: {},'.format(
+                    field, int_log2(min_val)))
+                fmt.line('max_{}: {},'.format(
+                    field, int_log2(max_val) + 1))
 
 
 class TypeVar(object):
@@ -33,37 +140,45 @@ class TypeVar(object):
 
     :param name: Short name of type variable used in instruction descriptions.
     :param doc: Documentation string.
-    :param base: Single base type or list of base types. Use this to specify an
-        exact set of base types if the general categories below are not good
-        enough.
-    :param ints: Allow all integer base types.
-    :param floats: Allow all floating point base types.
-    :param bools: Allow all boolean base types.
+    :param ints: Allow all integer base types, or `(min, max)` bit-range.
+    :param floats: Allow all floating point base types, or `(min, max)`
+                   bit-range.
+    :param bools: Allow all boolean base types, or `(min, max)` bit-range.
     :param scalars: Allow type variable to assume scalar types.
-    :param simd: Allow type variable to assume vector types.
+    :param simd: Allow type variable to assume vector types, or `(min, max)`
+                 lane count range.
     """
 
     def __init__(
-            self, name, doc, base=None,
+            self, name, doc,
             ints=False, floats=False, bools=False,
             scalars=True, simd=False,
-            derived_func=None):
+            base=None, derived_func=None):
         self.name = name
         self.__doc__ = doc
-        self.base = base
         self.is_derived = isinstance(base, TypeVar)
-        if self.is_derived:
+        if base:
+            assert self.is_derived
             assert derived_func
+            self.base = base
             self.derived_func = derived_func
             self.name = '{}({})'.format(derived_func, base.name)
         else:
+            min_lanes = 1 if scalars else 2
+            if simd:
+                if simd is True:
+                    max_lanes = MAX_LANES
+                else:
+                    min_lanes, max_lanes = simd
+                    assert not scalars or min_lanes <= 2
+            else:
+                max_lanes = 1
+
             self.type_set = TypeSet(
-                    allow_scalars=scalars,
-                    allow_simd=simd,
-                    base=base,
-                    all_ints=ints,
-                    all_floats=floats,
-                    all_bools=bools)
+                    lanes=(min_lanes, max_lanes),
+                    ints=ints,
+                    floats=floats,
+                    bools=bools)
 
     def __str__(self):
         return "`{}`".format(self.name)
@@ -92,7 +207,7 @@ class TypeVar(object):
         return value
 
     def free_typevar(self):
-        if isinstance(self.base, TypeVar):
+        if self.is_derived:
             return self.base
         else:
             return self

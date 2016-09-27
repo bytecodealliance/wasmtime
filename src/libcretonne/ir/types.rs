@@ -43,6 +43,18 @@ impl Type {
         Type(self.0 & 0x0f)
     }
 
+    /// Get log2 of the number of bits in a lane.
+    pub fn log2_lane_bits(self) -> u8 {
+        match self.lane_type() {
+            B1 => 0,
+            B8 | I8 => 3,
+            B16 | I16 => 4,
+            B32 | I32 | F32 => 5,
+            B64 | I64 | F64 => 6,
+            _ => 0,
+        }
+    }
+
     /// Get the number of bits in a lane.
     pub fn lane_bits(self) -> u8 {
         match self.lane_type() {
