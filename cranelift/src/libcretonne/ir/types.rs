@@ -67,7 +67,7 @@ impl Type {
         }
     }
 
-    /// Get a type with the same number of lanes as this type, but with the lanes replaces by
+    /// Get a type with the same number of lanes as this type, but with the lanes replaced by
     /// booleans of the same size.
     pub fn as_bool(self) -> Type {
         // Replace the low 4 bits with the boolean version, preserve the high 4 bits.
@@ -79,6 +79,38 @@ impl Type {
             _ => B1,
         };
         Type(lane.0 | (self.0 & 0xf0))
+    }
+
+    /// Get a type with the same number of lanes as this type, but with lanes that are half the
+    /// number of bits.
+    pub fn half_width(self) -> Option<Type> {
+        let lane = match self.lane_type() {
+            I16 => I8,
+            I32 => I16,
+            I64 => I32,
+            F64 => F32,
+            B16 => B8,
+            B32 => B16,
+            B64 => B32,
+            _ => return None,
+        };
+        Some(Type(lane.0 | (self.0 & 0xf0)))
+    }
+
+    /// Get a type with the same number of lanes as this type, but with lanes that are twice the
+    /// number of bits.
+    pub fn double_width(self) -> Option<Type> {
+        let lane = match self.lane_type() {
+            I8 => I16,
+            I16 => I32,
+            I32 => I64,
+            F32 => F64,
+            B8 => B16,
+            B16 => B32,
+            B32 => B64,
+            _ => return None,
+        };
+        Some(Type(lane.0 | (self.0 & 0xf0)))
     }
 
     /// Is this the VOID type?
@@ -331,6 +363,37 @@ mod tests {
         assert_eq!(I64.lane_bits(), 64);
         assert_eq!(F32.lane_bits(), 32);
         assert_eq!(F64.lane_bits(), 64);
+    }
+
+    #[test]
+    fn typevar_functions() {
+        assert_eq!(VOID.half_width(), None);
+        assert_eq!(B1.half_width(), None);
+        assert_eq!(B8.half_width(), None);
+        assert_eq!(B16.half_width(), Some(B8));
+        assert_eq!(B32.half_width(), Some(B16));
+        assert_eq!(B64.half_width(), Some(B32));
+        assert_eq!(I8.half_width(), None);
+        assert_eq!(I16.half_width(), Some(I8));
+        assert_eq!(I32.half_width(), Some(I16));
+        assert_eq!(I32X4.half_width(), Some(I16X4));
+        assert_eq!(I64.half_width(), Some(I32));
+        assert_eq!(F32.half_width(), None);
+        assert_eq!(F64.half_width(), Some(F32));
+
+        assert_eq!(VOID.double_width(), None);
+        assert_eq!(B1.double_width(), None);
+        assert_eq!(B8.double_width(), Some(B16));
+        assert_eq!(B16.double_width(), Some(B32));
+        assert_eq!(B32.double_width(), Some(B64));
+        assert_eq!(B64.double_width(), None);
+        assert_eq!(I8.double_width(), Some(I16));
+        assert_eq!(I16.double_width(), Some(I32));
+        assert_eq!(I32.double_width(), Some(I64));
+        assert_eq!(I32X4.double_width(), Some(I64X4));
+        assert_eq!(I64.double_width(), None);
+        assert_eq!(F32.double_width(), Some(F64));
+        assert_eq!(F64.double_width(), None);
     }
 
     #[test]
