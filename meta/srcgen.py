@@ -121,7 +121,3 @@ class Formatter(object):
         """Add a (multi-line) documentation comment."""
         s = re.sub('^', self.indent + '/// ', s, flags=re.M) + '\n'
         self.lines.append(s)
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
