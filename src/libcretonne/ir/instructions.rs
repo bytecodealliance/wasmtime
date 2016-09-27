@@ -398,52 +398,49 @@ pub enum BranchInfo<'a> {
 /// The `InstructionFormat` determines the constraints on most operands, but `Value` operands and
 /// results are not determined by the format. Every `Opcode` has an associated
 /// `OpcodeConstraints` object that provides the missing details.
-///
-/// Since there can be a lot of opcodes, the `OpcodeConstraints` object is encoded as a bit field
-/// by the `meta/gen_instr.py` script.
-///
-/// The bit field bits are:
-///
-/// Bits 0-2:
-///     Number of fixed result values. This does not include `variable_args` results as are
-///     produced by call instructions.
-///
-/// Bit 3:
-///     This opcode is polymorphic and the controlling type variable can be inferred from the
-///     designated input operand. This is the `typevar_operand` index given to the
-///     `InstructionFormat` meta language object. When bit 0 is not set, the controlling type
-///     variable must be the first output value instead.
-///
-/// Bits 4-7:
-///     Permitted set of types for the controlling type variable as an index into `TYPE_SETS`.
-///
-/// Bits 8-15:
-///     Offset into `OPERAND_CONSTRAINT` table of the descriptors for this opcode. The first
-///     `fixed_results()` entries describe the result constraints, then follows constraints for the
-///     fixed `Value` input operands. The number of `Value` inputs isdetermined by the instruction
-///     format.
-///
 #[derive(Clone, Copy)]
-pub struct OpcodeConstraints(u16);
+pub struct OpcodeConstraints {
+    /// Flags for this opcode encoded as a bit field:
+    ///
+    /// Bits 0-2:
+    ///     Number of fixed result values. This does not include `variable_args` results as are
+    ///     produced by call instructions.
+    ///
+    /// Bit 3:
+    ///     This opcode is polymorphic and the controlling type variable can be inferred from the
+    ///     designated input operand. This is the `typevar_operand` index given to the
+    ///     `InstructionFormat` meta language object. When bit 0 is not set, the controlling type
+    ///     variable must be the first output value instead.
+    flags: u8,
+
+    /// Permitted set of types for the controlling type variable as an index into `TYPE_SETS`.
+    typeset_offset: u8,
+
+    /// Offset into `OPERAND_CONSTRAINT` table of the descriptors for this opcode. The first
+    /// `fixed_results()` entries describe the result constraints, then follows constraints for the
+    /// fixed `Value` input operands. The number of `Value` inputs is determined by the instruction
+    /// format.
+    constraint_offset: u16,
+}
 
 impl OpcodeConstraints {
     /// Can the controlling type variable for this opcode be inferred from the designated value
     /// input operand?
     /// This also implies that this opcode is polymorphic.
     pub fn use_typevar_operand(self) -> bool {
-        (self.0 & 0x8) != 0
+        (self.flags & 0x8) != 0
     }
 
     /// Get the number of *fixed* result values produced by this opcode.
     /// This does not include `variable_args` produced by calls.
     pub fn fixed_results(self) -> usize {
-        (self.0 & 0x7) as usize
+        (self.flags & 0x7) as usize
     }
 
     /// Get the offset into `TYPE_SETS` for the controlling type variable.
     /// Returns `None` if the instruction is not polymorphic.
     fn typeset_offset(self) -> Option<usize> {
-        let offset = ((self.0 & 0xff) >> 4) as usize;
+        let offset = self.typeset_offset as usize;
         if offset < TYPE_SETS.len() {
             Some(offset)
         } else {
@@ -453,7 +450,7 @@ impl OpcodeConstraints {
 
     /// Get the offset into OPERAND_CONSTRAINTS where the descriptors for this opcode begin.
     fn constraint_offset(self) -> usize {
-        (self.0 >> 8) as usize
+        self.constraint_offset as usize
     }
 
     /// Get the value type of result number `n`, having resolved the controlling type variable to
