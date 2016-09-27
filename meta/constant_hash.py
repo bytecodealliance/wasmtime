@@ -74,7 +74,3 @@ def compute_quadratic(items, hash_function):
         table[h] = i
 
     return table
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
