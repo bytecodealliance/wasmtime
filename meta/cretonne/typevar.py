@@ -160,6 +160,47 @@ class TypeSet(object):
                 fmt.line('max_{}: {},'.format(
                     field, int_log2(max_val) + 1))
 
+    def __iand__(self, other):
+        """
+        Intersect self with other type set.
+
+        >>> a = TypeSet(lanes=True, ints=(16, 32))
+        >>> a
+        TypeSet(lanes=(1, 256), ints=(16, 32))
+        >>> b = TypeSet(lanes=(4, 16), ints=True)
+        >>> a &= b
+        >>> a
+        TypeSet(lanes=(4, 16), ints=(16, 32))
+
+        >>> a = TypeSet(lanes=True, bools=(1, 8))
+        >>> b = TypeSet(lanes=True, bools=(16, 32))
+        >>> a &= b
+        >>> a
+        TypeSet(lanes=(1, 256))
+        """
+        self.min_lanes = max(self.min_lanes, other.min_lanes)
+        self.max_lanes = min(self.max_lanes, other.max_lanes)
+
+        self.min_int = max(self.min_int, other.min_int)
+        self.max_int = min(self.max_int, other.max_int)
+        if self.min_int > self.max_int:
+            self.min_int = None
+            self.max_int = None
+
+        self.min_float = max(self.min_float, other.min_float)
+        self.max_float = min(self.max_float, other.max_float)
+        if self.min_float > self.max_float:
+            self.min_float = None
+            self.max_float = None
+
+        self.min_bool = max(self.min_bool, other.min_bool)
+        self.max_bool = min(self.max_bool, other.max_bool)
+        if self.min_bool > self.max_bool:
+            self.min_bool = None
+            self.max_bool = None
+
+        return self
+
 
 class TypeVar(object):
     """
