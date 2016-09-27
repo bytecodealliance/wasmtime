@@ -96,7 +96,7 @@ instances that refer to a *type variable* instead of a concrete value type.
 Polymorphism only works for SSA value operands. Other operands have a fixed
 operand kind.
 
-.. autoclass:: TypeVar
+.. autoclass:: cretonne.typevar.TypeVar
     :members:
 
 If multiple operands refer to the same type variable they will be required to

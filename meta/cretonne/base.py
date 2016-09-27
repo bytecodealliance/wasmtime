@@ -5,7 +5,8 @@ This module defines the basic Cretonne instruction set that all targets
 support.
 """
 from __future__ import absolute_import
-from . import TypeVar, Operand, Instruction, InstructionGroup, variable_args
+from . import Operand, Instruction, InstructionGroup, variable_args
+from .typevar import TypeVar
 from .types import i8, f32, f64, b1
 from .immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
 from . import entities
