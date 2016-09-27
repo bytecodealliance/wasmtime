@@ -1105,4 +1105,42 @@ fcvt_from_sint = Instruction(
         """,
         ins=x, outs=a)
 
+#
+# Legalization helper instructions.
+#
+
+WideInt = TypeVar(
+        'WideInt', 'A scalar integer type from `i16` upwards',
+        ints=(16, 64))
+x = Operand('x', WideInt)
+lo = Operand(
+        'lo', WideInt.half_width(), 'The low bits of `x`')
+hi = Operand(
+        'hi', WideInt.half_width(), 'The high bits of `x`')
+
+isplit_lohi = Instruction(
+        'isplit_lohi', r"""
+        Split a scalar integer into low and high parts.
+
+        Returns the low half of `x` and the high half of `x` as two independent
+        values.
+        """,
+        ins=x, outs=(lo, hi))
+
+
+NarrowInt = TypeVar(
+        'NarrowInt', 'A scalar integer type up to `i32`',
+        ints=(8, 32))
+lo = Operand('lo', NarrowInt)
+hi = Operand('hi', NarrowInt)
+a = Operand(
+        'a', NarrowInt.double_width(),
+        doc='The concatenation of `lo` and `hi`')
+
+iconcat_lohi = Instruction(
+        'iconcat_lohi', r"""
+        Concatenate low and high bits to form a larger integer type.
+        """,
+        ins=(lo, hi), outs=a)
+
 instructions.close()

@@ -120,6 +120,12 @@ pub enum InstructionData {
         opcode: Opcode,
         ty: Type, // TBD: imm: Box<ImmVectorData>
     },
+    UnarySplit {
+        opcode: Opcode,
+        ty: Type,
+        second_result: Value,
+        arg: Value,
+    },
     Binary {
         opcode: Opcode,
         ty: Type,
