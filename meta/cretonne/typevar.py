@@ -39,6 +39,26 @@ class TypeSet(object):
 
     The ranges are inclusive from smallest bit-width to largest bit-width.
 
+    A typeset representing scalar integer types `i8` through `i32`:
+
+    >>> TypeSet(ints=(8, 32))
+    TypeSet(lanes=(1, 1), ints=(8, 32))
+
+    Passing `True` instead of a range selects all available scalar types:
+
+    >>> TypeSet(ints=True)
+    TypeSet(lanes=(1, 1), ints=(8, 64))
+    >>> TypeSet(floats=True)
+    TypeSet(lanes=(1, 1), floats=(32, 64))
+    >>> TypeSet(bools=True)
+    TypeSet(lanes=(1, 1), bools=(1, 64))
+
+    Similarly, passing `True` for the lanes selects all possible scalar and
+    vector types:
+
+    >>> TypeSet(lanes=True, ints=True)
+    TypeSet(lanes=(1, 256), ints=(8, 64))
+
     :param lanes: `(min, max)` inclusive range of permitted vector lane counts.
     :param ints: `(min, max)` inclusive range of permitted scalar integer
                  widths.
@@ -48,11 +68,18 @@ class TypeSet(object):
                   widths.
     """
 
-    def __init__(self, lanes, ints=None, floats=None, bools=None):
-        self.min_lanes, self.max_lanes = lanes
-        assert is_power_of_two(self.min_lanes)
-        assert is_power_of_two(self.max_lanes)
-        assert self.max_lanes <= MAX_LANES
+    def __init__(self, lanes=None, ints=None, floats=None, bools=None):
+        if lanes:
+            if lanes is True:
+                lanes = (1, MAX_LANES)
+            self.min_lanes, self.max_lanes = lanes
+            assert is_power_of_two(self.min_lanes)
+            assert is_power_of_two(self.max_lanes)
+            assert self.max_lanes <= MAX_LANES
+        else:
+            self.min_lanes = 1
+            self.max_lanes = 1
+        assert self.min_lanes <= self.max_lanes
 
         if ints:
             if ints is True:
@@ -61,6 +88,7 @@ class TypeSet(object):
             assert is_power_of_two(self.min_int)
             assert is_power_of_two(self.max_int)
             assert self.max_int <= MAX_BITS
+            assert self.min_int <= self.max_int
         else:
             self.min_int = None
             self.max_int = None
@@ -73,6 +101,7 @@ class TypeSet(object):
             assert self.min_float >= 32
             assert is_power_of_two(self.max_float)
             assert self.max_float <= 64
+            assert self.min_float <= self.max_float
         else:
             self.min_float = None
             self.max_float = None
@@ -84,6 +113,7 @@ class TypeSet(object):
             assert is_power_of_two(self.min_bool)
             assert is_power_of_two(self.max_bool)
             assert self.max_bool <= MAX_BITS
+            assert self.min_bool <= self.max_bool
         else:
             self.min_bool = None
             self.max_bool = None
@@ -96,7 +126,10 @@ class TypeSet(object):
                 self.min_bool, self.max_bool)
 
     def __hash__(self):
-        return hash(self.typeset_key())
+        h = hash(self.typeset_key())
+        assert h == getattr(self, 'prev_hash', h), "TypeSet changed!"
+        self.prev_hash = h
+        return h
 
     def __eq__(self, other):
         return self.typeset_key() == other.typeset_key()
