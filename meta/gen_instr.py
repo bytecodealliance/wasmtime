@@ -297,8 +297,8 @@ def gen_type_constraints(fmt, instrs):
     # Preload table with constraints for typical binops.
     operand_seqs.add(['Same'] * 3)
 
-    # TypeSet indexes are encoded in 3 bits, with `111` reserved.
-    typeset_limit = 7
+    # TypeSet indexes are encoded in 8 bits, with `0xff` reserved.
+    typeset_limit = 0xff
 
     fmt.comment('Table of opcode constraints.')
     with fmt.indented(
@@ -331,11 +331,14 @@ def gen_type_constraints(fmt, instrs):
                         'Polymorphic over {}'.format(ctrl_typevar.type_set))
             # Compute the bit field encoding, c.f. instructions.rs.
             assert fixed_results < 8, "Bit field encoding too tight"
-            bits = (offset << 8) | (ctrl_typeset << 4) | fixed_results
+            flags = fixed_results
             if use_typevar_operand:
-                bits |= 8
-            assert bits < 0x10000, "Constraint table too large for bit field"
-            fmt.line('OpcodeConstraints({:#06x}),'.format(bits))
+                flags |= 8
+
+            with fmt.indented('OpcodeConstraints {', '},'):
+                fmt.line('flags: {:#04x},'.format(flags))
+                fmt.line('typeset_offset: {},'.format(ctrl_typeset))
+                fmt.line('constraint_offset: {},'.format(offset))
 
     fmt.comment('Table of value type sets.')
     assert len(type_sets.table) <= typeset_limit, "Too many type sets"
