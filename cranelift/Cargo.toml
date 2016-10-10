@@ -1,0 +1,3 @@
+# Phantom workspace manifest for all Cretonne crates.
+[workspace]
+members = ["src/tools"]
