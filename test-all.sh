@@ -51,12 +51,12 @@ done
 # Build cton-util for parser testing.
 cd "$topdir/src/tools"
 banner "Rust documentation"
-echo "open $topdir/src/tools/target/doc/cretonne/index.html"
+echo "open $topdir/target/doc/cretonne/index.html"
 cargo doc
 banner "Rust release build"
 cargo build --release
 
-export CTONUTIL="$topdir/src/tools/target/release/cton-util"
+export CTONUTIL="$topdir/target/release/cton-util"
 
 cd "$topdir"
 banner "File tests"

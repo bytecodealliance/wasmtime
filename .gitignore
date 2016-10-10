@@ -3,3 +3,5 @@
 *.swp
 *.swo
 tags
+target
+Cargo.lock
