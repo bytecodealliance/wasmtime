@@ -123,6 +123,11 @@ impl FromStr for Imm64 {
     }
 }
 
+/// 8-bit unsigned integer immediate operand.
+///
+/// This is used to indicate lane indexes typically.
+pub type Uimm8 = u8;
+
 /// An IEEE binary32 immediate floating point value.
 ///
 /// All bit patterns are allowed.
@@ -419,6 +424,12 @@ impl FromStr for Ieee64 {
         }
     }
 }
+
+/// Arbitrary vector immediate.
+///
+/// This kind of immediate can represent any kind of SIMD vector constant.
+/// The representation is simply the sequence of bytes that would be used to store the vector.
+pub type ImmVector = Vec<u8>;
 
 #[cfg(test)]
 mod tests {
