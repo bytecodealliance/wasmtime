@@ -145,21 +145,21 @@ impl Context {
 
                     InstructionData::Jump { ref mut data, .. } => {
                         try!(self.map.rewrite_ebb(&mut data.destination, loc));
-                        try!(self.map.rewrite_values(&mut data.arguments, loc));
+                        try!(self.map.rewrite_values(&mut data.varargs, loc));
                     }
 
                     InstructionData::Branch { ref mut data, .. } => {
                         try!(self.map.rewrite_value(&mut data.arg, loc));
                         try!(self.map.rewrite_ebb(&mut data.destination, loc));
-                        try!(self.map.rewrite_values(&mut data.arguments, loc));
+                        try!(self.map.rewrite_values(&mut data.varargs, loc));
                     }
 
                     InstructionData::Call { ref mut data, .. } => {
-                        try!(self.map.rewrite_values(&mut data.args, loc));
+                        try!(self.map.rewrite_values(&mut data.varargs, loc));
                     }
 
                     InstructionData::Return { ref mut data, .. } => {
-                        try!(self.map.rewrite_values(&mut data.args, loc));
+                        try!(self.map.rewrite_values(&mut data.varargs, loc));
                     }
                 }
             }
@@ -1104,7 +1104,7 @@ impl<'a> Parser<'a> {
                     ty: VOID,
                     data: Box::new(JumpData {
                         destination: ebb_num,
-                        arguments: args,
+                        varargs: args,
                     }),
                 }
             }
@@ -1119,7 +1119,7 @@ impl<'a> Parser<'a> {
                     data: Box::new(BranchData {
                         arg: ctrl_arg,
                         destination: ebb_num,
-                        arguments: args,
+                        varargs: args,
                     }),
                 }
             }
@@ -1178,7 +1178,7 @@ impl<'a> Parser<'a> {
                 InstructionData::Return {
                     opcode: opcode,
                     ty: VOID,
-                    data: Box::new(ReturnData { args: args }),
+                    data: Box::new(ReturnData { varargs: args }),
                 }
             }
             InstructionFormat::BranchTable => {

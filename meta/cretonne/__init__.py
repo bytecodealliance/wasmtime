@@ -290,10 +290,10 @@ class OperandKind(object):
     instruction.
     """
 
-    def __init__(self, name, doc):
+    def __init__(self, name, doc, default_member=None):
         self.name = name
         self.__doc__ = doc
-        self.default_member = None
+        self.default_member = default_member
         # The camel-cased name of an operand kind is also the Rust type used to
         # represent it.
         self.camel_name = camel_case(name)
@@ -334,7 +334,8 @@ variable_args = OperandKind(
         Use this to represent arguemtns passed to a function call, arguments
         passed to an extended basic block, or a variable number of results
         returned from an instruction.
-        """)
+        """,
+        default_member='varargs')
 
 
 # Instances of immediate operand types are provided in the
@@ -348,8 +349,7 @@ class ImmediateKind(OperandKind):
     """
 
     def __init__(self, name, doc, default_member='imm'):
-        super(ImmediateKind, self).__init__(name, doc)
-        self.default_member = default_member
+        super(ImmediateKind, self).__init__(name, doc, default_member)
 
     def __repr__(self):
         return 'ImmediateKind({})'.format(self.name)
@@ -363,8 +363,7 @@ class EntityRefKind(OperandKind):
     """
 
     def __init__(self, name, doc, default_member=None):
-        super(EntityRefKind, self).__init__(name, doc)
-        self.default_member = default_member or name
+        super(EntityRefKind, self).__init__(name, doc, default_member or name)
 
     def __repr__(self):
         return 'EntityRefKind({})'.format(self.name)
