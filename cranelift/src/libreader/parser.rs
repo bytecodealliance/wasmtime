@@ -9,8 +9,8 @@ use std::str::FromStr;
 use std::u32;
 use std::mem;
 use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotData, JumpTable,
-                   JumpTableData};
-use cretonne::ir::types::{VOID, Signature, ArgumentType, ArgumentExtension};
+                   JumpTableData, Signature, ArgumentType, ArgumentExtension};
+use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::{AnyEntity, NO_EBB, NO_INST, NO_VALUE};
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs,
@@ -1202,7 +1202,8 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne::ir::types::{self, ArgumentType, ArgumentExtension};
+    use cretonne::ir::{ArgumentType, ArgumentExtension};
+    use cretonne::ir::types;
     use cretonne::ir::entities::AnyEntity;
     use testfile::{Details, Comment};
     use isaspec::IsaSpec;
