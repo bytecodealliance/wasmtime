@@ -343,6 +343,180 @@ def gen_type_constraints(fmt, instrs):
             fmt.line('OperandConstraint::{},'.format(c))
 
 
+def gen_format_constructor(iform, fmt):
+    """
+    Emit a method for creating and inserting inserting an `iform` instruction,
+    where `iform` is an instruction format.
+
+    Instruction formats that can produce multiple results take a `ctrl_typevar`
+    argument for deducing the result types. Others take a `result_type`
+    argument.
+    """
+
+    # Construct method arguments.
+    args = ['&mut self', 'opcode: Opcode']
+
+    if iform.multiple_results:
+        args.append('ctrl_typevar: Type')
+        # `dfg::make_inst_results` will compute the result type.
+        result_type = 'types::VOID'
+    else:
+        args.append('result_type: Type')
+        result_type = 'result_type'
+
+    # Normal operand arguments.
+    for idx, kind in enumerate(iform.kinds):
+        args.append('op{}: {}'.format(idx, kind.rust_type))
+
+    proto = '{}({}) -> Inst'.format(iform.name, ', '.join(args))
+    fmt.line('#[allow(non_snake_case)]')
+    with fmt.indented('pub fn {} {{'.format(proto), '}'):
+        # Generate the instruction data.
+        with fmt.indented(
+                'let data = InstructionData::{} {{'.format(iform.name), '};'):
+            fmt.line('opcode: opcode,')
+            fmt.line('ty: {},'.format(result_type))
+            if iform.multiple_results:
+                fmt.line('second_result: Value::default(),')
+            if iform.boxed_storage:
+                with fmt.indented(
+                        'data: Box::new(instructions::{}Data {{'
+                        .format(iform.name), '}),'):
+                    gen_member_inits(iform, fmt)
+            else:
+                gen_member_inits(iform, fmt)
+
+        # Create result values if necessary.
+        if iform.multiple_results:
+            fmt.line('let inst = self.insert_inst(data);')
+            fmt.line('self.dfg.make_inst_results(inst, ctrl_typevar);')
+            fmt.line('inst')
+        else:
+            fmt.line('self.insert_inst(data)')
+
+
+def gen_member_inits(iform, fmt):
+    """
+    Emit member initializers for an `iform` instruction.
+    """
+
+    # Values first.
+    if len(iform.value_operands) == 1:
+        fmt.line('arg: op{},'.format(iform.value_operands[0]))
+    elif len(iform.value_operands) > 1:
+        fmt.line('args: [{}],'.format(
+            ', '.join('op{}'.format(i) for i in iform.value_operands)))
+
+    # Immediates and entity references.
+    for idx, member in enumerate(iform.members):
+        if member:
+            fmt.line('{}: op{},'.format(member, idx))
+
+
+def gen_inst_builder(inst, fmt):
+    """
+    Emit a method for generating the instruction `inst`.
+
+    The method will create and insert an instruction, then return the result
+    values, or the instruction reference itself for instructions that don't
+    have results.
+    """
+
+    # Construct method arguments.
+    args = ['&mut self']
+
+    # The controlling type variable will be inferred from the input values if
+    # possible. Otherwise, it is the first method argument.
+    if inst.is_polymorphic and not inst.use_typevar_operand:
+        args.append('{}: Type'.format(inst.ctrl_typevar.name))
+
+    tmpl_types = list()
+    into_args = list()
+    for op in inst.ins:
+        if isinstance(op.kind, cretonne.ImmediateKind):
+            t = 'T{}{}'.format(1 + len(tmpl_types), op.kind.name)
+            tmpl_types.append('{}: Into<{}>'.format(t, op.kind.rust_type))
+            into_args.append(op.name)
+        else:
+            t = op.kind.rust_type
+        args.append('{}: {}'.format(op.name, t))
+
+    # Return the inst reference for result-less instructions.
+    if len(inst.value_results) == 0:
+        rtype = 'Inst'
+    elif len(inst.value_results) == 1:
+        rtype = 'Value'
+    else:
+        rvals = ', '.join(len(inst.value_results) * ['Value'])
+        rtype = '({})'.format(rvals)
+
+    method = inst.name
+    if method == 'return':
+        # Avoid Rust keywords
+        method = '_' + method
+
+    if len(tmpl_types) > 0:
+        tmpl = '<{}>'.format(', '.join(tmpl_types))
+    else:
+        tmpl = ''
+    proto = '{}{}({}) -> {}'.format(method, tmpl,  ', '.join(args), rtype)
+
+    fmt.line('#[allow(non_snake_case)]')
+    with fmt.indented('pub fn {} {{'.format(proto), '}'):
+        # Convert all of the `Into<>` arguments.
+        for arg in into_args:
+            fmt.line('let {} = {}.into();'.format(arg, arg))
+
+        # Arguments for instruction constructor.
+        args = ['Opcode::' + inst.camel_name]
+
+        if inst.is_polymorphic and not inst.use_typevar_operand:
+            # This was an explicit method argument.
+            args.append(inst.ctrl_typevar.name)
+        elif len(inst.value_results) == 0:
+            args.append('types::VOID')
+        elif inst.is_polymorphic:
+            # Infer the controlling type variable from the input operands.
+            fmt.line(
+                    'let ctrl_typevar = self.dfg.value_type({});'
+                    .format(inst.ins[inst.format.typevar_operand].name))
+            args.append('ctrl_typevar')
+        else:
+            # This non-polymorphic instruction has a fixed result type.
+            args.append(
+                    'types::' +
+                    inst.outs[inst.value_results[0]].typ.name.upper())
+
+        args.extend(op.name for op in inst.ins)
+        args = ', '.join(args)
+        fmt.line('let inst = self.{}({});'.format(inst.format.name, args))
+
+        if len(inst.value_results) == 0:
+            fmt.line('inst')
+        elif len(inst.value_results) == 1:
+            fmt.line('self.dfg.first_result(inst)')
+        else:
+            fmt.line('let mut results = self.dfg.inst_results(inst);')
+            fmt.line('({})'.format(', '.join(
+                len(inst.value_results) * ['results.next().unwrap()'])))
+
+
+def gen_builder(insts, fmt):
+    """
+    Generate a Builder trait with methods for all instructions.
+    """
+    fmt.doc_comment(
+            'Methods for inserting instructions by instruction format.')
+    with fmt.indented("impl<'a> Builder<'a> {",  '}'):
+        for f in cretonne.InstructionFormat.all_formats:
+            gen_format_constructor(f, fmt)
+
+    fmt.doc_comment('Methods for inserting instructions by opcode.')
+    with fmt.indented("impl<'a> Builder<'a> {",  '}'):
+        for inst in insts:
+            gen_inst_builder(inst, fmt)
+
+
 def generate(isas, out_dir):
     groups = collect_instr_groups(isas)
 
@@ -353,3 +527,8 @@ def generate(isas, out_dir):
     instrs = gen_opcodes(groups, fmt)
     gen_type_constraints(fmt, instrs)
     fmt.update_file('opcodes.rs', out_dir)
+
+    # builder.rs
+    fmt = srcgen.Formatter()
+    gen_builder(instrs, fmt)
+    fmt.update_file('builder.rs', out_dir)

@@ -1057,7 +1057,7 @@ fdemote = Instruction(
         ins=x, outs=a)
 
 x = Operand('x', Float)
-a = Operand('a', Int)
+a = Operand('a', IntTo)
 
 fcvt_to_uint = Instruction(
         'fcvt_to_uint', r"""
@@ -1082,6 +1082,9 @@ fcvt_to_sint = Instruction(
         The result type must have the same number of vector lanes as the input.
         """,
         ins=x, outs=a)
+
+x = Operand('x', Int)
+a = Operand('a', FloatTo)
 
 fcvt_from_uint = Instruction(
         'fcvt_from_uint', r"""
