@@ -11,7 +11,7 @@ pub fn jump(func: &mut Function, dest: Ebb) -> Inst {
         ty: types::VOID,
         data: Box::new(JumpData {
             destination: dest,
-            arguments: VariableArgs::new(),
+            varargs: VariableArgs::new(),
         }),
     })
 }
@@ -23,7 +23,7 @@ pub fn branch(func: &mut Function, dest: Ebb) -> Inst {
         data: Box::new(BranchData {
             arg: NO_VALUE,
             destination: dest,
-            arguments: VariableArgs::new(),
+            varargs: VariableArgs::new(),
         }),
     })
 }
@@ -32,6 +32,6 @@ pub fn ret(func: &mut Function) -> Inst {
     func.dfg.make_inst(InstructionData::Return {
         opcode: Opcode::Return,
         ty: types::VOID,
-        data: Box::new(ReturnData { args: VariableArgs::new() }),
+        data: Box::new(ReturnData { varargs: VariableArgs::new() }),
     })
 }

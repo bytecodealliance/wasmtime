@@ -201,10 +201,10 @@ fn write_instruction(w: &mut Write,
         BranchTable { arg, table, .. } => writeln!(w, " {}, {}", arg, table),
         Call { ref data, .. } => writeln!(w, " {}", data),
         Return { ref data, .. } => {
-            if data.args.is_empty() {
+            if data.varargs.is_empty() {
                 writeln!(w, "")
             } else {
-                writeln!(w, " {}", data.args)
+                writeln!(w, " {}", data.varargs)
             }
         }
     }

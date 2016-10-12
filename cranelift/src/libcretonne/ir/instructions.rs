@@ -283,15 +283,15 @@ impl Display for TernaryOverflowData {
 #[derive(Clone, Debug)]
 pub struct JumpData {
     pub destination: Ebb,
-    pub arguments: VariableArgs,
+    pub varargs: VariableArgs,
 }
 
 impl Display for JumpData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if self.arguments.is_empty() {
+        if self.varargs.is_empty() {
             write!(f, "{}", self.destination)
         } else {
-            write!(f, "{}({})", self.destination, self.arguments)
+            write!(f, "{}({})", self.destination, self.varargs)
         }
     }
 }
@@ -302,14 +302,14 @@ impl Display for JumpData {
 pub struct BranchData {
     pub arg: Value,
     pub destination: Ebb,
-    pub arguments: VariableArgs,
+    pub varargs: VariableArgs,
 }
 
 impl Display for BranchData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         try!(write!(f, "{}, {}", self.arg, self.destination));
-        if !self.arguments.is_empty() {
-            try!(write!(f, "({})", self.arguments));
+        if !self.varargs.is_empty() {
+            try!(write!(f, "({})", self.varargs));
         }
         Ok(())
     }
@@ -322,12 +322,12 @@ pub struct CallData {
     second_result: Value,
 
     // Dynamically sized array containing call argument values.
-    pub args: VariableArgs,
+    pub varargs: VariableArgs,
 }
 
 impl Display for CallData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "TBD({})", self.args)
+        write!(f, "TBD({})", self.varargs)
     }
 }
 
@@ -335,7 +335,7 @@ impl Display for CallData {
 #[derive(Clone, Debug)]
 pub struct ReturnData {
     // Dynamically sized array containing return values.
-    pub args: VariableArgs,
+    pub varargs: VariableArgs,
 }
 
 impl InstructionData {
@@ -346,7 +346,7 @@ impl InstructionData {
             ty: return_type,
             data: Box::new(CallData {
                 second_result: NO_VALUE,
-                args: VariableArgs::new(),
+                varargs: VariableArgs::new(),
             }),
         }
     }
@@ -364,10 +364,10 @@ impl InstructionData {
     pub fn analyze_branch<'a>(&'a self) -> BranchInfo<'a> {
         match self {
             &InstructionData::Jump { ref data, .. } => {
-                BranchInfo::SingleDest(data.destination, &data.arguments)
+                BranchInfo::SingleDest(data.destination, &data.varargs)
             }
             &InstructionData::Branch { ref data, .. } => {
-                BranchInfo::SingleDest(data.destination, &data.arguments)
+                BranchInfo::SingleDest(data.destination, &data.varargs)
             }
             &InstructionData::BranchTable { table, .. } => BranchInfo::Table(table),
             _ => BranchInfo::NotABranch,
