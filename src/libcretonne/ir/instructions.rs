@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::ops::{Deref, DerefMut};
 
 use ir::{Value, Type, Ebb, JumpTable, FuncRef};
-use ir::immediates::{Imm64, Ieee32, Ieee64};
+use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, ImmVector};
 use ir::condcodes::*;
 use ir::types;
 
@@ -117,7 +117,8 @@ pub enum InstructionData {
     },
     UnaryImmVector {
         opcode: Opcode,
-        ty: Type, // TBD: imm: Box<ImmVectorData>
+        ty: Type,
+        data: Box<UnaryImmVectorData>,
     },
     UnarySplit {
         opcode: Opcode,
@@ -162,13 +163,13 @@ pub enum InstructionData {
     InsertLane {
         opcode: Opcode,
         ty: Type,
-        lane: u8,
+        lane: Uimm8,
         args: [Value; 2],
     },
     ExtractLane {
         opcode: Opcode,
         ty: Type,
-        lane: u8,
+        lane: Uimm8,
         arg: Value,
     },
     IntCompare {
@@ -261,6 +262,22 @@ impl Display for VariableArgs {
 impl Default for VariableArgs {
     fn default() -> VariableArgs {
         VariableArgs::new()
+    }
+}
+
+/// Payload data for `vconst`.
+#[derive(Clone, Debug)]
+pub struct UnaryImmVectorData {
+    pub imm: ImmVector,
+}
+
+impl Display for UnaryImmVectorData {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        try!(write!(f, "#"));
+        for b in &self.imm {
+            try!(write!(f, "{:02x}", b));
+        }
+        Ok(())
     }
 }
 
