@@ -290,13 +290,13 @@ class OperandKind(object):
     instruction.
     """
 
-    def __init__(self, name, doc, default_member=None):
+    def __init__(self, name, doc, default_member=None, rust_type=None):
         self.name = name
         self.__doc__ = doc
         self.default_member = default_member
         # The camel-cased name of an operand kind is also the Rust type used to
         # represent it.
-        self.camel_name = camel_case(name)
+        self.rust_type = rust_type or camel_case(name)
 
     def __str__(self):
         return self.name
@@ -348,8 +348,9 @@ class ImmediateKind(OperandKind):
                            `InstructionData` data structure.
     """
 
-    def __init__(self, name, doc, default_member='imm'):
-        super(ImmediateKind, self).__init__(name, doc, default_member)
+    def __init__(self, name, doc, default_member='imm', rust_type=None):
+        super(ImmediateKind, self).__init__(
+                name, doc, default_member, rust_type)
 
     def __repr__(self):
         return 'ImmediateKind({})'.format(self.name)
@@ -362,8 +363,9 @@ class EntityRefKind(OperandKind):
     The kind of an entity reference instruction operand.
     """
 
-    def __init__(self, name, doc, default_member=None):
-        super(EntityRefKind, self).__init__(name, doc, default_member or name)
+    def __init__(self, name, doc, default_member=None, rust_type=None):
+        super(EntityRefKind, self).__init__(
+                name, doc, default_member or name, rust_type)
 
     def __repr__(self):
         return 'EntityRefKind({})'.format(self.name)

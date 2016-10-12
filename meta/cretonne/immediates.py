@@ -28,7 +28,10 @@ ieee32 = ImmediateKind('ieee32', 'A 32-bit immediate floating point number.')
 ieee64 = ImmediateKind('ieee64', 'A 64-bit immediate floating point number.')
 
 #: A large SIMD vector constant.
-immvector = ImmediateKind('immvector', 'An immediate SIMD vector.')
+immvector = ImmediateKind(
+        'immvector',
+        'An immediate SIMD vector.',
+        rust_type='ImmVector')
 
 #: A condition code for comparing integer values.
 #:
@@ -37,7 +40,7 @@ immvector = ImmediateKind('immvector', 'An immediate SIMD vector.')
 intcc = ImmediateKind(
         'intcc',
         'An integer comparison condition code.',
-        default_member='cond')
+        default_member='cond', rust_type='IntCC')
 
 #: A condition code for comparing floating point values.
 #:
@@ -46,4 +49,4 @@ intcc = ImmediateKind(
 floatcc = ImmediateKind(
         'floatcc',
         'A floating point comparison condition code.',
-        default_member='cond')
+        default_member='cond', rust_type='FloatCC')
