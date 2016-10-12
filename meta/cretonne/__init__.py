@@ -293,6 +293,7 @@ class OperandKind(object):
     def __init__(self, name, doc):
         self.name = name
         self.__doc__ = doc
+        self.default_member = None
         # The camel-cased name of an operand kind is also the Rust type used to
         # represent it.
         self.camel_name = camel_case(name)
@@ -347,8 +348,7 @@ class ImmediateKind(OperandKind):
     """
 
     def __init__(self, name, doc, default_member='imm'):
-        self.name = name
-        self.__doc__ = doc
+        super(ImmediateKind, self).__init__(name, doc)
         self.default_member = default_member
 
     def __repr__(self):
@@ -362,9 +362,9 @@ class EntityRefKind(OperandKind):
     The kind of an entity reference instruction operand.
     """
 
-    def __init__(self, name, doc):
-        self.name = name
-        self.__doc__ = doc
+    def __init__(self, name, doc, default_member=None):
+        super(EntityRefKind, self).__init__(name, doc)
+        self.default_member = default_member or name
 
     def __repr__(self):
         return 'EntityRefKind({})'.format(self.name)
@@ -686,17 +686,17 @@ class InstructionFormat(object):
 
         Yields the operand kinds.
         """
+        self.members = list()
         for i, k in enumerate(kinds):
             if isinstance(k, tuple):
                 member, k = k
             else:
-                member = None
+                member = k.default_member
             yield k
+            self.members.append(member)
 
             # Create `FormatField` instances for the immediates.
             if isinstance(k, ImmediateKind):
-                if not member:
-                    member = k.default_member
                 assert not hasattr(self, member), "Duplicate member name"
                 field = FormatField(self, i, member)
                 setattr(self, member, field)

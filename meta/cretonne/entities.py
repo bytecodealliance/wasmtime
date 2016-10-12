@@ -9,7 +9,9 @@ from . import EntityRefKind
 
 #: A reference to an extended basic block in the same function.
 #: This is primarliy used in control flow instructions.
-ebb = EntityRefKind('ebb', 'An extended basic block in the same function.')
+ebb = EntityRefKind(
+        'ebb', 'An extended basic block in the same function.',
+        default_member='destination')
 
 #: A reference to a stack slot declared in the function preamble.
 stack_slot = EntityRefKind('stack_slot', 'A stack slot.')
@@ -23,4 +25,5 @@ signature = EntityRefKind('signature', 'A function signature.')
 function = EntityRefKind('function', 'An external function.')
 
 #: A reference to a jump table declared in the function preamble.
-jump_table = EntityRefKind('jump_table', 'A jump table.')
+jump_table = EntityRefKind(
+        'jump_table', 'A jump table.', default_member='table')
