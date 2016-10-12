@@ -10,8 +10,7 @@ use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use std::ops::{Deref, DerefMut};
 
-use ir::{Value, Type, Ebb, JumpTable};
-use ir::entities::NO_VALUE;
+use ir::{Value, Type, Ebb, JumpTable, FuncRef};
 use ir::immediates::{Imm64, Ieee32, Ieee64};
 use ir::condcodes::*;
 use ir::types;
@@ -321,7 +320,10 @@ pub struct CallData {
     /// Second result value for a call producing multiple return values.
     second_result: Value,
 
-    // Dynamically sized array containing call argument values.
+    /// Callee function.
+    pub func_ref: FuncRef,
+
+    /// Dynamically sized array containing call argument values.
     pub varargs: VariableArgs,
 }
 
@@ -336,20 +338,6 @@ impl Display for CallData {
 pub struct ReturnData {
     // Dynamically sized array containing return values.
     pub varargs: VariableArgs,
-}
-
-impl InstructionData {
-    /// Create data for a call instruction.
-    pub fn call(opc: Opcode, return_type: Type) -> InstructionData {
-        InstructionData::Call {
-            opcode: opc,
-            ty: return_type,
-            data: Box::new(CallData {
-                second_result: NO_VALUE,
-                varargs: VariableArgs::new(),
-            }),
-        }
-    }
 }
 
 /// Analyzing an instruction.
