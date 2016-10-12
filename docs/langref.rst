@@ -394,11 +394,11 @@ preamble`:
 This simple example illustrates direct function calls and signatures::
 
     function gcd(i32 uext, i32 uext) -> i32 uext "C" {
-        f1 = function divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
+        fn1 = function divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
 
     ebb1(v1: i32, v2: i32):
         brz v2, ebb2
-        v3, v4 = call f1(v1, v2)
+        v3, v4 = call fn1(v1, v2)
         br ebb1(v2, v4)
 
     ebb2:

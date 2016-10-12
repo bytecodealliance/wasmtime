@@ -18,11 +18,11 @@ stack_slot = EntityRefKind('stack_slot', 'A stack slot.')
 
 #: A reference to a function sugnature declared in the function preamble.
 #: Tbis is used to provide the call signature in an indirect call instruction.
-signature = EntityRefKind('signature', 'A function signature.')
+sig_ref = EntityRefKind('sig_ref', 'A function signature.')
 
 #: A reference to an external function declared in the function preamble.
 #: This is used to provide the callee and signature in a call instruction.
-function = EntityRefKind('function', 'An external function.')
+func_ref = EntityRefKind('func_ref', 'An external function.')
 
 #: A reference to a jump table declared in the function preamble.
 jump_table = EntityRefKind(

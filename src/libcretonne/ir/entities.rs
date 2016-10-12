@@ -245,6 +245,68 @@ impl Default for JumpTable {
     }
 }
 
+/// A reference to an external function.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct FuncRef(u32);
+
+impl EntityRef for FuncRef {
+    fn new(index: usize) -> FuncRef {
+        assert!(index < (u32::MAX as usize));
+        FuncRef(index as u32)
+    }
+
+    fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// Display a `FuncRef` reference as "fn12".
+impl Display for FuncRef {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        write!(fmt, "fn{}", self.0)
+    }
+}
+
+/// A guaranteed invalid function reference.
+pub const NO_FUNC_REF: FuncRef = FuncRef(u32::MAX);
+
+impl Default for FuncRef {
+    fn default() -> FuncRef {
+        NO_FUNC_REF
+    }
+}
+
+/// A reference to a function signature.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct SigRef(u32);
+
+impl EntityRef for SigRef {
+    fn new(index: usize) -> SigRef {
+        assert!(index < (u32::MAX as usize));
+        SigRef(index as u32)
+    }
+
+    fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// Display a `SigRef` reference as "sig12".
+impl Display for SigRef {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        write!(fmt, "sig{}", self.0)
+    }
+}
+
+/// A guaranteed invalid function reference.
+pub const NO_SIG_REF: SigRef = SigRef(u32::MAX);
+
+impl Default for SigRef {
+    fn default() -> SigRef {
+        NO_SIG_REF
+    }
+}
+
 /// A reference to any of the entities defined in this module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum AnyEntity {
@@ -255,6 +317,8 @@ pub enum AnyEntity {
     Value(Value),
     StackSlot(StackSlot),
     JumpTable(JumpTable),
+    FuncRef(FuncRef),
+    SigRef(SigRef),
 }
 
 impl Display for AnyEntity {
@@ -266,6 +330,8 @@ impl Display for AnyEntity {
             AnyEntity::Value(r) => r.fmt(fmt),
             AnyEntity::StackSlot(r) => r.fmt(fmt),
             AnyEntity::JumpTable(r) => r.fmt(fmt),
+            AnyEntity::FuncRef(r) => r.fmt(fmt),
+            AnyEntity::SigRef(r) => r.fmt(fmt),
         }
     }
 }
@@ -297,6 +363,18 @@ impl From<StackSlot> for AnyEntity {
 impl From<JumpTable> for AnyEntity {
     fn from(r: JumpTable) -> AnyEntity {
         AnyEntity::JumpTable(r)
+    }
+}
+
+impl From<FuncRef> for AnyEntity {
+    fn from(r: FuncRef) -> AnyEntity {
+        AnyEntity::FuncRef(r)
+    }
+}
+
+impl From<SigRef> for AnyEntity {
+    fn from(r: SigRef) -> AnyEntity {
+        AnyEntity::SigRef(r)
     }
 }
 
