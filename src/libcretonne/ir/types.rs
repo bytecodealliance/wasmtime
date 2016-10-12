@@ -1,4 +1,3 @@
-
 //! Common types for the Cretonne code generator.
 
 use std::default::Default;
@@ -229,108 +228,6 @@ impl Default for Type {
     }
 }
 
-// ====--------------------------------------------------------------------------------------====//
-//
-// Function signatures
-//
-// ====--------------------------------------------------------------------------------------====//
-
-/// Function argument extension options.
-///
-/// On some architectures, small integer function arguments are extended to the width of a
-/// general-purpose register.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum ArgumentExtension {
-    /// No extension, high bits are indeterminate.
-    None,
-    /// Unsigned extension: high bits in register are 0.
-    Uext,
-    /// Signed extension: high bits in register replicate sign bit.
-    Sext,
-}
-
-/// Function argument or return value type.
-///
-/// This describes the value type being passed to or from a function along with flags that affect
-/// how the argument is passed.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct ArgumentType {
-    pub value_type: Type,
-    pub extension: ArgumentExtension,
-    /// Place this argument in a register if possible.
-    pub inreg: bool,
-}
-
-/// Function signature.
-///
-/// The function signature describes the types of arguments and return values along with other
-/// details that are needed to call a function correctly.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Signature {
-    pub argument_types: Vec<ArgumentType>,
-    pub return_types: Vec<ArgumentType>,
-}
-
-impl ArgumentType {
-    pub fn new(vt: Type) -> ArgumentType {
-        ArgumentType {
-            value_type: vt,
-            extension: ArgumentExtension::None,
-            inreg: false,
-        }
-    }
-}
-
-impl Display for ArgumentType {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        try!(write!(f, "{}", self.value_type));
-        match self.extension {
-            ArgumentExtension::None => {}
-            ArgumentExtension::Uext => try!(write!(f, " uext")),
-            ArgumentExtension::Sext => try!(write!(f, " sext")),
-        }
-        if self.inreg {
-            try!(write!(f, " inreg"));
-        }
-        Ok(())
-    }
-}
-
-impl Signature {
-    pub fn new() -> Signature {
-        Signature {
-            argument_types: Vec::new(),
-            return_types: Vec::new(),
-        }
-    }
-}
-
-fn write_list(f: &mut Formatter, args: &Vec<ArgumentType>) -> fmt::Result {
-    match args.split_first() {
-        None => {}
-        Some((first, rest)) => {
-            try!(write!(f, "{}", first));
-            for arg in rest {
-                try!(write!(f, ", {}", arg));
-            }
-        }
-    }
-    Ok(())
-}
-
-impl Display for Signature {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        try!(write!(f, "("));
-        try!(write_list(f, &self.argument_types));
-        try!(write!(f, ")"));
-        if !self.return_types.is_empty() {
-            try!(write!(f, " -> "));
-            try!(write_list(f, &self.return_types));
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -441,29 +338,5 @@ mod tests {
         assert_eq!(I8.by(3), None);
         assert_eq!(I8.by(512), None);
         assert_eq!(VOID.by(4), None);
-    }
-
-    #[test]
-    fn argument_type() {
-        let mut t = ArgumentType::new(I32);
-        assert_eq!(t.to_string(), "i32");
-        t.extension = ArgumentExtension::Uext;
-        assert_eq!(t.to_string(), "i32 uext");
-        t.inreg = true;
-        assert_eq!(t.to_string(), "i32 uext inreg");
-    }
-
-    #[test]
-    fn signatures() {
-        let mut sig = Signature::new();
-        assert_eq!(sig.to_string(), "()");
-        sig.argument_types.push(ArgumentType::new(I32));
-        assert_eq!(sig.to_string(), "(i32)");
-        sig.return_types.push(ArgumentType::new(F32));
-        assert_eq!(sig.to_string(), "(i32) -> f32");
-        sig.argument_types.push(ArgumentType::new(I32.by(4).unwrap()));
-        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32");
-        sig.return_types.push(ArgumentType::new(B8));
-        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8");
     }
 }

@@ -11,9 +11,11 @@ pub mod dfg;
 pub mod layout;
 pub mod function;
 mod funcname;
+mod extfunc;
 
 pub use ir::funcname::FunctionName;
-pub use ir::types::{Type, Signature};
+pub use ir::extfunc::{Signature, ArgumentType, ArgumentExtension};
+pub use ir::types::Type;
 pub use ir::entities::{Ebb, Inst, Value, StackSlot, JumpTable};
 pub use ir::instructions::{Opcode, InstructionData};
 pub use ir::stackslot::StackSlotData;
