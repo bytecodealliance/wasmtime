@@ -12,14 +12,16 @@ pub mod layout;
 pub mod function;
 mod funcname;
 mod extfunc;
+mod builder;
 
 pub use ir::funcname::FunctionName;
 pub use ir::extfunc::{Signature, ArgumentType, ArgumentExtension};
 pub use ir::types::Type;
 pub use ir::entities::{Ebb, Inst, Value, StackSlot, JumpTable, FuncRef, SigRef};
-pub use ir::instructions::{Opcode, InstructionData};
+pub use ir::instructions::{Opcode, InstructionData, VariableArgs};
 pub use ir::stackslot::StackSlotData;
 pub use ir::jumptable::JumpTableData;
 pub use ir::dfg::{DataFlowGraph, ValueDef};
 pub use ir::layout::Layout;
 pub use ir::function::Function;
+pub use ir::builder::Builder;
