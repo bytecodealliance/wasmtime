@@ -1089,10 +1089,8 @@ impl<'a> Parser<'a> {
                 InstructionData::TernaryOverflow {
                     opcode: opcode,
                     ty: VOID,
-                    data: Box::new(TernaryOverflowData {
-                        second_result: NO_VALUE,
-                        args: [lhs, rhs, cin],
-                    }),
+                    second_result: NO_VALUE,
+                    data: Box::new(TernaryOverflowData { args: [lhs, rhs, cin] }),
                 }
             }
             InstructionFormat::Jump => {

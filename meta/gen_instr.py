@@ -87,23 +87,16 @@ def gen_instruction_data_impl(fmt):
                 'pub fn second_result(&self) -> Option<Value> {', '}'):
             with fmt.indented('match *self {', '}'):
                 for f in cretonne.InstructionFormat.all_formats:
-                    if not f.multiple_results:
-                        # Single or no results.
-                        fmt.line(
-                                'InstructionData::{} {{ .. }} => None,'
-                                .format(f.name))
-                    elif f.boxed_storage:
-                        # Multiple results, boxed storage.
-                        fmt.line(
-                                'InstructionData::' + f.name +
-                                ' { ref data, .. }' +
-                                ' => Some(data.second_result),')
-                    else:
-                        # Multiple results, inline storage.
+                    if f.multiple_results:
                         fmt.line(
                                 'InstructionData::' + f.name +
                                 ' { second_result, .. }' +
                                 ' => Some(second_result),')
+                    else:
+                        # Single or no results.
+                        fmt.line(
+                                'InstructionData::{} {{ .. }} => None,'
+                                .format(f.name))
 
         fmt.doc_comment('Mutable reference to second result value, if any.')
         with fmt.indented(
@@ -111,23 +104,16 @@ def gen_instruction_data_impl(fmt):
                 " -> Option<&'a mut Value> {", '}'):
             with fmt.indented('match *self {', '}'):
                 for f in cretonne.InstructionFormat.all_formats:
-                    if not f.multiple_results:
-                        # Single or no results.
-                        fmt.line(
-                                'InstructionData::{} {{ .. }} => None,'
-                                .format(f.name))
-                    elif f.boxed_storage:
-                        # Multiple results, boxed storage.
-                        fmt.line(
-                                'InstructionData::' + f.name +
-                                ' { ref mut data, .. }' +
-                                ' => Some(&mut data.second_result),')
-                    else:
-                        # Multiple results, inline storage.
+                    if f.multiple_results:
                         fmt.line(
                                 'InstructionData::' + f.name +
                                 ' { ref mut second_result, .. }' +
                                 ' => Some(second_result),')
+                    else:
+                        # Single or no results.
+                        fmt.line(
+                                'InstructionData::{} {{ .. }} => None,'
+                                .format(f.name))
 
         fmt.doc_comment('Get the controlling type variable operand.')
         with fmt.indented(

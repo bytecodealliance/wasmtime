@@ -158,6 +158,7 @@ pub enum InstructionData {
     TernaryOverflow {
         opcode: Opcode,
         ty: Type,
+        second_result: Value,
         data: Box<TernaryOverflowData>,
     },
     InsertLane {
@@ -203,6 +204,7 @@ pub enum InstructionData {
     Call {
         opcode: Opcode,
         ty: Type,
+        second_result: Value,
         data: Box<CallData>,
     },
     Return {
@@ -284,7 +286,6 @@ impl Display for UnaryImmVectorData {
 /// Payload data for ternary instructions with multiple results, such as `iadd_carry`.
 #[derive(Clone, Debug)]
 pub struct TernaryOverflowData {
-    pub second_result: Value,
     pub args: [Value; 3],
 }
 
@@ -334,9 +335,6 @@ impl Display for BranchData {
 /// Payload of a call instruction.
 #[derive(Clone, Debug)]
 pub struct CallData {
-    /// Second result value for a call producing multiple return values.
-    second_result: Value,
-
     /// Callee function.
     pub func_ref: FuncRef,
 
