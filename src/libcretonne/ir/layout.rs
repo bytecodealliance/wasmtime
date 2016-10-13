@@ -250,9 +250,273 @@ impl<'a> Iterator for Insts<'a> {
     }
 }
 
+
+/// Layout Cursor.
+///
+/// A `Cursor` represents a position in a function layout where instructions can be inserted and
+/// removed. It can be used to iterate through the instructions of a function while editing them at
+/// the same time. A normal instruction iterator can't do this since it holds an immutable refernce
+/// to the Layout.
+///
+/// When new instructions are added, the cursor can either apend them to an EBB or insert them
+/// before the current instruction.
+pub struct Cursor<'a> {
+    layout: &'a mut Layout,
+    pos: CursorPosition,
+}
+
+/// The possible positions of a cursor.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CursorPosition {
+    /// Cursor is not pointing anywhere. No instructions can be inserted.
+    Nowhere,
+    /// Cursor is pointing at an existing instruction.
+    /// New instructions will be inserted *before* the current instruction.
+    At(Inst),
+    /// Cursor is before the beginning of an EBB. No instructions can be inserted. Calling
+    /// `next_inst()` wil move to the first instruction in the EBB.
+    Before(Ebb),
+    /// Cursor is pointing after the end of an EBB.
+    /// New instructions will be appended to the EBB.
+    After(Ebb),
+}
+
+impl<'a> Cursor<'a> {
+    /// Create a new `Cursor` for `layout`.
+    /// The cursor holds a mutable reference to `layout` for its entire lifetime.
+    pub fn new(layout: &'a mut Layout) -> Cursor {
+        Cursor {
+            layout: layout,
+            pos: CursorPosition::Nowhere,
+        }
+    }
+
+    /// Get the current position.
+    pub fn position(&self) -> CursorPosition {
+        self.pos
+    }
+
+    /// Get the EBB corresponding to the current position.
+    pub fn current_ebb(&self) -> Option<Ebb> {
+        use self::CursorPosition::*;
+        match self.pos {
+            Nowhere => None,
+            At(inst) => self.layout.inst_ebb(inst),
+            Before(ebb) | After(ebb) => Some(ebb),
+        }
+    }
+
+    /// Go to a specific instruction which must be inserted in the layout.
+    /// New instructions will be inserted before `inst`.
+    pub fn goto_inst(&mut self, inst: Inst) {
+        assert!(self.layout.inst_ebb(inst).is_some());
+        self.pos = CursorPosition::At(inst);
+    }
+
+    /// Go to the top of `ebb` which must be inserted into the layout.
+    /// At this position, instructions cannot be inserted, but `next_inst()` will move to the first
+    /// instruction in `ebb`.
+    pub fn goto_top(&mut self, ebb: Ebb) {
+        assert!(self.layout.is_ebb_inserted(ebb));
+        self.pos = CursorPosition::Before(ebb);
+    }
+
+    /// Go to the bottom of `ebb` which must be inserted into the layout.
+    /// At this position, inserted instructions will be appended to `ebb`.
+    pub fn goto_bottom(&mut self, ebb: Ebb) {
+        assert!(self.layout.is_ebb_inserted(ebb));
+        self.pos = CursorPosition::After(ebb);
+    }
+
+    /// Go to the top of the next EBB in layout order and return it.
+    ///
+    /// - If the cursor wasn't pointing at anything, go to the top of the first EBB in the
+    ///   function.
+    /// - If there are no more EBBs, leave the cursor pointing at nothing and return `None`.
+    ///
+    /// # Examples
+    ///
+    /// The `next_ebb()` method is intended for iterating over the EBBs in layout order:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb};
+    /// # use cretonne::ir::layout::Cursor;
+    /// fn edit_func(func: &mut Function) {
+    ///     let mut cursor = Cursor::new(&mut func.layout);
+    ///     while let Some(ebb) = cursor.next_ebb() {
+    ///         // Edit ebb.
+    ///     }
+    /// }
+    /// ```
+    pub fn next_ebb(&mut self) -> Option<Ebb> {
+        let next = if let Some(ebb) = self.current_ebb() {
+            self.layout.ebbs[ebb].next.wrap()
+        } else {
+            self.layout.first_ebb
+        };
+        self.pos = match next {
+            Some(ebb) => CursorPosition::Before(ebb),
+            None => CursorPosition::Nowhere,
+        };
+        next
+    }
+
+    /// Go to the bottom of the previous EBB in layout order and return it.
+    ///
+    /// - If the cursor wasn't pointing at anything, go to the bottom of the last EBB in the
+    ///   function.
+    /// - If there are no more EBBs, leave the cursor pointing at nothing and return `None`.
+    ///
+    /// # Examples
+    ///
+    /// The `prev_ebb()` method is intended for iterating over the EBBs in backwards layout order:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb};
+    /// # use cretonne::ir::layout::Cursor;
+    /// fn edit_func(func: &mut Function) {
+    ///     let mut cursor = Cursor::new(&mut func.layout);
+    ///     while let Some(ebb) = cursor.prev_ebb() {
+    ///         // Edit ebb.
+    ///     }
+    /// }
+    /// ```
+    pub fn prev_ebb(&mut self) -> Option<Ebb> {
+        let prev = if let Some(ebb) = self.current_ebb() {
+            self.layout.ebbs[ebb].prev.wrap()
+        } else {
+            self.layout.last_ebb
+        };
+        self.pos = match prev {
+            Some(ebb) => CursorPosition::After(ebb),
+            None => CursorPosition::Nowhere,
+        };
+        prev
+    }
+
+    /// Move to the next instruction in the same EBB and return it.
+    ///
+    /// - If the cursor was positioned before an EBB, go to the first instruction in that EBB.
+    /// - If there are no more instructions in the EBB, go to the `After(ebb)` position and return
+    ///   `None`.
+    /// - If the cursor wasn't pointing anywhere, keep doing that.
+    ///
+    /// This method will never move the cursor to a different EBB.
+    ///
+    /// # Examples
+    ///
+    /// The `next_inst()` method is intended for iterating over the instructions in an EBB like
+    /// this:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb};
+    /// # use cretonne::ir::layout::Cursor;
+    /// fn edit_ebb(func: &mut Function, ebb: Ebb) {
+    ///     let mut cursor = Cursor::new(&mut func.layout);
+    ///     cursor.goto_top(ebb);
+    ///     while let Some(inst) = cursor.next_inst() {
+    ///         // Edit instructions...
+    ///     }
+    /// }
+    /// ```
+    /// The loop body can insert and remove instructions via the cursor.
+    ///
+    /// Iterating over all the instructions in a function looks like this:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb};
+    /// # use cretonne::ir::layout::Cursor;
+    /// fn edit_func(func: &mut Function) {
+    ///     let mut cursor = Cursor::new(&mut func.layout);
+    ///     while let Some(ebb) = cursor.next_ebb() {
+    ///         while let Some(inst) = cursor.next_inst() {
+    ///             // Edit instructions...
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    pub fn next_inst(&mut self) -> Option<Inst> {
+        use self::CursorPosition::*;
+        match self.pos {
+            Nowhere | After(..) => None,
+            At(inst) => {
+                if let Some(next) = self.layout.insts[inst].next.wrap() {
+                    self.pos = At(next);
+                    Some(next)
+                } else {
+                    self.pos =
+                        After(self.layout.inst_ebb(inst).expect("current instruction removed?"));
+                    None
+                }
+            }
+            Before(ebb) => {
+                if let Some(next) = self.layout.ebbs[ebb].first_inst.wrap() {
+                    self.pos = At(next);
+                    Some(next)
+                } else {
+                    self.pos = After(ebb);
+                    None
+                }
+            }
+        }
+    }
+
+    /// Move to the previous instruction in the same EBB and return it.
+    ///
+    /// - If the cursor was positioned after an EBB, go to the last instruction in that EBB.
+    /// - If there are no more instructions in the EBB, go to the `Before(ebb)` position and return
+    ///   `None`.
+    /// - If the cursor wasn't pointing anywhere, keep doing that.
+    ///
+    /// This method will never move the cursor to a different EBB.
+    ///
+    /// # Examples
+    ///
+    /// The `prev_inst()` method is intended for iterating backwards over the instructions in an
+    /// EBB like this:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb};
+    /// # use cretonne::ir::layout::Cursor;
+    /// fn edit_ebb(func: &mut Function, ebb: Ebb) {
+    ///     let mut cursor = Cursor::new(&mut func.layout);
+    ///     cursor.goto_bottom(ebb);
+    ///     while let Some(inst) = cursor.prev_inst() {
+    ///         // Edit instructions...
+    ///     }
+    /// }
+    /// ```
+    pub fn prev_inst(&mut self) -> Option<Inst> {
+        use self::CursorPosition::*;
+        match self.pos {
+            Nowhere | Before(..) => None,
+            At(inst) => {
+                if let Some(prev) = self.layout.insts[inst].prev.wrap() {
+                    self.pos = At(prev);
+                    Some(prev)
+                } else {
+                    self.pos =
+                        Before(self.layout.inst_ebb(inst).expect("current instruction removed?"));
+                    None
+                }
+            }
+            After(ebb) => {
+                if let Some(prev) = self.layout.ebbs[ebb].last_inst.wrap() {
+                    self.pos = At(prev);
+                    Some(prev)
+                } else {
+                    self.pos = Before(ebb);
+                    None
+                }
+            }
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
-    use super::Layout;
+    use super::{Layout, Cursor, CursorPosition};
     use entity_map::EntityRef;
     use ir::{Ebb, Inst};
 
@@ -301,6 +565,35 @@ mod tests {
             }
             assert_eq!(v, [e1, e2, e0]);
         }
+
+        // Test cursor positioning.
+        let mut cur = Cursor::new(&mut layout);
+        assert_eq!(cur.position(), CursorPosition::Nowhere);
+        assert_eq!(cur.next_inst(), None);
+        assert_eq!(cur.position(), CursorPosition::Nowhere);
+        assert_eq!(cur.prev_inst(), None);
+        assert_eq!(cur.position(), CursorPosition::Nowhere);
+
+        assert_eq!(cur.next_ebb(), Some(e1));
+        assert_eq!(cur.position(), CursorPosition::Before(e1));
+        assert_eq!(cur.next_inst(), None);
+        assert_eq!(cur.position(), CursorPosition::After(e1));
+        assert_eq!(cur.next_inst(), None);
+        assert_eq!(cur.position(), CursorPosition::After(e1));
+        assert_eq!(cur.next_ebb(), Some(e2));
+        assert_eq!(cur.prev_inst(), None);
+        assert_eq!(cur.position(), CursorPosition::Before(e2));
+        assert_eq!(cur.next_ebb(), Some(e0));
+        assert_eq!(cur.next_ebb(), None);
+        assert_eq!(cur.position(), CursorPosition::Nowhere);
+
+        // Backwards through the EBBs.
+        assert_eq!(cur.prev_ebb(), Some(e0));
+        assert_eq!(cur.position(), CursorPosition::After(e0));
+        assert_eq!(cur.prev_ebb(), Some(e2));
+        assert_eq!(cur.prev_ebb(), Some(e1));
+        assert_eq!(cur.prev_ebb(), None);
+        assert_eq!(cur.position(), CursorPosition::Nowhere);
     }
 
     #[test]
@@ -378,6 +671,30 @@ mod tests {
         assert_eq!(layout.inst_ebb(i2), Some(e1));
         let v: Vec<Inst> = layout.ebb_insts(e1).collect();
         assert_eq!(v, [i1, i2, i0]);
+
+        // Test cursor positioning.
+        let mut cur = Cursor::new(&mut layout);
+        cur.goto_top(e1);
+        assert_eq!(cur.position(), CursorPosition::Before(e1));
+        assert_eq!(cur.prev_inst(), None);
+        assert_eq!(cur.position(), CursorPosition::Before(e1));
+        assert_eq!(cur.next_inst(), Some(i1));
+        assert_eq!(cur.position(), CursorPosition::At(i1));
+        assert_eq!(cur.next_inst(), Some(i2));
+        assert_eq!(cur.next_inst(), Some(i0));
+        assert_eq!(cur.prev_inst(), Some(i2));
+        assert_eq!(cur.position(), CursorPosition::At(i2));
+        assert_eq!(cur.next_inst(), Some(i0));
+        assert_eq!(cur.position(), CursorPosition::At(i0));
+        assert_eq!(cur.next_inst(), None);
+        assert_eq!(cur.position(), CursorPosition::After(e1));
+        assert_eq!(cur.next_inst(), None);
+        assert_eq!(cur.position(), CursorPosition::After(e1));
+        assert_eq!(cur.prev_inst(), Some(i0));
+        assert_eq!(cur.prev_inst(), Some(i2));
+        assert_eq!(cur.prev_inst(), Some(i1));
+        assert_eq!(cur.prev_inst(), None);
+        assert_eq!(cur.position(), CursorPosition::Before(e1));
     }
 
     #[test]

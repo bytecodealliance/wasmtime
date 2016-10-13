@@ -22,6 +22,6 @@ pub use ir::instructions::{Opcode, InstructionData, VariableArgs};
 pub use ir::stackslot::StackSlotData;
 pub use ir::jumptable::JumpTableData;
 pub use ir::dfg::{DataFlowGraph, ValueDef};
-pub use ir::layout::Layout;
+pub use ir::layout::{Layout, Cursor};
 pub use ir::function::Function;
 pub use ir::builder::Builder;
