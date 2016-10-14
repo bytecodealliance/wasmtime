@@ -511,6 +511,24 @@ impl<'a> Cursor<'a> {
             }
         }
     }
+
+    /// Insert an instruction at the current position.
+    ///
+    /// - If pointing at an instruction, the new instruction is inserted before the current
+    ///   instruction.
+    /// - If pointing at the bottom of an EBB, the new instruction is appended to the EBB.
+    /// - Otherwise panic.
+    ///
+    /// In either case, the cursor is not moved, such that repeates calls to `insert_inst()` causes
+    /// instructions to appear in insertion order in the EBB.
+    pub fn insert_inst(&mut self, inst: Inst) {
+        use self::CursorPosition::*;
+        match self.pos {
+            Nowhere | Before(..) => panic!("Invalid insert_inst position"),
+            At(cur) => self.layout.insert_inst(inst, cur),
+            After(ebb) => self.layout.append_inst(inst, ebb),
+        }
+    }
 }
 
 
