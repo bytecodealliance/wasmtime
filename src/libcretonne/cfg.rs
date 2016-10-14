@@ -139,9 +139,7 @@ impl ControlFlowGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ir::Function;
-
-    use test_utils::make_inst;
+    use ir::{Function, Builder, Cursor, VariableArgs, types};
 
     #[test]
     fn empty() {
@@ -176,23 +174,29 @@ mod tests {
     fn branches_and_jumps() {
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();
+        let cond = func.dfg.append_ebb_arg(ebb0, types::I32);
         let ebb1 = func.dfg.make_ebb();
         let ebb2 = func.dfg.make_ebb();
-        func.layout.append_ebb(ebb0);
-        func.layout.append_ebb(ebb1);
-        func.layout.append_ebb(ebb2);
 
-        let br_ebb0_ebb2 = make_inst::branch(&mut func, ebb2);
-        func.layout.append_inst(br_ebb0_ebb2, ebb0);
+        let br_ebb0_ebb2;
+        let br_ebb1_ebb1;
+        let jmp_ebb0_ebb1;
+        let jmp_ebb1_ebb2;
 
-        let jmp_ebb0_ebb1 = make_inst::jump(&mut func, ebb1);
-        func.layout.append_inst(jmp_ebb0_ebb1, ebb0);
+        {
+            let mut cursor = Cursor::new(&mut func.layout);
+            let mut b = Builder::new(&mut func.dfg, &mut cursor);
 
-        let br_ebb1_ebb1 = make_inst::branch(&mut func, ebb1);
-        func.layout.append_inst(br_ebb1_ebb1, ebb1);
+            b.insert_ebb(ebb0);
+            br_ebb0_ebb2 = b.brnz(cond, ebb2, VariableArgs::new());
+            jmp_ebb0_ebb1 = b.jump(ebb1, VariableArgs::new());
 
-        let jmp_ebb1_ebb2 = make_inst::jump(&mut func, ebb2);
-        func.layout.append_inst(jmp_ebb1_ebb2, ebb1);
+            b.insert_ebb(ebb1);
+            br_ebb1_ebb1 = b.brnz(cond, ebb1, VariableArgs::new());
+            jmp_ebb1_ebb2 = b.jump(ebb2, VariableArgs::new());
+
+            b.insert_ebb(ebb2);
+        }
 
         let cfg = ControlFlowGraph::new(&func);
 
