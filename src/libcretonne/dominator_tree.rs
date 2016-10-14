@@ -116,10 +116,9 @@ impl DominatorTree {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ir::Function;
+    use ir::{Function, Builder, Cursor, VariableArgs, types};
     use ir::entities::NO_INST;
     use cfg::ControlFlowGraph;
-    use test_utils::make_inst;
 
     #[test]
     fn empty() {
@@ -133,23 +132,31 @@ mod test {
     fn non_zero_entry_block() {
         let mut func = Function::new();
         let ebb3 = func.dfg.make_ebb();
+        let cond = func.dfg.append_ebb_arg(ebb3, types::I32);
         let ebb1 = func.dfg.make_ebb();
         let ebb2 = func.dfg.make_ebb();
         let ebb0 = func.dfg.make_ebb();
-        func.layout.append_ebb(ebb3);
-        func.layout.append_ebb(ebb1);
-        func.layout.append_ebb(ebb2);
-        func.layout.append_ebb(ebb0);
 
-        let jmp_ebb3_ebb1 = make_inst::jump(&mut func, ebb1);
-        let br_ebb1_ebb0 = make_inst::branch(&mut func, ebb0);
-        let jmp_ebb1_ebb2 = make_inst::jump(&mut func, ebb2);
-        let jmp_ebb2_ebb0 = make_inst::jump(&mut func, ebb0);
+        let jmp_ebb3_ebb1;
+        let br_ebb1_ebb0;
+        let jmp_ebb1_ebb2;
 
-        func.layout.append_inst(br_ebb1_ebb0, ebb1);
-        func.layout.append_inst(jmp_ebb1_ebb2, ebb1);
-        func.layout.append_inst(jmp_ebb2_ebb0, ebb2);
-        func.layout.append_inst(jmp_ebb3_ebb1, ebb3);
+        {
+            let mut cursor = Cursor::new(&mut func.layout);
+            let mut b = Builder::new(&mut func.dfg, &mut cursor);
+
+            b.insert_ebb(ebb3);
+            jmp_ebb3_ebb1 = b.jump(ebb1, VariableArgs::new());
+
+            b.insert_ebb(ebb1);
+            br_ebb1_ebb0 = b.brnz(cond, ebb0, VariableArgs::new());
+            jmp_ebb1_ebb2 = b.jump(ebb2, VariableArgs::new());
+
+            b.insert_ebb(ebb2);
+            b.jump(ebb0, VariableArgs::new());
+
+            b.insert_ebb(ebb0);
+        }
 
         let cfg = ControlFlowGraph::new(&func);
         let dt = DominatorTree::new(&cfg);
