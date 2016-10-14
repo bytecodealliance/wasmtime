@@ -221,6 +221,71 @@ impl Layout {
             next: self.ebbs[ebb].first_inst.wrap(),
         }
     }
+
+    /// Split the EBB containing `before` in two.
+    ///
+    /// Insert `new_ebb` after the old EBB and move `before` and the following instructions to
+    /// `new_ebb`:
+    ///
+    /// ```text
+    /// old_ebb:
+    ///     i1
+    ///     i2
+    ///     i3 << before
+    ///     i4
+    /// ```
+    /// becomes:
+    ///
+    /// ```text
+    /// old_ebb:
+    ///     i1
+    ///     i2
+    /// new_ebb:
+    ///     i3 << before
+    ///     i4
+    /// ```
+    pub fn split_ebb(&mut self, new_ebb: Ebb, before: Inst) {
+        let old_ebb = self.inst_ebb(before)
+            .expect("The `before` instruction must be in the layout");
+        assert!(!self.is_ebb_inserted(new_ebb));
+
+        // Insert new_ebb after old_ebb.
+        let next_ebb = self.ebbs[old_ebb].next;
+        let last_inst = self.ebbs[old_ebb].last_inst;
+        {
+            let node = self.ebbs.ensure(new_ebb);
+            node.prev = old_ebb;
+            node.next = next_ebb;
+            node.first_inst = before;
+            node.last_inst = last_inst;
+        }
+        self.ebbs[old_ebb].next = new_ebb;
+
+        // Fix backwards link.
+        if Some(old_ebb) == self.last_ebb {
+            self.last_ebb = Some(new_ebb);
+        } else {
+            self.ebbs[next_ebb].prev = new_ebb;
+        }
+
+        // Disconnect the instruction links.
+        let prev_inst = self.insts[before].prev;
+        self.insts[before].prev = NO_INST;
+        self.ebbs[old_ebb].last_inst = prev_inst;
+        if prev_inst == NO_INST {
+            self.ebbs[old_ebb].first_inst = NO_INST;
+        } else {
+            self.insts[prev_inst].next = NO_INST;
+        }
+
+        // Fix the instruction -> ebb pointers.
+        let mut i = before;
+        while i != NO_INST {
+            debug_assert_eq!(self.insts[i].ebb, old_ebb);
+            self.insts[i].ebb = new_ebb;
+            i = self.insts[i].next;
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -781,5 +846,80 @@ mod tests {
         let v1: Vec<Inst> = layout.ebb_insts(e1).collect();
         assert_eq!(v0, [i0, i1]);
         assert_eq!(v1, [i2, i3]);
+    }
+
+    #[test]
+    fn split_ebb() {
+        let mut layout = Layout::new();
+
+        let e0 = Ebb::new(0);
+        let e1 = Ebb::new(1);
+        let e2 = Ebb::new(2);
+
+        let i0 = Inst::new(0);
+        let i1 = Inst::new(1);
+        let i2 = Inst::new(2);
+        let i3 = Inst::new(3);
+
+        layout.append_ebb(e0);
+        layout.append_inst(i0, e0);
+        assert_eq!(layout.inst_ebb(i0), Some(e0));
+        layout.split_ebb(e1, i0);
+        assert_eq!(layout.inst_ebb(i0), Some(e1));
+
+        {
+            let mut cur = Cursor::new(&mut layout);
+            assert_eq!(cur.next_ebb(), Some(e0));
+            assert_eq!(cur.next_inst(), None);
+            assert_eq!(cur.next_ebb(), Some(e1));
+            assert_eq!(cur.next_inst(), Some(i0));
+            assert_eq!(cur.next_inst(), None);
+            assert_eq!(cur.next_ebb(), None);
+
+            // Check backwards links.
+            assert_eq!(cur.prev_ebb(), Some(e1));
+            assert_eq!(cur.prev_inst(), Some(i0));
+            assert_eq!(cur.prev_inst(), None);
+            assert_eq!(cur.prev_ebb(), Some(e0));
+            assert_eq!(cur.prev_inst(), None);
+            assert_eq!(cur.prev_ebb(), None);
+        }
+
+        layout.append_inst(i1, e0);
+        layout.append_inst(i2, e0);
+        layout.append_inst(i3, e0);
+        layout.split_ebb(e2, i2);
+
+        assert_eq!(layout.inst_ebb(i0), Some(e1));
+        assert_eq!(layout.inst_ebb(i1), Some(e0));
+        assert_eq!(layout.inst_ebb(i2), Some(e2));
+        assert_eq!(layout.inst_ebb(i3), Some(e2));
+
+        {
+            let mut cur = Cursor::new(&mut layout);
+            assert_eq!(cur.next_ebb(), Some(e0));
+            assert_eq!(cur.next_inst(), Some(i1));
+            assert_eq!(cur.next_inst(), None);
+            assert_eq!(cur.next_ebb(), Some(e2));
+            assert_eq!(cur.next_inst(), Some(i2));
+            assert_eq!(cur.next_inst(), Some(i3));
+            assert_eq!(cur.next_inst(), None);
+            assert_eq!(cur.next_ebb(), Some(e1));
+            assert_eq!(cur.next_inst(), Some(i0));
+            assert_eq!(cur.next_inst(), None);
+            assert_eq!(cur.next_ebb(), None);
+
+            assert_eq!(cur.prev_ebb(), Some(e1));
+            assert_eq!(cur.prev_inst(), Some(i0));
+            assert_eq!(cur.prev_inst(), None);
+            assert_eq!(cur.prev_ebb(), Some(e2));
+            assert_eq!(cur.prev_inst(), Some(i3));
+            assert_eq!(cur.prev_inst(), Some(i2));
+            assert_eq!(cur.prev_inst(), None);
+            assert_eq!(cur.prev_ebb(), Some(e0));
+            assert_eq!(cur.prev_inst(), Some(i1));
+            assert_eq!(cur.prev_inst(), None);
+            assert_eq!(cur.prev_ebb(), None);
+        }
     }
 }
