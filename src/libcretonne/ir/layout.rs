@@ -614,6 +614,36 @@ impl<'a> Cursor<'a> {
             After(ebb) => self.layout.append_inst(inst, ebb),
         }
     }
+
+    /// Insert an EBB at the current position and switch to it.
+    ///
+    /// As far as possible, this method behaves as if the EBB header were an instruction inserted
+    /// at the current position.
+    ///
+    /// - If the cursor is pointing at an existing instruction, *the current EBB is split in two*
+    ///   and the current instruction becomes the first instruction in the inserted EBB.
+    /// - If the cursor points at the bottom of an EBB, the new EBB is inserted after the current
+    ///   one, and moved to the bottom of the new EBB where instructions can be appended.
+    /// - If the cursor points to the top of an EBB, the new EBB is inserted above the current one.
+    /// - If the cursor is not pointing at anything, the new EBB is placed last in the layout.
+    ///
+    /// This means that is is always valid to call this method, and it always leaves the cursor in
+    /// a state that will insert instructions into the new EBB.
+    pub fn insert_ebb(&mut self, new_ebb: Ebb) {
+        use self::CursorPosition::*;
+        match self.pos {
+            At(inst) => {
+                self.layout.split_ebb(new_ebb, inst);
+                // All other cases move to `After(ebb)`, but in this case we we'll stay `At(inst)`.
+                return;
+            }
+            Nowhere => self.layout.append_ebb(new_ebb),
+            Before(ebb) => self.layout.insert_ebb(new_ebb, ebb),
+            After(ebb) => self.layout.insert_ebb_after(new_ebb, ebb),
+        }
+        // For everything but `At(inst)` we end up appending to the new EBB.
+        self.pos = After(new_ebb);
+    }
 }
 
 
