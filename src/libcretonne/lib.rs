@@ -23,6 +23,3 @@ mod write;
 mod constant_hash;
 mod predicates;
 mod legalizer;
-
-#[cfg(test)]
-pub mod test_utils;
