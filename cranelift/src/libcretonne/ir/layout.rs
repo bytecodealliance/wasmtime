@@ -102,6 +102,26 @@ impl Layout {
         }
     }
 
+    /// Insert `ebb` in the layout *after* the existing EBB `after`.
+    pub fn insert_ebb_after(&mut self, ebb: Ebb, after: Ebb) {
+        assert!(!self.is_ebb_inserted(ebb),
+                "Cannot insert EBB that is already in the layout");
+        assert!(self.is_ebb_inserted(after),
+                "EBB Insertion point not in the layout");
+        let before = self.ebbs[after].next;
+        {
+            let node = self.ebbs.ensure(ebb);
+            node.next = before;
+            node.prev = after;
+        }
+        self.ebbs[after].next = ebb;
+        if before == NO_EBB {
+            self.last_ebb = Some(ebb);
+        } else {
+            self.ebbs[before].prev = ebb;
+        }
+    }
+
     /// Return an iterator over all EBBs in layout order.
     pub fn ebbs<'a>(&'a self) -> Ebbs<'a> {
         Ebbs {
@@ -603,6 +623,37 @@ mod tests {
     use entity_map::EntityRef;
     use ir::{Ebb, Inst};
 
+    fn verify(layout: &mut Layout, ebbs: &[(Ebb, &[Inst])]) {
+        // Check that EBBs are inserted and instructions belong the right places.
+        // Check forward linkage with iterators.
+        {
+            let mut ebb_iter = layout.ebbs();
+            for &(ebb, insts) in ebbs {
+                assert!(layout.is_ebb_inserted(ebb));
+                assert_eq!(ebb_iter.next(), Some(ebb));
+
+                let mut inst_iter = layout.ebb_insts(ebb);
+                for &inst in insts {
+                    assert_eq!(layout.inst_ebb(inst), Some(ebb));
+                    assert_eq!(inst_iter.next(), Some(inst));
+                }
+                assert_eq!(inst_iter.next(), None);
+            }
+            assert_eq!(ebb_iter.next(), None);
+        }
+
+        // Check backwards linkage with a cursor.
+        let mut cur = Cursor::new(layout);
+        for &(ebb, insts) in ebbs.into_iter().rev() {
+            assert_eq!(cur.prev_ebb(), Some(ebb));
+            for &inst in insts.into_iter().rev() {
+                assert_eq!(cur.prev_inst(), Some(inst));
+            }
+            assert_eq!(cur.prev_inst(), None);
+        }
+        assert_eq!(cur.prev_ebb(), None);
+    }
+
     #[test]
     fn append_ebb() {
         let mut layout = Layout::new();
@@ -614,10 +665,8 @@ mod tests {
             let imm = &layout;
             assert!(!imm.is_ebb_inserted(e0));
             assert!(!imm.is_ebb_inserted(e1));
-
-            let v: Vec<Ebb> = layout.ebbs().collect();
-            assert_eq!(v, []);
         }
+        verify(&mut layout, &[]);
 
         layout.append_ebb(e1);
         assert!(!layout.is_ebb_inserted(e0));
@@ -699,22 +748,34 @@ mod tests {
         assert!(!layout.is_ebb_inserted(e0));
         assert!(layout.is_ebb_inserted(e1));
         assert!(!layout.is_ebb_inserted(e2));
-        let v: Vec<Ebb> = layout.ebbs().collect();
-        assert_eq!(v, [e1]);
+        verify(&mut layout, &[(e1, &[])]);
 
         layout.insert_ebb(e2, e1);
         assert!(!layout.is_ebb_inserted(e0));
         assert!(layout.is_ebb_inserted(e1));
         assert!(layout.is_ebb_inserted(e2));
-        let v: Vec<Ebb> = layout.ebbs().collect();
-        assert_eq!(v, [e2, e1]);
+        verify(&mut layout, &[(e2, &[]), (e1, &[])]);
 
         layout.insert_ebb(e0, e1);
         assert!(layout.is_ebb_inserted(e0));
         assert!(layout.is_ebb_inserted(e1));
         assert!(layout.is_ebb_inserted(e2));
-        let v: Vec<Ebb> = layout.ebbs().collect();
-        assert_eq!(v, [e2, e0, e1]);
+        verify(&mut layout, &[(e2, &[]), (e0, &[]), (e1, &[])]);
+    }
+
+    #[test]
+    fn insert_ebb_after() {
+        let mut layout = Layout::new();
+        let e0 = Ebb::new(0);
+        let e1 = Ebb::new(1);
+        let e2 = Ebb::new(2);
+
+        layout.append_ebb(e1);
+        layout.insert_ebb_after(e2, e1);
+        verify(&mut layout, &[(e1, &[]), (e2, &[])]);
+
+        layout.insert_ebb_after(e0, e1);
+        verify(&mut layout, &[(e1, &[]), (e0, &[]), (e2, &[])]);
     }
 
     #[test]
@@ -749,11 +810,7 @@ mod tests {
         assert_eq!(v, [i1, i2]);
 
         layout.append_inst(i0, e1);
-        assert_eq!(layout.inst_ebb(i0), Some(e1));
-        assert_eq!(layout.inst_ebb(i1), Some(e1));
-        assert_eq!(layout.inst_ebb(i2), Some(e1));
-        let v: Vec<Inst> = layout.ebb_insts(e1).collect();
-        assert_eq!(v, [i1, i2, i0]);
+        verify(&mut layout, &[(e1, &[i1, i2, i0])]);
 
         // Test cursor positioning.
         let mut cur = Cursor::new(&mut layout);
@@ -812,11 +869,7 @@ mod tests {
         assert_eq!(v, [i2, i1]);
 
         layout.insert_inst(i0, i1);
-        assert_eq!(layout.inst_ebb(i0), Some(e1));
-        assert_eq!(layout.inst_ebb(i1), Some(e1));
-        assert_eq!(layout.inst_ebb(i2), Some(e1));
-        let v: Vec<Inst> = layout.ebb_insts(e1).collect();
-        assert_eq!(v, [i2, i0, i1]);
+        verify(&mut layout, &[(e1, &[i2, i0, i1])]);
     }
 
     #[test]
