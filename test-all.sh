@@ -34,14 +34,14 @@ RUSTFMT_VERSION="0.6.2"
 
 if cargo install --list | grep -q "^rustfmt v$RUSTFMT_VERSION"; then
     banner "Rust formatting"
-    $topdir/src/format-all.sh --write-mode=diff
+    $topdir/format-all.sh --write-mode=diff
 else
     echo "Please install rustfmt v$RUSTFMT_VERSION to verify formatting."
     echo "If a newer version of rustfmt is available, update this script."
 fi
 
 PKGS="cretonne cretonne-reader cretonne-tools filecheck"
-cd "$topdir/src/tools"
+cd "$topdir"
 for PKG in $PKGS
 do
     banner "Rust $PKG unit tests"
@@ -49,7 +49,7 @@ do
 done
 
 # Build cton-util for parser testing.
-cd "$topdir/src/tools"
+cd "$topdir"
 banner "Rust documentation"
 echo "open $topdir/target/doc/cretonne/index.html"
 cargo doc

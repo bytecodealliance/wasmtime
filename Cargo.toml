@@ -1,3 +1,23 @@
-# Phantom workspace manifest for all Cretonne crates.
+[package]
+name = "cretonne-tools"
+authors = ["The Cretonne Project Developers"]
+version = "0.0.0"
+description = "Binaries for testing the Cretonne library"
+license = "Apache-2.0"
+documentation = "https://cretonne.readthedocs.io/"
+repository = "https://github.com/stoklund/cretonne"
+publish = false
+
+[[bin]]
+name = "cton-util"
+path = "src/cton-util.rs"
+
+[dependencies]
+cretonne = { path = "lib/cretonne" }
+cretonne-reader = { path = "lib/reader" }
+filecheck = { path = "lib/filecheck" }
+docopt = "0.6.86"
+rustc-serialize = "0.3.19"
+num_cpus = "1.1.0"
+
 [workspace]
-members = ["src/tools"]
