@@ -10,8 +10,9 @@ The Cretonne meta language is used to define instructions for Cretonne. It is a
 domain specific language embedded in Python. This document describes the Python
 modules that form the embedded DSL.
 
-The meta language descriptions are Python modules under the :file:`meta`
-top-level directory. The descriptions are processed in two steps:
+The meta language descriptions are Python modules under the
+:file:`lib/cretonne/meta` directory. The descriptions are processed in two
+steps:
 
 1. The Python modules are imported. This has the effect of building static data
    structures in global variables in the modules. These static data structures
@@ -22,8 +23,9 @@ top-level directory. The descriptions are processed in two steps:
    constant tables.
 
 The main driver for this source code generation process is the
-:file:`meta/build.py` script which is invoked as part of the build process if
-anything in the :file:`meta` directory has changed since the last build.
+:file:`lib/cretonne/meta/build.py` script which is invoked as part of the build
+process if anything in the :file:`lib/cretonne/meta` directory has changed
+since the last build.
 
 
 Settings
@@ -33,8 +35,8 @@ Settings are used by the environment embedding Cretonne to control the details
 of code generation. Each setting is defined in the meta language so a compact
 and consistent Rust representation can be generated. Shared settings are defined
 in the :mod:`cretonne.settings` module. Some settings are specific to a target
-ISA, and defined in a `settings` module under the appropriate :file:`meta/isa/*`
-directory.
+ISA, and defined in a `settings` module under the appropriate
+:file:`lib/cretonne/meta/isa/*` directory.
 
 Settings can take boolean on/off values, small numbers, or explicitly enumerated
 symbolic values. Each type is represented by a sub-class of :class:`Setting`:
@@ -343,7 +345,7 @@ architectures. Each ISA is represented by a :py:class:`cretonne.TargetISA` insta
 .. autoclass:: TargetISA
 
 The definitions for each supported target live in a package under
-:file:`meta/isa`.
+:file:`lib/cretonne/meta/isa`.
 
 .. automodule:: isa
     :members:

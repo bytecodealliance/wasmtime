@@ -29,7 +29,7 @@ fn main() {
     let top_dir = cur_dir.as_path();
 
     // Scripts are in $top_dir/meta.
-    let meta_dir = top_dir.join("meta");
+    let meta_dir = top_dir.join("lib/cretonne/meta");
     let build_script = meta_dir.join("build.py");
 
     // Launch build script with Python. We'll just find python in the path.
