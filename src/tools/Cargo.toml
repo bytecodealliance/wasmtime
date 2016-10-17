@@ -10,9 +10,9 @@ name = "cton-util"
 path = "main.rs"
 
 [dependencies]
-cretonne = { path = "../libcretonne" }
-cretonne-reader = { path = "../libreader" }
-filecheck = { path = "../libfilecheck" }
+cretonne = { path = "../../lib/cretonne" }
+cretonne-reader = { path = "../../lib/reader" }
+filecheck = { path = "../../lib/filecheck" }
 docopt = "0.6.80"
 rustc-serialize = "0.3.19"
 num_cpus = "1.1.0"
