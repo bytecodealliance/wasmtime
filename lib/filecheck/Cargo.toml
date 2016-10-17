@@ -2,11 +2,13 @@
 authors = ["The Cretonne Project Developers"]
 name = "filecheck"
 version = "0.0.0"
+description = "Library for matching test outputs against filecheck directives"
+license = "Apache-2.0"
+repository = "https://github.com/stoklund/cretonne"
 publish = false
 
 [lib]
 name = "filecheck"
-path = "lib.rs"
 
 [dependencies]
 regex = "0.1.71"
