@@ -22,3 +22,49 @@ ebb1:
 ; nextln:     v1 = f32const 0.0
 ; nextln:     return v0, v1
 ; nextln: }
+
+function signatures() {
+    sig10 = signature()
+    sig11 = signature(i32, f64) -> i32, b1
+    fn5 = sig11 foo
+    fn8 = function bar(i32) -> b1
+}
+; sameln: function signatures() {
+; nextln:     $sig10 = signature()
+; nextln:     $sig11 = signature(i32, f64) -> i32, b1
+; nextln:     sig2 = signature(i32) -> b1
+; nextln:     $fn5 = $sig11 foo
+; nextln:     $fn8 = sig2 bar
+; nextln: }
+
+function direct() {
+    fn0 = function none()
+    fn1 = function one() -> i32
+    fn2 = function two() -> i32, f32
+
+ebb0:
+    call fn0()
+    v1 = call fn1()
+    v2, v3 = call fn2()
+    return
+}
+; check: call $fn0()
+; check: $v1 = call $fn1()
+; check: $v2, $v3 = call $fn2()
+; check: return
+
+function indirect(i64) {
+    sig0 = signature(i64)
+    sig1 = signature() -> i32
+    sig2 = signature() -> i32, f32
+
+ebb0(v0: i64):
+    v1 = call_indirect sig1, v0()
+    call_indirect sig0, v1(v0)
+    v3, v4 = call_indirect sig2, v1()
+    return
+}
+; check: $v1 = call_indirect $sig1, $v0()
+; check: call_indirect $sig0, $v1($v0)
+; check: $v3, $v4 = call_indirect $sig2, $v1()
+; check: return

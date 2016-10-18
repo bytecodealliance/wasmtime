@@ -9,12 +9,14 @@ use std::str::FromStr;
 use std::u32;
 use std::mem;
 use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotData, JumpTable,
-                   JumpTableData, Signature, ArgumentType, ArgumentExtension};
+                   JumpTableData, Signature, ArgumentType, ArgumentExtension, ExtFuncData, SigRef,
+                   FuncRef};
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::{AnyEntity, NO_EBB, NO_INST, NO_VALUE};
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs,
-                                 TernaryOverflowData, JumpData, BranchData, ReturnData};
+                                 TernaryOverflowData, JumpData, BranchData, CallData,
+                                 IndirectCallData, ReturnData};
 use cretonne::isa;
 use cretonne::settings;
 use testfile::{TestFile, Details, Comment};
@@ -82,6 +84,32 @@ impl Context {
     // Allocate a new stack slot and add a mapping number -> StackSlot.
     fn add_ss(&mut self, number: u32, data: StackSlotData, loc: &Location) -> Result<()> {
         self.map.def_ss(number, self.function.stack_slots.push(data), loc)
+    }
+
+    // Allocate a new signature and add a mapping number -> SigRef.
+    fn add_sig(&mut self, number: u32, data: Signature, loc: &Location) -> Result<()> {
+        self.map.def_sig(number, self.function.dfg.signatures.push(data), loc)
+    }
+
+    // Resolve a reference to a signature.
+    fn get_sig(&self, number: u32, loc: &Location) -> Result<SigRef> {
+        match self.map.get_sig(number) {
+            Some(sig) => Ok(sig),
+            None => err!(loc, "undefined signature sig{}", number),
+        }
+    }
+
+    // Allocate a new external function and add a mapping number -> FuncRef.
+    fn add_fn(&mut self, number: u32, data: ExtFuncData, loc: &Location) -> Result<()> {
+        self.map.def_fn(number, self.function.dfg.ext_funcs.push(data), loc)
+    }
+
+    // Resolve a reference to a function.
+    fn get_fn(&self, number: u32, loc: &Location) -> Result<FuncRef> {
+        match self.map.get_fn(number) {
+            Some(fnref) => Ok(fnref),
+            None => err!(loc, "undefined function fn{}", number),
+        }
     }
 
     // Allocate a new jump table and add a mapping number -> JumpTable.
@@ -300,6 +328,26 @@ impl<'a> Parser<'a> {
         if let Some(Token::StackSlot(ss)) = self.token() {
             self.consume();
             Ok(ss)
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume a function reference.
+    fn match_fn(&mut self, err_msg: &str) -> Result<u32> {
+        if let Some(Token::FuncRef(fnref)) = self.token() {
+            self.consume();
+            Ok(fnref)
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume a signature reference.
+    fn match_sig(&mut self, err_msg: &str) -> Result<u32> {
+        if let Some(Token::SigRef(sigref)) = self.token() {
+            self.consume();
+            Ok(sigref)
         } else {
             err!(self.loc, err_msg)
         }
@@ -628,6 +676,16 @@ impl<'a> Parser<'a> {
                     self.parse_stack_slot_decl()
                         .and_then(|(num, dat)| ctx.add_ss(num, dat, &self.loc))
                 }
+                Some(Token::SigRef(..)) => {
+                    self.gather_comments(ctx.function.dfg.signatures.next_key());
+                    self.parse_signature_decl()
+                        .and_then(|(num, dat)| ctx.add_sig(num, dat, &self.loc))
+                }
+                Some(Token::FuncRef(..)) => {
+                    self.gather_comments(ctx.function.dfg.ext_funcs.next_key());
+                    self.parse_function_decl(ctx)
+                        .and_then(|(num, dat)| ctx.add_fn(num, dat, &self.loc))
+                }
                 Some(Token::JumpTable(..)) => {
                     self.gather_comments(ctx.function.jump_tables.next_key());
                     self.parse_jump_table_decl()
@@ -658,6 +716,56 @@ impl<'a> Parser<'a> {
         let data = StackSlotData::new(bytes as u32);
 
         // TBD: stack-slot-decl ::= StackSlot(ss) "=" "stack_slot" Bytes * {"," stack-slot-flag}
+        Ok((number, data))
+    }
+
+    // Parse a signature decl.
+    //
+    // signature-decl ::= SigRef(sigref) "=" "signature" signature
+    //
+    fn parse_signature_decl(&mut self) -> Result<(u32, Signature)> {
+        let number = try!(self.match_sig("expected signature number: sig«n»"));
+        try!(self.match_token(Token::Equal, "expected '=' in signature decl"));
+        try!(self.match_identifier("signature", "expected 'signature'"));
+        let data = try!(self.parse_signature());
+        Ok((number, data))
+    }
+
+    // Parse a function decl.
+    //
+    // Two variants:
+    //
+    // function-decl ::= FuncRef(fnref) "=" function-spec
+    //                   FuncRef(fnref) "=" SigRef(sig) name
+    //
+    // The first variant allocates a new signature reference. The second references an existing
+    // signature which must be declared first.
+    //
+    fn parse_function_decl(&mut self, ctx: &mut Context) -> Result<(u32, ExtFuncData)> {
+        let number = try!(self.match_fn("expected function number: fn«n»"));
+        try!(self.match_token(Token::Equal, "expected '=' in function decl"));
+
+        let data = match self.token() {
+            Some(Token::Identifier("function")) => {
+                let (loc, name, sig) = try!(self.parse_function_spec());
+                let sigref = ctx.function.dfg.signatures.push(sig);
+                ctx.map.def_entity(sigref.into(), &loc).expect("duplicate SigRef entities created");
+                ExtFuncData {
+                    name: name,
+                    signature: sigref,
+                }
+            }
+            Some(Token::SigRef(sig_src)) => {
+                let sig = try!(ctx.get_sig(sig_src, &self.loc));
+                self.consume();
+                let name = try!(self.parse_function_name());
+                ExtFuncData {
+                    name: name,
+                    signature: sig,
+                }
+            }
+            _ => return err!(self.loc, "expected 'function' or sig«n» in function decl"),
+        };
         Ok((number, data))
     }
 
@@ -1177,10 +1285,39 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::Call => {
-                unimplemented!();
+                let func_ref = try!(self.match_fn("expected function reference")
+                    .and_then(|num| ctx.get_fn(num, &self.loc)));
+                try!(self.match_token(Token::LPar, "expected '(' before arguments"));
+                let args = try!(self.parse_value_list());
+                try!(self.match_token(Token::RPar, "expected ')' after arguments"));
+                InstructionData::Call {
+                    opcode: opcode,
+                    ty: VOID,
+                    second_result: NO_VALUE,
+                    data: Box::new(CallData {
+                        func_ref: func_ref,
+                        varargs: args,
+                    }),
+                }
             }
             InstructionFormat::IndirectCall => {
-                unimplemented!();
+                let sig_ref = try!(self.match_sig("expected signature reference")
+                    .and_then(|num| ctx.get_sig(num, &self.loc)));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let callee = try!(self.match_value("expected SSA value callee operand"));
+                try!(self.match_token(Token::LPar, "expected '(' before arguments"));
+                let args = try!(self.parse_value_list());
+                try!(self.match_token(Token::RPar, "expected ')' after arguments"));
+                InstructionData::IndirectCall {
+                    opcode: opcode,
+                    ty: VOID,
+                    second_result: NO_VALUE,
+                    data: Box::new(IndirectCallData {
+                        sig_ref: sig_ref,
+                        arg: callee,
+                        varargs: args,
+                    }),
+                }
             }
             InstructionFormat::Return => {
                 let args = try!(self.parse_value_list());
