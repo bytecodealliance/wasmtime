@@ -15,6 +15,7 @@ instructions = InstructionGroup("base", "Shared base instruction set")
 
 Int = TypeVar('Int', 'A scalar or vector integer type', ints=True, simd=True)
 iB = TypeVar('iB', 'A scalar integer type', ints=True)
+iPtr = TypeVar('iB', 'An integer address type', ints=(32, 64))
 Testable = TypeVar(
         'Testable', 'A scalar boolean or integer type',
         ints=True, bools=True)
@@ -108,6 +109,35 @@ x_return = Instruction(
         function signature's return types.
         """,
         ins=rvals)
+
+FN = Operand(
+        'FN',
+        entities.func_ref,
+        doc='function to call, declared by :inst:`function`')
+args = Operand('args', variable_args, doc='call arguments')
+
+call = Instruction(
+        'call', r"""
+        Direct function call.
+
+        Call a function which has been declared in the preamble. The argument
+        types must match the function's signature.
+        """,
+        ins=(FN, args),
+        outs=rvals)
+
+SIG = Operand('SIG', entities.sig_ref, doc='function signature')
+callee = Operand('callee', iPtr, doc='address of function to call')
+
+call_indirect = Instruction(
+        'call_indirect', r"""
+        Indirect function call.
+
+        Call the function pointed to by `callee` with the given arguments. The
+        called function must match the soecified signature.
+        """,
+        ins=(SIG, callee, args),
+        outs=rvals)
 
 #
 # Materializing constants.

@@ -10,7 +10,7 @@ use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use std::ops::{Deref, DerefMut};
 
-use ir::{Value, Type, Ebb, JumpTable, FuncRef};
+use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef};
 use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, ImmVector};
 use ir::condcodes::*;
 use ir::types;
@@ -207,6 +207,12 @@ pub enum InstructionData {
         second_result: Value,
         data: Box<CallData>,
     },
+    IndirectCall {
+        opcode: Opcode,
+        ty: Type,
+        second_result: Value,
+        data: Box<IndirectCallData>,
+    },
     Return {
         opcode: Opcode,
         ty: Type,
@@ -342,10 +348,15 @@ pub struct CallData {
     pub varargs: VariableArgs,
 }
 
-impl Display for CallData {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "TBD({})", self.varargs)
-    }
+/// Payload of an indirect call instruction.
+#[derive(Clone, Debug)]
+pub struct IndirectCallData {
+    /// Callee function.
+    pub arg: Value,
+    pub sig_ref: SigRef,
+
+    /// Dynamically sized array containing call argument values.
+    pub varargs: VariableArgs,
 }
 
 /// Payload of a return instruction.

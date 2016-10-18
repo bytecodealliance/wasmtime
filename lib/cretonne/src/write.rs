@@ -199,7 +199,10 @@ fn write_instruction(w: &mut Write,
         Jump { ref data, .. } => writeln!(w, " {}", data),
         Branch { ref data, .. } => writeln!(w, " {}", data),
         BranchTable { arg, table, .. } => writeln!(w, " {}, {}", arg, table),
-        Call { ref data, .. } => writeln!(w, " {}", data),
+        Call { ref data, .. } => writeln!(w, " {}({})", data.func_ref, data.varargs),
+        IndirectCall { ref data, .. } => {
+            writeln!(w, " {}, {}({})", data.sig_ref, data.arg, data.varargs)
+        }
         Return { ref data, .. } => {
             if data.varargs.is_empty() {
                 writeln!(w, "")
