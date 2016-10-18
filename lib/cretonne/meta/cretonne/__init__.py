@@ -712,7 +712,10 @@ class InstructionFormat(object):
         :py:class:`Instruction` arguments of the same name, except they must be
         tuples of :py:`Operand` objects.
         """
-        multiple_results = len(outs) > 1
+        if len(outs) == 1:
+            multiple_results = outs[0].kind == variable_args
+        else:
+            multiple_results = len(outs) > 1
         sig = (multiple_results,) + tuple(op.kind for op in ins)
         if sig not in InstructionFormat._registry:
             raise RuntimeError(

@@ -373,22 +373,15 @@ platform. When calling other Cretonne functions, the flags are not necessary.
 Functions that are called directly must be declared in the :term:`function
 preamble`:
 
-.. inst:: F = function NAME signature
+.. inst:: FN = function NAME signature
 
     Declare a function so it can be called directly.
 
     :arg NAME: Name of the function, passed to the linker for resolution.
     :arg signature: Function signature. See below.
-    :result F: A function identifier that can be used with :inst:`call`.
+    :result FN: A function identifier that can be used with :inst:`call`.
 
-.. inst:: a, b, ... = call F(args...)
-
-    Direct function call.
-
-    :arg F: Function identifier to call, declared by :inst:`function`.
-    :arg args...: Function arguments matching the signature of F.
-    :result a,b,...: Return values matching the signature of F.
-
+.. autoinst:: call
 .. autoinst:: x_return
 
 This simple example illustrates direct function calls and signatures::
@@ -414,14 +407,7 @@ Indirect function calls use a signature declared in the preamble.
     :arg signature: Function signature. See :token:`signature`.
     :result SIG: A signature identifier.
 
-.. inst:: a, b, ... = call_indirect SIG, x(args...)
-
-    Indirect function call.
-
-    :arg SIG: A function signature identifier declared with :inst:`signature`.
-    :arg iPtr x: The address of the function to call.
-    :arg args...: Function arguments matching SIG.
-    :result a,b,...: Return values matching SIG.
+.. autoinst:: call_indirect
 
 .. todo:: Define safe indirect function calls.
 

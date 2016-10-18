@@ -158,6 +158,11 @@ impl Context {
                         try!(self.map.rewrite_values(&mut data.varargs, loc));
                     }
 
+                    InstructionData::IndirectCall { ref mut data, .. } => {
+                        try!(self.map.rewrite_value(&mut data.arg, loc));
+                        try!(self.map.rewrite_values(&mut data.varargs, loc));
+                    }
+
                     InstructionData::Return { ref mut data, .. } => {
                         try!(self.map.rewrite_values(&mut data.varargs, loc));
                     }
@@ -1171,6 +1176,12 @@ impl<'a> Parser<'a> {
                     args: [lhs, rhs],
                 }
             }
+            InstructionFormat::Call => {
+                unimplemented!();
+            }
+            InstructionFormat::IndirectCall => {
+                unimplemented!();
+            }
             InstructionFormat::Return => {
                 let args = try!(self.parse_value_list());
                 InstructionData::Return {
@@ -1189,9 +1200,6 @@ impl<'a> Parser<'a> {
                     arg: arg,
                     table: table,
                 }
-            }
-            InstructionFormat::Call => {
-                unimplemented!();
             }
         })
     }

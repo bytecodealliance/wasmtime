@@ -8,7 +8,7 @@ in this module.
 from __future__ import absolute_import
 from . import InstructionFormat, value, variable_args
 from .immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
-from .entities import ebb, func_ref, jump_table
+from .entities import ebb, sig_ref, func_ref, jump_table
 
 Nullary = InstructionFormat()
 
@@ -47,6 +47,9 @@ BranchTable = InstructionFormat(value, jump_table)
 
 Call = InstructionFormat(
         func_ref, variable_args, multiple_results=True, boxed_storage=True)
+IndirectCall = InstructionFormat(
+        sig_ref, value, variable_args,
+        multiple_results=True, boxed_storage=True)
 Return = InstructionFormat(variable_args, boxed_storage=True)
 
 
