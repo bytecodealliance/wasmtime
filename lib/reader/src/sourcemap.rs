@@ -8,7 +8,7 @@
 //! clients.
 
 use std::collections::HashMap;
-use cretonne::ir::{StackSlot, JumpTable, Ebb, Value};
+use cretonne::ir::{StackSlot, JumpTable, Ebb, Value, SigRef, FuncRef};
 use cretonne::ir::entities::AnyEntity;
 use error::{Result, Location};
 use lexer::split_entity_name;
@@ -19,6 +19,8 @@ pub struct SourceMap {
     values: HashMap<Value, Value>, // vNN, vxNN
     ebbs: HashMap<Ebb, Ebb>, // ebbNN
     stack_slots: HashMap<u32, StackSlot>, // ssNN
+    signatures: HashMap<u32, SigRef>, // sigNN
+    functions: HashMap<u32, FuncRef>, // fnNN
     jump_tables: HashMap<u32, JumpTable>, // jtNN
 
     // Store locations for entities, including instructions.
@@ -40,6 +42,16 @@ impl SourceMap {
     /// Look up a stack slot entity by its source number.
     pub fn get_ss(&self, src_num: u32) -> Option<StackSlot> {
         self.stack_slots.get(&src_num).cloned()
+    }
+
+    /// Look up a signature entity by its source number.
+    pub fn get_sig(&self, src_num: u32) -> Option<SigRef> {
+        self.signatures.get(&src_num).cloned()
+    }
+
+    /// Look up a function entity by its source number.
+    pub fn get_fn(&self, src_num: u32) -> Option<FuncRef> {
+        self.functions.get(&src_num).cloned()
     }
 
     /// Look up a jump table entity by its source number.
@@ -64,6 +76,8 @@ impl SourceMap {
                 }
                 "ebb" => Ebb::with_number(num).and_then(|e| self.get_ebb(e)).map(AnyEntity::Ebb),
                 "ss" => self.get_ss(num).map(AnyEntity::StackSlot),
+                "sig" => self.get_sig(num).map(AnyEntity::SigRef),
+                "fn" => self.get_fn(num).map(AnyEntity::FuncRef),
                 "jt" => self.get_jt(num).map(AnyEntity::JumpTable),
                 _ => None,
             }
@@ -126,6 +140,8 @@ pub trait MutableSourceMap {
     fn def_value(&mut self, src: Value, entity: Value, loc: &Location) -> Result<()>;
     fn def_ebb(&mut self, src: Ebb, entity: Ebb, loc: &Location) -> Result<()>;
     fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()>;
+    fn def_sig(&mut self, src_num: u32, entity: SigRef, loc: &Location) -> Result<()>;
+    fn def_fn(&mut self, src_num: u32, entity: FuncRef, loc: &Location) -> Result<()>;
     fn def_jt(&mut self, src_num: u32, entity: JumpTable, loc: &Location) -> Result<()>;
 
     /// Define an entity without an associated source number. This can be used for instructions
@@ -139,6 +155,8 @@ impl MutableSourceMap for SourceMap {
             values: HashMap::new(),
             ebbs: HashMap::new(),
             stack_slots: HashMap::new(),
+            signatures: HashMap::new(),
+            functions: HashMap::new(),
             jump_tables: HashMap::new(),
             locations: HashMap::new(),
         }
@@ -163,6 +181,22 @@ impl MutableSourceMap for SourceMap {
     fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()> {
         if self.stack_slots.insert(src_num, entity).is_some() {
             err!(loc, "duplicate stack slot: ss{}", src_num)
+        } else {
+            self.def_entity(entity.into(), loc)
+        }
+    }
+
+    fn def_sig(&mut self, src_num: u32, entity: SigRef, loc: &Location) -> Result<()> {
+        if self.signatures.insert(src_num, entity).is_some() {
+            err!(loc, "duplicate signature: sig{}", src_num)
+        } else {
+            self.def_entity(entity.into(), loc)
+        }
+    }
+
+    fn def_fn(&mut self, src_num: u32, entity: FuncRef, loc: &Location) -> Result<()> {
+        if self.functions.insert(src_num, entity).is_some() {
+            err!(loc, "duplicate function: fn{}", src_num)
         } else {
             self.def_entity(entity.into(), loc)
         }
