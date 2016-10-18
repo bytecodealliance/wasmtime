@@ -8,7 +8,7 @@
 //! clients.
 
 use std::collections::HashMap;
-use cretonne::ir::{StackSlot, JumpTable, Ebb, Value, Inst};
+use cretonne::ir::{StackSlot, JumpTable, Ebb, Value};
 use cretonne::ir::entities::AnyEntity;
 use error::{Result, Location};
 use lexer::split_entity_name;
@@ -128,9 +128,9 @@ pub trait MutableSourceMap {
     fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()>;
     fn def_jt(&mut self, src_num: u32, entity: JumpTable, loc: &Location) -> Result<()>;
 
-    /// Define an instruction. Since instruction numbers never appear in source, only the location
-    /// is recorded.
-    fn def_inst(&mut self, entity: Inst, loc: &Location) -> Result<()>;
+    /// Define an entity without an associated source number. This can be used for instructions
+    /// whose numbers never appear in source, or implicitly defined signatures.
+    fn def_entity(&mut self, entity: AnyEntity, loc: &Location) -> Result<()>;
 }
 
 impl MutableSourceMap for SourceMap {
@@ -147,45 +147,37 @@ impl MutableSourceMap for SourceMap {
     fn def_value(&mut self, src: Value, entity: Value, loc: &Location) -> Result<()> {
         if self.values.insert(src, entity).is_some() {
             err!(loc, "duplicate value: {}", src)
-        } else if self.locations.insert(entity.into(), loc.clone()).is_some() {
-            err!(loc, "duplicate entity: {}", entity)
         } else {
-            Ok(())
+            self.def_entity(entity.into(), loc)
         }
     }
 
     fn def_ebb(&mut self, src: Ebb, entity: Ebb, loc: &Location) -> Result<()> {
         if self.ebbs.insert(src, entity).is_some() {
             err!(loc, "duplicate EBB: {}", src)
-        } else if self.locations.insert(entity.into(), loc.clone()).is_some() {
-            err!(loc, "duplicate entity: {}", entity)
         } else {
-            Ok(())
+            self.def_entity(entity.into(), loc)
         }
     }
 
     fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()> {
         if self.stack_slots.insert(src_num, entity).is_some() {
             err!(loc, "duplicate stack slot: ss{}", src_num)
-        } else if self.locations.insert(entity.into(), loc.clone()).is_some() {
-            err!(loc, "duplicate entity: {}", entity)
         } else {
-            Ok(())
+            self.def_entity(entity.into(), loc)
         }
     }
 
     fn def_jt(&mut self, src_num: u32, entity: JumpTable, loc: &Location) -> Result<()> {
         if self.jump_tables.insert(src_num, entity).is_some() {
             err!(loc, "duplicate jump table: jt{}", src_num)
-        } else if self.locations.insert(entity.into(), loc.clone()).is_some() {
-            err!(loc, "duplicate entity: {}", entity)
         } else {
-            Ok(())
+            self.def_entity(entity.into(), loc)
         }
     }
 
-    fn def_inst(&mut self, entity: Inst, loc: &Location) -> Result<()> {
-        if self.locations.insert(entity.into(), loc.clone()).is_some() {
+    fn def_entity(&mut self, entity: AnyEntity, loc: &Location) -> Result<()> {
+        if self.locations.insert(entity, loc.clone()).is_some() {
             err!(loc, "duplicate entity: {}", entity)
         } else {
             Ok(())

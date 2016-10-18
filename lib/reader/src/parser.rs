@@ -837,7 +837,7 @@ impl<'a> Parser<'a> {
         let inst = ctx.function.dfg.make_inst(inst_data);
         let num_results = ctx.function.dfg.make_inst_results(inst, ctrl_typevar);
         ctx.function.layout.append_inst(inst, ebb);
-        ctx.map.def_inst(inst, &opcode_loc).expect("duplicate inst references created");
+        ctx.map.def_entity(inst.into(), &opcode_loc).expect("duplicate inst references created");
 
         if results.len() != num_results {
             return err!(self.loc,
