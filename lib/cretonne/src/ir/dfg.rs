@@ -1,8 +1,9 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use ir::{Ebb, Inst, Value, Type};
+use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef};
 use ir::entities::{NO_VALUE, ExpandedValue};
 use ir::instructions::InstructionData;
+use ir::extfunc::ExtFuncData;
 use entity_map::{EntityMap, PrimaryEntityData};
 
 use std::ops::{Index, IndexMut};
@@ -33,10 +34,19 @@ pub struct DataFlowGraph {
     /// This is implemented directly with a `Vec` rather than an `EntityMap<Value, ...>` because
     /// the Value entity references can refer to two things -- an instruction or an extended value.
     extended_values: Vec<ValueData>,
+
+    /// Function signature table. These signatures are referenced by indirect call instructions as
+    /// well as the external function references.
+    pub signatures: EntityMap<SigRef, Signature>,
+
+    /// External function references. These are functions that can be called directly.
+    pub ext_funcs: EntityMap<FuncRef, ExtFuncData>,
 }
 
 impl PrimaryEntityData for InstructionData {}
 impl PrimaryEntityData for EbbData {}
+impl PrimaryEntityData for Signature {}
+impl PrimaryEntityData for ExtFuncData {}
 
 impl DataFlowGraph {
     /// Create a new empty `DataFlowGraph`.
@@ -45,6 +55,8 @@ impl DataFlowGraph {
             insts: EntityMap::new(),
             ebbs: EntityMap::new(),
             extended_values: Vec::new(),
+            signatures: EntityMap::new(),
+            ext_funcs: EntityMap::new(),
         }
     }
 

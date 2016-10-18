@@ -43,6 +43,17 @@ fn write_preamble(w: &mut Write, func: &Function) -> result::Result<bool, Error>
         try!(writeln!(w, "    {} = {}", ss, func.stack_slots[ss]));
     }
 
+    // Write out all signatures before functions since function decls can refer to signatures.
+    for sig in func.dfg.signatures.keys() {
+        any = true;
+        try!(writeln!(w, "    {} = signature{}", sig, func.dfg.signatures[sig]));
+    }
+
+    for fnref in func.dfg.ext_funcs.keys() {
+        any = true;
+        try!(writeln!(w, "    {} = {}", fnref, func.dfg.ext_funcs[fnref]));
+    }
+
     for jt in func.jump_tables.keys() {
         any = true;
         try!(writeln!(w, "    {} = {}", jt, func.jump_tables[jt]));

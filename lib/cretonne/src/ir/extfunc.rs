@@ -6,7 +6,7 @@
 //! This module declares the data types used to represent external functions and call signatures.
 
 use std::fmt::{self, Display, Formatter};
-use ir::Type;
+use ir::{Type, FunctionName, SigRef};
 
 /// Function signature.
 ///
@@ -102,6 +102,21 @@ pub enum ArgumentExtension {
     Uext,
     /// Signed extension: high bits in register replicate sign bit.
     Sext,
+}
+
+/// An external function.
+///
+/// Information about a function that can be called directly with a direct `call` instruction.
+#[derive(Clone, Debug)]
+pub struct ExtFuncData {
+    pub name: FunctionName,
+    pub signature: SigRef,
+}
+
+impl Display for ExtFuncData {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.signature, self.name)
+    }
 }
 
 #[cfg(test)]
