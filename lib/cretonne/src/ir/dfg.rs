@@ -2,7 +2,7 @@
 
 use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef};
 use ir::entities::{NO_VALUE, ExpandedValue};
-use ir::instructions::InstructionData;
+use ir::instructions::{InstructionData, CallInfo};
 use ir::extfunc::ExtFuncData;
 use entity_map::{EntityMap, PrimaryEntityData};
 
@@ -213,6 +213,7 @@ impl DataFlowGraph {
     pub fn make_inst_results(&mut self, inst: Inst, ctrl_typevar: Type) -> usize {
         let constraints = self.insts[inst].opcode().constraints();
         let fixed_results = constraints.fixed_results();
+        let mut total_results = fixed_results;
 
         // Additional values form a linked list starting from the second result value. Generate
         // the list backwards so we don't have to modify value table entries in place. (This
@@ -220,20 +221,41 @@ impl DataFlowGraph {
         // choice, but since it is only visible in extremely rare instructions with 3+ results,
         // we don't care).
         let mut head = NO_VALUE;
-        let mut first_type = Type::default();
+        let mut first_type = None;
+        let mut rev_num = 1;
 
-        // TBD: Function call return values for direct and indirect function calls.
+        // Get the call signature if this is a function call.
+        if let Some(sig) = self.call_signature(inst) {
+            // Create result values corresponding to the call return types.
+            let var_results = self.signatures[sig].return_types.len();
+            total_results += var_results;
 
-        if fixed_results > 0 {
-            for res_idx in (1..fixed_results).rev() {
+            for res_idx in (0..var_results).rev() {
+                if let Some(ty) = first_type {
+                    head = self.make_value(ValueData::Inst {
+                        ty: ty,
+                        num: (total_results - rev_num) as u16,
+                        inst: inst,
+                        next: head,
+                    });
+                    rev_num += 1;
+                }
+                first_type = Some(self.signatures[sig].return_types[res_idx].value_type);
+            }
+        }
+
+        // Then the fixed results whic will appear at the front of the list.
+        for res_idx in (0..fixed_results).rev() {
+            if let Some(ty) = first_type {
                 head = self.make_value(ValueData::Inst {
-                    ty: constraints.result_type(res_idx, ctrl_typevar),
-                    num: res_idx as u16,
+                    ty: ty,
+                    num: (total_results - rev_num) as u16,
                     inst: inst,
                     next: head,
                 });
+                rev_num += 1;
             }
-            first_type = constraints.result_type(0, ctrl_typevar);
+            first_type = Some(constraints.result_type(res_idx, ctrl_typevar));
         }
 
         // Update the second_result pointer in `inst`.
@@ -242,9 +264,9 @@ impl DataFlowGraph {
                 .second_result_mut()
                 .expect("instruction format doesn't allow multiple results") = head;
         }
-        *self.insts[inst].first_type_mut() = first_type;
+        *self.insts[inst].first_type_mut() = first_type.unwrap_or_default();
 
-        fixed_results
+        total_results
     }
 
     /// Get the first result of an instruction.
@@ -263,6 +285,16 @@ impl DataFlowGraph {
             } else {
                 Value::new_direct(inst)
             },
+        }
+    }
+
+    /// Get the call signature of a direct or indirect call instruction.
+    /// Returns `None` if `inst` is not a call instruction.
+    pub fn call_signature(&self, inst: Inst) -> Option<SigRef> {
+        match self.insts[inst].analyze_call() {
+            CallInfo::NotACall => None,
+            CallInfo::Direct(f, _) => Some(self.ext_funcs[f].signature),
+            CallInfo::Indirect(s, _) => Some(s),
         }
     }
 }
