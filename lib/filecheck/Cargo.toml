@@ -1,11 +1,11 @@
 [package]
 authors = ["The Cretonne Project Developers"]
 name = "filecheck"
-version = "0.0.0"
+version = "0.0.1"
 description = "Library for matching test outputs against filecheck directives"
 license = "Apache-2.0"
 repository = "https://github.com/stoklund/cretonne"
-publish = false
+documentation = "https://docs.rs/filecheck"
 
 [lib]
 name = "filecheck"
