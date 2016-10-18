@@ -388,6 +388,21 @@ impl InstructionData {
         }
     }
 
+    /// Return information about a call instruction.
+    ///
+    /// Any instruction that can call another function reveals its call signature here.
+    pub fn analyze_call<'a>(&'a self) -> CallInfo<'a> {
+        match self {
+            &InstructionData::Call { ref data, .. } => {
+                CallInfo::Direct(data.func_ref, &data.varargs)
+            }
+            &InstructionData::IndirectCall { ref data, .. } => {
+                CallInfo::Indirect(data.sig_ref, &data.varargs)
+            }
+            _ => CallInfo::NotACall,
+        }
+    }
+
     /// Return true if an instruction is terminating, or false otherwise.
     pub fn is_terminating<'a>(&'a self) -> bool {
         match self {
@@ -411,6 +426,19 @@ pub enum BranchInfo<'a> {
 
     /// This is a jump table branch which can have many destination EBBs.
     Table(JumpTable),
+}
+
+/// Information about call instructions.
+pub enum CallInfo<'a> {
+    /// This is not a call instruction.
+    NotACall,
+
+    /// This is a direct call to an external function declared in the preamble. See
+    /// `DataFlowGraph.ext_funcs`.
+    Direct(FuncRef, &'a [Value]),
+
+    /// This is an indirect call with the specified signature. See `DataFlowGraph.signatures`.
+    Indirect(SigRef, &'a [Value]),
 }
 
 /// Value type constraints for a given opcode.
