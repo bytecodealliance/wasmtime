@@ -169,8 +169,9 @@ class XFormGroup(object):
     A group of related transformations.
     """
 
-    def __init__(self):
+    def __init__(self, doc):
         self.xforms = list()
+        self.__doc__ = doc
 
     def legalize(self, src, dst):
         """
