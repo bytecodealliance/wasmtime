@@ -123,7 +123,7 @@ impl Layout {
     }
 
     /// Return an iterator over all EBBs in layout order.
-    pub fn ebbs<'a>(&'a self) -> Ebbs<'a> {
+    pub fn ebbs<'f>(&'f self) -> Ebbs<'f> {
         Ebbs {
             layout: self,
             next: self.first_ebb,
@@ -146,12 +146,12 @@ struct EbbNode {
 }
 
 /// Iterate over EBBs in layout order. See `Layout::ebbs()`.
-pub struct Ebbs<'a> {
-    layout: &'a Layout,
+pub struct Ebbs<'f> {
+    layout: &'f Layout,
     next: Option<Ebb>,
 }
 
-impl<'a> Iterator for Ebbs<'a> {
+impl<'f> Iterator for Ebbs<'f> {
     type Item = Ebb;
 
     fn next(&mut self) -> Option<Ebb> {
@@ -166,11 +166,11 @@ impl<'a> Iterator for Ebbs<'a> {
 }
 
 /// Use a layout reference in a for loop.
-impl<'a> IntoIterator for &'a Layout {
+impl<'f> IntoIterator for &'f Layout {
     type Item = Ebb;
-    type IntoIter = Ebbs<'a>;
+    type IntoIter = Ebbs<'f>;
 
-    fn into_iter(self) -> Ebbs<'a> {
+    fn into_iter(self) -> Ebbs<'f> {
         self.ebbs()
     }
 }
@@ -235,7 +235,7 @@ impl Layout {
     }
 
     /// Iterate over the instructions in `ebb` in layout order.
-    pub fn ebb_insts<'a>(&'a self, ebb: Ebb) -> Insts<'a> {
+    pub fn ebb_insts<'f>(&'f self, ebb: Ebb) -> Insts<'f> {
         Insts {
             layout: self,
             next: self.ebbs[ebb].first_inst.wrap(),
@@ -316,12 +316,12 @@ struct InstNode {
 }
 
 /// Iterate over instructions in an EBB in layout order. See `Layout::ebb_insts()`.
-pub struct Insts<'a> {
-    layout: &'a Layout,
+pub struct Insts<'f> {
+    layout: &'f Layout,
     next: Option<Inst>,
 }
 
-impl<'a> Iterator for Insts<'a> {
+impl<'f> Iterator for Insts<'f> {
     type Item = Inst;
 
     fn next(&mut self) -> Option<Inst> {
@@ -345,8 +345,8 @@ impl<'a> Iterator for Insts<'a> {
 ///
 /// When new instructions are added, the cursor can either apend them to an EBB or insert them
 /// before the current instruction.
-pub struct Cursor<'a> {
-    layout: &'a mut Layout,
+pub struct Cursor<'f> {
+    layout: &'f mut Layout,
     pos: CursorPosition,
 }
 
@@ -366,10 +366,10 @@ pub enum CursorPosition {
     After(Ebb),
 }
 
-impl<'a> Cursor<'a> {
+impl<'f> Cursor<'f> {
     /// Create a new `Cursor` for `layout`.
     /// The cursor holds a mutable reference to `layout` for its entire lifetime.
-    pub fn new(layout: &'a mut Layout) -> Cursor {
+    pub fn new(layout: &'f mut Layout) -> Cursor {
         Cursor {
             layout: layout,
             pos: CursorPosition::Nowhere,
