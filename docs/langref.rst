@@ -633,11 +633,35 @@ A few instructions have variants that take immediate operands (e.g.,
 :inst:`band` / :inst:`band_imm`), but in general an instruction is required to
 load a constant into an SSA value.
 
+.. autoinst:: select
+
+Constant materialization
+------------------------
+
 .. autoinst:: iconst
 .. autoinst:: f32const
 .. autoinst:: f64const
 .. autoinst:: vconst
-.. autoinst:: select
+
+Live range splitting
+--------------------
+
+Cretonne's register allocator assigns each SSA value to a register or a spill
+slot on the stack for its entire live range. Since the live range of an SSA
+value can be quite large, it is sometimes beneficial to split the live range
+into smaller parts.
+
+A live range is split by creating new SSA values that are copies or the
+original value or each other. The copies are created by inserting :inst:`copy`,
+:inst:`spill`, or :inst:`fill` instructions, depending on whether the values
+are assigned to registers or stack slots.
+
+This approach permits SSA form to be preserved throughout the register
+allocation pass and beyond.
+
+.. autoinst:: copy
+.. autoinst:: spill
+.. autoinst:: fill
 
 Vector operations
 -----------------
