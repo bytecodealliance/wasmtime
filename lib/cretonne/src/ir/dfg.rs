@@ -5,7 +5,9 @@ use ir::entities::{NO_VALUE, ExpandedValue};
 use ir::instructions::{InstructionData, CallInfo};
 use ir::extfunc::ExtFuncData;
 use entity_map::{EntityMap, PrimaryEntityData};
+use ir::builder::ReplaceBuilder;
 
+use std::mem;
 use std::ops::{Index, IndexMut};
 use std::u16;
 
@@ -269,6 +271,27 @@ impl DataFlowGraph {
         total_results
     }
 
+    /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
+    pub fn replace(&mut self, inst: Inst) -> ReplaceBuilder {
+        ReplaceBuilder::new(self, inst)
+    }
+
+    /// Detach secondary instruction results, and return them as an iterator.
+    ///
+    /// If `inst` produces two or more results, detach these secondary result values from `inst`,
+    /// and return an iterator that will enumerate them. The first result value cannot be detached.
+    ///
+    /// Use this method to detach secondary values before using `replace(inst)` to provide an
+    /// alternate instruction for computing the primary result value.
+    pub fn detach_secondary_results(&mut self, inst: Inst) -> Values {
+        let second_result =
+            self[inst].second_result_mut().map(|r| mem::replace(r, NO_VALUE)).unwrap_or_default();
+        Values {
+            dfg: self,
+            cur: second_result,
+        }
+    }
+
     /// Get the first result of an instruction.
     ///
     /// If `Inst` doesn't produce any results, this returns a `Value` with a `VOID` type.
@@ -277,7 +300,7 @@ impl DataFlowGraph {
     }
 
     /// Iterate through all the results of an instruction.
-    pub fn inst_results<'a>(&'a self, inst: Inst) -> Values<'a> {
+    pub fn inst_results(&self, inst: Inst) -> Values {
         Values {
             dfg: self,
             cur: if self.insts[inst].first_type().is_void() {
@@ -296,6 +319,34 @@ impl DataFlowGraph {
             CallInfo::Direct(f, _) => Some(self.ext_funcs[f].signature),
             CallInfo::Indirect(s, _) => Some(s),
         }
+    }
+
+    /// Compute the type of an instruction result from opcode constraints and call signatures.
+    ///
+    /// This computes the same sequence of result types that `make_inst_results()` above would
+    /// assign to the created result values, but it does not depend on `make_inst_results()` being
+    /// called first.
+    ///
+    /// Returns `None` if asked about a result index that is too large.
+    pub fn compute_result_type(&self,
+                               inst: Inst,
+                               result_idx: usize,
+                               ctrl_typevar: Type)
+                               -> Option<Type> {
+        let constraints = self.insts[inst].opcode().constraints();
+        let fixed_results = constraints.fixed_results();
+
+        if result_idx < fixed_results {
+            return Some(constraints.result_type(result_idx, ctrl_typevar));
+        }
+
+        // Not a fixed result, try to extract a return type from the call signature.
+        self.call_signature(inst).and_then(|sigref| {
+            self.signatures[sigref]
+                .return_types
+                .get(result_idx - fixed_results)
+                .map(|&arg| arg.value_type)
+        })
     }
 }
 
@@ -369,7 +420,7 @@ impl DataFlowGraph {
     }
 
     /// Iterate through the arguments to an EBB.
-    pub fn ebb_args<'a>(&'a self, ebb: Ebb) -> Values<'a> {
+    pub fn ebb_args(&self, ebb: Ebb) -> Values {
         Values {
             dfg: self,
             cur: self.ebbs[ebb].first_arg,
