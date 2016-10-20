@@ -49,15 +49,15 @@ impl<T: InstBuilderBase> InstBuilder for T {}
 ///
 /// A `Builder` holds mutable references to a data flow graph and a layout cursor. It provides
 /// convenience method for creating and inserting instructions at the current cursor position.
-pub struct Builder<'a> {
-    pub dfg: &'a mut DataFlowGraph,
-    pub pos: &'a mut Cursor<'a>,
+pub struct Builder<'c, 'fc: 'c, 'fd> {
+    pub pos: &'c mut Cursor<'fc>,
+    pub dfg: &'fd mut DataFlowGraph,
 }
 
-impl<'a> Builder<'a> {
+impl<'c, 'fc, 'fd> Builder<'c, 'fc, 'fd> {
     /// Create a new builder which inserts instructions at `pos`.
     /// The `dfg` and `pos.layout` references should be from the same `Function`.
-    pub fn new(dfg: &'a mut DataFlowGraph, pos: &'a mut Cursor<'a>) -> Builder<'a> {
+    pub fn new(dfg: &'fd mut DataFlowGraph, pos: &'c mut Cursor<'fc>) -> Builder<'c, 'fc, 'fd> {
         Builder {
             dfg: dfg,
             pos: pos,
@@ -78,7 +78,7 @@ impl<'a> Builder<'a> {
     }
 }
 
-impl<'a> InstBuilderBase for Builder<'a> {
+impl<'c, 'fc, 'fd> InstBuilderBase for Builder<'c, 'fc, 'fd> {
     fn data_flow_graph(&self) -> &DataFlowGraph {
         self.dfg
     }
