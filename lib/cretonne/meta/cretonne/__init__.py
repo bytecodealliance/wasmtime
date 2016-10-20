@@ -795,7 +795,19 @@ class Instruction(object):
         InstructionGroup.append(self)
 
     def __str__(self):
-        return self.name
+        prefix = ', '.join(o.name for o in self.outs)
+        if prefix:
+            prefix = prefix + ' = '
+        suffix = ', '.join(o.name for o in self.ins)
+        return '{}{} {}'.format(prefix, self.name, suffix)
+
+    def blurb(self):
+        """Get the first line of the doc comment"""
+        for line in self.__doc__.split('\n'):
+            line = line.strip()
+            if line:
+                return line
+        return ""
 
     def _verify_polymorphic(self):
         """

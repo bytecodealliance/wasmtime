@@ -139,7 +139,7 @@ impl ControlFlowGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ir::{Function, Builder, Cursor, VariableArgs, types};
+    use ir::{Function, Builder, InstBuilder, Cursor, VariableArgs, types};
 
     #[test]
     fn empty() {

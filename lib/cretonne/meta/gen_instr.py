@@ -177,14 +177,7 @@ def gen_opcodes(groups, fmt):
             for i in g.instructions:
                 instrs.append(i)
                 i.number = len(instrs)
-                # Build a doc comment.
-                prefix = ', '.join(o.name for o in i.outs)
-                if prefix:
-                    prefix = prefix + ' = '
-                suffix = ', '.join(o.name for o in i.ins)
-                fmt.doc_comment(
-                        '`{}{} {}`. ({})'
-                        .format(prefix, i.name, suffix, i.format.name))
+                fmt.doc_comment('`{}`. ({})'.format(i, i.format.name))
                 # Document polymorphism.
                 if i.is_polymorphic:
                     if i.use_typevar_operand:
@@ -370,7 +363,7 @@ def gen_format_constructor(iform, fmt):
 
     proto = '{}({}) -> Inst'.format(iform.name, ', '.join(args))
     fmt.line('#[allow(non_snake_case)]')
-    with fmt.indented('pub fn {} {{'.format(proto), '}'):
+    with fmt.indented('fn {} {{'.format(proto), '}'):
         # Generate the instruction data.
         with fmt.indented(
                 'let data = InstructionData::{} {{'.format(iform.name), '};'):
@@ -388,11 +381,9 @@ def gen_format_constructor(iform, fmt):
 
         # Create result values if necessary.
         if iform.multiple_results:
-            fmt.line('let inst = self.insert_inst(data);')
-            fmt.line('self.dfg.make_inst_results(inst, ctrl_typevar);')
-            fmt.line('inst')
+            fmt.line('self.complex_instruction(data, ctrl_typevar)')
         else:
-            fmt.line('self.insert_inst(data)')
+            fmt.line('self.simple_instruction(data)')
 
 
 def gen_member_inits(iform, fmt):
@@ -452,8 +443,8 @@ def gen_inst_builder(inst, fmt):
 
     method = inst.name
     if method == 'return':
-        # Avoid Rust keywords
-        method = '_' + method
+        # Avoid Rust keywords by appending '_'.
+        method += '_'
 
     if len(tmpl_types) > 0:
         tmpl = '<{}>'.format(', '.join(tmpl_types))
@@ -461,8 +452,9 @@ def gen_inst_builder(inst, fmt):
         tmpl = ''
     proto = '{}{}({}) -> {}'.format(method, tmpl,  ', '.join(args), rtype)
 
+    fmt.doc_comment('`{}`\n\n{}'.format(inst, inst.blurb()))
     fmt.line('#[allow(non_snake_case)]')
-    with fmt.indented('pub fn {} {{'.format(proto), '}'):
+    with fmt.indented('fn {} {{'.format(proto), '}'):
         # Convert all of the `Into<>` arguments.
         for arg in into_args:
             fmt.line('let {} = {}.into();'.format(arg, arg))
@@ -478,7 +470,7 @@ def gen_inst_builder(inst, fmt):
         elif inst.is_polymorphic:
             # Infer the controlling type variable from the input operands.
             fmt.line(
-                    'let ctrl_typevar = self.dfg.value_type({});'
+                    'let ctrl_typevar = self.data_flow_graph().value_type({});'
                     .format(inst.ins[inst.format.typevar_operand].name))
             args.append('ctrl_typevar')
         else:
@@ -494,9 +486,11 @@ def gen_inst_builder(inst, fmt):
         if len(inst.value_results) == 0:
             fmt.line('inst')
         elif len(inst.value_results) == 1:
-            fmt.line('self.dfg.first_result(inst)')
+            fmt.line('self.data_flow_graph().first_result(inst)')
         else:
-            fmt.line('let mut results = self.dfg.inst_results(inst);')
+            fmt.line(
+                    'let mut results = ' +
+                    'self.data_flow_graph().inst_results(inst);')
             fmt.line('({})'.format(', '.join(
                 len(inst.value_results) * ['results.next().unwrap()'])))
 
@@ -505,16 +499,26 @@ def gen_builder(insts, fmt):
     """
     Generate a Builder trait with methods for all instructions.
     """
-    fmt.doc_comment(
-            'Methods for inserting instructions by instruction format.')
-    with fmt.indented("impl<'a> Builder<'a> {",  '}'):
-        for f in cretonne.InstructionFormat.all_formats:
-            gen_format_constructor(f, fmt)
+    fmt.doc_comment("""
+            Convenience methods for building instructions.
 
-    fmt.doc_comment('Methods for inserting instructions by opcode.')
-    with fmt.indented("impl<'a> Builder<'a> {",  '}'):
+            The `InstrBuilder` trait has one method per instruction opcode for
+            conveniently constructing the instruction with minimum arguments.
+            Polymorphic instructions infer their result types from the input
+            arguments when possible. In some cases, an explicit `result_type`
+            or `ctrl_typevar` argument is required.
+
+            The opcode methods return the new instruction's result values, or
+            the `Inst` itself for instructions that don't have any results.
+
+            There is also a method per instruction format. These methods all
+            return an `Inst`.
+            """)
+    with fmt.indented("pub trait InstBuilder: InstBuilderBase {",  '}'):
         for inst in insts:
             gen_inst_builder(inst, fmt)
+        for f in cretonne.InstructionFormat.all_formats:
+            gen_format_constructor(f, fmt)
 
 
 def generate(isas, out_dir):
