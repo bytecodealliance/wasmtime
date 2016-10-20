@@ -48,40 +48,30 @@ include!(concat!(env!("OUT_DIR"), "/builder.rs"));
 /// Any type implementing `InstBuilderBase` gets all the `InstBuilder` methods for free.
 impl<'f, T: InstBuilderBase<'f>> InstBuilder<'f> for T {}
 
-/// Instruction builder.
+/// Builder that inserts an instruction at the current cursor position.
 ///
-/// A `Builder` holds mutable references to a data flow graph and a layout cursor. It provides
-/// convenience method for creating and inserting instructions at the current cursor position.
-pub struct Builder<'c, 'fc: 'c, 'fd> {
-    pub pos: &'c mut Cursor<'fc>,
-    pub dfg: &'fd mut DataFlowGraph,
+/// An `InsertBuilder` holds mutable references to a data flow graph and a layout cursor. It
+/// provides convenience methods for creating and inserting instructions at the current cursor
+/// position.
+pub struct InsertBuilder<'c, 'fc: 'c, 'fd> {
+    pos: &'c mut Cursor<'fc>,
+    dfg: &'fd mut DataFlowGraph,
 }
 
-impl<'c, 'fc, 'fd> Builder<'c, 'fc, 'fd> {
+impl<'c, 'fc, 'fd> InsertBuilder<'c, 'fc, 'fd> {
     /// Create a new builder which inserts instructions at `pos`.
     /// The `dfg` and `pos.layout` references should be from the same `Function`.
-    pub fn new(dfg: &'fd mut DataFlowGraph, pos: &'c mut Cursor<'fc>) -> Builder<'c, 'fc, 'fd> {
-        Builder {
+    pub fn new(dfg: &'fd mut DataFlowGraph,
+               pos: &'c mut Cursor<'fc>)
+               -> InsertBuilder<'c, 'fc, 'fd> {
+        InsertBuilder {
             dfg: dfg,
             pos: pos,
         }
     }
-
-    /// Create and insert an EBB. Further instructions will be inserted into the new EBB.
-    pub fn ebb(&mut self) -> Ebb {
-        let ebb = self.dfg.make_ebb();
-        self.insert_ebb(ebb);
-        ebb
-    }
-
-    /// Insert an existing EBB at the current position. Further instructions will be inserted into
-    /// the new EBB.
-    pub fn insert_ebb(&mut self, ebb: Ebb) {
-        self.pos.insert_ebb(ebb);
-    }
 }
 
-impl<'c, 'fc, 'fd> InstBuilderBase<'fd> for Builder<'c, 'fc, 'fd> {
+impl<'c, 'fc, 'fd> InstBuilderBase<'fd> for InsertBuilder<'c, 'fc, 'fd> {
     fn data_flow_graph(&self) -> &DataFlowGraph {
         self.dfg
     }
