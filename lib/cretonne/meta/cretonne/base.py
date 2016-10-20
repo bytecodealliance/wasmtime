@@ -204,6 +204,40 @@ select = Instruction(
         """,
         ins=(c, x, y), outs=a)
 
+x = Operand('x', Any)
+
+copy = Instruction(
+        'copy', r"""
+        Register-register copy.
+
+        This instruction copies its input, preserving the value type.
+
+        A pure SSA-form program does not need to copy values, but this
+        instruction is useful for representing intermediate stages during
+        instruction transformations, and the register allocator needs a way of
+        representing register copies.
+        """,
+        ins=x, outs=a)
+
+spill = Instruction(
+        'spill', r"""
+        Spill a register value to a stack slot.
+
+        This instruction behaves exactly like :inst:`copy`, but the result
+        value is assigned to a spill slot.
+        """,
+        ins=x, outs=a)
+
+fill = Instruction(
+        'fill', r"""
+        Load a register value from a stack slot.
+
+        This instruction behaves exactly like :inst:`copy`, but the input
+        value is assigned to a spill slot.
+        """,
+        ins=x, outs=a)
+
+
 #
 # Vector operations
 #
