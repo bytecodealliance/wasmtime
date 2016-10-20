@@ -7,7 +7,7 @@ use std::iter::{Iterator, IntoIterator};
 use entity_map::{EntityMap, EntityRef};
 use ir::entities::{Ebb, NO_EBB, Inst, NO_INST};
 use ir::dfg::DataFlowGraph;
-use ir::builder::Builder;
+use ir::builder::InsertBuilder;
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
 /// contain definitions of instructions or EBBs, but depends on `Inst` and `Ebb` entity references
@@ -618,8 +618,8 @@ impl<'f> Cursor<'f> {
     }
 
     /// Create a builder for inserting an instruction at the current position.
-    pub fn ins<'c, 'fd>(&'c mut self, dfg: &'fd mut DataFlowGraph) -> Builder<'c, 'f, 'fd> {
-        Builder::new(dfg, self)
+    pub fn ins<'c, 'fd>(&'c mut self, dfg: &'fd mut DataFlowGraph) -> InsertBuilder<'c, 'f, 'fd> {
+        InsertBuilder::new(dfg, self)
     }
 
     /// Insert an EBB at the current position and switch to it.
