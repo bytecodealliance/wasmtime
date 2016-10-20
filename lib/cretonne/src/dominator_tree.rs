@@ -116,7 +116,7 @@ impl DominatorTree {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ir::{Function, Builder, Cursor, VariableArgs, types};
+    use ir::{Function, Builder, InstBuilder, Cursor, VariableArgs, types};
     use ir::entities::NO_INST;
     use cfg::ControlFlowGraph;
 
