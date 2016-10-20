@@ -116,7 +116,7 @@ impl DominatorTree {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ir::{Function, Builder, InstBuilder, Cursor, VariableArgs, types};
+    use ir::{Function, InstBuilder, Cursor, VariableArgs, types};
     use ir::entities::NO_INST;
     use cfg::ControlFlowGraph;
 
@@ -142,20 +142,20 @@ mod test {
         let jmp_ebb1_ebb2;
 
         {
-            let mut cursor = Cursor::new(&mut func.layout);
-            let mut b = Builder::new(&mut func.dfg, &mut cursor);
+            let mut cur = Cursor::new(&mut func.layout);
+            let dfg = &mut func.dfg;
 
-            b.insert_ebb(ebb3);
-            jmp_ebb3_ebb1 = b.jump(ebb1, VariableArgs::new());
+            cur.insert_ebb(ebb3);
+            jmp_ebb3_ebb1 = cur.ins(dfg).jump(ebb1, VariableArgs::new());
 
-            b.insert_ebb(ebb1);
-            br_ebb1_ebb0 = b.brnz(cond, ebb0, VariableArgs::new());
-            jmp_ebb1_ebb2 = b.jump(ebb2, VariableArgs::new());
+            cur.insert_ebb(ebb1);
+            br_ebb1_ebb0 = cur.ins(dfg).brnz(cond, ebb0, VariableArgs::new());
+            jmp_ebb1_ebb2 = cur.ins(dfg).jump(ebb2, VariableArgs::new());
 
-            b.insert_ebb(ebb2);
-            b.jump(ebb0, VariableArgs::new());
+            cur.insert_ebb(ebb2);
+            cur.ins(dfg).jump(ebb0, VariableArgs::new());
 
-            b.insert_ebb(ebb0);
+            cur.insert_ebb(ebb0);
         }
 
         let cfg = ControlFlowGraph::new(&func);

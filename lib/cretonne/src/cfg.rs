@@ -139,7 +139,7 @@ impl ControlFlowGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ir::{Function, Builder, InstBuilder, Cursor, VariableArgs, types};
+    use ir::{Function, InstBuilder, Cursor, VariableArgs, types};
 
     #[test]
     fn empty() {
@@ -184,18 +184,18 @@ mod tests {
         let jmp_ebb1_ebb2;
 
         {
-            let mut cursor = Cursor::new(&mut func.layout);
-            let mut b = Builder::new(&mut func.dfg, &mut cursor);
+            let mut cur = Cursor::new(&mut func.layout);
+            let dfg = &mut func.dfg;
 
-            b.insert_ebb(ebb0);
-            br_ebb0_ebb2 = b.brnz(cond, ebb2, VariableArgs::new());
-            jmp_ebb0_ebb1 = b.jump(ebb1, VariableArgs::new());
+            cur.insert_ebb(ebb0);
+            br_ebb0_ebb2 = cur.ins(dfg).brnz(cond, ebb2, VariableArgs::new());
+            jmp_ebb0_ebb1 = cur.ins(dfg).jump(ebb1, VariableArgs::new());
 
-            b.insert_ebb(ebb1);
-            br_ebb1_ebb1 = b.brnz(cond, ebb1, VariableArgs::new());
-            jmp_ebb1_ebb2 = b.jump(ebb2, VariableArgs::new());
+            cur.insert_ebb(ebb1);
+            br_ebb1_ebb1 = cur.ins(dfg).brnz(cond, ebb1, VariableArgs::new());
+            jmp_ebb1_ebb2 = cur.ins(dfg).jump(ebb2, VariableArgs::new());
 
-            b.insert_ebb(ebb2);
+            cur.insert_ebb(ebb2);
         }
 
         let cfg = ControlFlowGraph::new(&func);

@@ -24,4 +24,4 @@ pub use ir::jumptable::JumpTableData;
 pub use ir::dfg::{DataFlowGraph, ValueDef};
 pub use ir::layout::{Layout, Cursor};
 pub use ir::function::Function;
-pub use ir::builder::{Builder, InstBuilder};
+pub use ir::builder::InstBuilder;
