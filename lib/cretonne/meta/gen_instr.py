@@ -347,7 +347,7 @@ def gen_format_constructor(iform, fmt):
     """
 
     # Construct method arguments.
-    args = ['&mut self', 'opcode: Opcode']
+    args = ['self', 'opcode: Opcode']
 
     if iform.multiple_results:
         args.append('ctrl_typevar: Type')
@@ -361,7 +361,9 @@ def gen_format_constructor(iform, fmt):
     for idx, kind in enumerate(iform.kinds):
         args.append('op{}: {}'.format(idx, kind.rust_type))
 
-    proto = '{}({}) -> Inst'.format(iform.name, ', '.join(args))
+    proto = '{}({})'.format(iform.name, ', '.join(args))
+    proto += " -> (Inst, &'f mut DataFlowGraph)"
+
     fmt.line('#[allow(non_snake_case)]')
     with fmt.indented('fn {} {{'.format(proto), '}'):
         # Generate the instruction data.
@@ -414,7 +416,7 @@ def gen_inst_builder(inst, fmt):
     """
 
     # Construct method arguments.
-    args = ['&mut self']
+    args = ['self']
 
     # The controlling type variable will be inferred from the input values if
     # possible. Otherwise, it is the first method argument.
@@ -481,18 +483,21 @@ def gen_inst_builder(inst, fmt):
 
         args.extend(op.name for op in inst.ins)
         args = ', '.join(args)
-        fmt.line('let inst = self.{}({});'.format(inst.format.name, args))
+        # Call to the format constructor,
+        fcall = 'self.{}({})'.format(inst.format.name, args)
 
         if len(inst.value_results) == 0:
-            fmt.line('inst')
-        elif len(inst.value_results) == 1:
-            fmt.line('self.data_flow_graph().first_result(inst)')
-        else:
-            fmt.line(
-                    'let mut results = ' +
-                    'self.data_flow_graph().inst_results(inst);')
-            fmt.line('({})'.format(', '.join(
-                len(inst.value_results) * ['results.next().unwrap()'])))
+            fmt.line(fcall + '.0')
+            return
+
+        if len(inst.value_results) == 1:
+            fmt.line('Value::new_direct({}.0)'.format(fcall))
+            return
+
+        fmt.line('let (inst, dfg) = {};'.format(fcall))
+        fmt.line('let mut results = dfg.inst_results(inst);')
+        fmt.line('({})'.format(', '.join(
+            len(inst.value_results) * ['results.next().unwrap()'])))
 
 
 def gen_builder(insts, fmt):
@@ -514,7 +519,8 @@ def gen_builder(insts, fmt):
             There is also a method per instruction format. These methods all
             return an `Inst`.
             """)
-    with fmt.indented("pub trait InstBuilder: InstBuilderBase {",  '}'):
+    with fmt.indented(
+            "pub trait InstBuilder<'f>: InstBuilderBase<'f> {",  '}'):
         for inst in insts:
             gen_inst_builder(inst, fmt)
         for f in cretonne.InstructionFormat.all_formats:
