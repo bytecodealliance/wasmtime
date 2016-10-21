@@ -2,7 +2,7 @@
 
 use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef};
 use ir::entities::{NO_VALUE, ExpandedValue};
-use ir::instructions::{InstructionData, CallInfo};
+use ir::instructions::{Opcode, InstructionData, CallInfo};
 use ir::extfunc::ExtFuncData;
 use entity_map::{EntityMap, PrimaryEntityData};
 use ir::builder::{InsertBuilder, ReplaceBuilder};
@@ -100,6 +100,7 @@ impl DataFlowGraph {
                 match self.extended_values[i] {
                     ValueData::Inst { ty, .. } => ty,
                     ValueData::Arg { ty, .. } => ty,
+                    ValueData::Alias { ty, .. } => ty,
                 }
             }
             None => panic!("NO_VALUE has no type"),
@@ -118,9 +119,102 @@ impl DataFlowGraph {
                 match self.extended_values[idx] {
                     ValueData::Inst { inst, num, .. } => ValueDef::Res(inst, num as usize),
                     ValueData::Arg { ebb, num, .. } => ValueDef::Arg(ebb, num as usize),
+                    ValueData::Alias { original, .. } => {
+                        // Make sure we only recurse one level. `resolve_aliases` has safeguards to
+                        // detect alias loops without overrunning the stack.
+                        self.value_def(self.resolve_aliases(original))
+                    }
                 }
             }
             None => panic!("NO_VALUE has no def"),
+        }
+    }
+
+    /// Resolve value aliases.
+    ///
+    /// Find the original SSA value that `value` aliases.
+    pub fn resolve_aliases(&self, value: Value) -> Value {
+        use ir::entities::ExpandedValue::Table;
+        let mut v = value;
+
+        for _ in 0..self.extended_values.len() {
+            v = match v.expand() {
+                Table(idx) => {
+                    match self.extended_values[idx] {
+                        ValueData::Alias { original, .. } => {
+                            // Follow alias values.
+                            original
+                        }
+                        _ => return v,
+                    }
+                }
+                _ => return v,
+            };
+        }
+        panic!("Value alias loop detected for {}", value);
+    }
+
+    /// Resolve value copies.
+    ///
+    /// Find the original definition of a value, looking through value aliases as well as
+    /// copy/spill/fill instructions.
+    pub fn resolve_copies(&self, value: Value) -> Value {
+        use ir::entities::ExpandedValue::Direct;
+        let mut v = self.resolve_aliases(value);
+
+        for _ in 0..self.insts.len() {
+            v = self.resolve_aliases(match v.expand() {
+                Direct(inst) => {
+                    match self[inst] {
+                        InstructionData::Unary { opcode, arg, .. } => {
+                            match opcode {
+                                Opcode::Copy | Opcode::Spill | Opcode::Fill => arg,
+                                _ => return v,
+                            }
+                        }
+                        _ => return v,
+                    }
+                }
+                _ => return v,
+            });
+        }
+        panic!("Copy loop detected for {}", value);
+    }
+
+    /// Turn a value into an alias of another.
+    ///
+    /// Change the `dest` value to behave as an alias of `src`. This means that all uses of `dest`
+    /// will behave as if they used that value `src`.
+    ///
+    /// The `dest` value cannot be a direct value defined as the first result of an instruction. To
+    /// replace a direct value with `src`, its defining instruction should be replaced with a
+    /// `copy src` instruction. See `replace()`.
+    pub fn change_to_alias(&mut self, dest: Value, src: Value) {
+        use ir::entities::ExpandedValue::Table;
+
+        // Try to create short alias chains by finding the original source value.
+        // This also avoids the creation of loops.
+        let original = self.resolve_aliases(src);
+        assert!(dest != original,
+                "Aliasing {} to {} would create a loop",
+                dest,
+                src);
+        let ty = self.value_type(original);
+        assert_eq!(self.value_type(dest),
+                   ty,
+                   "Aliasing {} to {} would change its type {} to {}",
+                   dest,
+                   src,
+                   self.value_type(dest),
+                   ty);
+
+        if let Table(idx) = dest.expand() {
+            self.extended_values[idx] = ValueData::Alias {
+                ty: ty,
+                original: original,
+            };
+        } else {
+            panic!("Cannot change dirrect value {} into an alias", dest);
         }
     }
 }
@@ -152,6 +246,11 @@ enum ValueData {
         ebb: Ebb,
         next: Value, // Next argument to `ebb`.
     },
+
+    // Value is an alias of another value.
+    // An alias value can't be linked as an instruction result or EBB argument. It is used as a
+    // placeholder when the original instruction or EBB has been rewritten or modified.
+    Alias { ty: Type, original: Value },
 }
 
 /// Iterate through a list of related value references, such as:
@@ -178,6 +277,9 @@ impl<'a> Iterator for Values<'a> {
                 match self.dfg.extended_values[index] {
                     ValueData::Inst { next, .. } => next,
                     ValueData::Arg { next, .. } => next,
+                    ValueData::Alias { .. } => {
+                        panic!("Alias value {} appeared in value list", prev)
+                    }
                 }
             }
             ExpandedValue::None => return None,
@@ -466,7 +568,7 @@ impl EbbData {
 mod tests {
     use super::*;
     use ir::types;
-    use ir::{Opcode, InstructionData};
+    use ir::{Function, Cursor, Opcode, InstructionData};
 
     #[test]
     fn make_inst() {
@@ -542,5 +644,49 @@ mod tests {
         assert_eq!(dfg.value_def(arg2), ValueDef::Arg(ebb, 1));
         assert_eq!(dfg.value_type(arg1), types::F32);
         assert_eq!(dfg.value_type(arg2), types::I16);
+    }
+
+    #[test]
+    fn aliases() {
+        use ir::InstBuilder;
+        use ir::entities::ExpandedValue::Direct;
+        use ir::condcodes::IntCC;
+
+        let mut func = Function::new();
+        let dfg = &mut func.dfg;
+        let ebb0 = dfg.make_ebb();
+        let arg0 = dfg.append_ebb_arg(ebb0, types::I32);
+        let pos = &mut Cursor::new(&mut func.layout);
+        pos.insert_ebb(ebb0);
+
+        // Build a little test program.
+        let v1 = dfg.ins(pos).iconst(types::I32, 42);
+        let (s, c) = dfg.ins(pos).iadd_cout(v1, arg0);
+        let iadd = match s.expand() {
+            Direct(i) => i,
+            _ => panic!(),
+        };
+
+        // Detach the 'c' value from iadd.
+        {
+            let mut vals = dfg.detach_secondary_results(iadd);
+            assert_eq!(vals.next(), Some(c));
+            assert_eq!(vals.next(), None);
+        }
+
+        // Replace iadd_cout with a normal iadd and an icmp.
+        dfg.replace(iadd).iadd(v1, arg0);
+        let c2 = dfg.ins(pos).icmp(IntCC::UnsignedLessThan, s, v1);
+        dfg.change_to_alias(c, c2);
+
+        assert_eq!(dfg.resolve_aliases(c2), c2);
+        assert_eq!(dfg.resolve_aliases(c), c2);
+
+        // Make a copy of the alias.
+        let c3 = dfg.ins(pos).copy(c);
+        // This does not see through copies.
+        assert_eq!(dfg.resolve_aliases(c3), c3);
+        // But this goes through both copies and aliases.
+        assert_eq!(dfg.resolve_copies(c3), c2);
     }
 }
