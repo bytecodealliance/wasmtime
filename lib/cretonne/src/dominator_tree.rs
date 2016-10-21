@@ -142,18 +142,18 @@ mod test {
         let jmp_ebb1_ebb2;
 
         {
-            let mut cur = Cursor::new(&mut func.layout);
             let dfg = &mut func.dfg;
+            let cur = &mut Cursor::new(&mut func.layout);
 
             cur.insert_ebb(ebb3);
-            jmp_ebb3_ebb1 = cur.ins(dfg).jump(ebb1, VariableArgs::new());
+            jmp_ebb3_ebb1 = dfg.ins(cur).jump(ebb1, VariableArgs::new());
 
             cur.insert_ebb(ebb1);
-            br_ebb1_ebb0 = cur.ins(dfg).brnz(cond, ebb0, VariableArgs::new());
-            jmp_ebb1_ebb2 = cur.ins(dfg).jump(ebb2, VariableArgs::new());
+            br_ebb1_ebb0 = dfg.ins(cur).brnz(cond, ebb0, VariableArgs::new());
+            jmp_ebb1_ebb2 = dfg.ins(cur).jump(ebb2, VariableArgs::new());
 
             cur.insert_ebb(ebb2);
-            cur.ins(dfg).jump(ebb0, VariableArgs::new());
+            dfg.ins(cur).jump(ebb0, VariableArgs::new());
 
             cur.insert_ebb(ebb0);
         }
