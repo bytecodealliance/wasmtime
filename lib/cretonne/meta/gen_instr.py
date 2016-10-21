@@ -474,7 +474,21 @@ def gen_inst_builder(inst, fmt):
             fmt.line(
                     'let ctrl_typevar = self.data_flow_graph().value_type({});'
                     .format(inst.ins[inst.format.typevar_operand].name))
-            args.append('ctrl_typevar')
+            if inst.format.multiple_results:
+                # The format constructor will resolve the result types from the
+                # type var.
+                args.append('ctrl_typevar')
+            elif inst.outs[inst.value_results[0]].typ == inst.ctrl_typevar:
+                # The format constructor expects a simple result type.
+                # No type transformation needed from the controlling type
+                # variable.
+                args.append('ctrl_typevar')
+            else:
+                # The format constructor expects a simple result type.
+                # TODO: This formula could be resolved ahead of time.
+                args.append(
+                        'Opcode::{}.constraints().result_type(0, ctrl_typevar)'
+                        .format(inst.camel_name))
         else:
             # This non-polymorphic instruction has a fixed result type.
             args.append(

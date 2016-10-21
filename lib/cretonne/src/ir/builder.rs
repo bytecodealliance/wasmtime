@@ -180,3 +180,32 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
         (self.inst, self.dfg)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ir::{Function, Cursor, InstBuilder};
+    use ir::types::*;
+    use ir::condcodes::*;
+
+    #[test]
+    fn types() {
+        let mut func = Function::new();
+        let dfg = &mut func.dfg;
+        let ebb0 = dfg.make_ebb();
+        let arg0 = dfg.append_ebb_arg(ebb0, I32);
+        let pos = &mut Cursor::new(&mut func.layout);
+        pos.insert_ebb(ebb0);
+
+        // Explicit types.
+        let v0 = dfg.ins(pos).iconst(I32, 3);
+        assert_eq!(dfg.value_type(v0), I32);
+
+        // Inferred from inputs.
+        let v1 = dfg.ins(pos).iadd(arg0, v0);
+        assert_eq!(dfg.value_type(v1), I32);
+
+        // Formula.
+        let cmp = dfg.ins(pos).icmp(IntCC::Equal, arg0, v0);
+        assert_eq!(dfg.value_type(cmp), B1);
+    }
+}
