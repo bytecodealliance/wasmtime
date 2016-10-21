@@ -28,6 +28,12 @@ impl Into<i64> for Imm64 {
     }
 }
 
+impl From<i64> for Imm64 {
+    fn from(x: i64) -> Self {
+        Imm64(x)
+    }
+}
+
 impl Display for Imm64 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let x = self.0;
