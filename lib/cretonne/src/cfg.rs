@@ -184,16 +184,16 @@ mod tests {
         let jmp_ebb1_ebb2;
 
         {
-            let mut cur = Cursor::new(&mut func.layout);
             let dfg = &mut func.dfg;
+            let cur = &mut Cursor::new(&mut func.layout);
 
             cur.insert_ebb(ebb0);
-            br_ebb0_ebb2 = cur.ins(dfg).brnz(cond, ebb2, VariableArgs::new());
-            jmp_ebb0_ebb1 = cur.ins(dfg).jump(ebb1, VariableArgs::new());
+            br_ebb0_ebb2 = dfg.ins(cur).brnz(cond, ebb2, VariableArgs::new());
+            jmp_ebb0_ebb1 = dfg.ins(cur).jump(ebb1, VariableArgs::new());
 
             cur.insert_ebb(ebb1);
-            br_ebb1_ebb1 = cur.ins(dfg).brnz(cond, ebb1, VariableArgs::new());
-            jmp_ebb1_ebb2 = cur.ins(dfg).jump(ebb2, VariableArgs::new());
+            br_ebb1_ebb1 = dfg.ins(cur).brnz(cond, ebb1, VariableArgs::new());
+            jmp_ebb1_ebb2 = dfg.ins(cur).jump(ebb2, VariableArgs::new());
 
             cur.insert_ebb(ebb2);
         }

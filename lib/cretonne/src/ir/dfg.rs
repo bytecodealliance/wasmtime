@@ -5,7 +5,8 @@ use ir::entities::{NO_VALUE, ExpandedValue};
 use ir::instructions::{InstructionData, CallInfo};
 use ir::extfunc::ExtFuncData;
 use entity_map::{EntityMap, PrimaryEntityData};
-use ir::builder::ReplaceBuilder;
+use ir::builder::{InsertBuilder, ReplaceBuilder};
+use ir::layout::Cursor;
 
 use std::mem;
 use std::ops::{Index, IndexMut};
@@ -269,6 +270,13 @@ impl DataFlowGraph {
         *self.insts[inst].first_type_mut() = first_type.unwrap_or_default();
 
         total_results
+    }
+
+    /// Create an `InsertBuilder` that will insert an instruction at the cursor's current position.
+    pub fn ins<'c, 'fc: 'c, 'fd>(&'fd mut self,
+                                 at: &'c mut Cursor<'fc>)
+                                 -> InsertBuilder<'c, 'fc, 'fd> {
+        InsertBuilder::new(self, at)
     }
 
     /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
