@@ -1,7 +1,7 @@
 """
 Generate build dependencies for Cargo.
 
-The `build.py` script is invoked by cargo when building libcretonne to
+The `build.py` script is invoked by cargo when building lib/cretonne to
 generate Rust code from the instruction descriptions. Cargo needs to know when
 it is necessary to rerun the build script.
 
