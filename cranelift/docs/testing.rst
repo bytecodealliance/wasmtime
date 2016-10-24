@@ -23,7 +23,7 @@ Unit tests
 
 Unit test live in a ``tests`` sub-module of the code they are testing::
 
-    pub fn add(x: u32, y: u32) {
+    pub fn add(x: u32, y: u32) -> u32 {
         x + y
     }
 
@@ -62,19 +62,21 @@ tested::
 
 These tests are useful for demonstrating how to use an API, and running them
 regularly makes sure that they stay up to date. Documentation tests are not
-appropriate for lots of assertions, use unit tests for that.
+appropriate for lots of assertions; use unit tests for that.
 
 Integration tests
 -----------------
 
-Integration tests are Rust source files thar are compiled and linked
+Integration tests are Rust source files that are compiled and linked
 individually. They are used to exercise the external API of the crates under
 test.
 
-These tests are usually found in the :file:`src/tools/tests` sub-directory where they
-have access to all the crates in the Cretonne repository. The
-:file:`libcretonne` and :file:`libreader` crates have no external dependencies
-which can make testing tedious.
+These tests are usually found in the :file:`tests` top-level directory where
+they have access to all the crates in the Cretonne repository. The
+:file:`lib/cretonne` and :file:`lib/reader` crates have no external
+dependencies, which can make testing tedious. Integration tests that don't need
+to depend on other crates can be placed in :file:`lib/cretonne/tests` and
+:file:`lib/reader/tests`.
 
 File tests
 ==========
@@ -107,7 +109,7 @@ header:
     isa_spec      : "isa" isa_name { `option` } "\n"
 
 The options given on the ``isa`` line modify the ISA-specific settings defined in
-:file:`meta/isa/*/setings.py`.
+:file:`lib/cretonne/meta/isa/*/settings.py`.
 
 All types of tests allow shared Cretonne settings to be modified:
 
@@ -117,7 +119,7 @@ All types of tests allow shared Cretonne settings to be modified:
     option        : flag | setting "=" value
 
 The shared settings available for all target ISAs are defined in
-:file:`meta/cretonne/settings.py`.
+:file:`lib/cretonne/meta/cretonne/settings.py`.
 
 The ``set`` lines apply settings cumulatively::
 
@@ -139,7 +141,8 @@ Filecheck
 
 Many of the test commands bescribed below use *filecheck* to verify their
 output. Filecheck is a Rust implementation of the LLVM tool of the same name.
-See the :file:`libfilecheck` documentation for details of its syntax.
+See the :file:`lib/filecheck` `documentation <https://docs.rs/filecheck/>`_ for
+details of its syntax.
 
 Comments in :file:`.cton` files are associated with the entity they follow.
 This typically means and instruction or the whole function. Those tests that
@@ -225,7 +228,7 @@ reported location of the error is verified::
             return
     }
 
-This example test passed if the verifier fails with an error message containing
+This example test passes if the verifier fails with an error message containing
 the sub-string ``"terminator"`` *and* the error is reported for the ``jump``
 instruction.
 

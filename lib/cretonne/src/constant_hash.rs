@@ -1,7 +1,7 @@
 //! Runtime support for precomputed constant hash tables.
 //!
-//! The `meta/constant_hash.py` Python module can generate constant hash tables using open
-//! addressing and quadratic probing. The hash tables are arrays that are guaranteed to:
+//! The `lib/cretonne/meta/constant_hash.py` Python module can generate constant hash tables using
+//! open addressing and quadratic probing. The hash tables are arrays that are guaranteed to:
 //!
 //! - Have a power-of-two size.
 //! - Contain at least one empty slot.
@@ -52,7 +52,7 @@ pub fn probe<K: Copy + Eq, T: Table<K> + ?Sized>(table: &T, key: K, hash: usize)
 }
 
 /// A primitive hash function for matching opcodes.
-/// Must match `meta/constant_hash.py`.
+/// Must match `lib/cretonne/meta/constant_hash.py`.
 pub fn simple_hash(s: &str) -> usize {
     let mut h: u32 = 5381;
     for c in s.chars() {
