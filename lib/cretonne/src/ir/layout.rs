@@ -391,6 +391,15 @@ impl<'f> Cursor<'f> {
         }
     }
 
+    /// Get the instruction corresponding to the current position, if any.
+    pub fn current_inst(&self) -> Option<Inst> {
+        use self::CursorPosition::*;
+        match self.pos {
+            At(inst) => Some(inst),
+            _ => None,
+        }
+    }
+
     /// Go to a specific instruction which must be inserted in the layout.
     /// New instructions will be inserted before `inst`.
     pub fn goto_inst(&mut self, inst: Inst) {
