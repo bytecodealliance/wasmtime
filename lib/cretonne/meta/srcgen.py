@@ -10,6 +10,11 @@ import sys
 import os
 import re
 
+try:
+    from typing import Any  # noqa
+except ImportError:
+    pass
+
 
 class Formatter(object):
     """
@@ -38,19 +43,23 @@ class Formatter(object):
     shiftwidth = 4
 
     def __init__(self):
+        # type: () -> None
         self.indent = ''
-        self.lines = []
+        self.lines = []  # type: List[str]
 
     def indent_push(self):
+        # type: () -> None
         """Increase current indentation level by one."""
         self.indent += ' ' * self.shiftwidth
 
     def indent_pop(self):
+        # type: () -> None
         """Decrease indentation by one level."""
         assert self.indent != '', 'Already at top level indentation'
         self.indent = self.indent[0:-self.shiftwidth]
 
     def line(self, s=None):
+        # type: (str) -> None
         """Add an indented line."""
         if s:
             self.lines.append('{}{}\n'.format(self.indent, s))
@@ -58,6 +67,7 @@ class Formatter(object):
             self.lines.append('\n')
 
     def outdented_line(self, s):
+        # type: (str) -> None
         """
         Emit a line outdented one level.
 
@@ -67,12 +77,14 @@ class Formatter(object):
         self.lines.append('{}{}\n'.format(self.indent[0:-self.shiftwidth], s))
 
     def writelines(self, f=None):
+        # type: (Any) -> None
         """Write all lines to `f`."""
         if not f:
             f = sys.stdout
         f.writelines(self.lines)
 
     def update_file(self, filename, directory):
+        # type: (str, str) -> None
         if directory is not None:
             filename = os.path.join(directory, filename)
         with open(filename, 'w') as f:
@@ -80,10 +92,12 @@ class Formatter(object):
 
     class _IndentedScope(object):
         def __init__(self, fmt, after):
+            # type: (Formatter, str) -> None
             self.fmt = fmt
             self.after = after
 
         def __enter__(self):
+            # type: () -> None
             self.fmt.indent_push()
 
         def __exit__(self, t, v, tb):
@@ -92,6 +106,7 @@ class Formatter(object):
                 self.fmt.line(self.after)
 
     def indented(self, before=None, after=None):
+        # type: (str, str) -> Formatter._IndentedScope
         """
         Return a scope object for use with a `with` statement:
 
@@ -108,7 +123,7 @@ class Formatter(object):
         """
         if before:
             self.line(before)
-        return self._IndentedScope(self, after)
+        return Formatter._IndentedScope(self, after)
 
     def format(self, fmt, *args):
         self.line(fmt.format(*args))

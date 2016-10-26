@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description='Generate sources for Cretonne.')
 parser.add_argument('--out-dir', help='set output directory')
 
 args = parser.parse_args()
-out_dir = args.out_dir
+out_dir = args.out_dir  # type: ignore
 
 isas = isa.all_isas()
 
