@@ -707,11 +707,24 @@ class InstructionFormat(object):
             self.members.append(member)
             yield k
 
-            # Create `FormatField` instances for the immediates.
-            if isinstance(k, ImmediateKind):
-                assert not hasattr(self, member), "Duplicate member name"
-                field = FormatField(self, i, member)
-                setattr(self, member, field)
+    def __getattr__(self, attr):
+        # type: (str) -> FormatField
+        """
+        Make instruction format members available as attributes.
+
+        Each non-value format member becomes a corresponding `FormatField`
+        attribute.
+        """
+        try:
+            i = self.members.index(attr)
+        except ValueError:
+            raise AttributeError(
+                    '{} is neither a {} member or a '
+                    .format(attr, self.name) +
+                    'normal InstructionFormat attribute')
+        field = FormatField(self, i, attr)
+        setattr(self, attr, field)
+        return field
 
     @staticmethod
     def lookup(ins, outs):
