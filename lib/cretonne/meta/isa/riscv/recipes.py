@@ -22,37 +22,44 @@ from cretonne.predicates import IsSignedInt
 
 
 def LOAD(funct3):
+    # type: (int) -> int
     assert funct3 <= 0b111
     return 0b00000 | (funct3 << 5)
 
 
 def STORE(funct3):
+    # type: (int) -> int
     assert funct3 <= 0b111
     return 0b01000 | (funct3 << 5)
 
 
 def BRANCH(funct3):
+    # type: (int) -> int
     assert funct3 <= 0b111
     return 0b11000 | (funct3 << 5)
 
 
 def OPIMM(funct3, funct7=0):
+    # type: (int, int) -> int
     assert funct3 <= 0b111
     return 0b00100 | (funct3 << 5) | (funct7 << 8)
 
 
 def OPIMM32(funct3, funct7=0):
+    # type: (int, int) -> int
     assert funct3 <= 0b111
     return 0b00110 | (funct3 << 5) | (funct7 << 8)
 
 
 def OP(funct3, funct7):
+    # type: (int, int) -> int
     assert funct3 <= 0b111
     assert funct7 <= 0b1111111
     return 0b01100 | (funct3 << 5) | (funct7 << 8)
 
 
 def OP32(funct3, funct7):
+    # type: (int, int) -> int
     assert funct3 <= 0b111
     assert funct7 <= 0b1111111
     return 0b01110 | (funct3 << 5) | (funct7 << 8)

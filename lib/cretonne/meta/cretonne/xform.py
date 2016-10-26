@@ -2,7 +2,13 @@
 Instruction transformations.
 """
 from __future__ import absolute_import
-from .ast import Def, Var, Apply
+from .ast import Def, Var, Apply, Expr  # noqa
+
+try:
+    from typing import Union, Iterator, Sequence, Iterable  # noqa
+    DefApply = Union[Def, Apply]
+except ImportError:
+    pass
 
 
 SRCCTX = 1
@@ -21,9 +27,11 @@ class Rtl(object):
     """
 
     def __init__(self, *args):
+        # type: (*DefApply) -> None
         self.rtl = args
 
     def __iter__(self):
+        # type: () -> Iterator[DefApply]
         return iter(self.rtl)
 
 
@@ -55,16 +63,17 @@ class XForm(object):
     """
 
     def __init__(self, src, dst):
+        # type: (Rtl, Rtl) -> None
         self.src = src
         self.dst = dst
         # Variables that are inputs to the source pattern.
-        self.inputs = list()
+        self.inputs = list()  # type: List[Var]
         # Variables defined in either src or dst.
-        self.defs = list()
+        self.defs = list()  # type: List[Var]
 
         # Rewrite variables in src and dst RTL lists to our own copies.
         # Map name -> private Var.
-        symtab = dict()
+        symtab = dict()  # type: Dict[str, Var]
         self._rewrite_rtl(src, symtab, SRCCTX)
         num_src_inputs = len(self.inputs)
         self._rewrite_rtl(dst, symtab, DSTCTX)
@@ -90,7 +99,8 @@ class XForm(object):
         return s
 
     def _rewrite_rtl(self, rtl, symtab, context):
-        for line in rtl:
+        # type: (Rtl, Dict[str, Var], int) -> None
+        for line in rtl.rtl:
             if isinstance(line, Def):
                 line.defs = tuple(
                         self._rewrite_defs(line.defs, symtab, context))
@@ -100,6 +110,7 @@ class XForm(object):
             self._rewrite_expr(expr, symtab, context)
 
     def _rewrite_expr(self, expr, symtab, context):
+        # type: (Apply, Dict[str, Var], int) -> None
         """
         Find all uses of variables in `expr` and replace them with our own
         local symbols.
@@ -113,6 +124,7 @@ class XForm(object):
                     self._rewrite_uses(expr, stack, symtab, context))
 
     def _rewrite_defs(self, defs, symtab, context):
+        # type: (Sequence[Var], Dict[str, Var], int) -> Iterable[Var]
         """
         Given a tuple of symbols defined in a Def, rewrite them to local
         symbols. Yield the new locals.
@@ -131,6 +143,7 @@ class XForm(object):
             yield var
 
     def _rewrite_uses(self, expr, stack, symtab, context):
+        # type: (Apply, List[Apply], Dict[str, Var], int) -> Iterable[Expr]
         """
         Given an `Apply` expr, rewrite all uses in its arguments to local
         variables. Yield a sequence of new arguments.
@@ -140,7 +153,7 @@ class XForm(object):
         for arg, operand in zip(expr.args, expr.inst.ins):
             # Nested instructions are allowed. Visit recursively.
             if isinstance(arg, Apply):
-                stack.push(arg)
+                stack.append(arg)
                 yield arg
                 continue
             if not isinstance(arg, Var):
@@ -169,11 +182,14 @@ class XFormGroup(object):
     A group of related transformations.
     """
 
-    def __init__(self, doc):
-        self.xforms = list()
+    def __init__(self, name, doc):
+        # type: (str, str) -> None
+        self.xforms = list()  # type: List[XForm]
+        self.name = name
         self.__doc__ = doc
 
     def legalize(self, src, dst):
+        # type: (Union[Def, Apply], Rtl) -> None
         """
         Add a legalization pattern to this group.
 

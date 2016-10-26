@@ -5,6 +5,12 @@ This module defines classes that can be used to create abstract syntax trees
 for patern matching an rewriting of cretonne instructions.
 """
 from __future__ import absolute_import
+from . import Instruction, BoundInstruction
+
+try:
+    from typing import Union, Tuple  # noqa
+except ImportError:
+    pass
 
 
 class Def(object):
@@ -29,10 +35,12 @@ class Def(object):
     """
 
     def __init__(self, defs, expr):
+        # type: (Union[Var, Tuple[Var, ...]], Apply) -> None
         if not isinstance(defs, tuple):
-            defs = (defs,)
-        assert isinstance(expr, Expr)
-        self.defs = defs
+            self.defs = (defs,)  # type: Tuple[Var, ...]
+        else:
+            self.defs = defs
+        assert isinstance(expr, Apply)
         self.expr = expr
 
     def __repr__(self):
@@ -42,19 +50,24 @@ class Def(object):
         if len(self.defs) == 1:
             return "{!s} << {!s}".format(self.defs[0], self.expr)
         else:
-            return "({}) << {!s}".format(", ".join(self.defs), self.expr)
+            return "({}) << {!s}".format(
+                    ', '.join(map(str, self.defs)), self.expr)
+
+    def root_inst(self):
+        # type: () -> Instruction
+        """Get the instruction at the root of this tree."""
+        return self.expr.root_inst()
+
+    def defs_expr(self):
+        # type: () -> Tuple[Tuple[Var, ...], Apply]
+        """Split into a defs tuple and an Apply expr."""
+        return (self.defs, self.expr)
 
 
 class Expr(object):
     """
     An AST expression.
     """
-
-    def __rlshift__(self, other):
-        """
-        Define variables using `var << expr` or `(v1, v2) << expr`.
-        """
-        return Def(other, self)
 
 
 class Var(Expr):
@@ -63,6 +76,7 @@ class Var(Expr):
     """
 
     def __init__(self, name):
+        # type: (str) -> None
         self.name = name
         # Bitmask of contexts where this variable is defined.
         # See XForm._rewrite_defs().
@@ -98,15 +112,23 @@ class Apply(Expr):
     """
 
     def __init__(self, inst, args):
-        from . import BoundInstruction
+        # type: (Union[Instruction, BoundInstruction], Tuple[Expr, ...]) -> None  # noqa
         if isinstance(inst, BoundInstruction):
             self.inst = inst.inst
             self.typevars = inst.typevars
         else:
+            assert isinstance(inst, Instruction)
             self.inst = inst
             self.typevars = ()
         self.args = args
         assert len(self.inst.ins) == len(args)
+
+    def __rlshift__(self, other):
+        # type: (Union[Var, Tuple[Var, ...]]) -> Def
+        """
+        Define variables using `var << expr` or `(v1, v2) << expr`.
+        """
+        return Def(other, self)
 
     def instname(self):
         i = self.inst.name
@@ -120,3 +142,13 @@ class Apply(Expr):
     def __str__(self):
         args = ', '.join(map(str, self.args))
         return '{}({})'.format(self.instname(), args)
+
+    def root_inst(self):
+        # type: () -> Instruction
+        """Get the instruction at the root of this tree."""
+        return self.inst
+
+    def defs_expr(self):
+        # type: () -> Tuple[Tuple[Var, ...], Apply]
+        """Split into a defs tuple and an Apply expr."""
+        return ((), self)

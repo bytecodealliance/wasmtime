@@ -15,7 +15,7 @@ from .ast import Var
 from .xform import Rtl, XFormGroup
 
 
-narrow = XFormGroup("""
+narrow = XFormGroup('narrow', """
         Legalize instructions by narrowing.
 
         The transformations in the 'narrow' group work by expressing
@@ -24,7 +24,7 @@ narrow = XFormGroup("""
         operations are expressed in terms of smaller integer types.
         """)
 
-expand = XFormGroup("""
+expand = XFormGroup('expand', """
         Legalize instructions by expansion.
 
         Rewrite instructions in terms of other instructions, generally
@@ -114,5 +114,5 @@ expand.legalize(
         Rtl(
             (a1, b1) << isub_bout(x, y),
             (a, b2) << isub_bout(a1, b_in),
-            c << bor(c1, c2)
+            c << bor(b1, b2)
         ))

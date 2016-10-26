@@ -9,14 +9,23 @@ import re
 import math
 import importlib
 from collections import OrderedDict
-from .predicates import And
-from .ast import Apply
+from .predicates import And, Predicate, FieldPredicate  # noqa
+
+# The typing module is only required by mypy, and we don't use these imports
+# outside type comments.
+try:
+    from typing import Tuple, Union, Any, Iterable, Sequence  # noqa
+    MaybeBoundInst = Union['Instruction', 'BoundInstruction']
+    AnyPredicate = Union['Predicate', 'FieldPredicate']
+except ImportError:
+    pass
 
 
 camel_re = re.compile('(^|_)([a-z])')
 
 
 def camel_case(s):
+    # type: (str) -> str
     """Convert the string s to CamelCase"""
     return camel_re.sub(lambda m: m.group(2).upper(), s)
 
@@ -133,7 +142,7 @@ class SettingGroup(object):
     """
 
     # The currently open setting group.
-    _current = None
+    _current = None  # type: SettingGroup
 
     def __init__(self, name, parent=None):
         self.name = name
@@ -175,7 +184,6 @@ class SettingGroup(object):
                 .format(self, SettingGroup._current))
         SettingGroup._current = None
         if globs:
-            from .predicates import Predicate
             for name, obj in globs.iteritems():
                 if isinstance(obj, Setting):
                     assert obj.name is None, obj.name
@@ -381,10 +389,10 @@ class ValueType(object):
     """
 
     # Map name -> ValueType.
-    _registry = dict()
+    _registry = dict()  # type: Dict[str, ValueType]
 
     # List of all the scalar types.
-    all_scalars = list()
+    all_scalars = list()  # type: List[ValueType]
 
     def __init__(self, name, membytes, doc):
         self.name = name
@@ -534,7 +542,7 @@ class InstructionGroup(object):
     """
 
     # The currently open instruction group.
-    _current = None
+    _current = None  # type: InstructionGroup
 
     def open(self):
         """
@@ -644,15 +652,17 @@ class InstructionFormat(object):
     """
 
     # Map (multiple_results, kind, kind, ...) -> InstructionFormat
-    _registry = dict()
+    _registry = dict()  # type: Dict[Tuple, InstructionFormat]
 
     # All existing formats.
-    all_formats = list()
+    all_formats = list()  # type: List[InstructionFormat]
 
     def __init__(self, *kinds, **kwargs):
-        self.name = kwargs.get('name', None)
+        # type: (*Union[OperandKind, Tuple[str, OperandKind]], **Any) -> None # noqa
+        self.name = kwargs.get('name', None)  # type: str
         self.multiple_results = kwargs.get('multiple_results', False)
         self.boxed_storage = kwargs.get('boxed_storage', False)
+        self.members = list()  # type: List[str]
         self.kinds = tuple(self._process_member_names(kinds))
 
         # Which of self.kinds are `value`?
@@ -660,7 +670,7 @@ class InstructionFormat(object):
                 i for i, k in enumerate(self.kinds) if k is value)
 
         # The typevar_operand argument must point to a 'value' operand.
-        self.typevar_operand = kwargs.get('typevar_operand', None)
+        self.typevar_operand = kwargs.get('typevar_operand', None)  # type: int
         if self.typevar_operand is not None:
             assert self.kinds[self.typevar_operand] is value, \
                     "typevar_operand must indicate a 'value' operand"
@@ -678,6 +688,7 @@ class InstructionFormat(object):
         InstructionFormat.all_formats.append(self)
 
     def _process_member_names(self, kinds):
+        # type: (Sequence[Union[OperandKind, Tuple[str, OperandKind]]]) -> Iterable[OperandKind] # noqa
         """
         Extract names of all the immediate operands in the kinds tuple.
 
@@ -687,14 +698,14 @@ class InstructionFormat(object):
 
         Yields the operand kinds.
         """
-        self.members = list()
-        for i, k in enumerate(kinds):
-            if isinstance(k, tuple):
-                member, k = k
+        for arg in kinds:
+            if isinstance(arg, OperandKind):
+                member = arg.default_member
+                k = arg
             else:
-                member = k.default_member
-            yield k
+                member, k = arg
             self.members.append(member)
+            yield k
 
             # Create `FormatField` instances for the immediates.
             if isinstance(k, ImmediateKind):
@@ -704,6 +715,7 @@ class InstructionFormat(object):
 
     @staticmethod
     def lookup(ins, outs):
+        # type: (Sequence[Operand], Sequence[Operand]) -> InstructionFormat
         """
         Find an existing instruction format that matches the given lists of
         instruction inputs and outputs.
@@ -750,6 +762,7 @@ class FormatField(object):
     """
 
     def __init__(self, format, operand, name):
+        # type: (InstructionFormat, int, str) -> None
         self.format = format
         self.operand = operand
         self.name = name
@@ -758,6 +771,7 @@ class FormatField(object):
         return '{}.{}'.format(self.format.name, self.name)
 
     def rust_name(self):
+        # type: () -> str
         if self.format.boxed_storage:
             return 'data.' + self.name
         else:
@@ -782,6 +796,7 @@ class Instruction(object):
     """
 
     def __init__(self, name, doc, ins=(), outs=(), **kwargs):
+        # type: (str, str, Union[Sequence[Operand], Operand], Union[Sequence[Operand], Operand], **Any) -> None # noqa
         self.name = name
         self.camel_name = camel_case(name)
         self.__doc__ = doc
@@ -898,6 +913,7 @@ class Instruction(object):
 
     @staticmethod
     def _to_operand_tuple(x):
+        # type: (Union[Sequence[Operand], Operand]) -> Tuple[Operand, ...]
         # Allow a single Operand instance instead of the awkward singleton
         # tuple syntax.
         if isinstance(x, Operand):
@@ -909,6 +925,7 @@ class Instruction(object):
         return x
 
     def bind(self, *args):
+        # type: (*ValueType) -> BoundInstruction
         """
         Bind a polymorphic instruction to a concrete list of type variable
         values.
@@ -917,6 +934,7 @@ class Instruction(object):
         return BoundInstruction(self, args)
 
     def __getattr__(self, name):
+        # type: (str) -> BoundInstruction
         """
         Bind a polymorphic instruction to a single type variable with dot
         syntax:
@@ -926,6 +944,7 @@ class Instruction(object):
         return self.bind(ValueType.by_name(name))
 
     def fully_bound(self):
+        # type: () -> Tuple[Instruction, Tuple[ValueType, ...]]
         """
         Verify that all typevars have been bound, and return a
         `(inst, typevars)` pair.
@@ -941,6 +960,7 @@ class Instruction(object):
         Create an `ast.Apply` AST node representing the application of this
         instruction to the arguments.
         """
+        from .ast import Apply
         return Apply(self, args)
 
 
@@ -950,6 +970,7 @@ class BoundInstruction(object):
     """
 
     def __init__(self, inst, typevars):
+        # type: (Instruction, Tuple[ValueType, ...]) -> None
         self.inst = inst
         self.typevars = typevars
         assert len(typevars) <= 1 + len(inst.other_typevars)
@@ -958,12 +979,14 @@ class BoundInstruction(object):
         return '.'.join([self.inst.name, ] + list(map(str, self.typevars)))
 
     def bind(self, *args):
+        # type: (*ValueType) -> BoundInstruction
         """
         Bind additional typevars.
         """
         return BoundInstruction(self.inst, self.typevars + args)
 
     def __getattr__(self, name):
+        # type: (str) -> BoundInstruction
         """
         Bind an additional typevar dot syntax:
 
@@ -972,6 +995,7 @@ class BoundInstruction(object):
         return self.bind(ValueType.by_name(name))
 
     def fully_bound(self):
+        # type: () -> Tuple[Instruction, Tuple[ValueType, ...]]
         """
         Verify that all typevars have been bound, and return a
         `(inst, typevars)` pair.
@@ -989,6 +1013,7 @@ class BoundInstruction(object):
         Create an `ast.Apply` AST node representing the application of this
         instruction to the arguments.
         """
+        from .ast import Apply
         return Apply(self, args)
 
 
@@ -1139,6 +1164,7 @@ class Encoding(object):
     """
 
     def __init__(self, cpumode, inst, recipe, encbits, instp=None, isap=None):
+        # type: (CPUMode, MaybeBoundInst, EncRecipe, int, AnyPredicate, AnyPredicate) -> None # noqa
         assert isinstance(cpumode, CPUMode)
         assert isinstance(recipe, EncRecipe)
         self.inst, self.typevars = inst.fully_bound()
