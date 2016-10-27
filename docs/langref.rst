@@ -83,6 +83,7 @@ instructions which behave more like variable accesses in a typical programming
 language. Cretonne can perform the necessary dataflow analysis to convert stack
 slots to SSA form.
 
+.. _value-types:
 
 Value types
 ===========

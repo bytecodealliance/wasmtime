@@ -9,6 +9,7 @@ Contents:
    langref
    metaref
    testing
+   compare-llvm
 
 Indices and tables
 ==================
