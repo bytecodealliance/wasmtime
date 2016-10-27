@@ -20,6 +20,7 @@ pub struct TestFile<'a> {
     pub commands: Vec<TestCommand<'a>>,
     /// `isa bar ...` lines.
     pub isa_spec: IsaSpec,
+    /// Parsed functions and additional details about each function.
     pub functions: Vec<(Function, Details<'a>)>,
 }
 
@@ -28,8 +29,12 @@ pub struct TestFile<'a> {
 /// The details to not affect the semantics of the function.
 #[derive(Debug)]
 pub struct Details<'a> {
+    /// Location of the `function` keyword that begins this function.
     pub location: Location,
+    /// Annotation comments that appeared inside or after the function.
     pub comments: Vec<Comment<'a>>,
+    /// Mapping of source entity numbers to parsed entity numbers.
+    /// Source locations of parsed entities.
     pub map: SourceMap,
 }
 

@@ -14,19 +14,27 @@
 
 use std::fmt::{self, Display, Formatter};
 
+/// A command appearing in a test file.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TestCommand<'a> {
+    /// The command name as a string.
     pub command: &'a str,
+    /// The options following the command name.
     pub options: Vec<TestOption<'a>>,
 }
 
+/// An option on a test command.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TestOption<'a> {
+    /// Single identifier flag: `foo`.
     Flag(&'a str),
+    /// A value assigned to an identifier: `foo=bar`.
     Value(&'a str, &'a str),
 }
 
 impl<'a> TestCommand<'a> {
+    /// Create a new TestCommand by parsing `s`.
+    /// The returned command contains references into `s`.
     pub fn new(s: &'a str) -> TestCommand<'a> {
         let mut parts = s.split_whitespace();
         let cmd = parts.next().unwrap_or("");
@@ -48,6 +56,8 @@ impl<'a> Display for TestCommand<'a> {
 }
 
 impl<'a> TestOption<'a> {
+    /// Create a new TestOption by parsing `s`.
+    /// The returned option contains references into `s`.
     pub fn new(s: &'a str) -> TestOption<'a> {
         match s.find('=') {
             None => TestOption::Flag(s),
