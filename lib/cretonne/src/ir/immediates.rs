@@ -17,6 +17,7 @@ use std::str::FromStr;
 pub struct Imm64(i64);
 
 impl Imm64 {
+    /// Create a new `Imm64` representing the signed number `x`.
     pub fn new(x: i64) -> Imm64 {
         Imm64(x)
     }
@@ -374,6 +375,7 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
 }
 
 impl Ieee32 {
+    /// Create a new `Ieee32` representing the number `x`.
     pub fn new(x: f32) -> Ieee32 {
         Ieee32(x)
     }
@@ -403,6 +405,7 @@ impl FromStr for Ieee32 {
 }
 
 impl Ieee64 {
+    /// Create a new `Ieee64` representing the number `x`.
     pub fn new(x: f64) -> Ieee64 {
         Ieee64(x)
     }

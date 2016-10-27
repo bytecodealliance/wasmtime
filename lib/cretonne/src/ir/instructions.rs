@@ -93,6 +93,7 @@ impl FromStr for Opcode {
 /// 16 bytes on 64-bit architectures. If more space is needed to represent an instruction, use a
 /// `Box<AuxData>` to store the additional information out of line.
 #[derive(Clone, Debug)]
+#[allow(missing_docs)]
 pub enum InstructionData {
     Nullary { opcode: Opcode, ty: Type },
     Unary {
@@ -226,14 +227,17 @@ pub enum InstructionData {
 pub struct VariableArgs(Vec<Value>);
 
 impl VariableArgs {
+    /// Create an empty argument list.
     pub fn new() -> VariableArgs {
         VariableArgs(Vec::new())
     }
 
+    /// Add an argument to the end.
     pub fn push(&mut self, v: Value) {
         self.0.push(v)
     }
 
+    /// Check if the list is empty.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -276,6 +280,7 @@ impl Default for VariableArgs {
 /// Payload data for `vconst`.
 #[derive(Clone, Debug)]
 pub struct UnaryImmVectorData {
+    /// Raw vector data.
     pub imm: ImmVector,
 }
 
@@ -292,6 +297,7 @@ impl Display for UnaryImmVectorData {
 /// Payload data for ternary instructions with multiple results, such as `iadd_carry`.
 #[derive(Clone, Debug)]
 pub struct TernaryOverflowData {
+    /// Value arguments.
     pub args: [Value; 3],
 }
 
@@ -305,7 +311,9 @@ impl Display for TernaryOverflowData {
 /// in the allowed InstructionData size.
 #[derive(Clone, Debug)]
 pub struct JumpData {
+    /// Jump destination EBB.
     pub destination: Ebb,
+    /// Arguments passed to destination EBB.
     pub varargs: VariableArgs,
 }
 
@@ -323,8 +331,11 @@ impl Display for JumpData {
 /// in the allowed InstructionData size.
 #[derive(Clone, Debug)]
 pub struct BranchData {
+    /// Value argument controlling the branch.
     pub arg: Value,
+    /// Branch destination EBB.
     pub destination: Ebb,
+    /// Arguments passed to destination EBB.
     pub varargs: VariableArgs,
 }
 
@@ -353,6 +364,8 @@ pub struct CallData {
 pub struct IndirectCallData {
     /// Callee function.
     pub arg: Value,
+
+    /// Signature of the callee function.
     pub sig_ref: SigRef,
 
     /// Dynamically sized array containing call argument values.
@@ -362,7 +375,7 @@ pub struct IndirectCallData {
 /// Payload of a return instruction.
 #[derive(Clone, Debug)]
 pub struct ReturnData {
-    // Dynamically sized array containing return values.
+    /// Dynamically sized array containing return values.
     pub varargs: VariableArgs,
 }
 

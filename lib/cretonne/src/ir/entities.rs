@@ -98,16 +98,16 @@ impl Default for Inst {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Value(u32);
 
-// Value references can either reference an instruction directly, or they can refer to the extended
-// value table.
+/// Value references can either reference an instruction directly, or they can refer to the
+/// extended value table.
 pub enum ExpandedValue {
-    // This is the first value produced by the referenced instruction.
+    /// This is the first value produced by the referenced instruction.
     Direct(Inst),
 
-    // This value is described in the extended value table.
+    /// This value is described in the extended value table.
     Table(usize),
 
-    // This is NO_VALUE.
+    /// This is NO_VALUE.
     None,
 }
 
@@ -135,19 +135,23 @@ impl Value {
             None
         }
     }
+    /// Create a `Direct` value corresponding to the first value produced by `i`.
     pub fn new_direct(i: Inst) -> Value {
         let encoding = i.index() * 2;
         assert!(encoding < u32::MAX as usize);
         Value(encoding as u32)
     }
 
+    /// Create a `Table` value referring to entry `i` in the `DataFlowGraph.extended_values` table.
+    /// This constructor should not be used directly. Use the public `DataFlowGraph` methods to
+    /// manipulate values.
     pub fn new_table(index: usize) -> Value {
         let encoding = index * 2 + 1;
         assert!(encoding < u32::MAX as usize);
         Value(encoding as u32)
     }
 
-    // Expand the internal representation into something useful.
+    /// Expand the internal representation into something useful.
     pub fn expand(&self) -> ExpandedValue {
         use self::ExpandedValue::*;
         if *self == NO_VALUE {
@@ -312,12 +316,19 @@ impl Default for SigRef {
 pub enum AnyEntity {
     /// The whole function.
     Function,
+    /// An extended basic block.
     Ebb(Ebb),
+    /// An instruction.
     Inst(Inst),
+    /// An SSA value.
     Value(Value),
+    /// A stack slot.
     StackSlot(StackSlot),
+    /// A jump table.
     JumpTable(JumpTable),
+    /// An external function.
     FuncRef(FuncRef),
+    /// A function call signature.
     SigRef(SigRef),
 }
 

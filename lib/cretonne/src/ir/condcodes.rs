@@ -29,15 +29,25 @@ pub trait CondCode: Copy {
 /// difference.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum IntCC {
+    /// `==`.
     Equal,
+    /// `!=`.
     NotEqual,
+    /// Signed `<`.
     SignedLessThan,
+    /// Signed `>=`.
     SignedGreaterThanOrEqual,
+    /// Signed `>`.
     SignedGreaterThan,
+    /// Signed `<=`.
     SignedLessThanOrEqual,
+    /// Unsigned `<`.
     UnsignedLessThan,
+    /// Unsigned `>=`.
     UnsignedGreaterThanOrEqual,
+    /// Unsigned `>`.
     UnsignedGreaterThan,
+    /// Unsigned `<=`.
     UnsignedLessThanOrEqual,
 }
 
@@ -131,24 +141,38 @@ impl FromStr for IntCC {
 /// except the impossible `!UN & !EQ & !LT & !GT` and the always true `UN | EQ | LT | GT`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum FloatCC {
-    Ordered, // EQ | LT | GT
-    Unordered, // UN
+    /// EQ | LT | GT
+    Ordered,
+    /// UN
+    Unordered,
 
-    Equal, // EQ
-    // The C '!=' operator is the inverse of '==': NotEqual.
-    NotEqual, // UN | LT | GT
-    OrderedNotEqual, // LT | GT
-    UnorderedOrEqual, // UN | EQ
+    /// EQ
+    Equal,
+    /// The C '!=' operator is the inverse of '==': `NotEqual`.
+    /// UN | LT | GT
+    NotEqual,
+    /// LT | GT
+    OrderedNotEqual,
+    /// UN | EQ
+    UnorderedOrEqual,
 
-    LessThan, // LT
-    LessThanOrEqual, // LT | EQ
-    GreaterThan, // GT
-    GreaterThanOrEqual, // GT | EQ
+    /// LT
+    LessThan,
+    /// LT | EQ
+    LessThanOrEqual,
+    /// GT
+    GreaterThan,
+    /// GT | EQ
+    GreaterThanOrEqual,
 
-    UnorderedOrLessThan, // UN | LT
-    UnorderedOrLessThanOrEqual, // UN | LT | EQ
-    UnorderedOrGreaterThan, // UN | GT
-    UnorderedOrGreaterThanOrEqual, // UN | GT | EQ
+    /// UN | LT
+    UnorderedOrLessThan,
+    /// UN | LT | EQ
+    UnorderedOrLessThanOrEqual,
+    /// UN | GT
+    UnorderedOrGreaterThan,
+    /// UN | GT | EQ
+    UnorderedOrGreaterThanOrEqual,
 }
 
 impl CondCode for FloatCC {

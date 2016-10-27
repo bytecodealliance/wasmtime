@@ -144,6 +144,7 @@ pub enum Error {
     BadValue,
 }
 
+/// A result returned when changing a setting.
 pub type Result<T> = result::Result<T, Error>;
 
 /// Implementation details for generated code.
@@ -156,10 +157,15 @@ pub mod detail {
 
     /// An instruction group template.
     pub struct Template {
+        /// Name of the instruction group.
         pub name: &'static str,
+        /// List of setting descriptors.
         pub descriptors: &'static [Descriptor],
+        /// Union of all enumerators.
         pub enumerators: &'static [&'static str],
+        /// Hash table of settings.
         pub hash_table: &'static [u16],
+        /// Default values.
         pub defaults: &'static [u8],
     }
 
@@ -227,7 +233,10 @@ pub mod detail {
     #[derive(Clone, Copy)]
     pub enum Detail {
         /// A boolean setting only uses one bit, numbered from LSB.
-        Bool { bit: u8 },
+        Bool {
+            /// 0-7.
+            bit: u8,
+        },
 
         /// A numerical setting uses the whole byte.
         Num,

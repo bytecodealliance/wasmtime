@@ -16,6 +16,7 @@ struct Isa {
     cpumode: &'static [shared_enc_tables::Level1Entry<u16>],
 }
 
+/// Get an ISA builder for creating RISC-V targets.
 pub fn isa_builder() -> IsaBuilder {
     IsaBuilder {
         setup: settings::builder(),

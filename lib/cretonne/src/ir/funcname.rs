@@ -14,6 +14,7 @@ use std::ascii::AsciiExt;
 pub struct FunctionName(String);
 
 impl FunctionName {
+    /// Create new function name equal to `s`.
     pub fn new<S: Into<String>>(s: S) -> FunctionName {
         FunctionName(s.into())
     }

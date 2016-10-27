@@ -19,6 +19,7 @@ def gen_formats(fmt):
     fmt.line('#[derive(Copy, Clone, PartialEq, Eq, Debug)]')
     with fmt.indented('pub enum InstructionFormat {', '}'):
         for f in cretonne.InstructionFormat.all_formats:
+            fmt.doc_comment(str(f))
             fmt.line(f.name + ',')
     fmt.line()
 
@@ -172,6 +173,7 @@ def gen_opcodes(groups, fmt):
     fmt.line('#[derive(Copy, Clone, PartialEq, Eq, Debug)]')
     instrs = []
     with fmt.indented('pub enum Opcode {', '}'):
+        fmt.doc_comment('An invalid opcode.')
         fmt.line('NotAnOpcode,')
         for g in groups:
             for i in g.instructions:
@@ -364,6 +366,7 @@ def gen_format_constructor(iform, fmt):
     proto = '{}({})'.format(iform.name, ', '.join(args))
     proto += " -> (Inst, &'f mut DataFlowGraph)"
 
+    fmt.doc_comment(str(iform))
     fmt.line('#[allow(non_snake_case)]')
     with fmt.indented('fn {} {{'.format(proto), '}'):
         # Generate the instruction data.
