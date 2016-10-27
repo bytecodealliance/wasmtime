@@ -707,6 +707,11 @@ class InstructionFormat(object):
             self.members.append(member)
             yield k
 
+    def __str__(self):
+        args = ', '.join('{}: {}'.format(m, k) if m else str(k)
+                         for m, k in zip(self.members, self.kinds))
+        return '{}({})'.format(self.name, args)
+
     def __getattr__(self, attr):
         # type: (str) -> FormatField
         """

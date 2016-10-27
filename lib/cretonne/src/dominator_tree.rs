@@ -1,10 +1,11 @@
-/// ! A Dominator Tree represented as mappings of Ebbs to their immediate dominator.
+//! A Dominator Tree represented as mappings of Ebbs to their immediate dominator.
 
 use cfg::*;
 use ir::Ebb;
 use ir::entities::NO_INST;
 use entity_map::EntityMap;
 
+/// The dominator tree for a single function.
 pub struct DominatorTree {
     data: EntityMap<Ebb, Option<BasicBlock>>,
 }

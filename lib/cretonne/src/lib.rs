@@ -1,14 +1,12 @@
+//! Cretonne code generation library.
 
-// ====------------------------------------------------------------------------------------==== //
-//
-// Cretonne code generation library.
-//
-// ====------------------------------------------------------------------------------------==== //
+#![deny(missing_docs)]
 
 pub use verifier::verify_function;
 pub use write::write_function;
 pub use legalizer::legalize_function;
 
+/// Version number of the cretonne crate.
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 pub mod ir;

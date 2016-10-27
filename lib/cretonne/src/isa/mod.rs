@@ -87,6 +87,7 @@ impl settings::Configurable for Builder {
     }
 }
 
+/// Methods that are specialized to a target ISA.
 pub trait TargetIsa {
     /// Get the name of this ISA.
     fn name(&self) -> &'static str;

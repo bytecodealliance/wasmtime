@@ -14,11 +14,14 @@ use ir::{Type, FunctionName, SigRef};
 /// details that are needed to call a function correctly.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Signature {
+    /// Types of the arguments passed to the function.
     pub argument_types: Vec<ArgumentType>,
+    /// Types returned from the function.
     pub return_types: Vec<ArgumentType>,
 }
 
 impl Signature {
+    /// Create a new blank signature.
     pub fn new() -> Signature {
         Signature {
             argument_types: Vec::new(),
@@ -59,13 +62,16 @@ impl Display for Signature {
 /// how the argument is passed.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct ArgumentType {
+    /// Type of the argument value.
     pub value_type: Type,
+    /// Method for extending argument to a full register.
     pub extension: ArgumentExtension,
     /// Place this argument in a register if possible.
     pub inreg: bool,
 }
 
 impl ArgumentType {
+    /// Create an argument type with default flags.
     pub fn new(vt: Type) -> ArgumentType {
         ArgumentType {
             value_type: vt,
@@ -109,7 +115,9 @@ pub enum ArgumentExtension {
 /// Information about a function that can be called directly with a direct `call` instruction.
 #[derive(Clone, Debug)]
 pub struct ExtFuncData {
+    /// Name of the external function.
     pub name: FunctionName,
+    /// Call signature of function.
     pub signature: SigRef,
 }
 

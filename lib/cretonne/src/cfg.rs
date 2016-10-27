@@ -33,17 +33,10 @@ pub type BasicBlock = (Ebb, Inst);
 /// A container for the successors and predecessors of some Ebb.
 #[derive(Debug, Clone, Default)]
 pub struct CFGNode {
+    /// EBBs that are the targets of branches and jumps in this EBB.
     pub successors: Vec<Ebb>,
+    /// Basic blocks that can branch or jump to this EBB.
     pub predecessors: Vec<BasicBlock>,
-}
-
-impl CFGNode {
-    pub fn new() -> CFGNode {
-        CFGNode {
-            successors: Vec::new(),
-            predecessors: Vec::new(),
-        }
-    }
 }
 
 /// The Control Flow Graph maintains a mapping of ebbs to their predecessors
@@ -88,10 +81,12 @@ impl ControlFlowGraph {
         self.data[to].predecessors.push(from);
     }
 
+    /// Get the CFG predecessor basic blocks to `ebb`.
     pub fn get_predecessors(&self, ebb: Ebb) -> &Vec<BasicBlock> {
         &self.data[ebb].predecessors
     }
 
+    /// Get the CFG successors to `ebb`.
     pub fn get_successors(&self, ebb: Ebb) -> &Vec<Ebb> {
         &self.data[ebb].successors
     }

@@ -61,7 +61,9 @@ use std::result;
 /// A verifier error.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Error {
+    /// The entity causing the verifier error.
     pub location: AnyEntity,
+    /// Error message.
     pub message: String,
 }
 
@@ -71,6 +73,7 @@ impl Display for Error {
     }
 }
 
+/// Verifier result.
 pub type Result<T> = result::Result<T, Error>;
 
 // Create an `Err` variant of `Result<X>` from a location and `format!` args.
@@ -90,11 +93,12 @@ macro_rules! err {
     };
 }
 
+/// Verify `func`.
 pub fn verify_function(func: &Function) -> Result<()> {
     Verifier::new(func).run()
 }
 
-pub struct Verifier<'a> {
+struct Verifier<'a> {
     func: &'a Function,
 }
 
@@ -165,7 +169,7 @@ impl<'a> Verifier<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Verifier, Error};
     use ir::Function;
     use ir::instructions::{InstructionData, Opcode};
     use ir::types;

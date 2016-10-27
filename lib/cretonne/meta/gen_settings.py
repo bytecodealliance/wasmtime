@@ -16,10 +16,12 @@ def gen_enum_types(sgrp, fmt):
         if not isinstance(setting, EnumSetting):
             continue
         ty = camel_case(setting.name)
+        fmt.doc_comment('Values for {}.'.format(setting))
         fmt.line('#[derive(Debug, PartialEq, Eq)]')
-        fmt.line(
-                'pub enum {} {{ {} }}'
-                .format(ty, ", ".join(camel_case(v) for v in setting.values)))
+        with fmt.indented('pub enum {} {{'.format(ty), '}'):
+            for v in setting.values:
+                fmt.doc_comment('`{}`.'.format(v))
+                fmt.line(camel_case(v) + ',')
 
 
 def gen_getter(setting, sgrp, fmt):
@@ -70,7 +72,7 @@ def gen_getters(sgrp, fmt):
     """
     fmt.doc_comment("User-defined settings.")
     with fmt.indented('impl Flags {', '}'):
-        # Dynamic numbered predicate getter.
+        fmt.doc_comment('Dynamic numbered predicate getter.')
         with fmt.indented(
                 'pub fn numbered_predicate(&self, p: usize) -> bool {', '}'):
             fmt.line(
@@ -187,6 +189,7 @@ def gen_constructor(sgrp, parent, fmt):
         if sgrp.parent:
             p = sgrp.parent
             args = '{}: &{}::Flags, {}'.format(p.name, p.qual_mod, args)
+        fmt.doc_comment('Create flags {} settings group.'.format(sgrp.name))
         with fmt.indented(
                 'pub fn new({}) -> Flags {{'.format(args), '}'):
             fmt.line('let bvec = builder.state_for("{}");'.format(sgrp.name))
