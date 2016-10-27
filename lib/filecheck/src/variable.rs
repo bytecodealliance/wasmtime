@@ -19,7 +19,9 @@ pub fn varname_prefix(s: &str) -> usize {
 /// A variable can contain either a regular expression or plain text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value<'a> {
+    /// Verbatim text.
     Text(Cow<'a, str>),
+    /// Regular expression.
     Regex(Cow<'a, str>),
 }
 
