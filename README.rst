@@ -36,6 +36,26 @@ Predictable performance
     the quirks of the target architecture. There are no advanced optimizations
     that sometimes work, somtimes fail.
 
+Building Cretonne
+-----------------
+
+Cretonne is using the Cargo package manager format. First, ensure you have
+installed `rust 1.12.0` or above. Then, change the workind directory to your
+clone of cretonne and run::
+
+    cargo build
+
+This will create a *target/debug* directory where you can find the generated
+binary.
+
+To build the optimized binary for release::
+
+    cargo build --release
+
+You can then run tests with::
+
+    ./test-all.sh
+
 Building the documentation
 --------------------------
 
