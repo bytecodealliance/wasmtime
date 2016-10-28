@@ -40,7 +40,7 @@ Building Cretonne
 -----------------
 
 Cretonne is using the Cargo package manager format. First, ensure you have
-installed `rust 1.12.0` or above. Then, change the workind directory to your
+installed `rust 1.12.0` or above. Then, change the working directory to your
 clone of cretonne and run::
 
     cargo build
