@@ -34,7 +34,7 @@ Scalable performance
 Predictable performance
     When optimizing, Cretonne focuses on adapting the target-independent IL to
     the quirks of the target architecture. There are no advanced optimizations
-    that sometimes work, somtimes fail.
+    that sometimes work, sometimes fail.
 
 Building Cretonne
 -----------------
