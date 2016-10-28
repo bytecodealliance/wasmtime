@@ -145,10 +145,10 @@ See the :file:`lib/filecheck` `documentation <https://docs.rs/filecheck/>`_ for
 details of its syntax.
 
 Comments in :file:`.cton` files are associated with the entity they follow.
-This typically means and instruction or the whole function. Those tests that
+This typically means an instruction or the whole function. Those tests that
 use filecheck will extract comments associated with each function (or its
 entities) and scan them for filecheck directives. The test output for each
-function is then matched againts the filecheck directives for that function.
+function is then matched against the filecheck directives for that function.
 
 Note that LLVM's file tests don't separate filecheck directives by their
 associated function. It verifies the concatenated output against all filecheck

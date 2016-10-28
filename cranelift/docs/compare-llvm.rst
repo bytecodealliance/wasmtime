@@ -129,7 +129,7 @@ LLVM uses `phi instructions
 <http://llvm.org/docs/LangRef.html#phi-instruction>`_ in its SSA
 representation. Cretonne passes arguments to EBBs instead. The two
 representations are equivalent, but the EBB arguments are better suited to
-handle EBBs that main contain multiple branches to the same destination block
+handle EBBs that may contain multiple branches to the same destination block
 with different arguments. Passing arguments to an EBB looks a lot like passing
 arguments to a function call, and the register allocator treats them very
 similarly. Arguments are assigned to registers or stack locations.
@@ -145,7 +145,7 @@ can hold.
   :cton:type:`i64`. LLVM can represent integer types of arbitrary bit width.
 - Floating point types are limited to :cton:type:`f32` and :cton:type:`f64`
   which is what WebAssembly provides. It is possible that 16-bit and 128-bit
-  types will be added in the future/
+  types will be added in the future.
 - Addresses are represented as integers---There are no Cretonne pointer types.
   LLVM currently has rich pointer types that include the pointee type. It may
   move to a simpler 'address' type in the future. Cretonne may add a single
@@ -173,7 +173,7 @@ Since Cretonne instructions are used all the way until the binary machine code
 is emitted, there are opcodes for every native instruction that can be
 generated. There is a lot of overlap between different ISAs, so for example the
 :cton:inst:`iadd_imm` instruction is used by every ISA that can add an
-immediate integer to a register. A simle RISC ISA like RISC-V can be defined
+immediate integer to a register. A simple RISC ISA like RISC-V can be defined
 with only shared instructions, while an Intel ISA needs a number of specific
 instructions to model addressing modes.
 

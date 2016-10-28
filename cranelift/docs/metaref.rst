@@ -139,7 +139,7 @@ indicated with an instance of :class:`ImmediateKind`.
 Entity references
 -----------------
 
-Instruction operands can also refer to other entties in the same function. This
+Instruction operands can also refer to other entities in the same function. This
 can be extended basic blocks, or entities declared in the function preamble.
 
 .. autoclass:: EntityRefKind
@@ -248,7 +248,7 @@ Encodings
 =========
 
 Encodings describe how Cretonne instructions are mapped to binary machine code
-for the target architecture. After the lealization pass, all remaining
+for the target architecture. After the legalization pass, all remaining
 instructions are expected to map 1-1 to native instruction encodings. Cretonne
 instructions that can't be encoded for the current architecture are called
 :term:`illegal instruction`\s.
@@ -256,7 +256,7 @@ instructions that can't be encoded for the current architecture are called
 Some instruction set architectures have different :term:`CPU mode`\s with
 incompatible encodings. For example, a modern ARMv8 CPU might support three
 different CPU modes: *A64* where instructions are encoded in 32 bits, *A32*
-where all instuctions are 32 bits, and *T32* which has a mix of 16-bit and
+where all instructions are 32 bits, and *T32* which has a mix of 16-bit and
 32-bit instruction encodings. These are incompatible encoding spaces, and while
 an :cton:inst:`iadd` instruction can be encoded in 32 bits in each of them, it's
 not the same 32 bits. It's a judgement call if CPU modes should be modelled as
