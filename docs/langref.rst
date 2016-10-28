@@ -514,7 +514,7 @@ simply represent a contiguous sequence of bytes in the stack frame.
     :arg SS: Stack slot declared with :inst:`stack_slot`.
     :arg Offset: Immediate non-negative offset.
 
-The dedicated stack access instructions are easy ofr the compiler to reason
+The dedicated stack access instructions are easy for the compiler to reason
 about because stack slots and offsets are fixed at compile time. For example,
 the alignment of these stack memory accesses can be inferred from the offsets
 and stack slot alignments.
@@ -583,7 +583,7 @@ than the native pointer size, for example unsigned :type:`i32` offsets on a
 
     Trap if the heap access would be out of bounds.
 
-    :arg H: Heap indetifier created by :inst:`heap`.
+    :arg H: Heap identifier created by :inst:`heap`.
     :arg T x: Value to be stored.
     :arg iN p: Unsigned base address in heap.
     :arg Offset: Immediate signed offset.

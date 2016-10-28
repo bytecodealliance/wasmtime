@@ -1,6 +1,6 @@
 """
 The `cretonne.entities` module predefines all the Cretonne entity reference
-operand types. Thee are corresponding definitions in the `cretonne.entities`
+operand types. There are corresponding definitions in the `cretonne.entities`
 Rust module.
 """
 from __future__ import absolute_import

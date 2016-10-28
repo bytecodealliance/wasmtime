@@ -134,7 +134,7 @@ call_indirect = Instruction(
         Indirect function call.
 
         Call the function pointed to by `callee` with the given arguments. The
-        called function must match the soecified signature.
+        called function must match the specified signature.
         """,
         ins=(SIG, callee, args),
         outs=rvals)
@@ -392,9 +392,9 @@ srem = Instruction(
 
         .. todo:: Integer remainder vs modulus.
 
-        Clarify whether the result has the sign of the divisor or the dividend.
-        Should we add a ``smod`` instruction for the case where the result has
-        the same sign as the divisor?
+            Clarify whether the result has the sign of the divisor or the dividend.
+            Should we add a ``smod`` instruction for the case where the result has
+            the same sign as the divisor?
         """,
         ins=(x, y), outs=a)
 
@@ -900,7 +900,7 @@ fma = Instruction(
         'fma', r"""
         Floating point fused multiply-and-add.
 
-        Computes :math:`a := xy+z` wihtout any intermediate rounding of the
+        Computes :math:`a := xy+z` without any intermediate rounding of the
         product.
         """,
         ins=(x, y, z), outs=a)
