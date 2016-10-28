@@ -184,7 +184,7 @@ class SettingGroup(object):
                 .format(self, SettingGroup._current))
         SettingGroup._current = None
         if globs:
-            for name, obj in globs.iteritems():
+            for name, obj in globs.items():
                 if isinstance(obj, Setting):
                     assert obj.name is None, obj.name
                     obj.name = name
@@ -761,7 +761,7 @@ class InstructionFormat(object):
         all the InstructionFormat objects and set their name from the dict key.
         This is used to name a bunch of global variables in a module.
         """
-        for name, obj in globs.iteritems():
+        for name, obj in globs.items():
             if isinstance(obj, InstructionFormat):
                 assert obj.name is None
                 obj.name = name
