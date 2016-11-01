@@ -392,9 +392,9 @@ srem = Instruction(
 
         .. todo:: Integer remainder vs modulus.
 
-            Clarify whether the result has the sign of the divisor or the dividend.
-            Should we add a ``smod`` instruction for the case where the result has
-            the same sign as the divisor?
+            Clarify whether the result has the sign of the divisor or the
+            dividend. Should we add a ``smod`` instruction for the case where
+            the result has the same sign as the divisor?
         """,
         ins=(x, y), outs=a)
 
