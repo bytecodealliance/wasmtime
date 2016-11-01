@@ -8,17 +8,43 @@ from __future__ import absolute_import
 import math
 from . import value
 
+try:
+    from typing import Tuple # noqa
+    Interval = Tuple[int, int]
+except ImportError:
+    pass
 
 MAX_LANES = 256
 MAX_BITS = 64
 
 
 def is_power_of_two(x):
+    # type: (int) -> bool
     return x > 0 and x & (x-1) == 0
 
 
 def int_log2(x):
+    # type: (int) -> int
     return int(math.log(x, 2))
+
+
+def intersect(a, b):
+    # type: (Interval, Interval) -> Interval
+    """
+    Given two `(min, max)` inclusive intervals, compute their intersection.
+
+    Use `(None, None)` to represent the empty interval on input and output.
+    """
+    if a[0] is None or b[0] is None:
+        return (None, None)
+    lo = max(a[0], b[0])
+    assert lo is not None
+    hi = min(a[1], b[1])
+    assert hi is not None
+    if lo <= hi:
+        return (lo, hi)
+    else:
+        return (None, None)
 
 
 class TypeSet(object):
@@ -69,6 +95,7 @@ class TypeSet(object):
     """
 
     def __init__(self, lanes=None, ints=None, floats=None, bools=None):
+        # type: (Interval, Interval, Interval, Interval) -> None
         if lanes:
             if lanes is True:
                 lanes = (1, MAX_LANES)
@@ -119,6 +146,7 @@ class TypeSet(object):
             self.max_bool = None
 
     def typeset_key(self):
+        # type: () -> Tuple[int, int, int, int, int, int, int, int]
         """Key tuple used for hashing and equality."""
         return (self.min_lanes, self.max_lanes,
                 self.min_int, self.max_int,
@@ -126,6 +154,7 @@ class TypeSet(object):
                 self.min_bool, self.max_bool)
 
     def __hash__(self):
+        # type: () -> int
         h = hash(self.typeset_key())
         assert h == getattr(self, 'prev_hash', h), "TypeSet changed!"
         self.prev_hash = h
@@ -135,6 +164,7 @@ class TypeSet(object):
         return self.typeset_key() == other.typeset_key()
 
     def __repr__(self):
+        # type: () -> str
         s = 'TypeSet(lanes=({}, {})'.format(self.min_lanes, self.max_lanes)
         if self.min_int is not None:
             s += ', ints=({}, {})'.format(self.min_int, self.max_int)
@@ -161,6 +191,7 @@ class TypeSet(object):
                     field, int_log2(max_val) + 1))
 
     def __iand__(self, other):
+        # type: (TypeSet) -> TypeSet
         """
         Intersect self with other type set.
 
@@ -181,23 +212,17 @@ class TypeSet(object):
         self.min_lanes = max(self.min_lanes, other.min_lanes)
         self.max_lanes = min(self.max_lanes, other.max_lanes)
 
-        self.min_int = max(self.min_int, other.min_int)
-        self.max_int = min(self.max_int, other.max_int)
-        if self.min_int > self.max_int:
-            self.min_int = None
-            self.max_int = None
+        self.min_int, self.max_int = intersect(
+                (self.min_int, self.max_int),
+                (other.min_int, other.max_int))
 
-        self.min_float = max(self.min_float, other.min_float)
-        self.max_float = min(self.max_float, other.max_float)
-        if self.min_float > self.max_float:
-            self.min_float = None
-            self.max_float = None
+        self.min_float, self.max_float = intersect(
+                (self.min_float, self.max_float),
+                (other.min_float, other.max_float))
 
-        self.min_bool = max(self.min_bool, other.min_bool)
-        self.max_bool = min(self.max_bool, other.max_bool)
-        if self.min_bool > self.max_bool:
-            self.min_bool = None
-            self.max_bool = None
+        self.min_bool, self.max_bool = intersect(
+                (self.min_bool, self.max_bool),
+                (other.min_bool, other.max_bool))
 
         return self
 
