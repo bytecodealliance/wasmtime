@@ -11,10 +11,6 @@ except ImportError:
     pass
 
 
-SRCCTX = 1
-DSTCTX = 2
-
-
 def canonicalize_defapply(node):
     # type: (DefApply) -> Def
     """
@@ -87,13 +83,13 @@ class XForm(object):
         # Rewrite variables in src and dst RTL lists to our own copies.
         # Map name -> private Var.
         symtab = dict()  # type: Dict[str, Var]
-        self._rewrite_rtl(src, symtab, SRCCTX)
+        self._rewrite_rtl(src, symtab, Var.SRCCTX)
         num_src_inputs = len(self.inputs)
-        self._rewrite_rtl(dst, symtab, DSTCTX)
+        self._rewrite_rtl(dst, symtab, Var.DSTCTX)
 
         # Check for inconsistently used inputs.
         for i in self.inputs:
-            if i.defctx:
+            if not i.is_input():
                 raise AssertionError(
                         "'{}' used as both input and def".format(i))
 
@@ -189,6 +185,22 @@ class XForm(object):
                 self.inputs.append(var)
             yield var
 
+    def verify_legalize(self):
+        # type: () -> None
+        """
+        Verify that this is a valid legalization XForm.
+
+        - The source pattern must describe a single instruction.
+        - All values defined in the output pattern must be defined in the
+          destination pattern.
+        """
+        assert len(self.src.rtl) == 1, "Legalize needs single instruction."
+        defs, expr = self.src.rtl[0].defs_expr()
+        for d in defs:
+            if not d.is_output():
+                raise AssertionError(
+                        '{} not defined in dest pattern'.format(d))
+
 
 class XFormGroup(object):
     """
@@ -209,4 +221,6 @@ class XFormGroup(object):
         :param src: Single `Def` or `Apply` to be legalized.
         :param dst: `Rtl` list of replacement instructions.
         """
-        self.xforms.append(XForm(Rtl(src), dst))
+        xform = XForm(Rtl(src), dst)
+        xform.verify_legalize()
+        self.xforms.append(xform)

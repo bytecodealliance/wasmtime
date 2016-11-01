@@ -114,5 +114,5 @@ expand.legalize(
         Rtl(
             (a1, b1) << isub_bout(x, y),
             (a, b2) << isub_bout(a1, b_in),
-            c << bor(b1, b2)
+            b << bor(b1, b2)
         ))
