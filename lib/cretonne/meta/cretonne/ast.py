@@ -73,6 +73,24 @@ class Expr(object):
 class Var(Expr):
     """
     A free variable.
+
+    When variables are used in `XForms` with source ans destination patterns,
+    they are classified as follows:
+
+    Input values
+        Uses in the source pattern with no preceding def. These may appear as
+        inputs in the destination pattern too, but no new inputs can be
+        introduced.
+    Output values
+        Variables that are defined in both the source and destination pattern.
+        These values may have uses outside the source pattern, and the
+        destination pattern must compute the same value.
+    Intermediate values
+        Values that are defined in the source pattern, but not in the
+        destination pattern. These may have uses outside the source pattern, so
+        the defining instruction can't be deleted immediately.
+    Temporary values
+        Values that are defined only in the destination pattern.
     """
 
     def __init__(self, name):
@@ -82,14 +100,41 @@ class Var(Expr):
         # See XForm._rewrite_defs().
         self.defctx = 0
 
+    # Context bits for `defctx` indicating which pattern has defines of this
+    # var.
+    SRCCTX = 1
+    DSTCTX = 2
+
     def __str__(self):
+        # type: () -> str
         return self.name
 
     def __repr__(self):
+        # type: () -> str
         s = self.name
         if self.defctx:
             s += ", d={:02b}".format(self.defctx)
         return "Var({})".format(s)
+
+    def is_input(self):
+        # type: () -> bool
+        """Is this an input value to the source pattern?"""
+        return self.defctx == 0
+
+    def is_output(self):
+        """Is this an output value, defined in both src and dest patterns?"""
+        # type: () -> bool
+        return self.defctx == self.SRCCTX | self.DSTCTX
+
+    def is_intermediate(self):
+        """Is this an intermediate value, defined only in the src pattern?"""
+        # type: () -> bool
+        return self.defctx == self.SRCCTX
+
+    def is_temp(self):
+        """Is this a temp value, defined only in the dest pattern?"""
+        # type: () -> bool
+        return self.defctx == self.DSTCTX
 
 
 class Apply(Expr):

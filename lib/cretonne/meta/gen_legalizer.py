@@ -14,7 +14,7 @@ from cretonne.ast import Def, Apply  # noqa
 from cretonne.xform import XForm, XFormGroup  # noqa
 
 try:
-    from typing import Union  # noqa
+    from typing import Union
     DefApply = Union[Def, Apply]
 except ImportError:
     pass
