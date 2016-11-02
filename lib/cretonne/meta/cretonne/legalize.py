@@ -77,14 +77,14 @@ expand.legalize(
         (a, c) << iadd_cout(x, y),
         Rtl(
             a << iadd(x, y),
-            c << icmp('ult', a, x)
+            c << icmp('IntCC::UnsignedLessThan', a, x)
         ))
 
 expand.legalize(
         (a, b) << isub_bout(x, y),
         Rtl(
             a << isub(x, y),
-            b << icmp('ugt', a, x)
+            b << icmp('IntCC::UnsignedGreaterThan', a, x)
         ))
 
 expand.legalize(
