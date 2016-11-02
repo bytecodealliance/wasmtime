@@ -5,10 +5,10 @@ Cretonne Language Reference
 .. default-domain:: cton
 .. highlight:: cton
 
-The Cretonne intermediate language has two equivalent representations: an
-*in-memory data structure* that the code generator library is using, and
-a *text format* which is used for test cases and debug output. Files containing
-Cretonne textual IL have the ``.cton`` filename extension.
+The Cretonne intermediate language (:term:`IL`) has two equivalent
+representations: an *in-memory data structure* that the code generator library
+is using, and a *text format* which is used for test cases and debug output.
+Files containing Cretonne textual IL have the ``.cton`` filename extension.
 
 This reference uses the text format to describe IL semantics but glosses over
 the finer details of the lexical and syntactic structure of the format.
@@ -76,9 +76,9 @@ variable during each iteration. Finally, ``v12`` is computed as the induction
 variable value for the next iteration.
 
 It can be difficult to generate correct SSA form if the program being converted
-into Cretonne IL contains multiple assignments to the same variables. Such
-variables can be presented to Cretonne as :term:`stack slot`\s instead. Stack
-slots are accessed with the :inst:`stack_store` and :inst:`stack_load`
+into Cretonne :term:`IL` contains multiple assignments to the same variables.
+Such variables can be presented to Cretonne as :term:`stack slot`\s instead.
+Stack slots are accessed with the :inst:`stack_store` and :inst:`stack_load`
 instructions which behave more like variable accesses in a typical programming
 language. Cretonne can perform the necessary dataflow analysis to convert stack
 slots to SSA form.
@@ -275,11 +275,11 @@ indicate the different kinds of immediate operands on an instruction.
     A floating point condition code. See the :inst:`fcmp` instruction for details.
 
 The two IEEE floating point immediate types :type:`ieee32` and :type:`ieee64`
-are displayed as hexadecimal floating point literals in the textual IL format.
-Decimal floating point literals are not allowed because some computer systems
-can round differently when converting to binary. The hexadecimal floating point
-format is mostly the same as the one used by C99, but extended to represent all
-NaN bit patterns:
+are displayed as hexadecimal floating point literals in the textual :term:`IL`
+format. Decimal floating point literals are not allowed because some computer
+systems can round differently when converting to binary. The hexadecimal
+floating point format is mostly the same as the one used by C99, but extended
+to represent all NaN bit patterns:
 
 Normal numbers
     Compatible with C99: ``-0x1.Tpe`` where ``T`` are the trailing
@@ -858,6 +858,20 @@ Glossary
 ========
 
 .. glossary::
+
+    intermediate language
+    IL
+        The language used to describe functions to Cretonne. This reference
+        describes the syntax and semantics of the Cretonne IL. The IL has two
+        forms: Textual and an in-memory intermediate representation
+        (:term:`IR`).
+
+    intermediate representation
+    IR
+        The in-memory representation of :term:`IL`. The data structures
+        Cretonne uses to represent a program internally are called the
+        intermediate representation. Cretonne's IR can be converted to text
+        losslessly.
 
     function signature
         A function signature describes how to call a function. It consists of:
