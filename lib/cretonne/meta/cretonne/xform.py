@@ -15,12 +15,25 @@ SRCCTX = 1
 DSTCTX = 2
 
 
+def canonicalize_defapply(node):
+    # type: (DefApply) -> Def
+    """
+    Canonicalize a `Def` or `Apply` node into a `Def`.
+
+    An `Apply` becomes a `Def` with an empty list of defs.
+    """
+    if isinstance(node, Apply):
+        return Def((), node)
+    else:
+        return node
+
+
 class Rtl(object):
     """
     Register Transfer Language list.
 
     An RTL object contains a list of register assignments in the form of `Def`
-    objects and/or Apply objects for side-effecting instructions.
+    objects.
 
     An RTL list can represent both a source pattern to be matched, or a
     destination pattern to be inserted.
@@ -28,10 +41,10 @@ class Rtl(object):
 
     def __init__(self, *args):
         # type: (*DefApply) -> None
-        self.rtl = args
+        self.rtl = tuple(map(canonicalize_defapply, args))
 
     def __iter__(self):
-        # type: () -> Iterator[DefApply]
+        # type: () -> Iterator[Def]
         return iter(self.rtl)
 
 
