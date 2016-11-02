@@ -1089,7 +1089,7 @@ x = Operand('x', Float)
 a = Operand('a', FloatTo)
 
 fpromote = Instruction(
-        'fcvt_ftof', r"""
+        'fpromote', r"""
         Convert `x` to a larger floating point format.
 
         Each lane in `x` is converted to the destination floating point format.
