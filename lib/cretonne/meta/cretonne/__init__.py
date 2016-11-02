@@ -834,6 +834,18 @@ class Instruction(object):
         suffix = ', '.join(o.name for o in self.ins)
         return '{}{} {}'.format(prefix, self.name, suffix)
 
+    def snake_name(self):
+        # type: () -> str
+        """
+        Get the snake_case name of this instruction.
+
+        Keywords in Rust and Python are altered by appending a '_'
+        """
+        if self.name == 'return':
+            return 'return_'
+        else:
+            return self.name
+
     def blurb(self):
         """Get the first line of the doc comment"""
         for line in self.__doc__.split('\n'):

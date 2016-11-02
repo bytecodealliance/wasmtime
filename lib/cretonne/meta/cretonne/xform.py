@@ -195,8 +195,7 @@ class XForm(object):
           destination pattern.
         """
         assert len(self.src.rtl) == 1, "Legalize needs single instruction."
-        defs, expr = self.src.rtl[0].defs_expr()
-        for d in defs:
+        for d in self.src.rtl[0].defs:
             if not d.is_output():
                 raise AssertionError(
                         '{} not defined in dest pattern'.format(d))

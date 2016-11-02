@@ -446,16 +446,12 @@ def gen_inst_builder(inst, fmt):
         rvals = ', '.join(len(inst.value_results) * ['Value'])
         rtype = '({})'.format(rvals)
 
-    method = inst.name
-    if method == 'return':
-        # Avoid Rust keywords by appending '_'.
-        method += '_'
-
     if len(tmpl_types) > 0:
         tmpl = '<{}>'.format(', '.join(tmpl_types))
     else:
         tmpl = ''
-    proto = '{}{}({}) -> {}'.format(method, tmpl,  ', '.join(args), rtype)
+    proto = '{}{}({}) -> {}'.format(
+            inst.snake_name(), tmpl,  ', '.join(args), rtype)
 
     fmt.doc_comment('`{}`\n\n{}'.format(inst, inst.blurb()))
     fmt.line('#[allow(non_snake_case)]')

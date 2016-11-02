@@ -53,16 +53,6 @@ class Def(object):
             return "({}) << {!s}".format(
                     ', '.join(map(str, self.defs)), self.expr)
 
-    def root_inst(self):
-        # type: () -> Instruction
-        """Get the instruction at the root of this tree."""
-        return self.expr.root_inst()
-
-    def defs_expr(self):
-        # type: () -> Tuple[Tuple[Var, ...], Apply]
-        """Split into a defs tuple and an Apply expr."""
-        return (self.defs, self.expr)
-
 
 class Expr(object):
     """
@@ -215,12 +205,12 @@ class Apply(Expr):
         args = ', '.join(map(str, self.args))
         return '{}({})'.format(self.instname(), args)
 
-    def root_inst(self):
-        # type: () -> Instruction
-        """Get the instruction at the root of this tree."""
-        return self.inst
-
-    def defs_expr(self):
-        # type: () -> Tuple[Tuple[Var, ...], Apply]
-        """Split into a defs tuple and an Apply expr."""
-        return ((), self)
+    def rust_builder(self):
+        # type: () -> str
+        """
+        Return a Rust Builder method call for instantiating this instruction
+        application.
+        """
+        args = ', '.join(map(str, self.args))
+        method = self.inst.snake_name()
+        return '{}({})'.format(method, args)
