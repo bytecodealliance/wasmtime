@@ -74,7 +74,7 @@ class Var(Expr):
     """
     A free variable.
 
-    When variables are used in `XForms` with source ans destination patterns,
+    When variables are used in `XForms` with source and destination patterns,
     they are classified as follows:
 
     Input values
@@ -96,14 +96,10 @@ class Var(Expr):
     def __init__(self, name):
         # type: (str) -> None
         self.name = name
-        # Bitmask of contexts where this variable is defined.
-        # See XForm._rewrite_defs().
-        self.defctx = 0
-
-    # Context bits for `defctx` indicating which pattern has defines of this
-    # var.
-    SRCCTX = 1
-    DSTCTX = 2
+        # The `Def` defining this variable in a source pattern.
+        self.src_def = None  # type: Def
+        # The `Def` defining this variable in a destination pattern.
+        self.dst_def = None  # type: Def
 
     def __str__(self):
         # type: () -> str
@@ -112,29 +108,60 @@ class Var(Expr):
     def __repr__(self):
         # type: () -> str
         s = self.name
-        if self.defctx:
-            s += ", d={:02b}".format(self.defctx)
+        if self.src_def:
+            s += ", src"
+        if self.dst_def:
+            s += ", dst"
         return "Var({})".format(s)
+
+    # Context bits for `set_def` indicating which pattern has defines of this
+    # var.
+    SRCCTX = 1
+    DSTCTX = 2
+
+    def set_def(self, context, d):
+        # type: (int, Def) -> None
+        """
+        Set the `Def` that defines this variable in the given context.
+
+        The `context` must be one of `SRCCTX` or `DSTCTX`
+        """
+        if context == self.SRCCTX:
+            self.src_def = d
+        else:
+            self.dst_def = d
+
+    def get_def(self, context):
+        # type: (int) -> Def
+        """
+        Get the def of this variable in context.
+
+        The `context` must be one of `SRCCTX` or `DSTCTX`
+        """
+        if context == self.SRCCTX:
+            return self.src_def
+        else:
+            return self.dst_def
 
     def is_input(self):
         # type: () -> bool
-        """Is this an input value to the source pattern?"""
-        return self.defctx == 0
+        """Is this an input value to the src pattern?"""
+        return not self.src_def and not self.dst_def
 
     def is_output(self):
-        """Is this an output value, defined in both src and dest patterns?"""
+        """Is this an output value, defined in both src and dst patterns?"""
         # type: () -> bool
-        return self.defctx == self.SRCCTX | self.DSTCTX
+        return self.src_def and self.dst_def
 
     def is_intermediate(self):
         """Is this an intermediate value, defined only in the src pattern?"""
         # type: () -> bool
-        return self.defctx == self.SRCCTX
+        return self.src_def and not self.dst_def
 
     def is_temp(self):
-        """Is this a temp value, defined only in the dest pattern?"""
+        """Is this a temp value, defined only in the dst pattern?"""
         # type: () -> bool
-        return self.defctx == self.DSTCTX
+        return not self.src_def and self.dst_def
 
 
 class Apply(Expr):
