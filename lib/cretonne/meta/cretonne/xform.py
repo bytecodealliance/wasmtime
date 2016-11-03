@@ -63,7 +63,7 @@ class XForm(object):
     ...     Rtl(c << iconst(v),
     ...         a << iadd(x, c)),
     ...     Rtl(a << iadd_imm(x, v)))
-    XForm(inputs=[Var(v), Var(x)], defs=[Var(c, d=01), Var(a, d=11)],
+    XForm(inputs=[Var(v), Var(x)], defs=[Var(c, src), Var(a, src, dst)],
       c << iconst(v)
       a << iadd(x, c)
     =>
@@ -112,7 +112,7 @@ class XForm(object):
         for line in rtl.rtl:
             if isinstance(line, Def):
                 line.defs = tuple(
-                        self._rewrite_defs(line.defs, symtab, context))
+                        self._rewrite_defs(line, symtab, context))
                 expr = line.expr
             else:
                 expr = line
@@ -132,23 +132,23 @@ class XForm(object):
             expr.args = tuple(
                     self._rewrite_uses(expr, stack, symtab, context))
 
-    def _rewrite_defs(self, defs, symtab, context):
-        # type: (Sequence[Var], Dict[str, Var], int) -> Iterable[Var]
+    def _rewrite_defs(self, line, symtab, context):
+        # type: (Def, Dict[str, Var], int) -> Iterable[Var]
         """
         Given a tuple of symbols defined in a Def, rewrite them to local
         symbols. Yield the new locals.
         """
-        for sym in defs:
+        for sym in line.defs:
             name = str(sym)
             if name in symtab:
                 var = symtab[name]
-                if var.defctx & context:
+                if var.get_def(context):
                     raise AssertionError("'{}' multiply defined".format(name))
             else:
                 var = Var(name)
                 symtab[name] = var
                 self.defs.append(var)
-            var.defctx |= context
+            var.set_def(context, line)
             yield var
 
     def _rewrite_uses(self, expr, stack, symtab, context):
@@ -173,8 +173,8 @@ class XForm(object):
             name = str(arg)
             if name in symtab:
                 var = symtab[name]
-                # The variable must be used consistenty as a def or input.
-                if var.defctx and (var.defctx & context) == 0:
+                # The variable must be used consistently as a def or input.
+                if not var.is_input() and not var.get_def(context):
                     raise AssertionError(
                             "'{}' used as both input and def"
                             .format(name))
