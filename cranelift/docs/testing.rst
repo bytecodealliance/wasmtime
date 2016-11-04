@@ -150,6 +150,10 @@ use filecheck will extract comments associated with each function (or its
 entities) and scan them for filecheck directives. The test output for each
 function is then matched against the filecheck directives for that function.
 
+Comments appearing before the first function in a file apply to every function.
+This is useful for defining common regular expression variables with the
+``regex:`` directive, for example.
+
 Note that LLVM's file tests don't separate filecheck directives by their
 associated function. It verifies the concatenated output against all filecheck
 directives in the test file. LLVM's :command:`FileCheck` command has a
