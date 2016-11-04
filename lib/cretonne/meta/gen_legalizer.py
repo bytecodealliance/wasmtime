@@ -105,6 +105,7 @@ def wrap_tup(seq):
 def emit_dst_inst(node, fmt):
     # type: (Def, Formatter) -> None
     exact_replace = False
+    replaced_inst = None  # type: str
     if len(node.defs) == 0:
         # This node doesn't define any values, so just insert the new
         # instruction.
@@ -116,6 +117,7 @@ def emit_dst_inst(node, fmt):
             # pattern.
             # Replace the whole instruction.
             builder = 'let {} = dfg.replace(inst)'.format(wrap_tup(node.defs))
+            replaced_inst = 'inst'
             # Secondary values weren't replaced if this is an exact replacement
             # for all the src results.
             exact_replace = (node.defs == src_def0.defs)
@@ -125,6 +127,14 @@ def emit_dst_inst(node, fmt):
             builder = 'let {} = dfg.ins(pos)'.format(wrap_tup(node.defs))
 
     fmt.line('{}.{};'.format(builder, node.expr.rust_builder()))
+
+    # If we just replaced an instruction, we need to bump the cursor so
+    # following instructions are inserted *after* the replaced insruction.
+    if replaced_inst:
+        with fmt.indented(
+                'if pos.current_inst() == Some({}) {{'
+                .format(replaced_inst), '}'):
+            fmt.line('pos.next_inst();')
 
     if exact_replace:
         fmt.comment('exactreplacement')
@@ -151,12 +161,7 @@ def gen_xform(xform, fmt):
 
 def gen_xform_group(xgrp, fmt):
     # type: (XFormGroup, Formatter) -> None
-    fmt.doc_comment("""
-        Legalize the instruction pointed to by `pos`.
-
-        Return the first instruction in the expansion, and leave `pos` pointing
-        at the last instruction in the expansion.
-        """)
+    fmt.doc_comment("Legalize the instruction pointed to by `pos`.")
     fmt.line('#[allow(unused_variables,unused_assignments)]')
     with fmt.indented(
             'fn ' + xgrp.name +
