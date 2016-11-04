@@ -9,6 +9,7 @@ import cretonne
 
 
 def gen_formats(fmt):
+    # type: (srcgen.Formatter) -> None
     """Generate an instruction format enumeration"""
 
     fmt.doc_comment('An instruction format')
@@ -38,7 +39,63 @@ def gen_formats(fmt):
     fmt.line()
 
 
+def gen_arguments_method(fmt, is_mut):
+    # type: (srcgen.Formatter, bool) -> None
+    method = 'arguments'
+    mut = ''
+    rslice = 'ref_slice'
+    if is_mut:
+        method += '_mut'
+        mut = 'mut '
+        rslice += '_mut'
+
+    with fmt.indented(
+            'pub fn {f}(&{m}self) -> [&{m}[Value]; 2] {{'
+            .format(f=method, m=mut), '}'):
+        with fmt.indented('match *self {', '}'):
+            for f in cretonne.InstructionFormat.all_formats:
+                n = 'InstructionData::' + f.name
+                has_varargs = cretonne.variable_args in f.kinds
+                # Formats with both fixed and variable arguments delegate to
+                # the data struct. We need to work around borrow checker quirks
+                # when extracting two mutable references.
+                if has_varargs and len(f.value_operands) > 0:
+                    fmt.line(
+                        '{} {{ ref {}data, .. }} => data.{}(),'
+                        .format(n, mut, method))
+                    continue
+                # Fixed args.
+                if len(f.value_operands) == 0:
+                    arg = '&{}[]'.format(mut)
+                    capture = ''
+                elif len(f.value_operands) == 1:
+                    if f.boxed_storage:
+                        capture = 'ref {}data, '.format(mut)
+                        arg = '{}(&{}data.arg)'.format(rslice, mut)
+                    else:
+                        capture = 'ref {}arg, '.format(mut)
+                        arg = '{}(arg)'.format(rslice)
+                else:
+                    if f.boxed_storage:
+                        capture = 'ref {}data, '.format(mut)
+                        arg = '&{}data.args'.format(mut)
+                    else:
+                        capture = 'ref {}args, '.format(mut)
+                        arg = 'args'
+                # Varargs.
+                if cretonne.variable_args in f.kinds:
+                    varg = '&{}data.varargs'.format(mut)
+                    capture = 'ref {}data, '.format(mut)
+                else:
+                    varg = '&{}[]'.format(mut)
+
+                fmt.line(
+                        '{} {{ {} .. }} => [{}, {}],'
+                        .format(n, capture, arg, varg))
+
+
 def gen_instruction_data_impl(fmt):
+    # type: (srcgen.Formatter) -> None
     """
     Generate the boring parts of the InstructionData implementation.
 
@@ -49,6 +106,7 @@ def gen_instruction_data_impl(fmt):
     - `pub fn first_type(&self) -> Type`
     - `pub fn second_result(&self) -> Option<Value>`
     - `pub fn second_result_mut<'a>(&'a mut self) -> Option<&'a mut Value>`
+    - `pub fn arguments(&self) -> (&[Value], &[Value])`
     """
 
     # The `opcode` and `first_type` methods simply read the `opcode` and `ty`
@@ -147,6 +205,22 @@ def gen_instruction_data_impl(fmt):
                                     n +
                                     ' {{ ref args, .. }} => Some(args[{}]),'
                                     .format(i))
+
+        fmt.doc_comment(
+                """
+                Get the value arguments to this instruction.
+
+                This is returned as two `Value` slices. The first one
+                represents the fixed arguments, the second any variable
+                arguments.
+                """)
+        gen_arguments_method(fmt, False)
+        fmt.doc_comment(
+                """
+                Get mutable references to the value arguments to this
+                instruction.
+                """)
+        gen_arguments_method(fmt, True)
 
 
 def collect_instr_groups(isas):
