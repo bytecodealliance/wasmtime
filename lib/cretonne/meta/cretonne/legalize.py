@@ -9,7 +9,7 @@ instructions that are legal.
 from __future__ import absolute_import
 from .base import iadd, iadd_cout, iadd_cin, iadd_carry
 from .base import isub, isub_bin, isub_bout, isub_borrow
-from .base import bor, isplit_lohi, iconcat_lohi
+from .base import band, bor, bxor, isplit_lohi, iconcat_lohi
 from .base import icmp
 from .ast import Var
 from .xform import Rtl, XFormGroup
@@ -70,6 +70,17 @@ narrow.legalize(
             ah << isub_bin(xh, yh, b),
             a << iconcat_lohi(al, ah)
         ))
+
+for bitop in [band, bor, bxor]:
+    narrow.legalize(
+            a << bitop(x, y),
+            Rtl(
+                (xl, xh) << isplit_lohi(x),
+                (yl, yh) << isplit_lohi(y),
+                al << bitop(xl, yl),
+                ah << bitop(xh, yh),
+                a << iconcat_lohi(al, ah)
+            ))
 
 # Expand integer operations with carry for RISC architectures that don't have
 # the flags.

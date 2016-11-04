@@ -1,0 +1,42 @@
+; Test the legalization of i64 arithmetic instructions.
+test legalizer
+isa riscv supports_m=1
+
+function bitwise_and(i64, i64) -> i64 {
+ebb0(v1: i64, v2: i64):
+    v3 = band v1, v2
+    return v3
+}
+; regex: V=v\d+
+; regex: VX=vx\d+
+; check: $(v1l=$V), $(v1h=$VX) = isplit_lohi $v1
+; check: $(v2l=$V), $(v2h=$VX) = isplit_lohi $v2
+; check: $(v3l=$V) = band $v1l, $v2l
+; check: $(v3h=$V) = band $v1h, $v2h
+; check: $v3 = iconcat_lohi $v3l, $v3h
+
+function bitwise_or(i64, i64) -> i64 {
+ebb0(v1: i64, v2: i64):
+    v3 = bor v1, v2
+    return v3
+}
+; regex: V=v\d+
+; regex: VX=vx\d+
+; check: $(v1l=$V), $(v1h=$VX) = isplit_lohi $v1
+; check: $(v2l=$V), $(v2h=$VX) = isplit_lohi $v2
+; check: $(v3l=$V) = bor $v1l, $v2l
+; check: $(v3h=$V) = bor $v1h, $v2h
+; check: $v3 = iconcat_lohi $v3l, $v3h
+
+function bitwise_xor(i64, i64) -> i64 {
+ebb0(v1: i64, v2: i64):
+    v3 = bxor v1, v2
+    return v3
+}
+; regex: V=v\d+
+; regex: VX=vx\d+
+; check: $(v1l=$V), $(v1h=$VX) = isplit_lohi $v1
+; check: $(v2l=$V), $(v2h=$VX) = isplit_lohi $v2
+; check: $(v3l=$V) = bxor $v1l, $v2l
+; check: $(v3h=$V) = bxor $v1h, $v2h
+; check: $v3 = iconcat_lohi $v3l, $v3h
