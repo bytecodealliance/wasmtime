@@ -20,6 +20,9 @@ pub struct TestFile<'a> {
     pub commands: Vec<TestCommand<'a>>,
     /// `isa bar ...` lines.
     pub isa_spec: IsaSpec,
+    /// Comments appearing before the first function.
+    /// These are all tagged as 'Function' scope for lack of a better entity.
+    pub preamble_comments: Vec<Comment<'a>>,
     /// Parsed functions and additional details about each function.
     pub functions: Vec<(Function, Details<'a>)>,
 }
@@ -47,6 +50,9 @@ pub struct Details<'a> {
 /// after the function are tagged as `AnyEntity::Function`.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Comment<'a> {
+    /// The entity this comment is attached to.
+    /// Comments always follow their entity.
     pub entity: AnyEntity,
+    /// Text of the comment, including the leading `;`.
     pub text: &'a str,
 }

@@ -38,9 +38,12 @@ pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
 /// The returned `TestFile` contains direct references to substrings of `text`.
 pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
     let mut parser = Parser::new(text);
+    // Gather the preamble comments as 'Function'.
+    parser.gather_comments(AnyEntity::Function);
     Ok(TestFile {
         commands: parser.parse_test_commands(),
         isa_spec: try!(parser.parse_isa_specs()),
+        preamble_comments: parser.take_comments(),
         functions: try!(parser.parse_function_list()),
     })
 }
@@ -271,6 +274,11 @@ impl<'a> Parser<'a> {
     // Begin gathering comments associated with `entity`.
     fn gather_comments<E: Into<AnyEntity>>(&mut self, entity: E) {
         self.comment_entity = Some(entity.into());
+    }
+
+    // Get the comments gathered so far, clearing out the internal list.
+    fn take_comments(&mut self) -> Vec<Comment<'a>> {
+        mem::replace(&mut self.comments, Vec::new())
     }
 
     // Rewrite the entity of the last added comments from `old` to `new`.
@@ -561,7 +569,7 @@ impl<'a> Parser<'a> {
 
         let details = Details {
             location: location,
-            comments: mem::replace(&mut self.comments, Vec::new()),
+            comments: self.take_comments(),
             map: ctx.map,
         };
 
@@ -1482,6 +1490,7 @@ mod tests {
                              test cfg option=5
                              test verify
                              set enable_float=false
+                             ; still preamble
                              function comment() {}")
             .unwrap();
         assert_eq!(tf.commands.len(), 2);
@@ -1491,6 +1500,9 @@ mod tests {
             IsaSpec::None(s) => assert!(!s.enable_float()),
             _ => panic!("unexpected ISAs"),
         }
+        assert_eq!(tf.preamble_comments.len(), 2);
+        assert_eq!(tf.preamble_comments[0].text, "; before");
+        assert_eq!(tf.preamble_comments[1].text, "; still preamble");
         assert_eq!(tf.functions.len(), 1);
         assert_eq!(tf.functions[0].0.name.to_string(), "comment");
     }
