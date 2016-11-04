@@ -164,6 +164,19 @@ impl Value {
             Table(index)
         }
     }
+
+    /// Assuming that this is a direct value, get the referenced instruction.
+    ///
+    /// # Panics
+    ///
+    /// If this is not a value created with `new_direct()`.
+    pub fn unwrap_direct(&self) -> Inst {
+        if let ExpandedValue::Direct(inst) = self.expand() {
+            inst
+        } else {
+            panic!("{} is not a direct value", self)
+        }
+    }
 }
 
 /// Display a `Value` reference as "v7" or "v2x".
