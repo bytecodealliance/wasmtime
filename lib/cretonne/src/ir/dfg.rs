@@ -137,7 +137,8 @@ impl DataFlowGraph {
         use ir::entities::ExpandedValue::Table;
         let mut v = value;
 
-        for _ in 0..self.extended_values.len() {
+        // Note that extended_values may be empty here.
+        for _ in 0..1 + self.extended_values.len() {
             v = match v.expand() {
                 Table(idx) => {
                     match self.extended_values[idx] {
@@ -655,12 +656,16 @@ mod tests {
         let mut func = Function::new();
         let dfg = &mut func.dfg;
         let ebb0 = dfg.make_ebb();
-        let arg0 = dfg.append_ebb_arg(ebb0, types::I32);
         let pos = &mut Cursor::new(&mut func.layout);
         pos.insert_ebb(ebb0);
 
         // Build a little test program.
         let v1 = dfg.ins(pos).iconst(types::I32, 42);
+
+        // Make sure we can resolve value aliases even when extended_values is empty.
+        assert_eq!(dfg.resolve_aliases(v1), v1);
+
+        let arg0 = dfg.append_ebb_arg(ebb0, types::I32);
         let (s, c) = dfg.ins(pos).iadd_cout(v1, arg0);
         let iadd = match s.expand() {
             Direct(i) => i,
