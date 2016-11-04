@@ -139,8 +139,6 @@ def gen_xform(xform, fmt):
     `inst: Inst` is the variable to be replaced. It is pointed to by `pos:
     Cursor`.
     `dfg: DataFlowGraph` is available and mutable.
-
-    Produce an `Option<Inst>` result at the end.
     """
     # Unwrap the source instruction, create local variables for the input
     # variables.
@@ -149,9 +147,6 @@ def gen_xform(xform, fmt):
     # Emit the destination pattern.
     for dst in xform.dst.rtl:
         emit_dst_inst(dst, fmt)
-
-    # TODO: Return the first replacement instruction.
-    fmt.line('None')
 
 
 def gen_xform_group(xgrp, fmt):
@@ -165,8 +160,7 @@ def gen_xform_group(xgrp, fmt):
     fmt.line('#[allow(unused_variables,unused_assignments)]')
     with fmt.indented(
             'fn ' + xgrp.name +
-            '(pos: &mut Cursor, dfg: &mut DataFlowGraph) -> ' +
-            'Option<Inst> {',
+            '(pos: &mut Cursor, dfg: &mut DataFlowGraph) -> bool {',
             '}'):
         # Gen the instruction to be legalized. The cursor we're passed must be
         # pointing at an instruction.
@@ -179,7 +173,8 @@ def gen_xform_group(xgrp, fmt):
                         'Opcode::{} => {{'.format(inst.camel_name), '}'):
                     gen_xform(xform, fmt)
             # We'll assume there are uncovered opcodes.
-            fmt.line('_ => None,')
+            fmt.line('_ => return false,')
+        fmt.line('true')
 
 
 def generate(isas, out_dir):
