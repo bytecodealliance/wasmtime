@@ -87,6 +87,19 @@ impl settings::Configurable for Builder {
     }
 }
 
+/// After determining that an instruction doesn't have an encoding, how should we proceed to
+/// legalize it?
+///
+/// These actions correspond to the transformation groups defined in `meta/cretonne/legalize.py`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Legalize {
+    /// Legalize in terms of narrower types.
+    Narrow,
+
+    /// Expanding in terms of other instructions using the same types.
+    Expand,
+}
+
 /// Methods that are specialized to a target ISA.
 pub trait TargetIsa {
     /// Get the name of this ISA.
@@ -101,7 +114,7 @@ pub trait TargetIsa {
     /// Otherwise, return `None`.
     ///
     /// This is also the main entry point for determining if an instruction is legal.
-    fn encode(&self, dfg: &DataFlowGraph, inst: &InstructionData) -> Option<Encoding>;
+    fn encode(&self, dfg: &DataFlowGraph, inst: &InstructionData) -> Result<Encoding, Legalize>;
 
     /// Get a static array of names associated with encoding recipes in this ISA. Encoding recipes
     /// are numbered starting from 0, corresponding to indexes into th name array.
