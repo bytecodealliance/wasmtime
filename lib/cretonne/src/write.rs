@@ -145,11 +145,28 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
     Some(rtype)
 }
 
+// Write out any value aliases appearing in `inst`.
+fn write_value_aliases(w: &mut Write, func: &Function, inst: Inst, indent: usize) -> Result {
+    for &arg in func.dfg[inst].arguments().iter().flat_map(|x| x.iter()) {
+        let resolved = func.dfg.resolve_aliases(arg);
+        if resolved != arg {
+            try!(writeln!(w, "{1:0$}{2} -> {3}", indent, "", arg, resolved));
+        }
+    }
+    Ok(())
+}
+
 fn write_instruction(w: &mut Write,
                      func: &Function,
                      isa: Option<&TargetIsa>,
                      inst: Inst)
                      -> Result {
+    // Indent all instructions to col 24 if any encodings are present.
+    let indent = if func.encodings.is_empty() { 4 } else { 24 };
+
+    // Value aliases come out on lines before the instruction using them.
+    try!(write_value_aliases(w, func, inst, indent));
+
     // Write out encoding info.
     if let Some(enc) = func.encodings.get(inst).cloned() {
         let mut s = String::with_capacity(16);
@@ -161,8 +178,8 @@ fn write_instruction(w: &mut Write,
         // Align instruction following ISA annotation to col 24.
         try!(write!(w, "{:23} ", s));
     } else {
-        // No annotations, simply indent by 4.
-        try!(write!(w, "    "));
+        // No annotations, simply indent.
+        try!(write!(w, "{1:0$}", indent, ""));
     }
 
     // Write out the result values, if any.
