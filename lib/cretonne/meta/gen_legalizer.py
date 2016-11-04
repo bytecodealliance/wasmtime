@@ -63,11 +63,11 @@ def unwrap_inst(iref, node, fmt):
             else:
                 # This is a value operand.
                 if nvops == 1:
-                    outs.append(prefix + 'arg')
+                    arg = prefix + 'arg'
                 else:
-                    outs.append(
-                            '{}args[{}]'.format(
-                                prefix, iform.value_operands.index(i)))
+                    arg = '{}args[{}]'.format(
+                            prefix, iform.value_operands.index(i))
+                outs.append('dfg.resolve_aliases({})'.format(arg))
         fmt.line('({})'.format(', '.join(outs)))
         fmt.outdented_line('} else {')
         fmt.line('unreachable!("bad instruction format")')

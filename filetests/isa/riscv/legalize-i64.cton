@@ -43,3 +43,23 @@ ebb0(v1: i64, v2: i64):
 ; check: [R#8c
 ; sameln: $(v3h=$V) = bxor $v1h, $v2h
 ; check: $v3 = iconcat_lohi $v3l, $v3h
+
+function arith_add(i64, i64) -> i64 {
+; Legalizing iadd.i64 requires two steps:
+; 1. Narrow to iadd_cout.i32, then
+; 2. Expand iadd_cout.i32 since RISC-V has no carry flag.
+ebb0(v1: i64, v2: i64):
+    v3 = iadd v1, v2
+    return v3
+}
+; check: $(v1l=$V), $(v1h=$VX) = isplit_lohi $v1
+; check: $(v2l=$V), $(v2h=$VX) = isplit_lohi $v2
+; check: [R#0c
+; sameln: $(v3l=$V) = iadd $v1l, $v2l
+; check: $(c=$V) = icmp ult, $v3l, $v1l
+; check: [R#0c
+; sameln: $(v3h1=$V) = iadd $v1h, $v2h
+; TODO: This doesn't typecheck. We need to convert the b1 result to i32.
+; check: [R#0c
+; sameln: $(v3h=$V) = iadd $v3h1, $c
+; check: $v3 = iconcat_lohi $v3l, $v3h
