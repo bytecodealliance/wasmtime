@@ -15,7 +15,7 @@
 
 use ir::{Function, Cursor, DataFlowGraph, InstructionData, Opcode, Inst, InstBuilder};
 use ir::condcodes::IntCC;
-use isa::TargetIsa;
+use isa::{TargetIsa, Legalize};
 
 /// Legalize `func` for `isa`.
 ///
@@ -25,30 +25,35 @@ use isa::TargetIsa;
 pub fn legalize_function(func: &mut Function, isa: &TargetIsa) {
     // TODO: This is very simplified and incomplete.
     func.encodings.resize(func.dfg.num_insts());
-    for ebb in func.layout.ebbs() {
-        for inst in func.layout.ebb_insts(ebb) {
+    let mut pos = Cursor::new(&mut func.layout);
+    while let Some(_ebb) = pos.next_ebb() {
+        while let Some(inst) = pos.next_inst() {
             match isa.encode(&func.dfg, &func.dfg[inst]) {
-                Some(encoding) => func.encodings[inst] = encoding,
-                None => {
-                    // TODO: We should transform the instruction into legal equivalents.
-                    // Possible strategies are:
-                    // 1. Expand instruction into sequence of legal instructions. Possibly
-                    //    iteratively.
-                    // 2. Split the controlling type variable into high and low parts. This applies
-                    //    both to SIMD vector types which can be halved and to integer types such
-                    //    as `i64` used on a 32-bit ISA.
-                    // 3. Promote the controlling type variable to a larger type. This typically
-                    //    means expressing `i8` and `i16` arithmetic in terms if `i32` operations
-                    //    on RISC targets. (It may or may not be beneficial to promote small vector
-                    //    types versus splitting them.)
-                    // 4. Convert to library calls. For example, floating point operations on an
-                    //    ISA with no IEEE 754 support.
-                    //
-                    // The iteration scheme used here is not going to cut it. Transforming
-                    // instructions involves changing `function.layout` which is impossiblr while
-                    // it is referenced by the two iterators. We need a layout cursor that can
-                    // maintain a position *and* permit inserting and replacing instructions.
+                Ok(encoding) => func.encodings[inst] = encoding,
+                Err(Legalize::Expand) => {
+                    expand(&mut pos, &mut func.dfg);
                 }
+                Err(Legalize::Narrow) => {
+                    narrow(&mut pos, &mut func.dfg);
+                }
+                // TODO: We should transform the instruction into legal equivalents.
+                // Possible strategies are:
+                // 1. Expand instruction into sequence of legal instructions. Possibly
+                //    iteratively.
+                // 2. Split the controlling type variable into high and low parts. This applies
+                //    both to SIMD vector types which can be halved and to integer types such
+                //    as `i64` used on a 32-bit ISA.
+                // 3. Promote the controlling type variable to a larger type. This typically
+                //    means expressing `i8` and `i16` arithmetic in terms if `i32` operations
+                //    on RISC targets. (It may or may not be beneficial to promote small vector
+                //    types versus splitting them.)
+                // 4. Convert to library calls. For example, floating point operations on an
+                //    ISA with no IEEE 754 support.
+                //
+                // The iteration scheme used here is not going to cut it. Transforming
+                // instructions involves changing `function.layout` which is impossiblr while
+                // it is referenced by the two iterators. We need a layout cursor that can
+                // maintain a position *and* permit inserting and replacing instructions.
             }
         }
     }
