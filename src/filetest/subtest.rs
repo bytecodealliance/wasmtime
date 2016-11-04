@@ -5,13 +5,16 @@ use std::borrow::Cow;
 use cretonne::ir::Function;
 use cretonne::isa::TargetIsa;
 use cretonne::settings::Flags;
-use cton_reader::Details;
+use cton_reader::{Details, Comment};
 use filecheck::{self, CheckerBuilder, Checker, Value as FCValue};
 
 pub type Result<T> = result::Result<T, String>;
 
 /// Context for running a a test on a single function.
 pub struct Context<'a> {
+    /// Comments from the preamble f the test file. These apply to all functions.
+    pub preamble_comments: &'a [Comment<'a>],
+
     /// Additional details about the function from the parser.
     pub details: Details<'a>,
 
@@ -69,7 +72,7 @@ impl<'a> filecheck::VariableMap for Context<'a> {
 
 /// Run filecheck on `text`, using directives extracted from `context`.
 pub fn run_filecheck(text: &str, context: &Context) -> Result<()> {
-    let checker = try!(build_filechecker(&context.details));
+    let checker = try!(build_filechecker(context));
     if try!(checker.check(&text, context).map_err(|e| format!("filecheck: {}", e))) {
         Ok(())
     } else {
@@ -80,10 +83,14 @@ pub fn run_filecheck(text: &str, context: &Context) -> Result<()> {
     }
 }
 
-/// Build a filechecker using the directives in the function's comments.
-pub fn build_filechecker(details: &Details) -> Result<Checker> {
+/// Build a filechecker using the directives in the file preamble and the function's comments.
+pub fn build_filechecker(context: &Context) -> Result<Checker> {
     let mut builder = CheckerBuilder::new();
-    for comment in &details.comments {
+    // Preamble comments apply to all functions.
+    for comment in context.preamble_comments {
+        try!(builder.directive(comment.text).map_err(|e| format!("filecheck: {}", e)));
+    }
+    for comment in &context.details.comments {
         try!(builder.directive(comment.text).map_err(|e| format!("filecheck: {}", e)));
     }
     let checker = builder.finish();

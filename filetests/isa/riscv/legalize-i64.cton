@@ -2,13 +2,14 @@
 test legalizer
 isa riscv supports_m=1
 
+; regex: V=v\d+
+; regex: VX=vx\d+
+
 function bitwise_and(i64, i64) -> i64 {
 ebb0(v1: i64, v2: i64):
     v3 = band v1, v2
     return v3
 }
-; regex: V=v\d+
-; regex: VX=vx\d+
 ; check: $(v1l=$V), $(v1h=$VX) = isplit_lohi $v1
 ; check: $(v2l=$V), $(v2h=$VX) = isplit_lohi $v2
 ; check: [R#ec
@@ -22,8 +23,6 @@ ebb0(v1: i64, v2: i64):
     v3 = bor v1, v2
     return v3
 }
-; regex: V=v\d+
-; regex: VX=vx\d+
 ; check: $(v1l=$V), $(v1h=$VX) = isplit_lohi $v1
 ; check: $(v2l=$V), $(v2h=$VX) = isplit_lohi $v2
 ; check: [R#cc
@@ -37,8 +36,6 @@ ebb0(v1: i64, v2: i64):
     v3 = bxor v1, v2
     return v3
 }
-; regex: V=v\d+
-; regex: VX=vx\d+
 ; check: $(v1l=$V), $(v1h=$VX) = isplit_lohi $v1
 ; check: $(v2l=$V), $(v2h=$VX) = isplit_lohi $v2
 ; check: [R#8c
