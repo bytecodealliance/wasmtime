@@ -106,6 +106,7 @@ def emit_dst_inst(node, fmt):
     # type: (Def, Formatter) -> None
     exact_replace = False
     replaced_inst = None  # type: str
+    fixup_first_result = False
     if len(node.defs) == 0:
         # This node doesn't define any values, so just insert the new
         # instruction.
@@ -125,6 +126,7 @@ def emit_dst_inst(node, fmt):
             # Insert a new instruction since its primary def doesn't match the
             # src.
             builder = 'let {} = dfg.ins(pos)'.format(wrap_tup(node.defs))
+            fixup_first_result = node.defs[0].is_output()
 
     fmt.line('{}.{};'.format(builder, node.expr.rust_builder()))
 
@@ -138,6 +140,14 @@ def emit_dst_inst(node, fmt):
 
     if exact_replace:
         fmt.comment('exactreplacement')
+
+    # Fix up any output vars.
+    if fixup_first_result:
+        # The first result of the instruction just inserted is an output var,
+        # but it was not a primary result in the source pattern.
+        # We need to change the original value to an alias of the primary one
+        # we just inserted.
+        fmt.line('dfg.change_to_alias(src_{0}, {0});'.format(node.defs[0]))
 
 
 def gen_xform(xform, fmt):
