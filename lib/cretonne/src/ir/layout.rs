@@ -381,6 +381,11 @@ impl<'f> Cursor<'f> {
         self.pos
     }
 
+    /// Move the cursor to a new position.
+    pub fn set_position(&mut self, pos: CursorPosition) {
+        self.pos = pos;
+    }
+
     /// Get the EBB corresponding to the current position.
     pub fn current_ebb(&self) -> Option<Ebb> {
         use self::CursorPosition::*;
