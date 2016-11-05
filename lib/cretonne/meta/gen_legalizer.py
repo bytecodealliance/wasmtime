@@ -138,9 +138,6 @@ def emit_dst_inst(node, fmt):
                 .format(replaced_inst), '}'):
             fmt.line('pos.next_inst();')
 
-    if exact_replace:
-        fmt.comment('exactreplacement')
-
     # Fix up any output vars.
     if fixup_first_result:
         # The first result of the instruction just inserted is an output var,
@@ -148,6 +145,15 @@ def emit_dst_inst(node, fmt):
         # We need to change the original value to an alias of the primary one
         # we just inserted.
         fmt.line('dfg.change_to_alias(src_{0}, {0});'.format(node.defs[0]))
+
+    if not exact_replace:
+        # We don't support secondary values as outputs yet. Depending on the
+        # source value, we would need to :
+        # 1. For a primary source value, replace with a copy instruction.
+        # 2. For a secondary source value, request that the builder reuses the
+        #    value when making secondary result nodes.
+        for d in node.defs[1:]:
+            assert not d.is_output()
 
 
 def gen_xform(xform, fmt):
