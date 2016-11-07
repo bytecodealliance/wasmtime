@@ -7,10 +7,10 @@ patterns that describe how base instructions can be transformed to other base
 instructions that are legal.
 """
 from __future__ import absolute_import
-from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry
+from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry, iadd_imm
 from .instructions import isub, isub_bin, isub_bout, isub_borrow
 from .instructions import band, bor, bxor, isplit_lohi, iconcat_lohi
-from .instructions import icmp
+from .instructions import icmp, iconst
 from cdsl.ast import Var
 from cdsl.xform import Rtl, XFormGroup
 
@@ -126,4 +126,12 @@ expand.legalize(
             (a1, b1) << isub_bout(x, y),
             (a, b2) << isub_bout(a1, b_in),
             b << bor(b1, b2)
+        ))
+
+# Expansions for immediates that are too large.
+expand.legalize(
+        a << iadd_imm(x, y),
+        Rtl(
+            a1 << iconst(y),
+            a << iadd(x, a1)
         ))
