@@ -19,3 +19,14 @@ ebb0(v1: i32, v2: i32):
 ; It's possible the legalizer will rewrite these value aliases in the future.
 ; check: $v4 -> $cout
 ; check: return $v3, $v4
+
+; Expanding illegal immediate constants.
+; Note that at some point we'll probably expand the iconst as well.
+function large_imm(i32) -> i32 {
+ebb0(v0: i32):
+    v1 = iadd_imm v0, 1000000000
+    return v1
+}
+; check: $(cst=$V) = iconst.i32 0x3b9a_ca00
+; check: $v1 = iadd $v0, $cst
+; check: return $v1
