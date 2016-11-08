@@ -71,7 +71,7 @@ a module looks like this::
 Instruction descriptions
 ========================
 
-.. currentmodule:: cretonne
+.. module:: cdsl.instructions
 
 New instructions are defined as instances of the :class:`Instruction`
 class. As instruction instances are created, they are added to the currently
@@ -81,11 +81,13 @@ open :class:`InstructionGroup`.
     :members:
 
 The basic Cretonne instruction set described in :doc:`langref` is defined by the
-Python module :mod:`cretonne.base`. This module has a global variable
-:data:`cretonne.base.instructions` which is an :class:`InstructionGroup`
-instance containing all the base instructions.
+Python module :mod:`base.instructions`. This module has a global variable
+:data:`base.instructions.GROUP` which is an :class:`InstructionGroup` instance
+containing all the base instructions.
 
 .. autoclass:: Instruction
+
+.. currentmodule:: cdsl.operands
 
 An instruction is defined with a set of distinct input and output operands which
 must be instances of the :class:`Operand` class.
@@ -201,7 +203,7 @@ represent SSA values:
 .. autodata:: VALUE
 .. autodata:: VARIABLE_ARGS
 
-.. currentmodule:: cretonne
+.. module:: cdsl.formats
 
 When an instruction description is created, it is automatically assigned a
 predefined instruction format which is an instance of
@@ -252,6 +254,8 @@ controlling type variable, or it can vary independently of the other operands.
 
 Encodings
 =========
+
+.. currentmodule:: cretonne
 
 Encodings describe how Cretonne instructions are mapped to binary machine code
 for the target architecture. After the legalization pass, all remaining

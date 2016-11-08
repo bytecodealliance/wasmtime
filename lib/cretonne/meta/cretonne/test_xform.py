@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 from unittest import TestCase
 from doctest import DocTestSuite
+from base.instructions import iadd, iadd_imm, iconst
 from . import xform
-from .base import iadd, iadd_imm, iconst
 from .ast import Var
 from .xform import Rtl, XForm
 

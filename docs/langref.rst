@@ -849,7 +849,7 @@ Base instruction group
 All of the shared instructions are part of the :instgroup:`base` instruction
 group.
 
-.. autoinstgroup:: cretonne.base.instructions
+.. autoinstgroup:: base.instructions.GROUP
 
 Target ISAs may define further instructions in their own instruction groups.
 

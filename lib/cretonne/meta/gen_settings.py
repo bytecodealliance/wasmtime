@@ -5,8 +5,8 @@ from __future__ import absolute_import
 import srcgen
 from unique_table import UniqueSeqTable
 import constant_hash
+from cdsl import camel_case
 from cdsl.settings import BoolSetting, NumSetting, EnumSetting
-from cretonne import camel_case
 from base import settings
 
 

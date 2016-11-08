@@ -2,7 +2,7 @@
 RISC-V Encodings.
 """
 from __future__ import absolute_import
-from cretonne import base
+from base import instructions as base
 from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, R, Rshamt, I
 from .settings import use_m

@@ -2,7 +2,7 @@ from __future__ import absolute_import
 from unittest import TestCase
 from doctest import DocTestSuite
 from . import ast
-from .base import jump, iadd
+from base.instructions import jump, iadd
 
 
 def load_tests(loader, tests, ignore):
