@@ -5,10 +5,11 @@ This module provides classes and functions used to describe Cretonne
 instructions.
 """
 from __future__ import absolute_import
-import re
 import importlib
+from cdsl import camel_case
 from cdsl.predicates import And
 import cdsl.types
+from cdsl.operands import VALUE, VARIABLE_ARGS, OperandKind
 
 # The typing module is only required by mypy, and we don't use these imports
 # outside type comments.
@@ -23,116 +24,6 @@ except ImportError:
 
 if TYPE_CHECKING:
     from .typevar import TypeVar  # noqa
-
-
-camel_re = re.compile('(^|_)([a-z])')
-
-
-def camel_case(s):
-    # type: (str) -> str
-    """Convert the string s to CamelCase"""
-    return camel_re.sub(lambda m: m.group(2).upper(), s)
-
-
-# Kinds of operands.
-#
-# Each instruction has an opcode and a number of operands. The opcode
-# determines the instruction format, and the format determines the number of
-# operands and the kind of each operand.
-class OperandKind(object):
-    """
-    An instance of the `OperandKind` class corresponds to a kind of operand.
-    Each operand kind has a corresponding type in the Rust representation of an
-    instruction.
-    """
-
-    def __init__(self, name, doc, default_member=None, rust_type=None):
-        # type: (str, str, str, str) -> None
-        self.name = name
-        self.__doc__ = doc
-        self.default_member = default_member
-        # The camel-cased name of an operand kind is also the Rust type used to
-        # represent it.
-        self.rust_type = rust_type or camel_case(name)
-
-    def __str__(self):
-        # type: () -> str
-        return self.name
-
-    def __repr__(self):
-        # type: () -> str
-        return 'OperandKind({})'.format(self.name)
-
-    def operand_kind(self):
-        # type: () -> OperandKind
-        """
-        An `OperandKind` instance can be used directly as the type of an
-        `Operand` when defining an instruction.
-        """
-        return self
-
-    def free_typevar(self):
-        # Return the free typevariable controlling the type of this operand.
-        return None
-
-#: An SSA value operand. This is a value defined by another instruction.
-value = OperandKind(
-        'value', """
-        An SSA value defined by another instruction.
-
-        This kind of operand can represent any SSA value type, but the
-        instruction format may restrict the valid value types for a given
-        operand.
-        """)
-
-#: A variable-sized list of value operands. Use for Ebb and function call
-#: arguments.
-variable_args = OperandKind(
-        'variable_args', """
-        A variable size list of `value` operands.
-
-        Use this to represent arguemtns passed to a function call, arguments
-        passed to an extended basic block, or a variable number of results
-        returned from an instruction.
-        """,
-        default_member='varargs')
-
-
-# Instances of immediate operand types are provided in the
-# `cretonne.immediates` module.
-class ImmediateKind(OperandKind):
-    """
-    The kind of an immediate instruction operand.
-
-    :param default_member: The default member name of this kind the
-                           `InstructionData` data structure.
-    """
-
-    def __init__(self, name, doc, default_member='imm', rust_type=None):
-        # type: (str, str, str, str) -> None
-        super(ImmediateKind, self).__init__(
-                name, doc, default_member, rust_type)
-
-    def __repr__(self):
-        # type: () -> str
-        return 'ImmediateKind({})'.format(self.name)
-
-
-# Instances of entity reference operand types are provided in the
-# `cretonne.entities` module.
-class EntityRefKind(OperandKind):
-    """
-    The kind of an entity reference instruction operand.
-    """
-
-    def __init__(self, name, doc, default_member=None, rust_type=None):
-        # type: (str, str, str, str) -> None
-        super(EntityRefKind, self).__init__(
-                name, doc, default_member or name, rust_type)
-
-    def __repr__(self):
-        # type: () -> str
-        return 'EntityRefKind({})'.format(self.name)
 
 
 # Defining instructions.
@@ -215,7 +106,7 @@ class Operand(object):
         self.__doc__ = doc
         self.typ = typ
         if isinstance(typ, cdsl.types.ValueType):
-            self.kind = value
+            self.kind = VALUE
         else:
             self.kind = typ.operand_kind()
 
@@ -235,7 +126,7 @@ class Operand(object):
         """
         Is this an SSA value operand?
         """
-        return self.kind is value
+        return self.kind is cdsl.operands.VALUE
 
 
 class InstructionFormat(object):
@@ -285,12 +176,12 @@ class InstructionFormat(object):
 
         # Which of self.kinds are `value`?
         self.value_operands = tuple(
-                i for i, k in enumerate(self.kinds) if k is value)
+                i for i, k in enumerate(self.kinds) if k is VALUE)
 
         # The typevar_operand argument must point to a 'value' operand.
         self.typevar_operand = kwargs.get('typevar_operand', None)  # type: int
         if self.typevar_operand is not None:
-            assert self.kinds[self.typevar_operand] is value, \
+            assert self.kinds[self.typevar_operand] is VALUE, \
                     "typevar_operand must indicate a 'value' operand"
         elif len(self.value_operands) > 0:
             # Default to the first 'value' operand, if there is one.
@@ -361,7 +252,7 @@ class InstructionFormat(object):
         tuples of :py:`Operand` objects.
         """
         if len(outs) == 1:
-            multiple_results = outs[0].kind == variable_args
+            multiple_results = outs[0].kind == VARIABLE_ARGS
         else:
             multiple_results = len(outs) > 1
         sig = (multiple_results, tuple(op.kind for op in ins))

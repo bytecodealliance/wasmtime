@@ -6,7 +6,7 @@ polymorphic by using type variables.
 """
 from __future__ import absolute_import
 import math
-import cretonne
+import cdsl.operands
 
 try:
     from typing import Tuple, Union # noqa
@@ -315,11 +315,11 @@ class TypeVar(object):
         return TypeVar(None, None, base=self, derived_func='DoubleWidth')
 
     def operand_kind(self):
-        # type: () -> cretonne.OperandKind
+        # type: () -> cdsl.operands.OperandKind
         # When a `TypeVar` object is used to describe the type of an `Operand`
         # in an instruction definition, the kind of that operand is an SSA
         # value.
-        return cretonne.value  # type: ignore
+        return cdsl.operands.VALUE
 
     def free_typevar(self):
         # type: () -> TypeVar

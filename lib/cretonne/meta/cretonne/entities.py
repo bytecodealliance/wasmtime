@@ -4,7 +4,7 @@ operand types. There are corresponding definitions in the `cretonne.entities`
 Rust module.
 """
 from __future__ import absolute_import
-from . import EntityRefKind
+from cdsl.operands import EntityRefKind
 
 
 #: A reference to an extended basic block in the same function.

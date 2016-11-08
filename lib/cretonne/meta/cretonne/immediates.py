@@ -3,7 +3,7 @@ The `cretonne.immediates` module predefines all the Cretonne immediate operand
 types.
 """
 from __future__ import absolute_import
-from . import ImmediateKind
+from cdsl.operands import ImmediateKind
 
 #: A 64-bit immediate integer operand.
 #:
