@@ -5,7 +5,7 @@ This module defines classes that can be used to create abstract syntax trees
 for patern matching an rewriting of cretonne instructions.
 """
 from __future__ import absolute_import
-from . import Instruction, BoundInstruction
+import cretonne
 
 try:
     from typing import Union, Tuple  # noqa
@@ -174,12 +174,12 @@ class Apply(Expr):
     """
 
     def __init__(self, inst, args):
-        # type: (Union[Instruction, BoundInstruction], Tuple[Expr, ...]) -> None  # noqa
-        if isinstance(inst, BoundInstruction):
+        # type: (Union[cretonne.Instruction, cretonne.BoundInstruction], Tuple[Expr, ...]) -> None  # noqa
+        if isinstance(inst, cretonne.BoundInstruction):
             self.inst = inst.inst
             self.typevars = inst.typevars
         else:
-            assert isinstance(inst, Instruction)
+            assert isinstance(inst, cretonne.Instruction)
             self.inst = inst
             self.typevars = ()
         self.args = args
