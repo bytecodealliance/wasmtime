@@ -5,7 +5,7 @@ This module defines classes that can be used to create abstract syntax trees
 for patern matching an rewriting of cretonne instructions.
 """
 from __future__ import absolute_import
-import cretonne
+from cdsl import instructions
 
 try:
     from typing import Union, Tuple  # noqa
@@ -20,7 +20,7 @@ class Def(object):
 
     Example:
 
-    >>> from .base import iadd_cout, iconst
+    >>> from base.instructions import iadd_cout, iconst
     >>> x = Var('x')
     >>> y = Var('y')
     >>> x << iconst(4)
@@ -162,7 +162,7 @@ class Apply(Expr):
     instructions. This applies to both bound and unbound polymorphic
     instructions:
 
-    >>> from .base import jump, iadd
+    >>> from base.instructions import jump, iadd
     >>> jump('next', ())
     Apply(jump, ('next', ()))
     >>> iadd.i32('x', 'y')
@@ -174,12 +174,12 @@ class Apply(Expr):
     """
 
     def __init__(self, inst, args):
-        # type: (Union[cretonne.Instruction, cretonne.BoundInstruction], Tuple[Expr, ...]) -> None  # noqa
-        if isinstance(inst, cretonne.BoundInstruction):
+        # type: (instructions.MaybeBoundInst, Tuple[Expr, ...]) -> None  # noqa
+        if isinstance(inst, instructions.BoundInstruction):
             self.inst = inst.inst
             self.typevars = inst.typevars
         else:
-            assert isinstance(inst, cretonne.Instruction)
+            assert isinstance(inst, instructions.Instruction)
             self.inst = inst
             self.typevars = ()
         self.args = args

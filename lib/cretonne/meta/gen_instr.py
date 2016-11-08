@@ -7,7 +7,7 @@ import constant_hash
 from unique_table import UniqueTable, UniqueSeqTable
 import cdsl.types
 import cdsl.operands
-import cretonne
+from cdsl.formats import InstructionFormat
 
 
 def gen_formats(fmt):
@@ -21,7 +21,7 @@ def gen_formats(fmt):
     fmt.doc_comment('and the `InstructionData` enums.')
     fmt.line('#[derive(Copy, Clone, PartialEq, Eq, Debug)]')
     with fmt.indented('pub enum InstructionFormat {', '}'):
-        for f in cretonne.InstructionFormat.all_formats:
+        for f in InstructionFormat.all_formats:
             fmt.doc_comment(str(f))
             fmt.line(f.name + ',')
     fmt.line()
@@ -34,7 +34,7 @@ def gen_formats(fmt):
                 "fn from(inst: &'a InstructionData) -> InstructionFormat {",
                 '}'):
             with fmt.indented('match *inst {', '}'):
-                for f in cretonne.InstructionFormat.all_formats:
+                for f in InstructionFormat.all_formats:
                     fmt.line(('InstructionData::{} {{ .. }} => ' +
                               'InstructionFormat::{},')
                              .format(f.name, f.name))
@@ -55,7 +55,7 @@ def gen_arguments_method(fmt, is_mut):
             'pub fn {f}(&{m}self) -> [&{m}[Value]; 2] {{'
             .format(f=method, m=mut), '}'):
         with fmt.indented('match *self {', '}'):
-            for f in cretonne.InstructionFormat.all_formats:
+            for f in InstructionFormat.all_formats:
                 n = 'InstructionData::' + f.name
                 has_varargs = cdsl.operands.VARIABLE_ARGS in f.kinds
                 # Formats with both fixed and variable arguments delegate to
@@ -118,7 +118,7 @@ def gen_instruction_data_impl(fmt):
         fmt.doc_comment('Get the opcode of this instruction.')
         with fmt.indented('pub fn opcode(&self) -> Opcode {', '}'):
             with fmt.indented('match *self {', '}'):
-                for f in cretonne.InstructionFormat.all_formats:
+                for f in InstructionFormat.all_formats:
                     fmt.line(
                             'InstructionData::{} {{ opcode, .. }} => opcode,'
                             .format(f.name))
@@ -126,7 +126,7 @@ def gen_instruction_data_impl(fmt):
         fmt.doc_comment('Type of the first result, or `VOID`.')
         with fmt.indented('pub fn first_type(&self) -> Type {', '}'):
             with fmt.indented('match *self {', '}'):
-                for f in cretonne.InstructionFormat.all_formats:
+                for f in InstructionFormat.all_formats:
                     fmt.line(
                             'InstructionData::{} {{ ty, .. }} => ty,'
                             .format(f.name))
@@ -135,7 +135,7 @@ def gen_instruction_data_impl(fmt):
         with fmt.indented(
                 'pub fn first_type_mut(&mut self) -> &mut Type {', '}'):
             with fmt.indented('match *self {', '}'):
-                for f in cretonne.InstructionFormat.all_formats:
+                for f in InstructionFormat.all_formats:
                     fmt.line(
                             'InstructionData::{} {{ ref mut ty, .. }} => ty,'
                             .format(f.name))
@@ -147,7 +147,7 @@ def gen_instruction_data_impl(fmt):
         with fmt.indented(
                 'pub fn second_result(&self) -> Option<Value> {', '}'):
             with fmt.indented('match *self {', '}'):
-                for f in cretonne.InstructionFormat.all_formats:
+                for f in InstructionFormat.all_formats:
                     if f.multiple_results:
                         fmt.line(
                                 'InstructionData::' + f.name +
@@ -164,7 +164,7 @@ def gen_instruction_data_impl(fmt):
                 "pub fn second_result_mut<'a>(&'a mut self)" +
                 " -> Option<&'a mut Value> {", '}'):
             with fmt.indented('match *self {', '}'):
-                for f in cretonne.InstructionFormat.all_formats:
+                for f in InstructionFormat.all_formats:
                     if f.multiple_results:
                         fmt.line(
                                 'InstructionData::' + f.name +
@@ -180,7 +180,7 @@ def gen_instruction_data_impl(fmt):
         with fmt.indented(
                 'pub fn typevar_operand(&self) -> Option<Value> {', '}'):
             with fmt.indented('match *self {', '}'):
-                for f in cretonne.InstructionFormat.all_formats:
+                for f in InstructionFormat.all_formats:
                     n = 'InstructionData::' + f.name
                     if f.typevar_operand is None:
                         fmt.line(n + ' { .. } => None,')
@@ -612,7 +612,7 @@ def gen_builder(insts, fmt):
             "pub trait InstBuilder<'f>: InstBuilderBase<'f> {",  '}'):
         for inst in insts:
             gen_inst_builder(inst, fmt)
-        for f in cretonne.InstructionFormat.all_formats:
+        for f in InstructionFormat.all_formats:
             gen_format_constructor(f, fmt)
 
 

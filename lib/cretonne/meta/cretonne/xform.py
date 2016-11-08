@@ -54,7 +54,7 @@ class XForm(object):
     A legalization pattern must have a source pattern containing only a single
     instruction.
 
-    >>> from .base import iconst, iadd, iadd_imm
+    >>> from base.instructions import iconst, iadd, iadd_imm
     >>> a = Var('a')
     >>> c = Var('c')
     >>> v = Var('v')

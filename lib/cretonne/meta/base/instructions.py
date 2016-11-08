@@ -5,16 +5,16 @@ This module defines the basic Cretonne instruction set that all targets
 support.
 """
 from __future__ import absolute_import
-from cdsl.operands import VARIABLE_ARGS
+from cdsl.operands import Operand, VARIABLE_ARGS
 from cdsl.typevar import TypeVar
-from . import Operand, Instruction, InstructionGroup
+from cdsl.instructions import Instruction, InstructionGroup
 from base.types import i8, f32, f64, b1
 from base.immediates import imm64, uimm8, ieee32, ieee64, immvector
 from base.immediates import intcc, floatcc
 from base import entities
 import base.formats  # noqa
 
-instructions = InstructionGroup("base", "Shared base instruction set")
+GROUP = InstructionGroup("base", "Shared base instruction set")
 
 Int = TypeVar('Int', 'A scalar or vector integer type', ints=True, simd=True)
 iB = TypeVar('iB', 'A scalar integer type', ints=True)
@@ -1213,4 +1213,4 @@ iconcat_lohi = Instruction(
         """,
         ins=(lo, hi), outs=a)
 
-instructions.close()
+GROUP.close()

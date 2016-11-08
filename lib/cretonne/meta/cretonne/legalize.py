@@ -7,10 +7,10 @@ patterns that describe how base instructions can be transformed to other base
 instructions that are legal.
 """
 from __future__ import absolute_import
-from .base import iadd, iadd_cout, iadd_cin, iadd_carry
-from .base import isub, isub_bin, isub_bout, isub_borrow
-from .base import band, bor, bxor, isplit_lohi, iconcat_lohi
-from .base import icmp
+from base.instructions import iadd, iadd_cout, iadd_cin, iadd_carry
+from base.instructions import isub, isub_bin, isub_bout, isub_borrow
+from base.instructions import band, bor, bxor, isplit_lohi, iconcat_lohi
+from base.instructions import icmp
 from .ast import Var
 from .xform import Rtl, XFormGroup
 

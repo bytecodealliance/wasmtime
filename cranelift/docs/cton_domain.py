@@ -269,7 +269,7 @@ class InstDocumenter(sphinx.ext.autodoc.Documenter):
         return False
 
     def resolve_name(self, modname, parents, path, base):
-        return 'cretonne.base', [base]
+        return 'base.instructions', [base]
 
     def format_signature(self):
         inst = self.object
