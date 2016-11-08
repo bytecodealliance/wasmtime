@@ -2,10 +2,11 @@
 Instruction transformations.
 """
 from __future__ import absolute_import
-from .ast import Def, Var, Apply, Expr  # noqa
+from .ast import Def, Var, Apply
 
 try:
     from typing import Union, Iterator, Sequence, Iterable  # noqa
+    from .ast import Expr  # noqa
     DefApply = Union[Def, Apply]
 except ImportError:
     pass

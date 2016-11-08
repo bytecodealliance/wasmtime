@@ -5,7 +5,7 @@ This module defines classes that can be used to create abstract syntax trees
 for patern matching an rewriting of cretonne instructions.
 """
 from __future__ import absolute_import
-from cdsl import instructions
+from . import instructions
 
 try:
     from typing import Union, Tuple  # noqa
