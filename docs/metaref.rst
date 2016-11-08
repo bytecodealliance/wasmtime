@@ -17,7 +17,7 @@ steps:
 1. The Python modules are imported. This has the effect of building static data
    structures in global variables in the modules. These static data structures
    in the :mod:`base` and :mod:`isa` packages use the classes in the
-   :mod:`cdsl` module to describe instruction sets and other properties.
+   :mod:`cdsl` package to describe instruction sets and other properties.
 
 2. The static data structures are processed to produce Rust source code and
    constant tables.
@@ -37,7 +37,7 @@ Settings are used by the environment embedding Cretonne to control the details
 of code generation. Each setting is defined in the meta language so a compact
 and consistent Rust representation can be generated. Shared settings are defined
 in the :mod:`base.settings` module. Some settings are specific to a target ISA,
-and defined in a `settings` module under the appropriate
+and defined in a :file:`settings.py` module under the appropriate
 :file:`lib/cretonne/meta/isa/*` directory.
 
 Settings can take boolean on/off values, small numbers, or explicitly enumerated
@@ -68,10 +68,10 @@ a module looks like this::
     group.close(globals())
 
 
+.. module:: cdsl.instructions
+
 Instruction descriptions
 ========================
-
-.. module:: cdsl.instructions
 
 New instructions are defined as instances of the :class:`Instruction`
 class. As instruction instances are created, they are added to the currently
@@ -96,15 +96,17 @@ must be instances of the :class:`Operand` class.
 
 Cretonne uses two separate type systems for operand kinds and SSA values.
 
+.. module:: cdsl.typevar
+
 Type variables
 --------------
 
-Instruction descriptions can be made polymorphic by using :class:`Operand`
-instances that refer to a *type variable* instead of a concrete value type.
-Polymorphism only works for SSA value operands. Other operands have a fixed
-operand kind.
+Instruction descriptions can be made polymorphic by using
+:class:`cdsl.operands.Operand` instances that refer to a *type variable*
+instead of a concrete value type. Polymorphism only works for SSA value
+operands. Other operands have a fixed operand kind.
 
-.. autoclass:: cdsl.typevar.TypeVar
+.. autoclass:: TypeVar
     :members:
 
 If multiple operands refer to the same type variable they will be required to
@@ -145,10 +147,11 @@ indicated with an instance of :class:`ImmediateKind`.
 Entity references
 -----------------
 
+.. currentmodule:: cdsl.operands
+
 Instruction operands can also refer to other entities in the same function. This
 can be extended basic blocks, or entities declared in the function preamble.
 
-.. currentmodule:: cdsl.operands
 .. autoclass:: EntityRefKind
 
 .. automodule:: base.entities
@@ -157,10 +160,11 @@ can be extended basic blocks, or entities declared in the function preamble.
 Value types
 -----------
 
-Concrete value types are represented as instances of :class:`cdsl.types.ValueType`. There are
-subclasses to represent scalar and vector types.
-
 .. currentmodule:: cdsl.types
+
+Concrete value types are represented as instances of :class:`ValueType`. There
+are subclasses to represent scalar and vector types.
+
 .. autoclass:: ValueType
 .. inheritance-diagram:: ValueType ScalarType VectorType IntType FloatType BoolType
     :parts: 1
@@ -182,14 +186,14 @@ There are no predefined vector types, but they can be created as needed with
 the :func:`ScalarType.by` function.
 
 
+.. module:: cdsl.operands
+
 Instruction representation
 ==========================
 
-.. module:: cdsl.operands
-
 The Rust in-memory representation of instructions is derived from the
 instruction descriptions. Part of the representation is generated, and part is
-written as Rust code in the `cretonne.instructions` module. The instruction
+written as Rust code in the ``cretonne.instructions`` module. The instruction
 representation depends on the input operand kinds and whether the instruction
 can produce multiple results.
 
@@ -255,7 +259,7 @@ controlling type variable, or it can vary independently of the other operands.
 Encodings
 =========
 
-.. currentmodule:: cretonne
+.. currentmodule:: cdsl.isa
 
 Encodings describe how Cretonne instructions are mapped to binary machine code
 for the target architecture. After the legalization pass, all remaining
@@ -345,12 +349,13 @@ encodings only need the recipe predicates.
 
 .. autoclass:: EncRecipe
 
+.. module:: cdsl.isa
 
 Targets
 =======
 
 Cretonne can be compiled with support for multiple target instruction set
-architectures. Each ISA is represented by a :py:class:`cretonne.TargetISA` instance.
+architectures. Each ISA is represented by a :py:class:`cdsl.isa.TargetISA` instance.
 
 .. autoclass:: TargetISA
 
