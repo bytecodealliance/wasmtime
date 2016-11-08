@@ -305,11 +305,19 @@ class InstDocumenter(sphinx.ext.autodoc.Documenter):
 
         # Add inputs and outputs.
         for op in self.object.ins:
+            if op.is_value():
+                typ = op.typevar
+            else:
+                typ = op.kind
             self.add_line(u':in {} {}: {}'.format(
-                op.typ.name, op.name, op.get_doc()), sourcename)
+                typ, op.name, op.get_doc()), sourcename)
         for op in self.object.outs:
+            if op.is_value():
+                typ = op.typevar
+            else:
+                typ = op.kind
             self.add_line(u':out {} {}: {}'.format(
-                op.typ.name, op.name, op.get_doc()), sourcename)
+                typ, op.name, op.get_doc()), sourcename)
 
         # Document type inference for polymorphic instructions.
         if self.object.is_polymorphic:
