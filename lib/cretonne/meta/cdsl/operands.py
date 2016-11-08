@@ -32,14 +32,6 @@ class OperandKind(object):
         # type: () -> str
         return 'OperandKind({})'.format(self.name)
 
-    def operand_kind(self):
-        # type: () -> OperandKind
-        """
-        An `OperandKind` instance can be used directly as the type of an
-        `Operand` when defining an instruction.
-        """
-        return self
-
     def free_typevar(self):
         # Return the free typevariable controlling the type of this operand.
         return None

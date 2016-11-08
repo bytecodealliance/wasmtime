@@ -8,7 +8,8 @@ from __future__ import absolute_import
 import importlib
 from cdsl import camel_case
 from cdsl.predicates import And
-import cdsl.types
+from cdsl.types import ValueType
+from cdsl.typevar import TypeVar
 from cdsl.operands import VALUE, VARIABLE_ARGS, OperandKind
 
 # The typing module is only required by mypy, and we don't use these imports
@@ -18,7 +19,7 @@ try:
     from cdsl.predicates import Predicate, FieldPredicate  # noqa
     MaybeBoundInst = Union['Instruction', 'BoundInstruction']
     AnyPredicate = Union['Predicate', 'FieldPredicate']
-    OperandSpec = Union['OperandKind', 'cdsl.types.ValueType', 'TypeVar']
+    OperandSpec = Union['OperandKind', ValueType, TypeVar]
 except ImportError:
     TYPE_CHECKING = False
 
@@ -105,10 +106,12 @@ class Operand(object):
         self.name = name
         self.__doc__ = doc
         self.typ = typ
-        if isinstance(typ, cdsl.types.ValueType):
+        if isinstance(typ, ValueType):
+            self.kind = VALUE
+        elif isinstance(typ, TypeVar):
             self.kind = VALUE
         else:
-            self.kind = typ.operand_kind()
+            self.kind = typ
 
     def get_doc(self):
         # type: () -> str
@@ -126,7 +129,7 @@ class Operand(object):
         """
         Is this an SSA value operand?
         """
-        return self.kind is cdsl.operands.VALUE
+        return self.kind is VALUE
 
 
 class InstructionFormat(object):
@@ -464,7 +467,7 @@ class Instruction(object):
         return x
 
     def bind(self, *args):
-        # type: (*cdsl.types.ValueType) -> BoundInstruction
+        # type: (*ValueType) -> BoundInstruction
         """
         Bind a polymorphic instruction to a concrete list of type variable
         values.
@@ -480,10 +483,10 @@ class Instruction(object):
 
         >>> iadd.i32
         """
-        return self.bind(cdsl.types.ValueType.by_name(name))
+        return self.bind(ValueType.by_name(name))
 
     def fully_bound(self):
-        # type: () -> Tuple[Instruction, Tuple[cdsl.types.ValueType, ...]]
+        # type: () -> Tuple[Instruction, Tuple[ValueType, ...]]
         """
         Verify that all typevars have been bound, and return a
         `(inst, typevars)` pair.
@@ -509,7 +512,7 @@ class BoundInstruction(object):
     """
 
     def __init__(self, inst, typevars):
-        # type: (Instruction, Tuple[cdsl.types.ValueType, ...]) -> None
+        # type: (Instruction, Tuple[ValueType, ...]) -> None
         self.inst = inst
         self.typevars = typevars
         assert len(typevars) <= 1 + len(inst.other_typevars)
@@ -518,7 +521,7 @@ class BoundInstruction(object):
         return '.'.join([self.inst.name, ] + list(map(str, self.typevars)))
 
     def bind(self, *args):
-        # type: (*cdsl.types.ValueType) -> BoundInstruction
+        # type: (*ValueType) -> BoundInstruction
         """
         Bind additional typevars.
         """
@@ -531,10 +534,10 @@ class BoundInstruction(object):
 
         >>> uext.i32.i8
         """
-        return self.bind(cdsl.types.ValueType.by_name(name))
+        return self.bind(ValueType.by_name(name))
 
     def fully_bound(self):
-        # type: () -> Tuple[Instruction, Tuple[cdsl.types.ValueType, ...]]
+        # type: () -> Tuple[Instruction, Tuple[ValueType, ...]]
         """
         Verify that all typevars have been bound, and return a
         `(inst, typevars)` pair.
