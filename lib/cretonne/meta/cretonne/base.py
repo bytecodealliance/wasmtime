@@ -12,6 +12,7 @@ from base.types import i8, f32, f64, b1
 from base.immediates import imm64, uimm8, ieee32, ieee64, immvector
 from base.immediates import intcc, floatcc
 from base import entities
+import base.formats  # noqa
 
 instructions = InstructionGroup("base", "Shared base instruction set")
 
