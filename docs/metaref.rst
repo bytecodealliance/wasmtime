@@ -28,20 +28,21 @@ process if anything in the :file:`lib/cretonne/meta` directory has changed
 since the last build.
 
 
+.. module:: cdsl.settings
+
 Settings
 ========
 
 Settings are used by the environment embedding Cretonne to control the details
 of code generation. Each setting is defined in the meta language so a compact
 and consistent Rust representation can be generated. Shared settings are defined
-in the :mod:`cretonne.settings` module. Some settings are specific to a target
-ISA, and defined in a `settings` module under the appropriate
+in the :mod:`base.settings` module. Some settings are specific to a target ISA,
+and defined in a `settings` module under the appropriate
 :file:`lib/cretonne/meta/isa/*` directory.
 
 Settings can take boolean on/off values, small numbers, or explicitly enumerated
 symbolic values. Each type is represented by a sub-class of :class:`Setting`:
 
-.. currentmodule:: cretonne
 .. inheritance-diagram:: Setting BoolSetting NumSetting EnumSetting
     :parts: 1
 
@@ -69,6 +70,8 @@ a module looks like this::
 
 Instruction descriptions
 ========================
+
+.. currentmodule:: cretonne
 
 New instructions are defined as instances of the :class:`Instruction`
 class. As instruction instances are created, they are added to the currently

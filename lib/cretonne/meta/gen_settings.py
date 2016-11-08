@@ -5,7 +5,9 @@ from __future__ import absolute_import
 import srcgen
 from unique_table import UniqueSeqTable
 import constant_hash
-from cretonne import camel_case, BoolSetting, NumSetting, EnumSetting, settings
+from cdsl.settings import BoolSetting, NumSetting, EnumSetting
+from cretonne import camel_case
+from base import settings
 
 
 def gen_enum_types(sgrp, fmt):
