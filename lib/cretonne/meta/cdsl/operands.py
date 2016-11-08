@@ -1,6 +1,14 @@
 """Classes for describing instruction operands."""
 from __future__ import absolute_import
 from . import camel_case
+from .types import ValueType
+from .typevar import TypeVar
+
+try:
+    from typing import Union
+    OperandSpec = Union['OperandKind', ValueType, TypeVar]
+except ImportError:
+    pass
 
 
 # Kinds of operands.
@@ -94,3 +102,56 @@ class EntityRefKind(OperandKind):
     def __repr__(self):
         # type: () -> str
         return 'EntityRefKind({})'.format(self.name)
+
+
+class Operand(object):
+    """
+    An instruction operand can be an *immediate*, an *SSA value*, or an *entity
+    reference*. The type of the operand is one of:
+
+    1. A :py:class:`ValueType` instance indicates an SSA value operand with a
+       concrete type.
+
+    2. A :py:class:`TypeVar` instance indicates an SSA value operand, and the
+       instruction is polymorphic over the possible concrete types that the
+       type variable can assume.
+
+    3. An :py:class:`ImmediateKind` instance indicates an immediate operand
+       whose value is encoded in the instruction itself rather than being
+       passed as an SSA value.
+
+    4. An :py:class:`EntityRefKind` instance indicates an operand that
+       references another entity in the function, typically something declared
+       in the function preamble.
+
+    """
+    def __init__(self, name, typ, doc=''):
+        # type: (str, OperandSpec, str) -> None
+        self.name = name
+        self.__doc__ = doc
+        self.typ = typ
+        if isinstance(typ, ValueType):
+            self.kind = VALUE
+        elif isinstance(typ, TypeVar):
+            self.kind = VALUE
+        else:
+            assert isinstance(typ, OperandKind)
+            self.kind = typ
+
+    def get_doc(self):
+        # type: () -> str
+        if self.__doc__:
+            return self.__doc__
+        else:
+            return self.typ.__doc__
+
+    def __str__(self):
+        # type: () -> str
+        return "`{}`".format(self.name)
+
+    def is_value(self):
+        # type: () -> bool
+        """
+        Is this an SSA value operand?
+        """
+        return self.kind is VALUE
