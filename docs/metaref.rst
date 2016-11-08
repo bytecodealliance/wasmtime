@@ -127,13 +127,14 @@ There are some practical restrictions on the use of type variables, see
 Immediate operands
 ------------------
 
+.. currentmodule:: cdsl.operands
+
 Immediate instruction operands don't correspond to SSA values, but have values
 that are encoded directly in the instruction. Immediate operands don't
 have types from the :class:`cdsl.types.ValueType` type system; they often have
 enumerated values of a specific type. The type of an immediate operand is
 indicated with an instance of :class:`ImmediateKind`.
 
-.. currentmodule:: cretonne
 .. autoclass:: ImmediateKind
 
 .. automodule:: cretonne.immediates
@@ -145,8 +146,7 @@ Entity references
 Instruction operands can also refer to other entities in the same function. This
 can be extended basic blocks, or entities declared in the function preamble.
 
-.. currentmodule:: cretonne
-
+.. currentmodule:: cdsl.operands
 .. autoclass:: EntityRefKind
 
 .. automodule:: cretonne.entities
@@ -183,7 +183,7 @@ the :func:`ScalarType.by` function.
 Instruction representation
 ==========================
 
-.. currentmodule:: cretonne
+.. module:: cdsl.operands
 
 The Rust in-memory representation of instructions is derived from the
 instruction descriptions. Part of the representation is generated, and part is
@@ -198,8 +198,10 @@ Since all SSA value operands are represented as a `Value` in Rust code, value
 types don't affect the representation. Two special operand kinds are used to
 represent SSA values:
 
-.. autodata:: value
-.. autodata:: variable_args
+.. autodata:: VALUE
+.. autodata:: VARIABLE_ARGS
+
+.. currentmodule:: cretonne
 
 When an instruction description is created, it is automatically assigned a
 predefined instruction format which is an instance of

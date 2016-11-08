@@ -6,6 +6,7 @@ import srcgen
 import constant_hash
 from unique_table import UniqueTable, UniqueSeqTable
 import cdsl.types
+import cdsl.operands
 import cretonne
 
 
@@ -56,7 +57,7 @@ def gen_arguments_method(fmt, is_mut):
         with fmt.indented('match *self {', '}'):
             for f in cretonne.InstructionFormat.all_formats:
                 n = 'InstructionData::' + f.name
-                has_varargs = cretonne.variable_args in f.kinds
+                has_varargs = cdsl.operands.VARIABLE_ARGS in f.kinds
                 # Formats with both fixed and variable arguments delegate to
                 # the data struct. We need to work around borrow checker quirks
                 # when extracting two mutable references.
@@ -84,7 +85,7 @@ def gen_arguments_method(fmt, is_mut):
                         capture = 'ref {}args, '.format(mut)
                         arg = 'args'
                 # Varargs.
-                if cretonne.variable_args in f.kinds:
+                if cdsl.operands.VARIABLE_ARGS in f.kinds:
                     varg = '&{}data.varargs'.format(mut)
                     capture = 'ref {}data, '.format(mut)
                 else:
@@ -311,7 +312,7 @@ def get_constraint(op, ctrl_typevar, type_sets):
     - `Free(idx)` where `idx` is an index into `type_sets`.
     - `Same`, `Lane`, `AsBool` for controlling typevar-derived constraints.
     """
-    assert op.kind is cretonne.value
+    assert op.kind is cdsl.operands.VALUE
     t = op.typ
 
     # A concrete value type.
@@ -504,7 +505,7 @@ def gen_inst_builder(inst, fmt):
     tmpl_types = list()
     into_args = list()
     for op in inst.ins:
-        if isinstance(op.kind, cretonne.ImmediateKind):
+        if isinstance(op.kind, cdsl.operands.ImmediateKind):
             t = 'T{}{}'.format(1 + len(tmpl_types), op.kind.name)
             tmpl_types.append('{}: Into<{}>'.format(t, op.kind.rust_type))
             into_args.append(op.name)

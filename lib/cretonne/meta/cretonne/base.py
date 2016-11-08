@@ -5,7 +5,8 @@ This module defines the basic Cretonne instruction set that all targets
 support.
 """
 from __future__ import absolute_import
-from . import Operand, Instruction, InstructionGroup, variable_args
+from cdsl.operands import VARIABLE_ARGS
+from . import Operand, Instruction, InstructionGroup
 from .typevar import TypeVar
 from base.types import i8, f32, f64, b1
 from .immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
@@ -31,7 +32,7 @@ Any = TypeVar(
 #
 c = Operand('c', Testable, doc='Controlling value to test')
 EBB = Operand('EBB', entities.ebb, doc='Destination extended basic block')
-args = Operand('args', variable_args, doc='EBB arguments')
+args = Operand('args', VARIABLE_ARGS, doc='EBB arguments')
 
 jump = Instruction(
         'jump', r"""
@@ -98,7 +99,7 @@ trapnz = Instruction(
         """,
         ins=c)
 
-rvals = Operand('rvals', variable_args, doc='return values')
+rvals = Operand('rvals', VARIABLE_ARGS, doc='return values')
 
 x_return = Instruction(
         'return', r"""
@@ -114,7 +115,7 @@ FN = Operand(
         'FN',
         entities.func_ref,
         doc='function to call, declared by :inst:`function`')
-args = Operand('args', variable_args, doc='call arguments')
+args = Operand('args', VARIABLE_ARGS, doc='call arguments')
 
 call = Instruction(
         'call', r"""

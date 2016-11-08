@@ -6,51 +6,52 @@ Rust representation of cretonne IL, so all instruction formats must be defined
 in this module.
 """
 from __future__ import absolute_import
-from . import InstructionFormat, value, variable_args
+from cdsl.operands import VALUE, VARIABLE_ARGS
+from . import InstructionFormat
 from .immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
 from .entities import ebb, sig_ref, func_ref, jump_table
 
 Nullary = InstructionFormat()
 
-Unary = InstructionFormat(value)
+Unary = InstructionFormat(VALUE)
 UnaryImm = InstructionFormat(imm64)
 UnaryIeee32 = InstructionFormat(ieee32)
 UnaryIeee64 = InstructionFormat(ieee64)
 UnaryImmVector = InstructionFormat(immvector, boxed_storage=True)
-UnarySplit = InstructionFormat(value, multiple_results=True)
+UnarySplit = InstructionFormat(VALUE, multiple_results=True)
 
-Binary = InstructionFormat(value, value)
-BinaryImm = InstructionFormat(value, imm64)
-BinaryImmRev = InstructionFormat(imm64, value)
+Binary = InstructionFormat(VALUE, VALUE)
+BinaryImm = InstructionFormat(VALUE, imm64)
+BinaryImmRev = InstructionFormat(imm64, VALUE)
 
 # Generate result + overflow flag.
-BinaryOverflow = InstructionFormat(value, value, multiple_results=True)
+BinaryOverflow = InstructionFormat(VALUE, VALUE, multiple_results=True)
 
-# The select instructions are controlled by the second value operand.
-# The first value operand is the controlling flag which has a derived type.
+# The select instructions are controlled by the second VALUE operand.
+# The first VALUE operand is the controlling flag which has a derived type.
 # The fma instruction has the same constraint on all inputs.
-Ternary = InstructionFormat(value, value, value, typevar_operand=1)
+Ternary = InstructionFormat(VALUE, VALUE, VALUE, typevar_operand=1)
 
 # Carry in *and* carry out for `iadd_carry` and friends.
 TernaryOverflow = InstructionFormat(
-        value, value, value, multiple_results=True, boxed_storage=True)
+        VALUE, VALUE, VALUE, multiple_results=True, boxed_storage=True)
 
-InsertLane = InstructionFormat(value, ('lane', uimm8), value)
-ExtractLane = InstructionFormat(value, ('lane', uimm8))
+InsertLane = InstructionFormat(VALUE, ('lane', uimm8), VALUE)
+ExtractLane = InstructionFormat(VALUE, ('lane', uimm8))
 
-IntCompare = InstructionFormat(intcc, value, value)
-FloatCompare = InstructionFormat(floatcc, value, value)
+IntCompare = InstructionFormat(intcc, VALUE, VALUE)
+FloatCompare = InstructionFormat(floatcc, VALUE, VALUE)
 
-Jump = InstructionFormat(ebb, variable_args, boxed_storage=True)
-Branch = InstructionFormat(value, ebb, variable_args, boxed_storage=True)
-BranchTable = InstructionFormat(value, jump_table)
+Jump = InstructionFormat(ebb, VARIABLE_ARGS, boxed_storage=True)
+Branch = InstructionFormat(VALUE, ebb, VARIABLE_ARGS, boxed_storage=True)
+BranchTable = InstructionFormat(VALUE, jump_table)
 
 Call = InstructionFormat(
-        func_ref, variable_args, multiple_results=True, boxed_storage=True)
+        func_ref, VARIABLE_ARGS, multiple_results=True, boxed_storage=True)
 IndirectCall = InstructionFormat(
-        sig_ref, value, variable_args,
+        sig_ref, VALUE, VARIABLE_ARGS,
         multiple_results=True, boxed_storage=True)
-Return = InstructionFormat(variable_args, boxed_storage=True)
+Return = InstructionFormat(VARIABLE_ARGS, boxed_storage=True)
 
 
 # Finally extract the names of global variables in this module.
