@@ -9,8 +9,9 @@ from cdsl.operands import VARIABLE_ARGS
 from . import Operand, Instruction, InstructionGroup
 from .typevar import TypeVar
 from base.types import i8, f32, f64, b1
-from .immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
-from . import entities
+from base.immediates import imm64, uimm8, ieee32, ieee64, immvector
+from base.immediates import intcc, floatcc
+from base import entities
 
 instructions = InstructionGroup("base", "Shared base instruction set")
 

@@ -137,7 +137,7 @@ indicated with an instance of :class:`ImmediateKind`.
 
 .. autoclass:: ImmediateKind
 
-.. automodule:: cretonne.immediates
+.. automodule:: base.immediates
     :members:
 
 Entity references
@@ -149,7 +149,7 @@ can be extended basic blocks, or entities declared in the function preamble.
 .. currentmodule:: cdsl.operands
 .. autoclass:: EntityRefKind
 
-.. automodule:: cretonne.entities
+.. automodule:: base.entities
     :members:
 
 Value types

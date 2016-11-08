@@ -10,8 +10,8 @@ instruction formats described in the reference:
 """
 from __future__ import absolute_import
 from cretonne import EncRecipe
-from cretonne.formats import Binary, BinaryImm
 from cdsl.predicates import IsSignedInt
+from base.formats import Binary, BinaryImm
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
 # instructions have 11 as the two low bits, with bits 6:2 determining the base
