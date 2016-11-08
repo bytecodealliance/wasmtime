@@ -4,7 +4,7 @@ RISC-V definitions.
 Commonly used definitions.
 """
 from __future__ import absolute_import
-from cretonne import TargetISA, CPUMode
+from cdsl.isa import TargetISA, CPUMode
 import base.instructions
 
 isa = TargetISA('riscv', [base.instructions.GROUP])
