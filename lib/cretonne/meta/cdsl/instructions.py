@@ -259,7 +259,7 @@ class Instruction(object):
         Create an `ast.Apply` AST node representing the application of this
         instruction to the arguments.
         """
-        from cretonne.ast import Apply
+        from .ast import Apply
         return Apply(self, args)
 
 
@@ -312,5 +312,5 @@ class BoundInstruction(object):
         Create an `ast.Apply` AST node representing the application of this
         instruction to the arguments.
         """
-        from cretonne.ast import Apply
+        from .ast import Apply
         return Apply(self, args)

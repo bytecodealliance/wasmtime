@@ -9,12 +9,12 @@ the input instruction.
 """
 from __future__ import absolute_import
 from srcgen import Formatter
-import cretonne.legalize as legalize
-from cretonne.ast import Def  # noqa
-from cretonne.xform import XForm, XFormGroup  # noqa
+from base import legalize
 
 try:
     from typing import Sequence  # noqa
+    from cdsl.ast import Def  # noqa
+    from cdsl.xform import XForm, XFormGroup  # noqa
 except ImportError:
     pass
 
