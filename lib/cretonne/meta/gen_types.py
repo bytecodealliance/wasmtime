@@ -9,7 +9,8 @@ This ensures that Python and Rust use the same type numbering.
 """
 from __future__ import absolute_import
 import srcgen
-from cretonne import ValueType
+from cdsl.types import ValueType
+import base.types  # noqa
 
 
 def emit_type(ty, fmt):

@@ -245,7 +245,7 @@ class TypeDocumenter(sphinx.ext.autodoc.Documenter):
         return False
 
     def resolve_name(self, modname, parents, path, base):
-        return 'cretonne.types', [base]
+        return 'base.types', [base]
 
     def add_content(self, more_content, no_docstring=False):
         super(TypeDocumenter, self).add_content(more_content, no_docstring)
@@ -280,11 +280,11 @@ class InstDocumenter(sphinx.ext.autodoc.Documenter):
             op = inst.ins[0]
             sig += ' ' + op.name
             # If the first input is variable-args, this is 'return'. No parens.
-            if op.typ.operand_kind().name == 'variable_args':
+            if op.kind.name == 'variable_args':
                 sig += '...'.format(op.name)
             for op in inst.ins[1:]:
                 # This is a call or branch with args in (...).
-                if op.typ.operand_kind().name == 'variable_args':
+                if op.kind.name == 'variable_args':
                     sig += '({}...)'.format(op.name)
                 else:
                     sig += ', ' + op.name

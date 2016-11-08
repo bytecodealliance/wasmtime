@@ -14,7 +14,7 @@ runif() {
 # Check Python sources for Python 3 compatibility using pylint.
 #
 # Install pylint with 'pip install pylint'.
-runif pylint --py3k --reports=no -- *.py cretonne isa
+runif pylint --py3k --reports=no -- *.py cdsl base cretonne isa
 
 # Style linting.
 runif flake8 .

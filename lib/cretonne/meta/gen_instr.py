@@ -5,6 +5,7 @@ from __future__ import absolute_import
 import srcgen
 import constant_hash
 from unique_table import UniqueTable, UniqueSeqTable
+import cdsl.types
 import cretonne
 
 
@@ -310,11 +311,11 @@ def get_constraint(op, ctrl_typevar, type_sets):
     - `Free(idx)` where `idx` is an index into `type_sets`.
     - `Same`, `Lane`, `AsBool` for controlling typevar-derived constraints.
     """
+    assert op.kind is cretonne.value
     t = op.typ
-    assert t.operand_kind() is cretonne.value
 
     # A concrete value type.
-    if isinstance(t, cretonne.ValueType):
+    if isinstance(t, cdsl.types.ValueType):
         return 'Concrete({})'.format(t.rust_name())
 
     if t.free_typevar() is not ctrl_typevar:
