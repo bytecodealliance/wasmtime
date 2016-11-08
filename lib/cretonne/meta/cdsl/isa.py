@@ -1,29 +1,18 @@
-"""
-Cretonne meta language module.
-
-This module provides classes and functions used to describe Cretonne
-instructions.
-"""
+"""Defining instruction set architectures."""
 from __future__ import absolute_import
-import importlib
-from cdsl.predicates import And
-from cdsl.typevar import TypeVar
+from .predicates import And
 
 # The typing module is only required by mypy, and we don't use these imports
 # outside type comments.
 try:
     from typing import Tuple, Union, Any, Iterable, Sequence, TYPE_CHECKING  # noqa
-    from cdsl.predicates import Predicate, FieldPredicate  # noqa
-    from cdsl.instructions import MaybeBoundInst  # noqa
-    AnyPredicate = Union['Predicate', 'FieldPredicate']
+    from .instructions import MaybeBoundInst, InstructionGroup, InstructionFormat  # noqa
+    from .predicates import Predicate, FieldPredicate  # noqa
+    from .settings import SettingGroup  # noqa
+    from .types import ValueType  # noqa
+    AnyPredicate = Union[Predicate, FieldPredicate]
 except ImportError:
-    TYPE_CHECKING = False
-
-if TYPE_CHECKING:
-    from cdsl.typevar import TypeVar  # noqa
-
-
-# Defining target ISAs.
+    pass
 
 
 class TargetISA(object):
@@ -38,12 +27,14 @@ class TargetISA(object):
     """
 
     def __init__(self, name, instruction_groups):
+        # type: (str, Sequence[InstructionGroup]) -> None
         self.name = name
-        self.settings = None
+        self.settings = None  # type: SettingGroup
         self.instruction_groups = instruction_groups
-        self.cpumodes = list()
+        self.cpumodes = list()  # type: List[CPUMode]
 
     def finish(self):
+        # type: () -> TargetISA
         """
         Finish the definition of a target ISA after adding all CPU modes and
         settings.
@@ -58,11 +49,12 @@ class TargetISA(object):
         return self
 
     def _collect_encoding_recipes(self):
+        # type: () -> None
         """
         Collect and number all encoding recipes in use.
         """
-        self.all_recipes = list()
-        rcps = set()
+        self.all_recipes = list()  # type: List[EncRecipe]
+        rcps = set()  # type: Set[EncRecipe]
         for cpumode in self.cpumodes:
             for enc in cpumode.encodings:
                 recipe = enc.recipe
@@ -72,6 +64,7 @@ class TargetISA(object):
                     self.all_recipes.append(recipe)
 
     def _collect_predicates(self):
+        # type: () -> None
         """
         Collect and number all predicates in use.
 
@@ -81,8 +74,8 @@ class TargetISA(object):
         Ensures that all ISA predicates have an assigned bit number in
         `self.settings`.
         """
-        self.all_instps = list()
-        instps = set()
+        self.all_instps = list()  # type: List[AnyPredicate]
+        instps = set()  # type: Set[AnyPredicate]
         for cpumode in self.cpumodes:
             for enc in cpumode.encodings:
                 instp = enc.instp
@@ -111,12 +104,14 @@ class CPUMode(object):
     """
 
     def __init__(self, name, isa):
+        # type: (str, TargetISA) -> None
         self.name = name
         self.isa = isa
-        self.encodings = []
+        self.encodings = []  # type: List[Encoding]
         isa.cpumodes.append(self)
 
     def __str__(self):
+        # type: () -> str
         return self.name
 
     def enc(self, *args, **kwargs):
@@ -142,14 +137,17 @@ class EncRecipe(object):
     """
 
     def __init__(self, name, format, instp=None, isap=None):
+        # type: (str, InstructionFormat, AnyPredicate, AnyPredicate) -> None
         self.name = name
         self.format = format
         self.instp = instp
         self.isap = isap
         if instp:
             assert instp.predicate_context() == format
+        self.number = None  # type: int
 
     def __str__(self):
+        # type: () -> str
         return self.name
 
 
@@ -185,9 +183,11 @@ class Encoding(object):
         self.isap = And.combine(recipe.isap, isap)
 
     def __str__(self):
+        # type: () -> str
         return '[{}#{:02x}]'.format(self.recipe, self.encbits)
 
     def ctrl_typevar(self):
+        # type: () -> ValueType
         """
         Get the controlling type variable for this encoding or `None`.
         """
@@ -195,8 +195,3 @@ class Encoding(object):
             return self.typevars[0]
         else:
             return None
-
-
-# Import the fixed instruction formats now so they can be added to the
-# registry.
-importlib.import_module('base.formats')

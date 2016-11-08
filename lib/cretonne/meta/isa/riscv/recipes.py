@@ -9,7 +9,7 @@ instruction formats described in the reference:
     Version 2.1
 """
 from __future__ import absolute_import
-from cretonne import EncRecipe
+from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt
 from base.formats import Binary, BinaryImm
 
