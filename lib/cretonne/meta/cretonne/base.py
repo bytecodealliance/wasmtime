@@ -7,7 +7,7 @@ support.
 from __future__ import absolute_import
 from . import Operand, Instruction, InstructionGroup, variable_args
 from .typevar import TypeVar
-from .types import i8, f32, f64, b1
+from base.types import i8, f32, f64, b1
 from .immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
 from . import entities
 

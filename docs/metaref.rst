@@ -4,7 +4,7 @@ Cretonne Meta Language Reference
 
 .. default-domain:: py
 .. highlight:: python
-.. module:: cretonne
+.. module:: cdsl
 
 The Cretonne meta language is used to define instructions for Cretonne. It is a
 domain specific language embedded in Python. This document describes the Python
@@ -16,8 +16,8 @@ steps:
 
 1. The Python modules are imported. This has the effect of building static data
    structures in global variables in the modules. These static data structures
-   use the classes in the :mod:`cretonne` module to describe instruction sets
-   and other properties.
+   in the :mod:`base` and :mod:`isa` packages use the classes in the
+   :mod:`cdsl` module to describe instruction sets and other properties.
 
 2. The static data structures are processed to produce Rust source code and
    constant tables.
@@ -41,6 +41,7 @@ ISA, and defined in a `settings` module under the appropriate
 Settings can take boolean on/off values, small numbers, or explicitly enumerated
 symbolic values. Each type is represented by a sub-class of :class:`Setting`:
 
+.. currentmodule:: cretonne
 .. inheritance-diagram:: Setting BoolSetting NumSetting EnumSetting
     :parts: 1
 
@@ -125,16 +126,15 @@ Immediate operands
 
 Immediate instruction operands don't correspond to SSA values, but have values
 that are encoded directly in the instruction. Immediate operands don't
-have types from the :class:`cretonne.ValueType` type system; they often have
+have types from the :class:`cdsl.types.ValueType` type system; they often have
 enumerated values of a specific type. The type of an immediate operand is
 indicated with an instance of :class:`ImmediateKind`.
 
+.. currentmodule:: cretonne
 .. autoclass:: ImmediateKind
 
 .. automodule:: cretonne.immediates
     :members:
-
-.. currentmodule:: cretonne
 
 Entity references
 -----------------
@@ -142,19 +142,20 @@ Entity references
 Instruction operands can also refer to other entities in the same function. This
 can be extended basic blocks, or entities declared in the function preamble.
 
+.. currentmodule:: cretonne
+
 .. autoclass:: EntityRefKind
 
 .. automodule:: cretonne.entities
     :members:
 
-.. currentmodule:: cretonne
-
 Value types
 -----------
 
-Concrete value types are represented as instances of :class:`cretonne.ValueType`. There are
+Concrete value types are represented as instances of :class:`cdsl.types.ValueType`. There are
 subclasses to represent scalar and vector types.
 
+.. currentmodule:: cdsl.types
 .. autoclass:: ValueType
 .. inheritance-diagram:: ValueType ScalarType VectorType IntType FloatType BoolType
     :parts: 1
@@ -169,10 +170,8 @@ subclasses to represent scalar and vector types.
 .. autoclass:: BoolType
     :members:
 
-.. automodule:: cretonne.types
+.. automodule:: base.types
     :members:
-
-.. currentmodule:: cretonne
 
 There are no predefined vector types, but they can be created as needed with
 the :func:`ScalarType.by` function.
@@ -180,6 +179,8 @@ the :func:`ScalarType.by` function.
 
 Instruction representation
 ==========================
+
+.. currentmodule:: cretonne
 
 The Rust in-memory representation of instructions is derived from the
 instruction descriptions. Part of the representation is generated, and part is

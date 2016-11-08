@@ -6,10 +6,10 @@ instructions.
 """
 from __future__ import absolute_import
 import re
-import math
 import importlib
 from collections import OrderedDict
 from .predicates import And, Predicate, FieldPredicate  # noqa
+import cdsl.types
 
 # The typing module is only required by mypy, and we don't use these imports
 # outside type comments.
@@ -17,7 +17,7 @@ try:
     from typing import Tuple, Union, Any, Iterable, Sequence, TYPE_CHECKING  # noqa
     MaybeBoundInst = Union['Instruction', 'BoundInstruction']
     AnyPredicate = Union['Predicate', 'FieldPredicate']
-    OperandSpec = Union['OperandKind', 'ValueType', 'TypeVar']
+    OperandSpec = Union['OperandKind', 'cdsl.types.ValueType', 'TypeVar']
 except ImportError:
     TYPE_CHECKING = False
 
@@ -391,171 +391,6 @@ class EntityRefKind(OperandKind):
         return 'EntityRefKind({})'.format(self.name)
 
 
-# ValueType instances (i8, i32, ...) are provided in the cretonne.types module.
-class ValueType(object):
-    """
-    A concrete SSA value type.
-
-    All SSA values have a type that is described by an instance of `ValueType`
-    or one of its subclasses.
-    """
-
-    # Map name -> ValueType.
-    _registry = dict()  # type: Dict[str, ValueType]
-
-    # List of all the scalar types.
-    all_scalars = list()  # type: List[ValueType]
-
-    def __init__(self, name, membytes, doc):
-        # type: (str, int, str) -> None
-        self.name = name
-        self.membytes = membytes
-        self.__doc__ = doc
-        assert name not in ValueType._registry
-        ValueType._registry[name] = self
-
-    def __str__(self):
-        # type: () -> str
-        return self.name
-
-    def operand_kind(self):
-        # type: () -> OperandKind
-        """
-        When a `ValueType` object is used to describe the type of an `Operand`
-        in an instruction definition, the kind of that operand is an SSA value.
-        """
-        return value
-
-    def free_typevar(self):
-        return None
-
-    @staticmethod
-    def by_name(name):
-        # type: (str) -> ValueType
-        if name in ValueType._registry:
-            return ValueType._registry[name]
-        else:
-            raise AttributeError("No type named '{}'".format(name))
-
-
-class ScalarType(ValueType):
-    """
-    A concrete scalar (not vector) type.
-
-    Also tracks a unique set of :py:class:`VectorType` instances with this type
-    as the lane type.
-    """
-
-    def __init__(self, name, membytes, doc):
-        # type: (str, int, str) -> None
-        super(ScalarType, self).__init__(name, membytes, doc)
-        self._vectors = dict()  # type: Dict[int, VectorType]
-        # Assign numbers starting from 1. (0 is VOID).
-        ValueType.all_scalars.append(self)
-        self.number = len(ValueType.all_scalars)
-        assert self.number < 16, 'Too many scalar types'
-
-    def __repr__(self):
-        # type: () -> str
-        return 'ScalarType({})'.format(self.name)
-
-    def rust_name(self):
-        # type: () -> str
-        return 'types::' + self.name.upper()
-
-    def by(self, lanes):
-        # type: (int) -> VectorType
-        """
-        Get a vector type with this type as the lane type.
-
-        For example, ``i32.by(4)`` returns the :obj:`i32x4` type.
-        """
-        if lanes in self._vectors:
-            return self._vectors[lanes]
-        else:
-            v = VectorType(self, lanes)
-            self._vectors[lanes] = v
-            return v
-
-
-class VectorType(ValueType):
-    """
-    A concrete SIMD vector type.
-
-    A vector type has a lane type which is an instance of :class:`ScalarType`,
-    and a positive number of lanes.
-    """
-
-    def __init__(self, base, lanes):
-        # type: (ScalarType, int) -> None
-        assert isinstance(base, ScalarType), 'SIMD lanes must be scalar types'
-        super(VectorType, self).__init__(
-                name='{}x{}'.format(base.name, lanes),
-                membytes=lanes*base.membytes,
-                doc="""
-                A SIMD vector with {} lanes containing a `{}` each.
-                """.format(lanes, base.name))
-        self.base = base
-        self.lanes = lanes
-        self.number = 16*int(math.log(lanes, 2)) + base.number
-
-    def __repr__(self):
-        # type: () -> str
-        return ('VectorType(base={}, lanes={})'
-                .format(self.base.name, self.lanes))
-
-
-class IntType(ScalarType):
-    """A concrete scalar integer type."""
-
-    def __init__(self, bits):
-        # type: (int) -> None
-        assert bits > 0, 'IntType must have positive number of bits'
-        super(IntType, self).__init__(
-                name='i{:d}'.format(bits),
-                membytes=bits // 8,
-                doc="An integer type with {} bits.".format(bits))
-        self.bits = bits
-
-    def __repr__(self):
-        # type: () -> str
-        return 'IntType(bits={})'.format(self.bits)
-
-
-class FloatType(ScalarType):
-    """A concrete scalar floating point type."""
-
-    def __init__(self, bits, doc):
-        # type: (int, str) -> None
-        assert bits > 0, 'FloatType must have positive number of bits'
-        super(FloatType, self).__init__(
-                name='f{:d}'.format(bits),
-                membytes=bits // 8,
-                doc=doc)
-        self.bits = bits
-
-    def __repr__(self):
-        # type: () -> str
-        return 'FloatType(bits={})'.format(self.bits)
-
-
-class BoolType(ScalarType):
-    """A concrete scalar boolean type."""
-
-    def __init__(self, bits):
-        # type: (int) -> None
-        assert bits > 0, 'BoolType must have positive number of bits'
-        super(BoolType, self).__init__(
-                name='b{:d}'.format(bits),
-                membytes=bits // 8,
-                doc="A boolean type with {} bits.".format(bits))
-        self.bits = bits
-
-    def __repr__(self):
-        # type: () -> str
-        return 'BoolType(bits={})'.format(self.bits)
-
-
 # Defining instructions.
 
 
@@ -633,9 +468,12 @@ class Operand(object):
     def __init__(self, name, typ, doc=''):
         # type: (str, OperandSpec, str) -> None
         self.name = name
-        self.typ = typ
         self.__doc__ = doc
-        self.kind = typ.operand_kind()
+        self.typ = typ
+        if isinstance(typ, cdsl.types.ValueType):
+            self.kind = value
+        else:
+            self.kind = typ.operand_kind()
 
     def get_doc(self):
         # type: () -> str
@@ -688,7 +526,7 @@ class InstructionFormat(object):
     """
 
     # Map (multiple_results, kind, kind, ...) -> InstructionFormat
-    _registry = dict()  # type: Dict[Tuple, InstructionFormat]
+    _registry = dict()  # type: Dict[Tuple[bool, Tuple[OperandKind, ...]], InstructionFormat]  # noqa
 
     # All existing formats.
     all_formats = list()  # type: List[InstructionFormat]
@@ -715,7 +553,7 @@ class InstructionFormat(object):
             self.typevar_operand = self.value_operands[0]
 
         # Compute a signature for the global registry.
-        sig = (self.multiple_results,) + self.kinds
+        sig = (self.multiple_results, self.kinds)
         if sig in InstructionFormat._registry:
             raise RuntimeError(
                 "Format '{}' has the same signature as existing format '{}'"
@@ -782,11 +620,11 @@ class InstructionFormat(object):
             multiple_results = outs[0].kind == variable_args
         else:
             multiple_results = len(outs) > 1
-        sig = (multiple_results,) + tuple(op.kind for op in ins)
+        sig = (multiple_results, tuple(op.kind for op in ins))
         if sig not in InstructionFormat._registry:
             raise RuntimeError(
                     "No instruction format matches ins = ({}){}".format(
-                        ", ".join(map(str, sig[1:])),
+                        ", ".join(map(str, sig[1])),
                         "[multiple results]" if multiple_results else ""))
         return InstructionFormat._registry[sig]
 
@@ -991,7 +829,7 @@ class Instruction(object):
         return x
 
     def bind(self, *args):
-        # type: (*ValueType) -> BoundInstruction
+        # type: (*cdsl.types.ValueType) -> BoundInstruction
         """
         Bind a polymorphic instruction to a concrete list of type variable
         values.
@@ -1007,10 +845,10 @@ class Instruction(object):
 
         >>> iadd.i32
         """
-        return self.bind(ValueType.by_name(name))
+        return self.bind(cdsl.types.ValueType.by_name(name))
 
     def fully_bound(self):
-        # type: () -> Tuple[Instruction, Tuple[ValueType, ...]]
+        # type: () -> Tuple[Instruction, Tuple[cdsl.types.ValueType, ...]]
         """
         Verify that all typevars have been bound, and return a
         `(inst, typevars)` pair.
@@ -1036,7 +874,7 @@ class BoundInstruction(object):
     """
 
     def __init__(self, inst, typevars):
-        # type: (Instruction, Tuple[ValueType, ...]) -> None
+        # type: (Instruction, Tuple[cdsl.types.ValueType, ...]) -> None
         self.inst = inst
         self.typevars = typevars
         assert len(typevars) <= 1 + len(inst.other_typevars)
@@ -1045,7 +883,7 @@ class BoundInstruction(object):
         return '.'.join([self.inst.name, ] + list(map(str, self.typevars)))
 
     def bind(self, *args):
-        # type: (*ValueType) -> BoundInstruction
+        # type: (*cdsl.types.ValueType) -> BoundInstruction
         """
         Bind additional typevars.
         """
@@ -1058,10 +896,10 @@ class BoundInstruction(object):
 
         >>> uext.i32.i8
         """
-        return self.bind(ValueType.by_name(name))
+        return self.bind(cdsl.types.ValueType.by_name(name))
 
     def fully_bound(self):
-        # type: () -> Tuple[Instruction, Tuple[ValueType, ...]]
+        # type: () -> Tuple[Instruction, Tuple[cdsl.types.ValueType, ...]]
         """
         Verify that all typevars have been bound, and return a
         `(inst, typevars)` pair.
