@@ -6,6 +6,7 @@ polymorphic by using type variables.
 """
 from __future__ import absolute_import
 import math
+from . import types
 
 try:
     from typing import Tuple, Union # noqa
@@ -242,6 +243,7 @@ class TypeVar(object):
         # type: (str, str, BoolInterval, BoolInterval, BoolInterval, bool, BoolInterval, TypeVar, str) -> None # noqa
         self.name = name
         self.__doc__ = doc
+        self.singleton_type = None  # type: types.ValueType
         self.is_derived = isinstance(base, TypeVar)
         if base:
             assert self.is_derived
@@ -257,6 +259,34 @@ class TypeVar(object):
                     ints=ints,
                     floats=floats,
                     bools=bools)
+
+    @staticmethod
+    def singleton(typ):
+        # type: (types.ValueType) -> TypeVar
+        """Create a type variable that can only assume a single type."""
+        if isinstance(typ, types.VectorType):
+            scalar = typ.base
+            lanes = (typ.lanes, typ.lanes)
+        elif isinstance(typ, types.ScalarType):
+            scalar = typ
+            lanes = (1, 1)
+
+        ints = None
+        floats = None
+        bools = None
+
+        if isinstance(scalar, types.IntType):
+            ints = (scalar.bits, scalar.bits)
+        elif isinstance(scalar, types.FloatType):
+            floats = (scalar.bits, scalar.bits)
+        elif isinstance(scalar, types.BoolType):
+            bools = (scalar.bits, scalar.bits)
+
+        tv = TypeVar(
+                typ.name, 'typeof({})'.format(typ),
+                ints, floats, bools, simd=lanes)
+        tv.singleton_type = typ
+        return tv
 
     def __str__(self):
         # type: () -> str
@@ -317,5 +347,8 @@ class TypeVar(object):
         # type: () -> TypeVar
         if self.is_derived:
             return self.base
+        elif self.singleton_type:
+            # A singleton type variable is not a proper free variable.
+            return None
         else:
             return self
