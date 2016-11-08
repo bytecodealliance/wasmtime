@@ -7,7 +7,7 @@ in this module.
 """
 from __future__ import absolute_import
 from cdsl.operands import VALUE, VARIABLE_ARGS
-from . import InstructionFormat
+from cretonne import InstructionFormat
 from .immediates import imm64, uimm8, ieee32, ieee64, immvector, intcc, floatcc
 from .entities import ebb, sig_ref, func_ref, jump_table
 

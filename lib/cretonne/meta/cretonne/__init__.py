@@ -732,4 +732,4 @@ class Encoding(object):
 
 # Import the fixed instruction formats now so they can be added to the
 # registry.
-importlib.import_module('cretonne.formats')
+importlib.import_module('base.formats')
