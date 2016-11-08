@@ -30,8 +30,9 @@ class ValueType(object):
         # type: () -> str
         return self.name
 
-    def free_typevar(self):
-        return None
+    def rust_name(self):
+        # type: () -> str
+        return 'types::' + self.name.upper()
 
     @staticmethod
     def by_name(name):
@@ -62,10 +63,6 @@ class ScalarType(ValueType):
     def __repr__(self):
         # type: () -> str
         return 'ScalarType({})'.format(self.name)
-
-    def rust_name(self):
-        # type: () -> str
-        return 'types::' + self.name.upper()
 
     def by(self, lanes):
         # type: (int) -> VectorType

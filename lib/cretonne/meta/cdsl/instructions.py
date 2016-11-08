@@ -130,10 +130,10 @@ class Instruction(object):
         """
         poly_ins = [
                 i for i in self.format.value_operands
-                if self.ins[i].typ.free_typevar()]
+                if self.ins[i].typevar.free_typevar()]
         poly_outs = [
                 i for i, o in enumerate(self.outs)
-                if o.typ.free_typevar()]
+                if o.is_value() and o.typevar.free_typevar()]
         self.is_polymorphic = len(poly_ins) > 0 or len(poly_outs) > 0
         if not self.is_polymorphic:
             return
@@ -143,7 +143,7 @@ class Instruction(object):
         typevar_error = None
         if self.format.typevar_operand is not None:
             try:
-                tv = self.ins[self.format.typevar_operand].typ
+                tv = self.ins[self.format.typevar_operand].typevar
                 if tv is tv.free_typevar():
                     self.other_typevars = self._verify_ctrl_typevar(tv)
                     self.ctrl_typevar = tv
@@ -160,7 +160,7 @@ class Instruction(object):
                 else:
                     raise RuntimeError(
                             "typevar_operand must be a free type variable")
-            tv = self.outs[0].typ
+            tv = self.outs[0].typevar
             if tv is not tv.free_typevar():
                 raise RuntimeError("first result must be a free type variable")
             self.other_typevars = self._verify_ctrl_typevar(tv)
@@ -181,7 +181,7 @@ class Instruction(object):
         other_tvs = []
         # Check value inputs.
         for opidx in self.format.value_operands:
-            typ = self.ins[opidx].typ
+            typ = self.ins[opidx].typevar
             tv = typ.free_typevar()
             # Non-polymorphic or derived form ctrl_typevar is OK.
             if tv is None or tv is ctrl_typevar:
@@ -200,7 +200,9 @@ class Instruction(object):
 
         # Check outputs.
         for result in self.outs:
-            typ = result.typ
+            if not result.is_value():
+                continue
+            typ = result.typevar
             tv = typ.free_typevar()
             # Non-polymorphic or derived from ctrl_typevar is OK.
             if tv is None or tv is ctrl_typevar:

@@ -40,10 +40,6 @@ class OperandKind(object):
         # type: () -> str
         return 'OperandKind({})'.format(self.name)
 
-    def free_typevar(self):
-        # Return the free typevariable controlling the type of this operand.
-        return None
-
 #: An SSA value operand. This is a value defined by another instruction.
 VALUE = OperandKind(
         'value', """
@@ -129,11 +125,15 @@ class Operand(object):
         # type: (str, OperandSpec, str) -> None
         self.name = name
         self.__doc__ = doc
-        self.typ = typ
+
+        # Decode the operand spec and set self.kind.
+        # Only VALUE operands have a typevar member.
         if isinstance(typ, ValueType):
             self.kind = VALUE
+            self.typevar = TypeVar.singleton(typ)
         elif isinstance(typ, TypeVar):
             self.kind = VALUE
+            self.typevar = typ
         else:
             assert isinstance(typ, OperandKind)
             self.kind = typ
@@ -142,8 +142,9 @@ class Operand(object):
         # type: () -> str
         if self.__doc__:
             return self.__doc__
-        else:
-            return self.typ.__doc__
+        if self.kind is VALUE:
+            return self.typevar.__doc__
+        return self.kind.__doc__
 
     def __str__(self):
         # type: () -> str

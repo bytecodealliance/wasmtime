@@ -5,9 +5,13 @@ from __future__ import absolute_import
 import srcgen
 import constant_hash
 from unique_table import UniqueTable, UniqueSeqTable
+from cdsl.operands import ImmediateKind
 import cdsl.types
-import cdsl.operands
 from cdsl.formats import InstructionFormat
+
+from cdsl.instructions import Instruction  # noqa
+from cdsl.operands import Operand  # noqa
+from cdsl.typevar import TypeVar  # noqa
 
 
 def gen_formats(fmt):
@@ -302,6 +306,7 @@ def gen_opcodes(groups, fmt):
 
 
 def get_constraint(op, ctrl_typevar, type_sets):
+    # type: (Operand, TypeVar, UniqueTable) -> str
     """
     Get the value type constraint for an SSA value operand, where
     `ctrl_typevar` is the controlling type variable.
@@ -312,22 +317,22 @@ def get_constraint(op, ctrl_typevar, type_sets):
     - `Free(idx)` where `idx` is an index into `type_sets`.
     - `Same`, `Lane`, `AsBool` for controlling typevar-derived constraints.
     """
-    assert op.kind is cdsl.operands.VALUE
-    t = op.typ
+    assert op.is_value()
+    tv = op.typevar
 
     # A concrete value type.
-    if isinstance(t, cdsl.types.ValueType):
-        return 'Concrete({})'.format(t.rust_name())
+    if tv.singleton_type:
+        return 'Concrete({})'.format(tv.singleton_type.rust_name())
 
-    if t.free_typevar() is not ctrl_typevar:
-        assert not t.is_derived
-        return 'Free({})'.format(type_sets.add(t.type_set))
+    if tv.free_typevar() is not ctrl_typevar:
+        assert not tv.is_derived
+        return 'Free({})'.format(type_sets.add(tv.type_set))
 
-    if t.is_derived:
-        assert t.base is ctrl_typevar, "Not derived directly from ctrl_typevar"
-        return t.derived_func
+    if tv.is_derived:
+        assert tv.base is ctrl_typevar, "Not derived from ctrl_typevar"
+        return tv.derived_func
 
-    assert t is ctrl_typevar
+    assert tv is ctrl_typevar
     return 'Same'
 
 
@@ -486,6 +491,7 @@ def gen_member_inits(iform, fmt):
 
 
 def gen_inst_builder(inst, fmt):
+    # type: (Instruction, srcgen.Formatter) -> None
     """
     Emit a method for generating the instruction `inst`.
 
@@ -502,10 +508,10 @@ def gen_inst_builder(inst, fmt):
     if inst.is_polymorphic and not inst.use_typevar_operand:
         args.append('{}: Type'.format(inst.ctrl_typevar.name))
 
-    tmpl_types = list()
-    into_args = list()
+    tmpl_types = list()  # type: List[str]
+    into_args = list()  # type: List[str]
     for op in inst.ins:
-        if isinstance(op.kind, cdsl.operands.ImmediateKind):
+        if isinstance(op.kind, ImmediateKind):
             t = 'T{}{}'.format(1 + len(tmpl_types), op.kind.name)
             tmpl_types.append('{}: Into<{}>'.format(t, op.kind.rust_type))
             into_args.append(op.name)
@@ -553,7 +559,7 @@ def gen_inst_builder(inst, fmt):
                 # The format constructor will resolve the result types from the
                 # type var.
                 args.append('ctrl_typevar')
-            elif inst.outs[inst.value_results[0]].typ == inst.ctrl_typevar:
+            elif inst.outs[inst.value_results[0]].typevar == inst.ctrl_typevar:
                 # The format constructor expects a simple result type.
                 # No type transformation needed from the controlling type
                 # variable.
@@ -567,13 +573,12 @@ def gen_inst_builder(inst, fmt):
         else:
             # This non-polymorphic instruction has a fixed result type.
             args.append(
-                    'types::' +
-                    inst.outs[inst.value_results[0]].typ.name.upper())
+                    inst.outs[inst.value_results[0]]
+                    .typevar.singleton_type.rust_name())
 
         args.extend(op.name for op in inst.ins)
-        args = ', '.join(args)
         # Call to the format constructor,
-        fcall = 'self.{}({})'.format(inst.format.name, args)
+        fcall = 'self.{}({})'.format(inst.format.name, ', '.join(args))
 
         if len(inst.value_results) == 0:
             fmt.line(fcall + '.0')

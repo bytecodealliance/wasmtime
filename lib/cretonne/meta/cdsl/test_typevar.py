@@ -3,6 +3,7 @@ from unittest import TestCase
 from doctest import DocTestSuite
 from . import typevar
 from .typevar import TypeSet, TypeVar
+from base.types import i32
 
 
 def load_tests(loader, tests, ignore):
@@ -62,3 +63,18 @@ class TestTypeVar(TestCase):
         self.assertEqual(str(x3.double_width()), '`DoubleWidth(x3)`')
         with self.assertRaises(AssertionError):
             x3.half_width()
+
+    def test_singleton(self):
+        x = TypeVar.singleton(i32)
+        self.assertEqual(str(x), '`i32`')
+        self.assertEqual(x.type_set.min_int, 32)
+        self.assertEqual(x.type_set.max_int, 32)
+        self.assertEqual(x.type_set.min_lanes, 1)
+        self.assertEqual(x.type_set.max_lanes, 1)
+
+        x = TypeVar.singleton(i32.by(4))
+        self.assertEqual(str(x), '`i32x4`')
+        self.assertEqual(x.type_set.min_int, 32)
+        self.assertEqual(x.type_set.max_int, 32)
+        self.assertEqual(x.type_set.min_lanes, 4)
+        self.assertEqual(x.type_set.max_lanes, 4)
