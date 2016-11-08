@@ -14,11 +14,15 @@ from .predicates import And, Predicate, FieldPredicate  # noqa
 # The typing module is only required by mypy, and we don't use these imports
 # outside type comments.
 try:
-    from typing import Tuple, Union, Any, Iterable, Sequence  # noqa
+    from typing import Tuple, Union, Any, Iterable, Sequence, TYPE_CHECKING  # noqa
     MaybeBoundInst = Union['Instruction', 'BoundInstruction']
     AnyPredicate = Union['Predicate', 'FieldPredicate']
+    OperandSpec = Union['OperandKind', 'ValueType', 'TypeVar']
 except ImportError:
-    pass
+    TYPE_CHECKING = False
+
+if TYPE_CHECKING:
+    from .typevar import TypeVar  # noqa
 
 
 camel_re = re.compile('(^|_)([a-z])')
@@ -299,6 +303,7 @@ class OperandKind(object):
     """
 
     def __init__(self, name, doc, default_member=None, rust_type=None):
+        # type: (str, str, str, str) -> None
         self.name = name
         self.__doc__ = doc
         self.default_member = default_member
@@ -307,12 +312,15 @@ class OperandKind(object):
         self.rust_type = rust_type or camel_case(name)
 
     def __str__(self):
+        # type: () -> str
         return self.name
 
     def __repr__(self):
+        # type: () -> str
         return 'OperandKind({})'.format(self.name)
 
     def operand_kind(self):
+        # type: () -> OperandKind
         """
         An `OperandKind` instance can be used directly as the type of an
         `Operand` when defining an instruction.
@@ -357,10 +365,12 @@ class ImmediateKind(OperandKind):
     """
 
     def __init__(self, name, doc, default_member='imm', rust_type=None):
+        # type: (str, str, str, str) -> None
         super(ImmediateKind, self).__init__(
                 name, doc, default_member, rust_type)
 
     def __repr__(self):
+        # type: () -> str
         return 'ImmediateKind({})'.format(self.name)
 
 
@@ -372,10 +382,12 @@ class EntityRefKind(OperandKind):
     """
 
     def __init__(self, name, doc, default_member=None, rust_type=None):
+        # type: (str, str, str, str) -> None
         super(EntityRefKind, self).__init__(
                 name, doc, default_member or name, rust_type)
 
     def __repr__(self):
+        # type: () -> str
         return 'EntityRefKind({})'.format(self.name)
 
 
@@ -395,6 +407,7 @@ class ValueType(object):
     all_scalars = list()  # type: List[ValueType]
 
     def __init__(self, name, membytes, doc):
+        # type: (str, int, str) -> None
         self.name = name
         self.membytes = membytes
         self.__doc__ = doc
@@ -402,9 +415,11 @@ class ValueType(object):
         ValueType._registry[name] = self
 
     def __str__(self):
+        # type: () -> str
         return self.name
 
     def operand_kind(self):
+        # type: () -> OperandKind
         """
         When a `ValueType` object is used to describe the type of an `Operand`
         in an instruction definition, the kind of that operand is an SSA value.
@@ -416,6 +431,7 @@ class ValueType(object):
 
     @staticmethod
     def by_name(name):
+        # type: (str) -> ValueType
         if name in ValueType._registry:
             return ValueType._registry[name]
         else:
@@ -431,20 +447,24 @@ class ScalarType(ValueType):
     """
 
     def __init__(self, name, membytes, doc):
+        # type: (str, int, str) -> None
         super(ScalarType, self).__init__(name, membytes, doc)
-        self._vectors = dict()
+        self._vectors = dict()  # type: Dict[int, VectorType]
         # Assign numbers starting from 1. (0 is VOID).
         ValueType.all_scalars.append(self)
         self.number = len(ValueType.all_scalars)
         assert self.number < 16, 'Too many scalar types'
 
     def __repr__(self):
+        # type: () -> str
         return 'ScalarType({})'.format(self.name)
 
     def rust_name(self):
+        # type: () -> str
         return 'types::' + self.name.upper()
 
     def by(self, lanes):
+        # type: (int) -> VectorType
         """
         Get a vector type with this type as the lane type.
 
@@ -467,6 +487,7 @@ class VectorType(ValueType):
     """
 
     def __init__(self, base, lanes):
+        # type: (ScalarType, int) -> None
         assert isinstance(base, ScalarType), 'SIMD lanes must be scalar types'
         super(VectorType, self).__init__(
                 name='{}x{}'.format(base.name, lanes),
@@ -479,6 +500,7 @@ class VectorType(ValueType):
         self.number = 16*int(math.log(lanes, 2)) + base.number
 
     def __repr__(self):
+        # type: () -> str
         return ('VectorType(base={}, lanes={})'
                 .format(self.base.name, self.lanes))
 
@@ -487,6 +509,7 @@ class IntType(ScalarType):
     """A concrete scalar integer type."""
 
     def __init__(self, bits):
+        # type: (int) -> None
         assert bits > 0, 'IntType must have positive number of bits'
         super(IntType, self).__init__(
                 name='i{:d}'.format(bits),
@@ -495,6 +518,7 @@ class IntType(ScalarType):
         self.bits = bits
 
     def __repr__(self):
+        # type: () -> str
         return 'IntType(bits={})'.format(self.bits)
 
 
@@ -502,6 +526,7 @@ class FloatType(ScalarType):
     """A concrete scalar floating point type."""
 
     def __init__(self, bits, doc):
+        # type: (int, str) -> None
         assert bits > 0, 'FloatType must have positive number of bits'
         super(FloatType, self).__init__(
                 name='f{:d}'.format(bits),
@@ -510,6 +535,7 @@ class FloatType(ScalarType):
         self.bits = bits
 
     def __repr__(self):
+        # type: () -> str
         return 'FloatType(bits={})'.format(self.bits)
 
 
@@ -517,6 +543,7 @@ class BoolType(ScalarType):
     """A concrete scalar boolean type."""
 
     def __init__(self, bits):
+        # type: (int) -> None
         assert bits > 0, 'BoolType must have positive number of bits'
         super(BoolType, self).__init__(
                 name='b{:d}'.format(bits),
@@ -525,6 +552,7 @@ class BoolType(ScalarType):
         self.bits = bits
 
     def __repr__(self):
+        # type: () -> str
         return 'BoolType(bits={})'.format(self.bits)
 
 
@@ -545,6 +573,7 @@ class InstructionGroup(object):
     _current = None  # type: InstructionGroup
 
     def open(self):
+        # type: () -> None
         """
         Open this instruction group such that future new instructions are
         added to this group.
@@ -555,6 +584,7 @@ class InstructionGroup(object):
         InstructionGroup._current = self
 
     def close(self):
+        # type: () -> None
         """
         Close this instruction group. This function should be called before
         opening another instruction group.
@@ -565,13 +595,15 @@ class InstructionGroup(object):
         InstructionGroup._current = None
 
     def __init__(self, name, doc):
+        # type: (str, str) -> None
         self.name = name
         self.__doc__ = doc
-        self.instructions = []
+        self.instructions = []  # type: List[Instruction]
         self.open()
 
     @staticmethod
     def append(inst):
+        # type: (Instruction) -> None
         assert InstructionGroup._current, \
                 "Open an instruction group before defining instructions."
         InstructionGroup._current.instructions.append(inst)
@@ -599,21 +631,25 @@ class Operand(object):
 
     """
     def __init__(self, name, typ, doc=''):
+        # type: (str, OperandSpec, str) -> None
         self.name = name
         self.typ = typ
         self.__doc__ = doc
         self.kind = typ.operand_kind()
 
     def get_doc(self):
+        # type: () -> str
         if self.__doc__:
             return self.__doc__
         else:
             return self.typ.__doc__
 
     def __str__(self):
+        # type: () -> str
         return "`{}`".format(self.name)
 
     def is_value(self):
+        # type: () -> bool
         """
         Is this an SSA value operand?
         """

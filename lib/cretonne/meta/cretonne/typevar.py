@@ -319,7 +319,7 @@ class TypeVar(object):
         # When a `TypeVar` object is used to describe the type of an `Operand`
         # in an instruction definition, the kind of that operand is an SSA
         # value.
-        return value
+        return value  # type: ignore
 
     def free_typevar(self):
         # type: () -> TypeVar
