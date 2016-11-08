@@ -6,8 +6,8 @@ support.
 """
 from __future__ import absolute_import
 from cdsl.operands import VARIABLE_ARGS
+from cdsl.typevar import TypeVar
 from . import Operand, Instruction, InstructionGroup
-from .typevar import TypeVar
 from base.types import i8, f32, f64, b1
 from base.immediates import imm64, uimm8, ieee32, ieee64, immvector
 from base.immediates import intcc, floatcc

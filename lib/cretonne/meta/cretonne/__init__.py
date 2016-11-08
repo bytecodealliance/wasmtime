@@ -23,7 +23,7 @@ except ImportError:
     TYPE_CHECKING = False
 
 if TYPE_CHECKING:
-    from .typevar import TypeVar  # noqa
+    from cdsl.typevar import TypeVar  # noqa
 
 
 # Defining instructions.
