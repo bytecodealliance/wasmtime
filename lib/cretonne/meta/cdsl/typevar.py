@@ -379,6 +379,9 @@ class TypeVar(object):
 
     def free_typevar(self):
         # type: () -> TypeVar
+        """
+        Get the free type variable controlling this one.
+        """
         if self.is_derived:
             return self.base
         elif self.singleton_type:
@@ -386,3 +389,32 @@ class TypeVar(object):
             return None
         else:
             return self
+
+    def constrain_types(self, other):
+        # type: (TypeVar) -> None
+        """
+        Constrain the range of types this variable can assume to a subset of
+        those `other` can assume.
+
+        If this is a SAMEAS-derived type variable, constrain the base instead.
+        """
+        a = self.strip_sameas()
+        b = other.strip_sameas()
+        if a is b:
+            return
+
+        if not a.is_derived and not b.is_derived:
+            a.type_set &= b.type_set
+            # TODO: What if a.type_set becomes empty?
+            if not a.singleton_type:
+                a.singleton_type = b.singleton_type
+            return
+
+        # TODO: Implement constraints for derived type variables.
+        #
+        # If a and b are both derived with the same derived_func, we could say
+        # `a.base.constrain_types(b.base)`, but unless the derived_func is
+        # injective, that may constrain `a.base` more than necessary.
+        #
+        # For the fully general case, we would need to compute an image typeset
+        # for `b` and propagate a `a.derived_func` pre-image to `a.base`.
