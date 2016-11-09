@@ -100,6 +100,10 @@ class XForm(object):
                     "extra inputs in dst RTL: {}".format(
                         self.inputs[num_src_inputs:]))
 
+        self._infer_types(self.src)
+        self._infer_types(self.dst)
+        self._collect_typevars()
+
     def __repr__(self):
         s = "XForm(inputs={}, defs={},\n  ".format(self.inputs, self.defs)
         s += '\n  '.join(str(n) for n in self.src)
@@ -200,6 +204,63 @@ class XForm(object):
             if not d.is_output():
                 raise AssertionError(
                         '{} not defined in dest pattern'.format(d))
+
+    def _infer_types(self, rtl):
+        # type: (Rtl) -> None
+        """Assign type variables to all value variables used in `rtl`."""
+        for d in rtl.rtl:
+            inst = d.expr.inst
+
+            # Get the Var corresponding to the controlling type variable.
+            ctrl_var = None  # type: Var
+            if inst.is_polymorphic:
+                if inst.use_typevar_operand:
+                    # Should this be an assertion instead?
+                    # Should all value operands be required to be Vars?
+                    arg = d.expr.args[inst.format.typevar_operand]
+                    if isinstance(arg, Var):
+                        ctrl_var = arg
+                else:
+                    ctrl_var = d.defs[inst.value_results[0]]
+
+            # Reconcile arguments with the requirements of `inst`.
+            for opnum in inst.format.value_operands:
+                inst_tv = inst.ins[opnum].typevar
+                v = d.expr.args[opnum]
+                if isinstance(v, Var):
+                    v.constrain_typevar(inst_tv, inst.ctrl_typevar, ctrl_var)
+
+            # Reconcile results with the requirements of `inst`.
+            for resnum in inst.value_results:
+                inst_tv = inst.outs[resnum].typevar
+                v = d.defs[resnum]
+                v.constrain_typevar(inst_tv, inst.ctrl_typevar, ctrl_var)
+
+    def _collect_typevars(self):
+        # type: () -> None
+        """
+        Collect a list of variables whose type can be used to infer the types
+        of all expressions.
+
+        This should be called after `_infer_types()` above has computed type
+        variables for all the used vars.
+        """
+        fvars = list(v for v in self.inputs if v.has_free_typevar())
+        fvars += list(v for v in self.defs if v.has_free_typevar())
+        self.free_typevars = fvars
+
+        # When substituting a pattern, we know the types of all variables that
+        # appear on the source side: inut, output, and intermediate values.
+        # However, temporary values which appear only on the destination side
+        # must have their type computed somehow.
+        #
+        # Some variables have a fixed type which appears as a type variable
+        # with a singleton_type field set. That's allowed for temps too.
+        for v in fvars:
+            if v.is_temp() and not v.typevar.singleton_type:
+                raise AssertionError(
+                        "Cannot determine type of temp '{}' in xform:\n{}"
+                        .format(v, self))
 
 
 class XFormGroup(object):
