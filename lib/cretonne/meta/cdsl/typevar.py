@@ -292,6 +292,27 @@ class TypeVar(object):
         # type: () -> str
         return "`{}`".format(self.name)
 
+    # Supported functions for derived type variables.
+    SAMEAS = 'SameAs'
+    LANEOF = 'LaneOf'
+    ASBOOL = 'AsBool'
+    HALFWIDTH = 'HalfWidth'
+    DOUBLEWIDTH = 'DoubleWidth'
+
+    @staticmethod
+    def derived(base, derived_func):
+        # type: (TypeVar, str) -> TypeVar
+        """Create a type variable that is a function of another."""
+        return TypeVar(None, None, base=base, derived_func=derived_func)
+
+    def change_to_derived(self, base, derived_func):
+        # type: (TypeVar, str) -> None
+        """Change this type variable into a derived one."""
+        self.type_set = None
+        self.is_derived = True
+        self.base = base
+        self.derived_func = derived_func
+
     def lane_of(self):
         # type: () -> TypeVar
         """
@@ -301,7 +322,7 @@ class TypeVar(object):
         When this type variable assumes a scalar type, the derived type will be
         the same scalar type.
         """
-        return TypeVar(None, None, base=self, derived_func='LaneOf')
+        return TypeVar.derived(self, self.LANEOF)
 
     def as_bool(self):
         # type: () -> TypeVar
@@ -309,7 +330,7 @@ class TypeVar(object):
         Return a derived type variable that has the same vector geometry as
         this type variable, but with boolean lanes. Scalar types map to `b1`.
         """
-        return TypeVar(None, None, base=self, derived_func='AsBool')
+        return TypeVar.derived(self, self.ASBOOL)
 
     def half_width(self):
         # type: () -> TypeVar
@@ -325,7 +346,7 @@ class TypeVar(object):
         if ts.min_bool:
             assert ts.min_bool > 8, "Can't halve all boolean types"
 
-        return TypeVar(None, None, base=self, derived_func='HalfWidth')
+        return TypeVar.derived(self, self.HALFWIDTH)
 
     def double_width(self):
         # type: () -> TypeVar
@@ -341,7 +362,7 @@ class TypeVar(object):
         if ts.max_bool:
             assert ts.max_bool < MAX_BITS, "Can't double all boolean types."
 
-        return TypeVar(None, None, base=self, derived_func='DoubleWidth')
+        return TypeVar.derived(self, self.DOUBLEWIDTH)
 
     def free_typevar(self):
         # type: () -> TypeVar
