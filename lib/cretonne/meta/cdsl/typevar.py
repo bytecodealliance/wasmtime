@@ -292,6 +292,25 @@ class TypeVar(object):
         # type: () -> str
         return "`{}`".format(self.name)
 
+    def __repr__(self):
+        # type: () -> str
+        if self.is_derived:
+            return (
+                    'TypeVar({}, base={}, derived_func={})'
+                    .format(self.name, self.base, self.derived_func))
+        else:
+            return (
+                    'TypeVar({}, {})'
+                    .format(self.name, self.type_set))
+
+    def __eq__(self, other):
+        if self.is_derived and other.is_derived:
+            return (
+                    self.derived_func == other.derived_func and
+                    self.base == other.base)
+        else:
+            return self is other
+
     # Supported functions for derived type variables.
     SAMEAS = 'SameAs'
     LANEOF = 'LaneOf'
