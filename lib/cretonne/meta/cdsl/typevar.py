@@ -313,6 +313,19 @@ class TypeVar(object):
         self.base = base
         self.derived_func = derived_func
 
+    def strip_sameas(self):
+        # type: () -> TypeVar
+        """
+        Strip any `SAMEAS` functions from this typevar.
+
+        Also rewrite any `SAMEAS` functions nested under this typevar.
+        """
+        if self.is_derived:
+            self.base = self.base.strip_sameas()
+            if self.derived_func == self.SAMEAS:
+                return self.base
+        return self
+
     def lane_of(self):
         # type: () -> TypeVar
         """
