@@ -57,10 +57,14 @@ class TestTypeVar(TestCase):
         x2 = TypeVar('x2', 'i16 and up', ints=(16, 64))
         with self.assertRaises(AssertionError):
             x2.double_width()
-        self.assertEqual(str(x2.half_width()), '`HalfWidth(x2)`')
+        self.assertEqual(str(x2.half_width()), '`half_width(x2)`')
+        self.assertEqual(x2.half_width().rust_expr(), 'x2.half_width()')
+        self.assertEqual(
+                x2.half_width().double_width().rust_expr(),
+                'x2.half_width().double_width()')
 
         x3 = TypeVar('x3', 'up to i32', ints=(8, 32))
-        self.assertEqual(str(x3.double_width()), '`DoubleWidth(x3)`')
+        self.assertEqual(str(x3.double_width()), '`double_width(x3)`')
         with self.assertRaises(AssertionError):
             x3.half_width()
 

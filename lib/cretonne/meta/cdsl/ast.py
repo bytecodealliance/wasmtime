@@ -197,6 +197,16 @@ class Var(Expr):
             return False
         return self.typevar is self.original_typevar
 
+    def rust_type(self):
+        # type: () -> str
+        """
+        Get a Rust expression that computes the type of this variable.
+
+        It is assumed that local variables exist corresponding to the free type
+        variables.
+        """
+        return self.typevar.rust_expr()
+
     def constrain_typevar(self, sym_typevar, sym_ctrl, ctrl_var):
         # type: (TypeVar, TypeVar, Var) -> None
         """
