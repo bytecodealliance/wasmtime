@@ -312,11 +312,14 @@ class TypeVar(object):
             return self is other
 
     # Supported functions for derived type variables.
-    SAMEAS = 'SameAs'
-    LANEOF = 'LaneOf'
-    ASBOOL = 'AsBool'
-    HALFWIDTH = 'HalfWidth'
-    DOUBLEWIDTH = 'DoubleWidth'
+    # The names here must match the method names on `ir::types::Type`.
+    # The camel_case of the names must match `enum OperandConstraint` in
+    # `instructions.rs`.
+    SAMEAS = 'same_as'
+    LANEOF = 'lane_of'
+    ASBOOL = 'as_bool'
+    HALFWIDTH = 'half_width'
+    DOUBLEWIDTH = 'double_width'
 
     @staticmethod
     def derived(base, derived_func):
@@ -370,13 +373,14 @@ class TypeVar(object):
         Return a derived type variable that has the same number of vector lanes
         as this one, but the lanes are half the width.
         """
-        ts = self.type_set
-        if ts.min_int:
-            assert ts.min_int > 8, "Can't halve all integer types"
-        if ts.min_float:
-            assert ts.min_float > 32, "Can't halve all float types"
-        if ts.min_bool:
-            assert ts.min_bool > 8, "Can't halve all boolean types"
+        if not self.is_derived:
+            ts = self.type_set
+            if ts.min_int:
+                assert ts.min_int > 8, "Can't halve all integer types"
+            if ts.min_float:
+                assert ts.min_float > 32, "Can't halve all float types"
+            if ts.min_bool:
+                assert ts.min_bool > 8, "Can't halve all boolean types"
 
         return TypeVar.derived(self, self.HALFWIDTH)
 
@@ -386,13 +390,14 @@ class TypeVar(object):
         Return a derived type variable that has the same number of vector lanes
         as this one, but the lanes are double the width.
         """
-        ts = self.type_set
-        if ts.max_int:
-            assert ts.max_int < MAX_BITS, "Can't double all integer types."
-        if ts.max_float:
-            assert ts.max_float < MAX_BITS, "Can't double all float types."
-        if ts.max_bool:
-            assert ts.max_bool < MAX_BITS, "Can't double all boolean types."
+        if not self.is_derived:
+            ts = self.type_set
+            if ts.max_int:
+                assert ts.max_int < MAX_BITS, "Can't double all integer types."
+            if ts.max_float:
+                assert ts.max_float < MAX_BITS, "Can't double all float types."
+            if ts.max_bool:
+                assert ts.max_bool < MAX_BITS, "Can't double all bool types."
 
         return TypeVar.derived(self, self.DOUBLEWIDTH)
 
@@ -408,6 +413,19 @@ class TypeVar(object):
             return None
         else:
             return self
+
+    def rust_expr(self):
+        # type: () -> str
+        """
+        Get a Rust expression that computes the type of this type variable.
+        """
+        if self.is_derived:
+            return '{}.{}()'.format(
+                    self.base.rust_expr(), self.derived_func)
+        elif self.singleton_type:
+            return self.singleton_type.rust_name()
+        else:
+            return self.name
 
     def constrain_types(self, other):
         # type: (TypeVar) -> None

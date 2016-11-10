@@ -5,6 +5,7 @@ from __future__ import absolute_import
 import srcgen
 import constant_hash
 from unique_table import UniqueTable, UniqueSeqTable
+from cdsl import camel_case
 from cdsl.operands import ImmediateKind
 import cdsl.types
 from cdsl.formats import InstructionFormat
@@ -330,7 +331,7 @@ def get_constraint(op, ctrl_typevar, type_sets):
 
     if tv.is_derived:
         assert tv.base is ctrl_typevar, "Not derived from ctrl_typevar"
-        return tv.derived_func
+        return camel_case(tv.derived_func)
 
     assert tv is ctrl_typevar
     return 'Same'
