@@ -10,6 +10,7 @@ the input instruction.
 from __future__ import absolute_import
 from srcgen import Formatter
 from base import legalize
+from cdsl.ast import Var
 
 try:
     from typing import Sequence  # noqa
@@ -72,6 +73,12 @@ def unwrap_inst(iref, node, fmt):
         fmt.outdented_line('} else {')
         fmt.line('unreachable!("bad instruction format")')
 
+    # Get the types of any variables where it is needed.
+    for i in iform.value_operands:
+        v = expr.args[i]
+        if isinstance(v, Var) and v.has_free_typevar():
+            fmt.line('let typeof_{0} = dfg.value_type({0});'.format(v))
+
     # If the node has multiple results, detach the values.
     # Place the secondary values in 'src_{}' locals.
     if len(node.defs) > 1:
@@ -91,6 +98,11 @@ def unwrap_inst(iref, node, fmt):
                 for d in node.defs[1:]:
                     fmt.line('src_{} = vals.next().unwrap();'.format(d))
                 fmt.line('assert_eq!(vals.next(), None);')
+            for d in node.defs[1:]:
+                if d.has_free_typevar():
+                    fmt.line(
+                            'let typeof_{0} = dfg.value_type(src_{0});'
+                            .format(d))
 
 
 def wrap_tup(seq):
@@ -128,7 +140,7 @@ def emit_dst_inst(node, fmt):
             builder = 'let {} = dfg.ins(pos)'.format(wrap_tup(node.defs))
             fixup_first_result = node.defs[0].is_output()
 
-    fmt.line('{}.{};'.format(builder, node.expr.rust_builder()))
+    fmt.line('{}.{};'.format(builder, node.expr.rust_builder(node.defs)))
 
     # If we just replaced an instruction, we need to bump the cursor so
     # following instructions are inserted *after* the replaced insruction.

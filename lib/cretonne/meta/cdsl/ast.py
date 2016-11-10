@@ -9,7 +9,7 @@ from . import instructions
 from .typevar import TypeVar
 
 try:
-    from typing import Union, Tuple  # noqa
+    from typing import Union, Tuple, Sequence  # noqa
 except ImportError:
     pass
 
@@ -389,12 +389,18 @@ class Apply(Expr):
         args = ', '.join(map(str, self.args))
         return '{}({})'.format(self.instname(), args)
 
-    def rust_builder(self):
-        # type: () -> str
+    def rust_builder(self, defs=None):
+        # type: (Sequence[Var]) -> str
         """
         Return a Rust Builder method call for instantiating this instruction
         application.
+
+        The `defs` argument should be a list of variables defined by this
+        instruction. It is used to construct a result type if necessary.
         """
         args = ', '.join(map(str, self.args))
+        # Do we need to pass an explicit type argument?
+        if self.inst.is_polymorphic and not self.inst.use_typevar_operand:
+            args = defs[0].rust_type() + ', ' + args
         method = self.inst.snake_name()
         return '{}({})'.format(method, args)
