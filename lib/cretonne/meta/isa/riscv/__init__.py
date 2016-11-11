@@ -29,4 +29,4 @@ from . import defs
 from . import encodings, settings # noqa
 
 # Re-export the primary target ISA definition.
-isa = defs.isa.finish()
+ISA = defs.ISA.finish()
