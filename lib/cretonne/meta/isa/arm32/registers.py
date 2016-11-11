@@ -2,7 +2,7 @@
 ARM32 register banks.
 """
 from __future__ import absolute_import
-from cdsl.registers import RegBank
+from cdsl.registers import RegBank, RegClass
 from .defs import ISA
 
 
@@ -27,3 +27,8 @@ FloatRegs = RegBank(
         - Q registers are 4 units each.
         """,
         units=64, prefix='s')
+
+GPR = RegClass('GPR', IntRegs)
+S = RegClass('S', FloatRegs, count=32)
+D = RegClass('D', FloatRegs, width=2)
+Q = RegClass('Q', FloatRegs, width=4)

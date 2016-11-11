@@ -23,7 +23,7 @@ data types, and the H-registers even less so. Rather than trying to model the
 H-registers accurately, we'll avoid using them in both I32 and I64 modes.
 """
 from __future__ import absolute_import
-from cdsl.registers import RegBank
+from cdsl.registers import RegBank, RegClass
 from .defs import ISA
 
 
@@ -37,3 +37,6 @@ FloatRegs = RegBank(
         'FloatRegs', ISA,
         'SSE floating point registers',
         units=16, prefix='xmm')
+
+GPR = RegClass('GPR', IntRegs)
+FPR = RegClass('FPR', FloatRegs)

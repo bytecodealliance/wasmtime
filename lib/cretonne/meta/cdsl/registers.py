@@ -19,7 +19,8 @@ The register allocator works with *register classes* which can allocate one or
 more register units at a time. A register class allocates more than one
 register unit at a time when its registers are composed of smaller alocatable
 units. For example, the ARM double precision floating point registers are
-composed of two single precision registers. """
+composed of two single precision registers.
+"""
 from __future__ import absolute_import
 from . import is_power_of_two, next_power_of_two
 
@@ -78,3 +79,53 @@ class RegBank(object):
         # type: () -> str
         return ('RegBank({}, units={}, first_unit={})'
                 .format(self.name, self.units, self.first_unit))
+
+
+class RegClass(object):
+    """
+    A register class is a subset of register units in a RegBank along with a
+    strategy for allocating registers.
+
+    The *width* parameter determines how many register units are allocated at a
+    time. Usually it that is one, but for example the ARM D registers are
+    allocated two units at a time. When multiple units are allocated, it is
+    always a contiguous set of unit numbers.
+
+    :param name: Name of this register class.
+    :param bank: The register bank we're allocating from.
+    :param count: The maximum number of allocations in this register class. By
+                  default, the whole register bank can be allocated.
+    :param width: How many units to allocate at a time.
+    :param start: The first unit to allocate, relative to `bank.first.unit`.
+    :param stride: How many units to skip to get to the next allocation.
+                   Default is `width`.
+    """
+
+    def __init__(self, name, bank, count=None, width=1, start=0, stride=None):
+        # type: (str, RegBank, int, int, int, int) -> None
+        self.name = name
+        self.bank = bank
+        self.start = start
+        self.width = width
+
+        assert width > 0
+        assert start >= 0 and start < bank.units
+
+        if stride is None:
+            stride = width
+        assert stride > 0
+        self.stride = stride
+
+        if count is None:
+            count = bank.units / stride
+        self.count = count
+
+        # When the stride is 1, we can wrap around to the beginning of the
+        # register bank, but with a larger stride, we wouldn't cover all the
+        # possible allocations with a simple modulo stride. For example,
+        # attempting to allocate the even registers before the odd ones
+        # wouldn't work. Only if stride is coprime to bank.units would it work,
+        # but that is unlikely since the bank size is almost always a power of
+        # two.
+        if start + count*stride > bank.units:
+            assert stride == 1, 'Wrapping with stride not supported'
