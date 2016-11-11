@@ -6,6 +6,7 @@ don't attempt parfect hashing, but simply generate an open addressed
 quadratically probed hash table.
 """
 from __future__ import absolute_import
+from cdsl import next_power_of_two
 
 
 def simple_hash(s):
@@ -22,27 +23,6 @@ def simple_hash(s):
     for c in s:
         h = ((h ^ ord(c)) + ((h >> 6) + (h << 26))) & 0xffffffff
     return h
-
-
-def next_power_of_two(x):
-    """
-    Compute the next power of two that is greater than `x`:
-        >>> next_power_of_two(0)
-        1
-        >>> next_power_of_two(1)
-        2
-        >>> next_power_of_two(2)
-        4
-        >>> next_power_of_two(3)
-        4
-        >>> next_power_of_two(4)
-        8
-    """
-    s = 1
-    while x & (x + 1) != 0:
-        x |= x >> s
-        s *= 2
-    return x + 1
 
 
 def compute_quadratic(items, hash_function):
