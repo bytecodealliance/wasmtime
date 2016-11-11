@@ -2,7 +2,7 @@
 Aarch64 register banks.
 """
 from __future__ import absolute_import
-from cdsl.registers import RegBank
+from cdsl.registers import RegBank, RegClass
 from .defs import ISA
 
 
@@ -17,3 +17,6 @@ FloatRegs = RegBank(
         'FloatRegs', ISA,
         'Floating point registers',
         units=32, prefix='v')
+
+GPR = RegClass('GPR', IntRegs)
+FPR = RegClass('FPR', FloatRegs)
