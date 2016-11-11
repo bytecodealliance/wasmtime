@@ -10,6 +10,7 @@ try:
     from .predicates import Predicate, FieldPredicate  # noqa
     from .settings import SettingGroup  # noqa
     from .types import ValueType  # noqa
+    from .registers import RegBank  # noqa
     AnyPredicate = Union[Predicate, FieldPredicate]
 except ImportError:
     pass
@@ -32,6 +33,7 @@ class TargetISA(object):
         self.settings = None  # type: SettingGroup
         self.instruction_groups = instruction_groups
         self.cpumodes = list()  # type: List[CPUMode]
+        self.regbanks = list()  # type: List[RegBank]
 
     def finish(self):
         # type: () -> TargetISA
