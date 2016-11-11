@@ -6,7 +6,7 @@ polymorphic by using type variables.
 """
 from __future__ import absolute_import
 import math
-from . import types
+from . import types, is_power_of_two
 
 try:
     from typing import Tuple, Union # noqa
@@ -18,11 +18,6 @@ except ImportError:
 
 MAX_LANES = 256
 MAX_BITS = 64
-
-
-def is_power_of_two(x):
-    # type: (int) -> bool
-    return x > 0 and x & (x-1) == 0
 
 
 def int_log2(x):
