@@ -7,7 +7,7 @@ architecture supported by Cretonne.
 """
 from __future__ import absolute_import
 from cdsl.isa import TargetISA  # noqa
-from . import riscv
+from . import riscv, intel, arm32, arm64
 
 
 def all_isas():
@@ -16,4 +16,4 @@ def all_isas():
     Get a list of all the supported target ISAs. Each target ISA is represented
     as a :py:class:`cretonne.TargetISA` instance.
     """
-    return [riscv.ISA]
+    return [riscv.ISA, intel.ISA, arm32.ISA, arm64.ISA]
