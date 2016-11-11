@@ -16,4 +16,4 @@ def all_isas():
     Get a list of all the supported target ISAs. Each target ISA is represented
     as a :py:class:`cretonne.TargetISA` instance.
     """
-    return [riscv.isa]
+    return [riscv.ISA]

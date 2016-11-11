@@ -5,9 +5,9 @@ from __future__ import absolute_import
 from cdsl.settings import SettingGroup, BoolSetting
 from cdsl.predicates import And
 import base.settings as shared
-from .defs import isa
+from .defs import ISA
 
-isa.settings = SettingGroup('riscv', parent=shared.group)
+ISA.settings = SettingGroup('riscv', parent=shared.group)
 
 supports_m = BoolSetting("CPU supports the 'M' extension (mul/div)")
 supports_a = BoolSetting("CPU supports the 'A' extension (atomics)")
@@ -25,4 +25,4 @@ use_d = And(supports_d, shared.enable_float)
 
 full_float = And(shared.enable_simd, supports_f, supports_d)
 
-isa.settings.close(globals())
+ISA.settings.close(globals())
