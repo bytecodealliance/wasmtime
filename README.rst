@@ -19,7 +19,7 @@ Cretonne is designed to be a code generator for WebAssembly with these design
 goals:
 
 No undefined behavior
-    Cretonne does not have a nasal demons clause, and it won't generate code
+    Cretonne does not have a `nasal demons clause <http://www.catb.org/jargon/html/N/nasal-demons.html>`_, and it won't generate code
     with unexpected behavior if invariants are broken.
 Portable semantics
     As far as possible, Cretonne's input language has well-defined semantics
