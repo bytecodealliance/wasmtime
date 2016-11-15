@@ -913,8 +913,8 @@ Glossary
         through to the following instructions in the block, but only the first
         instruction in the EBB can be a branch target.
 
-        The last instrution in an EBB must be a :term:`terminator instruction`,
-        so execion cannot flow through to the next EBB in the function. (But
+        The last instruction in an EBB must be a :term:`terminator instruction`,
+        so execution cannot flow through to the next EBB in the function. (But
         there may be a branch to the next EBB.)
 
         Note that some textbooks define an EBB as a maximal *subtree* in the
