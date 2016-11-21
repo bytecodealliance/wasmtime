@@ -9,6 +9,7 @@ Contents:
    langref
    metaref
    testing
+   regalloc
    compare-llvm
 
 Indices and tables
