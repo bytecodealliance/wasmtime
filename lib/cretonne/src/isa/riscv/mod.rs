@@ -2,11 +2,12 @@
 
 pub mod settings;
 mod enc_tables;
+mod registers;
 
 use super::super::settings as shared_settings;
 use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, general_encoding};
 use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, Encoding, Legalize};
+use isa::{TargetIsa, RegInfo, Encoding, Legalize};
 use ir::{InstructionData, DataFlowGraph};
 
 #[allow(dead_code)]
@@ -46,6 +47,10 @@ impl TargetIsa for Isa {
 
     fn flags(&self) -> &shared_settings::Flags {
         &self.shared_flags
+    }
+
+    fn register_info(&self) -> &RegInfo {
+        &registers::INFO
     }
 
     fn encode(&self, _: &DataFlowGraph, inst: &InstructionData) -> Result<Encoding, Legalize> {

@@ -8,6 +8,7 @@ This target ISA generates code for ARMv7 and ARMv8 CPUs in 32-bit mode
 
 from __future__ import absolute_import
 from . import defs
+from . import registers  # noqa
 
 # Re-export the primary target ISA definition.
 ISA = defs.ISA.finish()
