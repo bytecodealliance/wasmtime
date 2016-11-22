@@ -41,12 +41,14 @@
 //! concurrent function compilations.
 
 pub use isa::encoding::Encoding;
+pub use isa::registers::{RegUnit, RegBank, RegInfo};
 use settings;
 use ir::{InstructionData, DataFlowGraph};
 
 pub mod riscv;
 mod encoding;
 mod enc_tables;
+mod registers;
 
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
@@ -107,6 +109,9 @@ pub trait TargetIsa {
 
     /// Get the ISA-independent flags that were used to make this trait object.
     fn flags(&self) -> &settings::Flags;
+
+    /// Get a data structure describing the registers in this ISA.
+    fn register_info(&self) -> &RegInfo;
 
     /// Encode an instruction after determining it is legal.
     ///

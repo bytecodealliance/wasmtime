@@ -26,7 +26,7 @@ RV32G / RV64G
 """
 from __future__ import absolute_import
 from . import defs
-from . import encodings, settings # noqa
+from . import encodings, settings, registers  # noqa
 
 # Re-export the primary target ISA definition.
 ISA = defs.ISA.finish()
