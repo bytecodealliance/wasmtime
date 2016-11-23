@@ -6,15 +6,7 @@ from cdsl.registers import RegBank, RegClass
 from .defs import ISA
 
 
-# Special register units:
-# - r15 is the program counter.
-# - r14 is the link register.
-# - r13 is usually the stack pointer.
-IntRegs = RegBank(
-        'IntRegs', ISA,
-        'General purpose registers',
-        units=16, prefix='r')
-
+# Define the larger float bank first to avoid the alignment gap.
 FloatRegs = RegBank(
         'FloatRegs', ISA, r"""
         Floating point registers.
@@ -27,6 +19,15 @@ FloatRegs = RegBank(
         - Q registers are 4 units each.
         """,
         units=64, prefix='s')
+
+# Special register units:
+# - r15 is the program counter.
+# - r14 is the link register.
+# - r13 is usually the stack pointer.
+IntRegs = RegBank(
+        'IntRegs', ISA,
+        'General purpose registers',
+        units=16, prefix='r')
 
 GPR = RegClass('GPR', IntRegs)
 S = RegClass('S', FloatRegs, count=32)

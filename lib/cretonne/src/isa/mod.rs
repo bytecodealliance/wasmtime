@@ -46,6 +46,9 @@ use settings;
 use ir::{InstructionData, DataFlowGraph};
 
 pub mod riscv;
+pub mod intel;
+pub mod arm32;
+pub mod arm64;
 mod encoding;
 mod enc_tables;
 mod registers;
@@ -55,6 +58,9 @@ mod registers;
 pub fn lookup(name: &str) -> Option<Builder> {
     match name {
         "riscv" => riscv_builder(),
+        "intel" => intel_builder(),
+        "arm32" => arm32_builder(),
+        "arm64" => arm64_builder(),
         _ => None,
     }
 }
@@ -62,6 +68,18 @@ pub fn lookup(name: &str) -> Option<Builder> {
 // Make a builder for RISC-V.
 fn riscv_builder() -> Option<Builder> {
     Some(riscv::isa_builder())
+}
+
+fn intel_builder() -> Option<Builder> {
+    Some(intel::isa_builder())
+}
+
+fn arm32_builder() -> Option<Builder> {
+    Some(arm32::isa_builder())
+}
+
+fn arm64_builder() -> Option<Builder> {
+    Some(arm64::isa_builder())
 }
 
 /// Builder for a `TargetIsa`.

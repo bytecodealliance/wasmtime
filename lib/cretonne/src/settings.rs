@@ -270,6 +270,7 @@ mod tests {
                    "[shared]\n\
                     opt_level = \"default\"\n\
                     is_64bit = false\n\
+                    is_compressed = false\n\
                     enable_float = true\n\
                     enable_simd = true\n\
                     enable_atomics = true\n");

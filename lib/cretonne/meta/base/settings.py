@@ -20,6 +20,8 @@ opt_level = EnumSetting(
 
 is_64bit = BoolSetting("Enable 64-bit code generation")
 
+is_compressed = BoolSetting("Enable compressed instructions")
+
 enable_float = BoolSetting(
         """Enable the use of floating-point instructions""",
         default=True)
