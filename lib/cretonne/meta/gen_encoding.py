@@ -91,6 +91,8 @@ def emit_instps(instps, fmt):
     Emit a function for matching instruction predicates.
     """
 
+    if not instps:
+        fmt.line('#[allow(unused_variables)]')
     with fmt.indented(
             'pub fn check_instp(inst: &InstructionData, instp_idx: u16) ' +
             '-> bool {', '}'):

@@ -17,7 +17,7 @@ is no x87 floating point support.
 
 from __future__ import absolute_import
 from . import defs
-from . import registers  # noqa
+from . import settings, registers  # noqa
 
 # Re-export the primary target ISA definition.
 ISA = defs.ISA.finish()

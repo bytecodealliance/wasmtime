@@ -192,6 +192,7 @@ def gen_constructor(sgrp, parent, fmt):
             p = sgrp.parent
             args = '{}: &{}::Flags, {}'.format(p.name, p.qual_mod, args)
         fmt.doc_comment('Create flags {} settings group.'.format(sgrp.name))
+        fmt.line('#[allow(unused_variables)]')
         with fmt.indented(
                 'pub fn new({}) -> Flags {{'.format(args), '}'):
             fmt.line('let bvec = builder.state_for("{}");'.format(sgrp.name))
@@ -259,9 +260,8 @@ def generate(isas, out_dir):
 
     # Generate ISA-specific settings.
     for isa in isas:
-        if isa.settings:
-            isa.settings.qual_mod = 'isa::{}::settings'.format(
-                    isa.settings.name)
-            fmt = srcgen.Formatter()
-            gen_group(isa.settings, fmt)
-            fmt.update_file('settings-{}.rs'.format(isa.name), out_dir)
+        isa.settings.qual_mod = 'isa::{}::settings'.format(
+                isa.settings.name)
+        fmt = srcgen.Formatter()
+        gen_group(isa.settings, fmt)
+        fmt.update_file('settings-{}.rs'.format(isa.name), out_dir)
