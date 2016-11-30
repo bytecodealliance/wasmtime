@@ -83,7 +83,7 @@ trap = Instruction(
         'trap', r"""
         Terminate execution unconditionally.
         """,
-        is_terminator=True)
+        is_terminator=True, can_trap=True)
 
 trapz = Instruction(
         'trapz', r"""
@@ -91,7 +91,7 @@ trapz = Instruction(
 
         if ``c`` is non-zero, execution continues at the following instruction.
         """,
-        ins=c)
+        ins=c, can_trap=True)
 
 trapnz = Instruction(
         'trapnz', r"""
@@ -99,7 +99,7 @@ trapnz = Instruction(
 
         if ``c`` is zero, execution continues at the following instruction.
         """,
-        ins=c)
+        ins=c, can_trap=True)
 
 rvals = Operand('rvals', VARIABLE_ARGS, doc='return values')
 
@@ -111,7 +111,7 @@ x_return = Instruction(
         provided return values. The list of return values must match the
         function signature's return types.
         """,
-        ins=rvals)
+        ins=rvals, is_terminator=True)
 
 FN = Operand(
         'FN',
@@ -366,7 +366,7 @@ udiv = Instruction(
 
         This operation traps if the divisor is zero.
         """,
-        ins=(x, y), outs=a)
+        ins=(x, y), outs=a, can_trap=True)
 
 sdiv = Instruction(
         'sdiv', r"""
@@ -377,7 +377,7 @@ sdiv = Instruction(
         representable in :math:`B` bits two's complement. This only happens
         when :math:`x = -2^{B-1}, y = -1`.
         """,
-        ins=(x, y), outs=a)
+        ins=(x, y), outs=a, can_trap=True)
 
 urem = Instruction(
         'urem', """
@@ -385,7 +385,7 @@ urem = Instruction(
 
         This operation traps if the divisor is zero.
         """,
-        ins=(x, y), outs=a)
+        ins=(x, y), outs=a, can_trap=True)
 
 srem = Instruction(
         'srem', """
@@ -399,7 +399,7 @@ srem = Instruction(
             dividend. Should we add a ``smod`` instruction for the case where
             the result has the same sign as the divisor?
         """,
-        ins=(x, y), outs=a)
+        ins=(x, y), outs=a, can_trap=True)
 
 a = Operand('a', iB)
 x = Operand('x', iB)
@@ -1136,7 +1136,7 @@ fcvt_to_uint = Instruction(
 
         The result type must have the same number of vector lanes as the input.
         """,
-        ins=x, outs=a)
+        ins=x, outs=a, can_trap=True)
 
 fcvt_to_sint = Instruction(
         'fcvt_to_sint', r"""
@@ -1148,7 +1148,7 @@ fcvt_to_sint = Instruction(
 
         The result type must have the same number of vector lanes as the input.
         """,
-        ins=x, outs=a)
+        ins=x, outs=a, can_trap=True)
 
 x = Operand('x', Int)
 a = Operand('a', FloatTo)

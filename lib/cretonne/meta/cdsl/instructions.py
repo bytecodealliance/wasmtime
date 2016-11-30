@@ -80,6 +80,7 @@ class Instruction(object):
                 values or `variable_args`.
     :param is_terminator: This is a terminator instruction.
     :param is_branch: This is a branch instruction.
+    :param can_trap: This instruction can trap.
     """
 
     def __init__(self, name, doc, ins=(), outs=(), **kwargs):
@@ -94,6 +95,9 @@ class Instruction(object):
         self.value_results = tuple(
                 i for i, o in enumerate(self.outs) if o.is_value())
         self._verify_polymorphic()
+        self.is_branch = 'is_branch' in kwargs
+        self.is_terminator = 'is_terminator' in kwargs
+        self.can_trap = 'can_trap' in kwargs
         InstructionGroup.append(self)
 
     def __str__(self):

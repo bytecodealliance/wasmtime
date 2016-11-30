@@ -271,6 +271,22 @@ def gen_opcodes(groups, fmt):
                 fmt.line(i.camel_name + ',')
     fmt.line()
 
+    with fmt.indented('impl Opcode {', '}'):
+        attrs = ['is_branch', 'is_terminator', 'can_trap']
+
+        for attr in attrs:
+            if attr != attrs[0]:
+                fmt.line()
+
+            with fmt.indented('fn {}(self) -> bool {{'
+                              .format(attr), '}'):
+                with fmt.indented('match self {', '}'):
+                    for i in instrs:
+                        if getattr(i, attr):
+                            fmt.format('Opcode::{} => true,', i.camel_name, i.name)
+
+                    fmt.line('_ => false')
+
     # Generate a private opcode_format table.
     with fmt.indented(
             'const OPCODE_FORMAT: [InstructionFormat; {}] = ['
