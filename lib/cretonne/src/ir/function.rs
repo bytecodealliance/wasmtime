@@ -4,8 +4,8 @@
 //! instructions.
 
 use std::fmt::{self, Display, Debug, Formatter};
-use ir::{FunctionName, Signature, Inst, StackSlot, StackSlotData, JumpTable, JumpTableData,
-         DataFlowGraph, Layout};
+use ir::{FunctionName, Signature, Value, Inst, StackSlot, StackSlotData, JumpTable, JumpTableData,
+         ValueLoc, DataFlowGraph, Layout};
 use isa::Encoding;
 use entity_map::{EntityMap, PrimaryEntityData};
 use write::write_function;
@@ -37,6 +37,9 @@ pub struct Function {
     /// Encoding recipe and bits for the legal instructions.
     /// Illegal instructions have the `Encoding::default()` value.
     pub encodings: EntityMap<Inst, Encoding>,
+
+    /// Location assigned to every value.
+    pub locations: EntityMap<Value, ValueLoc>,
 }
 
 impl PrimaryEntityData for StackSlotData {}
@@ -53,6 +56,7 @@ impl Function {
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),
             encodings: EntityMap::new(),
+            locations: EntityMap::new(),
         }
     }
 

@@ -98,6 +98,17 @@ impl Default for Inst {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Value(u32);
 
+impl EntityRef for Value {
+    fn new(index: usize) -> Value {
+        assert!(index < (u32::MAX as usize));
+        Value(index as u32)
+    }
+
+    fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
 /// Value references can either reference an instruction directly, or they can refer to the
 /// extended value table.
 pub enum ExpandedValue {
