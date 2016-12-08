@@ -273,9 +273,18 @@ def gen_opcodes(groups, fmt):
 
     with fmt.indented('impl Opcode {', '}'):
         attrs = [
-            { 'name': 'is_branch', 'comment': 'True for all branch instructions.' },
-            { 'name': 'is_terminator', 'comment': 'True for instructions that terminate EBB.' },
-            { 'name': 'can_trap', 'comment': 'True if instruction could trap.' }
+            {
+                'name': 'is_branch',
+                'comment': 'True for all branch instructions.'
+            },
+            {
+                'name': 'is_terminator',
+                'comment': 'True for instructions that terminate EBB.'
+            },
+            {
+                'name': 'can_trap',
+                'comment': 'True if instruction could trap.'
+            }
         ]
 
         for attr in attrs:
@@ -288,7 +297,9 @@ def gen_opcodes(groups, fmt):
                 with fmt.indented('match self {', '}'):
                     for i in instrs:
                         if getattr(i, attr['name']):
-                            fmt.format('Opcode::{} => true,', i.camel_name, i.name)
+                            fmt.format(
+                                    'Opcode::{} => true,',
+                                    i.camel_name, i.name)
 
                     fmt.line('_ => false')
 
