@@ -14,6 +14,7 @@ mod funcname;
 mod extfunc;
 mod builder;
 mod valueloc;
+mod progpoint;
 
 pub use ir::funcname::FunctionName;
 pub use ir::extfunc::{Signature, ArgumentType, ArgumentExtension, ExtFuncData};
@@ -27,3 +28,4 @@ pub use ir::dfg::{DataFlowGraph, ValueDef};
 pub use ir::layout::{Layout, Cursor};
 pub use ir::function::Function;
 pub use ir::builder::InstBuilder;
+pub use ir::progpoint::{ProgramPoint, ProgramOrder};
