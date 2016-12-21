@@ -30,7 +30,7 @@ function banner() {
 # rustfmt is installed.
 #
 # This version should always be bumped to the newest version available.
-RUSTFMT_VERSION="0.6.2"
+RUSTFMT_VERSION="0.6.3"
 
 if cargo install --list | grep -q "^rustfmt v$RUSTFMT_VERSION"; then
     banner "Rust formatting"

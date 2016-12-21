@@ -9,8 +9,9 @@ use self::cretonne::entity_map::EntityMap;
 fn test_reverse_postorder_traversal(function_source: &str, ebb_order: Vec<u32>) {
     let func = &parse_functions(function_source).unwrap()[0];
     let cfg = ControlFlowGraph::new(&func);
-    let ebbs = ebb_order.iter().map(|n| Ebb::with_number(*n).unwrap())
-                               .collect::<Vec<Ebb>>();
+    let ebbs = ebb_order.iter()
+        .map(|n| Ebb::with_number(*n).unwrap())
+        .collect::<Vec<Ebb>>();
 
     let mut postorder_ebbs = cfg.postorder_ebbs();
     let mut postorder_map = EntityMap::with_capacity(postorder_ebbs.len());
@@ -50,7 +51,8 @@ fn simple_traversal() {
             ebb5:
                 trap
         }
-    ", vec![0, 2, 1, 3, 4, 5]);
+    ",
+                                     vec![0, 2, 1, 3, 4, 5]);
 }
 
 #[test]
@@ -67,7 +69,8 @@ fn loops_one() {
             ebb3:
                 return
         }
-    ", vec![0, 1, 2, 3]);
+    ",
+                                     vec![0, 1, 2, 3]);
 }
 
 #[test]
@@ -91,7 +94,8 @@ fn loops_two() {
                 brz v0, ebb4
                 return
         }
-    ", vec![0, 1, 2, 5, 4, 3]);
+    ",
+                                     vec![0, 1, 2, 5, 4, 3]);
 }
 
 #[test]
@@ -120,7 +124,8 @@ fn loops_three() {
             ebb7:
                 return
         }
-    ", vec![0, 1, 2, 5, 4, 3, 6, 7]);
+    ",
+                                     vec![0, 1, 2, 5, 4, 3, 6, 7]);
 }
 
 #[test]
@@ -142,5 +147,6 @@ fn back_edge_one() {
             ebb4:
                 trap
         }
-    ", vec![0, 1, 3, 2, 4]);
+    ",
+                                     vec![0, 1, 3, 2, 4]);
 }

@@ -165,9 +165,9 @@ impl Pattern {
             let refname = s[refname_begin..refname_end].to_string();
             return if let Some(defidx) = def {
                 Ok((Part::DefVar {
-                    def: defidx,
-                    var: refname,
-                },
+                        def: defidx,
+                        var: refname,
+                    },
                     refname_end + 1))
             } else {
                 Err(Error::Syntax(format!("expected variable name in $(=${})", refname)))
@@ -462,37 +462,37 @@ mod tests {
 
         assert_eq!(pat.parse_part("$(foo=$bar)").unwrap(),
                    (Part::DefVar {
-                       def: 0,
-                       var: "bar".to_string(),
-                   },
+                        def: 0,
+                        var: "bar".to_string(),
+                    },
                     11));
         assert_eq!(pat.parse_part("$(foo=$bar)").unwrap_err().to_string(),
                    "duplicate definition of $foo in same pattern");
 
         assert_eq!(pat.parse_part("$(fxo=$bar)x").unwrap(),
                    (Part::DefVar {
-                       def: 1,
-                       var: "bar".to_string(),
-                   },
+                        def: 1,
+                        var: "bar".to_string(),
+                    },
                     11));
 
         assert_eq!(pat.parse_part("$(fo2=[a-z])").unwrap(),
                    (Part::DefLit {
-                       def: 2,
-                       regex: "(?P<fo2>[a-z])".to_string(),
-                   },
+                        def: 2,
+                        regex: "(?P<fo2>[a-z])".to_string(),
+                    },
                     12));
         assert_eq!(pat.parse_part("$(fo3=[a-)])").unwrap(),
                    (Part::DefLit {
-                       def: 3,
-                       regex: "(?P<fo3>[a-)])".to_string(),
-                   },
+                        def: 3,
+                        regex: "(?P<fo3>[a-)])".to_string(),
+                    },
                     12));
         assert_eq!(pat.parse_part("$(fo4=)").unwrap(),
                    (Part::DefLit {
-                       def: 4,
-                       regex: "(?P<fo4>)".to_string(),
-                   },
+                        def: 4,
+                        regex: "(?P<fo4>)".to_string(),
+                    },
                     7));
 
         assert_eq!(pat.parse_part("$(=.*)").unwrap(),
