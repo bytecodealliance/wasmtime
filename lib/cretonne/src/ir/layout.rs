@@ -3,9 +3,11 @@
 //! The order of extended basic blocks in a function and the order of instructions in an EBB is
 //! determined by the `Layout` data structure defined in this module.
 
+use std::cmp;
 use std::iter::{Iterator, IntoIterator};
 use entity_map::{EntityMap, EntityRef};
 use ir::entities::{Ebb, NO_EBB, Inst, NO_INST};
+use ir::progpoint::{ProgramPoint, ProgramOrder, ExpandedProgramPoint};
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
 /// contain definitions of instructions or EBBs, but depends on `Inst` and `Ebb` entity references
@@ -49,6 +51,206 @@ impl Layout {
     }
 }
 
+// Sequence numbers.
+//
+// All instructions and EBBs are given a sequence number that can be used to quickly determine
+// their relative position in the layout. The sequence numbers are not contiguous, but are assigned
+// like line numbers in BASIC: 10, 20, 30, ...
+//
+// The EBB sequence numbers are strictly increasing, and so are the instruction sequence numbers
+// within an EBB. The instruction sequence numbers are all between the sequence number of their
+// containing EBB and the following EBB.
+//
+// The result is that sequence numbers work like BASIC line numbers for the textual representation
+// of the IL.
+type SequenceNumber = u32;
+
+// Initial stride assigned to new sequence numbers.
+const MAJOR_STRIDE: SequenceNumber = 10;
+
+// Secondary stride used when renumbering locally.
+const MINOR_STRIDE: SequenceNumber = 2;
+
+// Compute the midpoint between `a` and `b`.
+// Return `None` if the midpoint would be equal to either.
+fn midpoint(a: SequenceNumber, b: SequenceNumber) -> Option<SequenceNumber> {
+    assert!(a < b);
+    // Avoid integer overflow.
+    let m = a + (b - a) / 2;
+    if m > a { Some(m) } else { None }
+}
+
+#[test]
+fn test_midpoint() {
+    assert_eq!(midpoint(0, 1), None);
+    assert_eq!(midpoint(0, 2), Some(1));
+    assert_eq!(midpoint(0, 3), Some(1));
+    assert_eq!(midpoint(0, 4), Some(2));
+    assert_eq!(midpoint(1, 4), Some(2));
+    assert_eq!(midpoint(2, 4), Some(3));
+    assert_eq!(midpoint(3, 4), None);
+    assert_eq!(midpoint(3, 4), None);
+}
+
+impl ProgramOrder for Layout {
+    fn cmp(&self, a: ProgramPoint, b: ProgramPoint) -> cmp::Ordering {
+        let a_seq = self.pp_seq(a);
+        let b_seq = self.pp_seq(b);
+        a_seq.cmp(&b_seq)
+    }
+}
+
+// Private methods for dealing with sequence numbers.
+impl Layout {
+    /// Get the sequence number of a program point that must correspond to an entity in the layout.
+    fn pp_seq(&self, pp: ProgramPoint) -> SequenceNumber {
+        match pp.expand() {
+            ExpandedProgramPoint::Ebb(ebb) => self.ebbs[ebb].seq,
+            ExpandedProgramPoint::Inst(inst) => self.insts[inst].seq,
+        }
+    }
+
+    /// Get the last sequence number in `ebb`.
+    fn last_ebb_seq(&self, ebb: Ebb) -> SequenceNumber {
+        // Get the seq of the last instruction if it exists, otherwise use the EBB header seq.
+        self.ebbs[ebb]
+            .last_inst
+            .wrap()
+            .map(|inst| self.insts[inst].seq)
+            .unwrap_or(self.ebbs[ebb].seq)
+    }
+
+    /// Assign a valid sequence number to `ebb` such that the numbers are still monotonic. This may
+    /// require renumbering.
+    fn assign_ebb_seq(&mut self, ebb: Ebb) {
+        assert!(self.is_ebb_inserted(ebb));
+
+        // Get the sequence number immediately before `ebb`, or 0.
+        let prev_seq =
+            self.ebbs[ebb].prev.wrap().map(|prev_ebb| self.last_ebb_seq(prev_ebb)).unwrap_or(0);
+
+        // Get the sequence number immediately following `ebb`.
+        let next_seq = if let Some(inst) = self.ebbs[ebb].first_inst.wrap() {
+            self.insts[inst].seq
+        } else if let Some(next_ebb) = self.ebbs[ebb].next.wrap() {
+            self.ebbs[next_ebb].seq
+        } else {
+            // There is nothing after `ebb`. We can just use a major stride.
+            self.ebbs[ebb].seq = prev_seq + MAJOR_STRIDE;
+            return;
+        };
+
+        // Check if there is room between these sequence numbers.
+        if let Some(seq) = midpoint(prev_seq, next_seq) {
+            self.ebbs[ebb].seq = seq;
+        } else {
+            // No available integers between `prev_seq` and `next_seq`. We have to renumber.
+            self.renumber_from_ebb(ebb, prev_seq + MINOR_STRIDE);
+        }
+    }
+
+    /// Assign a valid sequence number to `inst` such that the numbers are still monotonic. This may
+    /// require renumbering.
+    fn assign_inst_seq(&mut self, inst: Inst) {
+        let ebb = self.inst_ebb(inst).expect("inst must be inserted before assigning an seq");
+
+        // Get the sequence number immediately before `inst`.
+        let prev_seq = match self.insts[inst].prev.wrap() {
+            Some(prev_inst) => self.insts[prev_inst].seq,
+            None => self.ebbs[ebb].seq,
+        };
+
+        // Get the sequence number immediately following `inst`.
+        let next_seq = if let Some(next_inst) = self.insts[inst].next.wrap() {
+            self.insts[next_inst].seq
+        } else if let Some(next_ebb) = self.ebbs[ebb].next.wrap() {
+            self.ebbs[next_ebb].seq
+        } else {
+            // There is nothing after `inst`. We can just use a major stride.
+            self.insts[inst].seq = prev_seq + MAJOR_STRIDE;
+            return;
+        };
+
+        // Check if there is room between these sequence numbers.
+        if let Some(seq) = midpoint(prev_seq, next_seq) {
+            self.insts[inst].seq = seq;
+        } else {
+            // No available integers between `prev_seq` and `next_seq`. We have to renumber.
+            self.renumber_from_inst(inst, prev_seq + MINOR_STRIDE);
+        }
+    }
+
+    /// Renumber instructions starting from `inst` until the end of the EBB or until numbers catch
+    /// up.
+    ///
+    /// Return `None` if renumbering has caught up and the sequence is monotonic again. Otherwise
+    /// return the last used sequence number.
+    fn renumber_insts(&mut self, inst: Inst, seq: SequenceNumber) -> Option<SequenceNumber> {
+        let mut inst = inst;
+        let mut seq = seq;
+
+        loop {
+            self.insts[inst].seq = seq;
+
+            // Next instruction.
+            inst = match self.insts[inst].next.wrap() {
+                None => return Some(seq),
+                Some(next) => next,
+            };
+
+            if seq < self.insts[inst].seq {
+                // Sequence caught up.
+                return None;
+            }
+
+            seq += MINOR_STRIDE;
+        }
+    }
+
+    /// Renumber starting from `ebb` to `seq` and continuing until the sequence numbers are
+    /// monotonic again.
+    fn renumber_from_ebb(&mut self, ebb: Ebb, first_seq: SequenceNumber) {
+        let mut ebb = ebb;
+        let mut seq = first_seq;
+
+        loop {
+            self.ebbs[ebb].seq = seq;
+
+            // Renumber instructions in `ebb`. Stop when the numbers catch up.
+            if let Some(inst) = self.ebbs[ebb].first_inst.wrap() {
+                seq = match self.renumber_insts(inst, seq + MINOR_STRIDE) {
+                    Some(s) => s,
+                    None => return,
+                }
+            }
+
+            // Advance to the next EBB.
+            ebb = match self.ebbs[ebb].next.wrap() {
+                Some(next) => next,
+                None => return,
+            };
+
+            // Stop renumbering once the numbers catch up.
+            if seq < self.ebbs[ebb].seq {
+                return;
+            }
+
+            seq += MINOR_STRIDE;
+        }
+    }
+
+    /// Renumber starting from `inst` to `seq` and continuing until the sequence numbers are
+    /// monotonic again.
+    fn renumber_from_inst(&mut self, inst: Inst, first_seq: SequenceNumber) {
+        if let Some(seq) = self.renumber_insts(inst, first_seq) {
+            // Renumbering spills over into next EBB.
+            if let Some(next_ebb) = self.ebbs[self.inst_ebb(inst).unwrap()].next.wrap() {
+                self.renumber_from_ebb(next_ebb, seq + MINOR_STRIDE);
+            }
+        }
+    }
+}
+
 /// Methods for laying out EBBs.
 ///
 /// An unknown EBB starts out as *not inserted* in the EBB layout. The layout is a linear order of
@@ -80,6 +282,7 @@ impl Layout {
             self.first_ebb = Some(ebb);
         }
         self.last_ebb = Some(ebb);
+        self.assign_ebb_seq(ebb);
     }
 
     /// Insert `ebb` in the layout before the existing EBB `before`.
@@ -100,6 +303,7 @@ impl Layout {
         } else {
             self.ebbs[after].next = ebb;
         }
+        self.assign_ebb_seq(ebb);
     }
 
     /// Insert `ebb` in the layout *after* the existing EBB `after`.
@@ -120,6 +324,7 @@ impl Layout {
         } else {
             self.ebbs[before].prev = ebb;
         }
+        self.assign_ebb_seq(ebb);
     }
 
     /// Return an iterator over all EBBs in layout order.
@@ -143,6 +348,7 @@ struct EbbNode {
     next: Ebb,
     first_inst: Inst,
     last_inst: Inst,
+    seq: SequenceNumber,
 }
 
 /// Iterate over EBBs in layout order. See `Layout::ebbs()`.
@@ -194,19 +400,22 @@ impl Layout {
         assert_eq!(self.inst_ebb(inst), None);
         assert!(self.is_ebb_inserted(ebb),
                 "Cannot append instructions to EBB not in layout");
-        let ebb_node = &mut self.ebbs[ebb];
         {
-            let inst_node = self.insts.ensure(inst);
-            inst_node.ebb = ebb;
-            inst_node.prev = ebb_node.last_inst;
-            assert_eq!(inst_node.next, NO_INST);
+            let ebb_node = &mut self.ebbs[ebb];
+            {
+                let inst_node = self.insts.ensure(inst);
+                inst_node.ebb = ebb;
+                inst_node.prev = ebb_node.last_inst;
+                assert_eq!(inst_node.next, NO_INST);
+            }
+            if ebb_node.first_inst == NO_INST {
+                ebb_node.first_inst = inst;
+            } else {
+                self.insts[ebb_node.last_inst].next = inst;
+            }
+            ebb_node.last_inst = inst;
         }
-        if ebb_node.first_inst == NO_INST {
-            ebb_node.first_inst = inst;
-        } else {
-            self.insts[ebb_node.last_inst].next = inst;
-        }
-        ebb_node.last_inst = inst;
+        self.assign_inst_seq(inst);
     }
 
     /// Fetch an ebb's last instruction.
@@ -232,6 +441,7 @@ impl Layout {
         } else {
             self.insts[after].next = inst;
         }
+        self.assign_inst_seq(inst);
     }
 
     /// Iterate over the instructions in `ebb` in layout order.
@@ -305,6 +515,8 @@ impl Layout {
             self.insts[i].ebb = new_ebb;
             i = self.insts[i].next;
         }
+
+        self.assign_ebb_seq(new_ebb);
     }
 }
 
@@ -313,6 +525,7 @@ struct InstNode {
     ebb: Ebb,
     prev: Inst,
     next: Inst,
+    seq: SequenceNumber,
 }
 
 /// Iterate over instructions in an EBB in layout order. See `Layout::ebb_insts()`.
@@ -665,21 +878,28 @@ impl<'f> Cursor<'f> {
 mod tests {
     use super::{Layout, Cursor, CursorPosition};
     use entity_map::EntityRef;
-    use ir::{Ebb, Inst};
+    use ir::{Ebb, Inst, ProgramOrder};
+    use std::cmp::Ordering;
 
     fn verify(layout: &mut Layout, ebbs: &[(Ebb, &[Inst])]) {
         // Check that EBBs are inserted and instructions belong the right places.
         // Check forward linkage with iterators.
+        // Check that layout sequence numbers are strictly monotonic.
         {
+            let mut seq = 0;
             let mut ebb_iter = layout.ebbs();
             for &(ebb, insts) in ebbs {
                 assert!(layout.is_ebb_inserted(ebb));
                 assert_eq!(ebb_iter.next(), Some(ebb));
+                assert!(layout.ebbs[ebb].seq > seq);
+                seq = layout.ebbs[ebb].seq;
 
                 let mut inst_iter = layout.ebb_insts(ebb);
                 for &inst in insts {
                     assert_eq!(layout.inst_ebb(inst), Some(ebb));
                     assert_eq!(inst_iter.next(), Some(inst));
+                    assert!(layout.insts[inst].seq > seq);
+                    seq = layout.insts[inst].seq;
                 }
                 assert_eq!(inst_iter.next(), None);
             }
@@ -1018,5 +1238,10 @@ mod tests {
             assert_eq!(cur.prev_inst(), None);
             assert_eq!(cur.prev_ebb(), None);
         }
+
+        // Check ProgramOrder.
+        assert_eq!(layout.cmp(e2.into(), e2.into()), Ordering::Equal);
+        assert_eq!(layout.cmp(e2.into(), i2.into()), Ordering::Less);
+        assert_eq!(layout.cmp(i3.into(), i2.into()), Ordering::Greater);
     }
 }
