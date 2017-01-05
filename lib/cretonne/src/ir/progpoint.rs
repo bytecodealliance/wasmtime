@@ -34,6 +34,7 @@ impl From<Ebb> for ProgramPoint {
 
 /// An expanded program point directly exposes the variants, but takes twice the space to
 /// represent.
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum ExpandedProgramPoint {
     // An instruction in the function.
     Inst(Inst),
@@ -41,20 +42,31 @@ pub enum ExpandedProgramPoint {
     Ebb(Ebb),
 }
 
-impl ProgramPoint {
-    /// Expand compact program point representation.
-    pub fn expand(self) -> ExpandedProgramPoint {
-        if self.0 & 1 == 0 {
-            ExpandedProgramPoint::Inst(Inst::new((self.0 / 2) as usize))
+impl From<Inst> for ExpandedProgramPoint {
+    fn from(inst: Inst) -> ExpandedProgramPoint {
+        ExpandedProgramPoint::Inst(inst)
+    }
+}
+
+impl From<Ebb> for ExpandedProgramPoint {
+    fn from(ebb: Ebb) -> ExpandedProgramPoint {
+        ExpandedProgramPoint::Ebb(ebb)
+    }
+}
+
+impl From<ProgramPoint> for ExpandedProgramPoint {
+    fn from(pp: ProgramPoint) -> ExpandedProgramPoint {
+        if pp.0 & 1 == 0 {
+            ExpandedProgramPoint::Inst(Inst::new((pp.0 / 2) as usize))
         } else {
-            ExpandedProgramPoint::Ebb(Ebb::new((self.0 / 2) as usize))
+            ExpandedProgramPoint::Ebb(Ebb::new((pp.0 / 2) as usize))
         }
     }
 }
 
 impl fmt::Display for ProgramPoint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.expand() {
+        match (*self).into() {
             ExpandedProgramPoint::Inst(x) => write!(f, "{}", x),
             ExpandedProgramPoint::Ebb(x) => write!(f, "{}", x),
         }
@@ -72,9 +84,16 @@ impl fmt::Debug for ProgramPoint {
 /// `ProgramPoint` objects don't carry enough information to be ordered independently, they need a
 /// context providing the program order.
 pub trait ProgramOrder {
-    /// Compare the program points `a` and `b` relative to this program order. Return `Less` if `a`
-    /// appears in the program before `b`.
-    fn cmp(&self, a: ProgramPoint, b: ProgramPoint) -> cmp::Ordering;
+    /// Compare the program points `a` and `b` relative to this program order.
+    ///
+    /// Return `Less` if `a` appears in the program before `b`.
+    ///
+    /// This is declared as a generic such that it can be called with `Inst` and `Ebb` arguments
+    /// directly. Depending on the implementation, there is a good chance performance will be
+    /// improved for those cases where the type of either argument is known statically.
+    fn cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
+        where A: Into<ExpandedProgramPoint>,
+              B: Into<ExpandedProgramPoint>;
 }
 
 #[cfg(test)]
