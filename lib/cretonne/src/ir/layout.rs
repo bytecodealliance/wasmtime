@@ -7,7 +7,7 @@ use std::cmp;
 use std::iter::{Iterator, IntoIterator};
 use entity_map::{EntityMap, EntityRef};
 use ir::entities::{Ebb, NO_EBB, Inst, NO_INST};
-use ir::progpoint::{ProgramPoint, ProgramOrder, ExpandedProgramPoint};
+use ir::progpoint::{ProgramOrder, ExpandedProgramPoint};
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
 /// contain definitions of instructions or EBBs, but depends on `Inst` and `Ebb` entity references
@@ -93,9 +93,12 @@ fn test_midpoint() {
 }
 
 impl ProgramOrder for Layout {
-    fn cmp(&self, a: ProgramPoint, b: ProgramPoint) -> cmp::Ordering {
-        let a_seq = self.pp_seq(a);
-        let b_seq = self.pp_seq(b);
+    fn cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
+        where A: Into<ExpandedProgramPoint>,
+              B: Into<ExpandedProgramPoint>
+    {
+        let a_seq = self.seq(a);
+        let b_seq = self.seq(b);
         a_seq.cmp(&b_seq)
     }
 }
@@ -103,8 +106,9 @@ impl ProgramOrder for Layout {
 // Private methods for dealing with sequence numbers.
 impl Layout {
     /// Get the sequence number of a program point that must correspond to an entity in the layout.
-    fn pp_seq(&self, pp: ProgramPoint) -> SequenceNumber {
-        match pp.expand() {
+    fn seq<PP: Into<ExpandedProgramPoint>>(&self, pp: PP) -> SequenceNumber {
+        // When `PP = Inst` or `PP = Ebb`, we expect this dynamic type check to be optimized out.
+        match pp.into() {
             ExpandedProgramPoint::Ebb(ebb) => self.ebbs[ebb].seq,
             ExpandedProgramPoint::Inst(inst) => self.insts[inst].seq,
         }
@@ -1240,8 +1244,8 @@ mod tests {
         }
 
         // Check ProgramOrder.
-        assert_eq!(layout.cmp(e2.into(), e2.into()), Ordering::Equal);
-        assert_eq!(layout.cmp(e2.into(), i2.into()), Ordering::Less);
-        assert_eq!(layout.cmp(i3.into(), i2.into()), Ordering::Greater);
+        assert_eq!(layout.cmp(e2, e2), Ordering::Equal);
+        assert_eq!(layout.cmp(e2, i2), Ordering::Less);
+        assert_eq!(layout.cmp(i3, i2), Ordering::Greater);
     }
 }
