@@ -36,9 +36,9 @@ impl From<Ebb> for ProgramPoint {
 /// represent.
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum ExpandedProgramPoint {
-    // An instruction in the function.
+    /// An instruction in the function.
     Inst(Inst),
-    // An EBB header.
+    /// An EBB header.
     Ebb(Ebb),
 }
 

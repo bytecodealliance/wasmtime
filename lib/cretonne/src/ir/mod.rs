@@ -28,4 +28,4 @@ pub use ir::dfg::{DataFlowGraph, ValueDef};
 pub use ir::layout::{Layout, Cursor};
 pub use ir::function::Function;
 pub use ir::builder::InstBuilder;
-pub use ir::progpoint::{ProgramPoint, ProgramOrder};
+pub use ir::progpoint::{ProgramPoint, ProgramOrder, ExpandedProgramPoint};

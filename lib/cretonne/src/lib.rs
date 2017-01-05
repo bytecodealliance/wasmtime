@@ -16,6 +16,7 @@ pub mod dominator_tree;
 pub mod entity_map;
 pub mod settings;
 pub mod verifier;
+pub mod regalloc;
 
 mod write;
 mod constant_hash;
