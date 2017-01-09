@@ -979,7 +979,26 @@ impl<'a> Parser<'a> {
                   Some(Token::LBracket) => true,
                   _ => false,
               } {
-            self.parse_instruction(ctx, ebb)?;
+            let (encoding, result_locations) = self.parse_instruction_encoding(ctx)?;
+
+            // We need to parse instruction results here because they are shared
+            // between the parsing of value aliases and the parsing of instructions.
+            //
+            // inst-results ::= Value(v) { "," Value(vx) }
+            let results = self.parse_inst_results()?;
+
+            match self.token() {
+                Some(Token::Arrow) => {
+                    self.consume();
+                    self.parse_value_alias(results, ctx)?;
+                }
+                Some(Token::Equal) => {
+                    self.consume();
+                    self.parse_instruction(results, encoding, result_locations, ctx, ebb)?;
+                }
+                _ if results.len() != 0 => return err!(self.loc, "expected -> or ="),
+                _ => self.parse_instruction(results, encoding, result_locations, ctx, ebb)?,
+            }
         }
 
         Ok(())
@@ -1099,17 +1118,11 @@ impl<'a> Parser<'a> {
         Ok((encoding, result_locations))
     }
 
-    // Parse an instruction, append it to `ebb`.
+    // Parse instruction results and return them.
     //
-    // instruction ::= [inst-results "="] Opcode(opc) ["." Type] ...
     // inst-results ::= Value(v) { "," Value(vx) }
     //
-    fn parse_instruction(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
-        // Collect comments for the next instruction to be allocated.
-        self.gather_comments(ctx.function.dfg.next_inst());
-
-        let (encoding, result_locations) = self.parse_instruction_encoding(ctx)?;
-
+    fn parse_inst_results(&mut self) -> Result<Vec<Value>> {
         // Result value numbers.
         let mut results = Vec::new();
 
@@ -1124,9 +1137,35 @@ impl<'a> Parser<'a> {
                 // inst-results ::= Value(v) { "," * Value(vx) }
                 results.push(self.match_value("expected result value")?);
             }
-
-            self.match_token(Token::Equal, "expected '=' before opcode")?;
         }
+
+        Ok(results)
+    }
+
+    // Parse a value alias, and append it to `ebb`.
+    //
+    // value_alias ::= [inst-results] "->" Value(vx)
+    //
+    fn parse_value_alias(&mut self, results: Vec<Value>, ctx: &mut Context) -> Result<()> {
+        if results.len() != 1 {
+            return err!(self.loc, "wrong number of aliases");
+        }
+        Ok(())
+    }
+
+    // Parse an instruction, append it to `ebb`.
+    //
+    // instruction ::= [inst-results "="] Opcode(opc) ["." Type] ...
+    //
+    fn parse_instruction(&mut self,
+                         results: Vec<Value>,
+                         encoding: Option<Encoding>,
+                         result_locations: Option<Vec<ValueLoc>>,
+                         ctx: &mut Context,
+                         ebb: Ebb)
+                         -> Result<()> {
+        // Collect comments for the next instruction to be allocated.
+        self.gather_comments(ctx.function.dfg.next_inst());
 
         // instruction ::=  [inst-results "="] * Opcode(opc) ["." Type] ...
         let opcode = if let Some(Token::Identifier(text)) = self.token() {
