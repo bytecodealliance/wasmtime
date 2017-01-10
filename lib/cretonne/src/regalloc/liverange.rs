@@ -108,7 +108,8 @@
 //!
 
 use std::cmp::Ordering;
-use ir::{Inst, Ebb, ProgramPoint, ProgramOrder};
+use ir::{Inst, Ebb, Value, ProgramPoint, ProgramOrder};
+use sparse_map::SparseMapValue;
 
 /// Global live range of a single SSA value.
 ///
@@ -138,6 +139,10 @@ use ir::{Inst, Ebb, ProgramPoint, ProgramOrder};
 /// instructions using or defining their value, `LiveRange` structs can contain references to
 /// branch and jump instructions.
 pub struct LiveRange {
+    /// The value described by this live range.
+    /// This member can't be modified in case the live range is stored in a `SparseMap`.
+    value: Value,
+
     /// The instruction or EBB header where this value is defined.
     def_begin: ProgramPoint,
 
@@ -193,12 +198,13 @@ impl Interval {
 }
 
 impl LiveRange {
-    /// Create a new live range defined at `def`.
+    /// Create a new live range for `value` defined at `def`.
     ///
     /// The live range will be created as dead, but it can be extended with `extend_in_ebb()`.
-    pub fn new<PP: Into<ProgramPoint>>(def: PP) -> LiveRange {
+    pub fn new<PP: Into<ProgramPoint>>(value: Value, def: PP) -> LiveRange {
         let def = def.into();
         LiveRange {
+            value: value,
             def_begin: def,
             def_end: def,
             liveins: Vec::new(),
@@ -317,10 +323,17 @@ impl LiveRange {
     }
 }
 
+/// Allow a `LiveRange` to be stored in a `SparseMap` indexed by values.
+impl SparseMapValue<Value> for LiveRange {
+    fn key(&self) -> Value {
+        self.value
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::LiveRange;
-    use ir::{Inst, Ebb};
+    use ir::{Inst, Ebb, Value};
     use entity_map::EntityRef;
     use ir::{ProgramOrder, ExpandedProgramPoint};
     use std::cmp::Ordering;
@@ -402,9 +415,10 @@ mod tests {
 
     #[test]
     fn dead_def_range() {
+        let v0 = Value::new(0);
         let i1 = Inst::new(1);
         let e2 = Ebb::new(2);
-        let lr = LiveRange::new(i1);
+        let lr = LiveRange::new(v0, i1);
         assert!(lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), i1.into());
@@ -415,8 +429,9 @@ mod tests {
 
     #[test]
     fn dead_arg_range() {
+        let v0 = Value::new(0);
         let e2 = Ebb::new(2);
-        let lr = LiveRange::new(e2);
+        let lr = LiveRange::new(v0, e2);
         assert!(lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), e2.into());
@@ -428,11 +443,12 @@ mod tests {
 
     #[test]
     fn local_def() {
+        let v0 = Value::new(0);
         let e10 = Ebb::new(10);
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
-        let mut lr = LiveRange::new(i11);
+        let mut lr = LiveRange::new(v0, i11);
 
         assert_eq!(lr.extend_in_ebb(e10, i13, PO), false);
         PO.validate(&lr);
@@ -450,11 +466,12 @@ mod tests {
 
     #[test]
     fn local_arg() {
+        let v0 = Value::new(0);
         let e10 = Ebb::new(10);
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
-        let mut lr = LiveRange::new(e10);
+        let mut lr = LiveRange::new(v0, e10);
 
         // Extending a dead EBB arg in its own block should not indicate that a live-in interval
         // was created.
@@ -480,6 +497,7 @@ mod tests {
 
     #[test]
     fn global_def() {
+        let v0 = Value::new(0);
         let e10 = Ebb::new(10);
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
@@ -487,7 +505,7 @@ mod tests {
         let i21 = Inst::new(21);
         let i22 = Inst::new(22);
         let i23 = Inst::new(23);
-        let mut lr = LiveRange::new(i11);
+        let mut lr = LiveRange::new(v0, i11);
 
         assert_eq!(lr.extend_in_ebb(e10, i12, PO), false);
 
