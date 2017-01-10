@@ -14,6 +14,7 @@ pub mod isa;
 pub mod cfg;
 pub mod dominator_tree;
 pub mod entity_map;
+pub mod sparse_map;
 pub mod settings;
 pub mod verifier;
 pub mod regalloc;
