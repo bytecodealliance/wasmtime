@@ -452,7 +452,8 @@ impl Layout {
     pub fn ebb_insts<'f>(&'f self, ebb: Ebb) -> Insts<'f> {
         Insts {
             layout: self,
-            next: self.ebbs[ebb].first_inst.wrap(),
+            head: self.ebbs[ebb].first_inst.wrap(),
+            tail: self.ebbs[ebb].last_inst.wrap(),
         }
     }
 
@@ -535,20 +536,39 @@ struct InstNode {
 /// Iterate over instructions in an EBB in layout order. See `Layout::ebb_insts()`.
 pub struct Insts<'f> {
     layout: &'f Layout,
-    next: Option<Inst>,
+    head: Option<Inst>,
+    tail: Option<Inst>,
 }
 
 impl<'f> Iterator for Insts<'f> {
     type Item = Inst;
 
     fn next(&mut self) -> Option<Inst> {
-        match self.next {
-            Some(inst) => {
-                self.next = self.layout.insts[inst].next.wrap();
-                Some(inst)
+        let rval = self.head;
+        if let Some(inst) = rval {
+            if self.head == self.tail {
+                self.head = None;
+                self.tail = None;
+            } else {
+                self.head = Some(self.layout.insts[inst].next);
             }
-            None => None,
         }
+        rval
+    }
+}
+
+impl<'f> DoubleEndedIterator for Insts<'f> {
+    fn next_back(&mut self) -> Option<Inst> {
+        let rval = self.tail;
+        if let Some(inst) = rval {
+            if self.head == self.tail {
+                self.head = None;
+                self.tail = None;
+            } else {
+                self.tail = Some(self.layout.insts[inst].prev);
+            }
+        }
+        rval
     }
 }
 
@@ -1076,6 +1096,10 @@ mod tests {
         assert_eq!(layout.inst_ebb(i2), Some(e1));
         let v: Vec<Inst> = layout.ebb_insts(e1).collect();
         assert_eq!(v, [i1, i2]);
+
+        // Test double-ended instruction iterator.
+        let v: Vec<Inst> = layout.ebb_insts(e1).rev().collect();
+        assert_eq!(v, [i2, i1]);
 
         layout.append_inst(i0, e1);
         verify(&mut layout, &[(e1, &[i1, i2, i0])]);
