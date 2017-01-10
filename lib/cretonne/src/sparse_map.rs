@@ -37,6 +37,7 @@
 
 use entity_map::{EntityRef, EntityMap};
 use std::mem;
+use std::slice;
 use std::u32;
 
 /// Trait for extracting keys from values stored in a `SparseMap`.
@@ -163,6 +164,28 @@ impl<K, V> SparseMap<K, V>
         // Nothing to remove.
         None
     }
+
+    /// Get an iterator over the values in the map.
+    ///
+    /// The iteration order is entirely determined by the preceding sequence of `insert` and
+    /// `remove` operations. In particular, if no elements were removed, this is the insertion
+    /// order.
+    pub fn values(&self) -> slice::Iter<V> {
+        self.dense.iter()
+    }
+}
+
+/// Iterating over the elements of a set.
+impl<'a, K, V> IntoIterator for &'a SparseMap<K, V>
+    where K: EntityRef,
+          V: SparseMapValue<K>
+{
+    type Item = &'a V;
+    type IntoIter = slice::Iter<'a, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.values()
+    }
 }
 
 /// Any `EntityRef` can be used as a sparse map value representing itself.
@@ -203,6 +226,7 @@ mod tests {
         assert!(map.is_empty());
         assert_eq!(map.len(), 0);
         assert_eq!(map.get(i1), None);
+        assert_eq!(map.values().count(), 0);
     }
 
     #[test]
@@ -251,6 +275,10 @@ mod tests {
         assert_eq!(map.insert(Obj(i1, "bar")), None);
         assert_eq!(map.insert(Obj(i0, "baz")), None);
 
+        // Iteration order = insertion order when nothing has been removed yet.
+        assert_eq!(map.values().map(|obj| obj.1).collect::<Vec<_>>(),
+                   ["foo", "bar", "baz"]);
+
         assert_eq!(map.len(), 3);
         assert_eq!(map.get(i0), Some(&Obj(i0, "baz")));
         assert_eq!(map.get(i1), Some(&Obj(i1, "bar")));
@@ -280,6 +308,13 @@ mod tests {
         assert_eq!(map.get(i1), Some(&Obj(i1, "barbar")));
         assert_eq!(map.get(i2), Some(&Obj(i2, "foo")));
         assert_eq!(map.get(i3), None);
+
+        // Check the reference `IntoIter` impl.
+        let mut v = Vec::new();
+        for i in &map {
+            v.push(i.1);
+        }
+        assert_eq!(v.len(), map.len());
     }
 
     #[test]
