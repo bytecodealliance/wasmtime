@@ -412,8 +412,8 @@ pub struct ReturnData {
 impl InstructionData {
     /// Execute a closure once for each argument to this instruction.
     /// See also the `arguments()` method.
-    pub fn each_arg<F>(&self, func: F)
-        where F: Fn(Value)
+    pub fn each_arg<F>(&self, mut func: F)
+        where F: FnMut(Value)
     {
         for part in &self.arguments() {
             for &arg in part.iter() {
@@ -424,8 +424,8 @@ impl InstructionData {
 
     /// Execute a closure with a mutable reference to each argument to this instruction.
     /// See also the `arguments_mut()` method.
-    pub fn each_arg_mut<F>(&mut self, func: F)
-        where F: Fn(&mut Value)
+    pub fn each_arg_mut<F>(&mut self, mut func: F)
+        where F: FnMut(&mut Value)
     {
         for part in &mut self.arguments_mut() {
             for arg in part.iter_mut() {
