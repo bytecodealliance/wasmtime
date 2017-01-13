@@ -81,6 +81,11 @@ impl<K, V> SparseMap<K, V>
         self.dense.is_empty()
     }
 
+    /// Remove all elements from the mapping.
+    pub fn clear(&mut self) {
+        self.dense.clear();
+    }
+
     /// Returns a reference to the value corresponding to the key.
     pub fn get(&self, key: K) -> Option<&V> {
         if let Some(idx) = self.sparse.get(key).cloned() {
