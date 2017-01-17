@@ -188,6 +188,24 @@ impl<'a> Context<'a> {
     // numbering. These references need to be rewritten after parsing is complete since forward
     // references are allowed.
     fn rewrite_references(&mut self) -> Result<()> {
+        for (&source_from, &(source_to, source_loc)) in &self.aliases {
+            let ir_to = match self.map.get_value(source_to) {
+                Some(v) => v,
+                None => {
+                    return err!(source_loc,
+                                "IR destination value alias not found for {}",
+                                source_to);
+                }
+            };
+            let dest_loc = self.map
+                .location(AnyEntity::from(ir_to))
+                .expect(&*format!("Error in looking up location of IR destination value alias \
+                                   for {}",
+                                  ir_to));
+            let ir_from = self.function.dfg.make_value_alias(ir_to);
+            self.map.def_value(source_from, ir_from, &dest_loc)?;
+        }
+
         for ebb in self.function.layout.ebbs() {
             for inst in self.function.layout.ebb_insts(ebb) {
                 let loc = inst.into();

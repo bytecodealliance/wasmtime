@@ -234,6 +234,19 @@ impl DataFlowGraph {
             panic!("Cannot change direct value {} into an alias", dest);
         }
     }
+
+    /// Create a new value alias.
+    ///
+    /// Note that this function should only be called by the parser.
+    pub fn make_value_alias(&mut self, src: Value) -> Value {
+        let ty = self.value_type(src);
+
+        let data = ValueData::Alias {
+            ty: ty,
+            original: src,
+        };
+        self.make_value(data)
+    }
 }
 
 /// Where did a value come from?
