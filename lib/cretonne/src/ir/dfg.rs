@@ -301,6 +301,14 @@ impl DataFlowGraph {
         self.insts.push(data)
     }
 
+    /// Get the instruction reference that will be assigned to the next instruction created by
+    /// `make_inst`.
+    ///
+    /// This is only really useful to the parser.
+    pub fn next_inst(&self) -> Inst {
+        self.insts.next_key()
+    }
+
     /// Create result values for an instruction that produces multiple results.
     ///
     /// Instructions that produce 0 or 1 result values only need to be created with `make_inst`. If
