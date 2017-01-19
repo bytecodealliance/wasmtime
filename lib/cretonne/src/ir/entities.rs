@@ -208,56 +208,20 @@ impl Default for Value {
 pub struct StackSlot(u32);
 entity_impl!(StackSlot, "ss");
 
-/// A guaranteed invalid stack slot reference.
-pub const NO_STACK_SLOT: StackSlot = StackSlot(u32::MAX);
-
-impl Default for StackSlot {
-    fn default() -> StackSlot {
-        NO_STACK_SLOT
-    }
-}
-
 /// An opaque reference to a jump table.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct JumpTable(u32);
 entity_impl!(JumpTable, "jt");
-
-/// A guaranteed invalid jump table reference.
-pub const NO_JUMP_TABLE: JumpTable = JumpTable(u32::MAX);
-
-impl Default for JumpTable {
-    fn default() -> JumpTable {
-        NO_JUMP_TABLE
-    }
-}
 
 /// A reference to an external function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FuncRef(u32);
 entity_impl!(FuncRef, "fn");
 
-/// A guaranteed invalid function reference.
-pub const NO_FUNC_REF: FuncRef = FuncRef(u32::MAX);
-
-impl Default for FuncRef {
-    fn default() -> FuncRef {
-        NO_FUNC_REF
-    }
-}
-
 /// A reference to a function signature.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct SigRef(u32);
 entity_impl!(SigRef, "sig");
-
-/// A guaranteed invalid function reference.
-pub const NO_SIG_REF: SigRef = SigRef(u32::MAX);
-
-impl Default for SigRef {
-    fn default() -> SigRef {
-        NO_SIG_REF
-    }
-}
 
 /// A reference to any of the entities defined in this module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
