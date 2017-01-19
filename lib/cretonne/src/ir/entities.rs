@@ -20,36 +20,55 @@
 //! format.
 
 use entity_map::EntityRef;
+use packed_option::ReservedValue;
 use std::default::Default;
 use std::fmt::{self, Display, Formatter};
 use std::u32;
 
+// Implement the common traits for a 32-bit entity reference.
+macro_rules! entity_impl {
+    // Basic traits.
+    ($entity:ident) => {
+        impl EntityRef for $entity {
+            fn new(index: usize) -> Self {
+                assert!(index < (u32::MAX as usize));
+                $entity(index as u32)
+            }
+
+            fn index(self) -> usize {
+                self.0 as usize
+            }
+        }
+
+        impl ReservedValue for $entity {
+            fn reserved_value() -> $entity {
+                $entity(u32::MAX)
+            }
+        }
+    };
+
+    // Include basic `Display` impl using the given display prefix.
+    // Display an `Ebb` reference as "ebb12".
+    ($entity:ident, $display_prefix:expr) => {
+        entity_impl!($entity);
+
+        impl Display for $entity {
+            fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+                write!(fmt, "{}{}", $display_prefix, self.0)
+            }
+        }
+    }
+}
+
 /// An opaque reference to an extended basic block in a function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Ebb(u32);
-
-impl EntityRef for Ebb {
-    fn new(index: usize) -> Self {
-        assert!(index < (u32::MAX as usize));
-        Ebb(index as u32)
-    }
-
-    fn index(self) -> usize {
-        self.0 as usize
-    }
-}
+entity_impl!(Ebb, "ebb");
 
 impl Ebb {
     /// Create a new EBB reference from its number. This corresponds to the ebbNN representation.
     pub fn with_number(n: u32) -> Option<Ebb> {
         if n < u32::MAX { Some(Ebb(n)) } else { None }
-    }
-}
-
-/// Display an `Ebb` reference as "ebb12".
-impl Display for Ebb {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write!(fmt, "ebb{}", self.0)
     }
 }
 
@@ -65,24 +84,7 @@ impl Default for Ebb {
 /// An opaque reference to an instruction in a function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Inst(u32);
-
-impl EntityRef for Inst {
-    fn new(index: usize) -> Self {
-        assert!(index < (u32::MAX as usize));
-        Inst(index as u32)
-    }
-
-    fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-
-/// Display an `Inst` reference as "inst7".
-impl Display for Inst {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write!(fmt, "inst{}", self.0)
-    }
-}
+entity_impl!(Inst, "inst");
 
 /// A guaranteed invalid instruction reference.
 pub const NO_INST: Inst = Inst(u32::MAX);
@@ -97,17 +99,7 @@ impl Default for Inst {
 /// An opaque reference to an SSA value.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Value(u32);
-
-impl EntityRef for Value {
-    fn new(index: usize) -> Value {
-        assert!(index < (u32::MAX as usize));
-        Value(index as u32)
-    }
-
-    fn index(self) -> usize {
-        self.0 as usize
-    }
-}
+entity_impl!(Value);
 
 /// Value references can either reference an instruction directly, or they can refer to the
 /// extended value table.
@@ -214,24 +206,7 @@ impl Default for Value {
 /// An opaque reference to a stack slot.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct StackSlot(u32);
-
-impl EntityRef for StackSlot {
-    fn new(index: usize) -> StackSlot {
-        assert!(index < (u32::MAX as usize));
-        StackSlot(index as u32)
-    }
-
-    fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-
-/// Display a `StackSlot` reference as "ss12".
-impl Display for StackSlot {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write!(fmt, "ss{}", self.0)
-    }
-}
+entity_impl!(StackSlot, "ss");
 
 /// A guaranteed invalid stack slot reference.
 pub const NO_STACK_SLOT: StackSlot = StackSlot(u32::MAX);
@@ -245,24 +220,7 @@ impl Default for StackSlot {
 /// An opaque reference to a jump table.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct JumpTable(u32);
-
-impl EntityRef for JumpTable {
-    fn new(index: usize) -> JumpTable {
-        assert!(index < (u32::MAX as usize));
-        JumpTable(index as u32)
-    }
-
-    fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-
-/// Display a `JumpTable` reference as "jt12".
-impl Display for JumpTable {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write!(fmt, "jt{}", self.0)
-    }
-}
+entity_impl!(JumpTable, "jt");
 
 /// A guaranteed invalid jump table reference.
 pub const NO_JUMP_TABLE: JumpTable = JumpTable(u32::MAX);
@@ -276,24 +234,7 @@ impl Default for JumpTable {
 /// A reference to an external function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FuncRef(u32);
-
-impl EntityRef for FuncRef {
-    fn new(index: usize) -> FuncRef {
-        assert!(index < (u32::MAX as usize));
-        FuncRef(index as u32)
-    }
-
-    fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-
-/// Display a `FuncRef` reference as "fn12".
-impl Display for FuncRef {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write!(fmt, "fn{}", self.0)
-    }
-}
+entity_impl!(FuncRef, "fn");
 
 /// A guaranteed invalid function reference.
 pub const NO_FUNC_REF: FuncRef = FuncRef(u32::MAX);
@@ -307,24 +248,7 @@ impl Default for FuncRef {
 /// A reference to a function signature.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct SigRef(u32);
-
-impl EntityRef for SigRef {
-    fn new(index: usize) -> SigRef {
-        assert!(index < (u32::MAX as usize));
-        SigRef(index as u32)
-    }
-
-    fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-
-/// Display a `SigRef` reference as "sig12".
-impl Display for SigRef {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write!(fmt, "sig{}", self.0)
-    }
-}
+entity_impl!(SigRef, "sig");
 
 /// A guaranteed invalid function reference.
 pub const NO_SIG_REF: SigRef = SigRef(u32::MAX);
