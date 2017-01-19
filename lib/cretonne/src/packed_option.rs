@@ -34,6 +34,18 @@ impl<T: ReservedValue> PackedOption<T> {
     pub fn expand(self) -> Option<T> {
         if self.is_none() { None } else { Some(self.0) }
     }
+
+    /// Maps a `PackedOption<T>` to `Option<U>` by applying a function to a contained value.
+    pub fn map<U, F>(self, f: F) -> Option<U>
+        where F: FnOnce(T) -> U
+    {
+        self.expand().map(f)
+    }
+
+    /// Unwrap a packed `Some` value or panic.
+    pub fn unwrap(self) -> T {
+        self.expand().unwrap()
+    }
 }
 
 impl<T: ReservedValue> Default for PackedOption<T> {
