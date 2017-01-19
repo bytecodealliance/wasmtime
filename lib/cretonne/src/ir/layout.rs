@@ -6,7 +6,8 @@
 use std::cmp;
 use std::iter::{Iterator, IntoIterator};
 use entity_map::{EntityMap, EntityRef};
-use ir::entities::{Ebb, NO_EBB, Inst, NO_INST};
+use packed_option::PackedOption;
+use ir::entities::{Ebb, Inst, NO_INST};
 use ir::progpoint::{ProgramOrder, ExpandedProgramPoint};
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
@@ -25,7 +26,7 @@ use ir::progpoint::{ProgramOrder, ExpandedProgramPoint};
 #[derive(Clone)]
 pub struct Layout {
     // Linked list nodes for the layout order of EBBs Forms a doubly linked list, terminated in
-    // both ends by NO_EBB.
+    // both ends by `None`.
     ebbs: EntityMap<Ebb, EbbNode>,
 
     // Linked list nodes for the layout order of instructions. Forms a double linked list per EBB,
@@ -130,13 +131,12 @@ impl Layout {
         assert!(self.is_ebb_inserted(ebb));
 
         // Get the sequence number immediately before `ebb`, or 0.
-        let prev_seq =
-            self.ebbs[ebb].prev.wrap().map(|prev_ebb| self.last_ebb_seq(prev_ebb)).unwrap_or(0);
+        let prev_seq = self.ebbs[ebb].prev.map(|prev_ebb| self.last_ebb_seq(prev_ebb)).unwrap_or(0);
 
         // Get the sequence number immediately following `ebb`.
         let next_seq = if let Some(inst) = self.ebbs[ebb].first_inst.wrap() {
             self.insts[inst].seq
-        } else if let Some(next_ebb) = self.ebbs[ebb].next.wrap() {
+        } else if let Some(next_ebb) = self.ebbs[ebb].next.expand() {
             self.ebbs[next_ebb].seq
         } else {
             // There is nothing after `ebb`. We can just use a major stride.
@@ -167,7 +167,7 @@ impl Layout {
         // Get the sequence number immediately following `inst`.
         let next_seq = if let Some(next_inst) = self.insts[inst].next.wrap() {
             self.insts[next_inst].seq
-        } else if let Some(next_ebb) = self.ebbs[ebb].next.wrap() {
+        } else if let Some(next_ebb) = self.ebbs[ebb].next.expand() {
             self.ebbs[next_ebb].seq
         } else {
             // There is nothing after `inst`. We can just use a major stride.
@@ -229,7 +229,7 @@ impl Layout {
             }
 
             // Advance to the next EBB.
-            ebb = match self.ebbs[ebb].next.wrap() {
+            ebb = match self.ebbs[ebb].next.expand() {
                 Some(next) => next,
                 None => return,
             };
@@ -248,7 +248,7 @@ impl Layout {
     fn renumber_from_inst(&mut self, inst: Inst, first_seq: SequenceNumber) {
         if let Some(seq) = self.renumber_insts(inst, first_seq) {
             // Renumbering spills over into next EBB.
-            if let Some(next_ebb) = self.ebbs[self.inst_ebb(inst).unwrap()].next.wrap() {
+            if let Some(next_ebb) = self.ebbs[self.inst_ebb(inst).unwrap()].next.expand() {
                 self.renumber_from_ebb(next_ebb, seq + MINOR_STRIDE);
             }
         }
@@ -267,7 +267,7 @@ impl Layout {
 impl Layout {
     /// Is `ebb` currently part of the layout?
     pub fn is_ebb_inserted(&self, ebb: Ebb) -> bool {
-        Some(ebb) == self.first_ebb || (self.ebbs.is_valid(ebb) && self.ebbs[ebb].prev != NO_EBB)
+        Some(ebb) == self.first_ebb || (self.ebbs.is_valid(ebb) && self.ebbs[ebb].prev.is_some())
     }
 
     /// Insert `ebb` as the last EBB in the layout.
@@ -277,11 +277,11 @@ impl Layout {
         {
             let node = self.ebbs.ensure(ebb);
             assert!(node.first_inst == NO_INST && node.last_inst == NO_INST);
-            node.prev = self.last_ebb.unwrap_or_default();
-            node.next = NO_EBB;
+            node.prev = self.last_ebb.into();
+            node.next = None.into();
         }
         if let Some(last) = self.last_ebb {
-            self.ebbs[last].next = ebb;
+            self.ebbs[last].next = ebb.into();
         } else {
             self.first_ebb = Some(ebb);
         }
@@ -298,14 +298,13 @@ impl Layout {
         let after = self.ebbs[before].prev;
         {
             let node = self.ebbs.ensure(ebb);
-            node.next = before;
+            node.next = before.into();
             node.prev = after;
         }
-        self.ebbs[before].prev = ebb;
-        if after == NO_EBB {
-            self.first_ebb = Some(ebb);
-        } else {
-            self.ebbs[after].next = ebb;
+        self.ebbs[before].prev = ebb.into();
+        match after.expand() {
+            None => self.first_ebb = Some(ebb),
+            Some(a) => self.ebbs[a].next = ebb.into(),
         }
         self.assign_ebb_seq(ebb);
     }
@@ -320,13 +319,12 @@ impl Layout {
         {
             let node = self.ebbs.ensure(ebb);
             node.next = before;
-            node.prev = after;
+            node.prev = after.into();
         }
-        self.ebbs[after].next = ebb;
-        if before == NO_EBB {
-            self.last_ebb = Some(ebb);
-        } else {
-            self.ebbs[before].prev = ebb;
+        self.ebbs[after].next = ebb.into();
+        match before.expand() {
+            None => self.last_ebb = Some(ebb),
+            Some(b) => self.ebbs[b].prev = ebb.into(),
         }
         self.assign_ebb_seq(ebb);
     }
@@ -348,8 +346,8 @@ impl Layout {
 
 #[derive(Clone, Debug, Default)]
 struct EbbNode {
-    prev: Ebb,
-    next: Ebb,
+    prev: PackedOption<Ebb>,
+    next: PackedOption<Ebb>,
     first_inst: Inst,
     last_inst: Inst,
     seq: SequenceNumber,
@@ -367,7 +365,7 @@ impl<'f> Iterator for Ebbs<'f> {
     fn next(&mut self) -> Option<Ebb> {
         match self.next {
             Some(ebb) => {
-                self.next = self.layout.ebbs[ebb].next.wrap();
+                self.next = self.layout.ebbs[ebb].next.expand();
                 Some(ebb)
             }
             None => None,
@@ -393,7 +391,7 @@ impl Layout {
     /// Get the EBB containing `inst`, or `None` if `inst` is not inserted in the layout.
     pub fn inst_ebb(&self, inst: Inst) -> Option<Ebb> {
         if self.insts.is_valid(inst) {
-            self.insts[inst].ebb.wrap()
+            self.insts[inst].ebb.into()
         } else {
             None
         }
@@ -408,7 +406,7 @@ impl Layout {
             let ebb_node = &mut self.ebbs[ebb];
             {
                 let inst_node = self.insts.ensure(inst);
-                inst_node.ebb = ebb;
+                inst_node.ebb = ebb.into();
                 inst_node.prev = ebb_node.last_inst;
                 assert_eq!(inst_node.next, NO_INST);
             }
@@ -435,7 +433,7 @@ impl Layout {
         let after = self.insts[before].prev;
         {
             let inst_node = self.insts.ensure(inst);
-            inst_node.ebb = ebb;
+            inst_node.ebb = ebb.into();
             inst_node.next = before;
             inst_node.prev = after;
         }
@@ -489,18 +487,18 @@ impl Layout {
         let last_inst = self.ebbs[old_ebb].last_inst;
         {
             let node = self.ebbs.ensure(new_ebb);
-            node.prev = old_ebb;
+            node.prev = old_ebb.into();
             node.next = next_ebb;
             node.first_inst = before;
             node.last_inst = last_inst;
         }
-        self.ebbs[old_ebb].next = new_ebb;
+        self.ebbs[old_ebb].next = new_ebb.into();
 
         // Fix backwards link.
         if Some(old_ebb) == self.last_ebb {
             self.last_ebb = Some(new_ebb);
         } else {
-            self.ebbs[next_ebb].prev = new_ebb;
+            self.ebbs[next_ebb.unwrap()].prev = new_ebb.into();
         }
 
         // Disconnect the instruction links.
@@ -516,8 +514,8 @@ impl Layout {
         // Fix the instruction -> ebb pointers.
         let mut i = before;
         while i != NO_INST {
-            debug_assert_eq!(self.insts[i].ebb, old_ebb);
-            self.insts[i].ebb = new_ebb;
+            debug_assert_eq!(self.insts[i].ebb.expand(), Some(old_ebb));
+            self.insts[i].ebb = new_ebb.into();
             i = self.insts[i].next;
         }
 
@@ -527,7 +525,8 @@ impl Layout {
 
 #[derive(Clone, Debug, Default)]
 struct InstNode {
-    ebb: Ebb,
+    // The Ebb containing this instruction, or `None` if the instruction is not yet inserted.
+    ebb: PackedOption<Ebb>,
     prev: Inst,
     next: Inst,
     seq: SequenceNumber,
@@ -686,7 +685,7 @@ impl<'f> Cursor<'f> {
     /// ```
     pub fn next_ebb(&mut self) -> Option<Ebb> {
         let next = if let Some(ebb) = self.current_ebb() {
-            self.layout.ebbs[ebb].next.wrap()
+            self.layout.ebbs[ebb].next.expand()
         } else {
             self.layout.first_ebb
         };
@@ -719,7 +718,7 @@ impl<'f> Cursor<'f> {
     /// ```
     pub fn prev_ebb(&mut self) -> Option<Ebb> {
         let prev = if let Some(ebb) = self.current_ebb() {
-            self.layout.ebbs[ebb].prev.wrap()
+            self.layout.ebbs[ebb].prev.expand()
         } else {
             self.layout.last_ebb
         };

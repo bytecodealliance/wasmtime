@@ -72,15 +72,6 @@ impl Ebb {
     }
 }
 
-/// A guaranteed invalid EBB reference.
-pub const NO_EBB: Ebb = Ebb(u32::MAX);
-
-impl Default for Ebb {
-    fn default() -> Ebb {
-        NO_EBB
-    }
-}
-
 /// An opaque reference to an instruction in a function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Inst(u32);
