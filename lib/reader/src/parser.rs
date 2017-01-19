@@ -13,7 +13,7 @@ use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotDa
                    FuncRef};
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
-use cretonne::ir::entities::{AnyEntity, NO_EBB, NO_INST, NO_VALUE};
+use cretonne::ir::entities::{AnyEntity, NO_INST, NO_VALUE};
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs,
                                  TernaryOverflowData, JumpData, BranchData, CallData,
                                  IndirectCallData, ReturnData};
@@ -204,9 +204,11 @@ impl Context {
         // Rewrite EBB references in jump tables.
         for jt in self.function.jump_tables.keys() {
             let loc = jt.into();
-            for ebb in self.function.jump_tables[jt].as_mut_slice() {
-                if *ebb != NO_EBB {
-                    try!(self.map.rewrite_ebb(ebb, loc));
+            for ebb_ref in self.function.jump_tables[jt].as_mut_slice() {
+                if let Some(mut ebb) = ebb_ref.expand() {
+                    try!(self.map.rewrite_ebb(&mut ebb, loc));
+                    // Convert back to a packed option.
+                    *ebb_ref = ebb.into();
                 }
             }
         }

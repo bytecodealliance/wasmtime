@@ -25,6 +25,11 @@ impl<T: ReservedValue> PackedOption<T> {
         self.0 == T::reserved_value()
     }
 
+    /// Returns `true` if the packed option is a `Some` value.
+    pub fn is_some(&self) -> bool {
+        !self.is_none()
+    }
+
     /// Expand the packed option into a normal `Option`.
     pub fn expand(self) -> Option<T> {
         if self.is_none() { None } else { Some(self.0) }

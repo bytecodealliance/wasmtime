@@ -3,7 +3,8 @@
 //! Jump tables are declared in the preamble and assigned an `ir::entities::JumpTable` reference.
 //! The actual table of destinations is stored in a `JumpTableData` struct defined in this module.
 
-use ir::entities::{Ebb, NO_EBB};
+use packed_option::PackedOption;
+use ir::entities::Ebb;
 use std::iter;
 use std::slice;
 use std::fmt::{self, Display, Formatter};
@@ -14,10 +15,10 @@ use std::fmt::{self, Display, Formatter};
 /// to be completely populated, though. Individual entries can be missing.
 #[derive(Clone)]
 pub struct JumpTableData {
-    // Table entries, using NO_EBB as a placeholder for missing entries.
-    table: Vec<Ebb>,
+    // Table entries, using `None` as a placeholder for missing entries.
+    table: Vec<PackedOption<Ebb>>,
 
-    // How many `NO_EBB` holes in table?
+    // How many `None` holes in table?
     holes: usize,
 }
 
@@ -34,16 +35,15 @@ impl JumpTableData {
     ///
     /// The table will grow as needed to fit 'idx'.
     pub fn set_entry(&mut self, idx: usize, dest: Ebb) {
-        assert!(dest != NO_EBB);
         // Resize table to fit `idx`.
         if idx >= self.table.len() {
             self.holes += idx - self.table.len();
-            self.table.resize(idx + 1, NO_EBB);
-        } else if self.table[idx] == NO_EBB {
+            self.table.resize(idx + 1, None.into());
+        } else if self.table[idx].is_none() {
             // We're filling in an existing hole.
             self.holes -= 1;
         }
-        self.table[idx] = dest;
+        self.table[idx] = dest.into();
     }
 
     /// Clear a table entry.
@@ -51,19 +51,15 @@ impl JumpTableData {
     /// The `br_table` instruction will fall through if given an index corresponding to a cleared
     /// table entry.
     pub fn clear_entry(&mut self, idx: usize) {
-        if idx < self.table.len() && self.table[idx] != NO_EBB {
+        if idx < self.table.len() && self.table[idx].is_some() {
             self.holes += 1;
-            self.table[idx] = NO_EBB;
+            self.table[idx] = None.into();
         }
     }
 
     /// Get the entry for `idx`, or `None`.
     pub fn get_entry(&self, idx: usize) -> Option<Ebb> {
-        if idx < self.table.len() && self.table[idx] != NO_EBB {
-            Some(self.table[idx])
-        } else {
-            None
-        }
+        self.table.get(idx).and_then(|e| e.expand())
     }
 
     /// Enumerate over all `(idx, dest)` pairs in the table in order.
@@ -74,13 +70,13 @@ impl JumpTableData {
     }
 
     /// Access the whole table as a mutable slice.
-    pub fn as_mut_slice(&mut self) -> &mut [Ebb] {
+    pub fn as_mut_slice(&mut self) -> &mut [PackedOption<Ebb>] {
         self.table.as_mut_slice()
     }
 }
 
 /// Enumerate `(idx, dest)` pairs in order.
-pub struct Entries<'a>(iter::Enumerate<iter::Cloned<slice::Iter<'a, Ebb>>>);
+pub struct Entries<'a>(iter::Enumerate<iter::Cloned<slice::Iter<'a, PackedOption<Ebb>>>>);
 
 impl<'a> Iterator for Entries<'a> {
     type Item = (usize, Ebb);
@@ -88,8 +84,8 @@ impl<'a> Iterator for Entries<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if let Some((idx, dest)) = self.0.next() {
-                if dest != NO_EBB {
-                    return Some((idx, dest));
+                if let Some(ebb) = dest.expand() {
+                    return Some((idx, ebb));
                 }
             } else {
                 return None;
@@ -100,18 +96,15 @@ impl<'a> Iterator for Entries<'a> {
 
 impl Display for JumpTableData {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        let first = self.table.first().cloned().unwrap_or_default();
-        if first == NO_EBB {
-            try!(write!(fmt, "jump_table 0"));
-        } else {
-            try!(write!(fmt, "jump_table {}", first));
+        match self.table.first().and_then(|e| e.expand()) {
+            None => try!(write!(fmt, "jump_table 0")),
+            Some(first) => try!(write!(fmt, "jump_table {}", first)),
         }
 
-        for dest in self.table.iter().cloned().skip(1) {
-            if dest == NO_EBB {
-                try!(write!(fmt, ", 0"));
-            } else {
-                try!(write!(fmt, ", {}", dest));
+        for dest in self.table.iter().skip(1).map(|e| e.expand()) {
+            match dest {
+                None => try!(write!(fmt, ", 0")),
+                Some(ebb) => try!(write!(fmt, ", {}", ebb)),
             }
         }
         Ok(())
