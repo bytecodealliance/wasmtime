@@ -132,9 +132,9 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
     fn simple_instruction(self, data: InstructionData) -> (Inst, &'f mut DataFlowGraph) {
         // The replacement instruction cannot generate multiple results, so verify that the old
         // instruction's secondary results have been detached.
-        let old_second_value = self.dfg[self.inst].second_result().unwrap_or_default();
+        let old_second_value = self.dfg[self.inst].second_result();
         assert_eq!(old_second_value,
-                   Value::default(),
+                   None,
                    "Secondary result values {:?} would be left dangling by replacing {} with {}",
                    self.dfg.inst_results(self.inst).collect::<Vec<_>>(),
                    self.dfg[self.inst].opcode(),
@@ -150,12 +150,12 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
                            ctrl_typevar: Type)
                            -> (Inst, &'f mut DataFlowGraph) {
         // If the old instruction still has secondary results attached, we'll keep them.
-        let old_second_value = self.dfg[self.inst].second_result().unwrap_or_default();
+        let old_second_value = self.dfg[self.inst].second_result();
 
         // Splat the new instruction on top of the old one.
         self.dfg[self.inst] = data;
 
-        if old_second_value == Value::default() {
+        if old_second_value.is_none() {
             // The old secondary values were either detached or non-existent.
             // Construct new ones and set the first result type too.
             self.dfg.make_inst_results(self.inst, ctrl_typevar);
@@ -163,7 +163,7 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
             // Reattach the old secondary values.
             if let Some(val_ref) = self.dfg[self.inst].second_result_mut() {
                 // Don't check types here. Leave that to the verifier.
-                *val_ref = old_second_value;
+                *val_ref = old_second_value.into();
             } else {
                 // Actually, this instruction format should have called `simple_instruction()`, but
                 // we don't have a rule against calling `complex_instruction()` even when it is
