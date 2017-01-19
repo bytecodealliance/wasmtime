@@ -110,7 +110,7 @@ impl<'a> Verifier<'a> {
     fn ebb_integrity(&self, ebb: Ebb, inst: Inst) -> Result<()> {
 
         let is_terminator = self.func.dfg[inst].opcode().is_terminator();
-        let is_last_inst = self.func.layout.last_inst(ebb) == inst;
+        let is_last_inst = self.func.layout.last_inst(ebb) == Some(inst);
 
         if is_terminator && !is_last_inst {
             // Terminating instructions only occur at the end of blocks.
