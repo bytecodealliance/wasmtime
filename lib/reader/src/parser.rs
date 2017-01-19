@@ -13,7 +13,7 @@ use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotDa
                    FuncRef};
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
-use cretonne::ir::entities::{AnyEntity, NO_INST, NO_VALUE};
+use cretonne::ir::entities::{AnyEntity, NO_VALUE};
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs,
                                  TernaryOverflowData, JumpData, BranchData, CallData,
                                  IndirectCallData, ReturnData};
@@ -281,17 +281,6 @@ impl<'a> Parser<'a> {
     // Get the comments gathered so far, clearing out the internal list.
     fn take_comments(&mut self) -> Vec<Comment<'a>> {
         mem::replace(&mut self.comments, Vec::new())
-    }
-
-    // Rewrite the entity of the last added comments from `old` to `new`.
-    // Also switch to collecting future comments for `new`.
-    fn rewrite_last_comment_entities<E: Into<AnyEntity>>(&mut self, old: E, new: E) {
-        let old = old.into();
-        let new = new.into();
-        for comment in (&mut self.comments).into_iter().rev().take_while(|c| c.entity == old) {
-            comment.entity = new;
-        }
-        self.comment_entity = Some(new);
     }
 
     // Match and consume a token without payload.
@@ -906,9 +895,8 @@ impl<'a> Parser<'a> {
     // inst-results ::= Value(v) { "," Value(vx) }
     //
     fn parse_instruction(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
-        // Collect comments for `NO_INST` while parsing the instruction, then rewrite after we
-        // allocate an instruction number.
-        self.gather_comments(NO_INST);
+        // Collect comments for the next instruction to be allocated.
+        self.gather_comments(ctx.function.dfg.next_inst());
 
         // Result value numbers.
         let mut results = Vec::new();
@@ -968,10 +956,6 @@ impl<'a> Parser<'a> {
                         num_results,
                         results.len());
         }
-
-        // If we saw any comments while parsing the instruction, they will have been recorded as
-        // belonging to `NO_INST`.
-        self.rewrite_last_comment_entities(NO_INST, inst);
 
         // Now map the source result values to the just created instruction results.
         // Pass a reference to `ctx.values` instead of `ctx` itself since the `Values` iterator
