@@ -141,17 +141,18 @@ When all the EBBs in a function are laid out linearly, the live range of a
 value doesn't have to be a contiguous interval, although it will be in a
 majority of cases. There can be holes in the linear live range.
 
-The live range of an SSA value is represented as:
+The part of a value's live range that falls inside a single EBB will always be
+an interval without any holes. This follows from the dominance requirements of
+SSA. A live range is represented as:
 
-- The earliest program point where the value is live.
-- The latest program point where the value is live.
-- A (often empty) list of holes, sorted in program order.
+- The interval inside the EBB where the value is defined.
+- A set of intervals for EBBs where the value is live-in.
 
-Any value that is only used inside a single EBB will have a live range without
-holes. Some values are live across large parts of the function, and this can
-often be represented with very few holes. It is important that the live range
-data structure doesn't have to grow linearly with the number of EBBs covered by
-a live range.
+Any value that is only used inside a single EBB will have an empty set of
+live-in intervals. Some values are live across large parts of the function, and
+this can often be represented with coalesced live-in intervals covering many
+EBBs. It is important that the live range data structure doesn't have to grow
+linearly with the number of EBBs covered by a live range.
 
 This representation is very similar to LLVM's ``LiveInterval`` data structure
 with a few important differences:
@@ -160,10 +161,16 @@ with a few important differences:
   ``LiveInterval`` represents the union of multiple related SSA values in a
   virtual register. This makes Cretonne's representation smaller because
   individual segments don't have to annotated with a value number.
-- Cretonne stores the min and max program points separately from a list of
-  holes, while LLVM stores an array of segments. The two representations are
-  equivalent, but Cretonne optimizes for the common case of a single contiguous
-  interval.
+- Cretonne stores the def-interval separately from a list of coalesced live-in
+  intervals, while LLVM stores an array of segments. The two representations
+  are equivalent, but Cretonne optimizes for the common case of a value that is
+  only used locally.
+- It is simpler to check if two live ranges are overlapping. The dominance
+  properties of SSA form means that it is only necessary to check the
+  def-interval of each live range against the intervals of the other range. It
+  is not necessary to check for overlap between the two sets of live-in
+  intervals. This makes the overlap check logarithmic in the number of live-in
+  intervals instead of linear.
 - LLVM represents a program point as ``SlotIndex`` which holds a pointer to a
   32-byte ``IndexListEntry`` struct. The entries are organized in a double
   linked list that mirrors the ordering of instructions in a basic block. This
