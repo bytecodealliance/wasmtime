@@ -13,7 +13,7 @@ use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotDa
                    FuncRef};
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
-use cretonne::ir::entities::{AnyEntity, NO_VALUE};
+use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs,
                                  TernaryOverflowData, JumpData, BranchData, CallData,
                                  IndirectCallData, ReturnData};
@@ -1125,7 +1125,7 @@ impl<'a> Parser<'a> {
                 InstructionData::UnarySplit {
                     opcode: opcode,
                     ty: VOID,
-                    second_result: NO_VALUE,
+                    second_result: None.into(),
                     arg: try!(self.match_value("expected SSA value operand")),
                 }
             }
@@ -1168,7 +1168,7 @@ impl<'a> Parser<'a> {
                 InstructionData::BinaryOverflow {
                     opcode: opcode,
                     ty: VOID,
-                    second_result: NO_VALUE,
+                    second_result: None.into(),
                     args: [lhs, rhs],
                 }
             }
@@ -1196,7 +1196,7 @@ impl<'a> Parser<'a> {
                 InstructionData::TernaryOverflow {
                     opcode: opcode,
                     ty: VOID,
-                    second_result: NO_VALUE,
+                    second_result: None.into(),
                     data: Box::new(TernaryOverflowData { args: [lhs, rhs, cin] }),
                 }
             }
@@ -1287,7 +1287,7 @@ impl<'a> Parser<'a> {
                 InstructionData::Call {
                     opcode: opcode,
                     ty: VOID,
-                    second_result: NO_VALUE,
+                    second_result: None.into(),
                     data: Box::new(CallData {
                         func_ref: func_ref,
                         varargs: args,
@@ -1305,7 +1305,7 @@ impl<'a> Parser<'a> {
                 InstructionData::IndirectCall {
                     opcode: opcode,
                     ty: VOID,
-                    second_result: NO_VALUE,
+                    second_result: None.into(),
                     data: Box::new(IndirectCallData {
                         sig_ref: sig_ref,
                         arg: callee,

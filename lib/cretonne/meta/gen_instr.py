@@ -112,7 +112,8 @@ def gen_instruction_data_impl(fmt):
     - `pub fn opcode(&self) -> Opcode`
     - `pub fn first_type(&self) -> Type`
     - `pub fn second_result(&self) -> Option<Value>`
-    - `pub fn second_result_mut<'a>(&'a mut self) -> Option<&'a mut Value>`
+    - `pub fn second_result_mut<'a>(&'a mut self)
+         -> Option<&'a mut PackedOption<Value>>`
     - `pub fn arguments(&self) -> (&[Value], &[Value])`
     """
 
@@ -157,7 +158,7 @@ def gen_instruction_data_impl(fmt):
                         fmt.line(
                                 'InstructionData::' + f.name +
                                 ' { second_result, .. }' +
-                                ' => Some(second_result),')
+                                ' => second_result.into(),')
                     else:
                         # Single or no results.
                         fmt.line(
@@ -167,7 +168,7 @@ def gen_instruction_data_impl(fmt):
         fmt.doc_comment('Mutable reference to second result value, if any.')
         with fmt.indented(
                 "pub fn second_result_mut<'a>(&'a mut self)" +
-                " -> Option<&'a mut Value> {", '}'):
+                " -> Option<&'a mut PackedOption<Value>> {", '}'):
             with fmt.indented('match *self {', '}'):
                 for f in InstructionFormat.all_formats:
                     if f.multiple_results:
@@ -489,7 +490,7 @@ def gen_format_constructor(iform, fmt):
             fmt.line('opcode: opcode,')
             fmt.line('ty: {},'.format(result_type))
             if iform.multiple_results:
-                fmt.line('second_result: Value::default(),')
+                fmt.line('second_result: None.into(),')
             if iform.boxed_storage:
                 with fmt.indented(
                         'data: Box::new(instructions::{}Data {{'

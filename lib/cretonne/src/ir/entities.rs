@@ -100,9 +100,6 @@ pub enum ExpandedValue {
 
     /// This value is described in the extended value table.
     Table(usize),
-
-    /// This is NO_VALUE.
-    None,
 }
 
 impl Value {
@@ -129,6 +126,7 @@ impl Value {
             None
         }
     }
+
     /// Create a `Direct` value corresponding to the first value produced by `i`.
     pub fn new_direct(i: Inst) -> Value {
         let encoding = i.index() * 2;
@@ -148,9 +146,6 @@ impl Value {
     /// Expand the internal representation into something useful.
     pub fn expand(&self) -> ExpandedValue {
         use self::ExpandedValue::*;
-        if *self == NO_VALUE {
-            return None;
-        }
         let index = (self.0 / 2) as usize;
         if self.0 % 2 == 0 {
             Direct(Inst::new(index))
@@ -180,17 +175,7 @@ impl Display for Value {
         match self.expand() {
             Direct(i) => write!(fmt, "v{}", i.0),
             Table(i) => write!(fmt, "vx{}", i),
-            None => write!(fmt, "NO_VALUE"),
         }
-    }
-}
-
-/// A guaranteed invalid value reference.
-pub const NO_VALUE: Value = Value(u32::MAX);
-
-impl Default for Value {
-    fn default() -> Value {
-        NO_VALUE
     }
 }
 

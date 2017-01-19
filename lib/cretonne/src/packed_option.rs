@@ -8,6 +8,7 @@
 //! to represent `None`.
 
 use std::fmt;
+use std::mem;
 
 /// Types that have a reserved value which can't be created any other way.
 pub trait ReservedValue: Eq {
@@ -45,6 +46,11 @@ impl<T: ReservedValue> PackedOption<T> {
     /// Unwrap a packed `Some` value or panic.
     pub fn unwrap(self) -> T {
         self.expand().unwrap()
+    }
+
+    /// Takes the value out of the packed option, leaving a `None` in its place.
+    pub fn take(&mut self) -> Option<T> {
+        mem::replace(self, None.into()).expand()
     }
 }
 

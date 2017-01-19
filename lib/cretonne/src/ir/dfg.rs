@@ -1,14 +1,14 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
 use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef};
-use ir::entities::{NO_VALUE, ExpandedValue};
+use ir::entities::ExpandedValue;
 use ir::instructions::{Opcode, InstructionData, CallInfo};
 use ir::extfunc::ExtFuncData;
 use entity_map::{EntityMap, PrimaryEntityData};
 use ir::builder::{InsertBuilder, ReplaceBuilder};
 use ir::layout::Cursor;
+use packed_option::PackedOption;
 
-use std::mem;
 use std::ops::{Index, IndexMut};
 use std::u16;
 
@@ -103,7 +103,6 @@ impl DataFlowGraph {
                     ValueData::Alias { ty, .. } => ty,
                 }
             }
-            None => panic!("NO_VALUE has no type"),
         }
     }
 
@@ -126,7 +125,6 @@ impl DataFlowGraph {
                     }
                 }
             }
-            None => panic!("NO_VALUE has no def"),
         }
     }
 
@@ -237,7 +235,7 @@ enum ValueData {
         ty: Type,
         num: u16, // Result number starting from 0.
         inst: Inst,
-        next: Value, // Next result defined by `def`.
+        next: PackedOption<Value>, // Next result defined by `def`.
     },
 
     // Value is an EBB argument.
@@ -245,7 +243,7 @@ enum ValueData {
         ty: Type,
         num: u16, // Argument number, starting from 0.
         ebb: Ebb,
-        next: Value, // Next argument to `ebb`.
+        next: PackedOption<Value>, // Next argument to `ebb`.
     },
 
     // Value is an alias of another value.
@@ -262,31 +260,30 @@ enum ValueData {
 /// A value iterator borrows a `DataFlowGraph` reference.
 pub struct Values<'a> {
     dfg: &'a DataFlowGraph,
-    cur: Value,
+    cur: Option<Value>,
 }
 
 impl<'a> Iterator for Values<'a> {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let prev = self.cur;
-
-        // Advance self.cur to the next value, or NO_VALUE.
-        self.cur = match prev.expand() {
-            ExpandedValue::Direct(inst) => self.dfg.insts[inst].second_result().unwrap_or_default(),
-            ExpandedValue::Table(index) => {
-                match self.dfg.extended_values[index] {
-                    ValueData::Inst { next, .. } => next,
-                    ValueData::Arg { next, .. } => next,
-                    ValueData::Alias { .. } => {
-                        panic!("Alias value {} appeared in value list", prev)
+        let rval = self.cur;
+        if let Some(prev) = rval {
+            // Advance self.cur to the next value, or `None`.
+            self.cur = match prev.expand() {
+                ExpandedValue::Direct(inst) => self.dfg.insts[inst].second_result(),
+                ExpandedValue::Table(index) => {
+                    match self.dfg.extended_values[index] {
+                        ValueData::Inst { next, .. } => next.into(),
+                        ValueData::Arg { next, .. } => next.into(),
+                        ValueData::Alias { .. } => {
+                            panic!("Alias value {} appeared in value list", prev)
+                        }
                     }
                 }
-            }
-            ExpandedValue::None => return None,
-        };
-
-        Some(prev)
+            };
+        }
+        rval
     }
 }
 
@@ -334,7 +331,7 @@ impl DataFlowGraph {
         // causes additional result values to be numbered backwards which is not the aestetic
         // choice, but since it is only visible in extremely rare instructions with 3+ results,
         // we don't care).
-        let mut head = NO_VALUE;
+        let mut head = None;
         let mut first_type = None;
         let mut rev_num = 1;
 
@@ -346,37 +343,37 @@ impl DataFlowGraph {
 
             for res_idx in (0..var_results).rev() {
                 if let Some(ty) = first_type {
-                    head = self.make_value(ValueData::Inst {
+                    head = Some(self.make_value(ValueData::Inst {
                         ty: ty,
                         num: (total_results - rev_num) as u16,
                         inst: inst,
-                        next: head,
-                    });
+                        next: head.into(),
+                    }));
                     rev_num += 1;
                 }
                 first_type = Some(self.signatures[sig].return_types[res_idx].value_type);
             }
         }
 
-        // Then the fixed results whic will appear at the front of the list.
+        // Then the fixed results which will appear at the front of the list.
         for res_idx in (0..fixed_results).rev() {
             if let Some(ty) = first_type {
-                head = self.make_value(ValueData::Inst {
+                head = Some(self.make_value(ValueData::Inst {
                     ty: ty,
                     num: (total_results - rev_num) as u16,
                     inst: inst,
-                    next: head,
-                });
+                    next: head.into(),
+                }));
                 rev_num += 1;
             }
             first_type = Some(constraints.result_type(res_idx, ctrl_typevar));
         }
 
         // Update the second_result pointer in `inst`.
-        if head != NO_VALUE {
+        if head.is_some() {
             *self.insts[inst]
                 .second_result_mut()
-                .expect("instruction format doesn't allow multiple results") = head;
+                .expect("instruction format doesn't allow multiple results") = head.into();
         }
         *self.insts[inst].first_type_mut() = first_type.unwrap_or_default();
 
@@ -403,8 +400,7 @@ impl DataFlowGraph {
     /// Use this method to detach secondary values before using `replace(inst)` to provide an
     /// alternate instruction for computing the primary result value.
     pub fn detach_secondary_results(&mut self, inst: Inst) -> Values {
-        let second_result =
-            self[inst].second_result_mut().map(|r| mem::replace(r, NO_VALUE)).unwrap_or_default();
+        let second_result = self[inst].second_result_mut().and_then(|r| r.take());
         Values {
             dfg: self,
             cur: second_result,
@@ -423,9 +419,9 @@ impl DataFlowGraph {
         Values {
             dfg: self,
             cur: if self.insts[inst].first_type().is_void() {
-                NO_VALUE
+                None
             } else {
-                Value::new_direct(inst)
+                Some(Value::new_direct(inst))
             },
         }
     }
@@ -494,17 +490,16 @@ impl DataFlowGraph {
 
     /// Get the number of arguments on `ebb`.
     pub fn num_ebb_args(&self, ebb: Ebb) -> usize {
-        let last_arg = self.ebbs[ebb].last_arg;
-        match last_arg.expand() {
-            ExpandedValue::None => 0,
-            ExpandedValue::Table(idx) => {
-                if let ValueData::Arg { num, .. } = self.extended_values[idx] {
-                    num as usize + 1
-                } else {
-                    panic!("inconsistent value table entry for EBB arg");
+        match self.ebbs[ebb].last_arg.expand() {
+            None => 0,
+            Some(last_arg) => {
+                if let ExpandedValue::Table(idx) = last_arg.expand() {
+                    if let ValueData::Arg { num, .. } = self.extended_values[idx] {
+                        return num as usize + 1;
+                    }
                 }
+                panic!("inconsistent value table entry for EBB arg");
             }
-            ExpandedValue::Direct(_) => panic!("inconsistent value table entry for EBB arg"),
         }
     }
 
@@ -516,25 +511,30 @@ impl DataFlowGraph {
             ty: ty,
             ebb: ebb,
             num: num_args as u16,
-            next: NO_VALUE,
+            next: None.into(),
         });
-        let last_arg = self.ebbs[ebb].last_arg;
-        match last_arg.expand() {
-            // If last_arg is NO_VALUE, we're adding the first EBB argument.
-            ExpandedValue::None => {
-                self.ebbs[ebb].first_arg = val;
+        match self.ebbs[ebb].last_arg.expand() {
+            // If last_arg is `None`, we're adding the first EBB argument.
+            None => {
+                self.ebbs[ebb].first_arg = val.into();
             }
-            // Append to linked list of arguments.
-            ExpandedValue::Table(idx) => {
-                if let ValueData::Arg { ref mut next, .. } = self.extended_values[idx] {
-                    *next = val;
-                } else {
-                    panic!("inconsistent value table entry for EBB arg");
+            Some(last_arg) => {
+                match last_arg.expand() {
+                    // Append to linked list of arguments.
+                    ExpandedValue::Table(idx) => {
+                        if let ValueData::Arg { ref mut next, .. } = self.extended_values[idx] {
+                            *next = val.into();
+                        } else {
+                            panic!("inconsistent value table entry for EBB arg");
+                        }
+                    }
+                    ExpandedValue::Direct(_) => {
+                        panic!("inconsistent value table entry for EBB arg")
+                    }
                 }
             }
-            ExpandedValue::Direct(_) => panic!("inconsistent value table entry for EBB arg"),
-        };
-        self.ebbs[ebb].last_arg = val;
+        }
+        self.ebbs[ebb].last_arg = val.into();
         val
     }
 
@@ -542,7 +542,7 @@ impl DataFlowGraph {
     pub fn ebb_args(&self, ebb: Ebb) -> Values {
         Values {
             dfg: self,
-            cur: self.ebbs[ebb].first_arg,
+            cur: self.ebbs[ebb].first_arg.into(),
         }
     }
 }
@@ -554,21 +554,21 @@ impl DataFlowGraph {
 // match the function arguments.
 #[derive(Clone)]
 struct EbbData {
-    // First argument to this EBB, or `NO_VALUE` if the block has no arguments.
+    // First argument to this EBB, or `None` if the block has no arguments.
     //
     // The arguments are all ValueData::Argument entries that form a linked list from `first_arg`
     // to `last_arg`.
-    first_arg: Value,
+    first_arg: PackedOption<Value>,
 
-    // Last argument to this EBB, or `NO_VALUE` if the block has no arguments.
-    last_arg: Value,
+    // Last argument to this EBB, or `None` if the block has no arguments.
+    last_arg: PackedOption<Value>,
 }
 
 impl EbbData {
     fn new() -> EbbData {
         EbbData {
-            first_arg: NO_VALUE,
-            last_arg: NO_VALUE,
+            first_arg: None.into(),
+            last_arg: None.into(),
         }
     }
 }
