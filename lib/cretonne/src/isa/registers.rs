@@ -147,8 +147,8 @@ impl RegInfo {
 
 /// Temporary object that holds enough information to print a register unit.
 pub struct DisplayRegUnit<'a> {
-    pub regunit: RegUnit,
-    pub reginfo: &'a RegInfo,
+    regunit: RegUnit,
+    reginfo: &'a RegInfo,
 }
 
 impl<'a> fmt::Display for DisplayRegUnit<'a> {

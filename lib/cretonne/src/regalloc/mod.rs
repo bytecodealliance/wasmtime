@@ -4,3 +4,4 @@
 
 pub mod liverange;
 pub mod liveness;
+pub mod allocatable_set;

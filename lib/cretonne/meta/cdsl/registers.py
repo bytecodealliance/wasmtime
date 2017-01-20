@@ -153,7 +153,12 @@ class RegClass(object):
         start = self.bank.first_unit + self.start
         for a in range(self.count):
             u = start + a * self.width
-            mask[u // 32] |= 1 << (u % 32)
+            b = u % 32
+            # We need fancier masking code if a register can straddle mask
+            # words. This will only happen with widths that are not powers of
+            # two.
+            assert b + self.width <= 32, 'Register straddles words'
+            mask[u // 32] |= 1 << b
 
         return mask
 
