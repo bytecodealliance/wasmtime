@@ -40,6 +40,7 @@ class OperandKind(object):
         # type: () -> str
         return 'OperandKind({})'.format(self.name)
 
+
 #: An SSA value operand. This is a value defined by another instruction.
 VALUE = OperandKind(
         'value', """
