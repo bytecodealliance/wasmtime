@@ -13,15 +13,14 @@
 //! The `entities` module defines public types for the entity references along with constants
 //! representing an invalid reference. We prefer to use `Option<EntityRef>` whenever possible, but
 //! unfortunately that type is twice as large as the 32-bit index type on its own. Thus, compact
-//! data structures use the sentinen constant, while function arguments and return values prefer
-//! the more Rust-like `Option<EntityRef>` variant.
+//! data structures use the `PackedOption<EntityRef>` representation, while function arguments and
+//! return values prefer the more Rust-like `Option<EntityRef>` variant.
 //!
 //! The entity references all implement the `Display` trait in a way that matches the textual IL
 //! format.
 
 use entity_map::EntityRef;
 use packed_option::ReservedValue;
-use std::default::Default;
 use std::fmt::{self, Display, Formatter};
 use std::u32;
 
@@ -67,25 +66,12 @@ entity_impl!(Ebb, "ebb");
 
 impl Ebb {
     /// Create a new EBB reference from its number. This corresponds to the ebbNN representation.
+    ///
+    /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Ebb> {
         if n < u32::MAX { Some(Ebb(n)) } else { None }
     }
 }
-
-/// An opaque reference to an instruction in a function.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
-pub struct Inst(u32);
-entity_impl!(Inst, "inst");
-
-/// A guaranteed invalid instruction reference.
-pub const NO_INST: Inst = Inst(u32::MAX);
-
-impl Default for Inst {
-    fn default() -> Inst {
-        NO_INST
-    }
-}
-
 
 /// An opaque reference to an SSA value.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -105,6 +91,8 @@ pub enum ExpandedValue {
 impl Value {
     /// Create a `Direct` value from its number representation.
     /// This is the number in the vNN notation.
+    ///
+    /// This method is for use by the parser.
     pub fn direct_with_number(n: u32) -> Option<Value> {
         if n < u32::MAX / 2 {
             let encoding = n * 2;
@@ -117,6 +105,8 @@ impl Value {
 
     /// Create a `Table` value from its number representation.
     /// This is the number in the vxNN notation.
+    ///
+    /// This method is for use by the parser.
     pub fn table_with_number(n: u32) -> Option<Value> {
         if n < u32::MAX / 2 {
             let encoding = n * 2 + 1;
@@ -178,6 +168,11 @@ impl Display for Value {
         }
     }
 }
+
+/// An opaque reference to an instruction in a function.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Inst(u32);
+entity_impl!(Inst, "inst");
 
 /// An opaque reference to a stack slot.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -303,5 +298,14 @@ mod tests {
                        _ => u32::MAX,
                    },
                    u32::MAX / 2 - 1);
+    }
+
+    #[test]
+    fn memory() {
+        use std::mem;
+        use packed_option::PackedOption;
+        // This is the whole point of `PackedOption`.
+        assert_eq!(mem::size_of::<Value>(),
+                   mem::size_of::<PackedOption<Value>>());
     }
 }
