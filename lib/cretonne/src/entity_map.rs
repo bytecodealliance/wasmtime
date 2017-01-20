@@ -24,24 +24,6 @@ pub trait EntityRef: Copy + Eq {
 
     /// Get the index that was used to create this entity reference.
     fn index(self) -> usize;
-
-    /// Convert an `EntityRef` to an `Optional<EntityRef>` by using the default value as the null
-    /// reference.
-    ///
-    /// Entity references are often used in compact data structures like linked lists where a
-    /// sentinel 'null' value is needed. Normally we would use an `Optional` for that, but
-    /// currently that uses twice the memory of a plain `EntityRef`.
-    ///
-    /// This method is called `wrap()` because it is the inverse of `unwrap()`.
-    fn wrap(self) -> Option<Self>
-        where Self: Default
-    {
-        if self == Self::default() {
-            None
-        } else {
-            Some(self)
-        }
-    }
 }
 
 /// A mapping `K -> V` for densely indexed entity references.
