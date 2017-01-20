@@ -41,7 +41,7 @@
 //! concurrent function compilations.
 
 pub use isa::encoding::Encoding;
-pub use isa::registers::{RegUnit, RegBank, RegInfo};
+pub use isa::registers::{RegInfo, RegUnit, RegClass};
 use settings;
 use ir::{InstructionData, DataFlowGraph};
 
@@ -49,9 +49,9 @@ pub mod riscv;
 pub mod intel;
 pub mod arm32;
 pub mod arm64;
+pub mod registers;
 mod encoding;
 mod enc_tables;
-mod registers;
 
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
