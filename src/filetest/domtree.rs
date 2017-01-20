@@ -41,7 +41,7 @@ impl SubTest for TestDomtree {
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
         let func = func.borrow();
         let cfg = ControlFlowGraph::new(func);
-        let domtree = DominatorTree::new(&cfg);
+        let domtree = DominatorTree::new(func, &cfg);
 
         // Build an expected domtree from the source annotations.
         let mut expected = HashMap::new();
@@ -68,7 +68,7 @@ impl SubTest for TestDomtree {
 
                     // Compare to computed domtree.
                     match domtree.idom(ebb) {
-                        Some((_, got_inst)) if got_inst != inst => {
+                        Some(got_inst) if got_inst != inst => {
                             return Err(format!("mismatching idoms for {}:\n\
                                                 want: {}, got: {}",
                                                src_ebb,
@@ -90,7 +90,7 @@ impl SubTest for TestDomtree {
         // Now we know that everything in `expected` is consistent with `domtree`.
         // All other EBB's should be either unreachable or the entry block.
         for ebb in func.layout.ebbs().skip(1).filter(|ebb| !expected.contains_key(&ebb)) {
-            if let Some((_, got_inst)) = domtree.idom(ebb) {
+            if let Some(got_inst) = domtree.idom(ebb) {
                 return Err(format!("mismatching idoms for renumbered {}:\n\
                                     want: unrechable, got: {}",
                                    ebb,

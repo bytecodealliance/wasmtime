@@ -48,6 +48,11 @@ impl<T: ReservedValue> PackedOption<T> {
         self.expand().unwrap()
     }
 
+    /// Unwrap a packed `Some` value or panic.
+    pub fn expect(self, msg: &str) -> T {
+        self.expand().expect(msg)
+    }
+
     /// Takes the value out of the packed option, leaving a `None` in its place.
     pub fn take(&mut self) -> Option<T> {
         mem::replace(self, None.into()).expand()
