@@ -1,116 +1,195 @@
 //! A Dominator Tree represented as mappings of Ebbs to their immediate dominator.
 
-use cfg::*;
-use ir::Ebb;
-use ir::entities::NO_INST;
+use cfg::{ControlFlowGraph, BasicBlock};
+use ir::{Ebb, Inst, Function, Layout, ProgramOrder};
 use entity_map::EntityMap;
+use packed_option::PackedOption;
+
+use std::cmp::Ordering;
+
+// Dominator tree node. We keep one of these per EBB.
+#[derive(Clone, Default)]
+struct DomNode {
+    // Number of this node in a reverse post-order traversal of the CFG, starting from 1.
+    // Unreachable nodes get number 0, all others are positive.
+    rpo_number: u32,
+
+    // The immediate dominator of this EBB, represented as the branch or jump instruction at the
+    // end of the dominating basic block.
+    //
+    // This is `None` for unreachable blocks and the entry block which doesn't have an immediate
+    // dominator.
+    idom: PackedOption<Inst>,
+}
 
 /// The dominator tree for a single function.
 pub struct DominatorTree {
-    data: EntityMap<Ebb, Option<BasicBlock>>,
+    nodes: EntityMap<Ebb, DomNode>,
+}
+
+/// Methods for querying the dominator tree.
+impl DominatorTree {
+    /// Is `ebb` reachable from the entry block?
+    pub fn is_reachable(&self, ebb: Ebb) -> bool {
+        self.nodes[ebb].rpo_number != 0
+    }
+
+    /// Returns the immediate dominator of `ebb`.
+    ///
+    /// The immediate dominator of an extended basic block is a basic block which we represent by
+    /// the branch or jump instruction at the end of the basic block. This does not have to be the
+    /// terminator of its EBB.
+    ///
+    /// A branch or jump is said to *dominate* `ebb` if all control flow paths from the function
+    /// entry to `ebb` must go through the branch.
+    ///
+    /// The *immediate dominator* is the dominator that is closest to `ebb`. All other dominators
+    /// also dominate the immediate dominator.
+    ///
+    /// This returns `None` if `ebb` is not reachable from the entry EBB, or if it is the entry EBB
+    /// which has no dominators.
+    pub fn idom(&self, ebb: Ebb) -> Option<Inst> {
+        self.nodes[ebb].idom.into()
+    }
+
+    /// Compare two EBBs relative to a reverse pst-order traversal of the control-flow graph.
+    ///
+    /// Return `Ordering::Less` if `a` comes before `b` in the RPO.
+    pub fn rpo_cmp(&self, a: Ebb, b: Ebb) -> Ordering {
+        self.nodes[a].rpo_number.cmp(&self.nodes[b].rpo_number)
+    }
+
+    /// Returns `true` if `a` dominates `b`.
+    ///
+    /// This means that every control-flow path from the function entry to `b` must go through `a`.
+    ///
+    /// Dominance is ill defined for unreachable blocks. This function can always determine
+    /// dominance for instructions in the same EBB, but otherwise returns `false` if either block
+    /// is unreachable.
+    ///
+    /// An instruction is considered to dominate itself.
+    pub fn dominates(&self, a: Inst, mut b: Inst, layout: &Layout) -> bool {
+        let ebb_a = layout.inst_ebb(a).expect("Instruction not in layout.");
+        let mut ebb_b = layout.inst_ebb(b).expect("Instruction not in layout.");
+        let rpo_a = self.nodes[ebb_a].rpo_number;
+
+        // Run a finger up the dominator tree from b until we see a.
+        // Do nothing if b is unreachable.
+        while rpo_a < self.nodes[ebb_b].rpo_number {
+            b = self.idom(ebb_b).expect("Shouldn't meet unreachable here.");
+            ebb_b = layout.inst_ebb(b).expect("Dominator got removed.");
+        }
+
+        ebb_a == ebb_b && layout.cmp(a, b) != Ordering::Greater
+    }
+
+    /// Compute the common dominator of two basic blocks.
+    ///
+    /// Both basic blocks are assumed to be reachable.
+    pub fn common_dominator(&self,
+                            mut a: BasicBlock,
+                            mut b: BasicBlock,
+                            layout: &Layout)
+                            -> BasicBlock {
+        loop {
+            match self.rpo_cmp(a.0, b.0) {
+                Ordering::Less => {
+                    // `a` comes before `b` in the RPO. Move `b` up.
+                    let idom = self.nodes[b.0].idom.expect("Unreachable basic block?");
+                    b = (layout.inst_ebb(idom).expect("Dangling idom instruction"), idom);
+                }
+                Ordering::Greater => {
+                    // `b` comes before `a` in the RPO. Move `a` up.
+                    let idom = self.nodes[a.0].idom.expect("Unreachable basic block?");
+                    a = (layout.inst_ebb(idom).expect("Dangling idom instruction"), idom);
+                }
+                Ordering::Equal => break,
+            }
+        }
+
+        assert_eq!(a.0, b.0, "Unreachable block passed to common_dominator?");
+
+        // We're in the same EBB. The common dominator is the earlier instruction.
+        if layout.cmp(a.1, b.1) == Ordering::Less {
+            a
+        } else {
+            b
+        }
+    }
 }
 
 impl DominatorTree {
     /// Build a dominator tree from a control flow graph using Keith D. Cooper's
     /// "Simple, Fast Dominator Algorithm."
-    pub fn new(cfg: &ControlFlowGraph) -> DominatorTree {
-        let mut ebbs = cfg.postorder_ebbs();
-        ebbs.reverse();
+    pub fn new(func: &Function, cfg: &ControlFlowGraph) -> DominatorTree {
+        let mut domtree = DominatorTree { nodes: EntityMap::with_capacity(func.dfg.num_ebbs()) };
 
-        let len = ebbs.len();
+        // We'll be iterating over a reverse postorder of the CFG.
+        // This vector only contains reachable EBBs.
+        let mut postorder = cfg.postorder_ebbs();
 
-        // The mappings which designate the dominator tree.
-        let mut data = EntityMap::with_capacity(len);
+        // Remove the entry block, and abort if the function is empty.
+        // The last block visited in a post-order traversal must be the entry block.
+        let entry_block = match postorder.pop() {
+            Some(ebb) => ebb,
+            None => return domtree,
+        };
+        assert_eq!(Some(entry_block), func.layout.entry_block());
 
-        let mut postorder_map = EntityMap::with_capacity(len);
-        for (i, ebb) in ebbs.iter().enumerate() {
-            postorder_map[ebb.clone()] = len - i;
+        // Do a first pass where we assign RPO numbers to all reachable nodes.
+        domtree.nodes[entry_block].rpo_number = 1;
+        for (rpo_idx, &ebb) in postorder.iter().rev().enumerate() {
+            // Update the current node and give it an RPO number.
+            // The entry block got 1, the rest start at 2.
+            //
+            // Nodes do not appear as reachable until the have an assigned RPO number, and
+            // `compute_idom` will only look at reachable nodes. This means that the function will
+            // never see an uninitialized predecessor.
+            //
+            // Due to the nature of the post-order traversal, every node we visit will have at
+            // least one predecessor that has previously been visited during this RPO.
+            domtree.nodes[ebb] = DomNode {
+                idom: domtree.compute_idom(ebb, cfg, &func.layout).into(),
+                rpo_number: rpo_idx as u32 + 2,
+            }
         }
 
-        let mut changed = false;
-
-        if len > 0 {
-            data[ebbs[0]] = Some((ebbs[0], NO_INST));
-            changed = true;
-        }
-
+        // Now that we have RPO numbers for everything and initial idom estimates, iterate until
+        // convergence.
+        //
+        // If the function is free of irreducible control flow, this will exit after one iteration.
+        let mut changed = true;
         while changed {
             changed = false;
-            for i in 1..len {
-                let ebb = ebbs[i];
-                let preds = cfg.get_predecessors(ebb);
-                let mut new_idom = None;
-
-                for pred in preds {
-                    if new_idom == None {
-                        new_idom = Some(pred.clone());
-                        continue;
-                    }
-                    // If this predecessor has an idom available find its common
-                    // ancestor with the current value of new_idom.
-                    if let Some(_) = data[pred.0] {
-                        new_idom = match new_idom {
-                            Some(cur_idom) => {
-                                Some((DominatorTree::intersect(&mut data,
-                                                               &postorder_map,
-                                                               *pred,
-                                                               cur_idom)))
-                            }
-                            None => panic!("A 'current idom' should have been set!"),
-                        }
-                    }
-                }
-                match data[ebb] {
-                    None => {
-                        data[ebb] = new_idom;
-                        changed = true;
-                    }
-                    Some(idom) => {
-                        // Old idom != New idom
-                        if idom.0 != new_idom.unwrap().0 {
-                            data[ebb] = new_idom;
-                            changed = true;
-                        }
-                    }
+            for &ebb in postorder.iter().rev() {
+                let idom = domtree.compute_idom(ebb, cfg, &func.layout).into();
+                if domtree.nodes[ebb].idom != idom {
+                    domtree.nodes[ebb].idom = idom;
+                    changed = true;
                 }
             }
         }
 
-        DominatorTree { data: data }
+        domtree
     }
 
-    /// Find the common dominator of two ebbs.
-    fn intersect(data: &EntityMap<Ebb, Option<BasicBlock>>,
-                 ordering: &EntityMap<Ebb, usize>,
-                 first: BasicBlock,
-                 second: BasicBlock)
-                 -> BasicBlock {
-        let mut a = first;
-        let mut b = second;
+    // Compute the idom for `ebb` using the current `idom` states for the reachable nodes.
+    fn compute_idom(&self, ebb: Ebb, cfg: &ControlFlowGraph, layout: &Layout) -> Inst {
+        // Get an iterator with just the reachable predecessors to `ebb`.
+        // Note that during the first pass, `is_reachable` returns false for blocks that haven't
+        // been visited yet.
+        let mut reachable_preds =
+            cfg.get_predecessors(ebb).iter().cloned().filter(|&(ebb, _)| self.is_reachable(ebb));
 
-        // Here we use 'ordering', a mapping of ebbs to their postorder
-        // visitation number, to ensure that we move upward through the tree.
-        // Walking upward means that we may always expect self.data[a] and
-        // self.data[b] to contain non-None entries.
-        while a.0 != b.0 {
-            while ordering[a.0] < ordering[b.0] {
-                a = data[a.0].unwrap();
-            }
-            while ordering[b.0] < ordering[a.0] {
-                b = data[b.0].unwrap();
-            }
+        // The RPO must visit at least one predecessor before this node.
+        let mut idom = reachable_preds.next()
+            .expect("EBB node must have one reachable predecessor");
+
+        for pred in reachable_preds {
+            idom = self.common_dominator(idom, pred, layout);
         }
 
-        // TODO: we can't rely on instruction numbers to always be ordered
-        // from lowest to highest. Given that, it will be necessary to create
-        // an abolute mapping to determine the instruction order in the future.
-        if a.1 == NO_INST || a.1 < b.1 { a } else { b }
-    }
-
-    /// Returns the immediate dominator of some ebb or None if the
-    /// node is unreachable.
-    pub fn idom(&self, ebb: Ebb) -> Option<BasicBlock> {
-        self.data[ebb].clone()
+        idom.1
     }
 }
 
@@ -118,15 +197,14 @@ impl DominatorTree {
 mod test {
     use super::*;
     use ir::{Function, InstBuilder, Cursor, VariableArgs, types};
-    use ir::entities::NO_INST;
     use cfg::ControlFlowGraph;
 
     #[test]
     fn empty() {
         let func = Function::new();
         let cfg = ControlFlowGraph::new(&func);
-        let dtree = DominatorTree::new(&cfg);
-        assert_eq!(0, dtree.data.keys().count());
+        let dtree = DominatorTree::new(&func, &cfg);
+        assert_eq!(0, dtree.nodes.keys().count());
     }
 
     #[test]
@@ -160,12 +238,16 @@ mod test {
         }
 
         let cfg = ControlFlowGraph::new(&func);
-        let dt = DominatorTree::new(&cfg);
+        let dt = DominatorTree::new(&func, &cfg);
 
         assert_eq!(func.layout.entry_block().unwrap(), ebb3);
-        assert_eq!(dt.idom(ebb3).unwrap(), (ebb3, NO_INST));
-        assert_eq!(dt.idom(ebb1).unwrap(), (ebb3, jmp_ebb3_ebb1));
-        assert_eq!(dt.idom(ebb2).unwrap(), (ebb1, jmp_ebb1_ebb2));
-        assert_eq!(dt.idom(ebb0).unwrap(), (ebb1, br_ebb1_ebb0));
+        assert_eq!(dt.idom(ebb3), None);
+        assert_eq!(dt.idom(ebb1).unwrap(), jmp_ebb3_ebb1);
+        assert_eq!(dt.idom(ebb2).unwrap(), jmp_ebb1_ebb2);
+        assert_eq!(dt.idom(ebb0).unwrap(), br_ebb1_ebb0);
+
+        assert!(dt.dominates(br_ebb1_ebb0, br_ebb1_ebb0, &func.layout));
+        assert!(!dt.dominates(br_ebb1_ebb0, jmp_ebb3_ebb1, &func.layout));
+        assert!(dt.dominates(jmp_ebb3_ebb1, br_ebb1_ebb0, &func.layout));
     }
 }
