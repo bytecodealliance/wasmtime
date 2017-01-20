@@ -29,7 +29,9 @@ IntRegs = RegBank(
         'General purpose registers',
         units=16, prefix='r')
 
-GPR = RegClass('GPR', IntRegs)
-S = RegClass('S', FloatRegs, count=32)
-D = RegClass('D', FloatRegs, width=2)
-Q = RegClass('Q', FloatRegs, width=4)
+GPR = RegClass(IntRegs)
+S = RegClass(FloatRegs, count=32)
+D = RegClass(FloatRegs, width=2)
+Q = RegClass(FloatRegs, width=4)
+
+RegClass.extract_names(globals())

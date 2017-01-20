@@ -1,6 +1,6 @@
 //! RISC-V register descriptions.
 
-use isa::registers::{RegBank, RegInfo};
+use isa::registers::{RegBank, RegClass, RegClassData, RegInfo};
 
 include!(concat!(env!("OUT_DIR"), "/registers-riscv.rs"));
 

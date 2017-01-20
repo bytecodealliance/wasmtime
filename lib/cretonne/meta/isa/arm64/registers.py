@@ -18,5 +18,7 @@ FloatRegs = RegBank(
         'Floating point registers',
         units=32, prefix='v')
 
-GPR = RegClass('GPR', IntRegs)
-FPR = RegClass('FPR', FloatRegs)
+GPR = RegClass(IntRegs)
+FPR = RegClass(FloatRegs)
+
+RegClass.extract_names(globals())

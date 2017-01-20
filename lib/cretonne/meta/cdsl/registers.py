@@ -32,6 +32,15 @@ except ImportError:
     pass
 
 
+# The number of 32-bit elements in a register unit mask
+MASK_LEN = 3
+
+# The maximum total number of register units allowed.
+# This limit can be raised by also adjusting the RegUnitMask type in
+# src/isa/registers.rs.
+MAX_UNITS = MASK_LEN * 32
+
+
 class RegBank(object):
     """
     A register bank belonging to an ISA.
@@ -61,6 +70,7 @@ class RegBank(object):
         self.units = units
         self.prefix = prefix
         self.names = names
+        self.classes = list()  # type: List[RegClass]
 
         assert len(names) <= units
 
@@ -91,19 +101,16 @@ class RegClass(object):
     allocated two units at a time. When multiple units are allocated, it is
     always a contiguous set of unit numbers.
 
-    :param name: Name of this register class.
     :param bank: The register bank we're allocating from.
     :param count: The maximum number of allocations in this register class. By
                   default, the whole register bank can be allocated.
     :param width: How many units to allocate at a time.
     :param start: The first unit to allocate, relative to `bank.first.unit`.
-    :param stride: How many units to skip to get to the next allocation.
-                   Default is `width`.
     """
 
-    def __init__(self, name, bank, count=None, width=1, start=0, stride=None):
-        # type: (str, RegBank, int, int, int, int) -> None
-        self.name = name
+    def __init__(self, bank, count=None, width=1, start=0):
+        # type: (RegBank, int, int, int) -> None
+        self.name = None  # type: str
         self.bank = bank
         self.start = start
         self.width = width
@@ -111,21 +118,53 @@ class RegClass(object):
         assert width > 0
         assert start >= 0 and start < bank.units
 
-        if stride is None:
-            stride = width
-        assert stride > 0
-        self.stride = stride
-
         if count is None:
-            count = bank.units / stride
+            count = bank.units // width
         self.count = count
 
-        # When the stride is 1, we can wrap around to the beginning of the
-        # register bank, but with a larger stride, we wouldn't cover all the
-        # possible allocations with a simple modulo stride. For example,
-        # attempting to allocate the even registers before the odd ones
-        # wouldn't work. Only if stride is coprime to bank.units would it work,
-        # but that is unlikely since the bank size is almost always a power of
-        # two.
-        if start + count*stride > bank.units:
-            assert stride == 1, 'Wrapping with stride not supported'
+        bank.classes.append(self)
+
+    def __getitem__(self, sliced):
+        """
+        Create a sub-class of a register class using slice notation. The slice
+        indexes refer to allocations in the parent register class, not register
+        units.
+        """
+        assert isinstance(sliced, slice), "RegClass slicing can't be 1 reg"
+        # We could add strided sub-classes if needed.
+        assert sliced.step is None, 'Subclass striding not supported'
+
+        w = self.width
+        s = self.start + sliced.start * w
+        c = sliced.stop - sliced.start
+        assert c > 1, "Can't have single-register classes"
+
+        return RegClass(self.bank, count=c, width=w, start=s)
+
+    def mask(self):
+        """
+        Compute a bit-mask of the register units allocated by this register
+        class.
+
+        Return as a list of 32-bit integers.
+        """
+        mask = [0] * MASK_LEN
+
+        start = self.bank.first_unit + self.start
+        for a in range(self.count):
+            u = start + a * self.width
+            mask[u // 32] |= 1 << (u % 32)
+
+        return mask
+
+    @staticmethod
+    def extract_names(globs):
+        """
+        Given a dict mapping name -> object as returned by `globals()`, find
+        all the RegClass objects and set their name from the dict key.
+        This is used to name a bunch of global variables in a module.
+        """
+        for name, obj in globs.items():
+            if isinstance(obj, RegClass):
+                assert obj.name is None
+                obj.name = name

@@ -11,6 +11,14 @@ use std::fmt;
 /// The register allocator will enforce that each register unit only gets used for one thing.
 pub type RegUnit = u16;
 
+/// A bit mask indexed by register units.
+///
+/// The size of this type is determined by the target ISA that has the most register units defined.
+/// Currently that is arm32 which has 64+16 units.
+///
+/// This type should be coordinated with meta/cdsl/registers.py.
+pub type RegUnitMask = [u32; 3];
+
 /// The register units in a target ISA are divided into disjoint register banks. Each bank covers a
 /// contiguous range of register units.
 ///
@@ -23,7 +31,7 @@ pub struct RegBank {
     pub first_unit: RegUnit,
 
     /// The total number of register units in this bank.
-    pub units: u16,
+    pub units: RegUnit,
 
     /// Array of specially named register units. This array can be shorter than the number of units
     /// in the bank.
@@ -79,6 +87,30 @@ impl RegBank {
     }
 }
 
+/// A register class reference.
+///
+/// All register classes are statically defined in tables generated from the meta descriptions.
+pub type RegClass = &'static RegClassData;
+
+/// Data about a register class.
+///
+/// A register class represents a subset of the registers in a bank. It describes the set of
+/// permitted registers for a register operand in a given encoding of an instruction.
+///
+/// A register class can be a subset of another register class. The top-level register classes are
+/// disjoint.
+pub struct RegClassData {
+    /// The index of this class in the ISA's RegInfo description.
+    pub index: u8,
+
+    /// How many register units to allocate per register.
+    pub width: u8,
+
+    /// Mask of register units in the class. If `width > 1`, the mask only has a bit set for the
+    /// first register unit in each allocatable register.
+    pub mask: RegUnitMask,
+}
+
 /// Information about the registers in an ISA.
 ///
 /// The `RegUnit` data structure collects all relevant static information about the registers in an
@@ -87,6 +119,9 @@ pub struct RegInfo {
     /// All register banks, ordered by their `first_unit`. The register banks are disjoint, but
     /// there may be holes of unused register unit numbers between banks due to alignment.
     pub banks: &'static [RegBank],
+
+    /// All register classes ordered topologically so a sub-class always follows its parent.
+    pub classes: &'static [RegClassData],
 }
 
 impl RegInfo {
