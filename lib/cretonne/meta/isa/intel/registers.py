@@ -38,5 +38,8 @@ FloatRegs = RegBank(
         'SSE floating point registers',
         units=16, prefix='xmm')
 
-GPR = RegClass('GPR', IntRegs)
-FPR = RegClass('FPR', FloatRegs)
+GPR = RegClass(IntRegs)
+ABCD = GPR[0:4]
+FPR = RegClass(FloatRegs)
+
+RegClass.extract_names(globals())
