@@ -12,6 +12,7 @@ from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt
 from base.formats import Binary, BinaryImm
+from .registers import GPR
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
 # instructions have 11 as the two low bits, with bits 6:2 determining the base
@@ -67,9 +68,11 @@ def OP32(funct3, funct7):
 
 # R-type 32-bit instructions: These are mostly binary arithmetic instructions.
 # The encbits are `opcode[6:2] | (funct3 << 5) | (funct7 << 8)
-R = EncRecipe('R', Binary)
+R = EncRecipe('R', Binary, ins=(GPR, GPR), outs=GPR)
 
 # R-type with an immediate shift amount instead of rs2.
-Rshamt = EncRecipe('Rshamt', BinaryImm)
+Rshamt = EncRecipe('Rshamt', BinaryImm, ins=GPR, outs=GPR)
 
-I = EncRecipe('I', BinaryImm, instp=IsSignedInt(BinaryImm.imm, 12))
+I = EncRecipe(
+        'I', BinaryImm, ins=GPR, outs=GPR,
+        instp=IsSignedInt(BinaryImm.imm, 12))

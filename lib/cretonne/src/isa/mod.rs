@@ -42,6 +42,8 @@
 
 pub use isa::encoding::Encoding;
 pub use isa::registers::{RegInfo, RegUnit, RegClass};
+pub use isa::constraints::RecipeConstraints;
+
 use settings;
 use ir::{InstructionData, DataFlowGraph};
 
@@ -52,6 +54,7 @@ pub mod arm64;
 pub mod registers;
 mod encoding;
 mod enc_tables;
+mod constraints;
 
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
@@ -140,10 +143,16 @@ pub trait TargetIsa {
     fn encode(&self, dfg: &DataFlowGraph, inst: &InstructionData) -> Result<Encoding, Legalize>;
 
     /// Get a static array of names associated with encoding recipes in this ISA. Encoding recipes
-    /// are numbered starting from 0, corresponding to indexes into th name array.
+    /// are numbered starting from 0, corresponding to indexes into the name array.
     ///
     /// This is just used for printing and parsing encodings in the textual IL format.
     fn recipe_names(&self) -> &'static [&'static str];
+
+    /// Get a static array of value operand constraints associated with encoding recipes in this
+    /// ISA.
+    ///
+    /// The constraints describe which registers can be used with an encoding recipe.
+    fn recipe_constraints(&self) -> &'static [RecipeConstraints];
 
     /// Create an object that can display an ISA-dependent encoding properly.
     fn display_enc(&self, enc: Encoding) -> encoding::DisplayEncoding {

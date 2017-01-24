@@ -1,6 +1,7 @@
 """Defining instruction set architectures."""
 from __future__ import absolute_import
 from .predicates import And
+from .registers import RegClass, Register
 
 # The typing module is only required by mypy, and we don't use these imports
 # outside type comments.
@@ -12,6 +13,8 @@ try:
     from .types import ValueType  # noqa
     from .registers import RegBank  # noqa
     AnyPredicate = Union[Predicate, FieldPredicate]
+    OperandConstraint = Union[RegClass, Register, int]
+    ConstraintSeq = Union[OperandConstraint, Tuple[OperandConstraint, ...]]
 except ImportError:
     pass
 
@@ -133,13 +136,24 @@ class EncRecipe(object):
     Many different instructions can be encoded by the same recipe, but they
     must all have the same instruction format.
 
+    The `ins` and `outs` arguments are tuples specifying the register
+    allocation constraints for the value operands and results respectively. The
+    possible constraints for an operand are:
+
+    - A `RegClass` specifying the set of allowed registers.
+    - A `Register` specifying a fixed-register operand.
+    - An integer indicating that this result is tied to a value operand, so
+      they must use the same register.
+
     :param name: Short mnemonic name for this recipe.
     :param format: All encoded instructions must have this
             :py:class:`InstructionFormat`.
+    :param: ins Tuple of register constraints for value operands.
+    :param: outs Tuple of register constraints for results.
     """
 
-    def __init__(self, name, format, instp=None, isap=None):
-        # type: (str, InstructionFormat, AnyPredicate, AnyPredicate) -> None
+    def __init__(self, name, format, ins, outs, instp=None, isap=None):
+        # type: (str, InstructionFormat, ConstraintSeq, ConstraintSeq, AnyPredicate, AnyPredicate) -> None  # noqa
         self.name = name
         self.format = format
         self.instp = instp
@@ -148,9 +162,28 @@ class EncRecipe(object):
             assert instp.predicate_context() == format
         self.number = None  # type: int
 
+        self.ins = self._verify_constraints(ins)
+        assert len(self.ins) == len(format.value_operands)
+        self.outs = self._verify_constraints(outs)
+        if len(self.outs) > 1:
+            assert format.multiple_results
+
     def __str__(self):
         # type: () -> str
         return self.name
+
+    def _verify_constraints(self, seq):
+        # (ConstraintSeq) -> Sequence[OperandConstraint]
+        if not isinstance(seq, tuple):
+            seq = (seq,)
+        for c in seq:
+            if isinstance(c, int):
+                # An integer constraint is bound to a value operand.
+                # Check that it is in range.
+                assert c >= 0 and c < len(self.format.value_operands)
+            else:
+                assert isinstance(c, RegClass) or isinstance(c, Register)
+        return seq
 
 
 class Encoding(object):

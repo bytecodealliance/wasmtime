@@ -7,7 +7,7 @@ mod registers;
 use super::super::settings as shared_settings;
 use isa::enc_tables::{lookup_enclist, general_encoding};
 use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, RegInfo, Encoding, Legalize};
+use isa::{TargetIsa, RegInfo, Encoding, Legalize, RecipeConstraints};
 use ir::{InstructionData, DataFlowGraph};
 
 #[allow(dead_code)]
@@ -62,5 +62,9 @@ impl TargetIsa for Isa {
 
     fn recipe_names(&self) -> &'static [&'static str] {
         &enc_tables::RECIPE_NAMES[..]
+    }
+
+    fn recipe_constraints(&self) -> &'static [RecipeConstraints] {
+        &enc_tables::RECIPE_CONSTRAINTS
     }
 }

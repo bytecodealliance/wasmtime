@@ -1,7 +1,7 @@
 """
 Generate sources for instruction encoding.
 
-The tables and functions generated here support the `TargetIsa::encode()`
+The tables and functions generated here support the `TargetISA::encode()`
 function which determines if a given instruction is legal, and if so, it's
 `Encoding` data which consists of a *recipe* and some *encoding* bits.
 
@@ -56,6 +56,13 @@ from unique_table import UniqueSeqTable
 from collections import OrderedDict, defaultdict
 import math
 import itertools
+from cdsl.registers import RegClass, Register
+
+try:
+    from typing import Sequence  # noqa
+    from cdsl.isa import TargetISA, OperandConstraint  # noqa
+except ImportError:
+    pass
 
 
 def emit_instp(instp, fmt):
@@ -399,6 +406,7 @@ def offset_type(length):
 
 
 def emit_recipe_names(isa, fmt):
+    # type: (TargetISA, srcgen.Formatter) -> None
     """
     Emit a table of encoding recipe names keyed by recipe number.
 
@@ -409,6 +417,48 @@ def emit_recipe_names(isa, fmt):
             .format(len(isa.all_recipes)), '];'):
         for r in isa.all_recipes:
             fmt.line('"{}",'.format(r.name))
+
+
+def emit_recipe_constraints(isa, fmt):
+    # type: (TargetISA, srcgen.Formatter) -> None
+    """
+    Emit a table of encoding recipe operand constraints keyed by recipe number.
+
+    These are used by the register allocator to pick registers that can be
+    properly encoded.
+    """
+    with fmt.indented(
+            'pub static RECIPE_CONSTRAINTS: [RecipeConstraints; {}] = ['
+            .format(len(isa.all_recipes)), '];'):
+        for r in isa.all_recipes:
+            fmt.comment(r.name)
+            with fmt.indented('RecipeConstraints {', '},'):
+                emit_operand_constraints(r.ins, 'ins', fmt)
+                emit_operand_constraints(r.outs, 'outs', fmt)
+
+
+def emit_operand_constraints(seq, field, fmt):
+    # type: (Sequence[OperandConstraint], str, srcgen.Formatter) -> None
+    """
+    Emit a struct field initializer for an array of operand constraints.
+    """
+    if len(seq) == 0:
+        fmt.line('{}: &[],'.format(field))
+        return
+    with fmt.indented('{}: &['.format(field), '],'):
+        for cons in seq:
+            with fmt.indented('OperandConstraint {', '},'):
+                if isinstance(cons, RegClass):
+                    fmt.line('kind: ConstraintKind::Reg,')
+                    fmt.line('regclass: {},'.format(cons))
+                elif isinstance(cons, Register):
+                    fmt.line(
+                            'kind: ConstraintKind::FixedReg({}),'
+                            .format(cons.unit))
+                    fmt.line('regclass: {},'.format(cons.regclass))
+                else:
+                    raise AssertionError(
+                            'Unsupported constraint {}'.format(cons))
 
 
 def gen_isa(isa, fmt):
@@ -446,6 +496,7 @@ def gen_isa(isa, fmt):
                 cpumode, level1_tables[cpumode], level1_offt, fmt)
 
     emit_recipe_names(isa, fmt)
+    emit_recipe_constraints(isa, fmt)
 
 
 def generate(isas, out_dir):

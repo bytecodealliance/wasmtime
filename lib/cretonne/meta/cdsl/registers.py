@@ -62,7 +62,7 @@ class RegBank(object):
                   `units`, the remaining units are named using `prefix`.
     """
 
-    def __init__(self, name, isa, doc, units, prefix='p', names=()):
+    def __init__(self, name, isa, doc, units, prefix='r', names=()):
         # type: (str, TargetISA, str, int, str, Sequence[str]) -> None
         self.name = name
         self.isa = isa
@@ -124,12 +124,16 @@ class RegClass(object):
 
         bank.classes.append(self)
 
+    def __str__(self):
+        return self.name
+
     def __getitem__(self, sliced):
         """
         Create a sub-class of a register class using slice notation. The slice
         indexes refer to allocations in the parent register class, not register
         units.
         """
+        print(repr(sliced))
         assert isinstance(sliced, slice), "RegClass slicing can't be 1 reg"
         # We could add strided sub-classes if needed.
         assert sliced.step is None, 'Subclass striding not supported'
@@ -142,6 +146,7 @@ class RegClass(object):
         return RegClass(self.bank, count=c, width=w, start=s)
 
     def mask(self):
+        # type: () -> List[int]
         """
         Compute a bit-mask of the register units allocated by this register
         class.
@@ -173,3 +178,22 @@ class RegClass(object):
             if isinstance(obj, RegClass):
                 assert obj.name is None
                 obj.name = name
+
+
+class Register(object):
+    """
+    A specific register in a register class.
+
+    A register is identified by the top-level register class it belongs to and
+    its first register unit.
+
+    Specific registers are used to describe constraints on instructions where
+    some operands must use a fixed register.
+
+    Register objects should be created using the indexing syntax on the
+    register class.
+    """
+    def __init__(self, rc, unit):
+        # type: (RegClass, int) -> None
+        self.regclass = rc
+        self.unit = unit
