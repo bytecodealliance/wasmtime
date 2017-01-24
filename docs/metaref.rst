@@ -331,8 +331,6 @@ encoded:
 - The CPU mode that must be active.
 - A :term:`sub-target predicate` that must be satisfied by the currently active
   sub-target.
-- :term:`Register constraint`\s that must be satisfied by the instruction's value
-  operands and results.
 
 An encoding specifies an *encoding recipe* along with some *encoding bits* that
 the recipe can use for native opcode fields etc. The encoding recipe has
@@ -348,6 +346,83 @@ per-encoding predicates when generating the encoding matcher code. Often
 encodings only need the recipe predicates.
 
 .. autoclass:: EncRecipe
+
+Register constraints
+====================
+
+After an encoding recipe has been chosen for an instruction, it is the register
+allocator's job to make sure that the recipe's :term:`Register constraint`\s
+are satisfied. Most ISAs have separate integer and floating point registers,
+and instructions can usually only use registers from one of the banks. Some
+instruction encodings are even more constrained and can only use a subset of
+the registers in a bank. These constraints are expressed in terms of register
+classes.
+
+Sometimes the result of an instruction is placed in a register that must be the
+same as one of the input registers. Some instructions even use a fixed register
+for inputs or results.
+
+Each encoding recipe specifies separate constraints for its value operands and
+result. These constraints are separate from the instruction predicate which can
+only evaluate the instruction's immediate operands.
+
+.. module:: cdsl.registers
+.. autoclass:: RegBank
+
+Register class constraints
+--------------------------
+
+The most common type of register constraint is the register class. It specifies
+that an operand or result must be allocated one of the registers from the given
+register class::
+
+    IntRegs = RegBank('IntRegs', ISA, 'General purpose registers', units=16, prefix='r')
+    GPR = RegClass(IntRegs)
+    R = EncRecipe('R', Binary, ins=(GPR, GPR), outs=GPR)
+
+This defines an encoding recipe for the ``Binary`` instruction format where
+both input operands must be allocated from the ``GPR`` register class.
+
+.. autoclass:: RegClass
+
+Tied register operands
+----------------------
+
+In more compact machine code encodings, it is common to require that the result
+register is the same as one of the inputs. This is represented with tied
+operands::
+
+    CR = EncRecipe('CR', Binary, ins=(GPR, GPR), outs=0)
+
+This indicates that the result value must be allocated to the same register as
+the first input value. Tied operand constraints can only be used for result
+values, so the number always refers to one of the input values.
+
+Fixed register operands
+-----------------------
+
+Some instructions use hard-coded input and output registers for some value
+operands. An example is the ``pblendvb`` Intel SSE instruction which takes one
+of its three value operands in the hard-coded ``%xmm0`` register::
+
+    XMM0 = FPR[0]
+    SSE66_XMM0 = EncRecipe('SSE66_XMM0', Ternary, ins=(FPR, FPR, XMM0), outs=0)
+
+The syntax ``FPR[0]`` selects the first register from the ``FPR`` register
+class which consists of all the XMM registers.
+
+Stack operands
+--------------
+
+Cretonne's register allocator can assign an SSA value to a stack slot if there
+isn't enough registers. It will insert :cton:inst:`spill` and :cton:inst:`fill`
+instructions as needed to satisfy instruction operand constraints, but it is
+also possible to have instructions that can access stack slots directly::
+
+    CSS = EncRecipe('CSS', Unary, ins=GPR, outs=Stack(GPR))
+
+An output stack value implies a store to the stack, an input value implies a
+load.
 
 .. module:: cdsl.isa
 
@@ -366,6 +441,9 @@ The definitions for each supported target live in a package under
     :members:
 
 .. automodule:: isa.riscv
+.. automodule:: isa.intel
+.. automodule:: isa.arm32
+.. automodule:: isa.arm64
 
 
 Glossary
