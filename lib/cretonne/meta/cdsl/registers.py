@@ -26,8 +26,11 @@ from . import is_power_of_two, next_power_of_two
 
 
 try:
-    from typing import Sequence # noqa
+    from typing import Sequence, Tuple  # noqa
     from .isa import TargetISA  # noqa
+    # A tuple uniquely identifying a register class inside a register bank.
+    # (count, width, start)
+    RCTup = Tuple[int, int, int]
 except ImportError:
     pass
 
@@ -90,6 +93,63 @@ class RegBank(object):
         return ('RegBank({}, units={}, first_unit={})'
                 .format(self.name, self.units, self.first_unit))
 
+    def finish_regclasses(self, first_index):
+        # type: (int) -> None
+        """
+        Assign indexes to the register classes in this bank, starting from
+        `first_index`.
+
+        Verify that the set of register classes satisfies:
+
+        1. Closed under intersection: The intersection of any two register
+           classes in the set is either empty or identical to a member of the
+           set.
+        2. There are no identical classes under different names.
+        3. Classes are sorted topologically such that all subclasses have a
+           higher index that the superclass.
+
+        We could reorder classes topologically here instead of just enforcing
+        the order, but the ordering tends to fall out naturally anyway.
+        """
+        cmap = dict()  # type: Dict[RCTup, RegClass]
+
+        for idx, rc in enumerate(self.classes):
+            # All register classes must be given a name.
+            assert rc.name, "Anonymous register class found"
+
+            # Assign a unique index.
+            assert rc.index is None
+            rc.index = idx + first_index
+
+            # Check for duplicates.
+            tup = rc.rctup()
+            if tup in cmap:
+                raise AssertionError(
+                        '{} and {} are identical register classes'
+                        .format(rc, cmap[tup]))
+            cmap[tup] = rc
+
+        # Check intersections and topological order.
+        for idx, rc1 in enumerate(self.classes):
+            for rc2 in self.classes[0:idx]:
+                itup = rc1.intersect(rc2)
+                if itup is None:
+                    continue
+                if itup not in cmap:
+                    raise AssertionError(
+                        'intersection of {} and {} missing'
+                        .format(rc1, rc2))
+                irc = cmap[itup]
+                # rc1 > rc2, so rc2 can't be the sub-class.
+                if irc is rc2:
+                    raise AssertionError(
+                            'Bad topological order: {}/{}'
+                            .format(rc1, rc2))
+                if irc is rc1:
+                    # The intersection of rc1 and rc2 is rc1, so it must be a
+                    # sub-class.
+                    rc2.subclasses.append(rc1)
+
 
 class RegClass(object):
     """
@@ -111,9 +171,13 @@ class RegClass(object):
     def __init__(self, bank, count=None, width=1, start=0):
         # type: (RegBank, int, int, int) -> None
         self.name = None  # type: str
+        self.index = None  # type: int
         self.bank = bank
         self.start = start
         self.width = width
+
+        # This is computed later in `finish_regclasses()`.
+        self.subclasses = list()  # type: List[RegClass]
 
         assert width > 0
         assert start >= 0 and start < bank.units
@@ -127,13 +191,43 @@ class RegClass(object):
     def __str__(self):
         return self.name
 
+    def rctup(self):
+        # type: () -> RCTup
+        """
+        Get a tuple that uniquely identifies the registers in this class.
+
+        The tuple can be used as a dictionary key to ensure that there are no
+        duplicate register classes.
+        """
+        return (self.count, self.width, self.start)
+
+    def intersect(self, other):
+        # type: (RegClass) -> RCTup
+        """
+        Get a tuple representing the intersction of two register classes.
+
+        Returns `None` if the two classes are disjoint.
+        """
+        if self.width != other.width:
+            return None
+        s_end = self.start + self.count * self.width
+        o_end = other.start + other.count * other.width
+        if self.start >= o_end or other.start >= s_end:
+            return None
+
+        # We have an overlap.
+        start = max(self.start, other.start)
+        end = min(s_end, o_end)
+        count = (end - start) // self.width
+        assert count > 0
+        return (count, self.width, start)
+
     def __getitem__(self, sliced):
         """
         Create a sub-class of a register class using slice notation. The slice
         indexes refer to allocations in the parent register class, not register
         units.
         """
-        print(repr(sliced))
         assert isinstance(sliced, slice), "RegClass slicing can't be 1 reg"
         # We could add strided sub-classes if needed.
         assert sliced.step is None, 'Subclass striding not supported'
@@ -166,6 +260,16 @@ class RegClass(object):
             mask[u // 32] |= 1 << b
 
         return mask
+
+    def subclass_mask(self):
+        # type: () -> int
+        """
+        Compute a bit-mask of subclasses, including self.
+        """
+        m = 1 << self.index
+        for rc in self.subclasses:
+            m |= 1 << rc.index
+        return m
 
     @staticmethod
     def extract_names(globs):

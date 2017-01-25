@@ -51,6 +51,7 @@ class TargetISA(object):
         """
         self._collect_encoding_recipes()
         self._collect_predicates()
+        self._collect_regclasses()
         return self
 
     def _collect_encoding_recipes(self):
@@ -95,6 +96,18 @@ class TargetISA(object):
                 # replicated here, which is OK.
                 if enc.isap:
                     self.settings.number_predicate(enc.isap)
+
+    def _collect_regclasses(self):
+        """
+        Collect and number register classes.
+
+        Every register class needs a unique index, and the classes need to be
+        topologically ordered.
+        """
+        rc_index = 0
+        for bank in self.regbanks:
+            bank.finish_regclasses(rc_index)
+            rc_index += len(bank.classes)
 
 
 class CPUMode(object):

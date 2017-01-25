@@ -1,5 +1,6 @@
 //! Data structures describing the registers in an ISA.
 
+use entity_map::EntityRef;
 use std::fmt;
 
 /// Register units are the smallest units of register allocation.
@@ -106,9 +107,57 @@ pub struct RegClassData {
     /// How many register units to allocate per register.
     pub width: u8,
 
+    /// Bit-mask of sub-classes of this register class, including itself.
+    ///
+    /// Bits correspond to RC indexes.
+    pub subclasses: u32,
+
     /// Mask of register units in the class. If `width > 1`, the mask only has a bit set for the
     /// first register unit in each allocatable register.
     pub mask: RegUnitMask,
+}
+
+impl RegClassData {
+    /// Get the register class corresponding to the intersection of `self` and `other`.
+    ///
+    /// This register class is guaranteed to exist if the register classes overlap. If the register
+    /// classes don't overlap, returns `None`.
+    pub fn intersect(&self, other: RegClass) -> Option<RegClassIndex> {
+        // Compute the set of common subclasses.
+        let mask = self.subclasses & other.subclasses;
+
+        if mask == 0 {
+            // No overlap.
+            None
+        } else {
+            // Register class indexes are topologically ordered, so the largest common subclass has
+            // the smallest index.
+            Some(RegClassIndex(mask.trailing_zeros() as u8))
+        }
+    }
+}
+
+/// A small reference to a register class.
+///
+/// Use this when storing register classes in compact data structures. The `RegInfo::rc()` method
+/// can be used to get the real register class reference back.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RegClassIndex(u8);
+
+impl EntityRef for RegClassIndex {
+    fn new(idx: usize) -> Self {
+        RegClassIndex(idx as u8)
+    }
+
+    fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl From<RegClass> for RegClassIndex {
+    fn from(rc: RegClass) -> Self {
+        RegClassIndex(rc.index)
+    }
 }
 
 /// Information about the registers in an ISA.
@@ -142,6 +191,11 @@ impl RegInfo {
             regunit: regunit,
             reginfo: self,
         }
+    }
+
+    /// Get the register class corresponding to `idx`.
+    pub fn rc(&self, idx: RegClassIndex) -> RegClass {
+        &self.classes[idx.index()]
     }
 }
 
