@@ -3,5 +3,8 @@ rust:
   - stable
   - beta
   - nightly
+install: pip install --upgrade mypy flake8
 script: ./test-all.sh
-cache: cargo
+cache:
+  - cargo
+  - pip
