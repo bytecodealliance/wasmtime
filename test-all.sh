@@ -40,6 +40,9 @@ else
     echo "If a newer version of rustfmt is available, update this script."
 fi
 
+banner "Python checks"
+$topdir/lib/cretonne/meta/check.sh
+
 PKGS="cretonne cretonne-reader cretonne-tools filecheck"
 cd "$topdir"
 for PKG in $PKGS
