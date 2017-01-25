@@ -6,7 +6,7 @@ include!(concat!(env!("OUT_DIR"), "/registers-intel.rs"));
 
 #[cfg(test)]
 mod tests {
-    use super::INFO;
+    use super::*;
     use isa::RegUnit;
 
     #[test]
@@ -45,5 +45,18 @@ mod tests {
         assert_eq!(uname(15), "%r15");
         assert_eq!(uname(16), "%xmm0");
         assert_eq!(uname(31), "%xmm15");
+    }
+
+    #[test]
+    fn regclasses() {
+        assert_eq!(GPR.intersect(GPR), Some(GPR.into()));
+        assert_eq!(GPR.intersect(ABCD), Some(ABCD.into()));
+        assert_eq!(GPR.intersect(FPR), None);
+        assert_eq!(ABCD.intersect(GPR), Some(ABCD.into()));
+        assert_eq!(ABCD.intersect(ABCD), Some(ABCD.into()));
+        assert_eq!(ABCD.intersect(FPR), None);
+        assert_eq!(FPR.intersect(FPR), Some(FPR.into()));
+        assert_eq!(FPR.intersect(GPR), None);
+        assert_eq!(FPR.intersect(ABCD), None);
     }
 }
