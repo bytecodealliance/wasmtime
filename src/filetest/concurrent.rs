@@ -96,10 +96,8 @@ impl ConcurrentRunner {
 fn heartbeat_thread(replies: Sender<Reply>) -> thread::JoinHandle<()> {
     thread::Builder::new()
         .name("heartbeat".to_string())
-        .spawn(move || {
-            while replies.send(Reply::Tick).is_ok() {
-                thread::sleep(Duration::from_secs(1));
-            }
+        .spawn(move || while replies.send(Reply::Tick).is_ok() {
+            thread::sleep(Duration::from_secs(1));
         })
         .unwrap()
 }
