@@ -1,17 +1,18 @@
 language: rust
 rust:
-  - stable
-  - beta
-  - nightly
+    - stable
+    - beta
+    - nightly
 dist: trusty
 sudo: false
 addons:
-  apt:
-    packages:
-      - python3-pip
+    apt:
+        packages:
+            - python3-pip
 install:
-  - pip3 install --user --upgrade mypy flake8
+    - pip3 install --user --upgrade mypy flake8
 script: ./test-all.sh
 cache:
-  - cargo
-  - pip
+    cargo: true
+    directories:
+        - $HOME/.cache/pip
