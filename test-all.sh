@@ -35,6 +35,12 @@ RUSTFMT_VERSION="0.7.1"
 if cargo install --list | grep -q "^rustfmt v$RUSTFMT_VERSION"; then
     banner "Rust formatting"
     $topdir/format-all.sh --write-mode=diff
+elif [ -n "$TRAVIS" ]; then
+    # We're running under Travis CI.
+    # Install rustfmt, it will be cached for the next build.
+    echo "Installing rustfmt v$RUSTFMT_VERSION."
+    cargo install --force --vers="$RUSTFMT_VERSION" rustfmt
+    $topdir/format-all.sh --write-mode=diff
 else
     echo "Please install rustfmt v$RUSTFMT_VERSION to verify formatting."
     echo "If a newer version of rustfmt is available, update this script."
