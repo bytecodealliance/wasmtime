@@ -21,6 +21,7 @@ pub struct OperandConstraint {
 }
 
 /// The different kinds of operand constraints.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ConstraintKind {
     /// This operand or result must be a register from the given register class.
     Reg,

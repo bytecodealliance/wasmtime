@@ -73,9 +73,9 @@
 //! 3. A numerical order by EBB number. Performant because it doesn't need to indirect through the
 //!    `ProgramOrder` for comparisons.
 //!
-//! These orderings will cause small differences in coalescing opportinities, but all of them would
+//! These orderings will cause small differences in coalescing opportunities, but all of them would
 //! do a decent job of compressing a long live range. The numerical order might be preferable
-//! beacuse:
+//! because:
 //!
 //! - It has better performance because EBB numbers can be compared directly without any table
 //!   lookups.
@@ -92,7 +92,7 @@
 //!
 //! Coalescing is an important compression technique because some live ranges can span thousands of
 //! EBBs. We can represent that by switching to a sorted `Vec<ProgramPoint>` representation where
-//! an `[Ebb, Inst]` pair represents a coalesced range, while an `Inst` entry without a preceeding
+//! an `[Ebb, Inst]` pair represents a coalesced range, while an `Inst` entry without a preceding
 //! `Ebb` entry represents a single live-in interval.
 //!
 //! This representation is more compact for a live range with many uncoalesced live-in intervals.
@@ -109,6 +109,7 @@
 
 use std::cmp::Ordering;
 use ir::{Inst, Ebb, Value, ProgramPoint, ProgramOrder};
+use regalloc::affinity::Affinity;
 use sparse_map::SparseMapValue;
 
 /// Global live range of a single SSA value.
@@ -143,6 +144,9 @@ pub struct LiveRange {
     /// This member can't be modified in case the live range is stored in a `SparseMap`.
     value: Value,
 
+    /// The preferred register allocation for this value.
+    pub affinity: Affinity,
+
     /// The instruction or EBB header where this value is defined.
     def_begin: ProgramPoint,
 
@@ -167,7 +171,7 @@ pub struct LiveRange {
 /// An additional contiguous interval of a global live range.
 ///
 /// This represents a live-in interval for a single EBB, or a coalesced set of live-in intervals
-/// for contiguous EBBs where all but the last live-in inteval covers the whole EBB.
+/// for contiguous EBBs where all but the last live-in interval covers the whole EBB.
 ///
 struct Interval {
     /// Interval starting point.
@@ -205,6 +209,7 @@ impl LiveRange {
         let def = def.into();
         LiveRange {
             value: value,
+            affinity: Default::default(),
             def_begin: def,
             def_end: def,
             liveins: Vec::new(),
@@ -238,7 +243,7 @@ impl LiveRange {
     /// is live-in to `ebb`, extending to `to`. Return true.
     ///
     /// The return value can be used to detect if we just learned that the value is live-in to
-    /// `ebb`. This can trigger recursive extensions in `ebb`'s CFG precedessor blocks.
+    /// `ebb`. This can trigger recursive extensions in `ebb`'s CFG predecessor blocks.
     pub fn extend_in_ebb<PO: ProgramOrder>(&mut self, ebb: Ebb, to: Inst, order: &PO) -> bool {
         // First check if we're extending the def interval.
         //

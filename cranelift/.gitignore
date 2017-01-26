@@ -5,3 +5,4 @@
 tags
 target
 Cargo.lock
+.*.rustfmt
