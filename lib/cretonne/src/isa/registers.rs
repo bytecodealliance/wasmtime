@@ -133,6 +133,12 @@ impl RegClassData {
             Some(RegClassIndex(mask.trailing_zeros() as u8))
         }
     }
+
+    /// Returns true if `other` is a subclass of this register class.
+    /// A register class is considerd to be a subclass of itself.
+    pub fn has_subclass<RCI: Into<RegClassIndex>>(&self, other: RCI) -> bool {
+        self.subclasses & (1 << other.into().0) != 0
+    }
 }
 
 /// A small reference to a register class.

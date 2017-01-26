@@ -41,8 +41,8 @@
 //! concurrent function compilations.
 
 pub use isa::encoding::Encoding;
-pub use isa::registers::{RegInfo, RegUnit, RegClass};
-pub use isa::constraints::RecipeConstraints;
+pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex};
+pub use isa::constraints::{RecipeConstraints, OperandConstraint, ConstraintKind};
 
 use settings;
 use ir::{InstructionData, DataFlowGraph};
