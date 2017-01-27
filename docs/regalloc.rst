@@ -206,7 +206,7 @@ top-down order, and each value define by the instruction is assigned an
 available register. With this iteration order, every value that is live at an
 instruction has already been assigned to a register.
 
-This coloring algorith works if the following condition holds:
+This coloring algorithm works if the following condition holds:
 
     At every instruction, consider the values live through the instruction. No
     matter how the live values have been assigned to registers, there must be

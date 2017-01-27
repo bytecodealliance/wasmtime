@@ -139,7 +139,7 @@ run will also have the RISC-V specific flag ``supports_m`` disabled.
 Filecheck
 ---------
 
-Many of the test commands bescribed below use *filecheck* to verify their
+Many of the test commands described below use *filecheck* to verify their
 output. Filecheck is a Rust implementation of the LLVM tool of the same name.
 See the :file:`lib/filecheck` `documentation <https://docs.rs/filecheck/>`_ for
 details of its syntax.

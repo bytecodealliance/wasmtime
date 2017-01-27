@@ -882,7 +882,7 @@ Glossary
         - Type and flags of each argument.
         - Type and flags of each return value.
 
-        Not all function atributes are part of the signature. For example, a
+        Not all function attributes are part of the signature. For example, a
         function that never returns could be marked as ``noreturn``, but that
         is not necessary to know when calling it, so it is just an attribute,
         and not part of the signature.
