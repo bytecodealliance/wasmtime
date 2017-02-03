@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn basic() {
-        // c.f. meta/constant_hash.py tests.
+        // c.f. `meta/constant_hash.py` tests.
         assert_eq!(simple_hash("Hello"), 0x2fa70c01);
         assert_eq!(simple_hash("world"), 0x5b0c31d5);
     }

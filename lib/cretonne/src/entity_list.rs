@@ -178,7 +178,7 @@ impl<T: EntityRef> ListPool<T> {
     /// Returns two mutable slices representing the two requested blocks.
     ///
     /// The two returned slices can be longer than the blocks. Each block is located at the front
-    /// the the respective slice.
+    /// of the respective slice.
     fn mut_slices(&mut self, block0: usize, block1: usize) -> (&mut [T], &mut [T]) {
         if block0 < block1 {
             let (s0, s1) = self.data.split_at_mut(block1);

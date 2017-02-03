@@ -3,18 +3,18 @@
 //!
 //!   EBB integrity
 //!
-//!    - All instructions reached from the ebb_insts iterator must belong to
-//!      the EBB as reported by inst_ebb().
+//!    - All instructions reached from the `ebb_insts` iterator must belong to
+//!      the EBB as reported by `inst_ebb()`.
 //!    - Every EBB must end in a terminator instruction, and no other instruction
 //!      can be a terminator.
-//!    - Every value in the ebb_args iterator belongs to the EBB as reported by value_ebb.
+//!    - Every value in the `ebb_args` iterator belongs to the EBB as reported by `value_ebb`.
 //!
 //!   Instruction integrity
 //!
 //!    - The instruction format must match the opcode.
 //! TODO:
 //!    - All result values must be created for multi-valued instructions.
-//!    - Instructions with no results must have a VOID first_type().
+//!    - Instructions with no results must have a VOID `first_type()`.
 //!    - All referenced entities must exist. (Values, EBBs, stack slots, ...)
 //!
 //!   SSA form
@@ -33,7 +33,7 @@
 //!    - Compare input and output values against the opcode's type constraints.
 //!      For polymorphic opcodes, determine the controlling type variable first.
 //!    - Branches and jumps must pass arguments to destination EBBs that match the
-//!      expected types excatly. The number of arguments must match.
+//!      expected types exactly. The number of arguments must match.
 //!    - All EBBs in a jump_table must take no arguments.
 //!    - Function calls are type checked against their signature.
 //!    - The entry block must take arguments that match the signature of the current
@@ -44,10 +44,10 @@
 //!   Ad hoc checking
 //!
 //!    - Stack slot loads and stores must be in-bounds.
-//!    - Immediate constraints for certain opcodes, like udiv_imm v3, 0.
+//!    - Immediate constraints for certain opcodes, like `udiv_imm v3, 0`.
 //!    - Extend / truncate instructions have more type constraints: Source type can't be
 //!      larger / smaller than result type.
-//!    - Insertlane and extractlane instructions have immediate lane numbers that must be in
+//!    - `Insertlane` and `extractlane` instructions have immediate lane numbers that must be in
 //!      range for their polymorphic type.
 //!    - Swizzle and shuffle instructions take a variable number of lane arguments. The number
 //!      of arguments must match the destination type, and the lane indexes must be in range.
@@ -76,7 +76,7 @@ impl Display for Error {
 /// Verifier result.
 pub type Result<T> = result::Result<T, Error>;
 
-// Create an `Err` variant of `Result<X>` from a location and `format!` args.
+// Create an `Err` variant of `Result<X>` from a location and `format!` arguments.
 macro_rules! err {
     ( $loc:expr, $msg:expr ) => {
         Err(Error {

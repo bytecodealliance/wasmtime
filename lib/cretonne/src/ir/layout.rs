@@ -573,10 +573,10 @@ impl<'f> DoubleEndedIterator for Insts<'f> {
 ///
 /// A `Cursor` represents a position in a function layout where instructions can be inserted and
 /// removed. It can be used to iterate through the instructions of a function while editing them at
-/// the same time. A normal instruction iterator can't do this since it holds an immutable refernce
-/// to the Layout.
+/// the same time. A normal instruction iterator can't do this since it holds an immutable
+/// reference to the Layout.
 ///
-/// When new instructions are added, the cursor can either apend them to an EBB or insert them
+/// When new instructions are added, the cursor can either append them to an EBB or insert them
 /// before the current instruction.
 pub struct Cursor<'f> {
     layout: &'f mut Layout,
@@ -592,7 +592,7 @@ pub enum CursorPosition {
     /// New instructions will be inserted *before* the current instruction.
     At(Inst),
     /// Cursor is before the beginning of an EBB. No instructions can be inserted. Calling
-    /// `next_inst()` wil move to the first instruction in the EBB.
+    /// `next_inst()` will move to the first instruction in the EBB.
     Before(Ebb),
     /// Cursor is pointing after the end of an EBB.
     /// New instructions will be appended to the EBB.
@@ -851,7 +851,7 @@ impl<'f> Cursor<'f> {
     /// - If pointing at the bottom of an EBB, the new instruction is appended to the EBB.
     /// - Otherwise panic.
     ///
-    /// In either case, the cursor is not moved, such that repeates calls to `insert_inst()` causes
+    /// In either case, the cursor is not moved, such that repeated calls to `insert_inst()` causes
     /// instructions to appear in insertion order in the EBB.
     pub fn insert_inst(&mut self, inst: Inst) {
         use self::CursorPosition::*;
@@ -1263,7 +1263,7 @@ mod tests {
             assert_eq!(cur.prev_ebb(), None);
         }
 
-        // Check ProgramOrder.
+        // Check `ProgramOrder`.
         assert_eq!(layout.cmp(e2, e2), Ordering::Equal);
         assert_eq!(layout.cmp(e2, i2), Ordering::Less);
         assert_eq!(layout.cmp(i3, i2), Ordering::Greater);

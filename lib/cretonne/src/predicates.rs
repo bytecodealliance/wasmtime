@@ -20,7 +20,7 @@ pub fn is_signed_int<T: Into<i64>>(x: T, wd: u8, sc: u8) -> bool {
 #[allow(dead_code)]
 pub fn is_unsigned_int<T: Into<i64>>(x: T, wd: u8, sc: u8) -> bool {
     let u = x.into() as u64;
-    // Bitmask of the permitted bits.
+    // Bit-mask of the permitted bits.
     let m = (1 << wd) - (1 << sc);
     u == (u & m)
 }
@@ -40,7 +40,7 @@ mod tests {
         assert!(is_signed_int(x2, 2, 0));
         assert!(!is_signed_int(x2, 2, 1));
 
-        // u32 doesn't sign-extend when converted to i64.
+        // `u32` doesn't sign-extend when converted to `i64`.
         assert!(!is_signed_int(x3, 8, 0));
 
         assert!(is_unsigned_int(x1, 1, 0));

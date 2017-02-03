@@ -13,7 +13,7 @@ use ir::condcodes::{IntCC, FloatCC};
 ///
 /// The `InstBuilderBase` trait provides the basic functionality required by the methods of the
 /// generated `InstBuilder` trait. These methods should not normally be used directly. Use the
-/// methods in the `InstBuilder trait instead.
+/// methods in the `InstBuilder` trait instead.
 ///
 /// Any data type that implements `InstBuilderBase` also gets all the methods of the `InstBuilder`
 /// trait.
@@ -104,7 +104,7 @@ impl<'c, 'fc, 'fd> InstBuilderBase<'fd> for InsertBuilder<'c, 'fc, 'fd> {
 ///
 /// If the old instruction still has secondary result values attached, it is assumed that the new
 /// instruction produces the same number and types of results. The old secondary values are
-/// preserved. If the replacemant instruction format does not support multiple results, the builder
+/// preserved. If the replacement instruction format does not support multiple results, the builder
 /// panics. It is a bug to leave result values dangling.
 ///
 /// If the old instruction was capable of producing secondary results, but the values have been

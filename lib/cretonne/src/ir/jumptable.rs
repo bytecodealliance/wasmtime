@@ -33,7 +33,7 @@ impl JumpTableData {
 
     /// Set a table entry.
     ///
-    /// The table will grow as needed to fit 'idx'.
+    /// The table will grow as needed to fit `idx`.
     pub fn set_entry(&mut self, idx: usize, dest: Ebb) {
         // Resize table to fit `idx`.
         if idx >= self.table.len() {

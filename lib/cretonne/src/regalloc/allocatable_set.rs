@@ -38,7 +38,7 @@ impl AllocatableSet {
         AllocatableSet { avail: [!0; 3] }
     }
 
-    /// Returns `true` if the spoecified register is available.
+    /// Returns `true` if the specified register is available.
     pub fn is_avail(&self, rc: RegClass, reg: RegUnit) -> bool {
         let (idx, bits) = bitmask(rc, reg);
         (self.avail[idx] & bits) == bits
@@ -71,7 +71,7 @@ impl AllocatableSet {
         for idx in 0..self.avail.len() {
             // If a single unit in a register is unavailable, the whole register can't be used.
             // If a register straddles a word boundary, it will be marked as unavailable.
-            // There's an assertion in cdsl/registers.py to check for that.
+            // There's an assertion in `cdsl/registers.py` to check for that.
             for i in 0..rc.width {
                 rsi.regs[idx] &= self.avail[idx] >> i;
             }
@@ -102,7 +102,7 @@ impl Iterator for RegSetIter {
 
                 return Some(unit);
             }
-            // How many register units was there in the word? This is a constant 32 for u32 etc.
+            // How many register units was there in the word? This is a constant 32 for `u32` etc.
             unit_offset += 8 * size_of_val(word) as RegUnit;
         }
 
@@ -134,7 +134,7 @@ mod tests {
     fn put_and_take() {
         let mut regs = AllocatableSet::new();
 
-        // GPR has units 28-36.
+        // `GPR` has units 28-36.
         assert_eq!(regs.iter(GPR).count(), 8);
         assert_eq!(regs.iter(DPR).collect::<Vec<_>>(), [28, 30, 33, 35]);
 

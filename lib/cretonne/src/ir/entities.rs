@@ -65,7 +65,7 @@ pub struct Ebb(u32);
 entity_impl!(Ebb, "ebb");
 
 impl Ebb {
-    /// Create a new EBB reference from its number. This corresponds to the ebbNN representation.
+    /// Create a new EBB reference from its number. This corresponds to the `ebbNN` representation.
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Ebb> {
@@ -90,7 +90,7 @@ pub enum ExpandedValue {
 
 impl Value {
     /// Create a `Direct` value from its number representation.
-    /// This is the number in the vNN notation.
+    /// This is the number in the `vNN` notation.
     ///
     /// This method is for use by the parser.
     pub fn direct_with_number(n: u32) -> Option<Value> {
@@ -104,7 +104,7 @@ impl Value {
     }
 
     /// Create a `Table` value from its number representation.
-    /// This is the number in the vxNN notation.
+    /// This is the number in the `vxNN` notation.
     ///
     /// This method is for use by the parser.
     pub fn table_with_number(n: u32) -> Option<Value> {
