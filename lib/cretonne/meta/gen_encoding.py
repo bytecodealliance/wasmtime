@@ -75,7 +75,7 @@ def emit_instp(instp, fmt):
     """
     iform = instp.predicate_context()
 
-    # Which fiels do we need in the InstructionData pattern match?
+    # Which fields do we need in the InstructionData pattern match?
     if iform.boxed_storage:
         fields = 'ref data'
     else:
@@ -99,10 +99,18 @@ def emit_instps(instps, fmt):
     """
 
     if not instps:
-        fmt.line('#[allow(unused_variables)]')
+        # If the ISA has no predicates, just emit a stub.
+        with fmt.indented(
+                'pub fn check_instp(_: &InstructionData, _: u16) ' +
+                '-> bool {', '}'):
+            fmt.line('unimplemented!()')
+        return
+
     with fmt.indented(
             'pub fn check_instp(inst: &InstructionData, instp_idx: u16) ' +
             '-> bool {', '}'):
+        # The matches emitted by `emit_instp` need this.
+        fmt.line('use ir::instructions::InstructionFormat;')
         with fmt.indented('match instp_idx {', '}'):
             for instp in instps:
                 emit_instp(instp, fmt)

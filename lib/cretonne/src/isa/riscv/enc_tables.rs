@@ -1,7 +1,6 @@
 //! Encoding tables for RISC-V.
 
 use ir::{Opcode, InstructionData};
-use ir::instructions::InstructionFormat;
 use ir::types;
 use predicates;
 use isa::enc_tables::{Level1Entry, Level2Entry};
