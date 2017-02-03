@@ -12,7 +12,7 @@ use packed_option::PackedOption;
 use std::ops::{Index, IndexMut};
 use std::u16;
 
-/// A data flow graph defines all instuctions and extended basic blocks in a function as well as
+/// A data flow graph defines all instructions and extended basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
 /// instruction results or EBB arguments.
 ///
@@ -213,7 +213,7 @@ impl DataFlowGraph {
                 original: original,
             };
         } else {
-            panic!("Cannot change dirrect value {} into an alias", dest);
+            panic!("Cannot change direct value {} into an alias", dest);
         }
     }
 }
@@ -328,7 +328,7 @@ impl DataFlowGraph {
 
         // Additional values form a linked list starting from the second result value. Generate
         // the list backwards so we don't have to modify value table entries in place. (This
-        // causes additional result values to be numbered backwards which is not the aestetic
+        // causes additional result values to be numbered backwards which is not the aesthetic
         // choice, but since it is only visible in extremely rare instructions with 3+ results,
         // we don't care).
         let mut head = None;
@@ -498,7 +498,7 @@ impl DataFlowGraph {
                         return num as usize + 1;
                     }
                 }
-                panic!("inconsistent value table entry for EBB arg");
+                panic!("inconsistent value table entry for EBB argument");
             }
         }
     }
@@ -514,7 +514,7 @@ impl DataFlowGraph {
             next: None.into(),
         });
         match self.ebbs[ebb].last_arg.expand() {
-            // If last_arg is `None`, we're adding the first EBB argument.
+            // If last_argument is `None`, we're adding the first EBB argument.
             None => {
                 self.ebbs[ebb].first_arg = val.into();
             }
@@ -525,11 +525,11 @@ impl DataFlowGraph {
                         if let ValueData::Arg { ref mut next, .. } = self.extended_values[idx] {
                             *next = val.into();
                         } else {
-                            panic!("inconsistent value table entry for EBB arg");
+                            panic!("inconsistent value table entry for EBB argument");
                         }
                     }
                     ExpandedValue::Direct(_) => {
-                        panic!("inconsistent value table entry for EBB arg")
+                        panic!("inconsistent value table entry for EBB argument")
                     }
                 }
             }
@@ -556,7 +556,7 @@ impl DataFlowGraph {
 struct EbbData {
     // First argument to this EBB, or `None` if the block has no arguments.
     //
-    // The arguments are all ValueData::Argument entries that form a linked list from `first_arg`
+    // The arguments are all `ValueData::Argument` entries that form a linked list from `first_arg`
     // to `last_arg`.
     first_arg: PackedOption<Value>,
 
@@ -680,14 +680,14 @@ mod tests {
             _ => panic!(),
         };
 
-        // Detach the 'c' value from iadd.
+        // Detach the 'c' value from `iadd`.
         {
             let mut vals = dfg.detach_secondary_results(iadd);
             assert_eq!(vals.next(), Some(c));
             assert_eq!(vals.next(), None);
         }
 
-        // Replace iadd_cout with a normal iadd and an icmp.
+        // Replace `iadd_cout` with a normal `iadd` and an `icmp`.
         dfg.replace(iadd).iadd(v1, arg0);
         let c2 = dfg.ins(pos).icmp(IntCC::UnsignedLessThan, s, v1);
         dfg.change_to_alias(c, c2);

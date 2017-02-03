@@ -57,9 +57,9 @@ impl Opcode {
     }
 }
 
-// This trait really belongs in lib/reader where it is used by the .cton file parser, but since it
-// critically depends on the `opcode_name()` function which is needed here anyway, it lives in this
-// module. This also saves us from running the build script twice to generate code for the two
+// This trait really belongs in lib/reader where it is used by the `.cton` file parser, but since
+// it critically depends on the `opcode_name()` function which is needed here anyway, it lives in
+// this module. This also saves us from running the build script twice to generate code for the two
 // separate crates.
 impl FromStr for Opcode {
     type Err = &'static str;
@@ -141,7 +141,7 @@ pub enum InstructionData {
         arg: Value,
         imm: Imm64,
     },
-    // Same as BinaryImm, but the immediate is the lhs operand.
+    // Same as `BinaryImm`, but the immediate is the left-hand-side operand.
     BinaryImmRev {
         opcode: Opcode,
         ty: Type,
@@ -246,7 +246,7 @@ impl VariableArgs {
     }
 }
 
-// Coerce VariableArgs into a &[Value] slice.
+// Coerce `VariableArgs` into a `&[Value]` slice.
 impl Deref for VariableArgs {
     type Target = [Value];
 
@@ -311,7 +311,7 @@ impl Display for TernaryOverflowData {
 }
 
 /// Payload data for jump instructions. These need to carry lists of EBB arguments that won't fit
-/// in the allowed InstructionData size.
+/// in the allowed `InstructionData` size.
 #[derive(Clone, Debug)]
 pub struct JumpData {
     /// Jump destination EBB.
@@ -331,7 +331,7 @@ impl Display for JumpData {
 }
 
 /// Payload data for branch instructions. These need to carry lists of EBB arguments that won't fit
-/// in the allowed InstructionData size.
+/// in the allowed `InstructionData` size.
 #[derive(Clone, Debug)]
 pub struct BranchData {
     /// Value argument controlling the branch.
@@ -702,11 +702,10 @@ mod tests {
     #[test]
     fn instruction_data() {
         use std::mem;
-        // The size of the InstructionData enum is important for performance. It should not exceed
-        // 16 bytes. Use `Box<FooData>` out-of-line payloads for instruction formats that require
-        // more space than that.
-        // It would be fine with a data structure smaller than 16 bytes, but what are the odds of
-        // that?
+        // The size of the `InstructionData` enum is important for performance. It should not
+        // exceed 16 bytes. Use `Box<FooData>` out-of-line payloads for instruction formats that
+        // require more space than that. It would be fine with a data structure smaller than 16
+        // bytes, but what are the odds of that?
         assert_eq!(mem::size_of::<InstructionData>(), 16);
     }
 

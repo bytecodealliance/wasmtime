@@ -60,7 +60,7 @@ impl Function {
         }
     }
 
-    /// Create a new empty, anomymous function.
+    /// Create a new empty, anonymous function.
     pub fn new() -> Function {
         Self::with_name_signature(FunctionName::default(), Signature::new())
     }

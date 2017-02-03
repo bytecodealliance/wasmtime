@@ -1,8 +1,9 @@
 //! A control flow graph represented as mappings of extended basic blocks to their predecessors
-//! and successors. Successors are represented as extended basic blocks while predecessors are
-//! represented by basic blocks.
-//! BasicBlocks are denoted by tuples of EBB and branch/jump instructions. Each predecessor
-//! tuple corresponds to the end of a basic block.
+//! and successors.
+//!
+//! Successors are represented as extended basic blocks while predecessors are represented by basic
+//! blocks. Basic blocks are denoted by tuples of EBB and branch/jump instructions. Each
+//! predecessor tuple corresponds to the end of a basic block.
 //!
 //! ```c
 //!     Ebb0:
@@ -19,8 +20,8 @@
 //!         jmp Ebb2     ; end of basic block
 //! ```
 //!
-//! Here Ebb1 and Ebb2 would each have a single predecessor denoted as (Ebb0, `brz vx, Ebb1`)
-//! and (Ebb0, `jmp Ebb2`) respectively.
+//! Here `Ebb1` and `Ebb2` would each have a single predecessor denoted as `(Ebb0, brz)`
+//! and `(Ebb0, jmp Ebb2)` respectively.
 
 use ir::{Function, Inst, Ebb};
 use ir::instructions::BranchInfo;
@@ -91,7 +92,7 @@ impl ControlFlowGraph {
         &self.data[ebb].successors
     }
 
-    /// Return [reachable] ebbs in postorder.
+    /// Return [reachable] ebbs in post-order.
     pub fn postorder_ebbs(&self) -> Vec<Ebb> {
         let entry_block = match self.entry_block {
             None => {
@@ -111,7 +112,7 @@ impl ControlFlowGraph {
                 // This is a white node. Mark it as gray.
                 grey.insert(node);
                 stack.push(node);
-                // Get any children we’ve never seen before.
+                // Get any children we've never seen before.
                 for child in self.get_successors(node) {
                     if !grey.contains(child) {
                         stack.push(child.clone());
@@ -125,7 +126,7 @@ impl ControlFlowGraph {
         postorder
     }
 
-    /// An iterator across all of the ebbs stored in the cfg.
+    /// An iterator across all of the ebbs stored in the CFG.
     pub fn ebbs(&self) -> Keys<Ebb> {
         self.data.keys()
     }

@@ -62,7 +62,7 @@ impl Display for Imm64 {
 impl FromStr for Imm64 {
     type Err = &'static str;
 
-    // Parse a decimal or hexadecimal Imm64, formatted as above.
+    // Parse a decimal or hexadecimal `Imm64`, formatted as above.
     fn from_str(s: &str) -> Result<Imm64, &'static str> {
         let mut value: u64 = 0;
         let mut digits = 0;
@@ -149,7 +149,7 @@ pub struct Ieee64(f64);
 
 // Format a floating point number in a way that is reasonably human-readable, and that can be
 // converted back to binary without any rounding issues. The hexadecimal formatting of normal and
-// subnormal numbers is compatible with C99 and the printf "%a" format specifier. The NaN and Inf
+// subnormal numbers is compatible with C99 and the `printf "%a"` format specifier. The NaN and Inf
 // formats are not supported by C99.
 //
 // The encoding parameters are:
@@ -380,7 +380,7 @@ impl Ieee32 {
         Ieee32(x)
     }
 
-    /// Construct Ieee32 immediate from raw bits.
+    /// Construct `Ieee32` immediate from raw bits.
     pub fn from_bits(x: u32) -> Ieee32 {
         Ieee32(unsafe { mem::transmute(x) })
     }
@@ -410,7 +410,7 @@ impl Ieee64 {
         Ieee64(x)
     }
 
-    /// Construct Ieee64 immediate from raw bits.
+    /// Construct `Ieee64` immediate from raw bits.
     pub fn from_bits(x: u64) -> Ieee64 {
         Ieee64(unsafe { mem::transmute(x) })
     }
@@ -496,7 +496,7 @@ mod tests {
                            "Negative number too small for Imm64");
         parse_ok::<Imm64>("18446744073709551615", "-1");
         parse_ok::<Imm64>("-9223372036854775808", "0x8000_0000_0000_0000");
-        // Overflow both the checked_add and checked_mul.
+        // Overflow both the `checked_add` and `checked_mul`.
         parse_err::<Imm64>("18446744073709551616", "Too large decimal Imm64");
         parse_err::<Imm64>("184467440737095516100", "Too large decimal Imm64");
         parse_err::<Imm64>("-9223372036854775809",

@@ -27,7 +27,7 @@
 //!   about creating new mappings to the default value. It doesn't distinguish clearly between an
 //!   unmapped key and one that maps to the default value. `SparseMap` does not require `Default`
 //!   values, and it tracks accurately if a key has been mapped or not.
-//! - Iterating over the contants of an `EntityMap` is linear in the size of the *key space*, while
+//! - Iterating over the contents of an `EntityMap` is linear in the size of the *key space*, while
 //!   iterating over a `SparseMap` is linear in the number of elements in the mapping. This is an
 //!   advantage precisely when the mapping is sparse.
 //! - `SparseMap::clear()` is constant time and super-fast. `EntityMap::clear()` is linear in the
@@ -45,7 +45,7 @@ use std::u32;
 /// All values stored in a `SparseMap` must keep track of their own key in the map and implement
 /// this trait to provide access to the key.
 pub trait SparseMapValue<K> {
-    /// Get the key of this sparse map value. This key is not alowed to change while the value
+    /// Get the key of this sparse map value. This key is not allowed to change while the value
     /// is a member of the map.
     fn key(&self) -> K;
 }

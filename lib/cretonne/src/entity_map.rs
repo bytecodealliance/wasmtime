@@ -139,7 +139,7 @@ impl<K, V> EntityMap<K, V>
         self.elems.resize(n, V::default());
     }
 
-    /// Ensure that `k` is a valid key but adding default entries if necesssary.
+    /// Ensure that `k` is a valid key but adding default entries if necessary.
     ///
     /// Return a mutable reference to the corresponding entry.
     pub fn ensure(&mut self, k: K) -> &mut V {
@@ -202,7 +202,7 @@ impl<K> Iterator for Keys<K>
 mod tests {
     use super::*;
 
-    // EntityRef impl for testing.
+    // `EntityRef` impl for testing.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     struct E(u32);
 

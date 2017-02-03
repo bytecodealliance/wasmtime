@@ -45,13 +45,13 @@
 //! handle *early clobbers* which are output registers that are not allowed to alias any input
 //! registers.
 //!
-//! If i1 < i2 < i3 are program points, we have:
+//! If `i1 < i2 < i3` are program points, we have:
 //!
-//! - i1-i2 and i1-i3 interfere because the intervals overlap.
-//! - i1-i2 and i2-i3 don't interfere.
-//! - i1-i3 and i2-i2 do interfere because the dead def would clobber the register.
-//! - i1-i2 and i2-i2 don't interfere.
-//! - i2-i3 and i2-i2 do interfere.
+//! - `i1-i2` and `i1-i3` interfere because the intervals overlap.
+//! - `i1-i2` and `i2-i3` don't interfere.
+//! - `i1-i3` and `i2-i2` do interfere because the dead def would clobber the register.
+//! - `i1-i2` and `i2-i2` don't interfere.
+//! - `i2-i3` and `i2-i2` do interfere.
 //!
 //! Because of this behavior around interval end points, live range interference is not completely
 //! equivalent to mathematical intersection of open or half-open intervals.
@@ -415,7 +415,7 @@ mod tests {
         }
     }
 
-    // Singleton ProgramOrder for tests below.
+    // Singleton `ProgramOrder` for tests below.
     const PO: &'static ProgOrder = &ProgOrder {};
 
     #[test]
@@ -441,7 +441,7 @@ mod tests {
         assert!(lr.is_local());
         assert_eq!(lr.def(), e2.into());
         assert_eq!(lr.def_local_end(), e2.into());
-        // The def interval of an EBB arg does not count as live-in.
+        // The def interval of an EBB argument does not count as live-in.
         assert_eq!(lr.livein_local_end(e2, PO), None);
         PO.validate(&lr);
     }
@@ -478,8 +478,8 @@ mod tests {
         let i13 = Inst::new(13);
         let mut lr = LiveRange::new(v0, e10);
 
-        // Extending a dead EBB arg in its own block should not indicate that a live-in interval
-        // was created.
+        // Extending a dead EBB argument in its own block should not indicate that a live-in
+        // interval was created.
         assert_eq!(lr.extend_in_ebb(e10, i12, PO), false);
         PO.validate(&lr);
         assert!(!lr.is_dead());

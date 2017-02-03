@@ -43,7 +43,7 @@ impl Type {
         Type(self.0 & 0x0f)
     }
 
-    /// Get log2 of the number of bits in a lane.
+    /// Get log_2 of the number of bits in a lane.
     pub fn log2_lane_bits(self) -> u8 {
         match self.lane_type() {
             B1 => 0,
@@ -157,7 +157,7 @@ impl Type {
         }
     }
 
-    /// Get log2 of the number of lanes in this SIMD vector type.
+    /// Get log_2 of the number of lanes in this SIMD vector type.
     ///
     /// All SIMD types have a lane count that is a power of two and no larger than 256, so this
     /// will be a number in the range 0-8.

@@ -52,7 +52,7 @@ impl DominatorTree {
         self.nodes[ebb].idom.into()
     }
 
-    /// Compare two EBBs relative to a reverse pst-order traversal of the control-flow graph.
+    /// Compare two EBBs relative to a reverse post-order traversal of the control-flow graph.
     ///
     /// Return `Ordering::Less` if `a` comes before `b` in the RPO.
     pub fn rpo_cmp(&self, a: Ebb, b: Ebb) -> Ordering {
@@ -124,7 +124,7 @@ impl DominatorTree {
     pub fn new(func: &Function, cfg: &ControlFlowGraph) -> DominatorTree {
         let mut domtree = DominatorTree { nodes: EntityMap::with_capacity(func.dfg.num_ebbs()) };
 
-        // We'll be iterating over a reverse postorder of the CFG.
+        // We'll be iterating over a reverse post-order of the CFG.
         // This vector only contains reachable EBBs.
         let mut postorder = cfg.postorder_ebbs();
 
@@ -154,8 +154,8 @@ impl DominatorTree {
             }
         }
 
-        // Now that we have RPO numbers for everything and initial idom estimates, iterate until
-        // convergence.
+        // Now that we have RPO numbers for everything and initial immediate dominator estimates,
+        // iterate until convergence.
         //
         // If the function is free of irreducible control flow, this will exit after one iteration.
         let mut changed = true;
@@ -173,7 +173,8 @@ impl DominatorTree {
         domtree
     }
 
-    // Compute the idom for `ebb` using the current `idom` states for the reachable nodes.
+    // Compute the immediate dominator for `ebb` using the current `idom` states for the reachable
+    // nodes.
     fn compute_idom(&self, ebb: Ebb, cfg: &ControlFlowGraph, layout: &Layout) -> Inst {
         // Get an iterator with just the reachable predecessors to `ebb`.
         // Note that during the first pass, `is_reachable` returns false for blocks that haven't

@@ -43,7 +43,8 @@ fn write_preamble(w: &mut Write, func: &Function) -> result::Result<bool, Error>
         try!(writeln!(w, "    {} = {}", ss, func.stack_slots[ss]));
     }
 
-    // Write out all signatures before functions since function decls can refer to signatures.
+    // Write out all signatures before functions since function declarations can refer to
+    // signatures.
     for sig in func.dfg.signatures.keys() {
         any = true;
         try!(writeln!(w, "    {} = signature{}", sig, func.dfg.signatures[sig]));
@@ -93,7 +94,7 @@ pub fn write_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
             try!(write_arg(w, func, arg));
         }
     }
-    // Remaining args.
+    // Remaining arguments.
     for arg in args {
         try!(write!(w, ", "));
         try!(write_arg(w, func, arg));
