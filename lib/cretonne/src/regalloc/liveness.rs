@@ -175,39 +175,87 @@
 //!
 //! There is some room for improvement.
 
-use regalloc::liverange::LiveRange;
-use ir::{Function, Value, Inst, Ebb, ProgramPoint};
-use ir::dfg::{DataFlowGraph, ValueDef};
 use cfg::ControlFlowGraph;
+use ir::dfg::ValueDef;
+use ir::{Function, Value, Inst, Ebb};
+use isa::{TargetIsa, RecipeConstraints};
+use regalloc::liverange::LiveRange;
+use regalloc::affinity::Affinity;
 use sparse_map::SparseMap;
 
 /// A set of live ranges, indexed by value number.
-struct LiveRangeSet(SparseMap<Value, LiveRange>);
+type LiveRangeSet = SparseMap<Value, LiveRange>;
 
-impl LiveRangeSet {
-    pub fn new() -> LiveRangeSet {
-        LiveRangeSet(SparseMap::new())
+/// Get a mutable reference to the live range for `value`.
+/// Create it if necessary.
+fn get_or_create<'a>(lrset: &'a mut LiveRangeSet,
+                     value: Value,
+                     func: &Function,
+                     recipe_constraints: &[RecipeConstraints])
+                     -> &'a mut LiveRange {
+    // It would be better to use `get_mut()` here, but that leads to borrow checker fighting
+    // which can probably only be resolved by non-lexical lifetimes.
+    // https://github.com/rust-lang/rfcs/issues/811
+    if lrset.get(value).is_none() {
+        // Create a live range for value. We need the program point that defines it.
+        let def;
+        let affinity;
+        match func.dfg.value_def(value) {
+            ValueDef::Res(inst, rnum) => {
+                def = inst.into();
+                // Initialize the affinity from the defining instruction's result constraints.
+                // Don't do this for call return values which are always tied to a single register.
+                affinity = recipe_constraints.get(func.encodings[inst].recipe())
+                    .and_then(|rc| rc.outs.get(rnum))
+                    .map(Affinity::new)
+                    .unwrap_or_default();
+            }
+            ValueDef::Arg(ebb, _) => {
+                def = ebb.into();
+                // Don't apply any affinity to EBB arguments.
+                // They could be in a register or on the stack.
+                affinity = Default::default();
+            }
+        };
+        lrset.insert(LiveRange::new(value, def, affinity));
+    }
+    lrset.get_mut(value).unwrap()
+}
+
+/// Extend the live range for `value` so it reaches `to` which must live in `ebb`.
+fn extend_to_use(lr: &mut LiveRange,
+                 ebb: Ebb,
+                 to: Inst,
+                 worklist: &mut Vec<Ebb>,
+                 func: &Function,
+                 cfg: &ControlFlowGraph) {
+    // This is our scratch working space, and we'll leave it empty when we return.
+    assert!(worklist.is_empty());
+
+    // Extend the range locally in `ebb`.
+    // If there already was a live interval in that block, we're done.
+    if lr.extend_in_ebb(ebb, to, &func.layout) {
+        worklist.push(ebb);
     }
 
-    pub fn clear(&mut self) {
-        self.0.clear();
-    }
-
-    /// Get a mutable reference to the live range for `value`.
-    /// Create it if necessary.
-    pub fn get_or_create(&mut self, value: Value, dfg: &DataFlowGraph) -> &mut LiveRange {
-        // It would be better to use `get_mut()` here, but that leads to borrow checker fighting
-        // which can probably only be resolved by non-lexical lifetimes.
-        // https://github.com/rust-lang/rfcs/issues/811
-        if self.0.get(value).is_none() {
-            // Create a live range for value. We need the program point that defines it.
-            let def: ProgramPoint = match dfg.value_def(value) {
-                ValueDef::Res(inst, _) => inst.into(),
-                ValueDef::Arg(ebb, _) => ebb.into(),
-            };
-            self.0.insert(LiveRange::new(value, def));
+    // The work list contains those EBBs where we have learned that the value needs to be
+    // live-in.
+    //
+    // This algorithm becomes a depth-first traversal up the CFG, enumerating all paths through the
+    // CFG from the existing live range to `ebb`.
+    //
+    // Extend the live range as we go. The live range itself also serves as a visited set since
+    // `extend_in_ebb` will never return true twice for the same EBB.
+    //
+    while let Some(livein) = worklist.pop() {
+        // We've learned that the value needs to be live-in to the `livein` EBB.
+        // Make sure it is also live at all predecessor branches to `livein`.
+        for &(pred, branch) in cfg.get_predecessors(livein) {
+            if lr.extend_in_ebb(pred, branch, &func.layout) {
+                // This predecessor EBB also became live-in. We need to process it later.
+                worklist.push(pred);
+            }
         }
-        self.0.get_mut(value).unwrap()
     }
 }
 
@@ -238,8 +286,12 @@ impl Liveness {
 
     /// Compute the live ranges of all SSA values used in `func`.
     /// This clears out any existing analysis stored in this data structure.
-    pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph) {
+    pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph, isa: &TargetIsa) {
         self.ranges.clear();
+
+        // Get ISA data structures used for computing live range affinities.
+        let recipe_constraints = isa.recipe_constraints();
+        let reg_info = isa.register_info();
 
         // The liveness computation needs to visit all uses, but the order doesn't matter.
         // TODO: Perhaps this traversal of the function could be combined with a dead code
@@ -247,47 +299,29 @@ impl Liveness {
         // TODO: Resolve value aliases while we're visiting instructions?
         for ebb in func.layout.ebbs() {
             for inst in func.layout.ebb_insts(ebb) {
-                func.dfg[inst].each_arg(|arg| self.extend_to_use(arg, ebb, inst, func, cfg));
-            }
-        }
-    }
+                // The instruction encoding is used to compute affinities.
+                let recipe = func.encodings[inst].recipe();
+                // Iterator of constraints, one per value operand.
+                // TODO: Should we fail here if the instruction doesn't have a valid encoding?
+                let mut operand_constraints =
+                    recipe_constraints.get(recipe).map(|c| c.ins).unwrap_or(&[]).iter();
 
-    /// Extend the live range for `value` so it reaches `to` which must live in `ebb`.
-    fn extend_to_use(&mut self,
-                     value: Value,
-                     ebb: Ebb,
-                     to: Inst,
-                     func: &Function,
-                     cfg: &ControlFlowGraph) {
-        // Get the live range, create it as a dead range if necessary.
-        let lr = self.ranges.get_or_create(value, &func.dfg);
+                func.dfg[inst].each_arg(|arg| {
+                    // Get the live range, create it as a dead range if necessary.
+                    let lr = get_or_create(&mut self.ranges, arg, func, recipe_constraints);
 
-        // This is our scratch working space, and we'll leave it empty when we return.
-        assert!(self.worklist.is_empty());
+                    // Extend the live range to reach this use.
+                    extend_to_use(lr, ebb, inst, &mut self.worklist, func, cfg);
 
-        // Extend the range locally in `ebb`.
-        // If there already was a live interval in that block, we're done.
-        if lr.extend_in_ebb(ebb, to, &func.layout) {
-            self.worklist.push(ebb);
-        }
-
-        // The work list contains those EBBs where we have learned that the value needs to be
-        // live-in.
-        //
-        // This algorithm becomes a depth-first traversal up the CFG, enumerating all paths through
-        // the CFG from the existing live range to `ebb`.
-        //
-        // Extend the live range as we go. The live range itself also serves as a visited set since
-        // `extend_in_ebb` will never return true twice for the same EBB.
-        //
-        while let Some(livein) = self.worklist.pop() {
-            // We've learned that the value needs to be live-in to the `livein` EBB.
-            // Make sure it is also live at all predecessor branches to `livein`.
-            for &(pred, branch) in cfg.get_predecessors(livein) {
-                if lr.extend_in_ebb(pred, branch, &func.layout) {
-                    // This predecessor EBB also became live-in. We need to process it later.
-                    self.worklist.push(pred);
-                }
+                    // Apply operand constraint, ignoring any variable arguments after the fixed
+                    // operands described by `operand_constraints`. Variable arguments are either
+                    // EBB arguments or call/return ABI arguments. EBB arguments need to be
+                    // resolved by the coloring algorithm, and ABI constraints require specific
+                    // registers or stack slots which the affinities don't model anyway.
+                    if let Some(constraint) = operand_constraints.next() {
+                        lr.affinity.merge(constraint, reg_info);
+                    }
+                });
             }
         }
     }
