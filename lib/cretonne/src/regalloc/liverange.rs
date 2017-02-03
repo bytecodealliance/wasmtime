@@ -205,11 +205,10 @@ impl LiveRange {
     /// Create a new live range for `value` defined at `def`.
     ///
     /// The live range will be created as dead, but it can be extended with `extend_in_ebb()`.
-    pub fn new<PP: Into<ProgramPoint>>(value: Value, def: PP) -> LiveRange {
-        let def = def.into();
+    pub fn new(value: Value, def: ProgramPoint, affinity: Affinity) -> LiveRange {
         LiveRange {
             value: value,
-            affinity: Default::default(),
+            affinity: affinity,
             def_begin: def,
             def_end: def,
             liveins: Vec::new(),
@@ -423,7 +422,7 @@ mod tests {
         let v0 = Value::new(0);
         let i1 = Inst::new(1);
         let e2 = Ebb::new(2);
-        let lr = LiveRange::new(v0, i1);
+        let lr = LiveRange::new(v0, i1.into(), Default::default());
         assert!(lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), i1.into());
@@ -436,7 +435,7 @@ mod tests {
     fn dead_arg_range() {
         let v0 = Value::new(0);
         let e2 = Ebb::new(2);
-        let lr = LiveRange::new(v0, e2);
+        let lr = LiveRange::new(v0, e2.into(), Default::default());
         assert!(lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), e2.into());
@@ -453,7 +452,7 @@ mod tests {
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
-        let mut lr = LiveRange::new(v0, i11);
+        let mut lr = LiveRange::new(v0, i11.into(), Default::default());
 
         assert_eq!(lr.extend_in_ebb(e10, i13, PO), false);
         PO.validate(&lr);
@@ -476,7 +475,7 @@ mod tests {
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
-        let mut lr = LiveRange::new(v0, e10);
+        let mut lr = LiveRange::new(v0, e10.into(), Default::default());
 
         // Extending a dead EBB argument in its own block should not indicate that a live-in
         // interval was created.
@@ -510,7 +509,7 @@ mod tests {
         let i21 = Inst::new(21);
         let i22 = Inst::new(22);
         let i23 = Inst::new(23);
-        let mut lr = LiveRange::new(v0, i11);
+        let mut lr = LiveRange::new(v0, i11.into(), Default::default());
 
         assert_eq!(lr.extend_in_ebb(e10, i12, PO), false);
 
