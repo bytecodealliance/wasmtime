@@ -284,6 +284,11 @@ impl Liveness {
         }
     }
 
+    /// Get the live range for `value`, if it exists.
+    pub fn get(&self, value: Value) -> Option<&LiveRange> {
+        self.ranges.get(value)
+    }
+
     /// Compute the live ranges of all SSA values used in `func`.
     /// This clears out any existing analysis stored in this data structure.
     pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph, isa: &TargetIsa) {
