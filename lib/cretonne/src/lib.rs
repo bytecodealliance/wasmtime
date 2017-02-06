@@ -25,4 +25,5 @@ mod constant_hash;
 mod predicates;
 mod legalizer;
 mod ref_slice;
+mod partition_slice;
 mod packed_option;
