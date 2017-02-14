@@ -348,6 +348,11 @@ impl Layout {
     pub fn entry_block(&self) -> Option<Ebb> {
         self.first_ebb
     }
+
+    /// Get the block following `ebb` in the layout order.
+    pub fn next_ebb(&self, ebb: Ebb) -> Option<Ebb> {
+        self.ebbs[ebb].next.expand()
+    }
 }
 
 #[derive(Clone, Debug, Default)]
