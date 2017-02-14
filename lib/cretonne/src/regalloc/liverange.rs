@@ -173,6 +173,7 @@ pub struct LiveRange {
 /// This represents a live-in interval for a single EBB, or a coalesced set of live-in intervals
 /// for contiguous EBBs where all but the last live-in interval covers the whole EBB.
 ///
+#[derive(Copy, Clone)]
 struct Interval {
     /// Interval starting point.
     ///
@@ -265,18 +266,57 @@ impl LiveRange {
             Ok(n) => {
                 // We have an interval that contains `ebb`, so we can simply extend it.
                 self.liveins[n].extend_to(to, order);
-                // TODO: Check if this interval can be coalesced with the `n+1` one.
+
+                // If `to` is the terminator and the value lives in the successor EBB,
+                // coalesce the two intervals.
+                if let Some(next) = self.liveins.get(n + 1).cloned() {
+                    if order.is_ebb_gap(to, next.begin) {
+                        self.liveins[n].extend_to(next.end, order);
+                        self.liveins.remove(n + 1);
+                    }
+                }
+
                 false
             }
             Err(n) => {
-                // Insert a new live-in interval at `n`.
-                // TODO: Check if this interval can be coalesced with the `n-1` or `n+1` one (or
-                // both).
-                self.liveins.insert(n,
-                                    Interval {
-                                        begin: ebb,
-                                        end: to,
-                                    });
+                // Insert a new live-in interval at `n`, or coalesce to predecessor or successor
+                // if possible.
+
+                // Determine if the new live-in range touches the predecessor or successor range
+                // and can therefore be coalesced to them.
+                let (coalesce_prev, coalesce_next) = {
+                    let prev = n.checked_sub(1).and_then(|i| self.liveins.get(i));
+                    let next = self.liveins.get(n);
+
+                    (prev.map_or(false, |prev| order.is_ebb_gap(prev.end, ebb)),
+                     next.map_or(false, |next| order.is_ebb_gap(to, next.begin)))
+                };
+
+                match (coalesce_prev, coalesce_next) {
+                    // Extend predecessor interval to cover new and successor intervals
+                    (true, true) => {
+                        let end = self.liveins[n].end;
+                        self.liveins[n - 1].extend_to(end, order);
+                        self.liveins.remove(n);
+                    }
+                    // Extend predecessor interval to cover new interval
+                    (true, false) => {
+                        self.liveins[n - 1].extend_to(to, order);
+                    }
+                    // Extend successor interval to cover new interval
+                    (false, true) => {
+                        self.liveins[n].begin = ebb;
+                    }
+                    // Cannot coalesce; insert new interval
+                    (false, false) => {
+                        self.liveins.insert(n,
+                                            Interval {
+                                                begin: ebb,
+                                                end: to,
+                                            });
+                    }
+                }
+
                 true
             }
         }
@@ -344,7 +384,8 @@ mod tests {
 
     // Dummy program order which simply compares indexes.
     // It is assumed that EBBs have indexes that are multiples of 10, and instructions have indexes
-    // in between.
+    // in between. `is_ebb_gap` assumes that terminator instructions have indexes of the form
+    // ebb * 10 + 1. This is used in the coalesce test.
     struct ProgOrder {}
 
     impl ProgramOrder for ProgOrder {
@@ -362,6 +403,10 @@ mod tests {
             let ia = idx(a.into());
             let ib = idx(b.into());
             ia.cmp(&ib)
+        }
+
+        fn is_ebb_gap(&self, inst: Inst, ebb: Ebb) -> bool {
+            inst.index() % 10 == 1 && ebb.index() / 10 == inst.index() / 10 + 1
         }
     }
 
@@ -528,5 +573,47 @@ mod tests {
         assert_eq!(lr.livein_local_end(e20, PO), Some(i23));
     }
 
-    // TODO: Add more tests that exercise the binary search and the coalescing algorithm.
+    #[test]
+    fn coalesce() {
+        let v0 = Value::new(0);
+        let i11 = Inst::new(11);
+        let e20 = Ebb::new(20);
+        let i21 = Inst::new(21);
+        let e30 = Ebb::new(30);
+        let i31 = Inst::new(31);
+        let e40 = Ebb::new(40);
+        let i41 = Inst::new(41);
+        let mut lr = LiveRange::new(v0, i11.into(), Default::default());
+
+        assert_eq!(lr.extend_in_ebb(e30, i31, PO), true);
+        assert_eq!(lr.liveins.len(), 1);
+
+        // Coalesce to previous
+        assert_eq!(lr.extend_in_ebb(e40, i41, PO), true);
+        assert_eq!(lr.liveins.len(), 1);
+        assert_eq!(lr.liveins[0].begin, e30);
+        assert_eq!(lr.liveins[0].end, i41);
+
+        // Coalesce to next
+        assert_eq!(lr.extend_in_ebb(e20, i21, PO), true);
+        assert_eq!(lr.liveins.len(), 1);
+        assert_eq!(lr.liveins[0].begin, e20);
+        assert_eq!(lr.liveins[0].end, i41);
+
+        let mut lr = LiveRange::new(v0, i11.into(), Default::default());
+
+        assert_eq!(lr.extend_in_ebb(e40, i41, PO), true);
+        assert_eq!(lr.liveins.len(), 1);
+
+        assert_eq!(lr.extend_in_ebb(e20, i21, PO), true);
+        assert_eq!(lr.liveins.len(), 2);
+
+        // Coalesce to previous and next
+        assert_eq!(lr.extend_in_ebb(e30, i31, PO), true);
+        assert_eq!(lr.liveins.len(), 1);
+        assert_eq!(lr.liveins[0].begin, e20);
+        assert_eq!(lr.liveins[0].end, i41);
+    }
+
+    // TODO: Add more tests that exercise the binary search algorithm.
 }

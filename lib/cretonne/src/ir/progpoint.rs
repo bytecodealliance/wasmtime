@@ -94,6 +94,11 @@ pub trait ProgramOrder {
     fn cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
         where A: Into<ExpandedProgramPoint>,
               B: Into<ExpandedProgramPoint>;
+
+    /// Is the range from `inst` to `ebb` just the gap between consecutive EBBs?
+    ///
+    /// This returns true if `inst` is the terminator in the EBB immediately before `ebb`.
+    fn is_ebb_gap(&self, inst: Inst, ebb: Ebb) -> bool;
 }
 
 #[cfg(test)]
