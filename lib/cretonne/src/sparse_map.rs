@@ -126,6 +126,11 @@ impl<K, V> SparseMap<K, V>
         None
     }
 
+    /// Return `true` if the map contains a value corresponding to `key`.
+    pub fn contains_key(&self, key: K) -> bool {
+        self.get(key).is_some()
+    }
+
     /// Insert a value into the map.
     ///
     /// If the map did not have this key present, `None` is returned.
