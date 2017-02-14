@@ -129,12 +129,17 @@ impl LiveValueTracker {
     ///
     /// This depends on the stored live value set at `ebb`'s immediate dominator, so that must have
     /// been visited first.
+    ///
+    /// Returns `(liveins, args)` as a pair or slices. The first slice is the set of live-in values
+    /// from the immediate dominator. The second slice is the set of `ebb` arguments that are live.
+    /// Dead arguments with no uses are ignored and not added to the set.
     pub fn ebb_top<PO: ProgramOrder>(&mut self,
                                      ebb: Ebb,
                                      dfg: &DataFlowGraph,
                                      liveness: &Liveness,
                                      program_order: &PO,
-                                     domtree: &DominatorTree) {
+                                     domtree: &DominatorTree)
+                                     -> (&[LiveValue], &[LiveValue]) {
         // Start over, compute the set of live values at the top of the EBB from two sources:
         //
         // 1. Values that were live before `ebb`'s immediate dominator, filtered for those that are
@@ -165,6 +170,7 @@ impl LiveValueTracker {
         }
 
         // Now add all the live arguments to `ebb`.
+        let first_arg = self.live.values.len();
         for value in dfg.ebb_args(ebb) {
             let lr = liveness.get(value).expect("EBB argument value has no live range");
             assert_eq!(lr.def(), ebb.into());
@@ -181,6 +187,8 @@ impl LiveValueTracker {
                 }
             }
         }
+
+        self.live.values.split_at(first_arg)
     }
 
     /// Prepare to move past `inst`.
