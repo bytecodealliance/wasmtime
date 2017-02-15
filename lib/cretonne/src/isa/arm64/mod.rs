@@ -42,8 +42,8 @@ impl TargetIsa for Isa {
         &self.shared_flags
     }
 
-    fn register_info(&self) -> &RegInfo {
-        &registers::INFO
+    fn register_info(&self) -> RegInfo {
+        registers::INFO.clone()
     }
 
     fn encode(&self, _: &DataFlowGraph, inst: &InstructionData) -> Result<Encoding, Legalize> {

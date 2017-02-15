@@ -324,7 +324,7 @@ impl Liveness {
                     // resolved by the coloring algorithm, and ABI constraints require specific
                     // registers or stack slots which the affinities don't model anyway.
                     if let Some(constraint) = operand_constraints.next() {
-                        lr.affinity.merge(constraint, reg_info);
+                        lr.affinity.merge(constraint, &reg_info);
                     }
                 });
             }
