@@ -49,6 +49,7 @@ pub enum ConstraintKind {
 }
 
 /// Constraints for an encoding recipe.
+#[derive(Clone)]
 pub struct RecipeConstraints {
     /// Constraints for the instruction's fixed value operands.
     ///
