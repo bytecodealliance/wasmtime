@@ -132,7 +132,7 @@ pub trait TargetIsa {
     fn flags(&self) -> &settings::Flags;
 
     /// Get a data structure describing the registers in this ISA.
-    fn register_info(&self) -> &RegInfo;
+    fn register_info(&self) -> RegInfo;
 
     /// Encode an instruction after determining it is legal.
     ///

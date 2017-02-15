@@ -168,6 +168,7 @@ impl From<RegClass> for RegClassIndex {
 ///
 /// The `RegUnit` data structure collects all relevant static information about the registers in an
 /// ISA.
+#[derive(Clone)]
 pub struct RegInfo {
     /// All register banks, ordered by their `first_unit`. The register banks are disjoint, but
     /// there may be holes of unused register unit numbers between banks due to alignment.
