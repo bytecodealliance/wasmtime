@@ -33,8 +33,8 @@ def gen_regclass(rc, fmt):
     """
     Emit a static data definition for a register class.
     """
-    fmt.comment(rc.name)
     with fmt.indented('RegClassData {', '},'):
+        fmt.line('name: "{}",'.format(rc.name))
         fmt.line('index: {},'.format(rc.index))
         fmt.line('width: {},'.format(rc.width))
         fmt.line('subclasses: 0x{:x},'.format(rc.subclass_mask()))

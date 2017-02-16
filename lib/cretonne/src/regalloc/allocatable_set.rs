@@ -118,12 +118,14 @@ mod tests {
 
     // Register classes for testing.
     const GPR: RegClass = &RegClassData {
+        name: "GPR",
         index: 0,
         width: 1,
         subclasses: 0,
         mask: [0xf0000000, 0x0000000f, 0],
     };
     const DPR: RegClass = &RegClassData {
+        name: "DPR",
         index: 0,
         width: 2,
         subclasses: 0,

@@ -99,6 +99,9 @@ pub type RegClass = &'static RegClassData;
 /// A register class can be a subset of another register class. The top-level register classes are
 /// disjoint.
 pub struct RegClassData {
+    /// The name of the register class.
+    pub name: &'static str,
+
     /// The index of this class in the ISA's RegInfo description.
     pub index: u8,
 
