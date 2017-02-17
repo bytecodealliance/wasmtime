@@ -119,10 +119,24 @@ impl DominatorTree {
 }
 
 impl DominatorTree {
+    /// Allocate a new blank dominator tree. Use `compute` to compute the dominator tree for a
+    /// function.
+    pub fn new() -> DominatorTree {
+        DominatorTree { nodes: EntityMap::new() }
+    }
+
+    /// Allocate and compute a dominator tree.
+    pub fn with_function(func: &Function, cfg: &ControlFlowGraph) -> DominatorTree {
+        let mut domtree = DominatorTree::new();
+        domtree.compute(func, cfg);
+        domtree
+    }
+
     /// Build a dominator tree from a control flow graph using Keith D. Cooper's
     /// "Simple, Fast Dominator Algorithm."
-    pub fn new(func: &Function, cfg: &ControlFlowGraph) -> DominatorTree {
-        let mut domtree = DominatorTree { nodes: EntityMap::with_capacity(func.dfg.num_ebbs()) };
+    pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph) {
+        self.nodes.clear();
+        self.nodes.resize(func.dfg.num_ebbs());
 
         // We'll be iterating over a reverse post-order of the CFG.
         // This vector only contains reachable EBBs.
@@ -132,12 +146,12 @@ impl DominatorTree {
         // The last block visited in a post-order traversal must be the entry block.
         let entry_block = match postorder.pop() {
             Some(ebb) => ebb,
-            None => return domtree,
+            None => return,
         };
         assert_eq!(Some(entry_block), func.layout.entry_block());
 
         // Do a first pass where we assign RPO numbers to all reachable nodes.
-        domtree.nodes[entry_block].rpo_number = 1;
+        self.nodes[entry_block].rpo_number = 1;
         for (rpo_idx, &ebb) in postorder.iter().rev().enumerate() {
             // Update the current node and give it an RPO number.
             // The entry block got 1, the rest start at 2.
@@ -148,8 +162,8 @@ impl DominatorTree {
             //
             // Due to the nature of the post-order traversal, every node we visit will have at
             // least one predecessor that has previously been visited during this RPO.
-            domtree.nodes[ebb] = DomNode {
-                idom: domtree.compute_idom(ebb, cfg, &func.layout).into(),
+            self.nodes[ebb] = DomNode {
+                idom: self.compute_idom(ebb, cfg, &func.layout).into(),
                 rpo_number: rpo_idx as u32 + 2,
             }
         }
@@ -162,15 +176,13 @@ impl DominatorTree {
         while changed {
             changed = false;
             for &ebb in postorder.iter().rev() {
-                let idom = domtree.compute_idom(ebb, cfg, &func.layout).into();
-                if domtree.nodes[ebb].idom != idom {
-                    domtree.nodes[ebb].idom = idom;
+                let idom = self.compute_idom(ebb, cfg, &func.layout).into();
+                if self.nodes[ebb].idom != idom {
+                    self.nodes[ebb].idom = idom;
                     changed = true;
                 }
             }
         }
-
-        domtree
     }
 
     // Compute the immediate dominator for `ebb` using the current `idom` states for the reachable
@@ -204,7 +216,7 @@ mod test {
     fn empty() {
         let func = Function::new();
         let cfg = ControlFlowGraph::with_function(&func);
-        let dtree = DominatorTree::new(&func, &cfg);
+        let dtree = DominatorTree::with_function(&func, &cfg);
         assert_eq!(0, dtree.nodes.keys().count());
     }
 
@@ -239,7 +251,7 @@ mod test {
         }
 
         let cfg = ControlFlowGraph::with_function(&func);
-        let dt = DominatorTree::new(&func, &cfg);
+        let dt = DominatorTree::with_function(&func, &cfg);
 
         assert_eq!(func.layout.entry_block().unwrap(), ebb3);
         assert_eq!(dt.idom(ebb3), None);
