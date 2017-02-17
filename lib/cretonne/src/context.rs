@@ -5,6 +5,7 @@
 //! on to memory allocations between function compilations.
 
 use cfg::ControlFlowGraph;
+use dominator_tree::DominatorTree;
 use ir::Function;
 
 /// Persistent data structures and compilation pipeline.
@@ -14,6 +15,9 @@ pub struct Context {
 
     /// The control flow graph of `func`.
     pub cfg: ControlFlowGraph,
+
+    /// Dominator tree for `func`.
+    pub domtree: DominatorTree,
 }
 
 impl Context {
@@ -25,6 +29,13 @@ impl Context {
         Context {
             func: Function::new(),
             cfg: ControlFlowGraph::new(),
+            domtree: DominatorTree::new(),
         }
+    }
+
+    /// Recompute the control flow graph and dominator tree.
+    pub fn flowgraph(&mut self) {
+        self.cfg.compute(&self.func);
+        self.domtree.compute(&self.func, &self.cfg);
     }
 }

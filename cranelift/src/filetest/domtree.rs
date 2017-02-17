@@ -41,7 +41,7 @@ impl SubTest for TestDomtree {
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
         let func = func.borrow();
         let cfg = ControlFlowGraph::with_function(func);
-        let domtree = DominatorTree::new(func, &cfg);
+        let domtree = DominatorTree::with_function(func, &cfg);
 
         // Build an expected domtree from the source annotations.
         let mut expected = HashMap::new();
