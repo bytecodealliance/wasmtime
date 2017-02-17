@@ -83,12 +83,12 @@ impl ControlFlowGraph {
     }
 
     /// Get the CFG predecessor basic blocks to `ebb`.
-    pub fn get_predecessors(&self, ebb: Ebb) -> &Vec<BasicBlock> {
+    pub fn get_predecessors(&self, ebb: Ebb) -> &[BasicBlock] {
         &self.data[ebb].predecessors
     }
 
     /// Get the CFG successors to `ebb`.
-    pub fn get_successors(&self, ebb: Ebb) -> &Vec<Ebb> {
+    pub fn get_successors(&self, ebb: Ebb) -> &[Ebb] {
         &self.data[ebb].successors
     }
 
