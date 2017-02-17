@@ -9,3 +9,6 @@ pub mod live_value_tracker;
 pub mod coloring;
 
 mod affinity;
+mod context;
+
+pub use self::context::Context;

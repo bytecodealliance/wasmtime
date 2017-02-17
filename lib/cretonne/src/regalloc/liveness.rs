@@ -291,7 +291,7 @@ impl Liveness {
 
     /// Compute the live ranges of all SSA values used in `func`.
     /// This clears out any existing analysis stored in this data structure.
-    pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph, isa: &TargetIsa) {
+    pub fn compute(&mut self, isa: &TargetIsa, func: &Function, cfg: &ControlFlowGraph) {
         self.ranges.clear();
 
         // Get ISA data structures used for computing live range affinities.
