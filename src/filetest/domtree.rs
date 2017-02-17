@@ -40,7 +40,7 @@ impl SubTest for TestDomtree {
     // Extract our own dominator tree from
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
         let func = func.borrow();
-        let cfg = ControlFlowGraph::new(func);
+        let cfg = ControlFlowGraph::with_function(func);
         let domtree = DominatorTree::new(func, &cfg);
 
         // Build an expected domtree from the source annotations.

@@ -33,7 +33,7 @@ impl<'a> CFGPrinter<'a> {
     pub fn new(func: &'a Function) -> CFGPrinter<'a> {
         CFGPrinter {
             func: func,
-            cfg: ControlFlowGraph::new(func),
+            cfg: ControlFlowGraph::with_function(func),
         }
     }
 

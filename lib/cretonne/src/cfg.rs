@@ -50,31 +50,44 @@ pub struct ControlFlowGraph {
 }
 
 impl ControlFlowGraph {
-    /// During initialization mappings will be generated for any existing
-    /// blocks within the CFG's associated function.
-    pub fn new(func: &Function) -> ControlFlowGraph {
+    /// Allocate a new blank control flow graph.
+    pub fn new() -> ControlFlowGraph {
+        ControlFlowGraph {
+            entry_block: None,
+            data: EntityMap::new(),
+        }
+    }
 
-        let mut cfg = ControlFlowGraph {
-            data: EntityMap::with_capacity(func.dfg.num_ebbs()),
-            entry_block: func.layout.entry_block(),
-        };
+    /// Allocate and compute the control flow graph for `func`.
+    pub fn with_function(func: &Function) -> ControlFlowGraph {
+        let mut cfg = ControlFlowGraph::new();
+        cfg.compute(func);
+        cfg
+    }
+
+    /// Compute the control flow graph of `func`.
+    ///
+    /// This will clear and overwrite any information already stored in this data structure.
+    pub fn compute(&mut self, func: &Function) {
+        self.entry_block = func.layout.entry_block();
+        self.data.clear();
+        self.data.resize(func.dfg.num_ebbs());
 
         for ebb in &func.layout {
             for inst in func.layout.ebb_insts(ebb) {
                 match func.dfg[inst].analyze_branch() {
                     BranchInfo::SingleDest(dest, _) => {
-                        cfg.add_edge((ebb, inst), dest);
+                        self.add_edge((ebb, inst), dest);
                     }
                     BranchInfo::Table(jt) => {
                         for (_, dest) in func.jump_tables[jt].entries() {
-                            cfg.add_edge((ebb, inst), dest);
+                            self.add_edge((ebb, inst), dest);
                         }
                     }
                     BranchInfo::NotABranch => {}
                 }
             }
         }
-        cfg
     }
 
     fn add_edge(&mut self, from: BasicBlock, to: Ebb) {
@@ -140,7 +153,7 @@ mod tests {
     #[test]
     fn empty() {
         let func = Function::new();
-        let cfg = ControlFlowGraph::new(&func);
+        let cfg = ControlFlowGraph::with_function(&func);
         assert_eq!(None, cfg.ebbs().next());
     }
 
@@ -154,7 +167,7 @@ mod tests {
         func.layout.append_ebb(ebb1);
         func.layout.append_ebb(ebb2);
 
-        let cfg = ControlFlowGraph::new(&func);
+        let cfg = ControlFlowGraph::with_function(&func);
         let nodes = cfg.ebbs().collect::<Vec<_>>();
         assert_eq!(nodes.len(), 3);
 
@@ -194,7 +207,7 @@ mod tests {
             cur.insert_ebb(ebb2);
         }
 
-        let cfg = ControlFlowGraph::new(&func);
+        let cfg = ControlFlowGraph::with_function(&func);
 
         let ebb0_predecessors = cfg.get_predecessors(ebb0);
         let ebb1_predecessors = cfg.get_predecessors(ebb1);

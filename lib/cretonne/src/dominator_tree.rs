@@ -203,7 +203,7 @@ mod test {
     #[test]
     fn empty() {
         let func = Function::new();
-        let cfg = ControlFlowGraph::new(&func);
+        let cfg = ControlFlowGraph::with_function(&func);
         let dtree = DominatorTree::new(&func, &cfg);
         assert_eq!(0, dtree.nodes.keys().count());
     }
@@ -238,7 +238,7 @@ mod test {
             cur.insert_ebb(ebb0);
         }
 
-        let cfg = ControlFlowGraph::new(&func);
+        let cfg = ControlFlowGraph::with_function(&func);
         let dt = DominatorTree::new(&func, &cfg);
 
         assert_eq!(func.layout.entry_block().unwrap(), ebb3);
