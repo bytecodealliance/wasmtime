@@ -300,3 +300,17 @@ Legalize each function for the specified target ISA and run the resulting
 function through filecheck. This test command can be used to validate the
 encodings selected for legal instructions as well as the instruction
 transformations performed by the legalizer.
+
+`test regalloc`
+---------------
+
+Test the register allocator.
+
+First, each function is legalized for the specified target ISA. This is
+required for register allocation since the instruction encodings provide
+register class constraints to the register allocator.
+
+Second, the register allocator is run on the function, inserting spill code and
+assigning registers and stack slots to all values.
+
+The resulting function is then run through filecheck.
