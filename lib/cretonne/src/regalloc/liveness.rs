@@ -304,6 +304,13 @@ impl Liveness {
         // TODO: Resolve value aliases while we're visiting instructions?
         for ebb in func.layout.ebbs() {
             for inst in func.layout.ebb_insts(ebb) {
+                // Make sure we have created live ranges for dead defs.
+                // TODO: When we implement DCE, we can use the absence of a live range to indicate
+                // an unused value.
+                for def in func.dfg.inst_results(inst) {
+                    get_or_create(&mut self.ranges, def, func, recipe_constraints);
+                }
+
                 // The instruction encoding is used to compute affinities.
                 let recipe = func.encodings[inst].recipe();
                 // Iterator of constraints, one per value operand.
