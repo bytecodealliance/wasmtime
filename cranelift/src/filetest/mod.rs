@@ -12,12 +12,14 @@ use print_cfg;
 use filetest::runner::TestRunner;
 
 pub mod subtest;
-mod runner;
-mod runone;
+
 mod concurrent;
 mod domtree;
-mod verifier;
 mod legalizer;
+mod regalloc;
+mod runner;
+mod runone;
+mod verifier;
 
 /// The result of running the test in a file.
 pub type TestResult = Result<time::Duration, String>;
@@ -49,7 +51,7 @@ pub fn run(verbose: bool, files: Vec<String>) -> CommandResult {
 /// Create a new subcommand trait object to match `parsed.command`.
 ///
 /// This function knows how to create all of the possible `test <foo>` commands that can appear in
-/// a .cton test file.
+/// a `.cton` test file.
 fn new_subtest(parsed: &TestCommand) -> subtest::Result<Box<subtest::SubTest>> {
     match parsed.command {
         "cat" => cat::subtest(parsed),
@@ -57,6 +59,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::Result<Box<subtest::SubTest>> {
         "domtree" => domtree::subtest(parsed),
         "verifier" => verifier::subtest(parsed),
         "legalizer" => legalizer::subtest(parsed),
+        "regalloc" => regalloc::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }
