@@ -229,7 +229,10 @@ impl LiveValueTracker {
         // Add the values defined by `inst`.
         let first_def = self.live.values.len();
         for value in dfg.inst_results(inst) {
-            let lr = liveness.get(value).expect("Instruction result has no live range");
+            let lr = match liveness.get(value) {
+                Some(lr) => lr,
+                None => panic!("{} result {} has no live range", dfg[inst].opcode(), value),
+            };
             assert_eq!(lr.def(), inst.into());
             match lr.def_local_end().into() {
                 ExpandedProgramPoint::Inst(endpoint) => {
