@@ -239,6 +239,13 @@ fn write_instruction(w: &mut Write,
                 writeln!(w, " {}", data.varargs)
             }
         }
+        ReturnReg { ref data, .. } => {
+            if data.varargs.is_empty() {
+                writeln!(w, "{}", data.arg)
+            } else {
+                writeln!(w, "{}, {}", data.arg, data.varargs)
+            }
+        }
     }
 }
 
