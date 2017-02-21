@@ -18,7 +18,7 @@ GROUP = InstructionGroup("base", "Shared base instruction set")
 
 Int = TypeVar('Int', 'A scalar or vector integer type', ints=True, simd=True)
 iB = TypeVar('iB', 'A scalar integer type', ints=True)
-iPtr = TypeVar('iB', 'An integer address type', ints=(32, 64))
+iAddr = TypeVar('iAddr', 'An integer address type', ints=(32, 64))
 Testable = TypeVar(
         'Testable', 'A scalar boolean or integer type',
         ints=True, bools=True)
@@ -113,6 +113,25 @@ x_return = Instruction(
         """,
         ins=rvals, is_terminator=True)
 
+raddr = Operand('raddr', iAddr, doc='Return address')
+
+return_reg = Instruction(
+        'return_reg', r"""
+        Return from the function to a return address held in a register.
+
+        Unconditionally transfer control to the calling function, passing the
+        provided return values. The list of return values must match the
+        function signature's return types.
+
+        This instruction should only be used by ISA-specific epilogue lowering
+        code. It is equivalent to :inst:`return`, but the return address is
+        provided explicitly in a register. This style of return instruction is
+        used by RISC architectures such as ARM and RISC-V. A normal
+        :inst:`return` will be legalized into this instruction on these
+        architectures.
+        """,
+        ins=(raddr, rvals), is_terminator=True)
+
 FN = Operand(
         'FN',
         entities.func_ref,
@@ -130,7 +149,7 @@ call = Instruction(
         outs=rvals)
 
 SIG = Operand('SIG', entities.sig_ref, doc='function signature')
-callee = Operand('callee', iPtr, doc='address of function to call')
+callee = Operand('callee', iAddr, doc='address of function to call')
 
 call_indirect = Instruction(
         'call_indirect', r"""

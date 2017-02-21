@@ -52,7 +52,7 @@ IndirectCall = InstructionFormat(
         sig_ref, VALUE, VARIABLE_ARGS,
         multiple_results=True, boxed_storage=True)
 Return = InstructionFormat(VARIABLE_ARGS, boxed_storage=True)
-
+ReturnReg = InstructionFormat(VALUE, VARIABLE_ARGS, boxed_storage=True)
 
 # Finally extract the names of global variables in this module.
 InstructionFormat.extract_names(globals())

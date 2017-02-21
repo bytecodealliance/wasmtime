@@ -222,6 +222,11 @@ pub enum InstructionData {
         ty: Type,
         data: Box<ReturnData>,
     },
+    ReturnReg {
+        opcode: Opcode,
+        ty: Type,
+        data: Box<ReturnRegData>,
+    },
 }
 
 /// A variable list of `Value` operands used for function call arguments and passing arguments to
@@ -404,6 +409,27 @@ impl IndirectCallData {
 pub struct ReturnData {
     /// Dynamically sized array containing return values.
     pub varargs: VariableArgs,
+}
+
+/// Payload of a return instruction.
+#[derive(Clone, Debug)]
+pub struct ReturnRegData {
+    /// Return address.
+    pub arg: Value,
+    /// Dynamically sized array containing return values.
+    pub varargs: VariableArgs,
+}
+
+impl ReturnRegData {
+    /// Get references to the arguments.
+    pub fn arguments(&self) -> [&[Value]; 2] {
+        [ref_slice(&self.arg), &self.varargs]
+    }
+
+    /// Get mutable references to the arguments.
+    pub fn arguments_mut(&mut self) -> [&mut [Value]; 2] {
+        [ref_slice_mut(&mut self.arg), &mut self.varargs]
+    }
 }
 
 /// Analyzing an instruction.

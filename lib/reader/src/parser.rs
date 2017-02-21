@@ -16,7 +16,7 @@ use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs,
                                  TernaryOverflowData, JumpData, BranchData, CallData,
-                                 IndirectCallData, ReturnData};
+                                 IndirectCallData, ReturnData, ReturnRegData};
 use cretonne::isa;
 use cretonne::settings;
 use testfile::{TestFile, Details, Comment};
@@ -195,6 +195,11 @@ impl Context {
                     }
 
                     InstructionData::Return { ref mut data, .. } => {
+                        try!(self.map.rewrite_values(&mut data.varargs, loc));
+                    }
+
+                    InstructionData::ReturnReg { ref mut data, .. } => {
+                        try!(self.map.rewrite_value(&mut data.arg, loc));
                         try!(self.map.rewrite_values(&mut data.varargs, loc));
                     }
                 }
@@ -1319,6 +1324,19 @@ impl<'a> Parser<'a> {
                     opcode: opcode,
                     ty: VOID,
                     data: Box::new(ReturnData { varargs: args }),
+                }
+            }
+            InstructionFormat::ReturnReg => {
+                let raddr = try!(self.match_value("expected SSA value return addr operand"));
+                try!(self.match_token(Token::Comma, "expected ',' between operands"));
+                let args = try!(self.parse_value_list());
+                InstructionData::ReturnReg {
+                    opcode: opcode,
+                    ty: VOID,
+                    data: Box::new(ReturnRegData {
+                        arg: raddr,
+                        varargs: args,
+                    }),
                 }
             }
             InstructionFormat::BranchTable => {
