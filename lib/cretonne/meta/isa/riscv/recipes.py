@@ -11,7 +11,7 @@ instruction formats described in the reference:
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt
-from base.formats import Binary, BinaryImm
+from base.formats import Binary, BinaryImm, ReturnReg
 from .registers import GPR
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
@@ -38,6 +38,12 @@ def BRANCH(funct3):
     # type: (int) -> int
     assert funct3 <= 0b111
     return 0b11000 | (funct3 << 5)
+
+
+def JALR(funct3=0):
+    # type: (int) -> int
+    assert funct3 <= 0b111
+    return 0b11001 | (funct3 << 5)
 
 
 def OPIMM(funct3, funct7=0):
@@ -76,3 +82,8 @@ Rshamt = EncRecipe('Rshamt', BinaryImm, ins=GPR, outs=GPR)
 I = EncRecipe(
         'I', BinaryImm, ins=GPR, outs=GPR,
         instp=IsSignedInt(BinaryImm.imm, 12))
+
+# I-type encoding for `jalr` as a return instruction. We won't use the
+# immediate offset.
+# The variable return values are not encoded.
+Iret = EncRecipe('Iret', ReturnReg, ins=GPR, outs=())

@@ -1327,9 +1327,12 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::ReturnReg => {
-                let raddr = try!(self.match_value("expected SSA value return addr operand"));
-                try!(self.match_token(Token::Comma, "expected ',' between operands"));
-                let args = try!(self.parse_value_list());
+                let raddr = try!(self.match_value("expected SSA value return address operand"));
+                let args = if self.optional(Token::Comma) {
+                    try!(self.parse_value_list())
+                } else {
+                    VariableArgs::new()
+                };
                 InstructionData::ReturnReg {
                     opcode: opcode,
                     ty: VOID,

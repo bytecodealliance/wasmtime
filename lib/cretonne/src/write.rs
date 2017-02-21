@@ -241,9 +241,9 @@ fn write_instruction(w: &mut Write,
         }
         ReturnReg { ref data, .. } => {
             if data.varargs.is_empty() {
-                writeln!(w, "{}", data.arg)
+                writeln!(w, " {}", data.arg)
             } else {
-                writeln!(w, "{}, {}", data.arg, data.varargs)
+                writeln!(w, " {}, {}", data.arg, data.varargs)
             }
         }
     }

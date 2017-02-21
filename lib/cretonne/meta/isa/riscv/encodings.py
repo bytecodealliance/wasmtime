@@ -4,7 +4,7 @@ RISC-V Encodings.
 from __future__ import absolute_import
 from base import instructions as base
 from .defs import RV32, RV64
-from .recipes import OPIMM, OPIMM32, OP, OP32, R, Rshamt, I
+from .recipes import OPIMM, OPIMM32, OP, OP32, JALR, R, Rshamt, I, Iret
 from .settings import use_m
 
 # Basic arithmetic binary instructions are encoded in an R-type instruction.
@@ -52,3 +52,12 @@ for inst,           inst_imm,      f3,    f7 in [
 RV32.enc(base.imul.i32, R, OP(0b000, 0b0000001), isap=use_m)
 RV64.enc(base.imul.i64, R, OP(0b000, 0b0000001), isap=use_m)
 RV64.enc(base.imul.i32, R, OP32(0b000, 0b0000001), isap=use_m)
+
+# Control flow.
+
+# Returns are a special case of JALR.
+# Note: Return stack predictors will only recognize this as a return when the
+# return address is provided in `x1`. We may want a special encoding to enforce
+# that.
+RV32.enc(base.return_reg.i32, Iret, JALR())
+RV64.enc(base.return_reg.i64, Iret, JALR())
