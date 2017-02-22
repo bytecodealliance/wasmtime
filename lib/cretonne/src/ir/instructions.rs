@@ -742,7 +742,7 @@ mod tests {
         assert!(x != y);
         y = Opcode::Iadd;
         assert_eq!(x, y);
-        assert_eq!(x.format(), Some(InstructionFormat::Binary));
+        assert_eq!(x.format(), InstructionFormat::Binary);
 
         assert_eq!(format!("{:?}", Opcode::IaddImm), "IaddImm");
         assert_eq!(Opcode::IaddImm.to_string(), "iadd_imm");
