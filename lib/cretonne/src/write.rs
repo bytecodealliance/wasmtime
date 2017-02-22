@@ -4,7 +4,7 @@
 //! equivalent textual representation. This textual representation can be read back by the
 //! `cretonne-reader` crate.
 
-use ir::{Function, Ebb, Inst, Value, Type};
+use ir::{Function, Ebb, Inst, Value, Type, ValueLoc};
 use isa::TargetIsa;
 use std::fmt::{Result, Error, Write};
 use std::result;
@@ -172,7 +172,19 @@ fn write_instruction(w: &mut Write,
     if let Some(enc) = func.encodings.get(inst).cloned() {
         let mut s = String::with_capacity(16);
         if let Some(isa) = isa {
-            try!(write!(s, "[{}]", isa.display_enc(enc)));
+            try!(write!(s, "[{}", isa.display_enc(enc)));
+            // Write value locations, if we have them.
+            if !func.locations.is_empty() {
+                let regs = isa.register_info();
+                for r in func.dfg.inst_results(inst) {
+                    match func.locations[r] {
+                        ValueLoc::Unassigned => write!(s, ",-")?,
+                        ValueLoc::Reg(ru) => write!(s, ",{}", regs.display_regunit(ru))?,
+                        ValueLoc::Stack(ss) => write!(s, ",{}", ss)?,
+                    }
+                }
+            }
+            try!(write!(s, "]"));
         } else {
             try!(write!(s, "[{}]", enc));
         }
