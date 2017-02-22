@@ -417,10 +417,20 @@ def gen_type_constraints(fmt, instrs):
                         get_constraint(i.ins[idx], ctrl_typevar, type_sets))
             offset = operand_seqs.add(constraints)
             fixed_results = len(i.value_results)
+            # Can the controlling type variable be inferred from the designated
+            # operand?
             use_typevar_operand = i.is_polymorphic and i.use_typevar_operand
+            # Can the controlling type variable be inferred from the result?
+            use_result = (fixed_results > 0 and
+                          i.outs[i.value_results[0]].typevar != ctrl_typevar)
+            # Are we required to use the designated operand instead of the
+            # result?
+            requires_typevar_operand = use_typevar_operand and not use_result
             fmt.comment(
-                    '{}: fixed_results={}, use_typevar_operand={}'
-                    .format(i.camel_name, fixed_results, use_typevar_operand))
+                    ('{}: fixed_results={}, use_typevar_operand={}, ' +
+                        'requires_typevar_operand={}')
+                    .format(i.camel_name, fixed_results, use_typevar_operand,
+                            requires_typevar_operand))
             fmt.comment('Constraints={}'.format(constraints))
             if i.is_polymorphic:
                 fmt.comment(
@@ -430,6 +440,8 @@ def gen_type_constraints(fmt, instrs):
             flags = fixed_results
             if use_typevar_operand:
                 flags |= 8
+            if requires_typevar_operand:
+                flags |= 0x10
 
             with fmt.indented('OpcodeConstraints {', '},'):
                 fmt.line('flags: {:#04x},'.format(flags))

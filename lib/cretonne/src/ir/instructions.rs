@@ -14,6 +14,7 @@ use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef};
 use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, ImmVector};
 use ir::condcodes::*;
 use ir::types;
+use ir::DataFlowGraph;
 
 use ref_slice::*;
 use packed_option::PackedOption;
@@ -492,6 +493,27 @@ impl InstructionData {
             _ => CallInfo::NotACall,
         }
     }
+
+    /// Get the controlling type variable, or `VOID` if this instruction isn't polymorphic.
+    ///
+    /// In most cases, the controlling type variable is the same as the first result type, but some
+    /// opcodes require us to read the type of the designated type variable operand from `dfg`.
+    pub fn ctrl_typevar(&self, dfg: &DataFlowGraph) -> Type {
+        let constraints = self.opcode().constraints();
+
+        if !constraints.is_polymorphic() {
+            types::VOID
+        } else if constraints.requires_typevar_operand() {
+            // Not all instruction formats have a designated operand, but in that case
+            // `requires_typevar_operand()` should never be true.
+            dfg.value_type(self.typevar_operand()
+                .expect("Instruction format doesn't have a designated operand, bad opcode."))
+        } else {
+            // For locality of reference, we prefer to get the controlling type variable from
+            // `idata` itself, when possible.
+            self.first_type()
+        }
+    }
 }
 
 /// Information about branch and jump instructions.
@@ -537,8 +559,12 @@ pub struct OpcodeConstraints {
     /// Bit 3:
     ///     This opcode is polymorphic and the controlling type variable can be inferred from the
     ///     designated input operand. This is the `typevar_operand` index given to the
-    ///     `InstructionFormat` meta language object. When bit 0 is not set, the controlling type
-    ///     variable must be the first output value instead.
+    ///     `InstructionFormat` meta language object. When this bit is not set, the controlling
+    ///     type variable must be the first output value instead.
+    ///
+    /// Bit 4:
+    ///     This opcode is polymorphic and the controlling type variable does *not* appear as the
+    ///     first result type.
     flags: u8,
 
     /// Permitted set of types for the controlling type variable as an index into `TYPE_SETS`.
@@ -557,6 +583,16 @@ impl OpcodeConstraints {
     /// This also implies that this opcode is polymorphic.
     pub fn use_typevar_operand(self) -> bool {
         (self.flags & 0x8) != 0
+    }
+
+    /// Is it necessary to look at the designated value input operand in order to determine the
+    /// controlling type variable, or is it good enough to use the first return type?
+    ///
+    /// Most polymorphic instructions produce a single result with the type of the controlling type
+    /// variable. A few polymorphic instructions either don't produce any results, or produce
+    /// results with a fixed type. These instructions return `true`.
+    pub fn requires_typevar_operand(self) -> bool {
+        (self.flags & 0x10) != 0
     }
 
     /// Get the number of *fixed* result values produced by this opcode.
