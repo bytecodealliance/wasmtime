@@ -53,8 +53,8 @@ impl TargetIsa for Isa {
         registers::INFO.clone()
     }
 
-    fn encode(&self, _: &DataFlowGraph, inst: &InstructionData) -> Result<Encoding, Legalize> {
-        lookup_enclist(inst.first_type(),
+    fn encode(&self, dfg: &DataFlowGraph, inst: &InstructionData) -> Result<Encoding, Legalize> {
+        lookup_enclist(inst.ctrl_typevar(dfg),
                        inst.opcode(),
                        self.cpumode,
                        &enc_tables::LEVEL2[..])
