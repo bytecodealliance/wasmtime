@@ -254,9 +254,13 @@ def gen_opcodes(groups, fmt):
     fmt.doc_comment('All instructions from all supported ISAs are present.')
     fmt.line('#[derive(Copy, Clone, PartialEq, Eq, Debug)]')
     instrs = []
+
+    # We explicitly set the discriminant of the first variant to 1, which
+    # allows us to take advantage of the NonZero optimization, meaning that
+    # wrapping enums can use the 0 discriminant instead of increasing the size
+    # if the whole type, and so SIZEOF(Option<Opcode>>) == SIZEOF(Opcode)
+    is_first_opcode = True
     with fmt.indented('pub enum Opcode {', '}'):
-        fmt.doc_comment('An invalid opcode.')
-        fmt.line('NotAnOpcode,')
         for g in groups:
             for i in g.instructions:
                 instrs.append(i)
@@ -269,7 +273,13 @@ def gen_opcodes(groups, fmt):
                                 'Type inferred from {}.'
                                 .format(i.ins[i.format.typevar_operand]))
                 # Enum variant itself.
-                fmt.line(i.camel_name + ',')
+                if is_first_opcode:
+                    fmt.doc_comment('We explicitly set this to 1 to allow the NonZero optimization,')
+                    fmt.doc_comment('meaning that SIZEOF(Option<Opcode>) == SIZEOF(Opcode)')
+                    fmt.line(i.camel_name + ' = 1,')
+                    is_first_opcode = False
+                else:
+                    fmt.line(i.camel_name + ',')
     fmt.line()
 
     with fmt.indented('impl Opcode {', '}'):
@@ -318,7 +328,6 @@ def gen_opcodes(groups, fmt):
     # Generate a private opcode_name function.
     with fmt.indented('fn opcode_name(opc: Opcode) -> &\'static str {', '}'):
         with fmt.indented('match opc {', '}'):
-            fmt.line('Opcode::NotAnOpcode => "<not an opcode>",')
             for i in instrs:
                 fmt.format('Opcode::{} => "{}",', i.camel_name, i.name)
     fmt.line()
@@ -328,13 +337,13 @@ def gen_opcodes(groups, fmt):
             instrs,
             lambda i: constant_hash.simple_hash(i.name))
     with fmt.indented(
-            'const OPCODE_HASH_TABLE: [Opcode; {}] = ['
+            'const OPCODE_HASH_TABLE: [Option<Opcode>; {}] = ['
             .format(len(hash_table)), '];'):
         for i in hash_table:
             if i is None:
-                fmt.line('Opcode::NotAnOpcode,')
+                fmt.line('None,')
             else:
-                fmt.format('Opcode::{},', i.camel_name)
+                fmt.format('Some(Opcode::{}),', i.camel_name)
     fmt.line()
     return instrs
 
