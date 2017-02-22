@@ -53,7 +53,7 @@ impl<OffT: Into<u32> + Copy> Table<Type> for [Level1Entry<OffT>] {
 ///
 /// Empty entries are encoded with a `NotAnOpcode` `opcode` field.
 pub struct Level2Entry<OffT: Into<u32> + Copy> {
-    pub opcode: Opcode,
+    pub opcode: Option<Opcode>,
     pub offset: OffT,
 }
 
@@ -63,12 +63,7 @@ impl<OffT: Into<u32> + Copy> Table<Opcode> for [Level2Entry<OffT>] {
     }
 
     fn key(&self, idx: usize) -> Option<Opcode> {
-        let opc = self[idx].opcode;
-        if opc != Opcode::NotAnOpcode {
-            Some(opc)
-        } else {
-            None
-        }
+        self[idx].opcode
     }
 }
 

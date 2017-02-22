@@ -1088,7 +1088,7 @@ impl<'a> Parser<'a> {
     // Parse the operands following the instruction opcode.
     // This depends on the format of the opcode.
     fn parse_inst_operands(&mut self, ctx: &Context, opcode: Opcode) -> Result<InstructionData> {
-        Ok(match opcode.format().unwrap() {
+        Ok(match opcode.format() {
             InstructionFormat::Nullary => {
                 InstructionData::Nullary {
                     opcode: opcode,

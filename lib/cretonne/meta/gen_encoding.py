@@ -364,12 +364,12 @@ def emit_level2_hashtables(level2_hashtables, offt, level2_doc, fmt):
             if entry:
                 fmt.line(
                         'Level2Entry ' +
-                        '{{ opcode: Opcode::{}, offset: {:#08x} }},'
+                        '{{ opcode: Some(Opcode::{}), offset: {:#08x} }},'
                         .format(entry.inst.camel_name, entry.offset))
             else:
                 fmt.line(
                         'Level2Entry ' +
-                        '{ opcode: Opcode::NotAnOpcode, offset: 0 },')
+                        '{ opcode: None, offset: 0 },')
 
 
 def emit_level1_hashtable(cpumode, level1, offt, fmt):

@@ -149,7 +149,7 @@ impl<'a> Verifier<'a> {
         let inst_data = &self.func.dfg[inst];
 
         // The instruction format matches the opcode
-        if inst_data.opcode().format() != Some(InstructionFormat::from(inst_data)) {
+        if inst_data.opcode().format() != InstructionFormat::from(inst_data) {
             return err!(inst, "instruction opcode doesn't match instruction format");
         }
 

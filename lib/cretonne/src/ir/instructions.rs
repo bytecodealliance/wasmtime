@@ -43,12 +43,8 @@ impl Display for Opcode {
 
 impl Opcode {
     /// Get the instruction format for this opcode.
-    pub fn format(self) -> Option<InstructionFormat> {
-        if self == Opcode::NotAnOpcode {
-            None
-        } else {
-            Some(OPCODE_FORMAT[self as usize - 1])
-        }
+    pub fn format(self) -> InstructionFormat {
+        OPCODE_FORMAT[self as usize - 1]
     }
 
     /// Get the constraint descriptor for this opcode.
@@ -69,23 +65,21 @@ impl FromStr for Opcode {
     fn from_str(s: &str) -> Result<Opcode, &'static str> {
         use constant_hash::{Table, simple_hash, probe};
 
-        impl<'a> Table<&'a str> for [Opcode] {
+        impl<'a> Table<&'a str> for [Option<Opcode>] {
             fn len(&self) -> usize {
                 self.len()
             }
 
             fn key(&self, idx: usize) -> Option<&'a str> {
-                if self[idx] == Opcode::NotAnOpcode {
-                    None
-                } else {
-                    Some(opcode_name(self[idx]))
-                }
+                self[idx].map(opcode_name)
             }
         }
 
-        match probe::<&str, [Opcode]>(&OPCODE_HASH_TABLE, s, simple_hash(s)) {
+        match probe::<&str, [Option<Opcode>]>(&OPCODE_HASH_TABLE, s, simple_hash(s)) {
             None => Err("Unknown opcode"),
-            Some(i) => Ok(OPCODE_HASH_TABLE[i]),
+            // We unwrap here because probe() should have ensured that the entry
+            // at this index is not None.
+            Some(i) => Ok(OPCODE_HASH_TABLE[i].unwrap()),
         }
     }
 }
