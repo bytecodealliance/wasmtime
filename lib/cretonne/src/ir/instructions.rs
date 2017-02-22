@@ -736,6 +736,8 @@ mod tests {
 
     #[test]
     fn opcodes() {
+        use std::mem;
+
         let x = Opcode::Iadd;
         let mut y = Opcode::Isub;
 
@@ -753,6 +755,12 @@ mod tests {
         assert_eq!("iadd\0".parse::<Opcode>(), Err("Unknown opcode"));
         assert_eq!("".parse::<Opcode>(), Err("Unknown opcode"));
         assert_eq!("\0".parse::<Opcode>(), Err("Unknown opcode"));
+
+        // Opcode is a single byte, and because Option<Opcode> originally came to 2 bytes, early on
+        // Opcode included a variant NotAnOpcode to avoid the unnecessary bloat. Since then the Rust
+        // compiler has brought in NonZero optimization, meaning that an enum not using the 0 value
+        // can be optional for no size cost. We want to ensure Option<Opcode> remains small.
+        assert_eq!(mem::size_of::<Opcode>(), mem::size_of::<Option<Opcode>>());
     }
 
     #[test]
