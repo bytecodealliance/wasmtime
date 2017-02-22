@@ -274,8 +274,6 @@ def gen_opcodes(groups, fmt):
                                 .format(i.ins[i.format.typevar_operand]))
                 # Enum variant itself.
                 if is_first_opcode:
-                    fmt.doc_comment('We explicitly set this to 1 to allow the NonZero optimization,')
-                    fmt.doc_comment('meaning that SIZEOF(Option<Opcode>) == SIZEOF(Opcode)')
                     fmt.line(i.camel_name + ' = 1,')
                     is_first_opcode = False
                 else:
