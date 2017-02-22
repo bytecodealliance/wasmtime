@@ -254,8 +254,8 @@ fill = Instruction(
         'fill', r"""
         Load a register value from a stack slot.
 
-        This instruction behaves exactly like :inst:`copy`, but the input
-        value is assigned to a spill slot.
+        This instruction behaves exactly like :inst:`copy`, but creates a new
+        SSA value for the spilled input value.
         """,
         ins=x, outs=a)
 
