@@ -230,7 +230,7 @@ impl<'a> Lexer<'a> {
             self.next_ch();
 
             if let Some(c) = self.lookahead {
-                // If the next character won't parse as a number, we conservatively return Token::Minus
+                // If the next character won't parse as a number, we return Token::Minus
                 if !c.is_alphanumeric() && c != '.' {
                     return token(Token::Minus, loc);
                 }
