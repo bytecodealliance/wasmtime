@@ -22,6 +22,9 @@ pub enum Token<'a> {
     RPar, // ')'
     LBrace, // '{'
     RBrace, // '}'
+    LBracket, // '['
+    RBracket, // ']'
+    Minus, // '-'
     Comma, // ','
     Dot, // '.'
     Colon, // ':'
@@ -36,6 +39,8 @@ pub enum Token<'a> {
     JumpTable(u32), // jt2
     FuncRef(u32), // fn2
     SigRef(u32), // sig2
+    Name(&'a str), // %9arbitrary_alphanum, %x3, %0, %function ...
+    HexSequence(&'a str), // #89AF
     Identifier(&'a str), // Unrecognized identifier (opcode, enumerator, ...)
 }
 
@@ -222,6 +227,13 @@ impl<'a> Lexer<'a> {
         // Skip a leading sign.
         if self.lookahead == Some('-') {
             self.next_ch();
+
+            if let Some(c) = self.lookahead {
+                // If the next character won't parse as a number, we conservatively return Token::Minus
+                if !c.is_alphanumeric() && c != '.' {
+                    return token(Token::Minus, loc);
+                }
+            }
         }
 
         // Check for NaNs with payloads.
@@ -326,6 +338,39 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn scan_name(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
+        let loc = self.loc();
+        let begin = self.pos;
+
+        assert!(self.lookahead == Some('%'));
+
+        while let Some(c) = self.next_ch() {
+            if !c.is_alphanumeric() && c != '_' {
+                break;
+            }
+        }
+
+        let end = self.pos;
+        token(Token::Name(&self.source[begin..end]), loc)
+    }
+
+    fn scan_hex_sequence(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
+        let loc = self.loc();
+        let begin = self.pos;
+
+        assert!(self.lookahead == Some('#'));
+
+        while let Some(c) = self.next_ch() {
+            match c {
+                'a'...'f' | 'A'...'F' | '0'...'9' => {},
+                _ => break,
+            }
+        }
+
+        let end = self.pos;
+        token(Token::HexSequence(&self.source[begin..end]), loc)
+    }
+
     /// Get the next token or a lexical error.
     ///
     /// Return None when the end of the source is encountered.
@@ -339,6 +384,8 @@ impl<'a> Lexer<'a> {
                 Some(')') => Some(self.scan_char(Token::RPar)),
                 Some('{') => Some(self.scan_char(Token::LBrace)),
                 Some('}') => Some(self.scan_char(Token::RBrace)),
+                Some('[') => Some(self.scan_char(Token::LBracket)),
+                Some(']') => Some(self.scan_char(Token::RBracket)),
                 Some(',') => Some(self.scan_char(Token::Comma)),
                 Some('.') => Some(self.scan_char(Token::Dot)),
                 Some(':') => Some(self.scan_char(Token::Colon)),
@@ -352,6 +399,8 @@ impl<'a> Lexer<'a> {
                 }
                 Some(ch) if ch.is_digit(10) => Some(self.scan_number()),
                 Some(ch) if ch.is_alphabetic() => Some(self.scan_word()),
+                Some('%') => Some(self.scan_name()),
+                Some('#') => Some(self.scan_hex_sequence()),
                 Some(ch) if ch.is_whitespace() => {
                     self.next_ch();
                     continue;
