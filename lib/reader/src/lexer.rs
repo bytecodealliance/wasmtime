@@ -7,6 +7,7 @@
 
 use std::str::CharIndices;
 use std::u16;
+use std::ascii::AsciiExt;
 use cretonne::ir::types;
 use cretonne::ir::{Value, Ebb};
 use error::Location;
@@ -340,12 +341,12 @@ impl<'a> Lexer<'a> {
 
     fn scan_name(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
         let loc = self.loc();
-        let begin = self.pos;
+        let begin = self.pos + 1;
 
         assert!(self.lookahead == Some('%'));
 
         while let Some(c) = self.next_ch() {
-            if !c.is_alphanumeric() && c != '_' {
+            if !(c.is_ascii() && c.is_alphanumeric() || c == '_') {
                 break;
             }
         }
@@ -356,14 +357,13 @@ impl<'a> Lexer<'a> {
 
     fn scan_hex_sequence(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
         let loc = self.loc();
-        let begin = self.pos;
+        let begin = self.pos + 1;
 
         assert!(self.lookahead == Some('#'));
 
         while let Some(c) = self.next_ch() {
-            match c {
-                'a'...'f' | 'A'...'F' | '0'...'9' => {},
-                _ => break,
+            if !char::is_digit(c, 16) {
+                break;
             }
         }
 
@@ -478,7 +478,7 @@ mod tests {
         assert_eq!(lex.next(), None);
 
         // Scan a comment after an invalid char.
-        let mut lex = Lexer::new("#; hello");
+        let mut lex = Lexer::new("$; hello");
         assert_eq!(lex.next(), error(Error::InvalidChar, 1));
         assert_eq!(lex.next(), token(Token::Comment("; hello"), 1));
         assert_eq!(lex.next(), None);
@@ -534,5 +534,28 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Type(types::I32.by(4).unwrap()), 1));
         assert_eq!(lex.next(), token(Token::Identifier("f32x5"), 1));
         assert_eq!(lex.next(), None);
+    }
+
+    #[test]
+    fn lex_hex_sequences() {
+        let mut lex = Lexer::new("#0 #DEADbeef123 #789");
+
+        assert_eq!(lex.next(), token(Token::HexSequence("0"), 1));
+        assert_eq!(lex.next(), token(Token::HexSequence("DEADbeef123"), 1));
+        assert_eq!(lex.next(), token(Token::HexSequence("789"), 1));
+    }
+
+    #[test]
+    fn lex_names() {
+        let mut lex = Lexer::new("%0 %x3 %function %123_abc %ss0 %v3 %ebb11 %_");
+
+        assert_eq!(lex.next(), token(Token::Name("0"), 1));
+        assert_eq!(lex.next(), token(Token::Name("x3"), 1));
+        assert_eq!(lex.next(), token(Token::Name("function"), 1));
+        assert_eq!(lex.next(), token(Token::Name("123_abc"), 1));
+        assert_eq!(lex.next(), token(Token::Name("ss0"), 1));
+        assert_eq!(lex.next(), token(Token::Name("v3"), 1));
+        assert_eq!(lex.next(), token(Token::Name("ebb11"), 1));
+        assert_eq!(lex.next(), token(Token::Name("_"), 1));
     }
 }
