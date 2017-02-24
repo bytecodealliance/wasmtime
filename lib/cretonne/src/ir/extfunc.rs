@@ -34,9 +34,9 @@ fn write_list(f: &mut Formatter, args: &Vec<ArgumentType>) -> fmt::Result {
     match args.split_first() {
         None => {}
         Some((first, rest)) => {
-            try!(write!(f, "{}", first));
+            write!(f, "{}", first)?;
             for arg in rest {
-                try!(write!(f, ", {}", arg));
+                write!(f, ", {}", arg)?;
             }
         }
     }
@@ -45,12 +45,12 @@ fn write_list(f: &mut Formatter, args: &Vec<ArgumentType>) -> fmt::Result {
 
 impl Display for Signature {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        try!(write!(f, "("));
-        try!(write_list(f, &self.argument_types));
-        try!(write!(f, ")"));
+        write!(f, "(")?;
+        write_list(f, &self.argument_types)?;
+        write!(f, ")")?;
         if !self.return_types.is_empty() {
-            try!(write!(f, " -> "));
-            try!(write_list(f, &self.return_types));
+            write!(f, " -> ")?;
+            write_list(f, &self.return_types)?;
         }
         Ok(())
     }
@@ -83,14 +83,14 @@ impl ArgumentType {
 
 impl Display for ArgumentType {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        try!(write!(f, "{}", self.value_type));
+        write!(f, "{}", self.value_type)?;
         match self.extension {
             ArgumentExtension::None => {}
-            ArgumentExtension::Uext => try!(write!(f, " uext")),
-            ArgumentExtension::Sext => try!(write!(f, " sext")),
+            ArgumentExtension::Uext => write!(f, " uext")?,
+            ArgumentExtension::Sext => write!(f, " sext")?,
         }
         if self.inreg {
-            try!(write!(f, " inreg"));
+            write!(f, " inreg")?;
         }
         Ok(())
     }
