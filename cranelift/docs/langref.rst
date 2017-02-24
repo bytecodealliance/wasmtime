@@ -893,6 +893,11 @@ Number of arguments to a function
     incoming frame pointer, and callee-saved registers that are saved in the
     prologue.
 
+Size of function call arguments on the stack
+    At most :math:`2^{32} - 1` bytes.
+
+    This is probably not possible to achieve given the limit on the number of
+    arguments, except by requiring extremely large offsets for stack arguments.
 
 Glossary
 ========
