@@ -1360,7 +1360,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne::ir::{ArgumentType, ArgumentExtension};
+    use cretonne::ir::ArgumentExtension;
     use cretonne::ir::types;
     use cretonne::ir::entities::AnyEntity;
     use testfile::{Details, Comment};
@@ -1371,12 +1371,9 @@ mod tests {
     fn argument_type() {
         let mut p = Parser::new("i32 sext");
         let arg = p.parse_argument_type().unwrap();
-        assert_eq!(arg,
-                   ArgumentType {
-                       value_type: types::I32,
-                       extension: ArgumentExtension::Sext,
-                       inreg: false,
-                   });
+        assert_eq!(arg.value_type, types::I32);
+        assert_eq!(arg.extension, ArgumentExtension::Sext);
+        assert_eq!(arg.inreg, false);
         let Error { location, message } = p.parse_argument_type().unwrap_err();
         assert_eq!(location.line_number, 1);
         assert_eq!(message, "expected argument type");

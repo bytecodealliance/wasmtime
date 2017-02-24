@@ -5,19 +5,30 @@
 //!
 //! This module declares the data types used to represent external functions and call signatures.
 
+use ir::{Type, FunctionName, SigRef, ArgumentLoc};
+use std::cmp;
 use std::fmt::{self, Display, Formatter};
-use ir::{Type, FunctionName, SigRef};
 
 /// Function signature.
 ///
 /// The function signature describes the types of arguments and return values along with other
 /// details that are needed to call a function correctly.
-#[derive(Clone, PartialEq, Eq, Debug)]
+///
+/// A signature can optionally include ISA-specific ABI information which specifies exactly how
+/// arguments and return values are passed.
+#[derive(Clone, Debug)]
 pub struct Signature {
     /// Types of the arguments passed to the function.
     pub argument_types: Vec<ArgumentType>,
     /// Types returned from the function.
     pub return_types: Vec<ArgumentType>,
+
+    /// When the signature has been legalized to a specific ISA, this holds the size of the
+    /// argument array on the stack. Before legalization, this is `None`.
+    ///
+    /// This can be computed from the legalized `argument_types` array as the maximum (offset plus
+    /// byte size) of the `ArgumentLoc::Stack(offset)` argument.
+    pub argument_bytes: Option<u32>,
 }
 
 impl Signature {
@@ -26,7 +37,23 @@ impl Signature {
         Signature {
             argument_types: Vec::new(),
             return_types: Vec::new(),
+            argument_bytes: None,
         }
+    }
+
+    /// Compute the size of the stack arguments and mark signature as legalized.
+    ///
+    /// Even if there are no stack arguments, this will set `argument_types` to `Some(0)` instead
+    /// of `None`. This indicates that the signature has been legalized.
+    pub fn compute_argument_bytes(&mut self) {
+        let bytes = self.argument_types
+            .iter()
+            .filter_map(|arg| match arg.location {
+                ArgumentLoc::Stack(offset) => Some(offset + arg.value_type.bits() as u32 / 8),
+                _ => None,
+            })
+            .fold(0, cmp::max);
+        self.argument_bytes = Some(bytes);
     }
 }
 
@@ -60,7 +87,7 @@ impl Display for Signature {
 ///
 /// This describes the value type being passed to or from a function along with flags that affect
 /// how the argument is passed.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct ArgumentType {
     /// Type of the argument value.
     pub value_type: Type,
@@ -68,6 +95,10 @@ pub struct ArgumentType {
     pub extension: ArgumentExtension,
     /// Place this argument in a register if possible.
     pub inreg: bool,
+
+    /// ABI-specific location of this argument, or `Unassigned` for arguments that have not yet
+    /// been legalized.
+    pub location: ArgumentLoc,
 }
 
 impl ArgumentType {
@@ -77,6 +108,7 @@ impl ArgumentType {
             value_type: vt,
             extension: ArgumentExtension::None,
             inreg: false,
+            location: Default::default(),
         }
     }
 }
@@ -92,7 +124,13 @@ impl Display for ArgumentType {
         if self.inreg {
             write!(f, " inreg")?;
         }
-        Ok(())
+
+        // This really needs a `&TargetAbi` so we can print register units correctly.
+        match self.location {
+            ArgumentLoc::Reg(ru) => write!(f, " [%{}]", ru),
+            ArgumentLoc::Stack(offset) => write!(f, " [{}]", offset),
+            ArgumentLoc::Unassigned => Ok(()),
+        }
     }
 }
 
@@ -154,5 +192,19 @@ mod tests {
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32");
         sig.return_types.push(ArgumentType::new(B8));
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8");
+
+        // Test the offset computation algorithm.
+        assert_eq!(sig.argument_bytes, None);
+        sig.argument_types[1].location = ArgumentLoc::Stack(8);
+        sig.compute_argument_bytes();
+        // An `i32x4` at offset 8 requires a 24-byte argument array.
+        assert_eq!(sig.argument_bytes, Some(24));
+        // Order does not matter.
+        sig.argument_types[0].location = ArgumentLoc::Stack(24);
+        sig.compute_argument_bytes();
+        assert_eq!(sig.argument_bytes, Some(28));
+
+        // Writing ABI-annotated signatures.
+        assert_eq!(sig.to_string(), "(i32 [24], i32x4 [8]) -> f32, b8");
     }
 }
