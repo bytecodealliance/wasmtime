@@ -80,7 +80,7 @@ into Cretonne :term:`IL` contains multiple assignments to the same variables.
 Such variables can be presented to Cretonne as :term:`stack slot`\s instead.
 Stack slots are accessed with the :inst:`stack_store` and :inst:`stack_load`
 instructions which behave more like variable accesses in a typical programming
-language. Cretonne can perform the necessary dataflow analysis to convert stack
+language. Cretonne can perform the necessary data-flow analysis to convert stack
 slots to SSA form.
 
 .. _value-types:
@@ -459,7 +459,7 @@ accesses may trap, or they may work. Sometimes, operating systems catch
 alignment traps and emulate the misaligned memory access.
 
 On target architectures like x86 that don't check alignment, Cretonne expands
-the aligntrap flag into a conditional trap instruction::
+the `aligntrap` flag into a conditional trap instruction::
 
     v5 = load.i32 v1, 4, align(4), aligntrap
     ; Becomes:
@@ -853,6 +853,45 @@ group.
 .. autoinstgroup:: base.instructions.GROUP
 
 Target ISAs may define further instructions in their own instruction groups.
+
+Implementation limits
+=====================
+
+Cretonne's intermediate representation imposes some limits on the size of
+functions and the number of entities allowed. If these limits are exceeded, the
+implementation will panic.
+
+Number of instructions in a function
+    At most :math:`2^{31} - 1`.
+
+Number of EBBs in a function
+    At most :math:`2^{31} - 1`.
+
+    Every EBB needs at least a terminator instruction anyway.
+
+Number of secondary values in a function
+    At most :math:`2^{31} - 1`.
+
+    Secondary values are any SSA values that are not the first result of an
+    instruction.
+
+Other entities declared in the preamble
+    At most :math:`2^{32} - 1`.
+
+    This covers things like stack slots, jump tables, external functions, and
+    function signatures, etc.
+
+Number of arguments to an EBB
+    At most :math:`2^{16}`.
+
+Number of arguments to a function
+    At most :math:`2^{16}`.
+
+    This follows from the limit on arguments to the entry EBB. Note that
+    Cretonne may add a handful of ABI register arguments as function signatures
+    are lowered. This is for representing things like the link register, the
+    incoming frame pointer, and callee-saved registers that are saved in the
+    prologue.
 
 
 Glossary
