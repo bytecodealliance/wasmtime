@@ -112,11 +112,11 @@ impl<'a> Display for Explainer<'a> {
 
             // Emit the match message itself.
             writeln!(f,
-                          "{} #{}{}: {}",
-                          if m.is_match { "Matched" } else { "Missed" },
-                          m.directive,
-                          if m.is_not { " not" } else { "" },
-                          m.regex)?;
+                     "{} #{}{}: {}",
+                     if m.is_match { "Matched" } else { "Missed" },
+                     m.directive,
+                     if m.is_not { " not" } else { "" },
+                     m.regex)?;
 
             // Emit any variable definitions.
             if let Ok(found) = self.vardefs.binary_search_by_key(&m.directive, |v| v.directive) {
