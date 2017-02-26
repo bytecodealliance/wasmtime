@@ -171,13 +171,13 @@ def gen_display(sgrp, fmt):
         with fmt.indented(
                 'fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {',
                 '}'):
-            fmt.line('try!(writeln!(f, "[{}]"));'.format(sgrp.name))
+            fmt.line('writeln!(f, "[{}]")?;'.format(sgrp.name))
             with fmt.indented('for d in &DESCRIPTORS {', '}'):
-                fmt.line('try!(write!(f, "{} = ", d.name));')
+                fmt.line('write!(f, "{} = ", d.name)?;')
                 fmt.line(
-                        'try!(TEMPLATE.format_toml_value(d.detail,' +
-                        'self.bytes[d.offset as usize], f));')
-                fmt.line('try!(writeln!(f, ""));')
+                        'TEMPLATE.format_toml_value(d.detail,' +
+                        'self.bytes[d.offset as usize], f)?;')
+                fmt.line('writeln!(f, "")?;')
             fmt.line('Ok(())')
 
 

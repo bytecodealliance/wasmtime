@@ -49,7 +49,7 @@ impl SubTest for TestRegalloc {
         comp_ctx.regalloc(isa);
 
         let mut text = String::new();
-        try!(write_function(&mut text, &comp_ctx.func, Some(isa)).map_err(|e| e.to_string()));
+        write_function(&mut text, &comp_ctx.func, Some(isa)).map_err(|e| e.to_string())?;
         run_filecheck(&text, context)
     }
 }

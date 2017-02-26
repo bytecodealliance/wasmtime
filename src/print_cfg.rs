@@ -19,7 +19,7 @@ pub fn run(files: Vec<String>) -> CommandResult {
         if i != 0 {
             println!("");
         }
-        try!(print_cfg(f))
+        print_cfg(f)?
     }
     Ok(())
 }
@@ -39,37 +39,37 @@ impl<'a> CFGPrinter<'a> {
 
     /// Write the CFG for this function to `w`.
     pub fn write(&self, w: &mut Write) -> Result {
-        try!(self.header(w));
-        try!(self.ebb_nodes(w));
-        try!(self.cfg_connections(w));
+        self.header(w)?;
+        self.ebb_nodes(w)?;
+        self.cfg_connections(w)?;
         writeln!(w, "}}")
     }
 
     fn header(&self, w: &mut Write) -> Result {
-        try!(writeln!(w, "digraph {} {{", self.func.name));
+        writeln!(w, "digraph {} {{", self.func.name)?;
         if let Some(entry) = self.func.layout.entry_block() {
-            try!(writeln!(w, "    {{rank=min; {}}}", entry));
+            writeln!(w, "    {{rank=min; {}}}", entry)?;
         }
         Ok(())
     }
 
     fn ebb_nodes(&self, w: &mut Write) -> Result {
         for ebb in &self.func.layout {
-            try!(write!(w, "    {} [shape=record, label=\"{{{}", ebb, ebb));
+            write!(w, "    {} [shape=record, label=\"{{{}", ebb, ebb)?;
             // Add all outgoing branch instructions to the label.
             for inst in self.func.layout.ebb_insts(ebb) {
                 let idata = &self.func.dfg[inst];
                 match idata.analyze_branch() {
                     BranchInfo::SingleDest(dest, _) => {
-                        try!(write!(w, " | <{}>{} {}", inst, idata.opcode(), dest))
+                        write!(w, " | <{}>{} {}", inst, idata.opcode(), dest)?
                     }
                     BranchInfo::Table(table) => {
-                        try!(write!(w, " | <{}>{} {}", inst, idata.opcode(), table))
+                        write!(w, " | <{}>{} {}", inst, idata.opcode(), table)?
                     }
                     BranchInfo::NotABranch => {}
                 }
             }
-            try!(writeln!(w, "}}\"]"))
+            writeln!(w, "}}\"]")?
         }
         Ok(())
     }
@@ -77,7 +77,7 @@ impl<'a> CFGPrinter<'a> {
     fn cfg_connections(&self, w: &mut Write) -> Result {
         for ebb in &self.func.layout {
             for &(parent, inst) in self.cfg.get_predecessors(ebb) {
-                try!(writeln!(w, "    {}:{} -> {}", parent, inst, ebb));
+                writeln!(w, "    {}:{} -> {}", parent, inst, ebb)?;
             }
         }
         Ok(())
@@ -91,8 +91,8 @@ impl<'a> Display for CFGPrinter<'a> {
 }
 
 fn print_cfg(filename: String) -> CommandResult {
-    let buffer = try!(read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e)));
-    let items = try!(parse_functions(&buffer).map_err(|e| format!("{}: {}", filename, e)));
+    let buffer = read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e))?;
+    let items = parse_functions(&buffer).map_err(|e| format!("{}: {}", filename, e))?;
 
     for (idx, func) in items.into_iter().enumerate() {
         if idx != 0 {

@@ -121,7 +121,7 @@ impl SourceMap {
     /// Rewrite a slice of value references.
     pub fn rewrite_values(&self, vals: &mut [Value], loc: AnyEntity) -> Result<()> {
         for val in vals {
-            try!(self.rewrite_value(val, loc));
+            self.rewrite_value(val, loc)?;
         }
         Ok(())
     }

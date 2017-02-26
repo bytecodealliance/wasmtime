@@ -7,7 +7,7 @@ pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
     if files.is_empty() {
         return Err("No check files".to_string());
     }
-    let checker = try!(read_checkfile(&files[0]));
+    let checker = read_checkfile(&files[0])?;
     if checker.is_empty() {
         return Err(format!("{}: no filecheck directives found", files[0]));
     }
@@ -18,11 +18,11 @@ pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
     }
 
     let mut buffer = String::new();
-    try!(io::stdin().read_to_string(&mut buffer).map_err(|e| format!("stdin: {}", e)));
+    io::stdin().read_to_string(&mut buffer).map_err(|e| format!("stdin: {}", e))?;
 
     if verbose {
-        let (success, explain) = try!(checker.explain(&buffer, NO_VARIABLES)
-            .map_err(|e| e.to_string()));
+        let (success, explain) = checker.explain(&buffer, NO_VARIABLES)
+            .map_err(|e| e.to_string())?;
         print!("{}", explain);
         if success {
             println!("OK");
@@ -30,18 +30,18 @@ pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
         } else {
             Err("Check failed".to_string())
         }
-    } else if try!(checker.check(&buffer, NO_VARIABLES).map_err(|e| e.to_string())) {
+    } else if checker.check(&buffer, NO_VARIABLES).map_err(|e| e.to_string())? {
         Ok(())
     } else {
-        let (_, explain) = try!(checker.explain(&buffer, NO_VARIABLES).map_err(|e| e.to_string()));
+        let (_, explain) = checker.explain(&buffer, NO_VARIABLES).map_err(|e| e.to_string())?;
         print!("{}", explain);
         Err("Check failed".to_string())
     }
 }
 
 fn read_checkfile(filename: &str) -> Result<Checker, String> {
-    let buffer = try!(read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e)));
+    let buffer = read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e))?;
     let mut builder = CheckerBuilder::new();
-    try!(builder.text(&buffer).map_err(|e| format!("{}: {}", filename, e)));
+    builder.text(&buffer).map_err(|e| format!("{}: {}", filename, e))?;
     Ok(builder.finish())
 }

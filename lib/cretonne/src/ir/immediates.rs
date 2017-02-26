@@ -49,10 +49,10 @@ impl Display for Imm64 {
             //   0xffff_ffff_fff8_4400
             //
             let mut pos = (64 - x.leading_zeros() - 1) & 0xf0;
-            try!(write!(f, "0x{:04x}", (x >> pos) & 0xffff));
+            write!(f, "0x{:04x}", (x >> pos) & 0xffff)?;
             while pos > 0 {
                 pos -= 16;
-                try!(write!(f, "_{:04x}", (x >> pos) & 0xffff));
+                write!(f, "_{:04x}", (x >> pos) & 0xffff)?;
             }
             Ok(())
         }
@@ -178,7 +178,7 @@ fn format_float(bits: u64, w: u8, t: u8, f: &mut Formatter) -> fmt::Result {
 
     // All formats share the leading sign.
     if sign_bit != 0 {
-        try!(write!(f, "-"));
+        write!(f, "-")?;
     }
 
     if e_bits == 0 {

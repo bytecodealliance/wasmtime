@@ -265,9 +265,9 @@ impl Display for VariableArgs {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         for (i, val) in self.0.iter().enumerate() {
             if i == 0 {
-                try!(write!(fmt, "{}", val));
+                write!(fmt, "{}", val)?;
             } else {
-                try!(write!(fmt, ", {}", val));
+                write!(fmt, ", {}", val)?;
             }
         }
         Ok(())
@@ -289,9 +289,9 @@ pub struct UnaryImmVectorData {
 
 impl Display for UnaryImmVectorData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        try!(write!(f, "#"));
+        write!(f, "#")?;
         for b in &self.imm {
-            try!(write!(f, "{:02x}", b));
+            write!(f, "{:02x}", b)?;
         }
         Ok(())
     }
@@ -356,9 +356,9 @@ impl BranchData {
 
 impl Display for BranchData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        try!(write!(f, "{}, {}", self.arg, self.destination));
+        write!(f, "{}, {}", self.arg, self.destination)?;
         if !self.varargs.is_empty() {
-            try!(write!(f, "({})", self.varargs));
+            write!(f, "({})", self.varargs)?;
         }
         Ok(())
     }

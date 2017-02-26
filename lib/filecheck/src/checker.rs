@@ -38,7 +38,7 @@ impl Directive {
         }
 
         // All other commands are followed by a pattern.
-        let pat = try!(rest.parse());
+        let pat = rest.parse()?;
 
         match cmd {
             "check" => Ok(Directive::Check(pat)),
@@ -99,7 +99,7 @@ impl CheckerBuilder {
     pub fn directive(&mut self, l: &str) -> Result<bool> {
         match self.linerx.captures(l) {
             Some(caps) => {
-                self.directives.push(try!(Directive::new(caps)));
+                self.directives.push(Directive::new(caps)?);
                 Ok(true)
             }
             None => Ok(false),
@@ -112,7 +112,7 @@ impl CheckerBuilder {
     /// This method can be used to parse a whole test file containing multiple directives.
     pub fn text(&mut self, t: &str) -> Result<&mut Self> {
         for caps in self.linerx.captures_iter(t) {
-            self.directives.push(try!(Directive::new(caps)));
+            self.directives.push(Directive::new(caps)?);
         }
         Ok(self)
     }
@@ -154,7 +154,7 @@ impl Checker {
     /// Explain how directives are matched against the input text.
     pub fn explain(&self, text: &str, vars: &VariableMap) -> Result<(bool, String)> {
         let mut expl = Explainer::new(text);
-        let success = try!(self.run(text, vars, &mut expl));
+        let success = self.run(text, vars, &mut expl)?;
         expl.finish();
         Ok((success, expl.to_string()))
     }
@@ -178,7 +178,7 @@ impl Checker {
                     // The `not:` directives test the same range as `unordered:` directives. In
                     // particular, if they refer to defined variables, their range is restricted to
                     // the text following the match that defined the variable.
-                    nots.push((dct_idx, state.unordered_begin(pat), try!(pat.resolve(&state))));
+                    nots.push((dct_idx, state.unordered_begin(pat), pat.resolve(&state)?));
                     continue;
                 }
                 Directive::Regex(ref var, ref rx) => {
@@ -192,7 +192,7 @@ impl Checker {
             };
             // Check if `pat` matches in `range`.
             state.recorder.directive(dct_idx);
-            if let Some((match_begin, match_end)) = try!(state.match_positive(pat, range)) {
+            if let Some((match_begin, match_end)) = state.match_positive(pat, range)? {
                 if let &Directive::Unordered(_) = dct {
                     // This was an unordered unordered match.
                     // Keep track of the largest matched position, but leave `last_ordered` alone.
@@ -318,7 +318,7 @@ impl<'a> State<'a> {
     // Search for `pat` in `range`, return the range matched.
     // After a positive match, update variable definitions, if any.
     fn match_positive(&mut self, pat: &Pattern, range: MatchRange) -> Result<Option<MatchRange>> {
-        let rx = try!(pat.resolve(self));
+        let rx = pat.resolve(self)?;
         let txt = &self.text[range.0..range.1];
         let defs = pat.defs();
         let matched_range = if defs.is_empty() {
@@ -382,7 +382,7 @@ impl Display for Directive {
 impl Display for Checker {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for (idx, dir) in self.directives.iter().enumerate() {
-            try!(write!(f, "#{} {}", idx, dir));
+            write!(f, "#{} {}", idx, dir)?;
         }
         Ok(())
     }

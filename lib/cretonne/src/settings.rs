@@ -103,7 +103,7 @@ fn parse_enum_value(value: &str, choices: &[&str]) -> Result<u8> {
 impl Configurable for Builder {
     fn set_bool(&mut self, name: &str, value: bool) -> Result<()> {
         use self::detail::Detail;
-        let (offset, detail) = try!(self.lookup(name));
+        let (offset, detail) = self.lookup(name)?;
         if let Detail::Bool { bit } = detail {
             self.set_bit(offset, bit, value);
             Ok(())
@@ -114,17 +114,17 @@ impl Configurable for Builder {
 
     fn set(&mut self, name: &str, value: &str) -> Result<()> {
         use self::detail::Detail;
-        let (offset, detail) = try!(self.lookup(name));
+        let (offset, detail) = self.lookup(name)?;
         match detail {
             Detail::Bool { bit } => {
-                self.set_bit(offset, bit, try!(parse_bool_value(value)));
+                self.set_bit(offset, bit, parse_bool_value(value))?;
             }
             Detail::Num => {
-                self.bytes[offset] = try!(value.parse().map_err(|_| Error::BadValue));
+                self.bytes[offset] = value.parse().map_err(|_| Error::BadValue)?;
             }
             Detail::Enum { last, enumerators } => {
-                self.bytes[offset] = try!(parse_enum_value(value,
-                                                           self.template.enums(last, enumerators)));
+                self.bytes[offset] = parse_enum_value(value,
+                                                           self.template.enums(last, enumerators))?;
             }
         }
         Ok(())

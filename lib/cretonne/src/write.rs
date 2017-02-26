@@ -12,14 +12,14 @@ use std::result;
 /// Write `func` to `w` as equivalent text.
 /// Use `isa` to emit ISA-dependent annotations.
 pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -> Result {
-    try!(write_spec(w, func));
-    try!(writeln!(w, " {{"));
-    let mut any = try!(write_preamble(w, func));
+    write_spec(w, func)?;
+    writeln!(w, " {{")?;
+    let mut any = write_preamble(w, func)?;
     for ebb in &func.layout {
         if any {
-            try!(writeln!(w, ""));
+            writeln!(w, "")?;
         }
-        try!(write_ebb(w, func, isa, ebb));
+        write_ebb(w, func, isa, ebb)?;
         any = true;
     }
     writeln!(w, "}}")
@@ -40,24 +40,24 @@ fn write_preamble(w: &mut Write, func: &Function) -> result::Result<bool, Error>
 
     for ss in func.stack_slots.keys() {
         any = true;
-        try!(writeln!(w, "    {} = {}", ss, func.stack_slots[ss]));
+        writeln!(w, "    {} = {}", ss, func.stack_slots[ss])?;
     }
 
     // Write out all signatures before functions since function declarations can refer to
     // signatures.
     for sig in func.dfg.signatures.keys() {
         any = true;
-        try!(writeln!(w, "    {} = signature{}", sig, func.dfg.signatures[sig]));
+        writeln!(w, "    {} = signature{}", sig, func.dfg.signatures[sig])?;
     }
 
     for fnref in func.dfg.ext_funcs.keys() {
         any = true;
-        try!(writeln!(w, "    {} = {}", fnref, func.dfg.ext_funcs[fnref]));
+        writeln!(w, "    {} = {}", fnref, func.dfg.ext_funcs[fnref])?;
     }
 
     for jt in func.jump_tables.keys() {
         any = true;
-        try!(writeln!(w, "    {} = {}", jt, func.jump_tables[jt]));
+        writeln!(w, "    {} = {}", jt, func.jump_tables[jt])?;
     }
 
     Ok(any)
@@ -83,29 +83,29 @@ pub fn write_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
 
     // If we're writing encoding annotations, shift by 20.
     if !func.encodings.is_empty() {
-        try!(write!(w, "                    "));
+        write!(w, "                    ")?;
     }
 
     let mut args = func.dfg.ebb_args(ebb);
     match args.next() {
         None => return writeln!(w, "{}:", ebb),
         Some(arg) => {
-            try!(write!(w, "{}(", ebb));
-            try!(write_arg(w, func, arg));
+            write!(w, "{}(", ebb)?;
+            write_arg(w, func, arg)?;
         }
     }
     // Remaining arguments.
     for arg in args {
-        try!(write!(w, ", "));
-        try!(write_arg(w, func, arg));
+        write!(w, ", ")?;
+        write_arg(w, func, arg)?;
     }
     writeln!(w, "):")
 }
 
 pub fn write_ebb(w: &mut Write, func: &Function, isa: Option<&TargetIsa>, ebb: Ebb) -> Result {
-    try!(write_ebb_header(w, func, ebb));
+    write_ebb_header(w, func, ebb)?;
     for inst in func.layout.ebb_insts(ebb) {
-        try!(write_instruction(w, func, isa, inst));
+        write_instruction(w, func, isa, inst)?;
     }
     Ok(())
 }
@@ -151,7 +151,7 @@ fn write_value_aliases(w: &mut Write, func: &Function, inst: Inst, indent: usize
     for &arg in func.dfg[inst].arguments().iter().flat_map(|x| x.iter()) {
         let resolved = func.dfg.resolve_aliases(arg);
         if resolved != arg {
-            try!(writeln!(w, "{1:0$}{2} -> {3}", indent, "", arg, resolved));
+            writeln!(w, "{1:0$}{2} -> {3}", indent, "", arg, resolved)?;
         }
     }
     Ok(())
@@ -166,13 +166,13 @@ fn write_instruction(w: &mut Write,
     let indent = if func.encodings.is_empty() { 4 } else { 24 };
 
     // Value aliases come out on lines before the instruction using them.
-    try!(write_value_aliases(w, func, inst, indent));
+    write_value_aliases(w, func, inst, indent)?;
 
     // Write out encoding info.
     if let Some(enc) = func.encodings.get(inst).cloned() {
         let mut s = String::with_capacity(16);
         if let Some(isa) = isa {
-            try!(write!(s, "[{}", isa.display_enc(enc)));
+            write!(s, "[{}", isa.display_enc(enc))?;
             // Write value locations, if we have them.
             if !func.locations.is_empty() {
                 let regs = isa.register_info();
@@ -184,15 +184,15 @@ fn write_instruction(w: &mut Write,
                     }
                 }
             }
-            try!(write!(s, "]"));
+            write!(s, "]")?;
         } else {
-            try!(write!(s, "[{}]", enc));
+            write!(s, "[{}]", enc)?;
         }
         // Align instruction following ISA annotation to col 24.
-        try!(write!(w, "{:23} ", s));
+        write!(w, "{:23} ", s)?;
     } else {
         // No annotations, simply indent.
-        try!(write!(w, "{1:0$}", indent, ""));
+        write!(w, "{1:0$}", indent, "")?;
     }
 
     // Write out the result values, if any.
@@ -200,21 +200,21 @@ fn write_instruction(w: &mut Write,
     for r in func.dfg.inst_results(inst) {
         if !has_results {
             has_results = true;
-            try!(write!(w, "{}", r));
+            write!(w, "{}", r)?;
         } else {
-            try!(write!(w, ", {}", r));
+            write!(w, ", {}", r)?;
         }
     }
     if has_results {
-        try!(write!(w, " = "));
+        write!(w, " = ")?;
     }
 
     // Then the opcode, possibly with a '.type' suffix.
     let opcode = func.dfg[inst].opcode();
 
     match type_suffix(func, inst) {
-        Some(suf) => try!(write!(w, "{}.{}", opcode, suf)),
-        None => try!(write!(w, "{}", opcode)),
+        Some(suf) => write!(w, "{}.{}", opcode, suf)?,
+        None => write!(w, "{}", opcode)?,
     }
 
     // Then the operands, depending on format.

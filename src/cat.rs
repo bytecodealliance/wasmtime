@@ -15,14 +15,14 @@ pub fn run(files: Vec<String>) -> CommandResult {
         if i != 0 {
             println!("");
         }
-        try!(cat_one(f))
+        cat_one(f)?
     }
     Ok(())
 }
 
 fn cat_one(filename: String) -> CommandResult {
-    let buffer = try!(read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e)));
-    let items = try!(parse_functions(&buffer).map_err(|e| format!("{}: {}", filename, e)));
+    let buffer = read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e))?;
+    let items = parse_functions(&buffer).map_err(|e| format!("{}: {}", filename, e))?;
 
     for (idx, func) in items.into_iter().enumerate() {
         if idx != 0 {
