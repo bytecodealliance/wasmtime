@@ -481,8 +481,8 @@ impl<'a> Parser<'a> {
                 "set" => {
                     last_set_loc = Some(self.loc);
                     isaspec::parse_options(self.consume_line().trim().split_whitespace(),
-                                                &mut flag_builder,
-                                                &self.loc)?;
+                                           &mut flag_builder,
+                                           &self.loc)?;
                 }
                 "isa" => {
                     last_set_loc = None;
