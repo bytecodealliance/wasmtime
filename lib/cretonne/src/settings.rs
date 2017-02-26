@@ -124,7 +124,7 @@ impl Configurable for Builder {
             }
             Detail::Enum { last, enumerators } => {
                 self.bytes[offset] = parse_enum_value(value,
-                                                           self.template.enums(last, enumerators))?;
+                                                      self.template.enums(last, enumerators))?;
             }
         }
         Ok(())
