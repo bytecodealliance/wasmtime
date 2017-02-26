@@ -97,14 +97,14 @@ impl<'a> Iterator for Entries<'a> {
 impl Display for JumpTableData {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         match self.table.first().and_then(|e| e.expand()) {
-            None => try!(write!(fmt, "jump_table 0")),
-            Some(first) => try!(write!(fmt, "jump_table {}", first)),
+            None => write!(fmt, "jump_table 0")?,
+            Some(first) => write!(fmt, "jump_table {}", first)?,
         }
 
         for dest in self.table.iter().skip(1).map(|e| e.expand()) {
             match dest {
-                None => try!(write!(fmt, ", 0")),
-                Some(ebb) => try!(write!(fmt, ", {}", ebb)),
+                None => write!(fmt, ", 0")?,
+                Some(ebb) => write!(fmt, ", {}", ebb)?,
             }
         }
         Ok(())

@@ -89,34 +89,34 @@ impl<'a> Display for Explainer<'a> {
                     .map(|d| nextln + d + 1)
                     .unwrap_or(self.text.len());
                 assert!(newln > nextln);
-                try!(writeln!(f, "> {}", &self.text[nextln..newln - 1]));
+                writeln!(f, "> {}", &self.text[nextln..newln - 1])?;
                 curln = nextln;
                 nextln = newln;
             }
 
             // Emit ~~~ under the part of the match in curln.
             if m.is_match {
-                try!(write!(f, "  "));
+                write!(f, "  ")?;
                 let mend = min(m.range.1, nextln - 1);
                 for pos in curln..mend {
-                    try!(if pos < m.range.0 {
+                    if pos < m.range.0 {
                         write!(f, " ")
                     } else if pos == m.range.0 {
                         write!(f, "^")
                     } else {
                         write!(f, "~")
-                    });
+                    }?;
                 }
-                try!(writeln!(f, ""));
+                writeln!(f, "")?;
             }
 
             // Emit the match message itself.
-            try!(writeln!(f,
+            writeln!(f,
                           "{} #{}{}: {}",
                           if m.is_match { "Matched" } else { "Missed" },
                           m.directive,
                           if m.is_not { " not" } else { "" },
-                          m.regex));
+                          m.regex)?;
 
             // Emit any variable definitions.
             if let Ok(found) = self.vardefs.binary_search_by_key(&m.directive, |v| v.directive) {
@@ -128,14 +128,14 @@ impl<'a> Display for Explainer<'a> {
                     if d.directive != m.directive {
                         break;
                     }
-                    try!(writeln!(f, "Define {}={}", d.varname, d.value));
+                    writeln!(f, "Define {}={}", d.varname, d.value)?;
                 }
             }
         }
 
         // Emit trailing lines.
         for line in self.text[nextln..].lines() {
-            try!(writeln!(f, "> {}", line));
+            writeln!(f, "> {}", line)?;
         }
         Ok(())
     }

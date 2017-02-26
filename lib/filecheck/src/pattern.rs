@@ -147,7 +147,7 @@ impl Pattern {
         let def = if varname.is_empty() {
             None
         } else {
-            Some(try!(self.add_def(&varname)))
+            Some(self.add_def(&varname)?)
         };
 
         // Match `$(var=$PAT)`.
@@ -270,7 +270,7 @@ impl FromStr for Pattern {
         let mut pat = Pattern::new();
         let mut pos = 0;
         while pos < s.len() {
-            let (part, len) = try!(pat.parse_part(&s[pos..]));
+            let (part, len) = pat.parse_part(&s[pos..])?;
             if let Some(v) = part.ref_var() {
                 if pat.defines_var(v) {
                     return Err(Error::Backref(format!("unsupported back-reference to '${}' \
@@ -353,7 +353,7 @@ impl Pattern {
             }
         }
 
-        Ok(try!(RegexBuilder::new(&out).multi_line(true).compile()))
+        Ok(RegexBuilder::new(&out).multi_line(true).compile()?)
     }
 }
 
@@ -361,7 +361,7 @@ impl Display for Pattern {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for part in &self.parts {
             use self::Part::*;
-            try!(match *part {
+            match *part {
                 Text(ref txt) if txt == "" => write!(f, "$()"),
                 Text(ref txt) if txt == "$" => write!(f, "$$"),
                 Text(ref txt) => write!(f, "{}", txt),
@@ -374,7 +374,7 @@ impl Display for Pattern {
                     write!(f, "$({}={})", defvar, litrx)
                 }
                 DefVar { def, ref var } => write!(f, "$({}=${})", self.defs[def], var),
-            });
+            }?;
         }
         Ok(())
     }

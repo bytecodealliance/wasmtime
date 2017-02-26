@@ -39,7 +39,7 @@ impl SubTest for TestLegalizer {
         legalize_function(&mut func, isa);
 
         let mut text = String::new();
-        try!(write_function(&mut text, &func, Some(isa)).map_err(|e| e.to_string()));
+        write_function(&mut text, &func, Some(isa)).map_err(|e| e.to_string())?;
         run_filecheck(&text, context)
     }
 }

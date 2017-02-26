@@ -159,8 +159,8 @@ impl<'a> Verifier<'a> {
     pub fn run(&self) -> Result<()> {
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
-                try!(self.ebb_integrity(ebb, inst));
-                try!(self.instruction_integrity(inst));
+                self.ebb_integrity(ebb, inst)?;
+                self.instruction_integrity(inst)?;
             }
         }
         Ok(())

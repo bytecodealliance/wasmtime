@@ -18,14 +18,14 @@ use filetest::subtest::{SubTest, Context, Result};
 /// If running this test causes a panic, it will propagate as normal.
 pub fn run(path: &Path) -> TestResult {
     let started = time::Instant::now();
-    let buffer = try!(read_to_string(path).map_err(|e| e.to_string()));
-    let testfile = try!(parse_test(&buffer).map_err(|e| e.to_string()));
+    let buffer = read_to_string(path).map_err(|e| e.to_string())?;
+    let testfile = parse_test(&buffer).map_err(|e| e.to_string())?;
     if testfile.functions.is_empty() {
         return Err("no functions found".to_string());
     }
 
     // Parse the test commands.
-    let mut tests = try!(testfile.commands.iter().map(new_subtest).collect::<Result<Vec<_>>>());
+    let mut tests = testfile.commands.iter().map(new_subtest).collect::<Result<Vec<_>>>()?;
 
     // Flags to use for those tests that don't need an ISA.
     // This is the cumulative effect of all the `set` commands in the file.
@@ -39,7 +39,7 @@ pub fn run(path: &Path) -> TestResult {
     tests.sort_by_key(|st| (st.is_mutating(), st.needs_verifier()));
 
     // Expand the tests into (test, flags, isa) tuples.
-    let mut tuples = try!(test_tuples(&tests, &testfile.isa_spec, flags));
+    let mut tuples = test_tuples(&tests, &testfile.isa_spec, flags)?;
 
     // Isolate the last test in the hope that this is the only mutating test.
     // If so, we can completely avoid cloning functions.
@@ -58,11 +58,11 @@ pub fn run(path: &Path) -> TestResult {
         };
 
         for tuple in &tuples {
-            try!(run_one_test(*tuple, Cow::Borrowed(&func), &mut context));
+            run_one_test(*tuple, Cow::Borrowed(&func), &mut context)?;
         }
         // Run the last test with an owned function which means it won't need to clone it before
         // mutating.
-        try!(run_one_test(last_tuple, Cow::Owned(func), &mut context));
+        run_one_test(last_tuple, Cow::Owned(func), &mut context)?;
     }
 
 
@@ -108,7 +108,7 @@ fn run_one_test<'a>(tuple: (&'a SubTest, &'a Flags, Option<&'a TargetIsa>),
 
     // Should we run the verifier before this test?
     if !context.verified && test.needs_verifier() {
-        try!(verify_function(&func).map_err(|e| e.to_string()));
+        verify_function(&func).map_err(|e| e.to_string())?;
         context.verified = true;
     }
 

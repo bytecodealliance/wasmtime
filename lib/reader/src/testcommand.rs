@@ -47,9 +47,9 @@ impl<'a> TestCommand<'a> {
 
 impl<'a> Display for TestCommand<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        try!(write!(f, "{}", self.command));
+        write!(f, "{}", self.command)?;
         for opt in &self.options {
-            try!(write!(f, " {}", opt));
+            write!(f, " {}", opt)?;
         }
         writeln!(f, "")
     }

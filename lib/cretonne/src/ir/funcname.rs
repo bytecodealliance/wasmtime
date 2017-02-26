@@ -42,9 +42,9 @@ fn needs_quotes(name: &str) -> bool {
 impl fmt::Display for FunctionName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if needs_quotes(&self.0) {
-            try!(f.write_char('"'));
+            f.write_char('"')?;
             for c in self.0.chars().flat_map(char::escape_default) {
-                try!(f.write_char(c));
+                f.write_char(c)?;
             }
             f.write_char('"')
         } else {
