@@ -42,8 +42,9 @@ Building Cretonne
 -----------------
 
 Cretonne is using the Cargo package manager format. First, ensure you have
-installed `rust 1.12.0` or above. Then, change the working directory to your
-clone of cretonne and run::
+installed a current stable rust (stable, beta, and nightly should all work, but
+only stable and beta are tested consistently). Then, change the working
+directory to your clone of cretonne and run::
 
     cargo build
 
