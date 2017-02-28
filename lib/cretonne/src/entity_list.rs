@@ -16,7 +16,7 @@
 //! Entity lists are not as safe to use as `Vec<T>`, but they never jeopardize Rust's memory safety
 //! guarantees. These are the problems to be aware of:
 //!
-//! - If you lose track of an entity list, it's memory won't be recycled until the pool is cleared.
+//! - If you lose track of an entity list, its memory won't be recycled until the pool is cleared.
 //!   This can cause the pool to grow very large with leaked lists.
 //! - If entity lists are used after their pool is cleared, they may contain garbage data, and
 //!   modifying them may corrupt other lists in the pool.
