@@ -23,6 +23,8 @@ use isa::{TargetIsa, Legalize};
 /// - Fill out `func.encodings`.
 ///
 pub fn legalize_function(func: &mut Function, isa: &TargetIsa) {
+    legalize_signatures(func, isa);
+
     // TODO: This is very simplified and incomplete.
     func.encodings.resize(func.dfg.num_insts());
     let mut pos = Cursor::new(&mut func.layout);
@@ -74,3 +76,15 @@ pub fn legalize_function(func: &mut Function, isa: &TargetIsa) {
 //
 // Concretely, this defines private functions `narrow()`, and `expand()`.
 include!(concat!(env!("OUT_DIR"), "/legalizer.rs"));
+
+/// Legalize all the function signatures in `func`.
+///
+/// This changes all signatures to be ABI-compliant with full `ArgumentLoc` annotations. It doesn't
+/// change the entry block arguments, calls, or return instructions, so this can leave the function
+/// in a state with type discrepancies.
+fn legalize_signatures(func: &mut Function, isa: &TargetIsa) {
+    isa.legalize_signature(&mut func.signature);
+    for sig in func.dfg.signatures.keys() {
+        isa.legalize_signature(&mut func.dfg.signatures[sig]);
+    }
+}
