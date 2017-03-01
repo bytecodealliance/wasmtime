@@ -45,7 +45,7 @@ pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex};
 pub use isa::constraints::{RecipeConstraints, OperandConstraint, ConstraintKind};
 
 use settings;
-use ir::{InstructionData, DataFlowGraph};
+use ir::{InstructionData, DataFlowGraph, Signature};
 
 pub mod riscv;
 pub mod intel;
@@ -160,5 +160,25 @@ pub trait TargetIsa {
             encoding: enc,
             recipe_names: self.recipe_names(),
         }
+    }
+
+    /// Legalize a function signature.
+    ///
+    /// This is used to legalize both the signature of the function being compiled and any called
+    /// functions. The signature should be modified by adding `ArgumentLoc` annotations to all
+    /// arguments and return values.
+    ///
+    /// Arguments with types that are not supported by the ABI can be expanded into multiple
+    /// arguments:
+    ///
+    /// - Integer types that are too large to fit in a register can be broken into multiple
+    ///   arguments of a smaller integer type.
+    /// - Floating point types can be bit-cast to an integer type of the same size, and possible
+    ///   broken into smaller integer types.
+    /// - Vector types can be bit-cast and broken down into smaller vectors or scalars.
+    ///
+    /// The legalizer will adapt argument and return values as necessary at all ABI boundaries.
+    fn legalize_signature(&self, _sig: &mut Signature) {
+        unimplemented!()
     }
 }

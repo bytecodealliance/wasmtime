@@ -64,11 +64,6 @@ impl Function {
     pub fn new() -> Function {
         Self::with_name_signature(FunctionName::default(), Signature::new())
     }
-
-    /// Get the signature of this function.
-    pub fn own_signature(&self) -> &Signature {
-        &self.signature
-    }
 }
 
 impl Display for Function {

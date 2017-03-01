@@ -1,6 +1,7 @@
 //! RISC-V Instruction Set Architecture.
 
 pub mod settings;
+mod abi;
 mod enc_tables;
 mod registers;
 
@@ -8,7 +9,7 @@ use super::super::settings as shared_settings;
 use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, general_encoding};
 use isa::Builder as IsaBuilder;
 use isa::{TargetIsa, RegInfo, Encoding, Legalize, RecipeConstraints};
-use ir::{InstructionData, DataFlowGraph};
+use ir::{InstructionData, DataFlowGraph, Signature};
 
 #[allow(dead_code)]
 struct Isa {
@@ -73,6 +74,11 @@ impl TargetIsa for Isa {
 
     fn recipe_constraints(&self) -> &'static [RecipeConstraints] {
         &enc_tables::RECIPE_CONSTRAINTS
+    }
+
+    fn legalize_signature(&self, sig: &mut Signature) {
+        // We can pass in `self.isa_flags` too, if we need it.
+        abi::legalize_signature(sig, &self.shared_flags)
     }
 }
 
