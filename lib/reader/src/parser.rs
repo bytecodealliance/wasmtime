@@ -44,16 +44,7 @@ pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
     let commands = parser.parse_test_commands();
     let isa_spec = parser.parse_isa_specs()?;
     let preamble_comments = parser.take_comments();
-
-    let functions = {
-        let mut unique_isa = None;
-        if let isaspec::IsaSpec::Some(ref isa_vec) = isa_spec {
-            if isa_vec.len() == 1 {
-                unique_isa = Some(&*isa_vec[0]);
-            }
-        }
-        parser.parse_function_list(unique_isa)?
-    };
+    let functions = parser.parse_function_list(isa_spec.unique_isa())?;
 
     Ok(TestFile {
         commands: commands,
@@ -102,7 +93,7 @@ impl<'a> Context<'a> {
         Context {
             function: f,
             map: SourceMap::new(),
-            unique_isa: unique_isa
+            unique_isa: unique_isa,
         }
     }
 
@@ -592,8 +583,9 @@ impl<'a> Parser<'a> {
     /// Parse a list of function definitions.
     ///
     /// This is the top-level parse function matching the whole contents of a file.
-    pub fn parse_function_list(&mut self, unique_isa: Option<&TargetIsa>)
-        -> Result<Vec<(Function, Details<'a>)>> {
+    pub fn parse_function_list(&mut self,
+                               unique_isa: Option<&TargetIsa>)
+                               -> Result<Vec<(Function, Details<'a>)>> {
         let mut list = Vec::new();
         while self.token().is_some() {
             list.push(self.parse_function(unique_isa)?);
@@ -605,7 +597,9 @@ impl<'a> Parser<'a> {
     //
     // function ::= * function-spec "{" preamble function-body "}"
     //
-    fn parse_function(&mut self, unique_isa: Option<&TargetIsa>) -> Result<(Function, Details<'a>)> {
+    fn parse_function(&mut self,
+                      unique_isa: Option<&TargetIsa>)
+                      -> Result<(Function, Details<'a>)> {
         // Begin gathering comments.
         // Make sure we don't include any comments before the `function` keyword.
         self.token();
@@ -916,6 +910,7 @@ impl<'a> Parser<'a> {
         while match self.token() {
             Some(Token::Value(_)) => true,
             Some(Token::Identifier(_)) => true,
+            Some(Token::LBracket) => true,
             _ => false,
         } {
             self.parse_instruction(ctx, ebb)?;
@@ -964,8 +959,9 @@ impl<'a> Parser<'a> {
         ctx.map.def_value(vx, value, &vx_location)
     }
 
-    fn parse_instruction_encoding(&mut self, ctx: &Context)
-        -> Result<(Option<Encoding>, Option<Vec<&'a str>>)> {
+    fn parse_instruction_encoding(&mut self,
+                                  ctx: &Context)
+                                  -> Result<(Option<Encoding>, Option<Vec<&'a str>>)> {
         let (mut encoding, mut result_registers) = (None, None);
 
         // encoding ::= "[" encoding_literal result_registers "]"
@@ -977,6 +973,11 @@ impl<'a> Parser<'a> {
 
                 if let Some(recipe_index) = ctx.find_recipe_index(recipe) {
                     encoding = Some(Encoding::new(recipe_index, bits));
+                } else if ctx.unique_isa.is_some() {
+                    return err!(self.loc, "invalid instruction recipe");
+                } else {
+                    return err!(self.loc,
+                                "provided instruction encoding for unspecified ISA");
                 }
             }
 
@@ -1525,7 +1526,7 @@ mod tests {
                                        ss3 = stack_slot 13
                                        ss1 = stack_slot 1
                                      }")
-            .parse_function()
+            .parse_function(None)
             .unwrap();
         assert_eq!(func.name.to_string(), "foo");
         let mut iter = func.stack_slots.keys();
@@ -1542,7 +1543,7 @@ mod tests {
                                     ss1  = stack_slot 13
                                     ss1  = stack_slot 1
                                 }")
-                       .parse_function()
+                       .parse_function(None)
                        .unwrap_err()
                        .to_string(),
                    "3: duplicate stack slot: ss1");
@@ -1554,7 +1555,7 @@ mod tests {
                                      ebb0:
                                      ebb4(vx3: i32):
                                      }")
-            .parse_function()
+            .parse_function(None)
             .unwrap();
         assert_eq!(func.name.to_string(), "ebbs");
 
@@ -1583,7 +1584,7 @@ mod tests {
                          trap ; Instruction
                          } ; Trailing.
                          ; More trailing.")
-                .parse_function()
+                .parse_function(None)
                 .unwrap();
         assert_eq!(func.name.to_string(), "comment");
         assert_eq!(comments.len(), 8); // no 'before' comment.
