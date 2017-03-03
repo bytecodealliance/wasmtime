@@ -20,7 +20,7 @@ pub struct Function {
     pub name: FunctionName,
 
     /// Signature of this function.
-    signature: Signature,
+    pub signature: Signature,
 
     /// Stack slots allocated in this function.
     pub stack_slots: EntityMap<StackSlot, StackSlotData>,

@@ -88,6 +88,14 @@ impl Default for ArgumentLoc {
 }
 
 impl ArgumentLoc {
+    /// Is this an assigned location? (That is, not `Unassigned`).
+    pub fn is_assigned(&self) -> bool {
+        match self {
+            &ArgumentLoc::Unassigned => false,
+            _ => true,
+        }
+    }
+
     /// Return an object that can display this argument location, using the register info from the
     /// target ISA.
     pub fn display<'a, R: Into<Option<&'a RegInfo>>>(self, regs: R) -> DisplayArgumentLoc<'a> {

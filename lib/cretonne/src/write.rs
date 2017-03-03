@@ -5,16 +5,19 @@
 //! `cretonne-reader` crate.
 
 use ir::{Function, Ebb, Inst, Value, Type};
-use isa::TargetIsa;
+use isa::{TargetIsa, RegInfo};
 use std::fmt::{Result, Error, Write};
 use std::result;
 
 /// Write `func` to `w` as equivalent text.
 /// Use `isa` to emit ISA-dependent annotations.
 pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -> Result {
-    write_spec(w, func)?;
+    let regs = isa.map(TargetIsa::register_info);
+    let regs = regs.as_ref();
+
+    write_spec(w, func, regs)?;
     writeln!(w, " {{")?;
-    let mut any = write_preamble(w, func)?;
+    let mut any = write_preamble(w, func, regs)?;
     for ebb in &func.layout {
         if any {
             writeln!(w, "")?;
@@ -31,11 +34,14 @@ pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -
 //
 // ====--------------------------------------------------------------------------------------====//
 
-fn write_spec(w: &mut Write, func: &Function) -> Result {
-    write!(w, "function {}{}", func.name, func.own_signature())
+fn write_spec(w: &mut Write, func: &Function, regs: Option<&RegInfo>) -> Result {
+    write!(w, "function {}{}", func.name, func.signature.display(regs))
 }
 
-fn write_preamble(w: &mut Write, func: &Function) -> result::Result<bool, Error> {
+fn write_preamble(w: &mut Write,
+                  func: &Function,
+                  regs: Option<&RegInfo>)
+                  -> result::Result<bool, Error> {
     let mut any = false;
 
     for ss in func.stack_slots.keys() {
@@ -47,7 +53,10 @@ fn write_preamble(w: &mut Write, func: &Function) -> result::Result<bool, Error>
     // signatures.
     for sig in func.dfg.signatures.keys() {
         any = true;
-        writeln!(w, "    {} = signature{}", sig, func.dfg.signatures[sig])?;
+        writeln!(w,
+                 "    {} = signature{}",
+                 sig,
+                 func.dfg.signatures[sig].display(regs))?;
     }
 
     for fnref in func.dfg.ext_funcs.keys() {

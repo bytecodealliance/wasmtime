@@ -6,8 +6,9 @@
 //! This module declares the data types used to represent external functions and call signatures.
 
 use ir::{Type, FunctionName, SigRef, ArgumentLoc};
+use isa::RegInfo;
 use std::cmp;
-use std::fmt::{self, Display, Formatter};
+use std::fmt;
 
 /// Function signature.
 ///
@@ -55,31 +56,48 @@ impl Signature {
             .fold(0, cmp::max);
         self.argument_bytes = Some(bytes);
     }
+
+    /// Return an object that can display `self` with correct register names.
+    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&'a self, regs: R) -> DisplaySignature<'a> {
+        DisplaySignature(self, regs.into())
+    }
 }
 
-fn write_list(f: &mut Formatter, args: &Vec<ArgumentType>) -> fmt::Result {
+/// Wrapper type capable of displaying a `Signature` with correct register names.
+pub struct DisplaySignature<'a>(&'a Signature, Option<&'a RegInfo>);
+
+fn write_list(f: &mut fmt::Formatter,
+              args: &Vec<ArgumentType>,
+              regs: Option<&RegInfo>)
+              -> fmt::Result {
     match args.split_first() {
         None => {}
         Some((first, rest)) => {
-            write!(f, "{}", first)?;
+            write!(f, "{}", first.display(regs))?;
             for arg in rest {
-                write!(f, ", {}", arg)?;
+                write!(f, ", {}", arg.display(regs))?;
             }
         }
     }
     Ok(())
 }
 
-impl Display for Signature {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+impl<'a> fmt::Display for DisplaySignature<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "(")?;
-        write_list(f, &self.argument_types)?;
+        write_list(f, &self.0.argument_types, self.1)?;
         write!(f, ")")?;
-        if !self.return_types.is_empty() {
+        if !self.0.return_types.is_empty() {
             write!(f, " -> ")?;
-            write_list(f, &self.return_types)?;
+            write_list(f, &self.0.return_types, self.1)?;
         }
         Ok(())
+    }
+}
+
+impl fmt::Display for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.display(None).fmt(f)
     }
 }
 
@@ -111,26 +129,39 @@ impl ArgumentType {
             location: Default::default(),
         }
     }
+
+    /// Return an object that can display `self` with correct register names.
+    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&'a self, regs: R) -> DisplayArgumentType<'a> {
+        DisplayArgumentType(self, regs.into())
+    }
 }
 
-impl Display for ArgumentType {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.value_type)?;
-        match self.extension {
+/// Wrapper type capable of displaying an `ArgumentType` with correct register names.
+pub struct DisplayArgumentType<'a>(&'a ArgumentType, Option<&'a RegInfo>);
+
+impl<'a> fmt::Display for DisplayArgumentType<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0.value_type)?;
+        match self.0.extension {
             ArgumentExtension::None => {}
             ArgumentExtension::Uext => write!(f, " uext")?,
             ArgumentExtension::Sext => write!(f, " sext")?,
         }
-        if self.inreg {
+        if self.0.inreg {
             write!(f, " inreg")?;
         }
 
-        // This really needs a `&TargetAbi` so we can print register units correctly.
-        match self.location {
-            ArgumentLoc::Reg(ru) => write!(f, " [%{}]", ru),
-            ArgumentLoc::Stack(offset) => write!(f, " [{}]", offset),
-            ArgumentLoc::Unassigned => Ok(()),
+        if self.0.location.is_assigned() {
+            write!(f, " [{}]", self.0.location.display(self.1))?;
         }
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for ArgumentType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.display(None).fmt(f)
     }
 }
 
@@ -159,8 +190,8 @@ pub struct ExtFuncData {
     pub signature: SigRef,
 }
 
-impl Display for ExtFuncData {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+impl fmt::Display for ExtFuncData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.signature, self.name)
     }
 }
