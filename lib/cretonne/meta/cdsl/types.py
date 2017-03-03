@@ -2,6 +2,11 @@
 from __future__ import absolute_import
 import math
 
+try:
+    from typing import Dict, List  # noqa
+except ImportError:
+    pass
+
 
 # ValueType instances (i8, i32, ...) are provided in the cretonne.types module.
 class ValueType(object):

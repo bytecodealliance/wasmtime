@@ -5,7 +5,7 @@ from __future__ import absolute_import
 from .ast import Def, Var, Apply
 
 try:
-    from typing import Union, Iterator, Sequence, Iterable  # noqa
+    from typing import Union, Iterator, Sequence, Iterable, List, Dict  # noqa
     from .ast import Expr  # noqa
     DefApply = Union[Def, Apply]
 except ImportError:

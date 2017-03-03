@@ -11,7 +11,7 @@ import os
 import re
 
 try:
-    from typing import Any  # noqa
+    from typing import Any, List  # noqa
 except ImportError:
     pass
 

@@ -6,7 +6,7 @@ from .operands import Operand
 from .formats import InstructionFormat
 
 try:
-    from typing import Union, Sequence
+    from typing import Union, Sequence, List  # noqa
     # List of operands for ins/outs:
     OpList = Union[Sequence[Operand], Operand]
     MaybeBoundInst = Union['Instruction', 'BoundInstruction']

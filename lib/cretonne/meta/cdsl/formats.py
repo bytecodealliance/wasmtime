@@ -6,7 +6,7 @@ from .operands import Operand  # noqa
 # The typing module is only required by mypy, and we don't use these imports
 # outside type comments.
 try:
-    from typing import Tuple, Union, Any, Sequence, Iterable  # noqa
+    from typing import Dict, List, Tuple, Union, Any, Sequence, Iterable  # noqa
 except ImportError:
     pass
 

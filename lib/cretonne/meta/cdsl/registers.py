@@ -26,7 +26,7 @@ from . import is_power_of_two, next_power_of_two
 
 
 try:
-    from typing import Sequence, Tuple  # noqa
+    from typing import Sequence, Tuple, List, Dict  # noqa
     from .isa import TargetISA  # noqa
     # A tuple uniquely identifying a register class inside a register bank.
     # (count, width, start)
