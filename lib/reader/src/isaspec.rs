@@ -22,6 +22,18 @@ pub enum IsaSpec {
     Some(Vec<Box<TargetIsa>>),
 }
 
+impl IsaSpec {
+    /// If the `IsaSpec` contains exactly 1 `TargetIsa` we return a reference to it
+    pub fn unique_isa(&self) -> Option<&TargetIsa> {
+        if let &IsaSpec::Some(ref isa_vec) = self {
+            if isa_vec.len() == 1 {
+                return Some(&*isa_vec[0]);
+            }
+        }
+        None
+    }
+}
+
 /// Parse an iterator of command line options and apply them to `config`.
 pub fn parse_options<'a, I>(iter: I, config: &mut Configurable, loc: &Location) -> Result<()>
     where I: Iterator<Item = &'a str>
