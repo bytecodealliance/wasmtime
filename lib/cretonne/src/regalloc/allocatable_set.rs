@@ -121,6 +121,7 @@ mod tests {
         name: "GPR",
         index: 0,
         width: 1,
+        first: 28,
         subclasses: 0,
         mask: [0xf0000000, 0x0000000f, 0],
     };
@@ -128,6 +129,7 @@ mod tests {
         name: "DPR",
         index: 0,
         width: 2,
+        first: 28,
         subclasses: 0,
         mask: [0x50000000, 0x0000000a, 0],
     };

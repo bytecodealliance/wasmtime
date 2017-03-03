@@ -21,6 +21,7 @@ pub mod settings;
 pub mod sparse_map;
 pub mod verifier;
 
+mod abi;
 mod constant_hash;
 mod context;
 mod legalizer;

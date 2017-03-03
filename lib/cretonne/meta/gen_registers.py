@@ -37,6 +37,7 @@ def gen_regclass(rc, fmt):
         fmt.line('name: "{}",'.format(rc.name))
         fmt.line('index: {},'.format(rc.index))
         fmt.line('width: {},'.format(rc.width))
+        fmt.line('first: {},'.format(rc.bank.first_unit + rc.start))
         fmt.line('subclasses: 0x{:x},'.format(rc.subclass_mask()))
         mask = ', '.join('0x{:08x}'.format(x) for x in rc.mask())
         fmt.line('mask: [{}],'.format(mask))
