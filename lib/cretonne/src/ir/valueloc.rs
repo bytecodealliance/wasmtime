@@ -3,8 +3,9 @@
 //! The register allocator assigns every SSA value to either a register or a stack slot. This
 //! assignment is represented by a `ValueLoc` object.
 
-use isa::RegUnit;
+use isa::{RegInfo, RegUnit};
 use ir::StackSlot;
+use std::fmt;
 
 /// Value location.
 #[derive(Copy, Clone, Debug)]
@@ -20,6 +21,35 @@ pub enum ValueLoc {
 impl Default for ValueLoc {
     fn default() -> Self {
         ValueLoc::Unassigned
+    }
+}
+
+impl ValueLoc {
+    /// Return an object that can display this value location, using the register info from the
+    /// target ISA.
+    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(self, regs: R) -> DisplayValueLoc<'a> {
+        DisplayValueLoc(self, regs.into())
+    }
+}
+
+/// Displaying a `ValueLoc` correctly requires the associated `RegInfo` from the target ISA.
+/// Without the register info, register units are simply show as numbers.
+///
+/// The `DisplayValueLoc` type can display the contained `ValueLoc`.
+pub struct DisplayValueLoc<'a>(ValueLoc, Option<&'a RegInfo>);
+
+impl<'a> fmt::Display for DisplayValueLoc<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.0 {
+            ValueLoc::Unassigned => write!(f, "-"),
+            ValueLoc::Reg(ru) => {
+                match self.1 {
+                    Some(regs) => write!(f, "{}", regs.display_regunit(ru)),
+                    None => write!(f, "%{}", ru),
+                }
+            }
+            ValueLoc::Stack(ss) => write!(f, "{}", ss),
+        }
     }
 }
 
@@ -54,5 +84,34 @@ pub enum ArgumentLoc {
 impl Default for ArgumentLoc {
     fn default() -> Self {
         ArgumentLoc::Unassigned
+    }
+}
+
+impl ArgumentLoc {
+    /// Return an object that can display this argument location, using the register info from the
+    /// target ISA.
+    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(self, regs: R) -> DisplayArgumentLoc<'a> {
+        DisplayArgumentLoc(self, regs.into())
+    }
+}
+
+/// Displaying a `ArgumentLoc` correctly requires the associated `RegInfo` from the target ISA.
+/// Without the register info, register units are simply show as numbers.
+///
+/// The `DisplayArgumentLoc` type can display the contained `ArgumentLoc`.
+pub struct DisplayArgumentLoc<'a>(ArgumentLoc, Option<&'a RegInfo>);
+
+impl<'a> fmt::Display for DisplayArgumentLoc<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.0 {
+            ArgumentLoc::Unassigned => write!(f, "-"),
+            ArgumentLoc::Reg(ru) => {
+                match self.1 {
+                    Some(regs) => write!(f, "{}", regs.display_regunit(ru)),
+                    None => write!(f, "%{}", ru),
+                }
+            }
+            ArgumentLoc::Stack(offset) => write!(f, "{}", offset),
+        }
     }
 }
