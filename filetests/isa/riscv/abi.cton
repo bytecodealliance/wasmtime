@@ -1,0 +1,23 @@
+; Test the legalization of function signatures.
+test legalizer
+isa riscv
+
+function f(i32) {
+    sig0 = signature(i32) -> i32
+
+; check: sig0 = signature(i32 [%x10]) -> i32 [%x10]
+
+    sig1 = signature(i64) -> b1
+; check: sig1 = signature(i32 [%x10], i32 [%x11]) -> b1 [%x10]
+
+; The i64 argument must go in an even-odd register pair.
+    sig2 = signature(f32, i64) -> f64
+; check: sig2 = signature(f32 [%f10], i32 [%x12], i32 [%x13]) -> f64 [%f10]
+
+; Spilling into the stack args.
+    sig3 = signature(f64, f64, f64, f64, f64, f64, f64, i64) -> f64
+; check: sig3 = signature(f64 [%f10], f64 [%f11], f64 [%f12], f64 [%f13], f64 [%f14], f64 [%f15], f64 [%f16], i32 [0], i32 [4]) -> f64 [%f10]
+
+ebb0(v0: i32):
+    return_reg v0
+}

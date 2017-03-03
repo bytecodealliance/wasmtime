@@ -108,6 +108,9 @@ pub struct RegClassData {
     /// How many register units to allocate per register.
     pub width: u8,
 
+    /// The first register unit in this class.
+    pub first: RegUnit,
+
     /// Bit-mask of sub-classes of this register class, including itself.
     ///
     /// Bits correspond to RC indexes.
@@ -141,6 +144,12 @@ impl RegClassData {
     /// A register class is considerd to be a subclass of itself.
     pub fn has_subclass<RCI: Into<RegClassIndex>>(&self, other: RCI) -> bool {
         self.subclasses & (1 << other.into().0) != 0
+    }
+
+    /// Get a specific register unit in this class.
+    pub fn unit(&self, offset: usize) -> RegUnit {
+        let uoffset = offset * self.width as usize;
+        self.first + uoffset as RegUnit
     }
 }
 
