@@ -6,7 +6,7 @@
 // ====--------------------------------------------------------------------------------------====//
 
 use std::str::FromStr;
-use std::u32;
+use std::{u16, u32};
 use std::mem;
 use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotData, JumpTable,
                    JumpTableData, Signature, ArgumentType, ArgumentExtension, ExtFuncData, SigRef,
@@ -17,7 +17,7 @@ use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs,
                                  TernaryOverflowData, JumpData, BranchData, CallData,
                                  IndirectCallData, ReturnData, ReturnRegData};
-use cretonne::isa;
+use cretonne::isa::{self, TargetIsa, Encoding};
 use cretonne::settings;
 use testfile::{TestFile, Details, Comment};
 use error::{Location, Error, Result};
@@ -40,11 +40,26 @@ pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
     let mut parser = Parser::new(text);
     // Gather the preamble comments as 'Function'.
     parser.gather_comments(AnyEntity::Function);
+
+    let commands = parser.parse_test_commands();
+    let isa_spec = parser.parse_isa_specs()?;
+    let preamble_comments = parser.take_comments();
+
+    let functions = {
+        let mut unique_isa = None;
+        if let isaspec::IsaSpec::Some(ref isa_vec) = isa_spec {
+            if isa_vec.len() == 1 {
+                unique_isa = Some(&*isa_vec[0]);
+            }
+        }
+        parser.parse_function_list(unique_isa)?
+    };
+
     Ok(TestFile {
-        commands: parser.parse_test_commands(),
-        isa_spec: parser.parse_isa_specs()?,
-        preamble_comments: parser.take_comments(),
-        functions: parser.parse_function_list()?,
+        commands: commands,
+        isa_spec: isa_spec,
+        preamble_comments: preamble_comments,
+        functions: functions,
     })
 }
 
@@ -71,16 +86,35 @@ pub struct Parser<'a> {
 //
 // Many entities like values, stack slots, and function signatures are referenced in the `.cton`
 // file by number. We need to map these numbers to real references.
-struct Context {
+struct Context<'a> {
     function: Function,
     map: SourceMap,
+
+    // Reference to the unique_isa for things like parsing ISA-specific instruction encoding
+    // information. This is only `Some` if exactly one set of `isa` directives were found in the
+    // prologue (it is valid to have directives for multiple different ISAs, but in that case we
+    // couldn't know which ISA the provided encodings are intended for)
+    unique_isa: Option<&'a TargetIsa>,
 }
 
-impl Context {
-    fn new(f: Function) -> Context {
+impl<'a> Context<'a> {
+    fn new(f: Function, unique_isa: Option<&'a TargetIsa>) -> Context<'a> {
         Context {
             function: f,
             map: SourceMap::new(),
+            unique_isa: unique_isa
+        }
+    }
+
+    // Get the index of a recipe name if it exists.
+    fn find_recipe_index(&self, recipe_name: &str) -> Option<u16> {
+        if let Some(unique_isa) = self.unique_isa {
+            unique_isa.recipe_names()
+                .iter()
+                .position(|&name| name == recipe_name)
+                .map(|idx| idx as u16)
+        } else {
+            None
         }
     }
 
@@ -454,6 +488,41 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume an identifier.
+    fn match_any_identifier(&mut self, err_msg: &str) -> Result<&'a str> {
+        if let Some(Token::Identifier(text)) = self.token() {
+            self.consume();
+            Ok(text)
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume a HexSequence that fits into a u16.
+    // This is used for instruction encodings.
+    fn match_hex16(&mut self, err_msg: &str) -> Result<u16> {
+        if let Some(Token::HexSequence(bits_str)) = self.token() {
+            self.consume();
+            // The only error we anticipate from this parse is overflow, the lexer should
+            // already have ensured that the string doesn't contain invalid characters, and
+            // isn't empty or negative.
+            u16::from_str_radix(bits_str, 16)
+                .map_err(|_| self.error("the hex sequence given overflows the u16 type"))
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume a name.
+    fn match_name(&mut self, err_msg: &str) -> Result<&'a str> {
+        if let Some(Token::Name(name)) = self.token() {
+            self.consume();
+            Ok(name)
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
     /// Parse a list of test commands.
     pub fn parse_test_commands(&mut self) -> Vec<TestCommand<'a>> {
         let mut list = Vec::new();
@@ -523,10 +592,11 @@ impl<'a> Parser<'a> {
     /// Parse a list of function definitions.
     ///
     /// This is the top-level parse function matching the whole contents of a file.
-    pub fn parse_function_list(&mut self) -> Result<Vec<(Function, Details<'a>)>> {
+    pub fn parse_function_list(&mut self, unique_isa: Option<&TargetIsa>)
+        -> Result<Vec<(Function, Details<'a>)>> {
         let mut list = Vec::new();
         while self.token().is_some() {
-            list.push(self.parse_function()?);
+            list.push(self.parse_function(unique_isa)?);
         }
         Ok(list)
     }
@@ -535,7 +605,7 @@ impl<'a> Parser<'a> {
     //
     // function ::= * function-spec "{" preamble function-body "}"
     //
-    fn parse_function(&mut self) -> Result<(Function, Details<'a>)> {
+    fn parse_function(&mut self, unique_isa: Option<&TargetIsa>) -> Result<(Function, Details<'a>)> {
         // Begin gathering comments.
         // Make sure we don't include any comments before the `function` keyword.
         self.token();
@@ -543,7 +613,7 @@ impl<'a> Parser<'a> {
         self.gather_comments(AnyEntity::Function);
 
         let (location, name, sig) = self.parse_function_spec()?;
-        let mut ctx = Context::new(Function::with_name_signature(name, sig));
+        let mut ctx = Context::new(Function::with_name_signature(name, sig), unique_isa);
 
         // function ::= function-spec * "{" preamble function-body "}"
         self.match_token(Token::LBrace, "expected '{' before function body")?;
@@ -894,6 +964,42 @@ impl<'a> Parser<'a> {
         ctx.map.def_value(vx, value, &vx_location)
     }
 
+    fn parse_instruction_encoding(&mut self, ctx: &Context)
+        -> Result<(Option<Encoding>, Option<Vec<&'a str>>)> {
+        let (mut encoding, mut result_registers) = (None, None);
+
+        // encoding ::= "[" encoding_literal result_registers "]"
+        if self.optional(Token::LBracket) {
+            // encoding_literal ::= "-" | Identifier HexSequence
+            if !self.optional(Token::Minus) {
+                let recipe = self.match_any_identifier("expected instruction encoding or '-'")?;
+                let bits = self.match_hex16("expected a hex sequence")?;
+
+                if let Some(recipe_index) = ctx.find_recipe_index(recipe) {
+                    encoding = Some(Encoding::new(recipe_index, bits));
+                }
+            }
+
+            // result_registers ::= ("," ( "-" | names ) )?
+            // names ::= Name { "," Name }
+            if self.optional(Token::Comma) && !self.optional(Token::Minus) {
+                let mut result = Vec::new();
+
+                result.push(self.match_name("expected register")?);
+                while self.optional(Token::Comma) {
+                    result.push(self.match_name("expected register")?);
+                }
+
+                result_registers = Some(result);
+            }
+
+            self.match_token(Token::RBracket,
+                             "expected ']' to terminate instruction encoding")?;
+        }
+
+        Ok((encoding, result_registers))
+    }
+
     // Parse an instruction, append it to `ebb`.
     //
     // instruction ::= [inst-results "="] Opcode(opc) ["." Type] ...
@@ -902,6 +1008,8 @@ impl<'a> Parser<'a> {
     fn parse_instruction(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
         // Collect comments for the next instruction to be allocated.
         self.gather_comments(ctx.function.dfg.next_inst());
+
+        let (encoding, result_registers) = self.parse_instruction_encoding(ctx)?;
 
         // Result value numbers.
         let mut results = Vec::new();
@@ -919,6 +1027,13 @@ impl<'a> Parser<'a> {
             }
 
             self.match_token(Token::Equal, "expected '=' before opcode")?;
+        }
+
+        if let Some(ref result_registers) = result_registers {
+            if result_registers.len() != results.len() {
+                return err!(self.loc,
+                            "must have same number of result registers as results");
+            }
         }
 
         // instruction ::=  [inst-results "="] * Opcode(opc) ["." Type] ...
@@ -954,6 +1069,10 @@ impl<'a> Parser<'a> {
         let num_results = ctx.function.dfg.make_inst_results(inst, ctrl_typevar);
         ctx.function.layout.append_inst(inst, ebb);
         ctx.map.def_entity(inst.into(), &opcode_loc).expect("duplicate inst references created");
+
+        if let Some(encoding) = encoding {
+            *ctx.function.encodings.ensure(inst) = encoding;
+        }
 
         if results.len() != num_results {
             return err!(self.loc,
