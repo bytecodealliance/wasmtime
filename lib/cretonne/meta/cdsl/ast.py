@@ -143,22 +143,22 @@ class Var(Expr):
     def is_input(self):
         # type: () -> bool
         """Is this an input value to the src pattern?"""
-        return not self.src_def and not self.dst_def
+        return self.src_def is None and self.dst_def is None
 
     def is_output(self):
-        """Is this an output value, defined in both src and dst patterns?"""
         # type: () -> bool
-        return self.src_def and self.dst_def
+        """Is this an output value, defined in both src and dst patterns?"""
+        return self.src_def is not None and self.dst_def is not None
 
     def is_intermediate(self):
-        """Is this an intermediate value, defined only in the src pattern?"""
         # type: () -> bool
-        return self.src_def and not self.dst_def
+        """Is this an intermediate value, defined only in the src pattern?"""
+        return self.src_def is not None and self.dst_def is None
 
     def is_temp(self):
-        """Is this a temp value, defined only in the dst pattern?"""
         # type: () -> bool
-        return not self.src_def and self.dst_def
+        """Is this a temp value, defined only in the dst pattern?"""
+        return self.src_def is None and self.dst_def is not None
 
     def get_typevar(self):
         # type: () -> TypeVar

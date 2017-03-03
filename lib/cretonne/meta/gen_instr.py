@@ -14,6 +14,13 @@ from cdsl.instructions import Instruction  # noqa
 from cdsl.operands import Operand  # noqa
 from cdsl.typevar import TypeVar  # noqa
 
+# The typing module is only required by mypy, and we don't use these imports
+# outside type comments.
+try:
+    from typing import List  # noqa
+except ImportError:
+    pass
+
 
 def gen_formats(fmt):
     # type: (srcgen.Formatter) -> None

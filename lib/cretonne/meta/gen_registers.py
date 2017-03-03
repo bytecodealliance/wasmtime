@@ -6,7 +6,7 @@ from __future__ import absolute_import
 import srcgen
 
 try:
-    from typing import Sequence  # noqa
+    from typing import Sequence, List  # noqa
     from cdsl.isa import TargetISA  # noqa
     from cdsl.registers import RegBank, RegClass  # noqa
 except ImportError:

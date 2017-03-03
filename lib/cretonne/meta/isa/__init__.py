@@ -9,6 +9,11 @@ from __future__ import absolute_import
 from cdsl.isa import TargetISA  # noqa
 from . import riscv, intel, arm32, arm64
 
+try:
+    from typing import List  # noqa
+except ImportError:
+    pass
+
 
 def all_isas():
     # type: () -> List[TargetISA]

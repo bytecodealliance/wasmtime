@@ -6,7 +6,7 @@ from .registers import RegClass, Register
 # The typing module is only required by mypy, and we don't use these imports
 # outside type comments.
 try:
-    from typing import Tuple, Union, Any, Iterable, Sequence, TYPE_CHECKING  # noqa
+    from typing import Tuple, Union, Any, Iterable, Sequence, List, Set, TYPE_CHECKING  # noqa
     from .instructions import MaybeBoundInst, InstructionGroup, InstructionFormat  # noqa
     from .predicates import Predicate, FieldPredicate  # noqa
     from .settings import SettingGroup  # noqa
