@@ -505,36 +505,13 @@ impl DataFlowGraph {
 
     /// Append an argument with type `ty` to `ebb`.
     pub fn append_ebb_arg(&mut self, ebb: Ebb, ty: Type) -> Value {
-        let num_args = self.num_ebb_args(ebb);
-        assert!(num_args <= u16::MAX as usize, "Too many arguments to EBB");
         let val = self.make_value(ValueData::Arg {
             ty: ty,
             ebb: ebb,
-            num: num_args as u16,
+            num: 0,
             next: None.into(),
         });
-        match self.ebbs[ebb].last_arg.expand() {
-            // If last_argument is `None`, we're adding the first EBB argument.
-            None => {
-                self.ebbs[ebb].first_arg = val.into();
-            }
-            Some(last_arg) => {
-                match last_arg.expand() {
-                    // Append to linked list of arguments.
-                    ExpandedValue::Table(idx) => {
-                        if let ValueData::Arg { ref mut next, .. } = self.extended_values[idx] {
-                            *next = val.into();
-                        } else {
-                            panic!("inconsistent value table entry for EBB argument");
-                        }
-                    }
-                    ExpandedValue::Direct(_) => {
-                        panic!("inconsistent value table entry for EBB argument")
-                    }
-                }
-            }
-        }
-        self.ebbs[ebb].last_arg = val.into();
+        self.put_ebb_arg(ebb, val);
         val
     }
 
@@ -544,6 +521,74 @@ impl DataFlowGraph {
             dfg: self,
             cur: self.ebbs[ebb].first_arg.into(),
         }
+    }
+
+    /// Given a value that is known to be an EBB argument, return the next EBB argument.
+    pub fn next_ebb_arg(&self, arg: Value) -> Option<Value> {
+        if let ExpandedValue::Table(index) = arg.expand() {
+            if let ValueData::Arg { next, .. } = self.extended_values[index] {
+                return next.into();
+            }
+        }
+        panic!("{} is not an EBB argument", arg);
+    }
+
+    /// Detach all the arguments from `ebb` and return the first one.
+    ///
+    /// The whole list of detached arguments can be traversed with `next_ebb_arg`. This method does
+    /// not return a `Values` iterator since it is often necessary to mutate the DFG while
+    /// processing the list of arguments.
+    ///
+    /// This is a quite low-level operation. Sensible things to do with the detached EBB arguments
+    /// is to put them back on the same EBB with `put_ebb_arg()` or change them into aliases
+    /// with `change_to_alias()`.
+    pub fn take_ebb_args(&mut self, ebb: Ebb) -> Option<Value> {
+        let first = self.ebbs[ebb].first_arg.into();
+        self.ebbs[ebb].first_arg = None.into();
+        self.ebbs[ebb].last_arg = None.into();
+        first
+    }
+
+    /// Append an existing argument value to `ebb`.
+    ///
+    /// The appended value should already be an EBB argument belonging to `ebb`, but it can't be
+    /// attached. In practice, this means that it should be one of the values returned from
+    /// `take_ebb_args()`.
+    ///
+    /// In almost all cases, you should be using `append_ebb_arg()` instead of this method.
+    pub fn put_ebb_arg(&mut self, ebb: Ebb, arg: Value) {
+        let arg_num = match self.ebbs[ebb].last_arg.map(|v| v.expand()) {
+            // If last_argument is `None`, we're adding the first EBB argument.
+            None => {
+                self.ebbs[ebb].first_arg = arg.into();
+                0
+            }
+            // Append to the linked list of arguments.
+            Some(ExpandedValue::Table(idx)) => {
+                if let ValueData::Arg { ref mut next, num, .. } = self.extended_values[idx] {
+                    *next = arg.into();
+                    assert!(num < u16::MAX, "Too many arguments to EBB");
+                    num + 1
+                } else {
+                    panic!("inconsistent value table entry for EBB argument");
+                }
+            }
+            _ => panic!("inconsistent value table entry for EBB argument"),
+        };
+        self.ebbs[ebb].last_arg = arg.into();
+
+        // Now update `arg` itself.
+        let arg_ebb = ebb;
+        if let ExpandedValue::Table(idx) = arg.expand() {
+            if let ValueData::Arg { ref mut num, ebb, ref mut next, .. } =
+                self.extended_values[idx] {
+                *num = arg_num;
+                *next = None.into();
+                assert_eq!(arg_ebb, ebb, "{} should already belong to EBB", arg);
+                return;
+            }
+        }
+        panic!("{} must be an EBB argument value", arg);
     }
 }
 
@@ -630,6 +675,9 @@ mod tests {
         assert_eq!(ebb.to_string(), "ebb0");
         assert_eq!(dfg.num_ebb_args(ebb), 0);
         assert_eq!(dfg.ebb_args(ebb).next(), None);
+        assert_eq!(dfg.take_ebb_args(ebb), None);
+        assert_eq!(dfg.num_ebb_args(ebb), 0);
+        assert_eq!(dfg.ebb_args(ebb).next(), None);
 
         let arg1 = dfg.append_ebb_arg(ebb, types::F32);
         assert_eq!(arg1.to_string(), "vx0");
@@ -653,6 +701,19 @@ mod tests {
         assert_eq!(dfg.value_def(arg2), ValueDef::Arg(ebb, 1));
         assert_eq!(dfg.value_type(arg1), types::F32);
         assert_eq!(dfg.value_type(arg2), types::I16);
+
+        // Swap the two EBB arguments.
+        let take1 = dfg.take_ebb_args(ebb).unwrap();
+        assert_eq!(dfg.num_ebb_args(ebb), 0);
+        assert_eq!(dfg.ebb_args(ebb).next(), None);
+        let take2 = dfg.next_ebb_arg(take1).unwrap();
+        assert_eq!(take1, arg1);
+        assert_eq!(take2, arg2);
+        assert_eq!(dfg.next_ebb_arg(take2), None);
+        dfg.put_ebb_arg(ebb, take2);
+        let arg3 = dfg.append_ebb_arg(ebb, types::I32);
+        dfg.put_ebb_arg(ebb, take1);
+        assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [take2, arg3, take1]);
     }
 
     #[test]
