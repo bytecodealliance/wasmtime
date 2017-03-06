@@ -13,7 +13,9 @@
 //! The legalizer does not deal with register allocation constraints. These constraints are derived
 //! from the encoding recipes, and solved later by the register allocator.
 
-use ir::{Function, Cursor, DataFlowGraph, InstructionData, Opcode, InstBuilder};
+use abi::{legalize_abi_value, ValueConversion};
+use ir::{Function, Cursor, DataFlowGraph, InstructionData, Opcode, InstBuilder, Ebb, Type, Value,
+         ArgumentType};
 use ir::condcodes::IntCC;
 use isa::{TargetIsa, Legalize};
 
@@ -86,5 +88,116 @@ fn legalize_signatures(func: &mut Function, isa: &TargetIsa) {
     isa.legalize_signature(&mut func.signature);
     for sig in func.dfg.signatures.keys() {
         isa.legalize_signature(&mut func.dfg.signatures[sig]);
+    }
+
+    if let Some(entry) = func.layout.entry_block() {
+        legalize_entry_arguments(func, entry);
+    }
+}
+
+/// Legalize the entry block arguments after `func`'s signature has been legalized.
+///
+/// The legalized signature may contain more arguments than the original signature, and the
+/// argument types have been changed. This function goes through the arguments to the entry EBB and
+/// replaces them with arguments of the right type for the ABI.
+///
+/// The original entry EBB arguments are computed from the new ABI arguments by code inserted at
+/// the top of the entry block.
+fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
+    // Insert position for argument conversion code.
+    // We want to insert instructions before the first instruction in the entry block.
+    // If the entry block is empty, append instructions to it instead.
+    let mut pos = Cursor::new(&mut func.layout);
+    pos.goto_top(entry);
+    pos.next_inst();
+
+    // Keep track of the argument types in the ABI-legalized signature.
+    let abi_types = &func.signature.argument_types;
+    let mut abi_arg = 0;
+
+    // Process the EBB arguments one at a time, possibly replacing one argument with multiple new
+    // ones. We do this by detaching the entry EBB arguments first.
+    let mut next_arg = func.dfg.take_ebb_args(entry);
+    while let Some(arg) = next_arg {
+        // Get the next argument before we mutate `arg`.
+        next_arg = func.dfg.next_ebb_arg(arg);
+
+        let arg_type = func.dfg.value_type(arg);
+        if arg_type == abi_types[abi_arg].value_type {
+            // No value translation is necessary, this argument matches the ABI type.
+            // Just use the original EBB argument value. This is the most common case.
+            func.dfg.put_ebb_arg(entry, arg);
+            abi_arg += 1;
+        } else {
+            // Compute the value we want for `arg` from the legalized ABI arguments.
+            let converted = convert_from_abi(&mut func.dfg,
+                                             &mut pos,
+                                             entry,
+                                             &mut abi_arg,
+                                             abi_types,
+                                             arg_type);
+            // The old `arg` is no longer an attached EBB argument, but there are probably still
+            // uses of the value. Make it an alias to the converted value.
+            func.dfg.change_to_alias(arg, converted);
+        }
+    }
+}
+
+/// Compute original value of type `ty` from the legalized ABI arguments beginning at `abi_arg`.
+///
+/// Update `abi_arg` to reflect the ABI arguments consumed and return the computed value.
+fn convert_from_abi(dfg: &mut DataFlowGraph,
+                    pos: &mut Cursor,
+                    entry: Ebb,
+                    abi_arg: &mut usize,
+                    abi_types: &[ArgumentType],
+                    ty: Type)
+                    -> Value {
+    // Terminate the recursion when we get the desired type.
+    if ty == abi_types[*abi_arg].value_type {
+        return dfg.append_ebb_arg(entry, ty);
+    }
+
+    // Reconstruct how `ty` was legalized into the argument at `abi_arg`.
+    let conversion = legalize_abi_value(ty, &abi_types[*abi_arg]);
+
+    // The conversion describes value to ABI argument. We implement the reverse conversion here.
+    match conversion {
+        // Construct a `ty` by concatenating two ABI integers.
+        ValueConversion::IntSplit => {
+            let abi_ty = ty.half_width().expect("Invalid type for conversion");
+            let lo = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            let hi = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            dfg.ins(pos).iconcat_lohi(lo, hi)
+        }
+        // Construct a `ty` by concatenating two halves of a vector.
+        ValueConversion::VectorSplit => {
+            let abi_ty = ty.half_vector().expect("Invalid type for conversion");
+            let _lo = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            let _hi = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            unimplemented!()
+        }
+        // Construct a `ty` by bit-casting from an integer type.
+        ValueConversion::IntBits => {
+            assert!(!ty.is_int());
+            let abi_ty = Type::int(ty.bits()).expect("Invalid type for conversion");
+            let arg = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            dfg.ins(pos).bitcast(ty, arg)
+        }
+        // ABI argument is a sign-extended version of the value we want.
+        ValueConversion::Sext(abi_ty) => {
+            let arg = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
+            // We could insert an `assert_sreduce` which would fold with a following `sextend` of
+            // this value.
+            dfg.ins(pos).ireduce(ty, arg)
+        }
+        ValueConversion::Uext(abi_ty) => {
+            let arg = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
+            // We could insert an `assert_ureduce` which would fold with a following `uextend` of
+            // this value.
+            dfg.ins(pos).ireduce(ty, arg)
+        }
     }
 }
