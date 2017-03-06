@@ -67,6 +67,17 @@ impl Type {
         }
     }
 
+    /// Get an integer type with the requested number of bits.
+    pub fn int(bits: u16) -> Option<Type> {
+        match bits {
+            8 => Some(I8),
+            16 => Some(I16),
+            32 => Some(I32),
+            64 => Some(I64),
+            _ => None,
+        }
+    }
+
     /// Get a type with the same number of lanes as this type, but with the lanes replaced by
     /// booleans of the same size.
     ///

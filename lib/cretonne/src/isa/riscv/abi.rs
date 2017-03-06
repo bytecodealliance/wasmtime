@@ -5,7 +5,7 @@
 //!
 //! This doesn't support the soft-float ABI at the moment.
 
-use abi::{ArgAction, ArgAssigner, legalize_args};
+use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
 use ir::{Signature, ArgumentType, ArgumentLoc};
 use isa::riscv::registers::{GPR, FPR};
 use settings as shared_settings;
@@ -39,7 +39,7 @@ impl ArgAssigner for Args {
         // Check for a legal type.
         // RISC-V doesn't have SIMD at all, so break all vectors down.
         if !ty.is_scalar() {
-            return ArgAction::Split;
+            return ArgAction::Convert(ValueConversion::VectorSplit);
         }
 
         // Large integers and booleans are broken down to fit in a register.
@@ -47,7 +47,7 @@ impl ArgAssigner for Args {
             // Align registers and stack to a multiple of two pointers.
             self.regs = align(self.regs, 2);
             self.offset = align(self.offset, 2 * self.pointer_bytes);
-            return ArgAction::Split;
+            return ArgAction::Convert(ValueConversion::IntSplit);
         }
 
         if self.regs < 8 {
