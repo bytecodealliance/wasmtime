@@ -315,6 +315,8 @@ class TypeVar(object):
     ASBOOL = 'as_bool'
     HALFWIDTH = 'half_width'
     DOUBLEWIDTH = 'double_width'
+    HALFVECTOR = 'half_vector'
+    DOUBLEVECTOR = 'double_vector'
 
     @staticmethod
     def derived(base, derived_func):
@@ -395,6 +397,30 @@ class TypeVar(object):
                 assert ts.max_bool < MAX_BITS, "Can't double all bool types."
 
         return TypeVar.derived(self, self.DOUBLEWIDTH)
+
+    def half_vector(self):
+        # type: () -> TypeVar
+        """
+        Return a derived type variable that has half the number of vector lanes
+        as this one, with the same lane type.
+        """
+        if not self.is_derived:
+            ts = self.type_set
+            assert ts.min_lanes > 1, "Can't halve a scalar type"
+
+        return TypeVar.derived(self, self.HALFVECTOR)
+
+    def double_vector(self):
+        # type: () -> TypeVar
+        """
+        Return a derived type variable that has twice the number of vector
+        lanes as this one, with the same lane type.
+        """
+        if not self.is_derived:
+            ts = self.type_set
+            assert ts.max_lanes < 256, "Can't double 256 lanes."
+
+        return TypeVar.derived(self, self.DOUBLEVECTOR)
 
     def free_typevar(self):
         # type: () -> TypeVar

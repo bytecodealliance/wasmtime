@@ -173,9 +173,9 @@ fn convert_from_abi(dfg: &mut DataFlowGraph,
         // Construct a `ty` by concatenating two halves of a vector.
         ValueConversion::VectorSplit => {
             let abi_ty = ty.half_vector().expect("Invalid type for conversion");
-            let _lo = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
-            let _hi = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
-            unimplemented!()
+            let lo = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            let hi = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            dfg.ins(pos).vconcat(lo, hi)
         }
         // Construct a `ty` by bit-casting from an integer type.
         ValueConversion::IntBits => {

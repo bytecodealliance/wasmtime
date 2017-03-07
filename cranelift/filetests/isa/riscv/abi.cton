@@ -21,6 +21,14 @@ function f(i32) {
     sig3 = signature(f64, f64, f64, f64, f64, f64, f64, i64) -> f64
 ; check: sig3 = signature(f64 [%f10], f64 [%f11], f64 [%f12], f64 [%f13], f64 [%f14], f64 [%f15], f64 [%f16], i32 [0], i32 [4]) -> f64 [%f10]
 
+; Splitting vectors.
+    sig4 = signature(i32x4)
+; check: sig4 = signature(i32 [%x10], i32 [%x11], i32 [%x12], i32 [%x13])
+
+; Splitting vectors, then splitting ints.
+    sig5 = signature(i64x4)
+; check: sig5 = signature(i32 [%x10], i32 [%x11], i32 [%x12], i32 [%x13], i32 [%x14], i32 [%x15], i32 [%x16], i32 [%x17])
+
 ebb0(v0: i32):
     return_reg v0
 }
@@ -30,5 +38,19 @@ ebb0(v0: i64):
 ; check: $ebb0($(v0l=$VX): i32, $(v0h=$VX): i32):
 ; check: iconcat_lohi $v0l, $v0h
     v1 = iadd_imm v0, 1
+    return v0
+}
+
+function vector_split_args(i64x4) -> i64 {
+ebb0(v0: i64x4):
+; check: $ebb0($(v0al=$VX): i32, $(v0ah=$VX): i32, $(v0bl=$VX): i32, $(v0bh=$VX): i32, $(v0cl=$VX): i32, $(v0ch=$VX): i32, $(v0dl=$VX): i32, $(v0dh=$VX): i32):
+; check: $(v0a=$V) = iconcat_lohi $v0al, $v0ah
+; check: $(v0b=$V) = iconcat_lohi $v0bl, $v0bh
+; check: $(v0ab=$V) = vconcat $v0a, $v0b
+; check: $(v0c=$V) = iconcat_lohi $v0cl, $v0ch
+; check: $(v0d=$V) = iconcat_lohi $v0dl, $v0dh
+; check: $(v0cd=$V) = vconcat $v0c, $v0d
+; check: $(v0abcd=$V) = vconcat $v0ab, $v0cd
+    v1 = iadd v0, v0
     return v0
 }

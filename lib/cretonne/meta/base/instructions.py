@@ -264,6 +264,40 @@ fill = Instruction(
 # Vector operations
 #
 
+x = Operand('x', TxN, doc='Vector to split')
+lo = Operand('lo', TxN.half_vector(), doc='Low-numbered lanes of `x`')
+hi = Operand('hi', TxN.half_vector(), doc='High-numbered lanes of `x`')
+
+vsplit = Instruction(
+        'vsplit', r"""
+        Split a vector into two halves.
+
+        Split the vector `x` into two separate values, each containing half of
+        the lanes from ``x``. The result may be two scalars if ``x`` only had
+        two lanes.
+        """,
+        ins=x, outs=(lo, hi))
+
+Any128 = TypeVar(
+        'Any128', 'Any scalar or vector type with as most 128 lanes',
+        ints=True, floats=True, bools=True, scalars=True, simd=(1, 128))
+x = Operand('x', Any128, doc='Low-numbered lanes')
+y = Operand('y', Any128, doc='High-numbered lanes')
+a = Operand('a', Any128.double_vector(), doc='Concatenation of `x` and `y`')
+
+vconcat = Instruction(
+        'vconcat', r"""
+        Vector concatenation.
+
+        Return a vector formed by concatenating ``x`` and ``y``. The resulting
+        vector type has twice as many lanes as each of the inputs. The lanes of
+        ``x`` appear as the low-numbered lanes, and the lanes of ``y`` become
+        the high-numbered lanes of ``a``.
+
+        It is possible to form a vector by concatenating two scalars.
+        """,
+        ins=(x, y), outs=a)
+
 c = Operand('c', TxN.as_bool(), doc='Controlling vector')
 x = Operand('x', TxN, doc='Value to use where `c` is true')
 y = Operand('y', TxN, doc='Value to use where `c` is false')
