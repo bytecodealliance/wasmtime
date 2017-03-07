@@ -668,14 +668,9 @@ allocation pass and beyond.
 Vector operations
 -----------------
 
+.. autoinst:: vsplit
+.. autoinst:: vconcat
 .. autoinst:: vselect
-
-.. inst:: a = vbuild x, y, z, ...
-
-    Vector build.
-
-    Build a vector value from the provided lanes.
-
 .. autoinst:: splat
 .. autoinst:: insertlane
 .. autoinst:: extractlane

@@ -217,6 +217,8 @@ impl Type {
     }
 
     /// Get a SIMD vector with half the number of lanes.
+    ///
+    /// There is no `double_vector()` method. Use `t.by(2)` instead.
     pub fn half_vector(self) -> Option<Type> {
         if self.is_scalar() {
             None

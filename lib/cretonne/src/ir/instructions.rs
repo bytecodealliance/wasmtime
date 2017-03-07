@@ -708,6 +708,12 @@ enum OperandConstraint {
 
     /// This operand is `ctrlType.double_width()`.
     DoubleWidth,
+
+    /// This operand is `ctrlType.half_vector()`.
+    HalfVector,
+
+    /// This operand is `ctrlType.double_vector()`.
+    DoubleVector,
 }
 
 impl OperandConstraint {
@@ -725,6 +731,8 @@ impl OperandConstraint {
             AsBool => Some(ctrl_type.as_bool()),
             HalfWidth => Some(ctrl_type.half_width().expect("invalid type for half_width")),
             DoubleWidth => Some(ctrl_type.double_width().expect("invalid type for double_width")),
+            HalfVector => Some(ctrl_type.half_vector().expect("invalid type for half_vector")),
+            DoubleVector => Some(ctrl_type.by(2).expect("invalid type for double_vector")),
         }
     }
 }
