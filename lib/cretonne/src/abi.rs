@@ -23,6 +23,18 @@ pub enum ArgAction {
     Convert(ValueConversion),
 }
 
+impl From<ArgumentLoc> for ArgAction {
+    fn from(x: ArgumentLoc) -> ArgAction {
+        ArgAction::Assign(x)
+    }
+}
+
+impl From<ValueConversion> for ArgAction {
+    fn from(x: ValueConversion) -> ArgAction {
+        ArgAction::Convert(x)
+    }
+}
+
 /// Legalization action to be applied to a value that is being passed to or from a legalized ABI.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueConversion {

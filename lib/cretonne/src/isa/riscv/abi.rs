@@ -41,7 +41,7 @@ impl ArgAssigner for Args {
         // Check for a legal type.
         // RISC-V doesn't have SIMD at all, so break all vectors down.
         if !ty.is_scalar() {
-            return ArgAction::Convert(ValueConversion::VectorSplit);
+            return ValueConversion::VectorSplit.into();
         }
 
         // Large integers and booleans are broken down to fit in a register.
@@ -49,19 +49,15 @@ impl ArgAssigner for Args {
             // Align registers and stack to a multiple of two pointers.
             self.regs = align(self.regs, 2);
             self.offset = align(self.offset, 2 * self.pointer_bytes);
-            return ArgAction::Convert(ValueConversion::IntSplit);
+            return ValueConversion::IntSplit.into();
         }
 
         // Small integers are extended to the size of a pointer register.
         if ty.is_int() && ty.bits() < self.pointer_bits {
             match arg.extension {
                 ArgumentExtension::None => {}
-                ArgumentExtension::Uext => {
-                    return ArgAction::Convert(ValueConversion::Uext(self.pointer_type))
-                }
-                ArgumentExtension::Sext => {
-                    return ArgAction::Convert(ValueConversion::Sext(self.pointer_type))
-                }
+                ArgumentExtension::Uext => return ValueConversion::Uext(self.pointer_type).into(),
+                ArgumentExtension::Sext => return ValueConversion::Sext(self.pointer_type).into(),
             }
         }
 
@@ -73,12 +69,12 @@ impl ArgAssigner for Args {
                 GPR.unit(10 + self.regs as usize)
             };
             self.regs += 1;
-            ArgAction::Assign(ArgumentLoc::Reg(reg))
+            ArgumentLoc::Reg(reg).into()
         } else {
             // Assign a stack location.
             let loc = ArgumentLoc::Stack(self.offset);
             self.offset += self.pointer_bytes;
-            ArgAction::Assign(loc)
+            loc.into()
         }
     }
 }
