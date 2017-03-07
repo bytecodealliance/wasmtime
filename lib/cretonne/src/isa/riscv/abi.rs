@@ -6,13 +6,14 @@
 //! This doesn't support the soft-float ABI at the moment.
 
 use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
-use ir::{Signature, ArgumentType, ArgumentLoc};
+use ir::{Signature, Type, ArgumentType, ArgumentLoc, ArgumentExtension};
 use isa::riscv::registers::{GPR, FPR};
 use settings as shared_settings;
 
 struct Args {
     pointer_bits: u16,
     pointer_bytes: u32,
+    pointer_type: Type,
     regs: u32,
     offset: u32,
 }
@@ -22,6 +23,7 @@ impl Args {
         Args {
             pointer_bits: bits,
             pointer_bytes: bits as u32 / 8,
+            pointer_type: Type::int(bits).unwrap(),
             regs: 0,
             offset: 0,
         }
@@ -48,6 +50,19 @@ impl ArgAssigner for Args {
             self.regs = align(self.regs, 2);
             self.offset = align(self.offset, 2 * self.pointer_bytes);
             return ArgAction::Convert(ValueConversion::IntSplit);
+        }
+
+        // Small integers are extended to the size of a pointer register.
+        if ty.is_int() && ty.bits() < self.pointer_bits {
+            match arg.extension {
+                ArgumentExtension::None => {}
+                ArgumentExtension::Uext => {
+                    return ArgAction::Convert(ValueConversion::Uext(self.pointer_type))
+                }
+                ArgumentExtension::Sext => {
+                    return ArgAction::Convert(ValueConversion::Sext(self.pointer_type))
+                }
+            }
         }
 
         if self.regs < 8 {

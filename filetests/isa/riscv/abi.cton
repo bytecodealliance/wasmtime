@@ -41,6 +41,13 @@ ebb0(v0: i64):
     return v0
 }
 
+function int_ext(i8, i8 sext, i8 uext) -> i8 {
+ebb0(v1: i8, v2: i8, v3: i8):
+; check: $ebb0($v1: i8, $(v2x=$VX): i32, $(v3x=$VX): i32):
+; check: ireduce.i8 $v2x
+; check: ireduce.i8 $v3x
+}
+
 function vector_split_args(i64x4) -> i64 {
 ebb0(v0: i64x4):
 ; check: $ebb0($(v0al=$VX): i32, $(v0ah=$VX): i32, $(v0bl=$VX): i32, $(v0bh=$VX): i32, $(v0cl=$VX): i32, $(v0ch=$VX): i32, $(v0dl=$VX): i32, $(v0dh=$VX): i32):
