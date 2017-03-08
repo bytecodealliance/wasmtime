@@ -6,7 +6,7 @@
 use std::fmt::{self, Display, Debug, Formatter};
 use ir::{FunctionName, Signature, Value, Inst, StackSlot, StackSlotData, JumpTable, JumpTableData,
          ValueLoc, DataFlowGraph, Layout};
-use isa::Encoding;
+use isa::{TargetIsa, Encoding};
 use entity_map::{EntityMap, PrimaryEntityData};
 use write::write_function;
 
@@ -63,6 +63,20 @@ impl Function {
     /// Create a new empty, anonymous function.
     pub fn new() -> Function {
         Self::with_name_signature(FunctionName::default(), Signature::new())
+    }
+
+    /// Return an object that can display this function with correct ISA-specific annotations.
+    pub fn display<'a, I: Into<Option<&'a TargetIsa>>>(&'a self, isa: I) -> DisplayFunction<'a> {
+        DisplayFunction(self, isa.into())
+    }
+}
+
+/// Wrapper type capable of displaying a `Function` with correct ISA annotations.
+pub struct DisplayFunction<'a>(&'a Function, Option<&'a TargetIsa>);
+
+impl<'a> Display for DisplayFunction<'a> {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        write_function(fmt, self.0, self.1)
     }
 }
 

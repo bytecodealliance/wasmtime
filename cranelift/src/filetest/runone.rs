@@ -90,7 +90,10 @@ fn test_tuples<'a>(tests: &'a [Box<SubTest>],
                 }
             }
         } else {
-            out.push((&**test, no_isa_flags, None));
+            // This test doesn't require an ISA, and we only want to run one instance of it.
+            // Still, give it an ISA ref if we happen to have a unique one.
+            // For example, `test cat` can use this to print encodings and register names.
+            out.push((&**test, no_isa_flags, isa_spec.unique_isa()));
         }
     }
     Ok(out)

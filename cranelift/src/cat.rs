@@ -61,6 +61,6 @@ impl SubTest for TestCat {
     }
 
     fn run(&self, func: Cow<Function>, context: &Context) -> STResult<()> {
-        subtest::run_filecheck(&func.to_string(), context)
+        subtest::run_filecheck(&func.display(context.isa).to_string(), context)
     }
 }
