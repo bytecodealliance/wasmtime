@@ -71,7 +71,8 @@ impl Directive {
                                              var,
                                              rest)));
         }
-        Ok(Directive::Regex(var, rest[varlen + 1..].to_string()))
+        // Ignore trailing white space in the regex, including CR.
+        Ok(Directive::Regex(var, rest[varlen + 1..].trim_right().to_string()))
     }
 }
 
@@ -410,10 +411,12 @@ mod tests {
                    Ok(true));
         assert_eq!(b.directive("[x86]sameln: $x $(y=[^]]*) there").map_err(e2s),
                    Ok(true));
+        // Windows line ending sneaking in.
+        assert_eq!(b.directive("regex: Y=foo\r").map_err(e2s), Ok(true));
 
         let c = b.finish();
         assert_eq!(c.to_string(),
                    "#0 regex: X=more text\n#1 not: patt $(x) $(y) here\n#2 sameln: $(x) \
-                    $(y=[^]]*) there\n");
+                    $(y=[^]]*) there\n#3 regex: Y=foo\n");
     }
 }
