@@ -288,31 +288,13 @@ def gen_opcodes(groups, fmt):
     fmt.line()
 
     with fmt.indented('impl Opcode {', '}'):
-        attrs = [
-            {
-                'name': 'is_branch',
-                'comment': 'True for all branch instructions.'
-            },
-            {
-                'name': 'is_terminator',
-                'comment': 'True for instructions that terminate EBB.'
-            },
-            {
-                'name': 'can_trap',
-                'comment': 'True if instruction could trap.'
-            }
-        ]
-
-        for attr in attrs:
-            if attr != attrs[0]:
-                fmt.line()
-
-            fmt.doc_comment(attr['comment'])
+        for attr in sorted(Instruction.ATTRIBS.keys()):
+            fmt.doc_comment(Instruction.ATTRIBS[attr])
             with fmt.indented('pub fn {}(self) -> bool {{'
-                              .format(attr['name']), '}'):
+                              .format(attr), '}'):
                 with fmt.indented('match self {', '}'):
                     for i in instrs:
-                        if getattr(i, attr['name']):
+                        if getattr(i, attr):
                             fmt.format(
                                     'Opcode::{} => true,',
                                     i.camel_name, i.name)

@@ -80,8 +80,21 @@ class Instruction(object):
                 values or `variable_args`.
     :param is_terminator: This is a terminator instruction.
     :param is_branch: This is a branch instruction.
+    :param is_call: This is a call instruction.
+    :param is_return: This is a return instruction.
     :param can_trap: This instruction can trap.
     """
+
+    # Boolean instruction attributes that can be passed as keyword arguments to
+    # the constructor. Map attribute name to doc comment for generated Rust
+    # code.
+    ATTRIBS = {
+            'is_terminator': 'True for instructions that terminate the EBB.',
+            'is_branch': 'True for all branch or jump instructions.',
+            'is_call': 'Is this a call instruction?',
+            'is_return': 'Is this a return instruction?',
+            'can_trap': 'Can this instruction cause a trap?',
+            }
 
     def __init__(self, name, doc, ins=(), outs=(), **kwargs):
         # type: (str, str, OpList, OpList, **Any) -> None # noqa
@@ -95,9 +108,8 @@ class Instruction(object):
         self.value_results = tuple(
                 i for i, o in enumerate(self.outs) if o.is_value())
         self._verify_polymorphic()
-        self.is_branch = 'is_branch' in kwargs
-        self.is_terminator = 'is_terminator' in kwargs
-        self.can_trap = 'can_trap' in kwargs
+        for attr in Instruction.ATTRIBS:
+            setattr(self, attr, not not kwargs.get(attr, False))
         InstructionGroup.append(self)
 
     def __str__(self):
