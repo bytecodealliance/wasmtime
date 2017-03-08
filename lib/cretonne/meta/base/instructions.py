@@ -111,7 +111,7 @@ x_return = Instruction(
         provided return values. The list of return values must match the
         function signature's return types.
         """,
-        ins=rvals, is_terminator=True)
+        ins=rvals, is_return=True, is_terminator=True)
 
 raddr = Operand('raddr', iAddr, doc='Return address')
 
@@ -130,7 +130,7 @@ return_reg = Instruction(
         :inst:`return` will be legalized into this instruction on these
         architectures.
         """,
-        ins=(raddr, rvals), is_terminator=True)
+        ins=(raddr, rvals), is_return=True, is_terminator=True)
 
 FN = Operand(
         'FN',
@@ -145,8 +145,7 @@ call = Instruction(
         Call a function which has been declared in the preamble. The argument
         types must match the function's signature.
         """,
-        ins=(FN, args),
-        outs=rvals)
+        ins=(FN, args), outs=rvals, is_call=True)
 
 SIG = Operand('SIG', entities.sig_ref, doc='function signature')
 callee = Operand('callee', iAddr, doc='address of function to call')
@@ -158,8 +157,7 @@ call_indirect = Instruction(
         Call the function pointed to by `callee` with the given arguments. The
         called function must match the specified signature.
         """,
-        ins=(SIG, callee, args),
-        outs=rvals)
+        ins=(SIG, callee, args), outs=rvals, is_call=True)
 
 #
 # Materializing constants.
