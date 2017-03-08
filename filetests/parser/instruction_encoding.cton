@@ -17,9 +17,9 @@ ebb1(v0: i32, v1: i32):
 ; nextln: $ebb1($v0: i32, $v1: i32):
 ; nextln:     [-]$WS $v2 = iadd $v0, $v1
 ; nextln:     [-]$WS trap
-; nextln:     [0#1234]$WS $v6, $v7 = iadd_cout $v2, $v0
+; nextln:     [R#1234]$WS $v6, $v7 = iadd_cout $v2, $v0
 ; TODO Add the full encoding information available: instruction recipe name and architectural registers if specified
-; nextln:     [2#beef]$WS $v8 = ishl_imm $v6, 2
+; nextln:     [Rshamt#beef]$WS $v8 = ishl_imm $v6, 2
 ; nextln:     [-]$WS $v9 = iadd $v8, $v7
-; nextln:     [3#05]$WS return $v0, $v8
+; nextln:     [Iret#05]$WS return $v0, $v8
 ; nextln: }

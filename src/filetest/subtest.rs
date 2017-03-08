@@ -10,7 +10,7 @@ use filecheck::{self, CheckerBuilder, Checker, Value as FCValue};
 
 pub type Result<T> = result::Result<T, String>;
 
-/// Context for running a a test on a single function.
+/// Context for running a test on a single function.
 pub struct Context<'a> {
     /// Comments from the preamble f the test file. These apply to all functions.
     pub preamble_comments: &'a [Comment<'a>],
@@ -24,8 +24,8 @@ pub struct Context<'a> {
     /// ISA-independent flags for this test.
     pub flags: &'a Flags,
 
-    /// Target ISA to test against. Only present for sub-tests whose `needs_isa` method returned
-    /// true.
+    /// Target ISA to test against. Only guaranteed to be present for sub-tests whose `needs_isa`
+    /// method returned `true`. For other sub-tests, this is set if the test file has a unique ISA.
     pub isa: Option<&'a TargetIsa>,
 }
 
