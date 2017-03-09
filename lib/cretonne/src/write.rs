@@ -282,19 +282,19 @@ fn write_instruction(w: &mut Write,
                      args[0],
                      DisplayValues(&args[1..]))
         }
-        Return { ref data, .. } => {
-            if data.varargs.is_empty() {
+        Return { ref args, .. } => {
+            if args.is_empty() {
                 writeln!(w, "")
             } else {
-                writeln!(w, " {}", data.varargs)
+                writeln!(w,
+                         " {}",
+                         DisplayValues(args.as_slice(&func.dfg.value_lists)))
             }
         }
-        ReturnReg { ref data, .. } => {
-            if data.varargs.is_empty() {
-                writeln!(w, " {}", data.arg)
-            } else {
-                writeln!(w, " {}, {}", data.arg, data.varargs)
-            }
+        ReturnReg { ref args, .. } => {
+            writeln!(w,
+                     " {}",
+                     DisplayValues(args.as_slice(&func.dfg.value_lists)))
         }
     }
 }

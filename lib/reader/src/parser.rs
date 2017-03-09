@@ -15,7 +15,7 @@ use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs,
-                                 TernaryOverflowData, ReturnData, ReturnRegData};
+                                 TernaryOverflowData};
 use cretonne::isa::{self, TargetIsa, Encoding};
 use cretonne::settings;
 use testfile::{TestFile, Details, Comment};
@@ -217,13 +217,12 @@ impl<'a> Context<'a> {
                         self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
 
-                    InstructionData::Return { ref mut data, .. } => {
-                        self.map.rewrite_values(&mut data.varargs, loc)?;
+                    InstructionData::Return { ref mut args, .. } => {
+                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
 
-                    InstructionData::ReturnReg { ref mut data, .. } => {
-                        self.map.rewrite_value(&mut data.arg, loc)?;
-                        self.map.rewrite_values(&mut data.varargs, loc)?;
+                    InstructionData::ReturnReg { ref mut args, .. } => {
+                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
                 }
             }
@@ -1527,7 +1526,7 @@ impl<'a> Parser<'a> {
                 InstructionData::Return {
                     opcode: opcode,
                     ty: VOID,
-                    data: Box::new(ReturnData { varargs: args }),
+                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
             }
             InstructionFormat::ReturnReg => {
@@ -1540,10 +1539,7 @@ impl<'a> Parser<'a> {
                 InstructionData::ReturnReg {
                     opcode: opcode,
                     ty: VOID,
-                    data: Box::new(ReturnRegData {
-                        arg: raddr,
-                        varargs: args,
-                    }),
+                    args: args.into_value_list(&[raddr], &mut ctx.function.dfg.value_lists),
                 }
             }
             InstructionFormat::BranchTable => {

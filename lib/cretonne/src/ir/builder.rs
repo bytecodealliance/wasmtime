@@ -5,7 +5,7 @@
 
 use ir::{types, instructions};
 use ir::{InstructionData, DataFlowGraph, Cursor};
-use ir::{Opcode, Type, Inst, Value, Ebb, JumpTable, VariableArgs, SigRef, FuncRef, ValueList};
+use ir::{Opcode, Type, Inst, Value, Ebb, JumpTable, SigRef, FuncRef, ValueList};
 use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, ImmVector};
 use ir::condcodes::{IntCC, FloatCC};
 

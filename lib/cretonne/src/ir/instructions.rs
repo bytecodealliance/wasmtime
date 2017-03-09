@@ -228,12 +228,12 @@ pub enum InstructionData {
     Return {
         opcode: Opcode,
         ty: Type,
-        data: Box<ReturnData>,
+        args: ValueList,
     },
     ReturnReg {
         opcode: Opcode,
         ty: Type,
-        data: Box<ReturnRegData>,
+        args: ValueList,
     },
 }
 
@@ -328,34 +328,6 @@ pub struct TernaryOverflowData {
 impl Display for TernaryOverflowData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}, {}, {}", self.args[0], self.args[1], self.args[2])
-    }
-}
-
-/// Payload of a return instruction.
-#[derive(Clone, Debug)]
-pub struct ReturnData {
-    /// Dynamically sized array containing return values.
-    pub varargs: VariableArgs,
-}
-
-/// Payload of a return instruction.
-#[derive(Clone, Debug)]
-pub struct ReturnRegData {
-    /// Return address.
-    pub arg: Value,
-    /// Dynamically sized array containing return values.
-    pub varargs: VariableArgs,
-}
-
-impl ReturnRegData {
-    /// Get references to the arguments.
-    pub fn arguments(&self) -> [&[Value]; 2] {
-        [ref_slice(&self.arg), &self.varargs]
-    }
-
-    /// Get mutable references to the arguments.
-    pub fn arguments_mut(&mut self) -> [&mut [Value]; 2] {
-        [ref_slice_mut(&mut self.arg), &mut self.varargs]
     }
 }
 

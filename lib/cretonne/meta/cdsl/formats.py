@@ -63,6 +63,10 @@ class InstructionFormat(object):
         self.value_operands = tuple(
                 i for i, k in enumerate(self.kinds) if k is VALUE)
 
+        # We require a value list for storage of variable arguments.
+        if VARIABLE_ARGS in self.kinds:
+            assert self.has_value_list, "Need a value list for variable args"
+
         # The typevar_operand argument must point to a 'value' operand.
         self.typevar_operand = kwargs.get('typevar_operand', None)  # type: int
         if self.typevar_operand is not None:
