@@ -65,7 +65,8 @@ class CtonObject(ObjectDescription):
         indextext = self.get_index_text(name)
         if indextext:
             self.indexnode['entries'].append(('single', indextext,
-                                              targetname, ''))
+                                              targetname, '', None))
+
 
 # Type variables are indicated as %T.
 typevar = re.compile('(\%[A-Z])')
@@ -112,6 +113,7 @@ class CtonType(CtonObject):
 
     def get_index_text(self, name):
         return name + ' (IL type)'
+
 
 sep_equal = re.compile('\s*=\s*')
 sep_comma = re.compile('\s*,\s*')

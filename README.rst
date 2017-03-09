@@ -65,11 +65,10 @@ Building the documentation
 To build the Cretonne documentation, you need the `Sphinx documentation
 generator <http://www.sphinx-doc.org/>`_::
 
-    $ pip install sphinx==1.3.5 sphinx-autobuild
+    $ pip install sphinx>=1.4 sphinx-autobuild sphinx_rtd_theme
     $ cd cretonne/docs
     $ make html
     $ open _build/html/index.html
 
-The specific Sphinx version is currently used by Read the Docs. Sphinx 1.4 has
-been released, but produces lots of warnings about four-column indices. We'll
-upgrade when Read the Docs does.
+We don't support Sphinx versions before 1.4 since the format of index tuples
+has changed.
