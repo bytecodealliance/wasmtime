@@ -206,12 +206,19 @@ def gen_instruction_data_impl(fmt):
 
         fmt.doc_comment('Get the controlling type variable operand.')
         with fmt.indented(
-                'pub fn typevar_operand(&self) -> Option<Value> {', '}'):
+                'pub fn typevar_operand(&self, pool: &ValueListPool) -> '
+                'Option<Value> {', '}'):
             with fmt.indented('match *self {', '}'):
                 for f in InstructionFormat.all_formats:
                     n = 'InstructionData::' + f.name
                     if f.typevar_operand is None:
                         fmt.line(n + ' { .. } => None,')
+                    elif f.has_value_list:
+                        # We keep all arguments in a value list.
+                        i = f.value_operands.index(f.typevar_operand)
+                        fmt.line(
+                                '{} {{ ref args, .. }} => '
+                                'args.get({}, pool),'.format(n, i))
                     elif len(f.value_operands) == 1:
                         # We have a single value operand called 'arg'.
                         if f.boxed_storage:

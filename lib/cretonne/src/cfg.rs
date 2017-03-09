@@ -75,7 +75,7 @@ impl ControlFlowGraph {
 
         for ebb in &func.layout {
             for inst in func.layout.ebb_insts(ebb) {
-                match func.dfg[inst].analyze_branch() {
+                match func.dfg[inst].analyze_branch(&func.dfg.value_lists) {
                     BranchInfo::SingleDest(dest, _) => {
                         self.add_edge((ebb, inst), dest);
                     }
@@ -148,7 +148,7 @@ impl ControlFlowGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ir::{Function, InstBuilder, Cursor, VariableArgs, types};
+    use ir::{Function, InstBuilder, Cursor, types};
 
     #[test]
     fn empty() {
@@ -197,12 +197,12 @@ mod tests {
             let cur = &mut Cursor::new(&mut func.layout);
 
             cur.insert_ebb(ebb0);
-            br_ebb0_ebb2 = dfg.ins(cur).brnz(cond, ebb2, VariableArgs::new());
-            jmp_ebb0_ebb1 = dfg.ins(cur).jump(ebb1, VariableArgs::new());
+            br_ebb0_ebb2 = dfg.ins(cur).brnz(cond, ebb2, &[]);
+            jmp_ebb0_ebb1 = dfg.ins(cur).jump(ebb1, &[]);
 
             cur.insert_ebb(ebb1);
-            br_ebb1_ebb1 = dfg.ins(cur).brnz(cond, ebb1, VariableArgs::new());
-            jmp_ebb1_ebb2 = dfg.ins(cur).jump(ebb2, VariableArgs::new());
+            br_ebb1_ebb1 = dfg.ins(cur).brnz(cond, ebb1, &[]);
+            jmp_ebb1_ebb2 = dfg.ins(cur).jump(ebb2, &[]);
 
             cur.insert_ebb(ebb2);
         }
