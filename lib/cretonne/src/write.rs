@@ -225,6 +225,7 @@ fn write_instruction(w: &mut Write,
     }
 
     // Then the operands, depending on format.
+    let pool = &func.dfg.value_lists;
     use ir::instructions::InstructionData::*;
     match func.dfg[inst] {
         Nullary { .. } => writeln!(w, ""),
@@ -244,8 +245,28 @@ fn write_instruction(w: &mut Write,
         ExtractLane { lane, arg, .. } => writeln!(w, " {}, {}", arg, lane),
         IntCompare { cond, args, .. } => writeln!(w, " {}, {}, {}", cond, args[0], args[1]),
         FloatCompare { cond, args, .. } => writeln!(w, " {}, {}, {}", cond, args[0], args[1]),
-        Jump { ref data, .. } => writeln!(w, " {}", data),
-        Branch { ref data, .. } => writeln!(w, " {}", data),
+        Jump { destination, ref args, .. } => {
+            if args.is_empty() {
+                writeln!(w, " {}", destination)
+            } else {
+                writeln!(w,
+                         " {}({})",
+                         destination,
+                         DisplayValues(args.as_slice(pool)))
+            }
+        }
+        Branch { destination, ref args, .. } => {
+            let args = args.as_slice(pool);
+            if args.len() == 1 {
+                writeln!(w, " {}, {}", args[0], destination)
+            } else {
+                writeln!(w,
+                         " {}, {}({})",
+                         args[0],
+                         destination,
+                         DisplayValues(&args[1..]))
+            }
+        }
         BranchTable { arg, table, .. } => writeln!(w, " {}, {}", arg, table),
         Call { func_ref, ref args, .. } => {
             writeln!(w,
@@ -253,8 +274,13 @@ fn write_instruction(w: &mut Write,
                      func_ref,
                      DisplayValues(args.as_slice(&func.dfg.value_lists)))
         }
-        IndirectCall { ref data, .. } => {
-            writeln!(w, " {}, {}({})", data.sig_ref, data.arg, data.varargs)
+        IndirectCall { sig_ref, ref args, .. } => {
+            let args = args.as_slice(pool);
+            writeln!(w,
+                     " {}, {}({})",
+                     sig_ref,
+                     args[0],
+                     DisplayValues(&args[1..]))
         }
         Return { ref data, .. } => {
             if data.varargs.is_empty() {

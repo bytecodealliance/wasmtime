@@ -42,15 +42,15 @@ ExtractLane = InstructionFormat(VALUE, ('lane', uimm8))
 IntCompare = InstructionFormat(intcc, VALUE, VALUE)
 FloatCompare = InstructionFormat(floatcc, VALUE, VALUE)
 
-Jump = InstructionFormat(ebb, VARIABLE_ARGS, boxed_storage=True)
-Branch = InstructionFormat(VALUE, ebb, VARIABLE_ARGS, boxed_storage=True)
+Jump = InstructionFormat(ebb, VARIABLE_ARGS, value_list=True)
+Branch = InstructionFormat(VALUE, ebb, VARIABLE_ARGS, value_list=True)
 BranchTable = InstructionFormat(VALUE, jump_table)
 
 Call = InstructionFormat(
         func_ref, VARIABLE_ARGS, multiple_results=True, value_list=True)
 IndirectCall = InstructionFormat(
         sig_ref, VALUE, VARIABLE_ARGS,
-        multiple_results=True, boxed_storage=True)
+        multiple_results=True, value_list=True)
 Return = InstructionFormat(VARIABLE_ARGS, boxed_storage=True)
 ReturnReg = InstructionFormat(VALUE, VARIABLE_ARGS, boxed_storage=True)
 

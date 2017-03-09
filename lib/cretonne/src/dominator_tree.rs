@@ -209,7 +209,7 @@ impl DominatorTree {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ir::{Function, InstBuilder, Cursor, VariableArgs, types};
+    use ir::{Function, InstBuilder, Cursor, types};
     use cfg::ControlFlowGraph;
 
     #[test]
@@ -238,14 +238,14 @@ mod test {
             let cur = &mut Cursor::new(&mut func.layout);
 
             cur.insert_ebb(ebb3);
-            jmp_ebb3_ebb1 = dfg.ins(cur).jump(ebb1, VariableArgs::new());
+            jmp_ebb3_ebb1 = dfg.ins(cur).jump(ebb1, &[]);
 
             cur.insert_ebb(ebb1);
-            br_ebb1_ebb0 = dfg.ins(cur).brnz(cond, ebb0, VariableArgs::new());
-            jmp_ebb1_ebb2 = dfg.ins(cur).jump(ebb2, VariableArgs::new());
+            br_ebb1_ebb0 = dfg.ins(cur).brnz(cond, ebb0, &[]);
+            jmp_ebb1_ebb2 = dfg.ins(cur).jump(ebb2, &[]);
 
             cur.insert_ebb(ebb2);
-            dfg.ins(cur).jump(ebb0, VariableArgs::new());
+            dfg.ins(cur).jump(ebb0, &[]);
 
             cur.insert_ebb(ebb0);
         }

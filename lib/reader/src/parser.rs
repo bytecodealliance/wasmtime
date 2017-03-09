@@ -15,8 +15,7 @@ use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs,
-                                 TernaryOverflowData, JumpData, BranchData, IndirectCallData,
-                                 ReturnData, ReturnRegData};
+                                 TernaryOverflowData, ReturnData, ReturnRegData};
 use cretonne::isa::{self, TargetIsa, Encoding};
 use cretonne::settings;
 use testfile::{TestFile, Details, Comment};
@@ -200,24 +199,22 @@ impl<'a> Context<'a> {
                         self.map.rewrite_values(&mut data.args, loc)?;
                     }
 
-                    InstructionData::Jump { ref mut data, .. } => {
-                        self.map.rewrite_ebb(&mut data.destination, loc)?;
-                        self.map.rewrite_values(&mut data.varargs, loc)?;
+                    InstructionData::Jump { ref mut destination, ref mut args, .. } => {
+                        self.map.rewrite_ebb(destination, loc)?;
+                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
 
-                    InstructionData::Branch { ref mut data, .. } => {
-                        self.map.rewrite_value(&mut data.arg, loc)?;
-                        self.map.rewrite_ebb(&mut data.destination, loc)?;
-                        self.map.rewrite_values(&mut data.varargs, loc)?;
+                    InstructionData::Branch { ref mut destination, ref mut args, .. } => {
+                        self.map.rewrite_ebb(destination, loc)?;
+                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
 
                     InstructionData::Call { ref mut args, .. } => {
                         self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
 
-                    InstructionData::IndirectCall { ref mut data, .. } => {
-                        self.map.rewrite_value(&mut data.arg, loc)?;
-                        self.map.rewrite_values(&mut data.varargs, loc)?;
+                    InstructionData::IndirectCall { ref mut args, .. } => {
+                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
 
                     InstructionData::Return { ref mut data, .. } => {
@@ -1209,7 +1206,7 @@ impl<'a> Parser<'a> {
                     // TBD: If it is defined in another block, the type should have been specified
                     // explicitly. It is unfortunate that the correctness of IL depends on the
                     // layout of the blocks.
-                    let ctrl_src_value = inst_data.typevar_operand()
+                    let ctrl_src_value = inst_data.typevar_operand(&ctx.function.dfg.value_lists)
                         .expect("Constraints <-> Format inconsistency");
                     ctx.function.dfg.value_type(match ctx.map.get_value(ctrl_src_value) {
                         Some(v) => v,
@@ -1429,10 +1426,8 @@ impl<'a> Parser<'a> {
                 InstructionData::Jump {
                     opcode: opcode,
                     ty: VOID,
-                    data: Box::new(JumpData {
-                        destination: ebb_num,
-                        varargs: args,
-                    }),
+                    destination: ebb_num,
+                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
             }
             InstructionFormat::Branch => {
@@ -1443,11 +1438,8 @@ impl<'a> Parser<'a> {
                 InstructionData::Branch {
                     opcode: opcode,
                     ty: VOID,
-                    data: Box::new(BranchData {
-                        arg: ctrl_arg,
-                        destination: ebb_num,
-                        varargs: args,
-                    }),
+                    destination: ebb_num,
+                    args: args.into_value_list(&[ctrl_arg], &mut ctx.function.dfg.value_lists),
                 }
             }
             InstructionFormat::InsertLane => {
@@ -1511,7 +1503,7 @@ impl<'a> Parser<'a> {
                     ty: VOID,
                     second_result: None.into(),
                     func_ref: func_ref,
-                    args: args.into_value_list(&mut ctx.function.dfg.value_lists),
+                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
             }
             InstructionFormat::IndirectCall => {
@@ -1526,11 +1518,8 @@ impl<'a> Parser<'a> {
                     opcode: opcode,
                     ty: VOID,
                     second_result: None.into(),
-                    data: Box::new(IndirectCallData {
-                        sig_ref: sig_ref,
-                        arg: callee,
-                        varargs: args,
-                    }),
+                    sig_ref: sig_ref,
+                    args: args.into_value_list(&[callee], &mut ctx.function.dfg.value_lists),
                 }
             }
             InstructionFormat::Return => {
