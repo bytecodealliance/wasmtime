@@ -20,7 +20,7 @@ pub use ir::funcname::FunctionName;
 pub use ir::extfunc::{Signature, ArgumentType, ArgumentExtension, ExtFuncData};
 pub use ir::types::Type;
 pub use ir::entities::{Ebb, Inst, Value, StackSlot, JumpTable, FuncRef, SigRef};
-pub use ir::instructions::{Opcode, InstructionData, VariableArgs};
+pub use ir::instructions::{Opcode, InstructionData, VariableArgs, ValueList, ValueListPool};
 pub use ir::stackslot::StackSlotData;
 pub use ir::jumptable::JumpTableData;
 pub use ir::valueloc::{ValueLoc, ArgumentLoc};

@@ -6,7 +6,7 @@
 
 use ir::{Function, Ebb, Inst, Value, Type};
 use isa::{TargetIsa, RegInfo};
-use std::fmt::{Result, Error, Write};
+use std::fmt::{self, Result, Error, Write};
 use std::result;
 
 /// Write `func` to `w` as equivalent text.
@@ -157,7 +157,7 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
 
 // Write out any value aliases appearing in `inst`.
 fn write_value_aliases(w: &mut Write, func: &Function, inst: Inst, indent: usize) -> Result {
-    for &arg in func.dfg[inst].arguments().iter().flat_map(|x| x.iter()) {
+    for &arg in func.dfg[inst].arguments(&func.dfg.value_lists).iter().flat_map(|x| x.iter()) {
         let resolved = func.dfg.resolve_aliases(arg);
         if resolved != arg {
             writeln!(w, "{1:0$}{2} -> {3}", indent, "", arg, resolved)?;
@@ -247,7 +247,12 @@ fn write_instruction(w: &mut Write,
         Jump { ref data, .. } => writeln!(w, " {}", data),
         Branch { ref data, .. } => writeln!(w, " {}", data),
         BranchTable { arg, table, .. } => writeln!(w, " {}, {}", arg, table),
-        Call { ref data, .. } => writeln!(w, " {}({})", data.func_ref, data.varargs),
+        Call { func_ref, ref args, .. } => {
+            writeln!(w,
+                     " {}({})",
+                     func_ref,
+                     DisplayValues(args.as_slice(&func.dfg.value_lists)))
+        }
         IndirectCall { ref data, .. } => {
             writeln!(w, " {}, {}({})", data.sig_ref, data.arg, data.varargs)
         }
@@ -265,6 +270,22 @@ fn write_instruction(w: &mut Write,
                 writeln!(w, " {}, {}", data.arg, data.varargs)
             }
         }
+    }
+}
+
+/// Displayable slice of values.
+struct DisplayValues<'a>(&'a [Value]);
+
+impl<'a> fmt::Display for DisplayValues<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result {
+        for (i, val) in self.0.iter().enumerate() {
+            if i == 0 {
+                write!(f, "{}", val)?;
+            } else {
+                write!(f, ", {}", val)?;
+            }
+        }
+        Ok(())
     }
 }
 

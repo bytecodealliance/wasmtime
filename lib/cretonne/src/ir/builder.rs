@@ -5,7 +5,7 @@
 
 use ir::{types, instructions};
 use ir::{InstructionData, DataFlowGraph, Cursor};
-use ir::{Opcode, Type, Inst, Value, Ebb, JumpTable, VariableArgs, SigRef, FuncRef};
+use ir::{Opcode, Type, Inst, Value, Ebb, JumpTable, VariableArgs, SigRef, FuncRef, ValueList};
 use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, ImmVector};
 use ir::condcodes::{IntCC, FloatCC};
 
@@ -21,6 +21,7 @@ pub trait InstBuilderBase<'f>: Sized {
     /// Get an immutable reference to the data flow graph that will hold the constructed
     /// instructions.
     fn data_flow_graph(&self) -> &DataFlowGraph;
+    fn data_flow_graph_mut(&mut self) -> &mut DataFlowGraph;
 
     /// Insert a simple instruction and return a reference to it.
     ///
@@ -76,6 +77,10 @@ impl<'c, 'fc, 'fd> InstBuilderBase<'fd> for InsertBuilder<'c, 'fc, 'fd> {
         self.dfg
     }
 
+    fn data_flow_graph_mut(&mut self) -> &mut DataFlowGraph {
+        self.dfg
+    }
+
     fn simple_instruction(self, data: InstructionData) -> (Inst, &'fd mut DataFlowGraph) {
         let inst = self.dfg.make_inst(data);
         self.pos.insert_inst(inst);
@@ -126,6 +131,10 @@ impl<'f> ReplaceBuilder<'f> {
 
 impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
     fn data_flow_graph(&self) -> &DataFlowGraph {
+        self.dfg
+    }
+
+    fn data_flow_graph_mut(&mut self) -> &mut DataFlowGraph {
         self.dfg
     }
 
