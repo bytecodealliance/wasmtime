@@ -61,3 +61,36 @@ ebb0(v0: i64x4):
     v1 = iadd v0, v0
     return v0
 }
+
+function parse_encoding(i32 [%x5]) -> i32 [%x10] {
+; check: function parse_encoding(i32 [%x5]) -> i32 [%x10] {
+
+    sig0 = signature(i32 [%x10]) -> i32 [%x10]
+; check: sig0 = signature(i32 [%x10]) -> i32 [%x10]
+
+    sig1 = signature(i32 [%x10], i32 [%x11]) -> b1 [%x10]
+; check: sig1 = signature(i32 [%x10], i32 [%x11]) -> b1 [%x10]
+
+    sig2 = signature(f32 [%f10], i32 [%x12], i32 [%x13]) -> f64 [%f10]
+; check: sig2 = signature(f32 [%f10], i32 [%x12], i32 [%x13]) -> f64 [%f10]
+
+; Arguments on stack where not necessary
+    sig3 = signature(f64 [%f10], i32 [0], i32 [4]) -> f64 [%f10]
+; check: sig3 = signature(f64 [%f10], i32 [0], i32 [4]) -> f64 [%f10]
+
+; Stack argument before register argument
+    sig4 = signature(f32 [72], i32 [%x10])
+; check: sig4 = signature(f32 [72], i32 [%x10])
+
+; Return value on stack
+    sig5 = signature() -> f32 [0]
+; check: sig5 = signature() -> f32 [0]
+
+; function + signature
+    fn15 = function bar(i32 [%x10]) -> b1 [%x10]
+; check: sig6 = signature(i32 [%x10]) -> b1 [%x10]
+; nextln: fn0 = sig6 bar
+
+ebb0(v0: i32):
+    return_reg v0
+}
