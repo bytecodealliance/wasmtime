@@ -10,7 +10,7 @@ use std::{u16, u32};
 use std::mem;
 use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotData, JumpTable,
                    JumpTableData, Signature, ArgumentType, ArgumentExtension, ExtFuncData, SigRef,
-                   FuncRef, ValueLoc};
+                   FuncRef, ValueLoc, ArgumentLoc};
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
@@ -445,6 +445,19 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume a u32 immediate.
+    // This is used for stack argument byte offsets.
+    fn match_uimm32(&mut self, err_msg: &str) -> Result<u32> {
+        if let Some(Token::Integer(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like an integer.
+            // Parse it as a u32 to check for overflow and other issues.
+            text.parse().map_err(|_| self.error("expected u32 decimal immediate"))
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
     // Match and consume an Ieee32 immediate.
     fn match_ieee32(&mut self, err_msg: &str) -> Result<Ieee32> {
         if let Some(Token::Float(text)) = self.token() {
@@ -596,7 +609,7 @@ impl<'a> Parser<'a> {
         self.comments.clear();
         self.gather_comments(AnyEntity::Function);
 
-        let (location, name, sig) = self.parse_function_spec()?;
+        let (location, name, sig) = self.parse_function_spec(unique_isa)?;
         let mut ctx = Context::new(Function::with_name_signature(name, sig), unique_isa);
 
         // function ::= function-spec * "{" preamble function-body "}"
@@ -630,7 +643,9 @@ impl<'a> Parser<'a> {
     //
     // function-spec ::= * "function" name signature
     //
-    fn parse_function_spec(&mut self) -> Result<(Location, FunctionName, Signature)> {
+    fn parse_function_spec(&mut self,
+                           unique_isa: Option<&TargetIsa>)
+                           -> Result<(Location, FunctionName, Signature)> {
         self.match_identifier("function", "expected 'function'")?;
         let location = self.loc;
 
@@ -638,7 +653,7 @@ impl<'a> Parser<'a> {
         let name = self.parse_function_name()?;
 
         // function-spec ::= "function" name * signature
-        let sig = self.parse_signature()?;
+        let sig = self.parse_signature(unique_isa)?;
 
         Ok((location, name, sig))
     }
@@ -661,17 +676,21 @@ impl<'a> Parser<'a> {
     //
     // signature ::=  * "(" [arglist] ")" ["->" retlist] [call_conv]
     //
-    fn parse_signature(&mut self) -> Result<Signature> {
+    fn parse_signature(&mut self, unique_isa: Option<&TargetIsa>) -> Result<Signature> {
         let mut sig = Signature::new();
 
         self.match_token(Token::LPar, "expected function signature: ( args... )")?;
         // signature ::=  "(" * [arglist] ")" ["->" retlist] [call_conv]
         if self.token() != Some(Token::RPar) {
-            sig.argument_types = self.parse_argument_list()?;
+            sig.argument_types = self.parse_argument_list(unique_isa)?;
         }
         self.match_token(Token::RPar, "expected ')' after function arguments")?;
         if self.optional(Token::Arrow) {
-            sig.return_types = self.parse_argument_list()?;
+            sig.return_types = self.parse_argument_list(unique_isa)?;
+        }
+
+        if sig.argument_types.iter().all(|a| a.location.is_assigned()) {
+            sig.compute_argument_bytes();
         }
 
         // TBD: calling convention.
@@ -683,27 +702,27 @@ impl<'a> Parser<'a> {
     //
     // arglist ::= * arg { "," arg }
     //
-    fn parse_argument_list(&mut self) -> Result<Vec<ArgumentType>> {
+    fn parse_argument_list(&mut self, unique_isa: Option<&TargetIsa>) -> Result<Vec<ArgumentType>> {
         let mut list = Vec::new();
 
         // arglist ::= * arg { "," arg }
-        list.push(self.parse_argument_type()?);
+        list.push(self.parse_argument_type(unique_isa)?);
 
         // arglist ::= arg * { "," arg }
         while self.optional(Token::Comma) {
             // arglist ::= arg { "," * arg }
-            list.push(self.parse_argument_type()?);
+            list.push(self.parse_argument_type(unique_isa)?);
         }
 
         Ok(list)
     }
 
     // Parse a single argument type with flags.
-    fn parse_argument_type(&mut self) -> Result<ArgumentType> {
-        // arg ::= * type { flag }
+    fn parse_argument_type(&mut self, unique_isa: Option<&TargetIsa>) -> Result<ArgumentType> {
+        // arg ::= * type { flag } [ argumentloc ]
         let mut arg = ArgumentType::new(self.match_type("expected argument type")?);
 
-        // arg ::= type * { flag }
+        // arg ::= type * { flag } [ argumentloc ]
         while let Some(Token::Identifier(s)) = self.token() {
             match s {
                 "uext" => arg.extension = ArgumentExtension::Uext,
@@ -714,7 +733,48 @@ impl<'a> Parser<'a> {
             self.consume();
         }
 
+        // arg ::= type { flag } * [ argumentloc ]
+        arg.location = self.parse_argument_location(unique_isa)?;
+
         Ok(arg)
+    }
+
+    // Parse an argument location specifier; either a register or a byte offset into the stack.
+    fn parse_argument_location(&mut self, unique_isa: Option<&TargetIsa>) -> Result<ArgumentLoc> {
+        // argumentloc ::= '[' regname | uimm32 ']'
+        if self.optional(Token::LBracket) {
+            let result = match self.token() {
+                Some(Token::Name(name)) => {
+                    self.consume();
+                    if let Some(isa) = unique_isa {
+                        isa.register_info()
+                            .parse_regunit(name)
+                            .map(ArgumentLoc::Reg)
+                            .ok_or(self.error("invalid register name"))
+                    } else {
+                        // We are unable to parse the register without a TargetISA, so we quietly
+                        // ignore it.
+                        Ok(ArgumentLoc::Unassigned)
+                    }
+                }
+                Some(Token::Integer(_)) => {
+                    let offset = self.match_uimm32("expected stack argument byte offset")?;
+                    Ok(ArgumentLoc::Stack(offset))
+                }
+                Some(Token::Minus) => {
+                    self.consume();
+                    Ok(ArgumentLoc::Unassigned)
+                }
+                _ => err!(self.loc, "expected argument location"),
+            };
+
+            self.match_token(Token::RBracket,
+                             "expected ']' to end argument location annotation")?;
+
+            result
+        } else {
+            Ok(ArgumentLoc::Unassigned)
+        }
     }
 
     // Parse the function preamble.
@@ -736,7 +796,7 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::SigRef(..)) => {
                     self.gather_comments(ctx.function.dfg.signatures.next_key());
-                    self.parse_signature_decl()
+                    self.parse_signature_decl(ctx.unique_isa)
                         .and_then(|(num, dat)| ctx.add_sig(num, dat, &self.loc))
                 }
                 Some(Token::FuncRef(..)) => {
@@ -781,11 +841,11 @@ impl<'a> Parser<'a> {
     //
     // signature-decl ::= SigRef(sigref) "=" "signature" signature
     //
-    fn parse_signature_decl(&mut self) -> Result<(u32, Signature)> {
+    fn parse_signature_decl(&mut self, unique_isa: Option<&TargetIsa>) -> Result<(u32, Signature)> {
         let number = self.match_sig("expected signature number: sig«n»")?;
         self.match_token(Token::Equal, "expected '=' in signature decl")?;
         self.match_identifier("signature", "expected 'signature'")?;
-        let data = self.parse_signature()?;
+        let data = self.parse_signature(unique_isa)?;
         Ok((number, data))
     }
 
@@ -805,7 +865,7 @@ impl<'a> Parser<'a> {
 
         let data = match self.token() {
             Some(Token::Identifier("function")) => {
-                let (loc, name, sig) = self.parse_function_spec()?;
+                let (loc, name, sig) = self.parse_function_spec(ctx.unique_isa)?;
                 let sigref = ctx.function.dfg.signatures.push(sig);
                 ctx.map.def_entity(sigref.into(), &loc).expect("duplicate SigRef entities created");
                 ExtFuncData {
@@ -1523,33 +1583,33 @@ mod tests {
     #[test]
     fn argument_type() {
         let mut p = Parser::new("i32 sext");
-        let arg = p.parse_argument_type().unwrap();
+        let arg = p.parse_argument_type(None).unwrap();
         assert_eq!(arg.value_type, types::I32);
         assert_eq!(arg.extension, ArgumentExtension::Sext);
         assert_eq!(arg.inreg, false);
-        let Error { location, message } = p.parse_argument_type().unwrap_err();
+        let Error { location, message } = p.parse_argument_type(None).unwrap_err();
         assert_eq!(location.line_number, 1);
         assert_eq!(message, "expected argument type");
     }
 
     #[test]
     fn signature() {
-        let sig = Parser::new("()").parse_signature().unwrap();
+        let sig = Parser::new("()").parse_signature(None).unwrap();
         assert_eq!(sig.argument_types.len(), 0);
         assert_eq!(sig.return_types.len(), 0);
 
         let sig2 = Parser::new("(i8 inreg uext, f32, f64) -> i32 sext, f64")
-            .parse_signature()
+            .parse_signature(None)
             .unwrap();
         assert_eq!(sig2.to_string(),
                    "(i8 uext inreg, f32, f64) -> i32 sext, f64");
 
         // `void` is not recognized as a type by the lexer. It should not appear in files.
-        assert_eq!(Parser::new("() -> void").parse_signature().unwrap_err().to_string(),
+        assert_eq!(Parser::new("() -> void").parse_signature(None).unwrap_err().to_string(),
                    "1: expected argument type");
-        assert_eq!(Parser::new("i8 -> i8").parse_signature().unwrap_err().to_string(),
+        assert_eq!(Parser::new("i8 -> i8").parse_signature(None).unwrap_err().to_string(),
                    "1: expected function signature: ( args... )");
-        assert_eq!(Parser::new("(i8 -> i8").parse_signature().unwrap_err().to_string(),
+        assert_eq!(Parser::new("(i8 -> i8").parse_signature(None).unwrap_err().to_string(),
                    "1: expected ')' after function arguments");
     }
 
