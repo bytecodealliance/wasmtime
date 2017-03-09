@@ -504,16 +504,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a name.
-    fn match_name(&mut self, err_msg: &str) -> Result<&'a str> {
-        if let Some(Token::Name(name)) = self.token() {
-            self.consume();
-            Ok(name)
-        } else {
-            err!(self.loc, err_msg)
-        }
-    }
-
     /// Parse a list of test commands.
     pub fn parse_test_commands(&mut self) -> Vec<TestCommand<'a>> {
         let mut list = Vec::new();
@@ -959,8 +949,7 @@ impl<'a> Parser<'a> {
         ctx.map.def_value(vx, value, &vx_location)
     }
 
-    fn parse_value_location(&mut self, ctx: &Context, isa: &TargetIsa) -> Result<ValueLoc> {
-        let reginfo = isa.register_info();
+    fn parse_value_location(&mut self, ctx: &Context) -> Result<ValueLoc> {
         match self.token() {
             Some(Token::StackSlot(src_num)) => {
                 self.consume();
@@ -974,9 +963,19 @@ impl<'a> Parser<'a> {
             }
             Some(Token::Name(name)) => {
                 self.consume();
-                reginfo.parse_regunit(name)
-                    .map(ValueLoc::Reg)
-                    .ok_or(self.error("invalid register value location"))
+                if let Some(isa) = ctx.unique_isa {
+                    isa.register_info()
+                        .parse_regunit(name)
+                        .map(ValueLoc::Reg)
+                        .ok_or(self.error("invalid register value location"))
+                } else {
+                    // For convenience we ignore value locations when no unique ISA is specified
+                    Ok(ValueLoc::Unassigned)
+                }
+            }
+            Some(Token::Minus) => {
+                self.consume();
+                Ok(ValueLoc::Unassigned)
             }
             _ => err!(self.loc, "invalid value location"),
         }
@@ -985,9 +984,9 @@ impl<'a> Parser<'a> {
     fn parse_instruction_encoding(&mut self,
                                   ctx: &Context)
                                   -> Result<(Option<Encoding>, Option<Vec<ValueLoc>>)> {
-        let (mut encoding, mut result_registers) = (None, None);
+        let (mut encoding, mut result_locations) = (None, None);
 
-        // encoding ::= "[" encoding_literal result_registers "]"
+        // encoding ::= "[" encoding_literal result_locations "]"
         if self.optional(Token::LBracket) {
             // encoding_literal ::= "-" | Identifier HexSequence
             if !self.optional(Token::Minus) {
@@ -999,31 +998,29 @@ impl<'a> Parser<'a> {
                 } else if ctx.unique_isa.is_some() {
                     return err!(self.loc, "invalid instruction recipe");
                 } else {
-                    return err!(self.loc,
-                                "provided instruction encoding for unspecified ISA");
+                    // We allow encodings to be specified when there's no unique ISA purely
+                    // for convenience, eg when copy-pasting code for a test.
                 }
             }
 
-            // result_registers ::= ("," ( "-" | names ) )?
+            // result_locations ::= ("," ( "-" | names ) )?
             // names ::= Name { "," Name }
-            if self.optional(Token::Comma) && !self.optional(Token::Minus) {
-                let isa = ctx.unique_isa
-                    .ok_or(self.error("value locations specified without a unique isa"))?;
-                let mut result = Vec::new();
+            if self.optional(Token::Comma) {
+                let mut results = Vec::new();
 
-                result.push(self.parse_value_location(ctx, isa)?);
+                results.push(self.parse_value_location(ctx)?);
                 while self.optional(Token::Comma) {
-                    result.push(self.parse_value_location(ctx, isa)?);
+                    results.push(self.parse_value_location(ctx)?);
                 }
 
-                result_registers = Some(result);
+                result_locations = Some(results);
             }
 
             self.match_token(Token::RBracket,
                              "expected ']' to terminate instruction encoding")?;
         }
 
-        Ok((encoding, result_registers))
+        Ok((encoding, result_locations))
     }
 
     // Parse an instruction, append it to `ebb`.
@@ -1100,29 +1097,26 @@ impl<'a> Parser<'a> {
                         results.len());
         }
 
+        if let Some(ref result_locations) = result_locations {
+            if results.len() != result_locations.len() {
+                return err!(self.loc,
+                            "instruction produces {} result values, but {} locations were \
+                             specified",
+                            results.len(),
+                            result_locations.len());
+            }
+        }
+
         // Now map the source result values to the just created instruction results.
         // Pass a reference to `ctx.values` instead of `ctx` itself since the `Values` iterator
         // holds a reference to `ctx.function`.
         self.add_values(&mut ctx.map,
-                        results.iter().map(|v| *v),
+                        results.into_iter(),
                         ctx.function.dfg.inst_results(inst))?;
 
-        if let Some(ref result_locations) = result_locations {
-            if result_locations.len() != results.len() {
-                return err!(self.loc,
-                            "must have same number of result locations as results");
-            } else {
-                for (&src_value, &loc) in results.iter().zip(result_locations) {
-                    // We are safe to unwrap here because all values should have been added to the
-                    // map in the above call to self.add_values()
-                    let value = ctx.map.get_value(src_value).unwrap();
-                    *ctx.function.locations.ensure(value) = loc;
-                }
-            }
-        } else {
-            for &src_value in results.iter() {
-                let value = ctx.map.get_value(src_value).unwrap();
-                *ctx.function.locations.ensure(value) = ValueLoc::Unassigned;
+        if let Some(result_locations) = result_locations {
+            for (value, loc) in ctx.function.dfg.inst_results(inst).zip(result_locations) {
+                *ctx.function.locations.ensure(value) = loc;
             }
         }
 
