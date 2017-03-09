@@ -54,6 +54,11 @@ use entity_map::EntityRef;
 ///
 /// All of the list methods that take a pool reference must be given the same pool reference every
 /// time they are called. Otherwise data structures will be corrupted.
+///
+/// Entity lists can be cloned, but that operation should only be used as part of cloning the whole
+/// function they belong to. *Cloning an entity list does not allocate new memory for the clone*.
+/// It creates an alias of the same memory.
+#[derive(Clone, Debug)]
 pub struct EntityList<T: EntityRef> {
     index: u32,
     unused: PhantomData<T>,
@@ -70,6 +75,7 @@ impl<T: EntityRef> Default for EntityList<T> {
 }
 
 /// A memory pool for storing lists of `T`.
+#[derive(Clone)]
 pub struct ListPool<T: EntityRef> {
     // The main array containing the lists.
     data: Vec<T>,

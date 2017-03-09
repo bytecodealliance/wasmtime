@@ -47,7 +47,7 @@ Branch = InstructionFormat(VALUE, ebb, VARIABLE_ARGS, boxed_storage=True)
 BranchTable = InstructionFormat(VALUE, jump_table)
 
 Call = InstructionFormat(
-        func_ref, VARIABLE_ARGS, multiple_results=True, boxed_storage=True)
+        func_ref, VARIABLE_ARGS, multiple_results=True, value_list=True)
 IndirectCall = InstructionFormat(
         sig_ref, VALUE, VARIABLE_ARGS,
         multiple_results=True, boxed_storage=True)

@@ -15,8 +15,8 @@ use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs,
-                                 TernaryOverflowData, JumpData, BranchData, CallData,
-                                 IndirectCallData, ReturnData, ReturnRegData};
+                                 TernaryOverflowData, JumpData, BranchData, IndirectCallData,
+                                 ReturnData, ReturnRegData};
 use cretonne::isa::{self, TargetIsa, Encoding};
 use cretonne::settings;
 use testfile::{TestFile, Details, Comment};
@@ -167,7 +167,8 @@ impl<'a> Context<'a> {
         for ebb in self.function.layout.ebbs() {
             for inst in self.function.layout.ebb_insts(ebb) {
                 let loc = inst.into();
-                match self.function.dfg[inst] {
+                let value_lists = &mut self.function.dfg.value_lists;
+                match self.function.dfg.insts[inst] {
                     InstructionData::Nullary { .. } |
                     InstructionData::UnaryImm { .. } |
                     InstructionData::UnaryIeee32 { .. } |
@@ -210,8 +211,8 @@ impl<'a> Context<'a> {
                         self.map.rewrite_values(&mut data.varargs, loc)?;
                     }
 
-                    InstructionData::Call { ref mut data, .. } => {
-                        self.map.rewrite_values(&mut data.varargs, loc)?;
+                    InstructionData::Call { ref mut args, .. } => {
+                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
 
                     InstructionData::IndirectCall { ref mut data, .. } => {
@@ -1300,7 +1301,10 @@ impl<'a> Parser<'a> {
 
     // Parse the operands following the instruction opcode.
     // This depends on the format of the opcode.
-    fn parse_inst_operands(&mut self, ctx: &Context, opcode: Opcode) -> Result<InstructionData> {
+    fn parse_inst_operands(&mut self,
+                           ctx: &mut Context,
+                           opcode: Opcode)
+                           -> Result<InstructionData> {
         Ok(match opcode.format() {
             InstructionFormat::Nullary => {
                 InstructionData::Nullary {
@@ -1506,10 +1510,8 @@ impl<'a> Parser<'a> {
                     opcode: opcode,
                     ty: VOID,
                     second_result: None.into(),
-                    data: Box::new(CallData {
-                        func_ref: func_ref,
-                        varargs: args,
-                    }),
+                    func_ref: func_ref,
+                    args: args.into_value_list(&mut ctx.function.dfg.value_lists),
                 }
             }
             InstructionFormat::IndirectCall => {

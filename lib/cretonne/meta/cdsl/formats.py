@@ -34,6 +34,8 @@ class InstructionFormat(object):
         enums.
     :param multiple_results: Set to `True` if this instruction format allows
         more than one result to be produced.
+    :param value_list: Set to `True` if this instruction format uses a
+        `ValueList` member to store its value operands.
     :param boxed_storage: Set to `True` is this instruction format requires a
         `data: Box<...>` pointer to additional storage in its `InstructionData`
         variant.
@@ -52,6 +54,7 @@ class InstructionFormat(object):
         # type: (*Union[OperandKind, Tuple[str, OperandKind]], **Any) -> None # noqa
         self.name = kwargs.get('name', None)  # type: str
         self.multiple_results = kwargs.get('multiple_results', False)
+        self.has_value_list = kwargs.get('value_list', False)
         self.boxed_storage = kwargs.get('boxed_storage', False)
         self.members = list()  # type: List[str]
         self.kinds = tuple(self._process_member_names(kinds))

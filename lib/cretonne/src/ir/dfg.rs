@@ -1,6 +1,6 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef};
+use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueListPool};
 use ir::entities::ExpandedValue;
 use ir::instructions::{Opcode, InstructionData, CallInfo};
 use ir::extfunc::ExtFuncData;
@@ -24,7 +24,10 @@ pub struct DataFlowGraph {
     /// Data about all of the instructions in the function, including opcodes and operands.
     /// The instructions in this map are not in program order. That is tracked by `Layout`, along
     /// with the EBB containing each instruction.
-    insts: EntityMap<Inst, InstructionData>,
+    pub insts: EntityMap<Inst, InstructionData>,
+
+    /// Memory pool of value lists referenced by instructions in `insts`.
+    pub value_lists: ValueListPool,
 
     /// Extended basic blocks in the function and their arguments.
     /// This map is not in program order. That is handled by `Layout`, and so is the sequence of
@@ -56,6 +59,7 @@ impl DataFlowGraph {
     pub fn new() -> DataFlowGraph {
         DataFlowGraph {
             insts: EntityMap::new(),
+            value_lists: ValueListPool::new(),
             ebbs: EntityMap::new(),
             extended_values: Vec::new(),
             signatures: EntityMap::new(),
@@ -429,7 +433,7 @@ impl DataFlowGraph {
     /// Get the call signature of a direct or indirect call instruction.
     /// Returns `None` if `inst` is not a call instruction.
     pub fn call_signature(&self, inst: Inst) -> Option<SigRef> {
-        match self.insts[inst].analyze_call() {
+        match self.insts[inst].analyze_call(&self.value_lists) {
             CallInfo::NotACall => None,
             CallInfo::Direct(f, _) => Some(self.ext_funcs[f].signature),
             CallInfo::Indirect(s, _) => Some(s),

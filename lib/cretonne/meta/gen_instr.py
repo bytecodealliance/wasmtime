@@ -58,17 +58,32 @@ def gen_arguments_method(fmt, is_mut):
     method = 'arguments'
     mut = ''
     rslice = 'ref_slice'
+    as_slice = 'as_slice'
     if is_mut:
         method += '_mut'
         mut = 'mut '
         rslice += '_mut'
+        as_slice = 'as_mut_slice'
 
     with fmt.indented(
-            'pub fn {f}(&{m}self) -> [&{m}[Value]; 2] {{'
+            'pub fn {f}<\'a>(&\'a {m}self, pool: &\'a {m}ValueListPool) -> '
+            '[&{m}[Value]; 2] {{'
             .format(f=method, m=mut), '}'):
         with fmt.indented('match *self {', '}'):
             for f in InstructionFormat.all_formats:
                 n = 'InstructionData::' + f.name
+
+                # Formats with a value list put all of their arguments in the
+                # list. We don't split them up, just return it all as variable
+                # arguments. (I expect the distinction to go away).
+                if f.has_value_list:
+                    arg = ''.format(mut)
+                    fmt.line(
+                        '{} {{ ref {}args, .. }} => '
+                        '[ &{}[], args.{}(pool) ],'
+                        .format(n, mut, mut, as_slice))
+                    continue
+
                 has_varargs = cdsl.operands.VARIABLE_ARGS in f.kinds
                 # Formats with both fixed and variable arguments delegate to
                 # the data struct. We need to work around borrow checker quirks
@@ -472,7 +487,11 @@ def gen_format_constructor(iform, fmt):
     """
 
     # Construct method arguments.
-    args = ['self', 'opcode: Opcode']
+    if iform.has_value_list:
+        args = ['mut self']
+    else:
+        args = ['self']
+    args.append('opcode: Opcode')
 
     if iform.multiple_results:
         args.append('ctrl_typevar: Type')
@@ -484,7 +503,10 @@ def gen_format_constructor(iform, fmt):
 
     # Normal operand arguments.
     for idx, kind in enumerate(iform.kinds):
-        args.append('op{}: {}'.format(idx, kind.rust_type))
+        if kind is cdsl.operands.VARIABLE_ARGS and iform.has_value_list:
+            args.append('op{}: &[Value]'.format(idx, kind.rust_type))
+        else:
+            args.append('op{}: {}'.format(idx, kind.rust_type))
 
     proto = '{}({})'.format(iform.name, ', '.join(args))
     proto += " -> (Inst, &'f mut DataFlowGraph)"
@@ -492,6 +514,21 @@ def gen_format_constructor(iform, fmt):
     fmt.doc_comment(str(iform))
     fmt.line('#[allow(non_snake_case)]')
     with fmt.indented('fn {} {{'.format(proto), '}'):
+        # Start by constructing a value list with *all* the arguments.
+        if iform.has_value_list:
+            fmt.line('let mut vlist = ValueList::default();')
+            with fmt.indented('{', '}'):
+                fmt.line(
+                        'let pool = '
+                        '&mut self.data_flow_graph_mut().value_lists;')
+                for idx, kind in enumerate(iform.kinds):
+                    if kind is cdsl.operands.VALUE:
+                        fmt.line('vlist.push(op{}, pool);'.format(idx))
+                    elif kind is cdsl.operands.VARIABLE_ARGS:
+                        fmt.line(
+                                'vlist.extend(op{}.iter().cloned(), pool);'
+                                .format(idx))
+
         # Generate the instruction data.
         with fmt.indented(
                 'let data = InstructionData::{} {{'.format(iform.name), '};'):
@@ -520,7 +557,10 @@ def gen_member_inits(iform, fmt):
     """
 
     # Values first.
-    if len(iform.value_operands) == 1:
+    if iform.has_value_list:
+        # Value-list formats put *all* arguments in the list.
+        fmt.line('args: vlist,')
+    elif len(iform.value_operands) == 1:
         fmt.line('arg: op{},'.format(iform.value_operands[0]))
     elif len(iform.value_operands) > 1:
         fmt.line('args: [{}],'.format(
@@ -528,6 +568,8 @@ def gen_member_inits(iform, fmt):
 
     # Immediates and entity references.
     for idx, member in enumerate(iform.members):
+        if iform.has_value_list and member == 'varargs':
+            continue
         if member:
             fmt.line('{}: op{},'.format(member, idx))
 
@@ -557,6 +599,9 @@ def gen_inst_builder(inst, fmt):
             t = 'T{}{}'.format(1 + len(tmpl_types), op.kind.name)
             tmpl_types.append('{}: Into<{}>'.format(t, op.kind.rust_type))
             into_args.append(op.name)
+        elif (inst.format.has_value_list and
+                op.kind is cdsl.operands.VARIABLE_ARGS):
+            t = '&[Value]'
         else:
             t = op.kind.rust_type
         args.append('{}: {}'.format(op.name, t))
