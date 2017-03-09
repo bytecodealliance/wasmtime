@@ -10,7 +10,7 @@ use std::{u16, u32};
 use std::mem;
 use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotData, JumpTable,
                    JumpTableData, Signature, ArgumentType, ArgumentExtension, ExtFuncData, SigRef,
-                   FuncRef};
+                   FuncRef, ValueLoc};
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
@@ -959,9 +959,32 @@ impl<'a> Parser<'a> {
         ctx.map.def_value(vx, value, &vx_location)
     }
 
+    fn parse_value_location(&mut self, ctx: &Context, isa: &TargetIsa) -> Result<ValueLoc> {
+        let reginfo = isa.register_info();
+        match self.token() {
+            Some(Token::StackSlot(src_num)) => {
+                self.consume();
+                if let Some(ss) = ctx.map.get_ss(src_num) {
+                    Ok(ValueLoc::Stack(ss))
+                } else {
+                    err!(self.loc,
+                         "attempted to use undefined stack slot ss{}",
+                         src_num)
+                }
+            }
+            Some(Token::Name(name)) => {
+                self.consume();
+                reginfo.parse_regunit(name)
+                    .map(ValueLoc::Reg)
+                    .ok_or(self.error("invalid register value location"))
+            }
+            _ => err!(self.loc, "invalid value location"),
+        }
+    }
+
     fn parse_instruction_encoding(&mut self,
                                   ctx: &Context)
-                                  -> Result<(Option<Encoding>, Option<Vec<&'a str>>)> {
+                                  -> Result<(Option<Encoding>, Option<Vec<ValueLoc>>)> {
         let (mut encoding, mut result_registers) = (None, None);
 
         // encoding ::= "[" encoding_literal result_registers "]"
@@ -984,11 +1007,13 @@ impl<'a> Parser<'a> {
             // result_registers ::= ("," ( "-" | names ) )?
             // names ::= Name { "," Name }
             if self.optional(Token::Comma) && !self.optional(Token::Minus) {
+                let isa = ctx.unique_isa
+                    .ok_or(self.error("value locations specified without a unique isa"))?;
                 let mut result = Vec::new();
 
-                result.push(self.match_name("expected register")?);
+                result.push(self.parse_value_location(ctx, isa)?);
                 while self.optional(Token::Comma) {
-                    result.push(self.match_name("expected register")?);
+                    result.push(self.parse_value_location(ctx, isa)?);
                 }
 
                 result_registers = Some(result);
@@ -1010,7 +1035,7 @@ impl<'a> Parser<'a> {
         // Collect comments for the next instruction to be allocated.
         self.gather_comments(ctx.function.dfg.next_inst());
 
-        let (encoding, result_registers) = self.parse_instruction_encoding(ctx)?;
+        let (encoding, result_locations) = self.parse_instruction_encoding(ctx)?;
 
         // Result value numbers.
         let mut results = Vec::new();
@@ -1028,13 +1053,6 @@ impl<'a> Parser<'a> {
             }
 
             self.match_token(Token::Equal, "expected '=' before opcode")?;
-        }
-
-        if let Some(ref result_registers) = result_registers {
-            if result_registers.len() != results.len() {
-                return err!(self.loc,
-                            "must have same number of result registers as results");
-            }
         }
 
         // instruction ::=  [inst-results "="] * Opcode(opc) ["." Type] ...
@@ -1086,8 +1104,29 @@ impl<'a> Parser<'a> {
         // Pass a reference to `ctx.values` instead of `ctx` itself since the `Values` iterator
         // holds a reference to `ctx.function`.
         self.add_values(&mut ctx.map,
-                        results.into_iter(),
-                        ctx.function.dfg.inst_results(inst))
+                        results.iter().map(|v| *v),
+                        ctx.function.dfg.inst_results(inst))?;
+
+        if let Some(ref result_locations) = result_locations {
+            if result_locations.len() != results.len() {
+                return err!(self.loc,
+                            "must have same number of result locations as results");
+            } else {
+                for (&src_value, &loc) in results.iter().zip(result_locations) {
+                    // We are safe to unwrap here because all values should have been added to the
+                    // map in the above call to self.add_values()
+                    let value = ctx.map.get_value(src_value).unwrap();
+                    *ctx.function.locations.ensure(value) = loc;
+                }
+            }
+        } else {
+            for &src_value in results.iter() {
+                let value = ctx.map.get_value(src_value).unwrap();
+                *ctx.function.locations.ensure(value) = ValueLoc::Unassigned;
+            }
+        }
+
+        Ok(())
     }
 
     // Type inference for polymorphic instructions.
