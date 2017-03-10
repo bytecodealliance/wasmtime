@@ -76,15 +76,12 @@ def emit_instp(instp, fmt):
     iform = instp.predicate_context()
 
     # Which fields do we need in the InstructionData pattern match?
-    if iform.boxed_storage:
-        fields = 'ref data'
-    else:
-        # Collect the leaf predicates
-        leafs = set()
-        instp.predicate_leafs(leafs)
-        # All the leafs are FieldPredicate instances. Here we just care about
-        # the field names.
-        fields = ', '.join(sorted(set(p.field.name for p in leafs)))
+    # Collect the leaf predicates.
+    leafs = set()
+    instp.predicate_leafs(leafs)
+    # All the leafs are FieldPredicate instances. Here we just care about
+    # the field names.
+    fields = ', '.join(sorted(set(p.field.name for p in leafs)))
 
     with fmt.indented('{} => {{'.format(instp.number), '}'):
         with fmt.indented(

@@ -41,34 +41,29 @@ def unwrap_inst(iref, node, fmt):
     with fmt.indented(
             'let ({}) = if let InstructionData::{} {{'
             .format(', '.join(map(str, expr.args)), iform.name), '};'):
-        if iform.boxed_storage:
-            # This format indirects to a largish `data` struct.
-            fmt.line('ref data,')
-        else:
-            # Fields are encoded directly.
-            for m in iform.imm_members:
-                fmt.line('{},'.format(m))
-            if nvops == 1:
-                fmt.line('arg,')
-            elif iform.has_value_list or nvops > 1:
-                fmt.line('ref args,')
+        # Fields are encoded directly.
+        for m in iform.imm_members:
+            fmt.line('{},'.format(m))
+        if nvops == 1:
+            fmt.line('arg,')
+        elif iform.has_value_list or nvops > 1:
+            fmt.line('ref args,')
         fmt.line('..')
         fmt.outdented_line('} = dfg[inst] {')
         if iform.has_value_list:
             fmt.line('let args = args.as_slice(&dfg.value_lists);')
         # Generate the values for the tuple.
         outs = list()
-        prefix = 'data.' if iform.boxed_storage else ''
         for opnum, op in enumerate(expr.inst.ins):
             if op.is_immediate():
                 n = expr.inst.imm_opnums.index(opnum)
-                outs.append(prefix + iform.imm_members[n])
+                outs.append(iform.imm_members[n])
             elif op.is_value():
                 if nvops == 1:
-                    arg = prefix + 'arg'
+                    arg = 'arg'
                 else:
                     n = expr.inst.value_opnums.index(opnum)
-                    arg = '{}args[{}]'.format(prefix, n)
+                    arg = 'args[{}]'.format(n)
                 outs.append('dfg.resolve_aliases({})'.format(arg))
         fmt.line('({})'.format(', '.join(outs)))
         fmt.outdented_line('} else {')

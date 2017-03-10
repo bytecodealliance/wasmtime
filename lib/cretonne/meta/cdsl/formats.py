@@ -42,11 +42,6 @@ class InstructionFormat(object):
         enums.
     :param multiple_results: Set to `True` if this instruction format allows
         more than one result to be produced.
-    :param value_list: Set to `True` if this instruction format uses a
-        `ValueList` member to store its value operands.
-    :param boxed_storage: Set to `True` is this instruction format requires a
-        `data: Box<...>` pointer to additional storage in its `InstructionData`
-        variant.
     :param typevar_operand: Index of the value input operand that is used to
         infer the controlling type variable. By default, this is `0`, the first
         `value` operand. The index is relative to the values only, ignoring
@@ -63,8 +58,6 @@ class InstructionFormat(object):
         # type: (*Union[OperandKind, Tuple[str, OperandKind]], **Any) -> None # noqa
         self.name = kwargs.get('name', None)  # type: str
         self.multiple_results = kwargs.get('multiple_results', False)
-        self.has_value_list = kwargs.get('value_list', False)
-        self.boxed_storage = kwargs.get('boxed_storage', False)
 
         # Struct member names for the immediate operands. All other instruction
         # operands are values or variable argument lists. They are all handled
@@ -73,6 +66,8 @@ class InstructionFormat(object):
         # The number of value operands stored in the format, or `None` when
         # `has_value_list` is set.
         self.num_value_operands = 0
+        # Does this format use a value list for storing value operands?
+        self.has_value_list = False
         # Operand kinds for the immediate operands.
         self.imm_kinds = tuple(self._process_member_names(kinds))
 
@@ -122,8 +117,7 @@ class InstructionFormat(object):
             if k is VALUE:
                 self.num_value_operands += 1
             elif k is VARIABLE_ARGS:
-                # We require a value list for storage of variable arguments.
-                assert self.has_value_list, "Need a value list"
+                self.has_value_list = True
             else:
                 self.imm_members.append(member)
                 yield k
@@ -234,7 +228,4 @@ class FormatField(object):
 
     def rust_name(self):
         # type: () -> str
-        if self.format.boxed_storage:
-            return 'data.' + self.name
-        else:
-            return self.name
+        return self.name
