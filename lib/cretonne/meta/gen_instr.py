@@ -117,9 +117,9 @@ def gen_instruction_data_impl(fmt):
     - `pub fn opcode(&self) -> Opcode`
     - `pub fn first_type(&self) -> Type`
     - `pub fn second_result(&self) -> Option<Value>`
-    - `pub fn second_result_mut<'a>(&'a mut self)
-         -> Option<&'a mut PackedOption<Value>>`
-    - `pub fn arguments(&self) -> (&[Value], &[Value])`
+    - `pub fn second_result_mut(&mut self) -> Option<&mut PackedOption<Value>>`
+    - `pub fn arguments(&self, &pool) -> &[Value]`
+    - `pub fn arguments_mut(&mut self, &pool) -> &mut [Value]`
     """
 
     # The `opcode` and `first_type` methods simply read the `opcode` and `ty`
@@ -172,8 +172,8 @@ def gen_instruction_data_impl(fmt):
 
         fmt.doc_comment('Mutable reference to second result value, if any.')
         with fmt.indented(
-                "pub fn second_result_mut<'a>(&'a mut self)" +
-                " -> Option<&'a mut PackedOption<Value>> {", '}'):
+                "pub fn second_result_mut(&mut self)" +
+                " -> Option<&mut PackedOption<Value>> {", '}'):
             with fmt.indented('match *self {', '}'):
                 for f in InstructionFormat.all_formats:
                     if f.multiple_results:
