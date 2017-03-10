@@ -510,10 +510,7 @@ def gen_format_constructor(iform, fmt):
 
     # Normal operand arguments.
     for idx, kind in enumerate(iform.kinds):
-        if kind is cdsl.operands.VARIABLE_ARGS and iform.has_value_list:
-            args.append('op{}: &[Value]'.format(idx, kind.rust_type))
-        else:
-            args.append('op{}: {}'.format(idx, kind.rust_type))
+        args.append('op{}: {}'.format(idx, kind.rust_type))
 
     proto = '{}({})'.format(iform.name, ', '.join(args))
     proto += " -> (Inst, &'f mut DataFlowGraph)"
@@ -575,8 +572,6 @@ def gen_member_inits(iform, fmt):
 
     # Immediates and entity references.
     for idx, member in enumerate(iform.members):
-        if iform.has_value_list and member == 'varargs':
-            continue
         if member:
             fmt.line('{}: op{},'.format(member, idx))
 
@@ -606,9 +601,6 @@ def gen_inst_builder(inst, fmt):
             t = 'T{}{}'.format(1 + len(tmpl_types), op.kind.name)
             tmpl_types.append('{}: Into<{}>'.format(t, op.kind.rust_type))
             into_args.append(op.name)
-        elif (inst.format.has_value_list and
-                op.kind is cdsl.operands.VARIABLE_ARGS):
-            t = '&[Value]'
         else:
             t = op.kind.rust_type
         args.append('{}: {}'.format(op.name, t))

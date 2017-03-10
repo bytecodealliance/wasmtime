@@ -61,7 +61,7 @@ VARIABLE_ARGS = OperandKind(
         passed to an extended basic block, or a variable number of results
         returned from an instruction.
         """,
-        default_member='varargs')
+        rust_type='&[Value]')
 
 
 # Instances of immediate operand types are provided in the
