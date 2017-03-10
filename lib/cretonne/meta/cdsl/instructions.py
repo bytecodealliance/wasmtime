@@ -104,9 +104,18 @@ class Instruction(object):
         self.ins = self._to_operand_tuple(ins)
         self.outs = self._to_operand_tuple(outs)
         self.format = InstructionFormat.lookup(self.ins, self.outs)
-        # Indexes into outs for value results. Others are `variable_args`.
+
+        # Indexes into `self.outs` for value results.
+        # Other results are `variable_args`.
         self.value_results = tuple(
                 i for i, o in enumerate(self.outs) if o.is_value())
+        # Indexes into `self.ins` for value operands.
+        self.value_opnums = tuple(
+                i for i, o in enumerate(self.ins) if o.is_value())
+        # Indexes into `self.ins` for non-value operands.
+        self.imm_opnums = tuple(
+                i for i, o in enumerate(self.ins) if o.is_immediate())
+
         self._verify_polymorphic()
         for attr in Instruction.ATTRIBS:
             setattr(self, attr, not not kwargs.get(attr, False))
