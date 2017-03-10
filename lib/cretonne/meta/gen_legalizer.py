@@ -35,7 +35,7 @@ def unwrap_inst(iref, node, fmt):
     fmt.comment('Unwrap {}'.format(node))
     expr = node.expr
     iform = expr.inst.format
-    nvops = len(iform.value_operands)
+    nvops = iform.num_value_operands
 
     # The tuple of locals we're extracting is `expr.args`.
     with fmt.indented(
@@ -50,31 +50,31 @@ def unwrap_inst(iref, node, fmt):
                 fmt.line('{},'.format(m))
             if nvops == 1:
                 fmt.line('arg,')
-            elif nvops > 1:
+            elif nvops != 0:
                 fmt.line('args,')
         fmt.line('..')
         fmt.outdented_line('} = dfg[inst] {')
         # Generate the values for the tuple.
         outs = list()
         prefix = 'data.' if iform.boxed_storage else ''
-        for i, m in enumerate(iform.members):
-            if m:
-                outs.append(prefix + m)
-            else:
-                # This is a value operand.
+        for opnum, op in enumerate(expr.inst.ins):
+            if op.is_immediate():
+                n = expr.inst.imm_opnums.index(opnum)
+                outs.append(prefix + iform.imm_members[n])
+            elif op.is_value():
                 if nvops == 1:
                     arg = prefix + 'arg'
                 else:
-                    arg = '{}args[{}]'.format(
-                            prefix, iform.value_operands.index(i))
+                    n = expr.inst.value_opnums.index(opnum)
+                    arg = '{}args[{}]'.format(prefix, n)
                 outs.append('dfg.resolve_aliases({})'.format(arg))
         fmt.line('({})'.format(', '.join(outs)))
         fmt.outdented_line('} else {')
         fmt.line('unreachable!("bad instruction format")')
 
     # Get the types of any variables where it is needed.
-    for i in iform.value_operands:
-        v = expr.args[i]
+    for opnum in expr.inst.value_opnums:
+        v = expr.args[opnum]
         if isinstance(v, Var) and v.has_free_typevar():
             fmt.line('let typeof_{0} = dfg.value_type({0});'.format(v))
 
