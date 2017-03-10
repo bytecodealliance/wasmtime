@@ -157,7 +157,7 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
 
 // Write out any value aliases appearing in `inst`.
 fn write_value_aliases(w: &mut Write, func: &Function, inst: Inst, indent: usize) -> Result {
-    for &arg in func.dfg[inst].arguments(&func.dfg.value_lists).iter().flat_map(|x| x.iter()) {
+    for &arg in func.dfg[inst].arguments(&func.dfg.value_lists) {
         let resolved = func.dfg.resolve_aliases(arg);
         if resolved != arg {
             writeln!(w, "{1:0$}{2} -> {3}", indent, "", arg, resolved)?;

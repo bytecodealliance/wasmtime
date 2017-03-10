@@ -299,7 +299,7 @@ impl<'a> Context<'a> {
                         }
                         ConstraintKind::Tied(arg_index) => {
                             // This def must use the same register as a fixed instruction argument.
-                            let arg = dfg[inst].arguments(&dfg.value_lists)[0][arg_index as usize];
+                            let arg = dfg[inst].arguments(&dfg.value_lists)[arg_index as usize];
                             let loc = locations[arg];
                             *locations.ensure(lv.value) = loc;
                             // Mark the reused register. It's not really clear if we support tied
