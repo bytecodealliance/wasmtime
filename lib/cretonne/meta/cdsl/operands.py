@@ -158,6 +158,13 @@ class Operand(object):
         """
         return self.kind is VALUE
 
+    def is_varargs(self):
+        # type: () -> bool
+        """
+        Is this a VARIABLE_ARGS operand?
+        """
+        return self.kind is VARIABLE_ARGS
+
     def is_immediate(self):
         # type: () -> bool
         """
