@@ -84,20 +84,11 @@ def gen_arguments_method(fmt, is_mut):
                         .format(n, mut, mut, as_slice))
                     continue
 
-                has_varargs = cdsl.operands.VARIABLE_ARGS in f.kinds
-                # Formats with both fixed and variable arguments delegate to
-                # the data struct. We need to work around borrow checker quirks
-                # when extracting two mutable references.
-                if has_varargs and len(f.value_operands) > 0:
-                    fmt.line(
-                        '{} {{ ref {}data, .. }} => data.{}(),'
-                        .format(n, mut, method))
-                    continue
                 # Fixed args.
-                if len(f.value_operands) == 0:
+                if f.num_value_operands == 0:
                     arg = '&{}[]'.format(mut)
                     capture = ''
-                elif len(f.value_operands) == 1:
+                elif f.num_value_operands == 1:
                     if f.boxed_storage:
                         capture = 'ref {}data, '.format(mut)
                         arg = '{}(&{}data.arg)'.format(rslice, mut)
@@ -111,16 +102,9 @@ def gen_arguments_method(fmt, is_mut):
                     else:
                         capture = 'ref {}args, '.format(mut)
                         arg = 'args'
-                # Varargs.
-                if cdsl.operands.VARIABLE_ARGS in f.kinds:
-                    varg = '&{}data.varargs'.format(mut)
-                    capture = 'ref {}data, '.format(mut)
-                else:
-                    varg = '&{}[]'.format(mut)
-
                 fmt.line(
-                        '{} {{ {} .. }} => [{}, {}],'
-                        .format(n, capture, arg, varg))
+                        '{} {{ {} .. }} => [{}, &{}[]],'
+                        .format(n, capture, arg, mut))
 
 
 def gen_instruction_data_impl(fmt):
@@ -219,7 +203,7 @@ def gen_instruction_data_impl(fmt):
                         fmt.line(
                                 '{} {{ ref args, .. }} => '
                                 'args.get({}, pool),'.format(n, i))
-                    elif len(f.value_operands) == 1:
+                    elif f.num_value_operands == 1:
                         # We have a single value operand called 'arg'.
                         if f.boxed_storage:
                             fmt.line(
@@ -564,9 +548,9 @@ def gen_member_inits(iform, fmt):
     if iform.has_value_list:
         # Value-list formats put *all* arguments in the list.
         fmt.line('args: vlist,')
-    elif len(iform.value_operands) == 1:
+    elif iform.num_value_operands == 1:
         fmt.line('arg: op{},'.format(iform.value_operands[0]))
-    elif len(iform.value_operands) > 1:
+    elif iform.num_value_operands > 1:
         fmt.line('args: [{}],'.format(
             ', '.join('op{}'.format(i) for i in iform.value_operands)))
 

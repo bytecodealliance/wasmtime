@@ -46,9 +46,8 @@ def unwrap_inst(iref, node, fmt):
             fmt.line('ref data,')
         else:
             # Fields are encoded directly.
-            for m in iform.members:
-                if m:
-                    fmt.line('{},'.format(m))
+            for m in iform.imm_members:
+                fmt.line('{},'.format(m))
             if nvops == 1:
                 fmt.line('arg,')
             elif nvops > 1:
