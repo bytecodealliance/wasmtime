@@ -145,13 +145,6 @@ pub enum InstructionData {
         arg: Value,
         imm: Imm64,
     },
-    // Same as `BinaryImm`, but the immediate is the left-hand-side operand.
-    BinaryImmRev {
-        opcode: Opcode,
-        ty: Type,
-        arg: Value,
-        imm: Imm64,
-    },
     BinaryOverflow {
         opcode: Opcode,
         ty: Type,

@@ -685,7 +685,7 @@ Integer operations
 .. autoinst:: iadd_cout
 .. autoinst:: iadd_carry
 .. autoinst:: isub
-.. autoinst:: isub_imm
+.. autoinst:: irsub_imm
 .. autoinst:: isub_bin
 .. autoinst:: isub_bout
 .. autoinst:: isub_borrow

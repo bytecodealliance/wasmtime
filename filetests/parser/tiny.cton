@@ -55,12 +55,14 @@ ebb0(vx0: i32, vx1: i32):
     v0 = icmp eq, vx0, vx1
     v1 = icmp ult, vx0, vx1
     v2 = icmp sge, vx0, vx1
+    v3 = irsub_imm vx1, 45
 }
 ; sameln: function icmp(i32, i32) {
 ; nextln: ebb0(vx0: i32, vx1: i32):
 ; nextln:     v0 = icmp eq, vx0, vx1
 ; nextln:     v1 = icmp ult, vx0, vx1
 ; nextln:     v2 = icmp sge, vx0, vx1
+; nextln:     v3 = irsub_imm vx1, 45
 ; nextln: }
 
 ; Floating condition codes.

@@ -25,6 +25,14 @@ class InstructionFormat(object):
     produced. Some instructions, like `call`, may have a variable number of
     results.
 
+    The instruction format stores two separate lists of operands: Immediates
+    and values. Immediate operands (including entity references) are
+    represented as explicit members in the `InstructionData` variants. The
+    value operands are stored differently, depending on how many there are.
+    Beyond a certain point, instruction formats switch to an external value
+    list for storing value arguments. Value lists can hold an arbitrary number
+    of values.
+
     All instruction formats must be predefined in the
     :py:mod:`cretonne.formats` module.
 
@@ -45,8 +53,8 @@ class InstructionFormat(object):
         immediate operands.
     """
 
-    # Map (multiple_results, kind, kind, ...) -> InstructionFormat
-    _registry = dict()  # type: Dict[Tuple[bool, Tuple[OperandKind, ...]], InstructionFormat]  # noqa
+    # Map (multiple_results, imm_kinds, num_value_operands) -> format
+    _registry = dict()  # type: Dict[Tuple[bool, Tuple[OperandKind, ...], int, bool], InstructionFormat]  # noqa
 
     # All existing formats.
     all_formats = list()  # type: List[InstructionFormat]
@@ -62,13 +70,11 @@ class InstructionFormat(object):
         # operands are values or variable argument lists. They are all handled
         # specially.
         self.imm_members = list()  # type: List[str]
-        # Operand kinds for the immediate operands.
-        self.imm_kinds = list()  # type: List[OperandKind]
         # The number of value operands stored in the format, or `None` when
         # `has_value_list` is set.
         self.num_value_operands = 0
-
-        sig_kinds = tuple(self._process_member_names(kinds))
+        # Operand kinds for the immediate operands.
+        self.imm_kinds = tuple(self._process_member_names(kinds))
 
         # The typevar_operand argument must point to a 'value' operand.
         self.typevar_operand = kwargs.get('typevar_operand', None)  # type: int
@@ -81,7 +87,10 @@ class InstructionFormat(object):
             self.typevar_operand = 0
 
         # Compute a signature for the global registry.
-        sig = (self.multiple_results, sig_kinds)
+        sig = (
+                self.multiple_results, self.imm_kinds,
+                self.num_value_operands,
+                self.has_value_list)
         if sig in InstructionFormat._registry:
             raise RuntimeError(
                 "Format '{}' has the same signature as existing format '{}'"
@@ -98,9 +107,9 @@ class InstructionFormat(object):
         pair. The member names correspond to members in the Rust
         `InstructionData` data structure.
 
-        Update the fields `num_value_operands`, `imm_kinds`, and `imm_members`.
+        Update the fields `num_value_operands` and `imm_members`.
 
-        Yields the operand kinds.
+        Yields the immediate operand kinds.
         """
         for arg in kinds:
             if isinstance(arg, OperandKind):
@@ -116,16 +125,14 @@ class InstructionFormat(object):
                 # We require a value list for storage of variable arguments.
                 assert self.has_value_list, "Need a value list"
             else:
-                self.imm_kinds.append(k)
                 self.imm_members.append(member)
-
-            yield k
+                yield k
 
     def __str__(self):
         # type: () -> str
         args = ', '.join('{}: {}'.format(m, k)
                          for m, k in zip(self.imm_members, self.imm_kinds))
-        return '{}({}, values={})'.format(
+        return '{}(imms=({}), vals={})'.format(
                 self.name, args, self.num_value_operands)
 
     def __getattr__(self, attr):
@@ -162,7 +169,13 @@ class InstructionFormat(object):
             multiple_results = outs[0].kind == VARIABLE_ARGS
         else:
             multiple_results = len(outs) > 1
-        sig = (multiple_results, tuple(op.kind for op in ins))
+
+        # Construct a signature.
+        imm_kinds = tuple(op.kind for op in ins if op.is_immediate())
+        num_values = sum(1 for op in ins if op.is_value())
+        has_varargs = (VARIABLE_ARGS in tuple(op.kind for op in ins))
+
+        sig = (multiple_results, imm_kinds, num_values, has_varargs)
         if sig not in InstructionFormat._registry:
             raise RuntimeError(
                     "No instruction format matches ins = ({}){}".format(

@@ -22,7 +22,6 @@ UnarySplit = InstructionFormat(VALUE, multiple_results=True)
 
 Binary = InstructionFormat(VALUE, VALUE)
 BinaryImm = InstructionFormat(VALUE, imm64)
-BinaryImmRev = InstructionFormat(imm64, VALUE)
 
 # Generate result + overflow flag.
 BinaryOverflow = InstructionFormat(VALUE, VALUE, multiple_results=True)
