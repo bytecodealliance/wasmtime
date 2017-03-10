@@ -157,3 +157,14 @@ class Operand(object):
         Is this an SSA value operand?
         """
         return self.kind is VALUE
+
+    def is_immediate(self):
+        # type: () -> bool
+        """
+        Is this an immediate operand?
+
+        Note that this includes both `ImmediateKind` operands *and* entity
+        references. It is any operand that doesn't represent a value
+        dependency.
+        """
+        return self.kind is not VALUE and self.kind is not VARIABLE_ARGS
