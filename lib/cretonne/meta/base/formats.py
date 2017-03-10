@@ -32,8 +32,7 @@ Ternary = InstructionFormat(VALUE, VALUE, VALUE, typevar_operand=1)
 
 # Catch-all for instructions with many outputs and inputs and no immediate
 # operands.
-MultiAry = InstructionFormat(
-        VARIABLE_ARGS, multiple_results=True, value_list=True)
+MultiAry = InstructionFormat(VARIABLE_ARGS, multiple_results=True)
 
 InsertLane = InstructionFormat(VALUE, ('lane', uimm8), VALUE)
 ExtractLane = InstructionFormat(VALUE, ('lane', uimm8))
@@ -41,15 +40,15 @@ ExtractLane = InstructionFormat(VALUE, ('lane', uimm8))
 IntCompare = InstructionFormat(intcc, VALUE, VALUE)
 FloatCompare = InstructionFormat(floatcc, VALUE, VALUE)
 
-Jump = InstructionFormat(ebb, VARIABLE_ARGS, value_list=True)
-Branch = InstructionFormat(VALUE, ebb, VARIABLE_ARGS, value_list=True)
+Jump = InstructionFormat(ebb, VARIABLE_ARGS)
+Branch = InstructionFormat(VALUE, ebb, VARIABLE_ARGS)
 BranchTable = InstructionFormat(VALUE, jump_table)
 
 Call = InstructionFormat(
-        func_ref, VARIABLE_ARGS, multiple_results=True, value_list=True)
+        func_ref, VARIABLE_ARGS, multiple_results=True)
 IndirectCall = InstructionFormat(
         sig_ref, VALUE, VARIABLE_ARGS,
-        multiple_results=True, value_list=True)
+        multiple_results=True)
 
 # Finally extract the names of global variables in this module.
 InstructionFormat.extract_names(globals())

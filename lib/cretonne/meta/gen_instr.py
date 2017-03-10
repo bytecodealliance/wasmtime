@@ -87,19 +87,11 @@ def gen_arguments_method(fmt, is_mut):
                     arg = '&{}[]'.format(mut)
                     capture = ''
                 elif f.num_value_operands == 1:
-                    if f.boxed_storage:
-                        capture = 'ref {}data, '.format(mut)
-                        arg = '{}(&{}data.arg)'.format(rslice, mut)
-                    else:
-                        capture = 'ref {}arg, '.format(mut)
-                        arg = '{}(arg)'.format(rslice)
+                    capture = 'ref {}arg, '.format(mut)
+                    arg = '{}(arg)'.format(rslice)
                 else:
-                    if f.boxed_storage:
-                        capture = 'ref {}data, '.format(mut)
-                        arg = '&{}data.args'.format(mut)
-                    else:
-                        capture = 'ref {}args, '.format(mut)
-                        arg = 'args'
+                    capture = 'ref {}args, '.format(mut)
+                    arg = 'args'
                 fmt.line(
                         '{} {{ {} .. }} => {},'
                         .format(n, capture, arg))
@@ -203,25 +195,15 @@ def gen_instruction_data_impl(fmt):
                                 'args.get({}, pool),'.format(n, i))
                     elif f.num_value_operands == 1:
                         # We have a single value operand called 'arg'.
-                        if f.boxed_storage:
-                            fmt.line(
-                                    n + ' { ref data, .. } => Some(data.arg),')
-                        else:
-                            fmt.line(n + ' { arg, .. } => Some(arg),')
+                        fmt.line(n + ' { arg, .. } => Some(arg),')
                     else:
                         # We have multiple value operands and an array `args`.
                         # Which `args` index to use?
                         i = f.typevar_operand
-                        if f.boxed_storage:
-                            fmt.line(
-                                    n +
-                                    ' { ref data, .. } => ' +
-                                    ('Some(data.args[{}]),'.format(i)))
-                        else:
-                            fmt.line(
-                                    n +
-                                    ' {{ ref args, .. }} => Some(args[{}]),'
-                                    .format(i))
+                        fmt.line(
+                                n +
+                                ' {{ ref args, .. }} => Some(args[{}]),'
+                                .format(i))
 
         fmt.doc_comment(
                 """
@@ -511,13 +493,7 @@ def gen_format_constructor(iform, fmt):
             fmt.line('ty: {},'.format(result_type))
             if iform.multiple_results:
                 fmt.line('second_result: None.into(),')
-            if iform.boxed_storage:
-                with fmt.indented(
-                        'data: Box::new(instructions::{}Data {{'
-                        .format(iform.name), '}),'):
-                    gen_member_inits(iform, fmt)
-            else:
-                gen_member_inits(iform, fmt)
+            gen_member_inits(iform, fmt)
 
         # Create result values if necessary.
         if iform.multiple_results:
