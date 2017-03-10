@@ -1,3 +1,16 @@
+//! Generic B-Tree implementation.
+//!
+//! This module defines a `Btree<K, V>` type which provides similar functionality to
+//! `BtreeMap<K, V>`, but with some important differences in the implementation:
+//!
+//! 1. Memory is allocated from a `NodePool<K, V>` instead of the global heap.
+//! 2. The footprint of a BTree is only 4 bytes.
+//! 3. A BTree doesn't implement `Drop`, leaving it to the pool to manage memory.
+//!
+//! The node pool is intended to be used as a LIFO allocator. After building up a larger data
+//! structure with many list references, the whole thing can be discarded quickly by clearing the
+//! pool.
+
 use std::marker::PhantomData;
 
 // A Node reference is a direct index to an element of the pool.
