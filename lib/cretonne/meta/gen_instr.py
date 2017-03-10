@@ -197,7 +197,7 @@ def gen_instruction_data_impl(fmt):
                         fmt.line(n + ' { .. } => None,')
                     elif f.has_value_list:
                         # We keep all arguments in a value list.
-                        i = f.value_operands.index(f.typevar_operand)
+                        i = f.typevar_operand
                         fmt.line(
                                 '{} {{ ref args, .. }} => '
                                 'args.get({}, pool),'.format(n, i))
@@ -211,9 +211,7 @@ def gen_instruction_data_impl(fmt):
                     else:
                         # We have multiple value operands and an array `args`.
                         # Which `args` index to use?
-                        # Map from index into f.kinds into f.value_operands
-                        # index.
-                        i = f.value_operands.index(f.typevar_operand)
+                        i = f.typevar_operand
                         if f.boxed_storage:
                             fmt.line(
                                     n +
@@ -280,9 +278,10 @@ def gen_opcodes(groups, fmt):
                 # Document polymorphism.
                 if i.is_polymorphic:
                     if i.use_typevar_operand:
+                        opnum = i.value_opnums[i.format.typevar_operand]
                         fmt.doc_comment(
                                 'Type inferred from {}.'
-                                .format(i.ins[i.format.typevar_operand]))
+                                .format(i.ins[opnum]))
                 # Enum variant itself.
                 if is_first_opcode:
                     fmt.line(i.camel_name + ' = 1,')
@@ -612,9 +611,10 @@ def gen_inst_builder(inst, fmt):
             args.append('types::VOID')
         elif inst.is_polymorphic:
             # Infer the controlling type variable from the input operands.
+            opnum = inst.value_opnums[inst.format.typevar_operand]
             fmt.line(
                     'let ctrl_typevar = self.data_flow_graph().value_type({});'
-                    .format(inst.ins[inst.format.typevar_operand].name))
+                    .format(inst.ins[opnum].name))
             if inst.format.multiple_results:
                 # The format constructor will resolve the result types from the
                 # type var.
