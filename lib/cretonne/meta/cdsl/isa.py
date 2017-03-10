@@ -176,7 +176,8 @@ class EncRecipe(object):
         self.number = None  # type: int
 
         self.ins = self._verify_constraints(ins)
-        assert len(self.ins) == len(format.value_operands)
+        if not format.has_value_list:
+            assert len(self.ins) == format.num_value_operands
         self.outs = self._verify_constraints(outs)
         if len(self.outs) > 1:
             assert format.multiple_results
@@ -193,7 +194,9 @@ class EncRecipe(object):
             if isinstance(c, int):
                 # An integer constraint is bound to a value operand.
                 # Check that it is in range.
-                assert c >= 0 and c < len(self.format.value_operands)
+                assert c >= 0
+                if not format.has_value_list:
+                    assert c < self.format.num_value_operands
             else:
                 assert isinstance(c, RegClass) or isinstance(c, Register)
         return seq

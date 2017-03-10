@@ -224,7 +224,7 @@ class XForm(object):
                     ctrl_var = d.defs[inst.value_results[0]]
 
             # Reconcile arguments with the requirements of `inst`.
-            for opnum in inst.format.value_operands:
+            for opnum in inst.value_opnums:
                 inst_tv = inst.ins[opnum].typevar
                 v = d.expr.args[opnum]
                 if isinstance(v, Var):

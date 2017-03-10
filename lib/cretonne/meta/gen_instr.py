@@ -411,9 +411,9 @@ def gen_type_constraints(fmt, instrs):
             for idx in i.value_results:
                 constraints.append(
                         get_constraint(i.outs[idx], ctrl_typevar, type_sets))
-            for idx in i.format.value_operands:
+            for opnum in i.value_opnums:
                 constraints.append(
-                        get_constraint(i.ins[idx], ctrl_typevar, type_sets))
+                        get_constraint(i.ins[opnum], ctrl_typevar, type_sets))
             offset = operand_seqs.add(constraints)
             fixed_results = len(i.value_results)
             # Can the controlling type variable be inferred from the designated
