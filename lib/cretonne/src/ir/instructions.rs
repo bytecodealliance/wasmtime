@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::ops::{Deref, DerefMut};
 
 use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef};
-use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, ImmVector};
+use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64};
 use ir::condcodes::*;
 use ir::types;
 use ir::DataFlowGraph;
@@ -122,11 +122,6 @@ pub enum InstructionData {
         opcode: Opcode,
         ty: Type,
         imm: Ieee64,
-    },
-    UnaryImmVector {
-        opcode: Opcode,
-        ty: Type,
-        data: Box<UnaryImmVectorData>,
     },
     UnarySplit {
         opcode: Opcode,
@@ -291,23 +286,6 @@ impl Display for VariableArgs {
 impl Default for VariableArgs {
     fn default() -> VariableArgs {
         VariableArgs::new()
-    }
-}
-
-/// Payload data for `vconst`.
-#[derive(Clone, Debug)]
-pub struct UnaryImmVectorData {
-    /// Raw vector data.
-    pub imm: ImmVector,
-}
-
-impl Display for UnaryImmVectorData {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "#")?;
-        for b in &self.imm {
-            write!(f, "{:02x}", b)?;
-        }
-        Ok(())
     }
 }
 

@@ -171,8 +171,7 @@ impl<'a> Context<'a> {
                     InstructionData::Nullary { .. } |
                     InstructionData::UnaryImm { .. } |
                     InstructionData::UnaryIeee32 { .. } |
-                    InstructionData::UnaryIeee64 { .. } |
-                    InstructionData::UnaryImmVector { .. } => {}
+                    InstructionData::UnaryIeee64 { .. } => {}
 
                     InstructionData::Unary { ref mut arg, .. } |
                     InstructionData::UnarySplit { ref mut arg, .. } |
@@ -1334,9 +1333,6 @@ impl<'a> Parser<'a> {
                     ty: VOID,
                     imm: self.match_ieee64("expected immediate 64-bit float operand")?,
                 }
-            }
-            InstructionFormat::UnaryImmVector => {
-                unimplemented!();
             }
             InstructionFormat::UnarySplit => {
                 InstructionData::UnarySplit {
