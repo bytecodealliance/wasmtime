@@ -318,7 +318,7 @@ impl Liveness {
                 let mut operand_constraints =
                     recipe_constraints.get(recipe).map(|c| c.ins).unwrap_or(&[]).iter();
 
-                func.dfg[inst].each_arg(&func.dfg.value_lists, |arg| {
+                for &arg in func.dfg[inst].arguments(&func.dfg.value_lists) {
                     // Get the live range, create it as a dead range if necessary.
                     let lr = get_or_create(&mut self.ranges, arg, func, recipe_constraints);
 
@@ -333,7 +333,7 @@ impl Liveness {
                     if let Some(constraint) = operand_constraints.next() {
                         lr.affinity.merge(constraint, &reg_info);
                     }
-                });
+                }
             }
         }
     }

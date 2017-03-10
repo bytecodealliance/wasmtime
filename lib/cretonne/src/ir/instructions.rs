@@ -336,30 +336,6 @@ impl Display for TernaryOverflowData {
 /// Avoid large matches on instruction formats by using the methods defined here to examine
 /// instructions.
 impl InstructionData {
-    /// Execute a closure once for each argument to this instruction.
-    /// See also the `arguments()` method.
-    pub fn each_arg<F>(&self, pool: &ValueListPool, mut func: F)
-        where F: FnMut(Value)
-    {
-        for part in &self.arguments(pool) {
-            for &arg in part.iter() {
-                func(arg);
-            }
-        }
-    }
-
-    /// Execute a closure with a mutable reference to each argument to this instruction.
-    /// See also the `arguments_mut()` method.
-    pub fn each_arg_mut<F>(&mut self, pool: &mut ValueListPool, mut func: F)
-        where F: FnMut(&mut Value)
-    {
-        for part in &mut self.arguments_mut(pool) {
-            for arg in part.iter_mut() {
-                func(arg);
-            }
-        }
-    }
-
     /// Return information about the destination of a branch or jump instruction.
     ///
     /// Any instruction that can transfer control to another EBB reveals its possible destinations
