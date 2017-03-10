@@ -27,12 +27,6 @@ ieee32 = ImmediateKind('ieee32', 'A 32-bit immediate floating point number.')
 #: IEEE 754-2008 binary64 interchange format.
 ieee64 = ImmediateKind('ieee64', 'A 64-bit immediate floating point number.')
 
-#: A large SIMD vector constant.
-immvector = ImmediateKind(
-        'immvector',
-        'An immediate SIMD vector.',
-        rust_type='ImmVector')
-
 #: A condition code for comparing integer values.
 #:
 #: This enumerated operand kind is used for the :cton:inst:`icmp` instruction

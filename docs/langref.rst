@@ -643,7 +643,6 @@ Constant materialization
 .. autoinst:: iconst
 .. autoinst:: f32const
 .. autoinst:: f64const
-.. autoinst:: vconst
 
 Live range splitting
 --------------------

@@ -9,7 +9,7 @@ from cdsl.operands import Operand, VARIABLE_ARGS
 from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
 from base.types import i8, f32, f64, b1
-from base.immediates import imm64, uimm8, ieee32, ieee64, immvector
+from base.immediates import imm64, uimm8, ieee32, ieee64
 from base.immediates import intcc, floatcc
 from base import entities
 import base.formats  # noqa
@@ -193,16 +193,6 @@ f64const = Instruction(
 
         Create a :type:`f64` SSA value with an immediate constant value, or a
         floating point vector where all the lanes have the same value.
-        """,
-        ins=N, outs=a)
-
-N = Operand('N', immvector)
-a = Operand('a', TxN, doc='A constant vector value')
-vconst = Instruction(
-        'vconst', r"""
-        Vector constant (floating point or integer).
-
-        Create a SIMD vector value where the lanes don't have to be identical.
         """,
         ins=N, outs=a)
 
