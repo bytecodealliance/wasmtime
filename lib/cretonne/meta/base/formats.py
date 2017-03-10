@@ -30,9 +30,10 @@ BinaryOverflow = InstructionFormat(VALUE, VALUE, multiple_results=True)
 # The fma instruction has the same constraint on all inputs.
 Ternary = InstructionFormat(VALUE, VALUE, VALUE, typevar_operand=1)
 
-# Carry in *and* carry out for `iadd_carry` and friends.
-TernaryOverflow = InstructionFormat(
-        VALUE, VALUE, VALUE, multiple_results=True, boxed_storage=True)
+# Catch-all for instructions with many outputs and inputs and no immediate
+# operands.
+MultiAry = InstructionFormat(
+        VARIABLE_ARGS, multiple_results=True, value_list=True)
 
 InsertLane = InstructionFormat(VALUE, ('lane', uimm8), VALUE)
 ExtractLane = InstructionFormat(VALUE, ('lane', uimm8))
@@ -49,8 +50,6 @@ Call = InstructionFormat(
 IndirectCall = InstructionFormat(
         sig_ref, VALUE, VARIABLE_ARGS,
         multiple_results=True, value_list=True)
-Return = InstructionFormat(VARIABLE_ARGS, value_list=True)
-ReturnReg = InstructionFormat(VALUE, VARIABLE_ARGS, value_list=True)
 
 # Finally extract the names of global variables in this module.
 InstructionFormat.extract_names(globals())

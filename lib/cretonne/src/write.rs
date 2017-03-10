@@ -238,7 +238,15 @@ fn write_instruction(w: &mut Write,
         BinaryImm { arg, imm, .. } => writeln!(w, " {}, {}", arg, imm),
         BinaryOverflow { args, .. } => writeln!(w, " {}, {}", args[0], args[1]),
         Ternary { args, .. } => writeln!(w, " {}, {}, {}", args[0], args[1], args[2]),
-        TernaryOverflow { ref data, .. } => writeln!(w, " {}", data),
+        MultiAry { ref args, .. } => {
+            if args.is_empty() {
+                writeln!(w, "")
+            } else {
+                writeln!(w,
+                         " {}",
+                         DisplayValues(args.as_slice(&func.dfg.value_lists)))
+            }
+        }
         InsertLane { lane, args, .. } => writeln!(w, " {}, {}, {}", args[0], lane, args[1]),
         ExtractLane { lane, arg, .. } => writeln!(w, " {}, {}", arg, lane),
         IntCompare { cond, args, .. } => writeln!(w, " {}, {}, {}", cond, args[0], args[1]),
@@ -279,20 +287,6 @@ fn write_instruction(w: &mut Write,
                      sig_ref,
                      args[0],
                      DisplayValues(&args[1..]))
-        }
-        Return { ref args, .. } => {
-            if args.is_empty() {
-                writeln!(w, "")
-            } else {
-                writeln!(w,
-                         " {}",
-                         DisplayValues(args.as_slice(&func.dfg.value_lists)))
-            }
-        }
-        ReturnReg { ref args, .. } => {
-            writeln!(w,
-                     " {}",
-                     DisplayValues(args.as_slice(&func.dfg.value_lists)))
         }
     }
 }

@@ -50,10 +50,12 @@ def unwrap_inst(iref, node, fmt):
                 fmt.line('{},'.format(m))
             if nvops == 1:
                 fmt.line('arg,')
-            elif nvops != 0:
-                fmt.line('args,')
+            elif iform.has_value_list or nvops > 1:
+                fmt.line('ref args,')
         fmt.line('..')
         fmt.outdented_line('} = dfg[inst] {')
+        if iform.has_value_list:
+            fmt.line('let args = args.as_slice(&dfg.value_lists);')
         # Generate the values for the tuple.
         outs = list()
         prefix = 'data.' if iform.boxed_storage else ''

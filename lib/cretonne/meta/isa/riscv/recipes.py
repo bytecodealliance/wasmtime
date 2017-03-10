@@ -11,7 +11,7 @@ instruction formats described in the reference:
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt
-from base.formats import Binary, BinaryImm, ReturnReg
+from base.formats import Binary, BinaryImm, MultiAry
 from .registers import GPR
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
@@ -86,4 +86,4 @@ I = EncRecipe(
 # I-type encoding for `jalr` as a return instruction. We won't use the
 # immediate offset.
 # The variable return values are not encoded.
-Iret = EncRecipe('Iret', ReturnReg, ins=GPR, outs=())
+Iret = EncRecipe('Iret', MultiAry, ins=GPR, outs=())
