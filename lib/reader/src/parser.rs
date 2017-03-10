@@ -14,8 +14,7 @@ use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotDa
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
-use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs,
-                                 TernaryOverflowData};
+use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs};
 use cretonne::isa::{self, TargetIsa, Encoding};
 use cretonne::settings;
 use testfile::{TestFile, Details, Comment};
@@ -193,8 +192,8 @@ impl<'a> Context<'a> {
                         self.map.rewrite_values(args, loc)?;
                     }
 
-                    InstructionData::TernaryOverflow { ref mut data, .. } => {
-                        self.map.rewrite_values(&mut data.args, loc)?;
+                    InstructionData::MultiAry { ref mut args, .. } => {
+                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
 
                     InstructionData::Jump { ref mut destination, ref mut args, .. } => {
@@ -212,14 +211,6 @@ impl<'a> Context<'a> {
                     }
 
                     InstructionData::IndirectCall { ref mut args, .. } => {
-                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
-                    }
-
-                    InstructionData::Return { ref mut args, .. } => {
-                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
-                    }
-
-                    InstructionData::ReturnReg { ref mut args, .. } => {
                         self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
                 }
@@ -1388,18 +1379,13 @@ impl<'a> Parser<'a> {
                     args: [ctrl_arg, true_arg, false_arg],
                 }
             }
-            InstructionFormat::TernaryOverflow => {
-                // Names here refer to the `iadd_carry` instruction.
-                let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let rhs = self.match_value("expected SSA value second operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let cin = self.match_value("expected SSA value third operand")?;
-                InstructionData::TernaryOverflow {
+            InstructionFormat::MultiAry => {
+                let args = self.parse_value_list()?;
+                InstructionData::MultiAry {
                     opcode: opcode,
                     ty: VOID,
                     second_result: None.into(),
-                    data: Box::new(TernaryOverflowData { args: [lhs, rhs, cin] }),
+                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
             }
             InstructionFormat::Jump => {
@@ -1503,27 +1489,6 @@ impl<'a> Parser<'a> {
                     second_result: None.into(),
                     sig_ref: sig_ref,
                     args: args.into_value_list(&[callee], &mut ctx.function.dfg.value_lists),
-                }
-            }
-            InstructionFormat::Return => {
-                let args = self.parse_value_list()?;
-                InstructionData::Return {
-                    opcode: opcode,
-                    ty: VOID,
-                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
-                }
-            }
-            InstructionFormat::ReturnReg => {
-                let raddr = self.match_value("expected SSA value return address operand")?;
-                let args = if self.optional(Token::Comma) {
-                    self.parse_value_list()?
-                } else {
-                    VariableArgs::new()
-                };
-                InstructionData::ReturnReg {
-                    opcode: opcode,
-                    ty: VOID,
-                    args: args.into_value_list(&[raddr], &mut ctx.function.dfg.value_lists),
                 }
             }
             InstructionFormat::BranchTable => {

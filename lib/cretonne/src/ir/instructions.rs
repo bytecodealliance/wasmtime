@@ -151,11 +151,11 @@ pub enum InstructionData {
         ty: Type,
         args: [Value; 3],
     },
-    TernaryOverflow {
+    MultiAry {
         opcode: Opcode,
         ty: Type,
         second_result: PackedOption<Value>,
-        data: Box<TernaryOverflowData>,
+        args: ValueList,
     },
     InsertLane {
         opcode: Opcode,
@@ -211,16 +211,6 @@ pub enum InstructionData {
         ty: Type,
         second_result: PackedOption<Value>,
         sig_ref: SigRef,
-        args: ValueList,
-    },
-    Return {
-        opcode: Opcode,
-        ty: Type,
-        args: ValueList,
-    },
-    ReturnReg {
-        opcode: Opcode,
-        ty: Type,
         args: ValueList,
     },
 }
@@ -286,19 +276,6 @@ impl Display for VariableArgs {
 impl Default for VariableArgs {
     fn default() -> VariableArgs {
         VariableArgs::new()
-    }
-}
-
-/// Payload data for ternary instructions with multiple results, such as `iadd_carry`.
-#[derive(Clone, Debug)]
-pub struct TernaryOverflowData {
-    /// Value arguments.
-    pub args: [Value; 3],
-}
-
-impl Display for TernaryOverflowData {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}, {}, {}", self.args[0], self.args[1], self.args[2])
     }
 }
 

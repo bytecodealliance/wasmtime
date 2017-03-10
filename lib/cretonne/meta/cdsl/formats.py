@@ -82,7 +82,7 @@ class InstructionFormat(object):
             if not self.has_value_list:
                 assert self.typevar_operand < self.num_value_operands, \
                         "typevar_operand must indicate a 'value' operand"
-        elif self.num_value_operands != 0:
+        elif self.has_value_list or self.num_value_operands > 0:
             # Default to the first 'value' operand, if there is one.
             self.typevar_operand = 0
 
@@ -176,12 +176,26 @@ class InstructionFormat(object):
         has_varargs = (VARIABLE_ARGS in tuple(op.kind for op in ins))
 
         sig = (multiple_results, imm_kinds, num_values, has_varargs)
-        if sig not in InstructionFormat._registry:
-            raise RuntimeError(
-                    "No instruction format matches ins = ({}){}".format(
-                        ", ".join(map(str, sig[1])),
-                        "[multiple results]" if multiple_results else ""))
-        return InstructionFormat._registry[sig]
+        if sig in InstructionFormat._registry:
+            return InstructionFormat._registry[sig]
+
+        # Try another value list format as an alternative.
+        sig = (True, imm_kinds, num_values, has_varargs)
+        if sig in InstructionFormat._registry:
+            return InstructionFormat._registry[sig]
+
+        sig = (multiple_results, imm_kinds, 0, True)
+        if sig in InstructionFormat._registry:
+            return InstructionFormat._registry[sig]
+
+        sig = (True, imm_kinds, 0, True)
+        if sig in InstructionFormat._registry:
+            return InstructionFormat._registry[sig]
+
+        raise RuntimeError(
+                'No instruction format matches multiple_results={},'
+                'imms={}, vals={}, varargs={}'.format(
+                    multiple_results, imm_kinds, num_values, has_varargs))
 
     @staticmethod
     def extract_names(globs):
