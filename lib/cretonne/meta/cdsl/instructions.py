@@ -154,7 +154,7 @@ class Instruction(object):
         variables.
         """
         poly_ins = [
-                i for i in self.format.value_operands
+                i for i in self.value_opnums
                 if self.ins[i].typevar.free_typevar()]
         poly_outs = [
                 i for i, o in enumerate(self.outs)
@@ -206,8 +206,8 @@ class Instruction(object):
         """
         other_tvs = []
         # Check value inputs.
-        for opidx in self.format.value_operands:
-            typ = self.ins[opidx].typevar
+        for opnum in self.value_opnums:
+            typ = self.ins[opnum].typevar
             tv = typ.free_typevar()
             # Non-polymorphic or derived form ctrl_typevar is OK.
             if tv is None or tv is ctrl_typevar:
@@ -216,7 +216,7 @@ class Instruction(object):
             if typ is not tv:
                 raise RuntimeError(
                         "{}: type variable {} must be derived from {}"
-                        .format(self.ins[opidx], typ.name, ctrl_typevar))
+                        .format(self.ins[opnum], typ.name, ctrl_typevar))
             # Other free type variables can only be used once each.
             if tv in other_tvs:
                 raise RuntimeError(

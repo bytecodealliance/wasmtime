@@ -68,11 +68,7 @@ class InstructionFormat(object):
         # `has_value_list` is set.
         self.num_value_operands = 0
 
-        self.kinds = tuple(self._process_member_names(kinds))
-
-        # Which of self.kinds are `value`?
-        self.value_operands = tuple(
-                i for i, k in enumerate(self.kinds) if k is VALUE)
+        sig_kinds = tuple(self._process_member_names(kinds))
 
         # The typevar_operand argument must point to a 'value' operand.
         self.typevar_operand = kwargs.get('typevar_operand', None)  # type: int
@@ -85,7 +81,7 @@ class InstructionFormat(object):
             self.typevar_operand = 0
 
         # Compute a signature for the global registry.
-        sig = (self.multiple_results, self.kinds)
+        sig = (self.multiple_results, sig_kinds)
         if sig in InstructionFormat._registry:
             raise RuntimeError(
                 "Format '{}' has the same signature as existing format '{}'"
