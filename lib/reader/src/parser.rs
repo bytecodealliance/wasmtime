@@ -177,7 +177,6 @@ impl<'a> Context<'a> {
                     InstructionData::Unary { ref mut arg, .. } |
                     InstructionData::UnarySplit { ref mut arg, .. } |
                     InstructionData::BinaryImm { ref mut arg, .. } |
-                    InstructionData::BinaryImmRev { ref mut arg, .. } |
                     InstructionData::ExtractLane { ref mut arg, .. } |
                     InstructionData::BranchTable { ref mut arg, .. } => {
                         self.map.rewrite_value(arg, loc)?;
@@ -1366,17 +1365,6 @@ impl<'a> Parser<'a> {
                     ty: VOID,
                     arg: lhs,
                     imm: rhs,
-                }
-            }
-            InstructionFormat::BinaryImmRev => {
-                let lhs = self.match_imm64("expected immediate integer first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let rhs = self.match_value("expected SSA value second operand")?;
-                InstructionData::BinaryImmRev {
-                    opcode: opcode,
-                    ty: VOID,
-                    imm: lhs,
-                    arg: rhs,
                 }
             }
             InstructionFormat::BinaryOverflow => {

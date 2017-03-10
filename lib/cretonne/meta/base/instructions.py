@@ -507,22 +507,18 @@ srem_imm = Instruction(
         allowed. """,
         ins=(x, Y), outs=a)
 
-# Swap x and y for isub_imm.
-X = Operand('X', imm64)
-y = Operand('y', iB)
+irsub_imm = Instruction(
+        'irsub_imm', """
+        Immediate reverse wrapping subtraction: :math:`a := Y - x \pmod{2^B}`.
 
-isub_imm = Instruction(
-        'isub_imm', """
-        Immediate wrapping subtraction: :math:`a := X - y \pmod{2^B}`.
-
-        Also works as integer negation when :math:`X = 0`. Use :inst:`iadd_imm`
+        Also works as integer negation when :math:`Y = 0`. Use :inst:`iadd_imm`
         with a negative immediate operand for the reverse immediate
         subtraction.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
         """,
-        ins=(X, y), outs=a)
+        ins=(x, Y), outs=a)
 
 #
 # Integer arithmetic with carry and/or borrow.
