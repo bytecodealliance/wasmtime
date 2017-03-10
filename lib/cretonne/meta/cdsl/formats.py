@@ -57,15 +57,22 @@ class InstructionFormat(object):
         self.has_value_list = kwargs.get('value_list', False)
         self.boxed_storage = kwargs.get('boxed_storage', False)
         self.members = list()  # type: List[str]
+
+        # Struct member names for the immediate operands. All other instruction
+        # operands are values or variable argument lists. They are all handled
+        # specially.
+        self.imm_members = list()  # type: List[str]
+        # Operand kinds for the immediate operands.
+        self.imm_kinds = list()  # type: List[OperandKind]
+        # The number of value operands stored in the format, or `None` when
+        # `has_value_list` is set.
+        self.num_value_operands = 0
+
         self.kinds = tuple(self._process_member_names(kinds))
 
         # Which of self.kinds are `value`?
         self.value_operands = tuple(
                 i for i, k in enumerate(self.kinds) if k is VALUE)
-
-        # We require a value list for storage of variable arguments.
-        if VARIABLE_ARGS in self.kinds:
-            assert self.has_value_list, "Need a value list for variable args"
 
         # The typevar_operand argument must point to a 'value' operand.
         self.typevar_operand = kwargs.get('typevar_operand', None)  # type: int
@@ -102,6 +109,17 @@ class InstructionFormat(object):
                 k = arg
             else:
                 member, k = arg
+
+            # We define 'immediate' as not a value or variable arguments.
+            if k is VALUE:
+                self.num_value_operands += 1
+            elif k is VARIABLE_ARGS:
+                # We require a value list for storage of variable arguments.
+                assert self.has_value_list, "Need a value list"
+            else:
+                self.imm_kinds.append(k)
+                self.imm_members.append(member)
+
             self.members.append(member)
             yield k
 
