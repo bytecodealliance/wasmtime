@@ -168,7 +168,8 @@ class Instruction(object):
         typevar_error = None
         if self.format.typevar_operand is not None:
             try:
-                tv = self.ins[self.format.typevar_operand].typevar
+                opnum = self.value_opnums[self.format.typevar_operand]
+                tv = self.ins[opnum].typevar
                 if tv is tv.free_typevar():
                     self.other_typevars = self._verify_ctrl_typevar(tv)
                     self.ctrl_typevar = tv

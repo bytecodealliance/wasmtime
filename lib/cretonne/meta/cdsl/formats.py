@@ -39,9 +39,10 @@ class InstructionFormat(object):
     :param boxed_storage: Set to `True` is this instruction format requires a
         `data: Box<...>` pointer to additional storage in its `InstructionData`
         variant.
-    :param typevar_operand: Index of the input operand that is used to infer
-        the controlling type variable. By default, this is the first `value`
-        operand.
+    :param typevar_operand: Index of the value input operand that is used to
+        infer the controlling type variable. By default, this is `0`, the first
+        `value` operand. The index is relative to the values only, ignoring
+        immediate operands.
     """
 
     # Map (multiple_results, kind, kind, ...) -> InstructionFormat
@@ -76,11 +77,12 @@ class InstructionFormat(object):
         # The typevar_operand argument must point to a 'value' operand.
         self.typevar_operand = kwargs.get('typevar_operand', None)  # type: int
         if self.typevar_operand is not None:
-            assert self.kinds[self.typevar_operand] is VALUE, \
-                    "typevar_operand must indicate a 'value' operand"
-        elif len(self.value_operands) > 0:
+            if not self.has_value_list:
+                assert self.typevar_operand < self.num_value_operands, \
+                        "typevar_operand must indicate a 'value' operand"
+        elif self.num_value_operands != 0:
             # Default to the first 'value' operand, if there is one.
-            self.typevar_operand = self.value_operands[0]
+            self.typevar_operand = 0
 
         # Compute a signature for the global registry.
         sig = (self.multiple_results, self.kinds)
