@@ -56,7 +56,6 @@ class InstructionFormat(object):
         self.multiple_results = kwargs.get('multiple_results', False)
         self.has_value_list = kwargs.get('value_list', False)
         self.boxed_storage = kwargs.get('boxed_storage', False)
-        self.members = list()  # type: List[str]
 
         # Struct member names for the immediate operands. All other instruction
         # operands are values or variable argument lists. They are all handled
@@ -101,6 +100,8 @@ class InstructionFormat(object):
         pair. The member names correspond to members in the Rust
         `InstructionData` data structure.
 
+        Update the fields `num_value_operands`, `imm_kinds`, and `imm_members`.
+
         Yields the operand kinds.
         """
         for arg in kinds:
@@ -120,25 +121,25 @@ class InstructionFormat(object):
                 self.imm_kinds.append(k)
                 self.imm_members.append(member)
 
-            self.members.append(member)
             yield k
 
     def __str__(self):
         # type: () -> str
-        args = ', '.join('{}: {}'.format(m, k) if m else str(k)
-                         for m, k in zip(self.members, self.kinds))
-        return '{}({})'.format(self.name, args)
+        args = ', '.join('{}: {}'.format(m, k)
+                         for m, k in zip(self.imm_members, self.imm_kinds))
+        return '{}({}, values={})'.format(
+                self.name, args, self.num_value_operands)
 
     def __getattr__(self, attr):
         # type: (str) -> FormatField
         """
-        Make instruction format members available as attributes.
+        Make immediate instruction format members available as attributes.
 
         Each non-value format member becomes a corresponding `FormatField`
         attribute.
         """
         try:
-            i = self.members.index(attr)
+            i = self.imm_members.index(attr)
         except ValueError:
             raise AttributeError(
                     '{} is neither a {} member or a '
@@ -192,7 +193,7 @@ class FormatField(object):
     data type.
 
     :param format: Parent `InstructionFormat`.
-    :param operand: Operand number in parent.
+    :param operand: Immediate operand number in parent.
     :param name: Member name in `InstructionData` variant.
     """
 
