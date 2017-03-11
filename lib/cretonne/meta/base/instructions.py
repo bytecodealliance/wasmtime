@@ -1063,6 +1063,67 @@ bitcast = Instruction(
         """,
         ins=x, outs=a)
 
+Bool = TypeVar(
+        'Bool',
+        'A scalar or vector boolean type',
+        bools=True, simd=True)
+BoolTo = TypeVar(
+        'BoolTo',
+        'A smaller boolean type with the same number of lanes',
+        bools=True, simd=True)
+
+x = Operand('x', Bool)
+a = Operand('a', BoolTo)
+
+breduce = Instruction(
+        'breduce', r"""
+        Convert `x` to a smaller boolean type in the platform-defined way.
+
+        The result type must have the same number of vector lanes as the input,
+        and each lane must not have more bits that the input lanes. If the
+        input and output types are the same, this is a no-op.
+        """, ins=x, outs=a)
+
+BoolTo = TypeVar(
+        'BoolTo',
+        'A larger boolean type with the same number of lanes',
+        bools=True, simd=True)
+
+x = Operand('x', Bool)
+a = Operand('a', BoolTo)
+
+bextend = Instruction(
+        'bextend', r"""
+        Convert `x` to a larger boolean type in the platform-defined way.
+
+        The result type must have the same number of vector lanes as the input,
+        and each lane must not have fewer bits that the input lanes. If the
+        input and output types are the same, this is a no-op.
+        """, ins=x, outs=a)
+
+IntTo = TypeVar(
+        'IntTo', 'An integer type with the same number of lanes',
+        ints=True, simd=True)
+
+x = Operand('x', Bool)
+a = Operand('a', IntTo)
+
+bint = Instruction(
+        'bint', r"""
+        Convert `x` to an integer.
+
+        True maps to 1 and false maps to 0. The result type must have the same
+        number of vector lanes as the input.
+        """, ins=x, outs=a)
+
+bmask = Instruction(
+        'bmask', r"""
+        Convert `x` to an integer mask.
+
+        True maps to all 1s and false maps to all 0s. The result type must have
+        the same number of vector lanes as the input.
+        """, ins=x, outs=a)
+
 Int = TypeVar('Int', 'A scalar or vector integer type', ints=True, simd=True)
 IntTo = TypeVar(
         'IntTo', 'A smaller integer type with the same number of lanes',

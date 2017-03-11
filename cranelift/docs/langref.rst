@@ -819,6 +819,10 @@ Conversion operations
 ---------------------
 
 .. autoinst:: bitcast
+.. autoinst:: breduce
+.. autoinst:: bextend
+.. autoinst:: bint
+.. autoinst:: bmask
 .. autoinst:: ireduce
 .. autoinst:: uextend
 .. autoinst:: sextend
