@@ -27,6 +27,7 @@ use ir::{Function, Inst, Ebb};
 use ir::instructions::BranchInfo;
 use entity_map::{EntityMap, Keys};
 use std::collections::HashSet;
+use std::mem;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 pub type BasicBlock = (Ebb, Inst);
@@ -74,20 +75,47 @@ impl ControlFlowGraph {
         self.data.resize(func.dfg.num_ebbs());
 
         for ebb in &func.layout {
-            for inst in func.layout.ebb_insts(ebb) {
-                match func.dfg[inst].analyze_branch(&func.dfg.value_lists) {
-                    BranchInfo::SingleDest(dest, _) => {
+            self.compute_ebb(func, ebb);
+        }
+    }
+
+    fn compute_ebb(&mut self, func: &Function, ebb: Ebb) {
+        for inst in func.layout.ebb_insts(ebb) {
+            match func.dfg[inst].analyze_branch(&func.dfg.value_lists) {
+                BranchInfo::SingleDest(dest, _) => {
+                    self.add_edge((ebb, inst), dest);
+                }
+                BranchInfo::Table(jt) => {
+                    for (_, dest) in func.jump_tables[jt].entries() {
                         self.add_edge((ebb, inst), dest);
                     }
-                    BranchInfo::Table(jt) => {
-                        for (_, dest) in func.jump_tables[jt].entries() {
-                            self.add_edge((ebb, inst), dest);
-                        }
-                    }
-                    BranchInfo::NotABranch => {}
                 }
+                BranchInfo::NotABranch => {}
             }
         }
+    }
+
+    fn invalidate_ebb_successors(&mut self, ebb: Ebb) {
+        // Temporarily take ownership because we need mutable access to self.data inside the loop.
+        // Unfortunately borrowck cannot see that our mut accesses to predecessors don't alias
+        // our iteration over successors.
+        let mut successors = mem::replace(&mut self.data[ebb].successors, Vec::new());
+        for suc in successors.iter().cloned() {
+            self.data[suc].predecessors.retain(|&(e, _)| e != ebb);
+        }
+        successors.clear();
+        self.data[ebb].successors = successors;
+    }
+
+    /// Recompute the control flow graph of `ebb`.
+    ///
+    /// This is for use after modifying instructions within a specific EBB. It recomputes all edges
+    /// from `ebb` while leaving edges to `ebb` intact. Its functionality a subset of that of the
+    /// more expensive `compute`, and should be used when we know we don't need to recompute the CFG
+    /// from scratch, but rather that our changes have been restricted to specific EBBs.
+    pub fn recompute_ebb(&mut self, func: &Function, ebb: Ebb) {
+        self.invalidate_ebb_successors(ebb);
+        self.compute_ebb(func, ebb);
     }
 
     fn add_edge(&mut self, from: BasicBlock, to: Ebb) {
@@ -207,32 +235,68 @@ mod tests {
             cur.insert_ebb(ebb2);
         }
 
-        let cfg = ControlFlowGraph::with_function(&func);
+        let mut cfg = ControlFlowGraph::with_function(&func);
 
-        let ebb0_predecessors = cfg.get_predecessors(ebb0);
-        let ebb1_predecessors = cfg.get_predecessors(ebb1);
-        let ebb2_predecessors = cfg.get_predecessors(ebb2);
+        {
+            let ebb0_predecessors = cfg.get_predecessors(ebb0);
+            let ebb1_predecessors = cfg.get_predecessors(ebb1);
+            let ebb2_predecessors = cfg.get_predecessors(ebb2);
 
-        let ebb0_successors = cfg.get_successors(ebb0);
-        let ebb1_successors = cfg.get_successors(ebb1);
-        let ebb2_successors = cfg.get_successors(ebb2);
+            let ebb0_successors = cfg.get_successors(ebb0);
+            let ebb1_successors = cfg.get_successors(ebb1);
+            let ebb2_successors = cfg.get_successors(ebb2);
 
-        assert_eq!(ebb0_predecessors.len(), 0);
-        assert_eq!(ebb1_predecessors.len(), 2);
-        assert_eq!(ebb2_predecessors.len(), 2);
+            assert_eq!(ebb0_predecessors.len(), 0);
+            assert_eq!(ebb1_predecessors.len(), 2);
+            assert_eq!(ebb2_predecessors.len(), 2);
 
-        assert_eq!(ebb1_predecessors.contains(&(ebb0, jmp_ebb0_ebb1)), true);
-        assert_eq!(ebb1_predecessors.contains(&(ebb1, br_ebb1_ebb1)), true);
-        assert_eq!(ebb2_predecessors.contains(&(ebb0, br_ebb0_ebb2)), true);
-        assert_eq!(ebb2_predecessors.contains(&(ebb1, jmp_ebb1_ebb2)), true);
+            assert_eq!(ebb1_predecessors.contains(&(ebb0, jmp_ebb0_ebb1)), true);
+            assert_eq!(ebb1_predecessors.contains(&(ebb1, br_ebb1_ebb1)), true);
+            assert_eq!(ebb2_predecessors.contains(&(ebb0, br_ebb0_ebb2)), true);
+            assert_eq!(ebb2_predecessors.contains(&(ebb1, jmp_ebb1_ebb2)), true);
 
-        assert_eq!(ebb0_successors.len(), 2);
-        assert_eq!(ebb1_successors.len(), 2);
-        assert_eq!(ebb2_successors.len(), 0);
+            assert_eq!(ebb0_successors.len(), 2);
+            assert_eq!(ebb1_successors.len(), 2);
+            assert_eq!(ebb2_successors.len(), 0);
 
-        assert_eq!(ebb0_successors.contains(&ebb1), true);
-        assert_eq!(ebb0_successors.contains(&ebb2), true);
-        assert_eq!(ebb1_successors.contains(&ebb1), true);
-        assert_eq!(ebb1_successors.contains(&ebb2), true);
+            assert_eq!(ebb0_successors.contains(&ebb1), true);
+            assert_eq!(ebb0_successors.contains(&ebb2), true);
+            assert_eq!(ebb1_successors.contains(&ebb1), true);
+            assert_eq!(ebb1_successors.contains(&ebb2), true);
+        }
+
+        // Change some instructions and recompute ebb0
+        func.dfg.replace(br_ebb0_ebb2).brnz(cond, ebb1, &[]);
+        func.dfg.replace(jmp_ebb0_ebb1).return_(&[]);
+        cfg.recompute_ebb(&mut func, ebb0);
+        let br_ebb0_ebb1 = br_ebb0_ebb2;
+
+        {
+            let ebb0_predecessors = cfg.get_predecessors(ebb0);
+            let ebb1_predecessors = cfg.get_predecessors(ebb1);
+            let ebb2_predecessors = cfg.get_predecessors(ebb2);
+
+            let ebb0_successors = cfg.get_successors(ebb0);
+            let ebb1_successors = cfg.get_successors(ebb1);
+            let ebb2_successors = cfg.get_successors(ebb2);
+
+            assert_eq!(ebb0_predecessors.len(), 0);
+            assert_eq!(ebb1_predecessors.len(), 2);
+            assert_eq!(ebb2_predecessors.len(), 1);
+
+            assert_eq!(ebb1_predecessors.contains(&(ebb0, br_ebb0_ebb1)), true);
+            assert_eq!(ebb1_predecessors.contains(&(ebb1, br_ebb1_ebb1)), true);
+            assert_eq!(ebb2_predecessors.contains(&(ebb0, br_ebb0_ebb2)), false);
+            assert_eq!(ebb2_predecessors.contains(&(ebb1, jmp_ebb1_ebb2)), true);
+
+            assert_eq!(ebb0_successors.len(), 1);
+            assert_eq!(ebb1_successors.len(), 2);
+            assert_eq!(ebb2_successors.len(), 0);
+
+            assert_eq!(ebb0_successors.contains(&ebb1), true);
+            assert_eq!(ebb0_successors.contains(&ebb2), false);
+            assert_eq!(ebb1_successors.contains(&ebb1), true);
+            assert_eq!(ebb1_successors.contains(&ebb2), true);
+        }
     }
 }
