@@ -311,6 +311,41 @@ impl<T: EntityRef> EntityList<T> {
         }
     }
 
+    /// Grow list by adding `count` uninitialized elements at the end.
+    ///
+    /// Returns a mutable slice representing the whole list.
+    fn grow<'a>(&'a mut self, count: usize, pool: &'a mut ListPool<T>) -> &'a mut [T] {
+        let idx = self.index as usize;
+        let new_len;
+        let block;
+        match pool.len_of(self) {
+            None => {
+                // This is an empty list. Allocate a block.
+                assert_eq!(idx, 0, "Invalid pool");
+                if count == 0 {
+                    return &mut [];
+                }
+                new_len = count;
+                block = pool.alloc(sclass_for_length(new_len));
+                self.index = (block + 1) as u32;
+            }
+            Some(len) => {
+                // Do we need to reallocate?
+                let sclass = sclass_for_length(len);
+                new_len = len + count;
+                let new_sclass = sclass_for_length(new_len);
+                if new_sclass != sclass {
+                    block = pool.realloc(idx - 1, sclass, new_sclass, len + 1);
+                    self.index = (block + 1) as u32;
+                } else {
+                    block = idx - 1;
+                }
+            }
+        }
+        pool.data[block] = T::new(new_len);
+        &mut pool.data[block + 1..block + 1 + new_len]
+    }
+
     /// Appends multiple elements to the back of the list.
     pub fn extend<I>(&mut self, elements: I, pool: &mut ListPool<T>)
         where I: IntoIterator<Item = T>
@@ -370,6 +405,20 @@ impl<T: EntityRef> EntityList<T> {
 
         // Finally adjust the length.
         pool.data[block] = T::new(len - 1);
+    }
+
+    /// Grow the list by inserting `count` elements at `index`.
+    ///
+    /// The new elements are not initialized, they will contain whatever happened to be in memory.
+    /// Since the memory comes from the pool, this will be either zero entity references or
+    /// whatever where in a previously deallocated list.
+    pub fn grow_at(&mut self, index: usize, count: usize, pool: &mut ListPool<T>) {
+        let mut data = self.grow(count, pool);
+
+        // Copy elements after `index` up.
+        for i in (index + count..data.len()).rev() {
+            data[i] = data[i - count];
+        }
     }
 }
 
@@ -529,5 +578,42 @@ mod tests {
         list.remove(0, pool);
         assert_eq!(list.as_slice(pool), &[]);
         assert!(list.is_empty());
+    }
+
+    #[test]
+    fn growing() {
+        let pool = &mut ListPool::<Inst>::new();
+        let mut list = EntityList::<Inst>::default();
+
+        let i1 = Inst::new(1);
+        let i2 = Inst::new(2);
+        let i3 = Inst::new(3);
+        let i4 = Inst::new(4);
+
+        // This is not supposed to change the list.
+        list.grow_at(0, 0, pool);
+        assert_eq!(list.len(pool), 0);
+        assert!(list.is_empty());
+
+        list.grow_at(0, 2, pool);
+        assert_eq!(list.len(pool), 2);
+
+        list.as_mut_slice(pool).copy_from_slice(&[i2, i3]);
+
+        list.grow_at(1, 0, pool);
+        assert_eq!(list.as_slice(pool), &[i2, i3]);
+
+        list.grow_at(1, 1, pool);
+        list.as_mut_slice(pool)[1] = i1;
+        assert_eq!(list.as_slice(pool), &[i2, i1, i3]);
+
+        // Append nothing at the end.
+        list.grow_at(3, 0, pool);
+        assert_eq!(list.as_slice(pool), &[i2, i1, i3]);
+
+        // Append something at the end.
+        list.grow_at(3, 1, pool);
+        list.as_mut_slice(pool)[3] = i4;
+        assert_eq!(list.as_slice(pool), &[i2, i1, i3, i4]);
     }
 }
