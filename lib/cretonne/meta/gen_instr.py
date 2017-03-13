@@ -111,6 +111,8 @@ def gen_instruction_data_impl(fmt):
     - `pub fn second_result_mut(&mut self) -> Option<&mut PackedOption<Value>>`
     - `pub fn arguments(&self, &pool) -> &[Value]`
     - `pub fn arguments_mut(&mut self, &pool) -> &mut [Value]`
+    - `pub fn take_value_list(&mut self) -> Option<ValueList>`
+    - `pub fn put_value_list(&mut self, args: ValueList>`
     """
 
     # The `opcode` and `first_type` methods simply read the `opcode` and `ty`
@@ -220,6 +222,45 @@ def gen_instruction_data_impl(fmt):
                 instruction.
                 """)
         gen_arguments_method(fmt, True)
+
+        fmt.doc_comment(
+                """
+                Take out the value list with all the value arguments and return
+                it.
+
+                This leaves the value list in the instruction empty. Use
+                `put_value_list` to put the value list back.
+                """)
+        with fmt.indented(
+                'pub fn take_value_list(&mut self) -> Option<ValueList> {',
+                '}'):
+            with fmt.indented('match *self {', '}'):
+                for f in InstructionFormat.all_formats:
+                    n = 'InstructionData::' + f.name
+                    if f.has_value_list:
+                        fmt.line(
+                            n + ' { ref mut args, .. } => Some(args.take()),')
+                fmt.line('_ => None,')
+
+        fmt.doc_comment(
+                """
+                Put back a value list.
+
+                After removing a value list with `take_value_list()`, use this
+                method to put it back. It is required that this instruction has
+                a format that accepts a value list, and that the existing value
+                list is empty. This avoids leaking list pool memory.
+                """)
+        with fmt.indented(
+                'pub fn put_value_list(&mut self, vlist: ValueList) {', '}'):
+            with fmt.indented('let args = match *self {', '};'):
+                for f in InstructionFormat.all_formats:
+                    n = 'InstructionData::' + f.name
+                    if f.has_value_list:
+                        fmt.line(n + ' { ref mut args, .. } => args,')
+                fmt.line('_ => panic!("No value list: {:?}", self),')
+            fmt.line('assert!(args.is_empty(), "Value list already in use");')
+            fmt.line('*args = vlist;')
 
 
 def collect_instr_groups(isas):

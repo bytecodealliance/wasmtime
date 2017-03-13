@@ -47,6 +47,7 @@
 //! reserved for the empty list which isn't allocated in the vector.
 
 use std::marker::PhantomData;
+use std::mem;
 
 use entity_map::EntityRef;
 
@@ -271,6 +272,13 @@ impl<T: EntityRef> EntityList<T> {
         }
         // Switch back to the empty list representation which has no storage.
         self.index = 0;
+    }
+
+    /// Take all elements from this list and return them as a new list. Leave this list empty.
+    ///
+    /// This is the equivalent of `Option::take()`.
+    pub fn take(&mut self) -> EntityList<T> {
+        mem::replace(self, Default::default())
     }
 
     /// Appends an element to the back of the list.
