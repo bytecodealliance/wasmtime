@@ -233,6 +233,12 @@ impl<T: EntityRef> EntityList<T> {
         pool.len_of(self).unwrap_or(0)
     }
 
+    /// Returns `true` if the list is valid
+    pub fn is_valid(&self, pool: &ListPool<T>) -> bool {
+        // We consider an empty list to be valid
+        self.is_empty() || pool.len_of(self) != None
+    }
+
     /// Get the list as a slice.
     pub fn as_slice<'a>(&'a self, pool: &'a ListPool<T>) -> &'a [T] {
         let idx = self.index as usize;

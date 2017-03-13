@@ -82,6 +82,11 @@ impl DataFlowGraph {
     pub fn num_ebbs(&self) -> usize {
         self.ebbs.len()
     }
+
+    /// Returns `true` if the given ebb reference is valid.
+    pub fn ebb_is_valid(&self, ebb: Ebb) -> bool {
+        self.ebbs.is_valid(ebb)
+    }
 }
 
 /// Handling values.
@@ -93,6 +98,14 @@ impl DataFlowGraph {
         let vref = Value::new_table(self.extended_values.len());
         self.extended_values.push(data);
         vref
+    }
+
+    /// Check if a value reference is valid.
+    pub fn value_is_valid(&self, v: Value) -> bool {
+        match v.expand() {
+            ExpandedValue::Direct(inst) => self.insts.is_valid(inst),
+            ExpandedValue::Table(index) => index < self.extended_values.len(),
+        }
     }
 
     /// Get the type of a value.

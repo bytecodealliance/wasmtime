@@ -12,17 +12,18 @@
 //!   Instruction integrity
 //!
 //!    - The instruction format must match the opcode.
-//! TODO:
 //!    - All result values must be created for multi-valued instructions.
 //!    - Instructions with no results must have a VOID `first_type()`.
 //!    - All referenced entities must exist. (Values, EBBs, stack slots, ...)
 //!
 //!   SSA form
 //!
+//! TODO:
 //!    - Values must be defined by an instruction that exists and that is inserted in
 //!      an EBB, or be an argument of an existing EBB.
 //!    - Values used by an instruction must dominate the instruction.
-//!     Control flow graph and dominator tree integrity:
+//!
+//!   Control flow graph and dominator tree integrity:
 //!
 //!    - All predecessors in the CFG must be branches to the EBB.
 //!    - All branches to an EBB must be present in the CFG.
@@ -52,7 +53,7 @@
 //!    - Swizzle and shuffle instructions take a variable number of lane arguments. The number
 //!      of arguments must match the destination type, and the lane indexes must be in range.
 
-use ir::{Function, ValueDef, Ebb, Inst};
+use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, Value};
 use ir::instructions::InstructionFormat;
 use ir::entities::AnyEntity;
 use std::fmt::{self, Display, Formatter};
@@ -147,13 +148,142 @@ impl<'a> Verifier<'a> {
 
     fn instruction_integrity(&self, inst: Inst) -> Result<()> {
         let inst_data = &self.func.dfg[inst];
+        let dfg = &self.func.dfg;
 
         // The instruction format matches the opcode
         if inst_data.opcode().format() != InstructionFormat::from(inst_data) {
             return err!(inst, "instruction opcode doesn't match instruction format");
         }
 
+        let fixed_results = inst_data.opcode().constraints().fixed_results();
+        // var_results is 0 if we aren't a call instruction
+        let var_results = dfg.call_signature(inst)
+            .map(|sig| dfg.signatures[sig].return_types.len())
+            .unwrap_or(0);
+        let total_results = fixed_results + var_results;
+
+        if total_results == 0 {
+            // Instructions with no results have a NULL `first_type()`
+            let ret_type = inst_data.first_type();
+            if ret_type != types::VOID {
+                return err!(inst,
+                            "instruction expected to have NULL return value, found {}",
+                            ret_type);
+            }
+        } else {
+            // All result values for multi-valued instructions are created
+            let got_results = dfg.inst_results(inst).count();
+            if got_results != total_results {
+                return err!(inst,
+                            "expected {} result values, found {}",
+                            total_results,
+                            got_results);
+            }
+        }
+
+        self.verify_entity_references(inst)
+    }
+
+    fn verify_entity_references(&self, inst: Inst) -> Result<()> {
+        use ir::instructions::InstructionData::*;
+
+        for &arg in self.func.dfg[inst].arguments(&self.func.dfg.value_lists) {
+            self.verify_value(inst, arg)?;
+        }
+
+        for res in self.func.dfg.inst_results(inst) {
+            self.verify_value(inst, res)?;
+        }
+
+        match &self.func.dfg[inst] {
+            &MultiAry { ref args, .. } => {
+                self.verify_value_list(inst, args)?;
+            }
+            &Jump { destination, ref args, .. } => {
+                self.verify_ebb(inst, destination)?;
+                self.verify_value_list(inst, args)?;
+            }
+            &Branch { destination, ref args, .. } => {
+                self.verify_ebb(inst, destination)?;
+                self.verify_value_list(inst, args)?;
+            }
+            &BranchTable { table, .. } => {
+                self.verify_jump_table(inst, table)?;
+            }
+            &Call { func_ref, ref args, .. } => {
+                self.verify_func_ref(inst, func_ref)?;
+                self.verify_value_list(inst, args)?;
+            }
+            &IndirectCall { sig_ref, ref args, .. } => {
+                self.verify_sig_ref(inst, sig_ref)?;
+                self.verify_value_list(inst, args)?;
+            }
+            // Exhaustive list so we can't forget to add new formats
+            &Nullary { .. } |
+            &Unary { .. } |
+            &UnaryImm { .. } |
+            &UnaryIeee32 { .. } |
+            &UnaryIeee64 { .. } |
+            &UnarySplit { .. } |
+            &Binary { .. } |
+            &BinaryImm { .. } |
+            &BinaryOverflow { .. } |
+            &Ternary { .. } |
+            &InsertLane { .. } |
+            &ExtractLane { .. } |
+            &IntCompare { .. } |
+            &FloatCompare { .. } => {}
+        }
+
         Ok(())
+    }
+
+    fn verify_ebb(&self, inst: Inst, e: Ebb) -> Result<()> {
+        if !self.func.dfg.ebb_is_valid(e) {
+            err!(inst, "invalid ebb reference {}", e)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn verify_sig_ref(&self, inst: Inst, s: SigRef) -> Result<()> {
+        if !self.func.dfg.signatures.is_valid(s) {
+            err!(inst, "invalid signature reference {}", s)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn verify_func_ref(&self, inst: Inst, f: FuncRef) -> Result<()> {
+        if !self.func.dfg.ext_funcs.is_valid(f) {
+            err!(inst, "invalid function reference {}", f)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn verify_value_list(&self, inst: Inst, l: &ValueList) -> Result<()> {
+        if !l.is_valid(&self.func.dfg.value_lists) {
+            err!(inst, "invalid value list reference {:?}", l)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn verify_jump_table(&self, inst: Inst, j: JumpTable) -> Result<()> {
+        if !self.func.jump_tables.is_valid(j) {
+            err!(inst, "invalid jump table reference {}", j)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn verify_value(&self, inst: Inst, v: Value) -> Result<()> {
+        if !self.func.dfg.value_is_valid(v) {
+            err!(inst, "invalid value reference {}", v)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn run(&self) -> Result<()> {
