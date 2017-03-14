@@ -51,11 +51,7 @@ pub type CommandResult = Result<(), String>;
 fn cton_util() -> CommandResult {
     // Parse comand line arguments.
     let args: Args = Docopt::new(USAGE)
-        .and_then(|d| {
-            d.help(true)
-                .version(Some(format!("Cretonne {}", VERSION)))
-                .decode()
-        })
+        .and_then(|d| d.help(true).version(Some(format!("Cretonne {}", VERSION))).decode())
         .unwrap_or_else(|e| e.exit());
 
     // Find the sub-command to execute.

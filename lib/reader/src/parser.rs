@@ -28,7 +28,12 @@ use sourcemap::{SourceMap, MutableSourceMap};
 ///
 /// Any test commands or ISA declarations are ignored.
 pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
-    parse_test(text).map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
+    parse_test(text).map(|file| {
+                             file.functions
+                                 .into_iter()
+                                 .map(|(func, _)| func)
+                                 .collect()
+                         })
 }
 
 /// Parse the entire `text` as a test case file.
@@ -45,11 +50,11 @@ pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
     let functions = parser.parse_function_list(isa_spec.unique_isa())?;
 
     Ok(TestFile {
-        commands: commands,
-        isa_spec: isa_spec,
-        preamble_comments: preamble_comments,
-        functions: functions,
-    })
+           commands: commands,
+           isa_spec: isa_spec,
+           preamble_comments: preamble_comments,
+           functions: functions,
+       })
 }
 
 pub struct Parser<'a> {
@@ -114,7 +119,12 @@ impl<'a> Context<'a> {
 
     // Allocate a new signature and add a mapping number -> SigRef.
     fn add_sig(&mut self, number: u32, data: Signature, loc: &Location) -> Result<()> {
-        self.map.def_sig(number, self.function.dfg.signatures.push(data), loc)
+        self.map.def_sig(number,
+                         self.function
+                             .dfg
+                             .signatures
+                             .push(data),
+                         loc)
     }
 
     // Resolve a reference to a signature.
@@ -127,7 +137,12 @@ impl<'a> Context<'a> {
 
     // Allocate a new external function and add a mapping number -> FuncRef.
     fn add_fn(&mut self, number: u32, data: ExtFuncData, loc: &Location) -> Result<()> {
-        self.map.def_fn(number, self.function.dfg.ext_funcs.push(data), loc)
+        self.map.def_fn(number,
+                        self.function
+                            .dfg
+                            .ext_funcs
+                            .push(data),
+                        loc)
     }
 
     // Resolve a reference to a function.
@@ -269,9 +284,9 @@ impl<'a> Parser<'a> {
                             // Gather comments, associate them with `comment_entity`.
                             if let Some(entity) = self.comment_entity {
                                 self.comments.push(Comment {
-                                    entity: entity,
-                                    text: text,
-                                });
+                                                       entity: entity,
+                                                       text: text,
+                                                   });
                             }
                         }
                         _ => self.lookahead = Some(token),
@@ -777,23 +792,35 @@ impl<'a> Parser<'a> {
             match self.token() {
                 Some(Token::StackSlot(..)) => {
                     self.gather_comments(ctx.function.stack_slots.next_key());
-                    self.parse_stack_slot_decl()
-                        .and_then(|(num, dat)| ctx.add_ss(num, dat, &self.loc))
+                    self.parse_stack_slot_decl().and_then(|(num, dat)| {
+                                                              ctx.add_ss(num, dat, &self.loc)
+                                                          })
                 }
                 Some(Token::SigRef(..)) => {
-                    self.gather_comments(ctx.function.dfg.signatures.next_key());
-                    self.parse_signature_decl(ctx.unique_isa)
-                        .and_then(|(num, dat)| ctx.add_sig(num, dat, &self.loc))
+                    self.gather_comments(ctx.function
+                                             .dfg
+                                             .signatures
+                                             .next_key());
+                    self.parse_signature_decl(ctx.unique_isa).and_then(|(num, dat)| {
+                                                                           ctx.add_sig(num,
+                                                                                       dat,
+                                                                                       &self.loc)
+                                                                       })
                 }
                 Some(Token::FuncRef(..)) => {
-                    self.gather_comments(ctx.function.dfg.ext_funcs.next_key());
-                    self.parse_function_decl(ctx)
-                        .and_then(|(num, dat)| ctx.add_fn(num, dat, &self.loc))
+                    self.gather_comments(ctx.function
+                                             .dfg
+                                             .ext_funcs
+                                             .next_key());
+                    self.parse_function_decl(ctx).and_then(|(num, dat)| {
+                                                               ctx.add_fn(num, dat, &self.loc)
+                                                           })
                 }
                 Some(Token::JumpTable(..)) => {
                     self.gather_comments(ctx.function.jump_tables.next_key());
-                    self.parse_jump_table_decl()
-                        .and_then(|(num, dat)| ctx.add_jt(num, dat, &self.loc))
+                    self.parse_jump_table_decl().and_then(|(num, dat)| {
+                                                              ctx.add_jt(num, dat, &self.loc)
+                                                          })
                 }
                 // More to come..
                 _ => return Ok(()),
@@ -852,7 +879,10 @@ impl<'a> Parser<'a> {
         let data = match self.token() {
             Some(Token::Identifier("function")) => {
                 let (loc, name, sig) = self.parse_function_spec(ctx.unique_isa)?;
-                let sigref = ctx.function.dfg.signatures.push(sig);
+                let sigref = ctx.function
+                    .dfg
+                    .signatures
+                    .push(sig);
                 ctx.map.def_entity(sigref.into(), &loc).expect("duplicate SigRef entities created");
                 ExtFuncData {
                     name: name,
@@ -944,11 +974,11 @@ impl<'a> Parser<'a> {
 
         // extended-basic-block ::= ebb-header * { instruction }
         while match self.token() {
-            Some(Token::Value(_)) => true,
-            Some(Token::Identifier(_)) => true,
-            Some(Token::LBracket) => true,
-            _ => false,
-        } {
+                  Some(Token::Value(_)) => true,
+                  Some(Token::Identifier(_)) => true,
+                  Some(Token::LBracket) => true,
+                  _ => false,
+              } {
             self.parse_instruction(ctx, ebb)?;
         }
 
@@ -1161,7 +1191,10 @@ impl<'a> Parser<'a> {
                         ctx.function.dfg.inst_results(inst))?;
 
         if let Some(result_locations) = result_locations {
-            for (value, loc) in ctx.function.dfg.inst_results(inst).zip(result_locations) {
+            for (value, loc) in ctx.function
+                    .dfg
+                    .inst_results(inst)
+                    .zip(result_locations) {
                 *ctx.function.locations.ensure(value) = loc;
             }
         }
@@ -1197,13 +1230,13 @@ impl<'a> Parser<'a> {
                     let ctrl_src_value = inst_data.typevar_operand(&ctx.function.dfg.value_lists)
                         .expect("Constraints <-> Format inconsistency");
                     ctx.function.dfg.value_type(match ctx.map.get_value(ctrl_src_value) {
-                        Some(v) => v,
-                        None => {
-                            return err!(self.loc,
-                                        "cannot determine type of operand {}",
-                                        ctrl_src_value);
-                        }
-                    })
+                                                    Some(v) => v,
+                                                    None => {
+                        return err!(self.loc,
+                                    "cannot determine type of operand {}",
+                                    ctrl_src_value);
+                    }
+                                                })
                 } else if constraints.is_polymorphic() {
                     // This opcode does not support type inference, so the explicit type variable
                     // is required.
@@ -1290,7 +1323,7 @@ impl<'a> Parser<'a> {
                            ctx: &mut Context,
                            opcode: Opcode)
                            -> Result<InstructionData> {
-        Ok(match opcode.format() {
+        let idata = match opcode.format() {
             InstructionFormat::Nullary => {
                 InstructionData::Nullary {
                     opcode: opcode,
@@ -1502,7 +1535,8 @@ impl<'a> Parser<'a> {
                     table: table,
                 }
             }
-        })
+        };
+        Ok(idata)
     }
 }
 
@@ -1555,8 +1589,8 @@ mod tests {
                                        ss3 = stack_slot 13
                                        ss1 = stack_slot 1
                                      }")
-            .parse_function(None)
-            .unwrap();
+                .parse_function(None)
+                .unwrap();
         assert_eq!(func.name.to_string(), "foo");
         let mut iter = func.stack_slots.keys();
         let ss0 = iter.next().unwrap();
@@ -1572,9 +1606,9 @@ mod tests {
                                     ss1  = stack_slot 13
                                     ss1  = stack_slot 1
                                 }")
-                       .parse_function(None)
-                       .unwrap_err()
-                       .to_string(),
+                           .parse_function(None)
+                           .unwrap_err()
+                           .to_string(),
                    "3: duplicate stack slot: ss1");
     }
 
@@ -1584,8 +1618,8 @@ mod tests {
                                      ebb0:
                                      ebb4(vx3: i32):
                                      }")
-            .parse_function(None)
-            .unwrap();
+                .parse_function(None)
+                .unwrap();
         assert_eq!(func.name.to_string(), "ebbs");
 
         let mut ebbs = func.layout.ebbs();
@@ -1602,8 +1636,7 @@ mod tests {
 
     #[test]
     fn comments() {
-        let (func, Details { comments, .. }) =
-            Parser::new("; before
+        let (func, Details { comments, .. }) = Parser::new("; before
                          function comment() { ; decl
                             ss10  = stack_slot 13 ; stackslot.
                             ; Still stackslot.
@@ -1645,7 +1678,7 @@ mod tests {
                              set enable_float=false
                              ; still preamble
                              function comment() {}")
-            .unwrap();
+                .unwrap();
         assert_eq!(tf.commands.len(), 2);
         assert_eq!(tf.commands[0].command, "cfg");
         assert_eq!(tf.commands[1].command, "verify");
@@ -1664,18 +1697,18 @@ mod tests {
     fn isa_spec() {
         assert!(parse_test("isa
                             function foo() {}")
-            .is_err());
+                        .is_err());
 
         assert!(parse_test("isa riscv
                             set enable_float=false
                             function foo() {}")
-            .is_err());
+                        .is_err());
 
         match parse_test("set enable_float=false
                           isa riscv
                           function foo() {}")
-            .unwrap()
-            .isa_spec {
+                      .unwrap()
+                      .isa_spec {
             IsaSpec::None(_) => panic!("Expected some ISA"),
             IsaSpec::Some(v) => {
                 assert_eq!(v.len(), 1);

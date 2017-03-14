@@ -188,7 +188,11 @@ fn write_instruction(w: &mut Write,
                 for r in func.dfg.inst_results(inst) {
                     write!(s,
                            ",{}",
-                           func.locations.get(r).cloned().unwrap_or_default().display(&regs))?
+                           func.locations
+                               .get(r)
+                               .cloned()
+                               .unwrap_or_default()
+                               .display(&regs))?
                 }
             }
             write!(s, "]")?;

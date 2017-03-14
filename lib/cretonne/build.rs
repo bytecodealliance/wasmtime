@@ -26,7 +26,8 @@ fn main() {
     // Make sure we rebuild is this build script changes.
     // I guess that won't happen if you have non-UTF8 bytes in your path names.
     // The `build.py` script prints out its own dependencies.
-    println!("cargo:rerun-if-changed={}", crate_dir.join("build.rs").to_string_lossy());
+    println!("cargo:rerun-if-changed={}",
+             crate_dir.join("build.rs").to_string_lossy());
 
     // Scripts are in `$crate_dir/meta`.
     let meta_dir = crate_dir.join("meta");

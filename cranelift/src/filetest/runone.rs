@@ -25,7 +25,10 @@ pub fn run(path: &Path) -> TestResult {
     }
 
     // Parse the test commands.
-    let mut tests = testfile.commands.iter().map(new_subtest).collect::<Result<Vec<_>>>()?;
+    let mut tests = testfile.commands
+        .iter()
+        .map(new_subtest)
+        .collect::<Result<Vec<_>>>()?;
 
     // Flags to use for those tests that don't need an ISA.
     // This is the cumulative effect of all the `set` commands in the file.

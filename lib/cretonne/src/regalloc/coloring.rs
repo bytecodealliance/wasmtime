@@ -200,7 +200,10 @@ impl<'a> Context<'a> {
 
         for lv in liveins {
             let value = lv.value;
-            let affinity = self.liveness.get(value).expect("No live range for live-in").affinity;
+            let affinity = self.liveness
+                .get(value)
+                .expect("No live range for live-in")
+                .affinity;
             if let Affinity::Reg(rc_index) = affinity {
                 let regclass = self.reginfo.rc(rc_index);
                 match func.locations[value] {

@@ -270,7 +270,10 @@ impl<'a> State<'a> {
     // Get the offset following the match that defined `var`, or 0 if var is an environment
     // variable or unknown.
     fn def_offset(&self, var: &str) -> usize {
-        self.vars.get(var).map(|&VarDef { offset, .. }| offset).unwrap_or(0)
+        self.vars
+            .get(var)
+            .map(|&VarDef { offset, .. }| offset)
+            .unwrap_or(0)
     }
 
     // Get the offset of the beginning of the next line after `pos`.
@@ -344,13 +347,13 @@ impl<'a> State<'a> {
             })
         };
         Ok(if let Some((b, e)) = matched_range {
-            let r = (range.0 + b, range.0 + e);
-            self.recorder.matched_check(rx.as_str(), r);
-            Some(r)
-        } else {
-            self.recorder.missed_check(rx.as_str(), range);
-            None
-        })
+               let r = (range.0 + b, range.0 + e);
+               self.recorder.matched_check(rx.as_str(), r);
+               Some(r)
+           } else {
+               self.recorder.missed_check(rx.as_str(), range);
+               None
+           })
     }
 }
 

@@ -67,10 +67,10 @@ impl RegBank {
                 }
             }
             .and_then(|offset| if offset < self.units {
-                Some(offset + self.first_unit)
-            } else {
-                None
-            })
+                          Some(offset + self.first_unit)
+                      } else {
+                          None
+                      })
     }
 
     /// Write `regunit` to `w`, assuming that it belongs to this bank.
@@ -199,7 +199,10 @@ impl RegInfo {
 
     /// Try to parse a regunit name. The name is not expected to begin with `%`.
     pub fn parse_regunit(&self, name: &str) -> Option<RegUnit> {
-        self.banks.iter().filter_map(|b| b.parse_regunit(name)).next()
+        self.banks
+            .iter()
+            .filter_map(|b| b.parse_regunit(name))
+            .next()
     }
 
     /// Make a temporary object that can display a register unit.

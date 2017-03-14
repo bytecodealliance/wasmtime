@@ -97,8 +97,8 @@ fn heartbeat_thread(replies: Sender<Reply>) -> thread::JoinHandle<()> {
     thread::Builder::new()
         .name("heartbeat".to_string())
         .spawn(move || while replies.send(Reply::Tick).is_ok() {
-            thread::sleep(Duration::from_secs(1));
-        })
+                   thread::sleep(Duration::from_secs(1));
+               })
         .unwrap()
 }
 
@@ -120,9 +120,9 @@ fn worker_thread(thread_num: usize,
                 // Tell them we're starting this job.
                 // The receiver should always be present for this as long as we have jobs.
                 replies.send(Reply::Starting {
-                        jobid: jobid,
-                        thread_num: thread_num,
-                    })
+                                 jobid: jobid,
+                                 thread_num: thread_num,
+                             })
                     .unwrap();
 
                 let result = catch_unwind(|| runone::run(path.as_path())).unwrap_or_else(|e| {
@@ -138,9 +138,9 @@ fn worker_thread(thread_num: usize,
                 });
 
                 replies.send(Reply::Done {
-                        jobid: jobid,
-                        result: result,
-                    })
+                                 jobid: jobid,
+                                 result: result,
+                             })
                     .unwrap();
             }
         })

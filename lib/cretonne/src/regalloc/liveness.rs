@@ -315,8 +315,10 @@ impl Liveness {
                 let recipe = func.encodings[inst].recipe();
                 // Iterator of constraints, one per value operand.
                 // TODO: Should we fail here if the instruction doesn't have a valid encoding?
-                let mut operand_constraints =
-                    recipe_constraints.get(recipe).map(|c| c.ins).unwrap_or(&[]).iter();
+                let mut operand_constraints = recipe_constraints.get(recipe)
+                    .map(|c| c.ins)
+                    .unwrap_or(&[])
+                    .iter();
 
                 for &arg in func.dfg[inst].arguments(&func.dfg.value_lists) {
                     // Get the live range, create it as a dead range if necessary.

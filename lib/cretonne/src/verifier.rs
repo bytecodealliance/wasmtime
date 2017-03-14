@@ -157,9 +157,8 @@ impl<'a> Verifier<'a> {
 
         let fixed_results = inst_data.opcode().constraints().fixed_results();
         // var_results is 0 if we aren't a call instruction
-        let var_results = dfg.call_signature(inst)
-            .map(|sig| dfg.signatures[sig].return_types.len())
-            .unwrap_or(0);
+        let var_results =
+            dfg.call_signature(inst).map(|sig| dfg.signatures[sig].return_types.len()).unwrap_or(0);
         let total_results = fixed_results + var_results;
 
         if total_results == 0 {
@@ -247,7 +246,10 @@ impl<'a> Verifier<'a> {
     }
 
     fn verify_sig_ref(&self, inst: Inst, s: SigRef) -> Result<()> {
-        if !self.func.dfg.signatures.is_valid(s) {
+        if !self.func
+                .dfg
+                .signatures
+                .is_valid(s) {
             err!(inst, "invalid signature reference {}", s)
         } else {
             Ok(())
@@ -255,7 +257,10 @@ impl<'a> Verifier<'a> {
     }
 
     fn verify_func_ref(&self, inst: Inst, f: FuncRef) -> Result<()> {
-        if !self.func.dfg.ext_funcs.is_valid(f) {
+        if !self.func
+                .dfg
+                .ext_funcs
+                .is_valid(f) {
             err!(inst, "invalid function reference {}", f)
         } else {
             Ok(())
@@ -330,9 +335,9 @@ mod tests {
         let ebb0 = func.dfg.make_ebb();
         func.layout.append_ebb(ebb0);
         let nullary_with_bad_opcode = func.dfg.make_inst(InstructionData::Nullary {
-            opcode: Opcode::Jump,
-            ty: types::VOID,
-        });
+                                                             opcode: Opcode::Jump,
+                                                             ty: types::VOID,
+                                                         });
         func.layout.append_inst(nullary_with_bad_opcode, ebb0);
         let verifier = Verifier::new(&func);
         assert_err_with_msg!(verifier.run(), "instruction format");

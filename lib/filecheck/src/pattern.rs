@@ -112,7 +112,7 @@ impl Pattern {
         // All remaining possibilities start with `$(`.
         if s.len() < 2 || !s.starts_with("$(") {
             return Err(Error::Syntax("pattern syntax error, use $$ to match a single $"
-                .to_string()));
+                                         .to_string()));
         }
 
         // Match the variable name, allowing for an empty varname in `$()`, or `$(=...)`.
@@ -164,14 +164,14 @@ impl Pattern {
             }
             let refname = s[refname_begin..refname_end].to_string();
             return if let Some(defidx) = def {
-                Ok((Part::DefVar {
-                        def: defidx,
-                        var: refname,
-                    },
-                    refname_end + 1))
-            } else {
-                Err(Error::Syntax(format!("expected variable name in $(=${})", refname)))
-            };
+                       Ok((Part::DefVar {
+                               def: defidx,
+                               var: refname,
+                           },
+                           refname_end + 1))
+                   } else {
+                       Err(Error::Syntax(format!("expected variable name in $(=${})", refname)))
+                   };
         }
 
         // Last case: `$(var=...)` where `...` is a regular expression, possibly containing matched
