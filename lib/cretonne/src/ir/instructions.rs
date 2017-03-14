@@ -627,8 +627,15 @@ mod tests {
     fn constraints() {
         let a = Opcode::Iadd.constraints();
         assert!(a.use_typevar_operand());
+        assert!(!a.requires_typevar_operand());
         assert_eq!(a.fixed_results(), 1);
         assert_eq!(a.fixed_value_arguments(), 2);
+
+        let b = Opcode::Bitcast.constraints();
+        assert!(!b.use_typevar_operand());
+        assert!(!b.requires_typevar_operand());
+        assert_eq!(b.fixed_results(), 1);
+        assert_eq!(b.fixed_value_arguments(), 1);
 
         let c = Opcode::Call.constraints();
         assert_eq!(c.fixed_results(), 0);
@@ -637,6 +644,12 @@ mod tests {
         let i = Opcode::CallIndirect.constraints();
         assert_eq!(i.fixed_results(), 0);
         assert_eq!(i.fixed_value_arguments(), 1);
+
+        let cmp = Opcode::Icmp.constraints();
+        assert!(cmp.use_typevar_operand());
+        assert!(cmp.requires_typevar_operand());
+        assert_eq!(cmp.fixed_results(), 1);
+        assert_eq!(cmp.fixed_value_arguments(), 2);
     }
 
     #[test]
