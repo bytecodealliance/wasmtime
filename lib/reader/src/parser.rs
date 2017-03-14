@@ -1299,13 +1299,20 @@ impl<'a> Parser<'a> {
                     let ctrl_src_value = inst_data.typevar_operand(&ctx.function.dfg.value_lists)
                         .expect("Constraints <-> Format inconsistency");
                     ctx.function.dfg.value_type(match ctx.map.get_value(ctrl_src_value) {
-                                                    Some(v) => v,
-                                                    None => {
-                        return err!(self.loc,
-                                    "cannot determine type of operand {}",
-                                    ctrl_src_value);
-                    }
-                                                })
+                        Some(v) => v,
+                        None => {
+                            if let Some(v) = ctx.aliases
+                                .get(&ctrl_src_value)
+                                .and_then(|&(aliased, _)| ctx.map.get_value(aliased))
+                            {
+                                v
+                            } else {
+                                return err!(self.loc,
+                                            "cannot determine type of operand {}",
+                                            ctrl_src_value);
+                            }
+                        }
+                    })
                 } else if constraints.is_polymorphic() {
                     // This opcode does not support type inference, so the explicit type variable
                     // is required.
