@@ -18,9 +18,9 @@
 //!
 //!   SSA form
 //!
-//! TODO:
 //!    - Values must be defined by an instruction that exists and that is inserted in
 //!      an EBB, or be an argument of an existing EBB.
+//! TODO:
 //!    - Values used by an instruction must dominate the instruction.
 //!
 //!   Control flow graph and dominator tree integrity:
@@ -166,7 +166,7 @@ impl<'a> Verifier<'a> {
             let ret_type = inst_data.first_type();
             if ret_type != types::VOID {
                 return err!(inst,
-                            "instruction expected to have NULL return value, found {}",
+                            "instruction with no results expects NULL return type, found {}",
                             ret_type);
             }
         } else {
@@ -283,12 +283,43 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_value(&self, inst: Inst, v: Value) -> Result<()> {
-        if !self.func.dfg.value_is_valid(v) {
-            err!(inst, "invalid value reference {}", v)
-        } else {
-            Ok(())
+    fn verify_value(&self, loc_inst: Inst, v: Value) -> Result<()> {
+        let dfg = &self.func.dfg;
+        if !dfg.value_is_valid(v) {
+            return err!(loc_inst, "invalid value reference {}", v);
         }
+
+        // SSA form
+        match dfg.value_def(v) {
+            // Value is defined by an instruction that exists and is inserted in an EBB.
+            ValueDef::Res(def_inst, _) => {
+                if !dfg.insts.is_valid(def_inst) {
+                    return err!(loc_inst,
+                                "{} is defined by invalid instruction {}",
+                                v,
+                                def_inst);
+                }
+                if self.func.layout.inst_ebb(def_inst) == None {
+                    return err!(loc_inst,
+                                "{} is defined by {} which has no EBB",
+                                v,
+                                def_inst);
+                }
+            }
+            // Value is defined by an existing EBB which is inserted in the layout.
+            ValueDef::Arg(ebb, _) => {
+                if !dfg.ebb_is_valid(ebb) {
+                    return err!(loc_inst, "{} is defined by invalid EBB {}", v, ebb);
+                }
+                if !self.func.layout.is_ebb_inserted(ebb) {
+                    return err!(loc_inst,
+                                "{} is defined by {} which is not in the layout",
+                                v,
+                                ebb);
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn run(&self) -> Result<()> {
