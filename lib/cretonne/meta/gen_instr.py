@@ -445,7 +445,7 @@ def gen_type_constraints(fmt, instrs):
             use_typevar_operand = i.is_polymorphic and i.use_typevar_operand
             # Can the controlling type variable be inferred from the result?
             use_result = (fixed_results > 0 and
-                          i.outs[i.value_results[0]].typevar != ctrl_typevar)
+                          i.outs[i.value_results[0]].typevar == ctrl_typevar)
             # Are we required to use the designated operand instead of the
             # result?
             requires_typevar_operand = use_typevar_operand and not use_result
