@@ -439,6 +439,7 @@ def gen_type_constraints(fmt, instrs):
                         get_constraint(i.ins[opnum], ctrl_typevar, type_sets))
             offset = operand_seqs.add(constraints)
             fixed_results = len(i.value_results)
+            fixed_values = len(i.value_opnums)
             # Can the controlling type variable be inferred from the designated
             # operand?
             use_typevar_operand = i.is_polymorphic and i.use_typevar_operand
@@ -449,10 +450,10 @@ def gen_type_constraints(fmt, instrs):
             # result?
             requires_typevar_operand = use_typevar_operand and not use_result
             fmt.comment(
-                    ('{}: fixed_results={}, use_typevar_operand={}, ' +
-                        'requires_typevar_operand={}')
+                    '{}: fixed_results={}, use_typevar_operand={}, '
+                    'requires_typevar_operand={}, fixed_values={}'
                     .format(i.camel_name, fixed_results, use_typevar_operand,
-                            requires_typevar_operand))
+                            requires_typevar_operand, fixed_values))
             fmt.comment('Constraints={}'.format(constraints))
             if i.is_polymorphic:
                 fmt.comment(
@@ -464,6 +465,8 @@ def gen_type_constraints(fmt, instrs):
                 flags |= 8
             if requires_typevar_operand:
                 flags |= 0x10
+            assert fixed_values < 8, "Bit field encoding too tight"
+            flags |= fixed_values << 5
 
             with fmt.indented('OpcodeConstraints {', '},'):
                 fmt.line('flags: {:#04x},'.format(flags))
