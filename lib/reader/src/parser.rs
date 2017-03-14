@@ -5,6 +5,7 @@
 //
 // ====--------------------------------------------------------------------------------------====//
 
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::{u16, u32};
 use std::mem;
@@ -83,6 +84,8 @@ pub struct Parser<'a> {
 struct Context<'a> {
     function: Function,
     map: SourceMap,
+    // Store aliases until the values can be reliably looked up.
+    aliases: HashMap<Value, (Value, Location)>,
 
     // Reference to the unique_isa for things like parsing ISA-specific instruction encoding
     // information. This is only `Some` if exactly one set of `isa` directives were found in the
@@ -96,6 +99,7 @@ impl<'a> Context<'a> {
         Context {
             function: f,
             map: SourceMap::new(),
+            aliases: HashMap::new(),
             unique_isa: unique_isa,
         }
     }
@@ -171,6 +175,13 @@ impl<'a> Context<'a> {
         let ebb = self.function.dfg.make_ebb();
         self.function.layout.append_ebb(ebb);
         self.map.def_ebb(src_ebb, ebb, loc).and(Ok(ebb))
+    }
+
+    fn add_alias(&mut self, src: Value, dest: Value, loc: Location) -> Result<()> {
+        match self.aliases.insert(src, (dest, loc)) {
+            Some((v, _)) if v != dest => err!(loc, "duplicate alias: {} -> {}", src, dest),
+            _ => Ok(()),
+        }
     }
 
     // The parser creates all instructions with Ebb and Value references using the source file
@@ -1150,7 +1161,8 @@ impl<'a> Parser<'a> {
         if results.len() != 1 {
             return err!(self.loc, "wrong number of aliases");
         }
-        Ok(())
+        let dest = self.match_value("expected value alias")?;
+        ctx.add_alias(results[0], dest, self.loc)
     }
 
     // Parse an instruction, append it to `ebb`.
