@@ -252,20 +252,20 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
         if s2.starts_with("NaN:0x") {
             // Quiet NaN with payload.
             return match u64::from_str_radix(&s2[6..], 16) {
-                Ok(payload) if payload < quiet_bit => {
-                    Ok(sign_bit | max_e_bits | quiet_bit | payload)
-                }
-                _ => Err("Invalid NaN payload"),
-            };
+                       Ok(payload) if payload < quiet_bit => {
+                           Ok(sign_bit | max_e_bits | quiet_bit | payload)
+                       }
+                       _ => Err("Invalid NaN payload"),
+                   };
         }
         if s2.starts_with("sNaN:0x") {
             // Signaling NaN with payload.
             return match u64::from_str_radix(&s2[7..], 16) {
-                Ok(payload) if 0 < payload && payload < quiet_bit => {
-                    Ok(sign_bit | max_e_bits | payload)
-                }
-                _ => Err("Invalid sNaN payload"),
-            };
+                       Ok(payload) if 0 < payload && payload < quiet_bit => {
+                           Ok(sign_bit | max_e_bits | payload)
+                       }
+                       _ => Err("Invalid sNaN payload"),
+                   };
         }
 
         return Err("Float must be hexadecimal");

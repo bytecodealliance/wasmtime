@@ -34,10 +34,10 @@ fn isa_constructor(shared_flags: shared_settings::Flags,
         &enc_tables::LEVEL1_A32[..]
     };
     Box::new(Isa {
-        isa_flags: settings::Flags::new(&shared_flags, builder),
-        shared_flags: shared_flags,
-        cpumode: level1,
-    })
+                 isa_flags: settings::Flags::new(&shared_flags, builder),
+                 shared_flags: shared_flags,
+                 cpumode: level1,
+             })
 }
 
 impl TargetIsa for Isa {
@@ -58,13 +58,13 @@ impl TargetIsa for Isa {
                        inst.opcode(),
                        self.cpumode,
                        &enc_tables::LEVEL2[..])
-            .and_then(|enclist_offset| {
-                general_encoding(enclist_offset,
-                                 &enc_tables::ENCLISTS[..],
-                                 |instp| enc_tables::check_instp(inst, instp),
-                                 |isap| self.isa_flags.numbered_predicate(isap as usize))
-                    .ok_or(Legalize::Expand)
-            })
+                .and_then(|enclist_offset| {
+                    general_encoding(enclist_offset,
+                                     &enc_tables::ENCLISTS[..],
+                                     |instp| enc_tables::check_instp(inst, instp),
+                                     |isap| self.isa_flags.numbered_predicate(isap as usize))
+                            .ok_or(Legalize::Expand)
+                })
     }
 
     fn recipe_names(&self) -> &'static [&'static str] {

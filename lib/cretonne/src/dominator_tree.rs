@@ -191,12 +191,14 @@ impl DominatorTree {
         // Get an iterator with just the reachable predecessors to `ebb`.
         // Note that during the first pass, `is_reachable` returns false for blocks that haven't
         // been visited yet.
-        let mut reachable_preds =
-            cfg.get_predecessors(ebb).iter().cloned().filter(|&(ebb, _)| self.is_reachable(ebb));
+        let mut reachable_preds = cfg.get_predecessors(ebb)
+            .iter()
+            .cloned()
+            .filter(|&(ebb, _)| self.is_reachable(ebb));
 
         // The RPO must visit at least one predecessor before this node.
-        let mut idom = reachable_preds.next()
-            .expect("EBB node must have one reachable predecessor");
+        let mut idom =
+            reachable_preds.next().expect("EBB node must have one reachable predecessor");
 
         for pred in reachable_preds {
             idom = self.common_dominator(idom, pred, layout);

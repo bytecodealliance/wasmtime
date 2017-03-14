@@ -55,9 +55,9 @@ pub struct LocatedToken<'a> {
 /// Wrap up a `Token` with the given location.
 fn token<'a>(token: Token<'a>, loc: Location) -> Result<LocatedToken<'a>, LocatedError> {
     Ok(LocatedToken {
-        token: token,
-        location: loc,
-    })
+           token: token,
+           location: loc,
+       })
 }
 
 /// An error from the lexical analysis.
@@ -76,15 +76,20 @@ pub struct LocatedError {
 /// Wrap up an `Error` with the given location.
 fn error<'a>(error: Error, loc: Location) -> Result<LocatedToken<'a>, LocatedError> {
     Err(LocatedError {
-        error: error,
-        location: loc,
-    })
+            error: error,
+            location: loc,
+        })
 }
 
 /// Get the number of decimal digits at the end of `s`.
 fn trailing_digits(s: &str) -> usize {
     // It's faster to iterate backwards over bytes, and we're only counting ASCII digits.
-    s.as_bytes().iter().rev().cloned().take_while(|&b| b'0' <= b && b <= b'9').count()
+    s.as_bytes()
+        .iter()
+        .rev()
+        .cloned()
+        .take_while(|&b| b'0' <= b && b <= b'9')
+        .count()
 }
 
 /// Pre-parse a supposed entity name by splitting it into two parts: A head of lowercase ASCII
@@ -284,9 +289,9 @@ impl<'a> Lexer<'a> {
         // Look for numbered well-known entities like ebb15, v45, ...
         token(split_entity_name(text)
                   .and_then(|(prefix, number)| {
-                      Self::numbered_entity(prefix, number)
+                                Self::numbered_entity(prefix, number)
                           .or_else(|| Self::value_type(text, prefix, number))
-                  })
+                            })
                   .unwrap_or(Token::Identifier(text)),
               loc)
     }
@@ -378,39 +383,39 @@ impl<'a> Lexer<'a> {
         loop {
             let loc = self.loc();
             return match self.lookahead {
-                None => None,
-                Some(';') => Some(self.scan_comment()),
-                Some('(') => Some(self.scan_char(Token::LPar)),
-                Some(')') => Some(self.scan_char(Token::RPar)),
-                Some('{') => Some(self.scan_char(Token::LBrace)),
-                Some('}') => Some(self.scan_char(Token::RBrace)),
-                Some('[') => Some(self.scan_char(Token::LBracket)),
-                Some(']') => Some(self.scan_char(Token::RBracket)),
-                Some(',') => Some(self.scan_char(Token::Comma)),
-                Some('.') => Some(self.scan_char(Token::Dot)),
-                Some(':') => Some(self.scan_char(Token::Colon)),
-                Some('=') => Some(self.scan_char(Token::Equal)),
-                Some('-') => {
-                    if self.looking_at("->") {
-                        Some(self.scan_chars(2, Token::Arrow))
-                    } else {
-                        Some(self.scan_number())
-                    }
-                }
-                Some(ch) if ch.is_digit(10) => Some(self.scan_number()),
-                Some(ch) if ch.is_alphabetic() => Some(self.scan_word()),
-                Some('%') => Some(self.scan_name()),
-                Some('#') => Some(self.scan_hex_sequence()),
-                Some(ch) if ch.is_whitespace() => {
-                    self.next_ch();
-                    continue;
-                }
-                _ => {
-                    // Skip invalid char, return error.
-                    self.next_ch();
-                    Some(error(Error::InvalidChar, loc))
-                }
-            };
+                       None => None,
+                       Some(';') => Some(self.scan_comment()),
+                       Some('(') => Some(self.scan_char(Token::LPar)),
+                       Some(')') => Some(self.scan_char(Token::RPar)),
+                       Some('{') => Some(self.scan_char(Token::LBrace)),
+                       Some('}') => Some(self.scan_char(Token::RBrace)),
+                       Some('[') => Some(self.scan_char(Token::LBracket)),
+                       Some(']') => Some(self.scan_char(Token::RBracket)),
+                       Some(',') => Some(self.scan_char(Token::Comma)),
+                       Some('.') => Some(self.scan_char(Token::Dot)),
+                       Some(':') => Some(self.scan_char(Token::Colon)),
+                       Some('=') => Some(self.scan_char(Token::Equal)),
+                       Some('-') => {
+                           if self.looking_at("->") {
+                               Some(self.scan_chars(2, Token::Arrow))
+                           } else {
+                               Some(self.scan_number())
+                           }
+                       }
+                       Some(ch) if ch.is_digit(10) => Some(self.scan_number()),
+                       Some(ch) if ch.is_alphabetic() => Some(self.scan_word()),
+                       Some('%') => Some(self.scan_name()),
+                       Some('#') => Some(self.scan_hex_sequence()),
+                       Some(ch) if ch.is_whitespace() => {
+                self.next_ch();
+                continue;
+            }
+                       _ => {
+                // Skip invalid char, return error.
+                self.next_ch();
+                Some(error(Error::InvalidChar, loc))
+            }
+                   };
         }
     }
 }

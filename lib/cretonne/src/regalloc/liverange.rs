@@ -221,16 +221,14 @@ impl LiveRange {
     /// Return `Ok(n)` if `liveins[n]` already contains `ebb`.
     /// Otherwise, return `Err(n)` with the index where such an interval should be inserted.
     fn find_ebb_interval<PO: ProgramOrder>(&self, ebb: Ebb, order: &PO) -> Result<usize, usize> {
-        self.liveins
-            .binary_search_by(|intv| order.cmp(intv.begin, ebb))
-            .or_else(|n| {
-                // The interval at `n-1` may cover `ebb`.
-                if n > 0 && order.cmp(self.liveins[n - 1].end, ebb) == Ordering::Greater {
-                    Ok(n - 1)
-                } else {
-                    Err(n)
-                }
-            })
+        self.liveins.binary_search_by(|intv| order.cmp(intv.begin, ebb)).or_else(|n| {
+            // The interval at `n-1` may cover `ebb`.
+            if n > 0 && order.cmp(self.liveins[n - 1].end, ebb) == Ordering::Greater {
+                Ok(n - 1)
+            } else {
+                Err(n)
+            }
+        })
     }
 
     /// Extend the local interval for `ebb` so it reaches `to` which must belong to `ebb`.

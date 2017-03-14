@@ -21,8 +21,7 @@ pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
     io::stdin().read_to_string(&mut buffer).map_err(|e| format!("stdin: {}", e))?;
 
     if verbose {
-        let (success, explain) = checker.explain(&buffer, NO_VARIABLES)
-            .map_err(|e| e.to_string())?;
+        let (success, explain) = checker.explain(&buffer, NO_VARIABLES).map_err(|e| e.to_string())?;
         print!("{}", explain);
         if success {
             println!("OK");

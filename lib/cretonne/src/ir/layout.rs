@@ -125,10 +125,7 @@ impl Layout {
     /// Get the last sequence number in `ebb`.
     fn last_ebb_seq(&self, ebb: Ebb) -> SequenceNumber {
         // Get the seq of the last instruction if it exists, otherwise use the EBB header seq.
-        self.ebbs[ebb]
-            .last_inst
-            .map(|inst| self.insts[inst].seq)
-            .unwrap_or(self.ebbs[ebb].seq)
+        self.ebbs[ebb].last_inst.map(|inst| self.insts[inst].seq).unwrap_or(self.ebbs[ebb].seq)
     }
 
     /// Assign a valid sequence number to `ebb` such that the numbers are still monotonic. This may
@@ -439,8 +436,8 @@ impl Layout {
     /// Insert `inst` before the instruction `before` in the same EBB.
     pub fn insert_inst(&mut self, inst: Inst, before: Inst) {
         assert_eq!(self.inst_ebb(inst), None);
-        let ebb = self.inst_ebb(before)
-            .expect("Instruction before insertion point not in the layout");
+        let ebb =
+            self.inst_ebb(before).expect("Instruction before insertion point not in the layout");
         let after = self.insts[before].prev;
         {
             let inst_node = self.insts.ensure(inst);
@@ -488,8 +485,8 @@ impl Layout {
     ///     i4
     /// ```
     pub fn split_ebb(&mut self, new_ebb: Ebb, before: Inst) {
-        let old_ebb = self.inst_ebb(before)
-            .expect("The `before` instruction must be in the layout");
+        let old_ebb =
+            self.inst_ebb(before).expect("The `before` instruction must be in the layout");
         assert!(!self.is_ebb_inserted(new_ebb));
 
         // Insert new_ebb after old_ebb.

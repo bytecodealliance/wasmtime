@@ -69,10 +69,10 @@ impl LiveValueVec {
     /// Add a new live value to `values`.
     fn push(&mut self, value: Value, endpoint: Inst, affinity: Affinity) {
         self.values.push(LiveValue {
-            value: value,
-            endpoint: endpoint,
-            affinity: affinity,
-        });
+                             value: value,
+                             endpoint: endpoint,
+                             affinity: affinity,
+                         });
     }
 
     /// Remove all elements.
@@ -167,8 +167,7 @@ impl LiveValueTracker {
                 self.idom_sets.get(&idom).expect("No stored live set for dominator");
             // Get just the values that are live-in to `ebb`.
             for &value in idom_live_list.as_slice(&self.idom_pool) {
-                let lr = liveness.get(value)
-                    .expect("Immediate dominator value has no live range");
+                let lr = liveness.get(value).expect("Immediate dominator value has no live range");
 
                 // Check if this value is live-in here.
                 if let Some(endpoint) = lr.livein_local_end(ebb, program_order) {
@@ -260,13 +259,16 @@ impl LiveValueTracker {
 
     /// Save the current set of live values so it is associated with `idom`.
     fn save_idom_live_set(&mut self, idom: Inst) {
-        let values = self.live.values.iter().map(|lv| lv.value);
+        let values = self.live
+            .values
+            .iter()
+            .map(|lv| lv.value);
         let pool = &mut self.idom_pool;
         // If there already is a set saved for `idom`, just keep it.
         self.idom_sets.entry(idom).or_insert_with(|| {
-            let mut list = ValueList::default();
-            list.extend(values, pool);
-            list
-        });
+                                                      let mut list = ValueList::default();
+                                                      list.extend(values, pool);
+                                                      list
+                                                  });
     }
 }

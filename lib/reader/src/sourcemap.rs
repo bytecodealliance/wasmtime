@@ -63,23 +63,27 @@ impl SourceMap {
     /// Returns the entity reference corresponding to `name`, if it exists.
     pub fn lookup_str(&self, name: &str) -> Option<AnyEntity> {
         split_entity_name(name).and_then(|(ent, num)| match ent {
-            "v" => {
-                Value::direct_with_number(num)
-                    .and_then(|v| self.get_value(v))
-                    .map(AnyEntity::Value)
-            }
-            "vx" => {
-                Value::table_with_number(num)
-                    .and_then(|v| self.get_value(v))
-                    .map(AnyEntity::Value)
-            }
-            "ebb" => Ebb::with_number(num).and_then(|e| self.get_ebb(e)).map(AnyEntity::Ebb),
-            "ss" => self.get_ss(num).map(AnyEntity::StackSlot),
-            "sig" => self.get_sig(num).map(AnyEntity::SigRef),
-            "fn" => self.get_fn(num).map(AnyEntity::FuncRef),
-            "jt" => self.get_jt(num).map(AnyEntity::JumpTable),
-            _ => None,
-        })
+                                             "v" => {
+                                                 Value::direct_with_number(num)
+                                                     .and_then(|v| self.get_value(v))
+                                                     .map(AnyEntity::Value)
+                                             }
+                                             "vx" => {
+                                                 Value::table_with_number(num)
+                                                     .and_then(|v| self.get_value(v))
+                                                     .map(AnyEntity::Value)
+                                             }
+                                             "ebb" => {
+                                                 Ebb::with_number(num)
+                                                     .and_then(|e| self.get_ebb(e))
+                                                     .map(AnyEntity::Ebb)
+                                             }
+                                             "ss" => self.get_ss(num).map(AnyEntity::StackSlot),
+                                             "sig" => self.get_sig(num).map(AnyEntity::SigRef),
+                                             "fn" => self.get_fn(num).map(AnyEntity::FuncRef),
+                                             "jt" => self.get_jt(num).map(AnyEntity::JumpTable),
+                                             _ => None,
+                                         })
     }
 
     /// Get the source location where an entity was defined.
@@ -229,7 +233,7 @@ mod tests {
                              ebb0(v4: i32, vx7: i32):
                                v10 = iadd v4, vx7
                              }")
-            .unwrap();
+                .unwrap();
         let map = &tf.functions[0].1.map;
 
         assert_eq!(map.lookup_str("v0"), None);

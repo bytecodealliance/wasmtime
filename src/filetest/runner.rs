@@ -105,9 +105,9 @@ impl TestRunner {
     /// Any problems reading `file` as a test case file will be reported as a test failure.
     pub fn push_test<P: Into<PathBuf>>(&mut self, file: P) {
         self.tests.push(QueueEntry {
-            path: file.into(),
-            state: State::New,
-        });
+                            path: file.into(),
+                            state: State::New,
+                        });
     }
 
     /// Begin running tests concurrently.
@@ -277,9 +277,9 @@ impl TestRunner {
         let mut times = self.tests
             .iter()
             .filter_map(|entry| match *entry {
-                QueueEntry { state: State::Done(Ok(dur)), .. } => Some(dur),
-                _ => None,
-            })
+                            QueueEntry { state: State::Done(Ok(dur)), .. } => Some(dur),
+                            _ => None,
+                        })
             .collect::<Vec<_>>();
 
         // Get me some real data, kid.
@@ -303,12 +303,12 @@ impl TestRunner {
             return;
         }
 
-        for t in self.tests
-            .iter()
-            .filter(|entry| match **entry {
-                QueueEntry { state: State::Done(Ok(dur)), .. } => dur > cut,
-                _ => false,
-            }) {
+        for t in self.tests.iter().filter(|entry| match **entry {
+                                              QueueEntry { state: State::Done(Ok(dur)), .. } => {
+                                                  dur > cut
+                                              }
+                                              _ => false,
+                                          }) {
             println!("slow: {}", t)
         }
 

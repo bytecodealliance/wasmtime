@@ -180,19 +180,20 @@ impl DataFlowGraph {
 
         for _ in 0..self.insts.len() {
             v = self.resolve_aliases(match v.expand() {
-                Direct(inst) => {
-                    match self[inst] {
-                        InstructionData::Unary { opcode, arg, .. } => {
-                            match opcode {
-                                Opcode::Copy | Opcode::Spill | Opcode::Fill => arg,
-                                _ => return v,
-                            }
-                        }
-                        _ => return v,
-                    }
-                }
-                _ => return v,
-            });
+                                         Direct(inst) => {
+                                             match self[inst] {
+                                                 InstructionData::Unary { opcode, arg, .. } => {
+                                                     match opcode {
+                                                         Opcode::Copy | Opcode::Spill |
+                                                         Opcode::Fill => arg,
+                                                         _ => return v,
+                                                     }
+                                                 }
+                                                 _ => return v,
+                                             }
+                                         }
+                                         _ => return v,
+                                     });
         }
         panic!("Copy loop detected for {}", value);
     }
@@ -361,11 +362,11 @@ impl DataFlowGraph {
             for res_idx in (0..var_results).rev() {
                 if let Some(ty) = first_type {
                     head = Some(self.make_value(ValueData::Inst {
-                        ty: ty,
-                        num: (total_results - rev_num) as u16,
-                        inst: inst,
-                        next: head.into(),
-                    }));
+                                                    ty: ty,
+                                                    num: (total_results - rev_num) as u16,
+                                                    inst: inst,
+                                                    next: head.into(),
+                                                }));
                     rev_num += 1;
                 }
                 first_type = Some(self.signatures[sig].return_types[res_idx].value_type);
@@ -376,11 +377,11 @@ impl DataFlowGraph {
         for res_idx in (0..fixed_results).rev() {
             if let Some(ty) = first_type {
                 head = Some(self.make_value(ValueData::Inst {
-                    ty: ty,
-                    num: (total_results - rev_num) as u16,
-                    inst: inst,
-                    next: head.into(),
-                }));
+                                                ty: ty,
+                                                num: (total_results - rev_num) as u16,
+                                                inst: inst,
+                                                next: head.into(),
+                                            }));
                 rev_num += 1;
             }
             first_type = Some(constraints.result_type(res_idx, ctrl_typevar));
@@ -474,11 +475,11 @@ impl DataFlowGraph {
 
         // Not a fixed result, try to extract a return type from the call signature.
         self.call_signature(inst).and_then(|sigref| {
-            self.signatures[sigref]
-                .return_types
-                .get(result_idx - fixed_results)
-                .map(|&arg| arg.value_type)
-        })
+                                               self.signatures[sigref]
+                                                   .return_types
+                                                   .get(result_idx - fixed_results)
+                                                   .map(|&arg| arg.value_type)
+                                           })
     }
 }
 
@@ -523,11 +524,11 @@ impl DataFlowGraph {
     /// Append an argument with type `ty` to `ebb`.
     pub fn append_ebb_arg(&mut self, ebb: Ebb, ty: Type) -> Value {
         let val = self.make_value(ValueData::Arg {
-            ty: ty,
-            ebb: ebb,
-            num: 0,
-            next: None.into(),
-        });
+                                      ty: ty,
+                                      ebb: ebb,
+                                      num: 0,
+                                      next: None.into(),
+                                  });
         self.put_ebb_arg(ebb, val);
         val
     }
