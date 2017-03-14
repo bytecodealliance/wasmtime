@@ -387,6 +387,9 @@ pub struct OpcodeConstraints {
     /// Bit 4:
     ///     This opcode is polymorphic and the controlling type variable does *not* appear as the
     ///     first result type.
+    ///
+    /// Bits 5-7:
+    ///     Number of fixed value arguments. The minimum required number of value operands.
     flags: u8,
 
     /// Permitted set of types for the controlling type variable as an index into `TYPE_SETS`.
@@ -421,6 +424,17 @@ impl OpcodeConstraints {
     /// This does not include `variable_args` produced by calls.
     pub fn fixed_results(self) -> usize {
         (self.flags & 0x7) as usize
+    }
+
+    /// Get the number of *fixed* input values required by this opcode.
+    ///
+    /// This does not include `variable_args` arguments on call and branch instructions.
+    ///
+    /// The number of fixed input values is usually implied by the instruction format, but
+    /// instruction formats that use a `ValueList` put both fixed and variable arguments in the
+    /// list. This method returns the *minimum* number of values required in the value list.
+    pub fn fixed_value_arguments(self) -> usize {
+        ((self.flags >> 5) & 0x7) as usize
     }
 
     /// Get the offset into `TYPE_SETS` for the controlling type variable.
@@ -607,6 +621,22 @@ mod tests {
         // require more space than that. It would be fine with a data structure smaller than 16
         // bytes, but what are the odds of that?
         assert_eq!(mem::size_of::<InstructionData>(), 16);
+    }
+
+    #[test]
+    fn constraints() {
+        let a = Opcode::Iadd.constraints();
+        assert!(a.use_typevar_operand());
+        assert_eq!(a.fixed_results(), 1);
+        assert_eq!(a.fixed_value_arguments(), 2);
+
+        let c = Opcode::Call.constraints();
+        assert_eq!(c.fixed_results(), 0);
+        assert_eq!(c.fixed_value_arguments(), 0);
+
+        let i = Opcode::CallIndirect.constraints();
+        assert_eq!(i.fixed_results(), 0);
+        assert_eq!(i.fixed_value_arguments(), 1);
     }
 
     #[test]
