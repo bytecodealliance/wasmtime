@@ -4,7 +4,7 @@
 //! equivalent textual representation. This textual representation can be read back by the
 //! `cretonne-reader` crate.
 
-use ir::{Function, Ebb, Inst, Value, Type};
+use ir::{Function, DataFlowGraph, Ebb, Inst, Value, Type};
 use isa::{TargetIsa, RegInfo};
 use std::fmt::{self, Result, Error, Write};
 use std::result;
@@ -228,69 +228,69 @@ fn write_instruction(w: &mut Write,
         None => write!(w, "{}", opcode)?,
     }
 
-    // Then the operands, depending on format.
-    let pool = &func.dfg.value_lists;
+    write_operands(w, &func.dfg, inst)?;
+    writeln!(w, "")
+}
+
+/// Write the operands of `inst` to `w` with a prepended space.
+pub fn write_operands(w: &mut Write, dfg: &DataFlowGraph, inst: Inst) -> Result {
+    let pool = &dfg.value_lists;
     use ir::instructions::InstructionData::*;
-    match func.dfg[inst] {
-        Nullary { .. } => writeln!(w, ""),
-        Unary { arg, .. } => writeln!(w, " {}", arg),
-        UnaryImm { imm, .. } => writeln!(w, " {}", imm),
-        UnaryIeee32 { imm, .. } => writeln!(w, " {}", imm),
-        UnaryIeee64 { imm, .. } => writeln!(w, " {}", imm),
-        UnarySplit { arg, .. } => writeln!(w, " {}", arg),
-        Binary { args, .. } => writeln!(w, " {}, {}", args[0], args[1]),
-        BinaryImm { arg, imm, .. } => writeln!(w, " {}, {}", arg, imm),
-        BinaryOverflow { args, .. } => writeln!(w, " {}, {}", args[0], args[1]),
-        Ternary { args, .. } => writeln!(w, " {}, {}, {}", args[0], args[1], args[2]),
+    match dfg[inst] {
+        Nullary { .. } => write!(w, ""),
+        Unary { arg, .. } => write!(w, " {}", arg),
+        UnaryImm { imm, .. } => write!(w, " {}", imm),
+        UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
+        UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
+        UnarySplit { arg, .. } => write!(w, " {}", arg),
+        Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
+        BinaryImm { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
+        BinaryOverflow { args, .. } => write!(w, " {}, {}", args[0], args[1]),
+        Ternary { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
         MultiAry { ref args, .. } => {
             if args.is_empty() {
-                writeln!(w, "")
+                write!(w, "")
             } else {
-                writeln!(w,
-                         " {}",
-                         DisplayValues(args.as_slice(&func.dfg.value_lists)))
+                write!(w, " {}", DisplayValues(args.as_slice(pool)))
             }
         }
-        InsertLane { lane, args, .. } => writeln!(w, " {}, {}, {}", args[0], lane, args[1]),
-        ExtractLane { lane, arg, .. } => writeln!(w, " {}, {}", arg, lane),
-        IntCompare { cond, args, .. } => writeln!(w, " {}, {}, {}", cond, args[0], args[1]),
-        FloatCompare { cond, args, .. } => writeln!(w, " {}, {}, {}", cond, args[0], args[1]),
+        InsertLane { lane, args, .. } => write!(w, " {}, {}, {}", args[0], lane, args[1]),
+        ExtractLane { lane, arg, .. } => write!(w, " {}, {}", arg, lane),
+        IntCompare { cond, args, .. } => write!(w, " {}, {}, {}", cond, args[0], args[1]),
+        FloatCompare { cond, args, .. } => write!(w, " {}, {}, {}", cond, args[0], args[1]),
         Jump { destination, ref args, .. } => {
             if args.is_empty() {
-                writeln!(w, " {}", destination)
+                write!(w, " {}", destination)
             } else {
-                writeln!(w,
-                         " {}({})",
-                         destination,
-                         DisplayValues(args.as_slice(pool)))
+                write!(w,
+                       " {}({})",
+                       destination,
+                       DisplayValues(args.as_slice(pool)))
             }
         }
         Branch { destination, ref args, .. } => {
             let args = args.as_slice(pool);
             if args.len() == 1 {
-                writeln!(w, " {}, {}", args[0], destination)
+                write!(w, " {}, {}", args[0], destination)
             } else {
-                writeln!(w,
-                         " {}, {}({})",
-                         args[0],
-                         destination,
-                         DisplayValues(&args[1..]))
+                write!(w,
+                       " {}, {}({})",
+                       args[0],
+                       destination,
+                       DisplayValues(&args[1..]))
             }
         }
-        BranchTable { arg, table, .. } => writeln!(w, " {}, {}", arg, table),
+        BranchTable { arg, table, .. } => write!(w, " {}, {}", arg, table),
         Call { func_ref, ref args, .. } => {
-            writeln!(w,
-                     " {}({})",
-                     func_ref,
-                     DisplayValues(args.as_slice(&func.dfg.value_lists)))
+            write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool)))
         }
         IndirectCall { sig_ref, ref args, .. } => {
             let args = args.as_slice(pool);
-            writeln!(w,
-                     " {}, {}({})",
-                     sig_ref,
-                     args[0],
-                     DisplayValues(&args[1..]))
+            write!(w,
+                   " {}, {}({})",
+                   sig_ref,
+                   args[0],
+                   DisplayValues(&args[1..]))
         }
     }
 }
