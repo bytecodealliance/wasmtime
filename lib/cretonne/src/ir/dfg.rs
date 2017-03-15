@@ -8,7 +8,9 @@ use entity_map::{EntityMap, PrimaryEntityData};
 use ir::builder::{InsertBuilder, ReplaceBuilder};
 use ir::layout::Cursor;
 use packed_option::PackedOption;
+use write::write_operands;
 
+use std::fmt;
 use std::ops::{Index, IndexMut};
 use std::u16;
 
@@ -337,6 +339,11 @@ impl DataFlowGraph {
         self.insts.next_key()
     }
 
+    /// Returns an object that displays `inst`.
+    pub fn display_inst(&self, inst: Inst) -> DisplayInst {
+        DisplayInst(self, inst)
+    }
+
     /// Create result values for an instruction that produces multiple results.
     ///
     /// Instructions that produce 0 or 1 result values only need to be created with `make_inst`. If
@@ -649,6 +656,34 @@ impl EbbData {
     }
 }
 
+/// Object that can display an instruction.
+pub struct DisplayInst<'a>(&'a DataFlowGraph, Inst);
+
+impl<'a> fmt::Display for DisplayInst<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let dfg = self.0;
+        let inst = &dfg[self.1];
+
+        let mut results = dfg.inst_results(self.1);
+        if let Some(first) = results.next() {
+            write!(f, "{}", first)?;
+            for v in results {
+                write!(f, ", {}", v)?;
+            }
+            write!(f, " = ")?;
+        }
+
+
+        let typevar = inst.ctrl_typevar(dfg);
+        if typevar.is_void() {
+            write!(f, "{}", inst.opcode())?;
+        } else {
+            write!(f, "{}.{}", inst.opcode(), typevar)?;
+        }
+        write_operands(f, dfg, self.1)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -665,6 +700,7 @@ mod tests {
         };
         let inst = dfg.make_inst(idata);
         assert_eq!(inst.to_string(), "inst0");
+        assert_eq!(dfg.display_inst(inst).to_string(), "v0 = iconst.i32");
 
         // Immutable reference resolution.
         {
@@ -692,6 +728,7 @@ mod tests {
             ty: types::VOID,
         };
         let inst = dfg.make_inst(idata);
+        assert_eq!(dfg.display_inst(inst).to_string(), "trap");
 
         // Result iterator should be empty.
         let mut res = dfg.inst_results(inst);
