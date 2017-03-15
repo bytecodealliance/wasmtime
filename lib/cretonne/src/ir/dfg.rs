@@ -549,7 +549,7 @@ impl DataFlowGraph {
                                       num: 0,
                                       next: None.into(),
                                   });
-        self.put_ebb_arg(ebb, val);
+        self.attach_ebb_arg(ebb, val);
         val
     }
 
@@ -578,9 +578,9 @@ impl DataFlowGraph {
     /// processing the list of arguments.
     ///
     /// This is a quite low-level operation. Sensible things to do with the detached EBB arguments
-    /// is to put them back on the same EBB with `put_ebb_arg()` or change them into aliases
+    /// is to put them back on the same EBB with `attach_ebb_arg()` or change them into aliases
     /// with `change_to_alias()`.
-    pub fn take_ebb_args(&mut self, ebb: Ebb) -> Option<Value> {
+    pub fn detach_ebb_args(&mut self, ebb: Ebb) -> Option<Value> {
         let first = self.ebbs[ebb].first_arg.into();
         self.ebbs[ebb].first_arg = None.into();
         self.ebbs[ebb].last_arg = None.into();
@@ -591,10 +591,10 @@ impl DataFlowGraph {
     ///
     /// The appended value should already be an EBB argument belonging to `ebb`, but it can't be
     /// attached. In practice, this means that it should be one of the values returned from
-    /// `take_ebb_args()`.
+    /// `detach_ebb_args()`.
     ///
     /// In almost all cases, you should be using `append_ebb_arg()` instead of this method.
-    pub fn put_ebb_arg(&mut self, ebb: Ebb, arg: Value) {
+    pub fn attach_ebb_arg(&mut self, ebb: Ebb, arg: Value) {
         let arg_num = match self.ebbs[ebb].last_arg.map(|v| v.expand()) {
             // If last_argument is `None`, we're adding the first EBB argument.
             None => {
@@ -743,7 +743,7 @@ mod tests {
         assert_eq!(ebb.to_string(), "ebb0");
         assert_eq!(dfg.num_ebb_args(ebb), 0);
         assert_eq!(dfg.ebb_args(ebb).next(), None);
-        assert_eq!(dfg.take_ebb_args(ebb), None);
+        assert_eq!(dfg.detach_ebb_args(ebb), None);
         assert_eq!(dfg.num_ebb_args(ebb), 0);
         assert_eq!(dfg.ebb_args(ebb).next(), None);
 
@@ -771,16 +771,16 @@ mod tests {
         assert_eq!(dfg.value_type(arg2), types::I16);
 
         // Swap the two EBB arguments.
-        let take1 = dfg.take_ebb_args(ebb).unwrap();
+        let take1 = dfg.detach_ebb_args(ebb).unwrap();
         assert_eq!(dfg.num_ebb_args(ebb), 0);
         assert_eq!(dfg.ebb_args(ebb).next(), None);
         let take2 = dfg.next_ebb_arg(take1).unwrap();
         assert_eq!(take1, arg1);
         assert_eq!(take2, arg2);
         assert_eq!(dfg.next_ebb_arg(take2), None);
-        dfg.put_ebb_arg(ebb, take2);
+        dfg.attach_ebb_arg(ebb, take2);
         let arg3 = dfg.append_ebb_arg(ebb, types::I32);
-        dfg.put_ebb_arg(ebb, take1);
+        dfg.attach_ebb_arg(ebb, take1);
         assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [take2, arg3, take1]);
     }
 
