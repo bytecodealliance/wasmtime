@@ -430,19 +430,29 @@ impl DataFlowGraph {
         ReplaceBuilder::new(self, inst)
     }
 
-    /// Detach secondary instruction results, and return them as an iterator.
+    /// Detach secondary instruction results, and return the first of them.
     ///
-    /// If `inst` produces two or more results, detach these secondary result values from `inst`,
-    /// and return an iterator that will enumerate them. The first result value cannot be detached.
+    /// If `inst` produces two or more results, detach these secondary result values from `inst`.
+    /// The first result value cannot be detached.
+    /// The full list of secondary results can be traversed with `next_secondary_result()`.
     ///
     /// Use this method to detach secondary values before using `replace(inst)` to provide an
     /// alternate instruction for computing the primary result value.
-    pub fn detach_secondary_results(&mut self, inst: Inst) -> Values {
-        let second_result = self[inst].second_result_mut().and_then(|r| r.take());
-        Values {
-            dfg: self,
-            cur: second_result,
+    pub fn detach_secondary_results(&mut self, inst: Inst) -> Option<Value> {
+        self[inst].second_result_mut().and_then(|r| r.take())
+    }
+
+    /// Get the next secondary result after `value`.
+    ///
+    /// Use this function to traverse the full list of instruction results returned from
+    /// `detach_secondary_results()`.
+    pub fn next_secondary_result(&self, value: Value) -> Option<Value> {
+        if let ExpandedValue::Table(index) = value.expand() {
+            if let ValueData::Inst { next, .. } = self.extended_values[index] {
+                return next.into();
+            }
         }
+        panic!("{} is not a secondary result value", value);
     }
 
     /// Get the first result of an instruction.
@@ -811,9 +821,8 @@ mod tests {
 
         // Detach the 'c' value from `iadd`.
         {
-            let mut vals = dfg.detach_secondary_results(iadd);
-            assert_eq!(vals.next(), Some(c));
-            assert_eq!(vals.next(), None);
+            assert_eq!(dfg.detach_secondary_results(iadd), Some(c));
+            assert_eq!(dfg.next_secondary_result(c), None);
         }
 
         // Replace `iadd_cout` with a normal `iadd` and an `icmp`.
