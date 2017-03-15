@@ -133,7 +133,7 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
 
     // Process the EBB arguments one at a time, possibly replacing one argument with multiple new
     // ones. We do this by detaching the entry EBB arguments first.
-    let mut next_arg = func.dfg.take_ebb_args(entry);
+    let mut next_arg = func.dfg.detach_ebb_args(entry);
     while let Some(arg) = next_arg {
         // Get the next argument before we mutate `arg`.
         next_arg = func.dfg.next_ebb_arg(arg);
@@ -142,7 +142,7 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
         if arg_type == abi_types[abi_arg].value_type {
             // No value translation is necessary, this argument matches the ABI type.
             // Just use the original EBB argument value. This is the most common case.
-            func.dfg.put_ebb_arg(entry, arg);
+            func.dfg.attach_ebb_arg(entry, arg);
             abi_arg += 1;
         } else {
             // Compute the value we want for `arg` from the legalized ABI arguments.
