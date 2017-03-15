@@ -137,6 +137,10 @@ fn worker_thread(thread_num: usize,
                     }
                 });
 
+                if let &Err(ref msg) = &result {
+                    dbg!("FAIL: {}", msg);
+                }
+
                 replies.send(Reply::Done {
                                  jobid: jobid,
                                  result: result,

@@ -17,6 +17,7 @@ use filetest::subtest::{SubTest, Context, Result};
 ///
 /// If running this test causes a panic, it will propagate as normal.
 pub fn run(path: &Path) -> TestResult {
+    dbg!("---\nFile: {}", path.to_string_lossy());
     let started = time::Instant::now();
     let buffer = read_to_string(path).map_err(|e| e.to_string())?;
     let testfile = parse_test(&buffer).map_err(|e| e.to_string())?;
@@ -108,6 +109,7 @@ fn run_one_test<'a>(tuple: (&'a SubTest, &'a Flags, Option<&'a TargetIsa>),
                     -> Result<()> {
     let (test, flags, isa) = tuple;
     let name = format!("{}({})", test.name(), func.name);
+    dbg!("Test: {} {}", name, isa.map(TargetIsa::name).unwrap_or("-"));
 
     context.flags = flags;
     context.isa = isa;

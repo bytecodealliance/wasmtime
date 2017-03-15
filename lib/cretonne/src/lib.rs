@@ -21,6 +21,9 @@ pub mod settings;
 pub mod sparse_map;
 pub mod verifier;
 
+#[macro_use]
+pub mod dbg;
+
 mod abi;
 mod constant_hash;
 mod context;

@@ -1,4 +1,4 @@
-
+#[macro_use(dbg)]
 extern crate cretonne;
 extern crate cton_reader;
 extern crate docopt;
