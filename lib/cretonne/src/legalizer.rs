@@ -146,12 +146,16 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
             abi_arg += 1;
         } else {
             // Compute the value we want for `arg` from the legalized ABI arguments.
-            let converted = convert_from_abi(&mut func.dfg,
-                                             &mut pos,
-                                             entry,
-                                             &mut abi_arg,
-                                             abi_types,
-                                             arg_type);
+            let mut get_arg = |dfg: &mut DataFlowGraph, ty| {
+                let abi_type = abi_types[abi_arg];
+                if ty == abi_type.value_type {
+                    abi_arg += 1;
+                    Ok(dfg.append_ebb_arg(entry, ty))
+                } else {
+                    Err(abi_type)
+                }
+            };
+            let converted = convert_from_abi(&mut func.dfg, &mut pos, arg_type, &mut get_arg);
             // The old `arg` is no longer an attached EBB argument, but there are probably still
             // uses of the value. Make it an alias to the converted value.
             func.dfg.change_to_alias(arg, converted);
@@ -159,57 +163,63 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
     }
 }
 
-/// Compute original value of type `ty` from the legalized ABI arguments beginning at `abi_arg`.
+/// Compute original value of type `ty` from the legalized ABI arguments.
 ///
-/// Update `abi_arg` to reflect the ABI arguments consumed and return the computed value.
-fn convert_from_abi(dfg: &mut DataFlowGraph,
-                    pos: &mut Cursor,
-                    entry: Ebb,
-                    abi_arg: &mut usize,
-                    abi_types: &[ArgumentType],
-                    ty: Type)
-                    -> Value {
+/// The conversion is recursive, controlled by the `get_arg` closure which is called to retrieve an
+/// ABI argument. It returns:
+///
+/// - `Ok(arg)` if the requested type matches the next ABI argument.
+/// - `Err(arg_type)` if further conversions are needed from the ABI argument `arg_type`.
+///
+fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
+                            pos: &mut Cursor,
+                            ty: Type,
+                            get_arg: &mut GetArg)
+                            -> Value
+    where GetArg: FnMut(&mut DataFlowGraph, Type) -> Result<Value, ArgumentType>
+{
     // Terminate the recursion when we get the desired type.
-    if ty == abi_types[*abi_arg].value_type {
-        return dfg.append_ebb_arg(entry, ty);
-    }
+    let arg_type = match get_arg(dfg, ty) {
+        Ok(v) => return v,
+        Err(t) => t,
+    };
 
-    // Reconstruct how `ty` was legalized into the argument at `abi_arg`.
-    let conversion = legalize_abi_value(ty, &abi_types[*abi_arg]);
+    // Reconstruct how `ty` was legalized into the `arg_type` argument.
+    let conversion = legalize_abi_value(ty, &arg_type);
 
     // The conversion describes value to ABI argument. We implement the reverse conversion here.
     match conversion {
         // Construct a `ty` by concatenating two ABI integers.
         ValueConversion::IntSplit => {
             let abi_ty = ty.half_width().expect("Invalid type for conversion");
-            let lo = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
-            let hi = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            let lo = convert_from_abi(dfg, pos, abi_ty, get_arg);
+            let hi = convert_from_abi(dfg, pos, abi_ty, get_arg);
             dfg.ins(pos).iconcat_lohi(lo, hi)
         }
         // Construct a `ty` by concatenating two halves of a vector.
         ValueConversion::VectorSplit => {
             let abi_ty = ty.half_vector().expect("Invalid type for conversion");
-            let lo = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
-            let hi = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            let lo = convert_from_abi(dfg, pos, abi_ty, get_arg);
+            let hi = convert_from_abi(dfg, pos, abi_ty, get_arg);
             dfg.ins(pos).vconcat(lo, hi)
         }
         // Construct a `ty` by bit-casting from an integer type.
         ValueConversion::IntBits => {
             assert!(!ty.is_int());
             let abi_ty = Type::int(ty.bits()).expect("Invalid type for conversion");
-            let arg = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            let arg = convert_from_abi(dfg, pos, abi_ty, get_arg);
             dfg.ins(pos).bitcast(ty, arg)
         }
         // ABI argument is a sign-extended version of the value we want.
         ValueConversion::Sext(abi_ty) => {
-            let arg = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            let arg = convert_from_abi(dfg, pos, abi_ty, get_arg);
             // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
             // We could insert an `assert_sreduce` which would fold with a following `sextend` of
             // this value.
             dfg.ins(pos).ireduce(ty, arg)
         }
         ValueConversion::Uext(abi_ty) => {
-            let arg = convert_from_abi(dfg, pos, entry, abi_arg, abi_types, abi_ty);
+            let arg = convert_from_abi(dfg, pos, abi_ty, get_arg);
             // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
             // We could insert an `assert_ureduce` which would fold with a following `uextend` of
             // this value.
@@ -225,21 +235,21 @@ fn convert_from_abi(dfg: &mut DataFlowGraph,
 /// to the closure, it will perform one of two actions:
 ///
 /// 1. If the suggested argument has an acceptable value type, consume it by adding it to the list
-///    of arguments and return `None`.
+///    of arguments and return `Ok(())`.
 /// 2. If the suggested argument doesn't have the right value type, don't change anything, but
-///    return the `ArgumentType` that is needed.
+///    return the `Err(ArgumentType)` that is needed.
 ///
 fn convert_to_abi<PutArg>(dfg: &mut DataFlowGraph,
                           pos: &mut Cursor,
                           value: Value,
                           put_arg: &mut PutArg)
-    where PutArg: FnMut(&mut DataFlowGraph, Value) -> Option<ArgumentType>
+    where PutArg: FnMut(&mut DataFlowGraph, Value) -> Result<(), ArgumentType>
 {
     // Start by invoking the closure to either terminate the recursion or get the argument type
     // we're trying to match.
     let arg_type = match put_arg(dfg, value) {
-        None => return,
-        Some(t) => t,
+        Ok(_) => return,
+        Err(t) => t,
     };
 
     let ty = dfg.value_type(value);
@@ -369,21 +379,18 @@ fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
     let mut abi_arg = 0;
     for old_arg in 0..have_args {
         let old_value = vlist.get(old_arg_offset + old_arg, &dfg.value_lists).unwrap();
-        convert_to_abi(dfg,
-                       pos,
-                       old_value,
-                       &mut |dfg, arg| {
+        let mut put_arg = |dfg: &mut DataFlowGraph, arg| {
             let abi_type = get_abi_type(dfg, abi_arg);
             if dfg.value_type(arg) == abi_type.value_type {
                 // This is the argument type we need.
                 vlist.as_mut_slice(&mut dfg.value_lists)[fixed_values + abi_arg] = arg;
                 abi_arg += 1;
-                None
+                Ok(())
             } else {
-                // Nope, `arg` needs to be converted.
-                Some(abi_type)
+                Err(abi_type)
             }
-        });
+        };
+        convert_to_abi(dfg, pos, old_value, &mut put_arg);
     }
 
     // Put the modified value list back.
