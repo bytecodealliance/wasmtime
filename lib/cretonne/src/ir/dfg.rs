@@ -455,6 +455,63 @@ impl DataFlowGraph {
         panic!("{} is not a secondary result value", value);
     }
 
+    /// Attach an existing value as a secondary result after `last_res` which must be the last
+    /// result of an instruction.
+    ///
+    /// This is a very low-level operation. Usually, instruction results with the correct types are
+    /// created automatically. The `res` value must be a secondary instruction result detached from
+    /// somewhere else.
+    pub fn attach_secondary_result(&mut self, last_res: Value, res: Value) {
+        let (res_inst, res_num) = match last_res.expand() {
+            ExpandedValue::Direct(inst) => {
+                // We're adding the second value to `inst`.
+                let next = self[inst].second_result_mut().expect("bad inst format");
+                assert!(next.is_none(), "last_res is not the last result");
+                *next = res.into();
+                (inst, 1)
+            }
+            ExpandedValue::Table(idx) => {
+                if let ValueData::Inst { num, inst, ref mut next, .. } = self.extended_values[idx] {
+                    assert!(next.is_none(), "last_res is not the last result");
+                    *next = res.into();
+                    assert!(num < u16::MAX, "Too many arguments to EBB");
+                    (inst, num + 1)
+                } else {
+                    panic!("last_res is not an instruction result");
+                }
+            }
+        };
+
+        // Now update `res` itself.
+        if let ExpandedValue::Table(idx) = res.expand() {
+            if let ValueData::Inst { ref mut num, ref mut inst, ref mut next, .. } =
+                self.extended_values[idx] {
+                *num = res_num;
+                *inst = res_inst;
+                *next = None.into();
+                return;
+            }
+        }
+        panic!("{} must be a result", res);
+    }
+
+    /// Append a new instruction result value after `last_res`.
+    ///
+    /// The `last_res` value must be the last value on an instruction.
+    pub fn append_secondary_result(&mut self, last_res: Value, ty: Type) -> Value {
+        // The only member that matters is `ty`. The rest is filled in by
+        // `attach_secondary_result`.
+        use entity_map::EntityRef;
+        let res = self.make_value(ValueData::Inst {
+                                      ty: ty,
+                                      inst: Inst::new(0),
+                                      num: 0,
+                                      next: None.into(),
+                                  });
+        self.attach_secondary_result(last_res, res);
+        res
+    }
+
     /// Move the instruction at `pos` to a new `Inst` reference so its first result can be
     /// redefined without overwriting the original instruction.
     ///
