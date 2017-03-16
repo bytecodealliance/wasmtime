@@ -5,7 +5,7 @@ use ir::entities::ExpandedValue;
 use ir::instructions::{Opcode, InstructionData, CallInfo};
 use ir::extfunc::ExtFuncData;
 use entity_map::{EntityMap, PrimaryEntityData};
-use ir::builder::{InsertBuilder, ReplaceBuilder};
+use ir::builder::{InsertBuilder, ReplaceBuilder, InstBuilder};
 use ir::layout::Cursor;
 use packed_option::PackedOption;
 use write::write_operands;
@@ -455,6 +455,41 @@ impl DataFlowGraph {
         panic!("{} is not a secondary result value", value);
     }
 
+    /// Move the instruction at `pos` to a new `Inst` reference so its first result can be
+    /// redefined without overwriting the original instruction.
+    ///
+    /// The first result value of an instruction is intrinsically tied to the `Inst` reference, so
+    /// it is not possible to detach the value and attach it to something else. This function
+    /// copies the instruction pointed to by `pos` to a new `Inst` reference, making the original
+    /// `Inst` reference available to be redefined with `dfg.replace(inst)` above.
+    ///
+    /// Before:
+    ///
+    ///   inst1:  v1, vx2 = foo  <-- pos
+    ///
+    /// After:
+    ///
+    ///   inst7:  v7, vx2 = foo
+    ///   inst1:  v1 = copy v7   <-- pos
+    ///
+    /// Returns the new `Inst` reference where the original instruction has been moved.
+    pub fn redefine_first_value(&mut self, pos: &mut Cursor) -> Inst {
+        let orig = pos.current_inst().expect("Cursor must point at an instruction");
+        let data = self[orig].clone();
+        // After cloning, any secondary values are attached to both copies. Don't do that, we only
+        // want them on the new clone.
+        self.detach_secondary_results(orig);
+        let new = self.make_inst(data);
+        pos.insert_inst(new);
+        // Replace the original instruction with a copy of the new value.
+        // This is likely to be immediately overwritten by something else, but this way we avoid
+        // leaving the DFG in a state with multiple references to secondary results and value
+        // lists. It also means that this method doesn't change the semantics of the program.
+        let new_value = self.first_result(new);
+        self.replace(orig).copy(new_value);
+        new
+    }
+
     /// Get the first result of an instruction.
     ///
     /// If `Inst` doesn't produce any results, this returns a `Value` with a `VOID` type.
@@ -819,9 +854,19 @@ mod tests {
             _ => panic!(),
         };
 
+        // Redefine the first value out of `iadd_cout`.
+        assert_eq!(pos.prev_inst(), Some(iadd));
+        let new_iadd = dfg.redefine_first_value(pos);
+        let new_s = dfg.first_result(new_iadd);
+        assert_eq!(dfg[iadd].opcode(), Opcode::Copy);
+        assert_eq!(dfg.inst_results(iadd).collect::<Vec<_>>(), [s]);
+        assert_eq!(dfg.inst_results(new_iadd).collect::<Vec<_>>(), [new_s, c]);
+        assert_eq!(dfg.resolve_copies(s), new_s);
+        pos.next_inst();
+
         // Detach the 'c' value from `iadd`.
         {
-            assert_eq!(dfg.detach_secondary_results(iadd), Some(c));
+            assert_eq!(dfg.detach_secondary_results(new_iadd), Some(c));
             assert_eq!(dfg.next_secondary_result(c), None);
         }
 
