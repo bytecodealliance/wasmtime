@@ -310,7 +310,7 @@ impl InstructionData {
                 CallInfo::Direct(func_ref, &args.as_slice(pool))
             }
             &InstructionData::IndirectCall { sig_ref, ref args, .. } => {
-                CallInfo::Indirect(sig_ref, &args.as_slice(pool))
+                CallInfo::Indirect(sig_ref, &args.as_slice(pool)[1..])
             }
             _ => CallInfo::NotACall,
         }

@@ -105,3 +105,19 @@ ebb0(v0: i64x4):
     ; check: return $v1al, $v1ah, $v1bl, $v1bh, $v1cl, $v1ch, $v1dl, $v1dh
     return v1
 }
+
+function indirect(i32) {
+    sig1 = signature()
+ebb0(v0: i32):
+    call_indirect sig1, v0()
+    return
+}
+
+; The first argument to call_indirect doesn't get altered.
+function indirect_arg(i32, f32x2) {
+    sig1 = signature(f32x2)
+ebb0(v0: i32, v1: f32x2):
+    call_indirect sig1, v0(v1)
+    ; check: call_indirect $sig1, $v0($V, $V)
+    return
+}
