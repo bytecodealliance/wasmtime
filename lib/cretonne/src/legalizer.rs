@@ -163,6 +163,89 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
     }
 }
 
+/// Legalize the results returned from a call instruction to match the ABI signature.
+///
+/// The cursor `pos` points to a call instruction with at least one return value. The cursor will
+/// be left pointing after the instructions inserted to convert the return values.
+///
+/// This function is very similar to the `legalize_entry_arguments` function above.
+fn legalize_inst_results<ResType>(dfg: &mut DataFlowGraph,
+                                  pos: &mut Cursor,
+                                  mut get_abi_type: ResType)
+    where ResType: FnMut(&DataFlowGraph, usize) -> ArgumentType
+{
+    let mut call = pos.current_inst().expect("Cursor must point to a call instruction");
+
+    // We theoretically allow for call instructions that return a number of fixed results before
+    // the call return values. In practice, it doesn't happen.
+    let fixed_results = dfg[call].opcode().constraints().fixed_results();
+    assert_eq!(fixed_results, 0, "Fixed results  on calls not supported");
+
+    let mut next_res = dfg.detach_secondary_results(call);
+    // The currently last result on the call instruction.
+    let mut last_res = dfg.first_result(call);
+    let mut abi_res = 0;
+
+    // The first result requires special handling.
+    let first_ty = dfg.value_type(last_res);
+    if first_ty != get_abi_type(dfg, abi_res).value_type {
+        // Move the call out of the way, so we can redefine the first result.
+        let copy = call;
+        call = dfg.redefine_first_value(pos);
+        last_res = dfg.first_result(call);
+        // Set up a closure that can attach new results to `call`.
+        let mut get_res = |dfg: &mut DataFlowGraph, ty| {
+            let abi_type = get_abi_type(dfg, abi_res);
+            if ty == abi_type.value_type {
+                // Don't append the first result - it's not detachable.
+                if fixed_results + abi_res == 0 {
+                    *dfg[call].first_type_mut() = ty;
+                    debug_assert_eq!(last_res, dfg.first_result(call));
+                } else {
+                    last_res = dfg.append_secondary_result(last_res, ty);
+                }
+                abi_res += 1;
+                Ok(last_res)
+            } else {
+                Err(abi_type)
+            }
+        };
+
+        let v = convert_from_abi(dfg, pos, first_ty, &mut get_res);
+        dfg.replace(copy).copy(v);
+    }
+
+    // Point immediately after the call and any instructions dealing with the first result.
+    pos.next_inst();
+
+    // Now do the secondary results.
+    while let Some(res) = next_res {
+        next_res = dfg.next_secondary_result(res);
+
+        let res_type = dfg.value_type(res);
+        if res_type == get_abi_type(dfg, abi_res).value_type {
+            // No value translation is necessary, this result matches the ABI type.
+            dfg.attach_secondary_result(last_res, res);
+            last_res = res;
+            abi_res += 1;
+        } else {
+            let mut get_res = |dfg: &mut DataFlowGraph, ty| {
+                let abi_type = get_abi_type(dfg, abi_res);
+                if ty == abi_type.value_type {
+                    last_res = dfg.append_secondary_result(last_res, ty);
+                    abi_res += 1;
+                    Ok(last_res)
+                } else {
+                    Err(abi_type)
+                }
+            };
+            let v = convert_from_abi(dfg, pos, res_type, &mut get_res);
+            // The old `res` is no longer an attached result.
+            dfg.change_to_alias(res, v);
+        }
+    }
+}
+
 /// Compute original value of type `ty` from the legalized ABI arguments.
 ///
 /// The conversion is recursive, controlled by the `get_arg` closure which is called to retrieve an
@@ -423,7 +506,11 @@ fn handle_call_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor) -> bool {
                             abi_args,
                             |dfg, abi_arg| dfg.signatures[sig_ref].argument_types[abi_arg]);
 
-    // TODO: Convert return values.
+    if !dfg.signatures[sig_ref].return_types.is_empty() {
+        legalize_inst_results(dfg,
+                              pos,
+                              |dfg, abi_res| dfg.signatures[sig_ref].return_types[abi_res]);
+    }
 
     // Yes, we changed stuff.
     true
