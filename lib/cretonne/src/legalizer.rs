@@ -169,9 +169,12 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
 /// be left pointing after the instructions inserted to convert the return values.
 ///
 /// This function is very similar to the `legalize_entry_arguments` function above.
+///
+/// Returns the possibly new instruction representing the call.
 fn legalize_inst_results<ResType>(dfg: &mut DataFlowGraph,
                                   pos: &mut Cursor,
                                   mut get_abi_type: ResType)
+                                  -> Inst
     where ResType: FnMut(&DataFlowGraph, usize) -> ArgumentType
 {
     let mut call = pos.current_inst().expect("Cursor must point to a call instruction");
@@ -244,6 +247,8 @@ fn legalize_inst_results<ResType>(dfg: &mut DataFlowGraph,
             dfg.change_to_alias(res, v);
         }
     }
+
+    call
 }
 
 /// Compute original value of type `ty` from the legalized ABI arguments.
@@ -387,9 +392,9 @@ fn check_arg_types<Args>(dfg: &DataFlowGraph, args: Args, types: &[ArgumentType]
 
 /// Check if the arguments of the call `inst` match the signature.
 ///
-/// Returns `None` if the signature matches and no changes are needed, or `Some(sig_ref)` if the
+/// Returns `Ok(())` if the signature matches and no changes are needed, or `Err(sig_ref)` if the
 /// signature doesn't match.
-fn check_call_signature(dfg: &DataFlowGraph, inst: Inst) -> Option<SigRef> {
+fn check_call_signature(dfg: &DataFlowGraph, inst: Inst) -> Result<(), SigRef> {
     // Extract the signature and argument values.
     let (sig_ref, args) = match dfg[inst].analyze_call(&dfg.value_lists) {
         CallInfo::Direct(func, args) => (dfg.ext_funcs[func].signature, args),
@@ -401,11 +406,23 @@ fn check_call_signature(dfg: &DataFlowGraph, inst: Inst) -> Option<SigRef> {
     if check_arg_types(dfg, args.iter().cloned(), &sig.argument_types[..]) &&
        check_arg_types(dfg, dfg.inst_results(inst), &sig.return_types[..]) {
         // All types check out.
-        None
+        Ok(())
     } else {
         // Call types need fixing.
-        Some(sig_ref)
+        Err(sig_ref)
     }
+}
+
+/// Check if the arguments of the return `inst` match the signature.
+fn check_return_signature(dfg: &DataFlowGraph, inst: Inst, sig: &Signature) -> bool {
+    let fixed_values = dfg[inst].opcode().constraints().fixed_value_arguments();
+    check_arg_types(dfg,
+                    dfg[inst]
+                        .arguments(&dfg.value_lists)
+                        .iter()
+                        .skip(fixed_values)
+                        .cloned(),
+                    &sig.return_types)
 }
 
 /// Insert ABI conversion code for the arguments to the call or return instruction at `pos`.
@@ -491,12 +508,12 @@ fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
 ///
 /// Returns `true` if any instructions were inserted.
 fn handle_call_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor) -> bool {
-    let inst = pos.current_inst().expect("Cursor must point to a call instruction");
+    let mut inst = pos.current_inst().expect("Cursor must point to a call instruction");
 
     // Start by checking if the argument types already match the signature.
     let sig_ref = match check_call_signature(dfg, inst) {
-        None => return false,
-        Some(s) => s,
+        Ok(_) => return false,
+        Err(s) => s,
     };
 
     // OK, we need to fix the call arguments to match the ABI signature.
@@ -507,10 +524,16 @@ fn handle_call_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor) -> bool {
                             |dfg, abi_arg| dfg.signatures[sig_ref].argument_types[abi_arg]);
 
     if !dfg.signatures[sig_ref].return_types.is_empty() {
-        legalize_inst_results(dfg,
-                              pos,
-                              |dfg, abi_res| dfg.signatures[sig_ref].return_types[abi_res]);
+        inst = legalize_inst_results(dfg,
+                                     pos,
+                                     |dfg, abi_res| dfg.signatures[sig_ref].return_types[abi_res]);
     }
+
+    debug_assert!(check_call_signature(dfg, inst).is_ok(),
+                  "Signature still wrong: {}, {}{}",
+                  dfg.display_inst(inst),
+                  sig_ref,
+                  dfg.signatures[sig_ref]);
 
     // Yes, we changed stuff.
     true
@@ -523,19 +546,17 @@ fn handle_return_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor, sig: &Signature)
     let inst = pos.current_inst().expect("Cursor must point to a return instruction");
 
     // Check if the returned types already match the signature.
-    let fixed_values = dfg[inst].opcode().constraints().fixed_value_arguments();
-    if check_arg_types(dfg,
-                       dfg[inst]
-                           .arguments(&dfg.value_lists)
-                           .iter()
-                           .skip(fixed_values)
-                           .cloned(),
-                       &sig.return_types[..]) {
+    if check_return_signature(dfg, inst, sig) {
         return false;
     }
 
     let abi_args = sig.return_types.len();
     legalize_inst_arguments(dfg, pos, abi_args, |_, abi_arg| sig.return_types[abi_arg]);
+
+    debug_assert!(check_return_signature(dfg, inst, sig),
+                  "Signature still wrong: {}, sig{}",
+                  dfg.display_inst(inst),
+                  sig);
 
     // Yes, we changed stuff.
     true
