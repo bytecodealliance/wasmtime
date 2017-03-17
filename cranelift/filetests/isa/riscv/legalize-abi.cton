@@ -14,6 +14,50 @@ ebb0(v0: i64):
     return v1
 }
 
+function split_call_arg(i32) {
+    fn1 = function foo(i64)
+    fn2 = function foo(i32, i64)
+ebb0(v0: i32):
+    v1 = uextend.i64 v0
+    call fn1(v1)
+    ; check: $(v1l=$V), $(v1h=$V) = isplit_lohi $v1
+    ; check: call $fn1($v1l, $v1h)
+    call fn2(v0, v1)
+    ; check: call $fn2($v0, $V, $V)
+    return
+}
+
+function split_ret_val() {
+    fn1 = function foo() -> i64
+ebb0:
+    v1 = call fn1()
+    ; check: $ebb0:
+    ; nextln: $(v1l=$V), $(v1h=$V) = call $fn1()
+    ; check: $(v1new=$V) = iconcat_lohi $v1l, $v1h
+    ; check: $v1 = copy $v1new
+    jump ebb1(v1)
+    ; check: jump $ebb1($v1)
+
+ebb1(v10: i64):
+    jump ebb1(v10)
+}
+
+; First return value is fine, second one is expanded.
+function split_ret_val2() {
+    fn1 = function foo() -> i32, i64
+ebb0:
+    v1, v2 = call fn1()
+    ; check: $ebb0:
+    ; nextln: $v1, $(v2l=$V), $(v2h=$V) = call $fn1()
+    ; check: $(v2new=$V) = iconcat_lohi $v2l, $v2h
+    ; check: $v2 -> $v2new
+    jump ebb1(v1, v2)
+    ; check: jump $ebb1($v1, $v2)
+
+ebb1(v9: i32, v10: i64):
+    jump ebb1(v9, v10)
+}
+
 function int_ext(i8, i8 sext, i8 uext) -> i8 uext {
 ebb0(v1: i8, v2: i8, v3: i8):
     ; check: $ebb0($v1: i8, $(v2x=$V): i32, $(v3x=$V): i32):
@@ -22,6 +66,22 @@ ebb0(v1: i8, v2: i8, v3: i8):
     ; check: $(v1x=$V) = uextend.i32 $v1
     ; check: return $v1x
     return v1
+}
+
+; Function produces single return value, still need to copy.
+function ext_ret_val() {
+    fn1 = function foo() -> i8 sext
+ebb0:
+    v1 = call fn1()
+    ; check: $ebb0:
+    ; nextln: $(rv=$V) = call $fn1()
+    ; check: $(v1new=$V) = ireduce.i8 $rv
+    ; check: $v1 = copy $v1new
+    jump ebb1(v1)
+    ; check: jump $ebb1($v1)
+
+ebb1(v10: i8):
+    jump ebb1(v10)
 }
 
 function vector_split_args(i64x4) -> i64x4 {
