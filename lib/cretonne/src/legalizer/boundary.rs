@@ -1,106 +1,34 @@
-//! Legalize instructions.
+//! Legalize ABI boundaries.
 //!
-//! A legal instruction is one that can be mapped directly to a machine code instruction for the
-//! target ISA. The `legalize_function()` function takes as input any function and transforms it
-//! into an equivalent function using only legal instructions.
+//! This legalizer sub-module contains code for dealing with ABI boundaries:
 //!
-//! The characteristics of legal instructions depend on the target ISA, so any given instruction
-//! can be legal for one ISA and illegal for another.
+//! - Function arguments passed to the entry block.
+//! - Function arguments passed to call instructions.
+//! - Return values from call instructions.
+//! - Return values passed to return instructions.
 //!
-//! Besides transforming instructions, the legalizer also fills out the `function.encodings` map
-//! which provides a legal encoding recipe for every instruction.
+//! The ABI boundary legalization happens in two phases:
 //!
-//! The legalizer does not deal with register allocation constraints. These constraints are derived
-//! from the encoding recipes, and solved later by the register allocator.
+//! 1. The `legalize_signatures` function rewrites all the preamble signatures with ABI information
+//!    and possibly new argument types. It also rewrites the entry block arguments to match.
+//! 2. The `handle_call_abi` and `handle_return_abi` functions rewrite call and return instructions
+//!    to match the new ABI signatures.
+//!
+//! Between the two phases, preamble signatures and call/return arguments don't match. This
+//! intermediate state doesn't type check.
 
 use abi::{legalize_abi_value, ValueConversion};
-use ir::{Function, Cursor, DataFlowGraph, InstructionData, Opcode, Inst, InstBuilder, Ebb, Type,
-         Value, Signature, SigRef, ArgumentType};
-use ir::condcodes::IntCC;
+use ir::{Function, Cursor, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value, Signature, SigRef,
+         ArgumentType};
 use ir::instructions::CallInfo;
-use isa::{TargetIsa, Legalize};
-
-/// Legalize `func` for `isa`.
-///
-/// - Transform any instructions that don't have a legal representation in `isa`.
-/// - Fill out `func.encodings`.
-///
-pub fn legalize_function(func: &mut Function, isa: &TargetIsa) {
-    legalize_signatures(func, isa);
-
-    // TODO: This is very simplified and incomplete.
-    func.encodings.resize(func.dfg.num_insts());
-    let mut pos = Cursor::new(&mut func.layout);
-    while let Some(_ebb) = pos.next_ebb() {
-        // Keep track of the cursor position before the instruction being processed, so we can
-        // double back when replacing instructions.
-        let mut prev_pos = pos.position();
-
-        while let Some(inst) = pos.next_inst() {
-            let opcode = func.dfg[inst].opcode();
-
-            // Check for ABI boundaries that need to be converted to the legalized signature.
-            if opcode.is_call() && handle_call_abi(&mut func.dfg, &mut pos) {
-                // Go back and legalize the inserted argument conversion instructions.
-                pos.set_position(prev_pos);
-                continue;
-            }
-
-            if opcode.is_return() && handle_return_abi(&mut func.dfg, &mut pos, &func.signature) {
-                // Go back and legalize the inserted return value conversion instructions.
-                pos.set_position(prev_pos);
-                continue;
-            }
-
-            match isa.encode(&func.dfg, &func.dfg[inst]) {
-                Ok(encoding) => *func.encodings.ensure(inst) = encoding,
-                Err(action) => {
-                    // We should transform the instruction into legal equivalents.
-                    // Possible strategies are:
-                    // 1. Legalize::Expand: Expand instruction into sequence of legal instructions.
-                    //    Possibly iteratively. ()
-                    // 2. Legalize::Narrow: Split the controlling type variable into high and low
-                    //    parts. This applies both to SIMD vector types which can be halved and to
-                    //    integer types such as `i64` used on a 32-bit ISA. ().
-                    // 3. TODO: Promote the controlling type variable to a larger type. This
-                    //    typically means expressing `i8` and `i16` arithmetic in terms if `i32`
-                    //    operations on RISC targets. (It may or may not be beneficial to promote
-                    //    small vector types versus splitting them.)
-                    // 4. TODO: Convert to library calls. For example, floating point operations on
-                    //    an ISA with no IEEE 754 support.
-                    let changed = match action {
-                        Legalize::Expand => expand(&mut pos, &mut func.dfg),
-                        Legalize::Narrow => narrow(&mut pos, &mut func.dfg),
-                    };
-                    // If the current instruction was replaced, we need to double back and revisit
-                    // the expanded sequence. This is both to assign encodings and possible to
-                    // expand further.
-                    // There's a risk of infinite looping here if the legalization patterns are
-                    // unsound. Should we attempt to detect that?
-                    if changed {
-                        pos.set_position(prev_pos);
-                    }
-                }
-            }
-
-            // Remember this position in case we need to double back.
-            prev_pos = pos.position();
-        }
-    }
-}
-
-// Include legalization patterns that were generated by `gen_legalizer.py` from the `XForms` in
-// `meta/cretonne/legalize.py`.
-//
-// Concretely, this defines private functions `narrow()`, and `expand()`.
-include!(concat!(env!("OUT_DIR"), "/legalizer.rs"));
+use isa::TargetIsa;
 
 /// Legalize all the function signatures in `func`.
 ///
 /// This changes all signatures to be ABI-compliant with full `ArgumentLoc` annotations. It doesn't
 /// change the entry block arguments, calls, or return instructions, so this can leave the function
 /// in a state with type discrepancies.
-fn legalize_signatures(func: &mut Function, isa: &TargetIsa) {
+pub fn legalize_signatures(func: &mut Function, isa: &TargetIsa) {
     isa.legalize_signature(&mut func.signature);
     for sig in func.dfg.signatures.keys() {
         isa.legalize_signature(&mut func.dfg.signatures[sig]);
@@ -507,7 +435,7 @@ fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
 /// original return values. The call's result values will be adapted to match the new signature.
 ///
 /// Returns `true` if any instructions were inserted.
-fn handle_call_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor) -> bool {
+pub fn handle_call_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor) -> bool {
     let mut inst = pos.current_inst().expect("Cursor must point to a call instruction");
 
     // Start by checking if the argument types already match the signature.
@@ -542,7 +470,7 @@ fn handle_call_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor) -> bool {
 /// Insert ABI conversion code before and after the call instruction at `pos`.
 ///
 /// Return `true` if any instructions were inserted.
-fn handle_return_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor, sig: &Signature) -> bool {
+pub fn handle_return_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor, sig: &Signature) -> bool {
     let inst = pos.current_inst().expect("Cursor must point to a return instruction");
 
     // Check if the returned types already match the signature.
