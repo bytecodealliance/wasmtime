@@ -24,9 +24,9 @@
 //!
 //!   Control flow graph and dominator tree integrity:
 //!
-//! TODO:
 //!    - All predecessors in the CFG must be branches to the EBB.
 //!    - All branches to an EBB must be present in the CFG.
+//! TODO:
 //!    - A recomputed dominator tree is identical to the existing one.
 //!
 //!   Type checking
@@ -54,7 +54,7 @@
 //!      of arguments must match the destination type, and the lane indexes must be in range.
 
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, Value};
-use ir::instructions::InstructionFormat;
+use ir::instructions::{InstructionFormat, BranchInfo};
 use ir::entities::AnyEntity;
 use cfg::ControlFlowGraph;
 use dominator_tree::DominatorTree;
@@ -342,12 +342,48 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    fn cfg_integrity(&self, ebb: Ebb) -> Result<()> {
+        for &(pred_ebb, pred_inst) in self.cfg.get_predecessors(ebb) {
+            // All predecessors in the CFG must be branches to the EBB
+            match self.func.dfg[pred_inst].analyze_branch(&self.func.dfg.value_lists) {
+                BranchInfo::SingleDest(target_ebb, _) => {
+                    if target_ebb != ebb {
+                        return err!(ebb,
+                                    "has predecessor {} in {} which does not branch here",
+                                    pred_inst,
+                                    pred_ebb);
+                    }
+                }
+                BranchInfo::Table(jt) => {
+                    if !self.func.jump_tables[jt].branches_to(ebb) {
+                        return err!(ebb,
+                                    "has predecessor {} using {} in {} which never branches here",
+                                    pred_inst,
+                                    jt,
+                                    pred_ebb);
+                    }
+                }
+                BranchInfo::NotABranch => {
+                    return err!(ebb, "has predecessor {} which is not a branch", pred_inst);
+                }
+            }
+            // All EBBs branching to `ebb` have it recorded as a successor in the CFG.
+            if !self.cfg.get_successors(pred_ebb).contains(&ebb) {
+                return err!(ebb,
+                            "predecessor {} does not have this EBB recorded as a successor",
+                            pred_ebb);
+            }
+        }
+        Ok(())
+    }
+
     pub fn run(&self) -> Result<()> {
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
                 self.ebb_integrity(ebb, inst)?;
                 self.instruction_integrity(inst)?;
             }
+            self.cfg_integrity(ebb)?;
         }
         Ok(())
     }
