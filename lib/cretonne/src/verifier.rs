@@ -20,11 +20,11 @@
 //!
 //!    - Values must be defined by an instruction that exists and that is inserted in
 //!      an EBB, or be an argument of an existing EBB.
-//! TODO:
 //!    - Values used by an instruction must dominate the instruction.
 //!
 //!   Control flow graph and dominator tree integrity:
 //!
+//! TODO:
 //!    - All predecessors in the CFG must be branches to the EBB.
 //!    - All branches to an EBB must be present in the CFG.
 //!    - A recomputed dominator tree is identical to the existing one.
@@ -56,6 +56,8 @@
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, Value};
 use ir::instructions::InstructionFormat;
 use ir::entities::AnyEntity;
+use cfg::ControlFlowGraph;
+use dominator_tree::DominatorTree;
 use std::fmt::{self, Display, Formatter};
 use std::result;
 
@@ -101,11 +103,19 @@ pub fn verify_function(func: &Function) -> Result<()> {
 
 struct Verifier<'a> {
     func: &'a Function,
+    cfg: ControlFlowGraph,
+    domtree: DominatorTree,
 }
 
 impl<'a> Verifier<'a> {
     pub fn new(func: &'a Function) -> Verifier {
-        Verifier { func: func }
+        let cfg = ControlFlowGraph::with_function(func);
+        let domtree = DominatorTree::with_function(func, &cfg);
+        Verifier {
+            func: func,
+            cfg: cfg,
+            domtree: domtree,
+        }
     }
 
     fn ebb_integrity(&self, ebb: Ebb, inst: Inst) -> Result<()> {
@@ -291,31 +301,41 @@ impl<'a> Verifier<'a> {
 
         // SSA form
         match dfg.value_def(v) {
-            // Value is defined by an instruction that exists and is inserted in an EBB.
             ValueDef::Res(def_inst, _) => {
+                // Value is defined by an instruction that exists.
                 if !dfg.insts.is_valid(def_inst) {
                     return err!(loc_inst,
                                 "{} is defined by invalid instruction {}",
                                 v,
                                 def_inst);
                 }
+                // Defining instruction is inserted in an EBB.
                 if self.func.layout.inst_ebb(def_inst) == None {
                     return err!(loc_inst,
                                 "{} is defined by {} which has no EBB",
                                 v,
                                 def_inst);
                 }
+                // Defining instruction dominates the instruction that uses the value.
+                if !self.domtree.dominates(def_inst, loc_inst, &self.func.layout) {
+                    return err!(loc_inst, "uses value from non-dominating {}", def_inst);
+                }
             }
-            // Value is defined by an existing EBB which is inserted in the layout.
             ValueDef::Arg(ebb, _) => {
+                // Value is defined by an existing EBB.
                 if !dfg.ebb_is_valid(ebb) {
                     return err!(loc_inst, "{} is defined by invalid EBB {}", v, ebb);
                 }
+                // Defining EBB is inserted in the layout
                 if !self.func.layout.is_ebb_inserted(ebb) {
                     return err!(loc_inst,
                                 "{} is defined by {} which is not in the layout",
                                 v,
                                 ebb);
+                }
+                // The defining EBB dominates the instruction using this value.
+                if !self.domtree.ebb_dominates(ebb, loc_inst, &self.func.layout) {
+                    return err!(loc_inst, "uses value arg from non-dominating {}", ebb);
                 }
             }
         }

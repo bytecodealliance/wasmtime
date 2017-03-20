@@ -68,8 +68,20 @@ impl DominatorTree {
     /// is unreachable.
     ///
     /// An instruction is considered to dominate itself.
-    pub fn dominates(&self, a: Inst, mut b: Inst, layout: &Layout) -> bool {
+    pub fn dominates(&self, a: Inst, b: Inst, layout: &Layout) -> bool {
         let ebb_a = layout.inst_ebb(a).expect("Instruction not in layout.");
+        self.ebb_dominates(ebb_a, b, layout) && layout.cmp(a, b) != Ordering::Greater
+    }
+
+    /// Returns `true` if `ebb_a` dominates `b`.
+    ///
+    /// This means that every control-flow path from the function entry to `b` must go through
+    /// `ebb_a`.
+    ///
+    /// Dominance is ill defined for unreachable blocks. This function can always determine
+    /// dominance for instructions in the same EBB, but otherwise returns `false` if either block
+    /// is unreachable.
+    pub fn ebb_dominates(&self, ebb_a: Ebb, mut b: Inst, layout: &Layout) -> bool {
         let mut ebb_b = layout.inst_ebb(b).expect("Instruction not in layout.");
         let rpo_a = self.nodes[ebb_a].rpo_number;
 
@@ -80,7 +92,7 @@ impl DominatorTree {
             ebb_b = layout.inst_ebb(b).expect("Dominator got removed.");
         }
 
-        ebb_a == ebb_b && layout.cmp(a, b) != Ordering::Greater
+        ebb_a == ebb_b
     }
 
     /// Compute the common dominator of two basic blocks.
