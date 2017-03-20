@@ -397,7 +397,7 @@ pub struct OpcodeConstraints {
 
     /// Offset into `OPERAND_CONSTRAINT` table of the descriptors for this opcode. The first
     /// `fixed_results()` entries describe the result constraints, then follows constraints for the
-    /// fixed `Value` input operands. The number of `Value` inputs is determined by the instruction
+    /// fixed `Value` input operands. (`fixed_value_arguments()` of them).
     /// format.
     constraint_offset: u16,
 }
@@ -457,9 +457,24 @@ impl OpcodeConstraints {
     /// `ctrl_type`.
     pub fn result_type(self, n: usize, ctrl_type: Type) -> Type {
         assert!(n < self.fixed_results(), "Invalid result index");
-        OPERAND_CONSTRAINTS[self.constraint_offset() + n]
-            .resolve(ctrl_type)
-            .expect("Result constraints can't be free")
+        if let ResolvedConstraint::Bound(t) =
+            OPERAND_CONSTRAINTS[self.constraint_offset() + n].resolve(ctrl_type) {
+            t
+        } else {
+            panic!("Result constraints can't be free");
+        }
+    }
+
+    /// Get the value type of input value number `n`, having resolved the controlling type variable
+    /// to `ctrl_type`.
+    ///
+    /// Unlike results, it is possible for some input values to vary freely within a specific
+    /// `ValueTypeSet`. This is represented with the `ArgumentConstraint::Free` variant.
+    pub fn value_argument_constraint(self, n: usize, ctrl_type: Type) -> ResolvedConstraint {
+        assert!(n < self.fixed_value_arguments(),
+                "Invalid value argument index");
+        let offset = self.constraint_offset() + self.fixed_results();
+        OPERAND_CONSTRAINTS[offset + n].resolve(ctrl_type)
     }
 
     /// Get the typeset of allowed types for the controlling type variable in a polymorphic
@@ -475,7 +490,7 @@ impl OpcodeConstraints {
 }
 
 /// A value type set describes the permitted set of types for a type variable.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ValueTypeSet {
     min_lanes: u8,
     max_lanes: u8,
@@ -561,24 +576,31 @@ enum OperandConstraint {
 impl OperandConstraint {
     /// Resolve this operand constraint into a concrete value type, given the value of the
     /// controlling type variable.
-    /// Returns `None` if this is a free operand which is independent of the controlling type
-    /// variable.
-    pub fn resolve(&self, ctrl_type: Type) -> Option<Type> {
+    pub fn resolve(&self, ctrl_type: Type) -> ResolvedConstraint {
         use self::OperandConstraint::*;
+        use self::ResolvedConstraint::Bound;
         match *self {
-            Concrete(t) => Some(t),
-            Free(_) => None,
-            Same => Some(ctrl_type),
-            LaneOf => Some(ctrl_type.lane_type()),
-            AsBool => Some(ctrl_type.as_bool()),
-            HalfWidth => Some(ctrl_type.half_width().expect("invalid type for half_width")),
-            DoubleWidth => Some(ctrl_type.double_width().expect("invalid type for double_width")),
-            HalfVector => Some(ctrl_type.half_vector().expect("invalid type for half_vector")),
-            DoubleVector => Some(ctrl_type.by(2).expect("invalid type for double_vector")),
+            Concrete(t) => Bound(t),
+            Free(vts) => ResolvedConstraint::Free(TYPE_SETS[vts as usize]),
+            Same => Bound(ctrl_type),
+            LaneOf => Bound(ctrl_type.lane_type()),
+            AsBool => Bound(ctrl_type.as_bool()),
+            HalfWidth => Bound(ctrl_type.half_width().expect("invalid type for half_width")),
+            DoubleWidth => Bound(ctrl_type.double_width().expect("invalid type for double_width")),
+            HalfVector => Bound(ctrl_type.half_vector().expect("invalid type for half_vector")),
+            DoubleVector => Bound(ctrl_type.by(2).expect("invalid type for double_vector")),
         }
     }
 }
 
+/// The type constraint on a value argument once the controlling type variable is known.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ResolvedConstraint {
+    /// The operand is bound to a known type.
+    Bound(Type),
+    /// The operand type can vary freely within the given set.
+    Free(ValueTypeSet),
+}
 
 #[cfg(test)]
 mod tests {
@@ -630,12 +652,24 @@ mod tests {
         assert!(!a.requires_typevar_operand());
         assert_eq!(a.fixed_results(), 1);
         assert_eq!(a.fixed_value_arguments(), 2);
+        assert_eq!(a.result_type(0, types::I32), types::I32);
+        assert_eq!(a.result_type(0, types::I8), types::I8);
+        assert_eq!(a.value_argument_constraint(0, types::I32),
+                   ResolvedConstraint::Bound(types::I32));
+        assert_eq!(a.value_argument_constraint(1, types::I32),
+                   ResolvedConstraint::Bound(types::I32));
 
         let b = Opcode::Bitcast.constraints();
         assert!(!b.use_typevar_operand());
         assert!(!b.requires_typevar_operand());
         assert_eq!(b.fixed_results(), 1);
         assert_eq!(b.fixed_value_arguments(), 1);
+        assert_eq!(b.result_type(0, types::I32), types::I32);
+        assert_eq!(b.result_type(0, types::I8), types::I8);
+        match b.value_argument_constraint(0, types::I32) {
+            ResolvedConstraint::Free(vts) => assert!(vts.contains(types::F32)),
+            _ => panic!("Unexpected constraint from value_argument_constraint"),
+        }
 
         let c = Opcode::Call.constraints();
         assert_eq!(c.fixed_results(), 0);
