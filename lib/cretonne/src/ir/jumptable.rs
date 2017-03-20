@@ -72,6 +72,11 @@ impl JumpTableData {
                     .enumerate())
     }
 
+    /// Checks if any of the entries branch to `ebb`.
+    pub fn branches_to(&self, ebb: Ebb) -> bool {
+        self.table.iter().any(|target_ebb| target_ebb.expand() == Some(ebb))
+    }
+
     /// Access the whole table as a mutable slice.
     pub fn as_mut_slice(&mut self) -> &mut [PackedOption<Ebb>] {
         self.table.as_mut_slice()
