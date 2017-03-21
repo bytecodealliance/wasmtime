@@ -175,12 +175,12 @@
 //!
 //! There is some room for improvement.
 
-use cfg::ControlFlowGraph;
+use flowgraph::ControlFlowGraph;
 use ir::dfg::ValueDef;
 use ir::{Function, Value, Inst, Ebb};
 use isa::{TargetIsa, RecipeConstraints};
-use regalloc::liverange::LiveRange;
 use regalloc::affinity::Affinity;
+use regalloc::liverange::LiveRange;
 use sparse_map::SparseMap;
 
 /// A set of live ranges, indexed by value number.

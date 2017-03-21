@@ -11,14 +11,14 @@
 //! We verify that the dominator tree annotations are complete and correct.
 //!
 
-use std::collections::HashMap;
-use std::borrow::{Borrow, Cow};
+use cretonne::dominator_tree::DominatorTree;
+use cretonne::flowgraph::ControlFlowGraph;
 use cretonne::ir::Function;
 use cretonne::ir::entities::AnyEntity;
-use cretonne::cfg::ControlFlowGraph;
-use cretonne::dominator_tree::DominatorTree;
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result};
+use std::borrow::{Borrow, Cow};
+use std::collections::HashMap;
 use utils::match_directive;
 
 struct TestDomtree;
