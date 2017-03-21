@@ -62,7 +62,7 @@ ebb1:
 ; nextln:     brz vx0, ebb1
 ; nextln: 
 ; nextln: ebb1:
-; nextln:     brnz vx0, ebb1
+; nextln:     brnz.i32 vx0, ebb1
 ; nextln: }
 
 function twoargs(i32, f32) {
@@ -77,7 +77,7 @@ ebb1(vx2: i32, vx3: f32):
 ; nextln:     brz vx0, ebb1(vx0, vx1)
 ; nextln: 
 ; nextln: ebb1(vx2: i32, vx3: f32):
-; nextln:     brnz vx0, ebb0(vx2, vx3)
+; nextln:     brnz.i32 vx0, ebb0(vx2, vx3)
 ; nextln: }
 
 function jumptable(i32) {

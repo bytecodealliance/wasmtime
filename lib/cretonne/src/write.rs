@@ -4,7 +4,7 @@
 //! equivalent textual representation. This textual representation can be read back by the
 //! `cretonne-reader` crate.
 
-use ir::{Function, DataFlowGraph, Ebb, Inst, Value, Type};
+use ir::{Function, DataFlowGraph, Ebb, Inst, Value, ValueDef, Type};
 use isa::{TargetIsa, RegInfo};
 use std::fmt::{self, Result, Error, Write};
 use std::result;
@@ -132,7 +132,8 @@ pub fn write_ebb(w: &mut Write, func: &Function, isa: Option<&TargetIsa>, ebb: E
 // if it can't be trivially inferred.
 //
 fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
-    let constraints = func.dfg[inst].opcode().constraints();
+    let inst_data = &func.dfg[inst];
+    let constraints = inst_data.opcode().constraints();
 
     if !constraints.is_polymorphic() {
         return None;
@@ -140,16 +141,18 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
 
     // If the controlling type variable can be inferred from the type of the designated value input
     // operand, we don't need the type suffix.
-    // TODO: Should we include the suffix when the input value is defined in another block? The
-    // parser needs to know the type of the value, so it must be defined in a block that lexically
-    // comes before this one.
     if constraints.use_typevar_operand() {
-        return None;
+        let ctrl_var = inst_data.typevar_operand(&func.dfg.value_lists).unwrap();
+        let def_ebb = match func.dfg.value_def(ctrl_var) {
+            ValueDef::Res(instr, _) => func.layout.inst_ebb(instr),
+            ValueDef::Arg(ebb, _) => Some(ebb),
+        };
+        if def_ebb.is_some() && def_ebb == func.layout.inst_ebb(inst) {
+            return None;
+        }
     }
 
-    // This polymorphic instruction doesn't support basic type inference.
-    // The controlling type variable is required to be the type of the first result.
-    let rtype = func.dfg.value_type(func.dfg.first_result(inst));
+    let rtype = inst_data.ctrl_typevar(&func.dfg);
     assert!(!rtype.is_void(),
             "Polymorphic instruction must produce a result");
     Some(rtype)
