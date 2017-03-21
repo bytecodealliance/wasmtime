@@ -210,7 +210,7 @@ fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
             let abi_ty = ty.half_width().expect("Invalid type for conversion");
             let lo = convert_from_abi(dfg, pos, abi_ty, get_arg);
             let hi = convert_from_abi(dfg, pos, abi_ty, get_arg);
-            dfg.ins(pos).iconcat_lohi(lo, hi)
+            dfg.ins(pos).iconcat(lo, hi)
         }
         // Construct a `ty` by concatenating two halves of a vector.
         ValueConversion::VectorSplit => {
@@ -271,7 +271,7 @@ fn convert_to_abi<PutArg>(dfg: &mut DataFlowGraph,
     let ty = dfg.value_type(value);
     match legalize_abi_value(ty, &arg_type) {
         ValueConversion::IntSplit => {
-            let (lo, hi) = dfg.ins(pos).isplit_lohi(value);
+            let (lo, hi) = dfg.ins(pos).isplit(value);
             convert_to_abi(dfg, pos, lo, put_arg);
             convert_to_abi(dfg, pos, hi, put_arg);
         }

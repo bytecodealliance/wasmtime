@@ -38,10 +38,10 @@ impl From<ValueConversion> for ArgAction {
 /// Legalization action to be applied to a value that is being passed to or from a legalized ABI.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueConversion {
-    /// Split an integer types into low and high parts, using `isplit_lohi`.
+    /// Split an integer types into low and high parts, using `isplit`.
     IntSplit,
 
-    /// Split a vector type into halves with identical lane types.
+    /// Split a vector type into halves with identical lane types, using `vsplit`.
     VectorSplit,
 
     /// Bit-cast to an integer type of the same size.

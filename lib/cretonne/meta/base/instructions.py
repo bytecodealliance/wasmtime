@@ -1286,8 +1286,8 @@ lo = Operand(
 hi = Operand(
         'hi', WideInt.half_width(), 'The high bits of `x`')
 
-isplit_lohi = Instruction(
-        'isplit_lohi', r"""
+isplit = Instruction(
+        'isplit', r"""
         Split a scalar integer into low and high parts.
 
         Returns the low half of `x` and the high half of `x` as two independent
@@ -1305,8 +1305,8 @@ a = Operand(
         'a', NarrowInt.double_width(),
         doc='The concatenation of `lo` and `hi`')
 
-iconcat_lohi = Instruction(
-        'iconcat_lohi', r"""
+iconcat = Instruction(
+        'iconcat', r"""
         Concatenate low and high bits to form a larger integer type.
         """,
         ins=(lo, hi), outs=a)
