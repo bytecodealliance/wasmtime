@@ -588,7 +588,8 @@ impl<'f> DoubleEndedIterator for Insts<'f> {
 /// When new instructions are added, the cursor can either append them to an EBB or insert them
 /// before the current instruction.
 pub struct Cursor<'f> {
-    layout: &'f mut Layout,
+    /// Borrowed function layout. Public so it can be re-borrowed from this cursor.
+    pub layout: &'f mut Layout,
     pos: CursorPosition,
 }
 

@@ -65,26 +65,103 @@
 //! instructions. These loops will remain in the program.
 
 use flowgraph::ControlFlowGraph;
-use ir::{DataFlowGraph, Cursor, Value, Opcode, ValueDef, InstructionData, InstBuilder};
+use ir::{DataFlowGraph, Ebb, Cursor, Value, Type, Opcode, ValueDef, InstructionData, InstBuilder};
+use std::iter;
 
 /// Split `value` into two values using the `isplit` semantics. Do this by reusing existing values
 /// if possible.
 pub fn isplit(dfg: &mut DataFlowGraph,
-              _cfg: &ControlFlowGraph,
+              cfg: &ControlFlowGraph,
               pos: &mut Cursor,
               value: Value)
               -> (Value, Value) {
-    split_value(dfg, pos, value, Opcode::Iconcat)
+    split_any(dfg, cfg, pos, value, Opcode::Iconcat)
 }
 
 /// Split `value` into halves using the `vsplit` semantics. Do this by reusing existing values if
 /// possible.
 pub fn vsplit(dfg: &mut DataFlowGraph,
-              _cfg: &ControlFlowGraph,
+              cfg: &ControlFlowGraph,
               pos: &mut Cursor,
               value: Value)
               -> (Value, Value) {
-    split_value(dfg, pos, value, Opcode::Vconcat)
+    split_any(dfg, cfg, pos, value, Opcode::Vconcat)
+}
+
+/// After splitting an EBB argument, we need to go back and fix up all of the predecessor
+/// instructions. This is potentially a recursive operation, but we don't implement it recursively
+/// since that could use up too muck stack.
+///
+/// Instead, the repairs are deferred and placed on a work list in stack form.
+struct Repair {
+    concat: Opcode,
+    // The argument type after splitting.
+    split_type: Type,
+    // The destination EBB whose arguments have been split.
+    ebb: Ebb,
+    // Number of the original EBB argument which has been replaced by the low part.
+    num: usize,
+    // Number of the new EBB argument which represents the high part after the split.
+    hi_num: usize,
+}
+
+/// Generic version of `isplit` and `vsplit` controlled by the `concat` opcode.
+fn split_any(dfg: &mut DataFlowGraph,
+             cfg: &ControlFlowGraph,
+             pos: &mut Cursor,
+             value: Value,
+             concat: Opcode)
+             -> (Value, Value) {
+    let saved_pos = pos.position();
+    let mut repairs = Vec::new();
+    let result = split_value(dfg, pos, value, concat, &mut repairs);
+
+    // We have split the value requested, and now we may need to fix some EBB predecessors.
+    while let Some(repair) = repairs.pop() {
+        for &(_, inst) in cfg.get_predecessors(repair.ebb) {
+            let branch_opc = dfg[inst].opcode();
+            assert!(branch_opc.is_branch(),
+                    "Predecessor not a branch: {}",
+                    dfg.display_inst(inst));
+            let fixed_args = branch_opc.constraints().fixed_value_arguments();
+            let mut args = dfg[inst].take_value_list().expect("Branches must have value lists.");
+            let num_args = args.len(&dfg.value_lists);
+            // Get the old value passed to the EBB argument we're repairing.
+            let old_arg = args.get(fixed_args + repair.num, &dfg.value_lists)
+                .expect("Too few branch arguments");
+
+            // It's possible that the CFG's predecessor list has duplicates. Detect them here.
+            if dfg.value_type(old_arg) == repair.split_type {
+                dfg[inst].put_value_list(args);
+                continue;
+            }
+
+            // Split the old argument, possibly causing more repairs to be scheduled.
+            pos.goto_inst(inst);
+            let (lo, hi) = split_value(dfg, pos, old_arg, repair.concat, &mut repairs);
+
+            // The `lo` part replaces the original argument.
+            *args.get_mut(fixed_args + repair.num, &mut dfg.value_lists).unwrap() = lo;
+
+            // The `hi` part goes at the end. Since multiple repairs may have been scheduled to the
+            // same EBB, there could be multiple arguments missing.
+            if num_args > fixed_args + repair.hi_num {
+                *args.get_mut(fixed_args + repair.hi_num, &mut dfg.value_lists).unwrap() = hi;
+            } else {
+                // We need to append one or more arguments. If we're adding more than one argument,
+                // there must be pending repairs on the stack that will fill in the correct values
+                // instead of `hi`.
+                args.extend(iter::repeat(hi).take(1 + fixed_args + repair.hi_num - num_args),
+                            &mut dfg.value_lists);
+            }
+
+            // Put the value list back after manipulating it.
+            dfg[inst].put_value_list(args);
+        }
+    }
+
+    pos.set_position(saved_pos);
+    result
 }
 
 /// Split a single value using the integer or vector semantics given by the `concat` opcode.
@@ -96,7 +173,8 @@ pub fn vsplit(dfg: &mut DataFlowGraph,
 fn split_value(dfg: &mut DataFlowGraph,
                pos: &mut Cursor,
                value: Value,
-               concat: Opcode)
+               concat: Opcode,
+               repairs: &mut Vec<Repair>)
                -> (Value, Value) {
     let value = dfg.resolve_copies(value);
     let mut reuse = None;
@@ -112,18 +190,76 @@ fn split_value(dfg: &mut DataFlowGraph,
                 }
             }
         }
-        ValueDef::Arg(_ebb, _num) => {}
+        ValueDef::Arg(ebb, num) => {
+            // This is an EBB argument. We can split the argument value unless this is the entry
+            // block.
+            if pos.layout.entry_block() != Some(ebb) {
+                // We are going to replace the argument at `num` with two new arguments.
+                // Determine the new value types.
+                let ty = dfg.value_type(value);
+                let split_type = match concat {
+                    Opcode::Iconcat => ty.half_width().expect("Invalid type for isplit"),
+                    Opcode::Vconcat => ty.half_vector().expect("Invalid type for vsplit"),
+                    _ => panic!("Unhandled concat opcode: {}", concat),
+                };
+
+                // Since the `repairs` stack potentially contains other argument numbers for `ebb`,
+                // avoid shifting and renumbering EBB arguments. It could invalidate other
+                // `repairs` entries.
+                //
+                // Replace the original `value` with the low part, and append the high part at the
+                // end of the argument list.
+                let lo = dfg.replace_ebb_arg(value, split_type);
+                let hi_num = dfg.num_ebb_args(ebb);
+                let hi = dfg.append_ebb_arg(ebb, split_type);
+                reuse = Some((lo, hi));
+
+
+                // Now the original value is dangling. Insert a concatenation instruction that can
+                // compute it from the two new arguments. This also serves as a record of what we
+                // did so a future call to this function doesn't have to redo the work.
+                //
+                // Note that it is safe to move `pos` here since `reuse` was set above, so we don't
+                // need to insert a split instruction before returning.
+                pos.goto_top(ebb);
+                pos.next_inst();
+                let concat_inst = dfg.ins(pos).Binary(concat, ty, lo, hi).0;
+                let concat_val = dfg.first_result(concat_inst);
+                dfg.change_to_alias(value, concat_val);
+
+                // Finally, splitting the EBB argument is not enough. We also have to repair all
+                // of the predecessor instructions that branch here.
+                add_repair(concat, split_type, ebb, num, hi_num, repairs);
+            }
+        }
     }
 
     // Did the code above succeed in finding values we can reuse?
     if let Some(pair) = reuse {
         pair
     } else {
-        // No, we'll just have to insert the requested split instruction at `pos`.
+        // No, we'll just have to insert the requested split instruction at `pos`. Note that `pos`
+        // has not been moved by the EBB argument code above when `reuse` is `None`.
         match concat {
             Opcode::Iconcat => dfg.ins(pos).isplit(value),
             Opcode::Vconcat => dfg.ins(pos).vsplit(value),
             _ => panic!("Unhandled concat opcode: {}", concat),
         }
     }
+}
+
+// Add a repair entry to the work list.
+fn add_repair(concat: Opcode,
+              split_type: Type,
+              ebb: Ebb,
+              num: usize,
+              hi_num: usize,
+              repairs: &mut Vec<Repair>) {
+    repairs.push(Repair {
+                     concat: concat,
+                     split_type: split_type,
+                     ebb: ebb,
+                     num: num,
+                     hi_num: hi_num,
+                 });
 }
