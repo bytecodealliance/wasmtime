@@ -7,9 +7,9 @@ isa riscv
 function int_split_args(i64) -> i64 {
 ebb0(v0: i64):
     ; check: $ebb0($(v0l=$V): i32, $(v0h=$V): i32):
-    ; check: iconcat_lohi $v0l, $v0h
+    ; check: iconcat $v0l, $v0h
     v1 = iadd_imm v0, 1
-    ; check: $(v1l=$V), $(v1h=$V) = isplit_lohi $v1
+    ; check: $(v1l=$V), $(v1h=$V) = isplit $v1
     ; check: return $v1l, $v1h
     return v1
 }
@@ -20,7 +20,7 @@ function split_call_arg(i32) {
 ebb0(v0: i32):
     v1 = uextend.i64 v0
     call fn1(v1)
-    ; check: $(v1l=$V), $(v1h=$V) = isplit_lohi $v1
+    ; check: $(v1l=$V), $(v1h=$V) = isplit $v1
     ; check: call $fn1($v1l, $v1h)
     call fn2(v0, v1)
     ; check: call $fn2($v0, $V, $V)
@@ -33,7 +33,7 @@ ebb0:
     v1 = call fn1()
     ; check: $ebb0:
     ; nextln: $(v1l=$V), $(v1h=$V) = call $fn1()
-    ; check: $(v1new=$V) = iconcat_lohi $v1l, $v1h
+    ; check: $(v1new=$V) = iconcat $v1l, $v1h
     ; check: $v1 = copy $v1new
     jump ebb1(v1)
     ; check: jump $ebb1($v1)
@@ -49,7 +49,7 @@ ebb0:
     v1, v2 = call fn1()
     ; check: $ebb0:
     ; nextln: $v1, $(v2l=$V), $(v2h=$V) = call $fn1()
-    ; check: $(v2new=$V) = iconcat_lohi $v2l, $v2h
+    ; check: $(v2new=$V) = iconcat $v2l, $v2h
     ; check: $v2 -> $v2new
     jump ebb1(v1, v2)
     ; check: jump $ebb1($v1, $v2)
@@ -87,21 +87,21 @@ ebb1(v10: i8):
 function vector_split_args(i64x4) -> i64x4 {
 ebb0(v0: i64x4):
     ; check: $ebb0($(v0al=$V): i32, $(v0ah=$V): i32, $(v0bl=$V): i32, $(v0bh=$V): i32, $(v0cl=$V): i32, $(v0ch=$V): i32, $(v0dl=$V): i32, $(v0dh=$V): i32):
-    ; check: $(v0a=$V) = iconcat_lohi $v0al, $v0ah
-    ; check: $(v0b=$V) = iconcat_lohi $v0bl, $v0bh
+    ; check: $(v0a=$V) = iconcat $v0al, $v0ah
+    ; check: $(v0b=$V) = iconcat $v0bl, $v0bh
     ; check: $(v0ab=$V) = vconcat $v0a, $v0b
-    ; check: $(v0c=$V) = iconcat_lohi $v0cl, $v0ch
-    ; check: $(v0d=$V) = iconcat_lohi $v0dl, $v0dh
+    ; check: $(v0c=$V) = iconcat $v0cl, $v0ch
+    ; check: $(v0d=$V) = iconcat $v0dl, $v0dh
     ; check: $(v0cd=$V) = vconcat $v0c, $v0d
     ; check: $(v0abcd=$V) = vconcat $v0ab, $v0cd
     v1 = iadd v0, v0
     ; check: $(v1ab=$V), $(v1cd=$V) = vsplit
     ; check: $(v1a=$V), $(v1b=$V) = vsplit $v1ab
-    ; check: $(v1al=$V), $(v1ah=$V) = isplit_lohi $v1a
-    ; check: $(v1bl=$V), $(v1bh=$V) = isplit_lohi $v1b
+    ; check: $(v1al=$V), $(v1ah=$V) = isplit $v1a
+    ; check: $(v1bl=$V), $(v1bh=$V) = isplit $v1b
     ; check: $(v1c=$V), $(v1d=$V) = vsplit $v1cd
-    ; check: $(v1cl=$V), $(v1ch=$V) = isplit_lohi $v1c
-    ; check: $(v1dl=$V), $(v1dh=$V) = isplit_lohi $v1d
+    ; check: $(v1cl=$V), $(v1ch=$V) = isplit $v1c
+    ; check: $(v1dl=$V), $(v1dh=$V) = isplit $v1d
     ; check: return $v1al, $v1ah, $v1bl, $v1bh, $v1cl, $v1ch, $v1dl, $v1dh
     return v1
 }

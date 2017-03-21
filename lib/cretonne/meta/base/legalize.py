@@ -9,7 +9,7 @@ instructions that are legal.
 from __future__ import absolute_import
 from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry, iadd_imm
 from .instructions import isub, isub_bin, isub_bout, isub_borrow
-from .instructions import band, bor, bxor, isplit_lohi, iconcat_lohi
+from .instructions import band, bor, bxor, isplit, iconcat
 from .instructions import icmp, iconst
 from cdsl.ast import Var
 from cdsl.xform import Rtl, XFormGroup
@@ -54,32 +54,32 @@ ah = Var('ah')
 narrow.legalize(
         a << iadd(x, y),
         Rtl(
-            (xl, xh) << isplit_lohi(x),
-            (yl, yh) << isplit_lohi(y),
+            (xl, xh) << isplit(x),
+            (yl, yh) << isplit(y),
             (al, c) << iadd_cout(xl, yl),
             ah << iadd_cin(xh, yh, c),
-            a << iconcat_lohi(al, ah)
+            a << iconcat(al, ah)
         ))
 
 narrow.legalize(
         a << isub(x, y),
         Rtl(
-            (xl, xh) << isplit_lohi(x),
-            (yl, yh) << isplit_lohi(y),
+            (xl, xh) << isplit(x),
+            (yl, yh) << isplit(y),
             (al, b) << isub_bout(xl, yl),
             ah << isub_bin(xh, yh, b),
-            a << iconcat_lohi(al, ah)
+            a << iconcat(al, ah)
         ))
 
 for bitop in [band, bor, bxor]:
     narrow.legalize(
             a << bitop(x, y),
             Rtl(
-                (xl, xh) << isplit_lohi(x),
-                (yl, yh) << isplit_lohi(y),
+                (xl, xh) << isplit(x),
+                (yl, yh) << isplit(y),
                 al << bitop(xl, yl),
                 ah << bitop(xh, yh),
-                a << iconcat_lohi(al, ah)
+                a << iconcat(al, ah)
             ))
 
 # Expand integer operations with carry for RISC architectures that don't have
