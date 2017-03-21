@@ -5,6 +5,7 @@
 
 use std::borrow::Cow;
 use cretonne::{legalize_function, write_function};
+use cretonne::flowgraph::ControlFlowGraph;
 use cretonne::ir::Function;
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result, run_filecheck};
@@ -36,7 +37,8 @@ impl SubTest for TestLegalizer {
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
         let mut func = func.into_owned();
         let isa = context.isa.expect("legalizer needs an ISA");
-        legalize_function(&mut func, isa);
+        let mut cfg = ControlFlowGraph::with_function(&func);
+        legalize_function(&mut func, &mut cfg, isa);
 
         let mut text = String::new();
         write_function(&mut text, &func, Some(isa)).map_err(|e| e.to_string())?;

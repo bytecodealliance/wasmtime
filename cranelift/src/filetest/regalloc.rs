@@ -42,10 +42,9 @@ impl SubTest for TestRegalloc {
         let mut comp_ctx = cretonne::Context::new();
         comp_ctx.func = func.into_owned();
 
+        comp_ctx.flowgraph();
         // TODO: Should we have an option to skip legalization?
         comp_ctx.legalize(isa);
-
-        comp_ctx.flowgraph();
         comp_ctx.regalloc(isa);
 
         let mut text = String::new();

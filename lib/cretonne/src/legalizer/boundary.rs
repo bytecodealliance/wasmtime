@@ -18,6 +18,7 @@
 //! intermediate state doesn't type check.
 
 use abi::{legalize_abi_value, ValueConversion};
+use flowgraph::ControlFlowGraph;
 use ir::{Function, Cursor, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value, Signature, SigRef,
          ArgumentType};
 use ir::instructions::CallInfo;
@@ -257,6 +258,7 @@ fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
 ///    return the `Err(ArgumentType)` that is needed.
 ///
 fn convert_to_abi<PutArg>(dfg: &mut DataFlowGraph,
+                          cfg: &ControlFlowGraph,
                           pos: &mut Cursor,
                           value: Value,
                           put_arg: &mut PutArg)
@@ -272,28 +274,28 @@ fn convert_to_abi<PutArg>(dfg: &mut DataFlowGraph,
     let ty = dfg.value_type(value);
     match legalize_abi_value(ty, &arg_type) {
         ValueConversion::IntSplit => {
-            let (lo, hi) = isplit(dfg, pos, value);
-            convert_to_abi(dfg, pos, lo, put_arg);
-            convert_to_abi(dfg, pos, hi, put_arg);
+            let (lo, hi) = isplit(dfg, cfg, pos, value);
+            convert_to_abi(dfg, cfg, pos, lo, put_arg);
+            convert_to_abi(dfg, cfg, pos, hi, put_arg);
         }
         ValueConversion::VectorSplit => {
-            let (lo, hi) = vsplit(dfg, pos, value);
-            convert_to_abi(dfg, pos, lo, put_arg);
-            convert_to_abi(dfg, pos, hi, put_arg);
+            let (lo, hi) = vsplit(dfg, cfg, pos, value);
+            convert_to_abi(dfg, cfg, pos, lo, put_arg);
+            convert_to_abi(dfg, cfg, pos, hi, put_arg);
         }
         ValueConversion::IntBits => {
             assert!(!ty.is_int());
             let abi_ty = Type::int(ty.bits()).expect("Invalid type for conversion");
             let arg = dfg.ins(pos).bitcast(abi_ty, value);
-            convert_to_abi(dfg, pos, arg, put_arg);
+            convert_to_abi(dfg, cfg, pos, arg, put_arg);
         }
         ValueConversion::Sext(abi_ty) => {
             let arg = dfg.ins(pos).sextend(abi_ty, value);
-            convert_to_abi(dfg, pos, arg, put_arg);
+            convert_to_abi(dfg, cfg, pos, arg, put_arg);
         }
         ValueConversion::Uext(abi_ty) => {
             let arg = dfg.ins(pos).uextend(abi_ty, value);
-            convert_to_abi(dfg, pos, arg, put_arg);
+            convert_to_abi(dfg, cfg, pos, arg, put_arg);
         }
     }
 }
@@ -361,6 +363,7 @@ fn check_return_signature(dfg: &DataFlowGraph, inst: Inst, sig: &Signature) -> b
 ///   argument number in `0..abi_args`.
 ///
 fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
+                                    cfg: &ControlFlowGraph,
                                     pos: &mut Cursor,
                                     abi_args: usize,
                                     mut get_abi_type: ArgType)
@@ -419,7 +422,7 @@ fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
                 Err(abi_type)
             }
         };
-        convert_to_abi(dfg, pos, old_value, &mut put_arg);
+        convert_to_abi(dfg, cfg, pos, old_value, &mut put_arg);
     }
 
     // Put the modified value list back.
@@ -436,7 +439,7 @@ fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
 /// original return values. The call's result values will be adapted to match the new signature.
 ///
 /// Returns `true` if any instructions were inserted.
-pub fn handle_call_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor) -> bool {
+pub fn handle_call_abi(dfg: &mut DataFlowGraph, cfg: &ControlFlowGraph, pos: &mut Cursor) -> bool {
     let mut inst = pos.current_inst().expect("Cursor must point to a call instruction");
 
     // Start by checking if the argument types already match the signature.
@@ -448,6 +451,7 @@ pub fn handle_call_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor) -> bool {
     // OK, we need to fix the call arguments to match the ABI signature.
     let abi_args = dfg.signatures[sig_ref].argument_types.len();
     legalize_inst_arguments(dfg,
+                            cfg,
                             pos,
                             abi_args,
                             |dfg, abi_arg| dfg.signatures[sig_ref].argument_types[abi_arg]);
@@ -471,7 +475,11 @@ pub fn handle_call_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor) -> bool {
 /// Insert ABI conversion code before and after the call instruction at `pos`.
 ///
 /// Return `true` if any instructions were inserted.
-pub fn handle_return_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor, sig: &Signature) -> bool {
+pub fn handle_return_abi(dfg: &mut DataFlowGraph,
+                         cfg: &ControlFlowGraph,
+                         pos: &mut Cursor,
+                         sig: &Signature)
+                         -> bool {
     let inst = pos.current_inst().expect("Cursor must point to a return instruction");
 
     // Check if the returned types already match the signature.
@@ -480,7 +488,11 @@ pub fn handle_return_abi(dfg: &mut DataFlowGraph, pos: &mut Cursor, sig: &Signat
     }
 
     let abi_args = sig.return_types.len();
-    legalize_inst_arguments(dfg, pos, abi_args, |_, abi_arg| sig.return_types[abi_arg]);
+    legalize_inst_arguments(dfg,
+                            cfg,
+                            pos,
+                            abi_args,
+                            |_, abi_arg| sig.return_types[abi_arg]);
 
     debug_assert!(check_return_signature(dfg, inst, sig),
                   "Signature still wrong: {}, sig{}",
