@@ -44,7 +44,7 @@ jump = Instruction(
         EBB arguments. The number and types of arguments must match the
         destination EBB.
         """,
-        ins=(EBB, args), is_terminator=True)
+        ins=(EBB, args), is_branch=True, is_terminator=True)
 
 brz = Instruction(
         'brz', r"""
