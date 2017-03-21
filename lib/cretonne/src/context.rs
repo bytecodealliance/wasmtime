@@ -47,7 +47,7 @@ impl Context {
 
     /// Run the legalizer for `isa` on the function.
     pub fn legalize(&mut self, isa: &TargetIsa) {
-        legalize_function(&mut self.func, isa);
+        legalize_function(&mut self.func, &mut self.cfg, isa);
     }
 
     /// Recompute the control flow graph and dominator tree.

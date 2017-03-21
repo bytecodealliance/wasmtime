@@ -13,6 +13,7 @@
 //! The legalizer does not deal with register allocation constraints. These constraints are derived
 //! from the encoding recipes, and solved later by the register allocator.
 
+use flowgraph::ControlFlowGraph;
 use ir::{Function, Cursor, DataFlowGraph, InstructionData, Opcode, InstBuilder};
 use ir::condcodes::IntCC;
 use isa::{TargetIsa, Legalize};
@@ -25,7 +26,7 @@ mod split;
 /// - Transform any instructions that don't have a legal representation in `isa`.
 /// - Fill out `func.encodings`.
 ///
-pub fn legalize_function(func: &mut Function, isa: &TargetIsa) {
+pub fn legalize_function(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &TargetIsa) {
     boundary::legalize_signatures(func, isa);
 
     // TODO: This is very simplified and incomplete.
@@ -40,14 +41,14 @@ pub fn legalize_function(func: &mut Function, isa: &TargetIsa) {
             let opcode = func.dfg[inst].opcode();
 
             // Check for ABI boundaries that need to be converted to the legalized signature.
-            if opcode.is_call() && boundary::handle_call_abi(&mut func.dfg, &mut pos) {
+            if opcode.is_call() && boundary::handle_call_abi(&mut func.dfg, cfg, &mut pos) {
                 // Go back and legalize the inserted argument conversion instructions.
                 pos.set_position(prev_pos);
                 continue;
             }
 
             if opcode.is_return() &&
-               boundary::handle_return_abi(&mut func.dfg, &mut pos, &func.signature) {
+               boundary::handle_return_abi(&mut func.dfg, cfg, &mut pos, &func.signature) {
                 // Go back and legalize the inserted return value conversion instructions.
                 pos.set_position(prev_pos);
                 continue;
@@ -70,8 +71,8 @@ pub fn legalize_function(func: &mut Function, isa: &TargetIsa) {
                     // 4. TODO: Convert to library calls. For example, floating point operations on
                     //    an ISA with no IEEE 754 support.
                     let changed = match action {
-                        Legalize::Expand => expand(&mut pos, &mut func.dfg),
-                        Legalize::Narrow => narrow(&mut pos, &mut func.dfg),
+                        Legalize::Expand => expand(&mut func.dfg, cfg, &mut pos),
+                        Legalize::Narrow => narrow(&mut func.dfg, cfg, &mut pos),
                     };
                     // If the current instruction was replaced, we need to double back and revisit
                     // the expanded sequence. This is both to assign encodings and possible to

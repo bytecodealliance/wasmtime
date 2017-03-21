@@ -140,7 +140,7 @@ def emit_dst_inst(node, fmt):
         # special functions in the `legalizer::split` module. These functions
         # will eliminate concat-split patterns.
         fmt.line(
-                'let {} = split::{}(dfg, pos, {});'
+                'let {} = split::{}(dfg, cfg, pos, {});'
                 .format(
                     wrap_tup(node.defs),
                     node.expr.inst.snake_name(),
@@ -220,9 +220,10 @@ def gen_xform_group(xgrp, fmt):
     fmt.doc_comment("Legalize the instruction pointed to by `pos`.")
     fmt.line('#[allow(unused_variables,unused_assignments)]')
     with fmt.indented(
-            'fn ' + xgrp.name +
-            '(pos: &mut Cursor, dfg: &mut DataFlowGraph) -> bool {',
-            '}'):
+            'fn {}(dfg: &mut DataFlowGraph, '
+            'cfg: &mut ControlFlowGraph, pos: &mut Cursor) -> '
+            'bool {{'.format(xgrp.name), '}'):
+
         # Gen the instruction to be legalized. The cursor we're passed must be
         # pointing at an instruction.
         fmt.line('let inst = pos.current_inst().expect("need instruction");')

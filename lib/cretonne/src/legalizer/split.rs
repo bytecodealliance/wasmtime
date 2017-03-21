@@ -64,17 +64,26 @@
 //! It is possible to have circular dependencies of EBB arguments that are never used by any real
 //! instructions. These loops will remain in the program.
 
+use flowgraph::ControlFlowGraph;
 use ir::{DataFlowGraph, Cursor, Value, Opcode, ValueDef, InstructionData, InstBuilder};
 
 /// Split `value` into two values using the `isplit` semantics. Do this by reusing existing values
 /// if possible.
-pub fn isplit(dfg: &mut DataFlowGraph, pos: &mut Cursor, value: Value) -> (Value, Value) {
+pub fn isplit(dfg: &mut DataFlowGraph,
+              _cfg: &ControlFlowGraph,
+              pos: &mut Cursor,
+              value: Value)
+              -> (Value, Value) {
     split_value(dfg, pos, value, Opcode::Iconcat)
 }
 
 /// Split `value` into halves using the `vsplit` semantics. Do this by reusing existing values if
 /// possible.
-pub fn vsplit(dfg: &mut DataFlowGraph, pos: &mut Cursor, value: Value) -> (Value, Value) {
+pub fn vsplit(dfg: &mut DataFlowGraph,
+              _cfg: &ControlFlowGraph,
+              pos: &mut Cursor,
+              value: Value)
+              -> (Value, Value) {
     split_value(dfg, pos, value, Opcode::Vconcat)
 }
 
