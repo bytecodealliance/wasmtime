@@ -9,8 +9,8 @@
 //! contexts concurrently. Typically, you would have one context per compilation thread and only a
 //! single ISA instance.
 
-use cfg::ControlFlowGraph;
 use dominator_tree::DominatorTree;
+use flowgraph::ControlFlowGraph;
 use ir::Function;
 use isa::TargetIsa;
 use legalize_function;

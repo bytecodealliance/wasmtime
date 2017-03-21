@@ -5,12 +5,12 @@
 //! avoids allocating data structures independently for each function begin compiled.
 
 use dominator_tree::DominatorTree;
+use flowgraph::ControlFlowGraph;
 use ir::Function;
+use isa::TargetIsa;
 use regalloc::coloring::Coloring;
 use regalloc::live_value_tracker::LiveValueTracker;
 use regalloc::liveness::Liveness;
-use isa::TargetIsa;
-use cfg::ControlFlowGraph;
 
 /// Persistent memory allocations for register allocation.
 pub struct Context {

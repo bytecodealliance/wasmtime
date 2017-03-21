@@ -1,8 +1,8 @@
 //! A Dominator Tree represented as mappings of Ebbs to their immediate dominator.
 
-use cfg::{ControlFlowGraph, BasicBlock};
-use ir::{Ebb, Inst, Function, Layout, ProgramOrder};
 use entity_map::EntityMap;
+use flowgraph::{ControlFlowGraph, BasicBlock};
+use ir::{Ebb, Inst, Function, Layout, ProgramOrder};
 use packed_option::PackedOption;
 
 use std::cmp::Ordering;
@@ -222,9 +222,9 @@ impl DominatorTree {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use flowgraph::ControlFlowGraph;
     use ir::{Function, InstBuilder, Cursor, types};
-    use cfg::ControlFlowGraph;
+    use super::*;
 
     #[test]
     fn empty() {

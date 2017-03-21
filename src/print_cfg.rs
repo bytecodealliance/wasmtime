@@ -7,12 +7,12 @@ use std::borrow::Cow;
 use std::fmt::{Result, Write, Display, Formatter};
 
 use CommandResult;
-use utils::read_to_string;
-use filetest::subtest::{self, SubTest, Context, Result as STResult};
+use cretonne::flowgraph::ControlFlowGraph;
 use cretonne::ir::Function;
-use cretonne::cfg::ControlFlowGraph;
 use cretonne::ir::instructions::BranchInfo;
 use cton_reader::{parse_functions, TestCommand};
+use filetest::subtest::{self, SubTest, Context, Result as STResult};
+use utils::read_to_string;
 
 pub fn run(files: Vec<String>) -> CommandResult {
     for (i, f) in files.into_iter().enumerate() {
