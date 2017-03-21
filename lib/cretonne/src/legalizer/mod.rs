@@ -18,6 +18,7 @@ use ir::condcodes::IntCC;
 use isa::{TargetIsa, Legalize};
 
 mod boundary;
+mod split;
 
 /// Legalize `func` for `isa`.
 ///

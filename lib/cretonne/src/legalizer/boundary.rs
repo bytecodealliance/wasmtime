@@ -22,6 +22,7 @@ use ir::{Function, Cursor, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value, S
          ArgumentType};
 use ir::instructions::CallInfo;
 use isa::TargetIsa;
+use legalizer::split::{isplit, vsplit};
 
 /// Legalize all the function signatures in `func`.
 ///
@@ -271,12 +272,12 @@ fn convert_to_abi<PutArg>(dfg: &mut DataFlowGraph,
     let ty = dfg.value_type(value);
     match legalize_abi_value(ty, &arg_type) {
         ValueConversion::IntSplit => {
-            let (lo, hi) = dfg.ins(pos).isplit(value);
+            let (lo, hi) = isplit(dfg, pos, value);
             convert_to_abi(dfg, pos, lo, put_arg);
             convert_to_abi(dfg, pos, hi, put_arg);
         }
         ValueConversion::VectorSplit => {
-            let (lo, hi) = dfg.ins(pos).vsplit(value);
+            let (lo, hi) = vsplit(dfg, pos, value);
             convert_to_abi(dfg, pos, lo, put_arg);
             convert_to_abi(dfg, pos, hi, put_arg);
         }

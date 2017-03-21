@@ -9,7 +9,7 @@ the input instruction.
 """
 from __future__ import absolute_import
 from srcgen import Formatter
-from base import legalize
+from base import legalize, instructions
 from cdsl.ast import Var
 
 try:
@@ -117,36 +117,61 @@ def wrap_tup(seq):
         return '({})'.format(', '.join(tup))
 
 
+def is_value_split(node):
+    # type: (Def) -> bool
+    """
+    Determine if `node` represents one of the value splitting instructions:
+    `isplit` or `vsplit. These instructions are lowered specially by the
+    `legalize::split` module.
+    """
+    if len(node.defs) != 2:
+        return False
+    return node.expr.inst in (instructions.isplit, instructions.vsplit)
+
+
 def emit_dst_inst(node, fmt):
     # type: (Def, Formatter) -> None
     exact_replace = False
     replaced_inst = None  # type: str
     fixup_first_result = False
-    if len(node.defs) == 0:
-        # This node doesn't define any values, so just insert the new
-        # instruction.
-        builder = 'dfg.ins(pos)'
-    else:
-        src_def0 = node.defs[0].src_def
-        if src_def0 and node.defs[0] == src_def0.defs[0]:
-            # The primary result is replacing the primary result of the src
-            # pattern.
-            # Replace the whole instruction.
-            builder = 'let {} = dfg.replace(inst)'.format(wrap_tup(node.defs))
-            replaced_inst = 'inst'
-            # Secondary values weren't replaced if this is an exact replacement
-            # for all the src results.
-            exact_replace = (node.defs == src_def0.defs)
-        else:
-            # Insert a new instruction since its primary def doesn't match the
-            # src.
-            builder = 'let {} = dfg.ins(pos)'.format(wrap_tup(node.defs))
-            fixup_first_result = node.defs[0].is_output()
 
-    fmt.line('{}.{};'.format(builder, node.expr.rust_builder(node.defs)))
+    if is_value_split(node):
+        # Split instructions are not emitted with the builder, but by calling
+        # special functions in the `legalizer::split` module. These functions
+        # will eliminate concat-split patterns.
+        fmt.line(
+                'let {} = split::{}(dfg, pos, {});'
+                .format(
+                    wrap_tup(node.defs),
+                    node.expr.inst.snake_name(),
+                    node.expr.args[0]))
+    else:
+        if len(node.defs) == 0:
+            # This node doesn't define any values, so just insert the new
+            # instruction.
+            builder = 'dfg.ins(pos)'
+        else:
+            src_def0 = node.defs[0].src_def
+            if src_def0 and node.defs[0] == src_def0.defs[0]:
+                # The primary result is replacing the primary result of the
+                # source pattern.
+                # Replace the whole instruction.
+                builder = 'let {} = dfg.replace(inst)'.format(
+                        wrap_tup(node.defs))
+                replaced_inst = 'inst'
+                # Secondary values weren't replaced if this is an exact
+                # replacement for all the source results.
+                exact_replace = (node.defs == src_def0.defs)
+            else:
+                # Insert a new instruction since its primary def doesn't match
+                # the source.
+                builder = 'let {} = dfg.ins(pos)'.format(wrap_tup(node.defs))
+                fixup_first_result = node.defs[0].is_output()
+
+        fmt.line('{}.{};'.format(builder, node.expr.rust_builder(node.defs)))
 
     # If we just replaced an instruction, we need to bump the cursor so
-    # following instructions are inserted *after* the replaced insruction.
+    # following instructions are inserted *after* the replaced instruction.
     if replaced_inst:
         with fmt.indented(
                 'if pos.current_inst() == Some({}) {{'
