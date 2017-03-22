@@ -178,24 +178,24 @@ impl DataFlowGraph {
     /// copy/spill/fill instructions.
     pub fn resolve_copies(&self, value: Value) -> Value {
         use ir::entities::ExpandedValue::Direct;
-        let mut v = self.resolve_aliases(value);
+        let mut v = value;
 
         for _ in 0..self.insts.len() {
-            v = self.resolve_aliases(match v.expand() {
-                                         Direct(inst) => {
-                                             match self[inst] {
-                                                 InstructionData::Unary { opcode, arg, .. } => {
-                                                     match opcode {
-                                                         Opcode::Copy | Opcode::Spill |
-                                                         Opcode::Fill => arg,
-                                                         _ => return v,
-                                                     }
-                                                 }
-                                                 _ => return v,
-                                             }
-                                         }
-                                         _ => return v,
-                                     });
+            v = self.resolve_aliases(v);
+            v = match v.expand() {
+                Direct(inst) => {
+                    match self[inst] {
+                        InstructionData::Unary { opcode, arg, .. } => {
+                            match opcode {
+                                Opcode::Copy | Opcode::Spill | Opcode::Fill => arg,
+                                _ => return v,
+                            }
+                        }
+                        _ => return v,
+                    }
+                }
+                _ => return v,
+            };
         }
         panic!("Copy loop detected for {}", value);
     }
