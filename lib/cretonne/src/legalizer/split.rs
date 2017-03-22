@@ -65,7 +65,8 @@
 //! instructions. These loops will remain in the program.
 
 use flowgraph::ControlFlowGraph;
-use ir::{DataFlowGraph, Ebb, Cursor, Value, Type, Opcode, ValueDef, InstructionData, InstBuilder};
+use ir::{DataFlowGraph, Ebb, Inst, Cursor, Value, Type, Opcode, ValueDef, InstructionData,
+         InstBuilder};
 use std::iter;
 
 /// Split `value` into two values using the `isplit` semantics. Do this by reusing existing values
@@ -262,4 +263,63 @@ fn add_repair(concat: Opcode,
                      num: num,
                      hi_num: hi_num,
                  });
+}
+
+/// Strip concat-split chains. Return a simpler way of computing the same value.
+///
+/// Given this input:
+///
+/// ```cton
+///     v10 = iconcat v1, v2
+///     v11, v12 = isplit v10
+/// ```
+///
+/// This function resolves `v11` to `v1` and `v12` to `v2`.
+fn resolve_splits(dfg: &DataFlowGraph, value: Value) -> Value {
+    let value = dfg.resolve_copies(value);
+
+    // Deconstruct a split instruction.
+    let split_res;
+    let concat_opc;
+    let split_arg;
+    if let ValueDef::Res(inst, num) = dfg.value_def(value) {
+        split_res = num;
+        concat_opc = match dfg[inst].opcode() {
+            Opcode::Isplit => Opcode::Iconcat,
+            Opcode::Vsplit => Opcode::Vconcat,
+            _ => return value,
+        };
+        split_arg = dfg[inst].arguments(&dfg.value_lists)[0];
+    } else {
+        return value;
+    }
+
+    // See if split_arg is defined by a concatenation instruction.
+    if let ValueDef::Res(inst, _) = dfg.value_def(split_arg) {
+        if dfg[inst].opcode() == concat_opc {
+            return dfg[inst].arguments(&dfg.value_lists)[split_res];
+        }
+    }
+
+    value
+}
+
+/// Simplify the arguments to a branch *after* the instructions leading up to the branch have been
+/// legalized.
+///
+/// The branch argument repairs performed by `split_any()` above may be performed on branches that
+/// have not yet been legalized. The repaired arguments can be defined by actual split
+/// instructions in that case.
+///
+/// After legalizing the instructions computing the value that was split, it is likely that we can
+/// avoid depending on the split instruction. Its input probably comes from a concatenation.
+pub fn simplify_branch_arguments(dfg: &mut DataFlowGraph, branch: Inst) {
+    let mut new_args = Vec::new();
+
+    for &arg in dfg[branch].arguments(&dfg.value_lists) {
+        let new_arg = resolve_splits(dfg, arg);
+        new_args.push(new_arg);
+    }
+
+    dfg.insts[branch].arguments_mut(&mut dfg.value_lists).copy_from_slice(&new_args);
 }

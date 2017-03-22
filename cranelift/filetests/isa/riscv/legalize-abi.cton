@@ -36,7 +36,8 @@ ebb0:
     ; check: $(v1new=$V) = iconcat $v1l, $v1h
     ; check: $v1 = copy $v1new
     jump ebb1(v1)
-    ; check: jump $ebb1($v1)
+    ; The v1 copy gets resolved by split::simplify_branch_arguments().
+    ; check: jump $ebb1($v1new)
 
 ebb1(v10: i64):
     jump ebb1(v10)
@@ -50,9 +51,9 @@ ebb0:
     ; check: $ebb0:
     ; nextln: $v1, $(v2l=$V), $(v2h=$V) = call $fn1()
     ; check: $(v2new=$V) = iconcat $v2l, $v2h
-    ; check: $v2 -> $v2new
     jump ebb1(v1, v2)
-    ; check: jump $ebb1($v1, $v2)
+    ; The v2 -> v2new alias is resolved by split::simplify_branch_arguments().
+    ; check: jump $ebb1($v1, $v2new)
 
 ebb1(v9: i32, v10: i64):
     jump ebb1(v9, v10)
@@ -78,7 +79,8 @@ ebb0:
     ; check: $(v1new=$V) = ireduce.i8 $rv
     ; check: $v1 = copy $v1new
     jump ebb1(v1)
-    ; check: jump $ebb1($v1)
+    ; The v1 copy gets resolved by split::simplify_branch_arguments().
+    ; check: jump $ebb1($v1new)
 
 ebb1(v10: i8):
     jump ebb1(v10)

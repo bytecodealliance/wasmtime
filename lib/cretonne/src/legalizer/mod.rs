@@ -54,6 +54,10 @@ pub fn legalize_function(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &
                 continue;
             }
 
+            if opcode.is_branch() {
+                split::simplify_branch_arguments(&mut func.dfg, inst);
+            }
+
             match isa.encode(&func.dfg, &func.dfg[inst]) {
                 Ok(encoding) => *func.encodings.ensure(inst) = encoding,
                 Err(action) => {
