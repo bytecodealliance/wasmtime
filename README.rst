@@ -65,7 +65,7 @@ Building the documentation
 To build the Cretonne documentation, you need the `Sphinx documentation
 generator <http://www.sphinx-doc.org/>`_::
 
-    $ pip install sphinx>=1.4 sphinx-autobuild sphinx_rtd_theme
+    $ pip install sphinx sphinx-autobuild sphinx_rtd_theme
     $ cd cretonne/docs
     $ make html
     $ open _build/html/index.html
