@@ -289,7 +289,7 @@ fn resolve_splits(dfg: &DataFlowGraph, value: Value) -> Value {
             Opcode::Vsplit => Opcode::Vconcat,
             _ => return value,
         };
-        split_arg = dfg[inst].arguments(&dfg.value_lists)[0];
+        split_arg = dfg.inst_args(inst)[0];
     } else {
         return value;
     }
@@ -297,7 +297,7 @@ fn resolve_splits(dfg: &DataFlowGraph, value: Value) -> Value {
     // See if split_arg is defined by a concatenation instruction.
     if let ValueDef::Res(inst, _) = dfg.value_def(split_arg) {
         if dfg[inst].opcode() == concat_opc {
-            return dfg[inst].arguments(&dfg.value_lists)[split_res];
+            return dfg.inst_args(inst)[split_res];
         }
     }
 
@@ -316,10 +316,10 @@ fn resolve_splits(dfg: &DataFlowGraph, value: Value) -> Value {
 pub fn simplify_branch_arguments(dfg: &mut DataFlowGraph, branch: Inst) {
     let mut new_args = Vec::new();
 
-    for &arg in dfg[branch].arguments(&dfg.value_lists) {
+    for &arg in dfg.inst_args(branch) {
         let new_arg = resolve_splits(dfg, arg);
         new_args.push(new_arg);
     }
 
-    dfg.insts[branch].arguments_mut(&mut dfg.value_lists).copy_from_slice(&new_args);
+    dfg.inst_args_mut(branch).copy_from_slice(&new_args);
 }

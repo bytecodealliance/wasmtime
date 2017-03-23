@@ -344,6 +344,16 @@ impl DataFlowGraph {
         DisplayInst(self, inst)
     }
 
+    /// Get the value arguments on `inst` as a slice.
+    pub fn inst_args(&self, inst: Inst) -> &[Value] {
+        self.insts[inst].arguments(&self.value_lists)
+    }
+
+    /// Get the value arguments on `inst` as a mutable slice.
+    pub fn inst_args_mut(&mut self, inst: Inst) -> &mut [Value] {
+        self.insts[inst].arguments_mut(&mut self.value_lists)
+    }
+
     /// Create result values for an instruction that produces multiple results.
     ///
     /// Instructions that produce 0 or 1 result values only need to be created with `make_inst`. If
