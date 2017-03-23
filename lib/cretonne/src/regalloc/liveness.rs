@@ -320,7 +320,7 @@ impl Liveness {
                     .unwrap_or(&[])
                     .iter();
 
-                for &arg in func.dfg[inst].arguments(&func.dfg.value_lists) {
+                for &arg in func.dfg.inst_args(inst) {
                     // Get the live range, create it as a dead range if necessary.
                     let lr = get_or_create(&mut self.ranges, arg, func, recipe_constraints);
 

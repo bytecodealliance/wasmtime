@@ -196,7 +196,7 @@ impl<'a> Verifier<'a> {
     fn verify_entity_references(&self, inst: Inst) -> Result<()> {
         use ir::instructions::InstructionData::*;
 
-        for &arg in self.func.dfg[inst].arguments(&self.func.dfg.value_lists) {
+        for &arg in self.func.dfg.inst_args(inst) {
             self.verify_value(inst, arg)?;
         }
 
