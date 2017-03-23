@@ -29,10 +29,16 @@ mod split;
 pub fn legalize_function(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &TargetIsa) {
     boundary::legalize_signatures(func, isa);
 
-    // TODO: This is very simplified and incomplete.
     func.encodings.resize(func.dfg.num_insts());
+
+    // Process EBBs in a reverse post-order. This minimizes the number of split instructions we
+    // need.
+    let mut postorder = cfg.postorder_ebbs();
     let mut pos = Cursor::new(&mut func.layout);
-    while let Some(_ebb) = pos.next_ebb() {
+
+    while let Some(ebb) = postorder.pop() {
+        pos.goto_top(ebb);
+
         // Keep track of the cursor position before the instruction being processed, so we can
         // double back when replacing instructions.
         let mut prev_pos = pos.position();
