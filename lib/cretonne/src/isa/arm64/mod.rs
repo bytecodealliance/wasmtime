@@ -1,14 +1,16 @@
 //! ARM 64-bit Instruction Set Architecture.
 
 pub mod settings;
+mod binemit;
 mod enc_tables;
 mod registers;
 
+use binemit::CodeSink;
 use super::super::settings as shared_settings;
 use isa::enc_tables::{lookup_enclist, general_encoding};
 use isa::Builder as IsaBuilder;
 use isa::{TargetIsa, RegInfo, Encoding, Legalize, RecipeConstraints};
-use ir::{InstructionData, DataFlowGraph};
+use ir;
 
 #[allow(dead_code)]
 struct Isa {
@@ -46,7 +48,10 @@ impl TargetIsa for Isa {
         registers::INFO.clone()
     }
 
-    fn encode(&self, dfg: &DataFlowGraph, inst: &InstructionData) -> Result<Encoding, Legalize> {
+    fn encode(&self,
+              dfg: &ir::DataFlowGraph,
+              inst: &ir::InstructionData)
+              -> Result<Encoding, Legalize> {
         lookup_enclist(inst.ctrl_typevar(dfg),
                        inst.opcode(),
                        &enc_tables::LEVEL1_A64[..],
@@ -66,5 +71,9 @@ impl TargetIsa for Isa {
 
     fn recipe_constraints(&self) -> &'static [RecipeConstraints] {
         &enc_tables::RECIPE_CONSTRAINTS
+    }
+
+    fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut CodeSink) {
+        binemit::emit_inst(func, inst, sink)
     }
 }

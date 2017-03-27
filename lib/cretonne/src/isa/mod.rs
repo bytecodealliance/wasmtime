@@ -44,8 +44,9 @@ pub use isa::encoding::Encoding;
 pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex};
 pub use isa::constraints::{RecipeConstraints, OperandConstraint, ConstraintKind};
 
+use binemit::CodeSink;
 use settings;
-use ir::{InstructionData, DataFlowGraph, Signature};
+use ir::{Function, Inst, InstructionData, DataFlowGraph, Signature};
 
 pub mod riscv;
 pub mod intel;
@@ -181,4 +182,10 @@ pub trait TargetIsa {
     fn legalize_signature(&self, _sig: &mut Signature) {
         unimplemented!()
     }
+
+    /// Emit binary machine code for a single instruction into the `sink` trait object.
+    ///
+    /// Note that this will call `put*` methods on the trait object via its vtable which is not the
+    /// fastest way of emitting code.
+    fn emit_inst(&self, func: &Function, inst: Inst, sink: &mut CodeSink);
 }

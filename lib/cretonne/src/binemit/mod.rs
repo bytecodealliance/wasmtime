@@ -3,7 +3,7 @@
 //! The `binemit` module contains code for translating Cretonne's intermediate representation into
 //! binary machine code.
 
-use ir::{FuncRef, JumpTable};
+use ir::{FuncRef, JumpTable, Function, Inst};
 
 /// Relocation kinds depend on the current ISA.
 pub struct Reloc(u16);
@@ -30,4 +30,12 @@ pub trait CodeSink {
 
     /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, Reloc, JumpTable);
+}
+
+/// Report a bad encoding error.
+#[inline(never)]
+pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
+    panic!("Bad encoding {} for {}",
+           func.encodings[inst],
+           func.dfg.display_inst(inst));
 }
