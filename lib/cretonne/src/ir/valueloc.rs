@@ -25,6 +25,14 @@ impl Default for ValueLoc {
 }
 
 impl ValueLoc {
+    /// Get the register unit of this location, or panic.
+    pub fn unwrap_reg(self) -> RegUnit {
+        match self {
+            ValueLoc::Reg(ru) => ru,
+            _ => panic!("Expected register: {:?}", self),
+        }
+    }
+
     /// Return an object that can display this value location, using the register info from the
     /// target ISA.
     pub fn display<'a, R: Into<Option<&'a RegInfo>>>(self, regs: R) -> DisplayValueLoc<'a> {
