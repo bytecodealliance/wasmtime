@@ -13,6 +13,7 @@ use filetest::runner::TestRunner;
 
 pub mod subtest;
 
+mod binemit;
 mod concurrent;
 mod domtree;
 mod legalizer;
@@ -60,6 +61,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::Result<Box<subtest::SubTest>> {
         "verifier" => verifier::subtest(parsed),
         "legalizer" => legalizer::subtest(parsed),
         "regalloc" => regalloc::subtest(parsed),
+        "binemit" => binemit::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }
