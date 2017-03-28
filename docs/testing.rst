@@ -314,3 +314,25 @@ Second, the register allocator is run on the function, inserting spill code and
 assigning registers and stack slots to all values.
 
 The resulting function is then run through filecheck.
+
+`test binemit`
+--------------
+
+Test the emission of binary machine code.
+
+The functions must contains instructions that are annotated with both encodings
+and value locations (registers or stack slots). For instructions that are
+annotated with a `bin:` directive, the emitted hexadecimal machine code for
+that instruction is compared to the directive::
+
+    test binemit
+    isa riscv
+
+    function int32() {
+    ebb0:
+        [-,%x5]             v1 = iconst.i32 1
+        [-,%x6]             v2 = iconst.i32 2
+        [R#0c,%x7]          v10 = iadd v1, v2       ; bin: 006283b3
+        [R#200c,%x8]        v11 = isub v1, v2       ; bin: 40628433
+        return
+    }
