@@ -2,12 +2,36 @@
 test binemit
 isa riscv
 
-function int32() {
+function RV32I() {
 ebb0:
-    [-,%x5]             v1 = iconst.i32 1
-    [-,%x6]             v2 = iconst.i32 2
-    [-,%x7]             v10 = iadd v1, v2       ; bin: 006283b3
-    [R#200c,%x8]        v11 = isub v1, v2       ; bin: 40628433
-    [R#10c]             v12 = imul v1, v2
+    [-,%x10]            v1 = iconst.i32 1
+    [-,%x21]            v2 = iconst.i32 2
+
+    ; Integer Register-Register Operations.
+    ; add
+    [-,%x7]             v10 = iadd v1, v2       ; bin: 015503b3
+    [-,%x16]            v11 = iadd v2, v1       ; bin: 00aa8833
+    ; sub
+    [-,%x7]             v12 = isub v1, v2       ; bin: 415503b3
+    [-,%x16]            v13 = isub v2, v1       ; bin: 40aa8833
+    ; TBD: slt/sltu
+    ; and
+    [-,%x7]             v20 = band v1, v2       ; bin: 015573b3
+    [-,%x16]            v21 = band v2, v1       ; bin: 00aaf833
+    ; or
+    [-,%x7]             v22 = bor v1, v2        ; bin: 015563b3
+    [-,%x16]            v23 = bor v2, v1        ; bin: 00aae833
+    ; xor
+    [-,%x7]             v24 = bxor v1, v2       ; bin: 015543b3
+    [-,%x16]            v25 = bxor v2, v1       ; bin: 00aac833
+    ; sll
+    [-,%x7]             v30 = ishl v1, v2       ; bin: 015513b3
+    [-,%x16]            v31 = ishl v2, v1       ; bin: 00aa9833
+    ; srl
+    [-,%x7]             v32 = ushr v1, v2       ; bin: 015553b3
+    [-,%x16]            v33 = ushr v2, v1       ; bin: 00aad833
+    ; sra
+    [-,%x7]             v34 = sshr v1, v2       ; bin: 415553b3
+    [-,%x16]            v35 = sshr v2, v1       ; bin: 40aad833
     return
 }
