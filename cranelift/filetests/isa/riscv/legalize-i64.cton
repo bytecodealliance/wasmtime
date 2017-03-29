@@ -57,8 +57,8 @@ ebb0(v1: i64, v2: i64):
 ; check: $(c=$V) = icmp ult, $v3l, $v1l
 ; check: [R#0c
 ; sameln: $(v3h1=$V) = iadd $v1h, $v2h
-; TODO: This doesn't typecheck. We need to convert the b1 result to i32.
+; check: $(c_int=$V) = bint.i32 $c
 ; check: [R#0c
-; sameln: $(v3h=$V) = iadd $v3h1, $c
+; sameln: $(v3h=$V) = iadd $v3h1, $c_int
 ; check: $v3 = iconcat $v3l, $v3h
 ; check: return $v3l, $v3h

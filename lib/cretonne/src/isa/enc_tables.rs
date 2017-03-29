@@ -84,7 +84,11 @@ pub fn lookup_enclist<OffT1, OffT2>(ctrl_typevar: Type,
 {
     // TODO: The choice of legalization actions here is naive. This needs to be configurable.
     probe(level1_table, ctrl_typevar, ctrl_typevar.index())
-        .ok_or(Legalize::Narrow)
+        .ok_or_else(|| if ctrl_typevar.lane_type().bits() > 32 {
+                        Legalize::Narrow
+                    } else {
+                        Legalize::Expand
+                    })
         .and_then(|l1idx| {
             let l1ent = &level1_table[l1idx];
             let l2off = l1ent.offset.into() as usize;
