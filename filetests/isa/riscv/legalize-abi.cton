@@ -96,7 +96,7 @@ ebb0(v0: i64x4):
     ; check: $(v0d=$V) = iconcat $v0dl, $v0dh
     ; check: $(v0cd=$V) = vconcat $v0c, $v0d
     ; check: $(v0abcd=$V) = vconcat $v0ab, $v0cd
-    v1 = iadd v0, v0
+    v1 = bxor v0, v0
     ; check: $(v1ab=$V), $(v1cd=$V) = vsplit
     ; check: $(v1a=$V), $(v1b=$V) = vsplit $v1ab
     ; check: $(v1al=$V), $(v1ah=$V) = isplit $v1a
