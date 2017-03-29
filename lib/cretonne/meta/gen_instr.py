@@ -210,10 +210,6 @@ def gen_instruction_data_impl(fmt):
         fmt.doc_comment(
                 """
                 Get the value arguments to this instruction.
-
-                This is returned as two `Value` slices. The first one
-                represents the fixed arguments, the second any variable
-                arguments.
                 """)
         gen_arguments_method(fmt, False)
         fmt.doc_comment(

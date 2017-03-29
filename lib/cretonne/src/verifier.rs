@@ -26,7 +26,6 @@
 //!
 //!    - All predecessors in the CFG must be branches to the EBB.
 //!    - All branches to an EBB must be present in the CFG.
-//! TODO:
 //!    - A recomputed dominator tree is identical to the existing one.
 //!
 //!   Type checking
@@ -42,6 +41,7 @@
 //!    - All return instructions must have return value operands matching the current
 //!      function signature.
 //!
+//! TODO:
 //!   Ad hoc checking
 //!
 //!    - Stack slot loads and stores must be in-bounds.
@@ -56,8 +56,9 @@
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir::entities::AnyEntity;
-use ir::instructions::{InstructionFormat, BranchInfo};
-use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, Value};
+use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallInfo};
+use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, Value, Type};
+use Context;
 use std::fmt::{self, Display, Formatter};
 use std::result;
 
@@ -99,6 +100,13 @@ macro_rules! err {
 /// Verify `func`.
 pub fn verify_function(func: &Function) -> Result<()> {
     Verifier::new(func).run()
+}
+
+/// Verify `ctx`.
+pub fn verify_context(ctx: &Context) -> Result<()> {
+    let verifier = Verifier::new(&ctx.func);
+    verifier.domtree_integrity(&ctx.domtree)?;
+    verifier.run()
 }
 
 struct Verifier<'a> {
@@ -377,11 +385,242 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    fn domtree_integrity(&self, domtree: &DominatorTree) -> Result<()> {
+        // We consider two `DominatorTree`s to be equal if they return the same immediate
+        // dominator for each EBB. Therefore the current domtree is valid if it matches the freshly
+        // computed one.
+        for ebb in self.func.layout.ebbs() {
+            let expected = domtree.idom(ebb);
+            let got = self.domtree.idom(ebb);
+            if got != expected {
+                return err!(ebb,
+                            "invalid domtree, expected idom({}) = {:?}, got {:?}",
+                            ebb,
+                            expected,
+                            got);
+            }
+        }
+        Ok(())
+    }
+
+    fn typecheck_entry_block_arguments(&self) -> Result<()> {
+        if let Some(ebb) = self.func.layout.entry_block() {
+            let expected_types = &self.func.signature.argument_types;
+            let ebb_arg_count = self.func.dfg.num_ebb_args(ebb);
+
+            if ebb_arg_count != expected_types.len() {
+                return err!(ebb, "entry block arguments must match function signature");
+            }
+
+            for (i, arg) in self.func
+                    .dfg
+                    .ebb_args(ebb)
+                    .enumerate() {
+                let arg_type = self.func.dfg.value_type(arg);
+                if arg_type != expected_types[i].value_type {
+                    return err!(ebb,
+                                "entry block argument {} expected to have type {}, got {}",
+                                i,
+                                expected_types[i],
+                                arg_type);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn typecheck(&self, inst: Inst) -> Result<()> {
+        let inst_data = &self.func.dfg[inst];
+        let constraints = inst_data.opcode().constraints();
+
+        let ctrl_type = if let Some(value_typeset) = constraints.ctrl_typeset() {
+            // For polymorphic opcodes, determine the controlling type variable first.
+            let ctrl_type = inst_data.ctrl_typevar(&self.func.dfg);
+
+            if !value_typeset.contains(ctrl_type) {
+                return err!(inst, "has an invalid controlling type {}", ctrl_type);
+            }
+
+            ctrl_type
+        } else {
+            // Non-polymorphic instructions don't check the controlling type variable, so `Option`
+            // is unnecessary and we can just make it `VOID`.
+            types::VOID
+        };
+
+        self.typecheck_results(inst, ctrl_type)?;
+        self.typecheck_fixed_args(inst, ctrl_type)?;
+        self.typecheck_variable_args(inst)?;
+        self.typecheck_return(inst)?;
+
+        Ok(())
+    }
+
+    fn typecheck_results(&self, inst: Inst, ctrl_type: Type) -> Result<()> {
+        let mut i = 0;
+        for result in self.func.dfg.inst_results(inst) {
+            let result_type = self.func.dfg.value_type(result);
+            let expected_type = self.func.dfg.compute_result_type(inst, i, ctrl_type);
+            if let Some(expected_type) = expected_type {
+                if result_type != expected_type {
+                    return err!(inst,
+                                "expected result {} ({}) to have type {}, found {}",
+                                i,
+                                result,
+                                expected_type,
+                                result_type);
+                }
+            } else {
+                return err!(inst, "has more result values than expected");
+            }
+            i += 1;
+        }
+
+        // There aren't any more result types left.
+        if self.func.dfg.compute_result_type(inst, i, ctrl_type) != None {
+            return err!(inst, "has fewer result values than expected");
+        }
+        Ok(())
+    }
+
+    fn typecheck_fixed_args(&self, inst: Inst, ctrl_type: Type) -> Result<()> {
+        let constraints = self.func.dfg[inst].opcode().constraints();
+
+        for (i, &arg) in self.func
+                .dfg
+                .inst_fixed_args(inst)
+                .iter()
+                .enumerate() {
+            let arg_type = self.func.dfg.value_type(arg);
+            match constraints.value_argument_constraint(i, ctrl_type) {
+                ResolvedConstraint::Bound(expected_type) => {
+                    if arg_type != expected_type {
+                        return err!(inst,
+                                    "arg {} ({}) has type {}, expected {}",
+                                    i,
+                                    arg,
+                                    arg_type,
+                                    expected_type);
+                    }
+                }
+                ResolvedConstraint::Free(type_set) => {
+                    if !type_set.contains(arg_type) {
+                        return err!(inst,
+                                    "arg {} ({}) with type {} failed to satisfy type set {:?}",
+                                    i,
+                                    arg,
+                                    arg_type,
+                                    type_set);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn typecheck_variable_args(&self, inst: Inst) -> Result<()> {
+        match self.func.dfg[inst].analyze_branch(&self.func.dfg.value_lists) {
+            BranchInfo::SingleDest(ebb, _) => {
+                let iter = self.func
+                    .dfg
+                    .ebb_args(ebb)
+                    .map(|v| self.func.dfg.value_type(v));
+                self.typecheck_variable_args_iterator(inst, iter)?;
+            }
+            BranchInfo::Table(table) => {
+                for (_, ebb) in self.func.jump_tables[table].entries() {
+                    let arg_count = self.func.dfg.num_ebb_args(ebb);
+                    if arg_count != 0 {
+                        return err!(inst,
+                                    "takes no arguments, but had target {} with {} arguments",
+                                    ebb,
+                                    arg_count);
+                    }
+                }
+            }
+            BranchInfo::NotABranch => {}
+        }
+
+        match self.func.dfg[inst].analyze_call(&self.func.dfg.value_lists) {
+            CallInfo::Direct(func_ref, _) => {
+                let sig_ref = self.func.dfg.ext_funcs[func_ref].signature;
+                let arg_types =
+                    self.func.dfg.signatures[sig_ref].argument_types.iter().map(|a| a.value_type);
+                self.typecheck_variable_args_iterator(inst, arg_types)?;
+            }
+            CallInfo::Indirect(sig_ref, _) => {
+                let arg_types =
+                    self.func.dfg.signatures[sig_ref].argument_types.iter().map(|a| a.value_type);
+                self.typecheck_variable_args_iterator(inst, arg_types)?;
+            }
+            CallInfo::NotACall => {}
+        }
+        Ok(())
+    }
+
+    fn typecheck_variable_args_iterator<I: Iterator<Item = Type>>(&self,
+                                                                  inst: Inst,
+                                                                  iter: I)
+                                                                  -> Result<()> {
+        let variable_args = self.func.dfg.inst_variable_args(inst);
+        let mut i = 0;
+
+        for expected_type in iter {
+            if i >= variable_args.len() {
+                // Result count mismatch handled below, we want the full argument count first though
+                i += 1;
+                continue;
+            }
+            let arg = variable_args[i];
+            let arg_type = self.func.dfg.value_type(arg);
+            if expected_type != arg_type {
+                return err!(inst,
+                            "arg {} ({}) has type {}, expected {}",
+                            i,
+                            variable_args[i],
+                            arg_type,
+                            expected_type);
+            }
+            i += 1;
+        }
+        if i != variable_args.len() {
+            return err!(inst,
+                        "mismatched argument count, got {}, expected {}",
+                        variable_args.len(),
+                        i);
+        }
+        Ok(())
+    }
+
+    fn typecheck_return(&self, inst: Inst) -> Result<()> {
+        if self.func.dfg[inst].opcode().is_return() {
+            let args = self.func.dfg.inst_variable_args(inst);
+            let expected_types = &self.func.signature.return_types;
+            if args.len() != expected_types.len() {
+                return err!(inst, "arguments of return must match function signature");
+            }
+            for (i, (&arg, &expected_type)) in args.iter().zip(expected_types).enumerate() {
+                let arg_type = self.func.dfg.value_type(arg);
+                if arg_type != expected_type.value_type {
+                    return err!(inst,
+                                "arg {} ({}) has type {}, must match function signature of {}",
+                                i,
+                                arg,
+                                arg_type,
+                                expected_type);
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn run(&self) -> Result<()> {
+        self.typecheck_entry_block_arguments()?;
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
                 self.ebb_integrity(ebb, inst)?;
                 self.instruction_integrity(inst)?;
+                self.typecheck(inst)?;
             }
             self.cfg_integrity(ebb)?;
         }

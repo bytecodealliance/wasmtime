@@ -398,7 +398,6 @@ pub struct OpcodeConstraints {
     /// Offset into `OPERAND_CONSTRAINT` table of the descriptors for this opcode. The first
     /// `fixed_results()` entries describe the result constraints, then follows constraints for the
     /// fixed `Value` input operands. (`fixed_value_arguments()` of them).
-    /// format.
     constraint_offset: u16,
 }
 
