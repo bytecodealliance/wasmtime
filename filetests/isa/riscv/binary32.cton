@@ -6,7 +6,7 @@ function int32() {
 ebb0:
     [-,%x5]             v1 = iconst.i32 1
     [-,%x6]             v2 = iconst.i32 2
-    [R#0c,%x7]          v10 = iadd v1, v2       ; bin: 006283b3
+    [-,%x7]             v10 = iadd v1, v2       ; bin: 006283b3
     [R#200c,%x8]        v11 = isub v1, v2       ; bin: 40628433
     [R#10c]             v12 = imul v1, v2
     return
