@@ -15,6 +15,7 @@ use ir::Function;
 use isa::TargetIsa;
 use legalize_function;
 use regalloc;
+use verifier;
 
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
@@ -43,6 +44,16 @@ impl Context {
             domtree: DominatorTree::new(),
             regalloc: regalloc::Context::new(),
         }
+    }
+
+    /// Run the verifier on the function.
+    ///
+    /// Also check that the dominator tree and control flow graph are consistent with the function.
+    ///
+    /// The `TargetIsa` argument is currently unused, but the verifier will soon be able to also
+    /// check ISA-dependent constraints.
+    pub fn verify<'a, ISA: Into<Option<&'a TargetIsa>>>(&self, _isa: ISA) -> verifier::Result<()> {
+        verifier::verify_context(self)
     }
 
     /// Run the legalizer for `isa` on the function.

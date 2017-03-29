@@ -4,11 +4,11 @@
 //! the result to filecheck.
 
 use std::borrow::Cow;
-use cretonne::{legalize_function, write_function};
-use cretonne::flowgraph::ControlFlowGraph;
+use cretonne::{self, write_function};
 use cretonne::ir::Function;
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result, run_filecheck};
+use utils::pretty_verifier_error;
 
 struct TestLegalizer;
 
@@ -35,13 +35,16 @@ impl SubTest for TestLegalizer {
     }
 
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
-        let mut func = func.into_owned();
+        let mut comp_ctx = cretonne::Context::new();
+        comp_ctx.func = func.into_owned();
         let isa = context.isa.expect("legalizer needs an ISA");
-        let mut cfg = ControlFlowGraph::with_function(&func);
-        legalize_function(&mut func, &mut cfg, isa);
+
+        comp_ctx.flowgraph();
+        comp_ctx.legalize(isa);
+        comp_ctx.verify(isa).map_err(|e| pretty_verifier_error(&comp_ctx.func, e))?;
 
         let mut text = String::new();
-        write_function(&mut text, &func, Some(isa)).map_err(|e| e.to_string())?;
+        write_function(&mut text, &comp_ctx.func, Some(isa)).map_err(|e| e.to_string())?;
         run_filecheck(&text, context)
     }
 }
