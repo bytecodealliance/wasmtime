@@ -9,7 +9,7 @@ use cretonne::settings::Flags;
 use cretonne::verify_function;
 use cton_reader::parse_test;
 use cton_reader::IsaSpec;
-use utils::read_to_string;
+use utils::{read_to_string, pretty_verifier_error};
 use filetest::{TestResult, new_subtest};
 use filetest::subtest::{SubTest, Context, Result};
 
@@ -116,7 +116,7 @@ fn run_one_test<'a>(tuple: (&'a SubTest, &'a Flags, Option<&'a TargetIsa>),
 
     // Should we run the verifier before this test?
     if !context.verified && test.needs_verifier() {
-        verify_function(&func).map_err(|e| e.to_string())?;
+        verify_function(&func).map_err(|e| pretty_verifier_error(&func, e))?;
         context.verified = true;
     }
 
