@@ -1,8 +1,11 @@
 //! Utility functions.
 
-use std::path::Path;
+use cretonne::ir::entities::AnyEntity;
+use cretonne::{ir, verifier, write_function};
+use std::fmt::Write;
 use std::fs::File;
 use std::io::{Result, Read};
+use std::path::Path;
 
 /// Read an entire file into a string.
 pub fn read_to_string<P: AsRef<Path>>(path: P) -> Result<String> {
@@ -27,6 +30,19 @@ pub fn match_directive<'a>(comment: &'a str, directive: &str) -> Option<&'a str>
     } else {
         None
     }
+}
+
+/// Pretty-print a verifier error.
+pub fn pretty_verifier_error(func: &ir::Function, err: verifier::Error) -> String {
+    let mut msg = err.to_string();
+    match err.location {
+        AnyEntity::Inst(inst) => {
+            write!(msg, "\n{}: {}\n\n", inst, func.dfg.display_inst(inst)).unwrap()
+        }
+        _ => {}
+    }
+    write_function(&mut msg, func, None).unwrap();
+    msg
 }
 
 #[test]
