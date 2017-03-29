@@ -346,12 +346,8 @@ fn check_call_signature(dfg: &DataFlowGraph, inst: Inst) -> Result<(), SigRef> {
 
 /// Check if the arguments of the return `inst` match the signature.
 fn check_return_signature(dfg: &DataFlowGraph, inst: Inst, sig: &Signature) -> bool {
-    let fixed_values = dfg[inst].opcode().constraints().fixed_value_arguments();
     check_arg_types(dfg,
-                    dfg.inst_args(inst)
-                        .iter()
-                        .skip(fixed_values)
-                        .cloned(),
+                    dfg.inst_variable_args(inst).iter().cloned(),
                     &sig.return_types)
 }
 
