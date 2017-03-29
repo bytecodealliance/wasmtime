@@ -336,3 +336,11 @@ that instruction is compared to the directive::
         [R#200c,%x8]        v11 = isub v1, v2       ; bin: 40628433
         return
     }
+
+If any instructions are unencoded (indicated with a `[-]` encoding field), they
+will be encoded using the same mechanism as the legalizer uses. However,
+illegal instructions for the ISA won't be expanded into other instruction
+sequences. Instead the test will fail.
+
+Value locations must be present if they are required to compute the binary
+bits. Missing value locations will cause the test to crash.

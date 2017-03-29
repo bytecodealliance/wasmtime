@@ -3,7 +3,7 @@
 //! The `binemit` test command generates binary machine code for every instruction in the input
 //! functions and compares the results to the expected output.
 
-use std::borrow::{Borrow, Cow};
+use std::borrow::Cow;
 use std::fmt::Write;
 use cretonne::binemit;
 use cretonne::ir;
@@ -60,7 +60,7 @@ impl SubTest for TestBinEmit {
     }
 
     fn is_mutating(&self) -> bool {
-        false
+        true
     }
 
     fn needs_isa(&self) -> bool {
@@ -71,7 +71,7 @@ impl SubTest for TestBinEmit {
         let isa = context.isa.expect("binemit needs an ISA");
         // TODO: Run a verifier pass over the code first to detect any bad encodings or missing/bad
         // value locations. The current error reporting is just crashing...
-        let func = func.borrow();
+        let mut func = func.into_owned();
 
         let mut sink = TextSink { text: String::new() };
 
@@ -85,6 +85,22 @@ impl SubTest for TestBinEmit {
                                            comment.text))
                     }
                 };
+
+                // Compute an encoding for `inst` if one wasn't provided.
+                if !func.encodings
+                        .get(inst)
+                        .map(|e| e.is_legal())
+                        .unwrap_or(false) {
+                    match isa.encode(&func.dfg, &func.dfg[inst]) {
+                        Ok(enc) => *func.encodings.ensure(inst) = enc,
+                        Err(_) => {
+                            return Err(format!("{} can't be encoded: {}",
+                                               inst,
+                                               func.dfg.display_inst(inst)))
+                        }
+                    }
+                }
+
                 sink.text.clear();
                 isa.emit_inst(&func, inst, &mut sink);
                 let have = sink.text.trim();
