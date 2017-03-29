@@ -1278,8 +1278,8 @@ fcvt_from_sint = Instruction(
 #
 
 WideInt = TypeVar(
-        'WideInt', 'A scalar integer type from `i16` upwards',
-        ints=(16, 64))
+        'WideInt', 'An integer type with lanes from `i16` upwards',
+        ints=(16, 64), simd=True)
 x = Operand('x', WideInt)
 lo = Operand(
         'lo', WideInt.half_width(), 'The low bits of `x`')
@@ -1288,7 +1288,10 @@ hi = Operand(
 
 isplit = Instruction(
         'isplit', r"""
-        Split a scalar integer into low and high parts.
+        Split an integer into low and high parts.
+
+        Vectors of integers are split lane-wise, so the results have the same
+        number of lanes as the input, but the lanes are half the size.
 
         Returns the low half of `x` and the high half of `x` as two independent
         values.
@@ -1297,8 +1300,8 @@ isplit = Instruction(
 
 
 NarrowInt = TypeVar(
-        'NarrowInt', 'A scalar integer type up to `i32`',
-        ints=(8, 32))
+        'NarrowInt', 'An integer type with lanes type to `i32`',
+        ints=(8, 32), simd=True)
 lo = Operand('lo', NarrowInt)
 hi = Operand('hi', NarrowInt)
 a = Operand(
@@ -1308,6 +1311,10 @@ a = Operand(
 iconcat = Instruction(
         'iconcat', r"""
         Concatenate low and high bits to form a larger integer type.
+
+        Vectors of integers are concatenated lane-wise such that the result has
+        the same number of lanes as the inputs, but the lanes are twice the
+        size.
         """,
         ins=(lo, hi), outs=a)
 
