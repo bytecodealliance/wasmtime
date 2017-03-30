@@ -7,6 +7,7 @@ patterns that describe how base instructions can be transformed to other base
 instructions that are legal.
 """
 from __future__ import absolute_import
+from .immediates import intcc
 from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry, iadd_imm
 from .instructions import isub, isub_bin, isub_bout, isub_borrow
 from .instructions import band, bor, bxor, isplit, iconcat
@@ -90,14 +91,14 @@ expand.legalize(
         (a, c) << iadd_cout(x, y),
         Rtl(
             a << iadd(x, y),
-            c << icmp('IntCC::UnsignedLessThan', a, x)
+            c << icmp(intcc.ult, a, x)
         ))
 
 expand.legalize(
         (a, b) << isub_bout(x, y),
         Rtl(
             a << isub(x, y),
-            b << icmp('IntCC::UnsignedGreaterThan', a, x)
+            b << icmp(intcc.ugt, a, x)
         ))
 
 expand.legalize(
