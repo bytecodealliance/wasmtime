@@ -193,6 +193,7 @@ class InstructionFormat(object):
 
     @staticmethod
     def extract_names(globs):
+        # type: (Dict[str, Any]) -> None
         """
         Given a dict mapping name -> object as returned by `globals()`, find
         all the InstructionFormat objects and set their name from the dict key.

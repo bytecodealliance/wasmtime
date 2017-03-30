@@ -47,9 +47,11 @@ class Def(object):
         self.expr = expr
 
     def __repr__(self):
+        # type: () -> str
         return "{} << {!r}".format(self.defs, self.expr)
 
     def __str__(self):
+        # type: () -> str
         if len(self.defs) == 1:
             return "{!s} << {!s}".format(self.defs[0], self.expr)
         else:
@@ -379,15 +381,18 @@ class Apply(Expr):
         return Def(other, self)
 
     def instname(self):
+        # type: () -> str
         i = self.inst.name
         for t in self.typevars:
             i += '.{}'.format(t)
         return i
 
     def __repr__(self):
+        # type: () -> str
         return "Apply({}, {})".format(self.instname(), self.args)
 
     def __str__(self):
+        # type: () -> str
         args = ', '.join(map(str, self.args))
         return '{}({})'.format(self.instname(), args)
 

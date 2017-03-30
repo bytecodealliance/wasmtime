@@ -14,6 +14,7 @@ from cdsl.ast import Var
 
 try:
     from typing import Sequence  # noqa
+    from cdsl.isa import TargetISA  # noqa
     from cdsl.ast import Def  # noqa
     from cdsl.xform import XForm, XFormGroup  # noqa
 except ImportError:
@@ -240,6 +241,7 @@ def gen_xform_group(xgrp, fmt):
 
 
 def generate(isas, out_dir):
+    # type: (Sequence[TargetISA], str) -> None
     fmt = Formatter()
     gen_xform_group(legalize.narrow, fmt)
     gen_xform_group(legalize.expand, fmt)

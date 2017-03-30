@@ -97,6 +97,7 @@ class TargetISA(object):
                     self.settings.number_predicate(enc.isap)
 
     def _collect_regclasses(self):
+        # type: () -> None
         """
         Collect and number register classes.
 
@@ -132,6 +133,7 @@ class CPUMode(object):
         return self.name
 
     def enc(self, *args, **kwargs):
+        # type: (*Any, **Any) -> None
         """
         Add a new encoding to this CPU mode.
 
@@ -186,7 +188,7 @@ class EncRecipe(object):
         return self.name
 
     def _verify_constraints(self, seq):
-        # (ConstraintSeq) -> Sequence[OperandConstraint]
+        # type: (ConstraintSeq) -> Sequence[OperandConstraint]
         if not isinstance(seq, tuple):
             seq = (seq,)
         for c in seq:
@@ -194,7 +196,7 @@ class EncRecipe(object):
                 # An integer constraint is bound to a value operand.
                 # Check that it is in range.
                 assert c >= 0
-                if not format.has_value_list:
+                if not self.format.has_value_list:
                     assert c < self.format.num_value_operands
             else:
                 assert isinstance(c, RegClass) or isinstance(c, Register)

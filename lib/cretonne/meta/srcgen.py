@@ -101,6 +101,7 @@ class Formatter(object):
             self.fmt.indent_push()
 
         def __exit__(self, t, v, tb):
+            # type: (object, object, object) -> None
             self.fmt.indent_pop()
             if self.after:
                 self.fmt.line(self.after)
@@ -126,13 +127,16 @@ class Formatter(object):
         return Formatter._IndentedScope(self, after)
 
     def format(self, fmt, *args):
+        # type: (str, *Any) -> None
         self.line(fmt.format(*args))
 
     def comment(self, s):
+        # type: (str) -> None
         """Add a comment line."""
         self.line('// ' + s)
 
     def doc_comment(self, s):
+        # type: (str) -> None
         """Add a (multi-line) documentation comment."""
         s = re.sub('^', self.indent + '/// ', s, flags=re.M) + '\n'
         self.lines.append(s)

@@ -16,8 +16,14 @@ from __future__ import absolute_import, print_function
 import os
 from os.path import dirname, abspath, join
 
+try:
+    from typing import Iterable  # noqa
+except ImportError:
+    pass
+
 
 def source_files(top):
+    # type: (str) -> Iterable[str]
     """
     Recursively find all interesting source files and directories in the
     directory tree starting at top. Yield a path to each file.
@@ -30,6 +36,7 @@ def source_files(top):
 
 
 def generate():
+    # type: () -> None
     print("Dependencies from meta language directory:")
     meta = dirname(abspath(__file__))
     for path in source_files(meta):

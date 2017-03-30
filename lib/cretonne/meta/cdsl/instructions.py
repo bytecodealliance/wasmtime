@@ -6,11 +6,13 @@ from .operands import Operand
 from .formats import InstructionFormat
 
 try:
-    from typing import Union, Sequence, List  # noqa
-    # List of operands for ins/outs:
-    OpList = Union[Sequence[Operand], Operand]
-    MaybeBoundInst = Union['Instruction', 'BoundInstruction']
-    from typing import Tuple, Any  # noqa
+    from typing import Union, Sequence, List, Tuple, Any, TYPE_CHECKING  # noqa
+    if TYPE_CHECKING:
+        from .ast import Expr, Apply  # noqa
+        from .typevar import TypeVar  # noqa
+        # List of operands for ins/outs:
+        OpList = Union[Sequence[Operand], Operand]
+        MaybeBoundInst = Union['Instruction', 'BoundInstruction']
 except ImportError:
     pass
 
@@ -122,6 +124,7 @@ class Instruction(object):
         InstructionGroup.append(self)
 
     def __str__(self):
+        # type: () -> str
         prefix = ', '.join(o.name for o in self.outs)
         if prefix:
             prefix = prefix + ' = '
@@ -141,6 +144,7 @@ class Instruction(object):
             return self.name
 
     def blurb(self):
+        # type: () -> str
         """Get the first line of the doc comment"""
         for line in self.__doc__.split('\n'):
             line = line.strip()
@@ -149,6 +153,7 @@ class Instruction(object):
         return ""
 
     def _verify_polymorphic(self):
+        # type: () -> None
         """
         Check if this instruction is polymorphic, and verify its use of type
         variables.
@@ -193,6 +198,7 @@ class Instruction(object):
             self.ctrl_typevar = tv
 
     def _verify_ctrl_typevar(self, ctrl_typevar):
+        # type: (TypeVar) -> List[TypeVar]
         """
         Verify that the use of TypeVars is consistent with `ctrl_typevar` as
         the controlling type variable.
@@ -204,7 +210,7 @@ class Instruction(object):
 
         Return list of other type variables used, or raise an error.
         """
-        other_tvs = []
+        other_tvs = []  # type: List[TypeVar]
         # Check value inputs.
         for opnum in self.value_opnums:
             typ = self.ins[opnum].typevar
@@ -283,11 +289,12 @@ class Instruction(object):
         return (self, ())
 
     def __call__(self, *args):
+        # type: (*Expr) -> Apply
         """
         Create an `ast.Apply` AST node representing the application of this
         instruction to the arguments.
         """
-        from .ast import Apply
+        from .ast import Apply  # noqa
         return Apply(self, args)
 
 
@@ -303,6 +310,7 @@ class BoundInstruction(object):
         assert len(typevars) <= 1 + len(inst.other_typevars)
 
     def __str__(self):
+        # type: () -> str
         return '.'.join([self.inst.name, ] + list(map(str, self.typevars)))
 
     def bind(self, *args):
@@ -336,9 +344,10 @@ class BoundInstruction(object):
         return (self.inst, self.typevars)
 
     def __call__(self, *args):
+        # type: (*Expr) -> Apply
         """
         Create an `ast.Apply` AST node representing the application of this
         instruction to the arguments.
         """
-        from .ast import Apply
+        from .ast import Apply  # noqa
         return Apply(self, args)

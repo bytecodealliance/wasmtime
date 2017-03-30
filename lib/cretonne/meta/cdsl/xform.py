@@ -40,10 +40,6 @@ class Rtl(object):
         # type: (*DefApply) -> None
         self.rtl = tuple(map(canonicalize_defapply, args))
 
-    def __iter__(self):
-        # type: () -> Iterator[Def]
-        return iter(self.rtl)
-
 
 class XForm(object):
     """
@@ -105,10 +101,11 @@ class XForm(object):
         self._collect_typevars()
 
     def __repr__(self):
+        # type: () -> str
         s = "XForm(inputs={}, defs={},\n  ".format(self.inputs, self.defs)
-        s += '\n  '.join(str(n) for n in self.src)
+        s += '\n  '.join(str(n) for n in self.src.rtl)
         s += '\n=>\n  '
-        s += '\n  '.join(str(n) for n in self.dst)
+        s += '\n  '.join(str(n) for n in self.dst.rtl)
         s += '\n)'
         return s
 
