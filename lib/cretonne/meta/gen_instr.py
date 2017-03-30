@@ -8,15 +8,18 @@ from unique_table import UniqueTable, UniqueSeqTable
 from cdsl import camel_case
 from cdsl.operands import ImmediateKind
 from cdsl.formats import InstructionFormat
-
-from cdsl.instructions import Instruction  # noqa
-from cdsl.operands import Operand  # noqa
-from cdsl.typevar import TypeVar  # noqa
+from cdsl.instructions import Instruction
 
 # The typing module is only required by mypy, and we don't use these imports
 # outside type comments.
 try:
-    from typing import List  # noqa
+    from typing import List, Sequence, Set, TYPE_CHECKING  # noqa
+    if TYPE_CHECKING:
+        from cdsl.isa import TargetISA  # noqa
+        from cdsl.instructions import InstructionGroup  # noqa
+        from cdsl.operands import Operand  # noqa
+        from cdsl.typevar import TypeVar  # noqa
+
 except ImportError:
     pass
 
@@ -260,7 +263,8 @@ def gen_instruction_data_impl(fmt):
 
 
 def collect_instr_groups(isas):
-    seen = set()
+    # type: (Sequence[TargetISA]) -> List[InstructionGroup]
+    seen = set()  # type: Set[InstructionGroup]
     groups = []
     for isa in isas:
         for g in isa.instruction_groups:
@@ -271,6 +275,7 @@ def collect_instr_groups(isas):
 
 
 def gen_opcodes(groups, fmt):
+    # type: (Sequence[InstructionGroup], srcgen.Formatter) -> Sequence[Instruction]  # noqa
     """
     Generate opcode enumerations.
 
@@ -389,6 +394,7 @@ def get_constraint(op, ctrl_typevar, type_sets):
 
 
 def gen_type_constraints(fmt, instrs):
+    # type: (srcgen.Formatter, Sequence[Instruction]) -> None
     """
     Generate value type constraints for all instructions.
 
@@ -487,6 +493,7 @@ def gen_type_constraints(fmt, instrs):
 
 
 def gen_format_constructor(iform, fmt):
+    # type: (InstructionFormat, srcgen.Formatter) -> None
     """
     Emit a method for creating and inserting inserting an `iform` instruction,
     where `iform` is an instruction format.
@@ -543,6 +550,7 @@ def gen_format_constructor(iform, fmt):
 
 
 def gen_member_inits(iform, fmt):
+    # type: (InstructionFormat, srcgen.Formatter) -> None
     """
     Emit member initializers for an `iform` instruction.
     """
@@ -696,6 +704,7 @@ def gen_inst_builder(inst, fmt):
 
 
 def gen_builder(insts, fmt):
+    # type: (Sequence[Instruction], srcgen.Formatter) -> None
     """
     Generate a Builder trait with methods for all instructions.
     """
@@ -723,6 +732,7 @@ def gen_builder(insts, fmt):
 
 
 def generate(isas, out_dir):
+    # type: (Sequence[TargetISA], str) -> None
     groups = collect_instr_groups(isas)
 
     # opcodes.rs

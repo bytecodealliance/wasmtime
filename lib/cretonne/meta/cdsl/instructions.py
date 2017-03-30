@@ -107,6 +107,9 @@ class Instruction(object):
         self.outs = self._to_operand_tuple(outs)
         self.format = InstructionFormat.lookup(self.ins, self.outs)
 
+        # Opcode number, assigned by gen_instr.py.
+        self.number = None  # type: int
+
         # Indexes into `self.outs` for value results.
         # Other results are `variable_args`.
         self.value_results = tuple(
