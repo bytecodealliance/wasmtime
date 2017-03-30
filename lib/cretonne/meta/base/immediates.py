@@ -34,7 +34,19 @@ ieee64 = ImmediateKind('ieee64', 'A 64-bit immediate floating point number.')
 intcc = ImmediateKind(
         'intcc',
         'An integer comparison condition code.',
-        default_member='cond', rust_type='IntCC')
+        default_member='cond', rust_type='IntCC',
+        values={
+            'eq':  'Equal',
+            'ne':  'NotEqual',
+            'sge': 'SignedGreaterThanOrEqual',
+            'sgt': 'SignedGreaterThan',
+            'sle': 'SignedLessThanOrEqual',
+            'slt': 'SignedLessThan',
+            'uge': 'UnsignedGreaterThanOrEqual',
+            'ugt': 'UnsignedGreaterThan',
+            'ule': 'UnsignedLessThanOrEqual',
+            'ult': 'UnsignedLessThan',
+        })
 
 #: A condition code for comparing floating point values.
 #:
@@ -43,4 +55,20 @@ intcc = ImmediateKind(
 floatcc = ImmediateKind(
         'floatcc',
         'A floating point comparison condition code.',
-        default_member='cond', rust_type='FloatCC')
+        default_member='cond', rust_type='FloatCC',
+        values={
+            'ord': 'Ordered',
+            'uno': 'Unordered',
+            'eq':  'Equal',
+            'ne':  'NotEqual',
+            'one': 'OrderedNotEqual',
+            'ueq': 'UnorderedOrEqual',
+            'lt':  'LessThan',
+            'le':  'LessThanOrEqual',
+            'gt':  'GreaterThan',
+            'ge':  'GreaterThanOrEqual',
+            'ult': 'UnorderedOrLessThan',
+            'ule': 'UnorderedOrLessThanOrEqual',
+            'ugt': 'UnorderedOrGreaterThan',
+            'uge': 'UnorderedOrGreaterThanOrEqual',
+        })

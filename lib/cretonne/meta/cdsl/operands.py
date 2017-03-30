@@ -5,8 +5,10 @@ from .types import ValueType
 from .typevar import TypeVar
 
 try:
-    from typing import Union
+    from typing import Union, Dict, TYPE_CHECKING  # noqa
     OperandSpec = Union['OperandKind', ValueType, TypeVar]
+    if TYPE_CHECKING:
+        from .ast import Enumerator  # noqa
 except ImportError:
     pass
 
@@ -74,14 +76,43 @@ class ImmediateKind(OperandKind):
                            `InstructionData` data structure.
     """
 
-    def __init__(self, name, doc, default_member='imm', rust_type=None):
-        # type: (str, str, str, str) -> None
+    def __init__(
+            self, name, doc,
+            default_member='imm',
+            rust_type=None,
+            values=None):
+        # type: (str, str, str, str, Dict[str, str]) -> None
         super(ImmediateKind, self).__init__(
                 name, doc, default_member, rust_type)
+        self.values = values
 
     def __repr__(self):
         # type: () -> str
         return 'ImmediateKind({})'.format(self.name)
+
+    def __getattr__(self, value):
+        # type: (str) -> Enumerator
+        """
+        Enumerated immediate kinds allow the use of dot syntax to produce
+        `Enumerator` AST nodes: `icmp.i32(intcc.ult, a, b)`.
+        """
+        from .ast import Enumerator  # noqa
+        if not self.values:
+            raise AssertionError(
+                    '{n} is not an enumerated operand kind: {n}.{a}'.format(
+                        n=self.name, a=value))
+        if value not in self.values:
+            raise AssertionError(
+                    'No such {n} enumerator: {n}.{a}'.format(
+                        n=self.name, a=value))
+        return Enumerator(self, value)
+
+    def rust_enumerator(self, value):
+        # type: (str) -> str
+        """
+        Get the qualified Rust name of the enumerator value `value`.
+        """
+        return '{}::{}'.format(self.rust_type, self.values[value])
 
 
 # Instances of entity reference operand types are provided in the

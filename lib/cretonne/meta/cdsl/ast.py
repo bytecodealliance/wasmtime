@@ -9,7 +9,9 @@ from . import instructions
 from .typevar import TypeVar
 
 try:
-    from typing import Union, Tuple, Sequence  # noqa
+    from typing import Union, Tuple, Sequence, TYPE_CHECKING  # noqa
+    if TYPE_CHECKING:
+        from .operands import ImmediateKind  # noqa
 except ImportError:
     pass
 
@@ -404,3 +406,35 @@ class Apply(Expr):
             args = defs[0].rust_type() + ', ' + args
         method = self.inst.snake_name()
         return '{}({})'.format(method, args)
+
+
+class Enumerator(Expr):
+    """
+    A value of an enumerated immediate operand.
+
+    Some immediate operand kinds like `intcc` and `floatcc` have an enumerated
+    range of values corresponding to a Rust enum type. An `Enumerator` object
+    is an AST leaf node representing one of the values.
+
+    :param kind: The enumerated `ImmediateKind` containing the value.
+    :param value: The textual IL representation of the value.
+
+    `Enumerator` nodes are not usually created directly. They are created by
+    using the dot syntax on immediate kinds: `intcc.ult`.
+    """
+
+    def __init__(self, kind, value):
+        # type: (ImmediateKind, str) -> None
+        self.kind = kind
+        self.value = value
+
+    def __str__(self):
+        # type: () -> str
+        """
+        Get the Rust expression form of this enumerator.
+        """
+        return self.kind.rust_enumerator(self.value)
+
+    def __repr__(self):
+        # type: () -> str
+        return '{}.{}'.format(self.kind, self.value)
