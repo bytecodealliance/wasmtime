@@ -61,6 +61,7 @@ use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpT
 use Context;
 use std::fmt::{self, Display, Formatter};
 use std::result;
+use std::collections::BTreeSet;
 
 /// A verifier error.
 #[derive(Debug, PartialEq, Eq)]
@@ -106,6 +107,7 @@ pub fn verify_function(func: &Function) -> Result<()> {
 pub fn verify_context(ctx: &Context) -> Result<()> {
     let verifier = Verifier::new(&ctx.func);
     verifier.domtree_integrity(&ctx.domtree)?;
+    verifier.cfg_integrity(&ctx.cfg)?;
     verifier.run()
 }
 
@@ -350,41 +352,6 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn cfg_integrity(&self, ebb: Ebb) -> Result<()> {
-        for &(pred_ebb, pred_inst) in self.cfg.get_predecessors(ebb) {
-            // All predecessors in the CFG must be branches to the EBB
-            match self.func.dfg[pred_inst].analyze_branch(&self.func.dfg.value_lists) {
-                BranchInfo::SingleDest(target_ebb, _) => {
-                    if target_ebb != ebb {
-                        return err!(ebb,
-                                    "has predecessor {} in {} which does not branch here",
-                                    pred_inst,
-                                    pred_ebb);
-                    }
-                }
-                BranchInfo::Table(jt) => {
-                    if !self.func.jump_tables[jt].branches_to(ebb) {
-                        return err!(ebb,
-                                    "has predecessor {} using {} in {} which never branches here",
-                                    pred_inst,
-                                    jt,
-                                    pred_ebb);
-                    }
-                }
-                BranchInfo::NotABranch => {
-                    return err!(ebb, "has predecessor {} which is not a branch", pred_inst);
-                }
-            }
-            // All EBBs branching to `ebb` have it recorded as a successor in the CFG.
-            if !self.cfg.get_successors(pred_ebb).contains(&ebb) {
-                return err!(ebb,
-                            "predecessor {} does not have this EBB recorded as a successor",
-                            pred_ebb);
-            }
-        }
-        Ok(())
-    }
-
     fn domtree_integrity(&self, domtree: &DominatorTree) -> Result<()> {
         // We consider two `DominatorTree`s to be equal if they return the same immediate
         // dominator for each EBB. Therefore the current domtree is valid if it matches the freshly
@@ -614,6 +581,54 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    fn cfg_integrity(&self, cfg: &ControlFlowGraph) -> Result<()> {
+        let mut expected_succs = BTreeSet::<Ebb>::new();
+        let mut got_succs = BTreeSet::<Ebb>::new();
+        let mut expected_preds = BTreeSet::<Inst>::new();
+        let mut got_preds = BTreeSet::<Inst>::new();
+
+        for ebb in self.func.layout.ebbs() {
+            expected_succs.extend(self.cfg.get_successors(ebb));
+            got_succs.extend(cfg.get_successors(ebb));
+
+            let missing_succs: Vec<Ebb> = expected_succs.difference(&got_succs).cloned().collect();
+            if missing_succs.len() != 0 {
+                return err!(ebb,
+                            "cfg lacked the following successor(s) {:?}",
+                            missing_succs);
+            }
+
+            let excess_succs: Vec<Ebb> = got_succs.difference(&expected_succs).cloned().collect();
+            if excess_succs.len() != 0 {
+                return err!(ebb, "cfg had unexpected successor(s) {:?}", excess_succs);
+            }
+
+            expected_preds.extend(self.cfg
+                                      .get_predecessors(ebb)
+                                      .iter()
+                                      .map(|&(_, inst)| inst));
+            got_preds.extend(cfg.get_predecessors(ebb).iter().map(|&(_, inst)| inst));
+
+            let missing_preds: Vec<Inst> = expected_preds.difference(&got_preds).cloned().collect();
+            if missing_preds.len() != 0 {
+                return err!(ebb,
+                            "cfg lacked the following predecessor(s) {:?}",
+                            missing_preds);
+            }
+
+            let excess_preds: Vec<Inst> = got_preds.difference(&expected_preds).cloned().collect();
+            if excess_preds.len() != 0 {
+                return err!(ebb, "cfg had unexpected predecessor(s) {:?}", excess_preds);
+            }
+
+            expected_succs.clear();
+            got_succs.clear();
+            expected_preds.clear();
+            got_preds.clear();
+        }
+        Ok(())
+    }
+
     pub fn run(&self) -> Result<()> {
         self.typecheck_entry_block_arguments()?;
         for ebb in self.func.layout.ebbs() {
@@ -622,7 +637,6 @@ impl<'a> Verifier<'a> {
                 self.instruction_integrity(inst)?;
                 self.typecheck(inst)?;
             }
-            self.cfg_integrity(ebb)?;
         }
         Ok(())
     }
