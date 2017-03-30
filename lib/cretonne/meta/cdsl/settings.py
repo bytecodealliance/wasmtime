@@ -3,6 +3,13 @@ from __future__ import absolute_import
 from collections import OrderedDict
 from .predicates import Predicate
 
+try:
+    from typing import Set, List, Dict, Any, TYPE_CHECKING  # noqa
+    if TYPE_CHECKING:
+        from .predicates import PredLeaf, PredNode  # noqa
+except ImportError:
+    pass
+
 
 class Setting(object):
     """
@@ -13,24 +20,25 @@ class Setting(object):
     """
 
     def __init__(self, doc):
-        self.name = None  # Assigned later by `extract_names()`.
+        # type: (str) -> None
+        self.name = None  # type: str  # Assigned later by `extract_names()`.
+        self.number = None  # type: int
         self.__doc__ = doc
         # Offset of byte in settings vector containing this setting.
-        self.byte_offset = None
+        self.byte_offset = None  # type: int
         self.group = SettingGroup.append(self)
 
     def __str__(self):
+        # type: () -> str
         return '{}.{}'.format(self.group.name, self.name)
 
     def predicate_context(self):
+        # type: () -> SettingGroup
         """
         Return the context where this setting can be evaluated as a (leaf)
         predicate.
         """
         return self.group
-
-    def predicate_leafs(self, leafs):
-        leafs.add(self)
 
 
 class BoolSetting(Setting):
@@ -42,10 +50,13 @@ class BoolSetting(Setting):
     """
 
     def __init__(self, doc, default=False):
+        # type: (str, bool) -> None
         super(BoolSetting, self).__init__(doc)
         self.default = default
+        self.bit_offset = None  # type: int
 
     def default_byte(self):
+        # type: () -> int
         """
         Get the default value of this setting, as a byte that can be bitwise
         or'ed with the other booleans sharing the same byte.
@@ -55,7 +66,12 @@ class BoolSetting(Setting):
         else:
             return 0
 
+    def predicate_leafs(self, leafs):
+        # type: (Set[PredLeaf]) -> None
+        leafs.add(self)
+
     def rust_predicate(self, prec):
+        # type: (int) -> str
         """
         Return the Rust code to compute the value of this setting.
 
@@ -74,12 +90,14 @@ class NumSetting(Setting):
     """
 
     def __init__(self, doc, default=0):
+        # type: (str, int) -> None
         super(NumSetting, self).__init__(doc)
         assert default == int(default)
         assert default >= 0 and default <= 255
         self.default = default
 
     def default_byte(self):
+        # type: () -> int
         return self.default
 
 
@@ -94,12 +112,14 @@ class EnumSetting(Setting):
     """
 
     def __init__(self, doc, *args):
+        # type: (str, *str) -> None
         super(EnumSetting, self).__init__(doc)
         assert len(args) > 0, "EnumSetting must have at least one value"
         self.values = tuple(str(x) for x in args)
         self.default = self.values[0]
 
     def default_byte(self):
+        # type: () -> int
         return 0
 
 
@@ -119,23 +139,25 @@ class SettingGroup(object):
     _current = None  # type: SettingGroup
 
     def __init__(self, name, parent=None):
+        # type: (str, SettingGroup) -> None
         self.name = name
         self.parent = parent
-        self.settings = []
+        self.settings = []  # type: List[Setting]
         # Named predicates computed from settings in this group or its
         # parents.
-        self.named_predicates = []
+        self.named_predicates = []  # type: List[Predicate]
         # All boolean predicates that can be accessed by number. This includes:
         # - All boolean settings in this group.
         # - All named predicates.
         # - Added anonymous predicates, see `number_predicate()`.
         # - Added parent predicates that are replicated in this group.
         # Maps predicate -> number.
-        self.predicate_number = OrderedDict()
+        self.predicate_number = OrderedDict()  # type: OrderedDict[PredNode, int]  # noqa
 
         self.open()
 
     def open(self):
+        # type: () -> None
         """
         Open this setting group such that future new settings are added to this
         group.
@@ -146,6 +168,7 @@ class SettingGroup(object):
         SettingGroup._current = self
 
     def close(self, globs=None):
+        # type: (Dict[str, Any]) -> None
         """
         Close this setting group. This function must be called before opening
         another setting group.
@@ -170,12 +193,14 @@ class SettingGroup(object):
 
     @staticmethod
     def append(setting):
+        # type: (Setting) -> SettingGroup
         g = SettingGroup._current
         assert g, "Open a setting group before defining settings."
         g.settings.append(setting)
         return g
 
     def number_predicate(self, pred):
+        # type: (PredNode) -> int
         """
         Make sure that `pred` has an assigned number, and will be included in
         this group's bit vector.
@@ -200,6 +225,7 @@ class SettingGroup(object):
             return number
 
     def layout(self):
+        # type: () -> None
         """
         Compute the layout of the byte vector used to represent this settings
         group.
@@ -250,6 +276,7 @@ class SettingGroup(object):
             self.number_predicate(p)
 
     def byte_size(self):
+        # type: () -> int
         """
         Compute the number of bytes required to hold all settings and
         precomputed predicates.
