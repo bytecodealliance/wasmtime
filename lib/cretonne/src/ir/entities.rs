@@ -170,7 +170,7 @@ impl Display for Value {
 }
 
 /// An opaque reference to an instruction in a function.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Inst(u32);
 entity_impl!(Inst, "inst");
 
