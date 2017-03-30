@@ -10,7 +10,7 @@ function determine the kind of predicate:
 
 - An *Instruction predicate* is evaluated on an instruction instance, so it can
   inspect all the immediate fields and type variables of the instruction.
-  Instruction predicates can be evaluatd before register allocation, so they
+  Instruction predicates can be evaluated before register allocation, so they
   can not depend on specific register assignments to the value operands or
   outputs.
 
@@ -23,6 +23,17 @@ predicate, the context is the instruction format.
 """
 from __future__ import absolute_import
 from functools import reduce
+
+try:
+    from typing import Sequence, Tuple, Set, Any, Union, TYPE_CHECKING  # noqa
+    if TYPE_CHECKING:
+        from .formats import InstructionFormat, FormatField  # noqa
+        from .settings import BoolSetting, SettingGroup  # noqa
+        PredContext = Union[SettingGroup, InstructionFormat]
+        PredLeaf = Union[BoolSetting, 'FieldPredicate']
+        PredNode = Union[PredLeaf, 'Predicate']
+except ImportError:
+    pass
 
 
 def _is_parent(a, b):
@@ -58,7 +69,9 @@ class Predicate(object):
     """
 
     def __init__(self, parts):
-        self.name = None
+        # type: (Sequence[PredNode]) -> None
+        self.name = None  # type: str
+        self.number = None  # type: int
         self.parts = parts
         self.context = reduce(
                 _descendant,
@@ -66,6 +79,7 @@ class Predicate(object):
         assert self.context, "Incompatible predicate parts"
 
     def __str__(self):
+        # type: () -> str
         if self.name:
             return '{}.{}'.format(self.context.name, self.name)
         else:
@@ -74,14 +88,20 @@ class Predicate(object):
                     ', '.join(map(str, self.parts)))
 
     def predicate_context(self):
+        # type: () -> PredContext
         return self.context
 
     def predicate_leafs(self, leafs):
+        # type: (Set[PredLeaf]) -> None
         """
         Collect all leaf predicates into the `leafs` set.
         """
         for part in self.parts:
             part.predicate_leafs(leafs)
+
+    def rust_predicate(self, prec):
+        # type: (int) -> str
+        raise NotImplementedError("rust_predicate is an abstract method")
 
 
 class And(Predicate):
@@ -92,9 +112,11 @@ class And(Predicate):
     precedence = 2
 
     def __init__(self, *args):
+        # type: (*PredNode) -> None
         super(And, self).__init__(args)
 
     def rust_predicate(self, prec):
+        # type: (int) -> str
         """
         Return a Rust expression computing the value of this predicate.
 
@@ -112,6 +134,7 @@ class And(Predicate):
 
     @staticmethod
     def combine(*args):
+        # type: (*PredNode) -> PredNode
         """
         Combine a sequence of predicates, allowing for `None` members.
 
@@ -135,9 +158,11 @@ class Or(Predicate):
     precedence = 1
 
     def __init__(self, *args):
+        # type: (*PredNode) -> None
         super(Or, self).__init__(args)
 
     def rust_predicate(self, prec):
+        # type: (int) -> str
         s = ' || '.join(p.rust_predicate(Or.precedence) for p in self.parts)
         if prec > Or.precedence:
             s = '({})'.format(s)
@@ -152,9 +177,11 @@ class Not(Predicate):
     precedence = 3
 
     def __init__(self, part):
+        # type: (PredNode) -> None
         super(Not, self).__init__((part,))
 
     def rust_predicate(self, prec):
+        # type: (int) -> str
         return '!' + self.parts[0].rust_predicate(Not.precedence)
 
 
@@ -168,15 +195,19 @@ class FieldPredicate(object):
     """
 
     def __init__(self, field, function, args):
+        # type: (FormatField, str, Sequence[Any]) -> None
+        self.number = None  # type: int
         self.field = field
         self.function = function
         self.args = args
 
     def __str__(self):
+        # type: () -> str
         args = (self.field.name,) + tuple(map(str, self.args))
         return '{}({})'.format(self.function, ', '.join(args))
 
     def predicate_context(self):
+        # type: () -> PredContext
         """
         This predicate can be evaluated in the context of an instruction
         format.
@@ -184,9 +215,11 @@ class FieldPredicate(object):
         return self.field.format
 
     def predicate_leafs(self, leafs):
+        # type: (Set[PredLeaf]) -> None
         leafs.add(self)
 
     def rust_predicate(self, prec):
+        # type: (int) -> str
         """
         Return a string of Rust code that evaluates this predicate.
         """
@@ -210,6 +243,7 @@ class IsSignedInt(FieldPredicate):
     """
 
     def __init__(self, field, width, scale=0):
+        # type: (FormatField, int, int) -> None
         super(IsSignedInt, self).__init__(
                 field, 'is_signed_int', (width, scale))
         self.width = width
@@ -232,6 +266,7 @@ class IsUnsignedInt(FieldPredicate):
     """
 
     def __init__(self, field, width, scale=0):
+        # type: (FormatField, int, int) -> None
         super(IsUnsignedInt, self).__init__(
                 field, 'is_unsigned_int', (width, scale))
         self.width = width

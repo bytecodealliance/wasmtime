@@ -8,11 +8,10 @@ from .registers import RegClass, Register
 try:
     from typing import Tuple, Union, Any, Iterable, Sequence, List, Set, TYPE_CHECKING  # noqa
     from .instructions import MaybeBoundInst, InstructionGroup, InstructionFormat  # noqa
-    from .predicates import Predicate, FieldPredicate  # noqa
+    from .predicates import PredNode  # noqa
     from .settings import SettingGroup  # noqa
     from .types import ValueType  # noqa
     from .registers import RegBank  # noqa
-    AnyPredicate = Union[Predicate, FieldPredicate]
     OperandConstraint = Union[RegClass, Register, int]
     ConstraintSeq = Union[OperandConstraint, Tuple[OperandConstraint, ...]]
 except ImportError:
@@ -80,8 +79,8 @@ class TargetISA(object):
         Ensures that all ISA predicates have an assigned bit number in
         `self.settings`.
         """
-        self.all_instps = list()  # type: List[AnyPredicate]
-        instps = set()  # type: Set[AnyPredicate]
+        self.all_instps = list()  # type: List[PredNode]
+        instps = set()  # type: Set[PredNode]
         for cpumode in self.cpumodes:
             for enc in cpumode.encodings:
                 instp = enc.instp
@@ -166,7 +165,7 @@ class EncRecipe(object):
     """
 
     def __init__(self, name, format, ins, outs, instp=None, isap=None):
-        # type: (str, InstructionFormat, ConstraintSeq, ConstraintSeq, AnyPredicate, AnyPredicate) -> None  # noqa
+        # type: (str, InstructionFormat, ConstraintSeq, ConstraintSeq, PredNode, PredNode) -> None  # noqa
         self.name = name
         self.format = format
         self.instp = instp
@@ -219,7 +218,7 @@ class Encoding(object):
     """
 
     def __init__(self, cpumode, inst, recipe, encbits, instp=None, isap=None):
-        # type: (CPUMode, MaybeBoundInst, EncRecipe, int, AnyPredicate, AnyPredicate) -> None # noqa
+        # type: (CPUMode, MaybeBoundInst, EncRecipe, int, PredNode, PredNode) -> None # noqa
         assert isinstance(cpumode, CPUMode)
         assert isinstance(recipe, EncRecipe)
         self.inst, self.typevars = inst.fully_bound()
