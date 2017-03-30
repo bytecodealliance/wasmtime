@@ -26,11 +26,12 @@ from . import is_power_of_two, next_power_of_two
 
 
 try:
-    from typing import Sequence, Tuple, List, Dict  # noqa
-    from .isa import TargetISA  # noqa
-    # A tuple uniquely identifying a register class inside a register bank.
-    # (count, width, start)
-    RCTup = Tuple[int, int, int]
+    from typing import Sequence, Tuple, List, Dict, Any, TYPE_CHECKING  # noqa
+    if TYPE_CHECKING:
+        from .isa import TargetISA  # noqa
+        # A tuple uniquely identifying a register class inside a register bank.
+        # (count, width, start)
+        RCTup = Tuple[int, int, int]
 except ImportError:
     pass
 
@@ -189,6 +190,7 @@ class RegClass(object):
         bank.classes.append(self)
 
     def __str__(self):
+        # type: () -> str
         return self.name
 
     def rctup(self):
@@ -223,6 +225,7 @@ class RegClass(object):
         return (count, self.width, start)
 
     def __getitem__(self, sliced):
+        # type: (slice) -> RegClass
         """
         Create a sub-class of a register class using slice notation. The slice
         indexes refer to allocations in the parent register class, not register
@@ -273,6 +276,7 @@ class RegClass(object):
 
     @staticmethod
     def extract_names(globs):
+        # type: (Dict[str, Any]) -> None
         """
         Given a dict mapping name -> object as returned by `globals()`, find
         all the RegClass objects and set their name from the dict key.

@@ -7,18 +7,25 @@ item is mapped to its offset in the final array.
 This is a compression technique for compile-time generated tables.
 """
 
+try:
+    from typing import Any, List, Dict, Tuple, Sequence  # noqa
+except ImportError:
+    pass
+
 
 class UniqueTable:
     """
     Collect items into the `table` list, removing duplicates.
     """
     def __init__(self):
+        # type: () -> None
         # List of items added in order.
-        self.table = list()
+        self.table = list()  # type: List[Any]
         # Map item -> index.
-        self.index = dict()
+        self.index = dict()  # type: Dict[Any, int]
 
     def add(self, item):
+        # type: (Any) -> int
         """
         Add a single item to the table if it isn't already there.
 
@@ -40,11 +47,13 @@ class UniqueSeqTable:
     Sequences don't have to be of the same length.
     """
     def __init__(self):
-        self.table = list()
+        # type: () -> None
+        self.table = list()  # type: List[Any]
         # Map seq -> index.
-        self.index = dict()
+        self.index = dict()  # type: Dict[Tuple[Any, ...], int]
 
     def add(self, seq):
+        # type: (Sequence[Any]) -> int
         """
         Add a sequence of items to the table. If the table already contains the
         items in `seq` in the same order, use those instead.

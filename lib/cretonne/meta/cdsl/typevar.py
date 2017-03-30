@@ -9,10 +9,12 @@ import math
 from . import types, is_power_of_two
 
 try:
-    from typing import Tuple, Union # noqa
-    Interval = Tuple[int, int]
-    # An Interval where `True` means 'everything'
-    BoolInterval = Union[bool, Interval]
+    from typing import Tuple, Union, TYPE_CHECKING # noqa
+    if TYPE_CHECKING:
+        from srcgen import Formatter  # noqa
+        Interval = Tuple[int, int]
+        # An Interval where `True` means 'everything'
+        BoolInterval = Union[bool, Interval]
 except ImportError:
     pass
 
@@ -143,7 +145,11 @@ class TypeSet(object):
         return h
 
     def __eq__(self, other):
-        return self.typeset_key() == other.typeset_key()
+        # type: (object) -> bool
+        if isinstance(other, TypeSet):
+            return self.typeset_key() == other.typeset_key()
+        else:
+            return False
 
     def __repr__(self):
         # type: () -> str
@@ -157,6 +163,7 @@ class TypeSet(object):
         return s + ')'
 
     def emit_fields(self, fmt):
+        # type: (Formatter) -> None
         """Emit field initializers for this typeset."""
         fmt.comment(repr(self))
         fields = ('lanes', 'int', 'float', 'bool')
@@ -299,6 +306,9 @@ class TypeVar(object):
                     .format(self.name, self.type_set))
 
     def __eq__(self, other):
+        # type: (object) -> bool
+        if not isinstance(other, TypeVar):
+            return False
         if self.is_derived and other.is_derived:
             return (
                     self.derived_func == other.derived_func and

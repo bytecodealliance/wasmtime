@@ -37,6 +37,7 @@ except ImportError:
 
 
 def _is_parent(a, b):
+    # type: (PredContext, PredContext) -> bool
     """
     Return true if a is a parent of b, or equal to it.
     """
@@ -46,6 +47,7 @@ def _is_parent(a, b):
 
 
 def _descendant(a, b):
+    # type: (PredContext, PredContext) -> PredContext
     """
     If a is a parent of b or b is a parent of a, return the descendant of the
     two.

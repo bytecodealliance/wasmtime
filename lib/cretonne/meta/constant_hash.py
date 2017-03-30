@@ -8,8 +8,14 @@ quadratically probed hash table.
 from __future__ import absolute_import
 from cdsl import next_power_of_two
 
+try:
+    from typing import Any, List, Sequence, Callable  # noqa
+except ImportError:
+    pass
+
 
 def simple_hash(s):
+    # type: (str) -> int
     """
     Compute a primitive hash of a string.
 
@@ -26,6 +32,7 @@ def simple_hash(s):
 
 
 def compute_quadratic(items, hash_function):
+    # type: (Sequence[Any], Callable[[Any], int]) -> List[Any]
     """
     Compute an open addressed, quadratically probed hash table containing
     `items`. The returned table is a list containing the elements of the
@@ -43,7 +50,7 @@ def compute_quadratic(items, hash_function):
     items = list(items)
     # Table size must be a power of two. Aim for >20% unused slots.
     size = next_power_of_two(int(1.20*len(items)))
-    table = [None] * size
+    table = [None] * size  # type: List[Any]
 
     for i in items:
         h = hash_function(i) % size

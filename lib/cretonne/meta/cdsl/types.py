@@ -21,11 +21,12 @@ class ValueType(object):
     _registry = dict()  # type: Dict[str, ValueType]
 
     # List of all the scalar types.
-    all_scalars = list()  # type: List[ValueType]
+    all_scalars = list()  # type: List[ScalarType]
 
     def __init__(self, name, membytes, doc):
         # type: (str, int, str) -> None
         self.name = name
+        self.number = None  # type: int
         self.membytes = membytes
         self.__doc__ = doc
         assert name not in ValueType._registry

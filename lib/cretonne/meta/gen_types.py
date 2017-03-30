@@ -12,8 +12,14 @@ import srcgen
 from cdsl.types import ValueType
 import base.types  # noqa
 
+try:
+    from typing import Iterable  # noqa
+except ImportError:
+    pass
+
 
 def emit_type(ty, fmt):
+    # type: (ValueType, srcgen.Formatter) -> None
     """
     Emit a constant definition of a single value type.
     """
@@ -25,6 +31,7 @@ def emit_type(ty, fmt):
 
 
 def emit_vectors(bits, fmt):
+    # type: (int, srcgen.Formatter) -> None
     """
     Emit definition for all vector types with `bits` total size.
     """
@@ -37,6 +44,7 @@ def emit_vectors(bits, fmt):
 
 
 def emit_types(fmt):
+    # type: (srcgen.Formatter) -> None
     for ty in ValueType.all_scalars:
         emit_type(ty, fmt)
     # Emit vector definitions for common SIMD sizes.
@@ -47,6 +55,7 @@ def emit_types(fmt):
 
 
 def generate(out_dir):
+    # type: (str) -> None
     fmt = srcgen.Formatter()
     emit_types(fmt)
     fmt.update_file('types.rs', out_dir)
