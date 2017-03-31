@@ -66,8 +66,41 @@ fn recipe_rshamt<CS: CodeSink + ?Sized>(_func: &Function, _inst: Inst, _sink: &m
     unimplemented!()
 }
 
-fn recipe_i<CS: CodeSink + ?Sized>(_func: &Function, _inst: Inst, _sink: &mut CS) {
-    unimplemented!()
+/// I-type instructions.
+///
+///   31  19  14     11 6
+///   imm rs1 funct3 rd opcode
+///    20  15     12  7      0
+///
+/// Encoding bits: `opcode[6:2] | (funct3 << 5)`
+fn put_i<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, imm: i64, rd: RegUnit, sink: &mut CS) {
+    let bits = bits as u32;
+    let opcode5 = bits & 0x1f;
+    let funct3 = (bits >> 5) & 0x7;
+    let rs1 = rs1 as u32 & 0x1f;
+    let rd = rd as u32 & 0x1f;
+
+    // 0-6: opcode
+    let mut i = 0x3;
+    i |= opcode5 << 2;
+    i |= rd << 7;
+    i |= funct3 << 12;
+    i |= rs1 << 15;
+    i |= (imm << 20) as u32;
+
+    sink.put4(i);
+}
+
+fn recipe_i<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::BinaryImm { arg, imm, .. } = func.dfg[inst] {
+        put_i(func.encodings[inst].bits(),
+              func.locations[arg].unwrap_reg(),
+              imm.into(),
+              func.locations[func.dfg.first_result(inst)].unwrap_reg(),
+              sink);
+    } else {
+        panic!("Expected Binary format: {:?}", func.dfg[inst]);
+    }
 }
 
 fn recipe_iret<CS: CodeSink + ?Sized>(_func: &Function, _inst: Inst, _sink: &mut CS) {

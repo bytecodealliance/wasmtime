@@ -39,5 +39,25 @@ ebb0:
     [-,%x7]             v44 = icmp ult, v1, v2  ; bin: 015533b3
     [-,%x16]            v45 = icmp ult, v2, v1  ; bin: 00aab833
 
+    ; Integer Register-Immediate Instructions
+
+    ; addi
+    [-,%x7]     v100 = iadd_imm v1, 1000       ; bin: 3e850393
+    [-,%x16]    v101 = iadd_imm v2, -905       ; bin: c77a8813
+    ; TBD: slti
+    ; andi
+    [-,%x7]     v110 = band_imm v1, 1000       ; bin: 3e857393
+    [-,%x16]    v111 = band_imm v2, -905       ; bin: c77af813
+    ; ori
+    [-,%x7]     v112 = bor_imm v1, 1000        ; bin: 3e856393
+    [-,%x16]    v113 = bor_imm v2, -905        ; bin: c77ae813
+    ; xori
+    [-,%x7]     v114 = bxor_imm v1, 1000       ; bin: 3e854393
+    [-,%x16]    v115 = bxor_imm v2, -905       ; bin: c77ac813
+
+    ; TBD: slli
+    ; TBD: srli
+    ; TBD: srai
+
     return
 }
