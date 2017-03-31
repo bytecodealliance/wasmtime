@@ -46,8 +46,18 @@ else
     echo "If a newer version of rustfmt is available, update this script."
 fi
 
-banner $(python --version 2>&1)
-$topdir/lib/cretonne/meta/check.sh
+# Check if any Python files have changed since we last checked them.
+tsfile=$topdir/target/meta-checked
+if [ -f $tsfile ]; then
+    needcheck=$(find $topdir/lib/cretonne/meta -name '*.py' -newer $tsfile)
+else
+    needcheck=yes
+fi
+if [ -n "$needcheck" ]; then
+    banner $(python --version 2>&1)
+    $topdir/lib/cretonne/meta/check.sh
+    touch $tsfile
+fi
 
 PKGS="cretonne cretonne-reader cretonne-tools filecheck"
 cd "$topdir"
