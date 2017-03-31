@@ -14,7 +14,6 @@ ebb0:
     ; sub
     [-,%x7]             v12 = isub v1, v2       ; bin: 415503b3
     [-,%x16]            v13 = isub v2, v1       ; bin: 40aa8833
-    ; TBD: slt/sltu
     ; and
     [-,%x7]             v20 = band v1, v2       ; bin: 015573b3
     [-,%x16]            v21 = band v2, v1       ; bin: 00aaf833
@@ -33,5 +32,12 @@ ebb0:
     ; sra
     [-,%x7]             v34 = sshr v1, v2       ; bin: 415553b3
     [-,%x16]            v35 = sshr v2, v1       ; bin: 40aad833
+    ; slt
+    [-,%x7]             v42 = icmp slt, v1, v2  ; bin: 015523b3
+    [-,%x16]            v43 = icmp slt, v2, v1  ; bin: 00aaa833
+    ; sltu
+    [-,%x7]             v44 = icmp ult, v1, v2  ; bin: 015533b3
+    [-,%x16]            v45 = icmp ult, v2, v1  ; bin: 00aab833
+
     return
 }
