@@ -57,15 +57,21 @@ from collections import OrderedDict, defaultdict
 import math
 import itertools
 from cdsl.registers import RegClass, Register
+from cdsl.predicates import FieldPredicate
 
 try:
-    from typing import Sequence  # noqa
-    from cdsl.isa import TargetISA, OperandConstraint  # noqa
+    from typing import Sequence, Set, Tuple, List, Iterable, DefaultDict, TYPE_CHECKING  # noqa
+    if TYPE_CHECKING:
+        from cdsl.isa import TargetISA, OperandConstraint, Encoding, CPUMode  # noqa
+        from cdsl.predicates import PredNode, PredLeaf  # noqa
+        from cdsl.types import ValueType  # noqa
+        from cdsl.instructions import Instruction  # noqa
 except ImportError:
     pass
 
 
 def emit_instp(instp, fmt):
+    # type: (PredNode, srcgen.Formatter) -> None
     """
     Emit code for matching an instruction predicate against an
     `InstructionData` reference called `inst`.
@@ -77,11 +83,15 @@ def emit_instp(instp, fmt):
 
     # Which fields do we need in the InstructionData pattern match?
     # Collect the leaf predicates.
-    leafs = set()
+    leafs = set()  # type: Set[PredLeaf]
     instp.predicate_leafs(leafs)
     # All the leafs are FieldPredicate instances. Here we just care about
     # the field names.
-    fields = ', '.join(sorted(set(p.field.name for p in leafs)))
+    fnames = set()  # type: Set[str]
+    for p in leafs:
+        assert isinstance(p, FieldPredicate)
+        fnames.add(p.field.name)
+    fields = ', '.join(sorted(fnames))
 
     with fmt.indented('{} => {{'.format(instp.number), '}'):
         with fmt.indented(
@@ -91,6 +101,7 @@ def emit_instp(instp, fmt):
 
 
 def emit_instps(instps, fmt):
+    # type: (Sequence[PredNode], srcgen.Formatter) -> None
     """
     Emit a function for matching instruction predicates.
     """
@@ -141,6 +152,7 @@ CODE_FAIL = (1 << CODE_BITS) - 1
 
 
 def seq_doc(enc):
+    # type: (Encoding) -> Tuple[Tuple[int, int, int], str]
     """
     Return a tuple containing u16 representations of the instruction predicate
     an recipe / encbits.
@@ -169,13 +181,15 @@ class EncList(object):
     """
 
     def __init__(self, inst, ty):
+        # type: (Instruction, ValueType) -> None
         self.inst = inst
         self.ty = ty
         # List of applicable Encoding instances.
         # These will have different predicates.
-        self.encodings = []
+        self.encodings = []  # type: List[Encoding]
 
     def name(self):
+        # type: () -> str
         name = self.inst.name
         if self.ty:
             name = '{}.{}'.format(name, self.ty.name)
@@ -184,6 +198,7 @@ class EncList(object):
         return name
 
     def by_isap(self):
+        # type: () -> Iterable[Tuple[PredNode, Tuple[Encoding, ...]]]
         """
         Group the encodings by ISA predicate without reordering them.
 
@@ -192,17 +207,18 @@ class EncList(object):
         have the same ISA predicate.
         """
         maxlen = CODE_FAIL >> PRED_BITS
-        for isap, group in itertools.groupby(
+        for isap, groupi in itertools.groupby(
                 self.encodings, lambda enc: enc.isap):
-            group = tuple(group)
+            group = tuple(groupi)
             # This probably never happens, but we can't express more than
             # maxlen encodings per isap.
             while len(group) > maxlen:
-                yield (isap, group[0..maxlen])
+                yield (isap, group[0:maxlen])
                 group = group[maxlen:]
             yield (isap, group)
 
     def encode(self, seq_table, doc_table, isa):
+        # type: (UniqueSeqTable, DefaultDict[int, List[str]], TargetISA) -> None  # noqa
         """
         Encode this list as a sequence of u16 numbers.
 
@@ -211,8 +227,8 @@ class EncList(object):
 
         Adds comment lines to `doc_table` keyed by seq_table offsets.
         """
-        words = list()
-        docs = list()
+        words = list()  # type: List[int]
+        docs = list()  # type: List[Tuple[int, str]]
 
         # Group our encodings by isap.
         for isap, group in self.by_isap():
@@ -249,21 +265,25 @@ class Level2Table(object):
     """
 
     def __init__(self, ty):
+        # type: (ValueType) -> None
         self.ty = ty
         # Maps inst -> EncList
-        self.lists = OrderedDict()
+        self.lists = OrderedDict()  # type: OrderedDict[Instruction, EncList]
 
     def __getitem__(self, inst):
+        # type: (Instruction) -> EncList
         ls = self.lists.get(inst)
         if not ls:
             ls = EncList(inst, self.ty)
             self.lists[inst] = ls
         return ls
 
-    def __iter__(self):
+    def enclists(self):
+        # type: () -> Iterable[EncList]
         return iter(self.lists.values())
 
     def layout_hashtable(self, level2_hashtables, level2_doc):
+        # type: (List[EncList], DefaultDict[int, List[str]]) -> None
         """
         Compute the hash table mapping opcode -> enclist.
 
@@ -290,20 +310,24 @@ class Level1Table(object):
     """
 
     def __init__(self):
-        self.tables = OrderedDict()
+        # type: () -> None
+        self.tables = OrderedDict()  # type: OrderedDict[ValueType, Level2Table]  # noqa
 
     def __getitem__(self, ty):
+        # type: (ValueType) -> Level2Table
         tbl = self.tables.get(ty)
         if not tbl:
             tbl = Level2Table(ty)
             self.tables[ty] = tbl
         return tbl
 
-    def __iter__(self):
+    def l2tables(self):
+        # type: () -> Iterable[Level2Table]
         return iter(self.tables.values())
 
 
 def make_tables(cpumode):
+    # type: (CPUMode) -> Level1Table
     """
     Generate tables for `cpumode` as described above.
     """
@@ -316,15 +340,17 @@ def make_tables(cpumode):
 
 
 def encode_enclists(level1, seq_table, doc_table, isa):
+    # type: (Level1Table, UniqueSeqTable, DefaultDict[int, List[str]], TargetISA) -> None  # noqa
     """
     Compute encodings and doc comments for encoding lists in `level1`.
     """
-    for level2 in level1:
-        for enclist in level2:
+    for level2 in level1.l2tables():
+        for enclist in level2.enclists():
             enclist.encode(seq_table, doc_table, isa)
 
 
 def emit_enclists(seq_table, doc_table, fmt):
+    # type: (UniqueSeqTable, DefaultDict[int, List[str]], srcgen.Formatter) -> None  # noqa
     with fmt.indented(
             'pub static ENCLISTS: [u16; {}] = ['.format(len(seq_table.table)),
             '];'):
@@ -342,11 +368,13 @@ def emit_enclists(seq_table, doc_table, fmt):
 
 
 def encode_level2_hashtables(level1, level2_hashtables, level2_doc):
-    for level2 in level1:
+    # type: (Level1Table, List[EncList], DefaultDict[int, List[str]]) -> None
+    for level2 in level1.l2tables():
         level2.layout_hashtable(level2_hashtables, level2_doc)
 
 
 def emit_level2_hashtables(level2_hashtables, offt, level2_doc, fmt):
+    # type: (List[EncList], str, DefaultDict[int, List[str]], srcgen.Formatter) -> None  # noqa
     """
     Emit the big concatenation of level 2 hash tables.
     """
@@ -370,6 +398,7 @@ def emit_level2_hashtables(level2_hashtables, offt, level2_doc, fmt):
 
 
 def emit_level1_hashtable(cpumode, level1, offt, fmt):
+    # type: (CPUMode, Level1Table, str, srcgen.Formatter) -> None  # noqa
     """
     Emit a level 1 hash table for `cpumode`.
     """
@@ -399,6 +428,7 @@ def emit_level1_hashtable(cpumode, level1, offt, fmt):
 
 
 def offset_type(length):
+    # type: (int) -> str
     """
     Compute an appropriate Rust integer type to use for offsets into a table of
     the given length.
@@ -467,6 +497,7 @@ def emit_operand_constraints(seq, field, fmt):
 
 
 def gen_isa(isa, fmt):
+    # type: (TargetISA, srcgen.Formatter) -> None
     # First assign numbers to relevant instruction predicates and generate the
     # check_instp() function..
     emit_instps(isa.all_instps, fmt)
@@ -476,11 +507,11 @@ def gen_isa(isa, fmt):
 
     # Tables for enclists with comments.
     seq_table = UniqueSeqTable()
-    doc_table = defaultdict(list)
+    doc_table = defaultdict(list)  # type: DefaultDict[int, List[str]]
 
     # Single table containing all the level2 hash tables.
-    level2_hashtables = list()
-    level2_doc = defaultdict(list)
+    level2_hashtables = list()  # type: List[EncList]
+    level2_doc = defaultdict(list)  # type: DefaultDict[int, List[str]]
 
     for cpumode in isa.cpumodes:
         level2_doc[len(level2_hashtables)].append(cpumode.name)
@@ -505,6 +536,7 @@ def gen_isa(isa, fmt):
 
 
 def generate(isas, out_dir):
+    # type: (Sequence[TargetISA], str) -> None
     for isa in isas:
         fmt = srcgen.Formatter()
         gen_isa(isa, fmt)
