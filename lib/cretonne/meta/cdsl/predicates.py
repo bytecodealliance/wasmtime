@@ -232,6 +232,21 @@ class FieldPredicate(object):
         return 'predicates::{}({})'.format(self.function, ', '.join(args))
 
 
+class IsEqual(FieldPredicate):
+    """
+    Instruction predicate that checks if an immediate instruction format field
+    is equal to a constant value.
+
+    :param field: `FormatField` to be checked.
+    :param value: The constant value to compare against.
+    """
+
+    def __init__(self, field, value):
+        # type: (FormatField, Any) -> None
+        super(IsEqual, self).__init__(field, 'is_equal', (value,))
+        self.value = value
+
+
 class IsSignedInt(FieldPredicate):
     """
     Instruction predicate that checks if an immediate instruction format field
