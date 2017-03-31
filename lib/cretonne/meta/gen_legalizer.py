@@ -43,8 +43,8 @@ def unwrap_inst(iref, node, fmt):
             'let ({}) = if let InstructionData::{} {{'
             .format(', '.join(map(str, expr.args)), iform.name), '};'):
         # Fields are encoded directly.
-        for m in iform.imm_members:
-            fmt.line('{},'.format(m))
+        for f in iform.imm_fields:
+            fmt.line('{},'.format(f.member))
         if nvops == 1:
             fmt.line('arg,')
         elif iform.has_value_list or nvops > 1:
@@ -58,7 +58,7 @@ def unwrap_inst(iref, node, fmt):
         for opnum, op in enumerate(expr.inst.ins):
             if op.is_immediate():
                 n = expr.inst.imm_opnums.index(opnum)
-                outs.append(iform.imm_members[n])
+                outs.append(iform.imm_fields[n].member)
             elif op.is_value():
                 if nvops == 1:
                     arg = 'arg'
