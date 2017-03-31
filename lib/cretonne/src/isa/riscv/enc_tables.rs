@@ -1,5 +1,6 @@
 //! Encoding tables for RISC-V.
 
+use ir::condcodes::IntCC;
 use ir::{Opcode, InstructionData};
 use ir::types;
 use predicates;

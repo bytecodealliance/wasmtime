@@ -11,7 +11,7 @@ instruction formats described in the reference:
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt
-from base.formats import Binary, BinaryImm, MultiAry
+from base.formats import Binary, BinaryImm, MultiAry, IntCompare
 from .registers import GPR
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
@@ -78,6 +78,9 @@ R = EncRecipe('R', Binary, ins=(GPR, GPR), outs=GPR)
 
 # R-type with an immediate shift amount instead of rs2.
 Rshamt = EncRecipe('Rshamt', BinaryImm, ins=GPR, outs=GPR)
+
+# R-type encoding of an integer comparison.
+Ricmp = EncRecipe('Ricmp', IntCompare, ins=(GPR, GPR), outs=GPR)
 
 I = EncRecipe(
         'I', BinaryImm, ins=GPR, outs=GPR,

@@ -3,9 +3,15 @@ RISC-V Encodings.
 """
 from __future__ import absolute_import
 from base import instructions as base
+from base.immediates import intcc
 from .defs import RV32, RV64
-from .recipes import OPIMM, OPIMM32, OP, OP32, JALR, R, Rshamt, I, Iret
+from .recipes import OPIMM, OPIMM32, OP, OP32, JALR, R, Rshamt, Ricmp, I, Iret
 from .settings import use_m
+from cdsl.ast import Var
+
+# Dummies for instruction predicates.
+x = Var('x')
+y = Var('y')
 
 # Basic arithmetic binary instructions are encoded in an R-type instruction.
 for inst,           inst_imm,      f3,    f7 in [
@@ -46,6 +52,13 @@ for inst,           inst_imm,      f3,    f7 in [
     RV32.enc(inst_imm.i32, Rshamt, OPIMM(f3, f7))
     RV64.enc(inst_imm.i64, Rshamt, OPIMM(f3, f7))
     RV64.enc(inst_imm.i32, Rshamt, OPIMM32(f3, f7))
+
+# Signed and unsigned integer 'less than'. There are no 'w' variants for
+# comparing 32-bit numbers in RV64.
+RV32.enc(base.icmp.i32(intcc.slt, x, y), Ricmp, OP(0b010, 0b0000000))
+RV64.enc(base.icmp.i64(intcc.slt, x, y), Ricmp, OP(0b010, 0b0000000))
+RV32.enc(base.icmp.i32(intcc.ult, x, y), Ricmp, OP(0b011, 0b0000000))
+RV64.enc(base.icmp.i64(intcc.ult, x, y), Ricmp, OP(0b011, 0b0000000))
 
 # "M" Standard Extension for Integer Multiplication and Division.
 # Gated by the `use_m` flag.
