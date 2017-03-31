@@ -515,8 +515,8 @@ def gen_format_constructor(iform, fmt):
         result_type = 'result_type'
 
     # Normal operand arguments. Start with the immediate operands.
-    for kind, name in zip(iform.imm_kinds, iform.imm_members):
-        args.append('{}: {}'.format(name, kind.rust_type))
+    for f in iform.imm_fields:
+        args.append('{}: {}'.format(f.member, f.kind.rust_type))
     # Then the value operands.
     if iform.has_value_list:
         # Take all value arguments as a finished value list. The value lists
@@ -557,8 +557,8 @@ def gen_member_inits(iform, fmt):
 
     # Immediate operands.
     # We have local variables with the same names as the members.
-    for member in iform.imm_members:
-        fmt.line('{}: {},'.format(member, member))
+    for f in iform.imm_fields:
+        fmt.line('{}: {},'.format(f.member, f.member))
 
     # Value operands.
     if iform.has_value_list:

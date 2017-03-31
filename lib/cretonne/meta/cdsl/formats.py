@@ -59,17 +59,15 @@ class InstructionFormat(object):
         self.name = kwargs.get('name', None)  # type: str
         self.multiple_results = kwargs.get('multiple_results', False)
 
-        # Struct member names for the immediate operands. All other instruction
-        # operands are values or variable argument lists. They are all handled
-        # specially.
-        self.imm_members = list()  # type: List[str]
         # The number of value operands stored in the format, or `None` when
         # `has_value_list` is set.
         self.num_value_operands = 0
         # Does this format use a value list for storing value operands?
         self.has_value_list = False
-        # Operand kinds for the immediate operands.
-        self.imm_kinds = tuple(self._process_member_names(kinds))
+        # Operand fields for the immediate operands. All other instruction
+        # operands are values or variable argument lists. They are all handled
+        # specially.
+        self.imm_fields = tuple(self._process_member_names(kinds))
 
         # The typevar_operand argument must point to a 'value' operand.
         self.typevar_operand = kwargs.get('typevar_operand', None)  # type: int
@@ -82,9 +80,9 @@ class InstructionFormat(object):
             self.typevar_operand = 0
 
         # Compute a signature for the global registry.
+        imm_kinds = tuple(f.kind for f in self.imm_fields)
         sig = (
-                self.multiple_results, self.imm_kinds,
-                self.num_value_operands,
+                self.multiple_results, imm_kinds, self.num_value_operands,
                 self.has_value_list)
         if sig in InstructionFormat._registry:
             raise RuntimeError(
@@ -94,7 +92,7 @@ class InstructionFormat(object):
         InstructionFormat.all_formats.append(self)
 
     def _process_member_names(self, kinds):
-        # type: (Sequence[Union[OperandKind, Tuple[str, OperandKind]]]) -> Iterable[OperandKind] # noqa
+        # type: (Sequence[Union[OperandKind, Tuple[str, OperandKind]]]) -> Iterable[FormatField]  # noqa
         """
         Extract names of all the immediate operands in the kinds tuple.
 
@@ -102,10 +100,11 @@ class InstructionFormat(object):
         pair. The member names correspond to members in the Rust
         `InstructionData` data structure.
 
-        Update the fields `num_value_operands` and `imm_members`.
+        Updates the fields `self.num_value_operands` and `self.has_value_list`.
 
-        Yields the immediate operand kinds.
+        Yields the immediate operand fields.
         """
+        inum = 0
         for arg in kinds:
             if isinstance(arg, OperandKind):
                 member = arg.default_member
@@ -119,13 +118,13 @@ class InstructionFormat(object):
             elif k is VARIABLE_ARGS:
                 self.has_value_list = True
             else:
-                self.imm_members.append(member)
-                yield k
+                yield FormatField(self, inum, k, member)
+                inum += 1
 
     def __str__(self):
         # type: () -> str
-        args = ', '.join('{}: {}'.format(m, k)
-                         for m, k in zip(self.imm_members, self.imm_kinds))
+        args = ', '.join(
+                '{}: {}'.format(f.member, f.kind) for f in self.imm_fields)
         return '{}(imms=({}), vals={})'.format(
                 self.name, args, self.num_value_operands)
 
@@ -137,16 +136,16 @@ class InstructionFormat(object):
         Each non-value format member becomes a corresponding `FormatField`
         attribute.
         """
-        try:
-            i = self.imm_members.index(attr)
-        except ValueError:
-            raise AttributeError(
-                    '{} is neither a {} member or a '
-                    .format(attr, self.name) +
-                    'normal InstructionFormat attribute')
-        field = FormatField(self, i, attr)
-        setattr(self, attr, field)
-        return field
+        for f in self.imm_fields:
+            if f.member == attr:
+                # Cache this field attribute so we won't have to search again.
+                setattr(self, attr, f)
+                return f
+
+        raise AttributeError(
+                '{} is neither a {} member or a '
+                .format(attr, self.name) +
+                'normal InstructionFormat attribute')
 
     @staticmethod
     def lookup(ins, outs):
@@ -207,26 +206,28 @@ class InstructionFormat(object):
 
 class FormatField(object):
     """
-    A field in an instruction format.
+    An immediate field in an instruction format.
 
     This corresponds to a single member of a variant of the `InstructionData`
     data type.
 
-    :param format: Parent `InstructionFormat`.
-    :param operand: Immediate operand number in parent.
-    :param name: Member name in `InstructionData` variant.
+    :param iformat: Parent `InstructionFormat`.
+    :param immnum: Immediate operand number in parent.
+    :param kind: Immediate Operand kind.
+    :param member: Member name in `InstructionData` variant.
     """
 
-    def __init__(self, format, operand, name):
-        # type: (InstructionFormat, int, str) -> None
-        self.format = format
-        self.operand = operand
-        self.name = name
+    def __init__(self, iform, immnum, kind, member):
+        # type: (InstructionFormat, int, OperandKind, str) -> None
+        self.format = iform
+        self.immnum = immnum
+        self.kind = kind
+        self.member = member
 
     def __str__(self):
         # type: () -> str
-        return '{}.{}'.format(self.format.name, self.name)
+        return '{}.{}'.format(self.format.name, self.member)
 
     def rust_name(self):
         # type: () -> str
-        return self.name
+        return self.member

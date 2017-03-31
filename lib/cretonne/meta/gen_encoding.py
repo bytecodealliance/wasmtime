@@ -90,7 +90,7 @@ def emit_instp(instp, fmt):
     fnames = set()  # type: Set[str]
     for p in leafs:
         assert isinstance(p, FieldPredicate)
-        fnames.add(p.field.name)
+        fnames.add(p.field.rust_name())
     fields = ', '.join(sorted(fnames))
 
     with fmt.indented('{} => {{'.format(instp.number), '}'):

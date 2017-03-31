@@ -207,7 +207,7 @@ class FieldPredicate(object):
 
     def __str__(self):
         # type: () -> str
-        args = (self.field.name,) + tuple(map(str, self.args))
+        args = (self.field.rust_name(),) + tuple(map(str, self.args))
         return '{}({})'.format(self.function, ', '.join(args))
 
     def predicate_context(self):
