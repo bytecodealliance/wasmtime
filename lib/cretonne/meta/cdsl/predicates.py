@@ -202,6 +202,8 @@ class FieldPredicate(object):
         self.field = field
         self.function = function
         self.args = args
+        # All PredNode members must have a name field. This will never be set.
+        self.name = None  # type: str
 
     def __str__(self):
         # type: () -> str

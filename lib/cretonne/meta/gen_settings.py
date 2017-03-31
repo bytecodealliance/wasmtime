@@ -9,8 +9,18 @@ from cdsl import camel_case
 from cdsl.settings import BoolSetting, NumSetting, EnumSetting
 from base import settings
 
+try:
+    from typing import Sequence, Set, Tuple, List, TYPE_CHECKING  # noqa
+    if TYPE_CHECKING:
+        from cdsl.isa import TargetISA  # noqa
+        from cdsl.settings import Setting, SettingGroup  # noqa
+        from cdsl.predicates import Predicate, PredContext  # noqa
+except ImportError:
+    pass
+
 
 def gen_enum_types(sgrp, fmt):
+    # type: (SettingGroup, srcgen.Formatter) -> None
     """
     Emit enum types for any enum settings.
     """
@@ -27,6 +37,7 @@ def gen_enum_types(sgrp, fmt):
 
 
 def gen_getter(setting, sgrp, fmt):
+    # type: (Setting, SettingGroup, srcgen.Formatter) -> None
     """
     Emit a getter function for `setting`.
     """
@@ -57,6 +68,7 @@ def gen_getter(setting, sgrp, fmt):
 
 
 def gen_pred_getter(pred, sgrp, fmt):
+    # type: (Predicate, SettingGroup, srcgen.Formatter) -> None
     """
     Emit a getter for a pre-computed predicate.
     """
@@ -69,6 +81,7 @@ def gen_pred_getter(pred, sgrp, fmt):
 
 
 def gen_getters(sgrp, fmt):
+    # type: (SettingGroup, srcgen.Formatter) -> None
     """
     Emit getter functions for all the settings in fmt.
     """
@@ -87,6 +100,7 @@ def gen_getters(sgrp, fmt):
 
 
 def gen_descriptors(sgrp, fmt):
+    # type: (SettingGroup, srcgen.Formatter) -> None
     """
     Generate the DESCRIPTORS and ENUMERATORS tables.
     """
@@ -125,6 +139,7 @@ def gen_descriptors(sgrp, fmt):
             fmt.line('"{}",'.format(txt))
 
     def hash_setting(s):
+        # type: (Setting) -> int
         return constant_hash.simple_hash(s.name)
 
     hash_table = constant_hash.compute_quadratic(sgrp.settings, hash_setting)
@@ -140,6 +155,7 @@ def gen_descriptors(sgrp, fmt):
 
 
 def gen_template(sgrp, fmt):
+    # type: (SettingGroup, srcgen.Formatter) -> None
     """
     Emit a Template constant.
     """
@@ -164,6 +180,7 @@ def gen_template(sgrp, fmt):
 
 
 def gen_display(sgrp, fmt):
+    # type: (SettingGroup, srcgen.Formatter) -> None
     """
     Generate the Display impl for Flags.
     """
@@ -182,6 +199,7 @@ def gen_display(sgrp, fmt):
 
 
 def gen_constructor(sgrp, parent, fmt):
+    # type: (SettingGroup, PredContext, srcgen.Formatter) -> None
     """
     Generate a Flags constructor.
     """
@@ -235,6 +253,7 @@ def gen_constructor(sgrp, parent, fmt):
 
 
 def gen_group(sgrp, fmt):
+    # type: (SettingGroup, srcgen.Formatter) -> None
     """
     Generate a Flags struct representing `sgrp`.
     """
@@ -252,6 +271,7 @@ def gen_group(sgrp, fmt):
 
 
 def generate(isas, out_dir):
+    # type: (Sequence[TargetISA], str) -> None
     # Generate shared settings.
     fmt = srcgen.Formatter()
     settings.group.qual_mod = 'settings'
