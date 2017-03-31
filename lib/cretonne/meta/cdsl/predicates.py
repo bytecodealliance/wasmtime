@@ -216,7 +216,8 @@ class FieldPredicate(object):
         This predicate can be evaluated in the context of an instruction
         format.
         """
-        return self.field.format
+        iform = self.field.format  # type: InstructionFormat
+        return iform
 
     def predicate_leafs(self, leafs):
         # type: (Set[PredLeaf]) -> None

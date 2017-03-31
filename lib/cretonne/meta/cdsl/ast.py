@@ -7,11 +7,13 @@ for patern matching an rewriting of cretonne instructions.
 from __future__ import absolute_import
 from . import instructions
 from .typevar import TypeVar
+from .predicates import IsEqual, And
 
 try:
     from typing import Union, Tuple, Sequence, TYPE_CHECKING  # noqa
     if TYPE_CHECKING:
         from .operands import ImmediateKind  # noqa
+        from .predicates import PredNode  # noqa
 except ImportError:
     pass
 
@@ -411,6 +413,32 @@ class Apply(Expr):
             args = defs[0].rust_type() + ', ' + args
         method = self.inst.snake_name()
         return '{}({})'.format(method, args)
+
+    def inst_predicate(self):
+        # type: () -> PredNode
+        """
+        Construct an instruction predicate that verifies the immediate operands
+        on this instruction.
+
+        Immediate operands in a source pattern can be either free variables or
+        constants like `Enumerator`. We don't currently support constraints on
+        free variables, but we may in the future.
+        """
+        pred = None  # type: PredNode
+        iform = self.inst.format
+
+        # Examine all of the immediate operands.
+        for ffield, opnum in zip(iform.imm_fields, self.inst.imm_opnums):
+            arg = self.args[opnum]
+
+            # Ignore free variables for now. We may add variable predicates
+            # later.
+            if isinstance(arg, Var):
+                continue
+
+            pred = And.combine(pred, IsEqual(ffield, arg))
+
+        return pred
 
 
 class Enumerator(Expr):
