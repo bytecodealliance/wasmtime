@@ -26,6 +26,9 @@ class Setting(object):
         self.__doc__ = doc
         # Offset of byte in settings vector containing this setting.
         self.byte_offset = None  # type: int
+        # Index into the generated DESCRIPTORS table.
+        self.descriptor_index = None  # type: int
+
         self.group = SettingGroup.append(self)
 
     def __str__(self):
@@ -39,6 +42,10 @@ class Setting(object):
         predicate.
         """
         return self.group
+
+    def default_byte(self):
+        # type: () -> int
+        raise NotImplementedError("default_byte is an abstract method")
 
 
 class BoolSetting(Setting):
@@ -153,6 +160,9 @@ class SettingGroup(object):
         # - Added parent predicates that are replicated in this group.
         # Maps predicate -> number.
         self.predicate_number = OrderedDict()  # type: OrderedDict[PredNode, int]  # noqa
+
+        # Fully qualified Rust module name. See gen_settings.py.
+        self.qual_mod = None  # type: str
 
         self.open()
 
