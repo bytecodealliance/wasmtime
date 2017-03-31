@@ -289,9 +289,10 @@ class Level2Table(object):
 
         Append the hash table to `level2_hashtables` and record the offset.
         """
-        hash_table = compute_quadratic(
-                self.lists.values(),
-                lambda enclist: enclist.inst.number)
+        def hash_func(enclist):
+            # type: (EncList) -> int
+            return enclist.inst.number
+        hash_table = compute_quadratic(self.lists.values(), hash_func)
 
         self.hash_table_offset = len(level2_hashtables)
         self.hash_table_len = len(hash_table)
@@ -402,9 +403,10 @@ def emit_level1_hashtable(cpumode, level1, offt, fmt):
     """
     Emit a level 1 hash table for `cpumode`.
     """
-    hash_table = compute_quadratic(
-            level1.tables.values(),
-            lambda level2: level2.ty.number)
+    def hash_func(level2):
+        # type: (Level2Table) -> int
+        return level2.ty.number
+    hash_table = compute_quadratic(level1.tables.values(), hash_func)
 
     with fmt.indented(
             'pub static LEVEL1_{}: [Level1Entry<{}>; {}] = ['

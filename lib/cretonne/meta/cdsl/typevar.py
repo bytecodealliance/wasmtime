@@ -60,7 +60,7 @@ def decode_interval(intv, full_range, default=None):
     """
     if isinstance(intv, tuple):
         # mypy buig here: 'builtins.None' object is not iterable
-        lo, hi = intv  # type: ignore
+        lo, hi = intv
         assert is_power_of_two(lo)
         assert is_power_of_two(hi)
         assert lo <= hi
