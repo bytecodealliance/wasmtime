@@ -55,9 +55,15 @@ ebb0:
     [-,%x7]     v114 = bxor_imm v1, 1000       ; bin: 3e854393
     [-,%x16]    v115 = bxor_imm v2, -905       ; bin: c77ac813
 
-    ; TBD: slli
-    ; TBD: srli
-    ; TBD: srai
+    ; slli
+    [-,%x7]     v120 = ishl_imm v1, 31         ; bin: 01f51393
+    [-,%x16]    v121 = ishl_imm v2, 8          ; bin: 008a9813
+    ; srli
+    [-,%x7]     v122 = ushr_imm v1, 31         ; bin: 01f55393
+    [-,%x16]    v123 = ushr_imm v2, 8          ; bin: 008ad813
+    ; srai
+    [-,%x7]     v124 = sshr_imm v1, 31         ; bin: 41f55393
+    [-,%x16]    v125 = sshr_imm v2, 8          ; bin: 408ad813
 
     return
 }
