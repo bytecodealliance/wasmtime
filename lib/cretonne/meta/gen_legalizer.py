@@ -211,6 +211,12 @@ def gen_xform(xform, fmt):
     # variables.
     unwrap_inst('inst', xform.src.rtl[0], fmt)
 
+    # We could support instruction predicates, but not yet. Should we just
+    # return false if it fails? What about multiple patterns with different
+    # predicates for the same opcode?
+    instp = xform.src.rtl[0].expr.inst_predicate()
+    assert instp is None, "Instruction predicates not supported in legalizer"
+
     # Emit the destination pattern.
     for dst in xform.dst.rtl:
         emit_dst_inst(dst, fmt)
