@@ -2,18 +2,23 @@
 from __future__ import absolute_import
 from .predicates import And
 from .registers import RegClass, Register
+from .ast import Apply
 
 # The typing module is only required by mypy, and we don't use these imports
 # outside type comments.
 try:
     from typing import Tuple, Union, Any, Iterable, Sequence, List, Set, TYPE_CHECKING  # noqa
-    from .instructions import MaybeBoundInst, InstructionGroup, InstructionFormat  # noqa
-    from .predicates import PredNode  # noqa
-    from .settings import SettingGroup  # noqa
-    from .types import ValueType  # noqa
-    from .registers import RegBank  # noqa
-    OperandConstraint = Union[RegClass, Register, int]
-    ConstraintSeq = Union[OperandConstraint, Tuple[OperandConstraint, ...]]
+    if TYPE_CHECKING:
+        from .instructions import MaybeBoundInst, InstructionGroup, InstructionFormat  # noqa
+        from .predicates import PredNode  # noqa
+        from .settings import SettingGroup  # noqa
+        from .types import ValueType  # noqa
+        from .registers import RegBank  # noqa
+        OperandConstraint = Union[RegClass, Register, int]
+        ConstraintSeq = Union[OperandConstraint, Tuple[OperandConstraint, ...]]
+        # Instruction specification for encodings. Allows for predicated
+        # instructions.
+        InstSpec = Union[MaybeBoundInst, Apply]
 except ImportError:
     pass
 
@@ -210,6 +215,14 @@ class Encoding(object):
     An `Encoding` object ties an instruction opcode with concrete type
     variables together with and encoding recipe and encoding bits.
 
+    The concrete instruction can be in three different forms:
+
+    1. A naked opcode: `trap` for non-polymorphic instructions.
+    2. With bound type variables: `iadd.i32` for polymorphic instructions.
+    3. With operands providing constraints: `icmp.i32(intcc.eq, x, y)`.
+
+    If the instruction is polymorphic, all type variables must be provided.
+
     :param cpumode: The CPU mode where the encoding is active.
     :param inst: The :py:class:`Instruction` or :py:class:`BoundInstruction`
                  being encoded.
@@ -220,10 +233,18 @@ class Encoding(object):
     """
 
     def __init__(self, cpumode, inst, recipe, encbits, instp=None, isap=None):
-        # type: (CPUMode, MaybeBoundInst, EncRecipe, int, PredNode, PredNode) -> None # noqa
+        # type: (CPUMode, InstSpec, EncRecipe, int, PredNode, PredNode) -> None # noqa
         assert isinstance(cpumode, CPUMode)
         assert isinstance(recipe, EncRecipe)
-        self.inst, self.typevars = inst.fully_bound()
+
+        # Check for possible instruction predicates in `inst`.
+        if isinstance(inst, Apply):
+            instp = And.combine(instp, inst.inst_predicate())
+            self.inst = inst.inst
+            self.typevars = inst.typevars
+        else:
+            self.inst, self.typevars = inst.fully_bound()
+
         self.cpumode = cpumode
         assert self.inst.format == recipe.format, (
                 "Format {} must match recipe: {}".format(
