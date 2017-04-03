@@ -145,6 +145,18 @@ fn recipe_i<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
     }
 }
 
+fn recipe_iicmp<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::IntCompareImm { arg, imm, .. } = func.dfg[inst] {
+        put_i(func.encodings[inst].bits(),
+              func.locations[arg].unwrap_reg(),
+              imm.into(),
+              func.locations[func.dfg.first_result(inst)].unwrap_reg(),
+              sink);
+    } else {
+        panic!("Expected IntCompareImm format: {:?}", func.dfg[inst]);
+    }
+}
+
 fn recipe_iret<CS: CodeSink + ?Sized>(_func: &Function, _inst: Inst, _sink: &mut CS) {
     unimplemented!()
 }

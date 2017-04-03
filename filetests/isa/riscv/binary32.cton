@@ -44,7 +44,6 @@ ebb0:
     ; addi
     [-,%x7]     v100 = iadd_imm v1, 1000       ; bin: 3e850393
     [-,%x16]    v101 = iadd_imm v2, -905       ; bin: c77a8813
-    ; TBD: slti
     ; andi
     [-,%x7]     v110 = band_imm v1, 1000       ; bin: 3e857393
     [-,%x16]    v111 = band_imm v2, -905       ; bin: c77af813
@@ -64,6 +63,13 @@ ebb0:
     ; srai
     [-,%x7]     v124 = sshr_imm v1, 31         ; bin: 41f55393
     [-,%x16]    v125 = sshr_imm v2, 8          ; bin: 408ad813
+
+    ; slti
+    [-,%x7]     v130 = icmp_imm slt, v1, 1000  ; bin: 3e852393
+    [-,%x16]    v131 = icmp_imm slt, v2, -905  ; bin: c77aa813
+    ; sltiu
+    [-,%x7]     v132 = icmp_imm ult, v1, 1000  ; bin: 3e853393
+    [-,%x16]    v133 = icmp_imm ult, v2, -905  ; bin: c77ab813
 
     return
 }
