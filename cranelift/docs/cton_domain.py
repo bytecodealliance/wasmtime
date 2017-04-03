@@ -304,16 +304,17 @@ class InstDocumenter(sphinx.ext.autodoc.Documenter):
     def add_content(self, more_content, no_docstring=False):
         super(InstDocumenter, self).add_content(more_content, no_docstring)
         sourcename = self.get_sourcename()
+        inst = self.object
 
         # Add inputs and outputs.
-        for op in self.object.ins:
+        for op in inst.ins:
             if op.is_value():
                 typ = op.typevar
             else:
                 typ = op.kind
             self.add_line(u':in {} {}: {}'.format(
                 typ, op.name, op.get_doc()), sourcename)
-        for op in self.object.outs:
+        for op in inst.outs:
             if op.is_value():
                 typ = op.typevar
             else:
@@ -322,22 +323,22 @@ class InstDocumenter(sphinx.ext.autodoc.Documenter):
                 typ, op.name, op.get_doc()), sourcename)
 
         # Document type inference for polymorphic instructions.
-        if self.object.is_polymorphic:
-            if self.object.ctrl_typevar is not None:
-                if self.object.use_typevar_operand:
+        if inst.is_polymorphic:
+            if inst.ctrl_typevar is not None:
+                if inst.use_typevar_operand:
+                    tvopnum = inst.value_opnums[inst.format.typevar_operand]
                     self.add_line(
                             u':typevar {}: inferred from {}'
                             .format(
-                                self.object.ctrl_typevar.name,
-                                self.object.ins[
-                                    self.object.format.typevar_operand]),
+                                inst.ctrl_typevar.name,
+                                inst.ins[tvopnum]),
                             sourcename)
                 else:
                     self.add_line(
                             u':typevar {}: explicitly provided'
-                            .format(self.object.ctrl_typevar.name),
+                            .format(inst.ctrl_typevar.name),
                             sourcename)
-            for tv in self.object.other_typevars:
+            for tv in inst.other_typevars:
                 self.add_line(
                         u':typevar {}: from input operand'.format(tv.name),
                         sourcename)
