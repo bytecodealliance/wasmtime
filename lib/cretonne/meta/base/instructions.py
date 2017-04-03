@@ -33,6 +33,9 @@ Any = TypeVar(
 # Control flow
 #
 c = Operand('c', Testable, doc='Controlling value to test')
+Cond = Operand('Cond', intcc)
+x = Operand('x', iB)
+y = Operand('y', iB)
 EBB = Operand('EBB', entities.ebb, doc='Destination extended basic block')
 args = Operand('args', VARIABLE_ARGS, doc='EBB arguments')
 
@@ -63,6 +66,26 @@ brnz = Instruction(
         ``c`` is an integer value, take the branch when ``c != 0``.
         """,
         ins=(c, EBB, args), is_branch=True)
+
+br_icmp = Instruction(
+        'br_icmp', r"""
+        Compare scalar integers and branch.
+
+        Compare ``x`` and ``y`` in the same way as the :inst:`icmp` instruction
+        and take the branch if the condition is true::
+
+            br_icmp ugt v1, v2, ebb4(v5, v6)
+
+        is semantically equivalent to::
+
+            v10 = icmp ugt, v1, v2
+            brnz v10, ebb4(v5, v6)
+
+        Some RISC architectures like MIPS and RISC-V provide instructions that
+        implement all or some of the condition codes. The instruction can also
+        be used to represent *macro-op fusion* on architectures like Intel's.
+        """,
+        ins=(Cond, x, y, EBB, args), is_branch=True)
 
 x = Operand('x', iB, doc='index into jump table')
 JT = Operand('JT', entities.jump_table)

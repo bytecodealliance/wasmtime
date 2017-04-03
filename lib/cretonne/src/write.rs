@@ -274,15 +274,19 @@ pub fn write_operands(w: &mut Write, dfg: &DataFlowGraph, inst: Inst) -> Result 
         }
         Branch { destination, ref args, .. } => {
             let args = args.as_slice(pool);
-            if args.len() == 1 {
-                write!(w, " {}, {}", args[0], destination)
-            } else {
-                write!(w,
-                       " {}, {}({})",
-                       args[0],
-                       destination,
-                       DisplayValues(&args[1..]))
+            write!(w, " {}, {}", args[0], destination)?;
+            if args.len() > 1 {
+                write!(w, "({})", DisplayValues(&args[1..]))?;
             }
+            Ok(())
+        }
+        BranchIcmp { cond, destination, ref args, .. } => {
+            let args = args.as_slice(pool);
+            write!(w, " {}, {}, {}, {}", cond, args[0], args[1], destination)?;
+            if args.len() > 2 {
+                write!(w, "({})", DisplayValues(&args[2..]))?;
+            }
+            Ok(())
         }
         BranchTable { arg, table, .. } => write!(w, " {}, {}", arg, table),
         Call { func_ref, ref args, .. } => {

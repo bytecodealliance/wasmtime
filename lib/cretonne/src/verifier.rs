@@ -218,11 +218,9 @@ impl<'a> Verifier<'a> {
             &MultiAry { ref args, .. } => {
                 self.verify_value_list(inst, args)?;
             }
-            &Jump { destination, ref args, .. } => {
-                self.verify_ebb(inst, destination)?;
-                self.verify_value_list(inst, args)?;
-            }
-            &Branch { destination, ref args, .. } => {
+            &Jump { destination, ref args, .. } |
+            &Branch { destination, ref args, .. } |
+            &BranchIcmp { destination, ref args, .. } => {
                 self.verify_ebb(inst, destination)?;
                 self.verify_value_list(inst, args)?;
             }

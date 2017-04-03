@@ -200,6 +200,13 @@ pub enum InstructionData {
         destination: Ebb,
         args: ValueList,
     },
+    BranchIcmp {
+        opcode: Opcode,
+        ty: Type,
+        cond: IntCC,
+        destination: Ebb,
+        args: ValueList,
+    },
     BranchTable {
         opcode: Opcode,
         ty: Type,
@@ -302,6 +309,9 @@ impl InstructionData {
             }
             &InstructionData::Branch { destination, ref args, .. } => {
                 BranchInfo::SingleDest(destination, &args.as_slice(pool)[1..])
+            }
+            &InstructionData::BranchIcmp { destination, ref args, .. } => {
+                BranchInfo::SingleDest(destination, &args.as_slice(pool)[2..])
             }
             &InstructionData::BranchTable { table, .. } => BranchInfo::Table(table),
             _ => BranchInfo::NotABranch,

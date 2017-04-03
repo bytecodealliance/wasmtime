@@ -241,20 +241,14 @@ impl<'a> Context<'a> {
                         self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
 
-                    InstructionData::Jump { ref mut destination, ref mut args, .. } => {
+                    InstructionData::Jump { ref mut destination, ref mut args, .. } |
+                    InstructionData::Branch { ref mut destination, ref mut args, .. } |
+                    InstructionData::BranchIcmp { ref mut destination, ref mut args, .. } => {
                         self.map.rewrite_ebb(destination, loc)?;
                         self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
 
-                    InstructionData::Branch { ref mut destination, ref mut args, .. } => {
-                        self.map.rewrite_ebb(destination, loc)?;
-                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
-                    }
-
-                    InstructionData::Call { ref mut args, .. } => {
-                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
-                    }
-
+                    InstructionData::Call { ref mut args, .. } |
                     InstructionData::IndirectCall { ref mut args, .. } => {
                         self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
@@ -1519,6 +1513,23 @@ impl<'a> Parser<'a> {
                     ty: VOID,
                     destination: ebb_num,
                     args: args.into_value_list(&[ctrl_arg], &mut ctx.function.dfg.value_lists),
+                }
+            }
+            InstructionFormat::BranchIcmp => {
+                let cond = self.match_enum("expected intcc condition code")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let lhs = self.match_value("expected SSA value first operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let rhs = self.match_value("expected SSA value second operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let args = self.parse_opt_value_list()?;
+                InstructionData::BranchIcmp {
+                    opcode: opcode,
+                    ty: VOID,
+                    cond: cond,
+                    destination: ebb_num,
+                    args: args.into_value_list(&[lhs, rhs], &mut ctx.function.dfg.value_lists),
                 }
             }
             InstructionFormat::InsertLane => {

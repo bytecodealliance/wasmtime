@@ -321,6 +321,7 @@ instruction in the EBB.
 .. autoinst:: jump
 .. autoinst:: brz
 .. autoinst:: brnz
+.. autoinst:: br_icmp
 .. autoinst:: br_table
 
 .. inst:: JT = jump_table EBB0, EBB1, ..., EBBn
