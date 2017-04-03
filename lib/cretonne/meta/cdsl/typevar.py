@@ -285,7 +285,7 @@ class TypeVar(object):
             bools = (scalar.bits, scalar.bits)
 
         tv = TypeVar(
-                typ.name, 'typeof({})'.format(typ),
+                typ.name, typ.__doc__,
                 ints, floats, bools, simd=lanes)
         tv.singleton_type = typ
         return tv
