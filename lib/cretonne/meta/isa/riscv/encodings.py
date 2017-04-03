@@ -6,7 +6,7 @@ from base import instructions as base
 from base.immediates import intcc
 from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH
-from .recipes import JALR, R, Rshamt, Ricmp, I, Iicmp, Iret, U, SB
+from .recipes import JALR, R, Rshamt, Ricmp, I, Iicmp, Iret, U, SB, SBzero
 from .settings import use_m
 from cdsl.ast import Var
 
@@ -92,6 +92,15 @@ for cond,           f3 in [
         ]:
     RV32.enc(base.br_icmp.i32(cond, x, y, dest, args), SB, BRANCH(f3))
     RV64.enc(base.br_icmp.i64(cond, x, y, dest, args), SB, BRANCH(f3))
+
+for inst,           f3 in [
+        (base.brz,  0b000),
+        (base.brnz, 0b001)
+        ]:
+    RV32.enc(inst.i32, SBzero, BRANCH(f3))
+    RV64.enc(inst.i64, SBzero, BRANCH(f3))
+    RV32.enc(inst.b1, SBzero, BRANCH(f3))
+    RV64.enc(inst.b1, SBzero, BRANCH(f3))
 
 # Returns are a special case of JALR.
 # Note: Return stack predictors will only recognize this as a return when the

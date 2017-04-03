@@ -246,3 +246,16 @@ fn recipe_sb<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) 
         panic!("Expected BranchIcmp format: {:?}", func.dfg[inst]);
     }
 }
+
+fn recipe_sbzero<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::Branch { destination, ref args, .. } = func.dfg[inst] {
+        let args = &args.as_slice(&func.dfg.value_lists)[0..1];
+        sink.reloc_ebb(RelocKind::Branch.into(), destination);
+        put_sb(func.encodings[inst].bits(),
+               func.locations[args[0]].unwrap_reg(),
+               0,
+               sink);
+    } else {
+        panic!("Expected Branch format: {:?}", func.dfg[inst]);
+    }
+}

@@ -91,5 +91,10 @@ ebb0:
     ; bgeu
     br_icmp uge, v1, v2, ebb0           ; bin: Branch(ebb0) 01557063
 
+    ; beq x, %x0
+    brz v1, ebb0                        ; bin: Branch(ebb0) 00050063
+    ; bne x, %x0
+    brnz v1, ebb0                       ; bin: Branch(ebb0) 00051063
+
     return
 }
