@@ -12,7 +12,7 @@ from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt
 from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
-from base.formats import UnaryImm, BranchIcmp
+from base.formats import UnaryImm, BranchIcmp, Branch
 from .registers import GPR
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
@@ -116,3 +116,6 @@ U = EncRecipe(
 # TODO: These instructions have a +/- 4 KB branch range. How to encode that
 # constraint?
 SB = EncRecipe('SB', BranchIcmp, ins=(GPR, GPR), outs=())
+
+# SB-type branch instruction with rs2 fixed to zero.
+SBzero = EncRecipe('SBzero', Branch, ins=(GPR), outs=())
