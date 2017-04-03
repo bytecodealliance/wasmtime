@@ -43,6 +43,7 @@ FloatCompare = InstructionFormat(floatcc, VALUE, VALUE)
 
 Jump = InstructionFormat(ebb, VARIABLE_ARGS)
 Branch = InstructionFormat(VALUE, ebb, VARIABLE_ARGS)
+BranchIcmp = InstructionFormat(intcc, VALUE, VALUE, ebb, VARIABLE_ARGS)
 BranchTable = InstructionFormat(VALUE, jump_table)
 
 Call = InstructionFormat(
