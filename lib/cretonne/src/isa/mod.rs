@@ -188,4 +188,12 @@ pub trait TargetIsa {
     /// Note that this will call `put*` methods on the trait object via its vtable which is not the
     /// fastest way of emitting code.
     fn emit_inst(&self, func: &Function, inst: Inst, sink: &mut CodeSink);
+
+    /// Get a static array of names associated with relocations in this ISA.
+    ///
+    /// This array can be indexed by the contents of `binemit::Reloc` objects passed to a
+    /// `CodeSink`.
+    fn reloc_names(&self) -> &'static [&'static str] {
+        unimplemented!()
+    }
 }

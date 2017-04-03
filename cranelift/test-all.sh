@@ -56,7 +56,7 @@ fi
 if [ -n "$needcheck" ]; then
     banner $(python --version 2>&1)
     $topdir/lib/cretonne/meta/check.sh
-    touch $tsfile
+    touch $tsfile || echo no target directory
 fi
 
 PKGS="cretonne cretonne-reader cretonne-tools filecheck"

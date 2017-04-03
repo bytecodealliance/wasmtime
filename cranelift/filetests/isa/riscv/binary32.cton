@@ -75,5 +75,21 @@ ebb0:
     [-,%x7]     v140 = iconst.i32 0x12345000            ; bin: 123453b7
     [-,%x16]    v141 = iconst.i32 0xffffffff_fedcb000   ; bin: fedcb837
 
+
+    ; Control Transfer Instructions
+
+    ; beq
+    br_icmp eq, v1, v2, ebb0            ; bin: Branch(ebb0) 01550063
+    ; bne
+    br_icmp ne, v1, v2, ebb0            ; bin: Branch(ebb0) 01551063
+    ; blt
+    br_icmp slt, v1, v2, ebb0           ; bin: Branch(ebb0) 01554063
+    ; bge
+    br_icmp sge, v1, v2, ebb0           ; bin: Branch(ebb0) 01555063
+    ; bltu
+    br_icmp ult, v1, v2, ebb0           ; bin: Branch(ebb0) 01556063
+    ; bgeu
+    br_icmp uge, v1, v2, ebb0           ; bin: Branch(ebb0) 01557063
+
     return
 }

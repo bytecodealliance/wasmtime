@@ -3,10 +3,10 @@
 //! The `binemit` module contains code for translating Cretonne's intermediate representation into
 //! binary machine code.
 
-use ir::{FuncRef, JumpTable, Function, Inst};
+use ir::{Ebb, FuncRef, JumpTable, Function, Inst};
 
 /// Relocation kinds depend on the current ISA.
-pub struct Reloc(u16);
+pub struct Reloc(pub u16);
 
 /// Abstract interface for adding bytes to the code segment.
 ///
@@ -24,6 +24,9 @@ pub trait CodeSink {
 
     /// Add 8 bytes to the code section.
     fn put8(&mut self, u64);
+
+    /// Add a relocation referencing an EBB at the current offset.
+    fn reloc_ebb(&mut self, Reloc, Ebb);
 
     /// Add a relocation referencing an external function at the current offset.
     fn reloc_func(&mut self, Reloc, FuncRef);

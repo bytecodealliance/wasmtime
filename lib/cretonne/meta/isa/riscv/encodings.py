@@ -5,14 +5,16 @@ from __future__ import absolute_import
 from base import instructions as base
 from base.immediates import intcc
 from .defs import RV32, RV64
-from .recipes import OPIMM, OPIMM32, OP, OP32, LUI
-from .recipes import JALR, R, Rshamt, Ricmp, I, Iicmp, Iret, U
+from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH
+from .recipes import JALR, R, Rshamt, Ricmp, I, Iicmp, Iret, U, SB
 from .settings import use_m
 from cdsl.ast import Var
 
 # Dummies for instruction predicates.
 x = Var('x')
 y = Var('y')
+dest = Var('dest')
+args = Var('args')
 
 # Basic arithmetic binary instructions are encoded in an R-type instruction.
 for inst,           inst_imm,      f3,    f7 in [
@@ -78,6 +80,18 @@ RV64.enc(base.imul.i64, R, OP(0b000, 0b0000001), isap=use_m)
 RV64.enc(base.imul.i32, R, OP32(0b000, 0b0000001), isap=use_m)
 
 # Control flow.
+
+# Conditional branches.
+for cond,           f3 in [
+        (intcc.eq,  0b000),
+        (intcc.ne,  0b001),
+        (intcc.slt, 0b100),
+        (intcc.sge, 0b101),
+        (intcc.ult, 0b110),
+        (intcc.uge, 0b111)
+        ]:
+    RV32.enc(base.br_icmp.i32(cond, x, y, dest, args), SB, BRANCH(f3))
+    RV64.enc(base.br_icmp.i64(cond, x, y, dest, args), SB, BRANCH(f3))
 
 # Returns are a special case of JALR.
 # Note: Return stack predictors will only recognize this as a return when the
