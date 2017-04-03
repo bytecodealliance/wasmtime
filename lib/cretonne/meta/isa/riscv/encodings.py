@@ -5,8 +5,8 @@ from __future__ import absolute_import
 from base import instructions as base
 from base.immediates import intcc
 from .defs import RV32, RV64
-from .recipes import OPIMM, OPIMM32, OP, OP32
-from .recipes import JALR, R, Rshamt, Ricmp, I, Iicmp, Iret
+from .recipes import OPIMM, OPIMM32, OP, OP32, LUI
+from .recipes import JALR, R, Rshamt, Ricmp, I, Iicmp, Iret, U
 from .settings import use_m
 from cdsl.ast import Var
 
@@ -65,6 +65,11 @@ RV32.enc(base.icmp_imm.i32(intcc.slt, x, y), Iicmp, OPIMM(0b010))
 RV64.enc(base.icmp_imm.i64(intcc.slt, x, y), Iicmp, OPIMM(0b010))
 RV32.enc(base.icmp_imm.i32(intcc.ult, x, y), Iicmp, OPIMM(0b011))
 RV64.enc(base.icmp_imm.i64(intcc.ult, x, y), Iicmp, OPIMM(0b011))
+
+# Integer constants with the low 12 bits clear are materialized by lui.
+RV32.enc(base.iconst.i32, U, LUI())
+RV64.enc(base.iconst.i32, U, LUI())
+RV64.enc(base.iconst.i64, U, LUI())
 
 # "M" Standard Extension for Integer Multiplication and Division.
 # Gated by the `use_m` flag.

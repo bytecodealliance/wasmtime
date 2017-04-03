@@ -160,3 +160,35 @@ fn recipe_iicmp<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut C
 fn recipe_iret<CS: CodeSink + ?Sized>(_func: &Function, _inst: Inst, _sink: &mut CS) {
     unimplemented!()
 }
+
+/// U-type instructions.
+///
+///   31  11 6
+///   imm rd opcode
+///    12  7      0
+///
+/// Encoding bits: `opcode[6:2] | (funct3 << 5)`
+fn put_u<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rd: RegUnit, sink: &mut CS) {
+    let bits = bits as u32;
+    let opcode5 = bits & 0x1f;
+    let rd = rd as u32 & 0x1f;
+
+    // 0-6: opcode
+    let mut i = 0x3;
+    i |= opcode5 << 2;
+    i |= rd << 7;
+    i |= imm as u32 & 0xfffff000;
+
+    sink.put4(i);
+}
+
+fn recipe_u<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::UnaryImm { imm, .. } = func.dfg[inst] {
+        put_u(func.encodings[inst].bits(),
+              imm.into(),
+              func.locations[func.dfg.first_result(inst)].unwrap_reg(),
+              sink);
+    } else {
+        panic!("Expected UnaryImm format: {:?}", func.dfg[inst]);
+    }
+}

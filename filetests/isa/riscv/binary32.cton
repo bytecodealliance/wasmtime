@@ -71,5 +71,9 @@ ebb0:
     [-,%x7]     v132 = icmp_imm ult, v1, 1000  ; bin: 3e853393
     [-,%x16]    v133 = icmp_imm ult, v2, -905  ; bin: c77ab813
 
+    ; lui
+    [-,%x7]     v140 = iconst.i32 0x12345000            ; bin: 123453b7
+    [-,%x16]    v141 = iconst.i32 0xffffffff_fedcb000   ; bin: fedcb837
+
     return
 }
