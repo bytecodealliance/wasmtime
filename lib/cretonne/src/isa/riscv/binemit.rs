@@ -1,10 +1,24 @@
 //! Emitting binary RISC-V machine code.
 
-use binemit::{CodeSink, bad_encoding};
+use binemit::{CodeSink, Reloc, bad_encoding};
 use ir::{Function, Inst, InstructionData};
 use isa::RegUnit;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-riscv.rs"));
+
+/// RISC-V relocation kinds.
+pub enum RelocKind {
+    /// A conditional (SB-type) branch to an EBB.
+    Branch,
+}
+
+pub static RELOC_NAMES: [&'static str; 1] = ["Branch"];
+
+impl Into<Reloc> for RelocKind {
+    fn into(self) -> Reloc {
+        Reloc(self as u16)
+    }
+}
 
 /// R-type instructions.
 ///
@@ -190,5 +204,45 @@ fn recipe_u<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
               sink);
     } else {
         panic!("Expected UnaryImm format: {:?}", func.dfg[inst]);
+    }
+}
+
+/// SB-type branch instructions.
+///
+///   31  24  19  14     11  6
+///   imm rs2 rs1 funct3 imm opcode
+///    25  20  15     12   7      0
+///
+/// The imm bits are not encoded by this function. They encode the relative distance to the
+/// destination block, handled by a relocation.
+///
+/// Encoding bits: `opcode[6:2] | (funct3 << 5)`
+fn put_sb<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, rs2: RegUnit, sink: &mut CS) {
+    let bits = bits as u32;
+    let opcode5 = bits & 0x1f;
+    let funct3 = (bits >> 5) & 0x7;
+    let rs1 = rs1 as u32 & 0x1f;
+    let rs2 = rs2 as u32 & 0x1f;
+
+    // 0-6: opcode
+    let mut i = 0x3;
+    i |= opcode5 << 2;
+    i |= funct3 << 12;
+    i |= rs1 << 15;
+    i |= rs2 << 20;
+
+    sink.put4(i);
+}
+
+fn recipe_sb<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::BranchIcmp { destination, ref args, .. } = func.dfg[inst] {
+        let args = &args.as_slice(&func.dfg.value_lists)[0..2];
+        sink.reloc_ebb(RelocKind::Branch.into(), destination);
+        put_sb(func.encodings[inst].bits(),
+               func.locations[args[0]].unwrap_reg(),
+               func.locations[args[1]].unwrap_reg(),
+               sink);
+    } else {
+        panic!("Expected BranchIcmp format: {:?}", func.dfg[inst]);
     }
 }

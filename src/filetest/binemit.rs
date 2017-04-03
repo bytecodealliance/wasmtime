@@ -25,6 +25,7 @@ pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
 
 // Code sink that generates text.
 struct TextSink {
+    rnames: &'static [&'static str],
     text: String,
 }
 
@@ -45,12 +46,16 @@ impl binemit::CodeSink for TextSink {
         write!(self.text, "{:016x} ", x).unwrap();
     }
 
-    fn reloc_func(&mut self, _: binemit::Reloc, _: ir::FuncRef) {
-        unimplemented!()
+    fn reloc_ebb(&mut self, reloc: binemit::Reloc, ebb: ir::Ebb) {
+        write!(self.text, "{}({}) ", self.rnames[reloc.0 as usize], ebb).unwrap();
     }
 
-    fn reloc_jt(&mut self, _: binemit::Reloc, _: ir::JumpTable) {
-        unimplemented!()
+    fn reloc_func(&mut self, reloc: binemit::Reloc, fref: ir::FuncRef) {
+        write!(self.text, "{}({}) ", self.rnames[reloc.0 as usize], fref).unwrap();
+    }
+
+    fn reloc_jt(&mut self, reloc: binemit::Reloc, jt: ir::JumpTable) {
+        write!(self.text, "{}({}) ", self.rnames[reloc.0 as usize], jt).unwrap();
     }
 }
 
@@ -73,7 +78,10 @@ impl SubTest for TestBinEmit {
         // value locations. The current error reporting is just crashing...
         let mut func = func.into_owned();
 
-        let mut sink = TextSink { text: String::new() };
+        let mut sink = TextSink {
+            rnames: isa.reloc_names(),
+            text: String::new(),
+        };
 
         for comment in &context.details.comments {
             if let Some(want) = match_directive(comment.text, "bin:") {
