@@ -367,6 +367,22 @@ icmp = Instruction(
         """,
         ins=(Cond, x, y), outs=a)
 
+a = Operand('a', b1)
+x = Operand('x', iB)
+Y = Operand('Y', imm64)
+
+icmp_imm = Instruction(
+        'icmp_imm', r"""
+        Compare scalar integer to a constant.
+
+        This is the same as the :inst:`icmp` instruction, except one operand is
+        an immediate constant.
+
+        This instruction can only compare scalars. Use :inst:`icmp` for
+        lane-wise vector comparisons.
+        """,
+        ins=(Cond, x, Y), outs=a)
+
 a = Operand('a', Int)
 x = Operand('x', Int)
 y = Operand('y', Int)

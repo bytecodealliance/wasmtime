@@ -251,6 +251,7 @@ impl<'a> Verifier<'a> {
             &InsertLane { .. } |
             &ExtractLane { .. } |
             &IntCompare { .. } |
+            &IntCompareImm { .. } |
             &FloatCompare { .. } => {}
         }
 
