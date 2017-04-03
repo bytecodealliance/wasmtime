@@ -38,6 +38,7 @@ InsertLane = InstructionFormat(VALUE, ('lane', uimm8), VALUE)
 ExtractLane = InstructionFormat(VALUE, ('lane', uimm8))
 
 IntCompare = InstructionFormat(intcc, VALUE, VALUE)
+IntCompareImm = InstructionFormat(intcc, VALUE, imm64)
 FloatCompare = InstructionFormat(floatcc, VALUE, VALUE)
 
 Jump = InstructionFormat(ebb, VARIABLE_ARGS)

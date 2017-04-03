@@ -216,11 +216,12 @@ impl<'a> Context<'a> {
                     InstructionData::UnaryIeee32 { .. } |
                     InstructionData::UnaryIeee64 { .. } => {}
 
-                    InstructionData::Unary { ref mut arg, .. } |
-                    InstructionData::UnarySplit { ref mut arg, .. } |
                     InstructionData::BinaryImm { ref mut arg, .. } |
+                    InstructionData::BranchTable { ref mut arg, .. } |
                     InstructionData::ExtractLane { ref mut arg, .. } |
-                    InstructionData::BranchTable { ref mut arg, .. } => {
+                    InstructionData::IntCompareImm { ref mut arg, .. } |
+                    InstructionData::Unary { ref mut arg, .. } |
+                    InstructionData::UnarySplit { ref mut arg, .. } => {
                         self.map.rewrite_value(arg, loc)?;
                     }
 
@@ -1555,6 +1556,20 @@ impl<'a> Parser<'a> {
                     ty: VOID,
                     cond: cond,
                     args: [lhs, rhs],
+                }
+            }
+            InstructionFormat::IntCompareImm => {
+                let cond = self.match_enum("expected intcc condition code")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let lhs = self.match_value("expected SSA value first operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let rhs = self.match_imm64("expected immediate second operand")?;
+                InstructionData::IntCompareImm {
+                    opcode: opcode,
+                    ty: VOID,
+                    cond: cond,
+                    arg: lhs,
+                    imm: rhs,
                 }
             }
             InstructionFormat::FloatCompare => {

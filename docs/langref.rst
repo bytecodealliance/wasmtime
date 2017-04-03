@@ -678,6 +678,7 @@ Integer operations
 ------------------
 
 .. autoinst:: icmp
+.. autoinst:: icmp_imm
 .. autoinst:: iadd
 .. autoinst:: iadd_imm
 .. autoinst:: iadd_cin

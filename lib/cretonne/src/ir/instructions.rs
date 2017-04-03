@@ -175,6 +175,13 @@ pub enum InstructionData {
         cond: IntCC,
         args: [Value; 2],
     },
+    IntCompareImm {
+        opcode: Opcode,
+        ty: Type,
+        cond: IntCC,
+        arg: Value,
+        imm: Imm64,
+    },
     FloatCompare {
         opcode: Opcode,
         ty: Type,
