@@ -12,6 +12,7 @@ from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt
 from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
+from base.formats import UnaryImm
 from .registers import GPR
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
@@ -72,6 +73,16 @@ def OP32(funct3, funct7):
     return 0b01110 | (funct3 << 5) | (funct7 << 8)
 
 
+def AIUPC():
+    # type: () -> int
+    return 0b00101
+
+
+def LUI():
+    # type: () -> int
+    return 0b01101
+
+
 # R-type 32-bit instructions: These are mostly binary arithmetic instructions.
 # The encbits are `opcode[6:2] | (funct3 << 5) | (funct7 << 8)
 R = EncRecipe('R', Binary, ins=(GPR, GPR), outs=GPR)
@@ -95,3 +106,8 @@ Iicmp = EncRecipe(
 # immediate offset.
 # The variable return values are not encoded.
 Iret = EncRecipe('Iret', MultiAry, ins=GPR, outs=())
+
+# U-type instructions have a 20-bit immediate that targets bits 12-31.
+U = EncRecipe(
+        'U', UnaryImm, ins=(), outs=GPR,
+        instp=IsSignedInt(UnaryImm.imm, 32, 12))
