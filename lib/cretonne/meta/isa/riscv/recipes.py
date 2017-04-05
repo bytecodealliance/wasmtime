@@ -85,37 +85,43 @@ def LUI():
 
 # R-type 32-bit instructions: These are mostly binary arithmetic instructions.
 # The encbits are `opcode[6:2] | (funct3 << 5) | (funct7 << 8)
-R = EncRecipe('R', Binary, ins=(GPR, GPR), outs=GPR)
+R = EncRecipe('R', Binary, size=4, ins=(GPR, GPR), outs=GPR)
 
 # R-type with an immediate shift amount instead of rs2.
-Rshamt = EncRecipe('Rshamt', BinaryImm, ins=GPR, outs=GPR)
+Rshamt = EncRecipe('Rshamt', BinaryImm, size=4, ins=GPR, outs=GPR)
 
 # R-type encoding of an integer comparison.
-Ricmp = EncRecipe('Ricmp', IntCompare, ins=(GPR, GPR), outs=GPR)
+Ricmp = EncRecipe('Ricmp', IntCompare, size=4, ins=(GPR, GPR), outs=GPR)
 
 I = EncRecipe(
-        'I', BinaryImm, ins=GPR, outs=GPR,
+        'I', BinaryImm, size=4, ins=GPR, outs=GPR,
         instp=IsSignedInt(BinaryImm.imm, 12))
 
 # I-type encoding of an integer comparison.
 Iicmp = EncRecipe(
-        'Iicmp', IntCompareImm, ins=GPR, outs=GPR,
+        'Iicmp', IntCompareImm, size=4, ins=GPR, outs=GPR,
         instp=IsSignedInt(IntCompareImm.imm, 12))
 
 # I-type encoding for `jalr` as a return instruction. We won't use the
 # immediate offset.
 # The variable return values are not encoded.
-Iret = EncRecipe('Iret', MultiAry, ins=GPR, outs=())
+Iret = EncRecipe('Iret', MultiAry, size=4, ins=GPR, outs=())
 
 # U-type instructions have a 20-bit immediate that targets bits 12-31.
 U = EncRecipe(
-        'U', UnaryImm, ins=(), outs=GPR,
+        'U', UnaryImm, size=4, ins=(), outs=GPR,
         instp=IsSignedInt(UnaryImm.imm, 32, 12))
 
 # SB-type branch instructions.
 # TODO: These instructions have a +/- 4 KB branch range. How to encode that
 # constraint?
-SB = EncRecipe('SB', BranchIcmp, ins=(GPR, GPR), outs=())
+SB = EncRecipe(
+        'SB', BranchIcmp, size=4,
+        ins=(GPR, GPR), outs=(),
+        branch_range=(0, 13))
 
 # SB-type branch instruction with rs2 fixed to zero.
-SBzero = EncRecipe('SBzero', Branch, ins=(GPR), outs=())
+SBzero = EncRecipe(
+        'SBzero', Branch, size=4,
+        ins=(GPR), outs=(),
+        branch_range=(0, 13))

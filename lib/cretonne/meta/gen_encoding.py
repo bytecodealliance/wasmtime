@@ -498,6 +498,27 @@ def emit_operand_constraints(seq, field, fmt):
                             'Unsupported constraint {}'.format(cons))
 
 
+def emit_recipe_sizing(isa, fmt):
+    # type: (TargetISA, srcgen.Formatter) -> None
+    """
+    Emit a table of encoding recipe code size information.
+    """
+    with fmt.indented(
+            'static RECIPE_SIZING: [RecipeSizing; {}] = ['
+            .format(len(isa.all_recipes)), '];'):
+        for r in isa.all_recipes:
+            fmt.comment(r.name)
+            with fmt.indented('RecipeSizing {', '},'):
+                fmt.format('bytes: {},', r.size)
+                if r.branch_range:
+                    fmt.format(
+                        'branch_range: '
+                        'Some(BranchRange {{ origin: {}, bits: {} }}),',
+                        *r.branch_range)
+                else:
+                    fmt.line('branch_range: None,')
+
+
 def gen_isa(isa, fmt):
     # type: (TargetISA, srcgen.Formatter) -> None
     # First assign numbers to relevant instruction predicates and generate the
@@ -535,10 +556,12 @@ def gen_isa(isa, fmt):
 
     emit_recipe_names(isa, fmt)
     emit_recipe_constraints(isa, fmt)
+    emit_recipe_sizing(isa, fmt)
 
     # Finally, tie it all together in an `EncInfo`.
     with fmt.indented('pub static INFO: EncInfo = EncInfo {', '};'):
         fmt.line('constraints: &RECIPE_CONSTRAINTS,')
+        fmt.line('sizing: &RECIPE_SIZING,')
         fmt.line('names: &RECIPE_NAMES,')
 
 

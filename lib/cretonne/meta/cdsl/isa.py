@@ -19,6 +19,7 @@ try:
         # Instruction specification for encodings. Allows for predicated
         # instructions.
         InstSpec = Union[MaybeBoundInst, Apply]
+        BranchRange = Sequence[int]
 except ImportError:
     pass
 
@@ -164,17 +165,38 @@ class EncRecipe(object):
     - An integer indicating that this result is tied to a value operand, so
       they must use the same register.
 
+    The `branch_range` argument must be provided for recipes that can encode
+    branch instructions. It is an `(origin, bits)` tuple describing the exact
+    range that can be encoded in a branch instruction.
+
     :param name: Short mnemonic name for this recipe.
     :param format: All encoded instructions must have this
             :py:class:`InstructionFormat`.
+    :param size: Number of bytes in the binary encoded instruction.
     :param: ins Tuple of register constraints for value operands.
     :param: outs Tuple of register constraints for results.
+    :param: branch_range `(origin, bits)` range for branches.
+    :param: instp Instruction predicate.
+    :param: isap ISA predicate.
     """
 
-    def __init__(self, name, format, ins, outs, instp=None, isap=None):
-        # type: (str, InstructionFormat, ConstraintSeq, ConstraintSeq, PredNode, PredNode) -> None  # noqa
+    def __init__(
+            self,
+            name,               # type: str
+            format,             # type: InstructionFormat
+            size,               # type: int
+            ins,                # type: ConstraintSeq
+            outs,               # type: ConstraintSeq
+            branch_range=None,  # type: BranchRange
+            instp=None,         # type: PredNode
+            isap=None           # type: PredNode
+            ):
+        # type: (...) -> None
         self.name = name
         self.format = format
+        assert size >= 0
+        self.size = size
+        self.branch_range = branch_range
         self.instp = instp
         self.isap = isap
         if instp:
@@ -249,6 +271,12 @@ class Encoding(object):
         assert self.inst.format == recipe.format, (
                 "Format {} must match recipe: {}".format(
                     self.inst.format, recipe.format))
+
+        if self.inst.is_branch:
+            assert recipe.branch_range, (
+                    'Recipe {} for {} must have a branch_range'
+                    .format(recipe, self.inst.name))
+
         self.recipe = recipe
         self.encbits = encbits
         # Combine recipe predicates with the manually specified ones.

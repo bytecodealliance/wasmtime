@@ -40,7 +40,7 @@
 //! The configured target ISA trait object is a `Box<TargetIsa>` which can be used for multiple
 //! concurrent function compilations.
 
-pub use isa::constraints::{RecipeConstraints, OperandConstraint, ConstraintKind};
+pub use isa::constraints::{RecipeConstraints, OperandConstraint, ConstraintKind, BranchRange};
 pub use isa::encoding::{Encoding, EncInfo};
 pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex};
 
