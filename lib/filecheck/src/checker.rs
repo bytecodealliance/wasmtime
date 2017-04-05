@@ -183,11 +183,13 @@ impl Checker {
                     continue;
                 }
                 Directive::Regex(ref var, ref rx) => {
-                    state.vars.insert(var.clone(),
-                                      VarDef {
-                                          value: Value::Regex(Cow::Borrowed(rx)),
-                                          offset: 0,
-                                      });
+                    state
+                        .vars
+                        .insert(var.clone(),
+                                VarDef {
+                                    value: Value::Regex(Cow::Borrowed(rx)),
+                                    offset: 0,
+                                });
                     continue;
                 }
             };
@@ -208,10 +210,14 @@ impl Checker {
                         state.recorder.directive(not_idx);
                         if let Some((s, e)) = rx.find(&text[not_begin..match_begin]) {
                             // Matched `not:` pattern.
-                            state.recorder.matched_not(rx.as_str(), (not_begin + s, not_begin + e));
+                            state
+                                .recorder
+                                .matched_not(rx.as_str(), (not_begin + s, not_begin + e));
                             return Ok(false);
                         } else {
-                            state.recorder.missed_not(rx.as_str(), (not_begin, match_begin));
+                            state
+                                .recorder
+                                .missed_not(rx.as_str(), (not_begin, match_begin));
                         }
                     }
                 }
@@ -410,9 +416,11 @@ mod tests {
                    Ok(true));
         assert_eq!(b.directive("regex: X = tommy").map_err(e2s),
                    Err("expected '=' after variable 'X' in regex: X = tommy".to_string()));
-        assert_eq!(b.directive("[arm]not:    patt $x $(y) here").map_err(e2s),
+        assert_eq!(b.directive("[arm]not:    patt $x $(y) here")
+                       .map_err(e2s),
                    Ok(true));
-        assert_eq!(b.directive("[x86]sameln: $x $(y=[^]]*) there").map_err(e2s),
+        assert_eq!(b.directive("[x86]sameln: $x $(y=[^]]*) there")
+                       .map_err(e2s),
                    Ok(true));
         // Windows line ending sneaking in.
         assert_eq!(b.directive("regex: Y=foo\r").map_err(e2s), Ok(true));

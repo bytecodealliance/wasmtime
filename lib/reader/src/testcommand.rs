@@ -40,7 +40,10 @@ impl<'a> TestCommand<'a> {
         let cmd = parts.next().unwrap_or("");
         TestCommand {
             command: cmd,
-            options: parts.filter(|s| !s.is_empty()).map(TestOption::new).collect(),
+            options: parts
+                .filter(|s| !s.is_empty())
+                .map(TestOption::new)
+                .collect(),
         }
     }
 }

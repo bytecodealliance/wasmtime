@@ -235,7 +235,11 @@ fn put_sb<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, rs2: RegUnit, sink: &m
 }
 
 fn recipe_sb<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::BranchIcmp { destination, ref args, .. } = func.dfg[inst] {
+    if let InstructionData::BranchIcmp {
+               destination,
+               ref args,
+               ..
+           } = func.dfg[inst] {
         let args = &args.as_slice(&func.dfg.value_lists)[0..2];
         sink.reloc_ebb(RelocKind::Branch.into(), destination);
         put_sb(func.encodings[inst].bits(),
@@ -248,7 +252,11 @@ fn recipe_sb<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) 
 }
 
 fn recipe_sbzero<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::Branch { destination, ref args, .. } = func.dfg[inst] {
+    if let InstructionData::Branch {
+               destination,
+               ref args,
+               ..
+           } = func.dfg[inst] {
         let args = &args.as_slice(&func.dfg.value_lists)[0..1];
         sink.reloc_ebb(RelocKind::Branch.into(), destination);
         put_sb(func.encodings[inst].bits(),

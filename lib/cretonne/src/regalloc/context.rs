@@ -52,6 +52,7 @@ impl Context {
         // TODO: Second pass: Spilling.
 
         // Third pass: Reload and coloring.
-        self.coloring.run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
+        self.coloring
+            .run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
     }
 }

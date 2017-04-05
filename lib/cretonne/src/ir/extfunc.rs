@@ -221,7 +221,8 @@ mod tests {
         assert_eq!(sig.to_string(), "(i32)");
         sig.return_types.push(ArgumentType::new(F32));
         assert_eq!(sig.to_string(), "(i32) -> f32");
-        sig.argument_types.push(ArgumentType::new(I32.by(4).unwrap()));
+        sig.argument_types
+            .push(ArgumentType::new(I32.by(4).unwrap()));
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32");
         sig.return_types.push(ArgumentType::new(B8));
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8");

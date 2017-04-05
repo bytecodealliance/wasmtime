@@ -104,10 +104,11 @@ impl TestRunner {
     ///
     /// Any problems reading `file` as a test case file will be reported as a test failure.
     pub fn push_test<P: Into<PathBuf>>(&mut self, file: P) {
-        self.tests.push(QueueEntry {
-                            path: file.into(),
-                            state: State::New,
-                        });
+        self.tests
+            .push(QueueEntry {
+                      path: file.into(),
+                      state: State::New,
+                  });
     }
 
     /// Begin running tests concurrently.
@@ -206,7 +207,9 @@ impl TestRunner {
         }
 
         // Check for any asynchronous replies without blocking.
-        while let Some(reply) = self.threads.as_mut().and_then(ConcurrentRunner::try_get) {
+        while let Some(reply) = self.threads
+                  .as_mut()
+                  .and_then(ConcurrentRunner::try_get) {
             self.handle_reply(reply);
         }
     }
@@ -303,12 +306,12 @@ impl TestRunner {
             return;
         }
 
-        for t in self.tests.iter().filter(|entry| match **entry {
-                                              QueueEntry { state: State::Done(Ok(dur)), .. } => {
-                                                  dur > cut
-                                              }
-                                              _ => false,
-                                          }) {
+        for t in self.tests
+                .iter()
+                .filter(|entry| match **entry {
+                            QueueEntry { state: State::Done(Ok(dur)), .. } => dur > cut,
+                            _ => false,
+                        }) {
             println!("slow: {}", t)
         }
 

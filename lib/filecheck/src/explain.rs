@@ -119,7 +119,8 @@ impl<'a> Display for Explainer<'a> {
                      m.regex)?;
 
             // Emit any variable definitions.
-            if let Ok(found) = self.vardefs.binary_search_by_key(&m.directive, |v| v.directive) {
+            if let Ok(found) = self.vardefs
+                   .binary_search_by_key(&m.directive, |v| v.directive) {
                 let mut first = found;
                 while first > 0 && self.vardefs[first - 1].directive == m.directive {
                     first -= 1;
@@ -147,50 +148,55 @@ impl<'a> Recorder for Explainer<'a> {
     }
 
     fn matched_check(&mut self, regex: &str, matched: MatchRange) {
-        self.matches.push(Match {
-                              directive: self.directive,
-                              is_match: true,
-                              is_not: false,
-                              regex: regex.to_owned(),
-                              range: matched,
-                          });
+        self.matches
+            .push(Match {
+                      directive: self.directive,
+                      is_match: true,
+                      is_not: false,
+                      regex: regex.to_owned(),
+                      range: matched,
+                  });
     }
 
     fn matched_not(&mut self, regex: &str, matched: MatchRange) {
-        self.matches.push(Match {
-                              directive: self.directive,
-                              is_match: true,
-                              is_not: true,
-                              regex: regex.to_owned(),
-                              range: matched,
-                          });
+        self.matches
+            .push(Match {
+                      directive: self.directive,
+                      is_match: true,
+                      is_not: true,
+                      regex: regex.to_owned(),
+                      range: matched,
+                  });
     }
 
     fn missed_check(&mut self, regex: &str, searched: MatchRange) {
-        self.matches.push(Match {
-                              directive: self.directive,
-                              is_match: false,
-                              is_not: false,
-                              regex: regex.to_owned(),
-                              range: searched,
-                          });
+        self.matches
+            .push(Match {
+                      directive: self.directive,
+                      is_match: false,
+                      is_not: false,
+                      regex: regex.to_owned(),
+                      range: searched,
+                  });
     }
 
     fn missed_not(&mut self, regex: &str, searched: MatchRange) {
-        self.matches.push(Match {
-                              directive: self.directive,
-                              is_match: false,
-                              is_not: true,
-                              regex: regex.to_owned(),
-                              range: searched,
-                          });
+        self.matches
+            .push(Match {
+                      directive: self.directive,
+                      is_match: false,
+                      is_not: true,
+                      regex: regex.to_owned(),
+                      range: searched,
+                  });
     }
 
     fn defined_var(&mut self, varname: &str, value: &str) {
-        self.vardefs.push(VarDef {
-                              directive: self.directive,
-                              varname: varname.to_owned(),
-                              value: value.to_owned(),
-                          });
+        self.vardefs
+            .push(VarDef {
+                      directive: self.directive,
+                      varname: varname.to_owned(),
+                      value: value.to_owned(),
+                  });
     }
 }

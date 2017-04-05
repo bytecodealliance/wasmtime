@@ -88,7 +88,8 @@ impl DominatorTree {
         // Run a finger up the dominator tree from b until we see a.
         // Do nothing if b is unreachable.
         while rpo_a < self.nodes[ebb_b].rpo_number {
-            b = self.idom(ebb_b).expect("Shouldn't meet unreachable here.");
+            b = self.idom(ebb_b)
+                .expect("Shouldn't meet unreachable here.");
             ebb_b = layout.inst_ebb(b).expect("Dominator got removed.");
         }
 
@@ -209,8 +210,9 @@ impl DominatorTree {
             .filter(|&(ebb, _)| self.is_reachable(ebb));
 
         // The RPO must visit at least one predecessor before this node.
-        let mut idom =
-            reachable_preds.next().expect("EBB node must have one reachable predecessor");
+        let mut idom = reachable_preds
+            .next()
+            .expect("EBB node must have one reachable predecessor");
 
         for pred in reachable_preds {
             idom = self.common_dominator(idom, pred, layout);

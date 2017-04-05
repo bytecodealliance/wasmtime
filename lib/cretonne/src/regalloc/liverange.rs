@@ -221,14 +221,16 @@ impl LiveRange {
     /// Return `Ok(n)` if `liveins[n]` already contains `ebb`.
     /// Otherwise, return `Err(n)` with the index where such an interval should be inserted.
     fn find_ebb_interval<PO: ProgramOrder>(&self, ebb: Ebb, order: &PO) -> Result<usize, usize> {
-        self.liveins.binary_search_by(|intv| order.cmp(intv.begin, ebb)).or_else(|n| {
-            // The interval at `n-1` may cover `ebb`.
-            if n > 0 && order.cmp(self.liveins[n - 1].end, ebb) == Ordering::Greater {
-                Ok(n - 1)
-            } else {
-                Err(n)
-            }
-        })
+        self.liveins
+            .binary_search_by(|intv| order.cmp(intv.begin, ebb))
+            .or_else(|n| {
+                         // The interval at `n-1` may cover `ebb`.
+                         if n > 0 && order.cmp(self.liveins[n - 1].end, ebb) == Ordering::Greater {
+                             Ok(n - 1)
+                         } else {
+                             Err(n)
+                         }
+                     })
     }
 
     /// Extend the local interval for `ebb` so it reaches `to` which must belong to `ebb`.
@@ -307,11 +309,12 @@ impl LiveRange {
                     }
                     // Cannot coalesce; insert new interval
                     (false, false) => {
-                        self.liveins.insert(n,
-                                            Interval {
-                                                begin: ebb,
-                                                end: to,
-                                            });
+                        self.liveins
+                            .insert(n,
+                                    Interval {
+                                        begin: ebb,
+                                        end: to,
+                                    });
                     }
                 }
 
@@ -361,7 +364,9 @@ impl LiveRange {
     /// answer, but it is also possible that an even later program point is returned. So don't
     /// depend on the returned `Inst` to belong to `ebb`.
     pub fn livein_local_end<PO: ProgramOrder>(&self, ebb: Ebb, order: &PO) -> Option<Inst> {
-        self.find_ebb_interval(ebb, order).ok().map(|n| self.liveins[n].end)
+        self.find_ebb_interval(ebb, order)
+            .ok()
+            .map(|n| self.liveins[n].end)
     }
 }
 

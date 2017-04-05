@@ -356,25 +356,37 @@ impl DataFlowGraph {
 
     /// Get the fixed value arguments on `inst` as a slice.
     pub fn inst_fixed_args(&self, inst: Inst) -> &[Value] {
-        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
+        let fixed_args = self[inst]
+            .opcode()
+            .constraints()
+            .fixed_value_arguments();
         &self.inst_args(inst)[..fixed_args]
     }
 
     /// Get the fixed value arguments on `inst` as a mutable slice.
     pub fn inst_fixed_args_mut(&mut self, inst: Inst) -> &mut [Value] {
-        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
+        let fixed_args = self[inst]
+            .opcode()
+            .constraints()
+            .fixed_value_arguments();
         &mut self.inst_args_mut(inst)[..fixed_args]
     }
 
     /// Get the variable value arguments on `inst` as a slice.
     pub fn inst_variable_args(&self, inst: Inst) -> &[Value] {
-        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
+        let fixed_args = self[inst]
+            .opcode()
+            .constraints()
+            .fixed_value_arguments();
         &self.inst_args(inst)[fixed_args..]
     }
 
     /// Get the variable value arguments on `inst` as a mutable slice.
     pub fn inst_variable_args_mut(&mut self, inst: Inst) -> &mut [Value] {
-        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
+        let fixed_args = self[inst]
+            .opcode()
+            .constraints()
+            .fixed_value_arguments();
         &mut self.inst_args_mut(inst)[fixed_args..]
     }
 
@@ -444,8 +456,8 @@ impl DataFlowGraph {
         // Update the second_result pointer in `inst`.
         if head.is_some() {
             *self.insts[inst]
-                .second_result_mut()
-                .expect("instruction format doesn't allow multiple results") = head.into();
+                 .second_result_mut()
+                 .expect("instruction format doesn't allow multiple results") = head.into();
         }
         *self.insts[inst].first_type_mut() = first_type.unwrap_or_default();
 
@@ -505,7 +517,12 @@ impl DataFlowGraph {
                 (inst, 1)
             }
             ExpandedValue::Table(idx) => {
-                if let ValueData::Inst { num, inst, ref mut next, .. } = self.extended_values[idx] {
+                if let ValueData::Inst {
+                           num,
+                           inst,
+                           ref mut next,
+                           ..
+                       } = self.extended_values[idx] {
                     assert!(next.is_none(), "last_res is not the last result");
                     *next = res.into();
                     assert!(num < u16::MAX, "Too many arguments to EBB");
@@ -518,8 +535,12 @@ impl DataFlowGraph {
 
         // Now update `res` itself.
         if let ExpandedValue::Table(idx) = res.expand() {
-            if let ValueData::Inst { ref mut num, ref mut inst, ref mut next, .. } =
-                self.extended_values[idx] {
+            if let ValueData::Inst {
+                       ref mut num,
+                       ref mut inst,
+                       ref mut next,
+                       ..
+                   } = self.extended_values[idx] {
                 *num = res_num;
                 *inst = res_inst;
                 *next = None.into();
@@ -565,7 +586,8 @@ impl DataFlowGraph {
     ///
     /// Returns the new `Inst` reference where the original instruction has been moved.
     pub fn redefine_first_value(&mut self, pos: &mut Cursor) -> Inst {
-        let orig = pos.current_inst().expect("Cursor must point at an instruction");
+        let orig = pos.current_inst()
+            .expect("Cursor must point at an instruction");
         let data = self[orig].clone();
         // After cloning, any secondary values are attached to both copies. Don't do that, we only
         // want them on the new clone.
@@ -630,12 +652,13 @@ impl DataFlowGraph {
         }
 
         // Not a fixed result, try to extract a return type from the call signature.
-        self.call_signature(inst).and_then(|sigref| {
-                                               self.signatures[sigref]
-                                                   .return_types
-                                                   .get(result_idx - fixed_results)
-                                                   .map(|&arg| arg.value_type)
-                                           })
+        self.call_signature(inst)
+            .and_then(|sigref| {
+                          self.signatures[sigref]
+                              .return_types
+                              .get(result_idx - fixed_results)
+                              .map(|&arg| arg.value_type)
+                      })
     }
 }
 
@@ -815,8 +838,12 @@ impl DataFlowGraph {
         // Now update `arg` itself.
         let arg_ebb = ebb;
         if let ExpandedValue::Table(idx) = arg.expand() {
-            if let ValueData::Arg { ref mut num, ebb, ref mut next, .. } =
-                self.extended_values[idx] {
+            if let ValueData::Arg {
+                       ref mut num,
+                       ebb,
+                       ref mut next,
+                       ..
+                   } = self.extended_values[idx] {
                 *num = arg_num;
                 *next = None.into();
                 assert_eq!(arg_ebb, ebb, "{} should already belong to EBB", arg);

@@ -35,10 +35,7 @@ mod tests {
 
     fn check(x: &[u32], want: &[u32]) {
         assert_eq!(x.len(), want.len());
-        let want_count = want.iter()
-            .cloned()
-            .filter(|&x| x % 10 == 0)
-            .count();
+        let want_count = want.iter().cloned().filter(|&x| x % 10 == 0).count();
         let mut v = Vec::new();
         v.extend(x.iter().cloned());
         let count = partition_slice(&mut v[..], |&x| x % 10 == 0);

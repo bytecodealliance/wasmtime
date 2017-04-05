@@ -348,12 +348,7 @@ mod tests {
         assert_eq!(big.bits(), 64 * 256);
 
         assert_eq!(big.half_vector().unwrap().to_string(), "f64x128");
-        assert_eq!(B1.by(2)
-                       .unwrap()
-                       .half_vector()
-                       .unwrap()
-                       .to_string(),
-                   "b1");
+        assert_eq!(B1.by(2).unwrap().half_vector().unwrap().to_string(), "b1");
         assert_eq!(I32.half_vector(), None);
         assert_eq!(VOID.half_vector(), None);
 
@@ -383,12 +378,7 @@ mod tests {
         assert_eq!(B1.by(8).unwrap().to_string(), "b1x8");
         assert_eq!(B8.by(1).unwrap().to_string(), "b8");
         assert_eq!(B16.by(256).unwrap().to_string(), "b16x256");
-        assert_eq!(B32.by(4)
-                       .unwrap()
-                       .by(2)
-                       .unwrap()
-                       .to_string(),
-                   "b32x8");
+        assert_eq!(B32.by(4).unwrap().by(2).unwrap().to_string(), "b32x8");
         assert_eq!(B64.by(8).unwrap().to_string(), "b64x8");
         assert_eq!(I8.by(64).unwrap().to_string(), "i8x64");
         assert_eq!(F64.by(2).unwrap().to_string(), "f64x2");

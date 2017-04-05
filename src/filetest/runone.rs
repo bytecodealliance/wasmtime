@@ -120,5 +120,6 @@ fn run_one_test<'a>(tuple: (&'a SubTest, &'a Flags, Option<&'a TargetIsa>),
         context.verified = true;
     }
 
-    test.run(func, context).map_err(|e| format!("{}: {}", name, e))
+    test.run(func, context)
+        .map_err(|e| format!("{}: {}", name, e))
 }
