@@ -1,7 +1,8 @@
 //! The `Encoding` struct.
 
+use binemit::CodeOffset;
+use isa::constraints::{RecipeConstraints, BranchRange};
 use std::fmt;
-use isa::constraints::RecipeConstraints;
 
 /// Bits needed to encode an instruction as binary machine code.
 ///
@@ -78,11 +79,27 @@ impl fmt::Display for DisplayEncoding {
     }
 }
 
+/// Code size information for an encoding recipe.
+///
+/// All encoding recipes correspond to an exact instruction size.
+pub struct RecipeSizing {
+    /// Size in bytes of instructions encoded with this recipe.
+    pub bytes: u8,
+
+    /// Allowed branch range in this recipe, if any.
+    ///
+    /// All encoding recipes for branches have exact branch range information.
+    pub branch_range: Option<BranchRange>,
+}
+
 /// Information about all the encodings in this ISA.
 #[derive(Clone)]
 pub struct EncInfo {
     /// Constraints on value operands per recipe.
     pub constraints: &'static [RecipeConstraints],
+
+    /// Code size information per recipe.
+    pub sizing: &'static [RecipeSizing],
 
     /// Names of encoding recipes.
     pub names: &'static [&'static str],
@@ -100,5 +117,24 @@ impl EncInfo {
             encoding: enc,
             recipe_names: self.names,
         }
+    }
+
+    /// Get the exact size in bytes of instructions encoded with `enc`.
+    ///
+    /// Returns 0 for illegal encodings.
+    pub fn bytes(&self, enc: Encoding) -> CodeOffset {
+        self.sizing
+            .get(enc.recipe())
+            .map(|s| s.bytes as CodeOffset)
+            .unwrap_or(0)
+    }
+
+    /// Get the branch range that is supported by `enc`, if any.
+    ///
+    /// This will never return `None` for a legal branch encoding.
+    pub fn branch_range(&self, enc: Encoding) -> Option<BranchRange> {
+        self.sizing
+            .get(enc.recipe())
+            .and_then(|s| s.branch_range)
     }
 }
