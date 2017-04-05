@@ -107,7 +107,8 @@ impl<'a> Context<'a> {
     // Get the index of a recipe name if it exists.
     fn find_recipe_index(&self, recipe_name: &str) -> Option<u16> {
         if let Some(unique_isa) = self.unique_isa {
-            unique_isa.recipe_names()
+            unique_isa
+                .recipe_names()
                 .iter()
                 .position(|&name| name == recipe_name)
                 .map(|idx| idx as u16)
@@ -118,17 +119,14 @@ impl<'a> Context<'a> {
 
     // Allocate a new stack slot and add a mapping number -> StackSlot.
     fn add_ss(&mut self, number: u32, data: StackSlotData, loc: &Location) -> Result<()> {
-        self.map.def_ss(number, self.function.stack_slots.push(data), loc)
+        self.map
+            .def_ss(number, self.function.stack_slots.push(data), loc)
     }
 
     // Allocate a new signature and add a mapping number -> SigRef.
     fn add_sig(&mut self, number: u32, data: Signature, loc: &Location) -> Result<()> {
-        self.map.def_sig(number,
-                         self.function
-                             .dfg
-                             .signatures
-                             .push(data),
-                         loc)
+        self.map
+            .def_sig(number, self.function.dfg.signatures.push(data), loc)
     }
 
     // Resolve a reference to a signature.
@@ -141,12 +139,8 @@ impl<'a> Context<'a> {
 
     // Allocate a new external function and add a mapping number -> FuncRef.
     fn add_fn(&mut self, number: u32, data: ExtFuncData, loc: &Location) -> Result<()> {
-        self.map.def_fn(number,
-                        self.function
-                            .dfg
-                            .ext_funcs
-                            .push(data),
-                        loc)
+        self.map
+            .def_fn(number, self.function.dfg.ext_funcs.push(data), loc)
     }
 
     // Resolve a reference to a function.
@@ -159,7 +153,8 @@ impl<'a> Context<'a> {
 
     // Allocate a new jump table and add a mapping number -> JumpTable.
     fn add_jt(&mut self, number: u32, data: JumpTableData, loc: &Location) -> Result<()> {
-        self.map.def_jt(number, self.function.jump_tables.push(data), loc)
+        self.map
+            .def_jt(number, self.function.jump_tables.push(data), loc)
     }
 
     // Resolve a reference to a jump table.
@@ -238,19 +233,34 @@ impl<'a> Context<'a> {
                     }
 
                     InstructionData::MultiAry { ref mut args, .. } => {
-                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
+                        self.map
+                            .rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
 
-                    InstructionData::Jump { ref mut destination, ref mut args, .. } |
-                    InstructionData::Branch { ref mut destination, ref mut args, .. } |
-                    InstructionData::BranchIcmp { ref mut destination, ref mut args, .. } => {
+                    InstructionData::Jump {
+                        ref mut destination,
+                        ref mut args,
+                        ..
+                    } |
+                    InstructionData::Branch {
+                        ref mut destination,
+                        ref mut args,
+                        ..
+                    } |
+                    InstructionData::BranchIcmp {
+                        ref mut destination,
+                        ref mut args,
+                        ..
+                    } => {
                         self.map.rewrite_ebb(destination, loc)?;
-                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
+                        self.map
+                            .rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
 
                     InstructionData::Call { ref mut args, .. } |
                     InstructionData::IndirectCall { ref mut args, .. } => {
-                        self.map.rewrite_values(args.as_mut_slice(value_lists), loc)?;
+                        self.map
+                            .rewrite_values(args.as_mut_slice(value_lists), loc)?;
                     }
                 }
             }
@@ -307,10 +317,11 @@ impl<'a> Parser<'a> {
                         Token::Comment(text) => {
                             // Gather comments, associate them with `comment_entity`.
                             if let Some(entity) = self.comment_entity {
-                                self.comments.push(Comment {
-                                                       entity: entity,
-                                                       text: text,
-                                                   });
+                                self.comments
+                                    .push(Comment {
+                                              entity: entity,
+                                              text: text,
+                                          });
                             }
                         }
                         _ => self.lookahead = Some(token),
@@ -464,7 +475,8 @@ impl<'a> Parser<'a> {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
             // Parse it as a u8 to check for overflow and other issues.
-            text.parse().map_err(|_| self.error("expected u8 decimal immediate"))
+            text.parse()
+                .map_err(|_| self.error("expected u8 decimal immediate"))
         } else {
             err!(self.loc, err_msg)
         }
@@ -477,7 +489,8 @@ impl<'a> Parser<'a> {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
             // Parse it as a u32 to check for overflow and other issues.
-            text.parse().map_err(|_| self.error("expected u32 decimal immediate"))
+            text.parse()
+                .map_err(|_| self.error("expected u32 decimal immediate"))
         } else {
             err!(self.loc, err_msg)
         }
@@ -714,7 +727,9 @@ impl<'a> Parser<'a> {
             sig.return_types = self.parse_argument_list(unique_isa)?;
         }
 
-        if sig.argument_types.iter().all(|a| a.location.is_assigned()) {
+        if sig.argument_types
+               .iter()
+               .all(|a| a.location.is_assigned()) {
             sig.compute_argument_bytes();
         }
 
@@ -816,35 +831,23 @@ impl<'a> Parser<'a> {
             match self.token() {
                 Some(Token::StackSlot(..)) => {
                     self.gather_comments(ctx.function.stack_slots.next_key());
-                    self.parse_stack_slot_decl().and_then(|(num, dat)| {
-                                                              ctx.add_ss(num, dat, &self.loc)
-                                                          })
+                    self.parse_stack_slot_decl()
+                        .and_then(|(num, dat)| ctx.add_ss(num, dat, &self.loc))
                 }
                 Some(Token::SigRef(..)) => {
-                    self.gather_comments(ctx.function
-                                             .dfg
-                                             .signatures
-                                             .next_key());
-                    self.parse_signature_decl(ctx.unique_isa).and_then(|(num, dat)| {
-                                                                           ctx.add_sig(num,
-                                                                                       dat,
-                                                                                       &self.loc)
-                                                                       })
+                    self.gather_comments(ctx.function.dfg.signatures.next_key());
+                    self.parse_signature_decl(ctx.unique_isa)
+                        .and_then(|(num, dat)| ctx.add_sig(num, dat, &self.loc))
                 }
                 Some(Token::FuncRef(..)) => {
-                    self.gather_comments(ctx.function
-                                             .dfg
-                                             .ext_funcs
-                                             .next_key());
-                    self.parse_function_decl(ctx).and_then(|(num, dat)| {
-                                                               ctx.add_fn(num, dat, &self.loc)
-                                                           })
+                    self.gather_comments(ctx.function.dfg.ext_funcs.next_key());
+                    self.parse_function_decl(ctx)
+                        .and_then(|(num, dat)| ctx.add_fn(num, dat, &self.loc))
                 }
                 Some(Token::JumpTable(..)) => {
                     self.gather_comments(ctx.function.jump_tables.next_key());
-                    self.parse_jump_table_decl().and_then(|(num, dat)| {
-                                                              ctx.add_jt(num, dat, &self.loc)
-                                                          })
+                    self.parse_jump_table_decl()
+                        .and_then(|(num, dat)| ctx.add_jt(num, dat, &self.loc))
                 }
                 // More to come..
                 _ => return Ok(()),
@@ -861,7 +864,8 @@ impl<'a> Parser<'a> {
         self.match_identifier("stack_slot", "expected 'stack_slot'")?;
 
         // stack-slot-decl ::= StackSlot(ss) "=" "stack_slot" * Bytes {"," stack-slot-flag}
-        let bytes: i64 = self.match_imm64("expected byte-size in stack_slot decl")?.into();
+        let bytes: i64 = self.match_imm64("expected byte-size in stack_slot decl")?
+            .into();
         if bytes < 0 {
             return err!(self.loc, "negative stack slot size");
         }
@@ -903,11 +907,10 @@ impl<'a> Parser<'a> {
         let data = match self.token() {
             Some(Token::Identifier("function")) => {
                 let (loc, name, sig) = self.parse_function_spec(ctx.unique_isa)?;
-                let sigref = ctx.function
-                    .dfg
-                    .signatures
-                    .push(sig);
-                ctx.map.def_entity(sigref.into(), &loc).expect("duplicate SigRef entities created");
+                let sigref = ctx.function.dfg.signatures.push(sig);
+                ctx.map
+                    .def_entity(sigref.into(), &loc)
+                    .expect("duplicate SigRef entities created");
                 ExtFuncData {
                     name: name,
                     signature: sigref,
@@ -1224,7 +1227,9 @@ impl<'a> Parser<'a> {
         let inst = ctx.function.dfg.make_inst(inst_data);
         let num_results = ctx.function.dfg.make_inst_results(inst, ctrl_typevar);
         ctx.function.layout.append_inst(inst, ebb);
-        ctx.map.def_entity(inst.into(), &opcode_loc).expect("duplicate inst references created");
+        ctx.map
+            .def_entity(inst.into(), &opcode_loc)
+            .expect("duplicate inst references created");
 
         if let Some(encoding) = encoding {
             *ctx.function.encodings.ensure(inst) = encoding;
@@ -1282,18 +1287,21 @@ impl<'a> Parser<'a> {
                      inst_data: &InstructionData)
                      -> Result<Type> {
         let constraints = opcode.constraints();
-        let ctrl_type = match explicit_ctrl_type {
-            Some(t) => t,
-            None => {
-                if constraints.use_typevar_operand() {
-                    // This is an opcode that supports type inference, AND there was no explicit
-                    // type specified. Look up `ctrl_value` to see if it was defined already.
-                    // TBD: If it is defined in another block, the type should have been specified
-                    // explicitly. It is unfortunate that the correctness of IL depends on the
-                    // layout of the blocks.
-                    let ctrl_src_value = inst_data.typevar_operand(&ctx.function.dfg.value_lists)
-                        .expect("Constraints <-> Format inconsistency");
-                    ctx.function.dfg.value_type(match ctx.map.get_value(ctrl_src_value) {
+        let ctrl_type =
+            match explicit_ctrl_type {
+                Some(t) => t,
+                None => {
+                    if constraints.use_typevar_operand() {
+                        // This is an opcode that supports type inference, AND there was no
+                        // explicit type specified. Look up `ctrl_value` to see if it was defined
+                        // already.
+                        // TBD: If it is defined in another block, the type should have been
+                        // specified explicitly. It is unfortunate that the correctness of IL
+                        // depends on the layout of the blocks.
+                        let ctrl_src_value = inst_data
+                            .typevar_operand(&ctx.function.dfg.value_lists)
+                            .expect("Constraints <-> Format inconsistency");
+                        ctx.function.dfg.value_type(match ctx.map.get_value(ctrl_src_value) {
                         Some(v) => v,
                         None => {
                             if let Some(v) = ctx.aliases
@@ -1308,19 +1316,19 @@ impl<'a> Parser<'a> {
                             }
                         }
                     })
-                } else if constraints.is_polymorphic() {
-                    // This opcode does not support type inference, so the explicit type variable
-                    // is required.
-                    return err!(self.loc,
-                                "type variable required for polymorphic opcode, e.g. '{}.{}'",
-                                opcode,
-                                constraints.ctrl_typeset().unwrap().example());
-                } else {
-                    // This is a non-polymorphic opcode. No typevar needed.
-                    VOID
+                    } else if constraints.is_polymorphic() {
+                        // This opcode does not support type inference, so the explicit type
+                        // variable is required.
+                        return err!(self.loc,
+                                    "type variable required for polymorphic opcode, e.g. '{}.{}'",
+                                    opcode,
+                                    constraints.ctrl_typeset().unwrap().example());
+                    } else {
+                        // This is a non-polymorphic opcode. No typevar needed.
+                        VOID
+                    }
                 }
-            }
-        };
+            };
 
         // Verify that `ctrl_type` is valid for the controlling type variable. We don't want to
         // attempt deriving types from an incorrect basis.
@@ -1629,7 +1637,8 @@ impl<'a> Parser<'a> {
             InstructionFormat::BranchTable => {
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let table = self.match_jt().and_then(|num| ctx.get_jt(num, &self.loc))?;
+                let table = self.match_jt()
+                    .and_then(|num| ctx.get_jt(num, &self.loc))?;
                 InstructionData::BranchTable {
                     opcode: opcode,
                     ty: VOID,
@@ -1679,7 +1688,8 @@ mod tests {
         assert_eq!(v4.to_string(), "v0");
         let vx3 = details.map.lookup_str("vx3").unwrap();
         assert_eq!(vx3.to_string(), "vx0");
-        let aliased_to = func.dfg.resolve_aliases(Value::table_with_number(0).unwrap());
+        let aliased_to = func.dfg
+            .resolve_aliases(Value::table_with_number(0).unwrap());
         assert_eq!(aliased_to.to_string(), "v0");
     }
 
@@ -1696,11 +1706,20 @@ mod tests {
                    "(i8 uext inreg, f32, f64) -> i32 sext, f64");
 
         // `void` is not recognized as a type by the lexer. It should not appear in files.
-        assert_eq!(Parser::new("() -> void").parse_signature(None).unwrap_err().to_string(),
+        assert_eq!(Parser::new("() -> void")
+                       .parse_signature(None)
+                       .unwrap_err()
+                       .to_string(),
                    "1: expected argument type");
-        assert_eq!(Parser::new("i8 -> i8").parse_signature(None).unwrap_err().to_string(),
+        assert_eq!(Parser::new("i8 -> i8")
+                       .parse_signature(None)
+                       .unwrap_err()
+                       .to_string(),
                    "1: expected function signature: ( args... )");
-        assert_eq!(Parser::new("(i8 -> i8").parse_signature(None).unwrap_err().to_string(),
+        assert_eq!(Parser::new("(i8 -> i8")
+                       .parse_signature(None)
+                       .unwrap_err()
+                       .to_string(),
                    "1: expected ')' after function arguments");
     }
 

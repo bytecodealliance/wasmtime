@@ -66,15 +66,14 @@ impl JumpTableData {
     ///
     /// This returns an iterator that skips any empty slots in the table.
     pub fn entries<'a>(&'a self) -> Entries {
-        Entries(self.table
-                    .iter()
-                    .cloned()
-                    .enumerate())
+        Entries(self.table.iter().cloned().enumerate())
     }
 
     /// Checks if any of the entries branch to `ebb`.
     pub fn branches_to(&self, ebb: Ebb) -> bool {
-        self.table.iter().any(|target_ebb| target_ebb.expand() == Some(ebb))
+        self.table
+            .iter()
+            .any(|target_ebb| target_ebb.expand() == Some(ebb))
     }
 
     /// Access the whole table as a mutable slice.
@@ -109,10 +108,7 @@ impl Display for JumpTableData {
             Some(first) => write!(fmt, "jump_table {}", first)?,
         }
 
-        for dest in self.table
-                .iter()
-                .skip(1)
-                .map(|e| e.expand()) {
+        for dest in self.table.iter().skip(1).map(|e| e.expand()) {
             match dest {
                 None => write!(fmt, ", 0")?,
                 Some(ebb) => write!(fmt, ", {}", ebb)?,

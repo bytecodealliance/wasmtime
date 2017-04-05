@@ -232,7 +232,9 @@ impl<'a> Context<'a> {
             if let Affinity::Reg(rc_index) = lv.affinity {
                 let regclass = self.reginfo.rc(rc_index);
                 // TODO: Fall back to a top-level super-class. Sub-classes are only hints.
-                let regunit = regs.iter(regclass).next().expect("Out of registers for arguments");
+                let regunit = regs.iter(regclass)
+                    .next()
+                    .expect("Out of registers for arguments");
                 regs.take(regclass, regunit);
                 *locations.ensure(lv.value) = ValueLoc::Reg(regunit);
             }

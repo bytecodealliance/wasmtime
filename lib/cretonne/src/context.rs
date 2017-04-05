@@ -69,6 +69,7 @@ impl Context {
 
     /// Run the register allocator.
     pub fn regalloc(&mut self, isa: &TargetIsa) {
-        self.regalloc.run(isa, &mut self.func, &self.cfg, &self.domtree);
+        self.regalloc
+            .run(isa, &mut self.func, &self.cfg, &self.domtree);
     }
 }

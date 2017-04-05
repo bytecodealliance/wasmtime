@@ -65,10 +65,7 @@ impl<'c, 'fc, 'fd> InsertBuilder<'c, 'fc, 'fd> {
     pub fn new(dfg: &'fd mut DataFlowGraph,
                pos: &'c mut Cursor<'fc>)
                -> InsertBuilder<'c, 'fc, 'fd> {
-        InsertBuilder {
-            dfg: dfg,
-            pos: pos,
-        }
+        InsertBuilder { dfg: dfg, pos: pos }
     }
 }
 
@@ -182,8 +179,9 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
 
             // Normally, make_inst_results() would also set the first result type, but we're not
             // going to call that, so set it manually.
-            *self.dfg[self.inst].first_type_mut() =
-                self.dfg.compute_result_type(self.inst, 0, ctrl_typevar).unwrap_or_default();
+            *self.dfg[self.inst].first_type_mut() = self.dfg
+                .compute_result_type(self.inst, 0, ctrl_typevar)
+                .unwrap_or_default();
         }
 
         (self.inst, self.dfg)

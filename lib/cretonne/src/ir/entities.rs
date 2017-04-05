@@ -286,14 +286,18 @@ mod tests {
         assert_eq!(Value::table_with_number(1).unwrap().to_string(), "vx1");
 
         assert_eq!(Value::direct_with_number(u32::MAX / 2), None);
-        assert_eq!(match Value::direct_with_number(u32::MAX / 2 - 1).unwrap().expand() {
+        assert_eq!(match Value::direct_with_number(u32::MAX / 2 - 1)
+                             .unwrap()
+                             .expand() {
                        ExpandedValue::Direct(i) => i.index() as u32,
                        _ => u32::MAX,
                    },
                    u32::MAX / 2 - 1);
 
         assert_eq!(Value::table_with_number(u32::MAX / 2), None);
-        assert_eq!(match Value::table_with_number(u32::MAX / 2 - 1).unwrap().expand() {
+        assert_eq!(match Value::table_with_number(u32::MAX / 2 - 1)
+                             .unwrap()
+                             .expand() {
                        ExpandedValue::Table(i) => i as u32,
                        _ => u32::MAX,
                    },

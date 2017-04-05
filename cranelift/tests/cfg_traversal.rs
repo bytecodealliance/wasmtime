@@ -9,7 +9,10 @@ use self::cton_reader::parse_functions;
 fn test_reverse_postorder_traversal(function_source: &str, ebb_order: Vec<u32>) {
     let func = &parse_functions(function_source).unwrap()[0];
     let cfg = ControlFlowGraph::with_function(&func);
-    let ebbs = ebb_order.iter().map(|n| Ebb::with_number(*n).unwrap()).collect::<Vec<Ebb>>();
+    let ebbs = ebb_order
+        .iter()
+        .map(|n| Ebb::with_number(*n).unwrap())
+        .collect::<Vec<Ebb>>();
 
     let mut postorder_ebbs = cfg.postorder_ebbs();
     let mut postorder_map = EntityMap::with_capacity(postorder_ebbs.len());

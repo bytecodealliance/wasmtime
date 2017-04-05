@@ -177,8 +177,9 @@ impl<'a> Verifier<'a> {
 
         let fixed_results = inst_data.opcode().constraints().fixed_results();
         // var_results is 0 if we aren't a call instruction
-        let var_results =
-            dfg.call_signature(inst).map(|sig| dfg.signatures[sig].return_types.len()).unwrap_or(0);
+        let var_results = dfg.call_signature(inst)
+            .map(|sig| dfg.signatures[sig].return_types.len())
+            .unwrap_or(0);
         let total_results = fixed_results + var_results;
 
         if total_results == 0 {
@@ -218,9 +219,21 @@ impl<'a> Verifier<'a> {
             &MultiAry { ref args, .. } => {
                 self.verify_value_list(inst, args)?;
             }
-            &Jump { destination, ref args, .. } |
-            &Branch { destination, ref args, .. } |
-            &BranchIcmp { destination, ref args, .. } => {
+            &Jump {
+                 destination,
+                 ref args,
+                 ..
+             } |
+            &Branch {
+                 destination,
+                 ref args,
+                 ..
+             } |
+            &BranchIcmp {
+                 destination,
+                 ref args,
+                 ..
+             } => {
                 self.verify_ebb(inst, destination)?;
                 self.verify_value_list(inst, args)?;
             }
@@ -265,10 +278,7 @@ impl<'a> Verifier<'a> {
     }
 
     fn verify_sig_ref(&self, inst: Inst, s: SigRef) -> Result<()> {
-        if !self.func
-                .dfg
-                .signatures
-                .is_valid(s) {
+        if !self.func.dfg.signatures.is_valid(s) {
             err!(inst, "invalid signature reference {}", s)
         } else {
             Ok(())
@@ -276,10 +286,7 @@ impl<'a> Verifier<'a> {
     }
 
     fn verify_func_ref(&self, inst: Inst, f: FuncRef) -> Result<()> {
-        if !self.func
-                .dfg
-                .ext_funcs
-                .is_valid(f) {
+        if !self.func.dfg.ext_funcs.is_valid(f) {
             err!(inst, "invalid function reference {}", f)
         } else {
             Ok(())
@@ -326,7 +333,8 @@ impl<'a> Verifier<'a> {
                                 def_inst);
                 }
                 // Defining instruction dominates the instruction that uses the value.
-                if !self.domtree.dominates(def_inst, loc_inst, &self.func.layout) {
+                if !self.domtree
+                        .dominates(def_inst, loc_inst, &self.func.layout) {
                     return err!(loc_inst, "uses value from non-dominating {}", def_inst);
                 }
             }
@@ -343,7 +351,8 @@ impl<'a> Verifier<'a> {
                                 ebb);
                 }
                 // The defining EBB dominates the instruction using this value.
-                if !self.domtree.ebb_dominates(ebb, loc_inst, &self.func.layout) {
+                if !self.domtree
+                        .ebb_dominates(ebb, loc_inst, &self.func.layout) {
                     return err!(loc_inst, "uses value arg from non-dominating {}", ebb);
                 }
             }
@@ -378,10 +387,7 @@ impl<'a> Verifier<'a> {
                 return err!(ebb, "entry block arguments must match function signature");
             }
 
-            for (i, arg) in self.func
-                    .dfg
-                    .ebb_args(ebb)
-                    .enumerate() {
+            for (i, arg) in self.func.dfg.ebb_args(ebb).enumerate() {
                 let arg_type = self.func.dfg.value_type(arg);
                 if arg_type != expected_types[i].value_type {
                     return err!(ebb,
@@ -452,11 +458,7 @@ impl<'a> Verifier<'a> {
     fn typecheck_fixed_args(&self, inst: Inst, ctrl_type: Type) -> Result<()> {
         let constraints = self.func.dfg[inst].opcode().constraints();
 
-        for (i, &arg) in self.func
-                .dfg
-                .inst_fixed_args(inst)
-                .iter()
-                .enumerate() {
+        for (i, &arg) in self.func.dfg.inst_fixed_args(inst).iter().enumerate() {
             let arg_type = self.func.dfg.value_type(arg);
             match constraints.value_argument_constraint(i, ctrl_type) {
                 ResolvedConstraint::Bound(expected_type) => {
@@ -510,13 +512,17 @@ impl<'a> Verifier<'a> {
         match self.func.dfg[inst].analyze_call(&self.func.dfg.value_lists) {
             CallInfo::Direct(func_ref, _) => {
                 let sig_ref = self.func.dfg.ext_funcs[func_ref].signature;
-                let arg_types =
-                    self.func.dfg.signatures[sig_ref].argument_types.iter().map(|a| a.value_type);
+                let arg_types = self.func.dfg.signatures[sig_ref]
+                    .argument_types
+                    .iter()
+                    .map(|a| a.value_type);
                 self.typecheck_variable_args_iterator(inst, arg_types)?;
             }
             CallInfo::Indirect(sig_ref, _) => {
-                let arg_types =
-                    self.func.dfg.signatures[sig_ref].argument_types.iter().map(|a| a.value_type);
+                let arg_types = self.func.dfg.signatures[sig_ref]
+                    .argument_types
+                    .iter()
+                    .map(|a| a.value_type);
                 self.typecheck_variable_args_iterator(inst, arg_types)?;
             }
             CallInfo::NotACall => {}
@@ -673,10 +679,11 @@ mod tests {
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();
         func.layout.append_ebb(ebb0);
-        let nullary_with_bad_opcode = func.dfg.make_inst(InstructionData::Nullary {
-                                                             opcode: Opcode::Jump,
-                                                             ty: types::VOID,
-                                                         });
+        let nullary_with_bad_opcode = func.dfg
+            .make_inst(InstructionData::Nullary {
+                           opcode: Opcode::Jump,
+                           ty: types::VOID,
+                       });
         func.layout.append_inst(nullary_with_bad_opcode, ebb0);
         let verifier = Verifier::new(&func);
         assert_err_with_msg!(verifier.run(), "instruction format");

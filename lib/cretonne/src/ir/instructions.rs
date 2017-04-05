@@ -304,15 +304,21 @@ impl InstructionData {
     /// here.
     pub fn analyze_branch<'a>(&'a self, pool: &'a ValueListPool) -> BranchInfo<'a> {
         match self {
-            &InstructionData::Jump { destination, ref args, .. } => {
-                BranchInfo::SingleDest(destination, &args.as_slice(pool))
-            }
-            &InstructionData::Branch { destination, ref args, .. } => {
-                BranchInfo::SingleDest(destination, &args.as_slice(pool)[1..])
-            }
-            &InstructionData::BranchIcmp { destination, ref args, .. } => {
-                BranchInfo::SingleDest(destination, &args.as_slice(pool)[2..])
-            }
+            &InstructionData::Jump {
+                 destination,
+                 ref args,
+                 ..
+             } => BranchInfo::SingleDest(destination, &args.as_slice(pool)),
+            &InstructionData::Branch {
+                 destination,
+                 ref args,
+                 ..
+             } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[1..]),
+            &InstructionData::BranchIcmp {
+                 destination,
+                 ref args,
+                 ..
+             } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[2..]),
             &InstructionData::BranchTable { table, .. } => BranchInfo::Table(table),
             _ => BranchInfo::NotABranch,
         }
@@ -601,9 +607,21 @@ impl OperandConstraint {
             Same => Bound(ctrl_type),
             LaneOf => Bound(ctrl_type.lane_type()),
             AsBool => Bound(ctrl_type.as_bool()),
-            HalfWidth => Bound(ctrl_type.half_width().expect("invalid type for half_width")),
-            DoubleWidth => Bound(ctrl_type.double_width().expect("invalid type for double_width")),
-            HalfVector => Bound(ctrl_type.half_vector().expect("invalid type for half_vector")),
+            HalfWidth => {
+                Bound(ctrl_type
+                          .half_width()
+                          .expect("invalid type for half_width"))
+            }
+            DoubleWidth => {
+                Bound(ctrl_type
+                          .double_width()
+                          .expect("invalid type for double_width"))
+            }
+            HalfVector => {
+                Bound(ctrl_type
+                          .half_vector()
+                          .expect("invalid type for half_vector"))
+            }
             DoubleVector => Bound(ctrl_type.by(2).expect("invalid type for double_vector")),
         }
     }

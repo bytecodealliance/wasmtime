@@ -135,7 +135,9 @@ impl<T: EntityRef> ListPool<T> {
         // The `wrapping_sub` handles the special case 0, which is the empty list. This way, the
         // cost of the bounds check that we have to pay anyway is co-opted to handle the special
         // case of the empty list.
-        self.data.get(idx.wrapping_sub(1)).map(|len| len.index())
+        self.data
+            .get(idx.wrapping_sub(1))
+            .map(|len| len.index())
     }
 
     /// Allocate a storage block with a size given by `sclass`.

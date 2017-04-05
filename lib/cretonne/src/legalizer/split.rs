@@ -125,7 +125,9 @@ fn split_any(dfg: &mut DataFlowGraph,
                     "Predecessor not a branch: {}",
                     dfg.display_inst(inst));
             let fixed_args = branch_opc.constraints().fixed_value_arguments();
-            let mut args = dfg[inst].take_value_list().expect("Branches must have value lists.");
+            let mut args = dfg[inst]
+                .take_value_list()
+                .expect("Branches must have value lists.");
             let num_args = args.len(&dfg.value_lists);
             // Get the old value passed to the EBB argument we're repairing.
             let old_arg = args.get(fixed_args + repair.num, &dfg.value_lists)
@@ -142,12 +144,14 @@ fn split_any(dfg: &mut DataFlowGraph,
             let (lo, hi) = split_value(dfg, pos, old_arg, repair.concat, &mut repairs);
 
             // The `lo` part replaces the original argument.
-            *args.get_mut(fixed_args + repair.num, &mut dfg.value_lists).unwrap() = lo;
+            *args.get_mut(fixed_args + repair.num, &mut dfg.value_lists)
+                 .unwrap() = lo;
 
             // The `hi` part goes at the end. Since multiple repairs may have been scheduled to the
             // same EBB, there could be multiple arguments missing.
             if num_args > fixed_args + repair.hi_num {
-                *args.get_mut(fixed_args + repair.hi_num, &mut dfg.value_lists).unwrap() = hi;
+                *args.get_mut(fixed_args + repair.hi_num, &mut dfg.value_lists)
+                     .unwrap() = hi;
             } else {
                 // We need to append one or more arguments. If we're adding more than one argument,
                 // there must be pending repairs on the stack that will fill in the correct values

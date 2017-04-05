@@ -205,7 +205,8 @@ fn get_or_create<'a>(lrset: &'a mut LiveRangeSet,
                 def = inst.into();
                 // Initialize the affinity from the defining instruction's result constraints.
                 // Don't do this for call return values which are always tied to a single register.
-                affinity = recipe_constraints.get(func.encodings[inst].recipe())
+                affinity = recipe_constraints
+                    .get(func.encodings[inst].recipe())
                     .and_then(|rc| rc.outs.get(rnum))
                     .map(Affinity::new)
                     .unwrap_or_default();
@@ -315,7 +316,8 @@ impl Liveness {
                 let recipe = func.encodings[inst].recipe();
                 // Iterator of constraints, one per value operand.
                 // TODO: Should we fail here if the instruction doesn't have a valid encoding?
-                let mut operand_constraints = recipe_constraints.get(recipe)
+                let mut operand_constraints = recipe_constraints
+                    .get(recipe)
                     .map(|c| c.ins)
                     .unwrap_or(&[])
                     .iter();

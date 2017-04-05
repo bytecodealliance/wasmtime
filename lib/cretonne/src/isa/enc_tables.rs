@@ -90,13 +90,13 @@ pub fn lookup_enclist<OffT1, OffT2>(ctrl_typevar: Type,
                         Legalize::Expand
                     })
         .and_then(|l1idx| {
-            let l1ent = &level1_table[l1idx];
-            let l2off = l1ent.offset.into() as usize;
-            let l2tab = &level2_table[l2off..l2off + (1 << l1ent.log2len)];
-            probe(l2tab, opcode, opcode as usize)
-                .map(|l2idx| l2tab[l2idx].offset.into() as usize)
-                .ok_or(Legalize::Expand)
-        })
+                      let l1ent = &level1_table[l1idx];
+                      let l2off = l1ent.offset.into() as usize;
+                      let l2tab = &level2_table[l2off..l2off + (1 << l1ent.log2len)];
+                      probe(l2tab, opcode, opcode as usize)
+                          .map(|l2idx| l2tab[l2idx].offset.into() as usize)
+                          .ok_or(Legalize::Expand)
+                  })
 }
 
 /// Encoding list entry.

@@ -262,7 +262,11 @@ pub fn write_operands(w: &mut Write, dfg: &DataFlowGraph, inst: Inst) -> Result 
         IntCompare { cond, args, .. } => write!(w, " {}, {}, {}", cond, args[0], args[1]),
         IntCompareImm { cond, arg, imm, .. } => write!(w, " {}, {}, {}", cond, arg, imm),
         FloatCompare { cond, args, .. } => write!(w, " {}, {}, {}", cond, args[0], args[1]),
-        Jump { destination, ref args, .. } => {
+        Jump {
+            destination,
+            ref args,
+            ..
+        } => {
             if args.is_empty() {
                 write!(w, " {}", destination)
             } else {
@@ -272,7 +276,11 @@ pub fn write_operands(w: &mut Write, dfg: &DataFlowGraph, inst: Inst) -> Result 
                        DisplayValues(args.as_slice(pool)))
             }
         }
-        Branch { destination, ref args, .. } => {
+        Branch {
+            destination,
+            ref args,
+            ..
+        } => {
             let args = args.as_slice(pool);
             write!(w, " {}, {}", args[0], destination)?;
             if args.len() > 1 {
@@ -280,7 +288,12 @@ pub fn write_operands(w: &mut Write, dfg: &DataFlowGraph, inst: Inst) -> Result 
             }
             Ok(())
         }
-        BranchIcmp { cond, destination, ref args, .. } => {
+        BranchIcmp {
+            cond,
+            destination,
+            ref args,
+            ..
+        } => {
             let args = args.as_slice(pool);
             write!(w, " {}, {}, {}, {}", cond, args[0], args[1], destination)?;
             if args.len() > 2 {

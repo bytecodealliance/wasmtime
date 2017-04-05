@@ -107,7 +107,8 @@ fn legalize_inst_results<ResType>(dfg: &mut DataFlowGraph,
                                   -> Inst
     where ResType: FnMut(&DataFlowGraph, usize) -> ArgumentType
 {
-    let mut call = pos.current_inst().expect("Cursor must point to a call instruction");
+    let mut call = pos.current_inst()
+        .expect("Cursor must point to a call instruction");
 
     // We theoretically allow for call instructions that return a number of fixed results before
     // the call return values. In practice, it doesn't happen.
@@ -364,10 +365,13 @@ fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
                                     mut get_abi_type: ArgType)
     where ArgType: FnMut(&DataFlowGraph, usize) -> ArgumentType
 {
-    let inst = pos.current_inst().expect("Cursor must point to a call instruction");
+    let inst = pos.current_inst()
+        .expect("Cursor must point to a call instruction");
 
     // Lift the value list out of the call instruction so we modify it.
-    let mut vlist = dfg[inst].take_value_list().expect("Call must have a value list");
+    let mut vlist = dfg[inst]
+        .take_value_list()
+        .expect("Call must have a value list");
 
     // The value list contains all arguments to the instruction, including the callee on an
     // indirect call which isn't part of the call arguments that must match the ABI signature.
@@ -405,7 +409,9 @@ fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
 
     let mut abi_arg = 0;
     for old_arg in 0..have_args {
-        let old_value = vlist.get(old_arg_offset + old_arg, &dfg.value_lists).unwrap();
+        let old_value = vlist
+            .get(old_arg_offset + old_arg, &dfg.value_lists)
+            .unwrap();
         let mut put_arg = |dfg: &mut DataFlowGraph, arg| {
             let abi_type = get_abi_type(dfg, abi_arg);
             if dfg.value_type(arg) == abi_type.value_type {
@@ -435,7 +441,8 @@ fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
 ///
 /// Returns `true` if any instructions were inserted.
 pub fn handle_call_abi(dfg: &mut DataFlowGraph, cfg: &ControlFlowGraph, pos: &mut Cursor) -> bool {
-    let mut inst = pos.current_inst().expect("Cursor must point to a call instruction");
+    let mut inst = pos.current_inst()
+        .expect("Cursor must point to a call instruction");
 
     // Start by checking if the argument types already match the signature.
     let sig_ref = match check_call_signature(dfg, inst) {
@@ -475,7 +482,8 @@ pub fn handle_return_abi(dfg: &mut DataFlowGraph,
                          pos: &mut Cursor,
                          sig: &Signature)
                          -> bool {
-    let inst = pos.current_inst().expect("Cursor must point to a return instruction");
+    let inst = pos.current_inst()
+        .expect("Cursor must point to a return instruction");
 
     // Check if the returned types already match the signature.
     if check_return_signature(dfg, inst, sig) {

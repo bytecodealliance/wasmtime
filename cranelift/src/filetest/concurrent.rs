@@ -119,10 +119,11 @@ fn worker_thread(thread_num: usize,
 
                 // Tell them we're starting this job.
                 // The receiver should always be present for this as long as we have jobs.
-                replies.send(Reply::Starting {
-                                 jobid: jobid,
-                                 thread_num: thread_num,
-                             })
+                replies
+                    .send(Reply::Starting {
+                              jobid: jobid,
+                              thread_num: thread_num,
+                          })
                     .unwrap();
 
                 let result = catch_unwind(|| runone::run(path.as_path())).unwrap_or_else(|e| {
@@ -141,10 +142,11 @@ fn worker_thread(thread_num: usize,
                     dbg!("FAIL: {}", msg);
                 }
 
-                replies.send(Reply::Done {
-                                 jobid: jobid,
-                                 result: result,
-                             })
+                replies
+                    .send(Reply::Done {
+                              jobid: jobid,
+                              result: result,
+                          })
                     .unwrap();
             }
         })
