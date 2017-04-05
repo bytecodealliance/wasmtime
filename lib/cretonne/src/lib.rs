@@ -10,6 +10,9 @@ pub use write::write_function;
 /// Version number of the cretonne crate.
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
+#[macro_use]
+pub mod dbg;
+
 pub mod binemit;
 pub mod flowgraph;
 pub mod dominator_tree;
@@ -21,9 +24,6 @@ pub mod regalloc;
 pub mod settings;
 pub mod sparse_map;
 pub mod verifier;
-
-#[macro_use]
-pub mod dbg;
 
 mod abi;
 mod constant_hash;

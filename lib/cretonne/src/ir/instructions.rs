@@ -324,6 +324,19 @@ impl InstructionData {
         }
     }
 
+    /// Get the single destination of this branch instruction, if it is a single destination
+    /// branch or jump.
+    ///
+    /// Multi-destination branches like `br_table` return `None`.
+    pub fn branch_destination(&self) -> Option<Ebb> {
+        match self {
+            &InstructionData::Jump { destination, .. } => Some(destination),
+            &InstructionData::Branch { destination, .. } => Some(destination),
+            &InstructionData::BranchIcmp { destination, .. } => Some(destination),
+            _ => None,
+        }
+    }
+
     /// Return information about a call instruction.
     ///
     /// Any instruction that can call another function reveals its call signature here.

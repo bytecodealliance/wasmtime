@@ -3,6 +3,10 @@
 //! The `binemit` module contains code for translating Cretonne's intermediate representation into
 //! binary machine code.
 
+mod relaxation;
+
+pub use self::relaxation::relax_branches;
+
 use ir::{Ebb, FuncRef, JumpTable, Function, Inst};
 
 /// Offset in bytes from the beginning of the function.

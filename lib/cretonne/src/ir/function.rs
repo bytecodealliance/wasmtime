@@ -3,11 +3,12 @@
 //! The `Function` struct defined in this module owns all of its extended basic blocks and
 //! instructions.
 
-use std::fmt::{self, Display, Debug, Formatter};
-use ir::{FunctionName, Signature, Value, Inst, StackSlot, StackSlotData, JumpTable, JumpTableData,
-         ValueLoc, DataFlowGraph, Layout};
-use isa::{TargetIsa, Encoding};
+use binemit::CodeOffset;
 use entity_map::{EntityMap, PrimaryEntityData};
+use ir::{FunctionName, Signature, Value, Inst, Ebb, StackSlot, StackSlotData, JumpTable,
+         JumpTableData, ValueLoc, DataFlowGraph, Layout};
+use isa::{TargetIsa, Encoding};
+use std::fmt::{self, Display, Debug, Formatter};
 use write::write_function;
 
 /// A function.
@@ -40,6 +41,13 @@ pub struct Function {
 
     /// Location assigned to every value.
     pub locations: EntityMap<Value, ValueLoc>,
+
+    /// Code offsets of the EBB headers.
+    ///
+    /// This information is only transiently available after the `binemit::relax_branches` function
+    /// computes it, and it can easily be recomputed by calling that function. It is not included
+    /// in the textual IL format.
+    pub offsets: EntityMap<Ebb, CodeOffset>,
 }
 
 impl PrimaryEntityData for StackSlotData {}
@@ -57,6 +65,7 @@ impl Function {
             layout: Layout::new(),
             encodings: EntityMap::new(),
             locations: EntityMap::new(),
+            offsets: EntityMap::new(),
         }
     }
 
