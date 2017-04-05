@@ -4,6 +4,7 @@
 //! functions and compares the results to the expected output.
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt::Write;
 use cretonne::binemit;
 use cretonne::ir;
@@ -97,54 +98,99 @@ impl SubTest for TestBinEmit {
 
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> Result<()> {
         let isa = context.isa.expect("binemit needs an ISA");
+        let encinfo = isa.encoding_info();
         // TODO: Run a verifier pass over the code first to detect any bad encodings or missing/bad
         // value locations. The current error reporting is just crashing...
         let mut func = func.into_owned();
-        let mut sink = TextSink::new(isa);
 
-        for comment in &context.details.comments {
-            if let Some(want) = match_directive(comment.text, "bin:") {
-                let inst = match comment.entity {
-                    AnyEntity::Inst(inst) => inst,
-                    _ => {
-                        return Err(format!("annotation on non-inst {}: {}",
-                                           comment.entity,
-                                           comment.text))
-                    }
-                };
-
-                // Compute an encoding for `inst` if one wasn't provided.
+        // Give an encoding to any instruction that doesn't already have one.
+        for ebb in func.layout.ebbs() {
+            for inst in func.layout.ebb_insts(ebb) {
                 if !func.encodings
                         .get(inst)
                         .map(|e| e.is_legal())
                         .unwrap_or(false) {
-                    match isa.encode(&func.dfg, &func.dfg[inst]) {
-                        Ok(enc) => *func.encodings.ensure(inst) = enc,
-                        Err(_) => {
-                            return Err(format!("{} can't be encoded: {}",
-                                               inst,
-                                               func.dfg.display_inst(inst)))
-                        }
+                    if let Ok(enc) = isa.encode(&func.dfg, &func.dfg[inst]) {
+                        *func.encodings.ensure(inst) = enc;
                     }
-                }
-
-                sink.text.clear();
-                isa.emit_inst(&func, inst, &mut sink);
-                let have = sink.text.trim();
-                if have != want {
-                    return Err(format!("Bad machine code for {}: {}\nWant: {}\nGot:  {}",
-                                       inst,
-                                       func.dfg.display_inst(inst),
-                                       want,
-                                       have));
                 }
             }
         }
 
-        if sink.text.is_empty() {
-            Err("No bin: directives found".to_string())
-        } else {
-            Ok(())
+        // Relax branches and compute EBB offsets based on the encodings.
+        binemit::relax_branches(&mut func, isa);
+
+        // Collect all of the 'bin:' directives on instructions.
+        let mut bins = HashMap::new();
+        for comment in &context.details.comments {
+            if let Some(want) = match_directive(comment.text, "bin:") {
+                match comment.entity {
+                    AnyEntity::Inst(inst) => {
+                        if let Some(prev) = bins.insert(inst, want) {
+                            return Err(format!("multiple 'bin:' directives on {}: '{}' and '{}'",
+                                               func.dfg.display_inst(inst),
+                                               prev,
+                                               want));
+                        }
+                    }
+                    _ => {
+                        return Err(format!("'bin:' directive on non-inst {}: {}",
+                                           comment.entity,
+                                           comment.text))
+                    }
+                }
+            }
         }
+        if bins.is_empty() {
+            return Err("No 'bin:' directives found".to_string());
+        }
+
+        // Now emit all instructions.
+        let mut sink = TextSink::new(isa);
+        for ebb in func.layout.ebbs() {
+            // Correct header offsets should have been computed by `relax_branches()`.
+            assert_eq!(sink.offset,
+                       func.offsets[ebb],
+                       "Inconsistent {} header offset",
+                       ebb);
+            for inst in func.layout.ebb_insts(ebb) {
+                sink.text.clear();
+                let enc = func.encodings.get(inst).cloned().unwrap_or_default();
+
+                // Send legal encodings into the emitter.
+                if enc.is_legal() {
+                    let before = sink.offset;
+                    isa.emit_inst(&func, inst, &mut sink);
+                    let emitted = sink.offset - before;
+                    // Verify the encoding recipe sizes against the ISAs emit_inst implementation.
+                    assert_eq!(emitted,
+                               encinfo.bytes(enc),
+                               "Inconsistent size for [{}] {}",
+                               encinfo.display(enc),
+                               func.dfg.display_inst(inst));
+                }
+
+                // Check against bin: directives.
+                if let Some(want) = bins.remove(&inst) {
+                    if !enc.is_legal() {
+                        return Err(format!("{} can't be encoded: {}",
+                                           inst,
+                                           func.dfg.display_inst(inst)));
+                    }
+                    sink.text.clear();
+                    isa.emit_inst(&func, inst, &mut sink);
+                    let have = sink.text.trim();
+                    if have != want {
+                        return Err(format!("Bad machine code for {}: {}\nWant: {}\nGot:  {}",
+                                           inst,
+                                           func.dfg.display_inst(inst),
+                                           want,
+                                           have));
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 }
