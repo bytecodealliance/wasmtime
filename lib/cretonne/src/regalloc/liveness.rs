@@ -178,7 +178,7 @@
 use flowgraph::ControlFlowGraph;
 use ir::dfg::ValueDef;
 use ir::{Function, Value, Inst, Ebb};
-use isa::{TargetIsa, RecipeConstraints};
+use isa::{TargetIsa, EncInfo};
 use regalloc::affinity::Affinity;
 use regalloc::liverange::LiveRange;
 use sparse_map::SparseMap;
@@ -191,7 +191,7 @@ type LiveRangeSet = SparseMap<Value, LiveRange>;
 fn get_or_create<'a>(lrset: &'a mut LiveRangeSet,
                      value: Value,
                      func: &Function,
-                     recipe_constraints: &[RecipeConstraints])
+                     enc_info: &EncInfo)
                      -> &'a mut LiveRange {
     // It would be better to use `get_mut()` here, but that leads to borrow checker fighting
     // which can probably only be resolved by non-lexical lifetimes.
@@ -205,8 +205,8 @@ fn get_or_create<'a>(lrset: &'a mut LiveRangeSet,
                 def = inst.into();
                 // Initialize the affinity from the defining instruction's result constraints.
                 // Don't do this for call return values which are always tied to a single register.
-                affinity = recipe_constraints
-                    .get(func.encodings[inst].recipe())
+                affinity = enc_info
+                    .operand_constraints(func.encodings[inst])
                     .and_then(|rc| rc.outs.get(rnum))
                     .map(Affinity::new)
                     .unwrap_or_default();
@@ -296,7 +296,7 @@ impl Liveness {
         self.ranges.clear();
 
         // Get ISA data structures used for computing live range affinities.
-        let recipe_constraints = isa.recipe_constraints();
+        let enc_info = isa.encoding_info();
         let reg_info = isa.register_info();
 
         // The liveness computation needs to visit all uses, but the order doesn't matter.
@@ -309,22 +309,20 @@ impl Liveness {
                 // TODO: When we implement DCE, we can use the absence of a live range to indicate
                 // an unused value.
                 for def in func.dfg.inst_results(inst) {
-                    get_or_create(&mut self.ranges, def, func, recipe_constraints);
+                    get_or_create(&mut self.ranges, def, func, &enc_info);
                 }
 
-                // The instruction encoding is used to compute affinities.
-                let recipe = func.encodings[inst].recipe();
                 // Iterator of constraints, one per value operand.
                 // TODO: Should we fail here if the instruction doesn't have a valid encoding?
-                let mut operand_constraints = recipe_constraints
-                    .get(recipe)
+                let mut operand_constraints = enc_info
+                    .operand_constraints(func.encodings[inst])
                     .map(|c| c.ins)
                     .unwrap_or(&[])
                     .iter();
 
                 for &arg in func.dfg.inst_args(inst) {
                     // Get the live range, create it as a dead range if necessary.
-                    let lr = get_or_create(&mut self.ranges, arg, func, recipe_constraints);
+                    let lr = get_or_create(&mut self.ranges, arg, func, &enc_info);
 
                     // Extend the live range to reach this use.
                     extend_to_use(lr, ebb, inst, &mut self.worklist, func, cfg);
