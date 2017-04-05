@@ -8,6 +8,7 @@ use std::fmt::Write;
 use cretonne::binemit;
 use cretonne::ir;
 use cretonne::ir::entities::AnyEntity;
+use cretonne::isa::TargetIsa;
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result};
 use utils::match_directive;
@@ -26,24 +27,46 @@ pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
 // Code sink that generates text.
 struct TextSink {
     rnames: &'static [&'static str],
+    offset: binemit::CodeOffset,
     text: String,
 }
 
+impl TextSink {
+    /// Create a new empty TextSink.
+    pub fn new(isa: &TargetIsa) -> TextSink {
+        TextSink {
+            rnames: isa.reloc_names(),
+            offset: 0,
+            text: String::new(),
+        }
+    }
+}
+
+
+
 impl binemit::CodeSink for TextSink {
+    fn offset(&self) -> binemit::CodeOffset {
+        self.offset
+    }
+
     fn put1(&mut self, x: u8) {
         write!(self.text, "{:02x} ", x).unwrap();
+        self.offset += 1;
     }
 
     fn put2(&mut self, x: u16) {
         write!(self.text, "{:04x} ", x).unwrap();
+        self.offset += 2;
     }
 
     fn put4(&mut self, x: u32) {
         write!(self.text, "{:08x} ", x).unwrap();
+        self.offset += 4;
     }
 
     fn put8(&mut self, x: u64) {
         write!(self.text, "{:016x} ", x).unwrap();
+        self.offset += 8;
     }
 
     fn reloc_ebb(&mut self, reloc: binemit::Reloc, ebb: ir::Ebb) {
@@ -77,11 +100,7 @@ impl SubTest for TestBinEmit {
         // TODO: Run a verifier pass over the code first to detect any bad encodings or missing/bad
         // value locations. The current error reporting is just crashing...
         let mut func = func.into_owned();
-
-        let mut sink = TextSink {
-            rnames: isa.reloc_names(),
-            text: String::new(),
-        };
+        let mut sink = TextSink::new(isa);
 
         for comment in &context.details.comments {
             if let Some(want) = match_directive(comment.text, "bin:") {

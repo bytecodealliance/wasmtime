@@ -5,6 +5,12 @@
 
 use ir::{Ebb, FuncRef, JumpTable, Function, Inst};
 
+/// Offset in bytes from the beginning of the function.
+///
+/// Cretonne can be used as a cross compiler, so we don't want to use a type like `usize` which
+/// depends on the *host* platform, not the *target* platform.
+pub type CodeOffset = u32;
+
 /// Relocation kinds depend on the current ISA.
 pub struct Reloc(pub u16);
 
@@ -13,6 +19,9 @@ pub struct Reloc(pub u16);
 /// A `CodeSink` will receive all of the machine code for a function. It also accepts relocations
 /// which are locations in the code section that need to be fixed up when linking.
 pub trait CodeSink {
+    /// Get the current position.
+    fn offset(&self) -> CodeOffset;
+
     /// Add 1 byte to the code section.
     fn put1(&mut self, u8);
 
