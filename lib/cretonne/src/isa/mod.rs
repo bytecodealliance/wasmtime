@@ -40,9 +40,9 @@
 //! The configured target ISA trait object is a `Box<TargetIsa>` which can be used for multiple
 //! concurrent function compilations.
 
-pub use isa::encoding::Encoding;
-pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex};
 pub use isa::constraints::{RecipeConstraints, OperandConstraint, ConstraintKind};
+pub use isa::encoding::{Encoding, EncInfo};
+pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex};
 
 use binemit::CodeSink;
 use settings;
@@ -143,25 +143,8 @@ pub trait TargetIsa {
     /// This is also the main entry point for determining if an instruction is legal.
     fn encode(&self, dfg: &DataFlowGraph, inst: &InstructionData) -> Result<Encoding, Legalize>;
 
-    /// Get a static array of names associated with encoding recipes in this ISA. Encoding recipes
-    /// are numbered starting from 0, corresponding to indexes into the name array.
-    ///
-    /// This is just used for printing and parsing encodings in the textual IL format.
-    fn recipe_names(&self) -> &'static [&'static str];
-
-    /// Get a static array of value operand constraints associated with encoding recipes in this
-    /// ISA.
-    ///
-    /// The constraints describe which registers can be used with an encoding recipe.
-    fn recipe_constraints(&self) -> &'static [RecipeConstraints];
-
-    /// Create an object that can display an ISA-dependent encoding properly.
-    fn display_enc(&self, enc: Encoding) -> encoding::DisplayEncoding {
-        encoding::DisplayEncoding {
-            encoding: enc,
-            recipe_names: self.recipe_names(),
-        }
-    }
+    /// Get a data structure describing the instruction encodings in this ISA.
+    fn encoding_info(&self) -> EncInfo;
 
     /// Legalize a function signature.
     ///

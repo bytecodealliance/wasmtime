@@ -1,6 +1,7 @@
 //! The `Encoding` struct.
 
 use std::fmt;
+use isa::constraints::RecipeConstraints;
 
 /// Bits needed to encode an instruction as binary machine code.
 ///
@@ -73,6 +74,31 @@ impl fmt::Display for DisplayEncoding {
                    self.encoding.bits)
         } else {
             write!(f, "-")
+        }
+    }
+}
+
+/// Information about all the encodings in this ISA.
+#[derive(Clone)]
+pub struct EncInfo {
+    /// Constraints on value operands per recipe.
+    pub constraints: &'static [RecipeConstraints],
+
+    /// Names of encoding recipes.
+    pub names: &'static [&'static str],
+}
+
+impl EncInfo {
+    /// Get the value operand constraints for `enc` if it is a legal encoding.
+    pub fn operand_constraints(&self, enc: Encoding) -> Option<&RecipeConstraints> {
+        self.constraints.get(enc.recipe())
+    }
+
+    /// Create an object that can display an ISA-dependent encoding properly.
+    pub fn display(&self, enc: Encoding) -> DisplayEncoding {
+        DisplayEncoding {
+            encoding: enc,
+            recipe_names: self.names,
         }
     }
 }

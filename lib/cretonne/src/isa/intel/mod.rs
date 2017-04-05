@@ -9,7 +9,7 @@ use binemit::CodeSink;
 use super::super::settings as shared_settings;
 use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, general_encoding};
 use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, RegInfo, Encoding, Legalize, RecipeConstraints};
+use isa::{TargetIsa, RegInfo, EncInfo, Encoding, Legalize};
 use ir;
 
 #[allow(dead_code)]
@@ -55,6 +55,10 @@ impl TargetIsa for Isa {
         registers::INFO.clone()
     }
 
+    fn encoding_info(&self) -> EncInfo {
+        enc_tables::INFO.clone()
+    }
+
     fn encode(&self,
               dfg: &ir::DataFlowGraph,
               inst: &ir::InstructionData)
@@ -70,14 +74,6 @@ impl TargetIsa for Isa {
                                      |isap| self.isa_flags.numbered_predicate(isap as usize))
                             .ok_or(Legalize::Expand)
                 })
-    }
-
-    fn recipe_names(&self) -> &'static [&'static str] {
-        &enc_tables::RECIPE_NAMES[..]
-    }
-
-    fn recipe_constraints(&self) -> &'static [RecipeConstraints] {
-        &enc_tables::RECIPE_CONSTRAINTS
     }
 
     fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut CodeSink) {

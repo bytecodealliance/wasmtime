@@ -184,7 +184,7 @@ fn write_instruction(w: &mut Write,
     if let Some(enc) = func.encodings.get(inst).cloned() {
         let mut s = String::with_capacity(16);
         if let Some(isa) = isa {
-            write!(s, "[{}", isa.display_enc(enc))?;
+            write!(s, "[{}", isa.encoding_info().display(enc))?;
             // Write value locations, if we have them.
             if !func.locations.is_empty() {
                 let regs = isa.register_info();

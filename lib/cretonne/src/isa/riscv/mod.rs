@@ -10,7 +10,7 @@ use super::super::settings as shared_settings;
 use binemit::CodeSink;
 use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, general_encoding};
 use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, RegInfo, Encoding, Legalize, RecipeConstraints};
+use isa::{TargetIsa, RegInfo, EncInfo, Encoding, Legalize};
 use ir::{Function, Inst, InstructionData, DataFlowGraph, Signature};
 
 #[allow(dead_code)]
@@ -56,6 +56,10 @@ impl TargetIsa for Isa {
         registers::INFO.clone()
     }
 
+    fn encoding_info(&self) -> EncInfo {
+        enc_tables::INFO.clone()
+    }
+
     fn encode(&self, dfg: &DataFlowGraph, inst: &InstructionData) -> Result<Encoding, Legalize> {
         lookup_enclist(inst.ctrl_typevar(dfg),
                        inst.opcode(),
@@ -68,14 +72,6 @@ impl TargetIsa for Isa {
                                      |isap| self.isa_flags.numbered_predicate(isap as usize))
                             .ok_or(Legalize::Expand)
                 })
-    }
-
-    fn recipe_names(&self) -> &'static [&'static str] {
-        &enc_tables::RECIPE_NAMES[..]
-    }
-
-    fn recipe_constraints(&self) -> &'static [RecipeConstraints] {
-        &enc_tables::RECIPE_CONSTRAINTS
     }
 
     fn legalize_signature(&self, sig: &mut Signature) {
@@ -100,7 +96,7 @@ mod tests {
     use ir::{types, immediates};
 
     fn encstr(isa: &isa::TargetIsa, enc: isa::Encoding) -> String {
-        isa.display_enc(enc).to_string()
+        isa.encoding_info().display(enc).to_string()
     }
 
     #[test]

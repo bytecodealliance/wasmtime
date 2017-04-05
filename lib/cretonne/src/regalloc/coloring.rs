@@ -38,7 +38,7 @@
 use entity_map::EntityMap;
 use dominator_tree::DominatorTree;
 use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph};
-use isa::{TargetIsa, RegInfo, Encoding, RecipeConstraints, ConstraintKind};
+use isa::{TargetIsa, RegInfo, Encoding, EncInfo, ConstraintKind};
 use regalloc::affinity::Affinity;
 use regalloc::allocatable_set::AllocatableSet;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
@@ -69,7 +69,7 @@ struct Context<'a> {
     // Cached ISA information.
     // We save it here to avoid frequent virtual function calls on the `TargetIsa` trait object.
     reginfo: RegInfo,
-    recipe_constraints: &'a [RecipeConstraints],
+    encinfo: EncInfo,
 
     // References to contextual data structures we need.
     domtree: &'a DominatorTree,
@@ -98,7 +98,7 @@ impl Coloring {
                tracker: &mut LiveValueTracker) {
         let mut ctx = Context {
             reginfo: isa.register_info(),
-            recipe_constraints: isa.recipe_constraints(),
+            encinfo: isa.encoding_info(),
             domtree: domtree,
             liveness: liveness,
             // TODO: Ask the target ISA about reserved registers etc.
@@ -259,7 +259,10 @@ impl<'a> Context<'a> {
         let (kills, defs) = tracker.process_inst(inst, dfg, self.liveness);
 
         // Get the operand constraints for `inst` that we are trying to satisfy.
-        let constraints = self.recipe_constraints[encoding.recipe()].clone();
+        let constraints = self.encinfo
+            .operand_constraints(encoding)
+            .expect("Missing instruction encoding")
+            .clone();
 
         // Get rid of the killed values.
         for lv in kills {

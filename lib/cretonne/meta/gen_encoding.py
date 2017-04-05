@@ -450,7 +450,7 @@ def emit_recipe_names(isa, fmt):
     This is used for pretty-printing encodings.
     """
     with fmt.indented(
-            'pub static RECIPE_NAMES: [&\'static str; {}] = ['
+            'static RECIPE_NAMES: [&\'static str; {}] = ['
             .format(len(isa.all_recipes)), '];'):
         for r in isa.all_recipes:
             fmt.line('"{}",'.format(r.name))
@@ -465,7 +465,7 @@ def emit_recipe_constraints(isa, fmt):
     properly encoded.
     """
     with fmt.indented(
-            'pub static RECIPE_CONSTRAINTS: [RecipeConstraints; {}] = ['
+            'static RECIPE_CONSTRAINTS: [RecipeConstraints; {}] = ['
             .format(len(isa.all_recipes)), '];'):
         for r in isa.all_recipes:
             fmt.comment(r.name)
@@ -535,6 +535,11 @@ def gen_isa(isa, fmt):
 
     emit_recipe_names(isa, fmt)
     emit_recipe_constraints(isa, fmt)
+
+    # Finally, tie it all together in an `EncInfo`.
+    with fmt.indented('pub static INFO: EncInfo = EncInfo {', '};'):
+        fmt.line('constraints: &RECIPE_CONSTRAINTS,')
+        fmt.line('names: &RECIPE_NAMES,')
 
 
 def generate(isas, out_dir):

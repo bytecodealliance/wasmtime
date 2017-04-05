@@ -108,7 +108,8 @@ impl<'a> Context<'a> {
     fn find_recipe_index(&self, recipe_name: &str) -> Option<u16> {
         if let Some(unique_isa) = self.unique_isa {
             unique_isa
-                .recipe_names()
+                .encoding_info()
+                .names
                 .iter()
                 .position(|&name| name == recipe_name)
                 .map(|idx| idx as u16)
