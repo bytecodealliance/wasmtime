@@ -3,10 +3,12 @@
 use binemit::{CodeSink, Reloc, bad_encoding};
 use ir::{Function, Inst, InstructionData};
 use isa::RegUnit;
+use predicates::is_signed_int;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-riscv.rs"));
 
 /// RISC-V relocation kinds.
+#[allow(dead_code)]
 pub enum RelocKind {
     /// A conditional (SB-type) branch to an EBB.
     Branch,
@@ -213,16 +215,16 @@ fn recipe_u<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
 ///   imm rs2 rs1 funct3 imm opcode
 ///    25  20  15     12   7      0
 ///
-/// The imm bits are not encoded by this function. They encode the relative distance to the
-/// destination block, handled by a relocation.
-///
 /// Encoding bits: `opcode[6:2] | (funct3 << 5)`
-fn put_sb<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, rs2: RegUnit, sink: &mut CS) {
+fn put_sb<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rs1: RegUnit, rs2: RegUnit, sink: &mut CS) {
     let bits = bits as u32;
     let opcode5 = bits & 0x1f;
     let funct3 = (bits >> 5) & 0x7;
     let rs1 = rs1 as u32 & 0x1f;
     let rs2 = rs2 as u32 & 0x1f;
+
+    assert!(is_signed_int(imm, 13, 1), "SB out of range {:#x}", imm);
+    let imm = imm as u32;
 
     // 0-6: opcode
     let mut i = 0x3;
@@ -230,6 +232,12 @@ fn put_sb<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, rs2: RegUnit, sink: &m
     i |= funct3 << 12;
     i |= rs1 << 15;
     i |= rs2 << 20;
+
+    // The displacement is completely hashed up.
+    i |= ((imm >> 11) & 0x1) << 7;
+    i |= ((imm >> 1) & 0xf) << 8;
+    i |= ((imm >> 5) & 0x3f) << 25;
+    i |= ((imm >> 12) & 0x1) << 31;
 
     sink.put4(i);
 }
@@ -240,9 +248,11 @@ fn recipe_sb<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) 
                ref args,
                ..
            } = func.dfg[inst] {
+        let dest = func.offsets[destination] as i64;
+        let disp = dest - sink.offset() as i64;
         let args = &args.as_slice(&func.dfg.value_lists)[0..2];
-        sink.reloc_ebb(RelocKind::Branch.into(), destination);
         put_sb(func.encodings[inst].bits(),
+               disp,
                func.locations[args[0]].unwrap_reg(),
                func.locations[args[1]].unwrap_reg(),
                sink);
@@ -257,9 +267,11 @@ fn recipe_sbzero<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut 
                ref args,
                ..
            } = func.dfg[inst] {
+        let dest = func.offsets[destination] as i64;
+        let disp = dest - sink.offset() as i64;
         let args = &args.as_slice(&func.dfg.value_lists)[0..1];
-        sink.reloc_ebb(RelocKind::Branch.into(), destination);
         put_sb(func.encodings[inst].bits(),
+               disp,
                func.locations[args[0]].unwrap_reg(),
                0,
                sink);

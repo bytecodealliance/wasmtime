@@ -80,23 +80,40 @@ ebb0:
     ; Control Transfer Instructions
 
 ebb1:
-    ; beq
-    br_icmp eq, v1, v2, ebb0            ; bin: Branch(ebb0) 01550063
-    ; bne
-    br_icmp ne, v1, v2, ebb0            ; bin: Branch(ebb0) 01551063
-    ; blt
-    br_icmp slt, v1, v2, ebb0           ; bin: Branch(ebb0) 01554063
-    ; bge
-    br_icmp sge, v1, v2, ebb0           ; bin: Branch(ebb0) 01555063
-    ; bltu
-    br_icmp ult, v1, v2, ebb0           ; bin: Branch(ebb0) 01556063
-    ; bgeu
-    br_icmp uge, v1, v2, ebb0           ; bin: Branch(ebb0) 01557063
+    ; beq 0x000
+    br_icmp eq, v1, v2, ebb1            ; bin: 01550063
+    ; bne 0xffc
+    br_icmp ne, v1, v2, ebb1            ; bin: ff551ee3
+    ; blt 0xff8
+    br_icmp slt, v1, v2, ebb1           ; bin: ff554ce3
+    ; bge 0xff4
+    br_icmp sge, v1, v2, ebb1           ; bin: ff555ae3
+    ; bltu 0xff0
+    br_icmp ult, v1, v2, ebb1           ; bin: ff5568e3
+    ; bgeu 0xfec
+    br_icmp uge, v1, v2, ebb1           ; bin: ff5576e3
 
+    ; Forward branches.
+    ; beq 0x018
+    br_icmp eq, v2, v1, ebb2            ; bin: 00aa8c63
+    ; bne 0x014
+    br_icmp ne, v2, v1, ebb2            ; bin: 00aa9a63
+    ; blt 0x010
+    br_icmp slt, v2, v1, ebb2           ; bin: 00aac863
+    ; bge 0x00c
+    br_icmp sge, v2, v1, ebb2           ; bin: 00aad663
+    ; bltu 0x008
+    br_icmp ult, v2, v1, ebb2           ; bin: 00aae463
+    ; bgeu 0x004
+    br_icmp uge, v2, v1, ebb2           ; bin: 00aaf263
+
+    jump ebb2
+
+ebb2:
     ; beq x, %x0
-    brz v1, ebb0                        ; bin: Branch(ebb0) 00050063
+    brz v1, ebb2                        ; bin: 00050063
     ; bne x, %x0
-    brnz v1, ebb0                       ; bin: Branch(ebb0) 00051063
+    brnz v1, ebb2                       ; bin: fe051ee3
 
     return
 }
