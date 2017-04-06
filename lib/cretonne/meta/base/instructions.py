@@ -49,6 +49,19 @@ jump = Instruction(
         """,
         ins=(EBB, args), is_branch=True, is_terminator=True)
 
+fallthrough = Instruction(
+        'fallthrough', r"""
+        Fall through to the next EBB.
+
+        This is the same as :inst:`jump`, except the destination EBB must be
+        the next one in the layout.
+
+        Jumps are turned into fall-through instructions by the branch
+        relaxation pass. There is no reason to use this instruction outside
+        that pass.
+        """,
+        ins=(EBB, args), is_branch=True, is_terminator=True)
+
 brz = Instruction(
         'brz', r"""
         Branch when zero.

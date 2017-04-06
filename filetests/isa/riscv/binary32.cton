@@ -107,7 +107,7 @@ ebb1:
     ; bgeu 0x004
     br_icmp uge, v2, v1, ebb2           ; bin: 00aaf263
 
-    jump ebb2
+    fallthrough ebb2
 
 ebb2:
     ; beq x, %x0

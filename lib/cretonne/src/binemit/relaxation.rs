@@ -29,8 +29,9 @@
 
 use binemit::CodeOffset;
 use entity_map::EntityMap;
-use ir::{Function, DataFlowGraph, Cursor, Inst};
+use ir::{Function, DataFlowGraph, Cursor, Inst, InstructionData, Opcode};
 use isa::{TargetIsa, EncInfo, Encoding};
+use iterators::IteratorExtras;
 
 /// Relax branches and compute the final layout of EBB headers in `func`.
 ///
@@ -41,6 +42,9 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) {
     // Clear all offsets so we can recognize EBBs that haven't been visited yet.
     func.offsets.clear();
     func.offsets.resize(func.dfg.num_ebbs());
+
+    // Start by inserting fall through instructions.
+    fallthroughs(func);
 
     // The relaxation algorithm iterates to convergence.
     let mut go_again = true;
@@ -84,6 +88,37 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) {
                 }
 
                 offset += size;
+            }
+        }
+    }
+}
+
+/// Convert `jump` instructions to `fallthrough` instructions where possible and verify that any
+/// existing `fallthrough` instructions are correct.
+fn fallthroughs(func: &mut Function) {
+    for (ebb, succ) in func.layout.ebbs().adjacent_pairs() {
+        let term = func.layout
+            .last_inst(ebb)
+            .expect("EBB has no terminator.");
+        if let InstructionData::Jump {
+                   ref mut opcode,
+                   destination,
+                   ..
+               } = func.dfg[term] {
+            match *opcode {
+                Opcode::Fallthrough => {
+                    // Somebody used a fall-through instruction before the branch relaxation pass.
+                    // Make sure it is correct, i.e. the destination is the layout successor.
+                    assert_eq!(destination, succ, "Illegal fall-through in {}", ebb)
+                }
+                Opcode::Jump => {
+                    // If this is a jump to the successor EBB, change it to a fall-through.
+                    if destination == succ {
+                        *opcode = Opcode::Fallthrough;
+                        func.encodings[term] = Default::default();
+                    }
+                }
+                _ => {}
             }
         }
     }
