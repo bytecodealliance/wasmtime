@@ -3,6 +3,8 @@ test binemit
 isa riscv
 
 function RV32I() {
+    fn0 = function foo()
+
 ebb0:
     [-,%x10]            v1 = iconst.i32 1
     [-,%x21]            v2 = iconst.i32 2
@@ -75,10 +77,13 @@ ebb0:
     [-,%x7]     v140 = iconst.i32 0x12345000            ; bin: 123453b7
     [-,%x16]    v141 = iconst.i32 0xffffffff_fedcb000   ; bin: fedcb837
 
+    ; Control Transfer Instructions
+
+    ; jal %x1, fn0
+    call fn0()                                  ; bin: Call(fn0) 000000ef
+
     brz v1, ebb3
     fallthrough ebb1
-
-    ; Control Transfer Instructions
 
 ebb1:
     ; beq 0x000
