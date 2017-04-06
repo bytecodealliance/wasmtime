@@ -177,8 +177,6 @@ impl SubTest for TestBinEmit {
                                            inst,
                                            func.dfg.display_inst(inst)));
                     }
-                    sink.text.clear();
-                    isa.emit_inst(&func, inst, &mut sink);
                     let have = sink.text.trim();
                     if have != want {
                         return Err(format!("Bad machine code for {}: {}\nWant: {}\nGot:  {}",

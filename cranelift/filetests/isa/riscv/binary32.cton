@@ -75,9 +75,11 @@ ebb0:
     [-,%x7]     v140 = iconst.i32 0x12345000            ; bin: 123453b7
     [-,%x16]    v141 = iconst.i32 0xffffffff_fedcb000   ; bin: fedcb837
 
+    jump ebb1
 
     ; Control Transfer Instructions
 
+ebb1:
     ; beq
     br_icmp eq, v1, v2, ebb0            ; bin: Branch(ebb0) 01550063
     ; bne
