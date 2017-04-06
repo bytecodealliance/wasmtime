@@ -8,13 +8,12 @@ use predicates::is_signed_int;
 include!(concat!(env!("OUT_DIR"), "/binemit-riscv.rs"));
 
 /// RISC-V relocation kinds.
-#[allow(dead_code)]
 pub enum RelocKind {
-    /// A conditional (SB-type) branch to an EBB.
-    Branch,
+    /// A jal call to a function.
+    Call,
 }
 
-pub static RELOC_NAMES: [&'static str; 1] = ["Branch"];
+pub static RELOC_NAMES: [&'static str; 1] = ["Call"];
 
 impl Into<Reloc> for RelocKind {
     fn into(self) -> Reloc {
@@ -316,5 +315,15 @@ fn recipe_uj<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) 
         put_uj(func.encodings[inst].bits(), disp, 0, sink);
     } else {
         panic!("Expected Jump format: {:?}", func.dfg[inst]);
+    }
+}
+
+fn recipe_ujcall<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::Call { func_ref, .. } = func.dfg[inst] {
+        sink.reloc_func(RelocKind::Call.into(), func_ref);
+        // rd=%x1 is the standard link register.
+        put_uj(func.encodings[inst].bits(), 0, 1, sink);
+    } else {
+        panic!("Expected Call format: {:?}", func.dfg[inst]);
     }
 }

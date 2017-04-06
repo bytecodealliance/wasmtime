@@ -6,7 +6,8 @@ from base import instructions as base
 from base.immediates import intcc
 from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH, JALR, JAL
-from .recipes import R, Rshamt, Ricmp, I, Iicmp, Iret, U, UJ, SB, SBzero
+from .recipes import R, Rshamt, Ricmp, I, Iicmp, Iret
+from .recipes import U, UJ, UJcall, SB, SBzero
 from .settings import use_m
 from cdsl.ast import Var
 
@@ -84,6 +85,8 @@ RV64.enc(base.imul.i32, R, OP32(0b000, 0b0000001), isap=use_m)
 # Unconditional branches.
 RV32.enc(base.jump, UJ, JAL())
 RV64.enc(base.jump, UJ, JAL())
+RV32.enc(base.call, UJcall, JAL())
+RV64.enc(base.call, UJcall, JAL())
 
 # Conditional branches.
 for cond,           f3 in [

@@ -12,7 +12,7 @@ from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt
 from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
-from base.formats import UnaryImm, BranchIcmp, Branch, Jump
+from base.formats import UnaryImm, BranchIcmp, Branch, Jump, Call
 from .registers import GPR
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
@@ -119,6 +119,7 @@ U = EncRecipe(
 
 # UJ-type unconditional branch instructions.
 UJ = EncRecipe('UJ', Jump, size=4, ins=(), outs=(), branch_range=(0, 21))
+UJcall = EncRecipe('UJcall', Call, size=4, ins=(), outs=())
 
 # SB-type branch instructions.
 # TODO: These instructions have a +/- 4 KB branch range. How to encode that
