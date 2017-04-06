@@ -75,7 +75,8 @@ ebb0:
     [-,%x7]     v140 = iconst.i32 0x12345000            ; bin: 123453b7
     [-,%x16]    v141 = iconst.i32 0xffffffff_fedcb000   ; bin: fedcb837
 
-    jump ebb1
+    brz v1, ebb3
+    fallthrough ebb1
 
     ; Control Transfer Instructions
 
@@ -110,10 +111,15 @@ ebb1:
     fallthrough ebb2
 
 ebb2:
-    ; beq x, %x0
-    brz v1, ebb2                        ; bin: 00050063
-    ; bne x, %x0
-    brnz v1, ebb2                       ; bin: fe051ee3
+    ; jal %x0, 0x00000
+    jump ebb2                           ; bin: 0000006f
 
-    return
+ebb3:
+    ; beq x, %x0
+    brz v1, ebb3                        ; bin: 00050063
+    ; bne x, %x0
+    brnz v1, ebb3                       ; bin: fe051ee3
+
+    ; jal %x0, 0x1ffff4
+    jump ebb2                           ; bin: ff5ff06f
 }

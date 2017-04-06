@@ -279,3 +279,42 @@ fn recipe_sbzero<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut 
         panic!("Expected Branch format: {:?}", func.dfg[inst]);
     }
 }
+
+/// UJ-type jump instructions.
+///
+///   31  11 6
+///   imm rd opcode
+///    12  7      0
+///
+/// Encoding bits: `opcode[6:2]`
+fn put_uj<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rd: RegUnit, sink: &mut CS) {
+    let bits = bits as u32;
+    let opcode5 = bits & 0x1f;
+    let rd = rd as u32 & 0x1f;
+
+    assert!(is_signed_int(imm, 21, 1), "UJ out of range {:#x}", imm);
+    let imm = imm as u32;
+
+    // 0-6: opcode
+    let mut i = 0x3;
+    i |= opcode5 << 2;
+    i |= rd << 7;
+
+    // The displacement is completely hashed up.
+    i |= imm & 0xff000;
+    i |= ((imm >> 11) & 0x1) << 20;
+    i |= ((imm >> 1) & 0x3ff) << 21;
+    i |= ((imm >> 20) & 0x1) << 31;
+
+    sink.put4(i);
+}
+
+fn recipe_uj<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::Jump { destination, .. } = func.dfg[inst] {
+        let dest = func.offsets[destination] as i64;
+        let disp = dest - sink.offset() as i64;
+        put_uj(func.encodings[inst].bits(), disp, 0, sink);
+    } else {
+        panic!("Expected Jump format: {:?}", func.dfg[inst]);
+    }
+}
