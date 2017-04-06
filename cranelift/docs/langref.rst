@@ -319,6 +319,7 @@ condition is satisfied, otherwise execution continues at the following
 instruction in the EBB.
 
 .. autoinst:: jump
+.. autoinst:: fallthrough
 .. autoinst:: brz
 .. autoinst:: brnz
 .. autoinst:: br_icmp
