@@ -300,7 +300,7 @@ class Level2Table(object):
         level2_doc[self.hash_table_offset].append(
                 '{:06x}: {}, {} entries'.format(
                     self.hash_table_offset,
-                    self.ty.name,
+                    self.ty,
                     self.hash_table_len))
         level2_hashtables.extend(hash_table)
 
@@ -405,7 +405,7 @@ def emit_level1_hashtable(cpumode, level1, offt, fmt):
     """
     def hash_func(level2):
         # type: (Level2Table) -> int
-        return level2.ty.number
+        return level2.ty.number if level2.ty is not None else 0
     hash_table = compute_quadratic(level1.tables.values(), hash_func)
 
     with fmt.indented(
@@ -415,11 +415,12 @@ def emit_level1_hashtable(cpumode, level1, offt, fmt):
             if level2:
                 l2l = int(math.log(level2.hash_table_len, 2))
                 assert l2l > 0, "Hash table too small"
+                tyname = level2.ty.name if level2.ty is not None else 'void'
                 fmt.line(
                         'Level1Entry ' +
                         '{{ ty: types::{}, log2len: {}, offset: {:#08x} }},'
                         .format(
-                            level2.ty.name.upper(),
+                            tyname.upper(),
                             l2l,
                             level2.hash_table_offset))
             else:
