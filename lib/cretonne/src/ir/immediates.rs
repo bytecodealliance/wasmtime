@@ -6,6 +6,7 @@
 //! module in the meta language.
 
 use std::fmt::{self, Display, Formatter};
+use std::i32;
 use std::mem;
 use std::str::FromStr;
 
@@ -35,6 +36,22 @@ impl From<i64> for Imm64 {
     }
 }
 
+// Hexadecimal with a multiple of 4 digits and group separators:
+//
+//   0xfff0
+//   0x0001_ffff
+//   0xffff_ffff_fff8_4400
+//
+fn write_hex(x: i64, f: &mut Formatter) -> fmt::Result {
+    let mut pos = (64 - x.leading_zeros() - 1) & 0xf0;
+    write!(f, "0x{:04x}", (x >> pos) & 0xffff)?;
+    while pos > 0 {
+        pos -= 16;
+        write!(f, "_{:04x}", (x >> pos) & 0xffff)?;
+    }
+    Ok(())
+}
+
 impl Display for Imm64 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let x = self.0;
@@ -42,21 +59,80 @@ impl Display for Imm64 {
             // Use decimal for small numbers.
             write!(f, "{}", x)
         } else {
-            // Hexadecimal with a multiple of 4 digits and group separators:
-            //
-            //   0xfff0
-            //   0x0001_ffff
-            //   0xffff_ffff_fff8_4400
-            //
-            let mut pos = (64 - x.leading_zeros() - 1) & 0xf0;
-            write!(f, "0x{:04x}", (x >> pos) & 0xffff)?;
-            while pos > 0 {
-                pos -= 16;
-                write!(f, "_{:04x}", (x >> pos) & 0xffff)?;
-            }
-            Ok(())
+            write_hex(x, f)
         }
     }
+}
+
+/// Parse a 64-bit number.
+fn parse_i64(s: &str) -> Result<i64, &'static str> {
+    let mut value: u64 = 0;
+    let mut digits = 0;
+    let negative = s.starts_with('-');
+    let s2 = if negative || s.starts_with('+') {
+        &s[1..]
+    } else {
+        s
+    };
+
+    if s2.starts_with("0x") {
+        // Hexadecimal.
+        for ch in s2[2..].chars() {
+            match ch.to_digit(16) {
+                Some(digit) => {
+                    digits += 1;
+                    if digits > 16 {
+                        return Err("Too many hexadecimal digits");
+                    }
+                    // This can't overflow given the digit limit.
+                    value = (value << 4) | digit as u64;
+                }
+                None => {
+                    // Allow embedded underscores, but fail on anything else.
+                    if ch != '_' {
+                        return Err("Invalid character in hexadecimal number");
+                    }
+                }
+            }
+        }
+    } else {
+        // Decimal number, possibly negative.
+        for ch in s2.chars() {
+            match ch.to_digit(16) {
+                Some(digit) => {
+                    digits += 1;
+                    match value.checked_mul(10) {
+                        None => return Err("Too large decimal number"),
+                        Some(v) => value = v,
+                    }
+                    match value.checked_add(digit as u64) {
+                        None => return Err("Too large decimal number"),
+                        Some(v) => value = v,
+                    }
+                }
+                None => {
+                    // Allow embedded underscores, but fail on anything else.
+                    if ch != '_' {
+                        return Err("Invalid character in decimal number");
+                    }
+                }
+            }
+        }
+    }
+
+    if digits == 0 {
+        return Err("No digits in number");
+    }
+
+    // We support the range-and-a-half from -2^63 .. 2^64-1.
+    if negative {
+        value = value.wrapping_neg();
+        // Don't allow large negative values to wrap around and become positive.
+        if value as i64 > 0 {
+            return Err("Negative number too small");
+        }
+    }
+    Ok(value as i64)
 }
 
 impl FromStr for Imm64 {
@@ -64,69 +140,7 @@ impl FromStr for Imm64 {
 
     // Parse a decimal or hexadecimal `Imm64`, formatted as above.
     fn from_str(s: &str) -> Result<Imm64, &'static str> {
-        let mut value: u64 = 0;
-        let mut digits = 0;
-        let negative = s.starts_with('-');
-        let s2 = if negative { &s[1..] } else { s };
-
-        if s2.starts_with("0x") {
-            // Hexadecimal.
-            for ch in s2[2..].chars() {
-                match ch.to_digit(16) {
-                    Some(digit) => {
-                        digits += 1;
-                        if digits > 16 {
-                            return Err("Too many hexadecimal digits in Imm64");
-                        }
-                        // This can't overflow given the digit limit.
-                        value = (value << 4) | digit as u64;
-                    }
-                    None => {
-                        // Allow embedded underscores, but fail on anything else.
-                        if ch != '_' {
-                            return Err("Invalid character in hexadecimal Imm64");
-                        }
-                    }
-                }
-            }
-        } else {
-            // Decimal number, possibly negative.
-            for ch in s2.chars() {
-                match ch.to_digit(16) {
-                    Some(digit) => {
-                        digits += 1;
-                        match value.checked_mul(10) {
-                            None => return Err("Too large decimal Imm64"),
-                            Some(v) => value = v,
-                        }
-                        match value.checked_add(digit as u64) {
-                            None => return Err("Too large decimal Imm64"),
-                            Some(v) => value = v,
-                        }
-                    }
-                    None => {
-                        // Allow embedded underscores, but fail on anything else.
-                        if ch != '_' {
-                            return Err("Invalid character in decimal Imm64");
-                        }
-                    }
-                }
-            }
-        }
-
-        if digits == 0 {
-            return Err("No digits in Imm64");
-        }
-
-        // We support the range-and-a-half from -2^63 .. 2^64-1.
-        if negative {
-            value = value.wrapping_neg();
-            // Don't allow large negative values to wrap around and become positive.
-            if value as i64 > 0 {
-                return Err("Negative number too small for Imm64");
-            }
-        }
-        Ok(Imm64::new(value as i64))
+        parse_i64(s).map(Imm64::new)
     }
 }
 
@@ -134,6 +148,68 @@ impl FromStr for Imm64 {
 ///
 /// This is used to indicate lane indexes typically.
 pub type Uimm8 = u8;
+
+/// 32-bit signed immediate offset.
+///
+/// This is used to encode an immediate offset for load/store instructions. All supported ISAs have
+/// a maximum load/store offset that fits in an `i32`.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct Offset32(i32);
+
+impl Offset32 {
+    /// Create a new `Offset32` representing the signed number `x`.
+    pub fn new(x: i32) -> Offset32 {
+        Offset32(x)
+    }
+}
+
+impl Into<i32> for Offset32 {
+    fn into(self) -> i32 {
+        self.0
+    }
+}
+
+impl From<i32> for Offset32 {
+    fn from(x: i32) -> Self {
+        Offset32(x)
+    }
+}
+
+impl Display for Offset32 {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        // 0 displays as an empty offset.
+        if self.0 == 0 {
+            return Ok(());
+        }
+
+        // Always include a sign.
+        write!(f, "{}", if self.0 < 0 { '-' } else { '+' })?;
+
+        let val = (self.0 as i64).abs();
+        if val < 10_000 {
+            write!(f, "{}", val)
+        } else {
+            write_hex(val, f)
+        }
+
+    }
+}
+
+impl FromStr for Offset32 {
+    type Err = &'static str;
+
+    // Parse a decimal or hexadecimal `Offset32`, formatted as above.
+    fn from_str(s: &str) -> Result<Offset32, &'static str> {
+        if !(s.starts_with('-') || s.starts_with('+')) {
+            return Err("Offset must begin with sign");
+        }
+        parse_i64(s).and_then(|x| if i32::MIN as i64 <= x && x <= i32::MAX as i64 {
+                                  Ok(Offset32::new(x as i32))
+                              } else {
+                                  Err("Offset out of range")
+                              })
+    }
+}
 
 /// An IEEE binary32 immediate floating point value.
 ///
@@ -486,15 +562,13 @@ mod tests {
         parse_ok::<Imm64>("0xffffffff_ffffffff", "-1");
         parse_ok::<Imm64>("0x80000000_00000000", "0x8000_0000_0000_0000");
         parse_ok::<Imm64>("-0x80000000_00000000", "0x8000_0000_0000_0000");
-        parse_err::<Imm64>("-0x80000000_00000001",
-                           "Negative number too small for Imm64");
+        parse_err::<Imm64>("-0x80000000_00000001", "Negative number too small");
         parse_ok::<Imm64>("18446744073709551615", "-1");
         parse_ok::<Imm64>("-9223372036854775808", "0x8000_0000_0000_0000");
         // Overflow both the `checked_add` and `checked_mul`.
-        parse_err::<Imm64>("18446744073709551616", "Too large decimal Imm64");
-        parse_err::<Imm64>("184467440737095516100", "Too large decimal Imm64");
-        parse_err::<Imm64>("-9223372036854775809",
-                           "Negative number too small for Imm64");
+        parse_err::<Imm64>("18446744073709551616", "Too large decimal number");
+        parse_err::<Imm64>("184467440737095516100", "Too large decimal number");
+        parse_err::<Imm64>("-9223372036854775809", "Negative number too small");
 
         // Underscores are allowed where digits go.
         parse_ok::<Imm64>("0_0", "0");
@@ -503,21 +577,47 @@ mod tests {
         parse_ok::<Imm64>("0x97_88_bb", "0x0097_88bb");
         parse_ok::<Imm64>("0x_97_", "151");
 
-        parse_err::<Imm64>("", "No digits in Imm64");
-        parse_err::<Imm64>("-", "No digits in Imm64");
-        parse_err::<Imm64>("_", "No digits in Imm64");
-        parse_err::<Imm64>("0x", "No digits in Imm64");
-        parse_err::<Imm64>("0x_", "No digits in Imm64");
-        parse_err::<Imm64>("-0x", "No digits in Imm64");
-        parse_err::<Imm64>(" ", "Invalid character in decimal Imm64");
-        parse_err::<Imm64>("0 ", "Invalid character in decimal Imm64");
-        parse_err::<Imm64>(" 0", "Invalid character in decimal Imm64");
-        parse_err::<Imm64>("--", "Invalid character in decimal Imm64");
-        parse_err::<Imm64>("-0x-", "Invalid character in hexadecimal Imm64");
+        parse_err::<Imm64>("", "No digits in number");
+        parse_err::<Imm64>("-", "No digits in number");
+        parse_err::<Imm64>("_", "No digits in number");
+        parse_err::<Imm64>("0x", "No digits in number");
+        parse_err::<Imm64>("0x_", "No digits in number");
+        parse_err::<Imm64>("-0x", "No digits in number");
+        parse_err::<Imm64>(" ", "Invalid character in decimal number");
+        parse_err::<Imm64>("0 ", "Invalid character in decimal number");
+        parse_err::<Imm64>(" 0", "Invalid character in decimal number");
+        parse_err::<Imm64>("--", "Invalid character in decimal number");
+        parse_err::<Imm64>("-0x-", "Invalid character in hexadecimal number");
 
         // Hex count overflow.
-        parse_err::<Imm64>("0x0_0000_0000_0000_0000",
-                           "Too many hexadecimal digits in Imm64");
+        parse_err::<Imm64>("0x0_0000_0000_0000_0000", "Too many hexadecimal digits");
+    }
+
+    #[test]
+    fn format_offset32() {
+        assert_eq!(Offset32(0).to_string(), "");
+        assert_eq!(Offset32(1).to_string(), "+1");
+        assert_eq!(Offset32(-1).to_string(), "-1");
+        assert_eq!(Offset32(9999).to_string(), "+9999");
+        assert_eq!(Offset32(10000).to_string(), "+0x2710");
+        assert_eq!(Offset32(-9999).to_string(), "-9999");
+        assert_eq!(Offset32(-10000).to_string(), "-0x2710");
+        assert_eq!(Offset32(0xffff).to_string(), "+0xffff");
+        assert_eq!(Offset32(0x10000).to_string(), "+0x0001_0000");
+    }
+
+    #[test]
+    fn parse_offset32() {
+        parse_ok::<Offset32>("+0", "");
+        parse_ok::<Offset32>("+1", "+1");
+        parse_ok::<Offset32>("-0", "");
+        parse_ok::<Offset32>("-1", "-1");
+        parse_ok::<Offset32>("+0x0", "");
+        parse_ok::<Offset32>("+0xf", "+15");
+        parse_ok::<Offset32>("-0x9", "-9");
+        parse_ok::<Offset32>("-0x8000_0000", "-0x8000_0000");
+
+        parse_err::<Offset32>("+0x8000_0000", "Offset out of range");
     }
 
     #[test]

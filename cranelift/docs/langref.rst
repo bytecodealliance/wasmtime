@@ -249,6 +249,13 @@ indicate the different kinds of immediate operands on an instruction.
     In the textual format, :type:`imm64` immediates appear as decimal or
     hexadecimal literals using the same syntax as C.
 
+.. type:: offset32
+
+    A signed 32-bit immediate address offset.
+
+    In the textual format, :type:`offset32` immediates always have an explicit
+    sign, and a 0 offset may beomitted.
+
 .. type:: ieee32
 
     A 32-bit immediate floating point number in the IEEE 754-2008 binary32
@@ -258,13 +265,6 @@ indicate the different kinds of immediate operands on an instruction.
 
     A 64-bit immediate floating point number in the IEEE 754-2008 binary64
     interchange format. All bit patterns are allowed.
-
-.. type:: immvector
-
-    An immediate SIMD vector. This operand supplies all the bits of a SIMD
-    type, so it can have different sizes depending on the type produced. The
-    bits of the operand are interpreted as if the SIMD vector was loaded from
-    memory containing the immediate.
 
 .. type:: intcc
 
