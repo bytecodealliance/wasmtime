@@ -259,9 +259,9 @@ pub fn write_operands(w: &mut Write, dfg: &DataFlowGraph, inst: Inst) -> Result 
         }
         InsertLane { lane, args, .. } => write!(w, " {}, {}, {}", args[0], lane, args[1]),
         ExtractLane { lane, arg, .. } => write!(w, " {}, {}", arg, lane),
-        IntCompare { cond, args, .. } => write!(w, " {}, {}, {}", cond, args[0], args[1]),
-        IntCompareImm { cond, arg, imm, .. } => write!(w, " {}, {}, {}", cond, arg, imm),
-        FloatCompare { cond, args, .. } => write!(w, " {}, {}, {}", cond, args[0], args[1]),
+        IntCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
+        IntCompareImm { cond, arg, imm, .. } => write!(w, " {} {}, {}", cond, arg, imm),
+        FloatCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
         Jump {
             destination,
             ref args,
@@ -295,7 +295,7 @@ pub fn write_operands(w: &mut Write, dfg: &DataFlowGraph, inst: Inst) -> Result 
             ..
         } => {
             let args = args.as_slice(pool);
-            write!(w, " {}, {}, {}, {}", cond, args[0], args[1], destination)?;
+            write!(w, " {} {}, {}, {}", cond, args[0], args[1], destination)?;
             if args.len() > 2 {
                 write!(w, "({})", DisplayValues(&args[2..]))?;
             }

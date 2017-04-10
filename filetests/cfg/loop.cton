@@ -21,7 +21,7 @@ ebb1(v5: i32):
     v10 = f32const 0.0
     v11 = fadd v9, v10
     v12 = iadd_imm v5, 1
-    v13 = icmp ult, v12, v2
+    v13 = icmp ult v12, v2
     brnz v13, ebb1(v12)     ; unordered: ebb1:inst12 -> ebb1
     v14 = f64const 0.0
     v15 = f64const 0.0

@@ -52,33 +52,33 @@ ebb0:
 ; Integer condition codes.
 function icmp(i32, i32) {
 ebb0(vx0: i32, vx1: i32):
-    v0 = icmp eq, vx0, vx1
-    v1 = icmp ult, vx0, vx1
-    v2 = icmp_imm sge, vx0, -12
+    v0 = icmp eq vx0, vx1
+    v1 = icmp ult vx0, vx1
+    v2 = icmp_imm sge vx0, -12
     v3 = irsub_imm vx1, 45
-    br_icmp eq, vx0, vx1, ebb0(vx1, vx0)
+    br_icmp eq vx0, vx1, ebb0(vx1, vx0)
 }
 ; sameln: function icmp(i32, i32) {
 ; nextln: ebb0(vx0: i32, vx1: i32):
-; nextln:     v0 = icmp eq, vx0, vx1
-; nextln:     v1 = icmp ult, vx0, vx1
-; nextln:     v2 = icmp_imm sge, vx0, -12
+; nextln:     v0 = icmp eq vx0, vx1
+; nextln:     v1 = icmp ult vx0, vx1
+; nextln:     v2 = icmp_imm sge vx0, -12
 ; nextln:     v3 = irsub_imm vx1, 45
-; nextln:     br_icmp eq, vx0, vx1, ebb0(vx1, vx0)
+; nextln:     br_icmp eq vx0, vx1, ebb0(vx1, vx0)
 ; nextln: }
 
 ; Floating condition codes.
 function fcmp(f32, f32) {
 ebb0(vx0: f32, vx1: f32):
-    v0 = fcmp eq, vx0, vx1
-    v1 = fcmp uno, vx0, vx1
-    v2 = fcmp lt, vx0, vx1
+    v0 = fcmp eq vx0, vx1
+    v1 = fcmp uno vx0, vx1
+    v2 = fcmp lt vx0, vx1
 }
 ; sameln: function fcmp(f32, f32) {
 ; nextln: ebb0(vx0: f32, vx1: f32):
-; nextln:     v0 = fcmp eq, vx0, vx1
-; nextln:     v1 = fcmp uno, vx0, vx1
-; nextln:     v2 = fcmp lt, vx0, vx1
+; nextln:     v0 = fcmp eq vx0, vx1
+; nextln:     v1 = fcmp uno vx0, vx1
+; nextln:     v2 = fcmp lt vx0, vx1
 ; nextln: }
 
 ; The bitcast instruction has two type variables: The controlling type variable
