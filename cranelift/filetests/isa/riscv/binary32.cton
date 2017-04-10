@@ -33,11 +33,11 @@ ebb0:
     [-,%x7]             v34 = sshr v1, v2       ; bin: 415553b3
     [-,%x16]            v35 = sshr v2, v1       ; bin: 40aad833
     ; slt
-    [-,%x7]             v42 = icmp slt, v1, v2  ; bin: 015523b3
-    [-,%x16]            v43 = icmp slt, v2, v1  ; bin: 00aaa833
+    [-,%x7]             v42 = icmp slt v1, v2   ; bin: 015523b3
+    [-,%x16]            v43 = icmp slt v2, v1   ; bin: 00aaa833
     ; sltu
-    [-,%x7]             v44 = icmp ult, v1, v2  ; bin: 015533b3
-    [-,%x16]            v45 = icmp ult, v2, v1  ; bin: 00aab833
+    [-,%x7]             v44 = icmp ult v1, v2   ; bin: 015533b3
+    [-,%x16]            v45 = icmp ult v2, v1   ; bin: 00aab833
 
     ; Integer Register-Immediate Instructions
 
@@ -65,11 +65,11 @@ ebb0:
     [-,%x16]    v125 = sshr_imm v2, 8          ; bin: 408ad813
 
     ; slti
-    [-,%x7]     v130 = icmp_imm slt, v1, 1000  ; bin: 3e852393
-    [-,%x16]    v131 = icmp_imm slt, v2, -905  ; bin: c77aa813
+    [-,%x7]     v130 = icmp_imm slt v1, 1000   ; bin: 3e852393
+    [-,%x16]    v131 = icmp_imm slt v2, -905   ; bin: c77aa813
     ; sltiu
-    [-,%x7]     v132 = icmp_imm ult, v1, 1000  ; bin: 3e853393
-    [-,%x16]    v133 = icmp_imm ult, v2, -905  ; bin: c77ab813
+    [-,%x7]     v132 = icmp_imm ult v1, 1000   ; bin: 3e853393
+    [-,%x16]    v133 = icmp_imm ult v2, -905   ; bin: c77ab813
 
     ; lui
     [-,%x7]     v140 = iconst.i32 0x12345000            ; bin: 123453b7
@@ -82,31 +82,31 @@ ebb0:
 
 ebb1:
     ; beq 0x000
-    br_icmp eq, v1, v2, ebb1            ; bin: 01550063
+    br_icmp eq v1, v2, ebb1             ; bin: 01550063
     ; bne 0xffc
-    br_icmp ne, v1, v2, ebb1            ; bin: ff551ee3
+    br_icmp ne v1, v2, ebb1             ; bin: ff551ee3
     ; blt 0xff8
-    br_icmp slt, v1, v2, ebb1           ; bin: ff554ce3
+    br_icmp slt v1, v2, ebb1            ; bin: ff554ce3
     ; bge 0xff4
-    br_icmp sge, v1, v2, ebb1           ; bin: ff555ae3
+    br_icmp sge v1, v2, ebb1            ; bin: ff555ae3
     ; bltu 0xff0
-    br_icmp ult, v1, v2, ebb1           ; bin: ff5568e3
+    br_icmp ult v1, v2, ebb1            ; bin: ff5568e3
     ; bgeu 0xfec
-    br_icmp uge, v1, v2, ebb1           ; bin: ff5576e3
+    br_icmp uge v1, v2, ebb1            ; bin: ff5576e3
 
     ; Forward branches.
     ; beq 0x018
-    br_icmp eq, v2, v1, ebb2            ; bin: 00aa8c63
+    br_icmp eq v2, v1, ebb2             ; bin: 00aa8c63
     ; bne 0x014
-    br_icmp ne, v2, v1, ebb2            ; bin: 00aa9a63
+    br_icmp ne v2, v1, ebb2             ; bin: 00aa9a63
     ; blt 0x010
-    br_icmp slt, v2, v1, ebb2           ; bin: 00aac863
+    br_icmp slt v2, v1, ebb2            ; bin: 00aac863
     ; bge 0x00c
-    br_icmp sge, v2, v1, ebb2           ; bin: 00aad663
+    br_icmp sge v2, v1, ebb2            ; bin: 00aad663
     ; bltu 0x008
-    br_icmp ult, v2, v1, ebb2           ; bin: 00aae463
+    br_icmp ult v2, v1, ebb2            ; bin: 00aae463
     ; bgeu 0x004
-    br_icmp uge, v2, v1, ebb2           ; bin: 00aaf263
+    br_icmp uge v2, v1, ebb2            ; bin: 00aaf263
 
     fallthrough ebb2
 

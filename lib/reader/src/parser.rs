@@ -1526,7 +1526,6 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::BranchIcmp => {
                 let cond = self.match_enum("expected intcc condition code")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value second operand")?;
@@ -1567,7 +1566,6 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::IntCompare => {
                 let cond = self.match_enum("expected intcc condition code")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value second operand")?;
@@ -1580,7 +1578,6 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::IntCompareImm => {
                 let cond = self.match_enum("expected intcc condition code")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_imm64("expected immediate second operand")?;
@@ -1594,7 +1591,6 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::FloatCompare => {
                 let cond = self.match_enum("expected floatcc condition code")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value second operand")?;
