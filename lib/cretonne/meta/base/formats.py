@@ -8,8 +8,8 @@ in this module.
 from __future__ import absolute_import
 from cdsl.formats import InstructionFormat
 from cdsl.operands import VALUE, VARIABLE_ARGS
-from .immediates import imm64, uimm8, ieee32, ieee64, intcc, floatcc
-from .entities import ebb, sig_ref, func_ref, jump_table
+from .immediates import imm64, uimm8, ieee32, ieee64, offset32, intcc, floatcc
+from .entities import ebb, sig_ref, func_ref, jump_table, stack_slot
 
 Nullary = InstructionFormat()
 
@@ -51,6 +51,9 @@ Call = InstructionFormat(
 IndirectCall = InstructionFormat(
         sig_ref, VALUE, VARIABLE_ARGS,
         multiple_results=True)
+
+StackLoad = InstructionFormat(stack_slot, offset32)
+StackStore = InstructionFormat(VALUE, stack_slot, offset32)
 
 # Finally extract the names of global variables in this module.
 InstructionFormat.extract_names(globals())

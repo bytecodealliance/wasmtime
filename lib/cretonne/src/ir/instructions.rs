@@ -10,8 +10,8 @@ use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use std::ops::{Deref, DerefMut};
 
-use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef};
-use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64};
+use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef, StackSlot};
+use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32};
 use ir::condcodes::*;
 use ir::types;
 use ir::DataFlowGraph;
@@ -226,6 +226,19 @@ pub enum InstructionData {
         second_result: PackedOption<Value>,
         sig_ref: SigRef,
         args: ValueList,
+    },
+    StackLoad {
+        opcode: Opcode,
+        ty: Type,
+        stack_slot: StackSlot,
+        offset: Offset32,
+    },
+    StackStore {
+        opcode: Opcode,
+        ty: Type,
+        arg: Value,
+        stack_slot: StackSlot,
+        offset: Offset32,
     },
 }
 

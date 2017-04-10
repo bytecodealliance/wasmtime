@@ -489,33 +489,8 @@ simply represent a contiguous sequence of bytes in the stack frame.
     :flag align(N): Request at least N bytes alignment.
     :result SS: Stack slot index.
 
-.. inst:: a = stack_load SS, Offset
-
-    Load a value from a stack slot at the constant offset.
-
-    This is a polymorphic instruction that can load any value type which has a
-    memory representation.
-
-    The offset is an immediate constant, not an SSA value. The memory access
-    cannot go out of bounds, i.e. ``sizeof(a) + Offset <= sizeof(SS)``.
-
-    :arg SS: Stack slot declared with :inst:`stack_slot`.
-    :arg Offset: Immediate non-negative offset.
-    :result T a: Value loaded.
-
-.. inst:: stack_store x, SS, Offset
-
-    Store a value to a stack slot at a constant offset.
-
-    This is a polymorphic instruction that can store any value type with a
-    memory representation.
-
-    The offset is an immediate constant, not an SSA value. The memory access
-    cannot go out of bounds, i.e. ``sizeof(a) + Offset <= sizeof(SS)``.
-
-    :arg T x: Value to be stored.
-    :arg SS: Stack slot declared with :inst:`stack_slot`.
-    :arg Offset: Immediate non-negative offset.
+.. autoinst:: stack_load
+.. autoinst:: stack_store
 
 The dedicated stack access instructions are easy for the compiler to reason
 about because stack slots and offsets are fixed at compile time. For example,
@@ -525,16 +500,7 @@ and stack slot alignments.
 It can be necessary to escape from the safety of the restricted instructions by
 taking the address of a stack slot.
 
-.. inst:: a = stack_addr SS, Offset
-
-    Get the address of a stack slot.
-
-    Compute the absolute address of a byte in a stack slot. The offset must
-    refer to a byte inside the stack slot: ``0 <= Offset < sizeof(SS)``.
-
-    :arg SS: Stack slot declared with :inst:`stack_slot`.
-    :arg Offset: Immediate non-negative offset.
-    :result iPtr a: Address.
+.. autoinst:: stack_addr
 
 The :inst:`stack_addr` instruction can be used to macro-expand the stack access
 instructions before instruction selection::

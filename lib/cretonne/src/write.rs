@@ -313,6 +313,13 @@ pub fn write_operands(w: &mut Write, dfg: &DataFlowGraph, inst: Inst) -> Result 
                    args[0],
                    DisplayValues(&args[1..]))
         }
+        StackLoad { stack_slot, offset, .. } => write!(w, " {}{}", stack_slot, offset),
+        StackStore {
+            arg,
+            stack_slot,
+            offset,
+            ..
+        } => write!(w, " {}, {}{}", arg, stack_slot, offset),
     }
 }
 
