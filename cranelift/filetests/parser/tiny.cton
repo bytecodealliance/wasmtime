@@ -93,3 +93,24 @@ ebb0(vx0: i32, vx1: f32):
 ; nextln:     v0 = bitcast.i8x4 vx0
 ; nextln:     v1 = bitcast.i32 vx1
 ; nextln: }
+
+; Stack slot references
+function stack() {
+    ss10 = stack_slot 8
+    ss2 = stack_slot 4
+
+ebb0:
+    v1 = stack_load.i32 ss10
+    v2 = stack_load.i32 ss10+4
+    stack_store v1, ss10+2
+    stack_store v2, ss2
+}
+; sameln: function stack() {
+; nextln:    $ss10 = stack_slot 8
+; nextln:    $ss2 = stack_slot 4
+
+; check: ebb0:
+; nextln: $v1 = stack_load.i32 $ss10
+; nextln: $v2 = stack_load.i32 $ss10+4
+; nextln: stack_store $v1, $ss10+2
+; nextln: stack_store $v2, $ss2

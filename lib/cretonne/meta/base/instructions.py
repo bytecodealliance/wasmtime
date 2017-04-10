@@ -9,7 +9,7 @@ from cdsl.operands import Operand, VARIABLE_ARGS
 from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
 from base.types import i8, f32, f64, b1
-from base.immediates import imm64, uimm8, ieee32, ieee64
+from base.immediates import imm64, uimm8, ieee32, ieee64, offset32
 from base.immediates import intcc, floatcc
 from base import entities
 import base.formats  # noqa
@@ -28,6 +28,12 @@ TxN = TypeVar(
 Any = TypeVar(
         'Any', 'Any integer, float, or boolean scalar or vector type',
         ints=True, floats=True, bools=True, scalars=True, simd=True)
+Mem = TypeVar(
+        'Mem', 'Any type that can be stored in memory',
+        ints=True, floats=True, simd=True)
+MemTo = TypeVar(
+        'MemTo', 'Any type that can be stored in memory',
+        ints=True, floats=True, simd=True)
 
 #
 # Control flow
@@ -194,6 +200,52 @@ call_indirect = Instruction(
         called function must match the specified signature.
         """,
         ins=(SIG, callee, args), outs=rvals, is_call=True)
+
+#
+# Memory operations
+#
+
+SS = Operand('SS', entities.stack_slot)
+Offset = Operand('Offset', offset32, 'In-bounds offset into stack slot')
+x = Operand('x', Mem, doc='Value to be stored')
+a = Operand('a', Mem, doc='Value loaded')
+addr = Operand('addr', iAddr)
+
+stack_load = Instruction(
+        'stack_load', r"""
+        Load a value from a stack slot at the constant offset.
+
+        This is a polymorphic instruction that can load any value type which
+        has a memory representation.
+
+        The offset is an immediate constant, not an SSA value. The memory
+        access cannot go out of bounds, i.e.
+        :math:`sizeof(a) + Offset <= sizeof(SS)`.
+        """,
+        ins=(SS, Offset), outs=a)
+
+stack_store = Instruction(
+        'stack_store', r"""
+        Store a value to a stack slot at a constant offset.
+
+        This is a polymorphic instruction that can store any value type with a
+        memory representation.
+
+        The offset is an immediate constant, not an SSA value. The memory
+        access cannot go out of bounds, i.e.
+        :math:`sizeof(a) + Offset <= sizeof(SS)`.
+        """,
+        ins=(x, SS, Offset))
+
+stack_addr = Instruction(
+        'stack_addr', r"""
+        Get the address of a stack slot.
+
+        Compute the absolute address of a byte in a stack slot. The offset must
+        refer to a byte inside the stack slot:
+        :math:`0 <= Offset < sizeof(SS)`.
+        """,
+        ins=(SS, Offset), outs=addr)
 
 #
 # Materializing constants.
@@ -1094,13 +1146,6 @@ nearest = Instruction(
 #
 # Conversions
 #
-
-Mem = TypeVar(
-        'Mem', 'Any type that can be stored in memory',
-        ints=True, floats=True, simd=True)
-MemTo = TypeVar(
-        'MemTo', 'Any type that can be stored in memory',
-        ints=True, floats=True, simd=True)
 
 x = Operand('x', Mem)
 a = Operand('a', MemTo, 'Bits of `x` reinterpreted')

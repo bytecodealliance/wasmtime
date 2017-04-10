@@ -21,7 +21,10 @@ uimm8 = ImmediateKind('uimm8', 'An 8-bit immediate unsigned integer.')
 #:
 #: This is used to represent an immediate address offset in load/store
 #: instructions.
-offset32 = ImmediateKind('offset32', 'A 32-bit immediate signed offset.')
+offset32 = ImmediateKind(
+        'offset32',
+        'A 32-bit immediate signed offset.',
+        default_member='offset')
 
 #: A 32-bit immediate floating point operand.
 #:

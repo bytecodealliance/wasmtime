@@ -11,7 +11,7 @@ use std::{u16, u32};
 use std::mem;
 use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotData, JumpTable,
                    JumpTableData, Signature, ArgumentType, ArgumentExtension, ExtFuncData, SigRef,
-                   FuncRef, ValueLoc, ArgumentLoc};
+                   FuncRef, StackSlot, ValueLoc, ArgumentLoc};
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Offset32, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
@@ -124,6 +124,14 @@ impl<'a> Context<'a> {
             .def_ss(number, self.function.stack_slots.push(data), loc)
     }
 
+    // Resolve a reference to a stack slot.
+    fn get_ss(&self, number: u32, loc: &Location) -> Result<StackSlot> {
+        match self.map.get_ss(number) {
+            Some(sig) => Ok(sig),
+            None => err!(loc, "undefined stack slot ss{}", number),
+        }
+    }
+
     // Allocate a new signature and add a mapping number -> SigRef.
     fn add_sig(&mut self, number: u32, data: Signature, loc: &Location) -> Result<()> {
         self.map
@@ -210,14 +218,16 @@ impl<'a> Context<'a> {
                     InstructionData::Nullary { .. } |
                     InstructionData::UnaryImm { .. } |
                     InstructionData::UnaryIeee32 { .. } |
-                    InstructionData::UnaryIeee64 { .. } => {}
+                    InstructionData::UnaryIeee64 { .. } |
+                    InstructionData::StackLoad { .. } => {}
 
                     InstructionData::BinaryImm { ref mut arg, .. } |
                     InstructionData::BranchTable { ref mut arg, .. } |
                     InstructionData::ExtractLane { ref mut arg, .. } |
                     InstructionData::IntCompareImm { ref mut arg, .. } |
                     InstructionData::Unary { ref mut arg, .. } |
-                    InstructionData::UnarySplit { ref mut arg, .. } => {
+                    InstructionData::UnarySplit { ref mut arg, .. } |
+                    InstructionData::StackStore { ref mut arg, .. } => {
                         self.map.rewrite_value(arg, loc)?;
                     }
 
@@ -1657,6 +1667,31 @@ impl<'a> Parser<'a> {
                     ty: VOID,
                     arg: arg,
                     table: table,
+                }
+            }
+            InstructionFormat::StackLoad => {
+                let ss = self.match_ss("expected stack slot number: ss«n»")
+                    .and_then(|num| ctx.get_ss(num, &self.loc))?;
+                let offset = self.optional_offset32()?;
+                InstructionData::StackLoad {
+                    opcode: opcode,
+                    ty: VOID,
+                    stack_slot: ss,
+                    offset: offset,
+                }
+            }
+            InstructionFormat::StackStore => {
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let ss = self.match_ss("expected stack slot number: ss«n»")
+                    .and_then(|num| ctx.get_ss(num, &self.loc))?;
+                let offset = self.optional_offset32()?;
+                InstructionData::StackStore {
+                    opcode: opcode,
+                    ty: VOID,
+                    arg: arg,
+                    stack_slot: ss,
+                    offset: offset,
                 }
             }
         };
