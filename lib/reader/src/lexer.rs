@@ -223,7 +223,7 @@ impl<'a> Lexer<'a> {
     // - `0x0.4p-34`: Float
     //
     // This function does not filter out all invalid numbers. It depends in the context-sensitive
-    // decoding of the text for that. For example, the number of allowed digits an an Ieee32` and
+    // decoding of the text for that. For example, the number of allowed digits in an `Ieee32` and
     // an `Ieee64` constant are different.
     fn scan_number(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
         let begin = self.pos;
@@ -231,15 +231,21 @@ impl<'a> Lexer<'a> {
         let mut is_float = false;
 
         // Skip a leading sign.
-        if self.lookahead == Some('-') {
-            self.next_ch();
+        match self.lookahead {
+            Some('-') => {
+                self.next_ch();
 
-            if let Some(c) = self.lookahead {
-                // If the next character won't parse as a number, we return Token::Minus
-                if !c.is_alphanumeric() && c != '.' {
-                    return token(Token::Minus, loc);
+                if let Some(c) = self.lookahead {
+                    // If the next character won't parse as a number, we return Token::Minus
+                    if !c.is_alphanumeric() && c != '.' {
+                        return token(Token::Minus, loc);
+                    }
                 }
             }
+            Some('+') => {
+                self.next_ch();
+            }
+            _ => {}
         }
 
         // Check for NaNs with payloads.
@@ -395,6 +401,7 @@ impl<'a> Lexer<'a> {
                        Some('.') => Some(self.scan_char(Token::Dot)),
                        Some(':') => Some(self.scan_char(Token::Colon)),
                        Some('=') => Some(self.scan_char(Token::Equal)),
+                       Some('+') => Some(self.scan_number()),
                        Some('-') => {
                            if self.looking_at("->") {
                                Some(self.scan_chars(2, Token::Arrow))
@@ -506,7 +513,7 @@ mod tests {
 
     #[test]
     fn lex_numbers() {
-        let mut lex = Lexer::new(" 0 2_000 -1,0xf -0x0 0.0 0x0.4p-34");
+        let mut lex = Lexer::new(" 0 2_000 -1,0xf -0x0 0.0 0x0.4p-34 +5");
         assert_eq!(lex.next(), token(Token::Integer("0"), 1));
         assert_eq!(lex.next(), token(Token::Integer("2_000"), 1));
         assert_eq!(lex.next(), token(Token::Integer("-1"), 1));
@@ -515,6 +522,7 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Integer("-0x0"), 1));
         assert_eq!(lex.next(), token(Token::Float("0.0"), 1));
         assert_eq!(lex.next(), token(Token::Float("0x0.4p-34"), 1));
+        assert_eq!(lex.next(), token(Token::Integer("+5"), 1));
         assert_eq!(lex.next(), None);
     }
 
