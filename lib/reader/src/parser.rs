@@ -227,15 +227,18 @@ impl<'a> Context<'a> {
                     InstructionData::IntCompareImm { ref mut arg, .. } |
                     InstructionData::Unary { ref mut arg, .. } |
                     InstructionData::UnarySplit { ref mut arg, .. } |
-                    InstructionData::StackStore { ref mut arg, .. } => {
+                    InstructionData::StackStore { ref mut arg, .. } |
+                    InstructionData::HeapLoad { ref mut arg, .. } => {
                         self.map.rewrite_value(arg, loc)?;
                     }
 
+                    // `args: Value[2]`
                     InstructionData::Binary { ref mut args, .. } |
                     InstructionData::BinaryOverflow { ref mut args, .. } |
                     InstructionData::InsertLane { ref mut args, .. } |
                     InstructionData::IntCompare { ref mut args, .. } |
-                    InstructionData::FloatCompare { ref mut args, .. } => {
+                    InstructionData::FloatCompare { ref mut args, .. } |
+                    InstructionData::HeapStore { ref mut args, .. } => {
                         self.map.rewrite_values(args, loc)?;
                     }
 
@@ -1707,6 +1710,28 @@ impl<'a> Parser<'a> {
                     ty: VOID,
                     arg: arg,
                     stack_slot: ss,
+                    offset: offset,
+                }
+            }
+            InstructionFormat::HeapLoad => {
+                let addr = self.match_value("expected SSA value address")?;
+                let offset = self.optional_uoffset32()?;
+                InstructionData::HeapLoad {
+                    opcode: opcode,
+                    ty: VOID,
+                    arg: addr,
+                    offset: offset,
+                }
+            }
+            InstructionFormat::HeapStore => {
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let addr = self.match_value("expected SSA value address")?;
+                let offset = self.optional_uoffset32()?;
+                InstructionData::HeapStore {
+                    opcode: opcode,
+                    ty: VOID,
+                    args: [arg, addr],
                     offset: offset,
                 }
             }

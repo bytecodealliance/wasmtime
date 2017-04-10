@@ -114,3 +114,17 @@ ebb0:
 ; nextln: $v2 = stack_load.i32 $ss10+4
 ; nextln: stack_store $v1, $ss10+2
 ; nextln: stack_store $v2, $ss2
+
+; Heap access instructions.
+function heap(i32) {
+    ; TODO: heap0 = heap %foo
+ebb0(v1: i32):
+    v2 = heap_load.f32 v1
+    v3 = heap_load.f32 v1+12
+    heap_store v3, v1
+}
+; sameln: function heap(i32) {
+; nextln: ebb0($v1: i32):
+; nextln:     $v2 = heap_load.f32 $v1
+; nextln:     $v3 = heap_load.f32 $v1+12
+; nextln:     heap_store $v3, $v1

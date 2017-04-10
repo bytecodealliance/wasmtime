@@ -269,7 +269,9 @@ impl<'a> Verifier<'a> {
             &ExtractLane { .. } |
             &IntCompare { .. } |
             &IntCompareImm { .. } |
-            &FloatCompare { .. } => {}
+            &FloatCompare { .. } |
+            &HeapLoad { .. } |
+            &HeapStore { .. } => {}
         }
 
         Ok(())

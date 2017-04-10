@@ -8,7 +8,8 @@ in this module.
 from __future__ import absolute_import
 from cdsl.formats import InstructionFormat
 from cdsl.operands import VALUE, VARIABLE_ARGS
-from .immediates import imm64, uimm8, ieee32, ieee64, offset32, intcc, floatcc
+from .immediates import imm64, uimm8, ieee32, ieee64, offset32, uoffset32
+from .immediates import intcc, floatcc
 from .entities import ebb, sig_ref, func_ref, jump_table, stack_slot
 
 Nullary = InstructionFormat()
@@ -54,6 +55,11 @@ IndirectCall = InstructionFormat(
 
 StackLoad = InstructionFormat(stack_slot, offset32)
 StackStore = InstructionFormat(VALUE, stack_slot, offset32)
+
+# Accessing a WebAssembly heap.
+# TODO: Add a reference to a `heap` declared in the preamble.
+HeapLoad = InstructionFormat(VALUE, uoffset32)
+HeapStore = InstructionFormat(VALUE, VALUE, uoffset32)
 
 # Finally extract the names of global variables in this module.
 InstructionFormat.extract_names(globals())
