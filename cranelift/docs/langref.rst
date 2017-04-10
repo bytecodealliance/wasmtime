@@ -31,8 +31,7 @@ Here is the same function compiled into Cretonne IL:
 
 .. literalinclude:: example.cton
     :language: cton
-    :linenos:
-    :emphasize-lines: 2
+    :lines: 2-
 
 The first line of a function definition provides the function *name* and
 the :term:`function signature` which declares the argument and return types.

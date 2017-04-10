@@ -79,6 +79,6 @@ export CTONUTIL="$topdir/target/release/cton-util"
 
 cd "$topdir"
 banner "File tests"
-"$CTONUTIL" test filetests
+"$CTONUTIL" test filetests docs
 
 banner "OK"
