@@ -533,49 +533,13 @@ than the native pointer size, for example unsigned :type:`i32` offsets on a
     :arg Name: String identifying the heap in the runtime environment.
     :result H: Heap identifier.
 
-.. inst:: a = heap_load H, p, Offset
-
-    Load a value at the address ``p + Offset`` in the heap H.
-
-    Trap if the heap access would be out of bounds.
-
-    :arg H: Heap identifier created by :inst:`heap`.
-    :arg iN p: Unsigned base address in heap.
-    :arg Offset: Immediate signed offset.
-    :flag align(N): Expected alignment of ``p + Offset``. Power of two.
-    :flag aligntrap: Always trap if the memory access is misaligned.
-    :result T a: Loaded value.
-
-.. inst:: a = heap_store H, x, p, Offset
-
-    Store a value at the address ``p + Offset`` in the heap H.
-
-    Trap if the heap access would be out of bounds.
-
-    :arg H: Heap identifier created by :inst:`heap`.
-    :arg T x: Value to be stored.
-    :arg iN p: Unsigned base address in heap.
-    :arg Offset: Immediate signed offset.
-    :flag align(N): Expected alignment of ``p + Offset``. Power of two.
-    :flag aligntrap: Always trap if the memory access is misaligned.
+.. autoinst:: heap_load
+.. autoinst:: heap_store
 
 When optimizing heap accesses, Cretonne may separate the heap bounds checking
 and address computations from the memory accesses.
 
-.. inst:: a = heap_addr H, p, Size
-
-    Bounds check and compute absolute address of heap memory.
-
-    Verify that the address range ``p .. p + Size - 1`` is valid in the heap H,
-    and trap if not.
-
-    Convert the heap-relative address in ``p`` to a real absolute address and
-    return it.
-
-    :arg H: Heap identifier created by :inst:`heap`.
-    :arg iN p: Unsigned base address in heap.
-    :arg Size: Immediate unsigned byte count for range to verify.
-    :result iPtr a: Absolute address corresponding to ``p``.
+.. autoinst:: heap_addr
 
 A small example using heaps::
 

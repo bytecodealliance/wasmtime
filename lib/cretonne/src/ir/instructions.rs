@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::ops::{Deref, DerefMut};
 
 use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef, StackSlot};
-use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32};
+use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32, Uoffset32};
 use ir::condcodes::*;
 use ir::types;
 use ir::DataFlowGraph;
@@ -239,6 +239,18 @@ pub enum InstructionData {
         arg: Value,
         stack_slot: StackSlot,
         offset: Offset32,
+    },
+    HeapLoad {
+        opcode: Opcode,
+        ty: Type,
+        arg: Value,
+        offset: Uoffset32,
+    },
+    HeapStore {
+        opcode: Opcode,
+        ty: Type,
+        args: [Value; 2],
+        offset: Uoffset32,
     },
 }
 

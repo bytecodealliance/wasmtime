@@ -6,7 +6,7 @@
 use ir::types;
 use ir::{InstructionData, DataFlowGraph, Cursor};
 use ir::{Opcode, Type, Inst, Value, Ebb, JumpTable, SigRef, FuncRef, StackSlot, ValueList};
-use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32};
+use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32, Uoffset32};
 use ir::condcodes::{IntCC, FloatCC};
 
 /// Base trait for instruction builders.
