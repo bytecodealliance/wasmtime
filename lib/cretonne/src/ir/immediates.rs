@@ -337,6 +337,11 @@ fn format_float(bits: u64, w: u8, t: u8, f: &mut Formatter) -> fmt::Result {
             write!(f, "0x0.{0:01$x}p{2}", left_t_bits, digits as usize, emin)
         }
     } else if e_bits == max_e_bits {
+        // Always print a `+` or `-` sign for these special values.
+        // This makes them easier to parse as they can't be confused as identifiers.
+        if sign_bit == 0 {
+            write!(f, "+")?;
+        }
         if t_bits == 0 {
             // Infinity.
             write!(f, "Inf")
@@ -375,6 +380,8 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
 
     let (sign_bit, s2) = if s.starts_with('-') {
         (1u64 << t + w, &s[1..])
+    } else if s.starts_with('+') {
+        (0, &s[1..])
     } else {
         (0, s)
     };
@@ -731,27 +738,29 @@ mod tests {
                    "0x0.800000p-126");
         assert_eq!(Ieee32::new(f32::MIN_POSITIVE * f32::EPSILON).to_string(),
                    "0x0.000002p-126");
-        assert_eq!(Ieee32::new(f32::INFINITY).to_string(), "Inf");
+        assert_eq!(Ieee32::new(f32::INFINITY).to_string(), "+Inf");
         assert_eq!(Ieee32::new(f32::NEG_INFINITY).to_string(), "-Inf");
-        assert_eq!(Ieee32::new(f32::NAN).to_string(), "NaN");
+        assert_eq!(Ieee32::new(f32::NAN).to_string(), "+NaN");
         assert_eq!(Ieee32::new(-f32::NAN).to_string(), "-NaN");
         // Construct some qNaNs with payloads.
-        assert_eq!(Ieee32::from_bits(0x7fc00001).to_string(), "NaN:0x1");
-        assert_eq!(Ieee32::from_bits(0x7ff00001).to_string(), "NaN:0x300001");
+        assert_eq!(Ieee32::from_bits(0x7fc00001).to_string(), "+NaN:0x1");
+        assert_eq!(Ieee32::from_bits(0x7ff00001).to_string(), "+NaN:0x300001");
         // Signaling NaNs.
-        assert_eq!(Ieee32::from_bits(0x7f800001).to_string(), "sNaN:0x1");
-        assert_eq!(Ieee32::from_bits(0x7fa00001).to_string(), "sNaN:0x200001");
+        assert_eq!(Ieee32::from_bits(0x7f800001).to_string(), "+sNaN:0x1");
+        assert_eq!(Ieee32::from_bits(0x7fa00001).to_string(), "+sNaN:0x200001");
     }
 
     #[test]
     fn parse_ieee32() {
         parse_ok::<Ieee32>("0.0", "0.0");
+        parse_ok::<Ieee32>("+0.0", "0.0");
         parse_ok::<Ieee32>("-0.0", "-0.0");
         parse_ok::<Ieee32>("0x0", "0.0");
         parse_ok::<Ieee32>("0x0.0", "0.0");
         parse_ok::<Ieee32>("0x.0", "0.0");
         parse_ok::<Ieee32>("0x0.", "0.0");
         parse_ok::<Ieee32>("0x1", "0x1.000000p0");
+        parse_ok::<Ieee32>("+0x1", "0x1.000000p0");
         parse_ok::<Ieee32>("-0x1", "-0x1.000000p0");
         parse_ok::<Ieee32>("0x10", "0x1.000000p4");
         parse_ok::<Ieee32>("0x10.0", "0x1.000000p4");
@@ -793,20 +802,22 @@ mod tests {
         parse_err::<Ieee32>("0x1.0p-150", "Magnitude too small");
 
         // NaNs and Infs.
-        parse_ok::<Ieee32>("Inf", "Inf");
+        parse_ok::<Ieee32>("Inf", "+Inf");
+        parse_ok::<Ieee32>("+Inf", "+Inf");
         parse_ok::<Ieee32>("-Inf", "-Inf");
-        parse_ok::<Ieee32>("NaN", "NaN");
+        parse_ok::<Ieee32>("NaN", "+NaN");
+        parse_ok::<Ieee32>("+NaN", "+NaN");
         parse_ok::<Ieee32>("-NaN", "-NaN");
-        parse_ok::<Ieee32>("NaN:0x0", "NaN");
+        parse_ok::<Ieee32>("NaN:0x0", "+NaN");
         parse_err::<Ieee32>("NaN:", "Float must be hexadecimal");
         parse_err::<Ieee32>("NaN:0", "Float must be hexadecimal");
         parse_err::<Ieee32>("NaN:0x", "Invalid NaN payload");
-        parse_ok::<Ieee32>("NaN:0x000001", "NaN:0x1");
-        parse_ok::<Ieee32>("NaN:0x300001", "NaN:0x300001");
+        parse_ok::<Ieee32>("NaN:0x000001", "+NaN:0x1");
+        parse_ok::<Ieee32>("NaN:0x300001", "+NaN:0x300001");
         parse_err::<Ieee32>("NaN:0x400001", "Invalid NaN payload");
-        parse_ok::<Ieee32>("sNaN:0x1", "sNaN:0x1");
+        parse_ok::<Ieee32>("sNaN:0x1", "+sNaN:0x1");
         parse_err::<Ieee32>("sNaN:0x0", "Invalid sNaN payload");
-        parse_ok::<Ieee32>("sNaN:0x200001", "sNaN:0x200001");
+        parse_ok::<Ieee32>("sNaN:0x200001", "+sNaN:0x200001");
         parse_err::<Ieee32>("sNaN:0x400001", "Invalid sNaN payload");
     }
 
@@ -829,19 +840,20 @@ mod tests {
                    "0x0.8000000000000p-1022");
         assert_eq!(Ieee64::new(f64::MIN_POSITIVE * f64::EPSILON).to_string(),
                    "0x0.0000000000001p-1022");
-        assert_eq!(Ieee64::new(f64::INFINITY).to_string(), "Inf");
+        assert_eq!(Ieee64::new(f64::INFINITY).to_string(), "+Inf");
         assert_eq!(Ieee64::new(f64::NEG_INFINITY).to_string(), "-Inf");
-        assert_eq!(Ieee64::new(f64::NAN).to_string(), "NaN");
+        assert_eq!(Ieee64::new(f64::NAN).to_string(), "+NaN");
         assert_eq!(Ieee64::new(-f64::NAN).to_string(), "-NaN");
         // Construct some qNaNs with payloads.
-        assert_eq!(Ieee64::from_bits(0x7ff8000000000001).to_string(), "NaN:0x1");
+        assert_eq!(Ieee64::from_bits(0x7ff8000000000001).to_string(),
+                   "+NaN:0x1");
         assert_eq!(Ieee64::from_bits(0x7ffc000000000001).to_string(),
-                   "NaN:0x4000000000001");
+                   "+NaN:0x4000000000001");
         // Signaling NaNs.
         assert_eq!(Ieee64::from_bits(0x7ff0000000000001).to_string(),
-                   "sNaN:0x1");
+                   "+sNaN:0x1");
         assert_eq!(Ieee64::from_bits(0x7ff4000000000001).to_string(),
-                   "sNaN:0x4000000000001");
+                   "+sNaN:0x4000000000001");
     }
 
     #[test]
@@ -894,20 +906,20 @@ mod tests {
         parse_err::<Ieee64>("0x1.0p-1075", "Magnitude too small");
 
         // NaNs and Infs.
-        parse_ok::<Ieee64>("Inf", "Inf");
+        parse_ok::<Ieee64>("Inf", "+Inf");
         parse_ok::<Ieee64>("-Inf", "-Inf");
-        parse_ok::<Ieee64>("NaN", "NaN");
+        parse_ok::<Ieee64>("NaN", "+NaN");
         parse_ok::<Ieee64>("-NaN", "-NaN");
-        parse_ok::<Ieee64>("NaN:0x0", "NaN");
+        parse_ok::<Ieee64>("NaN:0x0", "+NaN");
         parse_err::<Ieee64>("NaN:", "Float must be hexadecimal");
         parse_err::<Ieee64>("NaN:0", "Float must be hexadecimal");
         parse_err::<Ieee64>("NaN:0x", "Invalid NaN payload");
-        parse_ok::<Ieee64>("NaN:0x000001", "NaN:0x1");
-        parse_ok::<Ieee64>("NaN:0x4000000000001", "NaN:0x4000000000001");
+        parse_ok::<Ieee64>("NaN:0x000001", "+NaN:0x1");
+        parse_ok::<Ieee64>("NaN:0x4000000000001", "+NaN:0x4000000000001");
         parse_err::<Ieee64>("NaN:0x8000000000001", "Invalid NaN payload");
-        parse_ok::<Ieee64>("sNaN:0x1", "sNaN:0x1");
+        parse_ok::<Ieee64>("sNaN:0x1", "+sNaN:0x1");
         parse_err::<Ieee64>("sNaN:0x0", "Invalid sNaN payload");
-        parse_ok::<Ieee64>("sNaN:0x4000000000001", "sNaN:0x4000000000001");
+        parse_ok::<Ieee64>("sNaN:0x4000000000001", "+sNaN:0x4000000000001");
         parse_err::<Ieee64>("sNaN:0x8000000000001", "Invalid sNaN payload");
     }
 }
