@@ -13,7 +13,7 @@ use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotDa
                    JumpTableData, Signature, ArgumentType, ArgumentExtension, ExtFuncData, SigRef,
                    FuncRef, StackSlot, ValueLoc, ArgumentLoc};
 use cretonne::ir::types::VOID;
-use cretonne::ir::immediates::{Imm64, Offset32, Ieee32, Ieee64};
+use cretonne::ir::immediates::{Imm64, Offset32, Uoffset32, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs};
 use cretonne::isa::{self, TargetIsa, Encoding};
@@ -520,6 +520,22 @@ impl<'a> Parser<'a> {
         } else {
             // An offset32 operand can be absent.
             Ok(Offset32::new(0))
+        }
+    }
+
+    // Match and consume an optional uoffset32 immediate.
+    //
+    // Note that that this will match an empty string as an empty offset, and that if an offset is
+    // present, it must contain a `+` sign.
+    fn optional_uoffset32(&mut self) -> Result<Uoffset32> {
+        if let Some(Token::Integer(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like an integer.
+            // Parse it as a `Uoffset32` to check for overflow and other issues.
+            text.parse().map_err(|e| self.error(e))
+        } else {
+            // A uoffset32 operand can be absent.
+            Ok(Uoffset32::new(0))
         }
     }
 

@@ -6,7 +6,7 @@
 //! module in the meta language.
 
 use std::fmt::{self, Display, Formatter};
-use std::i32;
+use std::{i32, u32};
 use std::mem;
 use std::str::FromStr;
 
@@ -169,6 +169,12 @@ impl Into<i32> for Offset32 {
     }
 }
 
+impl Into<i64> for Offset32 {
+    fn into(self) -> i64 {
+        self.0 as i64
+    }
+}
+
 impl From<i32> for Offset32 {
     fn from(x: i32) -> Self {
         Offset32(x)
@@ -205,6 +211,71 @@ impl FromStr for Offset32 {
         }
         parse_i64(s).and_then(|x| if i32::MIN as i64 <= x && x <= i32::MAX as i64 {
                                   Ok(Offset32::new(x as i32))
+                              } else {
+                                  Err("Offset out of range")
+                              })
+    }
+}
+
+/// 32-bit unsigned immediate offset.
+///
+/// This is used to encode an immediate offset for WebAssembly heap_load/heap_store instructions.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct Uoffset32(u32);
+
+impl Uoffset32 {
+    /// Create a new `Uoffset32` representing the number `x`.
+    pub fn new(x: u32) -> Uoffset32 {
+        Uoffset32(x)
+    }
+}
+
+impl Into<u32> for Uoffset32 {
+    fn into(self) -> u32 {
+        self.0
+    }
+}
+
+impl Into<i64> for Uoffset32 {
+    fn into(self) -> i64 {
+        self.0 as i64
+    }
+}
+
+impl From<u32> for Uoffset32 {
+    fn from(x: u32) -> Self {
+        Uoffset32(x)
+    }
+}
+
+impl Display for Uoffset32 {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        // 0 displays as an empty offset.
+        if self.0 == 0 {
+            return Ok(());
+        }
+
+        // Always include a sign.
+        if self.0 < 10_000 {
+            write!(f, "+{}", self.0)
+        } else {
+            write!(f, "+")?;
+            write_hex(self.0 as i64, f)
+        }
+
+    }
+}
+
+impl FromStr for Uoffset32 {
+    type Err = &'static str;
+
+    // Parse a decimal or hexadecimal `Uoffset32`, formatted as above.
+    fn from_str(s: &str) -> Result<Uoffset32, &'static str> {
+        if !s.starts_with('+') {
+            return Err("Unsigned offset must begin with '+' sign");
+        }
+        parse_i64(s).and_then(|x| if 0 <= x && x <= u32::MAX as i64 {
+                                  Ok(Uoffset32::new(x as u32))
                               } else {
                                   Err("Offset out of range")
                               })
@@ -618,6 +689,28 @@ mod tests {
         parse_ok::<Offset32>("-0x8000_0000", "-0x8000_0000");
 
         parse_err::<Offset32>("+0x8000_0000", "Offset out of range");
+    }
+
+    #[test]
+    fn format_uoffset32() {
+        assert_eq!(Uoffset32(0).to_string(), "");
+        assert_eq!(Uoffset32(1).to_string(), "+1");
+        assert_eq!(Uoffset32(9999).to_string(), "+9999");
+        assert_eq!(Uoffset32(10000).to_string(), "+0x2710");
+        assert_eq!(Uoffset32(0xffff).to_string(), "+0xffff");
+        assert_eq!(Uoffset32(0x10000).to_string(), "+0x0001_0000");
+    }
+
+    #[test]
+    fn parse_uoffset32() {
+        parse_ok::<Uoffset32>("+0", "");
+        parse_ok::<Uoffset32>("+1", "+1");
+        parse_ok::<Uoffset32>("+0x0", "");
+        parse_ok::<Uoffset32>("+0xf", "+15");
+        parse_ok::<Uoffset32>("+0x8000_0000", "+0x8000_0000");
+        parse_ok::<Uoffset32>("+0xffff_ffff", "+0xffff_ffff");
+
+        parse_err::<Uoffset32>("+0x1_0000_0000", "Offset out of range");
     }
 
     #[test]
