@@ -63,10 +63,10 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
 
     // Process the EBB arguments one at a time, possibly replacing one argument with multiple new
     // ones. We do this by detaching the entry EBB arguments first.
-    let mut next_arg = func.dfg.detach_ebb_args(entry);
-    while let Some(arg) = next_arg {
-        // Get the next argument before we mutate `arg`.
-        next_arg = func.dfg.next_ebb_arg(arg);
+    let ebb_args = func.dfg.detach_ebb_args(entry);
+    let mut old_arg = 0;
+    while let Some(arg) = ebb_args.get(old_arg, &func.dfg.value_lists) {
+        old_arg += 1;
 
         let arg_type = func.dfg.value_type(arg);
         if arg_type == abi_types[abi_arg].value_type {

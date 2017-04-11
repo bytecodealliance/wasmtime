@@ -751,10 +751,7 @@ impl DataFlowGraph {
             self.ebbs[ebb].first_arg = new_arg.into();
         } else {
             // We need to find the num-1 argument value and change its next link.
-            let mut arg = self.ebbs[ebb].first_arg.expect("EBB has no arguments");
-            for _ in 1..num {
-                arg = self.next_ebb_arg(arg).expect("Too few EBB arguments");
-            }
+            let arg = self.ebbs[ebb].args.as_slice(&self.value_lists)[(num - 1) as usize];
             if let ExpandedValue::Table(index) = arg.expand() {
                 if let ValueData::Arg { ref mut next, .. } = self.extended_values[index] {
                     assert_eq!(next.expand(), Some(old_arg));
@@ -770,31 +767,15 @@ impl DataFlowGraph {
         new_arg
     }
 
-    /// Given a value that is known to be an EBB argument, return the next EBB argument.
-    pub fn next_ebb_arg(&self, arg: Value) -> Option<Value> {
-        if let ExpandedValue::Table(index) = arg.expand() {
-            if let ValueData::Arg { next, .. } = self.extended_values[index] {
-                return next.into();
-            }
-        }
-        panic!("{} is not an EBB argument", arg);
-    }
-
-    /// Detach all the arguments from `ebb` and return the first one.
-    ///
-    /// The whole list of detached arguments can be traversed with `next_ebb_arg`. This method does
-    /// not return a `Values` iterator since it is often necessary to mutate the DFG while
-    /// processing the list of arguments.
+    /// Detach all the arguments from `ebb` and return them as a `ValueList`.
     ///
     /// This is a quite low-level operation. Sensible things to do with the detached EBB arguments
     /// is to put them back on the same EBB with `attach_ebb_arg()` or change them into aliases
     /// with `change_to_alias()`.
-    pub fn detach_ebb_args(&mut self, ebb: Ebb) -> Option<Value> {
-        let first = self.ebbs[ebb].first_arg.into();
+    pub fn detach_ebb_args(&mut self, ebb: Ebb) -> ValueList {
         self.ebbs[ebb].first_arg = None.into();
         self.ebbs[ebb].last_arg = None.into();
-        self.ebbs[ebb].args.clear(&mut self.value_lists);
-        first
+        self.ebbs[ebb].args.take()
     }
 
     /// Append an existing argument value to `ebb`.
@@ -962,7 +943,7 @@ mod tests {
         assert_eq!(ebb.to_string(), "ebb0");
         assert_eq!(dfg.num_ebb_args(ebb), 0);
         assert_eq!(dfg.ebb_args(ebb), &[]);
-        assert_eq!(dfg.detach_ebb_args(ebb), None);
+        assert!(dfg.detach_ebb_args(ebb).is_empty());
         assert_eq!(dfg.num_ebb_args(ebb), 0);
         assert_eq!(dfg.ebb_args(ebb), &[]);
 
@@ -982,17 +963,14 @@ mod tests {
         assert_eq!(dfg.value_type(arg2), types::I16);
 
         // Swap the two EBB arguments.
-        let take1 = dfg.detach_ebb_args(ebb).unwrap();
+        let vlist = dfg.detach_ebb_args(ebb);
         assert_eq!(dfg.num_ebb_args(ebb), 0);
         assert_eq!(dfg.ebb_args(ebb), &[]);
-        let take2 = dfg.next_ebb_arg(take1).unwrap();
-        assert_eq!(take1, arg1);
-        assert_eq!(take2, arg2);
-        assert_eq!(dfg.next_ebb_arg(take2), None);
-        dfg.attach_ebb_arg(ebb, take2);
+        assert_eq!(vlist.as_slice(&dfg.value_lists), &[arg1, arg2]);
+        dfg.attach_ebb_arg(ebb, arg2);
         let arg3 = dfg.append_ebb_arg(ebb, types::I32);
-        dfg.attach_ebb_arg(ebb, take1);
-        assert_eq!(dfg.ebb_args(ebb), &[take2, arg3, take1]);
+        dfg.attach_ebb_arg(ebb, arg1);
+        assert_eq!(dfg.ebb_args(ebb), &[arg2, arg3, arg1]);
     }
 
     #[test]
