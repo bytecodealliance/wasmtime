@@ -376,6 +376,19 @@ impl InstructionData {
         }
     }
 
+    /// Get a mutable reference to the single destination of this branch instruction, if it is a
+    /// single destination branch or jump.
+    ///
+    /// Multi-destination branches like `br_table` return `None`.
+    pub fn branch_destination_mut(&mut self) -> Option<&mut Ebb> {
+        match *self {
+            InstructionData::Jump { ref mut destination, .. } => Some(destination),
+            InstructionData::Branch { ref mut destination, .. } => Some(destination),
+            InstructionData::BranchIcmp { ref mut destination, .. } => Some(destination),
+            _ => None,
+        }
+    }
+
     /// Return information about a call instruction.
     ///
     /// Any instruction that can call another function reveals its call signature here.
