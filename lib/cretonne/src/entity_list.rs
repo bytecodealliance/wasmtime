@@ -260,6 +260,15 @@ impl<T: EntityRef> EntityList<T> {
         self.as_slice(pool).get(index).cloned()
     }
 
+    /// Get the first element from the list.
+    pub fn first(&self, pool: &ListPool<T>) -> Option<T> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(pool.data[self.index as usize])
+        }
+    }
+
     /// Get the list as a mutable slice.
     pub fn as_mut_slice<'a>(&'a mut self, pool: &'a mut ListPool<T>) -> &'a mut [T] {
         let idx = self.index as usize;
@@ -507,6 +516,7 @@ mod tests {
         assert!(list.is_empty());
         assert_eq!(list.len(pool), 0);
         assert_eq!(list.as_slice(pool), &[]);
+        assert_eq!(list.first(pool), None);
     }
 
     #[test]
@@ -523,6 +533,7 @@ mod tests {
         assert_eq!(list.len(pool), 1);
         assert!(!list.is_empty());
         assert_eq!(list.as_slice(pool), &[i1]);
+        assert_eq!(list.first(pool), Some(i1));
         assert_eq!(list.get(0, pool), Some(i1));
         assert_eq!(list.get(1, pool), None);
 
@@ -530,6 +541,7 @@ mod tests {
         assert_eq!(list.len(pool), 2);
         assert!(!list.is_empty());
         assert_eq!(list.as_slice(pool), &[i1, i2]);
+        assert_eq!(list.first(pool), Some(i1));
         assert_eq!(list.get(0, pool), Some(i1));
         assert_eq!(list.get(1, pool), Some(i2));
         assert_eq!(list.get(2, pool), None);
@@ -538,6 +550,7 @@ mod tests {
         assert_eq!(list.len(pool), 3);
         assert!(!list.is_empty());
         assert_eq!(list.as_slice(pool), &[i1, i2, i3]);
+        assert_eq!(list.first(pool), Some(i1));
         assert_eq!(list.get(0, pool), Some(i1));
         assert_eq!(list.get(1, pool), Some(i2));
         assert_eq!(list.get(2, pool), Some(i3));
@@ -548,6 +561,7 @@ mod tests {
         assert_eq!(list.len(pool), 4);
         assert!(!list.is_empty());
         assert_eq!(list.as_slice(pool), &[i1, i2, i3, i4]);
+        assert_eq!(list.first(pool), Some(i1));
         assert_eq!(list.get(0, pool), Some(i1));
         assert_eq!(list.get(1, pool), Some(i2));
         assert_eq!(list.get(2, pool), Some(i3));
