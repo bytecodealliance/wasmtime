@@ -276,7 +276,6 @@ enum ValueData {
         ty: Type,
         num: u16, // Argument number, starting from 0.
         ebb: Ebb,
-        next: PackedOption<Value>, // Next argument to `ebb`.
     },
 
     // Value is an alias of another value.
@@ -308,7 +307,9 @@ impl<'a> Iterator for Values<'a> {
                 ExpandedValue::Table(index) => {
                     match self.dfg.extended_values[index] {
                         ValueData::Inst { next, .. } => next.into(),
-                        ValueData::Arg { next, .. } => next.into(),
+                        ValueData::Arg { .. } => {
+                            panic!("EBB argument {} appeared in value list", prev)
+                        }
                         ValueData::Alias { .. } => {
                             panic!("Alias value {} appeared in value list", prev)
                         }
@@ -696,7 +697,6 @@ impl DataFlowGraph {
                                       ty: ty,
                                       ebb: ebb,
                                       num: 0,
-                                      next: None.into(),
                                   });
         self.attach_ebb_arg(ebb, val);
         val
@@ -724,46 +724,20 @@ impl DataFlowGraph {
         };
 
         // Create new value identical to the old one except for the type.
-        let (ebb, num, new_arg) = if let ValueData::Arg { num, ebb, next, .. } = old_data {
-            (ebb,
-             num,
-             self.make_value(ValueData::Arg {
-                                 ty: new_type,
-                                 num: num,
-                                 ebb: ebb,
-                                 next: next,
-                             }))
+        let (ebb, num) = if let ValueData::Arg { num, ebb, .. } = old_data {
+            (ebb, num)
         } else {
             panic!("old_arg: {} must be an EBB argument: {:?}",
                    old_arg,
                    old_data);
         };
+        let new_arg = self.make_value(ValueData::Arg {
+                                          ty: new_type,
+                                          num: num,
+                                          ebb: ebb,
+                                      });
 
         self.ebbs[ebb].args.as_mut_slice(&mut self.value_lists)[num as usize] = new_arg;
-
-        // Now fix up the linked lists.
-        if self.ebbs[ebb].last_arg.expand() == Some(old_arg) {
-            self.ebbs[ebb].last_arg = new_arg.into();
-        }
-
-        if self.ebbs[ebb].first_arg.expand() == Some(old_arg) {
-            assert_eq!(num, 0);
-            self.ebbs[ebb].first_arg = new_arg.into();
-        } else {
-            // We need to find the num-1 argument value and change its next link.
-            let arg = self.ebbs[ebb].args.as_slice(&self.value_lists)[(num - 1) as usize];
-            if let ExpandedValue::Table(index) = arg.expand() {
-                if let ValueData::Arg { ref mut next, .. } = self.extended_values[index] {
-                    assert_eq!(next.expand(), Some(old_arg));
-                    *next = new_arg.into();
-                } else {
-                    panic!("{} is not an EBB argument", arg);
-                }
-            } else {
-                panic!("{} is not an EBB argument", arg);
-            }
-        }
-
         new_arg
     }
 
@@ -773,8 +747,6 @@ impl DataFlowGraph {
     /// is to put them back on the same EBB with `attach_ebb_arg()` or change them into aliases
     /// with `change_to_alias()`.
     pub fn detach_ebb_args(&mut self, ebb: Ebb) -> ValueList {
-        self.ebbs[ebb].first_arg = None.into();
-        self.ebbs[ebb].last_arg = None.into();
         self.ebbs[ebb].args.take()
     }
 
@@ -786,38 +758,14 @@ impl DataFlowGraph {
     ///
     /// In almost all cases, you should be using `append_ebb_arg()` instead of this method.
     pub fn attach_ebb_arg(&mut self, ebb: Ebb, arg: Value) {
-        self.ebbs[ebb].args.push(arg, &mut self.value_lists);
-        let arg_num = match self.ebbs[ebb].last_arg.map(|v| v.expand()) {
-            // If last_argument is `None`, we're adding the first EBB argument.
-            None => {
-                self.ebbs[ebb].first_arg = arg.into();
-                0
-            }
-            // Append to the linked list of arguments.
-            Some(ExpandedValue::Table(idx)) => {
-                if let ValueData::Arg { ref mut next, num, .. } = self.extended_values[idx] {
-                    *next = arg.into();
-                    assert!(num < u16::MAX, "Too many arguments to EBB");
-                    num + 1
-                } else {
-                    panic!("inconsistent value table entry for EBB argument");
-                }
-            }
-            _ => panic!("inconsistent value table entry for EBB argument"),
-        };
-        self.ebbs[ebb].last_arg = arg.into();
+        let arg_num = self.ebbs[ebb].args.push(arg, &mut self.value_lists);
+        assert!(arg_num <= u16::MAX as usize, "Too many arguments to EBB");
 
         // Now update `arg` itself.
         let arg_ebb = ebb;
         if let ExpandedValue::Table(idx) = arg.expand() {
-            if let ValueData::Arg {
-                       ref mut num,
-                       ebb,
-                       ref mut next,
-                       ..
-                   } = self.extended_values[idx] {
-                *num = arg_num;
-                *next = None.into();
+            if let ValueData::Arg { ref mut num, ebb, .. } = self.extended_values[idx] {
+                *num = arg_num as u16;
                 assert_eq!(arg_ebb, ebb, "{} should already belong to EBB", arg);
                 return;
             }
@@ -835,24 +783,11 @@ impl DataFlowGraph {
 struct EbbData {
     // List of arguments to this EBB.
     args: ValueList,
-
-    // First argument to this EBB, or `None` if the block has no arguments.
-    //
-    // The arguments are all `ValueData::Argument` entries that form a linked list from `first_arg`
-    // to `last_arg`.
-    first_arg: PackedOption<Value>,
-
-    // Last argument to this EBB, or `None` if the block has no arguments.
-    last_arg: PackedOption<Value>,
 }
 
 impl EbbData {
     fn new() -> EbbData {
-        EbbData {
-            args: ValueList::new(),
-            first_arg: None.into(),
-            last_arg: None.into(),
-        }
+        EbbData { args: ValueList::new() }
     }
 }
 
