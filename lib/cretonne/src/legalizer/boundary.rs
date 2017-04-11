@@ -302,11 +302,9 @@ fn convert_to_abi<PutArg>(dfg: &mut DataFlowGraph,
 }
 
 /// Check if a sequence of arguments match a desired sequence of argument types.
-fn check_arg_types<Args>(dfg: &DataFlowGraph, args: Args, types: &[ArgumentType]) -> bool
-    where Args: IntoIterator<Item = Value>
-{
+fn check_arg_types(dfg: &DataFlowGraph, args: &[Value], types: &[ArgumentType]) -> bool {
     let mut n = 0;
-    for arg in args {
+    for &arg in args {
         match types.get(n) {
             Some(&ArgumentType { value_type, .. }) => {
                 if dfg.value_type(arg) != value_type {
@@ -335,7 +333,7 @@ fn check_call_signature(dfg: &DataFlowGraph, inst: Inst) -> Result<(), SigRef> {
     };
     let sig = &dfg.signatures[sig_ref];
 
-    if check_arg_types(dfg, args.iter().cloned(), &sig.argument_types[..]) &&
+    if check_arg_types(dfg, args, &sig.argument_types[..]) &&
        check_arg_types(dfg, dfg.inst_results(inst), &sig.return_types[..]) {
         // All types check out.
         Ok(())
@@ -347,9 +345,7 @@ fn check_call_signature(dfg: &DataFlowGraph, inst: Inst) -> Result<(), SigRef> {
 
 /// Check if the arguments of the return `inst` match the signature.
 fn check_return_signature(dfg: &DataFlowGraph, inst: Inst, sig: &Signature) -> bool {
-    check_arg_types(dfg,
-                    dfg.inst_variable_args(inst).iter().cloned(),
-                    &sig.return_types)
+    check_arg_types(dfg, dfg.inst_variable_args(inst), &sig.return_types)
 }
 
 /// Insert ABI conversion code for the arguments to the call or return instruction at `pos`.

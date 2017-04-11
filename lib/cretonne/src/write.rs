@@ -188,7 +188,7 @@ fn write_instruction(w: &mut Write,
             // Write value locations, if we have them.
             if !func.locations.is_empty() {
                 let regs = isa.register_info();
-                for r in func.dfg.inst_results(inst) {
+                for &r in func.dfg.inst_results(inst) {
                     write!(s,
                            ",{}",
                            func.locations

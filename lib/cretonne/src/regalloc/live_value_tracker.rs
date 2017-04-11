@@ -233,7 +233,7 @@ impl LiveValueTracker {
 
         // Add the values defined by `inst`.
         let first_def = self.live.values.len();
-        for value in dfg.inst_results(inst) {
+        for &value in dfg.inst_results(inst) {
             let lr = match liveness.get(value) {
                 Some(lr) => lr,
                 None => panic!("{} result {} has no live range", dfg[inst].opcode(), value),
