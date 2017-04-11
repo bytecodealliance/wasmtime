@@ -295,7 +295,8 @@ impl<T: EntityRef> EntityList<T> {
     }
 
     /// Appends an element to the back of the list.
-    pub fn push(&mut self, element: T, pool: &mut ListPool<T>) {
+    /// Returns the index where the element was inserted.
+    pub fn push(&mut self, element: T, pool: &mut ListPool<T>) -> usize {
         let idx = self.index as usize;
         match pool.len_of(self) {
             None => {
@@ -305,6 +306,7 @@ impl<T: EntityRef> EntityList<T> {
                 pool.data[block] = T::new(1);
                 pool.data[block + 1] = element;
                 self.index = (block + 1) as u32;
+                0
             }
             Some(len) => {
                 // Do we need to reallocate?
@@ -320,6 +322,7 @@ impl<T: EntityRef> EntityList<T> {
                 }
                 pool.data[block + new_len] = element;
                 pool.data[block] = T::new(new_len);
+                len
             }
         }
     }
@@ -516,14 +519,14 @@ mod tests {
         let i3 = Inst::new(3);
         let i4 = Inst::new(4);
 
-        list.push(i1, pool);
+        assert_eq!(list.push(i1, pool), 0);
         assert_eq!(list.len(pool), 1);
         assert!(!list.is_empty());
         assert_eq!(list.as_slice(pool), &[i1]);
         assert_eq!(list.get(0, pool), Some(i1));
         assert_eq!(list.get(1, pool), None);
 
-        list.push(i2, pool);
+        assert_eq!(list.push(i2, pool), 1);
         assert_eq!(list.len(pool), 2);
         assert!(!list.is_empty());
         assert_eq!(list.as_slice(pool), &[i1, i2]);
@@ -531,7 +534,7 @@ mod tests {
         assert_eq!(list.get(1, pool), Some(i2));
         assert_eq!(list.get(2, pool), None);
 
-        list.push(i3, pool);
+        assert_eq!(list.push(i3, pool), 2);
         assert_eq!(list.len(pool), 3);
         assert!(!list.is_empty());
         assert_eq!(list.as_slice(pool), &[i1, i2, i3]);
@@ -541,7 +544,7 @@ mod tests {
         assert_eq!(list.get(3, pool), None);
 
         // This triggers a reallocation.
-        list.push(i4, pool);
+        assert_eq!(list.push(i4, pool), 3);
         assert_eq!(list.len(pool), 4);
         assert!(!list.is_empty());
         assert_eq!(list.as_slice(pool), &[i1, i2, i3, i4]);
