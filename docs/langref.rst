@@ -437,6 +437,26 @@ accesses may trap, or they may work. Sometimes, operating systems catch
 alignment traps and emulate the misaligned memory access.
 
 
+Extending loads and truncating stores
+-------------------------------------
+
+Most ISAs provide instructions that load an integer value smaller than a register
+and extends it to the width of the register. Similarly, store instructions that
+only write the low bits of an integer register are common.
+
+Cretonne provides extending loads and truncation stores for 8, 16, and 32-bit
+memory accesses.
+
+.. autoinst:: uload8
+.. autoinst:: sload8
+.. autoinst:: istore8
+.. autoinst:: uload16
+.. autoinst:: sload16
+.. autoinst:: istore16
+.. autoinst:: uload32
+.. autoinst:: sload32
+.. autoinst:: istore32
+
 Local variables
 ---------------
 

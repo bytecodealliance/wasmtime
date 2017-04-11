@@ -91,7 +91,7 @@ floatcc = ImmediateKind(
             'uge': 'UnorderedOrGreaterThanOrEqual',
         })
 
-#: Flags for memory operations like :inst:`load` and :inst:`store`.
+#: Flags for memory operations like :cton:inst:`load` and :cton:inst:`store`.
 memflags = ImmediateKind(
         'memflags',
         'Memory operation flags',
