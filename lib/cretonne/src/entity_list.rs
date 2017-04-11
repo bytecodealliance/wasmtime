@@ -222,6 +222,11 @@ impl<T: EntityRef> ListPool<T> {
 }
 
 impl<T: EntityRef> EntityList<T> {
+    /// Create a new empty list.
+    pub fn new() -> Self {
+        Default::default()
+    }
+
     /// Returns `true` if the list has a length of 0.
     pub fn is_empty(&self) -> bool {
         // 0 is a magic value for the empty list. Any list in the pool array must have a positive

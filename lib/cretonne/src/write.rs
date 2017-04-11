@@ -95,7 +95,7 @@ pub fn write_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
         write!(w, "                    ")?;
     }
 
-    let mut args = func.dfg.ebb_args(ebb);
+    let mut args = func.dfg.ebb_args(ebb).iter().cloned();
     match args.next() {
         None => return writeln!(w, "{}:", ebb),
         Some(arg) => {

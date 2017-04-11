@@ -182,7 +182,7 @@ impl LiveValueTracker {
 
         // Now add all the live arguments to `ebb`.
         let first_arg = self.live.values.len();
-        for value in dfg.ebb_args(ebb) {
+        for &value in dfg.ebb_args(ebb) {
             let lr = liveness
                 .get(value)
                 .expect("EBB argument value has no live range");
