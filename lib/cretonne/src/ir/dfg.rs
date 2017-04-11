@@ -26,7 +26,7 @@ pub struct DataFlowGraph {
     /// Data about all of the instructions in the function, including opcodes and operands.
     /// The instructions in this map are not in program order. That is tracked by `Layout`, along
     /// with the EBB containing each instruction.
-    pub insts: EntityMap<Inst, InstructionData>,
+    insts: EntityMap<Inst, InstructionData>,
 
     /// Memory pool of value lists referenced by instructions in `insts`.
     pub value_lists: ValueListPool,
@@ -75,6 +75,11 @@ impl DataFlowGraph {
     /// This is intended for use with `EntityMap::with_capacity`.
     pub fn num_insts(&self) -> usize {
         self.insts.len()
+    }
+
+    /// Returns `true` if the given instruction reference is valid.
+    pub fn inst_is_valid(&self, inst: Inst) -> bool {
+        self.insts.is_valid(inst)
     }
 
     /// Get the total number of extended basic blocks created in this function, whether they are

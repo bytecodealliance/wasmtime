@@ -213,71 +213,10 @@ impl<'a> Context<'a> {
         for ebb in self.function.layout.ebbs() {
             for inst in self.function.layout.ebb_insts(ebb) {
                 let loc = inst.into();
-                let value_lists = &mut self.function.dfg.value_lists;
-                match self.function.dfg.insts[inst] {
-                    InstructionData::Nullary { .. } |
-                    InstructionData::UnaryImm { .. } |
-                    InstructionData::UnaryIeee32 { .. } |
-                    InstructionData::UnaryIeee64 { .. } |
-                    InstructionData::StackLoad { .. } => {}
-
-                    InstructionData::BinaryImm { ref mut arg, .. } |
-                    InstructionData::BranchTable { ref mut arg, .. } |
-                    InstructionData::ExtractLane { ref mut arg, .. } |
-                    InstructionData::IntCompareImm { ref mut arg, .. } |
-                    InstructionData::Unary { ref mut arg, .. } |
-                    InstructionData::UnarySplit { ref mut arg, .. } |
-                    InstructionData::StackStore { ref mut arg, .. } |
-                    InstructionData::HeapLoad { ref mut arg, .. } |
-                    InstructionData::Load { ref mut arg, .. } => {
-                        self.map.rewrite_value(arg, loc)?;
-                    }
-
-                    // `args: Value[2]`
-                    InstructionData::Binary { ref mut args, .. } |
-                    InstructionData::BinaryOverflow { ref mut args, .. } |
-                    InstructionData::InsertLane { ref mut args, .. } |
-                    InstructionData::IntCompare { ref mut args, .. } |
-                    InstructionData::FloatCompare { ref mut args, .. } |
-                    InstructionData::HeapStore { ref mut args, .. } |
-                    InstructionData::Store { ref mut args, .. } => {
-                        self.map.rewrite_values(args, loc)?;
-                    }
-
-                    InstructionData::Ternary { ref mut args, .. } => {
-                        self.map.rewrite_values(args, loc)?;
-                    }
-
-                    InstructionData::MultiAry { ref mut args, .. } => {
-                        self.map
-                            .rewrite_values(args.as_mut_slice(value_lists), loc)?;
-                    }
-
-                    InstructionData::Jump {
-                        ref mut destination,
-                        ref mut args,
-                        ..
-                    } |
-                    InstructionData::Branch {
-                        ref mut destination,
-                        ref mut args,
-                        ..
-                    } |
-                    InstructionData::BranchIcmp {
-                        ref mut destination,
-                        ref mut args,
-                        ..
-                    } => {
-                        self.map.rewrite_ebb(destination, loc)?;
-                        self.map
-                            .rewrite_values(args.as_mut_slice(value_lists), loc)?;
-                    }
-
-                    InstructionData::Call { ref mut args, .. } |
-                    InstructionData::IndirectCall { ref mut args, .. } => {
-                        self.map
-                            .rewrite_values(args.as_mut_slice(value_lists), loc)?;
-                    }
+                self.map
+                    .rewrite_values(self.function.dfg.inst_args_mut(inst), loc)?;
+                if let Some(dest) = self.function.dfg[inst].branch_destination_mut() {
+                    self.map.rewrite_ebb(dest, loc)?;
                 }
             }
         }

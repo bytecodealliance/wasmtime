@@ -337,7 +337,7 @@ impl<'a> Verifier<'a> {
         match dfg.value_def(v) {
             ValueDef::Res(def_inst, _) => {
                 // Value is defined by an instruction that exists.
-                if !dfg.insts.is_valid(def_inst) {
+                if !dfg.inst_is_valid(def_inst) {
                     return err!(loc_inst,
                                 "{} is defined by invalid instruction {}",
                                 v,
