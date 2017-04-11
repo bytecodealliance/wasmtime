@@ -231,6 +231,99 @@ store = Instruction(
         """,
         ins=(Flags, x, p, Offset))
 
+iExt8 = TypeVar(
+        'iExt8', 'An integer type with more than 8 bits',
+        ints=(16, 64))
+x = Operand('x', iExt8)
+a = Operand('a', iExt8)
+
+uload8 = Instruction(
+        'uload8', r"""
+        Load 8 bits from memory at ``p + Offset`` and zero-extend.
+
+        This is equivalent to ``load.i8`` followed by ``uextend``.
+        """,
+        ins=(Flags, p, Offset), outs=a)
+
+sload8 = Instruction(
+        'sload8', r"""
+        Load 8 bits from memory at ``p + Offset`` and sign-extend.
+
+        This is equivalent to ``load.i8`` followed by ``uextend``.
+        """,
+        ins=(Flags, p, Offset), outs=a)
+
+istore8 = Instruction(
+        'istore8', r"""
+        Store the low 8 bits of ``x`` to memory at ``p + Offset``.
+
+        This is equivalent to ``ireduce.i8`` followed by ``store.i8``.
+        """,
+        ins=(Flags, x, p, Offset))
+
+iExt16 = TypeVar(
+        'iExt16', 'An integer type with more than 16 bits',
+        ints=(32, 64))
+x = Operand('x', iExt16)
+a = Operand('a', iExt16)
+
+uload16 = Instruction(
+        'uload16', r"""
+        Load 16 bits from memory at ``p + Offset`` and zero-extend.
+
+        This is equivalent to ``load.i16`` followed by ``uextend``.
+        """,
+        ins=(Flags, p, Offset), outs=a)
+
+sload16 = Instruction(
+        'sload16', r"""
+        Load 16 bits from memory at ``p + Offset`` and sign-extend.
+
+        This is equivalent to ``load.i16`` followed by ``uextend``.
+        """,
+        ins=(Flags, p, Offset), outs=a)
+
+istore16 = Instruction(
+        'istore16', r"""
+        Store the low 16 bits of ``x`` to memory at ``p + Offset``.
+
+        This is equivalent to ``ireduce.i16`` followed by ``store.i8``.
+        """,
+        ins=(Flags, x, p, Offset))
+
+iExt32 = TypeVar(
+        'iExt32', 'An integer type with more than 32 bits',
+        ints=(64, 64))
+x = Operand('x', iExt32)
+a = Operand('a', iExt32)
+
+uload32 = Instruction(
+        'uload32', r"""
+        Load 32 bits from memory at ``p + Offset`` and zero-extend.
+
+        This is equivalent to ``load.i32`` followed by ``uextend``.
+        """,
+        ins=(Flags, p, Offset), outs=a)
+
+sload32 = Instruction(
+        'sload32', r"""
+        Load 32 bits from memory at ``p + Offset`` and sign-extend.
+
+        This is equivalent to ``load.i32`` followed by ``uextend``.
+        """,
+        ins=(Flags, p, Offset), outs=a)
+
+istore32 = Instruction(
+        'istore32', r"""
+        Store the low 32 bits of ``x`` to memory at ``p + Offset``.
+
+        This is equivalent to ``ireduce.i32`` followed by ``store.i8``.
+        """,
+        ins=(Flags, x, p, Offset))
+
+x = Operand('x', Mem, doc='Value to be stored')
+a = Operand('a', Mem, doc='Value loaded')
+
 stack_load = Instruction(
         'stack_load', r"""
         Load a value from a stack slot at the constant offset.
