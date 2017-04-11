@@ -28,13 +28,25 @@ pub struct DataFlowGraph {
     /// with the EBB containing each instruction.
     insts: EntityMap<Inst, InstructionData>,
 
-    /// Memory pool of value lists referenced by instructions in `insts`.
-    pub value_lists: ValueListPool,
+    /// List of result values for each instruction.
+    ///
+    /// This map gets resized automatically by `make_inst()` so it is always in sync with the
+    /// primary `insts` map.
+    results: EntityMap<Inst, ValueList>,
 
     /// Extended basic blocks in the function and their arguments.
     /// This map is not in program order. That is handled by `Layout`, and so is the sequence of
     /// instructions contained in each EBB.
     ebbs: EntityMap<Ebb, EbbData>,
+
+    /// Memory pool of value lists.
+    ///
+    /// The `ValueList` references into this pool appear in many places:
+    ///
+    /// - Instructions in `insts` that don't have room for their entire argument list inline.
+    /// - Instruction result values in `results`.
+    /// - EBB arguments in `ebbs`.
+    pub value_lists: ValueListPool,
 
     /// Extended value table. Most `Value` references refer directly to their defining instruction.
     /// Others index into this table.
@@ -61,8 +73,9 @@ impl DataFlowGraph {
     pub fn new() -> DataFlowGraph {
         DataFlowGraph {
             insts: EntityMap::new(),
-            value_lists: ValueListPool::new(),
+            results: EntityMap::new(),
             ebbs: EntityMap::new(),
+            value_lists: ValueListPool::new(),
             extended_values: Vec::new(),
             signatures: EntityMap::new(),
             ext_funcs: EntityMap::new(),
@@ -140,8 +153,20 @@ impl DataFlowGraph {
             Direct(inst) => ValueDef::Res(inst, 0),
             Table(idx) => {
                 match self.extended_values[idx] {
-                    ValueData::Inst { inst, num, .. } => ValueDef::Res(inst, num as usize),
-                    ValueData::Arg { ebb, num, .. } => ValueDef::Arg(ebb, num as usize),
+                    ValueData::Inst { inst, num, .. } => {
+                        assert_eq!(Some(v),
+                                   self.results[inst].get(num as usize, &self.value_lists),
+                                   "Dangling result value {}: {}",
+                                   v,
+                                   self.display_inst(inst));
+                        ValueDef::Res(inst, num as usize)
+                    }
+                    ValueData::Arg { ebb, num, .. } => {
+                        assert_eq!(Some(v),
+                                   self.ebbs[ebb].args.get(num as usize, &self.value_lists),
+                                   "Dangling EBB argument value");
+                        ValueDef::Arg(ebb, num as usize)
+                    }
                     ValueData::Alias { original, .. } => {
                         // Make sure we only recurse one level. `resolve_aliases` has safeguards to
                         // detect alias loops without overrunning the stack.
@@ -334,7 +359,13 @@ impl DataFlowGraph {
     /// The type of the first result is indicated by `data.ty`. If the instruction produces
     /// multiple results, also call `make_inst_results` to allocate value table entries.
     pub fn make_inst(&mut self, data: InstructionData) -> Inst {
-        self.insts.push(data)
+        let ty = data.first_type();
+        let inst = self.insts.push(data);
+        let res = self.results.ensure(inst);
+        if !ty.is_void() {
+            res.push(Value::new_direct(inst), &mut self.value_lists);
+        }
+        inst
     }
 
     /// Get the instruction reference that will be assigned to the next instruction created by
@@ -416,6 +447,8 @@ impl DataFlowGraph {
         let fixed_results = constraints.fixed_results();
         let mut total_results = fixed_results;
 
+        self.results[inst].clear(&mut self.value_lists);
+
         // Additional values form a linked list starting from the second result value. Generate
         // the list backwards so we don't have to modify value table entries in place. (This
         // causes additional result values to be numbered backwards which is not the aesthetic
@@ -439,6 +472,7 @@ impl DataFlowGraph {
                                                     inst: inst,
                                                     next: head.into(),
                                                 }));
+                    self.results[inst].push(head.unwrap(), &mut self.value_lists);
                     rev_num += 1;
                 }
                 first_type = Some(self.signatures[sig].return_types[res_idx].value_type);
@@ -455,6 +489,7 @@ impl DataFlowGraph {
                                                 next: head.into(),
                                             }));
                 rev_num += 1;
+                self.results[inst].push(head.unwrap(), &mut self.value_lists);
             }
             first_type = Some(constraints.result_type(res_idx, ctrl_typevar));
         }
@@ -466,6 +501,14 @@ impl DataFlowGraph {
                  .expect("instruction format doesn't allow multiple results") = head.into();
         }
         *self.insts[inst].first_type_mut() = first_type.unwrap_or_default();
+
+        // Include the first result in the results vector.
+        if first_type.is_some() {
+            self.results[inst].push(Value::new_direct(inst), &mut self.value_lists);
+        }
+        self.results[inst]
+            .as_mut_slice(&mut self.value_lists)
+            .reverse();
 
         total_results
     }
@@ -491,6 +534,10 @@ impl DataFlowGraph {
     /// Use this method to detach secondary values before using `replace(inst)` to provide an
     /// alternate instruction for computing the primary result value.
     pub fn detach_secondary_results(&mut self, inst: Inst) -> Option<Value> {
+        self.results[inst].clear(&mut self.value_lists);
+        if !self.insts[inst].first_type().is_void() {
+            self.results[inst].push(Value::new_direct(inst), &mut self.value_lists);
+        }
         self[inst].second_result_mut().and_then(|r| r.take())
     }
 
@@ -538,6 +585,8 @@ impl DataFlowGraph {
                 }
             }
         };
+
+        self.results[res_inst].push(res, &mut self.value_lists);
 
         // Now update `res` itself.
         if let ExpandedValue::Table(idx) = res.expand() {
@@ -597,8 +646,11 @@ impl DataFlowGraph {
         let data = self[orig].clone();
         // After cloning, any secondary values are attached to both copies. Don't do that, we only
         // want them on the new clone.
+        let mut results = self.results[orig].take();
         self.detach_secondary_results(orig);
         let new = self.make_inst(data);
+        results.as_mut_slice(&mut self.value_lists)[0] = Value::new_direct(new);
+        self.results[new] = results;
         pos.insert_inst(new);
         // Replace the original instruction with a copy of the new value.
         // This is likely to be immediately overwritten by something else, but this way we avoid
@@ -611,9 +663,11 @@ impl DataFlowGraph {
 
     /// Get the first result of an instruction.
     ///
-    /// If `Inst` doesn't produce any results, this returns a `Value` with a `VOID` type.
+    /// This function panics if the instruction doesn't have any result.
     pub fn first_result(&self, inst: Inst) -> Value {
-        Value::new_direct(inst)
+        self.results[inst]
+            .first(&self.value_lists)
+            .expect("Instruction has no results")
     }
 
     /// Iterate through all the results of an instruction.
@@ -854,6 +908,7 @@ mod tests {
         let mut res = dfg.inst_results(inst);
         let val = res.next().unwrap();
         assert!(res.next().is_none());
+        assert_eq!(val, dfg.first_result(inst));
 
         assert_eq!(dfg.value_def(val), ValueDef::Res(inst, 0));
         assert_eq!(dfg.value_type(val), types::I32);
