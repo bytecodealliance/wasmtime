@@ -1895,13 +1895,12 @@ mod tests {
         let mut ebbs = func.layout.ebbs();
 
         let ebb0 = ebbs.next().unwrap();
-        assert_eq!(func.dfg.ebb_args(ebb0).next(), None);
+        assert_eq!(func.dfg.ebb_args(ebb0), &[]);
 
         let ebb4 = ebbs.next().unwrap();
-        let mut ebb4_args = func.dfg.ebb_args(ebb4);
-        let arg0 = ebb4_args.next().unwrap();
-        assert_eq!(func.dfg.value_type(arg0), types::I32);
-        assert_eq!(ebb4_args.next(), None);
+        let ebb4_args = func.dfg.ebb_args(ebb4);
+        assert_eq!(ebb4_args.len(), 1);
+        assert_eq!(func.dfg.value_type(ebb4_args[0]), types::I32);
     }
 
     #[test]

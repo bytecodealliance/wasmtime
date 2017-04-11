@@ -151,7 +151,7 @@ impl<'a> Verifier<'a> {
         }
 
         // Arguments belong to the correct ebb.
-        for arg in self.func.dfg.ebb_args(ebb) {
+        for &arg in self.func.dfg.ebb_args(ebb) {
             match self.func.dfg.value_def(arg) {
                 ValueDef::Arg(arg_ebb, _) => {
                     if ebb != arg_ebb {
@@ -405,7 +405,7 @@ impl<'a> Verifier<'a> {
                 return err!(ebb, "entry block arguments must match function signature");
             }
 
-            for (i, arg) in self.func.dfg.ebb_args(ebb).enumerate() {
+            for (i, &arg) in self.func.dfg.ebb_args(ebb).iter().enumerate() {
                 let arg_type = self.func.dfg.value_type(arg);
                 if arg_type != expected_types[i].value_type {
                     return err!(ebb,
@@ -510,7 +510,8 @@ impl<'a> Verifier<'a> {
                 let iter = self.func
                     .dfg
                     .ebb_args(ebb)
-                    .map(|v| self.func.dfg.value_type(v));
+                    .iter()
+                    .map(|&v| self.func.dfg.value_type(v));
                 self.typecheck_variable_args_iterator(inst, iter)?;
             }
             BranchInfo::Table(table) => {

@@ -1,6 +1,6 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueListPool};
+use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
 use ir::entities::ExpandedValue;
 use ir::instructions::{Opcode, InstructionData, CallInfo};
 use ir::extfunc::ExtFuncData;
@@ -687,17 +687,7 @@ impl DataFlowGraph {
 
     /// Get the number of arguments on `ebb`.
     pub fn num_ebb_args(&self, ebb: Ebb) -> usize {
-        match self.ebbs[ebb].last_arg.expand() {
-            None => 0,
-            Some(last_arg) => {
-                if let ExpandedValue::Table(idx) = last_arg.expand() {
-                    if let ValueData::Arg { num, .. } = self.extended_values[idx] {
-                        return num as usize + 1;
-                    }
-                }
-                panic!("inconsistent value table entry for EBB argument");
-            }
-        }
+        self.ebbs[ebb].args.len(&self.value_lists)
     }
 
     /// Append an argument with type `ty` to `ebb`.
@@ -712,12 +702,9 @@ impl DataFlowGraph {
         val
     }
 
-    /// Iterate through the arguments to an EBB.
-    pub fn ebb_args(&self, ebb: Ebb) -> Values {
-        Values {
-            dfg: self,
-            cur: self.ebbs[ebb].first_arg.into(),
-        }
+    /// Get the arguments to an EBB.
+    pub fn ebb_args(&self, ebb: Ebb) -> &[Value] {
+        self.ebbs[ebb].args.as_slice(&self.value_lists)
     }
 
     /// Replace an EBB argument with a new value of type `ty`.
@@ -751,6 +738,8 @@ impl DataFlowGraph {
                    old_arg,
                    old_data);
         };
+
+        self.ebbs[ebb].args.as_mut_slice(&mut self.value_lists)[num as usize] = new_arg;
 
         // Now fix up the linked lists.
         if self.ebbs[ebb].last_arg.expand() == Some(old_arg) {
@@ -804,6 +793,7 @@ impl DataFlowGraph {
         let first = self.ebbs[ebb].first_arg.into();
         self.ebbs[ebb].first_arg = None.into();
         self.ebbs[ebb].last_arg = None.into();
+        self.ebbs[ebb].args.clear(&mut self.value_lists);
         first
     }
 
@@ -815,6 +805,7 @@ impl DataFlowGraph {
     ///
     /// In almost all cases, you should be using `append_ebb_arg()` instead of this method.
     pub fn attach_ebb_arg(&mut self, ebb: Ebb, arg: Value) {
+        self.ebbs[ebb].args.push(arg, &mut self.value_lists);
         let arg_num = match self.ebbs[ebb].last_arg.map(|v| v.expand()) {
             // If last_argument is `None`, we're adding the first EBB argument.
             None => {
@@ -861,6 +852,9 @@ impl DataFlowGraph {
 // match the function arguments.
 #[derive(Clone)]
 struct EbbData {
+    // List of arguments to this EBB.
+    args: ValueList,
+
     // First argument to this EBB, or `None` if the block has no arguments.
     //
     // The arguments are all `ValueData::Argument` entries that form a linked list from `first_arg`
@@ -874,6 +868,7 @@ struct EbbData {
 impl EbbData {
     fn new() -> EbbData {
         EbbData {
+            args: ValueList::new(),
             first_arg: None.into(),
             last_arg: None.into(),
         }
@@ -966,28 +961,20 @@ mod tests {
         let ebb = dfg.make_ebb();
         assert_eq!(ebb.to_string(), "ebb0");
         assert_eq!(dfg.num_ebb_args(ebb), 0);
-        assert_eq!(dfg.ebb_args(ebb).next(), None);
+        assert_eq!(dfg.ebb_args(ebb), &[]);
         assert_eq!(dfg.detach_ebb_args(ebb), None);
         assert_eq!(dfg.num_ebb_args(ebb), 0);
-        assert_eq!(dfg.ebb_args(ebb).next(), None);
+        assert_eq!(dfg.ebb_args(ebb), &[]);
 
         let arg1 = dfg.append_ebb_arg(ebb, types::F32);
         assert_eq!(arg1.to_string(), "vx0");
         assert_eq!(dfg.num_ebb_args(ebb), 1);
-        {
-            let mut args1 = dfg.ebb_args(ebb);
-            assert_eq!(args1.next(), Some(arg1));
-            assert_eq!(args1.next(), None);
-        }
+        assert_eq!(dfg.ebb_args(ebb), &[arg1]);
+
         let arg2 = dfg.append_ebb_arg(ebb, types::I16);
         assert_eq!(arg2.to_string(), "vx1");
         assert_eq!(dfg.num_ebb_args(ebb), 2);
-        {
-            let mut args2 = dfg.ebb_args(ebb);
-            assert_eq!(args2.next(), Some(arg1));
-            assert_eq!(args2.next(), Some(arg2));
-            assert_eq!(args2.next(), None);
-        }
+        assert_eq!(dfg.ebb_args(ebb), &[arg1, arg2]);
 
         assert_eq!(dfg.value_def(arg1), ValueDef::Arg(ebb, 0));
         assert_eq!(dfg.value_def(arg2), ValueDef::Arg(ebb, 1));
@@ -997,7 +984,7 @@ mod tests {
         // Swap the two EBB arguments.
         let take1 = dfg.detach_ebb_args(ebb).unwrap();
         assert_eq!(dfg.num_ebb_args(ebb), 0);
-        assert_eq!(dfg.ebb_args(ebb).next(), None);
+        assert_eq!(dfg.ebb_args(ebb), &[]);
         let take2 = dfg.next_ebb_arg(take1).unwrap();
         assert_eq!(take1, arg1);
         assert_eq!(take2, arg2);
@@ -1005,7 +992,7 @@ mod tests {
         dfg.attach_ebb_arg(ebb, take2);
         let arg3 = dfg.append_ebb_arg(ebb, types::I32);
         dfg.attach_ebb_arg(ebb, take1);
-        assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [take2, arg3, take1]);
+        assert_eq!(dfg.ebb_args(ebb), &[take2, arg3, take1]);
     }
 
     #[test]
@@ -1018,24 +1005,24 @@ mod tests {
         let new1 = dfg.replace_ebb_arg(arg1, types::I64);
         assert_eq!(dfg.value_type(arg1), types::F32);
         assert_eq!(dfg.value_type(new1), types::I64);
-        assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [new1]);
+        assert_eq!(dfg.ebb_args(ebb), &[new1]);
 
         dfg.attach_ebb_arg(ebb, arg1);
-        assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [new1, arg1]);
+        assert_eq!(dfg.ebb_args(ebb), &[new1, arg1]);
 
         let new2 = dfg.replace_ebb_arg(arg1, types::I8);
         assert_eq!(dfg.value_type(arg1), types::F32);
         assert_eq!(dfg.value_type(new2), types::I8);
-        assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [new1, new2]);
+        assert_eq!(dfg.ebb_args(ebb), &[new1, new2]);
 
         dfg.attach_ebb_arg(ebb, arg1);
-        assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [new1, new2, arg1]);
+        assert_eq!(dfg.ebb_args(ebb), &[new1, new2, arg1]);
 
         let new3 = dfg.replace_ebb_arg(new2, types::I16);
         assert_eq!(dfg.value_type(new1), types::I64);
         assert_eq!(dfg.value_type(new2), types::I8);
         assert_eq!(dfg.value_type(new3), types::I16);
-        assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [new1, new3, arg1]);
+        assert_eq!(dfg.ebb_args(ebb), &[new1, new3, arg1]);
     }
 
     #[test]
