@@ -308,7 +308,7 @@ impl Liveness {
                 // Make sure we have created live ranges for dead defs.
                 // TODO: When we implement DCE, we can use the absence of a live range to indicate
                 // an unused value.
-                for def in func.dfg.inst_results(inst) {
+                for &def in func.dfg.inst_results(inst) {
                     get_or_create(&mut self.ranges, def, func, &enc_info);
                 }
 

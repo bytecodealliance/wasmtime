@@ -314,43 +314,6 @@ enum ValueData {
     Alias { ty: Type, original: Value },
 }
 
-/// Iterate through a list of related value references, such as:
-///
-/// - All results defined by an instruction. See `DataFlowGraph::inst_results`.
-/// - All arguments to an EBB. See `DataFlowGraph::ebb_args`.
-///
-/// A value iterator borrows a `DataFlowGraph` reference.
-pub struct Values<'a> {
-    dfg: &'a DataFlowGraph,
-    cur: Option<Value>,
-}
-
-impl<'a> Iterator for Values<'a> {
-    type Item = Value;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let rval = self.cur;
-        if let Some(prev) = rval {
-            // Advance self.cur to the next value, or `None`.
-            self.cur = match prev.expand() {
-                ExpandedValue::Direct(inst) => self.dfg.insts[inst].second_result(),
-                ExpandedValue::Table(index) => {
-                    match self.dfg.extended_values[index] {
-                        ValueData::Inst { next, .. } => next.into(),
-                        ValueData::Arg { .. } => {
-                            panic!("EBB argument {} appeared in value list", prev)
-                        }
-                        ValueData::Alias { .. } => {
-                            panic!("Alias value {} appeared in value list", prev)
-                        }
-                    }
-                }
-            };
-        }
-        rval
-    }
-}
-
 /// Instructions.
 ///
 impl DataFlowGraph {
@@ -671,15 +634,8 @@ impl DataFlowGraph {
     }
 
     /// Iterate through all the results of an instruction.
-    pub fn inst_results(&self, inst: Inst) -> Values {
-        Values {
-            dfg: self,
-            cur: if self.insts[inst].first_type().is_void() {
-                None
-            } else {
-                Some(Value::new_direct(inst))
-            },
-        }
+    pub fn inst_results(&self, inst: Inst) -> &[Value] {
+        self.results[inst].as_slice(&self.value_lists)
     }
 
     /// Get the call signature of a direct or indirect call instruction.
@@ -858,10 +814,9 @@ impl<'a> fmt::Display for DisplayInst<'a> {
         let dfg = self.0;
         let inst = &dfg[self.1];
 
-        let mut results = dfg.inst_results(self.1);
-        if let Some(first) = results.next() {
+        if let Some((first, rest)) = dfg.inst_results(self.1).split_first() {
             write!(f, "{}", first)?;
-            for v in results {
+            for v in rest {
                 write!(f, ", {}", v)?;
             }
             write!(f, " = ")?;
@@ -904,11 +859,9 @@ mod tests {
             assert_eq!(ins.first_type(), types::I32);
         }
 
-        // Result iterator.
-        let mut res = dfg.inst_results(inst);
-        let val = res.next().unwrap();
-        assert!(res.next().is_none());
-        assert_eq!(val, dfg.first_result(inst));
+        // Results.
+        let val = dfg.first_result(inst);
+        assert_eq!(dfg.inst_results(inst), &[val]);
 
         assert_eq!(dfg.value_def(val), ValueDef::Res(inst, 0));
         assert_eq!(dfg.value_type(val), types::I32);
@@ -925,9 +878,8 @@ mod tests {
         let inst = dfg.make_inst(idata);
         assert_eq!(dfg.display_inst(inst).to_string(), "trap");
 
-        // Result iterator should be empty.
-        let mut res = dfg.inst_results(inst);
-        assert_eq!(res.next(), None);
+        // Result slice should be empty.
+        assert_eq!(dfg.inst_results(inst), &[]);
     }
 
     #[test]
@@ -1028,8 +980,8 @@ mod tests {
         let new_iadd = dfg.redefine_first_value(pos);
         let new_s = dfg.first_result(new_iadd);
         assert_eq!(dfg[iadd].opcode(), Opcode::Copy);
-        assert_eq!(dfg.inst_results(iadd).collect::<Vec<_>>(), [s]);
-        assert_eq!(dfg.inst_results(new_iadd).collect::<Vec<_>>(), [new_s, c]);
+        assert_eq!(dfg.inst_results(iadd), &[s]);
+        assert_eq!(dfg.inst_results(new_iadd), &[new_s, c]);
         assert_eq!(dfg.resolve_copies(s), new_s);
         pos.next_inst();
 

@@ -1257,12 +1257,13 @@ impl<'a> Parser<'a> {
         // holds a reference to `ctx.function`.
         self.add_values(&mut ctx.map,
                         results.into_iter(),
-                        ctx.function.dfg.inst_results(inst))?;
+                        ctx.function.dfg.inst_results(inst).iter().cloned())?;
 
         if let Some(result_locations) = result_locations {
-            for (value, loc) in ctx.function
+            for (&value, loc) in ctx.function
                     .dfg
                     .inst_results(inst)
+                    .iter()
                     .zip(result_locations) {
                 *ctx.function.locations.ensure(value) = loc;
             }

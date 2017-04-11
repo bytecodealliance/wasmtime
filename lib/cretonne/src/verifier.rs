@@ -193,7 +193,7 @@ impl<'a> Verifier<'a> {
             }
         } else {
             // All result values for multi-valued instructions are created
-            let got_results = dfg.inst_results(inst).count();
+            let got_results = dfg.inst_results(inst).len();
             if got_results != total_results {
                 return err!(inst,
                             "expected {} result values, found {}",
@@ -212,7 +212,7 @@ impl<'a> Verifier<'a> {
             self.verify_value(inst, arg)?;
         }
 
-        for res in self.func.dfg.inst_results(inst) {
+        for &res in self.func.dfg.inst_results(inst) {
             self.verify_value(inst, res)?;
         }
 
@@ -448,7 +448,7 @@ impl<'a> Verifier<'a> {
 
     fn typecheck_results(&self, inst: Inst, ctrl_type: Type) -> Result<()> {
         let mut i = 0;
-        for result in self.func.dfg.inst_results(inst) {
+        for &result in self.func.dfg.inst_results(inst) {
             let result_type = self.func.dfg.value_type(result);
             let expected_type = self.func.dfg.compute_result_type(inst, i, ctrl_type);
             if let Some(expected_type) = expected_type {

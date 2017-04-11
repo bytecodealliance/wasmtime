@@ -143,7 +143,7 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
         assert_eq!(old_second_value,
                    None,
                    "Secondary result values {:?} would be left dangling by replacing {} with {}",
-                   self.dfg.inst_results(self.inst).collect::<Vec<_>>(),
+                   self.dfg.inst_results(self.inst),
                    self.dfg[self.inst].opcode(),
                    data.opcode());
 

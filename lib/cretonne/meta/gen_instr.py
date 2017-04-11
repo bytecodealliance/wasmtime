@@ -693,14 +693,17 @@ def gen_inst_builder(inst, fmt):
             fmt.line(fcall + '.0')
             return
 
+        fmt.line('let (inst, dfg) = {};'.format(fcall))
+
         if len(inst.value_results) == 1:
-            fmt.line('Value::new_direct({}.0)'.format(fcall))
+            fmt.line('dfg.first_result(inst)')
             return
 
-        fmt.line('let (inst, dfg) = {};'.format(fcall))
-        fmt.line('let mut results = dfg.inst_results(inst);')
-        fmt.line('({})'.format(', '.join(
-            len(inst.value_results) * ['results.next().unwrap()'])))
+        fmt.format(
+            'let results = &dfg.inst_results(inst)[0..{}];',
+            len(inst.value_results))
+        fmt.format('({})', ', '.join(
+            'results[{}]'.format(i) for i in range(len(inst.value_results))))
 
 
 def gen_builder(insts, fmt):
