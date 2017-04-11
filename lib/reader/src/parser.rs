@@ -11,7 +11,7 @@ use std::{u16, u32};
 use std::mem;
 use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotData, JumpTable,
                    JumpTableData, Signature, ArgumentType, ArgumentExtension, ExtFuncData, SigRef,
-                   FuncRef, StackSlot, ValueLoc, ArgumentLoc};
+                   FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags};
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Offset32, Uoffset32, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
@@ -228,7 +228,8 @@ impl<'a> Context<'a> {
                     InstructionData::Unary { ref mut arg, .. } |
                     InstructionData::UnarySplit { ref mut arg, .. } |
                     InstructionData::StackStore { ref mut arg, .. } |
-                    InstructionData::HeapLoad { ref mut arg, .. } => {
+                    InstructionData::HeapLoad { ref mut arg, .. } |
+                    InstructionData::Load { ref mut arg, .. } => {
                         self.map.rewrite_value(arg, loc)?;
                     }
 
@@ -238,7 +239,8 @@ impl<'a> Context<'a> {
                     InstructionData::InsertLane { ref mut args, .. } |
                     InstructionData::IntCompare { ref mut args, .. } |
                     InstructionData::FloatCompare { ref mut args, .. } |
-                    InstructionData::HeapStore { ref mut args, .. } => {
+                    InstructionData::HeapStore { ref mut args, .. } |
+                    InstructionData::Store { ref mut args, .. } => {
                         self.map.rewrite_values(args, loc)?;
                     }
 
@@ -574,6 +576,19 @@ impl<'a> Parser<'a> {
         } else {
             err!(self.loc, err_msg)
         }
+    }
+
+    // Match and a consume a possibly empty sequence of memory operation flags.
+    fn optional_memflags(&mut self) -> MemFlags {
+        let mut flags = MemFlags::new();
+        while let Some(Token::Identifier(text)) = self.token() {
+            if flags.set_by_name(text) {
+                self.consume();
+            } else {
+                break;
+            }
+        }
+        flags
     }
 
     // Match and consume an identifier.
@@ -1731,6 +1746,32 @@ impl<'a> Parser<'a> {
                 InstructionData::HeapStore {
                     opcode: opcode,
                     ty: VOID,
+                    args: [arg, addr],
+                    offset: offset,
+                }
+            }
+            InstructionFormat::Load => {
+                let flags = self.optional_memflags();
+                let addr = self.match_value("expected SSA value address")?;
+                let offset = self.optional_offset32()?;
+                InstructionData::Load {
+                    opcode: opcode,
+                    ty: VOID,
+                    flags: flags,
+                    arg: addr,
+                    offset: offset,
+                }
+            }
+            InstructionFormat::Store => {
+                let flags = self.optional_memflags();
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let addr = self.match_value("expected SSA value address")?;
+                let offset = self.optional_offset32()?;
+                InstructionData::Store {
+                    opcode: opcode,
+                    ty: VOID,
+                    flags: flags,
                     args: [arg, addr],
                     offset: offset,
                 }

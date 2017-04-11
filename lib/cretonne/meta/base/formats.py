@@ -9,7 +9,7 @@ from __future__ import absolute_import
 from cdsl.formats import InstructionFormat
 from cdsl.operands import VALUE, VARIABLE_ARGS
 from .immediates import imm64, uimm8, ieee32, ieee64, offset32, uoffset32
-from .immediates import intcc, floatcc
+from .immediates import intcc, floatcc, memflags
 from .entities import ebb, sig_ref, func_ref, jump_table, stack_slot
 
 Nullary = InstructionFormat()
@@ -52,6 +52,9 @@ Call = InstructionFormat(
 IndirectCall = InstructionFormat(
         sig_ref, VALUE, VARIABLE_ARGS,
         multiple_results=True)
+
+Load = InstructionFormat(memflags, VALUE, offset32)
+Store = InstructionFormat(memflags, VALUE, VALUE, offset32)
 
 StackLoad = InstructionFormat(stack_slot, offset32)
 StackStore = InstructionFormat(VALUE, stack_slot, offset32)

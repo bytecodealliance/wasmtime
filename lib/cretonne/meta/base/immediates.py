@@ -90,3 +90,9 @@ floatcc = ImmediateKind(
             'ugt': 'UnorderedOrGreaterThan',
             'uge': 'UnorderedOrGreaterThanOrEqual',
         })
+
+#: Flags for memory operations like :inst:`load` and :inst:`store`.
+memflags = ImmediateKind(
+        'memflags',
+        'Memory operation flags',
+        default_member='flags', rust_type='MemFlags')

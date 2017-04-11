@@ -271,7 +271,9 @@ impl<'a> Verifier<'a> {
             &IntCompareImm { .. } |
             &FloatCompare { .. } |
             &HeapLoad { .. } |
-            &HeapStore { .. } => {}
+            &HeapStore { .. } |
+            &Load { .. } |
+            &Store { .. } => {}
         }
 
         Ok(())

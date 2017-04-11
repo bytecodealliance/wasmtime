@@ -428,45 +428,13 @@ accessing memory. However, it can be very complicated to verify the safety of
 general loads and stores when compiling code for a sandboxed environment, so
 Cretonne also provides more restricted memory operations that are always safe.
 
-.. inst:: a = load p, Offset, Flags...
-
-    Load from memory at ``p + Offset``.
-
-    This is a polymorphic instruction that can load any value type which has a
-    memory representation.
-
-    :arg iPtr p: Base address.
-    :arg Offset: Immediate signed offset.
-    :flag align(N): Expected alignment of ``p + Offset``. Power of two.
-    :flag aligntrap: Always trap if the memory access is misaligned.
-    :result T a: Loaded value.
-
-.. inst:: store x, p, Offset, Flags...
-
-    Store ``x`` to memory at ``p + Offset``.
-
-    This is a polymorphic instruction that can store any value type with a
-    memory representation.
-
-    :arg T x: Value to store.
-    :arg iPtr p: Base address.
-    :arg Offset: Immediate signed offset.
-    :flag align(N): Expected alignment of ``p + Offset``. Power of two.
-    :flag aligntrap: Always trap if the memory access is misaligned.
+.. autoinst:: load
+.. autoinst:: store
 
 Loads and stores are *misaligned* if the resultant address is not a multiple of
 the expected alignment. Depending on the target architecture, misaligned memory
 accesses may trap, or they may work. Sometimes, operating systems catch
 alignment traps and emulate the misaligned memory access.
-
-On target architectures like x86 that don't check alignment, Cretonne expands
-the `aligntrap` flag into a conditional trap instruction::
-
-    v5 = load.i32 v1, 4, align(4), aligntrap
-    ; Becomes:
-    v10 = and_imm v1, 3
-    trapnz v10
-    v5 = load.i32 v1, 4
 
 
 Local variables
