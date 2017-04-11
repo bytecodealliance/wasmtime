@@ -128,3 +128,30 @@ ebb0(v1: i32):
 ; nextln:     $v2 = heap_load.f32 $v1
 ; nextln:     $v3 = heap_load.f32 $v1+12
 ; nextln:     heap_store $v3, $v1
+
+; Memory access instructions.
+function memory(i32) {
+ebb0(v1: i32):
+    v2 = load.i64 v1
+    v3 = load.i64 aligned v1
+    v4 = load.i64 notrap v1
+    v5 = load.i64 notrap aligned v1
+    v6 = load.i64 aligned notrap v1
+    v7 = load.i64 v1-12
+    v8 = load.i64 notrap v1+0x1_0000
+    store v2, v1
+    store aligned v3, v1+12
+    store notrap aligned v3, v1-12
+}
+; sameln: function memory(i32) {
+; nextln: ebb0($v1: i32):
+; nextln:     $v2 = load.i64 $v1
+; nextln:     $v3 = load.i64 aligned $v1
+; nextln:     $v4 = load.i64 notrap $v1
+; nextln:     $v5 = load.i64 notrap aligned $v1
+; nextln:     $v6 = load.i64 notrap aligned $v1
+; nextln:     $v7 = load.i64 $v1-12
+; nextln:     $v8 = load.i64 notrap $v1+0x0001_0000
+; nextln:     store $v2, $v1
+; nextln:     store aligned $v3, $v1+12
+; nextln:     store notrap aligned $v3, $v1-12

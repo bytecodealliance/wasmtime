@@ -10,7 +10,7 @@ from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
 from base.types import i8, f32, f64, b1
 from base.immediates import imm64, uimm8, ieee32, ieee64, offset32, uoffset32
-from base.immediates import intcc, floatcc
+from base.immediates import intcc, floatcc, memflags
 from base import entities
 import base.formats  # noqa
 
@@ -211,6 +211,25 @@ x = Operand('x', Mem, doc='Value to be stored')
 a = Operand('a', Mem, doc='Value loaded')
 p = Operand('p', iAddr)
 addr = Operand('addr', iAddr)
+Flags = Operand('Flags', memflags)
+
+load = Instruction(
+        'load', r"""
+        Load from memory at ``p + Offset``.
+
+        This is a polymorphic instruction that can load any value type which
+        has a memory representation.
+        """,
+        ins=(Flags, p, Offset), outs=a)
+
+store = Instruction(
+        'store', r"""
+        Store ``x`` to memory at ``p + Offset``.
+
+        This is a polymorphic instruction that can store any value type with a
+        memory representation.
+        """,
+        ins=(Flags, x, p, Offset))
 
 stack_load = Instruction(
         'stack_load', r"""

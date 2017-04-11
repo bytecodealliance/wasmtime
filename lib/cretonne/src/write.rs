@@ -322,6 +322,13 @@ pub fn write_operands(w: &mut Write, dfg: &DataFlowGraph, inst: Inst) -> Result 
         } => write!(w, " {}, {}{}", arg, stack_slot, offset),
         HeapLoad { arg, offset, .. } => write!(w, " {}{}", arg, offset),
         HeapStore { args, offset, .. } => write!(w, " {}, {}{}", args[0], args[1], offset),
+        Load { flags, arg, offset, .. } => write!(w, "{} {}{}", flags, arg, offset),
+        Store {
+            flags,
+            args,
+            offset,
+            ..
+        } => write!(w, "{} {}, {}{}", flags, args[0], args[1], offset),
     }
 }
 
