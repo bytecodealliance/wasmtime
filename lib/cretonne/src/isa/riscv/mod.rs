@@ -11,7 +11,7 @@ use binemit::CodeSink;
 use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, general_encoding};
 use isa::Builder as IsaBuilder;
 use isa::{TargetIsa, RegInfo, EncInfo, Encoding, Legalize};
-use ir::{Function, Inst, InstructionData, DataFlowGraph, Signature};
+use ir::{Function, Inst, InstructionData, DataFlowGraph, Signature, Type};
 
 #[allow(dead_code)]
 struct Isa {
@@ -60,8 +60,12 @@ impl TargetIsa for Isa {
         enc_tables::INFO.clone()
     }
 
-    fn encode(&self, dfg: &DataFlowGraph, inst: &InstructionData) -> Result<Encoding, Legalize> {
-        lookup_enclist(inst.ctrl_typevar(dfg),
+    fn encode(&self,
+              _dfg: &DataFlowGraph,
+              inst: &InstructionData,
+              ctrl_typevar: Type)
+              -> Result<Encoding, Legalize> {
+        lookup_enclist(ctrl_typevar,
                        inst.opcode(),
                        self.cpumode,
                        &enc_tables::LEVEL2[..])
@@ -120,7 +124,8 @@ mod tests {
         };
 
         // ADDI is I/0b00100
-        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst64).unwrap()), "I#04");
+        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst64, types::I64).unwrap()),
+                   "I#04");
 
         // Try to encode iadd_imm.i64 vx1, -10000.
         let inst64_large = InstructionData::BinaryImm {
@@ -131,7 +136,8 @@ mod tests {
         };
 
         // Immediate is out of range for ADDI.
-        assert_eq!(isa.encode(&dfg, &inst64_large), Err(isa::Legalize::Expand));
+        assert_eq!(isa.encode(&dfg, &inst64_large, types::I64),
+                   Err(isa::Legalize::Expand));
 
         // Create an iadd_imm.i32 which is encodable in RV64.
         let inst32 = InstructionData::BinaryImm {
@@ -142,7 +148,8 @@ mod tests {
         };
 
         // ADDIW is I/0b00110
-        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst32).unwrap()), "I#06");
+        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst32, types::I32).unwrap()),
+                   "I#06");
     }
 
     // Same as above, but for RV32.
@@ -167,7 +174,8 @@ mod tests {
         };
 
         // In 32-bit mode, an i64 bit add should be narrowed.
-        assert_eq!(isa.encode(&dfg, &inst64), Err(isa::Legalize::Narrow));
+        assert_eq!(isa.encode(&dfg, &inst64, types::I64),
+                   Err(isa::Legalize::Narrow));
 
         // Try to encode iadd_imm.i64 vx1, -10000.
         let inst64_large = InstructionData::BinaryImm {
@@ -178,7 +186,8 @@ mod tests {
         };
 
         // In 32-bit mode, an i64 bit add should be narrowed.
-        assert_eq!(isa.encode(&dfg, &inst64_large), Err(isa::Legalize::Narrow));
+        assert_eq!(isa.encode(&dfg, &inst64_large, types::I64),
+                   Err(isa::Legalize::Narrow));
 
         // Create an iadd_imm.i32 which is encodable in RV32.
         let inst32 = InstructionData::BinaryImm {
@@ -189,7 +198,8 @@ mod tests {
         };
 
         // ADDI is I/0b00100
-        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst32).unwrap()), "I#04");
+        assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst32, types::I32).unwrap()),
+                   "I#04");
 
         // Create an imul.i32 which is encodable in RV32, but only when use_m is true.
         let mul32 = InstructionData::Binary {
@@ -198,7 +208,8 @@ mod tests {
             args: [arg32, arg32],
         };
 
-        assert_eq!(isa.encode(&dfg, &mul32), Err(isa::Legalize::Expand));
+        assert_eq!(isa.encode(&dfg, &mul32, types::I32),
+                   Err(isa::Legalize::Expand));
     }
 
     #[test]
@@ -224,6 +235,7 @@ mod tests {
             ty: types::I32,
             args: [arg32, arg32],
         };
-        assert_eq!(encstr(&*isa, isa.encode(&dfg, &mul32).unwrap()), "R#10c");
+        assert_eq!(encstr(&*isa, isa.encode(&dfg, &mul32, types::I32).unwrap()),
+                   "R#10c");
     }
 }

@@ -425,7 +425,7 @@ impl<'a> Verifier<'a> {
 
         let ctrl_type = if let Some(value_typeset) = constraints.ctrl_typeset() {
             // For polymorphic opcodes, determine the controlling type variable first.
-            let ctrl_type = inst_data.ctrl_typevar(&self.func.dfg);
+            let ctrl_type = self.func.dfg.ctrl_typevar(inst);
 
             if !value_typeset.contains(ctrl_type) {
                 return err!(inst, "has an invalid controlling type {}", ctrl_type);

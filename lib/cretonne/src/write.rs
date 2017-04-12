@@ -152,7 +152,7 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
         }
     }
 
-    let rtype = inst_data.ctrl_typevar(&func.dfg);
+    let rtype = func.dfg.ctrl_typevar(inst);
     assert!(!rtype.is_void(),
             "Polymorphic instruction must produce a result");
     Some(rtype)
