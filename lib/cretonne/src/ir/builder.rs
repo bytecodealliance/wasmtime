@@ -118,13 +118,6 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
             // Construct new ones.
             self.dfg.make_inst_results(self.inst, ctrl_typevar);
         } else {
-            // Reattach the old secondary values.
-            let old_second_value = self.dfg.inst_results(self.inst).get(1).cloned();
-            if let Some(val_ref) = self.dfg[self.inst].second_result_mut() {
-                // Don't check types here. Leave that to the verifier.
-                *val_ref = old_second_value.into();
-            }
-
             // Normally, make_inst_results() would also set the first result type, but we're not
             // going to call that, so set it manually.
             *self.dfg[self.inst].first_type_mut() = self.dfg

@@ -110,8 +110,6 @@ def gen_instruction_data_impl(fmt):
 
     - `pub fn opcode(&self) -> Opcode`
     - `pub fn first_type(&self) -> Type`
-    - `pub fn second_result(&self) -> Option<Value>`
-    - `pub fn second_result_mut(&mut self) -> Option<&mut PackedOption<Value>>`
     - `pub fn arguments(&self, &pool) -> &[Value]`
     - `pub fn arguments_mut(&mut self, &pool) -> &mut [Value]`
     - `pub fn take_value_list(&mut self) -> Option<ValueList>`
@@ -146,42 +144,6 @@ def gen_instruction_data_impl(fmt):
                     fmt.line(
                             'InstructionData::{} {{ ref mut ty, .. }} => ty,'
                             .format(f.name))
-
-        # Generate shared and mutable accessors for `second_result` which only
-        # applies to instruction formats that can produce multiple results.
-        # Everything else returns `None`.
-        fmt.doc_comment('Second result value, if any.')
-        with fmt.indented(
-                'pub fn second_result(&self) -> Option<Value> {', '}'):
-            with fmt.indented('match *self {', '}'):
-                for f in InstructionFormat.all_formats:
-                    if f.multiple_results:
-                        fmt.line(
-                                'InstructionData::' + f.name +
-                                ' { second_result, .. }' +
-                                ' => second_result.into(),')
-                    else:
-                        # Single or no results.
-                        fmt.line(
-                                'InstructionData::{} {{ .. }} => None,'
-                                .format(f.name))
-
-        fmt.doc_comment('Mutable reference to second result value, if any.')
-        with fmt.indented(
-                "pub fn second_result_mut(&mut self)" +
-                " -> Option<&mut PackedOption<Value>> {", '}'):
-            with fmt.indented('match *self {', '}'):
-                for f in InstructionFormat.all_formats:
-                    if f.multiple_results:
-                        fmt.line(
-                                'InstructionData::' + f.name +
-                                ' { ref mut second_result, .. }' +
-                                ' => Some(second_result),')
-                    else:
-                        # Single or no results.
-                        fmt.line(
-                                'InstructionData::{} {{ .. }} => None,'
-                                .format(f.name))
 
         fmt.doc_comment('Get the controlling type variable operand.')
         with fmt.indented(
@@ -529,8 +491,6 @@ def gen_format_constructor(iform, fmt):
                 'let data = InstructionData::{} {{'.format(iform.name), '};'):
             fmt.line('opcode: opcode,')
             fmt.line('ty: types::VOID,')
-            if iform.multiple_results:
-                fmt.line('second_result: None.into(),')
             gen_member_inits(iform, fmt)
 
         fmt.line('self.build(data, ctrl_typevar)')

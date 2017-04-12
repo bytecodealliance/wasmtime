@@ -1442,7 +1442,6 @@ impl<'a> Parser<'a> {
                 InstructionData::UnarySplit {
                     opcode: opcode,
                     ty: VOID,
-                    second_result: None.into(),
                     arg: self.match_value("expected SSA value operand")?,
                 }
             }
@@ -1474,7 +1473,6 @@ impl<'a> Parser<'a> {
                 InstructionData::BinaryOverflow {
                     opcode: opcode,
                     ty: VOID,
-                    second_result: None.into(),
                     args: [lhs, rhs],
                 }
             }
@@ -1497,7 +1495,6 @@ impl<'a> Parser<'a> {
                 InstructionData::MultiAry {
                     opcode: opcode,
                     ty: VOID,
-                    second_result: None.into(),
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
             }
@@ -1610,7 +1607,6 @@ impl<'a> Parser<'a> {
                 InstructionData::Call {
                     opcode: opcode,
                     ty: VOID,
-                    second_result: None.into(),
                     func_ref: func_ref,
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
@@ -1626,7 +1622,6 @@ impl<'a> Parser<'a> {
                 InstructionData::IndirectCall {
                     opcode: opcode,
                     ty: VOID,
-                    second_result: None.into(),
                     sig_ref: sig_ref,
                     args: args.into_value_list(&[callee], &mut ctx.function.dfg.value_lists),
                 }
