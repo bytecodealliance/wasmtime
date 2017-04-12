@@ -18,9 +18,9 @@ ebb1:
 }
 ; sameln: function r1() -> i32, f32 {
 ; nextln: ebb0:
-; nextln:     v0 = iconst.i32 3
-; nextln:     v1 = f32const 0.0
-; nextln:     return v0, v1
+; nextln:     $v1 = iconst.i32 3
+; nextln:     $v2 = f32const 0.0
+; nextln:     return $v1, $v2
 ; nextln: }
 
 function signatures() {
