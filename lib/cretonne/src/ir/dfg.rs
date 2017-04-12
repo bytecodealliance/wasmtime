@@ -5,9 +5,8 @@ use ir::entities::ExpandedValue;
 use ir::instructions::{Opcode, InstructionData, CallInfo};
 use ir::extfunc::ExtFuncData;
 use entity_map::{EntityMap, PrimaryEntityData};
-use ir::builder::{InsertBuilder, ReplaceBuilder, InstBuilder};
+use ir::builder::{InsertBuilder, ReplaceBuilder};
 use ir::layout::Cursor;
-use packed_option::PackedOption;
 use write::write_operands;
 
 use std::fmt;
@@ -292,20 +291,11 @@ pub enum ValueDef {
 // Internal table storage for extended values.
 #[derive(Clone, Debug)]
 enum ValueData {
-    // Value is defined by an instruction, but it is not the first result.
-    Inst {
-        ty: Type,
-        num: u16, // Result number starting from 0.
-        inst: Inst,
-        next: PackedOption<Value>, // Next result defined by `def`.
-    },
+    // Value is defined by an instruction.
+    Inst { ty: Type, num: u16, inst: Inst },
 
     // Value is an EBB argument.
-    Arg {
-        ty: Type,
-        num: u16, // Argument number, starting from 0.
-        ebb: Ebb,
-    },
+    Arg { ty: Type, num: u16, ebb: Ebb },
 
     // Value is an alias of another value.
     // An alias value can't be linked as an instruction result or EBB argument. It is used as a
@@ -397,8 +387,6 @@ impl DataFlowGraph {
     /// The type of the first result value is also set, even if it was already set in the
     /// `InstructionData` passed to `make_inst`. If this function is called with a single-result
     /// instruction, that is the only effect.
-    ///
-    /// Returns the number of results produced by the instruction.
     pub fn make_inst_results(&mut self, inst: Inst, ctrl_typevar: Type) -> usize {
         let constraints = self.insts[inst].opcode().constraints();
         let fixed_results = constraints.fixed_results();
@@ -406,66 +394,26 @@ impl DataFlowGraph {
 
         self.results[inst].clear(&mut self.value_lists);
 
-        // Additional values form a linked list starting from the second result value. Generate
-        // the list backwards so we don't have to modify value table entries in place. (This
-        // causes additional result values to be numbered backwards which is not the aesthetic
-        // choice, but since it is only visible in extremely rare instructions with 3+ results,
-        // we don't care).
-        let mut head = None;
-        let mut first_type = None;
-        let mut rev_num = 1;
+        // The fixed results will appear at the front of the list.
+        for res_idx in 0..fixed_results {
+            self.append_result(inst, constraints.result_type(res_idx, ctrl_typevar));
+        }
 
         // Get the call signature if this is a function call.
         if let Some(sig) = self.call_signature(inst) {
             // Create result values corresponding to the call return types.
             let var_results = self.signatures[sig].return_types.len();
             total_results += var_results;
-
-            for res_idx in (0..var_results).rev() {
-                if let Some(ty) = first_type {
-                    head = Some(self.make_value(ValueData::Inst {
-                                                    ty: ty,
-                                                    num: (total_results - rev_num) as u16,
-                                                    inst: inst,
-                                                    next: head.into(),
-                                                }));
-                    self.results[inst].push(head.unwrap(), &mut self.value_lists);
-                    rev_num += 1;
-                }
-                first_type = Some(self.signatures[sig].return_types[res_idx].value_type);
+            for res_idx in 0..var_results {
+                let ty = self.signatures[sig].return_types[res_idx].value_type;
+                self.append_result(inst, ty);
             }
         }
 
-        // Then the fixed results which will appear at the front of the list.
-        for res_idx in (0..fixed_results).rev() {
-            if let Some(ty) = first_type {
-                head = Some(self.make_value(ValueData::Inst {
-                                                ty: ty,
-                                                num: (total_results - rev_num) as u16,
-                                                inst: inst,
-                                                next: head.into(),
-                                            }));
-                rev_num += 1;
-                self.results[inst].push(head.unwrap(), &mut self.value_lists);
-            }
-            first_type = Some(constraints.result_type(res_idx, ctrl_typevar));
+        if let Some(v) = self.results[inst].first(&mut self.value_lists) {
+            let ty = self.value_type(v);
+            *self[inst].first_type_mut() = ty;
         }
-
-        *self.insts[inst].first_type_mut() = first_type.unwrap_or_default();
-
-        // Include the first result in the results vector.
-        if let Some(ty) = first_type {
-            let v = self.make_value(ValueData::Inst {
-                                        ty: ty,
-                                        num: 0,
-                                        inst: inst,
-                                        next: head.into(),
-                                    });
-            self.results[inst].push(v, &mut self.value_lists);
-        }
-        self.results[inst]
-            .as_mut_slice(&mut self.value_lists)
-            .reverse();
 
         total_results
     }
@@ -482,37 +430,18 @@ impl DataFlowGraph {
         ReplaceBuilder::new(self, inst)
     }
 
-    /// Detach secondary instruction results, and return the first of them.
+    /// Detach secondary instruction results.
     ///
     /// If `inst` produces two or more results, detach these secondary result values from `inst`.
     /// The first result value cannot be detached.
-    /// The full list of secondary results can be traversed with `next_secondary_result()`.
     ///
     /// Use this method to detach secondary values before using `replace(inst)` to provide an
     /// alternate instruction for computing the primary result value.
-    pub fn detach_secondary_results(&mut self, inst: Inst) -> Option<Value> {
-        if !self.has_results(inst) {
-            return None;
+    pub fn detach_secondary_results(&mut self, inst: Inst) {
+        if let Some(first) = self.results[inst].first(&mut self.value_lists) {
+            self.results[inst].clear(&mut self.value_lists);
+            self.results[inst].push(first, &mut self.value_lists);
         }
-
-        let first = self.results[inst].first(&mut self.value_lists).unwrap();
-        let second = self.results[inst].get(1, &mut self.value_lists);
-        self.results[inst].clear(&mut self.value_lists);
-        self.results[inst].push(first, &mut self.value_lists);
-        second
-    }
-
-    /// Get the next secondary result after `value`.
-    ///
-    /// Use this function to traverse the full list of instruction results returned from
-    /// `detach_secondary_results()`.
-    pub fn next_secondary_result(&self, value: Value) -> Option<Value> {
-        if let ExpandedValue::Table(index) = value.expand() {
-            if let ValueData::Inst { next, .. } = self.extended_values[index] {
-                return next.into();
-            }
-        }
-        panic!("{} is not a secondary result value", value);
     }
 
     /// Detach the list of result values from `inst` and return it.
@@ -530,37 +459,17 @@ impl DataFlowGraph {
     /// This is a very low-level operation. Usually, instruction results with the correct types are
     /// created automatically. The `res` value must not be attached to anything else.
     pub fn attach_result(&mut self, inst: Inst, res: Value) {
-        let res_inst = inst;
-        if let Some(last_res) = self.results[inst]
-               .as_slice(&mut self.value_lists)
-               .last()
-               .cloned() {
-            self.attach_secondary_result(last_res, res);
+        let num = self.results[inst].push(res, &mut self.value_lists);
+        assert!(num <= u16::MAX as usize, "Too many result values");
+        let ty = self.value_type(res);
+        if let ExpandedValue::Table(idx) = res.expand() {
+            self.extended_values[idx] = ValueData::Inst {
+                ty: ty,
+                num: num as u16,
+                inst: inst,
+            };
         } else {
-            // This is the first result.
-            self.results[res_inst].push(res, &mut self.value_lists);
-
-            // Now update `res` itself.
-            match res.expand() {
-                ExpandedValue::Table(idx) => {
-                    if let ValueData::Inst {
-                               ref mut num,
-                               ref mut inst,
-                               ref mut next,
-                               ..
-                           } = self.extended_values[idx] {
-                        *num = 0;
-                        *inst = res_inst;
-                        *next = None.into();
-                        return;
-                    }
-                }
-                ExpandedValue::Direct(inst) => {
-                    assert_eq!(inst, res_inst);
-                    return;
-                }
-            }
-            panic!("{} must be a result", res);
+            panic!("Unexpected direct value");
         }
     }
 
@@ -570,121 +479,9 @@ impl DataFlowGraph {
                                       ty: ty,
                                       inst: inst,
                                       num: 0,
-                                      next: None.into(),
                                   });
         self.attach_result(inst, res);
         res
-    }
-
-    /// Attach an existing value as a secondary result after `last_res` which must be the last
-    /// result of an instruction.
-    ///
-    /// This is a very low-level operation. Usually, instruction results with the correct types are
-    /// created automatically. The `res` value must be a secondary instruction result detached from
-    /// somewhere else.
-    pub fn attach_secondary_result(&mut self, last_res: Value, res: Value) {
-        let res_inst = match last_res.expand() {
-            ExpandedValue::Direct(inst) => inst,
-            ExpandedValue::Table(idx) => {
-                if let ValueData::Inst { inst, ref mut next, .. } = self.extended_values[idx] {
-                    assert!(next.is_none(), "last_res is not the last result");
-                    *next = res.into();
-                    inst
-                } else {
-                    panic!("last_res is not an instruction result");
-                }
-            }
-        };
-
-        let res_num = self.results[res_inst].push(res, &mut self.value_lists);
-        assert!(res_num <= u16::MAX as usize, "Too many result values");
-
-        // Now update `res` itself.
-        if let ExpandedValue::Table(idx) = res.expand() {
-            if let ValueData::Inst {
-                       ref mut num,
-                       ref mut inst,
-                       ref mut next,
-                       ..
-                   } = self.extended_values[idx] {
-                *num = res_num as u16;
-                *inst = res_inst;
-                *next = None.into();
-                return;
-            }
-        }
-        panic!("{} must be a result", res);
-    }
-
-    /// Append a new instruction result value after `last_res`.
-    ///
-    /// The `last_res` value must be the last value on an instruction.
-    pub fn append_secondary_result(&mut self, last_res: Value, ty: Type) -> Value {
-        // The only member that matters is `ty`. The rest is filled in by
-        // `attach_secondary_result`.
-        use entity_map::EntityRef;
-        let res = self.make_value(ValueData::Inst {
-                                      ty: ty,
-                                      inst: Inst::new(0),
-                                      num: 0,
-                                      next: None.into(),
-                                  });
-        self.attach_secondary_result(last_res, res);
-        res
-    }
-
-    /// Move the instruction at `pos` to a new `Inst` reference so its first result can be
-    /// redefined without overwriting the original instruction.
-    ///
-    /// The first result value of an instruction is intrinsically tied to the `Inst` reference, so
-    /// it is not possible to detach the value and attach it to something else. This function
-    /// copies the instruction pointed to by `pos` to a new `Inst` reference, making the original
-    /// `Inst` reference available to be redefined with `dfg.replace(inst)` above.
-    ///
-    /// Before:
-    ///
-    ///   inst1:  v1, vx2 = foo  <-- pos
-    ///
-    /// After:
-    ///
-    ///   inst7:  v7, vx2 = foo
-    ///   inst1:  v1 = copy v7   <-- pos
-    ///
-    /// Returns the new `Inst` reference where the original instruction has been moved.
-    pub fn redefine_first_value(&mut self, pos: &mut Cursor) -> Inst {
-        let orig = pos.current_inst()
-            .expect("Cursor must point at an instruction");
-        let first_res = self.first_result(orig);
-        let first_type = self.value_type(first_res);
-        let data = self[orig].clone();
-        let results = self.results[orig].take();
-        self.results[orig].push(first_res, &mut self.value_lists);
-
-
-        let new = self.make_inst(data);
-        let new_first = self.make_value(ValueData::Inst {
-                                            ty: first_type,
-                                            num: 0,
-                                            inst: new,
-                                            next: None.into(),
-                                        });
-        self.results[new].push(new_first, &mut self.value_lists);
-
-        for i in 1.. {
-            if let Some(v) = results.get(i, &self.value_lists) {
-                self.attach_result(new, v);
-            } else {
-                break;
-            }
-        }
-
-        pos.insert_inst(new);
-        // Replace the original instruction with a copy of the new value.
-        // This is likely to be immediately overwritten by something else, but this way we avoid
-        // leaving the DFG in a state with multiple references to secondary results and value
-        // lists. It also means that this method doesn't change the semantics of the program.
-        self.replace(orig).copy(new_first);
-        new
     }
 
     /// Get the first result of an instruction.
@@ -1042,22 +839,6 @@ mod tests {
             ValueDef::Res(i, 0) => i,
             _ => panic!(),
         };
-
-        // Redefine the first value out of `iadd_cout`.
-        assert_eq!(pos.prev_inst(), Some(iadd));
-        let new_iadd = dfg.redefine_first_value(pos);
-        let new_s = dfg.first_result(new_iadd);
-        assert_eq!(dfg[iadd].opcode(), Opcode::Copy);
-        assert_eq!(dfg.inst_results(iadd), &[s]);
-        assert_eq!(dfg.inst_results(new_iadd), &[new_s, c]);
-        assert_eq!(dfg.resolve_copies(s), new_s);
-        pos.next_inst();
-
-        // Detach the 'c' value from `iadd`.
-        {
-            assert_eq!(dfg.detach_secondary_results(new_iadd), Some(c));
-            assert_eq!(dfg.next_secondary_result(c), None);
-        }
 
         // Replace `iadd_cout` with a normal `iadd` and an `icmp`.
         dfg.replace(iadd).iadd(v1, arg0);
