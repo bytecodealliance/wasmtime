@@ -243,6 +243,6 @@ mod tests {
         assert_eq!(map.lookup_str("ebb0").unwrap().to_string(), "ebb0");
         assert_eq!(map.lookup_str("v4").unwrap().to_string(), "vx0");
         assert_eq!(map.lookup_str("vx7").unwrap().to_string(), "vx1");
-        assert_eq!(map.lookup_str("v10").unwrap().to_string(), "v0");
+        assert_eq!(map.lookup_str("v10").unwrap().to_string(), "vx2");
     }
 }

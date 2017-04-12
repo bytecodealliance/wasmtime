@@ -1750,12 +1750,12 @@ mod tests {
                 .unwrap();
         assert_eq!(func.name.to_string(), "qux");
         let v4 = details.map.lookup_str("v4").unwrap();
-        assert_eq!(v4.to_string(), "v0");
+        assert_eq!(v4.to_string(), "vx0");
         let vx3 = details.map.lookup_str("vx3").unwrap();
-        assert_eq!(vx3.to_string(), "vx0");
+        assert_eq!(vx3.to_string(), "vx2");
         let aliased_to = func.dfg
             .resolve_aliases(Value::table_with_number(0).unwrap());
-        assert_eq!(aliased_to.to_string(), "v0");
+        assert_eq!(aliased_to.to_string(), "vx0");
     }
 
     #[test]
