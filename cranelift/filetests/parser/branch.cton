@@ -19,65 +19,65 @@ ebb1:
 
 ; Jumps with 1 arg.
 function onearg(i32) {
-ebb0(vx0: i32):
-    jump ebb1(vx0)
+ebb0(v90: i32):
+    jump ebb1(v90)
 
-ebb1(vx1: i32):
-    jump ebb0(vx1)
+ebb1(v91: i32):
+    jump ebb0(v91)
 }
 ; sameln: function onearg(i32) {
-; nextln: ebb0(vx0: i32):
-; nextln:     jump ebb1(vx0)
+; nextln: ebb0($v90: i32):
+; nextln:     jump ebb1($v90)
 ; nextln: 
-; nextln: ebb1(vx1: i32):
-; nextln:     jump ebb0(vx1)
+; nextln: ebb1($v91: i32):
+; nextln:     jump ebb0($v91)
 ; nextln: }
 
 ; Jumps with 2 args.
 function twoargs(i32, f32) {
-ebb0(vx0: i32, vx1: f32):
-    jump ebb1(vx0, vx1)
+ebb0(v90: i32, v91: f32):
+    jump ebb1(v90, v91)
 
-ebb1(vx2: i32, vx3: f32):
-    jump ebb0(vx2, vx3)
+ebb1(v92: i32, v93: f32):
+    jump ebb0(v92, v93)
 }
 ; sameln: function twoargs(i32, f32) {
-; nextln: ebb0(vx0: i32, vx1: f32):
-; nextln:     jump ebb1(vx0, vx1)
+; nextln: ebb0($v90: i32, $v91: f32):
+; nextln:     jump ebb1($v90, $v91)
 ; nextln: 
-; nextln: ebb1(vx2: i32, vx3: f32):
-; nextln:     jump ebb0(vx2, vx3)
+; nextln: ebb1($v92: i32, $v93: f32):
+; nextln:     jump ebb0($v92, $v93)
 ; nextln: }
 
 ; Branches with no arguments. The '()' empty argument list is optional.
 function minimal(i32) {
-ebb0(vx0: i32):
-    brz vx0, ebb1
+ebb0(v90: i32):
+    brz v90, ebb1
 
 ebb1:
-    brnz vx0, ebb1()
+    brnz v90, ebb1()
 }
 ; sameln: function minimal(i32) {
-; nextln: ebb0(vx0: i32):
-; nextln:     brz vx0, ebb1
+; nextln: ebb0($v90: i32):
+; nextln:     brz $v90, ebb1
 ; nextln: 
 ; nextln: ebb1:
-; nextln:     brnz.i32 vx0, ebb1
+; nextln:     brnz.i32 $v90, ebb1
 ; nextln: }
 
 function twoargs(i32, f32) {
-ebb0(vx0: i32, vx1: f32):
-    brz vx0, ebb1(vx0, vx1)
+ebb0(v90: i32, v91: f32):
+    brz v90, ebb1(v90, v91)
 
-ebb1(vx2: i32, vx3: f32):
-    brnz vx0, ebb0(vx2, vx3)
+ebb1(v92: i32, v93: f32):
+    brnz v90, ebb0(v92, v93)
 }
 ; sameln: function twoargs(i32, f32) {
-; nextln: ebb0(vx0: i32, vx1: f32):
-; nextln:     brz vx0, ebb1(vx0, vx1)
+; nextln: ebb0($v90: i32, $v91: f32):
+; nextln:     brz $v90, ebb1($v90, $v91)
 ; nextln: 
-; nextln: ebb1(vx2: i32, vx3: f32):
-; nextln:     brnz.i32 vx0, ebb0(vx2, vx3)
+; nextln: ebb1($v92: i32, $v93: f32):
+; nextln:     brnz.i32 $v90, ebb0($v92, $v93)
 ; nextln: }
 
 function jumptable(i32) {
@@ -98,8 +98,8 @@ ebb40:
 ; nextln:     jt0 = jump_table 0
 ; nextln:     jt1 = jump_table 0, 0, ebb0, ebb3, ebb1, ebb2
 ; nextln: 
-; nextln: ebb0(vx0: i32):
-; nextln:     br_table vx0, jt1
+; nextln: ebb0($v3: i32):
+; nextln:     br_table $v3, jt1
 ; nextln:     trap
 ; nextln: 
 ; nextln: ebb1:
