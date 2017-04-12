@@ -117,12 +117,6 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
             // The old result values were either detached or non-existent.
             // Construct new ones.
             self.dfg.make_inst_results(self.inst, ctrl_typevar);
-        } else {
-            // Normally, make_inst_results() would also set the first result type, but we're not
-            // going to call that, so set it manually.
-            *self.dfg[self.inst].first_type_mut() = self.dfg
-                .compute_result_type(self.inst, 0, ctrl_typevar)
-                .unwrap_or_default();
         }
 
         (self.inst, self.dfg)

@@ -1404,44 +1404,34 @@ impl<'a> Parser<'a> {
                            opcode: Opcode)
                            -> Result<InstructionData> {
         let idata = match opcode.format() {
-            InstructionFormat::Nullary => {
-                InstructionData::Nullary {
-                    opcode: opcode,
-                    ty: VOID,
-                }
-            }
+            InstructionFormat::Nullary => InstructionData::Nullary { opcode: opcode },
             InstructionFormat::Unary => {
                 InstructionData::Unary {
                     opcode: opcode,
-                    ty: VOID,
                     arg: self.match_value("expected SSA value operand")?,
                 }
             }
             InstructionFormat::UnaryImm => {
                 InstructionData::UnaryImm {
                     opcode: opcode,
-                    ty: VOID,
                     imm: self.match_imm64("expected immediate integer operand")?,
                 }
             }
             InstructionFormat::UnaryIeee32 => {
                 InstructionData::UnaryIeee32 {
                     opcode: opcode,
-                    ty: VOID,
                     imm: self.match_ieee32("expected immediate 32-bit float operand")?,
                 }
             }
             InstructionFormat::UnaryIeee64 => {
                 InstructionData::UnaryIeee64 {
                     opcode: opcode,
-                    ty: VOID,
                     imm: self.match_ieee64("expected immediate 64-bit float operand")?,
                 }
             }
             InstructionFormat::UnarySplit => {
                 InstructionData::UnarySplit {
                     opcode: opcode,
-                    ty: VOID,
                     arg: self.match_value("expected SSA value operand")?,
                 }
             }
@@ -1451,7 +1441,6 @@ impl<'a> Parser<'a> {
                 let rhs = self.match_value("expected SSA value second operand")?;
                 InstructionData::Binary {
                     opcode: opcode,
-                    ty: VOID,
                     args: [lhs, rhs],
                 }
             }
@@ -1461,7 +1450,6 @@ impl<'a> Parser<'a> {
                 let rhs = self.match_imm64("expected immediate integer second operand")?;
                 InstructionData::BinaryImm {
                     opcode: opcode,
-                    ty: VOID,
                     arg: lhs,
                     imm: rhs,
                 }
@@ -1472,7 +1460,6 @@ impl<'a> Parser<'a> {
                 let rhs = self.match_value("expected SSA value second operand")?;
                 InstructionData::BinaryOverflow {
                     opcode: opcode,
-                    ty: VOID,
                     args: [lhs, rhs],
                 }
             }
@@ -1486,7 +1473,6 @@ impl<'a> Parser<'a> {
                 let false_arg = self.match_value("expected SSA value false operand")?;
                 InstructionData::Ternary {
                     opcode: opcode,
-                    ty: VOID,
                     args: [ctrl_arg, true_arg, false_arg],
                 }
             }
@@ -1494,7 +1480,6 @@ impl<'a> Parser<'a> {
                 let args = self.parse_value_list()?;
                 InstructionData::MultiAry {
                     opcode: opcode,
-                    ty: VOID,
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
             }
@@ -1504,7 +1489,6 @@ impl<'a> Parser<'a> {
                 let args = self.parse_opt_value_list()?;
                 InstructionData::Jump {
                     opcode: opcode,
-                    ty: VOID,
                     destination: ebb_num,
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
@@ -1516,7 +1500,6 @@ impl<'a> Parser<'a> {
                 let args = self.parse_opt_value_list()?;
                 InstructionData::Branch {
                     opcode: opcode,
-                    ty: VOID,
                     destination: ebb_num,
                     args: args.into_value_list(&[ctrl_arg], &mut ctx.function.dfg.value_lists),
                 }
@@ -1531,7 +1514,6 @@ impl<'a> Parser<'a> {
                 let args = self.parse_opt_value_list()?;
                 InstructionData::BranchIcmp {
                     opcode: opcode,
-                    ty: VOID,
                     cond: cond,
                     destination: ebb_num,
                     args: args.into_value_list(&[lhs, rhs], &mut ctx.function.dfg.value_lists),
@@ -1545,7 +1527,6 @@ impl<'a> Parser<'a> {
                 let rhs = self.match_value("expected SSA value last operand")?;
                 InstructionData::InsertLane {
                     opcode: opcode,
-                    ty: VOID,
                     lane: lane,
                     args: [lhs, rhs],
                 }
@@ -1556,7 +1537,6 @@ impl<'a> Parser<'a> {
                 let lane = self.match_uimm8("expected lane number")?;
                 InstructionData::ExtractLane {
                     opcode: opcode,
-                    ty: VOID,
                     lane: lane,
                     arg: arg,
                 }
@@ -1568,7 +1548,6 @@ impl<'a> Parser<'a> {
                 let rhs = self.match_value("expected SSA value second operand")?;
                 InstructionData::IntCompare {
                     opcode: opcode,
-                    ty: VOID,
                     cond: cond,
                     args: [lhs, rhs],
                 }
@@ -1580,7 +1559,6 @@ impl<'a> Parser<'a> {
                 let rhs = self.match_imm64("expected immediate second operand")?;
                 InstructionData::IntCompareImm {
                     opcode: opcode,
-                    ty: VOID,
                     cond: cond,
                     arg: lhs,
                     imm: rhs,
@@ -1593,7 +1571,6 @@ impl<'a> Parser<'a> {
                 let rhs = self.match_value("expected SSA value second operand")?;
                 InstructionData::FloatCompare {
                     opcode: opcode,
-                    ty: VOID,
                     cond: cond,
                     args: [lhs, rhs],
                 }
@@ -1606,7 +1583,6 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::RPar, "expected ')' after arguments")?;
                 InstructionData::Call {
                     opcode: opcode,
-                    ty: VOID,
                     func_ref: func_ref,
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
@@ -1621,7 +1597,6 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::RPar, "expected ')' after arguments")?;
                 InstructionData::IndirectCall {
                     opcode: opcode,
-                    ty: VOID,
                     sig_ref: sig_ref,
                     args: args.into_value_list(&[callee], &mut ctx.function.dfg.value_lists),
                 }
@@ -1633,7 +1608,6 @@ impl<'a> Parser<'a> {
                     .and_then(|num| ctx.get_jt(num, &self.loc))?;
                 InstructionData::BranchTable {
                     opcode: opcode,
-                    ty: VOID,
                     arg: arg,
                     table: table,
                 }
@@ -1644,7 +1618,6 @@ impl<'a> Parser<'a> {
                 let offset = self.optional_offset32()?;
                 InstructionData::StackLoad {
                     opcode: opcode,
-                    ty: VOID,
                     stack_slot: ss,
                     offset: offset,
                 }
@@ -1657,7 +1630,6 @@ impl<'a> Parser<'a> {
                 let offset = self.optional_offset32()?;
                 InstructionData::StackStore {
                     opcode: opcode,
-                    ty: VOID,
                     arg: arg,
                     stack_slot: ss,
                     offset: offset,
@@ -1668,7 +1640,6 @@ impl<'a> Parser<'a> {
                 let offset = self.optional_uoffset32()?;
                 InstructionData::HeapLoad {
                     opcode: opcode,
-                    ty: VOID,
                     arg: addr,
                     offset: offset,
                 }
@@ -1680,7 +1651,6 @@ impl<'a> Parser<'a> {
                 let offset = self.optional_uoffset32()?;
                 InstructionData::HeapStore {
                     opcode: opcode,
-                    ty: VOID,
                     args: [arg, addr],
                     offset: offset,
                 }
@@ -1691,7 +1661,6 @@ impl<'a> Parser<'a> {
                 let offset = self.optional_offset32()?;
                 InstructionData::Load {
                     opcode: opcode,
-                    ty: VOID,
                     flags: flags,
                     arg: addr,
                     offset: offset,
@@ -1705,7 +1674,6 @@ impl<'a> Parser<'a> {
                 let offset = self.optional_offset32()?;
                 InstructionData::Store {
                     opcode: opcode,
-                    ty: VOID,
                     flags: flags,
                     args: [arg, addr],
                     offset: offset,

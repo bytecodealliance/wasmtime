@@ -118,7 +118,6 @@ mod tests {
         // Try to encode iadd_imm.i64 vx1, -10.
         let inst64 = InstructionData::BinaryImm {
             opcode: Opcode::IaddImm,
-            ty: types::I64,
             arg: arg64,
             imm: immediates::Imm64::new(-10),
         };
@@ -130,7 +129,6 @@ mod tests {
         // Try to encode iadd_imm.i64 vx1, -10000.
         let inst64_large = InstructionData::BinaryImm {
             opcode: Opcode::IaddImm,
-            ty: types::I64,
             arg: arg64,
             imm: immediates::Imm64::new(-10000),
         };
@@ -142,7 +140,6 @@ mod tests {
         // Create an iadd_imm.i32 which is encodable in RV64.
         let inst32 = InstructionData::BinaryImm {
             opcode: Opcode::IaddImm,
-            ty: types::I32,
             arg: arg32,
             imm: immediates::Imm64::new(10),
         };
@@ -168,7 +165,6 @@ mod tests {
         // Try to encode iadd_imm.i64 vx1, -10.
         let inst64 = InstructionData::BinaryImm {
             opcode: Opcode::IaddImm,
-            ty: types::I64,
             arg: arg64,
             imm: immediates::Imm64::new(-10),
         };
@@ -180,7 +176,6 @@ mod tests {
         // Try to encode iadd_imm.i64 vx1, -10000.
         let inst64_large = InstructionData::BinaryImm {
             opcode: Opcode::IaddImm,
-            ty: types::I64,
             arg: arg64,
             imm: immediates::Imm64::new(-10000),
         };
@@ -192,7 +187,6 @@ mod tests {
         // Create an iadd_imm.i32 which is encodable in RV32.
         let inst32 = InstructionData::BinaryImm {
             opcode: Opcode::IaddImm,
-            ty: types::I32,
             arg: arg32,
             imm: immediates::Imm64::new(10),
         };
@@ -204,7 +198,6 @@ mod tests {
         // Create an imul.i32 which is encodable in RV32, but only when use_m is true.
         let mul32 = InstructionData::Binary {
             opcode: Opcode::Imul,
-            ty: types::I32,
             args: [arg32, arg32],
         };
 
@@ -232,7 +225,6 @@ mod tests {
         // Create an imul.i32 which is encodable in RV32M.
         let mul32 = InstructionData::Binary {
             opcode: Opcode::Imul,
-            ty: types::I32,
             args: [arg32, arg32],
         };
         assert_eq!(encstr(&*isa, isa.encode(&dfg, &mul32, types::I32).unwrap()),

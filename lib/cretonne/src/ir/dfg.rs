@@ -132,7 +132,7 @@ impl DataFlowGraph {
     pub fn value_type(&self, v: Value) -> Type {
         use ir::entities::ExpandedValue::*;
         match v.expand() {
-            Direct(i) => self.insts[i].first_type(),
+            Direct(_) => panic!("Unexpected direct value"),
             Table(i) => {
                 match self.extended_values[i] {
                     ValueData::Inst { ty, .. } => ty,
@@ -409,11 +409,6 @@ impl DataFlowGraph {
                 let ty = self.signatures[sig].return_types[res_idx].value_type;
                 self.append_result(inst, ty);
             }
-        }
-
-        if let Some(v) = self.results[inst].first(&mut self.value_lists) {
-            let ty = self.value_type(v);
-            *self[inst].first_type_mut() = ty;
         }
 
         total_results
@@ -725,10 +720,7 @@ mod tests {
     fn make_inst() {
         let mut dfg = DataFlowGraph::new();
 
-        let idata = InstructionData::Nullary {
-            opcode: Opcode::Iconst,
-            ty: types::VOID,
-        };
+        let idata = InstructionData::Nullary { opcode: Opcode::Iconst };
         let inst = dfg.make_inst(idata);
         dfg.make_inst_results(inst, types::I32);
         assert_eq!(inst.to_string(), "inst0");
@@ -739,7 +731,6 @@ mod tests {
             let immdfg = &dfg;
             let ins = &immdfg[inst];
             assert_eq!(ins.opcode(), Opcode::Iconst);
-            assert_eq!(ins.first_type(), types::I32);
         }
 
         // Results.
@@ -754,10 +745,7 @@ mod tests {
     fn no_results() {
         let mut dfg = DataFlowGraph::new();
 
-        let idata = InstructionData::Nullary {
-            opcode: Opcode::Trap,
-            ty: types::VOID,
-        };
+        let idata = InstructionData::Nullary { opcode: Opcode::Trap };
         let inst = dfg.make_inst(idata);
         assert_eq!(dfg.display_inst(inst).to_string(), "trap");
 
