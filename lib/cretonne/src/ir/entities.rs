@@ -76,95 +76,18 @@ impl Ebb {
 /// An opaque reference to an SSA value.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Value(u32);
-entity_impl!(Value);
-
-/// Value references can either reference an instruction directly, or they can refer to the
-/// extended value table.
-pub enum ExpandedValue {
-    /// This is the first value produced by the referenced instruction.
-    Direct(Inst),
-
-    /// This value is described in the extended value table.
-    Table(usize),
-}
+entity_impl!(Value, "v");
 
 impl Value {
-    /// Create a `Direct` value from its number representation.
+    /// Create a value from its number representation.
     /// This is the number in the `vNN` notation.
     ///
     /// This method is for use by the parser.
-    pub fn direct_with_number(n: u32) -> Option<Value> {
+    pub fn with_number(n: u32) -> Option<Value> {
         if n < u32::MAX / 2 {
-            let encoding = n * 2;
-            assert!(encoding < u32::MAX);
-            Some(Value(encoding))
+            Some(Value(n))
         } else {
             None
-        }
-    }
-
-    /// Create a `Table` value from its number representation.
-    /// This is the number in the `vxNN` notation.
-    ///
-    /// This method is for use by the parser.
-    pub fn table_with_number(n: u32) -> Option<Value> {
-        if n < u32::MAX / 2 {
-            let encoding = n * 2 + 1;
-            assert!(encoding < u32::MAX);
-            Some(Value(encoding))
-        } else {
-            None
-        }
-    }
-
-    /// Create a `Direct` value corresponding to the first value produced by `i`.
-    pub fn new_direct(i: Inst) -> Value {
-        let encoding = i.index() * 2;
-        assert!(encoding < u32::MAX as usize);
-        Value(encoding as u32)
-    }
-
-    /// Create a `Table` value referring to entry `i` in the `DataFlowGraph.extended_values` table.
-    /// This constructor should not be used directly. Use the public `DataFlowGraph` methods to
-    /// manipulate values.
-    pub fn new_table(index: usize) -> Value {
-        let encoding = index * 2 + 1;
-        assert!(encoding < u32::MAX as usize);
-        Value(encoding as u32)
-    }
-
-    /// Expand the internal representation into something useful.
-    pub fn expand(&self) -> ExpandedValue {
-        use self::ExpandedValue::*;
-        let index = (self.0 / 2) as usize;
-        if self.0 % 2 == 0 {
-            Direct(Inst::new(index))
-        } else {
-            Table(index)
-        }
-    }
-
-    /// Assuming that this is a direct value, get the referenced instruction.
-    ///
-    /// # Panics
-    ///
-    /// If this is not a value created with `new_direct()`.
-    pub fn unwrap_direct(&self) -> Inst {
-        if let ExpandedValue::Direct(inst) = self.expand() {
-            inst
-        } else {
-            panic!("{} is not a direct value", self)
-        }
-    }
-}
-
-/// Display a `Value` reference as "v7" or "v2x".
-impl Display for Value {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        use self::ExpandedValue::*;
-        match self.expand() {
-            Direct(i) => write!(fmt, "v{}", i.0),
-            Table(i) => write!(fmt, "vx{}", i),
         }
     }
 }
@@ -276,32 +199,14 @@ impl From<SigRef> for AnyEntity {
 mod tests {
     use super::*;
     use std::u32;
-    use entity_map::EntityRef;
 
     #[test]
     fn value_with_number() {
-        assert_eq!(Value::direct_with_number(0).unwrap().to_string(), "v0");
-        assert_eq!(Value::direct_with_number(1).unwrap().to_string(), "v1");
-        assert_eq!(Value::table_with_number(0).unwrap().to_string(), "vx0");
-        assert_eq!(Value::table_with_number(1).unwrap().to_string(), "vx1");
+        assert_eq!(Value::with_number(0).unwrap().to_string(), "v0");
+        assert_eq!(Value::with_number(1).unwrap().to_string(), "v1");
 
-        assert_eq!(Value::direct_with_number(u32::MAX / 2), None);
-        assert_eq!(match Value::direct_with_number(u32::MAX / 2 - 1)
-                             .unwrap()
-                             .expand() {
-                       ExpandedValue::Direct(i) => i.index() as u32,
-                       _ => u32::MAX,
-                   },
-                   u32::MAX / 2 - 1);
-
-        assert_eq!(Value::table_with_number(u32::MAX / 2), None);
-        assert_eq!(match Value::table_with_number(u32::MAX / 2 - 1)
-                             .unwrap()
-                             .expand() {
-                       ExpandedValue::Table(i) => i as u32,
-                       _ => u32::MAX,
-                   },
-                   u32::MAX / 2 - 1);
+        assert_eq!(Value::with_number(u32::MAX / 2), None);
+        assert!(Value::with_number(u32::MAX / 2 - 1).is_some());
     }
 
     #[test]

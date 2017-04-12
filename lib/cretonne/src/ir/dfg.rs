@@ -2,7 +2,6 @@
 
 use entity_map::{EntityMap, PrimaryEntityData};
 use ir::builder::{InsertBuilder, ReplaceBuilder};
-use ir::entities::ExpandedValue;
 use ir::extfunc::ExtFuncData;
 use ir::instructions::{Opcode, InstructionData, CallInfo};
 use ir::layout::Cursor;
@@ -48,12 +47,8 @@ pub struct DataFlowGraph {
     /// - EBB arguments in `ebbs`.
     pub value_lists: ValueListPool,
 
-    /// Extended value table. Most `Value` references refer directly to their defining instruction.
-    /// Others index into this table.
-    ///
-    /// This is implemented directly with a `Vec` rather than an `EntityMap<Value, ...>` because
-    /// the Value entity references can refer to two things -- an instruction or an extended value.
-    extended_values: Vec<ValueData>,
+    /// Primary value table with entries for all values.
+    values: EntityMap<Value, ValueData>,
 
     /// Function signature table. These signatures are referenced by indirect call instructions as
     /// well as the external function references.
@@ -65,6 +60,7 @@ pub struct DataFlowGraph {
 
 impl PrimaryEntityData for InstructionData {}
 impl PrimaryEntityData for EbbData {}
+impl PrimaryEntityData for ValueData {}
 impl PrimaryEntityData for Signature {}
 impl PrimaryEntityData for ExtFuncData {}
 
@@ -76,7 +72,7 @@ impl DataFlowGraph {
             results: EntityMap::new(),
             ebbs: EntityMap::new(),
             value_lists: ValueListPool::new(),
-            extended_values: Vec::new(),
+            values: EntityMap::new(),
             signatures: EntityMap::new(),
             ext_funcs: EntityMap::new(),
         }
@@ -115,31 +111,20 @@ impl DataFlowGraph {
 impl DataFlowGraph {
     // Allocate an extended value entry.
     fn make_value(&mut self, data: ValueData) -> Value {
-        let vref = Value::new_table(self.extended_values.len());
-        self.extended_values.push(data);
-        vref
+        self.values.push(data)
     }
 
     /// Check if a value reference is valid.
     pub fn value_is_valid(&self, v: Value) -> bool {
-        match v.expand() {
-            ExpandedValue::Direct(inst) => self.insts.is_valid(inst),
-            ExpandedValue::Table(index) => index < self.extended_values.len(),
-        }
+        self.values.is_valid(v)
     }
 
     /// Get the type of a value.
     pub fn value_type(&self, v: Value) -> Type {
-        use ir::entities::ExpandedValue::*;
-        match v.expand() {
-            Direct(_) => panic!("Unexpected direct value"),
-            Table(i) => {
-                match self.extended_values[i] {
-                    ValueData::Inst { ty, .. } => ty,
-                    ValueData::Arg { ty, .. } => ty,
-                    ValueData::Alias { ty, .. } => ty,
-                }
-            }
+        match self.values[v] {
+            ValueData::Inst { ty, .. } |
+            ValueData::Arg { ty, .. } |
+            ValueData::Alias { ty, .. } => ty,
         }
     }
 
@@ -148,31 +133,25 @@ impl DataFlowGraph {
     /// This is either the instruction that defined it or the Ebb that has the value as an
     /// argument.
     pub fn value_def(&self, v: Value) -> ValueDef {
-        use ir::entities::ExpandedValue::*;
-        match v.expand() {
-            Direct(inst) => ValueDef::Res(inst, 0),
-            Table(idx) => {
-                match self.extended_values[idx] {
-                    ValueData::Inst { inst, num, .. } => {
-                        assert_eq!(Some(v),
-                                   self.results[inst].get(num as usize, &self.value_lists),
-                                   "Dangling result value {}: {}",
-                                   v,
-                                   self.display_inst(inst));
-                        ValueDef::Res(inst, num as usize)
-                    }
-                    ValueData::Arg { ebb, num, .. } => {
-                        assert_eq!(Some(v),
-                                   self.ebbs[ebb].args.get(num as usize, &self.value_lists),
-                                   "Dangling EBB argument value");
-                        ValueDef::Arg(ebb, num as usize)
-                    }
-                    ValueData::Alias { original, .. } => {
-                        // Make sure we only recurse one level. `resolve_aliases` has safeguards to
-                        // detect alias loops without overrunning the stack.
-                        self.value_def(self.resolve_aliases(original))
-                    }
-                }
+        match self.values[v] {
+            ValueData::Inst { inst, num, .. } => {
+                assert_eq!(Some(v),
+                           self.results[inst].get(num as usize, &self.value_lists),
+                           "Dangling result value {}: {}",
+                           v,
+                           self.display_inst(inst));
+                ValueDef::Res(inst, num as usize)
+            }
+            ValueData::Arg { ebb, num, .. } => {
+                assert_eq!(Some(v),
+                           self.ebbs[ebb].args.get(num as usize, &self.value_lists),
+                           "Dangling EBB argument value");
+                ValueDef::Arg(ebb, num as usize)
+            }
+            ValueData::Alias { original, .. } => {
+                // Make sure we only recurse one level. `resolve_aliases` has safeguards to
+                // detect alias loops without overrunning the stack.
+                self.value_def(self.resolve_aliases(original))
             }
         }
     }
@@ -181,23 +160,15 @@ impl DataFlowGraph {
     ///
     /// Find the original SSA value that `value` aliases.
     pub fn resolve_aliases(&self, value: Value) -> Value {
-        use ir::entities::ExpandedValue::Table;
         let mut v = value;
 
         // Note that extended_values may be empty here.
-        for _ in 0..1 + self.extended_values.len() {
-            v = match v.expand() {
-                Table(idx) => {
-                    match self.extended_values[idx] {
-                        ValueData::Alias { original, .. } => {
-                            // Follow alias values.
-                            original
-                        }
-                        _ => return v,
-                    }
-                }
-                _ => return v,
-            };
+        for _ in 0..1 + self.values.len() {
+            if let ValueData::Alias { original, .. } = self.values[v] {
+                v = original;
+            } else {
+                return v;
+            }
         }
         panic!("Value alias loop detected for {}", value);
     }
@@ -233,13 +204,7 @@ impl DataFlowGraph {
     ///
     /// Change the `dest` value to behave as an alias of `src`. This means that all uses of `dest`
     /// will behave as if they used that value `src`.
-    ///
-    /// The `dest` value cannot be a direct value defined as the first result of an instruction. To
-    /// replace a direct value with `src`, its defining instruction should be replaced with a
-    /// `copy src` instruction. See `replace()`.
     pub fn change_to_alias(&mut self, dest: Value, src: Value) {
-        use ir::entities::ExpandedValue::Table;
-
         // Try to create short alias chains by finding the original source value.
         // This also avoids the creation of loops.
         let original = self.resolve_aliases(src);
@@ -256,14 +221,10 @@ impl DataFlowGraph {
                    self.value_type(dest),
                    ty);
 
-        if let Table(idx) = dest.expand() {
-            self.extended_values[idx] = ValueData::Alias {
-                ty: ty,
-                original: original,
-            };
-        } else {
-            panic!("Cannot change direct value {} into an alias", dest);
-        }
+        self.values[dest] = ValueData::Alias {
+            ty: ty,
+            original: original,
+        };
     }
 
     /// Create a new value alias.
@@ -458,15 +419,11 @@ impl DataFlowGraph {
         let num = self.results[inst].push(res, &mut self.value_lists);
         assert!(num <= u16::MAX as usize, "Too many result values");
         let ty = self.value_type(res);
-        if let ExpandedValue::Table(idx) = res.expand() {
-            self.extended_values[idx] = ValueData::Inst {
-                ty: ty,
-                num: num as u16,
-                inst: inst,
-            };
-        } else {
-            panic!("Unexpected direct value");
-        }
+        self.values[res] = ValueData::Inst {
+            ty: ty,
+            num: num as u16,
+            inst: inst,
+        };
     }
 
     /// Append a new instruction result value to `inst`.
@@ -609,11 +566,7 @@ impl DataFlowGraph {
     ///
     /// Returns the new value.
     pub fn replace_ebb_arg(&mut self, old_arg: Value, new_type: Type) -> Value {
-        let old_data = if let ExpandedValue::Table(index) = old_arg.expand() {
-            self.extended_values[index].clone()
-        } else {
-            panic!("old_arg: {} must be an EBB argument", old_arg);
-        };
+        let old_data = self.values[old_arg].clone();
 
         // Create new value identical to the old one except for the type.
         let (ebb, num) = if let ValueData::Arg { num, ebb, .. } = old_data {
@@ -655,12 +608,10 @@ impl DataFlowGraph {
 
         // Now update `arg` itself.
         let arg_ebb = ebb;
-        if let ExpandedValue::Table(idx) = arg.expand() {
-            if let ValueData::Arg { ref mut num, ebb, .. } = self.extended_values[idx] {
-                *num = arg_num as u16;
-                assert_eq!(arg_ebb, ebb, "{} should already belong to EBB", arg);
-                return;
-            }
+        if let ValueData::Arg { ref mut num, ebb, .. } = self.values[arg] {
+            *num = arg_num as u16;
+            assert_eq!(arg_ebb, ebb, "{} should already belong to EBB", arg);
+            return;
         }
         panic!("{} must be an EBB argument value", arg);
     }
@@ -724,7 +675,7 @@ mod tests {
         let inst = dfg.make_inst(idata);
         dfg.make_inst_results(inst, types::I32);
         assert_eq!(inst.to_string(), "inst0");
-        assert_eq!(dfg.display_inst(inst).to_string(), "vx0 = iconst.i32");
+        assert_eq!(dfg.display_inst(inst).to_string(), "v0 = iconst.i32");
 
         // Immutable reference resolution.
         {
@@ -766,12 +717,12 @@ mod tests {
         assert_eq!(dfg.ebb_args(ebb), &[]);
 
         let arg1 = dfg.append_ebb_arg(ebb, types::F32);
-        assert_eq!(arg1.to_string(), "vx0");
+        assert_eq!(arg1.to_string(), "v0");
         assert_eq!(dfg.num_ebb_args(ebb), 1);
         assert_eq!(dfg.ebb_args(ebb), &[arg1]);
 
         let arg2 = dfg.append_ebb_arg(ebb, types::I16);
-        assert_eq!(arg2.to_string(), "vx1");
+        assert_eq!(arg2.to_string(), "v1");
         assert_eq!(dfg.num_ebb_args(ebb), 2);
         assert_eq!(dfg.ebb_args(ebb), &[arg1, arg2]);
 
@@ -835,7 +786,7 @@ mod tests {
         // Build a little test program.
         let v1 = dfg.ins(pos).iconst(types::I32, 42);
 
-        // Make sure we can resolve value aliases even when extended_values is empty.
+        // Make sure we can resolve value aliases even when values is empty.
         assert_eq!(dfg.resolve_aliases(v1), v1);
 
         let arg0 = dfg.append_ebb_arg(ebb0, types::I32);

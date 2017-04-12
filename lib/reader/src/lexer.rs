@@ -34,7 +34,7 @@ pub enum Token<'a> {
     Float(&'a str), // Floating point immediate
     Integer(&'a str), // Integer immediate
     Type(types::Type), // i32, f32, b32x4, ...
-    Value(Value), // v12, vx7
+    Value(Value), // v12, v7
     Ebb(Ebb), // ebb3
     StackSlot(u32), // ss3
     JumpTable(u32), // jt2
@@ -306,8 +306,7 @@ impl<'a> Lexer<'a> {
     // decoded token.
     fn numbered_entity(prefix: &str, number: u32) -> Option<Token<'a>> {
         match prefix {
-            "v" => Value::direct_with_number(number).map(|v| Token::Value(v)),
-            "vx" => Value::table_with_number(number).map(|v| Token::Value(v)),
+            "v" => Value::with_number(number).map(|v| Token::Value(v)),
             "ebb" => Ebb::with_number(number).map(|ebb| Token::Ebb(ebb)),
             "ss" => Some(Token::StackSlot(number)),
             "jt" => Some(Token::JumpTable(number)),
@@ -531,15 +530,14 @@ mod tests {
         let mut lex = Lexer::new("v0 v00 vx01 ebb1234567890 ebb5234567890 v1x vx1 vxvx4 \
                                   function0 function b1 i32x4 f32x5");
         assert_eq!(lex.next(),
-                   token(Token::Value(Value::direct_with_number(0).unwrap()), 1));
+                   token(Token::Value(Value::with_number(0).unwrap()), 1));
         assert_eq!(lex.next(), token(Token::Identifier("v00"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("vx01"), 1));
         assert_eq!(lex.next(),
                    token(Token::Ebb(Ebb::with_number(1234567890).unwrap()), 1));
         assert_eq!(lex.next(), token(Token::Identifier("ebb5234567890"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("v1x"), 1));
-        assert_eq!(lex.next(),
-                   token(Token::Value(Value::table_with_number(1).unwrap()), 1));
+        assert_eq!(lex.next(), token(Token::Identifier("vx1"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("vxvx4"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("function0"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("function"), 1));

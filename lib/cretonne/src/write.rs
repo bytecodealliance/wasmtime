@@ -86,8 +86,8 @@ pub fn write_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
     // Write out the basic block header, outdented:
     //
     //    ebb1:
-    //    ebb1(vx1: i32):
-    //    ebb10(vx4: f64, vx5: b1):
+    //    ebb1(v1: i32):
+    //    ebb10(v4: f64, v5: b1):
     //
 
     // If we're writing encoding annotations, shift by 20.
@@ -372,10 +372,10 @@ mod tests {
 
         f.dfg.append_ebb_arg(ebb, types::I8);
         assert_eq!(f.to_string(),
-                   "function foo() {\n    ss0 = stack_slot 4\n\nebb0(vx0: i8):\n}\n");
+                   "function foo() {\n    ss0 = stack_slot 4\n\nebb0(v0: i8):\n}\n");
 
         f.dfg.append_ebb_arg(ebb, types::F32.by(4).unwrap());
         assert_eq!(f.to_string(),
-                   "function foo() {\n    ss0 = stack_slot 4\n\nebb0(vx0: i8, vx1: f32x4):\n}\n");
+                   "function foo() {\n    ss0 = stack_slot 4\n\nebb0(v0: i8, v1: f32x4):\n}\n");
     }
 }

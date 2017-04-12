@@ -2,7 +2,7 @@
 test legalizer
 isa riscv
 
-; regex: V=vx?\d+
+; regex: V=v\d+
 
 function int_split_args(i64) -> i64 {
 ebb0(v0: i64):
