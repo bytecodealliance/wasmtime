@@ -91,17 +91,10 @@ def unwrap_inst(iref, node, fmt):
             for d in node.defs[1:]:
                 fmt.line('let src_{};'.format(d))
             with fmt.indented('{', '}'):
-                fmt.line(
-                        'src_{} = dfg.detach_secondary_results(inst).unwrap();'
-                        .format(node.defs[1]))
-                for i in range(2, len(node.defs)):
-                    fmt.line(
-                            'src_{} = dfg.next_secondary_result(src_{})'
-                            '.unwrap();'
-                            .format(node.defs[i], node.defs[i - 1]))
-                fmt.line(
-                        'assert_eq!(dfg.next_secondary_result(src_{}), None);'
-                        .format(node.defs[-1]))
+                fmt.line('let r = dfg.inst_results(inst);')
+                for i in range(1, len(node.defs)):
+                    fmt.line('src_{} = r[{}];'.format(node.defs[i], i))
+            fmt.line('dfg.detach_secondary_results(inst);')
             for d in node.defs[1:]:
                 if d.has_free_typevar():
                     fmt.line(
