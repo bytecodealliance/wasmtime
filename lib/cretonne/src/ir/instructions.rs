@@ -17,7 +17,6 @@ use ir::types;
 use ir::DataFlowGraph;
 
 use entity_list;
-use packed_option::PackedOption;
 use ref_slice::{ref_slice, ref_slice_mut};
 
 /// Some instructions use an external list of argument values because there is not enough space in
@@ -126,7 +125,6 @@ pub enum InstructionData {
     UnarySplit {
         opcode: Opcode,
         ty: Type,
-        second_result: PackedOption<Value>,
         arg: Value,
     },
     Binary {
@@ -143,7 +141,6 @@ pub enum InstructionData {
     BinaryOverflow {
         opcode: Opcode,
         ty: Type,
-        second_result: PackedOption<Value>,
         args: [Value; 2],
     },
     Ternary {
@@ -154,7 +151,6 @@ pub enum InstructionData {
     MultiAry {
         opcode: Opcode,
         ty: Type,
-        second_result: PackedOption<Value>,
         args: ValueList,
     },
     InsertLane {
@@ -216,14 +212,12 @@ pub enum InstructionData {
     Call {
         opcode: Opcode,
         ty: Type,
-        second_result: PackedOption<Value>,
         func_ref: FuncRef,
         args: ValueList,
     },
     IndirectCall {
         opcode: Opcode,
         ty: Type,
-        second_result: PackedOption<Value>,
         sig_ref: SigRef,
         args: ValueList,
     },

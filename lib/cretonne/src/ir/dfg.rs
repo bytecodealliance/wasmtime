@@ -457,12 +457,6 @@ impl DataFlowGraph {
             first_type = Some(constraints.result_type(res_idx, ctrl_typevar));
         }
 
-        // Update the second_result pointer in `inst`.
-        if head.is_some() {
-            *self.insts[inst]
-                 .second_result_mut()
-                 .expect("instruction format doesn't allow multiple results") = head.into();
-        }
         *self.insts[inst].first_type_mut() = first_type.unwrap_or_default();
 
         // Include the first result in the results vector.
@@ -497,11 +491,16 @@ impl DataFlowGraph {
     /// Use this method to detach secondary values before using `replace(inst)` to provide an
     /// alternate instruction for computing the primary result value.
     pub fn detach_secondary_results(&mut self, inst: Inst) -> Option<Value> {
+        if !self.has_results(inst) {
+            return None;
+        }
+
+        let second = self.results[inst].get(1, &mut self.value_lists);
         self.results[inst].clear(&mut self.value_lists);
         if !self.insts[inst].first_type().is_void() {
             self.results[inst].push(Value::new_direct(inst), &mut self.value_lists);
         }
-        self[inst].second_result_mut().and_then(|r| r.take())
+        second
     }
 
     /// Get the next secondary result after `value`.
@@ -524,32 +523,21 @@ impl DataFlowGraph {
     /// created automatically. The `res` value must be a secondary instruction result detached from
     /// somewhere else.
     pub fn attach_secondary_result(&mut self, last_res: Value, res: Value) {
-        let (res_inst, res_num) = match last_res.expand() {
-            ExpandedValue::Direct(inst) => {
-                // We're adding the second value to `inst`.
-                let next = self[inst].second_result_mut().expect("bad inst format");
-                assert!(next.is_none(), "last_res is not the last result");
-                *next = res.into();
-                (inst, 1)
-            }
+        let res_inst = match last_res.expand() {
+            ExpandedValue::Direct(inst) => inst,
             ExpandedValue::Table(idx) => {
-                if let ValueData::Inst {
-                           num,
-                           inst,
-                           ref mut next,
-                           ..
-                       } = self.extended_values[idx] {
+                if let ValueData::Inst { inst, ref mut next, .. } = self.extended_values[idx] {
                     assert!(next.is_none(), "last_res is not the last result");
                     *next = res.into();
-                    assert!(num < u16::MAX, "Too many arguments to EBB");
-                    (inst, num + 1)
+                    inst
                 } else {
                     panic!("last_res is not an instruction result");
                 }
             }
         };
 
-        self.results[res_inst].push(res, &mut self.value_lists);
+        let res_num = self.results[res_inst].push(res, &mut self.value_lists);
+        assert!(res_num <= u16::MAX as usize, "Too many result values");
 
         // Now update `res` itself.
         if let ExpandedValue::Table(idx) = res.expand() {
@@ -559,7 +547,7 @@ impl DataFlowGraph {
                        ref mut next,
                        ..
                    } = self.extended_values[idx] {
-                *num = res_num;
+                *num = res_num as u16;
                 *inst = res_inst;
                 *next = None.into();
                 return;
