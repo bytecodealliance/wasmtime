@@ -322,13 +322,9 @@ impl DataFlowGraph {
     /// The type of the first result is indicated by `data.ty`. If the instruction produces
     /// multiple results, also call `make_inst_results` to allocate value table entries.
     pub fn make_inst(&mut self, data: InstructionData) -> Inst {
-        let ty = data.first_type();
-        let inst = self.insts.push(data);
-        let res = self.results.ensure(inst);
-        if !ty.is_void() {
-            res.push(Value::new_direct(inst), &mut self.value_lists);
-        }
-        inst
+        let n = self.num_insts() + 1;
+        self.results.resize(n);
+        self.insts.push(data)
     }
 
     /// Get the instruction reference that will be assigned to the next instruction created by
@@ -392,9 +388,8 @@ impl DataFlowGraph {
 
     /// Create result values for an instruction that produces multiple results.
     ///
-    /// Instructions that produce 0 or 1 result values only need to be created with `make_inst`. If
-    /// the instruction may produce more than 1 result, call `make_inst_results` to allocate
-    /// value table entries for the additional results.
+    /// Instructions that produce no result values only need to be created with `make_inst`,
+    /// otherwise call `make_inst_results` to allocate value table entries for the results.
     ///
     /// The result value types are determined from the instruction's value type constraints and the
     /// provided `ctrl_typevar` type for polymorphic instructions. For non-polymorphic
@@ -838,9 +833,10 @@ mod tests {
 
         let idata = InstructionData::Nullary {
             opcode: Opcode::Iconst,
-            ty: types::I32,
+            ty: types::VOID,
         };
         let inst = dfg.make_inst(idata);
+        dfg.make_inst_results(inst, types::I32);
         assert_eq!(inst.to_string(), "inst0");
         assert_eq!(dfg.display_inst(inst).to_string(), "v0 = iconst.i32");
 
