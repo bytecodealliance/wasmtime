@@ -633,7 +633,12 @@ impl DataFlowGraph {
             .expect("Instruction has no results")
     }
 
-    /// Iterate through all the results of an instruction.
+    /// Test if `inst` has any result values currently.
+    pub fn has_results(&self, inst: Inst) -> bool {
+        !self.results[inst].is_empty()
+    }
+
+    /// Return all the results of an instruction.
     pub fn inst_results(&self, inst: Inst) -> &[Value] {
         self.results[inst].as_slice(&self.value_lists)
     }

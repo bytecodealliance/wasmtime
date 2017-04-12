@@ -498,21 +498,12 @@ def gen_format_constructor(iform, fmt):
     Emit a method for creating and inserting inserting an `iform` instruction,
     where `iform` is an instruction format.
 
-    Instruction formats that can produce multiple results take a `ctrl_typevar`
-    argument for deducing the result types. Others take a `result_type`
-    argument.
+    All instruction formats take an `opcode` argument and a `ctrl_typevar`
+    argument for deducing the result types.
     """
 
     # Construct method arguments.
-    args = ['self', 'opcode: Opcode']
-
-    if iform.multiple_results:
-        args.append('ctrl_typevar: Type')
-        # `dfg::make_inst_results` will compute the result type.
-        result_type = 'types::VOID'
-    else:
-        args.append('result_type: Type')
-        result_type = 'result_type'
+    args = ['self', 'opcode: Opcode', 'ctrl_typevar: Type']
 
     # Normal operand arguments. Start with the immediate operands.
     for f in iform.imm_fields:
@@ -537,16 +528,12 @@ def gen_format_constructor(iform, fmt):
         with fmt.indented(
                 'let data = InstructionData::{} {{'.format(iform.name), '};'):
             fmt.line('opcode: opcode,')
-            fmt.line('ty: {},'.format(result_type))
+            fmt.line('ty: types::VOID,')
             if iform.multiple_results:
                 fmt.line('second_result: None.into(),')
             gen_member_inits(iform, fmt)
 
-        # Create result values if necessary.
-        if iform.multiple_results:
-            fmt.line('self.complex_instruction(data, ctrl_typevar)')
-        else:
-            fmt.line('self.simple_instruction(data)')
+        fmt.line('self.build(data, ctrl_typevar)')
 
 
 def gen_member_inits(iform, fmt):
@@ -631,34 +618,19 @@ def gen_inst_builder(inst, fmt):
         if inst.is_polymorphic and not inst.use_typevar_operand:
             # This was an explicit method argument.
             args.append(inst.ctrl_typevar.name)
-        elif len(inst.value_results) == 0:
+        elif len(inst.value_results) == 0 or not inst.is_polymorphic:
+            # No controlling type variable needed.
             args.append('types::VOID')
-        elif inst.is_polymorphic:
+        else:
+            assert inst.is_polymorphic and inst.use_typevar_operand
             # Infer the controlling type variable from the input operands.
             opnum = inst.value_opnums[inst.format.typevar_operand]
             fmt.line(
                     'let ctrl_typevar = self.data_flow_graph().value_type({});'
                     .format(inst.ins[opnum].name))
-            if inst.format.multiple_results:
-                # The format constructor will resolve the result types from the
-                # type var.
-                args.append('ctrl_typevar')
-            elif inst.outs[inst.value_results[0]].typevar == inst.ctrl_typevar:
-                # The format constructor expects a simple result type.
-                # No type transformation needed from the controlling type
-                # variable.
-                args.append('ctrl_typevar')
-            else:
-                # The format constructor expects a simple result type.
-                # TODO: This formula could be resolved ahead of time.
-                args.append(
-                        'Opcode::{}.constraints().result_type(0, ctrl_typevar)'
-                        .format(inst.camel_name))
-        else:
-            # This non-polymorphic instruction has a fixed result type.
-            args.append(
-                    inst.outs[inst.value_results[0]]
-                    .typevar.singleton_type.rust_name())
+            # The format constructor will resolve the result types from the
+            # type var.
+            args.append('ctrl_typevar')
 
         # Now add all of the immediate operands to the constructor arguments.
         for opnum in inst.imm_opnums:
@@ -717,8 +689,8 @@ def gen_builder(insts, fmt):
             The `InstrBuilder` trait has one method per instruction opcode for
             conveniently constructing the instruction with minimum arguments.
             Polymorphic instructions infer their result types from the input
-            arguments when possible. In some cases, an explicit `result_type`
-            or `ctrl_typevar` argument is required.
+            arguments when possible. In some cases, an explicit `ctrl_typevar`
+            argument is required.
 
             The opcode methods return the new instruction's result values, or
             the `Inst` itself for instructions that don't have any results.
