@@ -511,6 +511,67 @@ impl DataFlowGraph {
         panic!("{} is not a secondary result value", value);
     }
 
+    /// Detach the list of result values from `inst` and return it.
+    ///
+    /// This leaves `inst` without any result values. New result values can be created by calling
+    /// `make_inst_results` or by using a `replace(inst)` builder.
+    pub fn detach_results(&mut self, inst: Inst) -> ValueList {
+        self.results[inst].take()
+    }
+
+    /// Attach an existing value to the result value list for `inst`.
+    ///
+    /// The `res` value is appended to the end of the result list.
+    ///
+    /// This is a very low-level operation. Usually, instruction results with the correct types are
+    /// created automatically. The `res` value must not be attached to anything else.
+    pub fn attach_result(&mut self, inst: Inst, res: Value) {
+        let res_inst = inst;
+        if let Some(last_res) = self.results[inst]
+               .as_slice(&mut self.value_lists)
+               .last()
+               .cloned() {
+            self.attach_secondary_result(last_res, res);
+        } else {
+            // This is the first result.
+            self.results[res_inst].push(res, &mut self.value_lists);
+
+            // Now update `res` itself.
+            match res.expand() {
+                ExpandedValue::Table(idx) => {
+                    if let ValueData::Inst {
+                               ref mut num,
+                               ref mut inst,
+                               ref mut next,
+                               ..
+                           } = self.extended_values[idx] {
+                        *num = 0;
+                        *inst = res_inst;
+                        *next = None.into();
+                        return;
+                    }
+                }
+                ExpandedValue::Direct(inst) => {
+                    assert_eq!(inst, res_inst);
+                    return;
+                }
+            }
+            panic!("{} must be a result", res);
+        }
+    }
+
+    /// Append a new instruction result value to `inst`.
+    pub fn append_result(&mut self, inst: Inst, ty: Type) -> Value {
+        let res = self.make_value(ValueData::Inst {
+                                      ty: ty,
+                                      inst: inst,
+                                      num: 0,
+                                      next: None.into(),
+                                  });
+        self.attach_result(inst, res);
+        res
+    }
+
     /// Attach an existing value as a secondary result after `last_res` which must be the last
     /// result of an instruction.
     ///
