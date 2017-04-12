@@ -13,7 +13,6 @@
 //!
 //!    - The instruction format must match the opcode.
 //!    - All result values must be created for multi-valued instructions.
-//!    - Instructions with no results must have a VOID `first_type()`.
 //!    - All referenced entities must exist. (Values, EBBs, stack slots, ...)
 //!
 //!   SSA form
@@ -200,6 +199,12 @@ impl<'a> Verifier<'a> {
 
         for &arg in self.func.dfg.inst_args(inst) {
             self.verify_value(inst, arg)?;
+
+            // All used values must be attached to something.
+            let original = self.func.dfg.resolve_aliases(arg);
+            if !self.func.dfg.value_is_attached(original) {
+                return err!(inst, "argument {} -> {} is not attached", arg, original);
+            }
         }
 
         for &res in self.func.dfg.inst_results(inst) {

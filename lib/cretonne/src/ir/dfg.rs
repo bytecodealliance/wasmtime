@@ -156,6 +156,21 @@ impl DataFlowGraph {
         }
     }
 
+    /// Determine if `v` is an attached instruction result / EBB argument.
+    ///
+    /// An attached value can't be attached to something else without first being detached.
+    ///
+    /// Value aliases are not considered to be attached to anything. Use `resolve_aliases()` to
+    /// determine if the original aliased value is attached.
+    pub fn value_is_attached(&self, v: Value) -> bool {
+        use self::ValueData::*;
+        match self.values[v] {
+            Inst { inst, num, .. } => Some(&v) == self.inst_results(inst).get(num as usize),
+            Arg { ebb, num, .. } => Some(&v) == self.ebb_args(ebb).get(num as usize),
+            Alias { .. } => false,
+        }
+    }
+
     /// Resolve value aliases.
     ///
     /// Find the original SSA value that `value` aliases.
@@ -204,7 +219,10 @@ impl DataFlowGraph {
     ///
     /// Change the `dest` value to behave as an alias of `src`. This means that all uses of `dest`
     /// will behave as if they used that value `src`.
+    ///
+    /// The `dest` value can't be attached to an instruction or EBB.
     pub fn change_to_alias(&mut self, dest: Value, src: Value) {
+        assert!(!self.value_is_attached(dest));
         // Try to create short alias chains by finding the original source value.
         // This also avoids the creation of loops.
         let original = self.resolve_aliases(src);
@@ -409,6 +427,15 @@ impl DataFlowGraph {
         self.results[inst].take()
     }
 
+    /// Clear the list of result values from `inst`.
+    ///
+    /// This leaves `inst` without any result values. New result values can be created by calling
+    /// `make_inst_results` or by using a `replace(inst)` builder.
+    pub fn clear_results(&mut self, inst: Inst) {
+        self.results[inst].clear(&mut self.value_lists)
+    }
+
+
     /// Attach an existing value to the result value list for `inst`.
     ///
     /// The `res` value is appended to the end of the result list.
@@ -416,6 +443,7 @@ impl DataFlowGraph {
     /// This is a very low-level operation. Usually, instruction results with the correct types are
     /// created automatically. The `res` value must not be attached to anything else.
     pub fn attach_result(&mut self, inst: Inst, res: Value) {
+        assert!(!self.value_is_attached(res));
         let num = self.results[inst].push(res, &mut self.value_lists);
         assert!(num <= u16::MAX as usize, "Too many result values");
         let ty = self.value_type(res);
@@ -597,23 +625,19 @@ impl DataFlowGraph {
 
     /// Append an existing argument value to `ebb`.
     ///
-    /// The appended value should already be an EBB argument belonging to `ebb`, but it can't be
-    /// attached. In practice, this means that it should be one of the values returned from
-    /// `detach_ebb_args()`.
+    /// The appended value can't already be attached to something else.
     ///
     /// In almost all cases, you should be using `append_ebb_arg()` instead of this method.
     pub fn attach_ebb_arg(&mut self, ebb: Ebb, arg: Value) {
-        let arg_num = self.ebbs[ebb].args.push(arg, &mut self.value_lists);
-        assert!(arg_num <= u16::MAX as usize, "Too many arguments to EBB");
-
-        // Now update `arg` itself.
-        let arg_ebb = ebb;
-        if let ValueData::Arg { ref mut num, ebb, .. } = self.values[arg] {
-            *num = arg_num as u16;
-            assert_eq!(arg_ebb, ebb, "{} should already belong to EBB", arg);
-            return;
-        }
-        panic!("{} must be an EBB argument value", arg);
+        assert!(!self.value_is_attached(arg));
+        let num = self.ebbs[ebb].args.push(arg, &mut self.value_lists);
+        assert!(num <= u16::MAX as usize, "Too many arguments to EBB");
+        let ty = self.value_type(arg);
+        self.values[arg] = ValueData::Arg {
+            ty: ty,
+            num: num as u16,
+            ebb: ebb,
+        };
     }
 }
 
@@ -795,6 +819,10 @@ mod tests {
             ValueDef::Res(i, 0) => i,
             _ => panic!(),
         };
+
+        // Remove `c` from the result list.
+        dfg.clear_results(iadd);
+        dfg.attach_result(iadd, s);
 
         // Replace `iadd_cout` with a normal `iadd` and an `icmp`.
         dfg.replace(iadd).iadd(v1, arg0);
