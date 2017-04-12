@@ -115,7 +115,7 @@ mod tests {
         let arg64 = dfg.append_ebb_arg(ebb, types::I64);
         let arg32 = dfg.append_ebb_arg(ebb, types::I32);
 
-        // Try to encode iadd_imm.i64 vx1, -10.
+        // Try to encode iadd_imm.i64 v1, -10.
         let inst64 = InstructionData::BinaryImm {
             opcode: Opcode::IaddImm,
             arg: arg64,
@@ -126,7 +126,7 @@ mod tests {
         assert_eq!(encstr(&*isa, isa.encode(&dfg, &inst64, types::I64).unwrap()),
                    "I#04");
 
-        // Try to encode iadd_imm.i64 vx1, -10000.
+        // Try to encode iadd_imm.i64 v1, -10000.
         let inst64_large = InstructionData::BinaryImm {
             opcode: Opcode::IaddImm,
             arg: arg64,
@@ -162,7 +162,7 @@ mod tests {
         let arg64 = dfg.append_ebb_arg(ebb, types::I64);
         let arg32 = dfg.append_ebb_arg(ebb, types::I32);
 
-        // Try to encode iadd_imm.i64 vx1, -10.
+        // Try to encode iadd_imm.i64 v1, -10.
         let inst64 = InstructionData::BinaryImm {
             opcode: Opcode::IaddImm,
             arg: arg64,
@@ -173,7 +173,7 @@ mod tests {
         assert_eq!(isa.encode(&dfg, &inst64, types::I64),
                    Err(isa::Legalize::Narrow));
 
-        // Try to encode iadd_imm.i64 vx1, -10000.
+        // Try to encode iadd_imm.i64 v1, -10000.
         let inst64_large = InstructionData::BinaryImm {
             opcode: Opcode::IaddImm,
             arg: arg64,

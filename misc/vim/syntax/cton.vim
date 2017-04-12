@@ -18,7 +18,7 @@ syn keyword ctonDecl function stack_slot jump_table
 syn keyword ctonFilecheck check sameln nextln unordered not regex contained
 
 syn match ctonType  /\<[bif]\d\+\(x\d\+\)\?\>/
-syn match ctonEntity /\<\(v\|vx\|ss\|jt\|fn\|sig\)\d\+\>/
+syn match ctonEntity /\<\(v\|ss\|jt\|fn\|sig\)\d\+\>/
 syn match ctonLabel /\<ebb\d+\>/
 syn match ctonName /%\w\+\>/
 

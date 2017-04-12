@@ -16,7 +16,7 @@ use lexer::split_entity_name;
 /// Mapping from source entity names to entity references that are valid in the parsed function.
 #[derive(Debug)]
 pub struct SourceMap {
-    values: HashMap<Value, Value>, // vNN, vxNN
+    values: HashMap<Value, Value>, // vNN
     ebbs: HashMap<Ebb, Ebb>, // ebbNN
     stack_slots: HashMap<u32, StackSlot>, // ssNN
     signatures: HashMap<u32, SigRef>, // sigNN
@@ -64,12 +64,7 @@ impl SourceMap {
     pub fn lookup_str(&self, name: &str) -> Option<AnyEntity> {
         split_entity_name(name).and_then(|(ent, num)| match ent {
                                              "v" => {
-                                                 Value::direct_with_number(num)
-                                                     .and_then(|v| self.get_value(v))
-                                                     .map(AnyEntity::Value)
-                                             }
-                                             "vx" => {
-                                                 Value::table_with_number(num)
+                                                 Value::with_number(num)
                                                      .and_then(|v| self.get_value(v))
                                                      .map(AnyEntity::Value)
                                              }
@@ -230,8 +225,8 @@ mod tests {
         let tf = parse_test("function detail() {
                                ss10 = stack_slot 13
                                jt10 = jump_table ebb0
-                             ebb0(v4: i32, vx7: i32):
-                               v10 = iadd v4, vx7
+                             ebb0(v4: i32, v7: i32):
+                               v10 = iadd v4, v7
                              }")
                 .unwrap();
         let map = &tf.functions[0].1.map;
@@ -241,8 +236,8 @@ mod tests {
         assert_eq!(map.lookup_str("ss10").unwrap().to_string(), "ss0");
         assert_eq!(map.lookup_str("jt10").unwrap().to_string(), "jt0");
         assert_eq!(map.lookup_str("ebb0").unwrap().to_string(), "ebb0");
-        assert_eq!(map.lookup_str("v4").unwrap().to_string(), "vx0");
-        assert_eq!(map.lookup_str("vx7").unwrap().to_string(), "vx1");
-        assert_eq!(map.lookup_str("v10").unwrap().to_string(), "vx2");
+        assert_eq!(map.lookup_str("v4").unwrap().to_string(), "v0");
+        assert_eq!(map.lookup_str("v7").unwrap().to_string(), "v1");
+        assert_eq!(map.lookup_str("v10").unwrap().to_string(), "v2");
     }
 }

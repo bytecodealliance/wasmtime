@@ -47,10 +47,9 @@ class CretonneLexer(RegexLexer):
             # Well known value types.
             (r'\b(b\d+|i\d+|f32|f64)(x\d+)?\b', Keyword.Type),
             # v<nn> = value
-            # vx<nn> = value
             # ss<nn> = stack slot
             # jt<nn> = jump table
-            (r'(vx?|ss|jt)\d+', Name.Variable),
+            (r'(v|ss|jt)\d+', Name.Variable),
             # ebb<nn> = extended basic block
             (r'(ebb)\d+', Name.Label),
             # Match instruction names in context.

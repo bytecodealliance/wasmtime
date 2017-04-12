@@ -1011,7 +1011,7 @@ impl<'a> Parser<'a> {
             // We need to parse instruction results here because they are shared
             // between the parsing of value aliases and the parsing of instructions.
             //
-            // inst-results ::= Value(v) { "," Value(vx) }
+            // inst-results ::= Value(v) { "," Value(v) }
             let results = self.parse_inst_results()?;
 
             match self.token() {
@@ -1032,7 +1032,7 @@ impl<'a> Parser<'a> {
     }
 
     // Parse parenthesized list of EBB arguments. Returns a vector of (u32, Type) pairs with the
-    // source vx numbers of the defined values and the defined types.
+    // source value numbers of the defined values and the defined types.
     //
     // ebb-args ::= * "(" ebb-arg { "," ebb-arg } ")"
     fn parse_ebb_args(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
@@ -1056,19 +1056,19 @@ impl<'a> Parser<'a> {
 
     // Parse a single EBB argument declaration, and append it to `ebb`.
     //
-    // ebb-arg ::= * Value(vx) ":" Type(t)
+    // ebb-arg ::= * Value(v) ":" Type(t)
     //
     fn parse_ebb_arg(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
-        // ebb-arg ::= * Value(vx) ":" Type(t)
-        let vx = self.match_value("EBB argument must be a value")?;
-        let vx_location = self.loc;
-        // ebb-arg ::= Value(vx) * ":" Type(t)
+        // ebb-arg ::= * Value(v) ":" Type(t)
+        let v = self.match_value("EBB argument must be a value")?;
+        let v_location = self.loc;
+        // ebb-arg ::= Value(v) * ":" Type(t)
         self.match_token(Token::Colon, "expected ':' after EBB argument")?;
-        // ebb-arg ::= Value(vx) ":" * Type(t)
+        // ebb-arg ::= Value(v) ":" * Type(t)
         let t = self.match_type("expected EBB argument type")?;
         // Allocate the EBB argument and add the mapping.
         let value = ctx.function.dfg.append_ebb_arg(ebb, t);
-        ctx.map.def_value(vx, value, &vx_location)
+        ctx.map.def_value(v, value, &v_location)
     }
 
     fn parse_value_location(&mut self, ctx: &Context) -> Result<ValueLoc> {
@@ -1147,21 +1147,21 @@ impl<'a> Parser<'a> {
 
     // Parse instruction results and return them.
     //
-    // inst-results ::= Value(v) { "," Value(vx) }
+    // inst-results ::= Value(v) { "," Value(v) }
     //
     fn parse_inst_results(&mut self) -> Result<Vec<Value>> {
         // Result value numbers.
         let mut results = Vec::new();
 
         // instruction  ::=  * [inst-results "="] Opcode(opc) ["." Type] ...
-        // inst-results ::= * Value(v) { "," Value(vx) }
+        // inst-results ::= * Value(v) { "," Value(v) }
         if let Some(Token::Value(v)) = self.token() {
             self.consume();
             results.push(v);
 
-            // inst-results ::= Value(v) * { "," Value(vx) }
+            // inst-results ::= Value(v) * { "," Value(v) }
             while self.optional(Token::Comma) {
-                // inst-results ::= Value(v) { "," * Value(vx) }
+                // inst-results ::= Value(v) { "," * Value(v) }
                 results.push(self.match_value("expected result value")?);
             }
         }
@@ -1171,7 +1171,7 @@ impl<'a> Parser<'a> {
 
     // Parse a value alias, and append it to `ebb`.
     //
-    // value_alias ::= [inst-results] "->" Value(vx)
+    // value_alias ::= [inst-results] "->" Value(v)
     //
     fn parse_value_alias(&mut self, results: Vec<Value>, ctx: &mut Context) -> Result<()> {
         if results.len() != 1 {
@@ -1711,19 +1711,23 @@ mod tests {
         let (func, details) = Parser::new("function qux() {
                                            ebb0:
                                              v4 = iconst.i8 6
-                                             vx3 -> v4
-                                             v1 = iadd_imm vx3, 17
+                                             v3 -> v4
+                                             v1 = iadd_imm v3, 17
                                            }")
                 .parse_function(None)
                 .unwrap();
         assert_eq!(func.name.to_string(), "qux");
         let v4 = details.map.lookup_str("v4").unwrap();
-        assert_eq!(v4.to_string(), "vx0");
-        let vx3 = details.map.lookup_str("vx3").unwrap();
-        assert_eq!(vx3.to_string(), "vx2");
-        let aliased_to = func.dfg
-            .resolve_aliases(Value::table_with_number(0).unwrap());
-        assert_eq!(aliased_to.to_string(), "vx0");
+        assert_eq!(v4.to_string(), "v0");
+        let v3 = details.map.lookup_str("v3").unwrap();
+        assert_eq!(v3.to_string(), "v2");
+        match v3 {
+            AnyEntity::Value(v3) => {
+                let aliased_to = func.dfg.resolve_aliases(v3);
+                assert_eq!(aliased_to.to_string(), "v0");
+            }
+            _ => panic!("expected value: {}", v3),
+        }
     }
 
     #[test]
@@ -1789,7 +1793,7 @@ mod tests {
     fn ebb_header() {
         let (func, _) = Parser::new("function ebbs() {
                                      ebb0:
-                                     ebb4(vx3: i32):
+                                     ebb4(v3: i32):
                                      }")
                 .parse_function(None)
                 .unwrap();

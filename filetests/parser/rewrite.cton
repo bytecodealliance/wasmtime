@@ -12,13 +12,13 @@ test cat
 function defs() {
 ebb100(v20: i32):
     v1000 = iconst.i32x8 5
-    vx200 = f64const 0x4.0p0
+    v9200 = f64const 0x4.0p0
     trap
 }
 ; sameln: function defs() {
 ; nextln: $ebb100($v20: i32):
 ; nextln:     $v1000 = iconst.i32x8 5
-; nextln:     $vx200 = f64const 0x1.0000000000000p2
+; nextln:     $v9200 = f64const 0x1.0000000000000p2
 ; nextln:     trap
 ; nextln: }
 

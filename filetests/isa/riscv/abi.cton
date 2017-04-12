@@ -3,7 +3,6 @@ test legalizer
 isa riscv
 
 ; regex: V=v\d+
-; regex: VX=vx\d+
 
 function f(i32) {
     sig0 = signature(i32) -> i32
