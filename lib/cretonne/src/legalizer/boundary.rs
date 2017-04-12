@@ -107,7 +107,7 @@ fn legalize_inst_results<ResType>(dfg: &mut DataFlowGraph,
                                   -> Inst
     where ResType: FnMut(&DataFlowGraph, usize) -> ArgumentType
 {
-    let mut call = pos.current_inst()
+    let call = pos.current_inst()
         .expect("Cursor must point to a call instruction");
 
     // We theoretically allow for call instructions that return a number of fixed results before
@@ -115,58 +115,26 @@ fn legalize_inst_results<ResType>(dfg: &mut DataFlowGraph,
     let fixed_results = dfg[call].opcode().constraints().fixed_results();
     assert_eq!(fixed_results, 0, "Fixed results  on calls not supported");
 
-    let mut next_res = dfg.detach_secondary_results(call);
-    // The currently last result on the call instruction.
-    let mut last_res = dfg.first_result(call);
+    let results = dfg.detach_results(call);
+    let mut next_res = 0;
     let mut abi_res = 0;
 
-    // The first result requires special handling.
-    let first_ty = dfg.value_type(last_res);
-    if first_ty != get_abi_type(dfg, abi_res).value_type {
-        // Move the call out of the way, so we can redefine the first result.
-        let copy = call;
-        call = dfg.redefine_first_value(pos);
-        last_res = dfg.first_result(call);
-        // Set up a closure that can attach new results to `call`.
-        let mut get_res = |dfg: &mut DataFlowGraph, ty| {
-            let abi_type = get_abi_type(dfg, abi_res);
-            if ty == abi_type.value_type {
-                // Don't append the first result - it's not detachable.
-                if fixed_results + abi_res == 0 {
-                    *dfg[call].first_type_mut() = ty;
-                    debug_assert_eq!(last_res, dfg.first_result(call));
-                } else {
-                    last_res = dfg.append_secondary_result(last_res, ty);
-                }
-                abi_res += 1;
-                Ok(last_res)
-            } else {
-                Err(abi_type)
-            }
-        };
-
-        let v = convert_from_abi(dfg, pos, first_ty, &mut get_res);
-        dfg.replace(copy).copy(v);
-    }
-
-    // Point immediately after the call and any instructions dealing with the first result.
+    // Point immediately after the call.
     pos.next_inst();
 
-    // Now do the secondary results.
-    while let Some(res) = next_res {
-        next_res = dfg.next_secondary_result(res);
+    while let Some(res) = results.get(next_res, &dfg.value_lists) {
+        next_res += 1;
 
         let res_type = dfg.value_type(res);
         if res_type == get_abi_type(dfg, abi_res).value_type {
             // No value translation is necessary, this result matches the ABI type.
-            dfg.attach_secondary_result(last_res, res);
-            last_res = res;
+            dfg.attach_result(call, res);
             abi_res += 1;
         } else {
             let mut get_res = |dfg: &mut DataFlowGraph, ty| {
                 let abi_type = get_abi_type(dfg, abi_res);
                 if ty == abi_type.value_type {
-                    last_res = dfg.append_secondary_result(last_res, ty);
+                    let last_res = dfg.append_result(call, ty);
                     abi_res += 1;
                     Ok(last_res)
                 } else {
@@ -199,12 +167,17 @@ fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
 {
     // Terminate the recursion when we get the desired type.
     let arg_type = match get_arg(dfg, ty) {
-        Ok(v) => return v,
+        Ok(v) => {
+            debug_assert_eq!(dfg.value_type(v), ty);
+            return v;
+        }
         Err(t) => t,
     };
 
     // Reconstruct how `ty` was legalized into the `arg_type` argument.
     let conversion = legalize_abi_value(ty, &arg_type);
+
+    dbg!("convert_from_abi({}): {:?}", ty, conversion);
 
     // The conversion describes value to ABI argument. We implement the reverse conversion here.
     match conversion {
@@ -213,6 +186,11 @@ fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
             let abi_ty = ty.half_width().expect("Invalid type for conversion");
             let lo = convert_from_abi(dfg, pos, abi_ty, get_arg);
             let hi = convert_from_abi(dfg, pos, abi_ty, get_arg);
+            dbg!("intsplit {}: {}, {}: {}",
+                 lo,
+                 dfg.value_type(lo),
+                 hi,
+                 dfg.value_type(hi));
             dfg.ins(pos).iconcat(lo, hi)
         }
         // Construct a `ty` by concatenating two halves of a vector.

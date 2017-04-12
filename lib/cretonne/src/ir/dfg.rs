@@ -454,8 +454,14 @@ impl DataFlowGraph {
         *self.insts[inst].first_type_mut() = first_type.unwrap_or_default();
 
         // Include the first result in the results vector.
-        if first_type.is_some() {
-            self.results[inst].push(Value::new_direct(inst), &mut self.value_lists);
+        if let Some(ty) = first_type {
+            let v = self.make_value(ValueData::Inst {
+                                        ty: ty,
+                                        num: 0,
+                                        inst: inst,
+                                        next: head.into(),
+                                    });
+            self.results[inst].push(v, &mut self.value_lists);
         }
         self.results[inst]
             .as_mut_slice(&mut self.value_lists)
@@ -489,11 +495,10 @@ impl DataFlowGraph {
             return None;
         }
 
+        let first = self.results[inst].first(&mut self.value_lists).unwrap();
         let second = self.results[inst].get(1, &mut self.value_lists);
         self.results[inst].clear(&mut self.value_lists);
-        if !self.insts[inst].first_type().is_void() {
-            self.results[inst].push(Value::new_direct(inst), &mut self.value_lists);
-        }
+        self.results[inst].push(first, &mut self.value_lists);
         second
     }
 
@@ -649,21 +654,36 @@ impl DataFlowGraph {
     pub fn redefine_first_value(&mut self, pos: &mut Cursor) -> Inst {
         let orig = pos.current_inst()
             .expect("Cursor must point at an instruction");
+        let first_res = self.first_result(orig);
+        let first_type = self.value_type(first_res);
         let data = self[orig].clone();
-        // After cloning, any secondary values are attached to both copies. Don't do that, we only
-        // want them on the new clone.
-        let mut results = self.results[orig].take();
-        self.detach_secondary_results(orig);
+        let results = self.results[orig].take();
+        self.results[orig].push(first_res, &mut self.value_lists);
+
+
         let new = self.make_inst(data);
-        results.as_mut_slice(&mut self.value_lists)[0] = Value::new_direct(new);
-        self.results[new] = results;
+        let new_first = self.make_value(ValueData::Inst {
+                                            ty: first_type,
+                                            num: 0,
+                                            inst: new,
+                                            next: None.into(),
+                                        });
+        self.results[new].push(new_first, &mut self.value_lists);
+
+        for i in 1.. {
+            if let Some(v) = results.get(i, &self.value_lists) {
+                self.attach_result(new, v);
+            } else {
+                break;
+            }
+        }
+
         pos.insert_inst(new);
         // Replace the original instruction with a copy of the new value.
         // This is likely to be immediately overwritten by something else, but this way we avoid
         // leaving the DFG in a state with multiple references to secondary results and value
         // lists. It also means that this method doesn't change the semantics of the program.
-        let new_value = self.first_result(new);
-        self.replace(orig).copy(new_value);
+        self.replace(orig).copy(new_first);
         new
     }
 
@@ -898,7 +918,7 @@ mod tests {
         let inst = dfg.make_inst(idata);
         dfg.make_inst_results(inst, types::I32);
         assert_eq!(inst.to_string(), "inst0");
-        assert_eq!(dfg.display_inst(inst).to_string(), "v0 = iconst.i32");
+        assert_eq!(dfg.display_inst(inst).to_string(), "vx0 = iconst.i32");
 
         // Immutable reference resolution.
         {
