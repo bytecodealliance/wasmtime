@@ -207,13 +207,12 @@ impl DataFlowGraph {
     /// Find the original definition of a value, looking through value aliases as well as
     /// copy/spill/fill instructions.
     pub fn resolve_copies(&self, value: Value) -> Value {
-        use ir::entities::ExpandedValue::Direct;
         let mut v = value;
 
         for _ in 0..self.insts.len() {
             v = self.resolve_aliases(v);
-            v = match v.expand() {
-                Direct(inst) => {
+            v = match self.value_def(v) {
+                ValueDef::Res(inst, 0) => {
                     match self[inst] {
                         InstructionData::Unary { opcode, arg, .. } => {
                             match opcode {
@@ -1003,7 +1002,6 @@ mod tests {
     #[test]
     fn aliases() {
         use ir::InstBuilder;
-        use ir::entities::ExpandedValue::Direct;
         use ir::condcodes::IntCC;
 
         let mut func = Function::new();
@@ -1020,8 +1018,8 @@ mod tests {
 
         let arg0 = dfg.append_ebb_arg(ebb0, types::I32);
         let (s, c) = dfg.ins(pos).iadd_cout(v1, arg0);
-        let iadd = match s.expand() {
-            Direct(i) => i,
+        let iadd = match dfg.value_def(s) {
+            ValueDef::Res(i, 0) => i,
             _ => panic!(),
         };
 
