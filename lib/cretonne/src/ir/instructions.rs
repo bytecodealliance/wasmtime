@@ -14,7 +14,6 @@ use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef, StackSlot, MemFlags};
 use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32, Uoffset32};
 use ir::condcodes::*;
 use ir::types;
-use ir::DataFlowGraph;
 
 use entity_list;
 use ref_slice::{ref_slice, ref_slice_mut};
@@ -395,27 +394,6 @@ impl InstructionData {
                 CallInfo::Indirect(sig_ref, &args.as_slice(pool)[1..])
             }
             _ => CallInfo::NotACall,
-        }
-    }
-
-    /// Get the controlling type variable, or `VOID` if this instruction isn't polymorphic.
-    ///
-    /// In most cases, the controlling type variable is the same as the first result type, but some
-    /// opcodes require us to read the type of the designated type variable operand from `dfg`.
-    pub fn ctrl_typevar(&self, dfg: &DataFlowGraph) -> Type {
-        let constraints = self.opcode().constraints();
-
-        if !constraints.is_polymorphic() {
-            types::VOID
-        } else if constraints.requires_typevar_operand() {
-            // Not all instruction formats have a designated operand, but in that case
-            // `requires_typevar_operand()` should never be true.
-            dfg.value_type(self.typevar_operand(&dfg.value_lists)
-                .expect("Instruction format doesn't have a designated operand, bad opcode."))
-        } else {
-            // For locality of reference, we prefer to get the controlling type variable from
-            // `idata` itself, when possible.
-            self.first_type()
         }
     }
 }

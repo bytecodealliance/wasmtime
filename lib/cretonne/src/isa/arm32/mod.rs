@@ -60,10 +60,11 @@ impl TargetIsa for Isa {
     }
 
     fn encode(&self,
-              dfg: &ir::DataFlowGraph,
-              inst: &ir::InstructionData)
+              _dfg: &ir::DataFlowGraph,
+              inst: &ir::InstructionData,
+              ctrl_typevar: ir::Type)
               -> Result<Encoding, Legalize> {
-        lookup_enclist(inst.ctrl_typevar(dfg),
+        lookup_enclist(ctrl_typevar,
                        inst.opcode(),
                        self.cpumode,
                        &enc_tables::LEVEL2[..])

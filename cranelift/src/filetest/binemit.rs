@@ -110,7 +110,9 @@ impl SubTest for TestBinEmit {
                         .get(inst)
                         .map(|e| e.is_legal())
                         .unwrap_or(false) {
-                    if let Ok(enc) = isa.encode(&func.dfg, &func.dfg[inst]) {
+                    if let Ok(enc) = isa.encode(&func.dfg,
+                                                &func.dfg[inst],
+                                                func.dfg.ctrl_typevar(inst)) {
                         *func.encodings.ensure(inst) = enc;
                     }
                 }

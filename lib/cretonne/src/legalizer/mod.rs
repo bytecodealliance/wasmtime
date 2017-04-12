@@ -64,7 +64,7 @@ pub fn legalize_function(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &
                 split::simplify_branch_arguments(&mut func.dfg, inst);
             }
 
-            match isa.encode(&func.dfg, &func.dfg[inst]) {
+            match isa.encode(&func.dfg, &func.dfg[inst], func.dfg.ctrl_typevar(inst)) {
                 Ok(encoding) => *func.encodings.ensure(inst) = encoding,
                 Err(action) => {
                     // We should transform the instruction into legal equivalents.

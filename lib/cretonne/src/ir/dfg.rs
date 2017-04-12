@@ -1,12 +1,13 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
-use ir::entities::ExpandedValue;
-use ir::instructions::{Opcode, InstructionData, CallInfo};
-use ir::extfunc::ExtFuncData;
 use entity_map::{EntityMap, PrimaryEntityData};
 use ir::builder::{InsertBuilder, ReplaceBuilder};
+use ir::entities::ExpandedValue;
+use ir::extfunc::ExtFuncData;
+use ir::instructions::{Opcode, InstructionData, CallInfo};
 use ir::layout::Cursor;
+use ir::types;
+use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
 use write::write_operands;
 
 use std::fmt;
@@ -541,6 +542,22 @@ impl DataFlowGraph {
                               .map(|&arg| arg.value_type)
                       })
     }
+
+    /// Get the controlling type variable, or `VOID` if `inst` isn't polymorphic.
+    pub fn ctrl_typevar(&self, inst: Inst) -> Type {
+        let constraints = self[inst].opcode().constraints();
+
+        if !constraints.is_polymorphic() {
+            types::VOID
+        } else if constraints.requires_typevar_operand() {
+            // Not all instruction formats have a designated operand, but in that case
+            // `requires_typevar_operand()` should never be true.
+            self.value_type(self[inst].typevar_operand(&self.value_lists)
+                .expect("Instruction format doesn't have a designated operand, bad opcode."))
+        } else {
+            self.value_type(self.first_result(inst))
+        }
+    }
 }
 
 /// Allow immutable access to instructions via indexing.
@@ -688,7 +705,7 @@ impl<'a> fmt::Display for DisplayInst<'a> {
         }
 
 
-        let typevar = inst.ctrl_typevar(dfg);
+        let typevar = dfg.ctrl_typevar(self.1);
         if typevar.is_void() {
             write!(f, "{}", inst.opcode())?;
         } else {

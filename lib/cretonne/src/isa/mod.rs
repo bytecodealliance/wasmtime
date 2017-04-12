@@ -46,7 +46,7 @@ pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex};
 
 use binemit::CodeSink;
 use settings;
-use ir::{Function, Inst, InstructionData, DataFlowGraph, Signature};
+use ir::{Function, Inst, InstructionData, DataFlowGraph, Signature, Type};
 
 pub mod riscv;
 pub mod intel;
@@ -141,7 +141,11 @@ pub trait TargetIsa {
     /// Otherwise, return `None`.
     ///
     /// This is also the main entry point for determining if an instruction is legal.
-    fn encode(&self, dfg: &DataFlowGraph, inst: &InstructionData) -> Result<Encoding, Legalize>;
+    fn encode(&self,
+              dfg: &DataFlowGraph,
+              inst: &InstructionData,
+              ctrl_typevar: Type)
+              -> Result<Encoding, Legalize>;
 
     /// Get a data structure describing the instruction encodings in this ISA.
     fn encoding_info(&self) -> EncInfo;
