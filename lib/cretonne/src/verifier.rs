@@ -183,23 +183,13 @@ impl<'a> Verifier<'a> {
             .unwrap_or(0);
         let total_results = fixed_results + var_results;
 
-        if total_results == 0 {
-            // Instructions with no results have a NULL `first_type()`
-            let ret_type = inst_data.first_type();
-            if ret_type != types::VOID {
-                return err!(inst,
-                            "instruction with no results expects NULL return type, found {}",
-                            ret_type);
-            }
-        } else {
-            // All result values for multi-valued instructions are created
-            let got_results = dfg.inst_results(inst).len();
-            if got_results != total_results {
-                return err!(inst,
-                            "expected {} result values, found {}",
-                            total_results,
-                            got_results);
-            }
+        // All result values for multi-valued instructions are created
+        let got_results = dfg.inst_results(inst).len();
+        if got_results != total_results {
+            return err!(inst,
+                        "expected {} result values, found {}",
+                        total_results,
+                        got_results);
         }
 
         self.verify_entity_references(inst)
@@ -671,7 +661,6 @@ mod tests {
     use super::{Verifier, Error};
     use ir::Function;
     use ir::instructions::{InstructionData, Opcode};
-    use ir::types;
 
     macro_rules! assert_err_with_msg {
         ($e:expr, $msg:expr) => (
@@ -698,11 +687,9 @@ mod tests {
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();
         func.layout.append_ebb(ebb0);
-        let nullary_with_bad_opcode = func.dfg
-            .make_inst(InstructionData::Nullary {
-                           opcode: Opcode::Jump,
-                           ty: types::VOID,
-                       });
+        let nullary_with_bad_opcode =
+            func.dfg
+                .make_inst(InstructionData::Nullary { opcode: Opcode::Jump });
         func.layout.append_inst(nullary_with_bad_opcode, ebb0);
         let verifier = Verifier::new(&func);
         assert_err_with_msg!(verifier.run(), "instruction format");

@@ -109,16 +109,14 @@ def gen_instruction_data_impl(fmt):
     the instruction formats:
 
     - `pub fn opcode(&self) -> Opcode`
-    - `pub fn first_type(&self) -> Type`
     - `pub fn arguments(&self, &pool) -> &[Value]`
     - `pub fn arguments_mut(&mut self, &pool) -> &mut [Value]`
     - `pub fn take_value_list(&mut self) -> Option<ValueList>`
     - `pub fn put_value_list(&mut self, args: ValueList>`
     """
 
-    # The `opcode` and `first_type` methods simply read the `opcode` and `ty`
-    # members. This is really a workaround for Rust's enum types missing shared
-    # members.
+    # The `opcode` method simply reads the `opcode` members. This is really a
+    # workaround for Rust's enum types missing shared members.
     with fmt.indented('impl InstructionData {', '}'):
         fmt.doc_comment('Get the opcode of this instruction.')
         with fmt.indented('pub fn opcode(&self) -> Opcode {', '}'):
@@ -126,23 +124,6 @@ def gen_instruction_data_impl(fmt):
                 for f in InstructionFormat.all_formats:
                     fmt.line(
                             'InstructionData::{} {{ opcode, .. }} => opcode,'
-                            .format(f.name))
-
-        fmt.doc_comment('Type of the first result, or `VOID`.')
-        with fmt.indented('pub fn first_type(&self) -> Type {', '}'):
-            with fmt.indented('match *self {', '}'):
-                for f in InstructionFormat.all_formats:
-                    fmt.line(
-                            'InstructionData::{} {{ ty, .. }} => ty,'
-                            .format(f.name))
-
-        fmt.doc_comment('Mutable reference to the type of the first result.')
-        with fmt.indented(
-                'pub fn first_type_mut(&mut self) -> &mut Type {', '}'):
-            with fmt.indented('match *self {', '}'):
-                for f in InstructionFormat.all_formats:
-                    fmt.line(
-                            'InstructionData::{} {{ ref mut ty, .. }} => ty,'
                             .format(f.name))
 
         fmt.doc_comment('Get the controlling type variable operand.')
@@ -490,7 +471,6 @@ def gen_format_constructor(iform, fmt):
         with fmt.indented(
                 'let data = InstructionData::{} {{'.format(iform.name), '};'):
             fmt.line('opcode: opcode,')
-            fmt.line('ty: types::VOID,')
             gen_member_inits(iform, fmt)
 
         fmt.line('self.build(data, ctrl_typevar)')
