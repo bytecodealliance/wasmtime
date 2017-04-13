@@ -10,6 +10,7 @@ use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueLis
 use write::write_operands;
 
 use std::fmt;
+use std::iter;
 use std::ops::{Index, IndexMut};
 use std::u16;
 
@@ -368,6 +369,22 @@ impl DataFlowGraph {
     /// `InstructionData` passed to `make_inst`. If this function is called with a single-result
     /// instruction, that is the only effect.
     pub fn make_inst_results(&mut self, inst: Inst, ctrl_typevar: Type) -> usize {
+        self.make_inst_results_reusing(inst, ctrl_typevar, iter::empty())
+    }
+
+    /// Create result values for `inst`, reusing the provided detached values.
+    ///
+    /// Create a new set of result values for `inst` using `ctrl_typevar` to determine the result
+    /// types. Any values provided by `reuse` will be reused. When `reuse` is exhausted or when it
+    /// produces `None`, a new value is created.
+    pub fn make_inst_results_reusing<I>(&mut self,
+                                        inst: Inst,
+                                        ctrl_typevar: Type,
+                                        reuse: I)
+                                        -> usize
+        where I: Iterator<Item = Option<Value>>
+    {
+        let mut reuse = reuse.fuse();
         let constraints = self.insts[inst].opcode().constraints();
         let fixed_results = constraints.fixed_results();
         let mut total_results = fixed_results;
@@ -376,7 +393,13 @@ impl DataFlowGraph {
 
         // The fixed results will appear at the front of the list.
         for res_idx in 0..fixed_results {
-            self.append_result(inst, constraints.result_type(res_idx, ctrl_typevar));
+            let ty = constraints.result_type(res_idx, ctrl_typevar);
+            if let Some(Some(v)) = reuse.next() {
+                debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
+                self.attach_result(inst, v);
+            } else {
+                self.append_result(inst, ty);
+            }
         }
 
         // Get the call signature if this is a function call.
@@ -386,7 +409,12 @@ impl DataFlowGraph {
             total_results += var_results;
             for res_idx in 0..var_results {
                 let ty = self.signatures[sig].return_types[res_idx].value_type;
-                self.append_result(inst, ty);
+                if let Some(Some(v)) = reuse.next() {
+                    debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
+                    self.attach_result(inst, v);
+                } else {
+                    self.append_result(inst, ty);
+                }
             }
         }
 
