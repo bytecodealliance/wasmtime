@@ -433,20 +433,6 @@ impl DataFlowGraph {
         ReplaceBuilder::new(self, inst)
     }
 
-    /// Detach secondary instruction results.
-    ///
-    /// If `inst` produces two or more results, detach these secondary result values from `inst`.
-    /// The first result value cannot be detached.
-    ///
-    /// Use this method to detach secondary values before using `replace(inst)` to provide an
-    /// alternate instruction for computing the primary result value.
-    pub fn detach_secondary_results(&mut self, inst: Inst) {
-        if let Some(first) = self.results[inst].first(&mut self.value_lists) {
-            self.results[inst].clear(&mut self.value_lists);
-            self.results[inst].push(first, &mut self.value_lists);
-        }
-    }
-
     /// Detach the list of result values from `inst` and return it.
     ///
     /// This leaves `inst` without any result values. New result values can be created by calling
@@ -484,13 +470,14 @@ impl DataFlowGraph {
 
     /// Append a new instruction result value to `inst`.
     pub fn append_result(&mut self, inst: Inst, ty: Type) -> Value {
-        let res = self.make_value(ValueData::Inst {
-                                      ty: ty,
-                                      inst: inst,
-                                      num: 0,
-                                  });
-        self.attach_result(inst, res);
-        res
+        let res = self.values.next_key();
+        let num = self.results[inst].push(res, &mut self.value_lists);
+        assert!(num <= u16::MAX as usize, "Too many result values");
+        self.make_value(ValueData::Inst {
+                            ty: ty,
+                            inst: inst,
+                            num: num as u16,
+                        })
     }
 
     /// Get the first result of an instruction.
@@ -596,20 +583,38 @@ impl DataFlowGraph {
         self.ebbs[ebb].args.len(&self.value_lists)
     }
 
-    /// Append an argument with type `ty` to `ebb`.
-    pub fn append_ebb_arg(&mut self, ebb: Ebb, ty: Type) -> Value {
-        let val = self.make_value(ValueData::Arg {
-                                      ty: ty,
-                                      ebb: ebb,
-                                      num: 0,
-                                  });
-        self.attach_ebb_arg(ebb, val);
-        val
-    }
-
     /// Get the arguments to an EBB.
     pub fn ebb_args(&self, ebb: Ebb) -> &[Value] {
         self.ebbs[ebb].args.as_slice(&self.value_lists)
+    }
+
+    /// Append an argument with type `ty` to `ebb`.
+    pub fn append_ebb_arg(&mut self, ebb: Ebb, ty: Type) -> Value {
+        let arg = self.values.next_key();
+        let num = self.ebbs[ebb].args.push(arg, &mut self.value_lists);
+        assert!(num <= u16::MAX as usize, "Too many arguments to EBB");
+        self.make_value(ValueData::Arg {
+                            ty: ty,
+                            num: num as u16,
+                            ebb: ebb,
+                        })
+    }
+
+    /// Append an existing argument value to `ebb`.
+    ///
+    /// The appended value can't already be attached to something else.
+    ///
+    /// In almost all cases, you should be using `append_ebb_arg()` instead of this method.
+    pub fn attach_ebb_arg(&mut self, ebb: Ebb, arg: Value) {
+        assert!(!self.value_is_attached(arg));
+        let num = self.ebbs[ebb].args.push(arg, &mut self.value_lists);
+        assert!(num <= u16::MAX as usize, "Too many arguments to EBB");
+        let ty = self.value_type(arg);
+        self.values[arg] = ValueData::Arg {
+            ty: ty,
+            num: num as u16,
+            ebb: ebb,
+        };
     }
 
     /// Replace an EBB argument with a new value of type `ty`.
@@ -622,15 +627,11 @@ impl DataFlowGraph {
     ///
     /// Returns the new value.
     pub fn replace_ebb_arg(&mut self, old_arg: Value, new_type: Type) -> Value {
-        let old_data = self.values[old_arg].clone();
-
         // Create new value identical to the old one except for the type.
-        let (ebb, num) = if let ValueData::Arg { num, ebb, .. } = old_data {
+        let (ebb, num) = if let ValueData::Arg { num, ebb, .. } = self.values[old_arg] {
             (ebb, num)
         } else {
-            panic!("old_arg: {} must be an EBB argument: {:?}",
-                   old_arg,
-                   old_data);
+            panic!("{} must be an EBB argument", old_arg);
         };
         let new_arg = self.make_value(ValueData::Arg {
                                           ty: new_type,
@@ -649,23 +650,6 @@ impl DataFlowGraph {
     /// with `change_to_alias()`.
     pub fn detach_ebb_args(&mut self, ebb: Ebb) -> ValueList {
         self.ebbs[ebb].args.take()
-    }
-
-    /// Append an existing argument value to `ebb`.
-    ///
-    /// The appended value can't already be attached to something else.
-    ///
-    /// In almost all cases, you should be using `append_ebb_arg()` instead of this method.
-    pub fn attach_ebb_arg(&mut self, ebb: Ebb, arg: Value) {
-        assert!(!self.value_is_attached(arg));
-        let num = self.ebbs[ebb].args.push(arg, &mut self.value_lists);
-        assert!(num <= u16::MAX as usize, "Too many arguments to EBB");
-        let ty = self.value_type(arg);
-        self.values[arg] = ValueData::Arg {
-            ty: ty,
-            num: num as u16,
-            ebb: ebb,
-        };
     }
 }
 
