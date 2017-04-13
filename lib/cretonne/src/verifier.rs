@@ -255,10 +255,8 @@ impl<'a> Verifier<'a> {
             &UnaryImm { .. } |
             &UnaryIeee32 { .. } |
             &UnaryIeee64 { .. } |
-            &UnarySplit { .. } |
             &Binary { .. } |
             &BinaryImm { .. } |
-            &BinaryOverflow { .. } |
             &Ternary { .. } |
             &InsertLane { .. } |
             &ExtractLane { .. } |

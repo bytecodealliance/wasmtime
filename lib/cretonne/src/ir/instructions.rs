@@ -105,14 +105,12 @@ pub enum InstructionData {
     UnaryImm { opcode: Opcode, imm: Imm64 },
     UnaryIeee32 { opcode: Opcode, imm: Ieee32 },
     UnaryIeee64 { opcode: Opcode, imm: Ieee64 },
-    UnarySplit { opcode: Opcode, arg: Value },
     Binary { opcode: Opcode, args: [Value; 2] },
     BinaryImm {
         opcode: Opcode,
         arg: Value,
         imm: Imm64,
     },
-    BinaryOverflow { opcode: Opcode, args: [Value; 2] },
     Ternary { opcode: Opcode, args: [Value; 3] },
     MultiAry { opcode: Opcode, args: ValueList },
     InsertLane {

@@ -18,13 +18,6 @@ class InstructionFormat(object):
     identified structurally, i.e., the format of an instruction is derived from
     the kinds of operands used in its declaration.
 
-    Most instruction formats produce a single result, or no result at all. If
-    an instruction can produce more than one result, the `multiple_results`
-    flag must be set on its format. All results are of the `value` kind, and
-    the instruction format does not keep track of how many results are
-    produced. Some instructions, like `call`, may have a variable number of
-    results.
-
     The instruction format stores two separate lists of operands: Immediates
     and values. Immediate operands (including entity references) are
     represented as explicit members in the `InstructionData` variants. The
@@ -40,16 +33,14 @@ class InstructionFormat(object):
     :param name: Instruction format name in CamelCase. This is used as a Rust
         variant name in both the `InstructionData` and `InstructionFormat`
         enums.
-    :param multiple_results: Set to `True` if this instruction format allows
-        more than one result to be produced.
     :param typevar_operand: Index of the value input operand that is used to
         infer the controlling type variable. By default, this is `0`, the first
         `value` operand. The index is relative to the values only, ignoring
         immediate operands.
     """
 
-    # Map (multiple_results, imm_kinds, num_value_operands) -> format
-    _registry = dict()  # type: Dict[Tuple[bool, Tuple[OperandKind, ...], int, bool], InstructionFormat]  # noqa
+    # Map (imm_kinds, num_value_operands) -> format
+    _registry = dict()  # type: Dict[Tuple[Tuple[OperandKind, ...], int, bool], InstructionFormat]  # noqa
 
     # All existing formats.
     all_formats = list()  # type: List[InstructionFormat]
@@ -57,7 +48,6 @@ class InstructionFormat(object):
     def __init__(self, *kinds, **kwargs):
         # type: (*Union[OperandKind, Tuple[str, OperandKind]], **Any) -> None # noqa
         self.name = kwargs.get('name', None)  # type: str
-        self.multiple_results = kwargs.get('multiple_results', False)
 
         # The number of value operands stored in the format, or `None` when
         # `has_value_list` is set.
@@ -81,9 +71,7 @@ class InstructionFormat(object):
 
         # Compute a signature for the global registry.
         imm_kinds = tuple(f.kind for f in self.imm_fields)
-        sig = (
-                self.multiple_results, imm_kinds, self.num_value_operands,
-                self.has_value_list)
+        sig = (imm_kinds, self.num_value_operands, self.has_value_list)
         if sig in InstructionFormat._registry:
             raise RuntimeError(
                 "Format '{}' has the same signature as existing format '{}'"
@@ -158,37 +146,24 @@ class InstructionFormat(object):
         :py:class:`Instruction` arguments of the same name, except they must be
         tuples of :py:`Operand` objects.
         """
-        if len(outs) == 1:
-            multiple_results = outs[0].kind == VARIABLE_ARGS
-        else:
-            multiple_results = len(outs) > 1
-
         # Construct a signature.
         imm_kinds = tuple(op.kind for op in ins if op.is_immediate())
         num_values = sum(1 for op in ins if op.is_value())
         has_varargs = (VARIABLE_ARGS in tuple(op.kind for op in ins))
 
-        sig = (multiple_results, imm_kinds, num_values, has_varargs)
+        sig = (imm_kinds, num_values, has_varargs)
         if sig in InstructionFormat._registry:
             return InstructionFormat._registry[sig]
 
         # Try another value list format as an alternative.
-        sig = (True, imm_kinds, num_values, has_varargs)
-        if sig in InstructionFormat._registry:
-            return InstructionFormat._registry[sig]
-
-        sig = (multiple_results, imm_kinds, 0, True)
-        if sig in InstructionFormat._registry:
-            return InstructionFormat._registry[sig]
-
-        sig = (True, imm_kinds, 0, True)
+        sig = (imm_kinds, 0, True)
         if sig in InstructionFormat._registry:
             return InstructionFormat._registry[sig]
 
         raise RuntimeError(
-                'No instruction format matches multiple_results={},'
+                'No instruction format matches '
                 'imms={}, vals={}, varargs={}'.format(
-                    multiple_results, imm_kinds, num_values, has_varargs))
+                    imm_kinds, num_values, has_varargs))
 
     @staticmethod
     def extract_names(globs):

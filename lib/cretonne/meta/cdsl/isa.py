@@ -207,8 +207,6 @@ class EncRecipe(object):
         if not format.has_value_list:
             assert len(self.ins) == format.num_value_operands
         self.outs = self._verify_constraints(outs)
-        if len(self.outs) > 1:
-            assert format.multiple_results
 
     def __str__(self):
         # type: () -> str

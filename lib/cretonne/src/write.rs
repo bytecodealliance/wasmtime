@@ -245,10 +245,8 @@ pub fn write_operands(w: &mut Write, dfg: &DataFlowGraph, inst: Inst) -> Result 
         UnaryImm { imm, .. } => write!(w, " {}", imm),
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
         UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
-        UnarySplit { arg, .. } => write!(w, " {}", arg),
         Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
         BinaryImm { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
-        BinaryOverflow { args, .. } => write!(w, " {}, {}", args[0], args[1]),
         Ternary { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
         MultiAry { ref args, .. } => {
             if args.is_empty() {
