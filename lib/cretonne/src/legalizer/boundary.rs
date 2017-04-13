@@ -85,10 +85,11 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
                     Err(abi_type)
                 }
             };
-            let converted = convert_from_abi(&mut func.dfg, &mut pos, arg_type, &mut get_arg);
+            let converted =
+                convert_from_abi(&mut func.dfg, &mut pos, arg_type, Some(arg), &mut get_arg);
             // The old `arg` is no longer an attached EBB argument, but there are probably still
-            // uses of the value. Make it an alias to the converted value.
-            func.dfg.change_to_alias(arg, converted);
+            // uses of the value.
+            assert_eq!(func.dfg.resolve_aliases(arg), converted);
         }
     }
 }
@@ -141,9 +142,8 @@ fn legalize_inst_results<ResType>(dfg: &mut DataFlowGraph,
                     Err(abi_type)
                 }
             };
-            let v = convert_from_abi(dfg, pos, res_type, &mut get_res);
-            // The old `res` is no longer an attached result.
-            dfg.change_to_alias(res, v);
+            let v = convert_from_abi(dfg, pos, res_type, Some(res), &mut get_res);
+            assert_eq!(dfg.resolve_aliases(res), v);
         }
     }
 
@@ -158,9 +158,11 @@ fn legalize_inst_results<ResType>(dfg: &mut DataFlowGraph,
 /// - `Ok(arg)` if the requested type matches the next ABI argument.
 /// - `Err(arg_type)` if further conversions are needed from the ABI argument `arg_type`.
 ///
+/// If the `into_result` value is provided, the converted result will be written into that value.
 fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
                             pos: &mut Cursor,
                             ty: Type,
+                            into_result: Option<Value>,
                             get_arg: &mut GetArg)
                             -> Value
     where GetArg: FnMut(&mut DataFlowGraph, Type) -> Result<Value, ArgumentType>
@@ -169,6 +171,7 @@ fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
     let arg_type = match get_arg(dfg, ty) {
         Ok(v) => {
             debug_assert_eq!(dfg.value_type(v), ty);
+            assert_eq!(into_result, None);
             return v;
         }
         Err(t) => t,
@@ -184,43 +187,49 @@ fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
         // Construct a `ty` by concatenating two ABI integers.
         ValueConversion::IntSplit => {
             let abi_ty = ty.half_width().expect("Invalid type for conversion");
-            let lo = convert_from_abi(dfg, pos, abi_ty, get_arg);
-            let hi = convert_from_abi(dfg, pos, abi_ty, get_arg);
+            let lo = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
+            let hi = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
             dbg!("intsplit {}: {}, {}: {}",
                  lo,
                  dfg.value_type(lo),
                  hi,
                  dfg.value_type(hi));
-            dfg.ins(pos).iconcat(lo, hi)
+            dfg.ins(pos).with_results([into_result]).iconcat(lo, hi)
         }
         // Construct a `ty` by concatenating two halves of a vector.
         ValueConversion::VectorSplit => {
             let abi_ty = ty.half_vector().expect("Invalid type for conversion");
-            let lo = convert_from_abi(dfg, pos, abi_ty, get_arg);
-            let hi = convert_from_abi(dfg, pos, abi_ty, get_arg);
-            dfg.ins(pos).vconcat(lo, hi)
+            let lo = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
+            let hi = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
+            dfg.ins(pos).with_results([into_result]).vconcat(lo, hi)
         }
         // Construct a `ty` by bit-casting from an integer type.
         ValueConversion::IntBits => {
             assert!(!ty.is_int());
             let abi_ty = Type::int(ty.bits()).expect("Invalid type for conversion");
-            let arg = convert_from_abi(dfg, pos, abi_ty, get_arg);
-            dfg.ins(pos).bitcast(ty, arg)
+            let arg = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
+            dfg.ins(pos)
+                .with_results([into_result])
+                .bitcast(ty, arg)
         }
         // ABI argument is a sign-extended version of the value we want.
         ValueConversion::Sext(abi_ty) => {
-            let arg = convert_from_abi(dfg, pos, abi_ty, get_arg);
+            let arg = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
             // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
             // We could insert an `assert_sreduce` which would fold with a following `sextend` of
             // this value.
-            dfg.ins(pos).ireduce(ty, arg)
+            dfg.ins(pos)
+                .with_results([into_result])
+                .ireduce(ty, arg)
         }
         ValueConversion::Uext(abi_ty) => {
-            let arg = convert_from_abi(dfg, pos, abi_ty, get_arg);
+            let arg = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
             // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
             // We could insert an `assert_ureduce` which would fold with a following `uextend` of
             // this value.
-            dfg.ins(pos).ireduce(ty, arg)
+            dfg.ins(pos)
+                .with_results([into_result])
+                .ireduce(ty, arg)
         }
     }
 }
