@@ -58,6 +58,36 @@ impl<'c, 'fc, 'fd> InsertBuilder<'c, 'fc, 'fd> {
                -> InsertBuilder<'c, 'fc, 'fd> {
         InsertBuilder { dfg: dfg, pos: pos }
     }
+
+    /// Reuse result values in `reuse`.
+    ///
+    /// Convert this builder into one that will reuse the provided result values instead of
+    /// allocating new ones. The provided values for reuse must not be attached to anything. Any
+    /// missing result values will be allocated as normal.
+    ///
+    /// The `reuse` argument is expected to be an array of `Option<Value>`.
+    pub fn with_results<Array>(self, reuse: Array) -> InsertReuseBuilder<'c, 'fc, 'fd, Array>
+        where Array: AsRef<[Option<Value>]>
+    {
+        InsertReuseBuilder {
+            dfg: self.dfg,
+            pos: self.pos,
+            reuse: reuse,
+        }
+    }
+
+    /// Reuse a single result value.
+    ///
+    /// Convert this into a builder that will reuse `v` as the single result value. The reused
+    /// result value `v` must not be attached to anything.
+    ///
+    /// This method should only be used when building an instruction with exactly one result. Use
+    /// `with_results()` for the more general case.
+    pub fn with_result(self, v: Value) -> InsertReuseBuilder<'c, 'fc, 'fd, [Option<Value>; 1]> {
+        // TODO: Specialize this to return a different builder that just attaches `v` instead of
+        // calling `make_inst_results_reusing()`.
+        self.with_results([Some(v)])
+    }
 }
 
 impl<'c, 'fc, 'fd> InstBuilderBase<'fd> for InsertBuilder<'c, 'fc, 'fd> {
@@ -72,6 +102,37 @@ impl<'c, 'fc, 'fd> InstBuilderBase<'fd> for InsertBuilder<'c, 'fc, 'fd> {
     fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'fd mut DataFlowGraph) {
         let inst = self.dfg.make_inst(data);
         self.dfg.make_inst_results(inst, ctrl_typevar);
+        self.pos.insert_inst(inst);
+        (inst, self.dfg)
+    }
+}
+
+/// Builder that inserts a new instruction like `InsertBuilder`, but reusing result values.
+pub struct InsertReuseBuilder<'c, 'fc: 'c, 'fd, Array>
+    where Array: AsRef<[Option<Value>]>
+{
+    pos: &'c mut Cursor<'fc>,
+    dfg: &'fd mut DataFlowGraph,
+    reuse: Array,
+}
+
+impl<'c, 'fc, 'fd, Array> InstBuilderBase<'fd> for InsertReuseBuilder<'c, 'fc, 'fd, Array>
+    where Array: AsRef<[Option<Value>]>
+{
+    fn data_flow_graph(&self) -> &DataFlowGraph {
+        self.dfg
+    }
+
+    fn data_flow_graph_mut(&mut self) -> &mut DataFlowGraph {
+        self.dfg
+    }
+
+    fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'fd mut DataFlowGraph) {
+        let inst = self.dfg.make_inst(data);
+        // Make an `Interator<Item = Option<Value>>`.
+        let ru = self.reuse.as_ref().iter().cloned();
+        self.dfg
+            .make_inst_results_reusing(inst, ctrl_typevar, ru);
         self.pos.insert_inst(inst);
         (inst, self.dfg)
     }
@@ -125,7 +186,7 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
 
 #[cfg(test)]
 mod tests {
-    use ir::{Function, Cursor, InstBuilder};
+    use ir::{Function, Cursor, InstBuilder, ValueDef};
     use ir::types::*;
     use ir::condcodes::*;
 
@@ -149,5 +210,29 @@ mod tests {
         // Formula.
         let cmp = dfg.ins(pos).icmp(IntCC::Equal, arg0, v0);
         assert_eq!(dfg.value_type(cmp), B1);
+    }
+
+    #[test]
+    fn reuse_results() {
+        let mut func = Function::new();
+        let dfg = &mut func.dfg;
+        let ebb0 = dfg.make_ebb();
+        let arg0 = dfg.append_ebb_arg(ebb0, I32);
+        let pos = &mut Cursor::new(&mut func.layout);
+        pos.insert_ebb(ebb0);
+
+        let v0 = dfg.ins(pos).iadd_imm(arg0, 17);
+        assert_eq!(dfg.value_type(v0), I32);
+        let iadd = pos.prev_inst().unwrap();
+        assert_eq!(dfg.value_def(v0), ValueDef::Res(iadd, 0));
+
+        // Detach v0 and reuse it for a different instruction.
+        dfg.clear_results(iadd);
+        let v0b = dfg.ins(pos).with_result(v0).iconst(I32, 3);
+        assert_eq!(v0, v0b);
+        assert_eq!(pos.current_inst(), Some(iadd));
+        let iconst = pos.prev_inst().unwrap();
+        assert!(iadd != iconst);
+        assert_eq!(dfg.value_def(v0), ValueDef::Res(iconst, 0));
     }
 }
