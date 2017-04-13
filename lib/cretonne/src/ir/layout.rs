@@ -910,10 +910,13 @@ impl<'f> Cursor<'f> {
     /// Remove the instruction under the cursor.
     ///
     /// The cursor is left pointing at the position following the current instruction.
-    pub fn remove_inst(&mut self) {
+    ///
+    /// Return the instruction that was removed.
+    pub fn remove_inst(&mut self) -> Inst {
         let inst = self.current_inst().expect("No instruction to remove");
         self.next_inst();
         self.layout.remove_inst(inst);
+        inst
     }
 
     /// Insert an EBB at the current position and switch to it.
@@ -1180,10 +1183,10 @@ mod tests {
 
         // Test remove_inst.
         cur.goto_inst(i2);
-        cur.remove_inst();
+        assert_eq!(cur.remove_inst(), i2);
         verify(cur.layout, &[(e1, &[i1, i0])]);
         assert_eq!(cur.layout.inst_ebb(i2), None);
-        cur.remove_inst();
+        assert_eq!(cur.remove_inst(), i0);
         verify(cur.layout, &[(e1, &[i1])]);
         assert_eq!(cur.layout.inst_ebb(i0), None);
         assert_eq!(cur.position(), CursorPosition::After(e1));
