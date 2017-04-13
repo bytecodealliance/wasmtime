@@ -460,6 +460,32 @@ impl Layout {
         self.assign_inst_seq(inst);
     }
 
+    /// Remove `inst` from the layout.
+    pub fn remove_inst(&mut self, inst: Inst) {
+        let ebb = self.inst_ebb(inst)
+            .expect("Instruction already removed.");
+        // Clear the `inst` node and extract links.
+        let prev;
+        let next;
+        {
+            let n = &mut self.insts[inst];
+            prev = n.prev;
+            next = n.next;
+            n.ebb = None.into();
+            n.prev = None.into();
+            n.next = None.into();
+        }
+        // Fix up links to `inst`.
+        match prev.expand() {
+            None => self.ebbs[ebb].first_inst = next,
+            Some(p) => self.insts[p].next = next,
+        }
+        match next.expand() {
+            None => self.ebbs[ebb].last_inst = prev,
+            Some(n) => self.insts[n].prev = prev,
+        }
+    }
+
     /// Iterate over the instructions in `ebb` in layout order.
     pub fn ebb_insts<'f>(&'f self, ebb: Ebb) -> Insts<'f> {
         Insts {
@@ -881,6 +907,15 @@ impl<'f> Cursor<'f> {
         }
     }
 
+    /// Remove the instruction under the cursor.
+    ///
+    /// The cursor is left pointing at the position following the current instruction.
+    pub fn remove_inst(&mut self) {
+        let inst = self.current_inst().expect("No instruction to remove");
+        self.next_inst();
+        self.layout.remove_inst(inst);
+    }
+
     /// Insert an EBB at the current position and switch to it.
     ///
     /// As far as possible, this method behaves as if the EBB header were an instruction inserted
@@ -1142,6 +1177,19 @@ mod tests {
         assert_eq!(cur.prev_inst(), Some(i1));
         assert_eq!(cur.prev_inst(), None);
         assert_eq!(cur.position(), CursorPosition::Before(e1));
+
+        // Test remove_inst.
+        cur.goto_inst(i2);
+        cur.remove_inst();
+        verify(cur.layout, &[(e1, &[i1, i0])]);
+        assert_eq!(cur.layout.inst_ebb(i2), None);
+        cur.remove_inst();
+        verify(cur.layout, &[(e1, &[i1])]);
+        assert_eq!(cur.layout.inst_ebb(i0), None);
+        assert_eq!(cur.position(), CursorPosition::After(e1));
+        cur.layout.remove_inst(i1);
+        verify(cur.layout, &[(e1, &[])]);
+        assert_eq!(cur.layout.inst_ebb(i1), None);
     }
 
     #[test]
