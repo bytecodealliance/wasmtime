@@ -228,9 +228,9 @@ fn split_value(dfg: &mut DataFlowGraph,
                 // need to insert a split instruction before returning.
                 pos.goto_top(ebb);
                 pos.next_inst();
-                let concat_inst = dfg.ins(pos).Binary(concat, split_type, lo, hi).0;
-                let concat_val = dfg.first_result(concat_inst);
-                dfg.change_to_alias(value, concat_val);
+                dfg.ins(pos)
+                    .with_result(value)
+                    .Binary(concat, split_type, lo, hi);
 
                 // Finally, splitting the EBB argument is not enough. We also have to repair all
                 // of the predecessor instructions that branch here.
