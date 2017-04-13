@@ -15,9 +15,7 @@ ebb0(v1: i32, v2: i32):
     return v3, v4
 }
 ; check: $v3 = iadd $v1, $v2
-; check: $(cout=$V) = icmp ult $v3, $v1
-; It's possible the legalizer will rewrite these value aliases in the future.
-; check: $v4 -> $cout
+; check: $v4 = icmp ult $v3, $v1
 ; check: return $v3, $v4
 
 ; Expanding illegal immediate constants.

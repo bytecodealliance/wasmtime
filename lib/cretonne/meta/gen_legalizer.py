@@ -22,7 +22,7 @@ except ImportError:
 
 
 def unwrap_inst(iref, node, fmt):
-    # type: (str, Def, Formatter) -> None
+    # type: (str, Def, Formatter) -> bool
     """
     Given a `Def` node, emit code that extracts all the instruction fields from
     `dfg[iref]`.
@@ -31,7 +31,8 @@ def unwrap_inst(iref, node, fmt):
 
     :param iref: Name of the `Inst` reference to unwrap.
     :param node: `Def` node providing variable names.
-
+    :returns: True if the instruction arguments were not detached, expecting a
+              replacement instruction to overwrite the original.
     """
     fmt.comment('Unwrap {}'.format(node))
     expr = node.expr
@@ -76,30 +77,34 @@ def unwrap_inst(iref, node, fmt):
         if isinstance(v, Var) and v.has_free_typevar():
             fmt.line('let typeof_{0} = dfg.value_type({0});'.format(v))
 
-    # If the node has multiple results, detach the values.
-    # Place the secondary values in 'src_{}' locals.
-    if len(node.defs) > 1:
+    # If the node has results, detach the values.
+    # Place the values in  locals.
+    replace_inst = False
+    if len(node.defs) > 0:
         if node.defs == node.defs[0].dst_def.defs:
             # Special case: The instruction replacing node defines the exact
             # same values.
             fmt.comment(
-                    'Multiple results handled by {}.'
+                    'Results handled by {}.'
                     .format(node.defs[0].dst_def))
+            replace_inst = True
         else:
-            fmt.comment('Detaching secondary results.')
-            # Boring case: Detach the secondary values, capture them in locals.
-            for d in node.defs[1:]:
-                fmt.line('let src_{};'.format(d))
+            # Boring case: Detach the result values, capture them in locals.
+            fmt.comment('Detaching results.')
+            for d in node.defs:
+                fmt.line('let {};'.format(d))
             with fmt.indented('{', '}'):
                 fmt.line('let r = dfg.inst_results(inst);')
-                for i in range(1, len(node.defs)):
-                    fmt.line('src_{} = r[{}];'.format(node.defs[i], i))
-            fmt.line('dfg.detach_secondary_results(inst);')
-            for d in node.defs[1:]:
+                for i in range(len(node.defs)):
+                    fmt.line('{} = r[{}];'.format(node.defs[i], i))
+            fmt.line('dfg.clear_results(inst);')
+            for d in node.defs:
                 if d.has_free_typevar():
                     fmt.line(
-                            'let typeof_{0} = dfg.value_type(src_{0});'
+                            'let typeof_{0} = dfg.value_type({0});'
                             .format(d))
+
+    return replace_inst
 
 
 def wrap_tup(seq):
@@ -125,9 +130,7 @@ def is_value_split(node):
 
 def emit_dst_inst(node, fmt):
     # type: (Def, Formatter) -> None
-    exact_replace = False
     replaced_inst = None  # type: str
-    fixup_first_result = False
 
     if is_value_split(node):
         # Split instructions are not emitted with the builder, but by calling
@@ -146,21 +149,28 @@ def emit_dst_inst(node, fmt):
             builder = 'dfg.ins(pos)'
         else:
             src_def0 = node.defs[0].src_def
-            if src_def0 and node.defs[0] == src_def0.defs[0]:
-                # The primary result is replacing the primary result of the
-                # source pattern.
+            if src_def0 and node.defs == src_def0.defs:
+                # The replacement instruction defines the exact same values as
+                # the source pattern. Unwrapping would have left the results
+                # intact.
                 # Replace the whole instruction.
                 builder = 'let {} = dfg.replace(inst)'.format(
                         wrap_tup(node.defs))
                 replaced_inst = 'inst'
-                # Secondary values weren't replaced if this is an exact
-                # replacement for all the source results.
-                exact_replace = (node.defs == src_def0.defs)
             else:
-                # Insert a new instruction since its primary def doesn't match
-                # the source.
+                # Insert a new instruction.
                 builder = 'let {} = dfg.ins(pos)'.format(wrap_tup(node.defs))
-                fixup_first_result = node.defs[0].is_output()
+                # We may want to reuse some of the detached output values.
+                if len(node.defs) == 1 and node.defs[0].is_output():
+                    # Reuse the single source result value.
+                    builder += '.with_result({})'.format(node.defs[0])
+                elif any(d.is_output() for d in node.defs):
+                    # We have some output values to be reused.
+                    array = ', '.join(
+                            ('Some({})'.format(d) if d.is_output()
+                                else 'None')
+                            for d in node.defs)
+                    builder += '.with_results([{}])'.format(array)
 
         fmt.line('{}.{};'.format(builder, node.expr.rust_builder(node.defs)))
 
@@ -171,23 +181,6 @@ def emit_dst_inst(node, fmt):
                 'if pos.current_inst() == Some({}) {{'
                 .format(replaced_inst), '}'):
             fmt.line('pos.next_inst();')
-
-    # Fix up any output vars.
-    if fixup_first_result:
-        # The first result of the instruction just inserted is an output var,
-        # but it was not a primary result in the source pattern.
-        # We need to change the original value to an alias of the primary one
-        # we just inserted.
-        fmt.line('dfg.change_to_alias(src_{0}, {0});'.format(node.defs[0]))
-
-    if not exact_replace:
-        # We don't support secondary values as outputs yet. Depending on the
-        # source value, we would need to :
-        # 1. For a primary source value, replace with a copy instruction.
-        # 2. For a secondary source value, request that the builder reuses the
-        #    value when making secondary result nodes.
-        for d in node.defs[1:]:
-            assert not d.is_output()
 
 
 def gen_xform(xform, fmt):
@@ -202,7 +195,7 @@ def gen_xform(xform, fmt):
     """
     # Unwrap the source instruction, create local variables for the input
     # variables.
-    unwrap_inst('inst', xform.src.rtl[0], fmt)
+    replace_inst = unwrap_inst('inst', xform.src.rtl[0], fmt)
 
     # We could support instruction predicates, but not yet. Should we just
     # return false if it fails? What about multiple patterns with different
@@ -213,6 +206,11 @@ def gen_xform(xform, fmt):
     # Emit the destination pattern.
     for dst in xform.dst.rtl:
         emit_dst_inst(dst, fmt)
+
+    # Delete the original instruction if we didn't have an opportunity to
+    # replace it.
+    if not replace_inst:
+        fmt.line('assert_eq!(pos.remove_inst(), inst);')
 
 
 def gen_xform_group(xgrp, fmt):
