@@ -18,13 +18,9 @@ Unary = InstructionFormat(VALUE)
 UnaryImm = InstructionFormat(imm64)
 UnaryIeee32 = InstructionFormat(ieee32)
 UnaryIeee64 = InstructionFormat(ieee64)
-UnarySplit = InstructionFormat(VALUE, multiple_results=True)
 
 Binary = InstructionFormat(VALUE, VALUE)
 BinaryImm = InstructionFormat(VALUE, imm64)
-
-# Generate result + overflow flag.
-BinaryOverflow = InstructionFormat(VALUE, VALUE, multiple_results=True)
 
 # The select instructions are controlled by the second VALUE operand.
 # The first VALUE operand is the controlling flag which has a derived type.
@@ -33,7 +29,7 @@ Ternary = InstructionFormat(VALUE, VALUE, VALUE, typevar_operand=1)
 
 # Catch-all for instructions with many outputs and inputs and no immediate
 # operands.
-MultiAry = InstructionFormat(VARIABLE_ARGS, multiple_results=True)
+MultiAry = InstructionFormat(VARIABLE_ARGS)
 
 InsertLane = InstructionFormat(VALUE, ('lane', uimm8), VALUE)
 ExtractLane = InstructionFormat(VALUE, ('lane', uimm8))
@@ -47,11 +43,8 @@ Branch = InstructionFormat(VALUE, ebb, VARIABLE_ARGS)
 BranchIcmp = InstructionFormat(intcc, VALUE, VALUE, ebb, VARIABLE_ARGS)
 BranchTable = InstructionFormat(VALUE, jump_table)
 
-Call = InstructionFormat(
-        func_ref, VARIABLE_ARGS, multiple_results=True)
-IndirectCall = InstructionFormat(
-        sig_ref, VALUE, VARIABLE_ARGS,
-        multiple_results=True)
+Call = InstructionFormat(func_ref, VARIABLE_ARGS)
+IndirectCall = InstructionFormat(sig_ref, VALUE, VARIABLE_ARGS)
 
 Load = InstructionFormat(memflags, VALUE, offset32)
 Store = InstructionFormat(memflags, VALUE, VALUE, offset32)

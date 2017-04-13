@@ -1429,12 +1429,6 @@ impl<'a> Parser<'a> {
                     imm: self.match_ieee64("expected immediate 64-bit float operand")?,
                 }
             }
-            InstructionFormat::UnarySplit => {
-                InstructionData::UnarySplit {
-                    opcode: opcode,
-                    arg: self.match_value("expected SSA value operand")?,
-                }
-            }
             InstructionFormat::Binary => {
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
@@ -1452,15 +1446,6 @@ impl<'a> Parser<'a> {
                     opcode: opcode,
                     arg: lhs,
                     imm: rhs,
-                }
-            }
-            InstructionFormat::BinaryOverflow => {
-                let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let rhs = self.match_value("expected SSA value second operand")?;
-                InstructionData::BinaryOverflow {
-                    opcode: opcode,
-                    args: [lhs, rhs],
                 }
             }
             InstructionFormat::Ternary => {
