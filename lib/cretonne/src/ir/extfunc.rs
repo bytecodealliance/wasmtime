@@ -9,6 +9,7 @@ use ir::{Type, FunctionName, SigRef, ArgumentLoc};
 use isa::RegInfo;
 use std::cmp;
 use std::fmt;
+use std::str::FromStr;
 
 /// Function signature.
 ///
@@ -111,10 +112,10 @@ impl fmt::Display for Signature {
 pub struct ArgumentType {
     /// Type of the argument value.
     pub value_type: Type,
+    /// Special purpose of argument, or `Normal`.
+    pub purpose: ArgumentPurpose,
     /// Method for extending argument to a full register.
     pub extension: ArgumentExtension,
-    /// Place this argument in a register if possible.
-    pub inreg: bool,
 
     /// ABI-specific location of this argument, or `Unassigned` for arguments that have not yet
     /// been legalized.
@@ -127,7 +128,7 @@ impl ArgumentType {
         ArgumentType {
             value_type: vt,
             extension: ArgumentExtension::None,
-            inreg: false,
+            purpose: ArgumentPurpose::Normal,
             location: Default::default(),
         }
     }
@@ -149,8 +150,8 @@ impl<'a> fmt::Display for DisplayArgumentType<'a> {
             ArgumentExtension::Uext => write!(f, " uext")?,
             ArgumentExtension::Sext => write!(f, " sext")?,
         }
-        if self.0.inreg {
-            write!(f, " inreg")?;
+        if self.0.purpose != ArgumentPurpose::Normal {
+            write!(f, " {}", self.0.purpose)?;
         }
 
         if self.0.location.is_assigned() {
@@ -181,6 +182,75 @@ pub enum ArgumentExtension {
     Sext,
 }
 
+/// The special purpose of a function argument.
+///
+/// Function arguments and return values are used to pass user program values between functions,
+/// but they are also used to represent special registers with significance to the ABI such as
+/// frame pointers and callee-saved registers.
+///
+/// The argument purpose is used to indicate any special meaning of an argument or return value.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum ArgumentPurpose {
+    /// A normal user program value passed to or from a function.
+    Normal,
+
+    /// Struct return pointer.
+    ///
+    /// When a function needs to return more data than will fit in registers, the caller passes a
+    /// pointer to a memory location where the return value can be written. In some ABIs, this
+    /// struct return pointer is passed in a specific register.
+    ///
+    /// This argument kind can also appear as a return value for ABIs that require a function with
+    /// a `StructReturn` pointer argument to also return that pointer in a register.
+    StructReturn,
+
+    /// The link register.
+    ///
+    /// Most RISC architectures implement calls by saving the return address in a designated
+    /// register rather than pushing it on the stack. This is represented with a `Link` argument.
+    ///
+    /// Similarly, some return instructions expect the return address in a register represented as
+    /// a `Link` return value.
+    Link,
+
+    /// The frame pointer.
+    ///
+    /// This indicates the frame pointer register which has a special meaning in some ABIs.
+    ///
+    /// The frame pointer appears as an argument and as a return value since it is a callee-saved
+    /// register.
+    FramePointer,
+
+    /// A callee-saved register.
+    ///
+    /// Some calling conventions have registers that must be saved by the callee. These registers
+    /// are represented as `CalleeSaved` arguments and return values.
+    CalleeSaved,
+}
+
+/// Text format names of the `ArgumentPurpose` variants.
+static PURPOSE_NAMES: [&'static str; 5] = ["normal", "sret", "link", "fp", "csr"];
+
+impl fmt::Display for ArgumentPurpose {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(PURPOSE_NAMES[*self as usize])
+    }
+}
+
+impl FromStr for ArgumentPurpose {
+    type Err = ();
+    fn from_str(s: &str) -> Result<ArgumentPurpose, ()> {
+        match s {
+            "normal" => Ok(ArgumentPurpose::Normal),
+            "sret" => Ok(ArgumentPurpose::StructReturn),
+            "link" => Ok(ArgumentPurpose::Link),
+            "fp" => Ok(ArgumentPurpose::FramePointer),
+            "csr" => Ok(ArgumentPurpose::CalleeSaved),
+            _ => Err(()),
+        }
+    }
+}
+
 /// An external function.
 ///
 /// Information about a function that can be called directly with a direct `call` instruction.
@@ -209,8 +279,21 @@ mod tests {
         assert_eq!(t.to_string(), "i32");
         t.extension = ArgumentExtension::Uext;
         assert_eq!(t.to_string(), "i32 uext");
-        t.inreg = true;
-        assert_eq!(t.to_string(), "i32 uext inreg");
+        t.purpose = ArgumentPurpose::StructReturn;
+        assert_eq!(t.to_string(), "i32 uext sret");
+    }
+
+    #[test]
+    fn argument_purpose() {
+        let all_purpose = [ArgumentPurpose::Normal,
+                           ArgumentPurpose::StructReturn,
+                           ArgumentPurpose::Link,
+                           ArgumentPurpose::FramePointer,
+                           ArgumentPurpose::CalleeSaved];
+        for (&e, &n) in all_purpose.iter().zip(PURPOSE_NAMES.iter()) {
+            assert_eq!(e.to_string(), n);
+            assert_eq!(Ok(e), n.parse());
+        }
     }
 
     #[test]

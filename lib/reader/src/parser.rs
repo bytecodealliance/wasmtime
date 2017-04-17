@@ -767,8 +767,13 @@ impl<'a> Parser<'a> {
             match s {
                 "uext" => arg.extension = ArgumentExtension::Uext,
                 "sext" => arg.extension = ArgumentExtension::Sext,
-                "inreg" => arg.inreg = true,
-                _ => break,
+                _ => {
+                    if let Ok(purpose) = s.parse() {
+                        arg.purpose = purpose;
+                    } else {
+                        break;
+                    }
+                }
             }
             self.consume();
         }
@@ -1672,7 +1677,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne::ir::ArgumentExtension;
+    use cretonne::ir::{ArgumentExtension, ArgumentPurpose};
     use cretonne::ir::types;
     use cretonne::ir::entities::AnyEntity;
     use testfile::{Details, Comment};
@@ -1685,7 +1690,7 @@ mod tests {
         let arg = p.parse_argument_type(None).unwrap();
         assert_eq!(arg.value_type, types::I32);
         assert_eq!(arg.extension, ArgumentExtension::Sext);
-        assert_eq!(arg.inreg, false);
+        assert_eq!(arg.purpose, ArgumentPurpose::Normal);
         let Error { location, message } = p.parse_argument_type(None).unwrap_err();
         assert_eq!(location.line_number, 1);
         assert_eq!(message, "expected argument type");
@@ -1721,11 +1726,11 @@ mod tests {
         assert_eq!(sig.argument_types.len(), 0);
         assert_eq!(sig.return_types.len(), 0);
 
-        let sig2 = Parser::new("(i8 inreg uext, f32, f64) -> i32 sext, f64")
+        let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64")
             .parse_signature(None)
             .unwrap();
         assert_eq!(sig2.to_string(),
-                   "(i8 uext inreg, f32, f64) -> i32 sext, f64");
+                   "(i8 uext, f32, f64, i32 sret) -> i32 sext, f64");
 
         // `void` is not recognized as a type by the lexer. It should not appear in files.
         assert_eq!(Parser::new("() -> void")
