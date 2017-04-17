@@ -364,8 +364,9 @@ calling convention:
     signature : "(" [arglist] ")" ["->" retlist] [call_conv]
     arglist   : arg { "," arg }
     retlist   : arglist
-    arg       : type { flag }
-    flag      : "uext" | "sext" | "inreg"
+    arg       : type [argext] [argspecial]
+    argext    : "uext" | "sext"
+    argspecial: "sret" | "link" | "fp" | "csr"
     callconv  : `string`
 
 Arguments and return values have flags whose meaning is mostly target

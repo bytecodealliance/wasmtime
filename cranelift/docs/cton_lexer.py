@@ -42,8 +42,7 @@ class CretonneLexer(RegexLexer):
             (r'[-+]?(\d+\.\d+([eE]\d+)?|s?NaN|Inf)', Number.Float),
             (r'[-+]?\d+', Number.Integer),
             # Known attributes.
-            (keywords('align', 'aligntrap', 'uext', 'sext', 'inreg'),
-                Name.Attribute),
+            (keywords('uext', 'sext'), Name.Attribute),
             # Well known value types.
             (r'\b(b\d+|i\d+|f32|f64)(x\d+)?\b', Keyword.Type),
             # v<nn> = value
