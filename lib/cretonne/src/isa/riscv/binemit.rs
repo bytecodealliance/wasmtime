@@ -172,8 +172,14 @@ fn recipe_iicmp<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut C
     }
 }
 
-fn recipe_iret<CS: CodeSink + ?Sized>(_func: &Function, _inst: Inst, _sink: &mut CS) {
-    unimplemented!()
+fn recipe_iret<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    // Return instructions are always a jalr to %x1.
+    // The return address is provided as a special-purpose link argument.
+    put_i(func.encodings[inst].bits(),
+          1, // rs1 = %x1
+          0, // no offset.
+          0, // rd = %x0: no address written.
+          sink);
 }
 
 /// U-type instructions.
