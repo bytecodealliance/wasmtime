@@ -290,21 +290,9 @@ fn convert_to_abi<PutArg>(dfg: &mut DataFlowGraph,
 
 /// Check if a sequence of arguments match a desired sequence of argument types.
 fn check_arg_types(dfg: &DataFlowGraph, args: &[Value], types: &[ArgumentType]) -> bool {
-    let mut n = 0;
-    for &arg in args {
-        match types.get(n) {
-            Some(&ArgumentType { value_type, .. }) => {
-                if dfg.value_type(arg) != value_type {
-                    return false;
-                }
-            }
-            None => return false,
-        }
-        n += 1
-    }
-
-    // Also verify that the number of arguments matches.
-    n == types.len()
+    let arg_types = args.iter().map(|&v| dfg.value_type(v));
+    let sig_types = types.iter().map(|&at| at.value_type);
+    arg_types.eq(sig_types)
 }
 
 /// Check if the arguments of the call `inst` match the signature.
