@@ -6,7 +6,7 @@
 //! This module declares the data types used to represent external functions and call signatures.
 
 use ir::{Type, FunctionName, SigRef, ArgumentLoc};
-use isa::RegInfo;
+use isa::{RegInfo, RegUnit};
 use std::cmp;
 use std::fmt;
 use std::str::FromStr;
@@ -130,6 +130,16 @@ impl ArgumentType {
             extension: ArgumentExtension::None,
             purpose: ArgumentPurpose::Normal,
             location: Default::default(),
+        }
+    }
+
+    /// Create an argument type for a special-purpose register.
+    pub fn special_reg(vt: Type, purpose: ArgumentPurpose, regunit: RegUnit) -> ArgumentType {
+        ArgumentType {
+            value_type: vt,
+            extension: ArgumentExtension::None,
+            purpose: purpose,
+            location: ArgumentLoc::Reg(regunit),
         }
     }
 

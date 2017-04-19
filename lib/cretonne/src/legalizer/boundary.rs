@@ -20,7 +20,7 @@
 use abi::{legalize_abi_value, ValueConversion};
 use flowgraph::ControlFlowGraph;
 use ir::{Function, Cursor, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value, Signature, SigRef,
-         ArgumentType};
+         ArgumentType, ArgumentPurpose};
 use ir::instructions::CallInfo;
 use isa::TargetIsa;
 use legalizer::split::{isplit, vsplit};
@@ -31,9 +31,9 @@ use legalizer::split::{isplit, vsplit};
 /// change the entry block arguments, calls, or return instructions, so this can leave the function
 /// in a state with type discrepancies.
 pub fn legalize_signatures(func: &mut Function, isa: &TargetIsa) {
-    isa.legalize_signature(&mut func.signature);
+    isa.legalize_signature(&mut func.signature, true);
     for sig in func.dfg.signatures.keys() {
-        isa.legalize_signature(&mut func.dfg.signatures[sig]);
+        isa.legalize_signature(&mut func.dfg.signatures[sig], false);
     }
 
     if let Some(entry) = func.layout.entry_block() {
@@ -50,6 +50,9 @@ pub fn legalize_signatures(func: &mut Function, isa: &TargetIsa) {
 /// The original entry EBB arguments are computed from the new ABI arguments by code inserted at
 /// the top of the entry block.
 fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
+    let mut has_sret = false;
+    let mut has_link = false;
+
     // Insert position for argument conversion code.
     // We want to insert instructions before the first instruction in the entry block.
     // If the entry block is empty, append instructions to it instead.
@@ -73,11 +76,22 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
             // No value translation is necessary, this argument matches the ABI type.
             // Just use the original EBB argument value. This is the most common case.
             func.dfg.attach_ebb_arg(entry, arg);
+            match abi_types[abi_arg].purpose {
+                ArgumentPurpose::Normal => {}
+                ArgumentPurpose::StructReturn => {
+                    assert!(!has_sret, "Multiple sret arguments found");
+                    has_sret = true;
+                }
+                _ => panic!("Unexpected special-purpose arg {}", abi_types[abi_arg]),
+            }
             abi_arg += 1;
         } else {
             // Compute the value we want for `arg` from the legalized ABI arguments.
             let mut get_arg = |dfg: &mut DataFlowGraph, ty| {
                 let abi_type = abi_types[abi_arg];
+                assert_eq!(abi_type.purpose,
+                           ArgumentPurpose::Normal,
+                           "Can't legalize special-purpose argument");
                 if ty == abi_type.value_type {
                     abi_arg += 1;
                     Ok(dfg.append_ebb_arg(entry, ty))
@@ -91,6 +105,35 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
             // uses of the value.
             assert_eq!(func.dfg.resolve_aliases(arg), converted);
         }
+    }
+
+    // The legalized signature may contain additional arguments representing special-purpose
+    // registers.
+    for &arg in &abi_types[abi_arg..] {
+        match arg.purpose {
+            // Any normal arguments should have been processed above.
+            ArgumentPurpose::Normal => {
+                panic!("Leftover arg: {}", arg);
+            }
+            // The callee-save arguments should not appear until after register allocation is
+            // done.
+            ArgumentPurpose::FramePointer |
+            ArgumentPurpose::CalleeSaved => {
+                panic!("Premature callee-saved arg {}", arg);
+            }
+            // These can be meaningfully added by `legalize_signature()`.
+            ArgumentPurpose::Link => {
+                assert!(!has_link, "Multiple link arguments found");
+                has_link = true;
+            }
+            ArgumentPurpose::StructReturn => {
+                assert!(!has_sret, "Multiple sret arguments found");
+                has_sret = true;
+            }
+        }
+        // Just create entry block values to match here. We will use them in `handle_return_abi()`
+        // below.
+        func.dfg.append_ebb_arg(entry, arg.value_type);
     }
 }
 
@@ -445,7 +488,7 @@ pub fn handle_call_abi(dfg: &mut DataFlowGraph, cfg: &ControlFlowGraph, pos: &mu
     true
 }
 
-/// Insert ABI conversion code before and after the call instruction at `pos`.
+/// Insert ABI conversion code before and after the return instruction at `pos`.
 ///
 /// Return `true` if any instructions were inserted.
 pub fn handle_return_abi(dfg: &mut DataFlowGraph,
@@ -461,15 +504,58 @@ pub fn handle_return_abi(dfg: &mut DataFlowGraph,
         return false;
     }
 
-    let abi_args = sig.return_types.len();
+    // Count the special-purpose return values (`link` and `sret`) that were appended to the
+    // legalized signature.
+    let special_args = sig.return_types
+        .iter()
+        .rev()
+        .take_while(|&rt| {
+                        rt.purpose == ArgumentPurpose::Link ||
+                        rt.purpose == ArgumentPurpose::StructReturn
+                    })
+        .count();
+
+    let abi_args = sig.return_types.len() - special_args;
     legalize_inst_arguments(dfg,
                             cfg,
                             pos,
                             abi_args,
                             |_, abi_arg| sig.return_types[abi_arg]);
+    assert_eq!(dfg.inst_variable_args(inst).len(), abi_args);
+
+    // Append special return arguments for any `sret` and `link` return values added to the
+    // legalized signature. These values should simply be propagated from the entry block
+    // arguments.
+    if special_args > 0 {
+        dbg!("Adding {} special-purpose arguments to {}",
+             special_args,
+             dfg.display_inst(inst));
+        let mut vlist = dfg[inst].take_value_list().unwrap();
+        for arg in &sig.return_types[abi_args..] {
+            match arg.purpose {
+                ArgumentPurpose::Link |
+                ArgumentPurpose::StructReturn => {}
+                ArgumentPurpose::Normal => panic!("unexpected return value {}", arg),
+                _ => panic!("Unsupported special purpose return value {}", arg),
+            }
+            // A `link` or `sret` return value can only appear in a signature that has a unique
+            // matching argument. They are appended at the end, so search the signature from the
+            // end.
+            let idx = sig.argument_types
+                .iter()
+                .rposition(|t| t.purpose == arg.purpose)
+                .expect("No matching special purpose argument.");
+            // Get the corresponding entry block value and add it to the return instruction's
+            // arguments.
+            let val = dfg.ebb_args(pos.layout.entry_block().unwrap())[idx];
+            debug_assert_eq!(dfg.value_type(val), arg.value_type);
+            vlist.push(val, &mut dfg.value_lists);
+        }
+        dfg[inst].put_value_list(vlist);
+    }
 
     debug_assert!(check_return_signature(dfg, inst, sig),
-                  "Signature still wrong: {}, sig{}",
+                  "Signature still wrong: {} / signature {}",
                   dfg.display_inst(inst),
                   sig);
 

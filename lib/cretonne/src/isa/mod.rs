@@ -166,7 +166,24 @@ pub trait TargetIsa {
     /// - Vector types can be bit-cast and broken down into smaller vectors or scalars.
     ///
     /// The legalizer will adapt argument and return values as necessary at all ABI boundaries.
-    fn legalize_signature(&self, _sig: &mut Signature) {
+    ///
+    /// When this function is called to legalize the signature of the function currently begin
+    /// compiler, `_current` is true. The legalized signature can then also contain special purpose
+    /// arguments and return values such as:
+    ///
+    /// - A `link` argument representing the link registers on RISC architectures that don't push
+    ///   the return address on the stack.
+    /// - A `link` return value which will receive the value that was passed to the `link`
+    ///   argument.
+    /// - An `sret` argument can be added if one wasn't present already. This is necessary if the
+    ///   signature returns more values than registers are available for returning values.
+    /// - An `sret` return value can be added if the ABI requires a function to return its `sret`
+    ///   argument in a register.
+    ///
+    /// Arguments and return values for the caller's frame pointer and other callee-saved registers
+    /// should not be added by this function. These arguments are not added until after register
+    /// allocation.
+    fn legalize_signature(&self, _sig: &mut Signature, _current: bool) {
         unimplemented!()
     }
 
