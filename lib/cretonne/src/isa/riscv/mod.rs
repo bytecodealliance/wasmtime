@@ -78,9 +78,9 @@ impl TargetIsa for Isa {
                 })
     }
 
-    fn legalize_signature(&self, sig: &mut Signature) {
+    fn legalize_signature(&self, sig: &mut Signature, current: bool) {
         // We can pass in `self.isa_flags` too, if we need it.
-        abi::legalize_signature(sig, &self.shared_flags)
+        abi::legalize_signature(sig, &self.shared_flags, current)
     }
 
     fn emit_inst(&self, func: &Function, inst: Inst, sink: &mut CodeSink) {

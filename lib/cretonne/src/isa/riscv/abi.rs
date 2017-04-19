@@ -6,7 +6,7 @@
 //! This doesn't support the soft-float ABI at the moment.
 
 use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
-use ir::{Signature, Type, ArgumentType, ArgumentLoc, ArgumentExtension};
+use ir::{Signature, Type, ArgumentType, ArgumentLoc, ArgumentExtension, ArgumentPurpose};
 use isa::riscv::registers::{GPR, FPR};
 use settings as shared_settings;
 
@@ -80,7 +80,7 @@ impl ArgAssigner for Args {
 }
 
 /// Legalize `sig` for RISC-V.
-pub fn legalize_signature(sig: &mut Signature, flags: &shared_settings::Flags) {
+pub fn legalize_signature(sig: &mut Signature, flags: &shared_settings::Flags, current: bool) {
     let bits = if flags.is_64bit() { 64 } else { 32 };
 
     let mut args = Args::new(bits);
@@ -88,4 +88,17 @@ pub fn legalize_signature(sig: &mut Signature, flags: &shared_settings::Flags) {
 
     let mut rets = Args::new(bits);
     legalize_args(&mut sig.return_types, &mut rets);
+
+    if current {
+        let ptr = Type::int(bits).unwrap();
+
+        // Add the link register as an argument and return value.
+        //
+        // The `jalr` instruction implementing a return can technically accept the return address
+        // in any register, but a micro-architecture with a return address predictor will only
+        // recognize it as a return if the address is in `x1`.
+        let link = ArgumentType::special_reg(ptr, ArgumentPurpose::Link, GPR.unit(1));
+        sig.argument_types.push(link);
+        sig.return_types.push(link);
+    }
 }
