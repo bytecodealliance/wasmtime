@@ -110,7 +110,7 @@ Iicmp = EncRecipe(
 # I-type encoding for `jalr` as a return instruction. We won't use the
 # immediate offset.
 # The variable return values are not encoded.
-Iret = EncRecipe('Iret', MultiAry, size=4, ins=GPR, outs=())
+Iret = EncRecipe('Iret', MultiAry, size=4, ins=(), outs=())
 
 # U-type instructions have a 20-bit immediate that targets bits 12-31.
 U = EncRecipe(
