@@ -4,7 +4,7 @@ isa riscv
 
 ; regex: V=v\d+
 
-function f(i32) {
+function f() {
     sig0 = signature(i32) -> i32
     ; check: sig0 = signature(i32 [%x10]) -> i32 [%x10]
 
@@ -27,6 +27,6 @@ function f(i32) {
     sig5 = signature(i64x4)
     ; check: sig5 = signature(i32 [%x10], i32 [%x11], i32 [%x12], i32 [%x13], i32 [%x14], i32 [%x15], i32 [%x16], i32 [%x17])
 
-ebb0(v0: i32):
-    return_reg v0
+ebb0:
+    return
 }

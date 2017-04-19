@@ -8,5 +8,5 @@ ebb0(v1: i32, v2: i32):
     v3 = iadd v1, v2
 ; check: [R#0c,%x0]
 ; sameln: iadd
-    return_reg v3
+    return
 }

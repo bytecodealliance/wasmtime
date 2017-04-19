@@ -386,7 +386,6 @@ preamble`:
 
 .. autoinst:: call
 .. autoinst:: x_return
-.. autoinst:: return_reg
 
 This simple example illustrates direct function calls and signatures::
 
