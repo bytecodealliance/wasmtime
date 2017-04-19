@@ -15,7 +15,7 @@ ebb0(v1: i32, v2: i32):
     ; check: [R#10c]
     ; sameln: $v12 = imul
 
-    return_reg v1
+    return
     ; check: [Iret#19]
-    ; sameln: return_reg
+    ; sameln: return
 }

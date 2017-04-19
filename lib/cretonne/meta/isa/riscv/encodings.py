@@ -109,9 +109,8 @@ for inst,           f3 in [
     RV32.enc(inst.b1, SBzero, BRANCH(f3))
     RV64.enc(inst.b1, SBzero, BRANCH(f3))
 
-# Returns are a special case of JALR.
-# Note: Return stack predictors will only recognize this as a return when the
-# return address is provided in `x1`. We may want a special encoding to enforce
-# that.
-RV32.enc(base.return_reg.i32, Iret, JALR())
-RV64.enc(base.return_reg.i64, Iret, JALR())
+# Returns are a special case of JALR using %x1 to hold the return address.
+# The return address is provided by a special-purpose `link` return value that
+# is added by legalize_signature().
+RV32.enc(base.x_return, Iret, JALR())
+RV64.enc(base.x_return, Iret, JALR())
