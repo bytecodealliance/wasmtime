@@ -59,6 +59,7 @@ use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallIn
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
          Value, Type};
 use Context;
+use std::error as std_error;
 use std::fmt::{self, Display, Formatter};
 use std::result;
 use std::collections::BTreeSet;
@@ -75,6 +76,12 @@ pub struct Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}: {}", self.location, self.message)
+    }
+}
+
+impl std_error::Error for Error {
+    fn description(&self) -> &str {
+        &self.message
     }
 }
 

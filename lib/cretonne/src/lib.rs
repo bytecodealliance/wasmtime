@@ -21,6 +21,7 @@ pub mod flowgraph;
 pub mod ir;
 pub mod isa;
 pub mod regalloc;
+pub mod result;
 pub mod settings;
 pub mod sparse_map;
 pub mod verifier;
