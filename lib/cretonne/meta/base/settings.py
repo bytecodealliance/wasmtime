@@ -18,6 +18,14 @@ opt_level = EnumSetting(
         """,
         'default', 'best', 'fastest')
 
+enable_verifier = BoolSetting(
+        """
+        Run the Cretonne IL verifier at strategic times during compilation.
+
+        This makes compilation slower but catches many bugs. The verifier is
+        disabled by default, except when reading Cretonne IL from a text file.
+        """)
+
 is_64bit = BoolSetting("Enable 64-bit code generation")
 
 is_compressed = BoolSetting("Enable compressed instructions")

@@ -271,6 +271,7 @@ mod tests {
         assert_eq!(f.to_string(),
                    "[shared]\n\
                     opt_level = \"default\"\n\
+                    enable_verifier = false\n\
                     is_64bit = false\n\
                     is_compressed = false\n\
                     enable_float = true\n\

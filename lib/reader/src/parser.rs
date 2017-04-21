@@ -17,7 +17,7 @@ use cretonne::ir::immediates::{Imm64, Offset32, Uoffset32, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs};
 use cretonne::isa::{self, TargetIsa, Encoding};
-use cretonne::settings;
+use cretonne::settings::{self, Configurable};
 use testfile::{TestFile, Details, Comment};
 use error::{Location, Error, Result};
 use lexer::{self, Lexer, Token};
@@ -576,6 +576,13 @@ impl<'a> Parser<'a> {
 
         let mut isas = Vec::new();
         let mut flag_builder = settings::builder();
+
+        // Change the default for `enable_verifier` to `true`. It defaults to `false` because it
+        // would slow down normal compilation, but when we're reading IL from a text file we're
+        // either testing or debugging Cretonne, and verification makes sense.
+        flag_builder
+            .set_bool("enable_verifier", true)
+            .expect("Missing enable_verifier setting");
 
         while let Some(Token::Identifier(command)) = self.token() {
             match command {
@@ -1849,7 +1856,10 @@ mod tests {
         assert_eq!(tf.commands[0].command, "cfg");
         assert_eq!(tf.commands[1].command, "verify");
         match tf.isa_spec {
-            IsaSpec::None(s) => assert!(!s.enable_float()),
+            IsaSpec::None(s) => {
+                assert!(s.enable_verifier());
+                assert!(!s.enable_float());
+            }
             _ => panic!("unexpected ISAs"),
         }
         assert_eq!(tf.preamble_comments.len(), 2);
