@@ -15,6 +15,7 @@ use ir::Function;
 use isa::TargetIsa;
 use legalize_function;
 use regalloc;
+use result::CtonResult;
 use verifier;
 
 /// Persistent data structures and compilation pipeline.
@@ -56,9 +57,19 @@ impl Context {
         verifier::verify_context(self)
     }
 
+    /// Run the verifier only if the `enable_verifier` setting is true.
+    pub fn verify_if(&self, isa: &TargetIsa) -> CtonResult {
+        if isa.flags().enable_verifier() {
+            self.verify(isa).map_err(Into::into)
+        } else {
+            Ok(())
+        }
+    }
+
     /// Run the legalizer for `isa` on the function.
-    pub fn legalize(&mut self, isa: &TargetIsa) {
+    pub fn legalize(&mut self, isa: &TargetIsa) -> CtonResult {
         legalize_function(&mut self.func, &mut self.cfg, isa);
+        self.verify_if(isa)
     }
 
     /// Recompute the control flow graph and dominator tree.
@@ -68,8 +79,9 @@ impl Context {
     }
 
     /// Run the register allocator.
-    pub fn regalloc(&mut self, isa: &TargetIsa) {
+    pub fn regalloc(&mut self, isa: &TargetIsa) -> CtonResult {
         self.regalloc
             .run(isa, &mut self.func, &self.cfg, &self.domtree);
+        self.verify_if(isa)
     }
 }

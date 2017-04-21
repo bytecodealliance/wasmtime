@@ -10,7 +10,7 @@ use cretonne::{self, write_function};
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result, run_filecheck};
 use std::borrow::Cow;
-use utils::pretty_verifier_error;
+use utils::pretty_error;
 
 struct TestRegalloc;
 
@@ -45,10 +45,10 @@ impl SubTest for TestRegalloc {
 
         comp_ctx.flowgraph();
         // TODO: Should we have an option to skip legalization?
-        comp_ctx.legalize(isa);
-        comp_ctx.regalloc(isa);
-        comp_ctx.verify(isa)
-            .map_err(|e| pretty_verifier_error(&comp_ctx.func, e))?;
+        comp_ctx.legalize(isa)
+            .map_err(|e| pretty_error(&comp_ctx.func, e))?;
+        comp_ctx.regalloc(isa)
+            .map_err(|e| pretty_error(&comp_ctx.func, e))?;
 
         let mut text = String::new();
         write_function(&mut text, &comp_ctx.func, Some(isa)).map_err(|e| e.to_string())?;

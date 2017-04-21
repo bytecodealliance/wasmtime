@@ -2,6 +2,7 @@
 
 use cretonne::ir::entities::AnyEntity;
 use cretonne::{ir, verifier, write_function};
+use cretonne::result::CtonError;
 use std::fmt::Write;
 use std::fs::File;
 use std::io::{Result, Read};
@@ -43,6 +44,15 @@ pub fn pretty_verifier_error(func: &ir::Function, err: verifier::Error) -> Strin
     }
     write_function(&mut msg, func, None).unwrap();
     msg
+}
+
+/// Pretty-print a Cretonne error.
+pub fn pretty_error(func: &ir::Function, err: CtonError) -> String {
+    if let CtonError::Verifier(e) = err {
+        pretty_verifier_error(func, e)
+    } else {
+        err.to_string()
+    }
 }
 
 #[test]
