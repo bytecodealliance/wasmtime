@@ -64,6 +64,27 @@ use std::fmt::{self, Display, Formatter};
 use std::result;
 use std::collections::BTreeSet;
 
+pub use self::liveness::verify_liveness;
+
+// Create an `Err` variant of `Result<X>` from a location and `format!` arguments.
+macro_rules! err {
+    ( $loc:expr, $msg:expr ) => {
+        Err(::verifier::Error {
+            location: $loc.into(),
+            message: String::from($msg),
+        })
+    };
+
+    ( $loc:expr, $fmt:expr, $( $arg:expr ),+ ) => {
+        Err(::verifier::Error {
+            location: $loc.into(),
+            message: format!( $fmt, $( $arg ),+ ),
+        })
+    };
+}
+
+mod liveness;
+
 /// A verifier error.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Error {
@@ -87,23 +108,6 @@ impl std_error::Error for Error {
 
 /// Verifier result.
 pub type Result = result::Result<(), Error>;
-
-// Create an `Err` variant of `Result<X>` from a location and `format!` arguments.
-macro_rules! err {
-    ( $loc:expr, $msg:expr ) => {
-        Err(Error {
-            location: $loc.into(),
-            message: String::from($msg),
-        })
-    };
-
-    ( $loc:expr, $fmt:expr, $( $arg:expr ),+ ) => {
-        Err(Error {
-            location: $loc.into(),
-            message: format!( $fmt, $( $arg ),+ ),
-        })
-    };
-}
 
 /// Verify `func`.
 pub fn verify_function(func: &Function) -> Result {

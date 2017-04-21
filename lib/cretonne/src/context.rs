@@ -81,7 +81,7 @@ impl Context {
     /// Run the register allocator.
     pub fn regalloc(&mut self, isa: &TargetIsa) -> CtonResult {
         self.regalloc
-            .run(isa, &mut self.func, &self.cfg, &self.domtree);
+            .run(isa, &mut self.func, &self.cfg, &self.domtree)?;
         self.verify_if(isa)
     }
 }
