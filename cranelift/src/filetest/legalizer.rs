@@ -8,7 +8,7 @@ use cretonne::{self, write_function};
 use cretonne::ir::Function;
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result, run_filecheck};
-use utils::pretty_verifier_error;
+use utils::pretty_error;
 
 struct TestLegalizer;
 
@@ -40,9 +40,8 @@ impl SubTest for TestLegalizer {
         let isa = context.isa.expect("legalizer needs an ISA");
 
         comp_ctx.flowgraph();
-        comp_ctx.legalize(isa);
-        comp_ctx.verify(isa)
-            .map_err(|e| pretty_verifier_error(&comp_ctx.func, e))?;
+        comp_ctx.legalize(isa)
+            .map_err(|e| pretty_error(&comp_ctx.func, e))?;
 
         let mut text = String::new();
         write_function(&mut text, &comp_ctx.func, Some(isa)).map_err(|e| e.to_string())?;
