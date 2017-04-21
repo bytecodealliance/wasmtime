@@ -174,12 +174,12 @@ pub struct LiveRange {
 /// for contiguous EBBs where all but the last live-in interval covers the whole EBB.
 ///
 #[derive(Copy, Clone)]
-struct Interval {
+pub struct Interval {
     /// Interval starting point.
     ///
     /// Since this interval does not represent the def of the value, it must begin at an EBB header
     /// where the value is live-in.
-    begin: Ebb,
+    pub begin: Ebb,
 
     /// Interval end point.
     ///
@@ -190,7 +190,7 @@ struct Interval {
     /// When this represents multiple contiguous live-in intervals, this is the end point of the
     /// last interval. The other intervals end at the terminator instructions of their respective
     /// EBB.
-    end: Inst,
+    pub end: Inst,
 }
 
 impl Interval {
@@ -367,6 +367,11 @@ impl LiveRange {
         self.find_ebb_interval(ebb, order)
             .ok()
             .map(|n| self.liveins[n].end)
+    }
+
+    /// Get all the live-in intervals.
+    pub fn liveins(&self) -> &[Interval] {
+        &self.liveins
     }
 }
 

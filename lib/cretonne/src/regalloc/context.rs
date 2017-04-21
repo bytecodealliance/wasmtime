@@ -11,6 +11,8 @@ use isa::TargetIsa;
 use regalloc::coloring::Coloring;
 use regalloc::live_value_tracker::LiveValueTracker;
 use regalloc::liveness::Liveness;
+use result::CtonResult;
+use verifier::verify_liveness;
 
 /// Persistent memory allocations for register allocation.
 pub struct Context {
@@ -40,7 +42,8 @@ impl Context {
                isa: &TargetIsa,
                func: &mut Function,
                cfg: &ControlFlowGraph,
-               domtree: &DominatorTree) {
+               domtree: &DominatorTree)
+               -> CtonResult {
         // `Liveness` and `Coloring` are self-clearing.
         // Tracker state (dominator live sets) is actually reused between the spilling and coloring
         // phases.
@@ -49,10 +52,16 @@ impl Context {
         // First pass: Liveness analysis.
         self.liveness.compute(isa, func, cfg);
 
+        if isa.flags().enable_verifier() {
+            verify_liveness(isa, func, cfg, &self.liveness)?;
+        }
+
         // TODO: Second pass: Spilling.
 
         // Third pass: Reload and coloring.
         self.coloring
             .run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
+
+        Ok(())
     }
 }

@@ -40,7 +40,7 @@ pub fn pretty_verifier_error(func: &ir::Function, err: verifier::Error) -> Strin
         AnyEntity::Inst(inst) => {
             write!(msg, "\n{}: {}\n\n", inst, func.dfg.display_inst(inst)).unwrap()
         }
-        _ => {}
+        _ => msg.push('\n'),
     }
     write_function(&mut msg, func, None).unwrap();
     msg
