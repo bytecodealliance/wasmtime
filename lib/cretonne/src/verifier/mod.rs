@@ -58,7 +58,6 @@ use ir::entities::AnyEntity;
 use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallInfo};
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
          Value, Type};
-use Context;
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter};
 use std::result;
@@ -114,11 +113,12 @@ pub fn verify_function(func: &Function) -> Result {
     Verifier::new(func).run()
 }
 
-/// Verify `ctx`.
-pub fn verify_context(ctx: &Context) -> Result {
-    let verifier = Verifier::new(&ctx.func);
-    verifier.domtree_integrity(&ctx.domtree)?;
-    verifier.cfg_integrity(&ctx.cfg)?;
+/// Verify `func` after checking the integrity of associated context data structures `cfg` and
+/// `domtree`.
+pub fn verify_context(func: &Function, cfg: &ControlFlowGraph, domtree: &DominatorTree) -> Result {
+    let verifier = Verifier::new(func);
+    verifier.cfg_integrity(cfg)?;
+    verifier.domtree_integrity(domtree)?;
     verifier.run()
 }
 
