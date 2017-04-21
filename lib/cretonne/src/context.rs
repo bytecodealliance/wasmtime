@@ -54,7 +54,7 @@ impl Context {
     /// The `TargetIsa` argument is currently unused, but the verifier will soon be able to also
     /// check ISA-dependent constraints.
     pub fn verify<'a, ISA: Into<Option<&'a TargetIsa>>>(&self, _isa: ISA) -> verifier::Result {
-        verifier::verify_context(self)
+        verifier::verify_context(&self.func, &self.cfg, &self.domtree)
     }
 
     /// Run the verifier only if the `enable_verifier` setting is true.
@@ -81,7 +81,6 @@ impl Context {
     /// Run the register allocator.
     pub fn regalloc(&mut self, isa: &TargetIsa) -> CtonResult {
         self.regalloc
-            .run(isa, &mut self.func, &self.cfg, &self.domtree)?;
-        self.verify_if(isa)
+            .run(isa, &mut self.func, &self.cfg, &self.domtree)
     }
 }

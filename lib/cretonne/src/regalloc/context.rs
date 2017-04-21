@@ -12,7 +12,7 @@ use regalloc::coloring::Coloring;
 use regalloc::live_value_tracker::LiveValueTracker;
 use regalloc::liveness::Liveness;
 use result::CtonResult;
-use verifier::verify_liveness;
+use verifier::{verify_context, verify_liveness};
 
 /// Persistent memory allocations for register allocation.
 pub struct Context {
@@ -62,6 +62,10 @@ impl Context {
         self.coloring
             .run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
 
+        if isa.flags().enable_verifier() {
+            verify_context(func, cfg, domtree)?;
+            verify_liveness(isa, func, cfg, &self.liveness)?;
+        }
         Ok(())
     }
 }
