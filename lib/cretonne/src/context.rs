@@ -53,8 +53,8 @@ impl Context {
     ///
     /// The `TargetIsa` argument is currently unused, but the verifier will soon be able to also
     /// check ISA-dependent constraints.
-    pub fn verify<'a, ISA: Into<Option<&'a TargetIsa>>>(&self, _isa: ISA) -> verifier::Result {
-        verifier::verify_context(&self.func, &self.cfg, &self.domtree)
+    pub fn verify<'a, ISA: Into<Option<&'a TargetIsa>>>(&self, isa: ISA) -> verifier::Result {
+        verifier::verify_context(&self.func, &self.cfg, &self.domtree, isa.into())
     }
 
     /// Run the verifier only if the `enable_verifier` setting is true.

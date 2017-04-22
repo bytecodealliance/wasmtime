@@ -51,7 +51,7 @@ impl SubTest for TestVerifier {
             }
         }
 
-        match verify_function(func) {
+        match verify_function(func, context.isa) {
             Ok(_) => {
                 match expected {
                     None => Ok(()),
