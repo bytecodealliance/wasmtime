@@ -58,6 +58,7 @@ use ir::entities::AnyEntity;
 use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallInfo};
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
          Value, Type};
+use isa::TargetIsa;
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter};
 use std::result;
@@ -109,14 +110,18 @@ impl std_error::Error for Error {
 pub type Result = result::Result<(), Error>;
 
 /// Verify `func`.
-pub fn verify_function(func: &Function) -> Result {
-    Verifier::new(func).run()
+pub fn verify_function(func: &Function, isa: Option<&TargetIsa>) -> Result {
+    Verifier::new(func, isa).run()
 }
 
 /// Verify `func` after checking the integrity of associated context data structures `cfg` and
 /// `domtree`.
-pub fn verify_context(func: &Function, cfg: &ControlFlowGraph, domtree: &DominatorTree) -> Result {
-    let verifier = Verifier::new(func);
+pub fn verify_context(func: &Function,
+                      cfg: &ControlFlowGraph,
+                      domtree: &DominatorTree,
+                      isa: Option<&TargetIsa>)
+                      -> Result {
+    let verifier = Verifier::new(func, isa);
     verifier.cfg_integrity(cfg)?;
     verifier.domtree_integrity(domtree)?;
     verifier.run()
@@ -126,16 +131,18 @@ struct Verifier<'a> {
     func: &'a Function,
     cfg: ControlFlowGraph,
     domtree: DominatorTree,
+    isa: Option<&'a TargetIsa>,
 }
 
 impl<'a> Verifier<'a> {
-    pub fn new(func: &'a Function) -> Verifier {
+    pub fn new(func: &'a Function, isa: Option<&'a TargetIsa>) -> Verifier<'a> {
         let cfg = ControlFlowGraph::with_function(func);
         let domtree = DominatorTree::with_function(func, &cfg);
         Verifier {
             func: func,
             cfg: cfg,
             domtree: domtree,
+            isa: isa,
         }
     }
 
@@ -657,6 +664,42 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    /// If the verifier has been set up with an ISA, make sure that the recorded encoding for the
+    /// instruction (if any) matches how the ISA would encode it.
+    fn verify_encoding(&self, inst: Inst) -> Result {
+        if let Some(isa) = self.isa {
+            let encoding = self.func
+                .encodings
+                .get(inst)
+                .cloned()
+                .unwrap_or_default();
+            if encoding.is_legal() {
+                let verify_encoding =
+                    isa.encode(&self.func.dfg,
+                               &self.func.dfg[inst],
+                               self.func.dfg.ctrl_typevar(inst));
+                match verify_encoding {
+                    Ok(verify_encoding) => {
+                        if verify_encoding != encoding {
+                            return err!(inst,
+                                        "Instruction re-encoding {} doesn't match {}",
+                                        isa.encoding_info().display(verify_encoding),
+                                        isa.encoding_info().display(encoding));
+                        }
+                    }
+                    Err(e) => {
+                        return err!(inst,
+                                    "Instruction failed to re-encode {}: {:?}",
+                                    isa.encoding_info().display(encoding),
+                                    e)
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn run(&self) -> Result {
         self.typecheck_entry_block_arguments()?;
         for ebb in self.func.layout.ebbs() {
@@ -664,8 +707,10 @@ impl<'a> Verifier<'a> {
                 self.ebb_integrity(ebb, inst)?;
                 self.instruction_integrity(inst)?;
                 self.typecheck(inst)?;
+                self.verify_encoding(inst)?;
             }
         }
+
         Ok(())
     }
 }
@@ -692,7 +737,7 @@ mod tests {
     #[test]
     fn empty() {
         let func = Function::new();
-        let verifier = Verifier::new(&func);
+        let verifier = Verifier::new(&func, None);
         assert_eq!(verifier.run(), Ok(()));
     }
 
@@ -705,7 +750,7 @@ mod tests {
             func.dfg
                 .make_inst(InstructionData::Nullary { opcode: Opcode::Jump });
         func.layout.append_inst(nullary_with_bad_opcode, ebb0);
-        let verifier = Verifier::new(&func);
+        let verifier = Verifier::new(&func, None);
         assert_err_with_msg!(verifier.run(), "instruction format");
     }
 }

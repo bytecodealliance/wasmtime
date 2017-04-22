@@ -116,7 +116,7 @@ fn run_one_test<'a>(tuple: (&'a SubTest, &'a Flags, Option<&'a TargetIsa>),
 
     // Should we run the verifier before this test?
     if !context.verified && test.needs_verifier() {
-        verify_function(&func).map_err(|e| pretty_verifier_error(&func, e))?;
+        verify_function(&func, isa).map_err(|e| pretty_verifier_error(&func, e))?;
         context.verified = true;
     }
 

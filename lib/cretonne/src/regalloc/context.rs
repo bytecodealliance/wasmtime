@@ -63,7 +63,7 @@ impl Context {
             .run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
 
         if isa.flags().enable_verifier() {
-            verify_context(func, cfg, domtree)?;
+            verify_context(func, cfg, domtree, Some(isa))?;
             verify_liveness(isa, func, cfg, &self.liveness)?;
         }
         Ok(())
