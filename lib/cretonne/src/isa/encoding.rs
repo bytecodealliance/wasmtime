@@ -60,7 +60,7 @@ impl fmt::Display for Encoding {
 }
 
 /// Temporary object that holds enough context to properly display an encoding.
-/// This is meant to be created by `TargetIsa::display_enc()`.
+/// This is meant to be created by `EncInfo::display()`.
 pub struct DisplayEncoding {
     pub encoding: Encoding,
     pub recipe_names: &'static [&'static str],
