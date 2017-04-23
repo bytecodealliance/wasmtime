@@ -91,6 +91,7 @@ pub fn legalize_function(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &
                     // unsound. Should we attempt to detect that?
                     if changed {
                         pos.set_position(prev_pos);
+                        continue;
                     }
                 }
             }
