@@ -15,8 +15,11 @@ use isa::{TargetIsa, RegInfo, RegClassIndex, OperandConstraint, ConstraintKind};
 /// Preferred register allocation for an SSA value.
 #[derive(Clone, Copy)]
 pub enum Affinity {
-    /// Don't care. This value can go anywhere.
-    Any,
+    /// No affinity.
+    ///
+    /// This indicates a value that is not defined or used by any real instructions. It is a ghost
+    /// value that won't appear in the final program.
+    None,
 
     /// This value should be placed in a spill slot on the stack.
     Stack,
@@ -27,14 +30,14 @@ pub enum Affinity {
 
 impl Default for Affinity {
     fn default() -> Self {
-        Affinity::Any
+        Affinity::None
     }
 }
 
 impl Affinity {
     /// Create an affinity that satisfies a single constraint.
     ///
-    /// This will never create the indifferent `Affinity::Any`.
+    /// This will never create an `Affinity::None`.
     /// Use the `Default` implementation for that.
     pub fn new(constraint: &OperandConstraint) -> Affinity {
         if constraint.kind == ConstraintKind::Stack {
@@ -47,9 +50,17 @@ impl Affinity {
     /// Create an affinity that matches an ABI argument for `isa`.
     pub fn abi(arg: &ArgumentType, isa: &TargetIsa) -> Affinity {
         match arg.location {
-            ArgumentLoc::Unassigned => Affinity::Any,
+            ArgumentLoc::Unassigned => Affinity::None,
             ArgumentLoc::Reg(_) => Affinity::Reg(isa.regclass_for_abi_type(arg.value_type).into()),
             ArgumentLoc::Stack(_) => Affinity::Stack,
+        }
+    }
+
+    /// Is this the `None` affinity?
+    pub fn is_none(self) -> bool {
+        match self {
+            Affinity::None => true,
+            _ => false,
         }
     }
 
@@ -59,7 +70,7 @@ impl Affinity {
     /// satisfies the constraint.
     pub fn merge(&mut self, constraint: &OperandConstraint, reg_info: &RegInfo) {
         match *self {
-            Affinity::Any => *self = Affinity::new(constraint),
+            Affinity::None => *self = Affinity::new(constraint),
             Affinity::Reg(rc) => {
                 // If the preferred register class is a subclass of the constraint, there's no need
                 // to change anything.
