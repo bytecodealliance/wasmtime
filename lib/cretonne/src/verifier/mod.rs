@@ -668,11 +668,7 @@ impl<'a> Verifier<'a> {
     /// instruction (if any) matches how the ISA would encode it.
     fn verify_encoding(&self, inst: Inst) -> Result {
         if let Some(isa) = self.isa {
-            let encoding = self.func
-                .encodings
-                .get(inst)
-                .cloned()
-                .unwrap_or_default();
+            let encoding = self.func.encodings.get_or_default(inst);
             if encoding.is_legal() {
                 let verify_encoding =
                     isa.encode(&self.func.dfg,
