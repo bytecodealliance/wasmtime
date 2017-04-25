@@ -21,12 +21,13 @@ use verifier::Result;
 ///
 /// We don't verify that live ranges are minimal. This would require recomputing live ranges for
 /// all values.
-pub fn verify_liveness(_isa: &TargetIsa,
+pub fn verify_liveness(isa: &TargetIsa,
                        func: &Function,
                        cfg: &ControlFlowGraph,
                        liveness: &Liveness)
                        -> Result {
     let verifier = LivenessVerifier {
+        isa: isa,
         func: func,
         cfg: cfg,
         liveness: liveness,
@@ -37,6 +38,7 @@ pub fn verify_liveness(_isa: &TargetIsa,
 }
 
 struct LivenessVerifier<'a> {
+    isa: &'a TargetIsa,
     func: &'a Function,
     cfg: &'a ControlFlowGraph,
     liveness: &'a Liveness,
@@ -61,6 +63,8 @@ impl<'a> LivenessVerifier<'a> {
     fn check_insts(&self) -> Result {
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
+                let encoding = self.func.encodings.get_or_default(inst);
+
                 // Check the defs.
                 for &val in self.func.dfg.inst_results(inst) {
                     let lr = match self.liveness.get(val) {
@@ -68,6 +72,24 @@ impl<'a> LivenessVerifier<'a> {
                         None => return err!(inst, "{} has no live range", val),
                     };
                     self.check_lr(inst.into(), val, lr)?;
+
+                    if encoding.is_legal() {
+                        // A legal instruction is not allowed to define ghost values.
+                        if lr.affinity.is_none() {
+                            return err!(inst,
+                                        "{} is a ghost value defined by a real [{}] instruction",
+                                        val,
+                                        self.isa.encoding_info().display(encoding));
+                        }
+                    } else {
+                        // A non-encoded instruction can only define ghost values.
+                        if !lr.affinity.is_none() {
+                            return err!(inst,
+                                        "{} is a real {} value defined by a ghost instruction",
+                                        val,
+                                        lr.affinity.display(&self.isa.register_info()));
+                        }
+                    }
                 }
 
                 // Check the uses.
@@ -78,6 +100,16 @@ impl<'a> LivenessVerifier<'a> {
                     };
                     if !self.live_at_use(lr, inst) {
                         return err!(inst, "{} is not live at this use", val);
+                    }
+
+                    if encoding.is_legal() {
+                        // A legal instruction is not allowed to depend on ghost values.
+                        if lr.affinity.is_none() {
+                            return err!(inst,
+                                        "{} is a ghost value used by a real [{}] instruction",
+                                        val,
+                                        self.isa.encoding_info().display(encoding));
+                        }
                     }
                 }
             }

@@ -327,7 +327,9 @@ impl<'a> Context<'a> {
                     }
                 }
                 Affinity::Stack => unimplemented!(),
-                Affinity::Any => unimplemented!(),
+                Affinity::None => {
+                    panic!("Encoded instruction defines {} with no affinity", lv.value)
+                }
             }
         }
 
