@@ -64,7 +64,7 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) {
             }
 
             while let Some(inst) = pos.next_inst() {
-                let enc = func.encodings.get(inst).cloned().unwrap_or_default();
+                let enc = func.encodings.get_or_default(inst);
                 let size = encinfo.bytes(enc);
 
                 // See if this might be a branch that is out of range.

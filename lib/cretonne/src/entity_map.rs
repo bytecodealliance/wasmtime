@@ -148,6 +148,11 @@ impl<K, V> EntityMap<K, V>
         }
         &mut self.elems[k.index()]
     }
+
+    /// Get the element at `k` or the default value if `k` is out of range.
+    pub fn get_or_default(&self, k: K) -> V {
+        self.elems.get(k.index()).cloned().unwrap_or_default()
+    }
 }
 
 /// Immutable indexing into an `EntityMap`.
