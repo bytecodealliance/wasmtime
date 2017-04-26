@@ -2,6 +2,7 @@
 
 use ir;
 use isa::RegClass;
+use regalloc::AllocatableSet;
 use settings as shared_settings;
 use super::registers::{S, D, Q, GPR};
 
@@ -24,4 +25,9 @@ pub fn regclass_for_abi_type(ty: ir::Type) -> RegClass {
             _ => panic!("Unexpected {} ABI type for arm32", ty),
         }
     }
+}
+
+/// Get the set of allocatable registers for `func`.
+pub fn allocatable_registers(_func: &ir::Function) -> AllocatableSet {
+    unimplemented!()
 }

@@ -6,8 +6,9 @@
 //! This doesn't support the soft-float ABI at the moment.
 
 use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
-use ir::{Signature, Type, ArgumentType, ArgumentLoc, ArgumentExtension, ArgumentPurpose};
+use ir::{self, Type, ArgumentType, ArgumentLoc, ArgumentExtension, ArgumentPurpose};
 use isa::RegClass;
+use regalloc::AllocatableSet;
 use settings as shared_settings;
 use super::registers::{GPR, FPR};
 use super::settings;
@@ -84,7 +85,7 @@ impl ArgAssigner for Args {
 }
 
 /// Legalize `sig` for RISC-V.
-pub fn legalize_signature(sig: &mut Signature,
+pub fn legalize_signature(sig: &mut ir::Signature,
                           flags: &shared_settings::Flags,
                           isa_flags: &settings::Flags,
                           current: bool) {
@@ -113,4 +114,23 @@ pub fn legalize_signature(sig: &mut Signature,
 /// Get register class for a type appearing in a legalized signature.
 pub fn regclass_for_abi_type(ty: Type) -> RegClass {
     if ty.is_float() { FPR } else { GPR }
+}
+
+pub fn allocatable_registers(_func: &ir::Function, isa_flags: &settings::Flags) -> AllocatableSet {
+    let mut regs = AllocatableSet::new();
+    regs.take(GPR, GPR.unit(0)); // Hard-wired 0.
+    // %x1 is the link register which is available for allocation.
+    regs.take(GPR, GPR.unit(2)); // Stack pointer.
+    regs.take(GPR, GPR.unit(3)); // Global pointer.
+    regs.take(GPR, GPR.unit(4)); // Thread pointer.
+    // TODO: %x8 is the frame pointer. Reserve it?
+
+    // Remove %x16 and up for RV32E.
+    if isa_flags.enable_e() {
+        for u in 16..32 {
+            regs.take(GPR, GPR.unit(u));
+        }
+    }
+
+    regs
 }

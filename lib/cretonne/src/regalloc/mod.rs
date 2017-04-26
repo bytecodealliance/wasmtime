@@ -11,4 +11,5 @@ pub mod coloring;
 mod affinity;
 mod context;
 
+pub use self::allocatable_set::AllocatableSet;
 pub use self::context::Context;

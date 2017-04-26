@@ -46,7 +46,8 @@ pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex};
 
 use binemit::CodeSink;
 use settings;
-use ir::{Function, Inst, InstructionData, DataFlowGraph, Signature, Type};
+use ir;
+use regalloc;
 
 pub mod riscv;
 pub mod intel;
@@ -142,9 +143,9 @@ pub trait TargetIsa {
     ///
     /// This is also the main entry point for determining if an instruction is legal.
     fn encode(&self,
-              dfg: &DataFlowGraph,
-              inst: &InstructionData,
-              ctrl_typevar: Type)
+              dfg: &ir::DataFlowGraph,
+              inst: &ir::InstructionData,
+              ctrl_typevar: ir::Type)
               -> Result<Encoding, Legalize>;
 
     /// Get a data structure describing the instruction encodings in this ISA.
@@ -183,7 +184,7 @@ pub trait TargetIsa {
     /// Arguments and return values for the caller's frame pointer and other callee-saved registers
     /// should not be added by this function. These arguments are not added until after register
     /// allocation.
-    fn legalize_signature(&self, sig: &mut Signature, current: bool);
+    fn legalize_signature(&self, sig: &mut ir::Signature, current: bool);
 
     /// Get the register class that should be used to represent an ABI argument or return value of
     /// type `ty`. This should be the top-level register class that contains the argument
@@ -191,13 +192,19 @@ pub trait TargetIsa {
     ///
     /// This function can assume that it will only be asked to provide register classes for types
     /// that `legalize_signature()` produces in `ArgumentLoc::Reg` entries.
-    fn regclass_for_abi_type(&self, ty: Type) -> RegClass;
+    fn regclass_for_abi_type(&self, ty: ir::Type) -> RegClass;
+
+    /// Get the set of allocatable registers that can be used when compiling `func`.
+    ///
+    /// This set excludes reserved registers like the stack pointer and other special-purpose
+    /// registers.
+    fn allocatable_registers(&self, func: &ir::Function) -> regalloc::AllocatableSet;
 
     /// Emit binary machine code for a single instruction into the `sink` trait object.
     ///
     /// Note that this will call `put*` methods on the trait object via its vtable which is not the
     /// fastest way of emitting code.
-    fn emit_inst(&self, func: &Function, inst: Inst, sink: &mut CodeSink);
+    fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut CodeSink);
 
     /// Get a static array of names associated with relocations in this ISA.
     ///

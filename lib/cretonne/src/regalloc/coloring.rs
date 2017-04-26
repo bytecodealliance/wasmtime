@@ -101,8 +101,7 @@ impl Coloring {
             encinfo: isa.encoding_info(),
             domtree: domtree,
             liveness: liveness,
-            // TODO: Ask the target ISA about reserved registers etc.
-            usable_regs: AllocatableSet::new(),
+            usable_regs: isa.allocatable_registers(func),
         };
         ctx.run(self, func, tracker)
     }
