@@ -37,7 +37,7 @@
 
 use entity_map::EntityMap;
 use dominator_tree::DominatorTree;
-use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph};
+use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph, Signature, ArgumentLoc};
 use isa::{TargetIsa, RegInfo, Encoding, EncInfo, ConstraintKind};
 use regalloc::affinity::Affinity;
 use regalloc::allocatable_set::AllocatableSet;
@@ -180,14 +180,15 @@ impl<'a> Context<'a> {
         let (liveins, args) =
             tracker.ebb_top(ebb, &func.dfg, self.liveness, &func.layout, self.domtree);
 
-        // The live-ins have already been assigned a register. Reconstruct the allocatable set.
-        let mut regs = self.livein_regs(liveins, func);
-
-        // TODO: Arguments to the entry block are pre-colored by the ABI. We should probably call
-        // a whole other function for that case.
-        self.color_args(args, &mut regs, &mut func.locations);
-
-        regs
+        // Arguments to the entry block have ABI constraints.
+        if func.layout.entry_block() == Some(ebb) {
+            assert_eq!(liveins.len(), 0);
+            self.color_entry_args(&func.signature, args, &mut func.locations)
+        } else {
+            // The live-ins have already been assigned a register. Reconstruct the allocatable set.
+            let regs = self.livein_regs(liveins, func);
+            self.color_args(args, regs, &mut func.locations)
+        }
     }
 
     /// Initialize a set of allocatable registers from the values that are live-in to a block.
@@ -218,14 +219,68 @@ impl<'a> Context<'a> {
         regs
     }
 
+    /// Color the arguments to the entry block.
+    ///
+    /// These are function arguments that should already have assigned register units in the
+    /// function signature.
+    ///
+    /// Return the set of remaining allocatable registers.
+    fn color_entry_args(&self,
+                        sig: &Signature,
+                        args: &[LiveValue],
+                        locations: &mut EntityMap<Value, ValueLoc>)
+                        -> AllocatableSet {
+        assert_eq!(sig.argument_types.len(), args.len());
+
+        let mut regs = self.usable_regs.clone();
+
+        for (lv, abi) in args.iter().zip(&sig.argument_types) {
+            match lv.affinity {
+                Affinity::Reg(rc_index) => {
+                    let regclass = self.reginfo.rc(rc_index);
+                    if let ArgumentLoc::Reg(regunit) = abi.location {
+                        regs.take(regclass, regunit);
+                        *locations.ensure(lv.value) = ValueLoc::Reg(regunit);
+                    } else {
+                        // This should have been fixed by the reload pass.
+                        panic!("Entry arg {} has {} affinity, but ABI {}",
+                               lv.value,
+                               lv.affinity.display(&self.reginfo),
+                               abi.display(&self.reginfo));
+                    }
+
+                }
+                Affinity::Stack => {
+                    if let ArgumentLoc::Stack(_offset) = abi.location {
+                        // TODO: Allocate a stack slot at incoming offset and assign it.
+                        panic!("Unimplemented {}: {} stack allocation",
+                               lv.value,
+                               abi.display(&self.reginfo));
+                    } else {
+                        // This should have been fixed by the reload pass.
+                        panic!("Entry arg {} has stack affinity, but ABI {}",
+                               lv.value,
+                               abi.display(&self.reginfo));
+                    }
+                }
+                // This is a ghost value, unused in the function. Don't assign it to a location
+                // either.
+                Affinity::None => {}
+            }
+        }
+
+        regs
+    }
+
     /// Color the live arguments to the current block.
     ///
     /// It is assumed that any live-in register values have already been taken out of the register
     /// set.
     fn color_args(&self,
                   args: &[LiveValue],
-                  regs: &mut AllocatableSet,
-                  locations: &mut EntityMap<Value, ValueLoc>) {
+                  mut regs: AllocatableSet,
+                  locations: &mut EntityMap<Value, ValueLoc>)
+                  -> AllocatableSet {
         for lv in args {
             // Only look at the register arguments.
             if let Affinity::Reg(rc_index) = lv.affinity {
@@ -238,6 +293,8 @@ impl<'a> Context<'a> {
                 *locations.ensure(lv.value) = ValueLoc::Reg(regunit);
             }
         }
+
+        regs
     }
 
     /// Color the values defined by `inst` and insert any necessary shuffle code to satisfy
