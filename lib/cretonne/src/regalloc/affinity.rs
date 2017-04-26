@@ -8,6 +8,7 @@
 //! subclass. This is just a hint, and the register allocator is allowed to pick a register from a
 //! larger register class instead.
 
+use std::fmt;
 use ir::{ArgumentType, ArgumentLoc};
 use isa::{TargetIsa, RegInfo, RegClassIndex, OperandConstraint, ConstraintKind};
 
@@ -73,6 +74,30 @@ impl Affinity {
                 }
             }
             Affinity::Stack => {}
+        }
+    }
+
+    /// Return an object that can display this value affinity, using the register info from the
+    /// target ISA.
+    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(self, regs: R) -> DisplayAffinity<'a> {
+        DisplayAffinity(self, regs.into())
+    }
+}
+
+/// Displaying an `Affinity` correctly requires the associated `RegInfo` from the target ISA.
+pub struct DisplayAffinity<'a>(Affinity, Option<&'a RegInfo>);
+
+impl<'a> fmt::Display for DisplayAffinity<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.0 {
+            Affinity::None => write!(f, "none"),
+            Affinity::Stack => write!(f, "stack"),
+            Affinity::Reg(rci) => {
+                match self.1 {
+                    Some(regs) => write!(f, "{}", regs.rc(rci)),
+                    None => write!(f, "{}", rci),
+                }
+            }
         }
     }
 }

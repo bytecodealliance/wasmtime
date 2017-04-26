@@ -153,6 +153,12 @@ impl RegClassData {
     }
 }
 
+impl fmt::Display for RegClassData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.name)
+    }
+}
+
 /// A small reference to a register class.
 ///
 /// Use this when storing register classes in compact data structures. The `RegInfo::rc()` method
@@ -173,6 +179,12 @@ impl EntityRef for RegClassIndex {
 impl From<RegClass> for RegClassIndex {
     fn from(rc: RegClass) -> Self {
         RegClassIndex(rc.index)
+    }
+}
+
+impl fmt::Display for RegClassIndex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "rci{}", self.0)
     }
 }
 
