@@ -18,6 +18,9 @@ enable_m = BoolSetting(
         "Enable the use of 'M' instructions if available",
         default=True)
 
+enable_e = BoolSetting(
+        "Enable the 'RV32E' instruction set with only 16 registers")
+
 use_m = And(supports_m, enable_m)
 use_a = And(supports_a, shared.enable_atomics)
 use_f = And(supports_f, shared.enable_float)
