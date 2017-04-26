@@ -11,7 +11,8 @@ use binemit::CodeSink;
 use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, general_encoding};
 use isa::Builder as IsaBuilder;
 use isa::{TargetIsa, RegInfo, RegClass, EncInfo, Encoding, Legalize};
-use ir::{Function, Inst, InstructionData, DataFlowGraph, Signature, Type};
+use ir;
+use regalloc;
 
 #[allow(dead_code)]
 struct Isa {
@@ -61,9 +62,9 @@ impl TargetIsa for Isa {
     }
 
     fn encode(&self,
-              _dfg: &DataFlowGraph,
-              inst: &InstructionData,
-              ctrl_typevar: Type)
+              _dfg: &ir::DataFlowGraph,
+              inst: &ir::InstructionData,
+              ctrl_typevar: ir::Type)
               -> Result<Encoding, Legalize> {
         lookup_enclist(ctrl_typevar,
                        inst.opcode(),
@@ -78,15 +79,19 @@ impl TargetIsa for Isa {
                 })
     }
 
-    fn legalize_signature(&self, sig: &mut Signature, current: bool) {
+    fn legalize_signature(&self, sig: &mut ir::Signature, current: bool) {
         abi::legalize_signature(sig, &self.shared_flags, &self.isa_flags, current)
     }
 
-    fn regclass_for_abi_type(&self, ty: Type) -> RegClass {
+    fn regclass_for_abi_type(&self, ty: ir::Type) -> RegClass {
         abi::regclass_for_abi_type(ty)
     }
 
-    fn emit_inst(&self, func: &Function, inst: Inst, sink: &mut CodeSink) {
+    fn allocatable_registers(&self, func: &ir::Function) -> regalloc::AllocatableSet {
+        abi::allocatable_registers(func, &self.isa_flags)
+    }
+
+    fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut CodeSink) {
         binemit::emit_inst(func, inst, sink)
     }
 

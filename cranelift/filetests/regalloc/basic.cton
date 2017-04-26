@@ -6,7 +6,8 @@ isa riscv
 function add(i32, i32) {
 ebb0(v1: i32, v2: i32):
     v3 = iadd v1, v2
-; check: [R#0c,%x0]
+; TODO: This shouldn't clobber the link register.
+; check: [R#0c,%x1]
 ; sameln: iadd
     return
 }

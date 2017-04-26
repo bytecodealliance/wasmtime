@@ -12,6 +12,7 @@ use isa::enc_tables::{lookup_enclist, general_encoding};
 use isa::Builder as IsaBuilder;
 use isa::{TargetIsa, RegInfo, RegClass, EncInfo, Encoding, Legalize};
 use ir;
+use regalloc;
 
 #[allow(dead_code)]
 struct Isa {
@@ -77,6 +78,10 @@ impl TargetIsa for Isa {
 
     fn regclass_for_abi_type(&self, ty: ir::Type) -> RegClass {
         abi::regclass_for_abi_type(ty)
+    }
+
+    fn allocatable_registers(&self, func: &ir::Function) -> regalloc::AllocatableSet {
+        abi::allocatable_registers(func)
     }
 
     fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut CodeSink) {
