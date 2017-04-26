@@ -190,6 +190,7 @@ type LiveRangeSet = SparseMap<Value, LiveRange>;
 /// Create it if necessary.
 fn get_or_create<'a>(lrset: &'a mut LiveRangeSet,
                      value: Value,
+                     isa: &TargetIsa,
                      func: &Function,
                      enc_info: &EncInfo)
                      -> &'a mut LiveRange {
@@ -211,11 +212,17 @@ fn get_or_create<'a>(lrset: &'a mut LiveRangeSet,
                     .map(Affinity::new)
                     .unwrap_or_default();
             }
-            ValueDef::Arg(ebb, _) => {
+            ValueDef::Arg(ebb, num) => {
                 def = ebb.into();
-                // Don't apply any affinity to EBB arguments.
-                // They could be in a register or on the stack.
-                affinity = Default::default();
+                if func.layout.entry_block() == Some(ebb) {
+                    // The affinity for entry block arguments can be inferred from the function
+                    // signature.
+                    affinity = Affinity::abi(&func.signature.argument_types[num], isa);
+                } else {
+                    // Don't apply any affinity to normal EBB arguments.
+                    // They could be in a register or on the stack.
+                    affinity = Default::default();
+                }
             }
         };
         lrset.insert(LiveRange::new(value, def, affinity));
@@ -309,7 +316,7 @@ impl Liveness {
                 // TODO: When we implement DCE, we can use the absence of a live range to indicate
                 // an unused value.
                 for &def in func.dfg.inst_results(inst) {
-                    get_or_create(&mut self.ranges, def, func, &enc_info);
+                    get_or_create(&mut self.ranges, def, isa, func, &enc_info);
                 }
 
                 // Iterator of constraints, one per value operand.
@@ -322,7 +329,7 @@ impl Liveness {
 
                 for &arg in func.dfg.inst_args(inst) {
                     // Get the live range, create it as a dead range if necessary.
-                    let lr = get_or_create(&mut self.ranges, arg, func, &enc_info);
+                    let lr = get_or_create(&mut self.ranges, arg, isa, func, &enc_info);
 
                     // Extend the live range to reach this use.
                     extend_to_use(lr, ebb, inst, &mut self.worklist, func, cfg);
