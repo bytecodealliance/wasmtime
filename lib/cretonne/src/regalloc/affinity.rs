@@ -8,7 +8,8 @@
 //! subclass. This is just a hint, and the register allocator is allowed to pick a register from a
 //! larger register class instead.
 
-use isa::{RegInfo, RegClassIndex, OperandConstraint, ConstraintKind};
+use ir::{ArgumentType, ArgumentLoc};
+use isa::{TargetIsa, RegInfo, RegClassIndex, OperandConstraint, ConstraintKind};
 
 /// Preferred register allocation for an SSA value.
 #[derive(Clone, Copy)]
@@ -39,6 +40,15 @@ impl Affinity {
             Affinity::Stack
         } else {
             Affinity::Reg(constraint.regclass.into())
+        }
+    }
+
+    /// Create an affinity that matches an ABI argument for `isa`.
+    pub fn abi(arg: &ArgumentType, isa: &TargetIsa) -> Affinity {
+        match arg.location {
+            ArgumentLoc::Unassigned => Affinity::Any,
+            ArgumentLoc::Reg(_) => Affinity::Reg(isa.regclass_for_abi_type(arg.value_type).into()),
+            ArgumentLoc::Stack(_) => Affinity::Stack,
         }
     }
 
