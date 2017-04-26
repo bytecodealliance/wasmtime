@@ -168,7 +168,7 @@ pub trait TargetIsa {
     /// The legalizer will adapt argument and return values as necessary at all ABI boundaries.
     ///
     /// When this function is called to legalize the signature of the function currently begin
-    /// compiler, `_current` is true. The legalized signature can then also contain special purpose
+    /// compiler, `current` is true. The legalized signature can then also contain special purpose
     /// arguments and return values such as:
     ///
     /// - A `link` argument representing the link registers on RISC architectures that don't push
@@ -183,9 +183,15 @@ pub trait TargetIsa {
     /// Arguments and return values for the caller's frame pointer and other callee-saved registers
     /// should not be added by this function. These arguments are not added until after register
     /// allocation.
-    fn legalize_signature(&self, _sig: &mut Signature, _current: bool) {
-        unimplemented!()
-    }
+    fn legalize_signature(&self, sig: &mut Signature, current: bool);
+
+    /// Get the register class that should be used to represent an ABI argument or return value of
+    /// type `ty`. This should be the top-level register class that contains the argument
+    /// registers.
+    ///
+    /// This function can assume that it will only be asked to provide register classes for types
+    /// that `legalize_signature()` produces in `ArgumentLoc::Reg` entries.
+    fn regclass_for_abi_type(&self, ty: Type) -> RegClass;
 
     /// Emit binary machine code for a single instruction into the `sink` trait object.
     ///

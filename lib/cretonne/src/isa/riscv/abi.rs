@@ -7,6 +7,7 @@
 
 use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
 use ir::{Signature, Type, ArgumentType, ArgumentLoc, ArgumentExtension, ArgumentPurpose};
+use isa::RegClass;
 use isa::riscv::registers::{GPR, FPR};
 use settings as shared_settings;
 
@@ -101,4 +102,9 @@ pub fn legalize_signature(sig: &mut Signature, flags: &shared_settings::Flags, c
         sig.argument_types.push(link);
         sig.return_types.push(link);
     }
+}
+
+/// Get register class for a type appearing in a legalized signature.
+pub fn regclass_for_abi_type(ty: Type) -> RegClass {
+    if ty.is_float() { FPR } else { GPR }
 }
