@@ -1,6 +1,7 @@
 //! ARM 32-bit Instruction Set Architecture.
 
 pub mod settings;
+mod abi;
 mod binemit;
 mod enc_tables;
 mod registers;
@@ -9,7 +10,7 @@ use binemit::CodeSink;
 use super::super::settings as shared_settings;
 use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, general_encoding};
 use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, RegInfo, EncInfo, Encoding, Legalize};
+use isa::{TargetIsa, RegInfo, RegClass, EncInfo, Encoding, Legalize};
 use ir;
 
 #[allow(dead_code)]
@@ -75,6 +76,14 @@ impl TargetIsa for Isa {
                                      |isap| self.isa_flags.numbered_predicate(isap as usize))
                             .ok_or(Legalize::Expand)
                 })
+    }
+
+    fn legalize_signature(&self, sig: &mut ir::Signature, current: bool) {
+        abi::legalize_signature(sig, &self.shared_flags, current)
+    }
+
+    fn regclass_for_abi_type(&self, ty: ir::Type) -> RegClass {
+        abi::regclass_for_abi_type(ty)
     }
 
     fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut CodeSink) {

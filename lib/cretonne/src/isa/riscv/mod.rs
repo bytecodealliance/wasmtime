@@ -10,7 +10,7 @@ use super::super::settings as shared_settings;
 use binemit::CodeSink;
 use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, general_encoding};
 use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, RegInfo, EncInfo, Encoding, Legalize};
+use isa::{TargetIsa, RegInfo, RegClass, EncInfo, Encoding, Legalize};
 use ir::{Function, Inst, InstructionData, DataFlowGraph, Signature, Type};
 
 #[allow(dead_code)]
@@ -81,6 +81,10 @@ impl TargetIsa for Isa {
     fn legalize_signature(&self, sig: &mut Signature, current: bool) {
         // We can pass in `self.isa_flags` too, if we need it.
         abi::legalize_signature(sig, &self.shared_flags, current)
+    }
+
+    fn regclass_for_abi_type(&self, ty: Type) -> RegClass {
+        abi::regclass_for_abi_type(ty)
     }
 
     fn emit_inst(&self, func: &Function, inst: Inst, sink: &mut CodeSink) {
