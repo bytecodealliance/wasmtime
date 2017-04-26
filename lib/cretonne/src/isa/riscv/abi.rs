@@ -8,24 +8,27 @@
 use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
 use ir::{Signature, Type, ArgumentType, ArgumentLoc, ArgumentExtension, ArgumentPurpose};
 use isa::RegClass;
-use isa::riscv::registers::{GPR, FPR};
 use settings as shared_settings;
+use super::registers::{GPR, FPR};
+use super::settings;
 
 struct Args {
     pointer_bits: u16,
     pointer_bytes: u32,
     pointer_type: Type,
     regs: u32,
+    reg_limit: u32,
     offset: u32,
 }
 
 impl Args {
-    fn new(bits: u16) -> Args {
+    fn new(bits: u16, enable_e: bool) -> Args {
         Args {
             pointer_bits: bits,
             pointer_bytes: bits as u32 / 8,
             pointer_type: Type::int(bits).unwrap(),
             regs: 0,
+            reg_limit: if enable_e { 6 } else { 8 },
             offset: 0,
         }
     }
@@ -62,7 +65,7 @@ impl ArgAssigner for Args {
             }
         }
 
-        if self.regs < 8 {
+        if self.regs < self.reg_limit {
             // Assign to a register.
             let reg = if ty.is_float() {
                 FPR.unit(10 + self.regs as usize)
@@ -81,13 +84,16 @@ impl ArgAssigner for Args {
 }
 
 /// Legalize `sig` for RISC-V.
-pub fn legalize_signature(sig: &mut Signature, flags: &shared_settings::Flags, current: bool) {
+pub fn legalize_signature(sig: &mut Signature,
+                          flags: &shared_settings::Flags,
+                          isa_flags: &settings::Flags,
+                          current: bool) {
     let bits = if flags.is_64bit() { 64 } else { 32 };
 
-    let mut args = Args::new(bits);
+    let mut args = Args::new(bits, isa_flags.enable_e());
     legalize_args(&mut sig.argument_types, &mut args);
 
-    let mut rets = Args::new(bits);
+    let mut rets = Args::new(bits, isa_flags.enable_e());
     legalize_args(&mut sig.return_types, &mut rets);
 
     if current {
