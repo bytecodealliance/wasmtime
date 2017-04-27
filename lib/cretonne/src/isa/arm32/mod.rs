@@ -39,7 +39,7 @@ fn isa_constructor(shared_flags: shared_settings::Flags,
     };
     Box::new(Isa {
                  isa_flags: settings::Flags::new(&shared_flags, builder),
-                 shared_flags: shared_flags,
+                 shared_flags,
                  cpumode: level1,
              })
 }

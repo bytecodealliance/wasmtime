@@ -139,10 +139,10 @@ impl<'a> Verifier<'a> {
         let cfg = ControlFlowGraph::with_function(func);
         let domtree = DominatorTree::with_function(func, &cfg);
         Verifier {
-            func: func,
-            cfg: cfg,
-            domtree: domtree,
-            isa: isa,
+            func,
+            cfg,
+            domtree,
+            isa,
         }
     }
 

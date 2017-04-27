@@ -70,9 +70,9 @@ impl LiveValueVec {
     fn push(&mut self, value: Value, endpoint: Inst, affinity: Affinity) {
         self.values
             .push(LiveValue {
-                      value: value,
-                      endpoint: endpoint,
-                      affinity: affinity,
+                      value,
+                      endpoint,
+                      affinity,
                   });
     }
 

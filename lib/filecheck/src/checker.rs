@@ -25,7 +25,7 @@ enum Directive {
 // 1. Keyword.
 // 2. Rest of line / pattern.
 //
-const DIRECTIVE_RX: &'static str = r"\b(check|sameln|nextln|unordered|not|regex):\s+(.*)";
+const DIRECTIVE_RX: &str = r"\b(check|sameln|nextln|unordered|not|regex):\s+(.*)";
 
 impl Directive {
     /// Create a new directive from a `DIRECTIVE_RX` match.
@@ -264,9 +264,9 @@ struct State<'a> {
 impl<'a> State<'a> {
     fn new(text: &'a str, env_vars: &'a VariableMap, recorder: &'a mut Recorder) -> State<'a> {
         State {
-            text: text,
-            env_vars: env_vars,
-            recorder: recorder,
+            text,
+            env_vars,
+            recorder,
             vars: HashMap::new(),
             last_ordered: 0,
             max_match: 0,

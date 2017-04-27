@@ -60,7 +60,7 @@ pub struct Explainer<'a> {
 impl<'a> Explainer<'a> {
     pub fn new(text: &'a str) -> Explainer {
         Explainer {
-            text: text,
+            text,
             directive: 0,
             matches: Vec::new(),
             vardefs: Vec::new(),

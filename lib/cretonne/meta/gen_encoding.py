@@ -451,7 +451,7 @@ def emit_recipe_names(isa, fmt):
     This is used for pretty-printing encodings.
     """
     with fmt.indented(
-            'static RECIPE_NAMES: [&\'static str; {}] = ['
+            'static RECIPE_NAMES: [&str; {}] = ['
             .format(len(isa.all_recipes)), '];'):
         for r in isa.all_recipes:
             fmt.line('"{}",'.format(r.name))

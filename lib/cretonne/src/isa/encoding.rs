@@ -19,10 +19,7 @@ pub struct Encoding {
 impl Encoding {
     /// Create a new `Encoding` containing `(recipe, bits)`.
     pub fn new(recipe: u16, bits: u16) -> Encoding {
-        Encoding {
-            recipe: recipe,
-            bits: bits,
-        }
+        Encoding { recipe, bits }
     }
 
     /// Get the recipe number in this encoding.

@@ -220,7 +220,7 @@ impl RegInfo {
     /// Make a temporary object that can display a register unit.
     pub fn display_regunit(&self, regunit: RegUnit) -> DisplayRegUnit {
         DisplayRegUnit {
-            regunit: regunit,
+            regunit,
             reginfo: self,
         }
     }

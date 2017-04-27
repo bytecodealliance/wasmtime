@@ -32,7 +32,7 @@ struct CFGPrinter<'a> {
 impl<'a> CFGPrinter<'a> {
     pub fn new(func: &'a Function) -> CFGPrinter<'a> {
         CFGPrinter {
-            func: func,
+            func,
             cfg: ControlFlowGraph::with_function(func),
         }
     }

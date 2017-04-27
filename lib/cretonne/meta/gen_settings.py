@@ -132,7 +132,7 @@ def gen_descriptors(sgrp, fmt):
                     raise AssertionError("Unknown setting kind")
 
     with fmt.indented(
-            'static ENUMERATORS: [&\'static str; {}] = ['
+            'static ENUMERATORS: [&str; {}] = ['
             .format(len(enums.table)),
             '];'):
         for txt in enums.table:

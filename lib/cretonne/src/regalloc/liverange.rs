@@ -208,8 +208,8 @@ impl LiveRange {
     /// The live range will be created as dead, but it can be extended with `extend_in_ebb()`.
     pub fn new(value: Value, def: ProgramPoint, affinity: Affinity) -> LiveRange {
         LiveRange {
-            value: value,
-            affinity: affinity,
+            value,
+            affinity,
             def_begin: def,
             def_end: def,
             liveins: Vec::new(),

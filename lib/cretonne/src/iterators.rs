@@ -8,10 +8,7 @@ pub trait IteratorExtras: Iterator {
               Self::Item: Clone
     {
         let elem = self.next();
-        AdjacentPairs {
-            iter: self,
-            elem: elem,
-        }
+        AdjacentPairs { iter: self, elem }
     }
 }
 

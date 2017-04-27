@@ -81,7 +81,7 @@ impl TestRunner {
     /// Create a new blank TrstRunner.
     pub fn new(verbose: bool) -> TestRunner {
         TestRunner {
-            verbose: verbose,
+            verbose,
             dir_stack: Vec::new(),
             tests: Vec::new(),
             new_tests: 0,

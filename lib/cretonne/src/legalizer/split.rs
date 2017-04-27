@@ -261,11 +261,11 @@ fn add_repair(concat: Opcode,
               hi_num: usize,
               repairs: &mut Vec<Repair>) {
     repairs.push(Repair {
-                     concat: concat,
-                     split_type: split_type,
-                     ebb: ebb,
-                     num: num,
-                     hi_num: hi_num,
+                     concat,
+                     split_type,
+                     ebb,
+                     num,
+                     hi_num,
                  });
 }
 

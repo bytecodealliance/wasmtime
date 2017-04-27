@@ -55,9 +55,9 @@ pub fn run(path: &Path) -> TestResult {
     for (func, details) in testfile.functions {
         let mut context = Context {
             preamble_comments: &testfile.preamble_comments,
-            details: details,
+            details,
             verified: false,
-            flags: flags,
+            flags,
             isa: None,
         };
 
