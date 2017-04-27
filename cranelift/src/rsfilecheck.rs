@@ -18,11 +18,13 @@ pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
     }
 
     let mut buffer = String::new();
-    io::stdin().read_to_string(&mut buffer)
+    io::stdin()
+        .read_to_string(&mut buffer)
         .map_err(|e| format!("stdin: {}", e))?;
 
     if verbose {
-        let (success, explain) = checker.explain(&buffer, NO_VARIABLES)
+        let (success, explain) = checker
+            .explain(&buffer, NO_VARIABLES)
             .map_err(|e| e.to_string())?;
         print!("{}", explain);
         if success {
@@ -31,11 +33,13 @@ pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
         } else {
             Err("Check failed".to_string())
         }
-    } else if checker.check(&buffer, NO_VARIABLES)
+    } else if checker
+                  .check(&buffer, NO_VARIABLES)
                   .map_err(|e| e.to_string())? {
         Ok(())
     } else {
-        let (_, explain) = checker.explain(&buffer, NO_VARIABLES)
+        let (_, explain) = checker
+            .explain(&buffer, NO_VARIABLES)
             .map_err(|e| e.to_string())?;
         print!("{}", explain);
         Err("Check failed".to_string())
@@ -43,9 +47,11 @@ pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
 }
 
 fn read_checkfile(filename: &str) -> Result<Checker, String> {
-    let buffer = read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e))?;
+    let buffer = read_to_string(&filename)
+        .map_err(|e| format!("{}: {}", filename, e))?;
     let mut builder = CheckerBuilder::new();
-    builder.text(&buffer)
+    builder
+        .text(&buffer)
         .map_err(|e| format!("{}: {}", filename, e))?;
     Ok(builder.finish())
 }
