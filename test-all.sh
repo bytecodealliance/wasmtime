@@ -22,28 +22,9 @@ function banner() {
 }
 
 # Run rustfmt if we have it.
-#
-# Rustfmt is still immature enough that its formatting decisions can change
-# between versions. This makes it difficult to enforce a certain style in a
-# test script since not all developers will upgrade rustfmt at the same time.
-# To work around this, we only verify formatting when a specific version of
-# rustfmt is installed.
-#
-# This version should always be bumped to the newest version available.
-RUSTFMT_VERSION="0.8.3"
-
-if cargo install --list | grep -q "^rustfmt v$RUSTFMT_VERSION"; then
+if $topdir/check-rustfmt.sh; then
     banner "Rust formatting"
     $topdir/format-all.sh --write-mode=diff
-elif [ -n "$TRAVIS" ]; then
-    # We're running under Travis CI.
-    # Install rustfmt, it will be cached for the next build.
-    echo "Installing rustfmt v$RUSTFMT_VERSION."
-    cargo install --force --vers="$RUSTFMT_VERSION" rustfmt
-    $topdir/format-all.sh --write-mode=diff
-else
-    echo "Please install rustfmt v$RUSTFMT_VERSION to verify formatting."
-    echo "If a newer version of rustfmt is available, update this script."
 fi
 
 # Check if any Python files have changed since we last checked them.
