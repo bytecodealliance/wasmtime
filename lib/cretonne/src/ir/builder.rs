@@ -56,7 +56,7 @@ impl<'c, 'fc, 'fd> InsertBuilder<'c, 'fc, 'fd> {
     pub fn new(dfg: &'fd mut DataFlowGraph,
                pos: &'c mut Cursor<'fc>)
                -> InsertBuilder<'c, 'fc, 'fd> {
-        InsertBuilder { dfg: dfg, pos: pos }
+        InsertBuilder { dfg, pos }
     }
 
     /// Reuse result values in `reuse`.
@@ -72,7 +72,7 @@ impl<'c, 'fc, 'fd> InsertBuilder<'c, 'fc, 'fd> {
         InsertReuseBuilder {
             dfg: self.dfg,
             pos: self.pos,
-            reuse: reuse,
+            reuse,
         }
     }
 
@@ -154,10 +154,7 @@ pub struct ReplaceBuilder<'f> {
 impl<'f> ReplaceBuilder<'f> {
     /// Create a `ReplaceBuilder` that will overwrite `inst`.
     pub fn new(dfg: &'f mut DataFlowGraph, inst: Inst) -> ReplaceBuilder {
-        ReplaceBuilder {
-            dfg: dfg,
-            inst: inst,
-        }
+        ReplaceBuilder { dfg, inst }
     }
 }
 

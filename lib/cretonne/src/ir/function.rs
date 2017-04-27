@@ -57,7 +57,7 @@ impl Function {
     /// Create a function with the given name and signature.
     pub fn with_name_signature(name: FunctionName, sig: Signature) -> Function {
         Function {
-            name: name,
+            name,
             signature: sig,
             stack_slots: EntityMap::new(),
             jump_tables: EntityMap::new(),

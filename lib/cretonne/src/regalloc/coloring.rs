@@ -99,8 +99,8 @@ impl Coloring {
         let mut ctx = Context {
             reginfo: isa.register_info(),
             encinfo: isa.encoding_info(),
-            domtree: domtree,
-            liveness: liveness,
+            domtree,
+            liveness,
             usable_regs: isa.allocatable_registers(func),
         };
         ctx.run(self, func, tracker)

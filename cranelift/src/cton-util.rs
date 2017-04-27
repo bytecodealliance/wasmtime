@@ -17,7 +17,7 @@ mod cat;
 mod print_cfg;
 mod rsfilecheck;
 
-const USAGE: &'static str = "
+const USAGE: &str = "
 Cretonne code generator utility
 
 Usage:

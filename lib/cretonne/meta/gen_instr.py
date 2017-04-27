@@ -470,7 +470,7 @@ def gen_format_constructor(iform, fmt):
         # Generate the instruction data.
         with fmt.indented(
                 'let data = InstructionData::{} {{'.format(iform.name), '};'):
-            fmt.line('opcode: opcode,')
+            fmt.line('opcode,')
             gen_member_inits(iform, fmt)
 
         fmt.line('self.build(data, ctrl_typevar)')
@@ -489,7 +489,7 @@ def gen_member_inits(iform, fmt):
 
     # Value operands.
     if iform.has_value_list:
-        fmt.line('args: args,')
+        fmt.line('args,')
     elif iform.num_value_operands == 1:
         fmt.line('arg: arg0,')
     elif iform.num_value_operands > 1:

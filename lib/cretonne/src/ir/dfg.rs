@@ -240,10 +240,7 @@ impl DataFlowGraph {
                    self.value_type(dest),
                    ty);
 
-        self.values[dest] = ValueData::Alias {
-            ty: ty,
-            original: original,
-        };
+        self.values[dest] = ValueData::Alias { ty, original };
     }
 
     /// Create a new value alias.
@@ -252,10 +249,7 @@ impl DataFlowGraph {
     pub fn make_value_alias(&mut self, src: Value) -> Value {
         let ty = self.value_type(src);
 
-        let data = ValueData::Alias {
-            ty: ty,
-            original: src,
-        };
+        let data = ValueData::Alias { ty, original: src };
         self.make_value(data)
     }
 }
@@ -462,9 +456,9 @@ impl DataFlowGraph {
         assert!(num <= u16::MAX as usize, "Too many result values");
         let ty = self.value_type(res);
         self.values[res] = ValueData::Inst {
-            ty: ty,
+            ty,
             num: num as u16,
-            inst: inst,
+            inst,
         };
     }
 
@@ -474,8 +468,8 @@ impl DataFlowGraph {
         let num = self.results[inst].push(res, &mut self.value_lists);
         assert!(num <= u16::MAX as usize, "Too many result values");
         self.make_value(ValueData::Inst {
-                            ty: ty,
-                            inst: inst,
+                            ty,
+                            inst,
                             num: num as u16,
                         })
     }
@@ -594,9 +588,9 @@ impl DataFlowGraph {
         let num = self.ebbs[ebb].args.push(arg, &mut self.value_lists);
         assert!(num <= u16::MAX as usize, "Too many arguments to EBB");
         self.make_value(ValueData::Arg {
-                            ty: ty,
+                            ty,
                             num: num as u16,
-                            ebb: ebb,
+                            ebb,
                         })
     }
 
@@ -611,9 +605,9 @@ impl DataFlowGraph {
         assert!(num <= u16::MAX as usize, "Too many arguments to EBB");
         let ty = self.value_type(arg);
         self.values[arg] = ValueData::Arg {
-            ty: ty,
+            ty,
             num: num as u16,
-            ebb: ebb,
+            ebb,
         };
     }
 
@@ -635,8 +629,8 @@ impl DataFlowGraph {
         };
         let new_arg = self.make_value(ValueData::Arg {
                                           ty: new_type,
-                                          num: num,
-                                          ebb: ebb,
+                                          num,
+                                          ebb,
                                       });
 
         self.ebbs[ebb].args.as_mut_slice(&mut self.value_lists)[num as usize] = new_arg;

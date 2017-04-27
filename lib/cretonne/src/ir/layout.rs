@@ -647,7 +647,7 @@ impl<'f> Cursor<'f> {
     /// The cursor holds a mutable reference to `layout` for its entire lifetime.
     pub fn new(layout: &'f mut Layout) -> Cursor {
         Cursor {
-            layout: layout,
+            layout,
             pos: CursorPosition::Nowhere,
         }
     }

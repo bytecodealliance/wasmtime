@@ -138,7 +138,7 @@ impl ArgumentType {
         ArgumentType {
             value_type: vt,
             extension: ArgumentExtension::None,
-            purpose: purpose,
+            purpose,
             location: ArgumentLoc::Reg(regunit),
         }
     }
@@ -239,7 +239,7 @@ pub enum ArgumentPurpose {
 }
 
 /// Text format names of the `ArgumentPurpose` variants.
-static PURPOSE_NAMES: [&'static str; 5] = ["normal", "sret", "link", "fp", "csr"];
+static PURPOSE_NAMES: [&str; 5] = ["normal", "sret", "link", "fp", "csr"];
 
 impl fmt::Display for ArgumentPurpose {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

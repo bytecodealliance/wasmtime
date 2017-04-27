@@ -27,10 +27,10 @@ pub fn verify_liveness(isa: &TargetIsa,
                        liveness: &Liveness)
                        -> Result {
     let verifier = LivenessVerifier {
-        isa: isa,
-        func: func,
-        cfg: cfg,
-        liveness: liveness,
+        isa,
+        func,
+        cfg,
+        liveness,
     };
     verifier.check_ebbs()?;
     verifier.check_insts()?;

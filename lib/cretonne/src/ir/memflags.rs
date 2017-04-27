@@ -7,7 +7,7 @@ enum FlagBit {
     Aligned,
 }
 
-const NAMES: [&'static str; 2] = ["notrap", "aligned"];
+const NAMES: [&str; 2] = ["notrap", "aligned"];
 
 /// Flags for memory operations like load/store.
 ///

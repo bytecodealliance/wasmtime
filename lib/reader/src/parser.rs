@@ -51,10 +51,10 @@ pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
     let functions = parser.parse_function_list(isa_spec.unique_isa())?;
 
     Ok(TestFile {
-           commands: commands,
-           isa_spec: isa_spec,
-           preamble_comments: preamble_comments,
-           functions: functions,
+           commands,
+           isa_spec,
+           preamble_comments,
+           functions,
        })
 }
 
@@ -100,7 +100,7 @@ impl<'a> Context<'a> {
             function: f,
             map: SourceMap::new(),
             aliases: HashMap::new(),
-            unique_isa: unique_isa,
+            unique_isa,
         }
     }
 
@@ -272,11 +272,7 @@ impl<'a> Parser<'a> {
                         Token::Comment(text) => {
                             // Gather comments, associate them with `comment_entity`.
                             if let Some(entity) = self.comment_entity {
-                                self.comments
-                                    .push(Comment {
-                                              entity: entity,
-                                              text: text,
-                                          });
+                                self.comments.push(Comment { entity, text });
                             }
                         }
                         _ => self.lookahead = Some(token),
@@ -676,7 +672,7 @@ impl<'a> Parser<'a> {
         ctx.rewrite_references()?;
 
         let details = Details {
-            location: location,
+            location,
             comments: self.take_comments(),
             map: ctx.map,
         };
@@ -924,7 +920,7 @@ impl<'a> Parser<'a> {
                     .def_entity(sigref.into(), &loc)
                     .expect("duplicate SigRef entities created");
                 ExtFuncData {
-                    name: name,
+                    name,
                     signature: sigref,
                 }
             }
@@ -933,7 +929,7 @@ impl<'a> Parser<'a> {
                 self.consume();
                 let name = self.parse_function_name()?;
                 ExtFuncData {
-                    name: name,
+                    name,
                     signature: sig,
                 }
             }
@@ -1416,28 +1412,28 @@ impl<'a> Parser<'a> {
                            opcode: Opcode)
                            -> Result<InstructionData> {
         let idata = match opcode.format() {
-            InstructionFormat::Nullary => InstructionData::Nullary { opcode: opcode },
+            InstructionFormat::Nullary => InstructionData::Nullary { opcode },
             InstructionFormat::Unary => {
                 InstructionData::Unary {
-                    opcode: opcode,
+                    opcode,
                     arg: self.match_value("expected SSA value operand")?,
                 }
             }
             InstructionFormat::UnaryImm => {
                 InstructionData::UnaryImm {
-                    opcode: opcode,
+                    opcode,
                     imm: self.match_imm64("expected immediate integer operand")?,
                 }
             }
             InstructionFormat::UnaryIeee32 => {
                 InstructionData::UnaryIeee32 {
-                    opcode: opcode,
+                    opcode,
                     imm: self.match_ieee32("expected immediate 32-bit float operand")?,
                 }
             }
             InstructionFormat::UnaryIeee64 => {
                 InstructionData::UnaryIeee64 {
-                    opcode: opcode,
+                    opcode,
                     imm: self.match_ieee64("expected immediate 64-bit float operand")?,
                 }
             }
@@ -1446,7 +1442,7 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value second operand")?;
                 InstructionData::Binary {
-                    opcode: opcode,
+                    opcode,
                     args: [lhs, rhs],
                 }
             }
@@ -1455,7 +1451,7 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_imm64("expected immediate integer second operand")?;
                 InstructionData::BinaryImm {
-                    opcode: opcode,
+                    opcode,
                     arg: lhs,
                     imm: rhs,
                 }
@@ -1469,14 +1465,14 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let false_arg = self.match_value("expected SSA value false operand")?;
                 InstructionData::Ternary {
-                    opcode: opcode,
+                    opcode,
                     args: [ctrl_arg, true_arg, false_arg],
                 }
             }
             InstructionFormat::MultiAry => {
                 let args = self.parse_value_list()?;
                 InstructionData::MultiAry {
-                    opcode: opcode,
+                    opcode,
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
             }
@@ -1485,7 +1481,7 @@ impl<'a> Parser<'a> {
                 let ebb_num = self.match_ebb("expected jump destination EBB")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::Jump {
-                    opcode: opcode,
+                    opcode,
                     destination: ebb_num,
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
@@ -1496,7 +1492,7 @@ impl<'a> Parser<'a> {
                 let ebb_num = self.match_ebb("expected branch destination EBB")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::Branch {
-                    opcode: opcode,
+                    opcode,
                     destination: ebb_num,
                     args: args.into_value_list(&[ctrl_arg], &mut ctx.function.dfg.value_lists),
                 }
@@ -1510,8 +1506,8 @@ impl<'a> Parser<'a> {
                 let ebb_num = self.match_ebb("expected branch destination EBB")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::BranchIcmp {
-                    opcode: opcode,
-                    cond: cond,
+                    opcode,
+                    cond,
                     destination: ebb_num,
                     args: args.into_value_list(&[lhs, rhs], &mut ctx.function.dfg.value_lists),
                 }
@@ -1523,8 +1519,8 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value last operand")?;
                 InstructionData::InsertLane {
-                    opcode: opcode,
-                    lane: lane,
+                    opcode,
+                    lane,
                     args: [lhs, rhs],
                 }
             }
@@ -1532,11 +1528,7 @@ impl<'a> Parser<'a> {
                 let arg = self.match_value("expected SSA value last operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let lane = self.match_uimm8("expected lane number")?;
-                InstructionData::ExtractLane {
-                    opcode: opcode,
-                    lane: lane,
-                    arg: arg,
-                }
+                InstructionData::ExtractLane { opcode, lane, arg }
             }
             InstructionFormat::IntCompare => {
                 let cond = self.match_enum("expected intcc condition code")?;
@@ -1544,8 +1536,8 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value second operand")?;
                 InstructionData::IntCompare {
-                    opcode: opcode,
-                    cond: cond,
+                    opcode,
+                    cond,
                     args: [lhs, rhs],
                 }
             }
@@ -1555,8 +1547,8 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_imm64("expected immediate second operand")?;
                 InstructionData::IntCompareImm {
-                    opcode: opcode,
-                    cond: cond,
+                    opcode,
+                    cond,
                     arg: lhs,
                     imm: rhs,
                 }
@@ -1567,8 +1559,8 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value second operand")?;
                 InstructionData::FloatCompare {
-                    opcode: opcode,
-                    cond: cond,
+                    opcode,
+                    cond,
                     args: [lhs, rhs],
                 }
             }
@@ -1579,8 +1571,8 @@ impl<'a> Parser<'a> {
                 let args = self.parse_value_list()?;
                 self.match_token(Token::RPar, "expected ')' after arguments")?;
                 InstructionData::Call {
-                    opcode: opcode,
-                    func_ref: func_ref,
+                    opcode,
+                    func_ref,
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
             }
@@ -1593,8 +1585,8 @@ impl<'a> Parser<'a> {
                 let args = self.parse_value_list()?;
                 self.match_token(Token::RPar, "expected ')' after arguments")?;
                 InstructionData::IndirectCall {
-                    opcode: opcode,
-                    sig_ref: sig_ref,
+                    opcode,
+                    sig_ref,
                     args: args.into_value_list(&[callee], &mut ctx.function.dfg.value_lists),
                 }
             }
@@ -1603,20 +1595,16 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let table = self.match_jt()
                     .and_then(|num| ctx.get_jt(num, &self.loc))?;
-                InstructionData::BranchTable {
-                    opcode: opcode,
-                    arg: arg,
-                    table: table,
-                }
+                InstructionData::BranchTable { opcode, arg, table }
             }
             InstructionFormat::StackLoad => {
                 let ss = self.match_ss("expected stack slot number: ss«n»")
                     .and_then(|num| ctx.get_ss(num, &self.loc))?;
                 let offset = self.optional_offset32()?;
                 InstructionData::StackLoad {
-                    opcode: opcode,
+                    opcode,
                     stack_slot: ss,
-                    offset: offset,
+                    offset,
                 }
             }
             InstructionFormat::StackStore => {
@@ -1626,19 +1614,19 @@ impl<'a> Parser<'a> {
                     .and_then(|num| ctx.get_ss(num, &self.loc))?;
                 let offset = self.optional_offset32()?;
                 InstructionData::StackStore {
-                    opcode: opcode,
-                    arg: arg,
+                    opcode,
+                    arg,
                     stack_slot: ss,
-                    offset: offset,
+                    offset,
                 }
             }
             InstructionFormat::HeapLoad => {
                 let addr = self.match_value("expected SSA value address")?;
                 let offset = self.optional_uoffset32()?;
                 InstructionData::HeapLoad {
-                    opcode: opcode,
+                    opcode,
                     arg: addr,
-                    offset: offset,
+                    offset,
                 }
             }
             InstructionFormat::HeapStore => {
@@ -1647,9 +1635,9 @@ impl<'a> Parser<'a> {
                 let addr = self.match_value("expected SSA value address")?;
                 let offset = self.optional_uoffset32()?;
                 InstructionData::HeapStore {
-                    opcode: opcode,
+                    opcode,
                     args: [arg, addr],
-                    offset: offset,
+                    offset,
                 }
             }
             InstructionFormat::Load => {
@@ -1657,10 +1645,10 @@ impl<'a> Parser<'a> {
                 let addr = self.match_value("expected SSA value address")?;
                 let offset = self.optional_offset32()?;
                 InstructionData::Load {
-                    opcode: opcode,
-                    flags: flags,
+                    opcode,
+                    flags,
                     arg: addr,
-                    offset: offset,
+                    offset,
                 }
             }
             InstructionFormat::Store => {
@@ -1670,10 +1658,10 @@ impl<'a> Parser<'a> {
                 let addr = self.match_value("expected SSA value address")?;
                 let offset = self.optional_offset32()?;
                 InstructionData::Store {
-                    opcode: opcode,
-                    flags: flags,
+                    opcode,
+                    flags,
                     args: [arg, addr],
-                    offset: offset,
+                    offset,
                 }
             }
         };

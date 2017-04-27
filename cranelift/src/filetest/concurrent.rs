@@ -51,8 +51,8 @@ impl ConcurrentRunner {
 
         ConcurrentRunner {
             request_tx: Some(request_tx),
-            reply_rx: reply_rx,
-            handles: handles,
+            reply_rx,
+            handles,
         }
     }
 
@@ -120,10 +120,7 @@ fn worker_thread(thread_num: usize,
                 // Tell them we're starting this job.
                 // The receiver should always be present for this as long as we have jobs.
                 replies
-                    .send(Reply::Starting {
-                              jobid: jobid,
-                              thread_num: thread_num,
-                          })
+                    .send(Reply::Starting { jobid, thread_num })
                     .unwrap();
 
                 let result = catch_unwind(|| runone::run(path.as_path())).unwrap_or_else(|e| {
@@ -142,12 +139,7 @@ fn worker_thread(thread_num: usize,
                     dbg!("FAIL: {}", msg);
                 }
 
-                replies
-                    .send(Reply::Done {
-                              jobid: jobid,
-                              result: result,
-                          })
-                    .unwrap();
+                replies.send(Reply::Done { jobid, result }).unwrap();
             }
         })
         .unwrap()
