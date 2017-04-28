@@ -12,11 +12,13 @@ use regalloc::coloring::Coloring;
 use regalloc::live_value_tracker::LiveValueTracker;
 use regalloc::liveness::Liveness;
 use result::CtonResult;
+use topo_order::TopoOrder;
 use verifier::{verify_context, verify_liveness};
 
 /// Persistent memory allocations for register allocation.
 pub struct Context {
     liveness: Liveness,
+    topo: TopoOrder,
     tracker: LiveValueTracker,
     coloring: Coloring,
 }
@@ -29,6 +31,7 @@ impl Context {
     pub fn new() -> Context {
         Context {
             liveness: Liveness::new(),
+            topo: TopoOrder::new(),
             tracker: LiveValueTracker::new(),
             coloring: Coloring::new(),
         }
@@ -60,7 +63,12 @@ impl Context {
 
         // Third pass: Reload and coloring.
         self.coloring
-            .run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
+            .run(isa,
+                 func,
+                 domtree,
+                 &mut self.liveness,
+                 &mut self.topo,
+                 &mut self.tracker);
 
         if isa.flags().enable_verifier() {
             verify_context(func, cfg, domtree, Some(isa))?;
