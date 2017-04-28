@@ -104,7 +104,7 @@ pub struct EncInfo {
 
 impl EncInfo {
     /// Get the value operand constraints for `enc` if it is a legal encoding.
-    pub fn operand_constraints(&self, enc: Encoding) -> Option<&RecipeConstraints> {
+    pub fn operand_constraints(&self, enc: Encoding) -> Option<&'static RecipeConstraints> {
         self.constraints.get(enc.recipe())
     }
 
