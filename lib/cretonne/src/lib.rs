@@ -35,4 +35,5 @@ mod packed_option;
 mod partition_slice;
 mod predicates;
 mod ref_slice;
+mod topo_order;
 mod write;

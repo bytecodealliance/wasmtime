@@ -43,19 +43,13 @@ use regalloc::affinity::Affinity;
 use regalloc::allocatable_set::AllocatableSet;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
-use sparse_map::SparseSet;
+use topo_order::TopoOrder;
 
 
 /// Data structures for the coloring pass.
 ///
 /// These are scratch space data structures that can be reused between invocations.
-pub struct Coloring {
-    /// Set of visited EBBs.
-    visited: SparseSet<Ebb>,
-
-    /// Stack of EBBs to be visited next.
-    stack: Vec<Ebb>,
-}
+pub struct Coloring {}
 
 /// Bundle of references that the coloring algorithm needs.
 ///
@@ -83,10 +77,7 @@ struct Context<'a> {
 impl Coloring {
     /// Allocate scratch space data structures for the coloring pass.
     pub fn new() -> Coloring {
-        Coloring {
-            visited: SparseSet::new(),
-            stack: Vec::new(),
-        }
+        Coloring {}
     }
 
     /// Run the coloring algorithm over `func`.
@@ -95,6 +86,7 @@ impl Coloring {
                func: &mut Function,
                domtree: &DominatorTree,
                liveness: &mut Liveness,
+               topo: &mut TopoOrder,
                tracker: &mut LiveValueTracker) {
         let mut ctx = Context {
             reginfo: isa.register_info(),
@@ -103,45 +95,17 @@ impl Coloring {
             liveness,
             usable_regs: isa.allocatable_registers(func),
         };
-        ctx.run(self, func, tracker)
+        ctx.run(func, topo, tracker)
     }
 }
 
 impl<'a> Context<'a> {
     /// Run the coloring algorithm.
-    fn run(&mut self, data: &mut Coloring, func: &mut Function, tracker: &mut LiveValueTracker) {
-        // Just visit blocks in layout order, letting `process_ebb` enforce a topological ordering.
+    fn run(&mut self, func: &mut Function, topo: &mut TopoOrder, tracker: &mut LiveValueTracker) {
+        // Just visit blocks in layout order, letting `topo` enforce a topological ordering.
         // TODO: Once we have a loop tree, we could visit hot blocks first.
-        let mut next = func.layout.entry_block();
-        while let Some(ebb) = next {
-            self.process_ebb(ebb, data, func, tracker);
-            next = func.layout.next_ebb(ebb);
-        }
-    }
-
-    /// Process `ebb`, but only after ensuring that the immediate dominator has been processed.
-    ///
-    /// This method can be called with the most desired order of visiting the EBBs. It will convert
-    /// that order into a valid topological order by visiting dominators first.
-    fn process_ebb(&mut self,
-                   mut ebb: Ebb,
-                   data: &mut Coloring,
-                   func: &mut Function,
-                   tracker: &mut LiveValueTracker) {
-        // The stack is just a scratch space for this algorithm. We leave it empty when returning.
-        assert!(data.stack.is_empty());
-
-        // Trace up the dominator tree until we reach a dominator that has already been visited.
-        while data.visited.insert(ebb).is_none() {
-            data.stack.push(ebb);
-            match self.domtree.idom(ebb) {
-                Some(idom) => ebb = func.layout.inst_ebb(idom).expect("idom not in layout"),
-                None => break,
-            }
-        }
-
-        // Pop off blocks in topological order.
-        while let Some(ebb) = data.stack.pop() {
+        topo.reset(func.layout.ebbs());
+        while let Some(ebb) = topo.next(&func.layout, self.domtree) {
             self.visit_ebb(ebb, func, tracker);
         }
     }
