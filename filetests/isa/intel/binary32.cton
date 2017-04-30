@@ -1,0 +1,23 @@
+; binary emission of 32-bit code.
+test binemit
+isa intel
+
+; The binary encodings can be verified with the command:
+;
+;   sed -ne 's/^ *; asm: *//p' filetests/isa/intel/binary32.cton | llvm-mc -show-encoding -triple=i386
+;
+
+function I32() {
+ebb0:
+    [-,%rcx]            v1 = iconst.i32 1
+    [-,%rsi]            v2 = iconst.i32 2
+
+    ; Integer Register-Register Operations.
+
+    ; asm: addl %esi, %ecx
+    [-,%rcx]             v10 = iadd v1, v2       ; bin: 01 f1
+    ; asm: addl %ecx, %esi
+    [-,%rsi]             v11 = iadd v2, v1       ; bin: 01 ce
+
+    return
+}
