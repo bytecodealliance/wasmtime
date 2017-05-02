@@ -78,6 +78,25 @@ impl AllocatableSet {
         }
         rsi
     }
+
+    /// Check if any register units allocated out of this set interferes with units allocated out
+    /// of `other`.
+    ///
+    /// This assumes that unused bits are 1.
+    pub fn interferes_with(&self, other: &AllocatableSet) -> bool {
+        self.avail
+            .iter()
+            .zip(&other.avail)
+            .any(|(&x, &y)| (x | y) != !0)
+    }
+
+    /// Intersect this set of allocatable registers with `other`. This has the effect of removing
+    /// any register units from this set that are not in `other`.
+    pub fn intersect(&mut self, other: &AllocatableSet) {
+        for (x, &y) in self.avail.iter_mut().zip(&other.avail) {
+            *x &= y;
+        }
+    }
 }
 
 /// Iterator over available registers in a register class.
@@ -178,5 +197,19 @@ mod tests {
 
         assert_eq!(regs.iter(GPR).count(), 7);
         assert_eq!(regs.iter(DPR).collect::<Vec<_>>(), [30, 33, 35]);
+    }
+
+    #[test]
+    fn interference() {
+        let mut regs1 = AllocatableSet::new();
+        let mut regs2 = AllocatableSet::new();
+
+        assert!(!regs1.interferes_with(&regs2));
+        regs1.take(&GPR, 32);
+        assert!(!regs1.interferes_with(&regs2));
+        regs2.take(&GPR, 31);
+        assert!(!regs1.interferes_with(&regs2));
+        regs1.intersect(&regs2);
+        assert!(regs1.interferes_with(&regs2));
     }
 }

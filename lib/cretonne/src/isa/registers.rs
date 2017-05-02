@@ -151,6 +151,11 @@ impl RegClassData {
         let uoffset = offset * self.width as usize;
         self.first + uoffset as RegUnit
     }
+
+    /// Does this register class contain `regunit`?
+    pub fn contains(&self, regunit: RegUnit) -> bool {
+        self.mask[(regunit / 32) as usize] & (1u32 << (regunit % 32)) != 0
+    }
 }
 
 impl fmt::Display for RegClassData {
