@@ -10,7 +10,7 @@ from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
 from base.types import i8, f32, f64, b1
 from base.immediates import imm64, uimm8, ieee32, ieee64, offset32, uoffset32
-from base.immediates import intcc, floatcc, memflags
+from base.immediates import intcc, floatcc, memflags, regunit
 from base import entities
 import base.formats  # noqa
 
@@ -467,6 +467,23 @@ fill = Instruction(
         """,
         ins=x, outs=a)
 
+src = Operand('src', regunit)
+dst = Operand('dst', regunit)
+
+regmove = Instruction(
+        'regmove', r"""
+        Temporarily divert ``x`` from ``src`` to ``dst``.
+
+        This instruction moves the location of a value from one register to
+        another without creating a new SSA value. It is used by the register
+        allocator to temporarily rearrange register assignments in order to
+        satisfy instruction constraints.
+
+        The register diversions created by this instruction must be undone
+        before the value leaves the EBB. At the entry to a new EBB, all live
+        values must be in their originally assigned registers.
+        """,
+        ins=(x, src, dst))
 
 #
 # Vector operations

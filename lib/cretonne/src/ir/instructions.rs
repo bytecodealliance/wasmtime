@@ -14,6 +14,7 @@ use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef, StackSlot, MemFlags};
 use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32, Uoffset32};
 use ir::condcodes::*;
 use ir::types;
+use isa::RegUnit;
 
 use entity_list;
 use ref_slice::{ref_slice, ref_slice_mut};
@@ -202,6 +203,12 @@ pub enum InstructionData {
         flags: MemFlags,
         args: [Value; 2],
         offset: Offset32,
+    },
+    RegMove {
+        opcode: Opcode,
+        arg: Value,
+        src: RegUnit,
+        dst: RegUnit,
     },
 }
 

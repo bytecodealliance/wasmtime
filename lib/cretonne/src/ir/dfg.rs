@@ -687,7 +687,7 @@ impl<'a> fmt::Display for DisplayInst<'a> {
         } else {
             write!(f, "{}.{}", inst.opcode(), typevar)?;
         }
-        write_operands(f, dfg, self.1)
+        write_operands(f, dfg, None, self.1)
     }
 }
 
