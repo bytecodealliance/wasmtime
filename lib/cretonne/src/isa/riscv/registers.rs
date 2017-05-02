@@ -6,7 +6,7 @@ include!(concat!(env!("OUT_DIR"), "/registers-riscv.rs"));
 
 #[cfg(test)]
 mod tests {
-    use super::INFO;
+    use super::{INFO, GPR, FPR};
     use isa::RegUnit;
 
     #[test]
@@ -33,5 +33,17 @@ mod tests {
         assert_eq!(uname(33), "%f1");
         assert_eq!(uname(63), "%f31");
         assert_eq!(uname(64), "%INVALID64");
+    }
+
+    #[test]
+    fn classes() {
+        assert!(GPR.contains(GPR.unit(0)));
+        assert!(GPR.contains(GPR.unit(31)));
+        assert!(!FPR.contains(GPR.unit(0)));
+        assert!(!FPR.contains(GPR.unit(31)));
+        assert!(!GPR.contains(FPR.unit(0)));
+        assert!(!GPR.contains(FPR.unit(31)));
+        assert!(FPR.contains(FPR.unit(0)));
+        assert!(FPR.contains(FPR.unit(31)));
     }
 }
