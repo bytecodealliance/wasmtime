@@ -16,7 +16,7 @@ use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Offset32, Uoffset32, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs};
-use cretonne::isa::{self, TargetIsa, Encoding};
+use cretonne::isa::{self, TargetIsa, Encoding, RegUnit};
 use cretonne::settings::{self, Configurable};
 use testfile::{TestFile, Details, Comment};
 use error::{Location, Error, Result};
@@ -548,6 +548,29 @@ impl<'a> Parser<'a> {
                 .map_err(|_| self.error("the hex sequence given overflows the u16 type"))
         } else {
             err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume a register unit either by number `%15` or by name `%rax`.
+    fn match_regunit(&mut self, isa: Option<&TargetIsa>) -> Result<RegUnit> {
+        if let Some(Token::Name(name)) = self.token() {
+            self.consume();
+            match isa {
+                Some(isa) => {
+                    isa.register_info()
+                        .parse_regunit(name)
+                        .ok_or_else(|| self.error("invalid register name"))
+                }
+                None => {
+                    name.parse()
+                        .map_err(|_| self.error("invalid register number"))
+                }
+            }
+        } else {
+            match isa {
+                Some(isa) => err!(self.loc, "Expected {} register unit", isa.name()),
+                None => err!(self.loc, "Expected register unit number"),
+            }
         }
     }
 
@@ -1662,6 +1685,19 @@ impl<'a> Parser<'a> {
                     flags,
                     args: [arg, addr],
                     offset,
+                }
+            }
+            InstructionFormat::RegMove => {
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let src = self.match_regunit(ctx.unique_isa)?;
+                self.match_token(Token::Arrow, "expected '->' between register units")?;
+                let dst = self.match_regunit(ctx.unique_isa)?;
+                InstructionData::RegMove {
+                    opcode,
+                    arg,
+                    src,
+                    dst,
                 }
             }
         };

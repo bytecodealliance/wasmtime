@@ -96,3 +96,9 @@ memflags = ImmediateKind(
         'memflags',
         'Memory operation flags',
         default_member='flags', rust_type='MemFlags')
+
+#: A register unit in the current target ISA.
+regunit = ImmediateKind(
+        'regunit',
+        'A register unit in the target ISA',
+        rust_type='RegUnit')

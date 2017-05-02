@@ -155,3 +155,18 @@ ebb0(v1: i32):
 ; nextln:     store $v2, $v1
 ; nextln:     store aligned $v3, $v1+12
 ; nextln:     store notrap aligned $v3, $v1-12
+
+; Register diversions.
+; This test file has no ISA, so we can unly use register unit numbers.
+function diversion(i32) {
+ebb0(v1: i32):
+    regmove v1, %10 -> %20
+    regmove v1, %20 -> %10
+    return
+}
+; sameln: function diversion(i32) {
+; nextln: ebb0($v1: i32):
+; nextln:     regmove $v1, %10 -> %20
+; nextln:     regmove $v1, %20 -> %10
+; nextln:     return
+; nextln: }

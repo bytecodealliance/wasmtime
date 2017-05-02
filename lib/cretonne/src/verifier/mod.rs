@@ -284,7 +284,8 @@ impl<'a> Verifier<'a> {
             &HeapLoad { .. } |
             &HeapStore { .. } |
             &Load { .. } |
-            &Store { .. } => {}
+            &Store { .. } |
+            &RegMove { .. } => {}
         }
 
         Ok(())

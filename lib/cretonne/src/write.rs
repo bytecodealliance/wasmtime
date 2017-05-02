@@ -225,12 +225,16 @@ fn write_instruction(w: &mut Write,
         None => write!(w, "{}", opcode)?,
     }
 
-    write_operands(w, &func.dfg, inst)?;
+    write_operands(w, &func.dfg, isa, inst)?;
     writeln!(w, "")
 }
 
 /// Write the operands of `inst` to `w` with a prepended space.
-pub fn write_operands(w: &mut Write, dfg: &DataFlowGraph, inst: Inst) -> Result {
+pub fn write_operands(w: &mut Write,
+                      dfg: &DataFlowGraph,
+                      isa: Option<&TargetIsa>,
+                      inst: Inst)
+                      -> Result {
     let pool = &dfg.value_lists;
     use ir::instructions::InstructionData::*;
     match dfg[inst] {
@@ -321,6 +325,19 @@ pub fn write_operands(w: &mut Write, dfg: &DataFlowGraph, inst: Inst) -> Result 
             offset,
             ..
         } => write!(w, "{} {}, {}{}", flags, args[0], args[1], offset),
+        RegMove { arg, src, dst, .. } => {
+            if let Some(isa) = isa {
+                let regs = isa.register_info();
+                write!(w,
+                       " {}, {} -> {}",
+                       arg,
+                       regs.display_regunit(src),
+                       regs.display_regunit(dst))
+            } else {
+                write!(w, " {}, %{} -> %{}", arg, src, dst)
+            }
+        }
+
     }
 }
 

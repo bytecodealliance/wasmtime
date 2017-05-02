@@ -583,6 +583,11 @@ allocation pass and beyond.
 .. autoinst:: spill
 .. autoinst:: fill
 
+Register values can be temporarily diverted to other registers by the
+:inst:`regmove` instruction.
+
+.. autoinst:: regmove
+
 Vector operations
 -----------------
 
