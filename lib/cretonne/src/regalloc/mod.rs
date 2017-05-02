@@ -10,6 +10,8 @@ pub mod coloring;
 
 mod affinity;
 mod context;
+mod diversion;
 
 pub use self::allocatable_set::AllocatableSet;
 pub use self::context::Context;
+pub use self::diversion::RegDiversions;
