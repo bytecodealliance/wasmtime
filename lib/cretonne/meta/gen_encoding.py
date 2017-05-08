@@ -60,9 +60,9 @@ from cdsl.registers import RegClass, Register
 from cdsl.predicates import FieldPredicate
 
 try:
-    from typing import Sequence, Set, Tuple, List, Iterable, DefaultDict, TYPE_CHECKING  # noqa
+    from typing import Sequence, Set, Tuple, List, Dict, Iterable, DefaultDict, TYPE_CHECKING  # noqa
     if TYPE_CHECKING:
-        from cdsl.isa import TargetISA, OperandConstraint, Encoding, CPUMode  # noqa
+        from cdsl.isa import TargetISA, OperandConstraint, Encoding, CPUMode, EncRecipe  # noqa
         from cdsl.predicates import PredNode, PredLeaf  # noqa
         from cdsl.types import ValueType  # noqa
         from cdsl.instructions import Instruction  # noqa
@@ -470,13 +470,20 @@ def emit_recipe_constraints(isa, fmt):
             .format(len(isa.all_recipes)), '];'):
         for r in isa.all_recipes:
             fmt.comment(r.name)
+            tied_i2o, tied_o2i = r.ties()
             with fmt.indented('RecipeConstraints {', '},'):
-                emit_operand_constraints(r.ins, 'ins', fmt)
-                emit_operand_constraints(r.outs, 'outs', fmt)
+                emit_operand_constraints(r, r.ins, 'ins', tied_i2o, fmt)
+                emit_operand_constraints(r, r.outs, 'outs', tied_o2i, fmt)
 
 
-def emit_operand_constraints(seq, field, fmt):
-    # type: (Sequence[OperandConstraint], str, srcgen.Formatter) -> None
+def emit_operand_constraints(
+        recipe,  # type: EncRecipe
+        seq,     # type: Sequence[OperandConstraint]
+        field,   # type: str
+        tied,    # type: Dict[int, int]
+        fmt      # type: srcgen.Formatter
+        ):
+    # type: (...) -> None
     """
     Emit a struct field initializer for an array of operand constraints.
     """
@@ -484,16 +491,25 @@ def emit_operand_constraints(seq, field, fmt):
         fmt.line('{}: &[],'.format(field))
         return
     with fmt.indented('{}: &['.format(field), '],'):
-        for cons in seq:
+        for n, cons in enumerate(seq):
             with fmt.indented('OperandConstraint {', '},'):
                 if isinstance(cons, RegClass):
-                    fmt.line('kind: ConstraintKind::Reg,')
-                    fmt.line('regclass: {},'.format(cons))
+                    if n in tied:
+                        fmt.format('kind: ConstraintKind::Tied({}),', tied[n])
+                    else:
+                        fmt.line('kind: ConstraintKind::Reg,')
+                    fmt.format('regclass: {},', cons)
                 elif isinstance(cons, Register):
-                    fmt.line(
-                            'kind: ConstraintKind::FixedReg({}),'
-                            .format(cons.unit))
-                    fmt.line('regclass: {},'.format(cons.regclass))
+                    assert n not in tied, "Can't tie fixed register operand"
+                    fmt.format(
+                            'kind: ConstraintKind::FixedReg({}),', cons.unit)
+                    fmt.format('regclass: {},', cons.regclass)
+                elif isinstance(cons, int):
+                    # This is a tied output constraint. It should never happen
+                    # for input constraints.
+                    assert cons == tied[n], "Invalid tied constraint"
+                    fmt.format('kind: ConstraintKind::Tied({}),', cons)
+                    fmt.format('regclass: {},', recipe.ins[cons])
                 else:
                     raise AssertionError(
                             'Unsupported constraint {}'.format(cons))

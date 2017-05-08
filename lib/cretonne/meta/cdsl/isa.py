@@ -7,7 +7,7 @@ from .ast import Apply
 # The typing module is only required by mypy, and we don't use these imports
 # outside type comments.
 try:
-    from typing import Tuple, Union, Any, Iterable, Sequence, List, Set, TYPE_CHECKING  # noqa
+    from typing import Tuple, Union, Any, Iterable, Sequence, List, Set, Dict, TYPE_CHECKING  # noqa
     if TYPE_CHECKING:
         from .instructions import MaybeBoundInst, InstructionGroup, InstructionFormat  # noqa
         from .predicates import PredNode  # noqa
@@ -220,12 +220,26 @@ class EncRecipe(object):
             if isinstance(c, int):
                 # An integer constraint is bound to a value operand.
                 # Check that it is in range.
-                assert c >= 0
-                if not self.format.has_value_list:
-                    assert c < self.format.num_value_operands
+                assert c >= 0 and c < len(self.ins)
             else:
                 assert isinstance(c, RegClass) or isinstance(c, Register)
         return seq
+
+    def ties(self):
+        # type: () -> Tuple[Dict[int, int], Dict[int, int]]
+        """
+        Return two dictionaries representing the tied operands.
+
+        The first maps input number to tied output number, the second maps
+        output number to tied input number.
+        """
+        i2o = dict()  # type: Dict[int, int]
+        o2i = dict()  # type: Dict[int, int]
+        for o, i in enumerate(self.outs):
+            if isinstance(i, int):
+                i2o[i] = o
+                o2i[o] = i
+        return (i2o, o2i)
 
 
 class Encoding(object):
