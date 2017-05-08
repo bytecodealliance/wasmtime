@@ -42,7 +42,7 @@
 
 pub use isa::constraints::{RecipeConstraints, OperandConstraint, ConstraintKind, BranchRange};
 pub use isa::encoding::{Encoding, EncInfo};
-pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex};
+pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex, regs_overlap};
 
 use binemit::CodeSink;
 use settings;
