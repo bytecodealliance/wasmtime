@@ -276,7 +276,7 @@ impl<'a> Context<'a> {
                   locations: &mut EntityMap<Value, ValueLoc>) {
         // First update the live value tracker with this instruction.
         // Get lists of values that are killed and defined by `inst`.
-        let (kills, defs) = tracker.process_inst(inst, dfg, self.liveness);
+        let (_throughs, kills, defs) = tracker.process_inst(inst, dfg, self.liveness);
 
         // Get the operand constraints for `inst` that we are trying to satisfy.
         let constraints = self.encinfo

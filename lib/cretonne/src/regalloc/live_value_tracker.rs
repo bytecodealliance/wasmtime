@@ -139,7 +139,7 @@ impl LiveValueTracker {
     /// This depends on the stored live value set at `ebb`'s immediate dominator, so that must have
     /// been visited first.
     ///
-    /// Returns `(liveins, args)` as a pair or slices. The first slice is the set of live-in values
+    /// Returns `(liveins, args)` as a pair of slices. The first slice is the set of live-in values
     /// from the immediate dominator. The second slice is the set of `ebb` arguments that are live.
     /// Dead arguments with no uses are ignored and not added to the set.
     pub fn ebb_top<PO: ProgramOrder>(&mut self,
@@ -209,9 +209,16 @@ impl LiveValueTracker {
     /// Determine the set of already live values that are killed by `inst`, and add the new defined
     /// values to the tracked set.
     ///
-    /// Returns `(kills, defs)` as a pair of slices. The `defs` slice is guaranteed to be in the
-    /// same order as `inst`'s results, and includes dead defines. The order of `kills` is
-    /// arbitrary.
+    /// Returns `(throughs, kills, defs)` as a tuple of slices:
+    ///
+    /// 1. The `throughs` slice is the set of live-through values that are neither defined nor
+    ///    killed by the instruction.
+    /// 2. The `kills` slice is the set of values that were live before the instruction and are
+    ///    killed at the instruction. This does not include dead defs.
+    /// 3. The `defs` slice is guaranteed to be in the same order as `inst`'s results, and includes
+    ///    dead defines.
+    ///
+    /// The order of `throughs` and `kills` is arbitrary.
     ///
     /// The `drop_dead()` method must be called next to actually remove the dead values from the
     /// tracked set after the two returned slices are no longer needed.
@@ -219,7 +226,7 @@ impl LiveValueTracker {
                         inst: Inst,
                         dfg: &DataFlowGraph,
                         liveness: &Liveness)
-                        -> (&[LiveValue], &[LiveValue]) {
+                        -> (&[LiveValue], &[LiveValue], &[LiveValue]) {
         // Save a copy of the live values before any branches or jumps that could be somebody's
         // immediate dominator.
         match dfg[inst].analyze_branch(&dfg.value_lists) {
@@ -249,7 +256,9 @@ impl LiveValueTracker {
             }
         }
 
-        (&self.live.values[first_kill..first_def], &self.live.values[first_def..])
+        (&self.live.values[0..first_kill],
+         &self.live.values[first_kill..first_def],
+         &self.live.values[first_def..])
     }
 
     /// Drop the values that are now dead after moving past `inst`.
