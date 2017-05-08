@@ -7,3 +7,4 @@ target
 Cargo.lock
 .*.rustfmt
 cretonne.dbg*
+.mypy_cache
