@@ -9,7 +9,7 @@ from __future__ import absolute_import
 from cdsl import next_power_of_two
 
 try:
-    from typing import Any, List, Sequence, Callable  # noqa
+    from typing import Any, List, Iterable, Callable  # noqa
 except ImportError:
     pass
 
@@ -32,7 +32,7 @@ def simple_hash(s):
 
 
 def compute_quadratic(items, hash_function):
-    # type: (Sequence[Any], Callable[[Any], int]) -> List[Any]
+    # type: (Iterable[Any], Callable[[Any], int]) -> List[Any]
     """
     Compute an open addressed, quadratically probed hash table containing
     `items`. The returned table is a list containing the elements of the
