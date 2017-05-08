@@ -33,13 +33,14 @@ pub enum ConstraintKind {
     /// register.
     FixedReg(RegUnit),
 
-    /// This result value must use the same register as an input value operand. Input operands
-    /// can't be tied.
+    /// This result value must use the same register as an input value operand.
     ///
-    /// The associated number is the index of the input value operand this result is tied to.
+    /// The associated number is the index of the input value operand this result is tied to. The
+    /// constraint's `regclass` field is the same as the tied operand's register class.
     ///
-    /// The constraint's `regclass` field is the top-level register class containing the tied
-    /// operand's register class.
+    /// When an (in, out) operand pair is tied, this constraint kind appears in both the `ins` and
+    /// the `outs` arrays. The constraint for the in operand is `Tied(out)`, and the constraint for
+    /// the out operand is `Tied(in)`.
     Tied(u8),
 
     /// This operand must be a value in a stack slot.
