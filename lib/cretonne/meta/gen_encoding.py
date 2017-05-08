@@ -474,6 +474,15 @@ def emit_recipe_constraints(isa, fmt):
             with fmt.indented('RecipeConstraints {', '},'):
                 emit_operand_constraints(r, r.ins, 'ins', tied_i2o, fmt)
                 emit_operand_constraints(r, r.outs, 'outs', tied_o2i, fmt)
+                fmt.format(
+                        'fixed_ins: {},',
+                        str(any(isinstance(c, Register)
+                            for c in r.ins)).lower())
+                fmt.format(
+                        'fixed_outs: {},',
+                        str(any(isinstance(c, Register)
+                            for c in r.outs)).lower())
+                fmt.format('tied_ops: {},', str(bool(tied_i2o)).lower())
 
 
 def emit_operand_constraints(

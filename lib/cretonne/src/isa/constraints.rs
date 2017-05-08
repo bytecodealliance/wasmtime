@@ -67,6 +67,15 @@ pub struct RecipeConstraints {
     /// If the instruction produces a variable number of results, it's probably a call and the
     /// constraints must be derived from the calling convention ABI.
     pub outs: &'static [OperandConstraint],
+
+    /// Are any of the input constraints `FixedReg`?
+    pub fixed_ins: bool,
+
+    /// Are any of the output constraints `FixedReg`?
+    pub fixed_outs: bool,
+
+    /// Are there any tied operands?
+    pub tied_ops: bool,
 }
 
 /// Constraints on the range of a branch instruction.
