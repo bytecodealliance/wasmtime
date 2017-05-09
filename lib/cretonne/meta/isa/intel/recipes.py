@@ -65,3 +65,6 @@ def OP(op, pp=0, mm=0, rrr=0, w=0):
 
 # XX /r
 Op1rr = EncRecipe('Op1rr', Binary, size=2, ins=(GPR, GPR), outs=0)
+
+# XX /n with one arg in %rcx, for shifts.
+Op1rc = EncRecipe('Op1rc', Binary, size=2, ins=(GPR, GPR.rcx), outs=0)

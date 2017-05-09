@@ -12,12 +12,12 @@ register bank.
 
 A register bank consists of a number of *register units* which are the smallest
 indivisible units of allocation and interference. A register unit doesn't
-necesarily correspond to a particular number of bits in a register, it is more
+necessarily correspond to a particular number of bits in a register, it is more
 like a placeholder that can be used to determine of a register is taken or not.
 
 The register allocator works with *register classes* which can allocate one or
 more register units at a time. A register class allocates more than one
-register unit at a time when its registers are composed of smaller alocatable
+register unit at a time when its registers are composed of smaller allocatable
 units. For example, the ARM double precision floating point registers are
 composed of two single precision registers.
 """
@@ -151,6 +151,18 @@ class RegBank(object):
                     # sub-class.
                     rc2.subclasses.append(rc1)
 
+    def unit_by_name(self, name):
+        # type: (str) -> int
+        """
+        Get a register unit in this bank by name.
+        """
+        if name in self.names:
+            r = self.names.index(name)
+        elif name.startswith(self.prefix):
+            r = int(name[len(self.prefix):])
+        assert r < self.units, 'Invalid register name: ' + name
+        return self.first_unit + r
+
 
 class RegClass(object):
     """
@@ -242,6 +254,15 @@ class RegClass(object):
 
         return RegClass(self.bank, count=c, width=w, start=s)
 
+    def __getattr__(self, attr):
+        # type: (str) -> Register
+        """
+        Get a specific register in the class by name.
+
+        For example: `GPR.r5`.
+        """
+        return Register(self, self.bank.unit_by_name(attr))
+
     def mask(self):
         # type: () -> List[int]
         """
@@ -298,8 +319,8 @@ class Register(object):
     Specific registers are used to describe constraints on instructions where
     some operands must use a fixed register.
 
-    Register objects should be created using the indexing syntax on the
-    register class.
+    Register instances can be created with the constructor, or accessed as
+    attributes on the register class: `GPR.rcx`.
     """
     def __init__(self, rc, unit):
         # type: (RegClass, int) -> None
