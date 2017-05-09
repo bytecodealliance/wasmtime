@@ -19,5 +19,20 @@ ebb0:
     ; asm: addl %ecx, %esi
     [-,%rsi]             v11 = iadd v2, v1       ; bin: 01 ce
 
+    ; Dynamic shifts take the shift amount in %rcx.
+
+    ; asm: shll %cl, %esi
+    [-,%rsi]             v12 = ishl v2, v1       ; bin: d3 e6
+    ; asm: shll %cl, %ecx
+    [-,%rcx]             v13 = ishl v1, v1       ; bin: d3 e1
+    ; asm: shrl %cl, %esi
+    [-,%rsi]             v14 = ushr v2, v1       ; bin: d3 ee
+    ; asm: shrl %cl, %ecx
+    [-,%rcx]             v15 = ushr v1, v1       ; bin: d3 e9
+    ; asm: sarl %cl, %esi
+    [-,%rsi]             v16 = sshr v2, v1       ; bin: d3 fe
+    ; asm: sarl %cl, %ecx
+    [-,%rcx]             v17 = sshr v1, v1       ; bin: d3 f9
+
     return
 }
