@@ -683,14 +683,13 @@ urem = Instruction(
 
 srem = Instruction(
         'srem', """
-        Signed integer remainder.
+        Signed integer remainder. The result has the sign of the dividend.
 
         This operation traps if the divisor is zero.
 
         .. todo:: Integer remainder vs modulus.
 
-            Clarify whether the result has the sign of the divisor or the
-            dividend. Should we add a ``smod`` instruction for the case where
+            Should we add a ``smod`` instruction for the case where
             the result has the same sign as the divisor?
         """,
         ins=(x, y), outs=a, can_trap=True)
