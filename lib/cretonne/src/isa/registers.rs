@@ -164,6 +164,12 @@ impl fmt::Display for RegClassData {
     }
 }
 
+impl fmt::Debug for RegClassData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.name)
+    }
+}
+
 /// A small reference to a register class.
 ///
 /// Use this when storing register classes in compact data structures. The `RegInfo::rc()` method

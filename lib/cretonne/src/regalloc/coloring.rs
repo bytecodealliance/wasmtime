@@ -34,6 +34,7 @@
 use entity_map::EntityMap;
 use dominator_tree::DominatorTree;
 use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph, Signature, ArgumentLoc};
+use ir::InstBuilder;
 use isa::{TargetIsa, Encoding, EncInfo, OperandConstraint, ConstraintKind};
 use isa::{RegUnit, RegClass, RegInfo, regs_overlap};
 use regalloc::affinity::Affinity;
@@ -302,7 +303,7 @@ impl<'a> Context<'a> {
     fn visit_inst(&mut self,
                   inst: Inst,
                   encoding: Encoding,
-                  _pos: &mut Cursor,
+                  pos: &mut Cursor,
                   dfg: &mut DataFlowGraph,
                   tracker: &mut LiveValueTracker,
                   regs: &mut AllocatableSet,
@@ -355,6 +356,11 @@ impl<'a> Context<'a> {
         let mut output_regs = self.solver
             .quick_solve()
             .unwrap_or_else(|_| self.iterate_solution());
+
+
+        // The solution and/or fixed input constraints may require us to shuffle the set of live
+        // registers around.
+        self.shuffle_inputs(pos, dfg, regs);
 
         // Apply the solution to the defs.
         for v in self.solver.vars().iter().filter(|&v| v.is_define()) {
@@ -496,5 +502,24 @@ impl<'a> Context<'a> {
     /// algorithm that adds one more variable until a solution can be found.
     fn iterate_solution(&self) -> AllocatableSet {
         unimplemented!();
+    }
+
+    /// Emit `regmove` instructions as needed to move the live registers into place before the
+    /// instruction. Also update `self.divert` accordingly.
+    ///
+    /// The `pos` cursor is expected to point at the instruction. The register moves are inserted
+    /// before.
+    ///
+    /// The solver needs to be reminded of the available registers before any moves are inserted.
+    fn shuffle_inputs(&mut self,
+                      pos: &mut Cursor,
+                      dfg: &mut DataFlowGraph,
+                      regs: &mut AllocatableSet) {
+        self.solver.schedule_moves(regs);
+
+        for m in self.solver.moves() {
+            self.divert.regmove(m.value, m.from, m.to);
+            dfg.ins(pos).regmove(m.value, m.from, m.to);
+        }
     }
 }
