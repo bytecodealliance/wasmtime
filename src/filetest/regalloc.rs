@@ -6,10 +6,11 @@
 //! The resulting function is sent to `filecheck`.
 
 use cretonne::ir::Function;
-use cretonne::{self, write_function};
+use cretonne::{self};
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result, run_filecheck};
 use std::borrow::Cow;
+use std::fmt::Write;
 use utils::pretty_error;
 
 struct TestRegalloc;
@@ -53,7 +54,7 @@ impl SubTest for TestRegalloc {
             .map_err(|e| pretty_error(&comp_ctx.func, e))?;
 
         let mut text = String::new();
-        write_function(&mut text, &comp_ctx.func, Some(isa))
+        write!(&mut text, "{}", &comp_ctx.func.display(Some(isa)))
             .map_err(|e| e.to_string())?;
         run_filecheck(&text, context)
     }
