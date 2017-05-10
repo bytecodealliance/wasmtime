@@ -129,6 +129,10 @@ pub struct Variable {
     /// The value whose register assignment we're looking for.
     pub value: Value,
 
+    /// Original register unit holding this live value before the instruction, or `None` for a
+    /// value that is defined by the instruction.
+    from: Option<RegUnit>,
+
     /// Avoid interference on the input side.
     is_input: bool,
 
@@ -137,9 +141,6 @@ pub struct Variable {
 
     /// Avoid interference with the global registers.
     is_global: bool,
-
-    /// The value is defined by the current instruction.
-    pub is_define: bool,
 
     /// Number of registers available in the domain of this variable.
     domain: u16,
@@ -152,6 +153,37 @@ pub struct Variable {
 }
 
 impl Variable {
+    fn new_live(value: Value, constraint: RegClass, from: RegUnit) -> Variable {
+        Variable {
+            value,
+            constraint,
+            from: Some(from),
+            is_input: true,
+            is_output: true,
+            is_global: false,
+            domain: 0,
+            solution: !0,
+        }
+    }
+
+    fn new_def(value: Value, constraint: RegClass) -> Variable {
+        Variable {
+            value,
+            constraint,
+            from: None,
+            is_input: false,
+            is_output: true,
+            is_global: false,
+            domain: 0,
+            solution: !0,
+        }
+    }
+
+    /// Does this variable represent a value defined by the current instruction?
+    pub fn is_define(&self) -> bool {
+        self.from.is_none()
+    }
+
     /// Get an iterator over possible register choices, given the available registers on the input
     /// and output sides respectively.
     fn iter(&self, iregs: &AllocatableSet, oregs: &AllocatableSet) -> RegSetIter {
@@ -179,7 +211,7 @@ impl fmt::Display for Variable {
         if self.is_global {
             write!(f, ", global")?;
         }
-        if self.is_define {
+        if self.is_define() {
             write!(f, ", def")?;
         }
         if self.domain > 0 {
@@ -369,16 +401,7 @@ impl Solver {
             self.regs_out.free(constraint, from);
         }
         self.vars
-            .push(Variable {
-                      value,
-                      constraint,
-                      is_input: true,
-                      is_output: true,
-                      is_global: false,
-                      is_define: false,
-                      domain: 0,
-                      solution: !0,
-                  });
+            .push(Variable::new_live(value, constraint, from));
     }
 
     /// Check for conflicts between fixed input assignments and existing live values.
@@ -474,17 +497,7 @@ impl Solver {
     /// This is similar to `add_var`, except the value doesn't have a prior register assignment.
     pub fn add_def(&mut self, value: Value, constraint: RegClass) {
         debug_assert!(self.inputs_done);
-        self.vars
-            .push(Variable {
-                      value,
-                      constraint,
-                      is_input: false,
-                      is_output: true,
-                      is_global: false,
-                      is_define: true,
-                      domain: 0,
-                      solution: !0,
-                  });
+        self.vars.push(Variable::new_def(value, constraint));
     }
 }
 
