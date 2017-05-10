@@ -357,7 +357,7 @@ impl<'a> Context<'a> {
             .unwrap_or_else(|_| self.iterate_solution());
 
         // Apply the solution to the defs.
-        for v in self.solver.vars().iter().filter(|&v| v.is_define) {
+        for v in self.solver.vars().iter().filter(|&v| v.is_define()) {
             *locations.ensure(v.value) = ValueLoc::Reg(v.solution);
         }
 
