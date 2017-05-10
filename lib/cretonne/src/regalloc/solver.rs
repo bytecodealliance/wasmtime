@@ -221,17 +221,25 @@ impl fmt::Display for Variable {
     }
 }
 
-
-struct Assignment {
-    value: Value,
-    from: RegUnit,
-    to: RegUnit,
-    rc: RegClass,
+#[derive(Clone, Debug)]
+pub struct Assignment {
+    pub value: Value,
+    pub from: RegUnit,
+    pub to: RegUnit,
+    pub rc: RegClass,
 }
 
 impl SparseMapValue<Value> for Assignment {
     fn key(&self) -> Value {
         self.value
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for Assignment {
+    fn eq(&self, other: &Assignment) -> bool {
+        self.value == other.value && self.from == other.from && self.to == other.to &&
+        self.rc.index == other.rc.index
     }
 }
 
@@ -296,6 +304,11 @@ pub struct Solver {
     /// - Live-through variables are marked as available.
     ///
     regs_out: AllocatableSet,
+
+    /// List of register moves scheduled to avoid conflicts.
+    ///
+    /// This is used as working space by the `schedule_moves()` function.
+    moves: Vec<Assignment>,
 }
 
 /// Interface for programming the constraints into the solver.
@@ -308,6 +321,7 @@ impl Solver {
             inputs_done: false,
             regs_in: AllocatableSet::new(),
             regs_out: AllocatableSet::new(),
+            moves: Vec::new(),
         }
     }
 
@@ -508,7 +522,7 @@ impl Solver {
     /// This is expected to succeed for most instructions since the constraint problem is almost
     /// always trivial.
     ///
-    /// Returns `true` is a solution was found.
+    /// Returns `Ok(regs)` if a solution was found.
     pub fn quick_solve(&mut self) -> Result<AllocatableSet, RegClass> {
         self.find_solution()
     }
@@ -545,5 +559,254 @@ impl Solver {
     /// Get all the variables.
     pub fn vars(&self) -> &[Variable] {
         &self.vars
+    }
+}
+
+/// Interface for working with parallel copies once a solution has been found.
+impl Solver {
+    /// Collect all the register moves we need to execute.
+    fn collect_moves(&mut self) {
+        self.moves.clear();
+
+        // Collect moves from the chosen solution for all non-define variables.
+        for v in &self.vars {
+            if let Some(from) = v.from {
+                self.moves
+                    .push(Assignment {
+                              value: v.value,
+                              from,
+                              to: v.solution,
+                              rc: v.constraint,
+                          });
+            }
+        }
+
+        self.moves.extend(self.assignments.values().cloned());
+    }
+
+    /// Try to schedule a sequence of `regmove` instructions that will shuffle registers into
+    /// place.
+    ///
+    /// This may require the use of additional available registers, and it can fail if no
+    /// additional registers are available.
+    ///
+    /// TODO: Handle failure by generating a sequence of register swaps, or by temporarily spilling
+    /// a register.
+    ///
+    /// Returns the number of spills that had to be emitted.
+    pub fn schedule_moves(&mut self, regs: &AllocatableSet) -> usize {
+        self.collect_moves();
+
+        let mut avail = regs.clone();
+        let mut i = 0;
+        while i < self.moves.len() {
+            // Find the first move that can be executed now.
+            if let Some(j) = self.moves[i..]
+                   .iter()
+                   .position(|m| avail.is_avail(m.rc, m.to)) {
+                // This move can be executed now.
+                self.moves.swap(i, i + j);
+                let m = &self.moves[i];
+                avail.take(m.rc, m.to);
+                avail.free(m.rc, m.from);
+                i += 1;
+                continue;
+            }
+
+            // When we get here, non of the `moves[i..]` can be executed. This means there are only
+            // cycles remaining. The cycles can be broken in a few ways:
+            //
+            // 1. Grab an available register and use it to break a cycle.
+            // 2. Move a value temporarily into a stack slot instead of a register.
+            // 3. Use swap instructions.
+            //
+            // TODO: So far we only implement 1.
+
+            // Pick an assignment with the largest possible width. This is more likely to break up
+            // a cycle than an assignment with fewer register units. For example, it may be
+            // necessary to move two arm32 S-registers out of the way before a D-register can move
+            // into place.
+            //
+            // We use `min_by_key` and `!` instead of `max_by_key` because it preserves the
+            // existing order of moves with the same width.
+            let j = self.moves[i..]
+                .iter()
+                .enumerate()
+                .min_by_key(|&(_, m)| !m.rc.width)
+                .unwrap()
+                .0;
+            self.moves.swap(i, i + j);
+
+            let m = self.moves[i].clone();
+            if let Some(reg) = avail.iter(m.rc).next() {
+                // Alter the move so it is guaranteed to be picked up when we loop. It is important
+                // that this move is scheduled immediately, otherwise we would have multiple moves
+                // of the same value, and they would not be commutable.
+                self.moves[i].to = reg;
+                // Append a fixup move so we end up in the right place. This move will be scheduled
+                // later. That's ok because it is the single remaining move of `m.value` after the
+                // next iteration.
+                self.moves
+                    .push(Assignment {
+                              value: m.value,
+                              rc: m.rc,
+                              from: reg,
+                              to: m.to,
+                          });
+                // TODO: What if allocating an extra register is not enough to break a cycle? This
+                // can happen when there are registers of different widths in a cycle. For ARM, we
+                // may have to move two S-registers out of the way before we can resolve a cycle
+                // involving a D-register.
+            } else {
+                panic!("Not enough registers in {} to schedule moves", m.rc);
+            }
+        }
+
+        // Spilling not implemented yet.
+        0
+    }
+
+    /// Borrow the scheduled set of register moves that was computed by `schedule_moves()`.
+    pub fn moves(&self) -> &[Assignment] {
+        &self.moves
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use entity_map::EntityRef;
+    use ir::Value;
+    use isa::{TargetIsa, RegClass, RegUnit};
+    use regalloc::AllocatableSet;
+    use std::borrow::Borrow;
+    use super::{Solver, Assignment};
+
+    // Make an arm32 `TargetIsa`, if possible.
+    fn arm32() -> Option<Box<TargetIsa>> {
+        use settings;
+        use isa;
+
+        let shared_builder = settings::builder();
+        let shared_flags = settings::Flags::new(&shared_builder);
+
+        isa::lookup("arm32").map(|b| b.finish(shared_flags))
+    }
+
+    // Get a register class by name.
+    fn rc_by_name(isa: &TargetIsa, name: &str) -> RegClass {
+        isa.register_info()
+            .classes
+            .iter()
+            .find(|rc| rc.name == name)
+            .expect("Can't find named register class.")
+    }
+
+    // Construct a move.
+    fn mov(value: Value, rc: RegClass, from: RegUnit, to: RegUnit) -> Assignment {
+        Assignment {
+            value,
+            rc,
+            from,
+            to,
+        }
+    }
+
+    #[test]
+    fn simple_moves() {
+        let isa = arm32().expect("This test requires arm32 support");
+        let isa = isa.borrow();
+        let gpr = rc_by_name(isa, "GPR");
+        let r0 = gpr.unit(0);
+        let r1 = gpr.unit(1);
+        let r2 = gpr.unit(2);
+        let mut regs = AllocatableSet::new();
+        let mut solver = Solver::new();
+        let v10 = Value::new(10);
+        let v11 = Value::new(11);
+
+        // As simple as it gets: Value is in r1, we want r0.
+        regs.take(gpr, r1);
+        solver.reset(&regs);
+        solver.reassign_in(v10, gpr, r1, r0);
+        solver.inputs_done();
+        assert!(solver.quick_solve().is_ok());
+        assert_eq!(solver.schedule_moves(&regs), 0);
+        assert_eq!(solver.moves(), &[mov(v10, gpr, r1, r0)]);
+
+        // A bit harder: r0, r1 need to go in r1, r2.
+        regs.take(gpr, r0);
+        solver.reset(&regs);
+        solver.reassign_in(v10, gpr, r0, r1);
+        solver.reassign_in(v11, gpr, r1, r2);
+        solver.inputs_done();
+        assert!(solver.quick_solve().is_ok());
+        assert_eq!(solver.schedule_moves(&regs), 0);
+        assert_eq!(solver.moves(),
+                   &[mov(v11, gpr, r1, r2), mov(v10, gpr, r0, r1)]);
+
+        // Swap r0 and r1 in three moves using r2 as a scratch.
+        solver.reset(&regs);
+        solver.reassign_in(v10, gpr, r0, r1);
+        solver.reassign_in(v11, gpr, r1, r0);
+        solver.inputs_done();
+        assert!(solver.quick_solve().is_ok());
+        assert_eq!(solver.schedule_moves(&regs), 0);
+        assert_eq!(solver.moves(),
+                   &[mov(v10, gpr, r0, r2),
+                     mov(v11, gpr, r1, r0),
+                     mov(v10, gpr, r2, r1)]);
+    }
+
+    #[test]
+    fn harder_move_cycles() {
+        let isa = arm32().expect("This test requires arm32 support");
+        let isa = isa.borrow();
+        let s = rc_by_name(isa, "S");
+        let d = rc_by_name(isa, "D");
+        let d0 = d.unit(0);
+        let d1 = d.unit(1);
+        let d2 = d.unit(2);
+        let s0 = s.unit(0);
+        let s1 = s.unit(1);
+        let s2 = s.unit(2);
+        let s3 = s.unit(3);
+        let mut regs = AllocatableSet::new();
+        let mut solver = Solver::new();
+        let v10 = Value::new(10);
+        let v11 = Value::new(11);
+        let v12 = Value::new(12);
+
+        // Not a simple cycle: Swap d0 <-> (s2, s3)
+        regs.take(d, d0);
+        regs.take(d, d1);
+        solver.reset(&regs);
+        solver.reassign_in(v10, d, d0, d1);
+        solver.reassign_in(v11, s, s2, s0);
+        solver.reassign_in(v12, s, s3, s1);
+        solver.inputs_done();
+        assert!(solver.quick_solve().is_ok());
+        assert_eq!(solver.schedule_moves(&regs), 0);
+        assert_eq!(solver.moves(),
+                   &[mov(v10, d, d0, d2),
+                     mov(v11, s, s2, s0),
+                     mov(v12, s, s3, s1),
+                     mov(v10, d, d2, d1)]);
+
+        // Same problem in the other direction: Swap (s0, s1) <-> d1.
+        //
+        // If we divert the moves in order, we will need to allocate *two* temporary S registers. A
+        // trivial algorithm might assume that allocating a single temp is enough.
+        solver.reset(&regs);
+        solver.reassign_in(v11, s, s0, s2);
+        solver.reassign_in(v12, s, s1, s3);
+        solver.reassign_in(v10, d, d1, d0);
+        solver.inputs_done();
+        assert!(solver.quick_solve().is_ok());
+        assert_eq!(solver.schedule_moves(&regs), 0);
+        assert_eq!(solver.moves(),
+                   &[mov(v10, d, d1, d2),
+                     mov(v12, s, s1, s3),
+                     mov(v11, s, s0, s2),
+                     mov(v10, d, d2, d0)]);
     }
 }
