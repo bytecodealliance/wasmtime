@@ -1,7 +1,7 @@
 //! Utility functions.
 
 use cretonne::ir::entities::AnyEntity;
-use cretonne::{ir, verifier, write_function};
+use cretonne::{ir, verifier};
 use cretonne::result::CtonError;
 use std::fmt::Write;
 use std::fs::File;
@@ -42,7 +42,7 @@ pub fn pretty_verifier_error(func: &ir::Function, err: verifier::Error) -> Strin
         }
         _ => msg.push('\n'),
     }
-    write_function(&mut msg, func, None).unwrap();
+    write!(msg, "{}", func).unwrap();
     msg
 }
 
