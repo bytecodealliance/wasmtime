@@ -11,6 +11,7 @@ use ir::{Inst, Ebb, Value, DataFlowGraph, ProgramOrder, ExpandedProgramPoint};
 use partition_slice::partition_slice;
 use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
+use regalloc::liverange::LiveRange;
 
 use std::collections::HashMap;
 
@@ -45,6 +46,12 @@ pub struct LiveValue {
     /// This value is simply a copy of the affinity stored in the live range. We copy it because
     /// almost all users of `LiveValue` need to look at it.
     pub affinity: Affinity,
+
+    /// The live range for this value never leaves its EBB.
+    pub is_local: bool,
+
+    /// This value is dead - the live range ends immediately.
+    pub is_dead: bool,
 }
 
 struct LiveValueVec {
@@ -66,13 +73,15 @@ impl LiveValueVec {
         }
     }
 
-    /// Add a new live value to `values`.
-    fn push(&mut self, value: Value, endpoint: Inst, affinity: Affinity) {
+    /// Add a new live value to `values`. Copy some properties from `lr`.
+    fn push(&mut self, value: Value, endpoint: Inst, lr: &LiveRange) {
         self.values
             .push(LiveValue {
                       value,
                       endpoint,
-                      affinity,
+                      affinity: lr.affinity,
+                      is_local: lr.is_local(),
+                      is_dead: lr.is_dead(),
                   });
     }
 
@@ -175,7 +184,7 @@ impl LiveValueTracker {
 
                 // Check if this value is live-in here.
                 if let Some(endpoint) = lr.livein_local_end(ebb, program_order) {
-                    self.live.push(value, endpoint, lr.affinity);
+                    self.live.push(value, endpoint, lr);
                 }
             }
         }
@@ -189,7 +198,7 @@ impl LiveValueTracker {
             assert_eq!(lr.def(), ebb.into());
             match lr.def_local_end().into() {
                 ExpandedProgramPoint::Inst(endpoint) => {
-                    self.live.push(value, endpoint, lr.affinity);
+                    self.live.push(value, endpoint, lr);
                 }
                 ExpandedProgramPoint::Ebb(local_ebb) => {
                     // This is a dead EBB argument which is not even live into the first
@@ -248,7 +257,7 @@ impl LiveValueTracker {
             assert_eq!(lr.def(), inst.into());
             match lr.def_local_end().into() {
                 ExpandedProgramPoint::Inst(endpoint) => {
-                    self.live.push(value, endpoint, lr.affinity);
+                    self.live.push(value, endpoint, lr);
                 }
                 ExpandedProgramPoint::Ebb(ebb) => {
                     panic!("Instruction result live range can't end at {}", ebb);
