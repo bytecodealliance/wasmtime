@@ -122,6 +122,10 @@ class Instruction(object):
                 i for i, o in enumerate(self.ins) if o.is_immediate())
 
         self._verify_polymorphic()
+        for attr in kwargs:
+            if attr not in Instruction.ATTRIBS:
+                raise AssertionError(
+                        "unknown instruction attribute '" + attr + "'")
         for attr in Instruction.ATTRIBS:
             setattr(self, attr, not not kwargs.get(attr, False))
         InstructionGroup.append(self)
