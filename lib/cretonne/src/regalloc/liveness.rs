@@ -311,6 +311,13 @@ impl Liveness {
         // elimination pass if we visit a post-order of the dominator tree?
         // TODO: Resolve value aliases while we're visiting instructions?
         for ebb in func.layout.ebbs() {
+            // Make sure we have created live ranges for dead EBB arguments.
+            // TODO: If these arguments are really dead, we could remove them, except for the entry
+            // block which must match the function signature.
+            for &arg in func.dfg.ebb_args(ebb) {
+                get_or_create(&mut self.ranges, arg, isa, func, &enc_info);
+            }
+
             for inst in func.layout.ebb_insts(ebb) {
                 // Make sure we have created live ranges for dead defs.
                 // TODO: When we implement DCE, we can use the absence of a live range to indicate
