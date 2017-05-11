@@ -435,6 +435,11 @@ impl Layout {
         self.assign_inst_seq(inst);
     }
 
+    /// Fetch an ebb's first instruction.
+    pub fn first_inst(&self, ebb: Ebb) -> Option<Inst> {
+        self.ebbs[ebb].first_inst.into()
+    }
+
     /// Fetch an ebb's last instruction.
     pub fn last_inst(&self, ebb: Ebb) -> Option<Inst> {
         self.ebbs[ebb].last_inst.into()

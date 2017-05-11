@@ -7,7 +7,7 @@
 use dominator_tree::DominatorTree;
 use entity_list::{EntityList, ListPool};
 use ir::instructions::BranchInfo;
-use ir::{Inst, Ebb, Value, DataFlowGraph, ProgramOrder, ExpandedProgramPoint};
+use ir::{Inst, Ebb, Value, DataFlowGraph, Layout, ExpandedProgramPoint};
 use partition_slice::partition_slice;
 use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
@@ -116,6 +116,12 @@ impl LiveValueVec {
         let keep = self.live_after(next_inst);
         self.values.truncate(keep);
     }
+
+    /// Remove any dead values.
+    fn remove_dead_values(&mut self) {
+        self.values.retain(|v| !v.is_dead);
+        self.live_prefix = None;
+    }
 }
 
 impl LiveValueTracker {
@@ -150,14 +156,15 @@ impl LiveValueTracker {
     ///
     /// Returns `(liveins, args)` as a pair of slices. The first slice is the set of live-in values
     /// from the immediate dominator. The second slice is the set of `ebb` arguments that are live.
-    /// Dead arguments with no uses are ignored and not added to the set.
-    pub fn ebb_top<PO: ProgramOrder>(&mut self,
-                                     ebb: Ebb,
-                                     dfg: &DataFlowGraph,
-                                     liveness: &Liveness,
-                                     program_order: &PO,
-                                     domtree: &DominatorTree)
-                                     -> (&[LiveValue], &[LiveValue]) {
+    ///
+    /// Dead arguments with no uses are included in `args`. Call `drop_dead_args()` to remove them.
+    pub fn ebb_top(&mut self,
+                   ebb: Ebb,
+                   dfg: &DataFlowGraph,
+                   liveness: &Liveness,
+                   layout: &Layout,
+                   domtree: &DominatorTree)
+                   -> (&[LiveValue], &[LiveValue]) {
         // Start over, compute the set of live values at the top of the EBB from two sources:
         //
         // 1. Values that were live before `ebb`'s immediate dominator, filtered for those that are
@@ -183,7 +190,7 @@ impl LiveValueTracker {
                     .expect("Immediate dominator value has no live range");
 
                 // Check if this value is live-in here.
-                if let Some(endpoint) = lr.livein_local_end(ebb, program_order) {
+                if let Some(endpoint) = lr.livein_local_end(ebb, layout) {
                     self.live.push(value, endpoint, lr);
                 }
             }
@@ -202,10 +209,14 @@ impl LiveValueTracker {
                 }
                 ExpandedProgramPoint::Ebb(local_ebb) => {
                     // This is a dead EBB argument which is not even live into the first
-                    // instruction in the EBB. We can ignore it.
+                    // instruction in the EBB.
                     assert_eq!(local_ebb,
                                ebb,
                                "EBB argument live range ends at wrong EBB header");
+                    // Give this value a fake endpoint that is the first instruction in the EBB.
+                    // We expect it to be removed by calling `drop_dead_args()`.
+                    self.live
+                        .push(value, layout.first_inst(ebb).expect("Empty EBB"), lr);
                 }
             }
         }
@@ -279,6 +290,13 @@ impl LiveValueTracker {
     pub fn drop_dead(&mut self, inst: Inst) {
         // Remove both live values that were killed by `inst` and dead defines from `inst`.
         self.live.remove_kill_values(inst);
+    }
+
+    /// Drop any values that are marked as `is_dead`.
+    ///
+    /// Use this after calling `ebb_top` to clean out dead EBB arguments.
+    pub fn drop_dead_args(&mut self) {
+        self.live.remove_dead_values();
     }
 
     /// Save the current set of live values so it is associated with `idom`.
