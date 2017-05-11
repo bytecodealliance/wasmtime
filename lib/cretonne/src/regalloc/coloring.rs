@@ -129,6 +129,7 @@ impl<'a> Context<'a> {
     fn visit_ebb(&mut self, ebb: Ebb, func: &mut Function, tracker: &mut LiveValueTracker) {
         dbg!("Coloring {}:", ebb);
         let mut regs = self.visit_ebb_header(ebb, func, tracker);
+        tracker.drop_dead_args();
         self.divert.clear();
 
         // Now go through the instructions in `ebb` and color the values they define.
@@ -162,14 +163,24 @@ impl<'a> Context<'a> {
             tracker.ebb_top(ebb, &func.dfg, self.liveness, &func.layout, self.domtree);
 
         // Arguments to the entry block have ABI constraints.
-        if func.layout.entry_block() == Some(ebb) {
+        let mut regs = if func.layout.entry_block() == Some(ebb) {
             assert_eq!(liveins.len(), 0);
             self.color_entry_args(&func.signature, args, &mut func.locations)
         } else {
             // The live-ins have already been assigned a register. Reconstruct the allocatable set.
             let regs = self.livein_regs(liveins, func);
             self.color_args(args, regs, &mut func.locations)
+        };
+
+        // Now forget about the dead arguments.
+        for lv in args.iter().filter(|&lv| lv.is_dead) {
+            if let Affinity::Reg(rci) = lv.affinity {
+                let rc = self.reginfo.rc(rci);
+                let reg = func.locations[lv.value].unwrap_reg();
+                regs.free(rc, reg);
+            }
         }
+        regs
     }
 
     /// Initialize a set of allocatable registers from the values that are live-in to a block.
