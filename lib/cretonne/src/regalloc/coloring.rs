@@ -33,8 +33,8 @@
 
 use entity_map::EntityMap;
 use dominator_tree::DominatorTree;
-use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph, Signature, ArgumentLoc};
-use ir::InstBuilder;
+use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph};
+use ir::{InstBuilder, Signature, ArgumentType, ArgumentLoc};
 use isa::{TargetIsa, Encoding, EncInfo, OperandConstraint, ConstraintKind};
 use isa::{RegUnit, RegClass, RegInfo, regs_overlap};
 use regalloc::affinity::Affinity;
@@ -145,7 +145,8 @@ impl<'a> Context<'a> {
                             &mut func.dfg,
                             tracker,
                             &mut regs,
-                            &mut func.locations);
+                            &mut func.locations,
+                            &func.signature);
             tracker.drop_dead(inst);
         }
 
@@ -307,7 +308,8 @@ impl<'a> Context<'a> {
                   dfg: &mut DataFlowGraph,
                   tracker: &mut LiveValueTracker,
                   regs: &mut AllocatableSet,
-                  locations: &mut EntityMap<Value, ValueLoc>) {
+                  locations: &mut EntityMap<Value, ValueLoc>,
+                  func_signature: &Signature) {
         dbg!("Coloring [{}] {}",
              self.encinfo.display(encoding),
              dfg.display_inst(inst));
@@ -320,6 +322,12 @@ impl<'a> Context<'a> {
         // Program the solver with register constraints for the input side.
         self.solver.reset(regs);
         self.program_input_constraints(inst, constraints.ins, dfg, locations);
+        let call_sig = dfg.call_signature(inst);
+        if let Some(sig) = call_sig {
+            self.program_input_abi(inst, &dfg.signatures[sig].argument_types, dfg, locations);
+        } else if dfg[inst].opcode().is_return() {
+            self.program_input_abi(inst, &func_signature.return_types, dfg, locations);
+        }
         if self.solver.has_fixed_input_conflicts() {
             self.divert_fixed_input_conflicts(tracker.live(), locations);
         }
@@ -342,12 +350,11 @@ impl<'a> Context<'a> {
         // detect conflicts between fixed outputs and tied operands where the input value hasn't
         // been converted to a solver variable.
         if constraints.fixed_outs {
-            self.program_fixed_output_constraints(inst,
-                                                  constraints.outs,
-                                                  defs,
-                                                  throughs,
-                                                  dfg,
-                                                  locations);
+            self.program_fixed_outputs(constraints.outs, defs, throughs, locations);
+        }
+        if let Some(sig) = call_sig {
+            let abi = &dfg.signatures[sig].return_types;
+            self.program_output_abi(abi, defs, throughs, locations);
         }
         self.program_output_constraints(inst, constraints.outs, defs, dfg, locations);
 
@@ -384,8 +391,8 @@ impl<'a> Context<'a> {
     fn program_input_constraints(&mut self,
                                  inst: Inst,
                                  constraints: &[OperandConstraint],
-                                 dfg: &mut DataFlowGraph,
-                                 locations: &mut EntityMap<Value, ValueLoc>) {
+                                 dfg: &DataFlowGraph,
+                                 locations: &EntityMap<Value, ValueLoc>) {
         for (op, &value) in constraints
                 .iter()
                 .zip(dfg.inst_args(inst))
@@ -412,6 +419,33 @@ impl<'a> Context<'a> {
         }
     }
 
+    /// Program the input-side ABI constraints for `inst` into the constraint solver.
+    ///
+    /// ABI constraints are the fixed register assignments used for calls and returns.
+    fn program_input_abi(&mut self,
+                         inst: Inst,
+                         abi_types: &[ArgumentType],
+                         dfg: &DataFlowGraph,
+                         locations: &EntityMap<Value, ValueLoc>) {
+        for (abi, &value) in abi_types.iter().zip(dfg.inst_variable_args(inst)) {
+            if let ArgumentLoc::Reg(reg) = abi.location {
+                let cur_reg = self.divert.reg(value, locations);
+                if reg != cur_reg {
+                    if let Affinity::Reg(rci) =
+                        self.liveness
+                            .get(value)
+                            .expect("ABI register must have live range")
+                            .affinity {
+                        let rc = self.reginfo.rc(rci);
+                        self.solver.reassign_in(value, rc, cur_reg, reg);
+                    } else {
+                        panic!("ABI argument {} should be in a register", value);
+                    }
+                }
+            }
+        }
+    }
+
     // Find existing live values that conflict with the fixed input register constraints programmed
     // into the constraint solver. Convert them to solver variables so they can be diverted.
     fn divert_fixed_input_conflicts(&mut self,
@@ -431,16 +465,38 @@ impl<'a> Context<'a> {
     /// Program any fixed-register output constraints into the solver. This may also detect
     /// conflicts between live-through registers and fixed output registers. These live-through
     /// values need to be turned into solver variables so they can be reassigned.
-    fn program_fixed_output_constraints(&mut self,
-                                        _inst: Inst,
-                                        constraints: &[OperandConstraint],
-                                        defs: &[LiveValue],
-                                        throughs: &[LiveValue],
-                                        _dfg: &mut DataFlowGraph,
-                                        locations: &mut EntityMap<Value, ValueLoc>) {
+    fn program_fixed_outputs(&mut self,
+                             constraints: &[OperandConstraint],
+                             defs: &[LiveValue],
+                             throughs: &[LiveValue],
+                             locations: &mut EntityMap<Value, ValueLoc>) {
         for (op, lv) in constraints.iter().zip(defs) {
             if let ConstraintKind::FixedReg(reg) = op.kind {
                 self.add_fixed_output(lv.value, op.regclass, reg, throughs, locations);
+            }
+        }
+    }
+
+    /// Program the output-side ABI constraints for `inst` into the constraint solver.
+    ///
+    /// That means return values for a call instruction.
+    fn program_output_abi(&mut self,
+                          abi_types: &[ArgumentType],
+                          defs: &[LiveValue],
+                          throughs: &[LiveValue],
+                          locations: &mut EntityMap<Value, ValueLoc>) {
+        // It's technically possible for a call instruction to have fixed results before the
+        // variable list of results, but we have no known instances of that.
+        // Just assume all results are variable return values.
+        assert_eq!(defs.len(), abi_types.len());
+        for (abi, lv) in abi_types.iter().zip(defs) {
+            if let ArgumentLoc::Reg(reg) = abi.location {
+                if let Affinity::Reg(rci) = lv.affinity {
+                    let rc = self.reginfo.rc(rci);
+                    self.add_fixed_output(lv.value, rc, reg, throughs, locations);
+                } else {
+                    panic!("ABI argument {} should be in a register", lv.value);
+                }
             }
         }
     }
