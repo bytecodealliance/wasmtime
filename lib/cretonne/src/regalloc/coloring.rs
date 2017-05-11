@@ -163,24 +163,14 @@ impl<'a> Context<'a> {
             tracker.ebb_top(ebb, &func.dfg, self.liveness, &func.layout, self.domtree);
 
         // Arguments to the entry block have ABI constraints.
-        let mut regs = if func.layout.entry_block() == Some(ebb) {
+        if func.layout.entry_block() == Some(ebb) {
             assert_eq!(liveins.len(), 0);
             self.color_entry_args(&func.signature, args, &mut func.locations)
         } else {
             // The live-ins have already been assigned a register. Reconstruct the allocatable set.
             let regs = self.livein_regs(liveins, func);
             self.color_args(args, regs, &mut func.locations)
-        };
-
-        // Now forget about the dead arguments.
-        for lv in args.iter().filter(|&lv| lv.is_dead) {
-            if let Affinity::Reg(rci) = lv.affinity {
-                let rc = self.reginfo.rc(rci);
-                let reg = func.locations[lv.value].unwrap_reg();
-                regs.free(rc, reg);
-            }
         }
-        regs
     }
 
     /// Initialize a set of allocatable registers from the values that are live-in to a block.
@@ -221,7 +211,7 @@ impl<'a> Context<'a> {
     /// These are function arguments that should already have assigned register units in the
     /// function signature.
     ///
-    /// Return the set of remaining allocatable registers.
+    /// Return the set of remaining allocatable registers after filtering out the dead arguments.
     fn color_entry_args(&self,
                         sig: &Signature,
                         args: &[LiveValue],
@@ -236,7 +226,9 @@ impl<'a> Context<'a> {
                 Affinity::Reg(rci) => {
                     let rc = self.reginfo.rc(rci);
                     if let ArgumentLoc::Reg(reg) = abi.location {
-                        regs.take(rc, reg);
+                        if !lv.is_dead {
+                            regs.take(rc, reg);
+                        }
                         *locations.ensure(lv.value) = ValueLoc::Reg(reg);
                     } else {
                         // This should have been fixed by the reload pass.
@@ -278,6 +270,9 @@ impl<'a> Context<'a> {
                   mut regs: AllocatableSet,
                   locations: &mut EntityMap<Value, ValueLoc>)
                   -> AllocatableSet {
+        // Available registers *after* filtering out the dead arguments.
+        let mut live_regs = regs.clone();
+
         for lv in args {
             // Only look at the register arguments.
             if let Affinity::Reg(rci) = lv.affinity {
@@ -287,11 +282,16 @@ impl<'a> Context<'a> {
                     .next()
                     .expect("Out of registers for arguments");
                 regs.take(rc, reg);
+                if !lv.is_dead {
+                    live_regs.take(rc, reg);
+                }
                 *locations.ensure(lv.value) = ValueLoc::Reg(reg);
             }
         }
 
-        regs
+        // All arguments are accounted for in `regs`. We don't care about the dead arguments now
+        // that we have made sure they don't interfere.
+        live_regs
     }
 
     /// Color the values defined by `inst` and insert any necessary shuffle code to satisfy
