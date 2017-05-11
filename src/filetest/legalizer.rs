@@ -4,7 +4,7 @@
 //! the result to filecheck.
 
 use std::borrow::Cow;
-use cretonne::{self};
+use cretonne;
 use cretonne::ir::Function;
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result, run_filecheck};

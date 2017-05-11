@@ -6,7 +6,7 @@
 //! The resulting function is sent to `filecheck`.
 
 use cretonne::ir::Function;
-use cretonne::{self};
+use cretonne;
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result, run_filecheck};
 use std::borrow::Cow;
