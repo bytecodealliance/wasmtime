@@ -210,7 +210,5 @@ pub trait TargetIsa {
     ///
     /// This array can be indexed by the contents of `binemit::Reloc` objects passed to a
     /// `CodeSink`.
-    fn reloc_names(&self) -> &'static [&'static str] {
-        unimplemented!()
-    }
+    fn reloc_names(&self) -> &'static [&'static str];
 }

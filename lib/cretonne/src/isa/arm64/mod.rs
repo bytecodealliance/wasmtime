@@ -87,4 +87,8 @@ impl TargetIsa for Isa {
     fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut CodeSink) {
         binemit::emit_inst(func, inst, sink)
     }
+
+    fn reloc_names(&self) -> &'static [&'static str] {
+        &binemit::RELOC_NAMES
+    }
 }
