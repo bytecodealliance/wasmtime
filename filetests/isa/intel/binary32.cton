@@ -92,5 +92,110 @@ ebb0:
     ; asm: xorl $1000000, %esi
     [-,%rsi]             v47 = bxor_imm v2, 1000000 ; bin: 81 f6 000f4240
 
+    ; Load/Store instructions.
+
+    ; Register indirect addressing with no displacement.
+
+    ; asm: movl %ecx, (%esi)
+    store v1, v2                                ; bin: 89 0e
+    ; asm: movl %esi, (%ecx)
+    store v2, v1                                ; bin: 89 31
+    ; asm: movw %cx, (%esi)
+    istore16 v1, v2                             ; bin: 66 89 0e
+    ; asm: movw %si, (%ecx)
+    istore16 v2, v1                             ; bin: 66 89 31
+    ; asm: movb %cl, (%esi)
+    istore8 v1, v2                              ; bin: 88 0e
+    ; Can't store %sil in 32-bit mode (needs REX prefix).
+
+    ; asm: movl (%ecx), %edi
+    [-,%rdi]            v100 = load.i32 v1      ; bin: 8b 39
+    ; asm: movl (%esi), %edx
+    [-,%rdx]            v101 = load.i32 v2      ; bin: 8b 16
+    ; asm: movzwl (%ecx), %edi
+    [-,%rdi]            v102 = uload16.i32 v1   ; bin: 0f b7 39
+    ; asm: movzwl (%esi), %edx
+    [-,%rdx]            v103 = uload16.i32 v2   ; bin: 0f b7 16
+    ; asm: movswl (%ecx), %edi
+    [-,%rdi]            v104 = sload16.i32 v1   ; bin: 0f bf 39
+    ; asm: movswl (%esi), %edx
+    [-,%rdx]            v105 = sload16.i32 v2   ; bin: 0f bf 16
+    ; asm: movzbl (%ecx), %edi
+    [-,%rdi]            v106 = uload8.i32 v1    ; bin: 0f b6 39
+    ; asm: movzbl (%esi), %edx
+    [-,%rdx]            v107 = uload8.i32 v2    ; bin: 0f b6 16
+    ; asm: movsbl (%ecx), %edi
+    [-,%rdi]            v108 = sload8.i32 v1    ; bin: 0f be 39
+    ; asm: movsbl (%esi), %edx
+    [-,%rdx]            v109 = sload8.i32 v2    ; bin: 0f be 16
+
+    ; Register-indirect with 8-bit signed displacement.
+
+    ; asm: movl %ecx, 100(%esi)
+    store v1, v2+100                            ; bin: 89 4e 64
+    ; asm: movl %esi, -100(%ecx)
+    store v2, v1-100                            ; bin: 89 71 9c
+    ; asm: movw %cx, 100(%esi)
+    istore16 v1, v2+100                         ; bin: 66 89 4e 64
+    ; asm: movw %si, -100(%ecx)
+    istore16 v2, v1-100                         ; bin: 66 89 71 9c
+    ; asm: movb %cl, 100(%esi)
+    istore8 v1, v2+100                          ; bin: 88 4e 64
+
+    ; asm: movl 50(%ecx), %edi
+    [-,%rdi]            v110 = load.i32 v1+50           ; bin: 8b 79 32
+    ; asm: movl -50(%esi), %edx
+    [-,%rdx]            v111 = load.i32 v2-50           ; bin: 8b 56 ce
+    ; asm: movzwl 50(%ecx), %edi
+    [-,%rdi]            v112 = uload16.i32 v1+50        ; bin: 0f b7 79 32
+    ; asm: movzwl -50(%esi), %edx
+    [-,%rdx]            v113 = uload16.i32 v2-50        ; bin: 0f b7 56 ce
+    ; asm: movswl 50(%ecx), %edi
+    [-,%rdi]            v114 = sload16.i32 v1+50        ; bin: 0f bf 79 32
+    ; asm: movswl -50(%esi), %edx
+    [-,%rdx]            v115 = sload16.i32 v2-50        ; bin: 0f bf 56 ce
+    ; asm: movzbl 50(%ecx), %edi
+    [-,%rdi]            v116 = uload8.i32 v1+50         ; bin: 0f b6 79 32
+    ; asm: movzbl -50(%esi), %edx
+    [-,%rdx]            v117 = uload8.i32 v2-50         ; bin: 0f b6 56 ce
+    ; asm: movsbl 50(%ecx), %edi
+    [-,%rdi]            v118 = sload8.i32 v1+50         ; bin: 0f be 79 32
+    ; asm: movsbl -50(%esi), %edx
+    [-,%rdx]            v119 = sload8.i32 v2-50         ; bin: 0f be 56 ce
+
+    ; Register-indirect with 32-bit signed displacement.
+
+    ; asm: movl %ecx, 10000(%esi)
+    store v1, v2+10000                          ; bin: 89 8e 00002710
+    ; asm: movl %esi, -10000(%ecx)
+    store v2, v1-10000                          ; bin: 89 b1 ffffd8f0
+    ; asm: movw %cx, 10000(%esi)
+    istore16 v1, v2+10000                       ; bin: 66 89 8e 00002710
+    ; asm: movw %si, -10000(%ecx)
+    istore16 v2, v1-10000                       ; bin: 66 89 b1 ffffd8f0
+    ; asm: movb %cl, 10000(%esi)
+    istore8 v1, v2+10000                        ; bin: 88 8e 00002710
+
+    ; asm: movl 50000(%ecx), %edi
+    [-,%rdi]            v120 = load.i32 v1+50000           ; bin: 8b b9 0000c350
+    ; asm: movl -50000(%esi), %edx
+    [-,%rdx]            v121 = load.i32 v2-50000           ; bin: 8b 96 ffff3cb0
+    ; asm: movzwl 50000(%ecx), %edi
+    [-,%rdi]            v122 = uload16.i32 v1+50000        ; bin: 0f b7 b9 0000c350
+    ; asm: movzwl -50000(%esi), %edx
+    [-,%rdx]            v123 = uload16.i32 v2-50000        ; bin: 0f b7 96 ffff3cb0
+    ; asm: movswl 50000(%ecx), %edi
+    [-,%rdi]            v124 = sload16.i32 v1+50000        ; bin: 0f bf b9 0000c350
+    ; asm: movswl -50000(%esi), %edx
+    [-,%rdx]            v125 = sload16.i32 v2-50000        ; bin: 0f bf 96 ffff3cb0
+    ; asm: movzbl 50000(%ecx), %edi
+    [-,%rdi]            v126 = uload8.i32 v1+50000         ; bin: 0f b6 b9 0000c350
+    ; asm: movzbl -50000(%esi), %edx
+    [-,%rdx]            v127 = uload8.i32 v2-50000         ; bin: 0f b6 96 ffff3cb0
+    ; asm: movsbl 50000(%ecx), %edi
+    [-,%rdi]            v128 = sload8.i32 v1+50000         ; bin: 0f be b9 0000c350
+    ; asm: movsbl -50000(%esi), %edx
+    [-,%rdx]            v129 = sload8.i32 v2-50000         ; bin: 0f be 96 ffff3cb0
+
     return
 }
