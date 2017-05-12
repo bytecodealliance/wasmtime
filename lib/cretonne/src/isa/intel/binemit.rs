@@ -53,3 +53,27 @@ fn recipe_op1rc<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut C
         panic!("Expected Binary format: {:?}", func.dfg[inst]);
     }
 }
+
+fn recipe_op1rib<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::BinaryImm { arg, imm, .. } = func.dfg[inst] {
+        let bits = func.encodings[inst].bits();
+        put_op1(bits, sink);
+        modrm_r_bits(func.locations[arg].unwrap_reg(), bits, sink);
+        let imm: i64 = imm.into();
+        sink.put1(imm as u8);
+    } else {
+        panic!("Expected BinaryImm format: {:?}", func.dfg[inst]);
+    }
+}
+
+fn recipe_op1rid<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::BinaryImm { arg, imm, .. } = func.dfg[inst] {
+        let bits = func.encodings[inst].bits();
+        put_op1(bits, sink);
+        modrm_r_bits(func.locations[arg].unwrap_reg(), bits, sink);
+        let imm: i64 = imm.into();
+        sink.put4(imm as u32);
+    } else {
+        panic!("Expected BinaryImm format: {:?}", func.dfg[inst]);
+    }
+}
