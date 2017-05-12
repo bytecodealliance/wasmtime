@@ -114,11 +114,11 @@ const CODE_ALWAYS: EncListEntry = PRED_MASK;
 /// The encoding list terminator.
 const CODE_FAIL: EncListEntry = 0xffff;
 
-/// Find the most general encoding of `inst`.
+/// Find the first applicable general encoding of `inst`.
 ///
 /// Given an encoding list offset as returned by `lookup_enclist` above, search the encoding list
-/// for the most general encoding that applies to `inst`. The encoding lists are laid out such that
-/// this is the last valid entry in the list.
+/// for the most first encoding that applies to `inst`. The encoding lists are laid out such that
+/// this is the first valid entry in the list.
 ///
 /// This function takes two closures that are used to evaluate predicates:
 /// - `instp` is passed an instruction predicate number to be evaluated on the current instruction.
@@ -133,14 +133,13 @@ pub fn general_encoding<InstP, IsaP>(offset: usize,
     where InstP: Fn(EncListEntry) -> bool,
           IsaP: Fn(EncListEntry) -> bool
 {
-    let mut found = None;
     let mut pos = offset;
     while enclist[pos] != CODE_FAIL {
         let pred = enclist[pos];
         if pred <= CODE_ALWAYS {
             // This is an instruction predicate followed by recipe and encbits entries.
             if pred == CODE_ALWAYS || instp(pred) {
-                found = Some(Encoding::new(enclist[pos + 1], enclist[pos + 2]))
+                return Some(Encoding::new(enclist[pos + 1], enclist[pos + 2]));
             }
             pos += 3;
         } else {
@@ -152,5 +151,6 @@ pub fn general_encoding<InstP, IsaP>(offset: usize,
             }
         }
     }
-    found
+
+    None
 }
