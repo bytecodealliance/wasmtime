@@ -3,9 +3,9 @@ Intel Encoding recipes.
 """
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
-from cdsl.predicates import IsSignedInt
-from base.formats import Binary, BinaryImm
-from .registers import GPR
+from cdsl.predicates import IsSignedInt, IsEqual
+from base.formats import Binary, BinaryImm, Store, Load
+from .registers import GPR, ABCD
 
 # Opcode representation.
 #
@@ -15,21 +15,21 @@ from .registers import GPR
 # name prefix:
 #
 # <op>            Op1* OP(op)
-# 0F <op>         Op2* OP(op)
+# 0F <op>         Op2* OP0F(op)
 # 0F 38 <op>      Op3* OP38(op)
 # 0F 3A <op>      Op3* OP3A(op)
 # 66 <op>         Mp1* MP66(op)
-# 66 0F <op>      Mp2* MP66(op)
-# 66 0F 38 <op>   Mp3* MP6638(op)
-# 66 0F 3A <op>   Mp3* MP663A(op)
+# 66 0F <op>      Mp2* MP660F(op)
+# 66 0F 38 <op>   Mp3* MP660F38(op)
+# 66 0F 3A <op>   Mp3* MP660F3A(op)
 # F2 <op>         Mp1* MPF2(op)
-# F2 0F <op>      Mp2* MPF2(op)
-# F2 0F 38 <op>   Mp3* MPF238(op)
-# F2 0F 3A <op>   Mp3* MPF23A(op)
+# F2 0F <op>      Mp2* MPF20F(op)
+# F2 0F 38 <op>   Mp3* MPF20F38(op)
+# F2 0F 3A <op>   Mp3* MPF20F3A(op)
 # F3 <op>         Mp1* MPF3(op)
-# F3 0F <op>      Mp2* MPF3(op)
-# F3 0F 38 <op>   Mp3* MPF338(op)
-# F3 0F 3A <op>   Mp3* MPF33A(op)
+# F3 0F <op>      Mp2* MP0FF3(op)
+# F3 0F 38 <op>   Mp3* MPF30F38(op)
+# F3 0F 3A <op>   Mp3* MPF30F3A(op)
 #
 # VEX/XOP and EVEX prefixes are not yet supported.
 #
@@ -63,6 +63,16 @@ def OP(op, pp=0, mm=0, rrr=0, w=0):
     return op | (pp << 8) | (mm << 10) | (rrr << 12) | (w << 15)
 
 
+def OP0F(op, rrr=0, w=0):
+    # type: (int, int, int) -> int
+    return OP(op, pp=0, mm=1, rrr=rrr, w=w)
+
+
+def MP66(op, rrr=0, w=0):
+    # type: (int, int, int) -> int
+    return OP(op, pp=1, mm=0, rrr=rrr, w=w)
+
+
 # XX /r
 Op1rr = EncRecipe('Op1rr', Binary, size=2, ins=(GPR, GPR), outs=0)
 
@@ -78,3 +88,78 @@ Op1rib = EncRecipe(
 Op1rid = EncRecipe(
         'Op1rid', BinaryImm, size=6, ins=GPR, outs=0,
         instp=IsSignedInt(BinaryImm.imm, 32))
+
+#
+# Store recipes.
+#
+
+# XX /r register-indirect store with no offset.
+Op1st = EncRecipe(
+        'Op1st', Store, size=2, ins=(GPR, GPR), outs=(),
+        instp=IsEqual(Store.offset, 0))
+
+# XX /r register-indirect store with no offset.
+# Only ABCD allowed for stored value. This is for byte stores.
+Op1st_abcd = EncRecipe(
+        'Op1st_abcd', Store, size=2, ins=(ABCD, GPR), outs=(),
+        instp=IsEqual(Store.offset, 0))
+
+# XX /r register-indirect store with 8-bit offset.
+Op1stDisp8 = EncRecipe(
+        'Op1stDisp8', Store, size=3, ins=(GPR, GPR), outs=(),
+        instp=IsSignedInt(Store.offset, 8))
+Op1stDisp8_abcd = EncRecipe(
+        'Op1stDisp8_abcd', Store, size=3, ins=(ABCD, GPR), outs=(),
+        instp=IsSignedInt(Store.offset, 8))
+
+# XX /r register-indirect store with 32-bit offset.
+Op1stDisp32 = EncRecipe('Op1stDisp32', Store, size=6, ins=(GPR, GPR), outs=())
+Op1stDisp32_abcd = EncRecipe(
+        'Op1stDisp32_abcd', Store, size=6, ins=(ABCD, GPR), outs=())
+
+# PP WW /r register-indirect store with no offset.
+Mp1st = EncRecipe(
+        'Mp1st', Store, size=3, ins=(GPR, GPR), outs=(),
+        instp=IsEqual(Store.offset, 0))
+
+# PP XX /r register-indirect store with 8-bit offset.
+Mp1stDisp8 = EncRecipe(
+        'Mp1stDisp8', Store, size=4, ins=(GPR, GPR), outs=(),
+        instp=IsSignedInt(Store.offset, 8))
+
+# PP XX /r register-indirect store with 32-bit offset.
+Mp1stDisp32 = EncRecipe('Mp1stDisp32', Store, size=7, ins=(GPR, GPR), outs=())
+
+#
+# Load recipes
+#
+
+# XX /r load with no offset.
+Op1ld = EncRecipe(
+        'Op1ld', Load, size=2, ins=(GPR), outs=(GPR),
+        instp=IsEqual(Load.offset, 0))
+
+# XX /r load with 8-bit offset.
+Op1ldDisp8 = EncRecipe(
+        'Op1ldDisp8', Load, size=3, ins=(GPR), outs=(GPR),
+        instp=IsSignedInt(Load.offset, 8))
+
+# XX /r load with 32-bit offset.
+Op1ldDisp32 = EncRecipe(
+        'Op1ldDisp32', Load, size=6, ins=(GPR), outs=(GPR),
+        instp=IsSignedInt(Load.offset, 32))
+
+# 0F XX /r load with no offset.
+Op2ld = EncRecipe(
+        'Op2ld', Load, size=3, ins=(GPR), outs=(GPR),
+        instp=IsEqual(Load.offset, 0))
+
+# XX /r load with 8-bit offset.
+Op2ldDisp8 = EncRecipe(
+        'Op2ldDisp8', Load, size=4, ins=(GPR), outs=(GPR),
+        instp=IsSignedInt(Load.offset, 8))
+
+# XX /r load with 32-bit offset.
+Op2ldDisp32 = EncRecipe(
+        'Op2ldDisp32', Load, size=7, ins=(GPR), outs=(GPR),
+        instp=IsSignedInt(Load.offset, 32))

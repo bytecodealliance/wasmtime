@@ -11,8 +11,8 @@
 
 /// Check that `x` is the same as `y`.
 #[allow(dead_code)]
-pub fn is_equal<T: Eq + Copy>(x: T, y: T) -> bool {
-    x == y
+pub fn is_equal<T: Eq + Copy, O: Into<T> + Copy>(x: T, y: O) -> bool {
+    x == y.into()
 }
 
 /// Check that `x` can be represented as a `wd`-bit signed integer with `sc` low zero bits.
