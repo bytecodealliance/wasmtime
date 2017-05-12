@@ -3,8 +3,8 @@ Intel Encoding recipes.
 """
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
-# from cdsl.predicates import IsSignedInt
-from base.formats import Binary
+from cdsl.predicates import IsSignedInt
+from base.formats import Binary, BinaryImm
 from .registers import GPR
 
 # Opcode representation.
@@ -68,3 +68,13 @@ Op1rr = EncRecipe('Op1rr', Binary, size=2, ins=(GPR, GPR), outs=0)
 
 # XX /n with one arg in %rcx, for shifts.
 Op1rc = EncRecipe('Op1rc', Binary, size=2, ins=(GPR, GPR.rcx), outs=0)
+
+# XX /n ib with 8-bit immediate sign-extended.
+Op1rib = EncRecipe(
+        'Op1rib', BinaryImm, size=3, ins=GPR, outs=0,
+        instp=IsSignedInt(BinaryImm.imm, 8))
+
+# XX /n id with 32-bit immediate sign-extended.
+Op1rid = EncRecipe(
+        'Op1rid', BinaryImm, size=6, ins=GPR, outs=0,
+        instp=IsSignedInt(BinaryImm.imm, 32))

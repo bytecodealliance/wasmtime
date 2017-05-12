@@ -18,21 +18,79 @@ ebb0:
     [-,%rcx]             v10 = iadd v1, v2       ; bin: 01 f1
     ; asm: addl %ecx, %esi
     [-,%rsi]             v11 = iadd v2, v1       ; bin: 01 ce
+    ; asm: subl %esi, %ecx
+    [-,%rcx]             v12 = isub v1, v2       ; bin: 29 f1
+    ; asm: subl %ecx, %esi
+    [-,%rsi]             v13 = isub v2, v1       ; bin: 29 ce
+
+    ; asm: andl %esi, %ecx
+    [-,%rcx]             v14 = band v1, v2       ; bin: 21 f1
+    ; asm: andl %ecx, %esi
+    [-,%rsi]             v15 = band v2, v1       ; bin: 21 ce
+    ; asm: orl %esi, %ecx
+    [-,%rcx]             v16 = bor v1, v2        ; bin: 09 f1
+    ; asm: orl %ecx, %esi
+    [-,%rsi]             v17 = bor v2, v1        ; bin: 09 ce
+    ; asm: xorl %esi, %ecx
+    [-,%rcx]             v18 = bxor v1, v2       ; bin: 31 f1
+    ; asm: xorl %ecx, %esi
+    [-,%rsi]             v19 = bxor v2, v1       ; bin: 31 ce
 
     ; Dynamic shifts take the shift amount in %rcx.
 
     ; asm: shll %cl, %esi
-    [-,%rsi]             v12 = ishl v2, v1       ; bin: d3 e6
+    [-,%rsi]             v20 = ishl v2, v1       ; bin: d3 e6
     ; asm: shll %cl, %ecx
-    [-,%rcx]             v13 = ishl v1, v1       ; bin: d3 e1
+    [-,%rcx]             v21 = ishl v1, v1       ; bin: d3 e1
     ; asm: shrl %cl, %esi
-    [-,%rsi]             v14 = ushr v2, v1       ; bin: d3 ee
+    [-,%rsi]             v22 = ushr v2, v1       ; bin: d3 ee
     ; asm: shrl %cl, %ecx
-    [-,%rcx]             v15 = ushr v1, v1       ; bin: d3 e9
+    [-,%rcx]             v23 = ushr v1, v1       ; bin: d3 e9
     ; asm: sarl %cl, %esi
-    [-,%rsi]             v16 = sshr v2, v1       ; bin: d3 fe
+    [-,%rsi]             v24 = sshr v2, v1       ; bin: d3 fe
     ; asm: sarl %cl, %ecx
-    [-,%rcx]             v17 = sshr v1, v1       ; bin: d3 f9
+    [-,%rcx]             v25 = sshr v1, v1       ; bin: d3 f9
+
+    ; Integer Register - Immediate 8-bit operations.
+    ; The 8-bit immediate is sign-extended.
+
+    ; asm: addl $-128, %ecx
+    [-,%rcx]             v30 = iadd_imm v1, -128 ; bin: 83 c1 80
+    ; asm: addl $10, %esi
+    [-,%rsi]             v31 = iadd_imm v2, 10   ; bin: 83 c6 0a
+
+    ; asm: andl $-128, %ecx
+    [-,%rcx]             v32 = band_imm v1, -128 ; bin: 83 e1 80
+    ; asm: andl $10, %esi
+    [-,%rsi]             v33 = band_imm v2, 10   ; bin: 83 e6 0a
+    ; asm: orl $-128, %ecx
+    [-,%rcx]             v34 = bor_imm v1, -128  ; bin: 83 c9 80
+    ; asm: orl $10, %esi
+    [-,%rsi]             v35 = bor_imm v2, 10    ; bin: 83 ce 0a
+    ; asm: xorl $-128, %ecx
+    [-,%rcx]             v36 = bxor_imm v1, -128 ; bin: 83 f1 80
+    ; asm: xorl $10, %esi
+    [-,%rsi]             v37 = bxor_imm v2, 10   ; bin: 83 f6 0a
+
+    ; Integer Register - Immediate 32-bit operations.
+
+    ; asm: addl $-128000, %ecx
+    [-,%rcx]             v40 = iadd_imm v1, -128000 ; bin: 81 c1 fffe0c00
+    ; asm: addl $1000000, %esi
+    [-,%rsi]             v41 = iadd_imm v2, 1000000 ; bin: 81 c6 000f4240
+
+    ; asm: andl $-128000, %ecx
+    [-,%rcx]             v42 = band_imm v1, -128000 ; bin: 81 e1 fffe0c00
+    ; asm: andl $1000000, %esi
+    [-,%rsi]             v43 = band_imm v2, 1000000 ; bin: 81 e6 000f4240
+    ; asm: orl $-128000, %ecx
+    [-,%rcx]             v44 = bor_imm v1, -128000  ; bin: 81 c9 fffe0c00
+    ; asm: orl $1000000, %esi
+    [-,%rsi]             v45 = bor_imm v2, 1000000  ; bin: 81 ce 000f4240
+    ; asm: xorl $-128000, %ecx
+    [-,%rcx]             v46 = bxor_imm v1, -128000 ; bin: 81 f1 fffe0c00
+    ; asm: xorl $1000000, %esi
+    [-,%rsi]             v47 = bxor_imm v2, 1000000 ; bin: 81 f6 000f4240
 
     return
 }
