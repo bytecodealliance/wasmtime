@@ -19,13 +19,15 @@ def gen_regbank(regbank, fmt):
     Emit a static data definition for regbank.
     """
     with fmt.indented('RegBank {', '},'):
-        fmt.line('name: "{}",'.format(regbank.name))
-        fmt.line('first_unit: {},'.format(regbank.first_unit))
-        fmt.line('units: {},'.format(regbank.units))
-        fmt.line(
-                'names: &[{}],'
-                .format(', '.join('"{}"'.format(n) for n in regbank.names)))
-        fmt.line('prefix: "{}",'.format(regbank.prefix))
+        fmt.format('name: "{}",', regbank.name)
+        fmt.format('first_unit: {},', regbank.first_unit)
+        fmt.format('units: {},', regbank.units)
+        fmt.format(
+                'names: &[{}],',
+                ', '.join('"{}"'.format(n) for n in regbank.names))
+        fmt.format('prefix: "{}",', regbank.prefix)
+        fmt.format('first_toprc: {},', regbank.toprcs[0].index)
+        fmt.format('num_toprcs: {},', len(regbank.toprcs))
 
 
 def gen_regclass(rc, fmt):
@@ -38,6 +40,7 @@ def gen_regclass(rc, fmt):
         fmt.format('index: {},', rc.index)
         fmt.format('width: {},', rc.width)
         fmt.format('bank: {},', rc.bank.index)
+        fmt.format('toprc: {},', rc.toprc.index)
         fmt.format('first: {},', rc.bank.first_unit + rc.start)
         fmt.format('subclasses: 0x{:x},', rc.subclass_mask())
         mask = ', '.join('0x{:08x}'.format(x) for x in rc.mask())
@@ -52,24 +55,23 @@ def gen_isa(isa, fmt):
     if not isa.regbanks:
         print('cargo:warning={} has no register banks'.format(isa.name))
 
-    rcs = list()  # type: List[RegClass]
     with fmt.indented('pub static INFO: RegInfo = RegInfo {', '};'):
         # Bank descriptors.
         with fmt.indented('banks: &[', '],'):
             for regbank in isa.regbanks:
                 gen_regbank(regbank, fmt)
-                rcs += regbank.classes
         fmt.line('classes: &CLASSES,')
 
     # Register class descriptors.
     with fmt.indented(
-            'const CLASSES: [RegClassData; {}] = ['.format(len(rcs)), '];'):
-        for idx, rc in enumerate(rcs):
+            'const CLASSES: [RegClassData; {}] = ['
+            .format(len(isa.regclasses)), '];'):
+        for idx, rc in enumerate(isa.regclasses):
             assert idx == rc.index
             gen_regclass(rc, fmt)
 
     # Emit constants referencing the register classes.
-    for rc in rcs:
+    for rc in isa.regclasses:
         fmt.line('#[allow(dead_code)]')
         fmt.line(
                 'pub const {}: RegClass = &CLASSES[{}];'

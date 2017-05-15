@@ -42,6 +42,7 @@ class TargetISA(object):
         self.instruction_groups = instruction_groups
         self.cpumodes = list()  # type: List[CPUMode]
         self.regbanks = list()  # type: List[RegBank]
+        self.regclasses = list()  # type: List[RegClass]
 
     def finish(self):
         # type: () -> TargetISA
@@ -109,11 +110,23 @@ class TargetISA(object):
 
         Every register class needs a unique index, and the classes need to be
         topologically ordered.
+
+        We also want all the top-level register classes to be first.
         """
-        rc_index = 0
+        # Compute subclasses and top-level classes in each bank.
+        # Collect the top-level classes so they get numbered consecutively.
         for bank in self.regbanks:
-            bank.finish_regclasses(rc_index)
-            rc_index += len(bank.classes)
+            bank.finish_regclasses()
+            self.regclasses.extend(bank.toprcs)
+
+        # Collect all of the non-top-level register classes.
+        # They are numbered strictly after the top-level classes.
+        for bank in self.regbanks:
+            self.regclasses.extend(
+                    rc for rc in bank.classes if not rc.is_toprc())
+
+        for idx, rc in enumerate(self.regclasses):
+            rc.index = idx
 
 
 class CPUMode(object):

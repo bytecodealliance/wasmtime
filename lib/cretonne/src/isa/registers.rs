@@ -42,6 +42,15 @@ pub struct RegBank {
     /// The remaining register units will be named this prefix followed by their decimal offset in
     /// the bank. So with a prefix `r`, registers will be named `r8`, `r9`, ...
     pub prefix: &'static str,
+
+    /// Index of the first top-level register class in this bank.
+    pub first_toprc: usize,
+
+    /// Number of top-level register classes in this bank.
+    ///
+    /// The top-level register classes in a bank are guaranteed to be numbered sequentially from
+    /// `first_toprc`, and all top-level register classes across banks come before any sub-classes.
+    pub num_toprcs: usize,
 }
 
 impl RegBank {
@@ -110,6 +119,9 @@ pub struct RegClassData {
 
     /// Index of the register bank this class belongs to.
     pub bank: u8,
+
+    /// Index of the top-level register class contains this one.
+    pub toprc: u8,
 
     /// The first register unit in this class.
     pub first: RegUnit,

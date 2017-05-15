@@ -75,6 +75,8 @@ class RegBank(object):
         self.prefix = prefix
         self.names = names
         self.classes = list()  # type: List[RegClass]
+        self.toprcs = list()  # type: List[RegClass]
+        self.first_toprc_index = None  # type: int
 
         assert len(names) <= units
 
@@ -95,11 +97,10 @@ class RegBank(object):
         return ('RegBank({}, units={}, first_unit={})'
                 .format(self.name, self.units, self.first_unit))
 
-    def finish_regclasses(self, first_index):
-        # type: (int) -> None
+    def finish_regclasses(self):
+        # type: () -> None
         """
-        Assign indexes to the register classes in this bank, starting from
-        `first_index`.
+        Compute subclasses and the top-level register class.
 
         Verify that the set of register classes satisfies:
 
@@ -115,13 +116,9 @@ class RegBank(object):
         """
         cmap = dict()  # type: Dict[RCTup, RegClass]
 
-        for idx, rc in enumerate(self.classes):
+        for rc in self.classes:
             # All register classes must be given a name.
             assert rc.name, "Anonymous register class found"
-
-            # Assign a unique index.
-            assert rc.index is None
-            rc.index = idx + first_index
 
             # Check for duplicates.
             tup = rc.rctup()
@@ -133,6 +130,7 @@ class RegBank(object):
 
         # Check intersections and topological order.
         for idx, rc1 in enumerate(self.classes):
+            rc1.toprc = rc1
             for rc2 in self.classes[0:idx]:
                 itup = rc1.intersect(rc2)
                 if itup is None:
@@ -151,6 +149,10 @@ class RegBank(object):
                     # The intersection of rc1 and rc2 is rc1, so it must be a
                     # sub-class.
                     rc2.subclasses.append(rc1)
+                    rc1.toprc = rc2.toprc
+
+            if rc1.is_toprc():
+                self.toprcs.append(rc1)
 
     def unit_by_name(self, name):
         # type: (str) -> int
@@ -192,6 +194,7 @@ class RegClass(object):
 
         # This is computed later in `finish_regclasses()`.
         self.subclasses = list()  # type: List[RegClass]
+        self.toprc = None  # type: RegClass
 
         assert width > 0
         assert start >= 0 and start < bank.units
@@ -205,6 +208,16 @@ class RegClass(object):
     def __str__(self):
         # type: () -> str
         return self.name
+
+    def is_toprc(self):
+        # type: () -> bool
+        """
+        Is this a top-level register class?
+
+        A top-level register class has no sub-classes. This can only be
+        answered aster running `finish_regclasses()`.
+        """
+        return self.toprc is self
 
     def rctup(self):
         # type: () -> RCTup
