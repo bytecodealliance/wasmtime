@@ -207,9 +207,7 @@ impl TestRunner {
         }
 
         // Check for any asynchronous replies without blocking.
-        while let Some(reply) = self.threads
-                  .as_mut()
-                  .and_then(ConcurrentRunner::try_get) {
+        while let Some(reply) = self.threads.as_mut().and_then(ConcurrentRunner::try_get) {
             self.handle_reply(reply);
         }
     }

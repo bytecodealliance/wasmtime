@@ -416,11 +416,9 @@ mod tests {
                    Ok(true));
         assert_eq!(b.directive("regex: X = tommy").map_err(e2s),
                    Err("expected '=' after variable 'X' in regex: X = tommy".to_string()));
-        assert_eq!(b.directive("[arm]not:    patt $x $(y) here")
-                       .map_err(e2s),
+        assert_eq!(b.directive("[arm]not:    patt $x $(y) here").map_err(e2s),
                    Ok(true));
-        assert_eq!(b.directive("[x86]sameln: $x $(y=[^]]*) there")
-                       .map_err(e2s),
+        assert_eq!(b.directive("[x86]sameln: $x $(y=[^]]*) there").map_err(e2s),
                    Ok(true));
         // Windows line ending sneaking in.
         assert_eq!(b.directive("regex: Y=foo\r").map_err(e2s), Ok(true));

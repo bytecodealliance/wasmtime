@@ -100,10 +100,10 @@ mod tests {
         divs.regmove(v1, 10, 12);
         assert_eq!(divs.diversion(v1),
                    Some(&Diversion {
-                             value: v1,
-                             from: 10,
-                             to: 12,
-                         }));
+                            value: v1,
+                            from: 10,
+                            to: 12,
+                        }));
         assert_eq!(divs.diversion(v2), None);
 
         divs.regmove(v1, 12, 11);

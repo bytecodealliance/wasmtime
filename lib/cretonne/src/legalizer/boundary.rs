@@ -251,9 +251,7 @@ fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
             assert!(!ty.is_int());
             let abi_ty = Type::int(ty.bits()).expect("Invalid type for conversion");
             let arg = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
-            dfg.ins(pos)
-                .with_results([into_result])
-                .bitcast(ty, arg)
+            dfg.ins(pos).with_results([into_result]).bitcast(ty, arg)
         }
         // ABI argument is a sign-extended version of the value we want.
         ValueConversion::Sext(abi_ty) => {
@@ -261,18 +259,14 @@ fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
             // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
             // We could insert an `assert_sreduce` which would fold with a following `sextend` of
             // this value.
-            dfg.ins(pos)
-                .with_results([into_result])
-                .ireduce(ty, arg)
+            dfg.ins(pos).with_results([into_result]).ireduce(ty, arg)
         }
         ValueConversion::Uext(abi_ty) => {
             let arg = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
             // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
             // We could insert an `assert_ureduce` which would fold with a following `uextend` of
             // this value.
-            dfg.ins(pos)
-                .with_results([into_result])
-                .ireduce(ty, arg)
+            dfg.ins(pos).with_results([into_result]).ireduce(ty, arg)
         }
     }
 }

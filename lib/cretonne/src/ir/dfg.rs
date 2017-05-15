@@ -316,37 +316,25 @@ impl DataFlowGraph {
 
     /// Get the fixed value arguments on `inst` as a slice.
     pub fn inst_fixed_args(&self, inst: Inst) -> &[Value] {
-        let fixed_args = self[inst]
-            .opcode()
-            .constraints()
-            .fixed_value_arguments();
+        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
         &self.inst_args(inst)[..fixed_args]
     }
 
     /// Get the fixed value arguments on `inst` as a mutable slice.
     pub fn inst_fixed_args_mut(&mut self, inst: Inst) -> &mut [Value] {
-        let fixed_args = self[inst]
-            .opcode()
-            .constraints()
-            .fixed_value_arguments();
+        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
         &mut self.inst_args_mut(inst)[..fixed_args]
     }
 
     /// Get the variable value arguments on `inst` as a slice.
     pub fn inst_variable_args(&self, inst: Inst) -> &[Value] {
-        let fixed_args = self[inst]
-            .opcode()
-            .constraints()
-            .fixed_value_arguments();
+        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
         &self.inst_args(inst)[fixed_args..]
     }
 
     /// Get the variable value arguments on `inst` as a mutable slice.
     pub fn inst_variable_args_mut(&mut self, inst: Inst) -> &mut [Value] {
-        let fixed_args = self[inst]
-            .opcode()
-            .constraints()
-            .fixed_value_arguments();
+        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
         &mut self.inst_args_mut(inst)[fixed_args..]
     }
 

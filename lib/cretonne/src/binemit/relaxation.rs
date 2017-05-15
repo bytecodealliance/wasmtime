@@ -97,9 +97,7 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) {
 /// existing `fallthrough` instructions are correct.
 fn fallthroughs(func: &mut Function) {
     for (ebb, succ) in func.layout.ebbs().adjacent_pairs() {
-        let term = func.layout
-            .last_inst(ebb)
-            .expect("EBB has no terminator.");
+        let term = func.layout.last_inst(ebb).expect("EBB has no terminator.");
         if let InstructionData::Jump {
                    ref mut opcode,
                    destination,

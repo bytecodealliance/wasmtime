@@ -29,12 +29,7 @@ use sourcemap::{SourceMap, MutableSourceMap};
 ///
 /// Any test commands or ISA declarations are ignored.
 pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
-    parse_test(text).map(|file| {
-                             file.functions
-                                 .into_iter()
-                                 .map(|(func, _)| func)
-                                 .collect()
-                         })
+    parse_test(text).map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
 }
 
 /// Parse the entire `text` as a test case file.
@@ -753,9 +748,7 @@ impl<'a> Parser<'a> {
             sig.return_types = self.parse_argument_list(unique_isa)?;
         }
 
-        if sig.argument_types
-               .iter()
-               .all(|a| a.location.is_assigned()) {
+        if sig.argument_types.iter().all(|a| a.location.is_assigned()) {
             sig.compute_argument_bytes();
         }
 
@@ -1319,48 +1312,50 @@ impl<'a> Parser<'a> {
                      inst_data: &InstructionData)
                      -> Result<Type> {
         let constraints = opcode.constraints();
-        let ctrl_type =
-            match explicit_ctrl_type {
-                Some(t) => t,
-                None => {
-                    if constraints.use_typevar_operand() {
-                        // This is an opcode that supports type inference, AND there was no
-                        // explicit type specified. Look up `ctrl_value` to see if it was defined
-                        // already.
-                        // TBD: If it is defined in another block, the type should have been
-                        // specified explicitly. It is unfortunate that the correctness of IL
-                        // depends on the layout of the blocks.
-                        let ctrl_src_value = inst_data
-                            .typevar_operand(&ctx.function.dfg.value_lists)
-                            .expect("Constraints <-> Format inconsistency");
-                        ctx.function.dfg.value_type(match ctx.map.get_value(ctrl_src_value) {
-                        Some(v) => v,
-                        None => {
-                            if let Some(v) = ctx.aliases
-                                .get(&ctrl_src_value)
-                                .and_then(|&(aliased, _)| ctx.map.get_value(aliased))
-                            {
-                                v
-                            } else {
-                                return err!(self.loc,
-                                            "cannot determine type of operand {}",
-                                            ctrl_src_value);
-                            }
-                        }
-                    })
-                    } else if constraints.is_polymorphic() {
-                        // This opcode does not support type inference, so the explicit type
-                        // variable is required.
-                        return err!(self.loc,
-                                    "type variable required for polymorphic opcode, e.g. '{}.{}'",
-                                    opcode,
-                                    constraints.ctrl_typeset().unwrap().example());
-                    } else {
-                        // This is a non-polymorphic opcode. No typevar needed.
-                        VOID
-                    }
+        let ctrl_type = match explicit_ctrl_type {
+            Some(t) => t,
+            None => {
+                if constraints.use_typevar_operand() {
+                    // This is an opcode that supports type inference, AND there was no
+                    // explicit type specified. Look up `ctrl_value` to see if it was defined
+                    // already.
+                    // TBD: If it is defined in another block, the type should have been
+                    // specified explicitly. It is unfortunate that the correctness of IL
+                    // depends on the layout of the blocks.
+                    let ctrl_src_value = inst_data
+                        .typevar_operand(&ctx.function.dfg.value_lists)
+                        .expect("Constraints <-> Format inconsistency");
+                    ctx.function
+                        .dfg
+                        .value_type(match ctx.map.get_value(ctrl_src_value) {
+                                        Some(v) => v,
+                                        None => {
+                                            if let Some(v) = ctx.aliases
+                                                   .get(&ctrl_src_value)
+                                                   .and_then(|&(aliased, _)| {
+                                                                 ctx.map.get_value(aliased)
+                                                             }) {
+                                                v
+                                            } else {
+                                                return err!(self.loc,
+                                                            "cannot determine type of operand {}",
+                                                            ctrl_src_value);
+                                            }
+                                        }
+                                    })
+                } else if constraints.is_polymorphic() {
+                    // This opcode does not support type inference, so the explicit type
+                    // variable is required.
+                    return err!(self.loc,
+                                "type variable required for polymorphic opcode, e.g. '{}.{}'",
+                                opcode,
+                                constraints.ctrl_typeset().unwrap().example());
+                } else {
+                    // This is a non-polymorphic opcode. No typevar needed.
+                    VOID
                 }
-            };
+            }
+        };
 
         // Verify that `ctrl_type` is valid for the controlling type variable. We don't want to
         // attempt deriving types from an incorrect basis.
@@ -1616,8 +1611,7 @@ impl<'a> Parser<'a> {
             InstructionFormat::BranchTable => {
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let table = self.match_jt()
-                    .and_then(|num| ctx.get_jt(num, &self.loc))?;
+                let table = self.match_jt().and_then(|num| ctx.get_jt(num, &self.loc))?;
                 InstructionData::BranchTable { opcode, arg, table }
             }
             InstructionFormat::StackLoad => {

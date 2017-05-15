@@ -130,8 +130,6 @@ impl EncInfo {
     ///
     /// This will never return `None` for a legal branch encoding.
     pub fn branch_range(&self, enc: Encoding) -> Option<BranchRange> {
-        self.sizing
-            .get(enc.recipe())
-            .and_then(|s| s.branch_range)
+        self.sizing.get(enc.recipe()).and_then(|s| s.branch_range)
     }
 }

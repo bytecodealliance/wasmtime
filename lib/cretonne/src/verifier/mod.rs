@@ -234,20 +234,20 @@ impl<'a> Verifier<'a> {
                 self.verify_value_list(inst, args)?;
             }
             &Jump {
-                 destination,
-                 ref args,
-                 ..
-             } |
+                destination,
+                ref args,
+                ..
+            } |
             &Branch {
-                 destination,
-                 ref args,
-                 ..
-             } |
+                destination,
+                ref args,
+                ..
+            } |
             &BranchIcmp {
-                 destination,
-                 ref args,
-                 ..
-             } => {
+                destination,
+                ref args,
+                ..
+            } => {
                 self.verify_ebb(inst, destination)?;
                 self.verify_value_list(inst, args)?;
             }
@@ -381,8 +381,7 @@ impl<'a> Verifier<'a> {
                                 ebb);
                 }
                 // The defining EBB dominates the instruction using this value.
-                if !self.domtree
-                        .ebb_dominates(ebb, loc_inst, &self.func.layout) {
+                if !self.domtree.ebb_dominates(ebb, loc_inst, &self.func.layout) {
                     return err!(loc_inst, "uses value arg from non-dominating {}", ebb);
                 }
             }
@@ -639,10 +638,7 @@ impl<'a> Verifier<'a> {
                 return err!(ebb, "cfg had unexpected successor(s) {:?}", excess_succs);
             }
 
-            expected_preds.extend(self.cfg
-                                      .get_predecessors(ebb)
-                                      .iter()
-                                      .map(|&(_, inst)| inst));
+            expected_preds.extend(self.cfg.get_predecessors(ebb).iter().map(|&(_, inst)| inst));
             got_preds.extend(cfg.get_predecessors(ebb).iter().map(|&(_, inst)| inst));
 
             let missing_preds: Vec<Inst> = expected_preds.difference(&got_preds).cloned().collect();

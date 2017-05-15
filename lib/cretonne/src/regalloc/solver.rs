@@ -414,8 +414,7 @@ impl Solver {
         if self.inputs_done {
             self.regs_out.free(constraint, from);
         }
-        self.vars
-            .push(Variable::new_live(value, constraint, from));
+        self.vars.push(Variable::new_live(value, constraint, from));
     }
 
     /// Check for conflicts between fixed input assignments and existing live values.

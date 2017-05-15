@@ -132,8 +132,7 @@ impl<'c, 'fc, 'fd, Array> InstBuilderBase<'fd> for InsertReuseBuilder<'c, 'fc, '
         let inst = self.dfg.make_inst(data);
         // Make an `Interator<Item = Option<Value>>`.
         let ru = self.reuse.as_ref().iter().cloned();
-        self.dfg
-            .make_inst_results_reusing(inst, ctrl_typevar, ru);
+        self.dfg.make_inst_results_reusing(inst, ctrl_typevar, ru);
         self.pos.insert_inst(inst);
         (inst, self.dfg)
     }

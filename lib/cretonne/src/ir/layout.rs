@@ -467,8 +467,7 @@ impl Layout {
 
     /// Remove `inst` from the layout.
     pub fn remove_inst(&mut self, inst: Inst) {
-        let ebb = self.inst_ebb(inst)
-            .expect("Instruction already removed.");
+        let ebb = self.inst_ebb(inst).expect("Instruction already removed.");
         // Clear the `inst` node and extract links.
         let prev;
         let next;
