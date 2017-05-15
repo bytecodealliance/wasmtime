@@ -65,17 +65,9 @@ mod tests {
                        .adjacent_pairs()
                        .collect::<Vec<_>>(),
                    vec![(2, 3), (3, 4)]);
-        assert_eq!([3, 4]
-                       .iter()
-                       .cloned()
-                       .adjacent_pairs()
-                       .collect::<Vec<_>>(),
+        assert_eq!([3, 4].iter().cloned().adjacent_pairs().collect::<Vec<_>>(),
                    vec![(3, 4)]);
-        assert_eq!([4]
-                       .iter()
-                       .cloned()
-                       .adjacent_pairs()
-                       .collect::<Vec<_>>(),
+        assert_eq!([4].iter().cloned().adjacent_pairs().collect::<Vec<_>>(),
                    vec![]);
         assert_eq!([]
                        .iter()

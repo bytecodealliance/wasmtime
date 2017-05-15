@@ -88,8 +88,7 @@ impl DominatorTree {
         // Run a finger up the dominator tree from b until we see a.
         // Do nothing if b is unreachable.
         while rpo_a < self.nodes[ebb_b].rpo_number {
-            b = self.idom(ebb_b)
-                .expect("Shouldn't meet unreachable here.");
+            b = self.idom(ebb_b).expect("Shouldn't meet unreachable here.");
             ebb_b = layout.inst_ebb(b).expect("Dominator got removed.");
         }
 

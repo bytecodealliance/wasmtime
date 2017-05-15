@@ -296,7 +296,7 @@ impl<'a> Lexer<'a> {
         token(split_entity_name(text)
                   .and_then(|(prefix, number)| {
                                 Self::numbered_entity(prefix, number)
-                          .or_else(|| Self::value_type(text, prefix, number))
+                                    .or_else(|| Self::value_type(text, prefix, number))
                             })
                   .unwrap_or(Token::Identifier(text)),
               loc)
@@ -413,14 +413,14 @@ impl<'a> Lexer<'a> {
                        Some('%') => Some(self.scan_name()),
                        Some('#') => Some(self.scan_hex_sequence()),
                        Some(ch) if ch.is_whitespace() => {
-                self.next_ch();
-                continue;
-            }
+                           self.next_ch();
+                           continue;
+                       }
                        _ => {
-                // Skip invalid char, return error.
-                self.next_ch();
-                Some(error(Error::InvalidChar, loc))
-            }
+                           // Skip invalid char, return error.
+                           self.next_ch();
+                           Some(error(Error::InvalidChar, loc))
+                       }
                    };
         }
     }
