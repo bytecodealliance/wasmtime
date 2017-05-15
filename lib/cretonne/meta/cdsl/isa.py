@@ -119,6 +119,11 @@ class TargetISA(object):
             bank.finish_regclasses()
             self.regclasses.extend(bank.toprcs)
 
+        # The limit on the number of top-level register classes can be raised.
+        # This should be coordinated with the `MAX_TOPRCS` constant in
+        # `isa/registers.rs`.
+        assert len(self.regclasses) <= 4, "Too many top-level register classes"
+
         # Collect all of the non-top-level register classes.
         # They are numbered strictly after the top-level classes.
         for bank in self.regbanks:
@@ -127,6 +132,11 @@ class TargetISA(object):
 
         for idx, rc in enumerate(self.regclasses):
             rc.index = idx
+
+        # The limit on the number of register classes can be changed. It should
+        # be coordinated with the `RegClassMask` and `RegClassIndex` types in
+        # `isa/registers.rs`.
+        assert len(self.regclasses) <= 32, "Too many register classes"
 
 
 class CPUMode(object):
