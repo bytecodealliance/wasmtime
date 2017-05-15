@@ -108,6 +108,9 @@ pub struct RegClassData {
     /// How many register units to allocate per register.
     pub width: u8,
 
+    /// Index of the register bank this class belongs to.
+    pub bank: u8,
+
     /// The first register unit in this class.
     pub first: RegUnit,
 

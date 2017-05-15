@@ -34,13 +34,14 @@ def gen_regclass(rc, fmt):
     Emit a static data definition for a register class.
     """
     with fmt.indented('RegClassData {', '},'):
-        fmt.line('name: "{}",'.format(rc.name))
-        fmt.line('index: {},'.format(rc.index))
-        fmt.line('width: {},'.format(rc.width))
-        fmt.line('first: {},'.format(rc.bank.first_unit + rc.start))
-        fmt.line('subclasses: 0x{:x},'.format(rc.subclass_mask()))
+        fmt.format('name: "{}",', rc.name)
+        fmt.format('index: {},', rc.index)
+        fmt.format('width: {},', rc.width)
+        fmt.format('bank: {},', rc.bank.index)
+        fmt.format('first: {},', rc.bank.first_unit + rc.start)
+        fmt.format('subclasses: 0x{:x},', rc.subclass_mask())
         mask = ', '.join('0x{:08x}'.format(x) for x in rc.mask())
-        fmt.line('mask: [{}],'.format(mask))
+        fmt.format('mask: [{}],', mask)
 
 
 def gen_isa(isa, fmt):
