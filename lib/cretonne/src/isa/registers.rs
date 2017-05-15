@@ -20,6 +20,18 @@ pub type RegUnit = u16;
 /// This type should be coordinated with meta/cdsl/registers.py.
 pub type RegUnitMask = [u32; 3];
 
+/// A bit mask indexed by register classes.
+///
+/// The size of this type is determined by the ISA with the most register classes.
+///
+/// This type should be coordinated with meta/cdsl/isa.py.
+pub type RegClassMask = u32;
+
+/// Guaranteed maximum number of top-level register classes in any ISA.
+///
+/// This can be increased, but should be coordinated with meta/cdsl/isa.py.
+pub const MAX_TOPRCS: usize = 4;
+
 /// The register units in a target ISA are divided into disjoint register banks. Each bank covers a
 /// contiguous range of register units.
 ///
@@ -129,7 +141,7 @@ pub struct RegClassData {
     /// Bit-mask of sub-classes of this register class, including itself.
     ///
     /// Bits correspond to RC indexes.
-    pub subclasses: u32,
+    pub subclasses: RegClassMask,
 
     /// Mask of register units in the class. If `width > 1`, the mask only has a bit set for the
     /// first register unit in each allocatable register.
