@@ -87,6 +87,7 @@ class RegBank(object):
                 align = next_power_of_two(align)
             self.first_unit = (u + align - 1) & -align
 
+        self.index = len(isa.regbanks)
         isa.regbanks.append(self)
 
     def __repr__(self):
