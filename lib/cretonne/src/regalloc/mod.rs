@@ -11,6 +11,7 @@ pub mod coloring;
 mod affinity;
 mod context;
 mod diversion;
+mod pressure;
 mod solver;
 
 pub use self::allocatable_set::AllocatableSet;
