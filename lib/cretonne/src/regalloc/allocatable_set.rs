@@ -5,8 +5,9 @@
 //! "register unit" abstraction. Every register contains one or more register units. Registers that
 //! share a register unit can't be in use at the same time.
 
-use std::mem::size_of_val;
 use isa::registers::{RegUnit, RegUnitMask, RegClass};
+use std::iter::ExactSizeIterator;
+use std::mem::size_of_val;
 
 /// Set of registers available for allocation.
 #[derive(Clone)]
@@ -128,7 +129,14 @@ impl Iterator for RegSetIter {
         // All of `self.regs` is 0.
         None
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let bits = self.regs.iter().map(|&w| w.count_ones() as usize).sum();
+        (bits, Some(bits))
+    }
 }
+
+impl ExactSizeIterator for RegSetIter {}
 
 #[cfg(test)]
 mod tests {
@@ -162,6 +170,7 @@ mod tests {
         let mut regs = AllocatableSet::new();
 
         // `GPR` has units 28-36.
+        assert_eq!(regs.iter(GPR).len(), 8);
         assert_eq!(regs.iter(GPR).count(), 8);
         assert_eq!(regs.iter(DPR).collect::<Vec<_>>(), [28, 30, 33, 35]);
 
