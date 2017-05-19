@@ -344,3 +344,11 @@ sequences. Instead the test will fail.
 
 Value locations must be present if they are required to compute the binary
 bits. Missing value locations will cause the test to crash.
+
+`test simple-gvn`
+-----------------
+
+Test the simple GVN pass.
+
+The simple GVN pass is run on each function, and then results are run
+through filecheck.

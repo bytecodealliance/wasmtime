@@ -201,7 +201,7 @@ load = Instruction(
         This is a polymorphic instruction that can load any value type which
         has a memory representation.
         """,
-        ins=(Flags, p, Offset), outs=a)
+        ins=(Flags, p, Offset), outs=a, can_load=True)
 
 store = Instruction(
         'store', r"""
@@ -210,7 +210,7 @@ store = Instruction(
         This is a polymorphic instruction that can store any value type with a
         memory representation.
         """,
-        ins=(Flags, x, p, Offset))
+        ins=(Flags, x, p, Offset), can_store=True)
 
 iExt8 = TypeVar(
         'iExt8', 'An integer type with more than 8 bits',
@@ -224,7 +224,7 @@ uload8 = Instruction(
 
         This is equivalent to ``load.i8`` followed by ``uextend``.
         """,
-        ins=(Flags, p, Offset), outs=a)
+        ins=(Flags, p, Offset), outs=a, can_load=True)
 
 sload8 = Instruction(
         'sload8', r"""
@@ -232,7 +232,7 @@ sload8 = Instruction(
 
         This is equivalent to ``load.i8`` followed by ``uextend``.
         """,
-        ins=(Flags, p, Offset), outs=a)
+        ins=(Flags, p, Offset), outs=a, can_load=True)
 
 istore8 = Instruction(
         'istore8', r"""
@@ -240,7 +240,7 @@ istore8 = Instruction(
 
         This is equivalent to ``ireduce.i8`` followed by ``store.i8``.
         """,
-        ins=(Flags, x, p, Offset))
+        ins=(Flags, x, p, Offset), can_store=True)
 
 iExt16 = TypeVar(
         'iExt16', 'An integer type with more than 16 bits',
@@ -254,7 +254,7 @@ uload16 = Instruction(
 
         This is equivalent to ``load.i16`` followed by ``uextend``.
         """,
-        ins=(Flags, p, Offset), outs=a)
+        ins=(Flags, p, Offset), outs=a, can_load=True)
 
 sload16 = Instruction(
         'sload16', r"""
@@ -262,7 +262,7 @@ sload16 = Instruction(
 
         This is equivalent to ``load.i16`` followed by ``uextend``.
         """,
-        ins=(Flags, p, Offset), outs=a)
+        ins=(Flags, p, Offset), outs=a, can_load=True)
 
 istore16 = Instruction(
         'istore16', r"""
@@ -270,7 +270,7 @@ istore16 = Instruction(
 
         This is equivalent to ``ireduce.i16`` followed by ``store.i8``.
         """,
-        ins=(Flags, x, p, Offset))
+        ins=(Flags, x, p, Offset), can_store=True)
 
 iExt32 = TypeVar(
         'iExt32', 'An integer type with more than 32 bits',
@@ -284,7 +284,7 @@ uload32 = Instruction(
 
         This is equivalent to ``load.i32`` followed by ``uextend``.
         """,
-        ins=(Flags, p, Offset), outs=a)
+        ins=(Flags, p, Offset), outs=a, can_load=True)
 
 sload32 = Instruction(
         'sload32', r"""
@@ -292,7 +292,7 @@ sload32 = Instruction(
 
         This is equivalent to ``load.i32`` followed by ``uextend``.
         """,
-        ins=(Flags, p, Offset), outs=a)
+        ins=(Flags, p, Offset), outs=a, can_load=True)
 
 istore32 = Instruction(
         'istore32', r"""
@@ -300,7 +300,7 @@ istore32 = Instruction(
 
         This is equivalent to ``ireduce.i32`` followed by ``store.i8``.
         """,
-        ins=(Flags, x, p, Offset))
+        ins=(Flags, x, p, Offset), can_store=True)
 
 x = Operand('x', Mem, doc='Value to be stored')
 a = Operand('a', Mem, doc='Value loaded')
@@ -316,7 +316,7 @@ stack_load = Instruction(
         access cannot go out of bounds, i.e.
         :math:`sizeof(a) + Offset <= sizeof(SS)`.
         """,
-        ins=(SS, Offset), outs=a)
+        ins=(SS, Offset), outs=a, can_load=True)
 
 stack_store = Instruction(
         'stack_store', r"""
@@ -329,7 +329,7 @@ stack_store = Instruction(
         access cannot go out of bounds, i.e.
         :math:`sizeof(a) + Offset <= sizeof(SS)`.
         """,
-        ins=(x, SS, Offset))
+        ins=(x, SS, Offset), can_store=True)
 
 stack_addr = Instruction(
         'stack_addr', r"""
@@ -357,7 +357,7 @@ heap_load = Instruction(
 
         Trap if the heap access would be out of bounds.
         """,
-        ins=(p, Offset), outs=a)
+        ins=(p, Offset), outs=a, can_load=True)
 
 heap_store = Instruction(
         'heap_store', r"""
@@ -365,7 +365,7 @@ heap_store = Instruction(
 
         Trap if the heap access would be out of bounds.
         """,
-        ins=(x, p, Offset))
+        ins=(x, p, Offset), can_store=True)
 
 heap_addr = Instruction(
         'heap_addr', r"""

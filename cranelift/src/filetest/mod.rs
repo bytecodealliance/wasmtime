@@ -20,6 +20,7 @@ mod legalizer;
 mod regalloc;
 mod runner;
 mod runone;
+mod simple_gvn;
 mod verifier;
 
 /// The result of running the test in a file.
@@ -62,6 +63,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::Result<Box<subtest::SubTest>> {
         "legalizer" => legalizer::subtest(parsed),
         "regalloc" => regalloc::subtest(parsed),
         "binemit" => binemit::subtest(parsed),
+        "simple-gvn" => simple_gvn::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }

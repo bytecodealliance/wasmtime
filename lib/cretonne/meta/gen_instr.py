@@ -228,7 +228,7 @@ def gen_opcodes(groups, fmt):
     fmt.doc_comment('An instruction opcode.')
     fmt.doc_comment('')
     fmt.doc_comment('All instructions from all supported ISAs are present.')
-    fmt.line('#[derive(Copy, Clone, PartialEq, Eq, Debug)]')
+    fmt.line('#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]')
     instrs = []
 
     # We explicitly set the discriminant of the first variant to 1, which
