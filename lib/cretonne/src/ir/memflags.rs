@@ -14,7 +14,7 @@ const NAMES: [&str; 2] = ["notrap", "aligned"];
 /// Each of these flags introduce a limited form of undefined behavior. The flags each enable
 /// certain optimizations that need to make additional assumptions. Generally, the semantics of a
 /// program does not change when a flag is removed, but adding a flag will.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct MemFlags {
     bits: u8,
 }

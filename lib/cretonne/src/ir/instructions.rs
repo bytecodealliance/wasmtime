@@ -98,7 +98,7 @@ impl FromStr for Opcode {
 /// value should have its `ty` field set to `VOID`. The size of `InstructionData` should be kept at
 /// 16 bytes on 64-bit architectures. If more space is needed to represent an instruction, use a
 /// `Box<AuxData>` to store the additional information out of line.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[allow(missing_docs)]
 pub enum InstructionData {
     Nullary { opcode: Opcode },

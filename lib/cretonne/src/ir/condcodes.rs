@@ -27,7 +27,7 @@ pub trait CondCode: Copy {
 /// This condition code is used by the `icmp` instruction to compare integer values. There are
 /// separate codes for comparing the integers as signed or unsigned numbers where it makes a
 /// difference.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum IntCC {
     /// `==`.
     Equal,
@@ -139,7 +139,7 @@ impl FromStr for IntCC {
 /// The condition codes described here are used to produce a single boolean value from the
 /// comparison. The 14 condition codes here cover every possible combination of the relation above
 /// except the impossible `!UN & !EQ & !LT & !GT` and the always true `UN | EQ | LT | GT`.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum FloatCC {
     /// EQ | LT | GT
     Ordered,

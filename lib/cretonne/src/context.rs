@@ -17,6 +17,7 @@ use legalize_function;
 use regalloc;
 use result::CtonResult;
 use verifier;
+use simple_gvn::do_simple_gvn;
 
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
@@ -51,16 +52,16 @@ impl Context {
     ///
     /// Also check that the dominator tree and control flow graph are consistent with the function.
     ///
-    /// The `TargetIsa` argument is currently unused, but the verifier will soon be able to also
+    /// The `isa` argument is currently unused, but the verifier will soon be able to also
     /// check ISA-dependent constraints.
-    pub fn verify<'a, ISA: Into<Option<&'a TargetIsa>>>(&self, isa: ISA) -> verifier::Result {
-        verifier::verify_context(&self.func, &self.cfg, &self.domtree, isa.into())
+    pub fn verify<'a>(&self, isa: Option<&TargetIsa>) -> verifier::Result {
+        verifier::verify_context(&self.func, &self.cfg, &self.domtree, isa)
     }
 
     /// Run the verifier only if the `enable_verifier` setting is true.
     pub fn verify_if(&self, isa: &TargetIsa) -> CtonResult {
         if isa.flags().enable_verifier() {
-            self.verify(isa).map_err(Into::into)
+            self.verify(Some(isa)).map_err(Into::into)
         } else {
             Ok(())
         }
@@ -76,6 +77,14 @@ impl Context {
     pub fn flowgraph(&mut self) {
         self.cfg.compute(&self.func);
         self.domtree.compute(&self.func, &self.cfg);
+    }
+
+    /// Perform simple GVN on the function.
+    pub fn simple_gvn(&mut self) -> CtonResult {
+        do_simple_gvn(&mut self.func, &mut self.cfg);
+        // TODO: Factor things such that we can get a Flags and test
+        // enable_verifier().
+        self.verify(None).map_err(Into::into)
     }
 
     /// Run the register allocator.

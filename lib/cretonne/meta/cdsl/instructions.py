@@ -85,6 +85,8 @@ class Instruction(object):
     :param is_call: This is a call instruction.
     :param is_return: This is a return instruction.
     :param can_trap: This instruction can trap.
+    :param can_load: This instruction can load from memory.
+    :param can_store: This instruction can store to memory.
     """
 
     # Boolean instruction attributes that can be passed as keyword arguments to
@@ -95,6 +97,8 @@ class Instruction(object):
             'is_branch': 'True for all branch or jump instructions.',
             'is_call': 'Is this a call instruction?',
             'is_return': 'Is this a return instruction?',
+            'can_load': 'Can this instruction read from memory?',
+            'can_store': 'Can this instruction write to memory?',
             'can_trap': 'Can this instruction cause a trap?',
             }
 

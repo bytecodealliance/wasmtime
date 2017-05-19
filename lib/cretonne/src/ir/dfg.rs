@@ -243,6 +243,46 @@ impl DataFlowGraph {
         self.values[dest] = ValueData::Alias { ty, original };
     }
 
+    /// Replace the results of one instruction with aliases to the results of another.
+    ///
+    /// Change all the results of `dest_inst` to behave as aliases of
+    /// corresponding results of `src_inst`, as if calling change_to_alias for
+    /// each.
+    ///
+    /// After calling this instruction, `dest_inst` will have had its results
+    /// cleared, so it likely needs to be removed from the graph.
+    ///
+    pub fn replace_with_aliases(&mut self, dest_inst: Inst, src_inst: Inst) {
+        debug_assert_ne!(dest_inst,
+                         src_inst,
+                         "Replacing {} with itself would create a loop",
+                         dest_inst);
+        debug_assert_eq!(self.results[dest_inst].len(&self.value_lists),
+                         self.results[src_inst].len(&self.value_lists),
+                         "Replacing {} with {} would produce a different number of results.",
+                         dest_inst,
+                         src_inst);
+
+        for (&dest, &src) in self.results[dest_inst]
+                .as_slice(&self.value_lists)
+                .iter()
+                .zip(self.results[src_inst].as_slice(&self.value_lists)) {
+            let original = src;
+            let ty = self.value_type(original);
+            assert_eq!(self.value_type(dest),
+                       ty,
+                       "Aliasing {} to {} would change its type {} to {}",
+                       dest,
+                       src,
+                       self.value_type(dest),
+                       ty);
+
+            self.values[dest] = ValueData::Alias { ty, original };
+        }
+
+        self.clear_results(dest_inst);
+    }
+
     /// Create a new value alias.
     ///
     /// Note that this function should only be called by the parser.

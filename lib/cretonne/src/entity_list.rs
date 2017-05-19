@@ -46,6 +46,7 @@
 //! The index stored in an `EntityList` points to part 2, the list elements. The value 0 is
 //! reserved for the empty list which isn't allocated in the vector.
 
+use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::mem;
 
@@ -59,6 +60,10 @@ use entity_map::EntityRef;
 /// Entity lists can be cloned, but that operation should only be used as part of cloning the whole
 /// function they belong to. *Cloning an entity list does not allocate new memory for the clone*.
 /// It creates an alias of the same memory.
+///
+/// Entity lists can also be hashed and compared for equality, but those operations just panic if,
+/// they're ever actually called, because it's not possible to compare the contents of the list
+/// without the pool reference.
 #[derive(Clone, Debug)]
 pub struct EntityList<T: EntityRef> {
     index: u32,
@@ -74,6 +79,19 @@ impl<T: EntityRef> Default for EntityList<T> {
         }
     }
 }
+
+impl<T: EntityRef> Hash for EntityList<T> {
+    fn hash<H: Hasher>(&self, _: &mut H) {
+        panic!("hash called on EntityList");
+    }
+}
+
+impl<T: EntityRef> PartialEq for EntityList<T> {
+    fn eq(&self, _: &EntityList<T>) -> bool {
+        panic!("eq called on EntityList");
+    }
+}
+impl<T: EntityRef> Eq for EntityList<T> {}
 
 /// A memory pool for storing lists of `T`.
 #[derive(Clone)]
