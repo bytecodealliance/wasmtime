@@ -64,6 +64,14 @@ impl Affinity {
         }
     }
 
+    /// Is this the `Stack` affinity?
+    pub fn is_stack(self) -> bool {
+        match self {
+            Affinity::Stack => true,
+            _ => false,
+        }
+    }
+
     /// Merge an operand constraint into this affinity.
     ///
     /// Note that this does not guarantee that the register allocator will pick a register that
