@@ -12,6 +12,7 @@ mod affinity;
 mod context;
 mod diversion;
 mod pressure;
+mod reload;
 mod solver;
 
 pub use self::allocatable_set::AllocatableSet;
