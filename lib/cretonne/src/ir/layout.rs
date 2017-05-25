@@ -923,6 +923,18 @@ impl<'f> Cursor<'f> {
         inst
     }
 
+    /// Remove the instruction under the cursor.
+    ///
+    /// The cursor is left pointing at the position preceding the current instruction.
+    ///
+    /// Return the instruction that was removed.
+    pub fn remove_inst_and_step_back(&mut self) -> Inst {
+        let inst = self.current_inst().expect("No instruction to remove");
+        self.prev_inst();
+        self.layout.remove_inst(inst);
+        inst
+    }
+
     /// Insert an EBB at the current position and switch to it.
     ///
     /// As far as possible, this method behaves as if the EBB header were an instruction inserted
