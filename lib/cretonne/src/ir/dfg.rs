@@ -106,6 +106,23 @@ impl DataFlowGraph {
     }
 }
 
+/// Resolve value aliases.
+///
+/// Find the original SSA value that `value` aliases.
+fn resolve_aliases(values: &EntityMap<Value, ValueData>, value: Value) -> Value {
+    let mut v = value;
+
+    // Note that values may be empty here.
+    for _ in 0..1 + values.len() {
+        if let ValueData::Alias { original, .. } = values[v] {
+            v = original;
+        } else {
+            return v;
+        }
+    }
+    panic!("Value alias loop detected for {}", value);
+}
+
 /// Handling values.
 ///
 /// Values are either EBB arguments or instruction results.
@@ -176,17 +193,7 @@ impl DataFlowGraph {
     ///
     /// Find the original SSA value that `value` aliases.
     pub fn resolve_aliases(&self, value: Value) -> Value {
-        let mut v = value;
-
-        // Note that extended_values may be empty here.
-        for _ in 0..1 + self.values.len() {
-            if let ValueData::Alias { original, .. } = self.values[v] {
-                v = original;
-            } else {
-                return v;
-            }
-        }
-        panic!("Value alias loop detected for {}", value);
+        resolve_aliases(&self.values, value)
     }
 
     /// Resolve value copies.
@@ -214,6 +221,19 @@ impl DataFlowGraph {
             };
         }
         panic!("Copy loop detected for {}", value);
+    }
+
+    /// Resolve all aliases among inst's arguments.
+    ///
+    /// For each argument of inst which is defined by an alias, replace the
+    /// alias with the aliased value.
+    pub fn resolve_aliases_in_arguments(&mut self, inst: Inst) {
+        for arg in self.insts[inst].arguments_mut(&mut self.value_lists) {
+            let resolved = resolve_aliases(&self.values, *arg);
+            if resolved != *arg {
+                *arg = resolved;
+            }
+        }
     }
 
     /// Turn a value into an alias of another.

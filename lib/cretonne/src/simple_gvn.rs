@@ -28,6 +28,9 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
         while let Some(inst) = pos.next_inst() {
             let opcode = func.dfg[inst].opcode();
 
+            // Resolve aliases, particularly aliases we created earlier.
+            func.dfg.resolve_aliases_in_arguments(inst);
+
             if trivially_unsafe_for_gvn(opcode) {
                 continue;
             }
@@ -47,7 +50,7 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
                 Occupied(mut entry) => {
                     if domtree.dominates(*entry.get(), inst, &pos.layout) {
                         func.dfg.replace_with_aliases(inst, *entry.get());
-                        pos.remove_inst();
+                        pos.remove_inst_and_step_back();
                     } else {
                         // The prior instruction doesn't dominate inst, so it
                         // won't dominate any subsequent instructions we'll
