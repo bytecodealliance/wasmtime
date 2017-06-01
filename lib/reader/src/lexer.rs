@@ -87,8 +87,7 @@ fn trailing_digits(s: &str) -> usize {
     s.as_bytes()
         .iter()
         .rev()
-        .cloned()
-        .take_while(|&b| b'0' <= b && b <= b'9')
+        .take_while(|&&b| b'0' <= b && b <= b'9')
         .count()
 }
 
