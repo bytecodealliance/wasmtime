@@ -71,7 +71,7 @@ impl<K, V> EntityMap<K, V>
     pub fn keys(&self) -> Keys<K> {
         Keys {
             pos: 0,
-            len: self.elems.len(),
+            rev_pos: self.elems.len(),
             unused: PhantomData,
         }
     }
@@ -183,7 +183,7 @@ pub struct Keys<K>
     where K: EntityRef
 {
     pos: usize,
-    len: usize,
+    rev_pos: usize,
     unused: PhantomData<K>,
 }
 
@@ -193,9 +193,23 @@ impl<K> Iterator for Keys<K>
     type Item = K;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos < self.len {
+        if self.pos < self.rev_pos {
             let k = K::new(self.pos);
             self.pos += 1;
+            Some(k)
+        } else {
+            None
+        }
+    }
+}
+
+impl<K> DoubleEndedIterator for Keys<K>
+    where K: EntityRef
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.rev_pos > self.pos {
+            let k = K::new(self.rev_pos - 1);
+            self.rev_pos -= 1;
             Some(k)
         } else {
             None

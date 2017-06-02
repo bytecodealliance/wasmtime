@@ -94,7 +94,7 @@ impl<T: EntityRef> PartialEq for EntityList<T> {
 impl<T: EntityRef> Eq for EntityList<T> {}
 
 /// A memory pool for storing lists of `T`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ListPool<T: EntityRef> {
     // The main array containing the lists.
     data: Vec<T>,

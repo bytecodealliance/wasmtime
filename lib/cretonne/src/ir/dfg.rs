@@ -8,7 +8,6 @@ use ir::layout::Cursor;
 use ir::types;
 use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
 use write::write_operands;
-
 use std::fmt;
 use std::iter;
 use std::ops::{Index, IndexMut};
