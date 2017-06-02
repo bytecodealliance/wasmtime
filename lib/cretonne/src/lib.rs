@@ -20,6 +20,7 @@ pub mod entity_map;
 pub mod flowgraph;
 pub mod ir;
 pub mod isa;
+pub mod loop_analysis;
 pub mod regalloc;
 pub mod result;
 pub mod settings;

@@ -12,6 +12,7 @@
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir::Function;
+use loop_analysis::LoopAnalysis;
 use isa::TargetIsa;
 use legalize_function;
 use regalloc;
@@ -32,6 +33,9 @@ pub struct Context {
 
     /// Register allocation context.
     pub regalloc: regalloc::Context,
+
+    /// Loop analysis of `func`.
+    pub loop_analysis: LoopAnalysis,
 }
 
 impl Context {
@@ -45,6 +49,7 @@ impl Context {
             cfg: ControlFlowGraph::new(),
             domtree: DominatorTree::new(),
             regalloc: regalloc::Context::new(),
+            loop_analysis: LoopAnalysis::new(),
         }
     }
 
