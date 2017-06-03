@@ -4,7 +4,7 @@ use error::{Error, Result};
 use variable::{varname_prefix, VariableMap, Value};
 use std::str::FromStr;
 use std::fmt::{self, Display, Formatter, Write};
-use regex::{Regex, RegexBuilder, quote};
+use regex::{Regex, RegexBuilder, escape};
 
 /// A pattern to match as specified in a directive.
 ///
@@ -313,7 +313,7 @@ impl Pattern {
         for part in &self.parts {
             match *part {
                 Part::Text(ref s) => {
-                    out.push_str(&quote(s));
+                    out.push_str(&escape(s));
                 }
                 Part::Regex(ref rx) => out.push_str(rx),
                 Part::Var(ref var) => {
@@ -322,7 +322,7 @@ impl Pattern {
                         None => {
                             return Err(Error::UndefVariable(format!("undefined variable ${}", var)))
                         }
-                        Some(Value::Text(s)) => out.push_str(&quote(&s)),
+                        Some(Value::Text(s)) => out.push_str(&escape(&s)),
                         // Wrap regex in non-capturing group for safe concatenation.
                         Some(Value::Regex(rx)) => write!(out, "(?:{})", rx).unwrap(),
                     }
@@ -335,7 +335,7 @@ impl Pattern {
                         None => {
                             return Err(Error::UndefVariable(format!("undefined variable ${}", var)))
                         }
-                        Some(Value::Text(s)) => write!(out, "{})", quote(&s[..])).unwrap(),
+                        Some(Value::Text(s)) => write!(out, "{})", escape(&s[..])).unwrap(),
                         Some(Value::Regex(rx)) => write!(out, "{})", rx).unwrap(),
                     }
                 }
@@ -353,7 +353,7 @@ impl Pattern {
             }
         }
 
-        Ok(RegexBuilder::new(&out).multi_line(true).compile()?)
+        Ok(RegexBuilder::new(&out).multi_line(true).build()?)
     }
 }
 

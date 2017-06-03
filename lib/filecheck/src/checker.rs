@@ -30,8 +30,8 @@ const DIRECTIVE_RX: &str = r"\b(check|sameln|nextln|unordered|not|regex):\s+(.*)
 impl Directive {
     /// Create a new directive from a `DIRECTIVE_RX` match.
     fn new(caps: Captures) -> Result<Directive> {
-        let cmd = caps.at(1).expect("group 1 must match");
-        let rest = caps.at(2).expect("group 2 must match");
+        let cmd = caps.get(1).map(|m| m.as_str()).expect("group 1 must match");
+        let rest = caps.get(2).map(|m| m.as_str()).expect("group 2 must match");
 
         if cmd == "regex" {
             return Directive::regex(rest);
@@ -208,11 +208,12 @@ impl Checker {
                     // Verify any pending `not:` directives now that we know their range.
                     for (not_idx, not_begin, rx) in nots.drain(..) {
                         state.recorder.directive(not_idx);
-                        if let Some((s, e)) = rx.find(&text[not_begin..match_begin]) {
+                        if let Some(mat) = rx.find(&text[not_begin..match_begin]) {
                             // Matched `not:` pattern.
                             state
                                 .recorder
-                                .matched_not(rx.as_str(), (not_begin + s, not_begin + e));
+                                .matched_not(rx.as_str(),
+                                             (not_begin + mat.start(), not_begin + mat.end()));
                             return Ok(false);
                         } else {
                             state
@@ -337,23 +338,23 @@ impl<'a> State<'a> {
         } else {
             // We need the captures to define variables.
             rx.captures(txt).map(|caps| {
-                let matched_range = caps.pos(0).expect("whole expression must match");
+                let matched_range = caps.get(0).expect("whole expression must match");
                 for var in defs {
-                    let txtval = caps.name(var).unwrap_or("");
+                    let txtval = caps.name(var).map(|mat| mat.as_str()).unwrap_or("");
                     self.recorder.defined_var(var, txtval);
                     let vardef = VarDef {
                         value: Value::Text(Cow::Borrowed(txtval)),
                         // This offset is the end of the whole matched pattern, not just the text
                         // defining the variable.
-                        offset: range.0 + matched_range.1,
+                        offset: range.0 + matched_range.end(),
                     };
                     self.vars.insert(var.clone(), vardef);
                 }
                 matched_range
             })
         };
-        Ok(if let Some((b, e)) = matched_range {
-               let r = (range.0 + b, range.0 + e);
+        Ok(if let Some(mat) = matched_range {
+               let r = (range.0 + mat.start(), range.0 + mat.end());
                self.recorder.matched_check(rx.as_str(), r);
                Some(r)
            } else {
