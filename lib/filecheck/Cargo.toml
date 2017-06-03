@@ -11,4 +11,4 @@ documentation = "https://docs.rs/filecheck"
 name = "filecheck"
 
 [dependencies]
-regex = "0.1.71"
+regex = "0.2.2"
