@@ -28,7 +28,10 @@ fn no_directives() {
 
 #[test]
 fn no_matches() {
-    let c = CheckerBuilder::new().text("regex: FOO=bar").unwrap().finish();
+    let c = CheckerBuilder::new()
+        .text("regex: FOO=bar")
+        .unwrap()
+        .finish();
     assert!(!c.is_empty());
 
     // An empty checker matches anything.
@@ -260,14 +263,22 @@ fn unordered() {
         .unwrap()
         .finish();
 
-    assert_eq!(c.check("one two three four", NO_VARIABLES).map_err(e2s), Ok(true));
-    assert_eq!(c.check("one three two four", NO_VARIABLES).map_err(e2s), Ok(true));
+    assert_eq!(c.check("one two three four", NO_VARIABLES).map_err(e2s),
+               Ok(true));
+    assert_eq!(c.check("one three two four", NO_VARIABLES).map_err(e2s),
+               Ok(true));
 
-    assert_eq!(c.check("one two four three four", NO_VARIABLES).map_err(e2s), Ok(true));
-    assert_eq!(c.check("one three four two four", NO_VARIABLES).map_err(e2s), Ok(true));
+    assert_eq!(c.check("one two four three four", NO_VARIABLES)
+                   .map_err(e2s),
+               Ok(true));
+    assert_eq!(c.check("one three four two four", NO_VARIABLES)
+                   .map_err(e2s),
+               Ok(true));
 
-    assert_eq!(c.check("one two four three", NO_VARIABLES).map_err(e2s), Ok(false));
-    assert_eq!(c.check("one three four two", NO_VARIABLES).map_err(e2s), Ok(false));
+    assert_eq!(c.check("one two four three", NO_VARIABLES).map_err(e2s),
+               Ok(false));
+    assert_eq!(c.check("one three four two", NO_VARIABLES).map_err(e2s),
+               Ok(false));
 }
 
 #[test]
@@ -281,14 +292,22 @@ fn leading_unordered() {
         .unwrap()
         .finish();
 
-    assert_eq!(c.check("one two three four", NO_VARIABLES).map_err(e2s), Ok(true));
-    assert_eq!(c.check("one three two four", NO_VARIABLES).map_err(e2s), Ok(true));
+    assert_eq!(c.check("one two three four", NO_VARIABLES).map_err(e2s),
+               Ok(true));
+    assert_eq!(c.check("one three two four", NO_VARIABLES).map_err(e2s),
+               Ok(true));
 
-    assert_eq!(c.check("one two four three four", NO_VARIABLES).map_err(e2s), Ok(true));
-    assert_eq!(c.check("one three four two four", NO_VARIABLES).map_err(e2s), Ok(true));
+    assert_eq!(c.check("one two four three four", NO_VARIABLES)
+                   .map_err(e2s),
+               Ok(true));
+    assert_eq!(c.check("one three four two four", NO_VARIABLES)
+                   .map_err(e2s),
+               Ok(true));
 
-    assert_eq!(c.check("one two four three", NO_VARIABLES).map_err(e2s), Ok(false));
-    assert_eq!(c.check("one three four two", NO_VARIABLES).map_err(e2s), Ok(false));
+    assert_eq!(c.check("one two four three", NO_VARIABLES).map_err(e2s),
+               Ok(false));
+    assert_eq!(c.check("one three four two", NO_VARIABLES).map_err(e2s),
+               Ok(false));
 }
 
 #[test]
@@ -302,12 +321,20 @@ fn trailing_unordered() {
         .unwrap()
         .finish();
 
-    assert_eq!(c.check("one two three four", NO_VARIABLES).map_err(e2s), Ok(true));
-    assert_eq!(c.check("one three two four", NO_VARIABLES).map_err(e2s), Ok(true));
+    assert_eq!(c.check("one two three four", NO_VARIABLES).map_err(e2s),
+               Ok(true));
+    assert_eq!(c.check("one three two four", NO_VARIABLES).map_err(e2s),
+               Ok(true));
 
-    assert_eq!(c.check("one two four three four", NO_VARIABLES).map_err(e2s), Ok(true));
-    assert_eq!(c.check("one three four two four", NO_VARIABLES).map_err(e2s), Ok(true));
+    assert_eq!(c.check("one two four three four", NO_VARIABLES)
+                   .map_err(e2s),
+               Ok(true));
+    assert_eq!(c.check("one three four two four", NO_VARIABLES)
+                   .map_err(e2s),
+               Ok(true));
 
-    assert_eq!(c.check("one two four three", NO_VARIABLES).map_err(e2s), Ok(true));
-    assert_eq!(c.check("one three four two", NO_VARIABLES).map_err(e2s), Ok(true));
+    assert_eq!(c.check("one two four three", NO_VARIABLES).map_err(e2s),
+               Ok(true));
+    assert_eq!(c.check("one three four two", NO_VARIABLES).map_err(e2s),
+               Ok(true));
 }
