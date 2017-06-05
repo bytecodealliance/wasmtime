@@ -10,6 +10,7 @@ use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueLis
 use write::write_operands;
 use std::fmt;
 use std::iter;
+use std::mem;
 use std::ops::{Index, IndexMut};
 use std::u16;
 
@@ -509,6 +510,36 @@ impl DataFlowGraph {
         };
     }
 
+    /// Replace an instruction result with a new value of type `new_type`.
+    ///
+    /// The `old_value` must be an attached instruction result.
+    ///
+    /// The old value is left detached, so it should probably be changed into something else.
+    ///
+    /// Returns the new value.
+    pub fn replace_result(&mut self, old_value: Value, new_type: Type) -> Value {
+        let (num, inst) = match self.values[old_value] {
+            ValueData::Inst { num, inst, .. } => (num, inst),
+            _ => panic!("{} is not an instruction result value", old_value),
+        };
+        let new_value = self.make_value(ValueData::Inst {
+                                            ty: new_type,
+                                            num,
+                                            inst,
+                                        });
+        let num = num as usize;
+        let attached = mem::replace(self.results[inst]
+                                        .get_mut(num, &mut self.value_lists)
+                                        .expect("Replacing detached result"),
+                                    new_value);
+        assert_eq!(attached,
+                   old_value,
+                   "{} wasn't detached from {}",
+                   old_value,
+                   self.display_inst(inst));
+        new_value
+    }
+
     /// Append a new instruction result value to `inst`.
     pub fn append_result(&mut self, inst: Inst, ty: Type) -> Value {
         let res = self.values.next_key();
@@ -767,6 +798,15 @@ mod tests {
 
         assert_eq!(dfg.value_def(val), ValueDef::Res(inst, 0));
         assert_eq!(dfg.value_type(val), types::I32);
+
+        // Replacing results.
+        assert!(dfg.value_is_attached(val));
+        let v2 = dfg.replace_result(val, types::F64);
+        assert!(!dfg.value_is_attached(val));
+        assert!(dfg.value_is_attached(v2));
+        assert_eq!(dfg.inst_results(inst), &[v2]);
+        assert_eq!(dfg.value_def(v2), ValueDef::Res(inst, 0));
+        assert_eq!(dfg.value_type(v2), types::F64);
     }
 
     #[test]
