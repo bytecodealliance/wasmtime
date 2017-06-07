@@ -177,7 +177,7 @@
 
 use flowgraph::ControlFlowGraph;
 use ir::dfg::ValueDef;
-use ir::{Function, Value, Inst, Ebb};
+use ir::{Function, Value, Inst, Ebb, Layout, ProgramPoint};
 use isa::{TargetIsa, EncInfo};
 use regalloc::affinity::Affinity;
 use regalloc::liverange::LiveRange;
@@ -295,6 +295,47 @@ impl Liveness {
     /// Get the live range for `value`, if it exists.
     pub fn get(&self, value: Value) -> Option<&LiveRange> {
         self.ranges.get(value)
+    }
+
+    /// Create a new live range for `value`.
+    ///
+    /// The new live range will be defined at `def` with no extent, like a dead value.
+    ///
+    /// This asserts that `value` does not have an existing live range.
+    pub fn create_dead<PP>(&mut self, value: Value, def: PP, affinity: Affinity)
+        where PP: Into<ProgramPoint>
+    {
+        let old = self.ranges
+            .insert(LiveRange::new(value, def.into(), affinity));
+        assert!(old.is_none(), "{} already has a live range", value);
+    }
+
+    /// Move the definition of `value` to `def`.
+    ///
+    /// The old and new def points must be in the same EBB, and before the end of the live range.
+    pub fn move_def_locally<PP>(&mut self, value: Value, def: PP)
+        where PP: Into<ProgramPoint>
+    {
+        let mut lr = self.ranges.get_mut(value).expect("Value has no live range");
+        lr.move_def_locally(def.into());
+    }
+
+    /// Locally extend the live range for `value` to reach `user`.
+    ///
+    /// It is assumed the `value` is already live before `user` in `ebb`.
+    ///
+    /// Returns a mutable reference to the value's affinity in case that also needs to be updated.
+    pub fn extend_locally(&mut self,
+                          value: Value,
+                          ebb: Ebb,
+                          user: Inst,
+                          layout: &Layout)
+                          -> &mut Affinity {
+        debug_assert_eq!(Some(ebb), layout.inst_ebb(user));
+        let mut lr = self.ranges.get_mut(value).expect("Value has no live range");
+        let livein = lr.extend_in_ebb(ebb, user, layout);
+        assert!(!livein, "{} should already be live in {}", value, ebb);
+        &mut lr.affinity
     }
 
     /// Compute the live ranges of all SSA values used in `func`.
