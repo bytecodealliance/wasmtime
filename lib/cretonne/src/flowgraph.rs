@@ -25,8 +25,7 @@
 
 use ir::{Function, Inst, Ebb};
 use ir::instructions::BranchInfo;
-use entity_map::{EntityMap, Keys};
-use std::collections::HashSet;
+use entity_map::EntityMap;
 use std::mem;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
@@ -132,45 +131,6 @@ impl ControlFlowGraph {
     pub fn get_successors(&self, ebb: Ebb) -> &[Ebb] {
         &self.data[ebb].successors
     }
-
-    /// Return [reachable] ebbs in post-order.
-    pub fn postorder_ebbs(&self) -> Vec<Ebb> {
-        let entry_block = match self.entry_block {
-            None => {
-                return Vec::new();
-            }
-            Some(eb) => eb,
-        };
-
-        let mut grey = HashSet::new();
-        let mut black = HashSet::new();
-        let mut stack = vec![entry_block.clone()];
-        let mut postorder = Vec::new();
-
-        while !stack.is_empty() {
-            let node = stack.pop().unwrap();
-            if !grey.contains(&node) {
-                // This is a white node. Mark it as gray.
-                grey.insert(node);
-                stack.push(node);
-                // Get any children we've never seen before.
-                for child in self.get_successors(node) {
-                    if !grey.contains(child) {
-                        stack.push(child.clone());
-                    }
-                }
-            } else if !black.contains(&node) {
-                postorder.push(node.clone());
-                black.insert(node.clone());
-            }
-        }
-        postorder
-    }
-
-    /// An iterator across all of the ebbs stored in the CFG.
-    pub fn ebbs(&self) -> Keys<Ebb> {
-        self.data.keys()
-    }
 }
 
 #[cfg(test)]
@@ -181,8 +141,7 @@ mod tests {
     #[test]
     fn empty() {
         let func = Function::new();
-        let cfg = ControlFlowGraph::with_function(&func);
-        assert_eq!(None, cfg.ebbs().next());
+        ControlFlowGraph::with_function(&func);
     }
 
     #[test]
@@ -196,11 +155,9 @@ mod tests {
         func.layout.append_ebb(ebb2);
 
         let cfg = ControlFlowGraph::with_function(&func);
-        let nodes = cfg.ebbs().collect::<Vec<_>>();
-        assert_eq!(nodes.len(), 3);
 
         let mut fun_ebbs = func.layout.ebbs();
-        for ebb in nodes {
+        for ebb in func.layout.ebbs() {
             assert_eq!(ebb, fun_ebbs.next().unwrap());
             assert_eq!(cfg.get_predecessors(ebb).len(), 0);
             assert_eq!(cfg.get_successors(ebb).len(), 0);
