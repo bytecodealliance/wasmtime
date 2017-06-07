@@ -128,8 +128,8 @@ impl LoopAnalysis {
                          cfg: &ControlFlowGraph,
                          domtree: &DominatorTree,
                          layout: &Layout) {
-        // We traverse the CFg in reverse postorder
-        for &ebb in cfg.postorder_ebbs().iter().rev() {
+        // We traverse the CFG in reverse postorder
+        for &ebb in domtree.cfg_postorder().iter().rev() {
             for &(_, pred_inst) in cfg.get_predecessors(ebb) {
                 // If the ebb dominates one of its predecessors it is a back edge
                 if domtree.ebb_dominates(ebb, pred_inst, layout) {

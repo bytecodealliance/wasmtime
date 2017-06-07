@@ -19,10 +19,9 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
     let domtree = DominatorTree::with_function(func, &cfg);
 
     // Visit EBBs in a reverse post-order.
-    let mut postorder = cfg.postorder_ebbs();
     let mut pos = Cursor::new(&mut func.layout);
 
-    while let Some(ebb) = postorder.pop() {
+    for &ebb in domtree.cfg_postorder().iter().rev() {
         pos.goto_top(ebb);
 
         while let Some(inst) = pos.next_inst() {
