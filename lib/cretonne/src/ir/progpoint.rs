@@ -1,7 +1,7 @@
 //! Program points.
 
 use entity_map::EntityRef;
-use ir::{Ebb, Inst};
+use ir::{Ebb, Inst, ValueDef};
 use std::fmt;
 use std::u32;
 use std::cmp;
@@ -29,6 +29,15 @@ impl From<Ebb> for ProgramPoint {
         let idx = ebb.index();
         assert!(idx < (u32::MAX / 2) as usize);
         ProgramPoint((idx * 2 + 1) as u32)
+    }
+}
+
+impl From<ValueDef> for ProgramPoint {
+    fn from(def: ValueDef) -> ProgramPoint {
+        match def {
+            ValueDef::Res(inst, _) => inst.into(),
+            ValueDef::Arg(ebb, _) => ebb.into(),
+        }
     }
 }
 
