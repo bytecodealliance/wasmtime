@@ -13,6 +13,7 @@
 //! The legalizer does not deal with register allocation constraints. These constraints are derived
 //! from the encoding recipes, and solved later by the register allocator.
 
+use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir::{Function, Cursor, DataFlowGraph, InstructionData, Opcode, InstBuilder};
 use ir::condcodes::IntCC;
@@ -26,17 +27,19 @@ mod split;
 /// - Transform any instructions that don't have a legal representation in `isa`.
 /// - Fill out `func.encodings`.
 ///
-pub fn legalize_function(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &TargetIsa) {
+pub fn legalize_function(func: &mut Function,
+                         cfg: &mut ControlFlowGraph,
+                         domtree: &DominatorTree,
+                         isa: &TargetIsa) {
     boundary::legalize_signatures(func, isa);
 
     func.encodings.resize(func.dfg.num_insts());
 
-    // Process EBBs in a reverse post-order. This minimizes the number of split instructions we
-    // need.
-    let mut postorder = cfg.postorder_ebbs();
     let mut pos = Cursor::new(&mut func.layout);
 
-    while let Some(ebb) = postorder.pop() {
+    // Process EBBs in a reverse post-order. This minimizes the number of split instructions we
+    // need.
+    for &ebb in domtree.cfg_postorder().iter().rev() {
         pos.goto_top(ebb);
 
         // Keep track of the cursor position before the instruction being processed, so we can

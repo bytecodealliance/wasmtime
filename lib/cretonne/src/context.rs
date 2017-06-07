@@ -75,7 +75,7 @@ impl Context {
 
     /// Run the legalizer for `isa` on the function.
     pub fn legalize(&mut self, isa: &TargetIsa) -> CtonResult {
-        legalize_function(&mut self.func, &mut self.cfg, isa);
+        legalize_function(&mut self.func, &mut self.cfg, &self.domtree, isa);
         self.verify_if(isa)
     }
 
