@@ -32,6 +32,7 @@ mod constant_hash;
 mod context;
 mod iterators;
 mod legalizer;
+mod licm;
 mod packed_option;
 mod partition_slice;
 mod predicates;

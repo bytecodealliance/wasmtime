@@ -19,6 +19,7 @@ use regalloc;
 use result::CtonResult;
 use verifier;
 use simple_gvn::do_simple_gvn;
+use licm::do_licm;
 
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
@@ -89,6 +90,15 @@ impl Context {
         do_simple_gvn(&mut self.func, &mut self.cfg);
         // TODO: Factor things such that we can get a Flags and test
         // enable_verifier().
+        self.verify(None).map_err(Into::into)
+    }
+
+    /// Perform LICM on the function.
+    pub fn licm(&mut self) -> CtonResult {
+        do_licm(&mut self.func,
+                &mut self.cfg,
+                &mut self.domtree,
+                &mut self.loop_analysis);
         self.verify(None).map_err(Into::into)
     }
 

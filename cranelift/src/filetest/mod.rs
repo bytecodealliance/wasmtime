@@ -17,6 +17,7 @@ mod binemit;
 mod concurrent;
 mod domtree;
 mod legalizer;
+mod licm;
 mod regalloc;
 mod runner;
 mod runone;
@@ -61,6 +62,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::Result<Box<subtest::SubTest>> {
         "domtree" => domtree::subtest(parsed),
         "verifier" => verifier::subtest(parsed),
         "legalizer" => legalizer::subtest(parsed),
+        "licm" => licm::subtest(parsed),
         "regalloc" => regalloc::subtest(parsed),
         "binemit" => binemit::subtest(parsed),
         "simple-gvn" => simple_gvn::subtest(parsed),
