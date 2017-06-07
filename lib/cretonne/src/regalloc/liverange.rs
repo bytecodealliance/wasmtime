@@ -347,6 +347,14 @@ impl LiveRange {
         self.def_begin
     }
 
+    /// Move the definition of this value to a new program point.
+    ///
+    /// It is only valid to move the definition within the same EBB, and it can't be moved beyond
+    /// `def_local_end()`.
+    pub fn move_def_locally(&mut self, def: ProgramPoint) {
+        self.def_begin = def;
+    }
+
     /// Get the local end-point of this live range in the EBB where it is defined.
     ///
     /// This can be the EBB header itself in the case of a dead EBB argument.
