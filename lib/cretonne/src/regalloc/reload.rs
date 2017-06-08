@@ -10,6 +10,7 @@
 //! pressure limits to be exceeded.
 
 use dominator_tree::DominatorTree;
+use entity_map::EntityMap;
 use ir::{Ebb, Inst, Value, Function, DataFlowGraph};
 use ir::layout::{Cursor, CursorPosition};
 use ir::{InstBuilder, ArgumentLoc};
@@ -29,6 +30,7 @@ pub struct Reload {
 
 /// Context data structure that gets instantiated once per pass.
 struct Context<'a> {
+    isa: &'a TargetIsa,
     // Cached ISA information.
     // We save it here to avoid frequent virtual function calls on the `TargetIsa` trait object.
     encinfo: EncInfo,
@@ -60,6 +62,7 @@ impl Reload {
                topo: &mut TopoOrder,
                tracker: &mut LiveValueTracker) {
         let mut ctx = Context {
+            isa,
             encinfo: isa.encoding_info(),
             domtree,
             liveness,
@@ -112,7 +115,13 @@ impl<'a> Context<'a> {
         while let Some(inst) = pos.current_inst() {
             let encoding = func.encodings[inst];
             if encoding.is_legal() {
-                self.visit_inst(ebb, inst, encoding, &mut pos, &mut func.dfg, tracker);
+                self.visit_inst(ebb,
+                                inst,
+                                encoding,
+                                &mut pos,
+                                &mut func.dfg,
+                                &mut func.encodings,
+                                tracker);
                 tracker.drop_dead(inst);
             } else {
                 pos.next_inst();
@@ -121,7 +130,7 @@ impl<'a> Context<'a> {
     }
 
     /// Process the EBB parameters. Return the next instruction in the EBB to be processed
-    fn visit_ebb_header(&self,
+    fn visit_ebb_header(&mut self,
                         ebb: Ebb,
                         func: &mut Function,
                         tracker: &mut LiveValueTracker)
@@ -139,7 +148,7 @@ impl<'a> Context<'a> {
 
     /// Visit the arguments to the entry block.
     /// These values have ABI constraints from the function signature.
-    fn visit_entry_args(&self,
+    fn visit_entry_args(&mut self,
                         ebb: Ebb,
                         func: &mut Function,
                         args: &[LiveValue])
@@ -157,7 +166,15 @@ impl<'a> Context<'a> {
                         // with a temporary register value that is immediately spilled.
                         let reg = func.dfg.replace_ebb_arg(arg.value, abi.value_type);
                         func.dfg.ins(&mut pos).with_result(arg.value).spill(reg);
-                        // TODO: Update live ranges.
+                        let spill = func.dfg.value_def(arg.value).unwrap_inst();
+                        *func.encodings.ensure(spill) = self.isa
+                            .encode(&func.dfg, &func.dfg[spill], abi.value_type)
+                            .expect("Can't encode spill");
+                        // Update live ranges.
+                        self.liveness.move_def_locally(arg.value, spill);
+                        let affinity = Affinity::abi(abi, self.isa);
+                        self.liveness.create_dead(reg, ebb, affinity);
+                        self.liveness.extend_locally(reg, ebb, spill, pos.layout);
                     }
                 }
                 ArgumentLoc::Stack(_) => {
@@ -184,6 +201,7 @@ impl<'a> Context<'a> {
                   encoding: Encoding,
                   pos: &mut Cursor,
                   dfg: &mut DataFlowGraph,
+                  encodings: &mut EntityMap<Inst, Encoding>,
                   tracker: &mut LiveValueTracker) {
         // Get the operand constraints for `inst` that we are trying to satisfy.
         let constraints = self.encinfo
@@ -213,6 +231,11 @@ impl<'a> Context<'a> {
             }
 
             let reg = dfg.ins(pos).fill(cand.value);
+            let fill = dfg.value_def(reg).unwrap_inst();
+            *encodings.ensure(fill) = self.isa
+                .encode(dfg, &dfg[fill], dfg.value_type(reg))
+                .expect("Can't encode fill");
+
             self.reloads
                 .insert(ReloadedValue {
                             stack: cand.value,

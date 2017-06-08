@@ -14,6 +14,7 @@ mod diversion;
 mod pressure;
 mod reload;
 mod solver;
+mod spilling;
 
 pub use self::allocatable_set::AllocatableSet;
 pub use self::context::Context;

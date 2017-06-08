@@ -12,6 +12,7 @@ use regalloc::coloring::Coloring;
 use regalloc::live_value_tracker::LiveValueTracker;
 use regalloc::liveness::Liveness;
 use regalloc::reload::Reload;
+use regalloc::spilling::Spilling;
 use result::CtonResult;
 use topo_order::TopoOrder;
 use verifier::{verify_context, verify_liveness};
@@ -21,6 +22,7 @@ pub struct Context {
     liveness: Liveness,
     topo: TopoOrder,
     tracker: LiveValueTracker,
+    spilling: Spilling,
     reload: Reload,
     coloring: Coloring,
 }
@@ -35,6 +37,7 @@ impl Context {
             liveness: Liveness::new(),
             topo: TopoOrder::new(),
             tracker: LiveValueTracker::new(),
+            spilling: Spilling::new(),
             reload: Reload::new(),
             coloring: Coloring::new(),
         }
@@ -62,7 +65,19 @@ impl Context {
             verify_liveness(isa, func, cfg, &self.liveness)?;
         }
 
-        // TODO: Second pass: Spilling.
+        // Second pass: Spilling.
+        self.spilling
+            .run(isa,
+                 func,
+                 domtree,
+                 &mut self.liveness,
+                 &mut self.topo,
+                 &mut self.tracker);
+
+        if isa.flags().enable_verifier() {
+            verify_context(func, cfg, domtree, Some(isa))?;
+            verify_liveness(isa, func, cfg, &self.liveness)?;
+        }
 
         // Third pass: Reload.
         self.reload

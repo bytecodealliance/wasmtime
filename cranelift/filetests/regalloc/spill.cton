@@ -1,0 +1,44 @@
+test regalloc
+
+; Test the spiler on an ISA with few registers.
+; RV32E has 16 registers, where:
+; - %x0 is hardwired to zero.
+; - %x1 is the return address.
+; - %x2 is the stack pointer.
+; - %x3 is the global pointer.
+; - %x4 is the thread pointer.
+; - %x10-%x15 are function arguments.
+;
+; regex: V=v\d+
+
+isa riscv enable_e
+
+; In straight-line code, the first value defined is spilled.
+; That is the argument.
+function %pyramid(i32) -> i32 {
+ebb0(v1: i32):
+; check: $v1 = spill $(rv1=$V)
+    v2 = iadd_imm v1, 12
+    v3 = iadd_imm v2, 12
+    v4 = iadd_imm v3, 12
+    v5 = iadd_imm v4, 12
+    v6 = iadd_imm v5, 12
+    v7 = iadd_imm v6, 12
+    v8 = iadd_imm v7, 12
+    v9 = iadd_imm v8, 12
+    v10 = iadd_imm v9, 12
+    v11 = iadd_imm v10, 12
+    v12 = iadd_imm v11, 12
+    v31 = iadd v11, v12
+    v30 = iadd v31, v10
+    v29 = iadd v30, v9
+    v28 = iadd v29, v8
+    v27 = iadd v28, v7
+    v26 = iadd v27, v6
+    v25 = iadd v26, v5
+    v24 = iadd v25, v4
+    v23 = iadd v24, v3
+    v22 = iadd v23, v2
+    v21 = iadd v22, v1
+    return v21
+}

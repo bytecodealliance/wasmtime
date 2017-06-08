@@ -39,6 +39,7 @@
 use isa::registers::{RegInfo, MAX_TOPRCS, RegClass, RegClassMask};
 use regalloc::AllocatableSet;
 use std::cmp::min;
+use std::fmt;
 use std::iter::ExactSizeIterator;
 
 /// Information per top-level register class.
@@ -222,6 +223,16 @@ impl Pressure {
         for e in self.toprc.iter_mut() {
             e.transient_count = 0;
         }
+    }
+}
+
+impl fmt::Display for Pressure {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Pressure[")?;
+        for rc in &self.toprc {
+            write!(f, " {}+{}/{}", rc.base_count, rc.transient_count, rc.limit)?;
+        }
+        write!(f, " ]")
     }
 }
 

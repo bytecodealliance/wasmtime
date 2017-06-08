@@ -12,7 +12,6 @@ use partition_slice::partition_slice;
 use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
 use regalloc::liverange::LiveRange;
-
 use std::collections::HashMap;
 
 type ValueList = EntityList<Value>;
@@ -297,6 +296,20 @@ impl LiveValueTracker {
     /// Use this after calling `ebb_top` to clean out dead EBB arguments.
     pub fn drop_dead_args(&mut self) {
         self.live.remove_dead_values();
+    }
+
+    /// Process new spills.
+    ///
+    /// Any values where `f` returns true are spilled and will be treated as if their affinity was
+    /// `Stack`.
+    pub fn process_spills<F>(&mut self, mut f: F)
+        where F: FnMut(Value) -> bool
+    {
+        for lv in &mut self.live.values {
+            if f(lv.value) {
+                lv.affinity = Affinity::Stack;
+            }
+        }
     }
 
     /// Save the current set of live values so it is associated with `idom`.
