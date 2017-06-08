@@ -182,6 +182,7 @@ use isa::{TargetIsa, EncInfo};
 use regalloc::affinity::Affinity;
 use regalloc::liverange::LiveRange;
 use sparse_map::SparseMap;
+use std::mem;
 
 /// A set of live ranges, indexed by value number.
 type LiveRangeSet = SparseMap<Value, LiveRange>;
@@ -337,6 +338,13 @@ impl Liveness {
         assert!(!livein, "{} should already be live in {}", value, ebb);
         &mut lr.affinity
     }
+
+    /// Change the affinity of `value` to `Stack` and return the previous affinity.
+    pub fn spill(&mut self, value: Value) -> Affinity {
+        let mut lr = self.ranges.get_mut(value).expect("Value has no live range");
+        mem::replace(&mut lr.affinity, Affinity::Stack)
+    }
+
 
     /// Compute the live ranges of all SSA values used in `func`.
     /// This clears out any existing analysis stored in this data structure.
