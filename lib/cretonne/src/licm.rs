@@ -46,7 +46,7 @@ pub fn do_licm(func: &mut Function,
             };
             // The last instruction of the pre-header is the termination instruction (usually
             // a jump) so we need to insert just before this.
-            for inst in invariant_inst.iter() {
+            for inst in invariant_inst {
                 pos.insert_inst(inst.clone());
             }
         }
@@ -64,11 +64,7 @@ fn create_pre_header(header: Ebb,
                      domtree: &DominatorTree)
                      -> Ebb {
     let pool = &mut ListPool::<Value>::new();
-    let header_args_values: Vec<Value> = func.dfg
-        .ebb_args(header)
-        .into_iter()
-        .map(|val| *val)
-        .collect();
+    let header_args_values: Vec<Value> = func.dfg.ebb_args(header).into_iter().cloned().collect();
     let header_args_types: Vec<Type> = header_args_values
         .clone()
         .into_iter()
@@ -135,8 +131,8 @@ fn change_branch_jump_destination(inst: Inst, new_ebb: Ebb, func: &mut Function)
     }
 }
 
-// Traverses a loop in reverse post-order from a header EBB and identify lopp-invariant
-// instructions. Theseloop-invariant instructions are then removed from the code and returned
+// Traverses a loop in reverse post-order from a header EBB and identify loop-invariant
+// instructions. These loop-invariant instructions are then removed from the code and returned
 // (in reverse post-order) for later use.
 fn remove_loop_invariant_instructions(lp: Loop,
                                       func: &mut Function,
@@ -163,8 +159,7 @@ fn remove_loop_invariant_instructions(lp: Loop,
                 // then this instruction is loop-invariant
                 invariant_inst.push(inst);
                 // We remove it from the loop
-                pos.remove_inst();
-                pos.prev_inst();
+                pos.remove_inst_and_step_back();
             } else {
                 // If the instruction is not loop-invariant we push its results in the set of
                 // loop values
@@ -178,10 +173,7 @@ fn remove_loop_invariant_instructions(lp: Loop,
 }
 
 /// Return ebbs from a loop in post-order, starting from an entry point in the block.
-pub fn postorder_ebbs_loop(loop_analysis: &LoopAnalysis,
-                           cfg: &ControlFlowGraph,
-                           lp: Loop)
-                           -> Vec<Ebb> {
+fn postorder_ebbs_loop(loop_analysis: &LoopAnalysis, cfg: &ControlFlowGraph, lp: Loop) -> Vec<Ebb> {
     let mut grey = HashSet::new();
     let mut black = HashSet::new();
     let mut stack = vec![loop_analysis.loop_header(lp).clone()];
