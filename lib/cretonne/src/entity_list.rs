@@ -416,7 +416,7 @@ impl<T: EntityRef> EntityList<T> {
         }
     }
 
-    /// Removes the element at position `index` from the list.
+    /// Removes the element at position `index` from the list. Potentially linear complexity.
     pub fn remove(&mut self, index: usize, pool: &mut ListPool<T>) {
         let len;
         {
@@ -446,6 +446,22 @@ impl<T: EntityRef> EntityList<T> {
 
         // Finally adjust the length.
         pool.data[block] = T::new(len - 1);
+    }
+
+    /// Removes the element at `index` in constant time by switching it with the last element of
+    /// the list.
+    pub fn swap_remove(&mut self, index: usize, pool: &mut ListPool<T>) {
+        let len = self.len(pool);
+        assert!(index < len);
+        if index == len - 1 {
+            self.remove(index, pool);
+        } else {
+            {
+                let seq = self.as_mut_slice(pool);
+                seq.swap(index, len - 1);
+            }
+            self.remove(len - 1, pool);
+        }
     }
 
     /// Grow the list by inserting `count` elements at `index`.
