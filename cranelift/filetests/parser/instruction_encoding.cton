@@ -4,7 +4,7 @@ isa riscv
 
 ; regex: WS=[ \t]*
 
-function foo(i32, i32) {
+function %foo(i32, i32) {
 ebb1(v0: i32, v1: i32):
     [-,-] v2 = iadd v0, v1
     [-] trap
@@ -13,7 +13,7 @@ ebb1(v0: i32, v1: i32):
     v9 = iadd v8, v7
     [Iret#5] return v0, v8
 }
-; sameln: function foo(i32, i32) {
+; sameln: function %foo(i32, i32) {
 ; nextln: $ebb1($v0: i32, $v1: i32):
 ; nextln:     [-,-]$WS $v2 = iadd $v0, $v1
 ; nextln:     [-]$WS trap

@@ -27,7 +27,7 @@ fn test_reverse_postorder_traversal(function_source: &str, ebb_order: Vec<u32>) 
 #[test]
 fn simple_traversal() {
     test_reverse_postorder_traversal("
-        function test(i32) {
+        function %test(i32) {
             ebb0(v0: i32):
                brz v0, ebb1
                jump ebb2
@@ -56,7 +56,7 @@ fn simple_traversal() {
 #[test]
 fn loops_one() {
     test_reverse_postorder_traversal("
-        function test(i32) {
+        function %test(i32) {
             ebb0(v0: i32):
                 jump ebb1
             ebb1:
@@ -74,7 +74,7 @@ fn loops_one() {
 #[test]
 fn loops_two() {
     test_reverse_postorder_traversal("
-        function test(i32) {
+        function %test(i32) {
             ebb0(v0: i32):
                 brz v0, ebb1
                 jump ebb2
@@ -99,7 +99,7 @@ fn loops_two() {
 #[test]
 fn loops_three() {
     test_reverse_postorder_traversal("
-        function test(i32) {
+        function %test(i32) {
             ebb0(v0: i32):
                 brz v0, ebb1
                 jump ebb2
@@ -129,7 +129,7 @@ fn loops_three() {
 #[test]
 fn back_edge_one() {
     test_reverse_postorder_traversal("
-        function test(i32) {
+        function %test(i32) {
             ebb0(v0: i32):
                 brz v0, ebb1
                 jump ebb2

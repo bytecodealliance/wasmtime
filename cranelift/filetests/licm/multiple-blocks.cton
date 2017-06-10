@@ -1,6 +1,6 @@
 test licm
 
-function multiple_blocks(i32) -> i32 {
+function %multiple_blocks(i32) -> i32 {
 
 ebb0(v0: i32):
     jump ebb1(v0)
@@ -23,7 +23,7 @@ ebb3(v30: i32):
     jump ebb1(v30)
 
 }
-; sameln:function multiple_blocks(i32) -> i32 {
+; sameln:function %multiple_blocks(i32) -> i32 {
 ; nextln: ebb0(v0: i32):
 ; nextln:     v2 = iconst.i32 1
 ; nextln:     v3 = iconst.i32 2

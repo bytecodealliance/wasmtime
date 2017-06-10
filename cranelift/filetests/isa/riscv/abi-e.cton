@@ -4,7 +4,7 @@ isa riscv enable_e
 
 ; regex: V=v\d+
 
-function f() {
+function %f() {
     ; Spilling into the stack args after %x15 since %16 and up are not
     ; available in RV32E.
     sig0 = signature(i64, i64, i64, i64) -> i64

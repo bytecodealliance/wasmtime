@@ -1,6 +1,6 @@
 test domtree
 
-function test(i32) {
+function %test(i32) {
     ebb0(v0: i32):
         brz v0, ebb1    ; dominates: ebb1 ebb6
         brnz v0, ebb2   ; dominates: ebb2 ebb9

@@ -4,7 +4,7 @@ isa riscv
 
 ; regex: V=v\d+
 
-function int_split_args(i64) -> i64 {
+function %int_split_args(i64) -> i64 {
 ebb0(v0: i64):
     ; check: $ebb0($(v0l=$V): i32, $(v0h=$V): i32, $(link=$V): i32):
     ; check: $v0 = iconcat $v0l, $v0h
@@ -14,9 +14,9 @@ ebb0(v0: i64):
     return v1
 }
 
-function split_call_arg(i32) {
-    fn1 = function foo(i64)
-    fn2 = function foo(i32, i64)
+function %split_call_arg(i32) {
+    fn1 = function %foo(i64)
+    fn2 = function %foo(i32, i64)
 ebb0(v0: i32):
     v1 = uextend.i64 v0
     call fn1(v1)
@@ -27,8 +27,8 @@ ebb0(v0: i32):
     return
 }
 
-function split_ret_val() {
-    fn1 = function foo() -> i64
+function %split_ret_val() {
+    fn1 = function %foo() -> i64
 ebb0:
     v1 = call fn1()
     ; check: $ebb0($(link=$V): i32):
@@ -42,8 +42,8 @@ ebb1(v10: i64):
 }
 
 ; First return value is fine, second one is expanded.
-function split_ret_val2() {
-    fn1 = function foo() -> i32, i64
+function %split_ret_val2() {
+    fn1 = function %foo() -> i32, i64
 ebb0:
     v1, v2 = call fn1()
     ; check: $ebb0($(link=$V): i32):
@@ -56,7 +56,7 @@ ebb1(v9: i32, v10: i64):
     jump ebb1(v9, v10)
 }
 
-function int_ext(i8, i8 sext, i8 uext) -> i8 uext {
+function %int_ext(i8, i8 sext, i8 uext) -> i8 uext {
 ebb0(v1: i8, v2: i8, v3: i8):
     ; check: $ebb0($v1: i8, $(v2x=$V): i32, $(v3x=$V): i32, $(link=$V): i32):
     ; check: $v2 = ireduce.i8 $v2x
@@ -67,8 +67,8 @@ ebb0(v1: i8, v2: i8, v3: i8):
 }
 
 ; Function produces single return value, still need to copy.
-function ext_ret_val() {
-    fn1 = function foo() -> i8 sext
+function %ext_ret_val() {
+    fn1 = function %foo() -> i8 sext
 ebb0:
     v1 = call fn1()
     ; check: $ebb0($V: i32):
@@ -81,7 +81,7 @@ ebb1(v10: i8):
     jump ebb1(v10)
 }
 
-function vector_split_args(i64x4) -> i64x4 {
+function %vector_split_args(i64x4) -> i64x4 {
 ebb0(v0: i64x4):
     ; check: $ebb0($(v0al=$V): i32, $(v0ah=$V): i32, $(v0bl=$V): i32, $(v0bh=$V): i32, $(v0cl=$V): i32, $(v0ch=$V): i32, $(v0dl=$V): i32, $(v0dh=$V): i32, $(link=$V): i32):
     ; check: $(v0a=$V) = iconcat $v0al, $v0ah
@@ -103,7 +103,7 @@ ebb0(v0: i64x4):
     return v1
 }
 
-function indirect(i32) {
+function %indirect(i32) {
     sig1 = signature()
 ebb0(v0: i32):
     call_indirect sig1, v0()
@@ -111,7 +111,7 @@ ebb0(v0: i32):
 }
 
 ; The first argument to call_indirect doesn't get altered.
-function indirect_arg(i32, f32x2) {
+function %indirect_arg(i32, f32x2) {
     sig1 = signature(f32x2)
 ebb0(v0: i32, v1: f32x2):
     call_indirect sig1, v0(v1)

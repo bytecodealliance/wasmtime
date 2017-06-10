@@ -5,7 +5,7 @@ isa riscv
 
 ; regex: RX=%x\d+
 
-function add(i32, i32) {
+function %add(i32, i32) {
 ebb0(v1: i32, v2: i32):
     v3 = iadd v1, v2
 ; check: [R#0c,%x5]
@@ -14,7 +14,7 @@ ebb0(v1: i32, v2: i32):
 }
 
 ; Function with a dead argument.
-function dead_arg(i32, i32) -> i32{
+function %dead_arg(i32, i32) -> i32{
 ebb0(v1: i32, v2: i32):
 ; not: regmove
 ; check: return $v1
@@ -22,7 +22,7 @@ ebb0(v1: i32, v2: i32):
 }
 
 ; Return a value from a different register.
-function move1(i32, i32) -> i32 {
+function %move1(i32, i32) -> i32 {
 ebb0(v1: i32, v2: i32):
 ; not: regmove
 ; check: regmove $v2, %x11 -> %x10
@@ -31,7 +31,7 @@ ebb0(v1: i32, v2: i32):
 }
 
 ; Swap two registers.
-function swap(i32, i32) -> i32, i32 {
+function %swap(i32, i32) -> i32, i32 {
 ebb0(v1: i32, v2: i32):
 ; not: regmove
 ; check: regmove $v2, %x11 -> $(tmp=$RX)
