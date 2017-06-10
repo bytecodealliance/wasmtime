@@ -130,7 +130,7 @@ The ``set`` lines apply settings cumulatively::
     set is_64bit=0
     isa riscv supports_m=false
 
-    function foo() {}
+    function %foo() {}
 
 This example will run the legalizer test twice. Both runs will have
 ``opt_level=best``, but they will have different ``is_64bit`` settings. The 32-bit
@@ -184,13 +184,13 @@ against the associated filecheck directives.
 
 Example::
 
-    function r1() -> i32, f32 {
+    function %r1() -> i32, f32 {
     ebb1:
         v10 = iconst.i32 3
         v20 = f32const 0.0
         return v10, v20
     }
-    ; sameln: function r1() -> i32, f32 {
+    ; sameln: function %r1() -> i32, f32 {
     ; nextln: ebb0:
     ; nextln:     v0 = iconst.i32 3
     ; nextln:     v1 = f32const 0.0
@@ -201,13 +201,13 @@ Notice that the values ``v10`` and ``v20`` in the source were renumbered to
 ``v0`` and ``v1`` respectively during parsing. The equivalent test using
 filecheck variables would be::
 
-    function r1() -> i32, f32 {
+    function %r1() -> i32, f32 {
     ebb1:
         v10 = iconst.i32 3
         v20 = f32const 0.0
         return v10, v20
     }
-    ; sameln: function r1() -> i32, f32 {
+    ; sameln: function %r1() -> i32, f32 {
     ; nextln: ebb0:
     ; nextln:     $v10 = iconst.i32 3
     ; nextln:     $v20 = f32const 0.0
@@ -226,7 +226,7 @@ reported location of the error is verified::
 
     test verifier
     
-    function test(i32) {
+    function %test(i32) {
         ebb0(v0: i32):
             jump ebb1       ; error: terminator
             return
@@ -250,8 +250,8 @@ command::
     test print-cfg
     test verifier
     
-    function nonsense(i32, i32) -> f32 {
-    ; check: digraph nonsense {
+    function %nonsense(i32, i32) -> f32 {
+    ; check: digraph %nonsense {
     ; regex: I=\binst\d+\b
     ; check: label="{ebb0 | <$(BRZ=$I)>brz ebb2 | <$(JUMP=$I)>jump ebb1}"]
     
@@ -276,7 +276,7 @@ Compute the dominator tree of each function and validate it against the
 
     test domtree
     
-    function test(i32) {
+    function %test(i32) {
         ebb0(v0: i32):
             jump ebb1     ; dominates: ebb1
         ebb1:
@@ -328,7 +328,7 @@ that instruction is compared to the directive::
     test binemit
     isa riscv
 
-    function int32() {
+    function %int32() {
     ebb0:
         [-,%x5]             v1 = iconst.i32 1
         [-,%x6]             v2 = iconst.i32 2

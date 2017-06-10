@@ -389,8 +389,8 @@ preamble`:
 
 This simple example illustrates direct function calls and signatures::
 
-    function gcd(i32 uext, i32 uext) -> i32 uext "C" {
-        fn1 = function divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
+    function %gcd(i32 uext, i32 uext) -> i32 uext "C" {
+        fn1 = function %divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
 
     ebb1(v1: i32, v2: i32):
         brz v2, ebb2
@@ -530,7 +530,7 @@ and address computations from the memory accesses.
 
 A small example using heaps::
 
-    function vdup(i32, i32) {
+    function %vdup(i32, i32) {
         h1 = heap "main"
 
     ebb1(v1: i32, v2: i32):

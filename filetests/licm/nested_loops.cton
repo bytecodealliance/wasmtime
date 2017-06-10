@@ -1,6 +1,6 @@
 test licm
 
-function nested_loops(i32) -> i32 {
+function %nested_loops(i32) -> i32 {
 
 ebb0(v0: i32):
     v1 = iconst.i32 1
@@ -25,7 +25,7 @@ ebb3(v30: i32):
 
 }
 
-; sameln:function nested_loops(i32) -> i32 {
+; sameln:function %nested_loops(i32) -> i32 {
 ; nextln: ebb4(v12: i32):
 ; nextln:     v1 = iconst.i32 1
 ; nextln:     v2 = iconst.i32 2

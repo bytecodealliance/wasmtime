@@ -723,9 +723,24 @@ impl<'a> Parser<'a> {
     //
     fn parse_function_name(&mut self) -> Result<FunctionName> {
         match self.token() {
-            Some(Token::Identifier(s)) => {
+            Some(Token::Name(s)) => {
                 self.consume();
                 Ok(FunctionName::new(s))
+            }
+            Some(Token::HexSequence(s)) => {
+                if s.len() % 2 != 0 {
+                    return err!(self.loc,
+                                "expected binary function name to have length multiple of two");
+                }
+                let mut bin_name = Vec::with_capacity(s.len() / 2);
+                let mut i = 0;
+                while i + 2 <= s.len() {
+                    let byte = u8::from_str_radix(&s[i..i + 2], 16).unwrap();
+                    bin_name.push(byte);
+                    i += 2;
+                }
+                self.consume();
+                Ok(FunctionName::new(bin_name))
             }
             _ => err!(self.loc, "expected function name"),
         }
@@ -1723,7 +1738,7 @@ mod tests {
 
     #[test]
     fn aliases() {
-        let (func, details) = Parser::new("function qux() {
+        let (func, details) = Parser::new("function %qux() {
                                            ebb0:
                                              v4 = iconst.i8 6
                                              v3 -> v4
@@ -1731,7 +1746,7 @@ mod tests {
                                            }")
                 .parse_function(None)
                 .unwrap();
-        assert_eq!(func.name.to_string(), "qux");
+        assert_eq!(func.name.to_string(), "%qux");
         let v4 = details.map.lookup_str("v4").unwrap();
         assert_eq!(v4.to_string(), "v0");
         let v3 = details.map.lookup_str("v3").unwrap();
@@ -1777,13 +1792,13 @@ mod tests {
 
     #[test]
     fn stack_slot_decl() {
-        let (func, _) = Parser::new("function foo() {
+        let (func, _) = Parser::new("function %foo() {
                                        ss3 = stack_slot 13
                                        ss1 = stack_slot 1
                                      }")
                 .parse_function(None)
                 .unwrap();
-        assert_eq!(func.name.to_string(), "foo");
+        assert_eq!(func.name.to_string(), "%foo");
         let mut iter = func.stack_slots.keys();
         let ss0 = iter.next().unwrap();
         assert_eq!(ss0.to_string(), "ss0");
@@ -1794,7 +1809,7 @@ mod tests {
         assert_eq!(iter.next(), None);
 
         // Catch duplicate definitions.
-        assert_eq!(Parser::new("function bar() {
+        assert_eq!(Parser::new("function %bar() {
                                     ss1  = stack_slot 13
                                     ss1  = stack_slot 1
                                 }")
@@ -1806,13 +1821,13 @@ mod tests {
 
     #[test]
     fn ebb_header() {
-        let (func, _) = Parser::new("function ebbs() {
+        let (func, _) = Parser::new("function %ebbs() {
                                      ebb0:
                                      ebb4(v3: i32):
                                      }")
                 .parse_function(None)
                 .unwrap();
-        assert_eq!(func.name.to_string(), "ebbs");
+        assert_eq!(func.name.to_string(), "%ebbs");
 
         let mut ebbs = func.layout.ebbs();
 
@@ -1828,7 +1843,7 @@ mod tests {
     #[test]
     fn comments() {
         let (func, Details { comments, .. }) = Parser::new("; before
-                         function comment() { ; decl
+                         function %comment() { ; decl
                             ss10  = stack_slot 13 ; stackslot.
                             ; Still stackslot.
                             jt10 = jump_table ebb0
@@ -1839,7 +1854,7 @@ mod tests {
                          ; More trailing.")
                 .parse_function(None)
                 .unwrap();
-        assert_eq!(func.name.to_string(), "comment");
+        assert_eq!(func.name.to_string(), "%comment");
         assert_eq!(comments.len(), 8); // no 'before' comment.
         assert_eq!(comments[0],
                    Comment {
@@ -1868,7 +1883,7 @@ mod tests {
                              test verify
                              set enable_float=false
                              ; still preamble
-                             function comment() {}")
+                             function %comment() {}")
                 .unwrap();
         assert_eq!(tf.commands.len(), 2);
         assert_eq!(tf.commands[0].command, "cfg");
@@ -1884,23 +1899,23 @@ mod tests {
         assert_eq!(tf.preamble_comments[0].text, "; before");
         assert_eq!(tf.preamble_comments[1].text, "; still preamble");
         assert_eq!(tf.functions.len(), 1);
-        assert_eq!(tf.functions[0].0.name.to_string(), "comment");
+        assert_eq!(tf.functions[0].0.name.to_string(), "%comment");
     }
 
     #[test]
     fn isa_spec() {
         assert!(parse_test("isa
-                            function foo() {}")
+                            function %foo() {}")
                         .is_err());
 
         assert!(parse_test("isa riscv
                             set enable_float=false
-                            function foo() {}")
+                            function %foo() {}")
                         .is_err());
 
         match parse_test("set enable_float=false
                           isa riscv
-                          function foo() {}")
+                          function %foo() {}")
                       .unwrap()
                       .isa_spec {
             IsaSpec::None(_) => panic!("Expected some ISA"),
@@ -1909,5 +1924,42 @@ mod tests {
                 assert_eq!(v[0].name(), "riscv");
             }
         }
+    }
+
+    #[test]
+    fn binary_function_name() {
+        // Valid characters in the name.
+        let func = Parser::new("function #1234567890AbCdEf() {
+                                           ebb0:
+                                             trap
+                                           }")
+                .parse_function(None)
+                .unwrap()
+                .0;
+        assert_eq!(func.name.to_string(), "#1234567890abcdef");
+
+        // Invalid characters in the name.
+        let mut parser = Parser::new("function #12ww() {
+                                           ebb0:
+                                             trap
+                                           }");
+        assert!(parser.parse_function(None).is_err());
+
+        // The length of binary function name should be multiple of two.
+        let mut parser = Parser::new("function #1() {
+                                           ebb0:
+                                             trap
+                                           }");
+        assert!(parser.parse_function(None).is_err());
+
+        // Empty binary function name should be valid.
+        let func = Parser::new("function #() {
+                                           ebb0:
+                                             trap
+                                           }")
+                .parse_function(None)
+                .unwrap()
+                .0;
+        assert_eq!(func.name.to_string(), "%");
     }
 }

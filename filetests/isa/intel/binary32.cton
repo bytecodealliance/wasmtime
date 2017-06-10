@@ -7,7 +7,7 @@ isa intel
 ;   sed -ne 's/^ *; asm: *//p' filetests/isa/intel/binary32.cton | llvm-mc -show-encoding -triple=i386
 ;
 
-function I32() {
+function %I32() {
 ebb0:
     [-,%rcx]            v1 = iconst.i32 1
     [-,%rsi]            v2 = iconst.i32 2

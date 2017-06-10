@@ -1,6 +1,6 @@
 test simple-gvn
 
-function simple_redundancy(i32, i32) -> i32 {
+function %simple_redundancy(i32, i32) -> i32 {
 ebb0(v0: i32, v1: i32):
     v2 = iadd v0, v1
     v3 = iadd v0, v1
@@ -9,7 +9,7 @@ ebb0(v0: i32, v1: i32):
     return v4
 }
 
-function cascading_redundancy(i32, i32) -> i32 {
+function %cascading_redundancy(i32, i32) -> i32 {
 ebb0(v0: i32, v1: i32):
     v2 = iadd v0, v1
     v3 = iadd v0, v1
