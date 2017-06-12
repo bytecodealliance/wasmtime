@@ -77,7 +77,7 @@ fn create_pre_header(header: Ebb,
     }
     for &(_, last_inst) in cfg.get_predecessors(header) {
         // We only follow normal edges (not the back edges)
-        if !domtree.ebb_dominates(header.clone(), last_inst, &func.layout) {
+        if !domtree.dominates(header, last_inst, &func.layout) {
             change_branch_jump_destination(last_inst, pre_header, func);
         }
     }
@@ -108,7 +108,7 @@ fn has_pre_header(layout: &Layout,
     let mut found = false;
     for &(pred_ebb, last_inst) in cfg.get_predecessors(header) {
         // We only count normal edges (not the back edges)
-        if !domtree.ebb_dominates(header.clone(), last_inst, layout) {
+        if !domtree.dominates(header, last_inst, layout) {
             if found {
                 // We have already found one, there are more than one
                 return None;

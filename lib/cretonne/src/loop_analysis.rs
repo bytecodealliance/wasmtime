@@ -132,7 +132,7 @@ impl LoopAnalysis {
         for &ebb in domtree.cfg_postorder().iter().rev() {
             for &(_, pred_inst) in cfg.get_predecessors(ebb) {
                 // If the ebb dominates one of its predecessors it is a back edge
-                if domtree.ebb_dominates(ebb, pred_inst, layout) {
+                if domtree.dominates(ebb, pred_inst, layout) {
                     // This ebb is a loop header, so we create its associated loop
                     let lp = self.loops.push(LoopData::new(ebb, None));
                     self.ebb_loop_map[ebb] = lp.into();
@@ -156,7 +156,7 @@ impl LoopAnalysis {
         for lp in self.loops().rev() {
             for &(pred, pred_inst) in cfg.get_predecessors(self.loops[lp].header) {
                 // We follow the back edges
-                if domtree.ebb_dominates(self.loops[lp].header, pred_inst, layout) {
+                if domtree.dominates(self.loops[lp].header, pred_inst, layout) {
                     stack.push(pred);
                 }
             }

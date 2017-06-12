@@ -381,7 +381,7 @@ impl<'a> Verifier<'a> {
                                 ebb);
                 }
                 // The defining EBB dominates the instruction using this value.
-                if !self.domtree.ebb_dominates(ebb, loc_inst, &self.func.layout) {
+                if !self.domtree.dominates(ebb, loc_inst, &self.func.layout) {
                     return err!(loc_inst, "uses value arg from non-dominating {}", ebb);
                 }
             }
