@@ -26,6 +26,12 @@
 //!
 //! Currently, the only register bank with multiple top-level registers is the `arm32`
 //! floating-point register bank which has `S`, `D`, and `Q` top-level classes.
+//!
+//! # Base and transient counts
+//!
+//! We maintain two separate register counts per top-level register class: base counts and
+//! transient counts. The base counts are adjusted with the `take` and `free` functions. The
+//! transient counts are adjusted with `take_transient` and `free_transient`.
 
 // Remove once we're using the pressure tracker.
 #![allow(dead_code)]
@@ -37,11 +43,12 @@ use std::iter::ExactSizeIterator;
 
 /// Information per top-level register class.
 ///
-/// Everything but the count is static information computed from the constructor arguments.
+/// Everything but the counts is static information computed from the constructor arguments.
 #[derive(Default)]
 struct TopRC {
     // Number of registers currently used from this register class.
-    count: u32,
+    base_count: u32,
+    transient_count: u32,
 
     // Max number of registers that can be allocated.
     limit: u32,
@@ -54,6 +61,12 @@ struct TopRC {
 
     // The number of aliasing top-level RCs.
     num_toprcs: u8,
+}
+
+impl TopRC {
+    fn total_count(&self) -> u32 {
+        self.base_count + self.transient_count
+    }
 }
 
 pub struct Pressure {
@@ -108,12 +121,16 @@ impl Pressure {
     /// If not, returns a bit-mask of top-level register classes that are interfering. Register
     /// pressure should be eased in one of the returned top-level register classes before calling
     /// `can_take()` to check again.
-    pub fn check_avail(&self, rc: RegClass) -> RegClassMask {
+    fn check_avail(&self, rc: RegClass) -> RegClassMask {
         let entry = &self.toprc[rc.toprc as usize];
         let mask = 1 << rc.toprc;
         if self.aliased & mask == 0 {
             // This is a simple unaliased top-level register class.
-            if entry.count < entry.limit { 0 } else { mask }
+            if entry.total_count() < entry.limit {
+                0
+            } else {
+                mask
+            }
         } else {
             // This is the more complicated case. The top-level register class has aliases.
             self.check_avail_aliased(entry)
@@ -142,9 +159,9 @@ impl Pressure {
             let u = if rcw < width {
                 // We can't take more than the total number of register units in the class.
                 // This matters for arm32 S-registers which can only ever lock out 16 D-registers.
-                min(rc.count * width, rc.limit * rcw)
+                min(rc.total_count() * width, rc.limit * rcw)
             } else {
-                rc.count * rcw
+                rc.total_count() * rcw
             };
 
             // If this top-level RC on its own is responsible for exceeding our limit, return it
@@ -169,20 +186,41 @@ impl Pressure {
 
     /// Take a register from `rc`.
     ///
-    /// This assumes that `can_take(rc)` already returned 0.
+    /// This does not check if there are enough registers available.
     pub fn take(&mut self, rc: RegClass) {
-        self.toprc[rc.toprc as usize].count += 1
+        self.toprc[rc.toprc as usize].base_count += 1
     }
 
     /// Free a register in `rc`.
     pub fn free(&mut self, rc: RegClass) {
-        self.toprc[rc.toprc as usize].count -= 1
+        self.toprc[rc.toprc as usize].base_count -= 1
     }
 
-    /// Reset all counts to 0.
+    /// Reset all counts to 0, both base and transient.
     pub fn reset(&mut self) {
         for e in self.toprc.iter_mut() {
-            e.count = 0;
+            e.base_count = 0;
+            e.transient_count = 0;
+        }
+    }
+
+    /// Try to increment a transient counter.
+    ///
+    /// This will fail if there are not enough registers available.
+    pub fn take_transient(&mut self, rc: RegClass) -> Result<(), RegClassMask> {
+        let mask = self.check_avail(rc);
+        if mask == 0 {
+            self.toprc[rc.toprc as usize].transient_count += 1;
+            Ok(())
+        } else {
+            Err(mask)
+        }
+    }
+
+    /// Reset all transient counts to 0.
+    pub fn reset_transient(&mut self) {
+        for e in self.toprc.iter_mut() {
+            e.transient_count = 0;
         }
     }
 }
