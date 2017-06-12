@@ -63,6 +63,15 @@ impl From<Ebb> for ExpandedProgramPoint {
     }
 }
 
+impl From<ValueDef> for ExpandedProgramPoint {
+    fn from(def: ValueDef) -> ExpandedProgramPoint {
+        match def {
+            ValueDef::Res(inst, _) => inst.into(),
+            ValueDef::Arg(ebb, _) => ebb.into(),
+        }
+    }
+}
+
 impl From<ProgramPoint> for ExpandedProgramPoint {
     fn from(pp: ProgramPoint) -> ExpandedProgramPoint {
         if pp.0 & 1 == 0 {

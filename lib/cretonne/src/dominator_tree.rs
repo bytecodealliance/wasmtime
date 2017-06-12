@@ -2,7 +2,7 @@
 
 use entity_map::EntityMap;
 use flowgraph::{ControlFlowGraph, BasicBlock};
-use ir::{Ebb, Inst, Function, Layout, ProgramOrder};
+use ir::{Ebb, Inst, Function, Layout, ProgramOrder, ExpandedProgramPoint};
 use packed_option::PackedOption;
 
 use std::cmp::Ordering;
@@ -66,11 +66,26 @@ impl DominatorTree {
         self.nodes[ebb].idom.into()
     }
 
-    /// Compare two EBBs relative to a reverse post-order traversal of the control-flow graph.
+    /// Compare two EBBs relative to the reverse post-order.
+    fn rpo_cmp_ebb(&self, a: Ebb, b: Ebb) -> Ordering {
+
+        self.nodes[a].rpo_number.cmp(&self.nodes[b].rpo_number)
+    }
+
+    /// Compare two program points relative to a reverse post-order traversal of the control-flow
+    /// graph.
     ///
     /// Return `Ordering::Less` if `a` comes before `b` in the RPO.
-    pub fn rpo_cmp(&self, a: Ebb, b: Ebb) -> Ordering {
-        self.nodes[a].rpo_number.cmp(&self.nodes[b].rpo_number)
+    ///
+    /// If `a` and `b` belong to the same EBB, compare their relative position in the EBB.
+    pub fn rpo_cmp<A, B>(&self, a: A, b: B, layout: &Layout) -> Ordering
+        where A: Into<ExpandedProgramPoint>,
+              B: Into<ExpandedProgramPoint>
+    {
+        let a = a.into();
+        let b = b.into();
+        self.rpo_cmp_ebb(layout.pp_ebb(a), layout.pp_ebb(b))
+            .then(layout.cmp(a, b))
     }
 
     /// Returns `true` if `a` dominates `b`.
@@ -118,7 +133,7 @@ impl DominatorTree {
                             layout: &Layout)
                             -> BasicBlock {
         loop {
-            match self.rpo_cmp(a.0, b.0) {
+            match self.rpo_cmp_ebb(a.0, b.0) {
                 Ordering::Less => {
                     // `a` comes before `b` in the RPO. Move `b` up.
                     let idom = self.nodes[b.0].idom.expect("Unreachable basic block?");
@@ -348,6 +363,13 @@ mod test {
         assert!(dt.dominates(br_ebb1_ebb0, br_ebb1_ebb0, &func.layout));
         assert!(!dt.dominates(br_ebb1_ebb0, jmp_ebb3_ebb1, &func.layout));
         assert!(dt.dominates(jmp_ebb3_ebb1, br_ebb1_ebb0, &func.layout));
+
+        assert_eq!(dt.rpo_cmp(ebb3, ebb3, &func.layout), Ordering::Equal);
+        assert_eq!(dt.rpo_cmp(ebb3, ebb1, &func.layout), Ordering::Less);
+        assert_eq!(dt.rpo_cmp(ebb3, jmp_ebb3_ebb1, &func.layout),
+                   Ordering::Less);
+        assert_eq!(dt.rpo_cmp(jmp_ebb3_ebb1, jmp_ebb1_ebb2, &func.layout),
+                   Ordering::Less);
 
         assert_eq!(dt.cfg_postorder(), &[ebb2, ebb0, ebb1, ebb3]);
     }
