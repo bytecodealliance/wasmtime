@@ -97,9 +97,48 @@ impl DominatorTree {
     /// is unreachable.
     ///
     /// An instruction is considered to dominate itself.
-    pub fn dominates(&self, a: Inst, b: Inst, layout: &Layout) -> bool {
-        let ebb_a = layout.inst_ebb(a).expect("Instruction not in layout.");
-        self.ebb_dominates(ebb_a, b, layout) && layout.cmp(a, b) != Ordering::Greater
+    pub fn dominates<A, B>(&self, a: A, b: B, layout: &Layout) -> bool
+        where A: Into<ExpandedProgramPoint>,
+              B: Into<ExpandedProgramPoint>
+    {
+        let a = a.into();
+        let b = b.into();
+        match a {
+            ExpandedProgramPoint::Ebb(ebb_a) => {
+                a == b || self.last_dominator(ebb_a, b, layout).is_some()
+            }
+            ExpandedProgramPoint::Inst(inst_a) => {
+                let ebb_a = layout.inst_ebb(inst_a).expect("Instruction not in layout.");
+                match self.last_dominator(ebb_a, b, layout) {
+                    Some(last) => layout.cmp(inst_a, last) != Ordering::Greater,
+                    None => false,
+                }
+            }
+        }
+    }
+
+    /// Find the last instruction in `a` that dominates `b`.
+    /// If no instructions in `a` dominate `b`, return `None`.
+    fn last_dominator<B>(&self, a: Ebb, b: B, layout: &Layout) -> Option<Inst>
+        where B: Into<ExpandedProgramPoint>
+    {
+        let (mut ebb_b, mut inst_b) = match b.into() {
+            ExpandedProgramPoint::Ebb(ebb) => (ebb, None),
+            ExpandedProgramPoint::Inst(inst) => {
+                (layout.inst_ebb(inst).expect("Instruction not in layout."), Some(inst))
+            }
+        };
+        let rpo_a = self.nodes[a].rpo_number;
+
+        // Run a finger up the dominator tree from b until we see a.
+        // Do nothing if b is unreachable.
+        while rpo_a < self.nodes[ebb_b].rpo_number {
+            let idom = self.idom(ebb_b).expect("Shouldn't meet unreachable here.");
+            ebb_b = layout.inst_ebb(idom).expect("Dominator got removed.");
+            inst_b = Some(idom);
+        }
+
+        if a == ebb_b { inst_b } else { None }
     }
 
     /// Returns `true` if `ebb_a` dominates `b`.
@@ -372,5 +411,80 @@ mod test {
                    Ordering::Less);
 
         assert_eq!(dt.cfg_postorder(), &[ebb2, ebb0, ebb1, ebb3]);
+    }
+
+    #[test]
+    fn backwards_layout() {
+        let mut func = Function::new();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
+
+        let jmp02;
+        let jmp21;
+        let trap;
+        {
+            let dfg = &mut func.dfg;
+            let cur = &mut Cursor::new(&mut func.layout);
+
+            cur.insert_ebb(ebb0);
+            jmp02 = dfg.ins(cur).jump(ebb2, &[]);
+
+            cur.insert_ebb(ebb1);
+            trap = dfg.ins(cur).trap();
+
+            cur.insert_ebb(ebb2);
+            jmp21 = dfg.ins(cur).jump(ebb1, &[]);
+        }
+
+        let cfg = ControlFlowGraph::with_function(&func);
+        let dt = DominatorTree::with_function(&func, &cfg);
+
+        assert_eq!(func.layout.entry_block(), Some(ebb0));
+        assert_eq!(dt.idom(ebb0), None);
+        assert_eq!(dt.idom(ebb1), Some(jmp21));
+        assert_eq!(dt.idom(ebb2), Some(jmp02));
+
+        assert!(dt.dominates(ebb0, ebb0, &func.layout));
+        assert!(dt.dominates(ebb0, jmp02, &func.layout));
+        assert!(dt.dominates(ebb0, ebb1, &func.layout));
+        assert!(dt.dominates(ebb0, trap, &func.layout));
+        assert!(dt.dominates(ebb0, ebb2, &func.layout));
+        assert!(dt.dominates(ebb0, jmp21, &func.layout));
+
+        assert!(!dt.dominates(jmp02, ebb0, &func.layout));
+        assert!(dt.dominates(jmp02, jmp02, &func.layout));
+        assert!(dt.dominates(jmp02, ebb1, &func.layout));
+        assert!(dt.dominates(jmp02, trap, &func.layout));
+        assert!(dt.dominates(jmp02, ebb2, &func.layout));
+        assert!(dt.dominates(jmp02, jmp21, &func.layout));
+
+        assert!(!dt.dominates(ebb1, ebb0, &func.layout));
+        assert!(!dt.dominates(ebb1, jmp02, &func.layout));
+        assert!(dt.dominates(ebb1, ebb1, &func.layout));
+        assert!(dt.dominates(ebb1, trap, &func.layout));
+        assert!(!dt.dominates(ebb1, ebb2, &func.layout));
+        assert!(!dt.dominates(ebb1, jmp21, &func.layout));
+
+        assert!(!dt.dominates(trap, ebb0, &func.layout));
+        assert!(!dt.dominates(trap, jmp02, &func.layout));
+        assert!(!dt.dominates(trap, ebb1, &func.layout));
+        assert!(dt.dominates(trap, trap, &func.layout));
+        assert!(!dt.dominates(trap, ebb2, &func.layout));
+        assert!(!dt.dominates(trap, jmp21, &func.layout));
+
+        assert!(!dt.dominates(ebb2, ebb0, &func.layout));
+        assert!(!dt.dominates(ebb2, jmp02, &func.layout));
+        assert!(dt.dominates(ebb2, ebb1, &func.layout));
+        assert!(dt.dominates(ebb2, trap, &func.layout));
+        assert!(dt.dominates(ebb2, ebb2, &func.layout));
+        assert!(dt.dominates(ebb2, jmp21, &func.layout));
+
+        assert!(!dt.dominates(jmp21, ebb0, &func.layout));
+        assert!(!dt.dominates(jmp21, jmp02, &func.layout));
+        assert!(dt.dominates(jmp21, ebb1, &func.layout));
+        assert!(dt.dominates(jmp21, trap, &func.layout));
+        assert!(!dt.dominates(jmp21, ebb2, &func.layout));
+        assert!(dt.dominates(jmp21, jmp21, &func.layout));
     }
 }
