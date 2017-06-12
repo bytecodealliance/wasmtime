@@ -412,6 +412,18 @@ impl Layout {
         }
     }
 
+    /// Get the EBB containing the program point `pp`. Panic if `pp` is not in the layout.
+    pub fn pp_ebb<PP>(&self, pp: PP) -> Ebb
+        where PP: Into<ExpandedProgramPoint>
+    {
+        match pp.into() {
+            ExpandedProgramPoint::Ebb(ebb) => ebb,
+            ExpandedProgramPoint::Inst(inst) => {
+                self.inst_ebb(inst).expect("Program point not in layout")
+            }
+        }
+    }
+
     /// Append `inst` to the end of `ebb`.
     pub fn append_inst(&mut self, inst: Inst, ebb: Ebb) {
         assert_eq!(self.inst_ebb(inst), None);
