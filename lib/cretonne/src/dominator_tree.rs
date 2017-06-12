@@ -141,28 +141,6 @@ impl DominatorTree {
         if a == ebb_b { inst_b } else { None }
     }
 
-    /// Returns `true` if `ebb_a` dominates `b`.
-    ///
-    /// This means that every control-flow path from the function entry to `b` must go through
-    /// `ebb_a`.
-    ///
-    /// Dominance is ill defined for unreachable blocks. This function can always determine
-    /// dominance for instructions in the same EBB, but otherwise returns `false` if either block
-    /// is unreachable.
-    pub fn ebb_dominates(&self, ebb_a: Ebb, mut b: Inst, layout: &Layout) -> bool {
-        let mut ebb_b = layout.inst_ebb(b).expect("Instruction not in layout.");
-        let rpo_a = self.nodes[ebb_a].rpo_number;
-
-        // Run a finger up the dominator tree from b until we see a.
-        // Do nothing if b is unreachable.
-        while rpo_a < self.nodes[ebb_b].rpo_number {
-            b = self.idom(ebb_b).expect("Shouldn't meet unreachable here.");
-            ebb_b = layout.inst_ebb(b).expect("Dominator got removed.");
-        }
-
-        ebb_a == ebb_b
-    }
-
     /// Compute the common dominator of two basic blocks.
     ///
     /// Both basic blocks are assumed to be reachable.
