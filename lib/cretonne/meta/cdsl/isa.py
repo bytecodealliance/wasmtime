@@ -1,7 +1,7 @@
 """Defining instruction set architectures."""
 from __future__ import absolute_import
 from .predicates import And
-from .registers import RegClass, Register
+from .registers import RegClass, Register, Stack
 from .ast import Apply
 
 # The typing module is only required by mypy, and we don't use these imports
@@ -14,7 +14,7 @@ try:
         from .settings import SettingGroup  # noqa
         from .types import ValueType  # noqa
         from .registers import RegBank  # noqa
-        OperandConstraint = Union[RegClass, Register, int]
+        OperandConstraint = Union[RegClass, Register, int, Stack]
         ConstraintSeq = Union[OperandConstraint, Tuple[OperandConstraint, ...]]
         # Instruction specification for encodings. Allows for predicated
         # instructions.
@@ -187,6 +187,7 @@ class EncRecipe(object):
     - A `Register` specifying a fixed-register operand.
     - An integer indicating that this result is tied to a value operand, so
       they must use the same register.
+    - A `Stack` specifying a value in a stack slot.
 
     The `branch_range` argument must be provided for recipes that can encode
     branch instructions. It is an `(origin, bits)` tuple describing the exact
@@ -245,7 +246,9 @@ class EncRecipe(object):
                 # Check that it is in range.
                 assert c >= 0 and c < len(self.ins)
             else:
-                assert isinstance(c, RegClass) or isinstance(c, Register)
+                assert (isinstance(c, RegClass)
+                        or isinstance(c, Register)
+                        or isinstance(c, Stack))
         return seq
 
     def ties(self):

@@ -340,3 +340,15 @@ class Register(object):
         # type: (RegClass, int) -> None
         self.regclass = rc
         self.unit = unit
+
+
+class Stack(object):
+    """
+    An operand that must be in a stack slot.
+
+    A `Stack` object can be used to indicate an operand constraint for a value
+    operand that must live in a stack slot.
+    """
+    def __init__(self, rc):
+        # type: (RegClass) -> None
+        self.regclass = rc

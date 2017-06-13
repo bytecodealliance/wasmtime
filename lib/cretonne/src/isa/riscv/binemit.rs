@@ -333,3 +333,11 @@ fn recipe_ujcall<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut 
         panic!("Expected Call format: {:?}", func.dfg[inst]);
     }
 }
+
+fn recipe_gpsp<CS: CodeSink + ?Sized>(_func: &Function, _inst: Inst, _sink: &mut CS) {
+    unimplemented!();
+}
+
+fn recipe_gpfi<CS: CodeSink + ?Sized>(_func: &Function, _inst: Inst, _sink: &mut CS) {
+    unimplemented!();
+}
