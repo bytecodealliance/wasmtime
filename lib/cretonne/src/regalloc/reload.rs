@@ -13,7 +13,7 @@ use dominator_tree::DominatorTree;
 use entity_map::EntityMap;
 use ir::{Ebb, Inst, Value, Function, Signature, DataFlowGraph};
 use ir::layout::{Cursor, CursorPosition};
-use ir::{InstBuilder, ArgumentType, ArgumentLoc};
+use ir::{InstBuilder, Opcode, ArgumentType, ArgumentLoc};
 use isa::RegClass;
 use isa::{TargetIsa, Encoding, EncInfo, RecipeConstraints, ConstraintKind};
 use regalloc::affinity::Affinity;
@@ -167,16 +167,14 @@ impl<'a> Context<'a> {
                         // An incoming register parameter was spilled. Replace the parameter value
                         // with a temporary register value that is immediately spilled.
                         let reg = func.dfg.replace_ebb_arg(arg.value, abi.value_type);
-                        func.dfg.ins(&mut pos).with_result(arg.value).spill(reg);
-                        let spill = func.dfg.value_def(arg.value).unwrap_inst();
-                        *func.encodings.ensure(spill) = self.isa
-                            .encode(&func.dfg, &func.dfg[spill], abi.value_type)
-                            .expect("Can't encode spill");
-                        // Update live ranges.
-                        self.liveness.move_def_locally(arg.value, spill);
                         let affinity = Affinity::abi(abi, self.isa);
                         self.liveness.create_dead(reg, ebb, affinity);
-                        self.liveness.extend_locally(reg, ebb, spill, pos.layout);
+                        self.insert_spill(ebb,
+                                          arg.value,
+                                          reg,
+                                          &mut pos,
+                                          &mut func.encodings,
+                                          &mut func.dfg);
                     }
                 }
                 ArgumentLoc::Stack(_) => {
@@ -270,13 +268,8 @@ impl<'a> Context<'a> {
             if lv.affinity.is_stack() && op.kind != ConstraintKind::Stack {
                 let value_type = dfg.value_type(lv.value);
                 let reg = dfg.replace_result(lv.value, value_type);
-                dfg.ins(pos).with_result(lv.value).spill(reg);
-                let spill = dfg.value_def(lv.value).unwrap_inst();
-
-                // Create a live range for reg.
                 self.liveness.create_dead(reg, inst, Affinity::new(op));
-                self.liveness.extend_locally(reg, ebb, spill, &pos.layout);
-                self.liveness.move_def_locally(lv.value, spill);
+                self.insert_spill(ebb, lv.value, reg, pos, encodings, dfg);
             }
         }
     }
@@ -336,5 +329,36 @@ impl<'a> Context<'a> {
                 }
             }
         }
+    }
+
+    /// Insert a spill at `pos` and update data structures.
+    ///
+    /// - Insert `stack = spill reg` at `pos`, and assign an encoding.
+    /// - Move the `stack` live range starting point to the new instruction.
+    /// - Extend the `reg` live range to reach the new instruction.
+    fn insert_spill(&mut self,
+                    ebb: Ebb,
+                    stack: Value,
+                    reg: Value,
+                    pos: &mut Cursor,
+                    encodings: &mut EntityMap<Inst, Encoding>,
+                    dfg: &mut DataFlowGraph) {
+        let ty = dfg.value_type(reg);
+
+        // Insert spill instruction. Use the low-level `Unary` constructor because it returns an
+        // instruction reference directly rather than a result value (which we know is equal to
+        // `stack`).
+        let (inst, _) = dfg.ins(pos)
+            .with_result(stack)
+            .Unary(Opcode::Spill, ty, reg);
+
+        // Give it an encoding.
+        *encodings.ensure(inst) = self.isa
+            .encode(dfg, &dfg[inst], ty)
+            .expect("Can't encode spill");
+
+        // Update live ranges.
+        self.liveness.move_def_locally(stack, inst);
+        self.liveness.extend_locally(reg, ebb, inst, pos.layout);
     }
 }
