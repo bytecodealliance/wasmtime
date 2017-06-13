@@ -11,11 +11,11 @@
 
 use dominator_tree::DominatorTree;
 use entity_map::EntityMap;
-use ir::{Ebb, Inst, Value, Function, DataFlowGraph};
+use ir::{Ebb, Inst, Value, Function, Signature, DataFlowGraph};
 use ir::layout::{Cursor, CursorPosition};
-use ir::{InstBuilder, ArgumentLoc};
+use ir::{InstBuilder, ArgumentType, ArgumentLoc};
 use isa::RegClass;
-use isa::{TargetIsa, Encoding, EncInfo, ConstraintKind};
+use isa::{TargetIsa, Encoding, EncInfo, RecipeConstraints, ConstraintKind};
 use regalloc::affinity::Affinity;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
@@ -61,6 +61,7 @@ impl Reload {
                liveness: &mut Liveness,
                topo: &mut TopoOrder,
                tracker: &mut LiveValueTracker) {
+        dbg!("Reload for:\n{}", func.display(isa));
         let mut ctx = Context {
             isa,
             encinfo: isa.encoding_info(),
@@ -121,6 +122,7 @@ impl<'a> Context<'a> {
                                 &mut pos,
                                 &mut func.dfg,
                                 &mut func.encodings,
+                                &func.signature,
                                 tracker);
                 tracker.drop_dead(inst);
             } else {
@@ -202,27 +204,16 @@ impl<'a> Context<'a> {
                   pos: &mut Cursor,
                   dfg: &mut DataFlowGraph,
                   encodings: &mut EntityMap<Inst, Encoding>,
+                  func_signature: &Signature,
                   tracker: &mut LiveValueTracker) {
         // Get the operand constraints for `inst` that we are trying to satisfy.
         let constraints = self.encinfo
             .operand_constraints(encoding)
             .expect("Missing instruction encoding");
 
-        assert!(self.candidates.is_empty());
-
         // Identify reload candidates.
-        for (op, &arg) in constraints.ins.iter().zip(dfg.inst_args(inst)) {
-            if op.kind != ConstraintKind::Stack {
-                let lv = self.liveness.get(arg).expect("Missing live range for arg");
-                if lv.affinity.is_stack() {
-                    self.candidates
-                        .push(ReloadCandidate {
-                                  value: arg,
-                                  regclass: op.regclass,
-                              })
-                }
-            }
-        }
+        assert!(self.candidates.is_empty());
+        self.find_candidates(inst, constraints, func_signature, dfg);
 
         // Insert fill instructions before `inst`.
         while let Some(cand) = self.candidates.pop() {
@@ -286,6 +277,63 @@ impl<'a> Context<'a> {
                 self.liveness.create_dead(reg, inst, Affinity::new(op));
                 self.liveness.extend_locally(reg, ebb, spill, &pos.layout);
                 self.liveness.move_def_locally(lv.value, spill);
+            }
+        }
+    }
+
+    // Find reload candidates for `inst` and add them to `self.condidates`.
+    //
+    // These are uses of spilled values where the operand constraint requires a register.
+    fn find_candidates(&mut self,
+                       inst: Inst,
+                       constraints: &RecipeConstraints,
+                       func_signature: &Signature,
+                       dfg: &DataFlowGraph) {
+        let args = dfg.inst_args(inst);
+
+        for (op, &arg) in constraints.ins.iter().zip(args) {
+            if op.kind != ConstraintKind::Stack {
+                let lv = self.liveness.get(arg).expect("Missing live range for arg");
+                if lv.affinity.is_stack() {
+                    self.candidates
+                        .push(ReloadCandidate {
+                                  value: arg,
+                                  regclass: op.regclass,
+                              })
+                }
+            }
+        }
+
+        // If we only have the fixed arguments, we're done now.
+        if args.len() == constraints.ins.len() {
+            return;
+        }
+        let var_args = &args[constraints.ins.len()..];
+
+        // Handle ABI arguments.
+        if let Some(sig) = dfg.call_signature(inst) {
+            self.handle_abi_args(&dfg.signatures[sig].argument_types, var_args);
+        } else if dfg[inst].opcode().is_return() {
+            self.handle_abi_args(&func_signature.return_types, var_args);
+        }
+    }
+
+    /// Find reload candidates in the instruction's ABI variable arguments. This handles both
+    /// return values and call arguments.
+    fn handle_abi_args(&mut self, abi_types: &[ArgumentType], var_args: &[Value]) {
+        assert_eq!(abi_types.len(), var_args.len());
+        for (abi, &arg) in abi_types.iter().zip(var_args) {
+            if abi.location.is_reg() {
+                let lv = self.liveness
+                    .get(arg)
+                    .expect("Missing live range for ABI arg");
+                if lv.affinity.is_stack() {
+                    self.candidates
+                        .push(ReloadCandidate {
+                                  value: arg,
+                                  regclass: self.isa.regclass_for_abi_type(abi.value_type),
+                              });
+                }
             }
         }
     }
