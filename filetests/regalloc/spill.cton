@@ -17,6 +17,7 @@ isa riscv enable_e
 ; That is in order:
 ; 1. The argument v1.
 ; 2. The link register.
+; 3. The first computed value, v2
 function %pyramid(i32) -> i32 {
 ebb0(v1: i32):
 ; check: $ebb0($(rv1=$V): i32, $(rlink=$V): i32)
@@ -24,6 +25,9 @@ ebb0(v1: i32):
     ; nextln: $(link=$V) = spill $rlink
     ; not: spill
     v2 = iadd_imm v1, 12
+    ; check: $(r1v2=$V) = iadd_imm
+    ; nextln: $v2 = spill $r1v2
+    ; not: spill
     v3 = iadd_imm v2, 12
     v4 = iadd_imm v3, 12
     v5 = iadd_imm v4, 12
@@ -35,7 +39,10 @@ ebb0(v1: i32):
     v11 = iadd_imm v10, 12
     v12 = iadd_imm v11, 12
     v13 = iadd_imm v12, 12
-    v32 = iadd v12, v13
+    v14 = iadd_imm v13, 12
+    v33 = iadd v13, v14
+    ; check: iadd $v13
+    v32 = iadd v33, v12
     v31 = iadd v32, v11
     v30 = iadd v31, v10
     v29 = iadd v30, v9
@@ -46,7 +53,11 @@ ebb0(v1: i32):
     v24 = iadd v25, v4
     v23 = iadd v24, v3
     v22 = iadd v23, v2
+    ; check: $(r2v2=$V) = fill $v2
+    ; check: $v22 = iadd $v23, $r2v2
     v21 = iadd v22, v1
+    ; check: $(r2v1=$V) = fill $v1
+    ; check: $v21 = iadd $v22, $r2v1
     ; check: $(rlink2=$V) = fill $link
     return v21
     ; check: return $v21, $rlink2
