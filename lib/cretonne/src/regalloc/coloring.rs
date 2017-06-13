@@ -101,6 +101,7 @@ impl Coloring {
                liveness: &mut Liveness,
                topo: &mut TopoOrder,
                tracker: &mut LiveValueTracker) {
+        dbg!("Coloring for:\n{}", func.display(isa));
         let mut ctx = Context {
             reginfo: isa.register_info(),
             encinfo: isa.encoding_info(),
