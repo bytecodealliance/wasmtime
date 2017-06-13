@@ -11,8 +11,9 @@ instruction formats described in the reference:
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt
+from cdsl.registers import Stack
 from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
-from base.formats import UnaryImm, BranchIcmp, Branch, Jump, Call
+from base.formats import Unary, UnaryImm, BranchIcmp, Branch, Jump, Call
 from .registers import GPR
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
@@ -134,3 +135,13 @@ SBzero = EncRecipe(
         'SBzero', Branch, size=4,
         ins=(GPR), outs=(),
         branch_range=(0, 13))
+
+# Spill of a GPR.
+GPsp = EncRecipe(
+        'GPsp', Unary, size=4,
+        ins=GPR, outs=Stack(GPR))
+
+# Fill of a GPR.
+GPfi = EncRecipe(
+        'GPfi', Unary, size=4,
+        ins=Stack(GPR), outs=GPR)

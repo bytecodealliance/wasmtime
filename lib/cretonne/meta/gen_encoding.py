@@ -56,7 +56,7 @@ from unique_table import UniqueSeqTable
 from collections import OrderedDict, defaultdict
 import math
 import itertools
-from cdsl.registers import RegClass, Register
+from cdsl.registers import RegClass, Register, Stack
 from cdsl.predicates import FieldPredicate
 
 try:
@@ -519,6 +519,10 @@ def emit_operand_constraints(
                     assert cons == tied[n], "Invalid tied constraint"
                     fmt.format('kind: ConstraintKind::Tied({}),', cons)
                     fmt.format('regclass: {},', recipe.ins[cons])
+                elif isinstance(cons, Stack):
+                    assert n not in tied, "Can't tie stack operand"
+                    fmt.line('kind: ConstraintKind::Stack,')
+                    fmt.format('regclass: {},', cons.regclass)
                 else:
                     raise AssertionError(
                             'Unsupported constraint {}'.format(cons))
