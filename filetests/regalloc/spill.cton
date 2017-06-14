@@ -62,3 +62,16 @@ ebb0(v1: i32):
     return v21
     ; check: return $v21, $rlink2
 }
+
+; All values live across a call must be spilled
+function %across_call(i32) {
+    fn0 = function %foo(i32)
+ebb0(v1: i32):
+    ; check: $v1 = spill
+    call fn0(v1)
+    ; check: call $fn0
+    call fn0(v1)
+    ; check: fill $v1
+    ; check: call $fn0
+    return
+}
