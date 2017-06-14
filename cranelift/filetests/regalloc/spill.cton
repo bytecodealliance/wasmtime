@@ -75,3 +75,32 @@ ebb0(v1: i32):
     ; check: call $fn0
     return
 }
+
+; The same value used for two function arguments.
+function %doubleuse(i32) {
+    fn0 = function %xx(i32, i32)
+ebb0(v0: i32):
+    ; check: $(c=$V) = copy $v0
+    call fn0(v0, v0)
+    ; check: call $fn0($v0, $c)
+    return
+}
+
+; The same value used as indirect callee and argument.
+function %doubleuse_icall1(i32) {
+    sig0 = signature(i32)
+ebb0(v0: i32):
+    ; not:copy
+    call_indirect sig0, v0(v0)
+    return
+}
+
+; The same value used as indirect callee and two arguments.
+function %doubleuse_icall2(i32) {
+    sig0 = signature(i32, i32)
+ebb0(v0: i32):
+    ; check: $(c=$V) = copy $v0
+    call_indirect sig0, v0(v0, v0)
+    ; check: call_indirect $sig0, $v0($v0, $c)
+    return
+}
