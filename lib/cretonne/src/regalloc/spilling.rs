@@ -152,13 +152,24 @@ impl<'a> Context<'a> {
         //
         // Spills should be removed from tracker. Otherwise they could be double-counted by
         // free_regs below.
+        let call_sig = dfg.call_signature(inst);
 
         // Update the live value tracker with this instruction.
         let (throughs, kills, defs) = tracker.process_inst(inst, dfg, self.liveness);
 
-
         // Remove kills from the pressure tracker.
         self.free_regs(kills);
+
+        // If inst is a call, spill all register values that are live across the call.
+        // This means that we don't currently take advantage of callee-saved registers.
+        // TODO: Be more sophisticated.
+        if call_sig.is_some() {
+            for lv in throughs {
+                if lv.affinity.is_reg() && !self.spills.contains(&lv.value) {
+                    self.spill_reg(lv.value);
+                }
+            }
+        }
 
         // Make sure we have enough registers for the register defs.
         // Dead defs are included here. They need a register too.

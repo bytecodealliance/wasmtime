@@ -64,6 +64,14 @@ impl Affinity {
         }
     }
 
+    /// Is this the `Reg` affinity?
+    pub fn is_reg(self) -> bool {
+        match self {
+            Affinity::Reg(_) => true,
+            _ => false,
+        }
+    }
+
     /// Is this the `Stack` affinity?
     pub fn is_stack(self) -> bool {
         match self {
