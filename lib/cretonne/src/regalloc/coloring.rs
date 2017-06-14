@@ -430,18 +430,16 @@ impl<'a> Context<'a> {
                          locations: &EntityMap<Value, ValueLoc>) {
         for (abi, &value) in abi_types.iter().zip(dfg.inst_variable_args(inst)) {
             if let ArgumentLoc::Reg(reg) = abi.location {
-                let cur_reg = self.divert.reg(value, locations);
-                if reg != cur_reg {
-                    if let Affinity::Reg(rci) =
-                        self.liveness
-                            .get(value)
-                            .expect("ABI register must have live range")
-                            .affinity {
-                        let rc = self.reginfo.rc(rci);
-                        self.solver.reassign_in(value, rc, cur_reg, reg);
-                    } else {
-                        panic!("ABI argument {} should be in a register", value);
-                    }
+                if let Affinity::Reg(rci) =
+                    self.liveness
+                        .get(value)
+                        .expect("ABI register must have live range")
+                        .affinity {
+                    let rc = self.reginfo.rc(rci);
+                    let cur_reg = self.divert.reg(value, locations);
+                    self.solver.reassign_in(value, rc, cur_reg, reg);
+                } else {
+                    panic!("ABI argument {} should be in a register", value);
                 }
             }
         }
