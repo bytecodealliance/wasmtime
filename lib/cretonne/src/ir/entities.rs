@@ -74,7 +74,7 @@ impl Ebb {
 }
 
 /// An opaque reference to an SSA value.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Value(u32);
 entity_impl!(Value, "v");
 
