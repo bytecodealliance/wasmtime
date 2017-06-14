@@ -2,7 +2,9 @@
 extern crate cretonne;
 extern crate cton_reader;
 extern crate docopt;
-extern crate rustc_serialize;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate filecheck;
 extern crate num_cpus;
 
@@ -34,7 +36,7 @@ Options:
 
 ";
 
-#[derive(RustcDecodable, Debug)]
+#[derive(Deserialize, Debug)]
 struct Args {
     cmd_test: bool,
     cmd_cat: bool,
@@ -49,12 +51,12 @@ pub type CommandResult = Result<(), String>;
 
 /// Parse the command line arguments and run the requested command.
 fn cton_util() -> CommandResult {
-    // Parse comand line arguments.
+    // Parse command line arguments.
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| {
                       d.help(true)
                           .version(Some(format!("Cretonne {}", VERSION)))
-                          .decode()
+                          .deserialize()
                   })
         .unwrap_or_else(|e| e.exit());
 
