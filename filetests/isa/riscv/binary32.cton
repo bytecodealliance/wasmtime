@@ -77,6 +77,10 @@ ebb0(v9999: i32):
     [-,%x7]     v140 = iconst.i32 0x12345000            ; bin: 123453b7
     [-,%x16]    v141 = iconst.i32 0xffffffff_fedcb000   ; bin: fedcb837
 
+    ; Copies alias to iadd_imm.
+    [-,%x7]     v150 = copy v1                          ; bin: 00050393
+    [-,%x16]    v151 = copy v2                          ; bin: 000a8813
+
     ; Control Transfer Instructions
 
     ; jal %x1, fn0
