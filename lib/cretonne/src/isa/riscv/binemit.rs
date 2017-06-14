@@ -182,6 +182,15 @@ fn recipe_iret<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS
           sink);
 }
 
+fn recipe_icall<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    // Indirect instructions are jalr with rd=%x1.
+    put_i(func.encodings[inst].bits(),
+          func.locations[func.dfg.inst_args(inst)[0]].unwrap_reg(),
+          0, // no offset.
+          1, // rd = %x1: link register.
+          sink);
+}
+
 fn recipe_icopy<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
     if let InstructionData::Unary { arg, .. } = func.dfg[inst] {
         put_i(func.encodings[inst].bits(),

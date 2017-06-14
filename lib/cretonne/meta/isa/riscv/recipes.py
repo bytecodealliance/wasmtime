@@ -13,7 +13,8 @@ from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt
 from cdsl.registers import Stack
 from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
-from base.formats import Unary, UnaryImm, BranchIcmp, Branch, Jump, Call
+from base.formats import Unary, UnaryImm, BranchIcmp, Branch, Jump
+from base.formats import Call, IndirectCall
 from .registers import GPR
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
@@ -112,6 +113,9 @@ Iicmp = EncRecipe(
 # immediate offset.
 # The variable return values are not encoded.
 Iret = EncRecipe('Iret', MultiAry, size=4, ins=(), outs=())
+
+# I-type encoding for `jalr` as an indirect call.
+Icall = EncRecipe('Icall', IndirectCall, size=4, ins=GPR, outs=())
 
 # Copy of a GPR is implemented as addi x, 0.
 Icopy = EncRecipe('Icopy', Unary, size=4, ins=GPR, outs=GPR)

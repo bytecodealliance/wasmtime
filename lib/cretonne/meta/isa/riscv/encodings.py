@@ -7,7 +7,7 @@ from base.immediates import intcc
 from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH, JALR, JAL
 from .recipes import LOAD, STORE
-from .recipes import R, Rshamt, Ricmp, I, Iicmp, Iret, Icopy
+from .recipes import R, Rshamt, Ricmp, I, Iicmp, Iret, Icall, Icopy
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi
 from .settings import use_m
 from cdsl.ast import Var
@@ -115,6 +115,8 @@ for inst,           f3 in [
 # is added by legalize_signature().
 RV32.enc(base.x_return, Iret, JALR())
 RV64.enc(base.x_return, Iret, JALR())
+RV32.enc(base.call_indirect.i32, Icall, JALR())
+RV64.enc(base.call_indirect.i64, Icall, JALR())
 
 # Spill and fill.
 RV32.enc(base.spill.i32, GPsp, STORE(0b010))

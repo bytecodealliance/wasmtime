@@ -4,6 +4,7 @@ isa riscv
 
 function %RV32I(i32 link [%x1]) -> i32 link [%x1] {
     fn0 = function %foo()
+    sig0 = signature()
 
 ebb0(v9999: i32):
     [-,%x10]            v1 = iconst.i32 1
@@ -85,6 +86,10 @@ ebb0(v9999: i32):
 
     ; jal %x1, fn0
     call fn0()                                  ; bin: Call(fn0) 000000ef
+
+    ; jalr %x1, %x10
+    call_indirect sig0, v1()                    ; bin: 000500e7
+    call_indirect sig0, v2()                    ; bin: 000a80e7
 
     brz v1, ebb3
     brnz v1, ebb1
