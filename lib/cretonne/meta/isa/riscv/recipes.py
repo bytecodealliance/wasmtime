@@ -113,6 +113,9 @@ Iicmp = EncRecipe(
 # The variable return values are not encoded.
 Iret = EncRecipe('Iret', MultiAry, size=4, ins=(), outs=())
 
+# Copy of a GPR is implemented as addi x, 0.
+Icopy = EncRecipe('Icopy', Unary, size=4, ins=GPR, outs=GPR)
+
 # U-type instructions have a 20-bit immediate that targets bits 12-31.
 U = EncRecipe(
         'U', UnaryImm, size=4, ins=(), outs=GPR,

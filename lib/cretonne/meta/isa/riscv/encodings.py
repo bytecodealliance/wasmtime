@@ -7,7 +7,7 @@ from base.immediates import intcc
 from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH, JALR, JAL
 from .recipes import LOAD, STORE
-from .recipes import R, Rshamt, Ricmp, I, Iicmp, Iret
+from .recipes import R, Rshamt, Ricmp, I, Iicmp, Iret, Icopy
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi
 from .settings import use_m
 from cdsl.ast import Var
@@ -123,3 +123,8 @@ RV64.enc(base.spill.i64, GPsp, STORE(0b011))
 RV32.enc(base.fill.i32, GPfi, LOAD(0b010))
 RV64.enc(base.fill.i32, GPfi, LOAD(0b010))
 RV64.enc(base.fill.i64, GPfi, LOAD(0b011))
+
+# Register copies.
+RV32.enc(base.copy.i32, Icopy, OPIMM(0b000))
+RV64.enc(base.copy.i64, Icopy, OPIMM(0b000))
+RV64.enc(base.copy.i32, Icopy, OPIMM32(0b000))

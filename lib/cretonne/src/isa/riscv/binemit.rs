@@ -182,6 +182,18 @@ fn recipe_iret<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS
           sink);
 }
 
+fn recipe_icopy<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::Unary { arg, .. } = func.dfg[inst] {
+        put_i(func.encodings[inst].bits(),
+              func.locations[arg].unwrap_reg(),
+              0,
+              func.locations[func.dfg.first_result(inst)].unwrap_reg(),
+              sink);
+    } else {
+        panic!("Expected Unary format: {:?}", func.dfg[inst]);
+    }
+}
+
 /// U-type instructions.
 ///
 ///   31  11 6
