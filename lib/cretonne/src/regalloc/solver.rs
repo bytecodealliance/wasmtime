@@ -364,13 +364,15 @@ impl Solver {
         }
         self.regs_in.free(rc, from);
         self.regs_out.take(rc, to);
-        self.assignments
-            .insert(Assignment {
-                        value,
-                        rc,
-                        from,
-                        to,
-                    });
+        if from != to {
+            self.assignments
+                .insert(Assignment {
+                            value,
+                            rc,
+                            from,
+                            to,
+                        });
+        }
     }
 
     /// Add a variable representing an input side value with an existing register assignment.
