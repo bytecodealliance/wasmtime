@@ -16,11 +16,11 @@
 //!    operands.
 
 use dominator_tree::DominatorTree;
-use entity_map::EntityMap;
 use ir::{DataFlowGraph, Layout, Cursor, InstBuilder};
-use ir::{Function, Ebb, Inst, Value, SigRef};
+use ir::{Function, Ebb, Inst, Value, ValueLoc, SigRef};
+use ir::{InstEncodings, StackSlots, ValueLocations};
 use isa::registers::{RegClass, RegClassMask};
-use isa::{TargetIsa, RegInfo, EncInfo, Encoding, RecipeConstraints, ConstraintKind};
+use isa::{TargetIsa, RegInfo, EncInfo, RecipeConstraints, ConstraintKind};
 use regalloc::affinity::Affinity;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
@@ -41,7 +41,9 @@ struct Context<'a> {
     encinfo: EncInfo,
 
     // References to parts of the current function.
-    encodings: &'a mut EntityMap<Inst, Encoding>,
+    encodings: &'a mut InstEncodings,
+    stack_slots: &'a mut StackSlots,
+    locations: &'a mut ValueLocations,
 
     // References to contextual data structures we need.
     domtree: &'a DominatorTree,
@@ -85,6 +87,8 @@ impl Spilling {
             reginfo: isa.register_info(),
             encinfo: isa.encoding_info(),
             encodings: &mut func.encodings,
+            stack_slots: &mut func.stack_slots,
+            locations: &mut func.locations,
             domtree,
             liveness,
             topo,
@@ -209,7 +213,7 @@ impl<'a> Context<'a> {
         if call_sig.is_some() {
             for lv in throughs {
                 if lv.affinity.is_reg() && !self.spills.contains(&lv.value) {
-                    self.spill_reg(lv.value);
+                    self.spill_reg(lv.value, dfg);
                 }
             }
         }
@@ -351,7 +355,7 @@ impl<'a> Context<'a> {
 
         if let Some(value) = best {
             // Found a spill candidate.
-            self.spill_reg(value);
+            self.spill_reg(value, dfg);
         } else {
             panic!("Ran out of registers for mask={}", mask);
         }
@@ -365,12 +369,17 @@ impl<'a> Context<'a> {
     ///
     /// Note that this does not update the cached affinity in the live value tracker. Call
     /// `process_spills` to do that.
-    fn spill_reg(&mut self, value: Value) {
+    fn spill_reg(&mut self, value: Value, dfg: &DataFlowGraph) {
         if let Affinity::Reg(rci) = self.liveness.spill(value) {
             let rc = self.reginfo.rc(rci);
             self.pressure.free(rc);
             self.spills.push(value);
-            dbg!("Spilled {}:{} -> {}", value, rc, self.pressure);
+
+            // Assign a spill slot.
+            // TODO: phi-related values should use the same spill slot.
+            let ss = self.stack_slots.make_spill_slot(dfg.value_type(value));
+            *self.locations.ensure(value) = ValueLoc::Stack(ss);
+            dbg!("Spilled {}:{} to {} -> {}", value, rc, ss, self.pressure);
         } else {
             panic!("Cannot spill {} that was already on the stack", value);
         }
