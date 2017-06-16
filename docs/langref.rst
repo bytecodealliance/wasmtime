@@ -465,9 +465,9 @@ frame. The stack frame is divided into fixed-size stack slots that are
 allocated in the :term:`function preamble`. Stack slots are not typed, they
 simply represent a contiguous sequence of bytes in the stack frame.
 
-.. inst:: SS = stack_slot Bytes, Flags...
+.. inst:: SS = local Bytes, Flags...
 
-    Allocate a stack slot in the preamble.
+    Allocate a stack slot for a local variable in the preamble.
 
     If no alignment is specified, Cretonne will pick an appropriate alignment
     for the stack slot based on its size and access patterns.

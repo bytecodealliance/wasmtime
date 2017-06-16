@@ -1,7 +1,7 @@
 " Vim syntax file
 " Language:     Cretonne
 " Maintainer:   Jakob Stoklund Olesen <stoklund@2pi.dk
-" Last Change:  Sep 22, 2016
+" Last Change:  Jun 16, 2017
 
 if version < 600
   syntax clear
@@ -14,7 +14,7 @@ endif
 syn spell notoplevel
 
 syn keyword ctonHeader test isa set
-syn keyword ctonDecl function stack_slot jump_table
+syn keyword ctonDecl function jump_table incoming_arg outgoing_arg spill_slot local
 syn keyword ctonFilecheck check sameln nextln unordered not regex contained
 
 syn match ctonType  /\<[bif]\d\+\(x\d\+\)\?\>/
