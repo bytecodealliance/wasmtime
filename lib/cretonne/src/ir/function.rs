@@ -5,8 +5,8 @@
 
 use binemit::CodeOffset;
 use entity_map::{EntityMap, PrimaryEntityData};
-use ir::{FunctionName, Signature, Value, Inst, Ebb, StackSlot, StackSlotData, JumpTable,
-         JumpTableData, ValueLoc, DataFlowGraph, Layout};
+use ir::{FunctionName, Signature, Value, Inst, Ebb, StackSlots, JumpTable, JumpTableData,
+         ValueLoc, DataFlowGraph, Layout};
 use isa::{TargetIsa, Encoding};
 use std::fmt::{self, Display, Debug, Formatter};
 use write::write_function;
@@ -24,7 +24,7 @@ pub struct Function {
     pub signature: Signature,
 
     /// Stack slots allocated in this function.
-    pub stack_slots: EntityMap<StackSlot, StackSlotData>,
+    pub stack_slots: StackSlots,
 
     /// Jump tables used in this function.
     pub jump_tables: EntityMap<JumpTable, JumpTableData>,
@@ -50,7 +50,6 @@ pub struct Function {
     pub offsets: EntityMap<Ebb, CodeOffset>,
 }
 
-impl PrimaryEntityData for StackSlotData {}
 impl PrimaryEntityData for JumpTableData {}
 
 impl Function {
@@ -59,7 +58,7 @@ impl Function {
         Function {
             name,
             signature: sig,
-            stack_slots: EntityMap::new(),
+            stack_slots: StackSlots::new(),
             jump_tables: EntityMap::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),

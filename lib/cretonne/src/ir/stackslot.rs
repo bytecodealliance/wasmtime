@@ -3,7 +3,10 @@
 //! The `StackSlotData` struct keeps track of a single stack slot in a function.
 //!
 
+use entity_map::{EntityMap, PrimaryEntityData, Keys};
+use ir::{Type, StackSlot};
 use std::fmt;
+use std::ops::Index;
 use std::str::FromStr;
 
 /// The kind of a stack slot.
@@ -78,6 +81,71 @@ impl StackSlotData {
 impl fmt::Display for StackSlotData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.kind, self.size)
+    }
+}
+
+impl PrimaryEntityData for StackSlotData {}
+
+/// Stack frame manager.
+///
+/// Keep track of all the stack slots used by a function.
+#[derive(Clone, Debug)]
+pub struct StackSlots {
+    slots: EntityMap<StackSlot, StackSlotData>,
+}
+
+/// Stack slot manager functions that behave mostly like an entity map.
+impl StackSlots {
+    /// Create an empty stack slot manager.
+    pub fn new() -> StackSlots {
+        StackSlots { slots: EntityMap::new() }
+    }
+
+    /// Clear out everything.
+    pub fn clear(&mut self) {
+        self.slots.clear();
+    }
+
+    /// Allocate a new stack slot.
+    ///
+    /// This function should be primarily used by the text format parser. There are more convenient
+    /// functions for creating specific kinds of stack slots below.
+    pub fn push(&mut self, data: StackSlotData) -> StackSlot {
+        self.slots.push(data)
+    }
+
+    /// Check if `ss` is a valid stack slot reference.
+    pub fn is_valid(&self, ss: StackSlot) -> bool {
+        self.slots.is_valid(ss)
+    }
+
+    /// Get an iterator over all the stack slot keys.
+    pub fn keys(&self) -> Keys<StackSlot> {
+        self.slots.keys()
+    }
+
+    /// Get a reference to the next stack slot that would be created by `push()`.
+    ///
+    /// This should just be used by the parser.
+    pub fn next_key(&self) -> StackSlot {
+        self.slots.next_key()
+    }
+}
+
+/// Higher-level stack frame manipulation functions.
+impl StackSlots {
+    /// Create a new spill slot for spilling values of type `ty`.
+    pub fn make_spill_slot(&mut self, ty: Type) -> StackSlot {
+        let bytes = (ty.bits() as u32 + 7) / 8;
+        self.push(StackSlotData::new(StackSlotKind::SpillSlot, bytes))
+    }
+}
+
+impl Index<StackSlot> for StackSlots {
+    type Output = StackSlotData;
+
+    fn index(&self, ss: StackSlot) -> &StackSlotData {
+        &self.slots[ss]
     }
 }
 
