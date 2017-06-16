@@ -896,13 +896,17 @@ impl<'a> Parser<'a> {
 
     // Parse a stack slot decl.
     //
-    // stack-slot-decl ::= * StackSlot(ss) "=" "stack_slot" Bytes {"," stack-slot-flag}
+    // stack-slot-decl ::= * StackSlot(ss) "=" stack-slot-kind Bytes {"," stack-slot-flag}
+    // stack-slot-kind ::= "local"
+    //                   | "spill_slot"
+    //                   | "incoming_arg"
+    //                   | "outgoing_arg"
     fn parse_stack_slot_decl(&mut self) -> Result<(u32, StackSlotData)> {
         let number = self.match_ss("expected stack slot number: ss«n»")?;
-        self.match_token(Token::Equal, "expected '=' in stack_slot decl")?;
-        self.match_identifier("stack_slot", "expected 'stack_slot'")?;
+        self.match_token(Token::Equal, "expected '=' in stack slot declaration")?;
+        let kind = self.match_enum("expected stack slot kind")?;
 
-        // stack-slot-decl ::= StackSlot(ss) "=" "stack_slot" * Bytes {"," stack-slot-flag}
+        // stack-slot-decl ::= StackSlot(ss) "=" stack-slot-kind * Bytes {"," stack-slot-flag}
         let bytes: i64 = self.match_imm64("expected byte-size in stack_slot decl")?
             .into();
         if bytes < 0 {
@@ -911,9 +915,9 @@ impl<'a> Parser<'a> {
         if bytes > u32::MAX as i64 {
             return err!(self.loc, "stack slot too large");
         }
-        let data = StackSlotData::new(bytes as u32);
+        let data = StackSlotData::new(kind, bytes as u32);
 
-        // TBD: stack-slot-decl ::= StackSlot(ss) "=" "stack_slot" Bytes * {"," stack-slot-flag}
+        // TBD: stack-slot-decl ::= StackSlot(ss) "=" stack-slot-kind Bytes * {"," stack-slot-flag}
         Ok((number, data))
     }
 
@@ -1719,6 +1723,7 @@ mod tests {
     use super::*;
     use cretonne::ir::{ArgumentExtension, ArgumentPurpose};
     use cretonne::ir::types;
+    use cretonne::ir::StackSlotKind;
     use cretonne::ir::entities::AnyEntity;
     use testfile::{Details, Comment};
     use isaspec::IsaSpec;
@@ -1793,8 +1798,8 @@ mod tests {
     #[test]
     fn stack_slot_decl() {
         let (func, _) = Parser::new("function %foo() {
-                                       ss3 = stack_slot 13
-                                       ss1 = stack_slot 1
+                                       ss3 = incoming_arg 13
+                                       ss1 = spill_slot 1
                                      }")
                 .parse_function(None)
                 .unwrap();
@@ -1802,16 +1807,18 @@ mod tests {
         let mut iter = func.stack_slots.keys();
         let ss0 = iter.next().unwrap();
         assert_eq!(ss0.to_string(), "ss0");
+        assert_eq!(func.stack_slots[ss0].kind, StackSlotKind::IncomingArg);
         assert_eq!(func.stack_slots[ss0].size, 13);
         let ss1 = iter.next().unwrap();
         assert_eq!(ss1.to_string(), "ss1");
+        assert_eq!(func.stack_slots[ss1].kind, StackSlotKind::SpillSlot);
         assert_eq!(func.stack_slots[ss1].size, 1);
         assert_eq!(iter.next(), None);
 
         // Catch duplicate definitions.
         assert_eq!(Parser::new("function %bar() {
-                                    ss1  = stack_slot 13
-                                    ss1  = stack_slot 1
+                                    ss1  = spill_slot 13
+                                    ss1  = spill_slot 1
                                 }")
                            .parse_function(None)
                            .unwrap_err()
@@ -1844,7 +1851,7 @@ mod tests {
     fn comments() {
         let (func, Details { comments, .. }) = Parser::new("; before
                          function %comment() { ; decl
-                            ss10  = stack_slot 13 ; stackslot.
+                            ss10  = outgoing_arg 13 ; stackslot.
                             ; Still stackslot.
                             jt10 = jump_table ebb0
                             ; Jumptable

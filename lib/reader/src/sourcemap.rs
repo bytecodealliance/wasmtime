@@ -223,7 +223,7 @@ mod tests {
     #[test]
     fn details() {
         let tf = parse_test("function %detail() {
-                               ss10 = stack_slot 13
+                               ss10 = incoming_arg 13
                                jt10 = jump_table ebb0
                              ebb0(v4: i32, v7: i32):
                                v10 = iadd v4, v7

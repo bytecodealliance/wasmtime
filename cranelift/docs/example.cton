@@ -1,7 +1,7 @@
 test verifier
 
 function %average(i32, i32) -> f32 {
-    ss1 = stack_slot 8            ; Stack slot for ``sum``.
+    ss1 = local 8            ; Stack slot for ``sum``.
 
 ebb1(v1: i32, v2: i32):
     v3 = f64const 0x0.0

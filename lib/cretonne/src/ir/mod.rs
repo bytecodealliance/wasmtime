@@ -22,7 +22,7 @@ pub use ir::extfunc::{Signature, ArgumentType, ArgumentExtension, ArgumentPurpos
 pub use ir::types::Type;
 pub use ir::entities::{Ebb, Inst, Value, StackSlot, JumpTable, FuncRef, SigRef};
 pub use ir::instructions::{Opcode, InstructionData, VariableArgs, ValueList, ValueListPool};
-pub use ir::stackslot::StackSlotData;
+pub use ir::stackslot::{StackSlotKind, StackSlotData};
 pub use ir::jumptable::JumpTableData;
 pub use ir::valueloc::{ValueLoc, ArgumentLoc};
 pub use ir::dfg::{DataFlowGraph, ValueDef};
