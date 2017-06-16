@@ -10,6 +10,7 @@ test regalloc
 ; - %x10-%x15 are function arguments.
 ;
 ; regex: V=v\d+
+; regex: WS=\s+
 
 isa riscv enable_e
 
@@ -19,14 +20,18 @@ isa riscv enable_e
 ; 2. The link register.
 ; 3. The first computed value, v2
 function %pyramid(i32) -> i32 {
+; check: ss0 = spill_slot 4
+; check: ss1 = spill_slot 4
+; check: ss2 = spill_slot 4
+; not: spill_slot
 ebb0(v1: i32):
 ; check: $ebb0($(rv1=$V): i32, $(rlink=$V): i32)
-    ; check: $v1 = spill $rv1
-    ; nextln: $(link=$V) = spill $rlink
+    ; check: ,ss0]$WS $v1 = spill $rv1
+    ; nextln: ,ss1]$WS $(link=$V) = spill $rlink
     ; not: spill
     v2 = iadd_imm v1, 12
     ; check: $(r1v2=$V) = iadd_imm
-    ; nextln: $v2 = spill $r1v2
+    ; nextln: ,ss2]$WS $v2 = spill $r1v2
     ; not: spill
     v3 = iadd_imm v2, 12
     v4 = iadd_imm v3, 12
