@@ -33,7 +33,7 @@
 
 use entity_map::EntityMap;
 use dominator_tree::DominatorTree;
-use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph};
+use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph, ValueLocations};
 use ir::{InstBuilder, Signature, ArgumentType, ArgumentLoc};
 use isa::{TargetIsa, Encoding, EncInfo, OperandConstraint, ConstraintKind};
 use isa::{RegUnit, RegClass, RegInfo, regs_overlap};
@@ -218,7 +218,7 @@ impl<'a> Context<'a> {
     fn color_entry_args(&self,
                         sig: &Signature,
                         args: &[LiveValue],
-                        locations: &mut EntityMap<Value, ValueLoc>)
+                        locations: &mut ValueLocations)
                         -> AllocatableSet {
         assert_eq!(sig.argument_types.len(), args.len());
 
@@ -271,7 +271,7 @@ impl<'a> Context<'a> {
     fn color_args(&self,
                   args: &[LiveValue],
                   mut regs: AllocatableSet,
-                  locations: &mut EntityMap<Value, ValueLoc>)
+                  locations: &mut ValueLocations)
                   -> AllocatableSet {
         // Available registers *after* filtering out the dead arguments.
         let mut live_regs = regs.clone();
@@ -309,7 +309,7 @@ impl<'a> Context<'a> {
                   dfg: &mut DataFlowGraph,
                   tracker: &mut LiveValueTracker,
                   regs: &mut AllocatableSet,
-                  locations: &mut EntityMap<Value, ValueLoc>,
+                  locations: &mut ValueLocations,
                   func_signature: &Signature) {
         dbg!("Coloring [{}] {}",
              self.encinfo.display(encoding),
@@ -449,7 +449,7 @@ impl<'a> Context<'a> {
     // into the constraint solver. Convert them to solver variables so they can be diverted.
     fn divert_fixed_input_conflicts(&mut self,
                                     live: &[LiveValue],
-                                    locations: &mut EntityMap<Value, ValueLoc>) {
+                                    locations: &mut ValueLocations) {
         for lv in live {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
@@ -468,7 +468,7 @@ impl<'a> Context<'a> {
                              constraints: &[OperandConstraint],
                              defs: &[LiveValue],
                              throughs: &[LiveValue],
-                             locations: &mut EntityMap<Value, ValueLoc>) {
+                             locations: &mut ValueLocations) {
         for (op, lv) in constraints.iter().zip(defs) {
             if let ConstraintKind::FixedReg(reg) = op.kind {
                 self.add_fixed_output(lv.value, op.regclass, reg, throughs, locations);
@@ -483,7 +483,7 @@ impl<'a> Context<'a> {
                           abi_types: &[ArgumentType],
                           defs: &[LiveValue],
                           throughs: &[LiveValue],
-                          locations: &mut EntityMap<Value, ValueLoc>) {
+                          locations: &mut ValueLocations) {
         // It's technically possible for a call instruction to have fixed results before the
         // variable list of results, but we have no known instances of that.
         // Just assume all results are variable return values.
@@ -506,7 +506,7 @@ impl<'a> Context<'a> {
                         rc: RegClass,
                         reg: RegUnit,
                         throughs: &[LiveValue],
-                        locations: &mut EntityMap<Value, ValueLoc>) {
+                        locations: &mut ValueLocations) {
         if !self.solver.add_fixed_output(rc, reg) {
             // The fixed output conflicts with some of the live-through registers.
             for lv in throughs {
@@ -538,7 +538,7 @@ impl<'a> Context<'a> {
                                   constraints: &[OperandConstraint],
                                   defs: &[LiveValue],
                                   _dfg: &mut DataFlowGraph,
-                                  _locations: &mut EntityMap<Value, ValueLoc>) {
+                                  _locations: &mut ValueLocations) {
         for (op, lv) in constraints.iter().zip(defs) {
             match op.kind {
                 ConstraintKind::FixedReg(_) |
