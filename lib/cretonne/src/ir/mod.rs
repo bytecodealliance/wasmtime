@@ -31,3 +31,19 @@ pub use ir::function::Function;
 pub use ir::builder::InstBuilder;
 pub use ir::progpoint::{ProgramPoint, ProgramOrder, ExpandedProgramPoint};
 pub use ir::memflags::MemFlags;
+
+use binemit;
+use entity_map::EntityMap;
+use isa;
+
+/// Map of value locations.
+pub type ValueLocations = EntityMap<Value, ValueLoc>;
+
+/// Map of jump tables.
+pub type JumpTables = EntityMap<JumpTable, JumpTableData>;
+
+/// Map of instruction encodings.
+pub type InstEncodings = EntityMap<Inst, isa::Encoding>;
+
+/// Code offsets for EBBs.
+pub type EbbOffsets = EntityMap<Ebb, binemit::CodeOffset>;

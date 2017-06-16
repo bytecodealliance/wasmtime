@@ -10,8 +10,7 @@
 //! pressure limits to be exceeded.
 
 use dominator_tree::DominatorTree;
-use entity_map::EntityMap;
-use ir::{Ebb, Inst, Value, Function, Signature, DataFlowGraph};
+use ir::{Ebb, Inst, Value, Function, Signature, DataFlowGraph, InstEncodings};
 use ir::layout::{Cursor, CursorPosition};
 use ir::{InstBuilder, Opcode, ArgumentType, ArgumentLoc};
 use isa::RegClass;
@@ -201,7 +200,7 @@ impl<'a> Context<'a> {
                   encoding: Encoding,
                   pos: &mut Cursor,
                   dfg: &mut DataFlowGraph,
-                  encodings: &mut EntityMap<Inst, Encoding>,
+                  encodings: &mut InstEncodings,
                   func_signature: &Signature,
                   tracker: &mut LiveValueTracker) {
         // Get the operand constraints for `inst` that we are trying to satisfy.
@@ -341,7 +340,7 @@ impl<'a> Context<'a> {
                     stack: Value,
                     reg: Value,
                     pos: &mut Cursor,
-                    encodings: &mut EntityMap<Inst, Encoding>,
+                    encodings: &mut InstEncodings,
                     dfg: &mut DataFlowGraph) {
         let ty = dfg.value_type(reg);
 

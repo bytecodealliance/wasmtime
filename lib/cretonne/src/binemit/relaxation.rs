@@ -28,9 +28,8 @@
 //! ```
 
 use binemit::CodeOffset;
-use entity_map::EntityMap;
-use ir::{Function, DataFlowGraph, Cursor, Inst, InstructionData, Opcode};
-use isa::{TargetIsa, EncInfo, Encoding};
+use ir::{Function, DataFlowGraph, Cursor, InstructionData, Opcode, InstEncodings};
+use isa::{TargetIsa, EncInfo};
 use iterators::IteratorExtras;
 
 /// Relax branches and compute the final layout of EBB headers in `func`.
@@ -127,7 +126,7 @@ fn fallthroughs(func: &mut Function) {
 /// Return the size of the replacement instructions up to and including the location where `pos` is
 /// left.
 fn relax_branch(dfg: &mut DataFlowGraph,
-                encodings: &mut EntityMap<Inst, Encoding>,
+                encodings: &mut InstEncodings,
                 encinfo: &EncInfo,
                 pos: &mut Cursor,
                 offset: CodeOffset,
