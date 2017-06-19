@@ -48,6 +48,7 @@ use binemit::CodeSink;
 use settings;
 use ir;
 use regalloc;
+use isa::enc_tables::Encodings;
 
 pub mod riscv;
 pub mod intel;
@@ -136,17 +137,27 @@ pub trait TargetIsa {
     /// Get a data structure describing the registers in this ISA.
     fn register_info(&self) -> RegInfo;
 
+    /// Returns an iterartor over legal encodings for the instruction.
+    fn legal_encodings<'a, 'b>(&'a self,
+                               dfg: &'b ir::DataFlowGraph,
+                               inst: &'b ir::InstructionData,
+                               ctrl_typevar: ir::Type)
+                               -> Result<Encodings<'a, 'b>, Legalize>;
+
     /// Encode an instruction after determining it is legal.
     ///
     /// If `inst` can legally be encoded in this ISA, produce the corresponding `Encoding` object.
-    /// Otherwise, return `None`.
+    /// Otherwise, return `Legalize` action.
     ///
     /// This is also the main entry point for determining if an instruction is legal.
     fn encode(&self,
               dfg: &ir::DataFlowGraph,
               inst: &ir::InstructionData,
               ctrl_typevar: ir::Type)
-              -> Result<Encoding, Legalize>;
+              -> Result<Encoding, Legalize> {
+        self.legal_encodings(dfg, inst, ctrl_typevar)
+            .and_then(|mut iter| iter.next().ok_or(Legalize::Expand))
+    }
 
     /// Get a data structure describing the instruction encodings in this ISA.
     fn encoding_info(&self) -> EncInfo;

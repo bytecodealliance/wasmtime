@@ -8,9 +8,9 @@ mod registers;
 
 use super::super::settings as shared_settings;
 use binemit::CodeSink;
-use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, general_encoding};
+use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encodings};
 use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, RegInfo, RegClass, EncInfo, Encoding, Legalize};
+use isa::{TargetIsa, RegInfo, RegClass, EncInfo, Legalize};
 use ir;
 use regalloc;
 
@@ -61,22 +61,22 @@ impl TargetIsa for Isa {
         enc_tables::INFO.clone()
     }
 
-    fn encode(&self,
-              _dfg: &ir::DataFlowGraph,
-              inst: &ir::InstructionData,
-              ctrl_typevar: ir::Type)
-              -> Result<Encoding, Legalize> {
+    fn legal_encodings<'a, 'b>(&'a self,
+                               _dfg: &'b ir::DataFlowGraph,
+                               inst: &'b ir::InstructionData,
+                               ctrl_typevar: ir::Type)
+                               -> Result<Encodings<'a, 'b>, Legalize> {
         lookup_enclist(ctrl_typevar,
                        inst.opcode(),
                        self.cpumode,
                        &enc_tables::LEVEL2[..])
                 .and_then(|enclist_offset| {
-                    general_encoding(enclist_offset,
-                                     &enc_tables::ENCLISTS[..],
-                                     |instp| enc_tables::check_instp(inst, instp),
-                                     |isap| self.isa_flags.numbered_predicate(isap as usize))
-                            .ok_or(Legalize::Expand)
-                })
+                              Ok(Encodings::new(enclist_offset,
+                                                &enc_tables::ENCLISTS[..],
+                                                inst,
+                                                enc_tables::check_instp,
+                                                self.isa_flags.predicate_bytes()))
+                          })
     }
 
     fn legalize_signature(&self, sig: &mut ir::Signature, current: bool) {
