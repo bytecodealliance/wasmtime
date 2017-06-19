@@ -60,7 +60,7 @@ impl Context {
     ///
     /// The `isa` argument is currently unused, but the verifier will soon be able to also
     /// check ISA-dependent constraints.
-    pub fn verify<'a>(&self, isa: Option<&TargetIsa>) -> verifier::Result {
+    pub fn verify(&self, isa: Option<&TargetIsa>) -> verifier::Result {
         verifier::verify_context(&self.func, &self.cfg, &self.domtree, isa)
     }
 

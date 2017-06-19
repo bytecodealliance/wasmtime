@@ -66,7 +66,7 @@ impl Directive {
             return Err(Error::Syntax(format!("invalid variable name in regex: {}", rest)));
         }
         let var = rest[0..varlen].to_string();
-        if !rest[varlen..].starts_with("=") {
+        if !rest[varlen..].starts_with('=') {
             return Err(Error::Syntax(format!("expected '=' after variable '{}' in regex: {}",
                                              var,
                                              rest)));
@@ -196,7 +196,7 @@ impl Checker {
             // Check if `pat` matches in `range`.
             state.recorder.directive(dct_idx);
             if let Some((match_begin, match_end)) = state.match_positive(pat, range)? {
-                if let &Directive::Unordered(_) = dct {
+                if let Directive::Unordered(_) = *dct {
                     // This was an unordered unordered match.
                     // Keep track of the largest matched position, but leave `last_ordered` alone.
                     state.max_match = max(state.max_match, match_end);
@@ -231,7 +231,7 @@ impl Checker {
         // Verify any pending `not:` directives after the last ordered directive.
         for (not_idx, not_begin, rx) in nots.drain(..) {
             state.recorder.directive(not_idx);
-            if let Some(_) = rx.find(&text[not_begin..]) {
+            if rx.find(&text[not_begin..]).is_some() {
                 // Matched `not:` pattern.
                 // TODO: Use matched range for an error message.
                 return Ok(false);

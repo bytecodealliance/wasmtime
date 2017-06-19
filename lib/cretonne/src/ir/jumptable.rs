@@ -65,7 +65,7 @@ impl JumpTableData {
     /// Enumerate over all `(idx, dest)` pairs in the table in order.
     ///
     /// This returns an iterator that skips any empty slots in the table.
-    pub fn entries<'a>(&'a self) -> Entries {
+    pub fn entries(&self) -> Entries {
         Entries(self.table.iter().cloned().enumerate())
     }
 

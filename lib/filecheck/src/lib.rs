@@ -4,8 +4,8 @@
 //! A list of directives is typically extracted from a file containing a test case. The test case
 //! is then run through the program under test, and its output matched against the directives.
 //!
-//! See the [CheckerBuilder](struct.CheckerBuilder.html) and [Checker](struct.Checker.html) types
-//! for the main library API.
+//! See the [`CheckerBuilder`](struct.CheckerBuilder.html) and [`Checker`](struct.Checker.html)
+//! types for the main library API.
 //!
 //! # Directives
 //!

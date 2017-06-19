@@ -208,7 +208,7 @@ impl MutableSourceMap for SourceMap {
     }
 
     fn def_entity(&mut self, entity: AnyEntity, loc: &Location) -> Result<()> {
-        if self.locations.insert(entity, loc.clone()).is_some() {
+        if self.locations.insert(entity, *loc).is_some() {
             err!(loc, "duplicate entity: {}", entity)
         } else {
             Ok(())

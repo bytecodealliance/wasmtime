@@ -226,7 +226,7 @@ impl<'a> Context<'a> {
                 // Add register def to pressure, spill if needed.
                 while let Err(mask) = self.pressure.take_transient(op.regclass) {
                     dbg!("Need {} reg from {} throughs", op.regclass, throughs.len());
-                    self.spill_from(mask, throughs, dfg, &pos.layout);
+                    self.spill_from(mask, throughs, dfg, pos.layout);
                 }
             }
         }

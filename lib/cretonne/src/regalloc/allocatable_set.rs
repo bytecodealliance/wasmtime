@@ -50,14 +50,14 @@ impl AllocatableSet {
     /// It is an error to take a register that doesn't have all of its register units available.
     pub fn take(&mut self, rc: RegClass, reg: RegUnit) {
         let (idx, bits) = bitmask(rc, reg);
-        debug_assert!((self.avail[idx] & bits) == bits, "Not available");
+        debug_assert_eq!(self.avail[idx] & bits, bits, "Not available");
         self.avail[idx] &= !bits;
     }
 
     /// Make `reg` available for allocation again.
     pub fn free(&mut self, rc: RegClass, reg: RegUnit) {
         let (idx, bits) = bitmask(rc, reg);
-        debug_assert!((self.avail[idx] & bits) == 0, "Not allocated");
+        debug_assert_eq!(self.avail[idx] & bits, 0, "Not allocated");
         self.avail[idx] |= bits;
     }
 
@@ -118,7 +118,7 @@ impl Iterator for RegSetIter {
                 let unit = unit_offset + word.trailing_zeros() as RegUnit;
 
                 // Clear that lowest bit so we won't find it again.
-                *word = *word & (*word - 1);
+                *word &= *word - 1;
 
                 return Some(unit);
             }

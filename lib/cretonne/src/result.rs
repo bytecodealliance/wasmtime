@@ -3,7 +3,6 @@
 use verifier;
 use std::error::Error as StdError;
 use std::fmt;
-use std::result;
 
 /// A compilation error.
 ///
@@ -32,7 +31,7 @@ pub enum CtonError {
 }
 
 /// A Cretonne compilation result.
-pub type CtonResult = result::Result<(), CtonError>;
+pub type CtonResult = Result<(), CtonError>;
 
 impl fmt::Display for CtonError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

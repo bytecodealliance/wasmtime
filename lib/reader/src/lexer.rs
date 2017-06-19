@@ -171,7 +171,7 @@ impl<'a> Lexer<'a> {
 
     // Scan a single-char token.
     fn scan_char(&mut self, tok: Token<'a>) -> Result<LocatedToken<'a>, LocatedError> {
-        assert!(self.lookahead != None);
+        assert_ne!(self.lookahead, None);
         let loc = self.loc();
         self.next_ch();
         token(tok, loc)
@@ -184,7 +184,7 @@ impl<'a> Lexer<'a> {
                   -> Result<LocatedToken<'a>, LocatedError> {
         let loc = self.loc();
         for _ in 0..count {
-            assert!(self.lookahead != None);
+            assert_ne!(self.lookahead, None);
             self.next_ch();
         }
         token(tok, loc)
@@ -206,7 +206,7 @@ impl<'a> Lexer<'a> {
     fn scan_comment(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
         let loc = self.loc();
         let text = self.rest_of_line();
-        return token(Token::Comment(text), loc);
+        token(Token::Comment(text), loc)
     }
 
     // Scan a number token which can represent either an integer or floating point number.
@@ -305,8 +305,8 @@ impl<'a> Lexer<'a> {
     // decoded token.
     fn numbered_entity(prefix: &str, number: u32) -> Option<Token<'a>> {
         match prefix {
-            "v" => Value::with_number(number).map(|v| Token::Value(v)),
-            "ebb" => Ebb::with_number(number).map(|ebb| Token::Ebb(ebb)),
+            "v" => Value::with_number(number).map(Token::Value),
+            "ebb" => Ebb::with_number(number).map(Token::Ebb),
             "ss" => Some(Token::StackSlot(number)),
             "jt" => Some(Token::JumpTable(number)),
             "fn" => Some(Token::FuncRef(number)),
@@ -339,7 +339,7 @@ impl<'a> Lexer<'a> {
         };
         if is_vector {
             if number <= u16::MAX as u32 {
-                base_type.by(number as u16).map(|t| Token::Type(t))
+                base_type.by(number as u16).map(Token::Type)
             } else {
                 None
             }
@@ -352,7 +352,7 @@ impl<'a> Lexer<'a> {
         let loc = self.loc();
         let begin = self.pos + 1;
 
-        assert!(self.lookahead == Some('%'));
+        assert_eq!(self.lookahead, Some('%'));
 
         while let Some(c) = self.next_ch() {
             if !(c.is_ascii() && c.is_alphanumeric() || c == '_') {
@@ -368,7 +368,7 @@ impl<'a> Lexer<'a> {
         let loc = self.loc();
         let begin = self.pos + 1;
 
-        assert!(self.lookahead == Some('#'));
+        assert_eq!(self.lookahead, Some('#'));
 
         while let Some(c) = self.next_ch() {
             if !char::is_digit(c, 16) {

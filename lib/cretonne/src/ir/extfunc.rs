@@ -70,7 +70,7 @@ impl Signature {
 pub struct DisplaySignature<'a>(&'a Signature, Option<&'a RegInfo>);
 
 fn write_list(f: &mut fmt::Formatter,
-              args: &Vec<ArgumentType>,
+              args: &[ArgumentType],
               regs: Option<&RegInfo>)
               -> fmt::Result {
     match args.split_first() {
