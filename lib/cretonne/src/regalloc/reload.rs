@@ -233,7 +233,7 @@ impl<'a> Context<'a> {
             // Create a live range for the new reload.
             let affinity = Affinity::Reg(cand.regclass.into());
             self.liveness.create_dead(reg, dfg.value_def(reg), affinity);
-            self.liveness.extend_locally(reg, ebb, inst, &pos.layout);
+            self.liveness.extend_locally(reg, ebb, inst, pos.layout);
         }
 
         // Rewrite arguments.

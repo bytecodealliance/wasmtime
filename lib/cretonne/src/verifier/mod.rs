@@ -229,21 +229,21 @@ impl<'a> Verifier<'a> {
             self.verify_value(inst, res)?;
         }
 
-        match &self.func.dfg[inst] {
-            &MultiAry { ref args, .. } => {
+        match self.func.dfg[inst] {
+            MultiAry { ref args, .. } => {
                 self.verify_value_list(inst, args)?;
             }
-            &Jump {
+            Jump {
                 destination,
                 ref args,
                 ..
             } |
-            &Branch {
+            Branch {
                 destination,
                 ref args,
                 ..
             } |
-            &BranchIcmp {
+            BranchIcmp {
                 destination,
                 ref args,
                 ..
@@ -251,41 +251,41 @@ impl<'a> Verifier<'a> {
                 self.verify_ebb(inst, destination)?;
                 self.verify_value_list(inst, args)?;
             }
-            &BranchTable { table, .. } => {
+            BranchTable { table, .. } => {
                 self.verify_jump_table(inst, table)?;
             }
-            &Call { func_ref, ref args, .. } => {
+            Call { func_ref, ref args, .. } => {
                 self.verify_func_ref(inst, func_ref)?;
                 self.verify_value_list(inst, args)?;
             }
-            &IndirectCall { sig_ref, ref args, .. } => {
+            IndirectCall { sig_ref, ref args, .. } => {
                 self.verify_sig_ref(inst, sig_ref)?;
                 self.verify_value_list(inst, args)?;
             }
-            &StackLoad { stack_slot, .. } |
-            &StackStore { stack_slot, .. } => {
+            StackLoad { stack_slot, .. } |
+            StackStore { stack_slot, .. } => {
                 self.verify_stack_slot(inst, stack_slot)?;
             }
 
             // Exhaustive list so we can't forget to add new formats
-            &Nullary { .. } |
-            &Unary { .. } |
-            &UnaryImm { .. } |
-            &UnaryIeee32 { .. } |
-            &UnaryIeee64 { .. } |
-            &Binary { .. } |
-            &BinaryImm { .. } |
-            &Ternary { .. } |
-            &InsertLane { .. } |
-            &ExtractLane { .. } |
-            &IntCompare { .. } |
-            &IntCompareImm { .. } |
-            &FloatCompare { .. } |
-            &HeapLoad { .. } |
-            &HeapStore { .. } |
-            &Load { .. } |
-            &Store { .. } |
-            &RegMove { .. } => {}
+            Nullary { .. } |
+            Unary { .. } |
+            UnaryImm { .. } |
+            UnaryIeee32 { .. } |
+            UnaryIeee64 { .. } |
+            Binary { .. } |
+            BinaryImm { .. } |
+            Ternary { .. } |
+            InsertLane { .. } |
+            ExtractLane { .. } |
+            IntCompare { .. } |
+            IntCompareImm { .. } |
+            FloatCompare { .. } |
+            HeapLoad { .. } |
+            HeapStore { .. } |
+            Load { .. } |
+            Store { .. } |
+            RegMove { .. } => {}
         }
 
         Ok(())
@@ -627,14 +627,14 @@ impl<'a> Verifier<'a> {
             got_succs.extend(cfg.get_successors(ebb));
 
             let missing_succs: Vec<Ebb> = expected_succs.difference(&got_succs).cloned().collect();
-            if missing_succs.len() != 0 {
+            if !missing_succs.is_empty() {
                 return err!(ebb,
                             "cfg lacked the following successor(s) {:?}",
                             missing_succs);
             }
 
             let excess_succs: Vec<Ebb> = got_succs.difference(&expected_succs).cloned().collect();
-            if excess_succs.len() != 0 {
+            if !excess_succs.is_empty() {
                 return err!(ebb, "cfg had unexpected successor(s) {:?}", excess_succs);
             }
 
@@ -642,14 +642,14 @@ impl<'a> Verifier<'a> {
             got_preds.extend(cfg.get_predecessors(ebb).iter().map(|&(_, inst)| inst));
 
             let missing_preds: Vec<Inst> = expected_preds.difference(&got_preds).cloned().collect();
-            if missing_preds.len() != 0 {
+            if !missing_preds.is_empty() {
                 return err!(ebb,
                             "cfg lacked the following predecessor(s) {:?}",
                             missing_preds);
             }
 
             let excess_preds: Vec<Inst> = got_preds.difference(&expected_preds).cloned().collect();
-            if excess_preds.len() != 0 {
+            if !excess_preds.is_empty() {
                 return err!(ebb, "cfg had unexpected predecessor(s) {:?}", excess_preds);
             }
 

@@ -21,18 +21,13 @@ pub fn do_licm(func: &mut Function,
         let invariant_inst = remove_loop_invariant_instructions(lp, func, cfg, loop_analysis);
         // Then we create the loop's pre-header and fill it with the invariant instructions
         // Then we remove the invariant instructions from the loop body
-        if invariant_inst.len() > 0 {
+        if !invariant_inst.is_empty() {
             // If the loop has a natural pre-header we use it, otherwise we create it.
             let mut pos;
-            match has_pre_header(&func.layout,
-                                 cfg,
-                                 domtree,
-                                 loop_analysis.loop_header(lp).clone()) {
+            match has_pre_header(&func.layout, cfg, domtree, loop_analysis.loop_header(lp)) {
                 None => {
-                    let pre_header = create_pre_header(loop_analysis.loop_header(lp).clone(),
-                                                       func,
-                                                       cfg,
-                                                       domtree);
+                    let pre_header =
+                        create_pre_header(loop_analysis.loop_header(lp), func, cfg, domtree);
                     pos = Cursor::new(&mut func.layout);
                     pos.goto_bottom(pre_header);
                     pos.prev_inst();
@@ -47,7 +42,7 @@ pub fn do_licm(func: &mut Function,
             // The last instruction of the pre-header is the termination instruction (usually
             // a jump) so we need to insert just before this.
             for inst in invariant_inst {
-                pos.insert_inst(inst.clone());
+                pos.insert_inst(inst);
             }
         }
     }
@@ -146,7 +141,7 @@ fn remove_loop_invariant_instructions(lp: Loop,
     for ebb in postorder_ebbs_loop(loop_analysis, cfg, lp).iter().rev() {
         // Arguments of the EBB are loop values
         for val in func.dfg.ebb_args(*ebb) {
-            loop_values.insert(val.clone());
+            loop_values.insert(*val);
         }
         pos.goto_top(*ebb);
         while let Some(inst) = pos.next_inst() {
@@ -164,7 +159,7 @@ fn remove_loop_invariant_instructions(lp: Loop,
                 // If the instruction is not loop-invariant we push its results in the set of
                 // loop values
                 for out in func.dfg.inst_results(inst) {
-                    loop_values.insert(out.clone());
+                    loop_values.insert(*out);
                 }
             }
         }
@@ -176,7 +171,7 @@ fn remove_loop_invariant_instructions(lp: Loop,
 fn postorder_ebbs_loop(loop_analysis: &LoopAnalysis, cfg: &ControlFlowGraph, lp: Loop) -> Vec<Ebb> {
     let mut grey = HashSet::new();
     let mut black = HashSet::new();
-    let mut stack = vec![loop_analysis.loop_header(lp).clone()];
+    let mut stack = vec![loop_analysis.loop_header(lp)];
     let mut postorder = Vec::new();
 
     while !stack.is_empty() {
@@ -187,13 +182,13 @@ fn postorder_ebbs_loop(loop_analysis: &LoopAnalysis, cfg: &ControlFlowGraph, lp:
             stack.push(node);
             // Get any children we've never seen before.
             for child in cfg.get_successors(node) {
-                if loop_analysis.is_in_loop(child.clone(), lp) && !grey.contains(child) {
-                    stack.push(child.clone());
+                if loop_analysis.is_in_loop(*child, lp) && !grey.contains(child) {
+                    stack.push(*child);
                 }
             }
         } else if !black.contains(&node) {
-            postorder.push(node.clone());
-            black.insert(node.clone());
+            postorder.push(node);
+            black.insert(node);
         }
     }
     postorder

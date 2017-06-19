@@ -73,7 +73,7 @@ impl TopoOrder {
                 }
             }
         }
-        return self.stack.pop();
+        self.stack.pop()
     }
 }
 

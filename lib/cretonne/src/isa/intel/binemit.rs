@@ -10,13 +10,13 @@ pub static RELOC_NAMES: [&'static str; 1] = ["Call"];
 
 // Emit single-byte opcode.
 fn put_op1<CS: CodeSink + ?Sized>(bits: u16, sink: &mut CS) {
-    debug_assert!(bits & 0x0f00 == 0, "Invalid encoding bits for Op1*");
+    debug_assert_eq!(bits & 0x0f00, 0, "Invalid encoding bits for Op1*");
     sink.put1(bits as u8);
 }
 
 // Emit two-byte opcode: 0F XX
 fn put_op2<CS: CodeSink + ?Sized>(bits: u16, sink: &mut CS) {
-    debug_assert!(bits & 0x0f00 == 0x0400, "Invalid encoding bits for Op2*");
+    debug_assert_eq!(bits & 0x0f00, 0x0400, "Invalid encoding bits for Op2*");
     sink.put1(0x0f);
     sink.put1(bits as u8);
 }
@@ -26,7 +26,7 @@ const PREFIX: [u8; 3] = [0x66, 0xf3, 0xf2];
 
 // Emit single-byte opcode with mandatory prefix.
 fn put_mp1<CS: CodeSink + ?Sized>(bits: u16, sink: &mut CS) {
-    debug_assert!(bits & 0x0c00 == 0, "Invalid encoding bits for Mp1*");
+    debug_assert_eq!(bits & 0x0c00, 0, "Invalid encoding bits for Mp1*");
     let pp = (bits >> 8) & 3;
     sink.put1(PREFIX[(pp - 1) as usize]);
     sink.put1(bits as u8);

@@ -247,10 +247,11 @@ impl DataFlowGraph {
         // Try to create short alias chains by finding the original source value.
         // This also avoids the creation of loops.
         let original = self.resolve_aliases(src);
-        assert!(dest != original,
-                "Aliasing {} to {} would create a loop",
-                dest,
-                src);
+        assert_ne!(dest,
+                   original,
+                   "Aliasing {} to {} would create a loop",
+                   dest,
+                   src);
         let ty = self.value_type(original);
         assert_eq!(self.value_type(dest),
                    ty,
@@ -326,8 +327,8 @@ pub enum ValueDef {
 impl ValueDef {
     /// Unwrap the instruction where the value was defined, or panic.
     pub fn unwrap_inst(&self) -> Inst {
-        match self {
-            &ValueDef::Res(inst, _) => inst,
+        match *self {
+            ValueDef::Res(inst, _) => inst,
             _ => panic!("Value is not an instruction result"),
         }
     }

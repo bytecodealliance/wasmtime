@@ -314,7 +314,7 @@ fn format_float(bits: u64, w: u8, t: u8, f: &mut Formatter) -> fmt::Result {
     let max_e_bits = (1u64 << w) - 1;
     let t_bits = bits & ((1u64 << t) - 1); // Trailing significand.
     let e_bits = (bits >> t) & max_e_bits; // Biased exponent.
-    let sign_bit = (bits >> w + t) & 1;
+    let sign_bit = (bits >> (w + t)) & 1;
 
     let bias: i32 = (1 << (w - 1)) - 1;
     let e = e_bits as i32 - bias; // Unbiased exponent.
@@ -381,7 +381,7 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
     debug_assert!((t + w + 1).is_power_of_two(), "Unexpected IEEE format size");
 
     let (sign_bit, s2) = if s.starts_with('-') {
-        (1u64 << t + w, &s[1..])
+        (1u64 << (t + w), &s[1..])
     } else if s.starts_with('+') {
         (0, &s[1..])
     } else {

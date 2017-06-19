@@ -199,7 +199,7 @@ impl Pressure {
 
     /// Reset all counts to 0, both base and transient.
     pub fn reset(&mut self) {
-        for e in self.toprc.iter_mut() {
+        for e in &mut self.toprc {
             e.base_count = 0;
             e.transient_count = 0;
         }
@@ -220,7 +220,7 @@ impl Pressure {
 
     /// Reset all transient counts to 0.
     pub fn reset_transient(&mut self) {
-        for e in self.toprc.iter_mut() {
+        for e in &mut self.toprc {
             e.transient_count = 0;
         }
     }

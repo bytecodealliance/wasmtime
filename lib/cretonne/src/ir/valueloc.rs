@@ -98,16 +98,16 @@ impl Default for ArgumentLoc {
 impl ArgumentLoc {
     /// Is this an assigned location? (That is, not `Unassigned`).
     pub fn is_assigned(&self) -> bool {
-        match self {
-            &ArgumentLoc::Unassigned => false,
+        match *self {
+            ArgumentLoc::Unassigned => false,
             _ => true,
         }
     }
 
     /// Is this a register location?
     pub fn is_reg(&self) -> bool {
-        match self {
-            &ArgumentLoc::Reg(_) => true,
+        match *self {
+            ArgumentLoc::Reg(_) => true,
             _ => false,
         }
     }

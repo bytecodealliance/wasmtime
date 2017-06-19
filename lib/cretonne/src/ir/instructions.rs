@@ -286,23 +286,23 @@ impl InstructionData {
     /// Any instruction that can transfer control to another EBB reveals its possible destinations
     /// here.
     pub fn analyze_branch<'a>(&'a self, pool: &'a ValueListPool) -> BranchInfo<'a> {
-        match self {
-            &InstructionData::Jump {
+        match *self {
+            InstructionData::Jump {
                 destination,
                 ref args,
                 ..
-            } => BranchInfo::SingleDest(destination, &args.as_slice(pool)),
-            &InstructionData::Branch {
+            } => BranchInfo::SingleDest(destination, args.as_slice(pool)),
+            InstructionData::Branch {
                 destination,
                 ref args,
                 ..
             } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[1..]),
-            &InstructionData::BranchIcmp {
+            InstructionData::BranchIcmp {
                 destination,
                 ref args,
                 ..
             } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[2..]),
-            &InstructionData::BranchTable { table, .. } => BranchInfo::Table(table),
+            InstructionData::BranchTable { table, .. } => BranchInfo::Table(table),
             _ => BranchInfo::NotABranch,
         }
     }
@@ -312,10 +312,10 @@ impl InstructionData {
     ///
     /// Multi-destination branches like `br_table` return `None`.
     pub fn branch_destination(&self) -> Option<Ebb> {
-        match self {
-            &InstructionData::Jump { destination, .. } => Some(destination),
-            &InstructionData::Branch { destination, .. } => Some(destination),
-            &InstructionData::BranchIcmp { destination, .. } => Some(destination),
+        match *self {
+            InstructionData::Jump { destination, .. } => Some(destination),
+            InstructionData::Branch { destination, .. } => Some(destination),
+            InstructionData::BranchIcmp { destination, .. } => Some(destination),
             _ => None,
         }
     }
@@ -337,11 +337,11 @@ impl InstructionData {
     ///
     /// Any instruction that can call another function reveals its call signature here.
     pub fn analyze_call<'a>(&'a self, pool: &'a ValueListPool) -> CallInfo<'a> {
-        match self {
-            &InstructionData::Call { func_ref, ref args, .. } => {
-                CallInfo::Direct(func_ref, &args.as_slice(pool))
+        match *self {
+            InstructionData::Call { func_ref, ref args, .. } => {
+                CallInfo::Direct(func_ref, args.as_slice(pool))
             }
-            &InstructionData::IndirectCall { sig_ref, ref args, .. } => {
+            InstructionData::IndirectCall { sig_ref, ref args, .. } => {
                 CallInfo::Indirect(sig_ref, &args.as_slice(pool)[1..])
             }
             _ => CallInfo::NotACall,
