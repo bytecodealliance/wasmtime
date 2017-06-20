@@ -15,6 +15,7 @@ mod pressure;
 mod reload;
 mod solver;
 mod spilling;
+mod virtregs;
 
 pub use self::allocatable_set::AllocatableSet;
 pub use self::context::Context;
