@@ -982,7 +982,7 @@ impl<'f> Cursor<'f> {
 #[cfg(test)]
 mod tests {
     use super::{Layout, Cursor, CursorPosition};
-    use entity_map::EntityRef;
+    use entity_ref::EntityRef;
     use ir::{Ebb, Inst, ProgramOrder};
     use std::cmp::Ordering;
 

@@ -1,34 +1,16 @@
 //! A loop analysis represented as mappings of loops to their header Ebb
 //! and parent in the loop tree.
 
-use ir::{Function, Ebb, Layout};
-use flowgraph::ControlFlowGraph;
 use dominator_tree::DominatorTree;
-use entity_map::{EntityMap, PrimaryEntityData};
-use packed_option::{PackedOption, ReservedValue};
-use entity_map::{EntityRef, Keys};
-use std::u32;
+use entity_map::{EntityMap, PrimaryEntityData, Keys};
+use flowgraph::ControlFlowGraph;
+use ir::{Function, Ebb, Layout};
+use packed_option::PackedOption;
 
 /// A opaque reference to a code loop.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Loop(u32);
-impl EntityRef for Loop {
-    fn new(index: usize) -> Self {
-        assert!(index < (u32::MAX as usize));
-        Loop(index as u32)
-    }
-
-    fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl ReservedValue for Loop {
-    fn reserved_value() -> Loop {
-        Loop(u32::MAX)
-    }
-}
-
+entity_impl!(Loop, "loop");
 
 /// Loop tree information for a single function.
 ///

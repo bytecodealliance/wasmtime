@@ -19,45 +19,8 @@
 //! The entity references all implement the `Display` trait in a way that matches the textual IL
 //! format.
 
-use entity_map::EntityRef;
-use packed_option::ReservedValue;
-use std::fmt::{self, Display, Formatter};
+use std::fmt;
 use std::u32;
-
-// Implement the common traits for a 32-bit entity reference.
-macro_rules! entity_impl {
-    // Basic traits.
-    ($entity:ident) => {
-        impl EntityRef for $entity {
-            fn new(index: usize) -> Self {
-                assert!(index < (u32::MAX as usize));
-                $entity(index as u32)
-            }
-
-            fn index(self) -> usize {
-                self.0 as usize
-            }
-        }
-
-        impl ReservedValue for $entity {
-            fn reserved_value() -> $entity {
-                $entity(u32::MAX)
-            }
-        }
-    };
-
-    // Include basic `Display` impl using the given display prefix.
-    // Display an `Ebb` reference as "ebb12".
-    ($entity:ident, $display_prefix:expr) => {
-        entity_impl!($entity);
-
-        impl Display for $entity {
-            fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-                write!(fmt, "{}{}", $display_prefix, self.0)
-            }
-        }
-    }
-}
 
 /// An opaque reference to an extended basic block in a function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
@@ -138,17 +101,17 @@ pub enum AnyEntity {
     SigRef(SigRef),
 }
 
-impl Display for AnyEntity {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+impl fmt::Display for AnyEntity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            AnyEntity::Function => write!(fmt, "function"),
-            AnyEntity::Ebb(r) => r.fmt(fmt),
-            AnyEntity::Inst(r) => r.fmt(fmt),
-            AnyEntity::Value(r) => r.fmt(fmt),
-            AnyEntity::StackSlot(r) => r.fmt(fmt),
-            AnyEntity::JumpTable(r) => r.fmt(fmt),
-            AnyEntity::FuncRef(r) => r.fmt(fmt),
-            AnyEntity::SigRef(r) => r.fmt(fmt),
+            AnyEntity::Function => write!(f, "function"),
+            AnyEntity::Ebb(r) => r.fmt(f),
+            AnyEntity::Inst(r) => r.fmt(f),
+            AnyEntity::Value(r) => r.fmt(f),
+            AnyEntity::StackSlot(r) => r.fmt(f),
+            AnyEntity::JumpTable(r) => r.fmt(f),
+            AnyEntity::FuncRef(r) => r.fmt(f),
+            AnyEntity::SigRef(r) => r.fmt(f),
         }
     }
 }
