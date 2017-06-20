@@ -35,7 +35,8 @@
 //! - `SparseMap` requires the values to implement `SparseMapValue<K>` which means that they must
 //!   contain their own key.
 
-use entity_map::{EntityRef, EntityMap};
+use entity_map::EntityMap;
+use entity_ref::EntityRef;
 use std::mem;
 use std::slice;
 use std::u32;
@@ -215,7 +216,7 @@ pub type SparseSet<T> = SparseMap<T, T>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entity_map::EntityRef;
+    use entity_ref::EntityRef;
     use ir::Inst;
 
     // Mock key-value object for testing.

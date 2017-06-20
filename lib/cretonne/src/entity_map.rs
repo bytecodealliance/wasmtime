@@ -1,8 +1,7 @@
 //! Densely numbered entity references as mapping keys.
 //!
-//! This module defines an `EntityRef` trait that should be implemented by reference types wrapping
-//! a small integer index. The `EntityMap` data structure uses the dense index space to implement a
-//! map with a vector. There are primary and secondary entity maps:
+//! The `EntityMap` data structure uses the dense index space to implement a map with a vector.
+//! There are primary and secondary entity maps:
 //!
 //! - A *primary* `EntityMap` contains the main definition of an entity, and it can be used to
 //!   allocate new entity references with the `push` method. The values stores in a primary map
@@ -10,21 +9,9 @@
 //! - A *secondary* `EntityMap` contains additional data about entities kept in a primary map. The
 //!   values need to implement `Clone + Default` traits so the map can be grown with `ensure`.
 
-use std::vec::Vec;
-use std::default::Default;
+use entity_ref::EntityRef;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
-
-/// A type wrapping a small integer index should implement `EntityRef` so it can be used as the key
-/// of an `EntityMap`.
-pub trait EntityRef: Copy + Eq {
-    /// Create a new entity reference from a small integer.
-    /// This should crash if the requested index is not representable.
-    fn new(usize) -> Self;
-
-    /// Get the index that was used to create this entity reference.
-    fn index(self) -> usize;
-}
 
 /// A mapping `K -> V` for densely indexed entity references.
 #[derive(Debug, Clone)]

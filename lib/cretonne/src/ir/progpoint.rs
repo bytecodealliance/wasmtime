@@ -1,6 +1,6 @@
 //! Program points.
 
-use entity_map::EntityRef;
+use entity_ref::EntityRef;
 use ir::{Ebb, Inst, ValueDef};
 use std::fmt;
 use std::u32;
@@ -122,7 +122,7 @@ pub trait ProgramOrder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entity_map::EntityRef;
+    use entity_ref::EntityRef;
     use ir::{Inst, Ebb};
 
     #[test]

@@ -675,7 +675,7 @@ impl Solver {
 
 #[cfg(test)]
 mod tests {
-    use entity_map::EntityRef;
+    use entity_ref::EntityRef;
     use ir::Value;
     use isa::{TargetIsa, RegClass, RegUnit};
     use regalloc::AllocatableSet;
