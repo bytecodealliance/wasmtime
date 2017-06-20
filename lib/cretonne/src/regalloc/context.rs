@@ -13,6 +13,7 @@ use regalloc::live_value_tracker::LiveValueTracker;
 use regalloc::liveness::Liveness;
 use regalloc::reload::Reload;
 use regalloc::spilling::Spilling;
+use regalloc::virtregs::VirtRegs;
 use result::CtonResult;
 use topo_order::TopoOrder;
 use verifier::{verify_context, verify_liveness};
@@ -20,6 +21,7 @@ use verifier::{verify_context, verify_liveness};
 /// Persistent memory allocations for register allocation.
 pub struct Context {
     liveness: Liveness,
+    virtregs: VirtRegs,
     topo: TopoOrder,
     tracker: LiveValueTracker,
     spilling: Spilling,
@@ -35,6 +37,7 @@ impl Context {
     pub fn new() -> Context {
         Context {
             liveness: Liveness::new(),
+            virtregs: VirtRegs::new(),
             topo: TopoOrder::new(),
             tracker: LiveValueTracker::new(),
             spilling: Spilling::new(),
@@ -54,6 +57,8 @@ impl Context {
                domtree: &DominatorTree)
                -> CtonResult {
         // `Liveness` and `Coloring` are self-clearing.
+        self.virtregs.clear();
+
         // Tracker state (dominator live sets) is actually reused between the spilling and coloring
         // phases.
         self.tracker.clear();
