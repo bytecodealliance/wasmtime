@@ -8,6 +8,7 @@ use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir::Function;
 use isa::TargetIsa;
+use regalloc::coalescing::Coalescing;
 use regalloc::coloring::Coloring;
 use regalloc::live_value_tracker::LiveValueTracker;
 use regalloc::liveness::Liveness;
@@ -22,6 +23,7 @@ use verifier::{verify_context, verify_liveness};
 pub struct Context {
     liveness: Liveness,
     virtregs: VirtRegs,
+    coalescing: Coalescing,
     topo: TopoOrder,
     tracker: LiveValueTracker,
     spilling: Spilling,
@@ -38,6 +40,7 @@ impl Context {
         Context {
             liveness: Liveness::new(),
             virtregs: VirtRegs::new(),
+            coalescing: Coalescing::new(),
             topo: TopoOrder::new(),
             tracker: LiveValueTracker::new(),
             spilling: Spilling::new(),
@@ -69,6 +72,21 @@ impl Context {
         if isa.flags().enable_verifier() {
             verify_liveness(isa, func, cfg, &self.liveness)?;
         }
+
+        // Coalesce and create conventional SSA form.
+        self.coalescing
+            .conventional_ssa(isa,
+                              func,
+                              cfg,
+                              domtree,
+                              &mut self.liveness,
+                              &mut self.virtregs);
+
+        if isa.flags().enable_verifier() {
+            verify_context(func, cfg, domtree, Some(isa))?;
+            verify_liveness(isa, func, cfg, &self.liveness)?;
+        }
+
 
         // Second pass: Spilling.
         self.spilling
