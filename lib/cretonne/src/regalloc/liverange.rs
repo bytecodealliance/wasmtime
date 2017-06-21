@@ -108,7 +108,7 @@
 //!
 
 use std::cmp::Ordering;
-use ir::{Inst, Ebb, Value, ProgramPoint, ProgramOrder};
+use ir::{Inst, Ebb, Value, ProgramPoint, ExpandedProgramPoint, ProgramOrder};
 use regalloc::affinity::Affinity;
 use sparse_map::SparseMapValue;
 
@@ -380,6 +380,40 @@ impl LiveRange {
     /// Get all the live-in intervals.
     pub fn liveins(&self) -> &[Interval] {
         &self.liveins
+    }
+
+    /// Check if this live range overlaps a definition in `ebb`.
+    pub fn overlaps_def<PO>(&self, def: ExpandedProgramPoint, ebb: Ebb, order: &PO) -> bool
+        where PO: ProgramOrder
+    {
+        // Check for an overlap with the local range.
+        if order.cmp(def, self.def_begin) != Ordering::Less &&
+           order.cmp(def, self.def_end) == Ordering::Less {
+            return true;
+        }
+
+        // Check for an overlap with a live-in range.
+        match self.livein_local_end(ebb, order) {
+            Some(inst) => order.cmp(def, inst) == Ordering::Less,
+            None => false,
+        }
+    }
+
+    /// Check if this live range reaches a use at `inst` in `ebb`.
+    pub fn reaches_use<PO>(&self, user: Inst, ebb: Ebb, order: &PO) -> bool
+        where PO: ProgramOrder
+    {
+        // Check for an overlap with the local range.
+        if order.cmp(user, self.def_begin) == Ordering::Greater &&
+           order.cmp(user, self.def_end) != Ordering::Greater {
+            return true;
+        }
+
+        // Check for an overlap with a live-in range.
+        match self.livein_local_end(ebb, order) {
+            Some(inst) => order.cmp(user, inst) != Ordering::Greater,
+            None => false,
+        }
     }
 }
 
