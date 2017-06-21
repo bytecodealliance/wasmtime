@@ -9,6 +9,7 @@ pub mod live_value_tracker;
 pub mod coloring;
 
 mod affinity;
+mod coalescing;
 mod context;
 mod diversion;
 mod pressure;

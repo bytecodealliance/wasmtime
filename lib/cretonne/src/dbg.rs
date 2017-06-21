@@ -13,6 +13,7 @@ use std::ascii::AsciiExt;
 use std::cell::RefCell;
 use std::env;
 use std::ffi::OsStr;
+use std::fmt;
 use std::fs::File;
 use std::io::{Write, BufWriter};
 use std::sync::atomic;
@@ -95,6 +96,26 @@ macro_rules! dbg {
             // Drop the error result so we don't get compiler errors for ignoring it.
             // What are you going to do, log the error?
             $crate::dbg::with_writer(|w| { writeln!(w, $($arg)+).ok(); })
+        }
+    }
+}
+
+/// Helper for printing lists.
+pub struct DisplayList<'a, T>(pub &'a [T]) where T: 'a + fmt::Display;
+
+impl<'a, T> fmt::Display for DisplayList<'a, T>
+    where T: 'a + fmt::Display
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.0.split_first() {
+            None => write!(f, "[]"),
+            Some((first, rest)) => {
+                write!(f, "[{}", first)?;
+                for x in rest {
+                    write!(f, ", {}", x)?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }
