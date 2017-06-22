@@ -40,7 +40,7 @@ class TestTypeSet(TestCase):
         a = TypeSet(lanes=True, ints=True, floats=True)
         s = set()
         s.add(a)
-        a.max_int = 32
+        a.ints.remove(64)
         # Can't rehash after modification.
         with self.assertRaises(AssertionError):
             a in s
@@ -71,14 +71,18 @@ class TestTypeVar(TestCase):
     def test_singleton(self):
         x = TypeVar.singleton(i32)
         self.assertEqual(str(x), '`i32`')
-        self.assertEqual(x.type_set.min_int, 32)
-        self.assertEqual(x.type_set.max_int, 32)
-        self.assertEqual(x.type_set.min_lanes, 1)
-        self.assertEqual(x.type_set.max_lanes, 1)
+        self.assertEqual(min(x.type_set.ints), 32)
+        self.assertEqual(max(x.type_set.ints), 32)
+        self.assertEqual(min(x.type_set.lanes), 1)
+        self.assertEqual(max(x.type_set.lanes), 1)
+        self.assertEqual(len(x.type_set.floats), 0)
+        self.assertEqual(len(x.type_set.bools), 0)
 
         x = TypeVar.singleton(i32.by(4))
         self.assertEqual(str(x), '`i32x4`')
-        self.assertEqual(x.type_set.min_int, 32)
-        self.assertEqual(x.type_set.max_int, 32)
-        self.assertEqual(x.type_set.min_lanes, 4)
-        self.assertEqual(x.type_set.max_lanes, 4)
+        self.assertEqual(min(x.type_set.ints), 32)
+        self.assertEqual(max(x.type_set.ints), 32)
+        self.assertEqual(min(x.type_set.lanes), 4)
+        self.assertEqual(max(x.type_set.lanes), 4)
+        self.assertEqual(len(x.type_set.floats), 0)
+        self.assertEqual(len(x.type_set.bools), 0)
