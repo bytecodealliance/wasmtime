@@ -8,3 +8,4 @@ Cargo.lock
 .*.rustfmt
 cretonne.dbg*
 .mypy_cache
+rusty-tags.*
