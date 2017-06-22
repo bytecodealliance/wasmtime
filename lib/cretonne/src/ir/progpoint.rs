@@ -82,12 +82,25 @@ impl From<ProgramPoint> for ExpandedProgramPoint {
     }
 }
 
-impl fmt::Display for ProgramPoint {
+impl fmt::Display for ExpandedProgramPoint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match (*self).into() {
+        match *self {
             ExpandedProgramPoint::Inst(x) => write!(f, "{}", x),
             ExpandedProgramPoint::Ebb(x) => write!(f, "{}", x),
         }
+    }
+}
+
+impl fmt::Display for ProgramPoint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let epp: ExpandedProgramPoint = (*self).into();
+        epp.fmt(f)
+    }
+}
+
+impl fmt::Debug for ExpandedProgramPoint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ExpandedProgramPoint({})", self)
     }
 }
 
