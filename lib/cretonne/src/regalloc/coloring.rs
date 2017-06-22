@@ -31,18 +31,18 @@
 //! defined by the instruction and only consider the colors of other values that are live at the
 //! instruction.
 
-use entity_map::EntityMap;
 use dominator_tree::DominatorTree;
+use entity_map::EntityMap;
 use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph, ValueLocations};
 use ir::{InstBuilder, Signature, ArgumentType, ArgumentLoc};
-use isa::{TargetIsa, Encoding, EncInfo, OperandConstraint, ConstraintKind};
 use isa::{RegUnit, RegClass, RegInfo, regs_overlap};
+use isa::{TargetIsa, EncInfo, RecipeConstraints, OperandConstraint, ConstraintKind};
+use regalloc::RegDiversions;
 use regalloc::affinity::Affinity;
 use regalloc::allocatable_set::AllocatableSet;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
 use regalloc::solver::Solver;
-use regalloc::RegDiversions;
 use topo_order::TopoOrder;
 
 
@@ -138,19 +138,18 @@ impl<'a> Context<'a> {
         let mut pos = Cursor::new(&mut func.layout);
         pos.goto_top(ebb);
         while let Some(inst) = pos.next_inst() {
-            let encoding = func.encodings[inst];
-            assert!(encoding.is_legal(), "Illegal: {}", func.dfg[inst].opcode());
-            self.visit_inst(inst,
-                            encoding,
-                            &mut pos,
-                            &mut func.dfg,
-                            tracker,
-                            &mut regs,
-                            &mut func.locations,
-                            &func.signature);
-            tracker.drop_dead(inst);
+            if let Some(constraints) = self.encinfo.operand_constraints(func.encodings[inst]) {
+                self.visit_inst(inst,
+                                constraints,
+                                &mut pos,
+                                &mut func.dfg,
+                                tracker,
+                                &mut regs,
+                                &mut func.locations,
+                                &func.signature);
+                tracker.drop_dead(inst);
+            }
         }
-
     }
 
     /// Visit the `ebb` header.
@@ -304,21 +303,14 @@ impl<'a> Context<'a> {
     /// or killed values from the set.
     fn visit_inst(&mut self,
                   inst: Inst,
-                  encoding: Encoding,
+                  constraints: &RecipeConstraints,
                   pos: &mut Cursor,
                   dfg: &mut DataFlowGraph,
                   tracker: &mut LiveValueTracker,
                   regs: &mut AllocatableSet,
                   locations: &mut ValueLocations,
                   func_signature: &Signature) {
-        dbg!("Coloring [{}] {}",
-             self.encinfo.display(encoding),
-             dfg.display_inst(inst));
-
-        // Get the operand constraints for `inst` that we are trying to satisfy.
-        let constraints = self.encinfo
-            .operand_constraints(encoding)
-            .expect("Missing instruction encoding");
+        dbg!("Coloring {}", dfg.display_inst(inst));
 
         // Program the solver with register constraints for the input side.
         self.solver.reset(regs);
