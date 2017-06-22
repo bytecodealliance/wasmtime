@@ -713,7 +713,8 @@ imul_imm = Instruction(
         'imul_imm', """
         Integer multiplication by immediate constant.
 
-        Polymorphic over all scalar integer types.
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
         """,
         ins=(x, Y), outs=a)
 
@@ -912,18 +913,33 @@ a = Operand('a', iB)
 band_imm = Instruction(
         'band_imm', """
         Bitwise and with immediate.
+
+        Same as :inst:`band`, but one operand is an immediate constant.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
         """,
         ins=(x, Y), outs=a)
 
 bor_imm = Instruction(
         'bor_imm', """
         Bitwise or with immediate.
+
+        Same as :inst:`bor`, but one operand is an immediate constant.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
         """,
         ins=(x, Y), outs=a)
 
 bxor_imm = Instruction(
         'bxor_imm', """
         Bitwise xor with immediate.
+
+        Same as :inst:`bxor`, but one operand is an immediate constant.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
         """,
         ins=(x, Y), outs=a)
 

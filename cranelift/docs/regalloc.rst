@@ -55,12 +55,12 @@ EBB argument fixup
 
 The contract between the spilling and coloring phases is that the number of
 values in registers never exceeds the number of available registers. This
-sounds simple enough in theory, but in pratice there are some complications.
+sounds simple enough in theory, but in practice there are some complications.
 
 Real-world complications to SSA coloring
 ----------------------------------------
 
-In practice, instruction set architectures don't have "K interchangable
+In practice, instruction set architectures don't have "K interchangeable
 registers", and register pressure can't be measured with a single number. There
 are complications:
 

@@ -100,7 +100,7 @@ of input functions in the :doc:`Cretonne textual intermediate language
 
 The available test commands are described below.
 
-Many test comands only make sense in the context of a target instruction set
+Many test commands only make sense in the context of a target instruction set
 architecture. These tests require one or more ISA specifications in the test
 header:
 

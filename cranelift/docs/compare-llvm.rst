@@ -152,7 +152,7 @@ can hold.
   address type too.
 - SIMD vector types are limited to a power-of-two number of vector lanes up to
   256. LLVM allows an arbitrary number of SIMD lanes.
-- Cretonne has no aggregrate types. LLVM has named and anonymous struct types as
+- Cretonne has no aggregate types. LLVM has named and anonymous struct types as
   well as array types.
 
 Cretonne has multiple boolean types, whereas LLVM simply uses `i1`. The sized
@@ -160,7 +160,7 @@ Cretonne boolean types are used to represent SIMD vector masks like ``b32x4``
 where each lane is either all 0 or all 1 bits.
 
 Cretonne instructions and function calls can return multiple result values. LLVM
-instead models this by returning a single value of an aggregrate type.
+instead models this by returning a single value of an aggregate type.
 
 Instruction set
 ---------------
