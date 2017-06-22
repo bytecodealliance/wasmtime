@@ -625,7 +625,7 @@ impl<'a> Parser<'a> {
                     // Apply the ISA-specific settings to `isa_builder`.
                     isaspec::parse_options(words, &mut isa_builder, &self.loc)?;
 
-                    // Construct a trait object with the aggregrate settings.
+                    // Construct a trait object with the aggregate settings.
                     isas.push(isa_builder.finish(settings::Flags::new(&flag_builder)));
                 }
                 _ => break,
