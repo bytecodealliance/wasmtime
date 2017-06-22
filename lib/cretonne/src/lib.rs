@@ -16,6 +16,7 @@ pub mod dbg;
 pub mod entity_ref;
 
 pub mod binemit;
+pub mod bitset;
 pub mod dominator_tree;
 pub mod entity_list;
 pub mod entity_map;
