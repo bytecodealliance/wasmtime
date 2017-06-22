@@ -104,6 +104,11 @@ I = EncRecipe(
         'I', BinaryImm, size=4, ins=GPR, outs=GPR,
         instp=IsSignedInt(BinaryImm.imm, 12))
 
+# I-type instruction with a hardcoded %x0 rs1.
+Iz = EncRecipe(
+        'Iz', UnaryImm, size=4, ins=(), outs=GPR,
+        instp=IsSignedInt(UnaryImm.imm, 12))
+
 # I-type encoding of an integer comparison.
 Iicmp = EncRecipe(
         'Iicmp', IntCompareImm, size=4, ins=GPR, outs=GPR,

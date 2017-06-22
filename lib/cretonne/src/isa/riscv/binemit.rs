@@ -160,6 +160,18 @@ fn recipe_i<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
     }
 }
 
+fn recipe_iz<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::UnaryImm { imm, .. } = func.dfg[inst] {
+        put_i(func.encodings[inst].bits(),
+              0,
+              imm.into(),
+              func.locations[func.dfg.first_result(inst)].unwrap_reg(),
+              sink);
+    } else {
+        panic!("Expected UnaryImm format: {:?}", func.dfg[inst]);
+    }
+}
+
 fn recipe_iicmp<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
     if let InstructionData::IntCompareImm { arg, imm, .. } = func.dfg[inst] {
         put_i(func.encodings[inst].bits(),

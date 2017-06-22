@@ -77,6 +77,9 @@ ebb0(v9999: i32):
     ; lui
     [-,%x7]     v140 = iconst.i32 0x12345000            ; bin: 123453b7
     [-,%x16]    v141 = iconst.i32 0xffffffff_fedcb000   ; bin: fedcb837
+    ; addi
+    [-,%x7]     v142 = iconst.i32 1000                  ; bin: 3e800393
+    [-,%x16]    v143 = iconst.i32 -905                  ; bin: c7700813
 
     ; Copies alias to iadd_imm.
     [-,%x7]     v150 = copy v1                          ; bin: 00050393
