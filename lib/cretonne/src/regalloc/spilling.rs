@@ -25,6 +25,7 @@ use regalloc::affinity::Affinity;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
 use regalloc::pressure::Pressure;
+use regalloc::virtregs::VirtRegs;
 use topo_order::TopoOrder;
 
 /// Persistent data structures for the spilling pass.
@@ -48,6 +49,7 @@ struct Context<'a> {
     // References to contextual data structures we need.
     domtree: &'a DominatorTree,
     liveness: &'a mut Liveness,
+    virtregs: &'a VirtRegs,
     topo: &'a mut TopoOrder,
 
     // Current register pressure.
@@ -77,6 +79,7 @@ impl Spilling {
                func: &mut Function,
                domtree: &DominatorTree,
                liveness: &mut Liveness,
+               virtregs: &VirtRegs,
                topo: &mut TopoOrder,
                tracker: &mut LiveValueTracker) {
         dbg!("Spilling for:\n{}", func.display(isa));
@@ -91,6 +94,7 @@ impl Spilling {
             locations: &mut func.locations,
             domtree,
             liveness,
+            virtregs,
             topo,
             pressure: Pressure::new(&reginfo, &usable_regs),
             spills: &mut self.spills,
@@ -374,14 +378,16 @@ impl<'a> Context<'a> {
             let rc = self.reginfo.rc(rci);
             self.pressure.free(rc);
             self.spills.push(value);
-
-            // Assign a spill slot.
-            // TODO: phi-related values should use the same spill slot.
-            let ss = self.stack_slots.make_spill_slot(dfg.value_type(value));
-            *self.locations.ensure(value) = ValueLoc::Stack(ss);
-            dbg!("Spilled {}:{} to {} -> {}", value, rc, ss, self.pressure);
+            dbg!("Spilled {}:{} -> {}", value, rc, self.pressure);
         } else {
             panic!("Cannot spill {} that was already on the stack", value);
+        }
+
+        // Assign a spill slot for the whole virtual register.
+        let ss = self.stack_slots.make_spill_slot(dfg.value_type(value));
+        for &v in self.virtregs.congruence_class(&value) {
+            self.liveness.spill(v);
+            *self.locations.ensure(v) = ValueLoc::Stack(ss);
         }
     }
 
