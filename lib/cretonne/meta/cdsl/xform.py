@@ -254,7 +254,7 @@ class XForm(object):
         # Some variables have a fixed type which appears as a type variable
         # with a singleton_type field set. That's allowed for temps too.
         for v in fvars:
-            if v.is_temp() and not v.typevar.singleton_type:
+            if v.is_temp() and not v.typevar.singleton_type():
                 raise AssertionError(
                         "Cannot determine type of temp '{}' in xform:\n{}"
                         .format(v, self))

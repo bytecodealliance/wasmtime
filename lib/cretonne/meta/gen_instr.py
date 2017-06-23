@@ -321,8 +321,8 @@ def get_constraint(op, ctrl_typevar, type_sets):
     tv = op.typevar
 
     # A concrete value type.
-    if tv.singleton_type:
-        return 'Concrete({})'.format(tv.singleton_type.rust_name())
+    if tv.singleton_type():
+        return 'Concrete({})'.format(tv.singleton_type().rust_name())
 
     if tv.free_typevar() is not ctrl_typevar:
         assert not tv.is_derived
