@@ -186,7 +186,7 @@ class Instruction(object):
             try:
                 opnum = self.value_opnums[self.format.typevar_operand]
                 tv = self.ins[opnum].typevar
-                if tv is tv.free_typevar():
+                if tv is tv.free_typevar() or tv.singleton_type() is not None:
                     self.other_typevars = self._verify_ctrl_typevar(tv)
                     self.ctrl_typevar = tv
                     self.use_typevar_operand = True

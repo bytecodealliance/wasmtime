@@ -7,15 +7,19 @@ polymorphic by using type variables.
 from __future__ import absolute_import
 import math
 from . import types, is_power_of_two
+from copy import deepcopy
+from .types import ValueType, IntType, FloatType, BoolType
 
 try:
     from typing import Tuple, Union, Iterable, Any, Set, TYPE_CHECKING # noqa
+    from typing import cast
     if TYPE_CHECKING:
         from srcgen import Formatter  # noqa
         Interval = Tuple[int, int]
         # An Interval where `True` means 'everything'
         BoolInterval = Union[bool, Interval]
 except ImportError:
+    TYPE_CHECKING = False
     pass
 
 MAX_LANES = 256
@@ -112,6 +116,16 @@ def interval_to_set(intv):
     return set([2**i for i in range(int_log2(lo), int_log2(hi)+1)])
 
 
+def legal_bool(bits):
+    # type: (int) -> bool
+    """
+    True iff bits is a legal bit width for a bool type.
+    bits == 1 || bits \in { 8, 16, .. MAX_BITS }
+    """
+    return bits == 1 or \
+        (bits >= 8 and bits <= MAX_BITS and is_power_of_two(bits))
+
+
 class TypeSet(object):
     """
     A set of types.
@@ -165,7 +179,15 @@ class TypeSet(object):
         self.ints = interval_to_set(decode_interval(ints, (8, MAX_BITS)))
         self.floats = interval_to_set(decode_interval(floats, (32, 64)))
         self.bools = interval_to_set(decode_interval(bools, (1, MAX_BITS)))
-        self.bools = set(filter(lambda x:   x == 1 or x >= 8, self.bools))
+        self.bools = set(filter(legal_bool, self.bools))
+
+    def copy(self):
+        # type: (TypeSet) -> TypeSet
+        """
+        Return a copy of our self. deepcopy is sufficient and safe here, since
+        TypeSet contains only sets of numbers.
+        """
+        return deepcopy(self)
 
     def typeset_key(self):
         # type: () -> Tuple[Tuple, Tuple, Tuple, Tuple]
@@ -241,6 +263,109 @@ class TypeSet(object):
 
         return self
 
+    def lane_of(self):
+        # type: () -> TypeSet
+        """
+        Return a TypeSet describing the image of self across lane_of
+        """
+        new = self.copy()
+        new.lanes = set([1])
+        return new
+
+    def as_bool(self):
+        # type: () -> TypeSet
+        """
+        Return a TypeSet describing the image of self across as_bool
+        """
+        new = self.copy()
+        new.ints = set()
+        new.floats = set()
+        new.bools = self.ints.union(self.floats).union(self.bools)
+
+        if 1 in self.lanes:
+            new.bools.add(1)
+        return new
+
+    def half_width(self):
+        # type: () -> TypeSet
+        """
+        Return a TypeSet describing the image of self across halfwidth
+        """
+        new = self.copy()
+        new.ints = set([x/2 for x in self.ints if x > 8])
+        new.floats = set([x/2 for x in self.floats if x > 32])
+        new.bools = set([x/2 for x in self.bools if x > 8])
+
+        return new
+
+    def double_width(self):
+        # type: () -> TypeSet
+        """
+        Return a TypeSet describing the image of self across doublewidth
+        """
+        new = self.copy()
+        new.ints = set([x*2 for x in self.ints if x < MAX_BITS])
+        new.floats = set([x*2 for x in self.floats if x < MAX_BITS])
+        new.bools = set(filter(legal_bool,
+                               set([x*2 for x in self.bools if x < MAX_BITS])))
+
+        return new
+
+    def half_vector(self):
+        # type: () -> TypeSet
+        """
+        Return a TypeSet describing the image of self across halfvector
+        """
+        new = self.copy()
+        new.lanes = set([x/2 for x in self.lanes if x > 1])
+
+        return new
+
+    def double_vector(self):
+        # type: () -> TypeSet
+        """
+        Return a TypeSet describing the image of self across doublevector
+        """
+        new = self.copy()
+        new.lanes = set([x*2 for x in self.lanes if x < MAX_LANES])
+
+        return new
+
+    def size(self):
+        # type: () -> int
+        """
+        Return the number of concrete types represented by this typeset
+        """
+        return len(self.lanes) * (len(self.ints) + len(self.floats) +
+                                  len(self.bools))
+
+    def get_singleton(self):
+        # type: () -> types.ValueType
+        """
+        Return the singleton type represented by self. Can only call on
+        typesets containing 1 type.
+        """
+        assert self.size() == 1
+        if len(self.ints) > 0:
+            bits = tuple(self.ints)[0]
+            scalar_type = ValueType.by_name(IntType.get_name(bits))
+        elif len(self.floats) > 0:
+            bits = tuple(self.floats)[0]
+            scalar_type = ValueType.by_name(FloatType.get_name(bits))
+        else:
+            bits = tuple(self.bools)[0]
+            scalar_type = ValueType.by_name(BoolType.get_name(bits))
+
+        nlanes = tuple(self.lanes)[0]
+
+        if nlanes == 1:
+            return scalar_type
+        else:
+            if TYPE_CHECKING:
+                return cast(types.ScalarType, scalar_type).by(nlanes)
+            else:
+                return scalar_type.by(nlanes)
+
 
 class TypeVar(object):
     """
@@ -271,7 +396,6 @@ class TypeVar(object):
         # type: (str, str, BoolInterval, BoolInterval, BoolInterval, bool, BoolInterval, TypeVar, str) -> None # noqa
         self.name = name
         self.__doc__ = doc
-        self.singleton_type = None  # type: types.ValueType
         self.is_derived = isinstance(base, TypeVar)
         if base:
             assert self.is_derived
@@ -313,7 +437,6 @@ class TypeVar(object):
         tv = TypeVar(
                 typ.name, typ.__doc__,
                 ints, floats, bools, simd=lanes)
-        tv.singleton_type = typ
         return tv
 
     def __str__(self):
@@ -406,14 +529,13 @@ class TypeVar(object):
         Return a derived type variable that has the same number of vector lanes
         as this one, but the lanes are half the width.
         """
-        if not self.is_derived:
-            ts = self.type_set
-            if len(ts.ints) > 0:
-                assert min(ts.ints) > 8, "Can't halve all integer types"
-            if len(ts.floats) > 0:
-                assert min(ts.floats) > 32, "Can't halve all float types"
-            if len(ts.bools) > 0:
-                assert min(ts.bools) > 8, "Can't halve all boolean types"
+        ts = self.get_typeset()
+        if len(ts.ints) > 0:
+            assert min(ts.ints) > 8, "Can't halve all integer types"
+        if len(ts.floats) > 0:
+            assert min(ts.floats) > 32, "Can't halve all float types"
+        if len(ts.bools) > 0:
+            assert min(ts.bools) > 8, "Can't halve all boolean types"
 
         return TypeVar.derived(self, self.HALFWIDTH)
 
@@ -423,16 +545,13 @@ class TypeVar(object):
         Return a derived type variable that has the same number of vector lanes
         as this one, but the lanes are double the width.
         """
-        if not self.is_derived:
-            ts = self.type_set
-            if len(ts.ints) > 0:
-                assert max(ts.ints) < MAX_BITS,\
-                       "Can't double all integer types."
-            if len(ts.floats) > 0:
-                assert max(ts.floats) < MAX_BITS,\
-                       "Can't double all float types."
-            if len(ts.bools) > 0:
-                assert max(ts.bools) < MAX_BITS, "Can't double all bool types."
+        ts = self.get_typeset()
+        if len(ts.ints) > 0:
+            assert max(ts.ints) < MAX_BITS, "Can't double all integer types."
+        if len(ts.floats) > 0:
+            assert max(ts.floats) < MAX_BITS, "Can't double all float types."
+        if len(ts.bools) > 0:
+            assert max(ts.bools) < MAX_BITS, "Can't double all bool types."
 
         return TypeVar.derived(self, self.DOUBLEWIDTH)
 
@@ -442,9 +561,8 @@ class TypeVar(object):
         Return a derived type variable that has half the number of vector lanes
         as this one, with the same lane type.
         """
-        if not self.is_derived:
-            ts = self.type_set
-            assert min(ts.lanes) > 1, "Can't halve a scalar type"
+        ts = self.get_typeset()
+        assert min(ts.lanes) > 1, "Can't halve a scalar type"
 
         return TypeVar.derived(self, self.HALFVECTOR)
 
@@ -454,11 +572,22 @@ class TypeVar(object):
         Return a derived type variable that has twice the number of vector
         lanes as this one, with the same lane type.
         """
-        if not self.is_derived:
-            ts = self.type_set
-            assert max(ts.lanes) < MAX_LANES, "Can't double 256 lanes."
+        ts = self.get_typeset()
+        assert max(ts.lanes) < MAX_LANES, "Can't double 256 lanes."
 
         return TypeVar.derived(self, self.DOUBLEVECTOR)
+
+    def singleton_type(self):
+        # type: () -> ValueType
+        """
+        If the associated typeset has a single type return it. Otherwise return
+        None
+        """
+        ts = self.get_typeset()
+        if ts.size() != 1:
+            return None
+
+        return ts.get_singleton()
 
     def free_typevar(self):
         # type: () -> TypeVar
@@ -467,7 +596,7 @@ class TypeVar(object):
         """
         if self.is_derived:
             return self.base
-        elif self.singleton_type:
+        elif self.singleton_type() is not None:
             # A singleton type variable is not a proper free variable.
             return None
         else:
@@ -481,8 +610,8 @@ class TypeVar(object):
         if self.is_derived:
             return '{}.{}()'.format(
                     self.base.rust_expr(), self.derived_func)
-        elif self.singleton_type:
-            return self.singleton_type.rust_name()
+        elif self.singleton_type():
+            return self.singleton_type().rust_name()
         else:
             return self.name
 
@@ -501,9 +630,6 @@ class TypeVar(object):
 
         if not a.is_derived and not b.is_derived:
             a.type_set &= b.type_set
-            # TODO: What if a.type_set becomes empty?
-            if not a.singleton_type:
-                a.singleton_type = b.singleton_type
             return
 
         # TODO: Implement constraints for derived type variables.
@@ -514,3 +640,29 @@ class TypeVar(object):
         #
         # For the fully general case, we would need to compute an image typeset
         # for `b` and propagate a `a.derived_func` pre-image to `a.base`.
+
+    def get_typeset(self):
+        # type: () -> TypeSet
+        """
+        Returns the typeset for this TV. If the TV is derived, computes it
+        recursively from the derived function and the base's typeset.
+        """
+        if not self.is_derived:
+            return self.type_set
+        else:
+            if (self.derived_func == TypeVar.SAMEAS):
+                return self.base.get_typeset()
+            elif (self.derived_func == TypeVar.LANEOF):
+                return self.base.get_typeset().lane_of()
+            elif (self.derived_func == TypeVar.ASBOOL):
+                return self.base.get_typeset().as_bool()
+            elif (self.derived_func == TypeVar.HALFWIDTH):
+                return self.base.get_typeset().half_width()
+            elif (self.derived_func == TypeVar.DOUBLEWIDTH):
+                return self.base.get_typeset().double_width()
+            elif (self.derived_func == TypeVar.HALFVECTOR):
+                return self.base.get_typeset().half_vector()
+            elif (self.derived_func == TypeVar.DOUBLEVECTOR):
+                return self.base.get_typeset().double_vector()
+            else:
+                assert False, "Unknown derived function: " + self.derived_func

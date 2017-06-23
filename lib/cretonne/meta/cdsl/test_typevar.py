@@ -3,7 +3,7 @@ from unittest import TestCase
 from doctest import DocTestSuite
 from . import typevar
 from .typevar import TypeSet, TypeVar
-from base.types import i32
+from base.types import i32, i16, b1, f64
 
 
 def load_tests(loader, tests, ignore):
@@ -44,6 +44,84 @@ class TestTypeSet(TestCase):
         # Can't rehash after modification.
         with self.assertRaises(AssertionError):
             a in s
+
+    def test_forward_images(self):
+        a = TypeSet(lanes=(2, 8), ints=(8, 8), floats=(32, 32))
+        b = TypeSet(lanes=(1, 8), ints=(8, 8), floats=(32, 32))
+        self.assertEqual(a.lane_of(), TypeSet(ints=(8, 8), floats=(32, 32)))
+
+        c = TypeSet(lanes=(2, 8))
+        c.bools = set([8, 32])
+
+        # Test case with disjoint intervals
+        self.assertEqual(a.as_bool(), c)
+
+        # For as_bool check b1 is present when 1 \in lanes
+        d = TypeSet(lanes=(1, 8))
+        d.bools = set([1, 8, 32])
+        self.assertEqual(b.as_bool(), d)
+
+        self.assertEqual(TypeSet(lanes=(1, 32)).half_vector(),
+                         TypeSet(lanes=(1, 16)))
+
+        self.assertEqual(TypeSet(lanes=(1, 32)).double_vector(),
+                         TypeSet(lanes=(2, 64)))
+
+        self.assertEqual(TypeSet(lanes=(128, 256)).double_vector(),
+                         TypeSet(lanes=(256, 256)))
+
+        self.assertEqual(TypeSet(ints=(8, 32)).half_width(),
+                         TypeSet(ints=(8, 16)))
+
+        self.assertEqual(TypeSet(ints=(8, 32)).double_width(),
+                         TypeSet(ints=(16, 64)))
+
+        self.assertEqual(TypeSet(ints=(32, 64)).double_width(),
+                         TypeSet(ints=(64, 64)))
+
+        # Should produce an empty ts
+        self.assertEqual(TypeSet(floats=(32, 32)).half_width(),
+                         TypeSet())
+
+        self.assertEqual(TypeSet(floats=(32, 64)).half_width(),
+                         TypeSet(floats=(32, 32)))
+
+        self.assertEqual(TypeSet(floats=(32, 32)).double_width(),
+                         TypeSet(floats=(64, 64)))
+
+        self.assertEqual(TypeSet(floats=(32, 64)).double_width(),
+                         TypeSet(floats=(64, 64)))
+
+        # Bools have trickier behavior around b1 (since b2, b4 don't exist)
+        self.assertEqual(TypeSet(bools=(1, 8)).half_width(),
+                         TypeSet())
+
+        t = TypeSet()
+        t.bools = set([8, 16])
+        self.assertEqual(TypeSet(bools=(1, 32)).half_width(), t)
+
+        # double_width() of bools={1, 8, 16} must not include 2 or 8
+        t.bools = set([16, 32])
+        self.assertEqual(TypeSet(bools=(1, 16)).double_width(), t)
+
+        self.assertEqual(TypeSet(bools=(32, 64)).double_width(),
+                         TypeSet(bools=(64, 64)))
+
+    def test_get_singleton(self):
+        # Raise error when calling get_singleton() on non-singleton TS
+        t = TypeSet(lanes=(1, 1), ints=(8, 8), floats=(32, 32))
+        with self.assertRaises(AssertionError):
+            t.get_singleton()
+        t = TypeSet(lanes=(1, 2), floats=(32, 32))
+
+        with self.assertRaises(AssertionError):
+            t.get_singleton()
+
+        self.assertEqual(TypeSet(ints=(16, 16)).get_singleton(), i16)
+        self.assertEqual(TypeSet(floats=(64, 64)).get_singleton(), f64)
+        self.assertEqual(TypeSet(bools=(1, 1)).get_singleton(), b1)
+        self.assertEqual(TypeSet(lanes=(4, 4), ints=(32, 32)).get_singleton(),
+                         i32.by(4))
 
 
 class TestTypeVar(TestCase):

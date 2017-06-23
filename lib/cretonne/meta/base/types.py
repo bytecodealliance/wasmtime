@@ -2,15 +2,10 @@
 The base.types module predefines all the Cretonne scalar types.
 """
 from __future__ import absolute_import
-from cdsl.types import ScalarType, IntType, FloatType, BoolType
+from cdsl.types import IntType, FloatType, BoolType
 
 #: Boolean.
-b1 = ScalarType(
-        'b1', 0,
-        """
-        A boolean value that is either true or false.
-        """)
-
+b1 = BoolType(1)    #: 1-bit bool. Type is abstract (can't be stored in mem)
 b8 = BoolType(8)    #: 8-bit bool.
 b16 = BoolType(16)  #: 16-bit bool.
 b32 = BoolType(32)  #: 32-bit bool.
