@@ -66,14 +66,14 @@ impl Context {
         // phases.
         self.tracker.clear();
 
-        // First pass: Liveness analysis.
+        // Pass: Liveness analysis.
         self.liveness.compute(isa, func, cfg);
 
         if isa.flags().enable_verifier() {
             verify_liveness(isa, func, cfg, &self.liveness)?;
         }
 
-        // Coalesce and create conventional SSA form.
+        // Pass: Coalesce and create conventional SSA form.
         self.coalescing
             .conventional_ssa(isa,
                               func,
@@ -88,12 +88,13 @@ impl Context {
         }
 
 
-        // Second pass: Spilling.
+        // Pass: Spilling.
         self.spilling
             .run(isa,
                  func,
                  domtree,
                  &mut self.liveness,
+                 &self.virtregs,
                  &mut self.topo,
                  &mut self.tracker);
 
@@ -102,7 +103,7 @@ impl Context {
             verify_liveness(isa, func, cfg, &self.liveness)?;
         }
 
-        // Third pass: Reload.
+        // Pass: Reload.
         self.reload
             .run(isa,
                  func,
@@ -116,7 +117,7 @@ impl Context {
             verify_liveness(isa, func, cfg, &self.liveness)?;
         }
 
-        // Fourth pass: Coloring.
+        // Pass: Coloring.
         self.coloring
             .run(isa,
                  func,
