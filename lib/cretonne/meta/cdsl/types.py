@@ -3,8 +3,9 @@ from __future__ import absolute_import
 import math
 
 try:
-    from typing import Dict, List  # noqa
+    from typing import Dict, List, cast, TYPE_CHECKING # noqa
 except ImportError:
+    TYPE_CHECKING = False
     pass
 
 
@@ -97,7 +98,7 @@ class VectorType(ValueType):
         # type: (ScalarType, int) -> None
         assert isinstance(base, ScalarType), 'SIMD lanes must be scalar types'
         super(VectorType, self).__init__(
-                name=VectorType.get_name(base, lanes),
+                name='{}x{}'.format(base.name, lanes),
                 membytes=lanes*base.membytes,
                 doc="""
                 A SIMD vector with {} lanes containing a `{}` each.
@@ -111,11 +112,6 @@ class VectorType(ValueType):
         return ('VectorType(base={}, lanes={})'
                 .format(self.base.name, self.lanes))
 
-    @staticmethod
-    def get_name(base, lanes):
-        # type: (ValueType, int) -> str
-        return '{}x{}'.format(base.name, lanes)
-
 
 class IntType(ScalarType):
     """A concrete scalar integer type."""
@@ -124,7 +120,7 @@ class IntType(ScalarType):
         # type: (int) -> None
         assert bits > 0, 'IntType must have positive number of bits'
         super(IntType, self).__init__(
-                name=IntType.get_name(bits),
+                name='i{:d}'.format(bits),
                 membytes=bits // 8,
                 doc="An integer type with {} bits.".format(bits))
         self.bits = bits
@@ -134,9 +130,13 @@ class IntType(ScalarType):
         return 'IntType(bits={})'.format(self.bits)
 
     @staticmethod
-    def get_name(bits):
-        # type: (int) -> str
-        return 'i{:d}'.format(bits)
+    def with_bits(bits):
+        # type: (int) -> IntType
+        typ = ValueType.by_name('i{:d}'.format(bits))
+        if TYPE_CHECKING:
+            return cast(IntType, typ)
+        else:
+            return typ
 
 
 class FloatType(ScalarType):
@@ -146,7 +146,7 @@ class FloatType(ScalarType):
         # type: (int, str) -> None
         assert bits > 0, 'FloatType must have positive number of bits'
         super(FloatType, self).__init__(
-                name=FloatType.get_name(bits),
+                name='f{:d}'.format(bits),
                 membytes=bits // 8,
                 doc=doc)
         self.bits = bits
@@ -156,9 +156,13 @@ class FloatType(ScalarType):
         return 'FloatType(bits={})'.format(self.bits)
 
     @staticmethod
-    def get_name(bits):
-        # type: (int) -> str
-        return 'f{:d}'.format(bits)
+    def with_bits(bits):
+        # type: (int) -> FloatType
+        typ = ValueType.by_name('f{:d}'.format(bits))
+        if TYPE_CHECKING:
+            return cast(FloatType, typ)
+        else:
+            return typ
 
 
 class BoolType(ScalarType):
@@ -168,7 +172,7 @@ class BoolType(ScalarType):
         # type: (int) -> None
         assert bits > 0, 'BoolType must have positive number of bits'
         super(BoolType, self).__init__(
-                name=BoolType.get_name(bits),
+                name='b{:d}'.format(bits),
                 membytes=bits // 8,
                 doc="A boolean type with {} bits.".format(bits))
         self.bits = bits
@@ -178,6 +182,10 @@ class BoolType(ScalarType):
         return 'BoolType(bits={})'.format(self.bits)
 
     @staticmethod
-    def get_name(bits):
-        # type: (int) -> str
-        return 'b{:d}'.format(bits)
+    def with_bits(bits):
+        # type: (int) -> BoolType
+        typ = ValueType.by_name('b{:d}'.format(bits))
+        if TYPE_CHECKING:
+            return cast(BoolType, typ)
+        else:
+            return typ
