@@ -8,18 +8,17 @@ from __future__ import absolute_import
 import math
 from . import types, is_power_of_two
 from copy import deepcopy
-from .types import ValueType, IntType, FloatType, BoolType
+from .types import IntType, FloatType, BoolType
 
 try:
     from typing import Tuple, Union, Iterable, Any, Set, TYPE_CHECKING # noqa
-    from typing import cast
     if TYPE_CHECKING:
         from srcgen import Formatter  # noqa
+        from .types import ValueType  # noqa
         Interval = Tuple[int, int]
         # An Interval where `True` means 'everything'
         BoolInterval = Union[bool, Interval]
 except ImportError:
-    TYPE_CHECKING = False
     pass
 
 MAX_LANES = 256
@@ -263,6 +262,16 @@ class TypeSet(object):
 
         return self
 
+    def issubset(self, other):
+        # type: (TypeSet) -> bool
+        """
+        Return true iff self is a subset of other
+        """
+        return self.lanes.issubset(other.lanes) and \
+            self.ints.issubset(other.ints) and \
+            self.floats.issubset(other.floats) and \
+            self.bools.issubset(other.bools)
+
     def lane_of(self):
         # type: () -> TypeSet
         """
@@ -292,9 +301,9 @@ class TypeSet(object):
         Return a TypeSet describing the image of self across halfwidth
         """
         new = self.copy()
-        new.ints = set([x/2 for x in self.ints if x > 8])
-        new.floats = set([x/2 for x in self.floats if x > 32])
-        new.bools = set([x/2 for x in self.bools if x > 8])
+        new.ints = set([x//2 for x in self.ints if x > 8])
+        new.floats = set([x//2 for x in self.floats if x > 32])
+        new.bools = set([x//2 for x in self.bools if x > 8])
 
         return new
 
@@ -317,7 +326,7 @@ class TypeSet(object):
         Return a TypeSet describing the image of self across halfvector
         """
         new = self.copy()
-        new.lanes = set([x/2 for x in self.lanes if x > 1])
+        new.lanes = set([x//2 for x in self.lanes if x > 1])
 
         return new
 
@@ -330,6 +339,67 @@ class TypeSet(object):
         new.lanes = set([x*2 for x in self.lanes if x < MAX_LANES])
 
         return new
+
+    def map(self, func):
+        # type: (str) -> TypeSet
+        """
+        Return the image of self across the derived function func
+        """
+        if (func == TypeVar.SAMEAS):
+            return self
+        elif (func == TypeVar.LANEOF):
+            return self.lane_of()
+        elif (func == TypeVar.ASBOOL):
+            return self.as_bool()
+        elif (func == TypeVar.HALFWIDTH):
+            return self.half_width()
+        elif (func == TypeVar.DOUBLEWIDTH):
+            return self.double_width()
+        elif (func == TypeVar.HALFVECTOR):
+            return self.half_vector()
+        elif (func == TypeVar.DOUBLEVECTOR):
+            return self.double_vector()
+        else:
+            assert False, "Unknown derived function: " + func
+
+    def map_inverse(self, func):
+        # type: (str) -> TypeSet
+        """
+        Return the inverse image of self across the derived function func
+        """
+        # The inverse of the empty set is always empty
+        if (self.size() == 0):
+            return self
+
+        if (func == TypeVar.SAMEAS):
+            return self
+        elif (func == TypeVar.LANEOF):
+            new = self.copy()
+            new.lanes = set([2**i for i in range(0, int_log2(MAX_LANES)+1)])
+            return new
+        elif (func == TypeVar.ASBOOL):
+            new = self.copy()
+            new.ints = self.bools.difference(set([1]))
+            new.floats = self.bools.intersection(set([32, 64]))
+
+            if 1 not in self.bools:
+                try:
+                    # If the range doesn't have b1, then the domain can't
+                    # include scalars, as as_bool(scalar)=b1
+                    new.lanes.remove(1)
+                except KeyError:
+                    pass
+            return new
+        elif (func == TypeVar.HALFWIDTH):
+            return self.double_width()
+        elif (func == TypeVar.DOUBLEWIDTH):
+            return self.half_width()
+        elif (func == TypeVar.HALFVECTOR):
+            return self.double_vector()
+        elif (func == TypeVar.DOUBLEVECTOR):
+            return self.half_vector()
+        else:
+            assert False, "Unknown derived function: " + func
 
     def size(self):
         # type: () -> int
@@ -346,25 +416,20 @@ class TypeSet(object):
         typesets containing 1 type.
         """
         assert self.size() == 1
+        scalar_type = None  # type: types.ScalarType
         if len(self.ints) > 0:
-            bits = tuple(self.ints)[0]
-            scalar_type = ValueType.by_name(IntType.get_name(bits))
+            scalar_type = IntType.with_bits(tuple(self.ints)[0])
         elif len(self.floats) > 0:
-            bits = tuple(self.floats)[0]
-            scalar_type = ValueType.by_name(FloatType.get_name(bits))
+            scalar_type = FloatType.with_bits(tuple(self.floats)[0])
         else:
-            bits = tuple(self.bools)[0]
-            scalar_type = ValueType.by_name(BoolType.get_name(bits))
+            scalar_type = BoolType.with_bits(tuple(self.bools)[0])
 
         nlanes = tuple(self.lanes)[0]
 
         if nlanes == 1:
             return scalar_type
         else:
-            if TYPE_CHECKING:
-                return cast(types.ScalarType, scalar_type).by(nlanes)
-            else:
-                return scalar_type.by(nlanes)
+            return scalar_type.by(nlanes)
 
 
 class TypeVar(object):
@@ -482,6 +547,14 @@ class TypeVar(object):
         # type: (TypeVar, str) -> TypeVar
         """Create a type variable that is a function of another."""
         return TypeVar(None, None, base=base, derived_func=derived_func)
+
+    @staticmethod
+    def from_typeset(ts):
+        # type: (TypeSet) -> TypeVar
+        """ Create a type variable from a type set."""
+        tv = TypeVar(None, None)
+        tv.type_set = ts
+        return tv
 
     def change_to_derived(self, base, derived_func):
         # type: (TypeVar, str) -> None
@@ -615,6 +688,17 @@ class TypeVar(object):
         else:
             return self.name
 
+    def constrain_types_by_ts(self, ts):
+        # type: (TypeSet) -> None
+        """
+        Constrain the range of types this variable can assume to a subset of
+        those in the typeset ts.
+        """
+        if not self.is_derived:
+            self.type_set &= ts
+        else:
+            self.base.constrain_types_by_ts(ts.map_inverse(self.derived_func))
+
     def constrain_types(self, other):
         # type: (TypeVar) -> None
         """
@@ -628,18 +712,7 @@ class TypeVar(object):
         if a is b:
             return
 
-        if not a.is_derived and not b.is_derived:
-            a.type_set &= b.type_set
-            return
-
-        # TODO: Implement constraints for derived type variables.
-        #
-        # If a and b are both derived with the same derived_func, we could say
-        # `a.base.constrain_types(b.base)`, but unless the derived_func is
-        # injective, that may constrain `a.base` more than necessary.
-        #
-        # For the fully general case, we would need to compute an image typeset
-        # for `b` and propagate a `a.derived_func` pre-image to `a.base`.
+        a.constrain_types_by_ts(b.get_typeset())
 
     def get_typeset(self):
         # type: () -> TypeSet

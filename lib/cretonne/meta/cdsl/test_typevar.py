@@ -4,6 +4,8 @@ from doctest import DocTestSuite
 from . import typevar
 from .typevar import TypeSet, TypeVar
 from base.types import i32, i16, b1, f64
+from itertools import product
+from functools import reduce
 
 
 def load_tests(loader, tests, ignore):
@@ -123,6 +125,58 @@ class TestTypeSet(TestCase):
         self.assertEqual(TypeSet(lanes=(4, 4), ints=(32, 32)).get_singleton(),
                          i32.by(4))
 
+    def test_map_inverse(self):
+        t = TypeSet(lanes=(1, 1), ints=(8, 8), floats=(32, 32))
+        self.assertEqual(t, t.map_inverse(TypeVar.SAMEAS))
+
+        # LANEOF
+        self.assertEqual(TypeSet(lanes=True, ints=(8, 8), floats=(32, 32)),
+                         t.map_inverse(TypeVar.LANEOF))
+        # Inverse of empty set is still empty across LANEOF
+        self.assertEqual(TypeSet(),
+                         TypeSet().map_inverse(TypeVar.LANEOF))
+
+        # ASBOOL
+        t = TypeSet(lanes=(1, 4), bools=(1, 64))
+        self.assertEqual(t.map_inverse(TypeVar.ASBOOL),
+                         TypeSet(lanes=(1, 4), ints=True, bools=True,
+                                 floats=True))
+
+        # Inverse image across ASBOOL of TS not involving b1 cannot have
+        # lanes=1
+        t = TypeSet(lanes=(1, 4), bools=(16, 32))
+        self.assertEqual(t.map_inverse(TypeVar.ASBOOL),
+                         TypeSet(lanes=(2, 4), ints=(16, 32), bools=(16, 32),
+                                 floats=(32, 32)))
+
+        # Half/Double Vector
+        t = TypeSet(lanes=(1, 1), ints=(8, 8))
+        t1 = TypeSet(lanes=(256, 256), ints=(8, 8))
+        self.assertEqual(t.map_inverse(TypeVar.DOUBLEVECTOR).size(), 0)
+        self.assertEqual(t1.map_inverse(TypeVar.HALFVECTOR).size(), 0)
+
+        t = TypeSet(lanes=(1, 16), ints=(8, 16), floats=(32, 32))
+        t1 = TypeSet(lanes=(64, 256), bools=(1, 32))
+
+        self.assertEqual(t.map_inverse(TypeVar.DOUBLEVECTOR),
+                         TypeSet(lanes=(1, 8), ints=(8, 16), floats=(32, 32)))
+        self.assertEqual(t1.map_inverse(TypeVar.HALFVECTOR),
+                         TypeSet(lanes=(128, 256), bools=(1, 32)))
+
+        # Half/Double Width
+        t = TypeSet(ints=(8, 8), floats=(32, 32), bools=(1, 8))
+        t1 = TypeSet(ints=(64, 64), floats=(64, 64), bools=(64, 64))
+        self.assertEqual(t.map_inverse(TypeVar.DOUBLEWIDTH).size(), 0)
+        self.assertEqual(t1.map_inverse(TypeVar.HALFWIDTH).size(), 0)
+
+        t = TypeSet(lanes=(1, 16), ints=(8, 16), floats=(32, 64))
+        t1 = TypeSet(lanes=(64, 256), bools=(1, 64))
+
+        self.assertEqual(t.map_inverse(TypeVar.DOUBLEWIDTH),
+                         TypeSet(lanes=(1, 16), ints=(8, 8), floats=(32, 32)))
+        self.assertEqual(t1.map_inverse(TypeVar.HALFWIDTH),
+                         TypeSet(lanes=(64, 256), bools=(16, 64)))
+
 
 class TestTypeVar(TestCase):
     def test_functions(self):
@@ -164,3 +218,57 @@ class TestTypeVar(TestCase):
         self.assertEqual(max(x.type_set.lanes), 4)
         self.assertEqual(len(x.type_set.floats), 0)
         self.assertEqual(len(x.type_set.bools), 0)
+
+    def test_stress_constrain_types(self):
+        # Get all 49 possible derived vars of lentgh 2. Since we have SAMEAS
+        # this includes singly derived and non-derived vars
+        funcs = [TypeVar.SAMEAS, TypeVar.LANEOF,
+                 TypeVar.ASBOOL, TypeVar.HALFVECTOR, TypeVar.DOUBLEVECTOR,
+                 TypeVar.HALFWIDTH, TypeVar.DOUBLEWIDTH]
+        v = list(product(*[funcs, funcs]))
+
+        # For each pair of derived variables
+        for (i1, i2) in product(v, v):
+            # Compute the derived sets for each  starting with a full typeset
+            full_ts = TypeSet(lanes=True, floats=True, ints=True, bools=True)
+            ts1 = reduce(lambda ts, func:   ts.map(func), i1, full_ts)
+            ts2 = reduce(lambda ts, func:   ts.map(func), i2, full_ts)
+
+            # Compute intersection
+            intersect = ts1.copy()
+            intersect &= ts2
+
+            # Propagate instersections backward
+            ts1_src = reduce(lambda ts, func:   ts.map_inverse(func),
+                             reversed(i1),
+                             intersect)
+            ts2_src = reduce(lambda ts, func:   ts.map_inverse(func),
+                             reversed(i2),
+                             intersect)
+
+            # If the intersection or its propagated forms are empty, then these
+            # two variables can never overlap. For example x.double_vector and
+            # x.lane_of.
+            if (intersect.size() == 0 or ts1_src.size() == 0 or
+                    ts2_src.size() == 0):
+                continue
+
+            # Should be safe to create derived tvs from ts1_src and ts2_src
+            tv1 = reduce(lambda tv, func:   TypeVar.derived(tv, func),
+                         i1,
+                         TypeVar.from_typeset(ts1_src))
+
+            tv2 = reduce(lambda tv, func:   TypeVar.derived(tv, func),
+                         i2,
+                         TypeVar.from_typeset(ts2_src))
+
+            # The typesets of the two derived variables should be subsets of
+            # the intersection we computed originally
+            assert tv1.get_typeset().issubset(intersect)
+            assert tv2.get_typeset().issubset(intersect)
+
+            # In the absence of AS_BOOL map(map_inverse(f)) == f so the
+            # typesets of tv1 and tv2 should be exactly intersection
+            assert (tv1.get_typeset() == tv2.get_typeset() and
+                    tv1.get_typeset() == intersect) or\
+                TypeVar.ASBOOL in set(i1 + i2)
