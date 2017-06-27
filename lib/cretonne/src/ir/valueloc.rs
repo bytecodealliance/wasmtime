@@ -8,7 +8,7 @@ use ir::StackSlot;
 use std::fmt;
 
 /// Value location.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ValueLoc {
     /// This value has not been assigned to a location yet.
     Unassigned,
