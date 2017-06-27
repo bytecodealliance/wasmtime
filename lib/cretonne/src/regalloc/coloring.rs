@@ -147,8 +147,11 @@ impl<'a> Context<'a> {
                                 &mut regs,
                                 &mut func.locations,
                                 &func.signature);
-                tracker.drop_dead(inst);
+            } else {
+                let (_throughs, kills) = tracker.process_ghost(inst);
+                self.process_ghost_kills(kills, &mut regs, &func.locations);
             }
+            tracker.drop_dead(inst);
         }
     }
 
@@ -377,6 +380,9 @@ impl<'a> Context<'a> {
                 }
             }
         }
+
+        self.forget_diverted(kills);
+
         *regs = output_regs;
     }
 
@@ -567,6 +573,38 @@ impl<'a> Context<'a> {
         for m in self.solver.moves() {
             self.divert.regmove(m.value, m.from, m.to);
             dfg.ins(pos).regmove(m.value, m.from, m.to);
+        }
+    }
+
+    /// Forget about any register diversions in `kills`.
+    fn forget_diverted(&mut self, kills: &[LiveValue]) {
+        if self.divert.is_empty() {
+            return;
+        }
+
+        for lv in kills {
+            if lv.affinity.is_reg() {
+                self.divert.remove(lv.value);
+            }
+        }
+    }
+
+    /// Process kills on a ghost instruction.
+    /// - Forget diversions.
+    /// - Free killed registers.
+    fn process_ghost_kills(&mut self,
+                           kills: &[LiveValue],
+                           regs: &mut AllocatableSet,
+                           locations: &ValueLocations) {
+        for lv in kills {
+            if let Affinity::Reg(rci) = lv.affinity {
+                let rc = self.reginfo.rc(rci);
+                let reg = match self.divert.remove(lv.value) {
+                    Some(r) => r,
+                    None => locations[lv.value].unwrap_reg(),
+                };
+                regs.free(rc, reg);
+            }
         }
     }
 }

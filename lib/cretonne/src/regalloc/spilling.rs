@@ -129,9 +129,12 @@ impl<'a> Context<'a> {
         while let Some(inst) = pos.next_inst() {
             if let Some(constraints) = self.encinfo.operand_constraints(self.encodings[inst]) {
                 self.visit_inst(inst, constraints, &mut pos, dfg, tracker);
-                tracker.drop_dead(inst);
-                self.process_spills(tracker);
+            } else {
+                let (_throughs, kills) = tracker.process_ghost(inst);
+                self.free_regs(kills);
             }
+            tracker.drop_dead(inst);
+            self.process_spills(tracker);
         }
     }
 
