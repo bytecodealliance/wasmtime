@@ -51,6 +51,11 @@ impl RegDiversions {
         self.current.clear()
     }
 
+    /// Are there any diversions?
+    pub fn is_empty(&self) -> bool {
+        self.current.is_empty()
+    }
+
     /// Get the current diversion of `value`, if any.
     pub fn diversion(&self, value: Value) -> Option<&Diversion> {
         self.current.iter().find(|d| d.value == value)
@@ -82,6 +87,16 @@ impl RegDiversions {
         } else {
             self.current.push(Diversion::new(value, from, to));
         }
+    }
+
+    /// Drop any recorded register move for `value`.
+    ///
+    /// Returns the `to` register of the removed diversion.
+    pub fn remove(&mut self, value: Value) -> Option<RegUnit> {
+        self.current
+            .iter()
+            .position(|d| d.value == value)
+            .map(|i| self.current.swap_remove(i).to)
     }
 }
 

@@ -280,6 +280,16 @@ impl LiveValueTracker {
          &self.live.values[first_def..])
     }
 
+    /// Prepare to move past a ghost instruction.
+    ///
+    /// This is like `process_inst`, except any defs are ignored.
+    ///
+    /// Returns `(throughs, kills)`.
+    pub fn process_ghost(&mut self, inst: Inst) -> (&[LiveValue], &[LiveValue]) {
+        let first_kill = self.live.live_after(inst);
+        self.live.values.as_slice().split_at(first_kill)
+    }
+
     /// Drop the values that are now dead after moving past `inst`.
     ///
     /// This removes both live values that were killed by `inst` and dead defines on `inst` itself.
