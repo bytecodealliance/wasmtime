@@ -61,7 +61,8 @@ ebb0(v0: i32):
     ; v1 and v0 interfere here:
     trapnz v0
     ; check: $(cp1=$V) = copy $v1
-    ; nextln: jump $ebb1($cp1)
+    ; not: copy
+    ; check: jump $ebb1($cp1)
     jump ebb1(v1)
 
 ebb1(v10: i32):
@@ -85,7 +86,8 @@ ebb1(v10: i32, v11: i32):
     v12 = iadd v10, v11
     v13 = icmp ult v12, v0
     ; check: $(nv11b=$V) = copy $v11
-    ; nextln: brnz $v13, $ebb1($nv11b, $v12)
+    ; not: copy
+    ; check: brnz $v13, $ebb1($nv11b, $v12)
     brnz v13, ebb1(v11, v12)
     return v12
 }

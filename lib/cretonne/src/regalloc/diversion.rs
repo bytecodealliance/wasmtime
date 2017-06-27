@@ -61,7 +61,7 @@ impl RegDiversions {
         self.current.iter().find(|d| d.value == value)
     }
 
-    /// Get all current diversion.
+    /// Get all current diversions.
     pub fn all(&self) -> &[Diversion] {
         self.current.as_slice()
     }

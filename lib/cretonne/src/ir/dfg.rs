@@ -104,6 +104,11 @@ impl DataFlowGraph {
     pub fn ebb_is_valid(&self, ebb: Ebb) -> bool {
         self.ebbs.is_valid(ebb)
     }
+
+    /// Get the total number of values.
+    pub fn num_values(&self) -> usize {
+        self.values.len()
+    }
 }
 
 /// Resolve value aliases.

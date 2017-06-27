@@ -23,6 +23,10 @@
 //!    operands are allowed to read spilled values, but each such instance must be counted as using
 //!    a register.
 //!
+//! 5. The code must be in conventional SSA form. Among other things, this means that values passed
+//!    as arguments when branching to an EBB must belong to the same virtual register as the
+//!    corresponding EBB argument value.
+//!
 //! # Iteration order
 //!
 //! The SSA property guarantees that whenever the live range of two values overlap, one of the
@@ -30,10 +34,16 @@
 //! a topological order relative to the dominance relation, we can assign colors to the values
 //! defined by the instruction and only consider the colors of other values that are live at the
 //! instruction.
+//!
+//! The first time we see a branch to an EBB, the EBB's argument values are colored to match the
+//! registers currently holding branch argument values passed to the predecessor branch. By
+//! visiting EBBs in a CFG topological order, we guarantee that at least one predecessor branch has
+//! been visited before the destination EBB. Therefore, the EBB's arguments are already colored.
+//!
+//! The exception is the entry block whose arguments are colored from the ABI requirements.
 
 use dominator_tree::DominatorTree;
-use entity_map::EntityMap;
-use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph, ValueLocations};
+use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph, Layout, ValueLocations};
 use ir::{InstBuilder, Signature, ArgumentType, ArgumentLoc};
 use isa::{RegUnit, RegClass, RegInfo, regs_overlap};
 use isa::{TargetIsa, EncInfo, RecipeConstraints, OperandConstraint, ConstraintKind};
@@ -42,8 +52,8 @@ use regalloc::affinity::Affinity;
 use regalloc::allocatable_set::AllocatableSet;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
+use regalloc::liverange::LiveRange;
 use regalloc::solver::Solver;
-use topo_order::TopoOrder;
 
 
 /// Data structures for the coloring pass.
@@ -75,7 +85,6 @@ struct Context<'a> {
     // References to working set data structures.
     // If we need to borrow out of a data structure across a method call, it must be passed as a
     // function argument instead, see the `LiveValueTracker` arguments.
-    topo: &'a mut TopoOrder,
     divert: &'a mut RegDiversions,
     solver: &'a mut Solver,
 
@@ -99,7 +108,6 @@ impl Coloring {
                func: &mut Function,
                domtree: &DominatorTree,
                liveness: &mut Liveness,
-               topo: &mut TopoOrder,
                tracker: &mut LiveValueTracker) {
         dbg!("Coloring for:\n{}", func.display(isa));
         let mut ctx = Context {
@@ -107,7 +115,6 @@ impl Coloring {
             encinfo: isa.encoding_info(),
             domtree,
             liveness,
-            topo,
             divert: &mut self.divert,
             solver: &mut self.solver,
             usable_regs: isa.allocatable_registers(func),
@@ -119,10 +126,11 @@ impl Coloring {
 impl<'a> Context<'a> {
     /// Run the coloring algorithm.
     fn run(&mut self, func: &mut Function, tracker: &mut LiveValueTracker) {
-        // Just visit blocks in layout order, letting `self.topo` enforce a topological ordering.
-        // TODO: Once we have a loop tree, we could visit hot blocks first.
-        self.topo.reset(func.layout.ebbs());
-        while let Some(ebb) = self.topo.next(&func.layout, self.domtree) {
+        func.locations.resize(func.dfg.num_values());
+
+        // Visit blocks in reverse post-order. We need to ensure that at least one predecessor has
+        // been visited before each EBB. That guarantees that the EBB arguments have been colored.
+        for &ebb in self.domtree.cfg_postorder().iter().rev() {
             self.visit_ebb(ebb, func, tracker);
         }
     }
@@ -164,28 +172,29 @@ impl<'a> Context<'a> {
                         tracker: &mut LiveValueTracker)
                         -> AllocatableSet {
         // Reposition the live value tracker and deal with the EBB arguments.
-        let (liveins, args) =
-            tracker.ebb_top(ebb, &func.dfg, self.liveness, &func.layout, self.domtree);
+        tracker.ebb_top(ebb, &func.dfg, self.liveness, &func.layout, self.domtree);
 
-        // Arguments to the entry block have ABI constraints.
         if func.layout.entry_block() == Some(ebb) {
-            assert_eq!(liveins.len(), 0);
-            self.color_entry_args(&func.signature, args, &mut func.locations)
+            // Arguments to the entry block have ABI constraints.
+            self.color_entry_args(&func.signature, tracker.live(), &mut func.locations)
         } else {
-            // The live-ins have already been assigned a register. Reconstruct the allocatable set.
-            let regs = self.livein_regs(liveins, func);
-            self.color_args(args, regs, &mut func.locations)
+            // The live-ins and arguments to a non-entry EBB have already been assigned a register.
+            // Reconstruct the allocatable set.
+            self.livein_regs(tracker.live(), func)
         }
     }
 
     /// Initialize a set of allocatable registers from the values that are live-in to a block.
     /// These values must already be colored when the dominating blocks were processed.
-    fn livein_regs(&self, liveins: &[LiveValue], func: &Function) -> AllocatableSet {
+    ///
+    /// Also process the EBB arguments which were colored when the first predecessor branch was
+    /// encountered.
+    fn livein_regs(&self, live: &[LiveValue], func: &Function) -> AllocatableSet {
         // Start from the registers that are actually usable. We don't want to include any reserved
         // registers in the set.
         let mut regs = self.usable_regs.clone();
 
-        for lv in liveins {
+        for lv in live.iter().filter(|lv| !lv.is_dead) {
             let value = lv.value;
             let affinity = self.liveness
                 .get(value)
@@ -234,7 +243,7 @@ impl<'a> Context<'a> {
                         if !lv.is_dead {
                             regs.take(rc, reg);
                         }
-                        *locations.ensure(lv.value) = ValueLoc::Reg(reg);
+                        locations[lv.value] = ValueLoc::Reg(reg);
                     } else {
                         // This should have been fixed by the reload pass.
                         panic!("Entry arg {} has {} affinity, but ABI {}",
@@ -266,39 +275,6 @@ impl<'a> Context<'a> {
         regs
     }
 
-    /// Color the live arguments to the current block.
-    ///
-    /// It is assumed that any live-in register values have already been taken out of the register
-    /// set.
-    fn color_args(&self,
-                  args: &[LiveValue],
-                  mut regs: AllocatableSet,
-                  locations: &mut ValueLocations)
-                  -> AllocatableSet {
-        // Available registers *after* filtering out the dead arguments.
-        let mut live_regs = regs.clone();
-
-        for lv in args {
-            // Only look at the register arguments.
-            if let Affinity::Reg(rci) = lv.affinity {
-                let rc = self.reginfo.rc(rci);
-                // TODO: Fall back to a top-level super-class. Sub-classes are only hints.
-                let reg = regs.iter(rc)
-                    .next()
-                    .expect("Out of registers for arguments");
-                regs.take(rc, reg);
-                if !lv.is_dead {
-                    live_regs.take(rc, reg);
-                }
-                *locations.ensure(lv.value) = ValueLoc::Reg(reg);
-            }
-        }
-
-        // All arguments are accounted for in `regs`. We don't care about the dead arguments now
-        // that we have made sure they don't interfere.
-        live_regs
-    }
-
     /// Color the values defined by `inst` and insert any necessary shuffle code to satisfy
     /// instruction constraints.
     ///
@@ -315,6 +291,10 @@ impl<'a> Context<'a> {
                   func_signature: &Signature) {
         dbg!("Coloring {}", dfg.display_inst(inst));
 
+        // EBB whose arguments should be colored to match the current branch instruction's
+        // arguments.
+        let mut color_dest_args = None;
+
         // Program the solver with register constraints for the input side.
         self.solver.reset(regs);
         self.program_input_constraints(inst, constraints.ins, dfg, locations);
@@ -323,7 +303,25 @@ impl<'a> Context<'a> {
             self.program_input_abi(inst, &dfg.signatures[sig].argument_types, dfg, locations);
         } else if dfg[inst].opcode().is_return() {
             self.program_input_abi(inst, &func_signature.return_types, dfg, locations);
+        } else if dfg[inst].opcode().is_branch() {
+            // This is a branch, so we need to make sure that globally live values are in their
+            // global registers. For EBBs that take arguments, we also need to place the argument
+            // values in the expected registers.
+            if let Some(dest) = dfg[inst].branch_destination() {
+                if self.program_ebb_arguments(inst, dest, dfg, pos.layout, locations) {
+                    color_dest_args = Some(dest);
+                }
+            } else {
+                // This is a multi-way branch like `br_table`. We only support arguments on
+                // single-destination branches.
+                assert_eq!(dfg.inst_variable_args(inst).len(),
+                           0,
+                           "Can't handle EBB arguments: {}",
+                           dfg.display_inst(inst));
+                self.undivert_regs(|lr| !lr.is_local());
+            }
         }
+
         if self.solver.has_fixed_input_conflicts() {
             self.divert_fixed_input_conflicts(tracker.live(), locations);
         }
@@ -365,9 +363,15 @@ impl<'a> Context<'a> {
         // registers around.
         self.shuffle_inputs(pos, dfg, regs);
 
+        // If this is the first time we branch to `dest`, color its arguments to match the current
+        // register state.
+        if let Some(dest) = color_dest_args {
+            self.color_ebb_arguments(inst, dest, dfg, locations);
+        }
+
         // Apply the solution to the defs.
         for v in self.solver.vars().iter().filter(|&v| v.is_define()) {
-            *locations.ensure(v.value) = ValueLoc::Reg(v.solution);
+            locations[v.value] = ValueLoc::Reg(v.solution);
         }
 
         // Update `regs` for the next instruction, remove the dead defs.
@@ -391,7 +395,7 @@ impl<'a> Context<'a> {
                                  inst: Inst,
                                  constraints: &[OperandConstraint],
                                  dfg: &DataFlowGraph,
-                                 locations: &EntityMap<Value, ValueLoc>) {
+                                 locations: &ValueLocations) {
         for (op, &value) in constraints
                 .iter()
                 .zip(dfg.inst_args(inst))
@@ -425,7 +429,7 @@ impl<'a> Context<'a> {
                          inst: Inst,
                          abi_types: &[ArgumentType],
                          dfg: &DataFlowGraph,
-                         locations: &EntityMap<Value, ValueLoc>) {
+                         locations: &ValueLocations) {
         for (abi, &value) in abi_types.iter().zip(dfg.inst_variable_args(inst)) {
             if let ArgumentLoc::Reg(reg) = abi.location {
                 if let Affinity::Reg(rci) =
@@ -438,6 +442,115 @@ impl<'a> Context<'a> {
                     self.solver.reassign_in(value, rc, cur_reg, reg);
                 } else {
                     panic!("ABI argument {} should be in a register", value);
+                }
+            }
+        }
+    }
+
+    /// Prepare for a branch to `dest`.
+    ///
+    /// 1. Any values that are live-in to `dest` must be un-diverted so they live in their globally
+    ///    assigned register.
+    /// 2. If the `dest` EBB takes arguments, reassign the branch argument values to the matching
+    ///    registers.
+    ///
+    /// Returns true if this is the first time a branch to `dest` is seen, so the `dest` argument
+    /// values should be colored after `shuffle_inputs`.
+    fn program_ebb_arguments(&mut self,
+                             inst: Inst,
+                             dest: Ebb,
+                             dfg: &DataFlowGraph,
+                             layout: &Layout,
+                             locations: &ValueLocations)
+                             -> bool {
+        // Find diverted registers that are live-in to `dest` and reassign them to their global
+        // home.
+        //
+        // Values with a global live range that are not live in to `dest` could appear as branch
+        // arguments, so they can't always be un-diverted.
+        self.undivert_regs(|lr| lr.livein_local_end(dest, layout).is_some());
+
+        // Now handle the EBB arguments.
+        let br_args = dfg.inst_variable_args(inst);
+        let dest_args = dfg.ebb_args(dest);
+        assert_eq!(br_args.len(), dest_args.len());
+        for (&dest_arg, &br_arg) in dest_args.iter().zip(br_args) {
+            // The first time we encounter a branch to `dest`, we get to pick the location. The
+            // following times we see a branch to `dest`, we must follow suit.
+            match locations[dest_arg] {
+                ValueLoc::Unassigned => {
+                    // This is the first branch to `dest`, so we should color `dest_arg` instead of
+                    // `br_arg`. However, we don't know where `br_arg` will end up until
+                    // after `shuffle_inputs`. See `color_ebb_arguments` below.
+                    return true;
+                }
+                ValueLoc::Reg(dest_reg) => {
+                    // We've branched to `dest` before. Make sure we use the correct argument
+                    // registers by reassigning `br_arg`.
+                    let br_lr = self.liveness
+                        .get(br_arg)
+                        .expect("Missing live range for branch argument");
+                    if let Affinity::Reg(rci) = br_lr.affinity {
+                        let rc = self.reginfo.rc(rci);
+                        let br_reg = self.divert.reg(br_arg, locations);
+                        self.solver.reassign_in(br_arg, rc, br_reg, dest_reg);
+                    } else {
+                        panic!("Branch argument {} is not in a register", br_arg);
+                    }
+                }
+                ValueLoc::Stack(ss) => {
+                    // The spiller should already have given us identical stack slots.
+                    debug_assert_eq!(ValueLoc::Stack(ss), locations[br_arg]);
+                }
+            }
+        }
+
+        // No `dest` arguments need coloring.
+        false
+    }
+
+    /// Knowing that we've never seen a branch to `dest` before, color its arguments to match our
+    /// register state.
+    ///
+    /// This function is only called when `program_ebb_arguments()` returned `true`.
+    fn color_ebb_arguments(&mut self,
+                           inst: Inst,
+                           dest: Ebb,
+                           dfg: &DataFlowGraph,
+                           locations: &mut ValueLocations) {
+        let br_args = dfg.inst_variable_args(inst);
+        let dest_args = dfg.ebb_args(dest);
+        assert_eq!(br_args.len(), dest_args.len());
+        for (&dest_arg, &br_arg) in dest_args.iter().zip(br_args) {
+            match locations[dest_arg] {
+                ValueLoc::Unassigned => {
+                    let br_reg = self.divert.reg(br_arg, locations);
+                    locations[dest_arg] = ValueLoc::Reg(br_reg);
+                }
+                ValueLoc::Reg(_) => panic!("{} arg {} already colored", dest, dest_arg),
+                // Spilled value consistency is verified by `program_ebb_arguments()` above.
+                ValueLoc::Stack(_) => {}
+            }
+        }
+    }
+
+    /// Find all diverted registers where `pred` returns `true` and undo their diversion so they
+    /// are reallocated to their global register assignments.
+    fn undivert_regs<Pred>(&mut self, mut pred: Pred)
+        where Pred: FnMut(&LiveRange) -> bool
+    {
+        for rdiv in self.divert.all() {
+            let lr = self.liveness
+                .get(rdiv.value)
+                .expect("Missing live range for diverted register");
+            if pred(lr) {
+                if let Affinity::Reg(rci) = lr.affinity {
+                    let rc = self.reginfo.rc(rci);
+                    self.solver.reassign_in(rdiv.value, rc, rdiv.to, rdiv.from);
+                } else {
+                    panic!("Diverted register {} with {} affinity",
+                           rdiv.value,
+                           lr.affinity.display(&self.reginfo));
                 }
             }
         }
@@ -525,7 +638,7 @@ impl<'a> Context<'a> {
             let ok = self.solver.add_fixed_output(rc, reg);
             assert!(ok, "Couldn't clear fixed output interference for {}", value);
         }
-        *locations.ensure(value) = ValueLoc::Reg(reg);
+        locations[value] = ValueLoc::Reg(reg);
     }
 
     /// Program the output-side constraints for `inst` into the constraint solver.
