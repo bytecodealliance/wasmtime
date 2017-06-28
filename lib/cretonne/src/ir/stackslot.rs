@@ -69,18 +69,33 @@ pub struct StackSlotData {
 
     /// Size of stack slot in bytes.
     pub size: u32,
+
+    /// Offset of stack slot relative to the stack pointer in the caller.
+    ///
+    /// On Intel ISAs, the base address is the stack pointer *before* the return address was
+    /// pushed. On RISC ISAs, the base address is the value of the stack pointer on entry to the
+    /// function.
+    pub offset: i32,
 }
 
 impl StackSlotData {
     /// Create a stack slot with the specified byte size.
     pub fn new(kind: StackSlotKind, size: u32) -> StackSlotData {
-        StackSlotData { kind, size }
+        StackSlotData {
+            kind,
+            size,
+            offset: 0,
+        }
     }
 }
 
 impl fmt::Display for StackSlotData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.kind, self.size)
+        write!(f, "{} {}", self.kind, self.size)?;
+        if self.offset != 0 {
+            write!(f, ", offset {}", self.offset)?;
+        }
+        Ok(())
     }
 }
 
@@ -136,8 +151,15 @@ impl StackSlots {
 impl StackSlots {
     /// Create a new spill slot for spilling values of type `ty`.
     pub fn make_spill_slot(&mut self, ty: Type) -> StackSlot {
-        let bytes = (ty.bits() as u32 + 7) / 8;
-        self.push(StackSlotData::new(StackSlotKind::SpillSlot, bytes))
+        self.push(StackSlotData::new(StackSlotKind::SpillSlot, ty.bytes()))
+    }
+
+    /// Create a stack slot representing an incoming function argument.
+    pub fn make_incoming_arg(&mut self, ty: Type, offset: u32) -> StackSlot {
+        let mut data = StackSlotData::new(StackSlotKind::IncomingArg, ty.bytes());
+        assert!(offset <= i32::max_value() as u32 - data.size);
+        data.offset = offset as i32;
+        self.push(data)
     }
 }
 

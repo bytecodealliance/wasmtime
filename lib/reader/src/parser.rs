@@ -428,15 +428,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a u32 immediate.
+    // Match and consume an i32 immediate.
     // This is used for stack argument byte offsets.
-    fn match_uimm32(&mut self, err_msg: &str) -> Result<u32> {
+    fn match_imm32(&mut self, err_msg: &str) -> Result<i32> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
-            // Parse it as a u32 to check for overflow and other issues.
+            // Parse it as a i32 to check for overflow and other issues.
             text.parse()
-                .map_err(|_| self.error("expected u32 decimal immediate"))
+                .map_err(|_| self.error("expected i32 decimal immediate"))
         } else {
             err!(self.loc, err_msg)
         }
@@ -837,7 +837,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Some(Token::Integer(_)) => {
-                    let offset = self.match_uimm32("expected stack argument byte offset")?;
+                    let offset = self.match_imm32("expected stack argument byte offset")?;
                     Ok(ArgumentLoc::Stack(offset))
                 }
                 Some(Token::Minus) => {
@@ -870,8 +870,9 @@ impl<'a> Parser<'a> {
             match self.token() {
                 Some(Token::StackSlot(..)) => {
                     self.gather_comments(ctx.function.stack_slots.next_key());
+                    let loc = self.loc;
                     self.parse_stack_slot_decl()
-                        .and_then(|(num, dat)| ctx.add_ss(num, dat, &self.loc))
+                        .and_then(|(num, dat)| ctx.add_ss(num, dat, &loc))
                 }
                 Some(Token::SigRef(..)) => {
                     self.gather_comments(ctx.function.dfg.signatures.next_key());
@@ -915,7 +916,15 @@ impl<'a> Parser<'a> {
         if bytes > u32::MAX as i64 {
             return err!(self.loc, "stack slot too large");
         }
-        let data = StackSlotData::new(kind, bytes as u32);
+        let mut data = StackSlotData::new(kind, bytes as u32);
+
+        // Take additional options.
+        while self.optional(Token::Comma) {
+            match self.match_any_identifier("expected stack slot flags")? {
+                "offset" => data.offset = self.match_imm32("expected byte offset")?,
+                other => return err!(self.loc, "Unknown stack slot flag '{}'", other),
+            }
+        }
 
         // TBD: stack-slot-decl ::= StackSlot(ss) "=" stack-slot-kind Bytes * {"," stack-slot-flag}
         Ok((number, data))

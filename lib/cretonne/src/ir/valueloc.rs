@@ -86,7 +86,7 @@ pub enum ArgumentLoc {
     /// Argument is passed in a register.
     Reg(RegUnit),
     /// Argument is passed on the stack, at the given byte offset into the argument array.
-    Stack(u32),
+    Stack(i32),
 }
 
 impl Default for ArgumentLoc {

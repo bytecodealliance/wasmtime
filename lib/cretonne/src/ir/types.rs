@@ -197,6 +197,11 @@ impl Type {
         self.lane_bits() as u16 * self.lane_count()
     }
 
+    /// Get the number of bytes used to store this type in memory.
+    pub fn bytes(self) -> u32 {
+        (self.bits() as u32 + 7) / 8
+    }
+
     /// Get a SIMD vector type with `n` times more lanes than this one.
     ///
     /// If this is a scalar type, this produces a SIMD type with this as a lane type and `n` lanes.
