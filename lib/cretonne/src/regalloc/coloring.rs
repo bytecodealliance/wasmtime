@@ -253,19 +253,8 @@ impl<'a> Context<'a> {
                     }
 
                 }
-                Affinity::Stack => {
-                    if let ArgumentLoc::Stack(_offset) = abi.location {
-                        // TODO: Allocate a stack slot at incoming offset and assign it.
-                        panic!("Unimplemented {}: {} stack allocation",
-                               lv.value,
-                               abi.display(&self.reginfo));
-                    } else {
-                        // This should have been fixed by the reload pass.
-                        panic!("Entry arg {} has stack affinity, but ABI {}",
-                               lv.value,
-                               abi.display(&self.reginfo));
-                    }
-                }
+                // The spiller will have assigned an incoming stack slot already.
+                Affinity::Stack => assert!(abi.location.is_stack()),
                 // This is a ghost value, unused in the function. Don't assign it to a location
                 // either.
                 Affinity::None => {}

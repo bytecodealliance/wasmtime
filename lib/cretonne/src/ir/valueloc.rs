@@ -112,6 +112,14 @@ impl ArgumentLoc {
         }
     }
 
+    /// Is this a stack location?
+    pub fn is_stack(&self) -> bool {
+        match *self {
+            ArgumentLoc::Stack(_) => true,
+            _ => false,
+        }
+    }
+
     /// Return an object that can display this argument location, using the register info from the
     /// target ISA.
     pub fn display<'a, R: Into<Option<&'a RegInfo>>>(self, regs: R) -> DisplayArgumentLoc<'a> {

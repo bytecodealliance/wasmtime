@@ -155,10 +155,10 @@ impl StackSlots {
     }
 
     /// Create a stack slot representing an incoming function argument.
-    pub fn make_incoming_arg(&mut self, ty: Type, offset: u32) -> StackSlot {
+    pub fn make_incoming_arg(&mut self, ty: Type, offset: i32) -> StackSlot {
         let mut data = StackSlotData::new(StackSlotKind::IncomingArg, ty.bytes());
-        assert!(offset <= i32::max_value() as u32 - data.size);
-        data.offset = offset as i32;
+        assert!(offset <= i32::max_value() - data.size as i32);
+        data.offset = offset;
         self.push(data)
     }
 }

@@ -17,7 +17,7 @@
 
 use dominator_tree::DominatorTree;
 use ir::{DataFlowGraph, Layout, Cursor, InstBuilder};
-use ir::{Function, Ebb, Inst, Value, ValueLoc, SigRef};
+use ir::{Function, Ebb, Inst, Value, ValueLoc, ArgumentLoc, Signature, SigRef};
 use ir::{InstEncodings, StackSlots, ValueLocations};
 use isa::registers::{RegClass, RegClassMask};
 use isa::{TargetIsa, RegInfo, EncInfo, RecipeConstraints, ConstraintKind};
@@ -45,6 +45,7 @@ struct Context<'a> {
     encodings: &'a mut InstEncodings,
     stack_slots: &'a mut StackSlots,
     locations: &'a mut ValueLocations,
+    func_signature: &'a Signature,
 
     // References to contextual data structures we need.
     domtree: &'a DominatorTree,
@@ -92,6 +93,7 @@ impl Spilling {
             encodings: &mut func.encodings,
             stack_slots: &mut func.stack_slots,
             locations: &mut func.locations,
+            func_signature: &func.signature,
             domtree,
             liveness,
             virtregs,
@@ -109,9 +111,34 @@ impl<'a> Context<'a> {
            layout: &mut Layout,
            dfg: &mut DataFlowGraph,
            tracker: &mut LiveValueTracker) {
+        if let Some(entry) = layout.entry_block() {
+            self.spill_entry_arguments(entry, dfg);
+        }
+
         self.topo.reset(layout.ebbs());
         while let Some(ebb) = self.topo.next(layout, self.domtree) {
             self.visit_ebb(ebb, layout, dfg, tracker);
+        }
+    }
+
+    /// Assign stack slots to incoming function arguments on the stack.
+    fn spill_entry_arguments(&mut self, entry: Ebb, dfg: &DataFlowGraph) {
+        for (abi, &arg) in self.func_signature
+                .argument_types
+                .iter()
+                .zip(dfg.ebb_args(entry)) {
+            if let ArgumentLoc::Stack(offset) = abi.location {
+                // Function arguments passed on the stack can't be part of a virtual register. We
+                // would need to write other values to the stack slot, but it belongs to the
+                // caller. (Not that the caller would care, nobody depends on stack arguments being
+                // preserved across calls).
+                assert_eq!(self.virtregs.get(arg),
+                           None,
+                           "Stack argument {} can't be part of a virtual register",
+                           arg);
+                let ss = self.stack_slots.make_incoming_arg(abi.value_type, offset);
+                *self.locations.ensure(arg) = ValueLoc::Stack(ss);
+            }
         }
     }
 
