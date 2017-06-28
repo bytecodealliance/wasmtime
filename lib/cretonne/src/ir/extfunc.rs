@@ -51,8 +51,8 @@ impl Signature {
         let bytes = self.argument_types
             .iter()
             .filter_map(|arg| match arg.location {
-                            ArgumentLoc::Stack(offset) => {
-                                Some(offset + arg.value_type.bits() as u32 / 8)
+                            ArgumentLoc::Stack(offset) if offset > 0 => {
+                                Some(offset as u32 + arg.value_type.bytes())
                             }
                             _ => None,
                         })

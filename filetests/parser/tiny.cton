@@ -98,7 +98,7 @@ ebb0(v90: i32, v91: f32):
 function %stack() {
     ss10 = spill_slot 8
     ss2 = local 4
-    ss3 = incoming_arg 4
+    ss3 = incoming_arg 4, offset 8
     ss4 = outgoing_arg 4
 
 ebb0:
@@ -110,7 +110,7 @@ ebb0:
 ; sameln: function %stack() {
 ; nextln:    $ss10 = spill_slot 8
 ; nextln:    $ss2 = local 4
-; nextln:    $ss3 = incoming_arg 4
+; nextln:    $ss3 = incoming_arg 4, offset 8
 ; nextln:    $ss4 = outgoing_arg 4
 
 ; check: ebb0:
