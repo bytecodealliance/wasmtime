@@ -8,7 +8,7 @@
 use dbg::DisplayList;
 use dominator_tree::DominatorTree;
 use flowgraph::{ControlFlowGraph, BasicBlock};
-use ir::{DataFlowGraph, Layout, Cursor, InstBuilder};
+use ir::{DataFlowGraph, Layout, Cursor, InstBuilder, ValueDef};
 use ir::{Function, Ebb, Inst, Value, ExpandedProgramPoint};
 use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
@@ -400,6 +400,22 @@ impl<'a> Context<'a> {
                  pred_val,
                  pred_ebb,
                  self.func.dfg.display_inst(pred_inst));
+
+            // Never coalesce incoming function arguments on the stack. These arguments are
+            // pre-spilled, and the rest of the virtual register would be forced to spill to the
+            // `incoming_arg` stack slot too.
+            if let ValueDef::Arg(def_ebb, def_num) = self.func.dfg.value_def(pred_val) {
+                if Some(def_ebb) == self.func.layout.entry_block() &&
+                   self.func.signature.argument_types[def_num]
+                       .location
+                       .is_stack() {
+                    dbg!("Isolating incoming stack parameter {}", pred_val);
+                    let new_val = self.split_pred(pred_inst, pred_ebb, argnum, pred_val);
+                    assert!(self.add_class(new_val).is_ok());
+                    continue;
+                }
+            }
+
             if let Err((a, b)) = self.add_class(pred_val) {
                 dbg!("Found conflict between {} and {}", a, b);
                 // We have a conflict between the already merged value `a` and one of the new

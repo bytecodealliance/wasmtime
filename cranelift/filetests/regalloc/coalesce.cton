@@ -91,3 +91,21 @@ ebb1(v10: i32, v11: i32):
     brnz v13, ebb1(v11, v12)
     return v12
 }
+
+; Function arguments passed on the stack aren't allowed to be part of a virtual
+; register, at least for now. This is because the other values in the virtual
+; register would need to be spilled to the incoming_arg stack slot which we treat
+; as belonging to the caller.
+function %stackarg(i32, i32, i32, i32, i32, i32, i32, i32, i32) -> i32 {
+; check: ss0 = incoming_arg 4
+; not: incoming_arg
+ebb0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32, v8: i32):
+    ; check: fill v8
+    ; not: v8
+    brnz v0, ebb1(v8)
+    jump ebb1(v7)
+
+ebb1(v10: i32):
+    v11 = iadd_imm v10, 1
+    return v11
+}
