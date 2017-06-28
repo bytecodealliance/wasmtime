@@ -109,3 +109,15 @@ ebb0(v0: i32):
     ; check: call_indirect $sig0, $v0($v0, $c)
     return
 }
+
+; Two arguments on the stack.
+function %stackargs(i32, i32, i32, i32, i32, i32, i32, i32) -> i32 {
+; check: ss0 = incoming_arg 4
+; check: ss1 = incoming_arg 4, offset 4
+; not: incoming_arg
+ebb0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32):
+    ; unordered: fill $v6
+    ; unordered: fill $v7
+    v10 = iadd v6, v7
+    return v10
+}
