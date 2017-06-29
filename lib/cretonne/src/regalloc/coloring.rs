@@ -200,13 +200,13 @@ impl<'a> Context<'a> {
                 .get(value)
                 .expect("No live range for live-in")
                 .affinity;
+            dbg!("Live-in: {}:{} in {}",
+                 value,
+                 affinity.display(&self.reginfo),
+                 func.locations[value].display(&self.reginfo));
             if let Affinity::Reg(rci) = affinity {
                 let rc = self.reginfo.rc(rci);
                 let loc = func.locations[value];
-                dbg!("Live-in: {}:{} in {}",
-                     lv.value,
-                     rc,
-                     loc.display(&self.reginfo));
                 match loc {
                     ValueLoc::Reg(reg) => regs.take(rc, reg),
                     ValueLoc::Unassigned => panic!("Live-in {} wasn't assigned", value),
@@ -471,7 +471,12 @@ impl<'a> Context<'a> {
                     // This is the first branch to `dest`, so we should color `dest_arg` instead of
                     // `br_arg`. However, we don't know where `br_arg` will end up until
                     // after `shuffle_inputs`. See `color_ebb_arguments` below.
-                    return true;
+                    //
+                    // It is possible for `dest_arg` to have no affinity, and then it should simply
+                    // be ignored.
+                    if self.liveness.get(dest_arg).unwrap().affinity.is_reg() {
+                        return true;
+                    }
                 }
                 ValueLoc::Reg(dest_reg) => {
                     // We've branched to `dest` before. Make sure we use the correct argument
@@ -513,8 +518,10 @@ impl<'a> Context<'a> {
         for (&dest_arg, &br_arg) in dest_args.iter().zip(br_args) {
             match locations[dest_arg] {
                 ValueLoc::Unassigned => {
-                    let br_reg = self.divert.reg(br_arg, locations);
-                    locations[dest_arg] = ValueLoc::Reg(br_reg);
+                    if self.liveness.get(dest_arg).unwrap().affinity.is_reg() {
+                        let br_reg = self.divert.reg(br_arg, locations);
+                        locations[dest_arg] = ValueLoc::Reg(br_reg);
+                    }
                 }
                 ValueLoc::Reg(_) => panic!("{} arg {} already colored", dest, dest_arg),
                 // Spilled value consistency is verified by `program_ebb_arguments()` above.
