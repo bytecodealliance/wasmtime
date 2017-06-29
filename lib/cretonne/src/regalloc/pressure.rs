@@ -224,6 +224,14 @@ impl Pressure {
             e.transient_count = 0;
         }
     }
+
+    /// Preserve the transient counts by transferring them to the base counts.
+    pub fn preserve_transient(&mut self) {
+        for e in &mut self.toprc {
+            e.base_count += e.transient_count;
+            e.transient_count = 0;
+        }
+    }
 }
 
 impl fmt::Display for Pressure {
