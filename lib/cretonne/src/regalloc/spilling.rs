@@ -260,7 +260,14 @@ impl<'a> Context<'a> {
                 // Add register def to pressure, spill if needed.
                 while let Err(mask) = self.pressure.take_transient(op.regclass) {
                     dbg!("Need {} reg from {} throughs", op.regclass, throughs.len());
-                    self.spill_from(mask, throughs, dfg, pos.layout);
+                    match self.spill_candidate(mask, throughs, dfg, pos.layout) {
+                        Some(cand) => self.spill_reg(cand, dfg),
+                        None => {
+                            panic!("Ran out of {} registers for {}",
+                                   op.regclass,
+                                   dfg.display_inst(inst))
+                        }
+                    }
                 }
             }
         }
@@ -341,22 +348,32 @@ impl<'a> Context<'a> {
                 // Spill a live register that is *not* used by the current instruction.
                 // Spilling a use wouldn't help.
                 let args = dfg.inst_args(inst);
-                self.spill_from(mask,
-                                tracker.live().iter().filter(|lv| !args.contains(&lv.value)),
-                                dfg,
-                                &pos.layout);
+                match self.spill_candidate(mask,
+                                           tracker.live().iter().filter(|lv| {
+                    !args.contains(&lv.value)
+                }),
+                                           dfg,
+                                           &pos.layout) {
+                    Some(cand) => self.spill_reg(cand, dfg),
+                    None => {
+                        panic!("Ran out of {} registers when inserting copy before {}",
+                               rc,
+                               dfg.display_inst(inst))
+                    }
+                }
             }
         }
         self.pressure.reset_transient();
         self.reg_uses.clear()
     }
 
-    // Spill a candidate from `candidates` whose top-level register class is in `mask`.
-    fn spill_from<'ii, II>(&mut self,
-                           mask: RegClassMask,
-                           candidates: II,
-                           dfg: &DataFlowGraph,
-                           layout: &Layout)
+    // Find a spill candidate from `candidates` whose top-level register class is in `mask`.
+    fn spill_candidate<'ii, II>(&self,
+                                mask: RegClassMask,
+                                candidates: II,
+                                dfg: &DataFlowGraph,
+                                layout: &Layout)
+                                -> Option<Value>
         where II: IntoIterator<Item = &'ii LiveValue>
     {
         // Find the best viable spill candidate.
@@ -367,7 +384,7 @@ impl<'a> Context<'a> {
         //
         // We know that all candidate defs dominate the current instruction, so one of them will
         // dominate the others. That is the earliest def.
-        let best = candidates
+        candidates
             .into_iter()
             .filter_map(|lv| {
                 // Viable candidates are registers in one of the `mask` classes, and not already in
@@ -385,14 +402,7 @@ impl<'a> Context<'a> {
                         // Find the minimum candidate according to the RPO of their defs.
                         self.domtree
                             .rpo_cmp(dfg.value_def(a), dfg.value_def(b), layout)
-                    });
-
-        if let Some(value) = best {
-            // Found a spill candidate.
-            self.spill_reg(value, dfg);
-        } else {
-            panic!("Ran out of registers for mask={}", mask);
-        }
+                    })
     }
 
     /// Spill `value` immediately by
@@ -424,7 +434,7 @@ impl<'a> Context<'a> {
     /// Process any pending spills in the `self.spills` vector.
     ///
     /// It is assumed that spills are removed from the pressure tracker immediately, see
-    /// `spill_from` above.
+    /// `spill_reg` above.
     ///
     /// We also need to update the live range affinity and remove spilled values from the live
     /// value tracker.
