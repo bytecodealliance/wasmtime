@@ -376,9 +376,9 @@ impl Liveness {
                 }
 
                 // Iterator of constraints, one per value operand.
-                // TODO: Should we fail here if the instruction doesn't have a valid encoding?
+                let encoding = func.encodings[inst];
                 let mut operand_constraints = enc_info
-                    .operand_constraints(func.encodings[inst])
+                    .operand_constraints(encoding)
                     .map(|c| c.ins)
                     .unwrap_or(&[])
                     .iter();
@@ -392,11 +392,18 @@ impl Liveness {
 
                     // Apply operand constraint, ignoring any variable arguments after the fixed
                     // operands described by `operand_constraints`. Variable arguments are either
-                    // EBB arguments or call/return ABI arguments. EBB arguments need to be
-                    // resolved by the coloring algorithm, and ABI constraints require specific
-                    // registers or stack slots which the affinities don't model anyway.
+                    // EBB arguments or call/return ABI arguments.
                     if let Some(constraint) = operand_constraints.next() {
                         lr.affinity.merge(constraint, &reg_info);
+                    } else if lr.affinity.is_none() && encoding.is_legal() &&
+                              !func.dfg[inst].opcode().is_branch() {
+                        // This is a real encoded instruction using a value that doesn't yet have a
+                        // concrete affinity. Most likely a call argument or a return value. Give
+                        // the value a register affinity matching the ABI type.
+                        //
+                        // EBB arguments on a branch are not required to have an affinity.
+                        let rc = isa.regclass_for_abi_type(func.dfg.value_type(arg));
+                        lr.affinity = Affinity::Reg(rc.into());
                     }
                 }
             }
