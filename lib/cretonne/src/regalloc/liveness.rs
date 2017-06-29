@@ -279,6 +279,9 @@ pub struct Liveness {
     /// This vector is always empty, except for inside that function.
     /// It lives here to avoid repeated allocation of scratch memory.
     worklist: Vec<Ebb>,
+
+    /// Working space for the `propagate_ebb_arguments` algorithm.
+    ebb_args: Vec<Value>,
 }
 
 impl Liveness {
@@ -290,6 +293,7 @@ impl Liveness {
         Liveness {
             ranges: LiveRangeSet::new(),
             worklist: Vec::new(),
+            ebb_args: Vec::new(),
         }
     }
 
@@ -404,6 +408,43 @@ impl Liveness {
                         // EBB arguments on a branch are not required to have an affinity.
                         let rc = isa.regclass_for_abi_type(func.dfg.value_type(arg));
                         lr.affinity = Affinity::Reg(rc.into());
+                    }
+                }
+            }
+        }
+
+        self.propagate_ebb_arguments(func, cfg);
+    }
+
+    /// Propagate affinities for EBB arguments.
+    ///
+    /// If an EBB argument value has an affinity, all predecessors must pass a value with an
+    /// affinity.
+    pub fn propagate_ebb_arguments(&mut self, func: &Function, cfg: &ControlFlowGraph) {
+        assert!(self.ebb_args.is_empty());
+
+        for ebb in func.layout.ebbs() {
+            for &arg in func.dfg.ebb_args(ebb).iter() {
+                let affinity = self.ranges.get(arg).unwrap().affinity;
+                if affinity.is_none() {
+                    continue;
+                }
+                self.ebb_args.push(arg);
+
+                // Now apply the affinity to all predecessors recursively.
+                while let Some(succ_arg) = self.ebb_args.pop() {
+                    let (succ_ebb, num) = match func.dfg.value_def(succ_arg) {
+                        ValueDef::Arg(e, n) => (e, n),
+                        _ => continue,
+                    };
+
+                    for &(_, pred_branch) in cfg.get_predecessors(succ_ebb) {
+                        let pred_arg = func.dfg.inst_variable_args(pred_branch)[num];
+                        let pred_affinity = &mut self.ranges.get_mut(pred_arg).unwrap().affinity;
+                        if pred_affinity.is_none() {
+                            *pred_affinity = affinity;
+                            self.ebb_args.push(pred_arg);
+                        }
                     }
                 }
             }
