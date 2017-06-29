@@ -19,7 +19,7 @@ use dominator_tree::DominatorTree;
 use ir::{DataFlowGraph, Layout, Cursor, InstBuilder};
 use ir::{Function, Ebb, Inst, Value, ValueLoc, ArgumentLoc, Signature, SigRef};
 use ir::{InstEncodings, StackSlots, ValueLocations};
-use isa::registers::{RegClass, RegClassMask};
+use isa::registers::{RegClassMask, RegClassIndex};
 use isa::{TargetIsa, RegInfo, EncInfo, RecipeConstraints, ConstraintKind};
 use regalloc::affinity::Affinity;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
@@ -245,18 +245,10 @@ impl<'a> Context<'a> {
                   dfg: &mut DataFlowGraph,
                   tracker: &mut LiveValueTracker) {
         dbg!("Inst {}, {}", dfg.display_inst(inst), self.pressure);
-        // TODO: Repair constraint violations by copying input values.
-        //
-        // - Tied use of value that is not killed.
-        // - Count pressure for register uses of spilled values too.
 
+        // We may need to resolve register constraints if there are any noteworthy uses.
         assert!(self.reg_uses.is_empty());
-
-        // If the instruction has any fixed register operands, we may need to resolve register
-        // constraints.
-        if constraints.fixed_ins {
-            self.collect_reg_uses(inst, constraints, dfg);
-        }
+        self.collect_reg_uses(inst, constraints, dfg);
 
         // Calls usually have fixed register uses.
         let call_sig = dfg.call_signature(inst);
@@ -267,7 +259,6 @@ impl<'a> Context<'a> {
         if !self.reg_uses.is_empty() {
             self.process_reg_uses(inst, pos, dfg, tracker);
         }
-
 
         // Update the live value tracker with this instruction.
         let (throughs, kills, defs) = tracker.process_inst(inst, dfg, self.liveness);
@@ -312,7 +303,12 @@ impl<'a> Context<'a> {
         // This won't cause spilling.
         self.take_live_regs(defs);
     }
-    // Collect register uses from the fixed input constraints.
+
+    // Collect register uses that are noteworthy in one of the following ways:
+    //
+    // 1. It's a fixed register constraint.
+    // 2. It's a use of a spilled value.
+    // 3. It's a tied register constraint and the value isn't killed.
     //
     // We are assuming here that if a value is used both by a fixed register operand and a register
     // class operand, they two are compatible. We are also assuming that two register class
@@ -323,11 +319,23 @@ impl<'a> Context<'a> {
                         dfg: &DataFlowGraph) {
         let args = dfg.inst_args(inst);
         for (idx, (op, &arg)) in constraints.ins.iter().zip(args).enumerate() {
+            let mut reguse = RegUse::new(arg, idx, op.regclass.into());
             match op.kind {
-                ConstraintKind::FixedReg(_) => {
-                    self.reg_uses.push(RegUse::new(arg, idx));
+                ConstraintKind::Stack => continue,
+                ConstraintKind::FixedReg(_) => reguse.fixed = true,
+                ConstraintKind::Tied(_) => {
+                    // TODO: If `arg` isn't killed here, we need a copy
                 }
-                _ => {}
+                ConstraintKind::Reg => {}
+            }
+            let lr = &self.liveness[arg];
+            if lr.affinity.is_stack() {
+                reguse.spilled = true;
+            }
+
+            // Only collect the interesting register uses.
+            if reguse.fixed || reguse.spilled {
+                self.reg_uses.push(reguse);
             }
         }
     }
@@ -343,7 +351,17 @@ impl<'a> Context<'a> {
                 .zip(args)
                 .enumerate() {
             if abi.location.is_reg() {
-                self.reg_uses.push(RegUse::new(arg, fixed_args + idx));
+                let (rci, spilled) = match self.liveness[arg].affinity {
+                    Affinity::Reg(rci) => (rci, false),
+                    Affinity::Stack => {
+                        (self.isa.regclass_for_abi_type(abi.value_type).into(), true)
+                    }
+                    Affinity::None => panic!("Missing affinity for {}", arg),
+                };
+                let mut reguse = RegUse::new(arg, fixed_args + idx, rci);
+                reguse.fixed = true;
+                reguse.spilled = spilled;
+                self.reg_uses.push(reguse);
             }
         }
     }
@@ -364,35 +382,49 @@ impl<'a> Context<'a> {
         // outside nightly Rust.
         self.reg_uses.sort_by_key(|u| (u.value, u.opidx));
 
-        // We are assuming that `reg_uses` has an entry per fixed register operand, and that any
-        // non-fixed register operands are compatible with one of the fixed uses of the value.
-        for i in 1..self.reg_uses.len() {
+        for i in 0..self.reg_uses.len() {
             let ru = self.reg_uses[i];
-            if self.reg_uses[i - 1].value != ru.value {
-                continue;
+
+            // Do we need to insert a copy for this use?
+            let need_copy = if ru.tied {
+                true
+            } else if ru.fixed {
+                // This is a fixed register use which doesn't necessarily require a copy.
+                // Make a copy only if this is not the first use of the value.
+                self.reg_uses
+                    .get(i.wrapping_sub(1))
+                    .map(|ru2| ru2.value == ru.value)
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+
+            if need_copy {
+                let copy = self.insert_copy(ru.value, ru.rci, pos, dfg);
+                dfg.inst_args_mut(inst)[ru.opidx as usize] = copy;
             }
 
-            // We have two fixed uses of the same value. Make a copy.
-            let (copy, rc) = self.insert_copy(ru.value, pos, dfg);
-            dfg.inst_args_mut(inst)[ru.opidx as usize] = copy;
-
-            // Make sure the new copy doesn't blow the register pressure.
-            while let Err(mask) = self.pressure.take_transient(rc) {
-                dbg!("Copy of {} reg causes spill", rc);
-                // Spill a live register that is *not* used by the current instruction.
-                // Spilling a use wouldn't help.
-                let args = dfg.inst_args(inst);
-                match self.spill_candidate(mask,
-                                           tracker.live().iter().filter(|lv| {
-                    !args.contains(&lv.value)
-                }),
-                                           dfg,
-                                           &pos.layout) {
-                    Some(cand) => self.spill_reg(cand, dfg),
-                    None => {
-                        panic!("Ran out of {} registers when inserting copy before {}",
-                               rc,
-                               dfg.display_inst(inst))
+            // Even if we don't insert a copy, we may need to account for register pressure for the
+            // reload pass.
+            if need_copy || ru.spilled {
+                let rc = self.reginfo.rc(ru.rci);
+                while let Err(mask) = self.pressure.take_transient(rc) {
+                    dbg!("Copy of {} reg causes spill", rc);
+                    // Spill a live register that is *not* used by the current instruction.
+                    // Spilling a use wouldn't help.
+                    let args = dfg.inst_args(inst);
+                    match self.spill_candidate(mask,
+                                               tracker.live().iter().filter(|lv| {
+                        !args.contains(&lv.value)
+                    }),
+                                               dfg,
+                                               &pos.layout) {
+                        Some(cand) => self.spill_reg(cand, dfg),
+                        None => {
+                            panic!("Ran out of {} registers when inserting copy before {}",
+                                   rc,
+                                   dfg.display_inst(inst))
+                        }
                     }
                 }
             }
@@ -481,12 +513,13 @@ impl<'a> Context<'a> {
 
     /// Insert a `copy value` before `pos` and give it a live range extending to `pos`.
     ///
-    /// Returns the new local value created and its register class.
+    /// Returns the new local value created.
     fn insert_copy(&mut self,
                    value: Value,
+                   rci: RegClassIndex,
                    pos: &mut Cursor,
                    dfg: &mut DataFlowGraph)
-                   -> (Value, RegClass) {
+                   -> Value {
         let copy = dfg.ins(pos).copy(value);
         let inst = dfg.value_def(copy).unwrap_inst();
         let ty = dfg.value_type(copy);
@@ -498,21 +531,14 @@ impl<'a> Context<'a> {
         *self.encodings.ensure(inst) = encoding;
 
         // Update live ranges.
-        let rc = self.encinfo
-            .operand_constraints(encoding)
-            .expect("Bad copy encoding")
-            .outs
-            [0]
-                .regclass;
-        self.liveness
-            .create_dead(copy, inst, Affinity::Reg(rc.into()));
+        self.liveness.create_dead(copy, inst, Affinity::Reg(rci));
         self.liveness
             .extend_locally(copy,
                             pos.layout.pp_ebb(inst),
                             pos.current_inst().expect("must be at an instruction"),
                             pos.layout);
 
-        (copy, rc)
+        copy
     }
 }
 
@@ -522,13 +548,29 @@ impl<'a> Context<'a> {
 struct RegUse {
     value: Value,
     opidx: u16,
+
+    // Register class required by the use.
+    rci: RegClassIndex,
+
+    // A use with a fixed register constraint.
+    fixed: bool,
+
+    // A register use of a spilled value.
+    spilled: bool,
+
+    // A use with a tied register constraint *and* the used value is not killed.
+    tied: bool,
 }
 
 impl RegUse {
-    fn new(value: Value, idx: usize) -> RegUse {
+    fn new(value: Value, idx: usize, rci: RegClassIndex) -> RegUse {
         RegUse {
             value,
             opidx: idx as u16,
+            rci,
+            fixed: false,
+            spilled: false,
+            tied: false,
         }
     }
 }
