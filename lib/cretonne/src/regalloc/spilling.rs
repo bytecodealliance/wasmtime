@@ -200,8 +200,42 @@ impl<'a> Context<'a> {
         self.pressure.reset();
         self.take_live_regs(liveins);
 
-        // TODO: Process and count EBB arguments. Some may need spilling.
-        self.take_live_regs(args);
+        // An EBB can have an arbitrary (up to 2^16...) number of EBB arguments, so they are not
+        // guaranteed to fit in registers.
+        for lv in args {
+            if let Affinity::Reg(rci) = lv.affinity {
+                let rc = self.reginfo.rc(rci);
+                'try_take: while let Err(mask) = self.pressure.take_transient(rc) {
+                    dbg!("Need {} reg for EBB argument {} from {} live-ins",
+                         rc,
+                         lv.value,
+                         liveins.len());
+                    match self.spill_candidate(mask, liveins, dfg, layout) {
+                        Some(cand) => {
+                            dbg!("Spilling live-in {} to make room for {} EBB argument {}",
+                                 cand,
+                                 rc,
+                                 lv.value);
+                            self.spill_reg(cand, dfg);
+                        }
+                        None => {
+                            // We can't spill any of the live-in registers, so we have to spill an
+                            // EBB argument. Since the current spill metric would consider all the
+                            // EBB arguments equal, just spill the present register.
+                            dbg!("Spilling {} EBB argument {}", rc, lv.value);
+
+                            // Since `spill_reg` will free a register, add the current one here.
+                            self.pressure.take(rc);
+                            self.spill_reg(lv.value, dfg);
+                            break 'try_take;
+                        }
+                    }
+                }
+            }
+        }
+
+        // The transient pressure counts for the EBB arguments are accurate. Just preserve them.
+        self.pressure.preserve_transient();
     }
 
     fn visit_inst(&mut self,
