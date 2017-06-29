@@ -183,6 +183,7 @@ use regalloc::affinity::Affinity;
 use regalloc::liverange::LiveRange;
 use sparse_map::SparseMap;
 use std::mem;
+use std::ops::Index;
 
 /// A set of live ranges, indexed by value number.
 type LiveRangeSet = SparseMap<Value, LiveRange>;
@@ -448,6 +449,17 @@ impl Liveness {
                     }
                 }
             }
+        }
+    }
+}
+
+impl Index<Value> for Liveness {
+    type Output = LiveRange;
+
+    fn index(&self, index: Value) -> &LiveRange {
+        match self.ranges.get(index) {
+            Some(lr) => lr,
+            None => panic!("{} has no live range", index),
         }
     }
 }
