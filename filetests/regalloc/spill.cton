@@ -144,3 +144,53 @@ ebb1(v10: i32, v11: i32, v12: i32, v13: i32, v14: i32, v15: i32, v16: i32, v17: 
     v33 = iadd v32, v1
     return v33
 }
+
+; In straight-line code, the first value defined is spilled.
+; That is in order:
+; 1. The argument v1.
+; 2. The link register.
+; 3. The first computed value, v2
+function %use_spilled_value(i32) -> i32 {
+; check: ss0 = spill_slot 4
+; check: ss1 = spill_slot 4
+; check: ss2 = spill_slot 4
+ebb0(v1: i32):
+; check: $ebb0($(rv1=$V): i32, $(rlink=$V): i32)
+    ; check: ,ss0]$WS $v1 = spill $rv1
+    ; nextln: ,ss1]$WS $(link=$V) = spill $rlink
+    ; not: spill
+    v2 = iadd_imm v1, 12
+    ; check: $(r1v2=$V) = iadd_imm
+    ; nextln: ,ss2]$WS $v2 = spill $r1v2
+    v3 = iadd_imm v2, 12
+    v4 = iadd_imm v3, 12
+    v5 = iadd_imm v4, 12
+    v6 = iadd_imm v5, 12
+    v7 = iadd_imm v6, 12
+    v8 = iadd_imm v7, 12
+    v9 = iadd_imm v8, 12
+    v10 = iadd_imm v9, 12
+    v11 = iadd_imm v10, 12
+    v12 = iadd_imm v11, 12
+    v13 = iadd_imm v12, 12
+    v14 = iadd_imm v13, 12
+
+    ; Here we have maximum register pressure, and v2 has been spilled.
+    ; What happens if we use it?
+    v33 = iadd v2, v14
+    v32 = iadd v33, v12
+    v31 = iadd v32, v11
+    v30 = iadd v31, v10
+    v29 = iadd v30, v9
+    v28 = iadd v29, v8
+    v27 = iadd v28, v7
+    v26 = iadd v27, v6
+    v25 = iadd v26, v5
+    v24 = iadd v25, v4
+    v23 = iadd v24, v3
+    v22 = iadd v23, v2
+    v21 = iadd v22, v1
+    v20 = iadd v21, v13
+    v19 = iadd v20, v2
+    return v21
+}
