@@ -285,8 +285,7 @@ impl<'a> Context<'a> {
 
         for (op, &arg) in constraints.ins.iter().zip(args) {
             if op.kind != ConstraintKind::Stack {
-                let lv = self.liveness.get(arg).expect("Missing live range for arg");
-                if lv.affinity.is_stack() {
+                if self.liveness[arg].affinity.is_stack() {
                     self.candidates
                         .push(ReloadCandidate {
                                   value: arg,

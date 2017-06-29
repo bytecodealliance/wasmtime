@@ -474,17 +474,14 @@ impl<'a> Context<'a> {
                     //
                     // It is possible for `dest_arg` to have no affinity, and then it should simply
                     // be ignored.
-                    if self.liveness.get(dest_arg).unwrap().affinity.is_reg() {
+                    if self.liveness[dest_arg].affinity.is_reg() {
                         return true;
                     }
                 }
                 ValueLoc::Reg(dest_reg) => {
                     // We've branched to `dest` before. Make sure we use the correct argument
                     // registers by reassigning `br_arg`.
-                    let br_lr = self.liveness
-                        .get(br_arg)
-                        .expect("Missing live range for branch argument");
-                    if let Affinity::Reg(rci) = br_lr.affinity {
+                    if let Affinity::Reg(rci) = self.liveness[br_arg].affinity {
                         let rc = self.reginfo.rc(rci);
                         let br_reg = self.divert.reg(br_arg, locations);
                         self.solver.reassign_in(br_arg, rc, br_reg, dest_reg);
@@ -518,7 +515,7 @@ impl<'a> Context<'a> {
         for (&dest_arg, &br_arg) in dest_args.iter().zip(br_args) {
             match locations[dest_arg] {
                 ValueLoc::Unassigned => {
-                    if self.liveness.get(dest_arg).unwrap().affinity.is_reg() {
+                    if self.liveness[dest_arg].affinity.is_reg() {
                         let br_reg = self.divert.reg(br_arg, locations);
                         locations[dest_arg] = ValueLoc::Reg(br_reg);
                     }
