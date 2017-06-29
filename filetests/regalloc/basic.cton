@@ -63,3 +63,18 @@ ebb1(v10: i32):
     v11 = call fn0(v10)
     return v11
 }
+
+; Pass an EBB argument as a jump argument.
+function %jumpebb(i32, i32) -> i32 {
+    fn0 = function %foo(i32) -> i32
+
+ebb0(v1: i32, v2: i32):
+    brnz v1, ebb1(v1, v2)
+    jump ebb1(v2, v1)
+
+ebb1(v10: i32, v11: i32):
+    jump ebb2(v10, v11)
+
+ebb2(v20: i32, v21: i32):
+    return v21
+}
