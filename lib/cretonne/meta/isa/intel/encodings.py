@@ -64,3 +64,10 @@ I32.enc(base.uload8.i32.i32, *r.ldDisp32(0x0f, 0xb6))
 I32.enc(base.sload8.i32.i32, *r.ld(0x0f, 0xbe))
 I32.enc(base.sload8.i32.i32, *r.ldDisp8(0x0f, 0xbe))
 I32.enc(base.sload8.i32.i32, *r.ldDisp32(0x0f, 0xbe))
+
+#
+# Call/return
+#
+I32.enc(base.call, *r.call_id(0xe8))
+I32.enc(base.call_indirect.i32, *r.call_r(0xff, rrr=2))
+I32.enc(base.x_return, *r.ret(0xc3))

@@ -5,6 +5,7 @@ from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual
 from base.formats import UnaryImm, Binary, BinaryImm, Store, Load
+from base.formats import MultiAry, Call, IndirectCall
 from .registers import GPR, ABCD
 
 try:
@@ -206,3 +207,10 @@ ldDisp8 = TailRecipe(
 ldDisp32 = TailRecipe(
         'ldDisp32', Load, size=5, ins=(GPR), outs=(GPR),
         instp=IsSignedInt(Load.offset, 32))
+
+#
+# Call/return
+#
+call_id = TailRecipe('call_id', Call, size=4, ins=(), outs=())
+call_r = TailRecipe('call_r', IndirectCall, size=1, ins=GPR, outs=())
+ret = TailRecipe('ret', MultiAry, size=0, ins=(), outs=())
