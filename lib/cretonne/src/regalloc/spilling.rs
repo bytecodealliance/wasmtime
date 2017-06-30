@@ -155,7 +155,7 @@ impl<'a> Context<'a> {
         pos.goto_top(ebb);
         while let Some(inst) = pos.next_inst() {
             if let Some(constraints) = self.encinfo.operand_constraints(self.encodings[inst]) {
-                self.visit_inst(inst, constraints, &mut pos, dfg, tracker);
+                self.visit_inst(inst, ebb, constraints, &mut pos, dfg, tracker);
             } else {
                 let (_throughs, kills) = tracker.process_ghost(inst);
                 self.free_regs(kills);
@@ -240,6 +240,7 @@ impl<'a> Context<'a> {
 
     fn visit_inst(&mut self,
                   inst: Inst,
+                  ebb: Ebb,
                   constraints: &RecipeConstraints,
                   pos: &mut Cursor,
                   dfg: &mut DataFlowGraph,
@@ -248,7 +249,7 @@ impl<'a> Context<'a> {
 
         // We may need to resolve register constraints if there are any noteworthy uses.
         assert!(self.reg_uses.is_empty());
-        self.collect_reg_uses(inst, constraints, dfg);
+        self.collect_reg_uses(inst, ebb, constraints, dfg, pos.layout);
 
         // Calls usually have fixed register uses.
         let call_sig = dfg.call_signature(inst);
@@ -315,20 +316,23 @@ impl<'a> Context<'a> {
     // operands are always compatible.
     fn collect_reg_uses(&mut self,
                         inst: Inst,
+                        ebb: Ebb,
                         constraints: &RecipeConstraints,
-                        dfg: &DataFlowGraph) {
+                        dfg: &DataFlowGraph,
+                        layout: &Layout) {
         let args = dfg.inst_args(inst);
         for (idx, (op, &arg)) in constraints.ins.iter().zip(args).enumerate() {
             let mut reguse = RegUse::new(arg, idx, op.regclass.into());
+            let lr = &self.liveness[arg];
             match op.kind {
                 ConstraintKind::Stack => continue,
                 ConstraintKind::FixedReg(_) => reguse.fixed = true,
                 ConstraintKind::Tied(_) => {
-                    // TODO: If `arg` isn't killed here, we need a copy
+                    // A tied operand must kill the used value.
+                    reguse.tied = !lr.killed_at(inst, ebb, layout);
                 }
                 ConstraintKind::Reg => {}
             }
-            let lr = &self.liveness[arg];
             if lr.affinity.is_stack() {
                 reguse.spilled = true;
             }
