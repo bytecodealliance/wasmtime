@@ -30,6 +30,19 @@ def gen_regbank(regbank, fmt):
         fmt.format('num_toprcs: {},', len(regbank.toprcs))
 
 
+def gen_regbank_units(regbank, fmt):
+    # type: (RegBank, srcgen.Formatter) -> None
+    """
+    Emit constants for all the register units in `regbank`.
+    """
+    for unit in range(regbank.units):
+        v = unit + regbank.first_unit
+        if unit < len(regbank.names):
+            fmt.format("{} = {},", regbank.names[unit], v)
+        else:
+            fmt.format("{}{} = {},", regbank.prefix, unit, v)
+
+
 def gen_regclass(rc, fmt):
     # type: (RegClass, srcgen.Formatter) -> None
     """
@@ -76,6 +89,13 @@ def gen_isa(isa, fmt):
         fmt.line(
                 'pub const {}: RegClass = &CLASSES[{}];'
                 .format(rc.name, rc.index))
+
+    # Emit constants for all the register units.
+    fmt.line('#[allow(dead_code, non_camel_case_types)]')
+    fmt.line('#[derive(Clone, Copy)]')
+    with fmt.indented('pub enum RU {', '}'):
+        for regbank in isa.regbanks:
+            gen_regbank_units(regbank, fmt)
 
 
 def generate(isas, out_dir):
