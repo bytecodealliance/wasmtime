@@ -488,6 +488,32 @@ impl Solver {
         self.regs_out.free(rc, reg);
     }
 
+    /// Record that an input register is tied to an output register.
+    ///
+    /// It is assumed that `add_kill` was called previously with the same arguments.
+    ///
+    /// The output value that must have the same register as the input value is not recorded in the
+    /// solver.
+    pub fn add_tied_input(&mut self, value: Value, rc: RegClass, reg: RegUnit) {
+        debug_assert!(self.inputs_done);
+
+        // If a fixed assignment is tied, the `to` register is not available on the output side.
+        if let Some(a) = self.assignments.get(value) {
+            debug_assert_eq!(a.from, reg);
+            self.regs_out.take(a.rc, a.to);
+            return;
+        }
+
+        // Check if a variable was created.
+        if let Some(v) = self.vars.iter_mut().find(|v| v.value == value) {
+            assert!(v.is_input);
+            v.is_output = true;
+            return;
+        }
+
+        self.regs_out.take(rc, reg);
+    }
+
     /// Add a fixed output assignment.
     ///
     /// This means that `to` will not be available for variables on the output side of the

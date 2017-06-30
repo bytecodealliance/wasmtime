@@ -1,0 +1,15 @@
+test regalloc
+isa intel
+
+; regex: V=v\d+
+
+; Tied operands, both are killed at instruction.
+function %tied_easy() -> i32 {
+ebb0:
+    v0 = iconst.i32 12
+    v1 = iconst.i32 13
+    ; not: copy
+    ; check: isub
+    v2 = isub v0, v1
+    return v2
+}

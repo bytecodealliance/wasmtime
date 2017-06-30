@@ -363,6 +363,17 @@ impl<'a> Context<'a> {
             locations[v.value] = ValueLoc::Reg(v.solution);
         }
 
+        // Tied defs are not part of the solution above.
+        // Copy register assignments from tied inputs to tied outputs.
+        if constraints.tied_ops {
+            for (op, lv) in constraints.outs.iter().zip(defs) {
+                if let ConstraintKind::Tied(num) = op.kind {
+                    let arg = dfg.inst_args(inst)[num as usize];
+                    locations[lv.value] = locations[arg];
+                }
+            }
+        }
+
         // Update `regs` for the next instruction, remove the dead defs.
         for lv in defs {
             if lv.endpoint == inst {
@@ -638,11 +649,11 @@ impl<'a> Context<'a> {
     ///
     /// It is assumed that all fixed outputs have already been handled.
     fn program_output_constraints(&mut self,
-                                  _inst: Inst,
+                                  inst: Inst,
                                   constraints: &[OperandConstraint],
                                   defs: &[LiveValue],
-                                  _dfg: &mut DataFlowGraph,
-                                  _locations: &mut ValueLocations) {
+                                  dfg: &mut DataFlowGraph,
+                                  locations: &mut ValueLocations) {
         for (op, lv) in constraints.iter().zip(defs) {
             match op.kind {
                 ConstraintKind::FixedReg(_) |
@@ -650,7 +661,13 @@ impl<'a> Context<'a> {
                 ConstraintKind::Reg => {
                     self.solver.add_def(lv.value, op.regclass);
                 }
-                ConstraintKind::Tied(_) => unimplemented!(),
+                ConstraintKind::Tied(num) => {
+                    // Find the input operand we're tied to.
+                    // The solver doesn't care about the output value.
+                    let arg = dfg.inst_args(inst)[num as usize];
+                    self.solver
+                        .add_tied_input(arg, op.regclass, self.divert.reg(arg, locations));
+                }
             }
         }
     }
