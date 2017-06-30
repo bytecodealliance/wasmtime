@@ -88,7 +88,7 @@ impl TargetIsa for Isa {
     }
 
     fn allocatable_registers(&self, func: &ir::Function) -> regalloc::AllocatableSet {
-        abi::allocatable_registers(func)
+        abi::allocatable_registers(func, &self.shared_flags)
     }
 
     fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut CodeSink) {
