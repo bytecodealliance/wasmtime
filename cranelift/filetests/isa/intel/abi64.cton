@@ -1,0 +1,20 @@
+; Test the legalization of function signatures.
+test legalizer
+set is_64bit
+isa intel
+
+; regex: V=v\d+
+
+function %f() {
+    sig0 = signature(i32) -> i32
+    ; check: sig0 = signature(i32 [%rdi]) -> i32 [%rax]
+
+    sig1 = signature(i64) -> b1
+    ; check: sig1 = signature(i64 [%rdi]) -> b1 [%rax]
+
+    sig2 = signature(f32, i64) -> f64
+    ; check: sig2 = signature(f32 [%xmm0], i64 [%rdi]) -> f64 [%xmm0]
+
+ebb0:
+    return
+}
