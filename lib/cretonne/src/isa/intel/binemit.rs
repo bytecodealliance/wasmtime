@@ -133,6 +133,19 @@ fn recipe_op1rid<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut 
     }
 }
 
+fn recipe_op1uid<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::UnaryImm { imm, .. } = func.dfg[inst] {
+        let bits = func.encodings[inst].bits();
+        let reg = func.locations[func.dfg.first_result(inst)].unwrap_reg();
+        // The destination register is encoded in the low bits of the opcode. No ModR/M
+        put_op1(bits | (reg & 7), sink);
+        let imm: i64 = imm.into();
+        sink.put4(imm as u32);
+    } else {
+        panic!("Expected UnaryImm format: {:?}", func.dfg[inst]);
+    }
+}
+
 // Store recipes.
 
 fn recipe_op1st<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {

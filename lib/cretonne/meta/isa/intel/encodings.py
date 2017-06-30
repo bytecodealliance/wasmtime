@@ -22,6 +22,9 @@ for inst,                   rrr in [
     I32.enc(inst, *r.rib(0x83, rrr=rrr))
     I32.enc(inst, *r.rid(0x81, rrr=rrr))
 
+# Immediate constant.
+I32.enc(base.iconst.i32, *r.uid(0xb8))
+
 # 32-bit shifts and rotates.
 # Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
 # and 16-bit shifts would need explicit masking.
