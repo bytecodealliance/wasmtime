@@ -8,6 +8,9 @@ isa intel
 ;
 
 function %I32() {
+    fn0 = function %foo()
+    sig0 = signature()
+
 ebb0:
     ; asm: movl $1, %ecx
     [-,%rcx]            v1 = iconst.i32 1        ; bin: b9 00000001
@@ -199,5 +202,14 @@ ebb0:
     ; asm: movsbl -50000(%esi), %edx
     [-,%rdx]            v129 = sload8.i32 v2-50000         ; bin: 0f be 96 ffff3cb0
 
-    return
+    ; asm: call foo
+    call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
+
+    ; asm: call *%ecx
+    call_indirect sig0, v1()                    ; bin: ff d1
+    ; asm: call *%esi
+    call_indirect sig0, v2()                    ; bin: ff d6
+
+    ; asm: ret
+    return                                      ; bin: c3
 }

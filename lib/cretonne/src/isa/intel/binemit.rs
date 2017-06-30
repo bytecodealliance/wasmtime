@@ -1,12 +1,24 @@
 //! Emitting binary Intel machine code.
 
-use binemit::{CodeSink, bad_encoding};
+use binemit::{CodeSink, Reloc, bad_encoding};
 use ir::{Function, Inst, InstructionData};
 use isa::RegUnit;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-intel.rs"));
 
-pub static RELOC_NAMES: [&'static str; 1] = ["Call"];
+/// Intel relocations.
+pub enum RelocKind {
+    /// A 4-byte relative function reference. Based from relocation + 4 bytes.
+    PCRel4,
+}
+
+pub static RELOC_NAMES: [&'static str; 1] = ["PCRel4"];
+
+impl Into<Reloc> for RelocKind {
+    fn into(self) -> Reloc {
+        Reloc(self as u16)
+    }
+}
 
 // Emit single-byte opcode.
 fn put_op1<CS: CodeSink + ?Sized>(bits: u16, sink: &mut CS) {
@@ -309,4 +321,26 @@ fn recipe_op2lddisp32<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: 
     } else {
         panic!("Expected Load format: {:?}", func.dfg[inst]);
     }
+}
+
+fn recipe_op1call_id<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::Call { func_ref, .. } = func.dfg[inst] {
+        put_op1(func.encodings[inst].bits(), sink);
+        sink.reloc_func(RelocKind::PCRel4.into(), func_ref);
+        sink.put4(0);
+    } else {
+        panic!("Expected Call format: {:?}", func.dfg[inst]);
+    }
+}
+
+fn recipe_op1call_r<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    let bits = func.encodings[inst].bits();
+    put_op1(bits, sink);
+    modrm_r_bits(func.locations[func.dfg.inst_args(inst)[0]].unwrap_reg(),
+                 bits,
+                 sink);
+}
+
+fn recipe_op1ret<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    put_op1(func.encodings[inst].bits(), sink);
 }
