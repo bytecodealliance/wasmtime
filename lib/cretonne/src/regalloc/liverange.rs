@@ -399,7 +399,7 @@ impl LiveRange {
         }
     }
 
-    /// Check if this live range reaches a use at `inst` in `ebb`.
+    /// Check if this live range reaches a use at `user` in `ebb`.
     pub fn reaches_use<PO>(&self, user: Inst, ebb: Ebb, order: &PO) -> bool
         where PO: ProgramOrder
     {
@@ -414,6 +414,13 @@ impl LiveRange {
             Some(inst) => order.cmp(user, inst) != Ordering::Greater,
             None => false,
         }
+    }
+
+    /// Check if this live range is killed at `user` in `ebb`.
+    pub fn killed_at<PO>(&self, user: Inst, ebb: Ebb, order: &PO) -> bool
+        where PO: ProgramOrder
+    {
+        self.def_local_end() == user.into() || self.livein_local_end(ebb, order) == Some(user)
     }
 }
 
