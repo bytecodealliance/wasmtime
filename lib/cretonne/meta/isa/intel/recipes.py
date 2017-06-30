@@ -4,7 +4,7 @@ Intel Encoding recipes.
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual
-from base.formats import Binary, BinaryImm, Store, Load
+from base.formats import UnaryImm, Binary, BinaryImm, Store, Load
 from .registers import GPR, ABCD
 
 try:
@@ -154,6 +154,11 @@ rib = TailRecipe(
 rid = TailRecipe(
         'rid', BinaryImm, size=5, ins=GPR, outs=0,
         instp=IsSignedInt(BinaryImm.imm, 32))
+
+# XX+rd id unary with 32-bit immediate.
+uid = TailRecipe(
+        'uid', UnaryImm, size=4, ins=(), outs=GPR,
+        instp=IsSignedInt(UnaryImm.imm, 32))
 
 #
 # Store recipes.

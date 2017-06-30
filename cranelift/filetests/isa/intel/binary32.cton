@@ -9,8 +9,10 @@ isa intel
 
 function %I32() {
 ebb0:
-    [-,%rcx]            v1 = iconst.i32 1
-    [-,%rsi]            v2 = iconst.i32 2
+    ; asm: movl $1, %ecx
+    [-,%rcx]            v1 = iconst.i32 1        ; bin: b9 00000001
+    ; asm: movl $2, %esi
+    [-,%rsi]            v2 = iconst.i32 2        ; bin: be 00000002
 
     ; Integer Register-Register Operations.
 
