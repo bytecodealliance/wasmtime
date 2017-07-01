@@ -278,7 +278,9 @@ impl<'a> Context<'a> {
                   regs: &mut AllocatableSet,
                   locations: &mut ValueLocations,
                   func_signature: &Signature) {
-        dbg!("Coloring {}", dfg.display_inst(inst));
+        dbg!("Coloring {}\n          {}",
+             dfg.display_inst(inst),
+             regs.display(&self.reginfo));
 
         // EBB whose arguments should be colored to match the current branch instruction's
         // arguments.
