@@ -5,7 +5,8 @@
 //! "register unit" abstraction. Every register contains one or more register units. Registers that
 //! share a register unit can't be in use at the same time.
 
-use isa::registers::{RegUnit, RegUnitMask, RegClass};
+use isa::registers::{RegInfo, RegUnit, RegUnitMask, RegClass};
+use std::fmt;
 use std::iter::ExactSizeIterator;
 use std::mem::size_of_val;
 
@@ -98,6 +99,12 @@ impl AllocatableSet {
             *x &= y;
         }
     }
+
+    /// Return an object that can display this register set, using the register info from the
+    /// target ISA.
+    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&self, regs: R) -> DisplayAllocatableSet<'a> {
+        DisplayAllocatableSet(self.clone(), regs.into())
+    }
 }
 
 /// Iterator over available registers in a register class.
@@ -137,6 +144,45 @@ impl Iterator for RegSetIter {
 }
 
 impl ExactSizeIterator for RegSetIter {}
+
+/// Displaying an `AllocatableSet` correctly requires the associated `RegInfo` from the target ISA.
+pub struct DisplayAllocatableSet<'a>(AllocatableSet, Option<&'a RegInfo>);
+
+impl<'a> fmt::Display for DisplayAllocatableSet<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[")?;
+        match self.1 {
+            None => {
+                for w in &self.0.avail {
+                    write!(f, " #{:08x}", w)?;
+                }
+            }
+            Some(reginfo) => {
+                let toprcs = reginfo
+                    .banks
+                    .iter()
+                    .map(|b| b.first_toprc + b.num_toprcs)
+                    .max()
+                    .expect("No register banks");
+                for rc in &reginfo.classes[0..toprcs] {
+                    if rc.width == 1 {
+                        write!(f, " {}:", rc)?;
+                        for u in self.0.iter(rc) {
+                            write!(f, " {}", reginfo.display_regunit(u))?;
+                        }
+                    }
+                }
+            }
+        }
+        write!(f, " ]")
+    }
+}
+
+impl fmt::Display for AllocatableSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.display(None).fmt(f)
+    }
+}
 
 #[cfg(test)]
 mod tests {
