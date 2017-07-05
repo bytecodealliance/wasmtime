@@ -371,7 +371,8 @@ impl<'a> Context<'a> {
             for (op, lv) in constraints.outs.iter().zip(defs) {
                 if let ConstraintKind::Tied(num) = op.kind {
                     let arg = dfg.inst_args(inst)[num as usize];
-                    locations[lv.value] = locations[arg];
+                    let reg = self.divert.reg(arg, locations);
+                    locations[lv.value] = ValueLoc::Reg(reg);
                 }
             }
         }
