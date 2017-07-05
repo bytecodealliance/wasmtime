@@ -8,7 +8,6 @@ from __future__ import absolute_import
 import math
 from . import types, is_power_of_two
 from copy import deepcopy
-from .types import IntType, FloatType, BoolType
 
 try:
     from typing import Tuple, Union, Iterable, Any, Set, TYPE_CHECKING # noqa
@@ -210,6 +209,10 @@ class TypeSet(object):
         else:
             return False
 
+    def __ne__(self, other):
+        # type: (object) -> bool
+        return not self.__eq__(other)
+
     def __repr__(self):
         # type: () -> str
         s = 'TypeSet(lanes={}'.format(pp_set(self.lanes))
@@ -289,7 +292,9 @@ class TypeSet(object):
         new = self.copy()
         new.ints = set()
         new.floats = set()
-        new.bools = self.ints.union(self.floats).union(self.bools)
+
+        if len(self.lanes.difference(set([1]))) > 0:
+            new.bools = self.ints.union(self.floats).union(self.bools)
 
         if 1 in self.lanes:
             new.bools.add(1)
@@ -340,7 +345,7 @@ class TypeSet(object):
 
         return new
 
-    def map(self, func):
+    def image(self, func):
         # type: (str) -> TypeSet
         """
         Return the image of self across the derived function func
@@ -362,7 +367,7 @@ class TypeSet(object):
         else:
             assert False, "Unknown derived function: " + func
 
-    def map_inverse(self, func):
+    def preimage(self, func):
         # type: (str) -> TypeSet
         """
         Return the inverse image of self across the derived function func
@@ -379,16 +384,14 @@ class TypeSet(object):
             return new
         elif (func == TypeVar.ASBOOL):
             new = self.copy()
-            new.ints = self.bools.difference(set([1]))
-            new.floats = self.bools.intersection(set([32, 64]))
 
             if 1 not in self.bools:
-                try:
-                    # If the range doesn't have b1, then the domain can't
-                    # include scalars, as as_bool(scalar)=b1
-                    new.lanes.remove(1)
-                except KeyError:
-                    pass
+                new.ints = self.bools.difference(set([1]))
+                new.floats = self.bools.intersection(set([32, 64]))
+            else:
+                new.ints = set([2**x for x in range(3, 7)])
+                new.floats = set([32, 64])
+
             return new
         elif (func == TypeVar.HALFWIDTH):
             return self.double_width()
@@ -409,27 +412,32 @@ class TypeSet(object):
         return len(self.lanes) * (len(self.ints) + len(self.floats) +
                                   len(self.bools))
 
+    def concrete_types(self):
+        # type: () -> Iterable[types.ValueType]
+        def by(scalar, lanes):
+            # type: (types.ScalarType, int) -> types.ValueType
+            if (lanes == 1):
+                return scalar
+            else:
+                return scalar.by(lanes)
+
+        for nlanes in self.lanes:
+            for bits in self.ints:
+                yield by(types.IntType.with_bits(bits), nlanes)
+            for bits in self.floats:
+                yield by(types.FloatType.with_bits(bits), nlanes)
+            for bits in self.bools:
+                yield by(types.BoolType.with_bits(bits), nlanes)
+
     def get_singleton(self):
         # type: () -> types.ValueType
         """
         Return the singleton type represented by self. Can only call on
         typesets containing 1 type.
         """
-        assert self.size() == 1
-        scalar_type = None  # type: types.ScalarType
-        if len(self.ints) > 0:
-            scalar_type = IntType.with_bits(tuple(self.ints)[0])
-        elif len(self.floats) > 0:
-            scalar_type = FloatType.with_bits(tuple(self.floats)[0])
-        else:
-            scalar_type = BoolType.with_bits(tuple(self.bools)[0])
-
-        nlanes = tuple(self.lanes)[0]
-
-        if nlanes == 1:
-            return scalar_type
-        else:
-            return scalar_type.by(nlanes)
+        types = list(self.concrete_types())
+        assert len(types) == 1
+        return types[0]
 
 
 class TypeVar(object):
@@ -519,6 +527,13 @@ class TypeVar(object):
                     'TypeVar({}, {})'
                     .format(self.name, self.type_set))
 
+    def __hash__(self):
+        # type: () -> int
+        if (not self.is_derived):
+            return object.__hash__(self)
+
+        return hash((self.derived_func, self.base))
+
     def __eq__(self, other):
         # type: (object) -> bool
         if not isinstance(other, TypeVar):
@@ -529,6 +544,10 @@ class TypeVar(object):
                     self.base == other.base)
         else:
             return self is other
+
+    def __ne__(self, other):
+        # type: (object) -> bool
+        return not self.__eq__(other)
 
     # Supported functions for derived type variables.
     # The names here must match the method names on `ir::types::Type`.
@@ -541,6 +560,27 @@ class TypeVar(object):
     DOUBLEWIDTH = 'double_width'
     HALFVECTOR = 'half_vector'
     DOUBLEVECTOR = 'double_vector'
+
+    @staticmethod
+    def is_bijection(func):
+        # type: (str) -> bool
+        return func in [
+            TypeVar.SAMEAS,
+            TypeVar.HALFWIDTH,
+            TypeVar.DOUBLEWIDTH,
+            TypeVar.HALFVECTOR,
+            TypeVar.DOUBLEVECTOR]
+
+    @staticmethod
+    def inverse_func(func):
+        # type: (str) -> str
+        return {
+            TypeVar.SAMEAS: TypeVar.SAMEAS,
+            TypeVar.HALFWIDTH: TypeVar.DOUBLEWIDTH,
+            TypeVar.DOUBLEWIDTH: TypeVar.HALFWIDTH,
+            TypeVar.HALFVECTOR: TypeVar.DOUBLEVECTOR,
+            TypeVar.DOUBLEVECTOR: TypeVar.HALFVECTOR
+        }[func]
 
     @staticmethod
     def derived(base, derived_func):
@@ -668,7 +708,7 @@ class TypeVar(object):
         Get the free type variable controlling this one.
         """
         if self.is_derived:
-            return self.base
+            return self.base.free_typevar()
         elif self.singleton_type() is not None:
             # A singleton type variable is not a proper free variable.
             return None
@@ -697,7 +737,7 @@ class TypeVar(object):
         if not self.is_derived:
             self.type_set &= ts
         else:
-            self.base.constrain_types_by_ts(ts.map_inverse(self.derived_func))
+            self.base.constrain_types_by_ts(ts.preimage(self.derived_func))
 
     def constrain_types(self, other):
         # type: (TypeVar) -> None
@@ -723,19 +763,14 @@ class TypeVar(object):
         if not self.is_derived:
             return self.type_set
         else:
-            if (self.derived_func == TypeVar.SAMEAS):
-                return self.base.get_typeset()
-            elif (self.derived_func == TypeVar.LANEOF):
-                return self.base.get_typeset().lane_of()
-            elif (self.derived_func == TypeVar.ASBOOL):
-                return self.base.get_typeset().as_bool()
-            elif (self.derived_func == TypeVar.HALFWIDTH):
-                return self.base.get_typeset().half_width()
-            elif (self.derived_func == TypeVar.DOUBLEWIDTH):
-                return self.base.get_typeset().double_width()
-            elif (self.derived_func == TypeVar.HALFVECTOR):
-                return self.base.get_typeset().half_vector()
-            elif (self.derived_func == TypeVar.DOUBLEVECTOR):
-                return self.base.get_typeset().double_vector()
-            else:
-                assert False, "Unknown derived function: " + self.derived_func
+            return self.base.get_typeset().image(self.derived_func)
+
+    def get_fresh_copy(self, name):
+        # type: (str) -> TypeVar
+        """
+        Get a fresh copy of self. Can only be called on free typevars.
+        """
+        assert not self.is_derived
+        tv = TypeVar.from_typeset(self.type_set.copy())
+        tv.name = name
+        return tv
