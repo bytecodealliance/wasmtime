@@ -238,7 +238,9 @@ impl fmt::Display for Pressure {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Pressure[")?;
         for rc in &self.toprc {
-            write!(f, " {}+{}/{}", rc.base_count, rc.transient_count, rc.limit)?;
+            if rc.limit > 0 {
+                write!(f, " {}+{}/{}", rc.base_count, rc.transient_count, rc.limit)?;
+            }
         }
         write!(f, " ]")
     }
