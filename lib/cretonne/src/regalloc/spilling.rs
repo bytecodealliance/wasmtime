@@ -26,6 +26,7 @@ use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
 use regalloc::pressure::Pressure;
 use regalloc::virtregs::VirtRegs;
+use std::fmt;
 use topo_order::TopoOrder;
 
 /// Persistent data structures for the spilling pass.
@@ -338,7 +339,8 @@ impl<'a> Context<'a> {
             }
 
             // Only collect the interesting register uses.
-            if reguse.fixed || reguse.spilled {
+            if reguse.fixed || reguse.tied || reguse.spilled {
+                dbg!("  reguse: {}", reguse);
                 self.reg_uses.push(reguse);
             }
         }
@@ -576,5 +578,21 @@ impl RegUse {
             spilled: false,
             tied: false,
         }
+    }
+}
+
+impl fmt::Display for RegUse {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}@op{}", self.value, self.opidx)?;
+        if self.fixed {
+            write!(f, "/fixed")?;
+        }
+        if self.spilled {
+            write!(f, "/spilled")?;
+        }
+        if self.tied {
+            write!(f, "/tied")?;
+        }
+        Ok(())
     }
 }
