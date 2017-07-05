@@ -29,11 +29,19 @@ class TypeEnv(object):
         :attribute constraints: a list of accumulated constraints - tuples
                             (tv1, tv2)) where tv1 and tv2 are equal
         :attribute ranks: dictionary recording the (optional) ranks for tvs.
-                      tvs corresponding to real variables have explicitly
-                      specified ranks.
+                          'rank' is a partial ordering on TVs based on their
+                          origin. See comments in rank() and register().
         :attribute vars: a set containing all known Vars
         :attribute idx: counter used to get fresh ids
     """
+
+    RANK_DERIVED = 5
+    RANK_INPUT = 4
+    RANK_INTERMEDIATE = 3
+    RANK_OUTPUT = 2
+    RANK_TEMP = 1
+    RANK_INTERNAL = 0
+
     def __init__(self, arg=None):
         # type: (Optional[Tuple[TypeMap, ConstraintList]]) -> None
         self.ranks = {}  # type: Dict[TypeVar, int]
@@ -104,9 +112,10 @@ class TypeEnv(object):
         Get the rank of tv in the partial order. TVs directly associated with a
         Var get their rank from the Var (see register()).
         Internally generated non-derived TVs implicitly get the lowest rank (0)
-        Internal derived variables get the highest rank.
+        Derived variables get the highest rank.
         """
-        default_rank = 5 if tv.is_derived else 0
+        default_rank = TypeEnv.RANK_DERIVED if tv.is_derived else\
+            TypeEnv.RANK_INTERNAL
         return self.ranks.get(tv, default_rank)
 
     def register(self, v):
@@ -118,25 +127,26 @@ class TypeEnv(object):
         self.vars.add(v)
 
         if v.is_input():
-            r = 4
+            r = TypeEnv.RANK_INPUT
         elif v.is_intermediate():
-            r = 3
+            r = TypeEnv.RANK_INTERMEDIATE
         elif v.is_output():
-            r = 2
+            r = TypeEnv.RANK_OUTPUT
         else:
             assert(v.is_temp())
-            r = 1
+            r = TypeEnv.RANK_TEMP
 
         self.ranks[v.get_typevar()] = r
 
     def free_typevars(self):
-        # type: () -> Set[TypeVar]
+        # type: () -> List[TypeVar]
         """
         Get the free typevars in the current type env.
         """
         tvs = set([self[tv].free_typevar() for tv in self.type_map.keys()])
         # Filter out None here due to singleton type vars
-        return set(filter(lambda x: x is not None, tvs))
+        return sorted(filter(lambda x: x is not None, tvs),
+                      key=lambda x:   x.name)
 
     def normalize(self):
         # type: () -> None
@@ -178,7 +188,7 @@ class TypeEnv(object):
             s.add(a)
             children[b] = s
 
-        for r in list(self.free_typevars()):
+        for r in self.free_typevars():
             while (r not in source_tvs and r in children and
                    len(children[r]) == 1):
                 child = list(children[r])[0]
@@ -359,9 +369,6 @@ def normalize_tv(tv):
     # type: (TypeVar) -> TypeVar
     """
     Normalize a (potentially derived) TV using the following rules:
-        - collapse SAMEAS
-        SAMEAS(base) -> base
-
         - vector and width derived functions commute
         {HALF,DOUBLE}VECTOR({HALF,DOUBLE}WIDTH(base)) ->
             {HALF,DOUBLE}WIDTH({HALF,DOUBLE}VECTOR(base))
@@ -378,10 +385,6 @@ def normalize_tv(tv):
 
     df = tv.derived_func
 
-    # Collapse SAMEAS edges
-    if (df == TypeVar.SAMEAS):
-        return normalize_tv(tv.base)
-
     if (tv.base.is_derived):
         base_df = tv.base.derived_func
 
@@ -393,8 +396,9 @@ def normalize_tv(tv):
                         TypeVar.derived(tv.base.base, df), base_df))
 
         # Cancelling: HALFWIDTH, DOUBLEWIDTH and HALFVECTOR, DOUBLEVECTOR
-        # cancel each other. TODO: Does this cancellation hide type
-        # overflow/underflow?
+        # cancel each other. Note: This doesn't hide any over/underflows,
+        # since we 1) assert the safety of each TV in the chain upon its
+        # creation, and 2) the base typeset is only allowed to shrink.
 
         if (df, base_df) in \
                 [(TypeVar.HALFVECTOR, TypeVar.DOUBLEVECTOR),

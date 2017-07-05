@@ -127,7 +127,6 @@ class TestTypeSet(TestCase):
 
     def test_preimage(self):
         t = TypeSet(lanes=(1, 1), ints=(8, 8), floats=(32, 32))
-        self.assertEqual(t, t.preimage(TypeVar.SAMEAS))
 
         # LANEOF
         self.assertEqual(TypeSet(lanes=True, ints=(8, 8), floats=(32, 32)),
@@ -217,12 +216,11 @@ class TestTypeVar(TestCase):
         self.assertEqual(len(x.type_set.bools), 0)
 
     def test_stress_constrain_types(self):
-        # Get all 49 possible derived vars of length 2. Since we have SAMEAS
-        # this includes singly derived and non-derived vars
-        funcs = [TypeVar.SAMEAS, TypeVar.LANEOF,
+        # Get all 43 possible derived vars of length up to 2
+        funcs = [TypeVar.LANEOF,
                  TypeVar.ASBOOL, TypeVar.HALFVECTOR, TypeVar.DOUBLEVECTOR,
                  TypeVar.HALFWIDTH, TypeVar.DOUBLEWIDTH]
-        v = list(product(*[funcs, funcs]))
+        v = [()] + [(x,) for x in funcs] + list(product(*[funcs, funcs]))
 
         # For each pair of derived variables
         for (i1, i2) in product(v, v):

@@ -62,7 +62,7 @@ def agree(me, other):
             if m[me[tv]] != other[tv]:
                 return False
 
-    # Tranlsate our constraints using m, and sort
+    # Translate our constraints using m, and sort
     me_equiv_constr = [(subst(a, m), subst(b, m)) for (a, b) in me.constraints]
     me_equiv_constr = sorted([sort_constr(x) for x in me_equiv_constr])
 
@@ -76,7 +76,7 @@ def agree(me, other):
 def check_typing(got_or_err, expected, symtab=None):
     # type: (TypingOrError, Tuple[VarMap, ConstraintList], Dict[str, Var]) -> None # noqa
     """
-    Check that a the typying we received (got_or_err) complies with the
+    Check that a the typing we received (got_or_err) complies with the
     expected typing (expected). If symtab is specified, substitute the Vars in
     expected using symtab first (used when checking type inference on XForms)
     """
@@ -409,7 +409,7 @@ class TestXForm(TypeCheckingBaseTest):
 
             # If there are no free_typevars, this is a non-polymorphic pattern.
             # There should be only one possible concrete typing.
-            if (len(xform.free_typevars) == 0):
+            if (len(xform.ti.free_typevars()) == 0):
                 assert len(concrete_typings_list) == 1
                 continue
 
@@ -423,7 +423,7 @@ class TestXForm(TypeCheckingBaseTest):
                 theoretical_num_typings =\
                     reduce(lambda x, y:    x*y,
                            [tv.get_typeset().size()
-                            for tv in xform.free_typevars], 1)
+                            for tv in xform.ti.free_typevars()], 1)
                 assert len(concrete_typings_list) < theoretical_num_typings
 
             # Check the validity of each individual concrete typing against the

@@ -106,14 +106,14 @@ class XForm(object):
 
         # Sanity: The set of inferred free typevars should be a subset of the
         # TVs corresponding to Vars appearing in src
-        self.free_typevars = self.ti.free_typevars()
+        free_typevars = set(self.ti.free_typevars())
         src_vars = set(self.inputs).union(
             [x for x in self.defs if not x.is_temp()])
         src_tvs = set([v.get_typevar() for v in src_vars])
-        if (not self.free_typevars.issubset(src_tvs)):
+        if (not free_typevars.issubset(src_tvs)):
             raise AssertionError(
                 "Some free vars don't appear in src - {}"
-                .format(self.free_typevars.difference(src_tvs)))
+                .format(free_typevars.difference(src_tvs)))
 
         # Update the type vars for each Var to their inferred values
         for v in self.inputs + self.defs:

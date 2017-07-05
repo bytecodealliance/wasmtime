@@ -350,9 +350,7 @@ class TypeSet(object):
         """
         Return the image of self across the derived function func
         """
-        if (func == TypeVar.SAMEAS):
-            return self
-        elif (func == TypeVar.LANEOF):
+        if (func == TypeVar.LANEOF):
             return self.lane_of()
         elif (func == TypeVar.ASBOOL):
             return self.as_bool()
@@ -376,9 +374,7 @@ class TypeSet(object):
         if (self.size() == 0):
             return self
 
-        if (func == TypeVar.SAMEAS):
-            return self
-        elif (func == TypeVar.LANEOF):
+        if (func == TypeVar.LANEOF):
             new = self.copy()
             new.lanes = set([2**i for i in range(0, int_log2(MAX_LANES)+1)])
             return new
@@ -388,6 +384,9 @@ class TypeSet(object):
             if 1 not in self.bools:
                 new.ints = self.bools.difference(set([1]))
                 new.floats = self.bools.intersection(set([32, 64]))
+                # If b1 is not in our typeset, than lanes=1 cannot be in the
+                # pre-image, as as_bool() of scalars is always b1.
+                new.lanes = self.lanes.difference(set([1]))
             else:
                 new.ints = set([2**x for x in range(3, 7)])
                 new.floats = set([32, 64])
@@ -553,7 +552,6 @@ class TypeVar(object):
     # The names here must match the method names on `ir::types::Type`.
     # The camel_case of the names must match `enum OperandConstraint` in
     # `instructions.rs`.
-    SAMEAS = 'same_as'
     LANEOF = 'lane_of'
     ASBOOL = 'as_bool'
     HALFWIDTH = 'half_width'
@@ -565,7 +563,6 @@ class TypeVar(object):
     def is_bijection(func):
         # type: (str) -> bool
         return func in [
-            TypeVar.SAMEAS,
             TypeVar.HALFWIDTH,
             TypeVar.DOUBLEWIDTH,
             TypeVar.HALFVECTOR,
@@ -575,7 +572,6 @@ class TypeVar(object):
     def inverse_func(func):
         # type: (str) -> str
         return {
-            TypeVar.SAMEAS: TypeVar.SAMEAS,
             TypeVar.HALFWIDTH: TypeVar.DOUBLEWIDTH,
             TypeVar.DOUBLEWIDTH: TypeVar.HALFWIDTH,
             TypeVar.HALFVECTOR: TypeVar.DOUBLEVECTOR,
@@ -586,6 +582,31 @@ class TypeVar(object):
     def derived(base, derived_func):
         # type: (TypeVar, str) -> TypeVar
         """Create a type variable that is a function of another."""
+
+        # Safety checks to avoid over/underflows.
+        ts = base.get_typeset()
+
+        if derived_func == TypeVar.HALFWIDTH:
+            if len(ts.ints) > 0:
+                assert min(ts.ints) > 8, "Can't halve all integer types"
+            if len(ts.floats) > 0:
+                assert min(ts.floats) > 32, "Can't halve all float types"
+            if len(ts.bools) > 0:
+                assert min(ts.bools) > 8, "Can't halve all boolean types"
+        elif derived_func == TypeVar.DOUBLEWIDTH:
+            if len(ts.ints) > 0:
+                assert max(ts.ints) < MAX_BITS,\
+                    "Can't double all integer types."
+            if len(ts.floats) > 0:
+                assert max(ts.floats) < MAX_BITS,\
+                    "Can't double all float types."
+            if len(ts.bools) > 0:
+                assert max(ts.bools) < MAX_BITS, "Can't double all bool types."
+        elif derived_func == TypeVar.HALFVECTOR:
+            assert min(ts.lanes) > 1, "Can't halve a scalar type"
+        elif derived_func == TypeVar.DOUBLEVECTOR:
+            assert max(ts.lanes) < MAX_LANES, "Can't double 256 lanes."
+
         return TypeVar(None, None, base=base, derived_func=derived_func)
 
     @staticmethod
@@ -595,27 +616,6 @@ class TypeVar(object):
         tv = TypeVar(None, None)
         tv.type_set = ts
         return tv
-
-    def change_to_derived(self, base, derived_func):
-        # type: (TypeVar, str) -> None
-        """Change this type variable into a derived one."""
-        self.type_set = None
-        self.is_derived = True
-        self.base = base
-        self.derived_func = derived_func
-
-    def strip_sameas(self):
-        # type: () -> TypeVar
-        """
-        Strip any `SAMEAS` functions from this typevar.
-
-        Also rewrite any `SAMEAS` functions nested under this typevar.
-        """
-        if self.is_derived:
-            self.base = self.base.strip_sameas()
-            if self.derived_func == self.SAMEAS:
-                return self.base
-        return self
 
     def lane_of(self):
         # type: () -> TypeVar
@@ -642,14 +642,6 @@ class TypeVar(object):
         Return a derived type variable that has the same number of vector lanes
         as this one, but the lanes are half the width.
         """
-        ts = self.get_typeset()
-        if len(ts.ints) > 0:
-            assert min(ts.ints) > 8, "Can't halve all integer types"
-        if len(ts.floats) > 0:
-            assert min(ts.floats) > 32, "Can't halve all float types"
-        if len(ts.bools) > 0:
-            assert min(ts.bools) > 8, "Can't halve all boolean types"
-
         return TypeVar.derived(self, self.HALFWIDTH)
 
     def double_width(self):
@@ -658,14 +650,6 @@ class TypeVar(object):
         Return a derived type variable that has the same number of vector lanes
         as this one, but the lanes are double the width.
         """
-        ts = self.get_typeset()
-        if len(ts.ints) > 0:
-            assert max(ts.ints) < MAX_BITS, "Can't double all integer types."
-        if len(ts.floats) > 0:
-            assert max(ts.floats) < MAX_BITS, "Can't double all float types."
-        if len(ts.bools) > 0:
-            assert max(ts.bools) < MAX_BITS, "Can't double all bool types."
-
         return TypeVar.derived(self, self.DOUBLEWIDTH)
 
     def half_vector(self):
@@ -674,9 +658,6 @@ class TypeVar(object):
         Return a derived type variable that has half the number of vector lanes
         as this one, with the same lane type.
         """
-        ts = self.get_typeset()
-        assert min(ts.lanes) > 1, "Can't halve a scalar type"
-
         return TypeVar.derived(self, self.HALFVECTOR)
 
     def double_vector(self):
@@ -685,9 +666,6 @@ class TypeVar(object):
         Return a derived type variable that has twice the number of vector
         lanes as this one, with the same lane type.
         """
-        ts = self.get_typeset()
-        assert max(ts.lanes) < MAX_LANES, "Can't double 256 lanes."
-
         return TypeVar.derived(self, self.DOUBLEVECTOR)
 
     def singleton_type(self):
@@ -744,15 +722,11 @@ class TypeVar(object):
         """
         Constrain the range of types this variable can assume to a subset of
         those `other` can assume.
-
-        If this is a SAMEAS-derived type variable, constrain the base instead.
         """
-        a = self.strip_sameas()
-        b = other.strip_sameas()
-        if a is b:
+        if self is other:
             return
 
-        a.constrain_types_by_ts(b.get_typeset())
+        self.constrain_types_by_ts(other.get_typeset())
 
     def get_typeset(self):
         # type: () -> TypeSet
