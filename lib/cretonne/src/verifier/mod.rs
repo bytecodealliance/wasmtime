@@ -363,7 +363,8 @@ impl<'a> Verifier<'a> {
                                 def_inst);
                 }
                 // Defining instruction dominates the instruction that uses the value.
-                if !self.domtree
+                if self.domtree.is_reachable(self.func.layout.pp_ebb(loc_inst)) &&
+                   !self.domtree
                         .dominates(def_inst, loc_inst, &self.func.layout) {
                     return err!(loc_inst, "uses value from non-dominating {}", def_inst);
                 }
@@ -381,7 +382,8 @@ impl<'a> Verifier<'a> {
                                 ebb);
                 }
                 // The defining EBB dominates the instruction using this value.
-                if !self.domtree.dominates(ebb, loc_inst, &self.func.layout) {
+                if self.domtree.is_reachable(ebb) &&
+                   !self.domtree.dominates(ebb, loc_inst, &self.func.layout) {
                     return err!(loc_inst, "uses value arg from non-dominating {}", ebb);
                 }
             }
