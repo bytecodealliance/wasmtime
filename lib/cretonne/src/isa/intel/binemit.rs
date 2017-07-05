@@ -111,6 +111,16 @@ fn recipe_op1rr<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut C
     }
 }
 
+fn recipe_op1ur<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
+    if let InstructionData::Unary { arg, .. } = func.dfg[inst] {
+        put_op1(func.encodings[inst].bits(), sink);
+        let res = func.locations[func.dfg.first_result(inst)].unwrap_reg();
+        modrm_rr(res, func.locations[arg].unwrap_reg(), sink);
+    } else {
+        panic!("Expected Unary format: {:?}", func.dfg[inst]);
+    }
+}
+
 fn recipe_op1rc<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
     if let InstructionData::Binary { args, .. } = func.dfg[inst] {
         let bits = func.encodings[inst].bits();

@@ -4,8 +4,8 @@ Intel Encoding recipes.
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual
-from base.formats import UnaryImm, Binary, BinaryImm, Store, Load
-from base.formats import MultiAry, Call, IndirectCall
+from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
+from base.formats import Call, IndirectCall, Store, Load
 from .registers import GPR, ABCD
 
 try:
@@ -142,6 +142,10 @@ class TailRecipe:
 
 # XX /r
 rr = TailRecipe('rr', Binary, size=1, ins=(GPR, GPR), outs=0)
+
+# XX /r, but for a unary operator with separate input/output register, like
+# copies.
+ur = TailRecipe('ur', Unary, size=1, ins=GPR, outs=GPR)
 
 # XX /n with one arg in %rcx, for shifts.
 rc = TailRecipe('rc', Binary, size=1, ins=(GPR, GPR.rcx), outs=0)

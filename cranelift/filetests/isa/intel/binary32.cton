@@ -56,6 +56,11 @@ ebb0:
     ; asm: sarl %cl, %ecx
     [-,%rcx]             v25 = sshr v1, v1       ; bin: d3 f9
 
+    ; asm: movl %esi, %ecx
+    [-,%rcx]             v26 = copy v2           ; bin: 89 f1
+    ; asm: movl %ecx, %esi
+    [-,%rsi]             v27 = copy v1           ; bin: 89 ce
+
     ; Integer Register - Immediate 8-bit operations.
     ; The 8-bit immediate is sign-extended.
 
