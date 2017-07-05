@@ -13,6 +13,8 @@ I32.enc(base.band.i32, *r.rr(0x21))
 I32.enc(base.bor.i32,  *r.rr(0x09))
 I32.enc(base.bxor.i32, *r.rr(0x31))
 
+I32.enc(base.copy.i32, *r.ur(0x89))
+
 # Immediate instructions with sign-extended 8-bit and 32-bit immediate.
 for inst,                   rrr in [
         (base.iadd_imm.i32, 0),
