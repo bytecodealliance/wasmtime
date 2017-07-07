@@ -87,42 +87,6 @@ fn put_rshamt<CS: CodeSink + ?Sized>(bits: u16,
     sink.put4(i);
 }
 
-fn recipe_r<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::Binary { args, .. } = func.dfg[inst] {
-        put_r(func.encodings[inst].bits(),
-              func.locations[args[0]].unwrap_reg(),
-              func.locations[args[1]].unwrap_reg(),
-              func.locations[func.dfg.first_result(inst)].unwrap_reg(),
-              sink);
-    } else {
-        panic!("Expected Binary format: {:?}", func.dfg[inst]);
-    }
-}
-
-fn recipe_ricmp<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::IntCompare { args, .. } = func.dfg[inst] {
-        put_r(func.encodings[inst].bits(),
-              func.locations[args[0]].unwrap_reg(),
-              func.locations[args[1]].unwrap_reg(),
-              func.locations[func.dfg.first_result(inst)].unwrap_reg(),
-              sink);
-    } else {
-        panic!("Expected IntCompare format: {:?}", func.dfg[inst]);
-    }
-}
-
-fn recipe_rshamt<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::BinaryImm { arg, imm, .. } = func.dfg[inst] {
-        put_rshamt(func.encodings[inst].bits(),
-                   func.locations[arg].unwrap_reg(),
-                   imm.into(),
-                   func.locations[func.dfg.first_result(inst)].unwrap_reg(),
-                   sink);
-    } else {
-        panic!("Expected BinaryImm format: {:?}", func.dfg[inst]);
-    }
-}
-
 /// I-type instructions.
 ///
 ///   31  19  14     11 6
@@ -148,73 +112,6 @@ fn put_i<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, imm: i64, rd: RegUnit, 
     sink.put4(i);
 }
 
-fn recipe_i<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::BinaryImm { arg, imm, .. } = func.dfg[inst] {
-        put_i(func.encodings[inst].bits(),
-              func.locations[arg].unwrap_reg(),
-              imm.into(),
-              func.locations[func.dfg.first_result(inst)].unwrap_reg(),
-              sink);
-    } else {
-        panic!("Expected BinaryImm format: {:?}", func.dfg[inst]);
-    }
-}
-
-fn recipe_iz<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::UnaryImm { imm, .. } = func.dfg[inst] {
-        put_i(func.encodings[inst].bits(),
-              0,
-              imm.into(),
-              func.locations[func.dfg.first_result(inst)].unwrap_reg(),
-              sink);
-    } else {
-        panic!("Expected UnaryImm format: {:?}", func.dfg[inst]);
-    }
-}
-
-fn recipe_iicmp<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::IntCompareImm { arg, imm, .. } = func.dfg[inst] {
-        put_i(func.encodings[inst].bits(),
-              func.locations[arg].unwrap_reg(),
-              imm.into(),
-              func.locations[func.dfg.first_result(inst)].unwrap_reg(),
-              sink);
-    } else {
-        panic!("Expected IntCompareImm format: {:?}", func.dfg[inst]);
-    }
-}
-
-fn recipe_iret<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    // Return instructions are always a jalr to %x1.
-    // The return address is provided as a special-purpose link argument.
-    put_i(func.encodings[inst].bits(),
-          1, // rs1 = %x1
-          0, // no offset.
-          0, // rd = %x0: no address written.
-          sink);
-}
-
-fn recipe_icall<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    // Indirect instructions are jalr with rd=%x1.
-    put_i(func.encodings[inst].bits(),
-          func.locations[func.dfg.inst_args(inst)[0]].unwrap_reg(),
-          0, // no offset.
-          1, // rd = %x1: link register.
-          sink);
-}
-
-fn recipe_icopy<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::Unary { arg, .. } = func.dfg[inst] {
-        put_i(func.encodings[inst].bits(),
-              func.locations[arg].unwrap_reg(),
-              0,
-              func.locations[func.dfg.first_result(inst)].unwrap_reg(),
-              sink);
-    } else {
-        panic!("Expected Unary format: {:?}", func.dfg[inst]);
-    }
-}
-
 /// U-type instructions.
 ///
 ///   31  11 6
@@ -234,17 +131,6 @@ fn put_u<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rd: RegUnit, sink: &mut CS)
     i |= imm as u32 & 0xfffff000;
 
     sink.put4(i);
-}
-
-fn recipe_u<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::UnaryImm { imm, .. } = func.dfg[inst] {
-        put_u(func.encodings[inst].bits(),
-              imm.into(),
-              func.locations[func.dfg.first_result(inst)].unwrap_reg(),
-              sink);
-    } else {
-        panic!("Expected UnaryImm format: {:?}", func.dfg[inst]);
-    }
 }
 
 /// SB-type branch instructions.
@@ -280,44 +166,6 @@ fn put_sb<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rs1: RegUnit, rs2: RegUnit
     sink.put4(i);
 }
 
-fn recipe_sb<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::BranchIcmp {
-               destination,
-               ref args,
-               ..
-           } = func.dfg[inst] {
-        let dest = func.offsets[destination] as i64;
-        let disp = dest - sink.offset() as i64;
-        let args = &args.as_slice(&func.dfg.value_lists)[0..2];
-        put_sb(func.encodings[inst].bits(),
-               disp,
-               func.locations[args[0]].unwrap_reg(),
-               func.locations[args[1]].unwrap_reg(),
-               sink);
-    } else {
-        panic!("Expected BranchIcmp format: {:?}", func.dfg[inst]);
-    }
-}
-
-fn recipe_sbzero<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::Branch {
-               destination,
-               ref args,
-               ..
-           } = func.dfg[inst] {
-        let dest = func.offsets[destination] as i64;
-        let disp = dest - sink.offset() as i64;
-        let args = &args.as_slice(&func.dfg.value_lists)[0..1];
-        put_sb(func.encodings[inst].bits(),
-               disp,
-               func.locations[args[0]].unwrap_reg(),
-               0,
-               sink);
-    } else {
-        panic!("Expected Branch format: {:?}", func.dfg[inst]);
-    }
-}
-
 /// UJ-type jump instructions.
 ///
 ///   31  11 6
@@ -345,32 +193,4 @@ fn put_uj<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rd: RegUnit, sink: &mut CS
     i |= ((imm >> 20) & 0x1) << 31;
 
     sink.put4(i);
-}
-
-fn recipe_uj<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::Jump { destination, .. } = func.dfg[inst] {
-        let dest = func.offsets[destination] as i64;
-        let disp = dest - sink.offset() as i64;
-        put_uj(func.encodings[inst].bits(), disp, 0, sink);
-    } else {
-        panic!("Expected Jump format: {:?}", func.dfg[inst]);
-    }
-}
-
-fn recipe_ujcall<CS: CodeSink + ?Sized>(func: &Function, inst: Inst, sink: &mut CS) {
-    if let InstructionData::Call { func_ref, .. } = func.dfg[inst] {
-        sink.reloc_func(RelocKind::Call.into(), func_ref);
-        // rd=%x1 is the standard link register.
-        put_uj(func.encodings[inst].bits(), 0, 1, sink);
-    } else {
-        panic!("Expected Call format: {:?}", func.dfg[inst]);
-    }
-}
-
-fn recipe_gpsp<CS: CodeSink + ?Sized>(_func: &Function, _inst: Inst, _sink: &mut CS) {
-    unimplemented!();
-}
-
-fn recipe_gpfi<CS: CodeSink + ?Sized>(_func: &Function, _inst: Inst, _sink: &mut CS) {
-    unimplemented!();
 }
