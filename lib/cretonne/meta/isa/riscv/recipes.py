@@ -92,68 +92,123 @@ def LUI():
 
 # R-type 32-bit instructions: These are mostly binary arithmetic instructions.
 # The encbits are `opcode[6:2] | (funct3 << 5) | (funct7 << 8)
-R = EncRecipe('R', Binary, size=4, ins=(GPR, GPR), outs=GPR)
+R = EncRecipe(
+        'R', Binary, size=4, ins=(GPR, GPR), outs=GPR,
+        emit='put_r(bits, in_reg0, in_reg1, out_reg0, sink);')
 
 # R-type with an immediate shift amount instead of rs2.
-Rshamt = EncRecipe('Rshamt', BinaryImm, size=4, ins=GPR, outs=GPR)
+Rshamt = EncRecipe(
+        'Rshamt', BinaryImm, size=4, ins=GPR, outs=GPR,
+        emit='put_rshamt(bits, in_reg0, imm.into(), out_reg0, sink);')
 
 # R-type encoding of an integer comparison.
-Ricmp = EncRecipe('Ricmp', IntCompare, size=4, ins=(GPR, GPR), outs=GPR)
+Ricmp = EncRecipe(
+        'Ricmp', IntCompare, size=4, ins=(GPR, GPR), outs=GPR,
+        emit='put_r(bits, in_reg0, in_reg1, out_reg0, sink);')
 
 I = EncRecipe(
         'I', BinaryImm, size=4, ins=GPR, outs=GPR,
-        instp=IsSignedInt(BinaryImm.imm, 12))
+        instp=IsSignedInt(BinaryImm.imm, 12),
+        emit='put_i(bits, in_reg0, imm.into(), out_reg0, sink);')
 
 # I-type instruction with a hardcoded %x0 rs1.
 Iz = EncRecipe(
         'Iz', UnaryImm, size=4, ins=(), outs=GPR,
-        instp=IsSignedInt(UnaryImm.imm, 12))
+        instp=IsSignedInt(UnaryImm.imm, 12),
+        emit='put_i(bits, 0, imm.into(), out_reg0, sink);')
 
 # I-type encoding of an integer comparison.
 Iicmp = EncRecipe(
         'Iicmp', IntCompareImm, size=4, ins=GPR, outs=GPR,
-        instp=IsSignedInt(IntCompareImm.imm, 12))
+        instp=IsSignedInt(IntCompareImm.imm, 12),
+        emit='put_i(bits, in_reg0, imm.into(), out_reg0, sink);')
 
 # I-type encoding for `jalr` as a return instruction. We won't use the
 # immediate offset.
 # The variable return values are not encoded.
-Iret = EncRecipe('Iret', MultiAry, size=4, ins=(), outs=())
+Iret = EncRecipe(
+        'Iret', MultiAry, size=4, ins=(), outs=(),
+        emit='''
+        // Return instructions are always a jalr to %x1.
+        // The return address is provided as a special-purpose link argument.
+        put_i(bits,
+              1, // rs1 = %x1
+              0, // no offset.
+              0, // rd = %x0: no address written.
+              sink);
+        ''')
 
 # I-type encoding for `jalr` as an indirect call.
-Icall = EncRecipe('Icall', IndirectCall, size=4, ins=GPR, outs=())
+Icall = EncRecipe(
+        'Icall', IndirectCall, size=4, ins=GPR, outs=(),
+        emit='''
+        // Indirect instructions are jalr with rd=%x1.
+        put_i(bits,
+              in_reg0,
+              0, // no offset.
+              1, // rd = %x1: link register.
+              sink);
+        ''')
+
 
 # Copy of a GPR is implemented as addi x, 0.
-Icopy = EncRecipe('Icopy', Unary, size=4, ins=GPR, outs=GPR)
+Icopy = EncRecipe(
+        'Icopy', Unary, size=4, ins=GPR, outs=GPR,
+        emit='put_i(bits, in_reg0, 0, out_reg0, sink);')
 
 # U-type instructions have a 20-bit immediate that targets bits 12-31.
 U = EncRecipe(
         'U', UnaryImm, size=4, ins=(), outs=GPR,
-        instp=IsSignedInt(UnaryImm.imm, 32, 12))
+        instp=IsSignedInt(UnaryImm.imm, 32, 12),
+        emit='put_u(bits, imm.into(), out_reg0, sink);')
 
 # UJ-type unconditional branch instructions.
-UJ = EncRecipe('UJ', Jump, size=4, ins=(), outs=(), branch_range=(0, 21))
-UJcall = EncRecipe('UJcall', Call, size=4, ins=(), outs=())
+UJ = EncRecipe(
+        'UJ', Jump, size=4, ins=(), outs=(), branch_range=(0, 21),
+        emit='''
+        let dest = func.offsets[destination] as i64;
+        let disp = dest - sink.offset() as i64;
+        put_uj(bits, disp, 0, sink);
+        ''')
+
+UJcall = EncRecipe(
+        'UJcall', Call, size=4, ins=(), outs=(),
+        emit='''
+        sink.reloc_func(RelocKind::Call.into(), func_ref);
+        // rd=%x1 is the standard link register.
+        put_uj(bits, 0, 1, sink);
+        ''')
 
 # SB-type branch instructions.
-# TODO: These instructions have a +/- 4 KB branch range. How to encode that
-# constraint?
 SB = EncRecipe(
         'SB', BranchIcmp, size=4,
         ins=(GPR, GPR), outs=(),
-        branch_range=(0, 13))
+        branch_range=(0, 13),
+        emit='''
+        let dest = func.offsets[destination] as i64;
+        let disp = dest - sink.offset() as i64;
+        put_sb(bits, disp, in_reg0, in_reg1, sink);
+        ''')
 
 # SB-type branch instruction with rs2 fixed to zero.
 SBzero = EncRecipe(
         'SBzero', Branch, size=4,
         ins=(GPR), outs=(),
-        branch_range=(0, 13))
+        branch_range=(0, 13),
+        emit='''
+        let dest = func.offsets[destination] as i64;
+        let disp = dest - sink.offset() as i64;
+        put_sb(bits, disp, in_reg0, 0, sink);
+        ''')
 
 # Spill of a GPR.
 GPsp = EncRecipe(
         'GPsp', Unary, size=4,
-        ins=GPR, outs=Stack(GPR))
+        ins=GPR, outs=Stack(GPR),
+        emit='unimplemented!();')
 
 # Fill of a GPR.
 GPfi = EncRecipe(
         'GPfi', Unary, size=4,
-        ins=Stack(GPR), outs=GPR)
+        ins=Stack(GPR), outs=GPR,
+        emit='unimplemented!();')

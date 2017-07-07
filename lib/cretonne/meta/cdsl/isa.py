@@ -202,6 +202,7 @@ class EncRecipe(object):
     :param: branch_range `(origin, bits)` range for branches.
     :param: instp Instruction predicate.
     :param: isap ISA predicate.
+    :param: emit Rust code for binary emission.
     """
 
     def __init__(
@@ -213,7 +214,8 @@ class EncRecipe(object):
             outs,               # type: ConstraintSeq
             branch_range=None,  # type: BranchRange
             instp=None,         # type: PredNode
-            isap=None           # type: PredNode
+            isap=None,          # type: PredNode
+            emit=None           # type: str
             ):
         # type: (...) -> None
         self.name = name
@@ -223,6 +225,7 @@ class EncRecipe(object):
         self.branch_range = branch_range
         self.instp = instp
         self.isap = isap
+        self.emit = emit
         if instp:
             assert instp.predicate_context() == format
         self.number = None  # type: int
