@@ -8,7 +8,6 @@ source code.
 from __future__ import absolute_import
 import sys
 import os
-import re
 
 try:
     from typing import Any, List  # noqa
@@ -130,6 +129,12 @@ class Formatter(object):
         # type: (str, *Any) -> None
         self.line(fmt.format(*args))
 
+    def multi_line(self, s):
+        # type: (str) -> None
+        """Add one or more lines after stripping common indentation."""
+        for l in parse_multiline(s):
+            self.line(l)
+
     def comment(self, s):
         # type: (str) -> None
         """Add a comment line."""
@@ -138,5 +143,37 @@ class Formatter(object):
     def doc_comment(self, s):
         # type: (str) -> None
         """Add a (multi-line) documentation comment."""
-        s = re.sub('^', self.indent + '/// ', s, flags=re.M) + '\n'
-        self.lines.append(s)
+        for l in parse_multiline(s):
+            self.line('/// ' + l if l else '///')
+
+
+def _indent(s):
+    # type: (str) -> int
+    """
+    Compute the indentation of s, or None of an empty line.
+
+    Example:
+        >>> _indent("foo")
+        0
+        >>> _indent("    bar")
+        4
+        >>> _indent("   ")
+        >>> _indent("")
+    """
+    t = s.lstrip()
+    return len(s) - len(t) if t else None
+
+
+def parse_multiline(s):
+    # type: (str) -> List[str]
+    """
+    Given a multi-line string, split it into a sequence of lines after
+    stripping a common indentation. This is useful for strings defined with doc
+    strings:
+        >>> parse_multiline('\\n    hello\\n    world\\n')
+        [None, 'hello', 'world']
+    """
+    lines = s.splitlines()
+    indents = list(i for i in (_indent(l) for l in lines) if i)
+    indent = min(indents) if indents else 0
+    return list(l[indent:] if len(l) > indent else None for l in lines)
