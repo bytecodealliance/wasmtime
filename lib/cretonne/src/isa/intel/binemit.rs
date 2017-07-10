@@ -44,10 +44,27 @@ fn rex2(rm: RegUnit, reg: RegUnit) -> u8 {
     BASE_REX | b | (r << 2)
 }
 
+// Emit a REX prefix.
+//
+// The R, X, and B bits are computed from registers using the functions above. The W bit is
+// extracted from `bits`.
+fn rex_prefix<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
+    debug_assert_eq!(rex & 0xf8, BASE_REX);
+    let w = ((bits >> 15) & 1) as u8;
+    sink.put1(rex | (w << 3));
+}
+
 // Emit a single-byte opcode with no REX prefix.
 fn put_op1<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     debug_assert_eq!(bits & 0x8f00, 0, "Invalid encoding bits for Op1*");
     debug_assert_eq!(rex, BASE_REX, "Invalid registers for REX-less encoding");
+    sink.put1(bits as u8);
+}
+
+// Emit a single-byte opcode with REX prefix.
+fn put_rexop1<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
+    debug_assert_eq!(bits & 0x0f00, 0, "Invalid encoding bits for Op1*");
+    rex_prefix(bits, rex, sink);
     sink.put1(bits as u8);
 }
 
