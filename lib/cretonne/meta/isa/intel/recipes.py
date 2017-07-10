@@ -160,6 +160,33 @@ class TailRecipe:
                 emit=replace_put_op(self.emit, name))
         return (self.recipes[name], bits)
 
+    def rex(self, *ops, **kwargs):
+        # type: (*int, **int) -> Tuple[EncRecipe, int]
+        """
+        Create a REX encoding recipe and encoding bits for the opcode bytes in
+        `ops`.
+
+        The recipe will always generate a REX prefix, whether it is required or
+        not. For instructions that don't require a REX prefix, two encodings
+        should be added: One with REX and one without.
+        """
+        rrr = kwargs.get('rrr', 0)
+        w = kwargs.get('w', 0)
+        name, bits = decode_ops(ops, rrr, w)
+        name = 'Rex' + name
+        if name not in self.recipes:
+            self.recipes[name] = EncRecipe(
+                name + self.name,
+                self.format,
+                1 + len(ops) + self.size,
+                ins=self.ins,
+                outs=self.outs,
+                branch_range=self.branch_range,
+                instp=self.instp,
+                isap=self.isap,
+                emit=replace_put_op(self.emit, name))
+        return (self.recipes[name], bits)
+
 
 # XX /r
 rr = TailRecipe(
@@ -208,16 +235,35 @@ rid = TailRecipe(
         sink.put4(imm as u32);
         ''')
 
-# XX+rd id unary with 32-bit immediate.
+# XX /n id with 32-bit immediate sign-extended. UnaryImm version.
 uid = TailRecipe(
-        'uid', UnaryImm, size=4, ins=(), outs=GPR,
+        'uid', UnaryImm, size=5, ins=(), outs=GPR,
         instp=IsSignedInt(UnaryImm.imm, 32),
+        emit='''
+        PUT_OP(bits, rex1(out_reg0), sink);
+        modrm_r_bits(out_reg0, bits, sink);
+        let imm: i64 = imm.into();
+        sink.put4(imm as u32);
+        ''')
+
+# XX+rd id unary with 32-bit immediate. Note no recipe predicate.
+puid = TailRecipe(
+        'uid', UnaryImm, size=4, ins=(), outs=GPR,
         emit='''
         // The destination register is encoded in the low bits of the opcode.
         // No ModR/M.
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         let imm: i64 = imm.into();
         sink.put4(imm as u32);
+        ''')
+
+# XX+rd iq unary with 64-bit immediate.
+puiq = TailRecipe(
+        'uiq', UnaryImm, size=8, ins=(), outs=GPR,
+        emit='''
+        PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+        let imm: i64 = imm.into();
+        sink.put8(imm as u64);
         ''')
 
 #
