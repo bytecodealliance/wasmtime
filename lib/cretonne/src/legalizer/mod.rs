@@ -18,6 +18,8 @@ use flowgraph::ControlFlowGraph;
 use ir::{Function, Cursor, DataFlowGraph, InstructionData, Opcode, InstBuilder};
 use ir::condcodes::IntCC;
 use isa::{TargetIsa, Legalize};
+use bitset::BitSet;
+use ir::instructions::ValueTypeSet;
 
 mod boundary;
 mod split;

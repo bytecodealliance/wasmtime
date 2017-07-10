@@ -6,28 +6,15 @@ from base.immediates import intcc
 from .typevar import TypeVar
 from .ast import Var, Def
 from .xform import Rtl, XForm
-from .ti import ti_rtl, subst, TypeEnv, get_type_env
+from .ti import ti_rtl, subst, TypeEnv, get_type_env, ConstrainTVsEqual
 from unittest import TestCase
 from functools import reduce
 
 try:
     from .ti import TypeMap, ConstraintList, VarMap, TypingOrError # noqa
-    from .ti import Constraint
     from typing import List, Dict, Tuple, TYPE_CHECKING, cast # noqa
 except ImportError:
     TYPE_CHECKING = False
-
-
-def sort_constr(c):
-    # type: (Constraint) -> Constraint
-    """
-    Sort the 2 typevars in a constraint by name for comparison
-    """
-    r = tuple(sorted(c, key=lambda y: y.name))
-    if TYPE_CHECKING:
-        return cast(Constraint, r)
-    else:
-        return r
 
 
 def agree(me, other):
@@ -63,13 +50,10 @@ def agree(me, other):
                 return False
 
     # Translate our constraints using m, and sort
-    me_equiv_constr = [(subst(a, m), subst(b, m)) for (a, b) in me.constraints]
-    me_equiv_constr = sorted([sort_constr(x) for x in me_equiv_constr])
-
+    me_equiv_constr = sorted([constr.translate(m)
+                              for constr in me.constraints])
     # Sort other's constraints
-    other_equiv_constr = sorted([sort_constr(x) for x in other.constraints],
-                                key=lambda y:   y[0].name)
-
+    other_equiv_constr = sorted(other.constraints)
     return me_equiv_constr == other_equiv_constr
 
 
@@ -224,7 +208,7 @@ class TestRTL(TypeCheckingBaseTest):
             self.v3: txn,
             self.v4: txn,
             self.v5: txn,
-        }, [(ixn.as_bool(), txn.as_bool())]))
+        }, [ConstrainTVsEqual(ixn.as_bool(), txn.as_bool())]))
 
     def test_vselect_vsplits(self):
         # type: () -> None

@@ -506,10 +506,14 @@ type BitSet16 = BitSet<u16>;
 /// A value type set describes the permitted set of types for a type variable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ValueTypeSet {
-    lanes: BitSet16,
-    ints: BitSet8,
-    floats: BitSet8,
-    bools: BitSet8,
+    /// Allowed lane sizes
+    pub lanes: BitSet16,
+    /// Allowed int widths
+    pub ints: BitSet8,
+    /// Allowed float widths
+    pub floats: BitSet8,
+    /// Allowed bool widths
+    pub bools: BitSet8,
 }
 
 impl ValueTypeSet {

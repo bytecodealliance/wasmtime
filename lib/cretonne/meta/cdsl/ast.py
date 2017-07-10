@@ -10,12 +10,25 @@ from .typevar import TypeVar
 from .predicates import IsEqual, And
 
 try:
-    from typing import Union, Tuple, Sequence, TYPE_CHECKING  # noqa
+    from typing import Union, Tuple, Sequence, TYPE_CHECKING, Dict, List  # noqa
     if TYPE_CHECKING:
         from .operands import ImmediateKind  # noqa
         from .predicates import PredNode  # noqa
 except ImportError:
     pass
+
+
+def replace_var(arg, m):
+    # type: (Expr, Dict[Var, Var]) -> Expr
+    """
+    Given a var v return either m[v] or a new variable v' (and remember
+    m[v]=v'). Otherwise return the argument unchanged
+    """
+    if isinstance(arg, Var):
+        new_arg = m.get(arg, Var(arg.name))  # type: Var
+        m[arg] = new_arg
+        return new_arg
+    return arg
 
 
 class Def(object):
@@ -59,6 +72,21 @@ class Def(object):
         else:
             return "({}) << {!s}".format(
                     ', '.join(map(str, self.defs)), self.expr)
+
+    def copy(self, m):
+        # type: (Dict[Var, Var]) -> Def
+        """
+        Return a copy of this Def with vars replaced with fresh variables,
+        in accordance with the map m. Update m as neccessary.
+        """
+        new_expr = self.expr.copy(m)
+        new_defs = []  # type: List[Var]
+        for v in self.defs:
+            new_v = replace_var(v, m)
+            assert(isinstance(new_v, Var))
+            new_defs.append(new_v)
+
+        return Def(tuple(new_defs), new_expr)
 
 
 class Expr(object):
@@ -302,6 +330,15 @@ class Apply(Expr):
             pred = And.combine(pred, IsEqual(ffield, arg))
 
         return pred
+
+    def copy(self, m):
+        # type: (Dict[Var, Var]) -> Apply
+        """
+        Return a copy of this Expr with vars replaced with fresh variables,
+        in accordance with the map m. Update m as neccessary.
+        """
+        return Apply(self.inst, tuple(map(lambda e: replace_var(e, m),
+                                          self.args)))
 
 
 class Enumerator(Expr):

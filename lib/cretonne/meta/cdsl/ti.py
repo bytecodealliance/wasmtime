@@ -8,18 +8,133 @@ from itertools import product
 
 try:
     from typing import Dict, TYPE_CHECKING, Union, Tuple, Optional, Set # noqa
-    from typing import Iterable # noqa
-    from typing import cast, List
+    from typing import Iterable, List # noqa
+    from typing import cast
     from .xform import Rtl, XForm # noqa
     from .ast import Expr # noqa
+    from .typevar import TypeSet # noqa
     if TYPE_CHECKING:
-        Constraint = Tuple[TypeVar, TypeVar]
-        ConstraintList = List[Constraint]
         TypeMap = Dict[TypeVar, TypeVar]
         VarMap = Dict[Var, TypeVar]
 except ImportError:
     TYPE_CHECKING = False
     pass
+
+
+class TypeConstraint(object):
+    """
+    Base class for all runtime-emittable type constraints.
+    """
+
+
+class ConstrainTVsEqual(TypeConstraint):
+    """
+    Constraint specifying that two derived type vars must have the same runtime
+    type.
+    """
+    def __init__(self, tv1, tv2):
+        # type: (TypeVar, TypeVar) -> None
+        assert tv1.is_derived and tv2.is_derived
+        (self.tv1, self.tv2) = sorted([tv1, tv2], key=repr)
+
+    def is_trivial(self):
+        # type: () -> bool
+        """
+        Return true if this constrain is statically decidable.
+        """
+        return self.tv1 == self.tv2 or \
+            (self.tv1.singleton_type() is not None and
+             self.tv2.singleton_type() is not None)
+
+    def translate(self, m):
+        # type: (Union[TypeEnv, TypeMap]) -> ConstrainTVsEqual
+        """
+        Translate any TypeVars in the constraint according to the map m
+        """
+        if isinstance(m, TypeEnv):
+            return ConstrainTVsEqual(m[self.tv1], m[self.tv2])
+        else:
+            return ConstrainTVsEqual(subst(self.tv1, m), subst(self.tv2, m))
+
+    def __eq__(self, other):
+        # type: (object) -> bool
+        if (not isinstance(other, ConstrainTVsEqual)):
+            return False
+
+        return (self.tv1, self.tv2) == (other.tv1, other.tv2)
+
+    def __hash__(self):
+        # type: () -> int
+        return hash((self.tv1, self.tv2))
+
+    def eval(self):
+        # type: () -> bool
+        """
+        Evaluate this constraint. Should only be called when the constraint has
+        been translated to concrete types.
+        """
+        assert self.tv1.singleton_type() is not None and \
+            self.tv2.singleton_type() is not None
+        return self.tv1.singleton_type() == self.tv2.singleton_type()
+
+
+class ConstrainTVInTypeset(TypeConstraint):
+    """
+    Constraint specifying that a type var must belong to some typeset.
+    """
+    def __init__(self, tv, ts):
+        # type: (TypeVar, TypeSet) -> None
+        assert not tv.is_derived and tv.name.startswith("typeof_")
+        self.tv = tv
+        self.ts = ts
+
+    def is_trivial(self):
+        # type: () -> bool
+        """
+        Return true if this constrain is statically decidable.
+        """
+        tv_ts = self.tv.get_typeset().copy()
+
+        # Trivially True
+        if (tv_ts.issubset(self.ts)):
+            return True
+
+        # Trivially false
+        tv_ts &= self.ts
+        if (tv_ts.size() == 0):
+            return True
+
+        return False
+
+    def translate(self, m):
+        # type: (Union[TypeEnv, TypeMap]) -> ConstrainTVInTypeset
+        """
+        Translate any TypeVars in the constraint according to the map m
+        """
+        if isinstance(m, TypeEnv):
+            return ConstrainTVInTypeset(m[self.tv], self.ts)
+        else:
+            return ConstrainTVInTypeset(subst(self.tv, m), self.ts)
+
+    def __eq__(self, other):
+        # type: (object) -> bool
+        if (not isinstance(other, ConstrainTVInTypeset)):
+            return False
+
+        return (self.tv, self.ts) == (other.tv, other.ts)
+
+    def __hash__(self):
+        # type: () -> int
+        return hash((self.tv, self.ts))
+
+    def eval(self):
+        # type: () -> bool
+        """
+        Evaluate this constraint. Should only be called when the constraint has
+        been translated to concrete types.
+        """
+        assert self.tv.singleton_type() is not None
+        return self.tv.get_typeset().issubset(self.ts)
 
 
 class TypeEnv(object):
@@ -43,13 +158,13 @@ class TypeEnv(object):
     RANK_INTERNAL = 0
 
     def __init__(self, arg=None):
-        # type: (Optional[Tuple[TypeMap, ConstraintList]]) -> None
+        # type: (Optional[Tuple[TypeMap, List[TypeConstraint]]]) -> None
         self.ranks = {}  # type: Dict[TypeVar, int]
         self.vars = set()  # type: Set[Var]
 
         if arg is None:
             self.type_map = {}  # type: TypeMap
-            self.constraints = []  # type: ConstraintList
+            self.constraints = []  # type: List[TypeConstraint]
         else:
             self.type_map, self.constraints = arg
 
@@ -94,7 +209,9 @@ class TypeEnv(object):
         """
         Add a new equivalence constraint between tv1 and tv2
         """
-        self.constraints.append((tv1, tv2))
+        constr = ConstrainTVsEqual(tv1, tv2)
+        if (constr not in self.constraints):
+            self.constraints.append(constr)
 
     def get_uid(self):
         # type: () -> str
@@ -206,15 +323,24 @@ class TypeEnv(object):
         """
         vars_tvs = set([v.get_typevar() for v in self.vars])
         new_type_map = {tv: self[tv] for tv in vars_tvs if tv != self[tv]}
-        new_constraints = [(self[tv1], self[tv2])
-                           for (tv1, tv2) in self.constraints]
 
-        # Sanity: new constraints and the new type_map should only contain
-        # tvs associated with real vars
-        for (a, b) in new_constraints:
-            assert a.free_typevar() in vars_tvs and\
-                   b.free_typevar() in vars_tvs
+        new_constraints = []  # type: List[TypeConstraint]
+        for constr in self.constraints:
+            # Currently typeinference only generates ConstrainTVsEqual
+            # constraints
+            assert isinstance(constr, ConstrainTVsEqual)
+            constr = constr.translate(self)
 
+            if constr.is_trivial() or constr in new_constraints:
+                continue
+
+            # Sanity: translated constraints should refer to only real vars
+            assert constr.tv1.free_typevar() in vars_tvs and\
+                constr.tv2.free_typevar() in vars_tvs
+
+            new_constraints.append(constr)
+
+        # Sanity: translated typemap should refer to only real vars
         for (k, v) in new_type_map.items():
             assert k in vars_tvs
             assert v.free_typevar() is None or v.free_typevar() in vars_tvs
@@ -245,13 +371,13 @@ class TypeEnv(object):
 
             # Check if constraints are satisfied for this typing
             failed = None
-            for (tv1, tv2) in self.constraints:
-                tv1 = subst(tv1, m)
-                tv2 = subst(tv2, m)
-                assert tv1.get_typeset().size() == 1 and\
-                    tv2.get_typeset().size() == 1
-                if (tv1.get_typeset() != tv2.get_typeset()):
-                    failed = (tv1, tv2)
+            for constr in self.constraints:
+                # Currently typeinference only generates ConstrainTVsEqual
+                # constraints
+                assert isinstance(constr, ConstrainTVsEqual)
+                concrete_constr = constr.translate(m)
+                if not concrete_constr.eval():
+                    failed = concrete_constr
                     break
 
             if (failed is not None):
@@ -287,9 +413,10 @@ class TypeEnv(object):
                 edges.add((v, v.base, "solid", v.derived_func))
                 v = v.base
 
-        for (a, b) in self.constraints:
-            assert a in nodes and b in nodes
-            edges.add((a, b, "dashed", None))
+        for constr in self.constraints:
+            assert isinstance(constr, ConstrainTVsEqual)
+            assert constr.tv1 in nodes and constr.tv2 in nodes
+            edges.add((constr.tv1, constr.tv2, "dashed", None))
 
         root_nodes = set([x for x in nodes
                           if x not in self.type_map and not x.is_derived])

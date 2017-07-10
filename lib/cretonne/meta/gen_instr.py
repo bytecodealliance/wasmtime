@@ -336,6 +336,25 @@ def get_constraint(op, ctrl_typevar, type_sets):
     return 'Same'
 
 
+# TypeSet indexes are encoded in 8 bits, with `0xff` reserved.
+typeset_limit = 0xff
+
+
+def gen_typesets_table(fmt, type_sets):
+    # type: (srcgen.Formatter, UniqueTable) -> None
+    """
+    Generate the table of ValueTypeSets described by type_sets.
+    """
+    fmt.comment('Table of value type sets.')
+    assert len(type_sets.table) <= typeset_limit, "Too many type sets"
+    with fmt.indented(
+            'const TYPE_SETS : [ValueTypeSet; {}] = ['
+            .format(len(type_sets.table)), '];'):
+        for ts in type_sets.table:
+            with fmt.indented('ValueTypeSet {', '},'):
+                ts.emit_fields(fmt)
+
+
 def gen_type_constraints(fmt, instrs):
     # type: (srcgen.Formatter, Sequence[Instruction]) -> None
     """
@@ -359,9 +378,6 @@ def gen_type_constraints(fmt, instrs):
 
     # Preload table with constraints for typical binops.
     operand_seqs.add(['Same'] * 3)
-
-    # TypeSet indexes are encoded in 8 bits, with `0xff` reserved.
-    typeset_limit = 0xff
 
     fmt.comment('Table of opcode constraints.')
     with fmt.indented(
@@ -418,14 +434,7 @@ def gen_type_constraints(fmt, instrs):
                 fmt.line('typeset_offset: {},'.format(ctrl_typeset))
                 fmt.line('constraint_offset: {},'.format(offset))
 
-    fmt.comment('Table of value type sets.')
-    assert len(type_sets.table) <= typeset_limit, "Too many type sets"
-    with fmt.indented(
-            'const TYPE_SETS : [ValueTypeSet; {}] = ['
-            .format(len(type_sets.table)), '];'):
-        for ts in type_sets.table:
-            with fmt.indented('ValueTypeSet {', '},'):
-                ts.emit_fields(fmt)
+    gen_typesets_table(fmt, type_sets)
 
     fmt.comment('Table of operand constraint sequences.')
     with fmt.indented(

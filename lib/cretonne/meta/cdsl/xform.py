@@ -41,6 +41,14 @@ class Rtl(object):
         # type: (*DefApply) -> None
         self.rtl = tuple(map(canonicalize_defapply, args))
 
+    def copy(self, m):
+        # type: (Dict[Var, Var]) -> Rtl
+        """
+        Return a copy of this rtl with all Vars substituted with copies or
+        according to m. Update m as neccessary.
+        """
+        return Rtl(*[d.copy(m) for d in self.rtl])
+
 
 class XForm(object):
     """
