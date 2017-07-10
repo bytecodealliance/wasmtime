@@ -43,7 +43,9 @@ OPCODE_PREFIX = {
         (0xf2, 0x0f, 0x3a): ('Mp3', 0b1111)
         }
 
-# VEX/XOP and EVEX prefixes are not yet supported.
+# The table above does not include the REX prefix which goes after the
+# mandatory prefix. VEX/XOP and EVEX prefixes are not yet supported. Encodings
+# using any of these prefixes are represented by separate recipes.
 #
 # The encoding bits are:
 #
@@ -79,6 +81,18 @@ def decode_ops(ops, rrr=0, w=0):
     return (name, op | (mmpp << 8) | (rrr << 12) | (w << 15))
 
 
+def replace_put_op(emit, prefix):
+    # type: (str, str) -> str
+    """
+    Given a snippet of Rust code (or None), replace the `PUT_OP` macro with the
+    corresponding `put_*` function from the `binemit.rs` module.
+    """
+    if emit is None:
+        return None
+    else:
+        return emit.replace('PUT_OP', 'put_' + prefix.lower())
+
+
 class TailRecipe:
     """
     Generate encoding recipes on demand.
@@ -92,6 +106,10 @@ class TailRecipe:
 
     The arguments are the same as for an `EncRecipe`, except for `size` which
     does not include the size of the opcode.
+
+    The `emit` parameter contains Rust code to actually emit an encoding, like
+    `EncRecipe` does it. Additionally, the text `PUT_OP` is substituted with
+    the proper `put_*` function from the `intel/binemit.rs` module.
     """
 
     def __init__(
@@ -103,7 +121,8 @@ class TailRecipe:
             outs,               # type: ConstraintSeq
             branch_range=None,  # type: BranchRange
             instp=None,         # type: PredNode
-            isap=None           # type: PredNode
+            isap=None,          # type: PredNode
+            emit=None           # type: str
             ):
         # type: (...) -> None
         self.name = name
@@ -114,6 +133,7 @@ class TailRecipe:
         self.branch_range = branch_range
         self.instp = instp
         self.isap = isap
+        self.emit = emit
 
         # Cached recipes, keyed by name prefix.
         self.recipes = dict()  # type: Dict[str, EncRecipe]
@@ -136,34 +156,69 @@ class TailRecipe:
                 outs=self.outs,
                 branch_range=self.branch_range,
                 instp=self.instp,
-                isap=self.isap)
+                isap=self.isap,
+                emit=replace_put_op(self.emit, name))
         return (self.recipes[name], bits)
 
 
 # XX /r
-rr = TailRecipe('rr', Binary, size=1, ins=(GPR, GPR), outs=0)
+rr = TailRecipe(
+        'rr', Binary, size=1, ins=(GPR, GPR), outs=0,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        modrm_rr(in_reg0, in_reg1, sink);
+        ''')
 
 # XX /r, but for a unary operator with separate input/output register, like
 # copies.
-ur = TailRecipe('ur', Unary, size=1, ins=GPR, outs=GPR)
+ur = TailRecipe(
+        'ur', Unary, size=1, ins=GPR, outs=GPR,
+        emit='''
+        PUT_OP(bits, rex2(out_reg0, in_reg0), sink);
+        modrm_rr(out_reg0, in_reg0, sink);
+        ''')
 
 # XX /n with one arg in %rcx, for shifts.
-rc = TailRecipe('rc', Binary, size=1, ins=(GPR, GPR.rcx), outs=0)
+rc = TailRecipe(
+        'rc', Binary, size=1, ins=(GPR, GPR.rcx), outs=0,
+        emit='''
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        ''')
 
 # XX /n ib with 8-bit immediate sign-extended.
 rib = TailRecipe(
         'rib', BinaryImm, size=2, ins=GPR, outs=0,
-        instp=IsSignedInt(BinaryImm.imm, 8))
+        instp=IsSignedInt(BinaryImm.imm, 8),
+        emit='''
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        let imm: i64 = imm.into();
+        sink.put1(imm as u8);
+        ''')
 
 # XX /n id with 32-bit immediate sign-extended.
 rid = TailRecipe(
         'rid', BinaryImm, size=5, ins=GPR, outs=0,
-        instp=IsSignedInt(BinaryImm.imm, 32))
+        instp=IsSignedInt(BinaryImm.imm, 32),
+        emit='''
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        let imm: i64 = imm.into();
+        sink.put4(imm as u32);
+        ''')
 
 # XX+rd id unary with 32-bit immediate.
 uid = TailRecipe(
         'uid', UnaryImm, size=4, ins=(), outs=GPR,
-        instp=IsSignedInt(UnaryImm.imm, 32))
+        instp=IsSignedInt(UnaryImm.imm, 32),
+        emit='''
+        // The destination register is encoded in the low bits of the opcode.
+        // No ModR/M.
+        PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+        let imm: i64 = imm.into();
+        sink.put4(imm as u32);
+        ''')
 
 #
 # Store recipes.
@@ -172,26 +227,59 @@ uid = TailRecipe(
 # XX /r register-indirect store with no offset.
 st = TailRecipe(
         'st', Store, size=1, ins=(GPR, GPR), outs=(),
-        instp=IsEqual(Store.offset, 0))
+        instp=IsEqual(Store.offset, 0),
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        modrm_rm(in_reg1, in_reg0, sink);
+        ''')
 
 # XX /r register-indirect store with no offset.
 # Only ABCD allowed for stored value. This is for byte stores.
 st_abcd = TailRecipe(
         'st_abcd', Store, size=1, ins=(ABCD, GPR), outs=(),
-        instp=IsEqual(Store.offset, 0))
+        instp=IsEqual(Store.offset, 0),
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        modrm_rm(in_reg1, in_reg0, sink);
+        ''')
 
 # XX /r register-indirect store with 8-bit offset.
 stDisp8 = TailRecipe(
         'stDisp8', Store, size=2, ins=(GPR, GPR), outs=(),
-        instp=IsSignedInt(Store.offset, 8))
+        instp=IsSignedInt(Store.offset, 8),
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        modrm_disp8(in_reg1, in_reg0, sink);
+        let offset: i32 = offset.into();
+        sink.put1(offset as u8);
+        ''')
 stDisp8_abcd = TailRecipe(
         'stDisp8_abcd', Store, size=2, ins=(ABCD, GPR), outs=(),
-        instp=IsSignedInt(Store.offset, 8))
+        instp=IsSignedInt(Store.offset, 8),
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        modrm_disp8(in_reg1, in_reg0, sink);
+        let offset: i32 = offset.into();
+        sink.put1(offset as u8);
+        ''')
 
 # XX /r register-indirect store with 32-bit offset.
-stDisp32 = TailRecipe('stDisp32', Store, size=5, ins=(GPR, GPR), outs=())
+stDisp32 = TailRecipe(
+        'stDisp32', Store, size=5, ins=(GPR, GPR), outs=(),
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        modrm_disp32(in_reg1, in_reg0, sink);
+        let offset: i32 = offset.into();
+        sink.put4(offset as u32);
+        ''')
 stDisp32_abcd = TailRecipe(
-        'stDisp32_abcd', Store, size=5, ins=(ABCD, GPR), outs=())
+        'stDisp32_abcd', Store, size=5, ins=(ABCD, GPR), outs=(),
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        modrm_disp32(in_reg1, in_reg0, sink);
+        let offset: i32 = offset.into();
+        sink.put4(offset as u32);
+        ''')
 
 #
 # Load recipes
@@ -200,21 +288,54 @@ stDisp32_abcd = TailRecipe(
 # XX /r load with no offset.
 ld = TailRecipe(
         'ld', Load, size=1, ins=(GPR), outs=(GPR),
-        instp=IsEqual(Load.offset, 0))
+        instp=IsEqual(Load.offset, 0),
+        emit='''
+        PUT_OP(bits, rex2(out_reg0, in_reg0), sink);
+        modrm_rm(in_reg0, out_reg0, sink);
+        ''')
 
 # XX /r load with 8-bit offset.
 ldDisp8 = TailRecipe(
         'ldDisp8', Load, size=2, ins=(GPR), outs=(GPR),
-        instp=IsSignedInt(Load.offset, 8))
+        instp=IsSignedInt(Load.offset, 8),
+        emit='''
+        PUT_OP(bits, rex2(out_reg0, in_reg0), sink);
+        modrm_disp8(in_reg0, out_reg0, sink);
+        let offset: i32 = offset.into();
+        sink.put1(offset as u8);
+        ''')
 
 # XX /r load with 32-bit offset.
 ldDisp32 = TailRecipe(
         'ldDisp32', Load, size=5, ins=(GPR), outs=(GPR),
-        instp=IsSignedInt(Load.offset, 32))
+        instp=IsSignedInt(Load.offset, 32),
+        emit='''
+        PUT_OP(bits, rex2(out_reg0, in_reg0), sink);
+        modrm_disp32(in_reg0, out_reg0, sink);
+        let offset: i32 = offset.into();
+        sink.put4(offset as u32);
+        ''')
 
 #
 # Call/return
 #
-call_id = TailRecipe('call_id', Call, size=4, ins=(), outs=())
-call_r = TailRecipe('call_r', IndirectCall, size=1, ins=GPR, outs=())
-ret = TailRecipe('ret', MultiAry, size=0, ins=(), outs=())
+call_id = TailRecipe(
+        'call_id', Call, size=4, ins=(), outs=(),
+        emit='''
+        PUT_OP(bits, BASE_REX, sink);
+        sink.reloc_func(RelocKind::PCRel4.into(), func_ref);
+        sink.put4(0);
+        ''')
+
+call_r = TailRecipe(
+        'call_r', IndirectCall, size=1, ins=GPR, outs=(),
+        emit='''
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        ''')
+
+ret = TailRecipe(
+        'ret', MultiAry, size=0, ins=(), outs=(),
+        emit='''
+        PUT_OP(bits, BASE_REX, sink);
+        ''')
