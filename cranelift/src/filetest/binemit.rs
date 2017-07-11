@@ -12,7 +12,7 @@ use cretonne::ir::entities::AnyEntity;
 use cretonne::isa::TargetIsa;
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result};
-use utils::match_directive;
+use utils::{match_directive, pretty_error};
 
 struct TestBinEmit;
 
@@ -117,7 +117,8 @@ impl SubTest for TestBinEmit {
         }
 
         // Relax branches and compute EBB offsets based on the encodings.
-        binemit::relax_branches(&mut func, isa);
+        let code_size = binemit::relax_branches(&mut func, isa)
+            .map_err(|e| pretty_error(&func, context.isa, e))?;
 
         // Collect all of the 'bin:' directives on instructions.
         let mut bins = HashMap::new();
@@ -186,6 +187,10 @@ impl SubTest for TestBinEmit {
                     }
                 }
             }
+        }
+
+        if sink.offset != code_size {
+            return Err(format!("Expected code size {}, got {}", code_size, sink.offset));
         }
 
         Ok(())

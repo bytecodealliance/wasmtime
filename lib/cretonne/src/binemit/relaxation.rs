@@ -31,11 +31,12 @@ use binemit::CodeOffset;
 use ir::{Function, DataFlowGraph, Cursor, InstructionData, Opcode, InstEncodings};
 use isa::{TargetIsa, EncInfo};
 use iterators::IteratorExtras;
+use result::CtonError;
 
 /// Relax branches and compute the final layout of EBB headers in `func`.
 ///
 /// Fill in the `func.offsets` table so the function is ready for binary emission.
-pub fn relax_branches(func: &mut Function, isa: &TargetIsa) {
+pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> Result<CodeOffset, CtonError> {
     let encinfo = isa.encoding_info();
 
     // Clear all offsets so we can recognize EBBs that haven't been visited yet.
@@ -45,13 +46,15 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) {
     // Start by inserting fall through instructions.
     fallthroughs(func);
 
+    let mut offset = 0;
+
     // The relaxation algorithm iterates to convergence.
     let mut go_again = true;
     while go_again {
         go_again = false;
+        offset = 0;
 
         // Visit all instructions in layout order
-        let mut offset = 0;
         let mut pos = Cursor::new(&mut func.layout);
         while let Some(ebb) = pos.next_ebb() {
             // Record the offset for `ebb` and make sure we iterate until offsets are stable.
@@ -90,6 +93,8 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) {
             }
         }
     }
+
+    Ok(offset)
 }
 
 /// Convert `jump` instructions to `fallthrough` instructions where possible and verify that any
