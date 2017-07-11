@@ -14,6 +14,7 @@ use filetest::runner::TestRunner;
 pub mod subtest;
 
 mod binemit;
+mod compile;
 mod concurrent;
 mod domtree;
 mod legalizer;
@@ -57,15 +58,16 @@ pub fn run(verbose: bool, files: Vec<String>) -> CommandResult {
 /// a `.cton` test file.
 fn new_subtest(parsed: &TestCommand) -> subtest::Result<Box<subtest::SubTest>> {
     match parsed.command {
+        "binemit" => binemit::subtest(parsed),
         "cat" => cat::subtest(parsed),
-        "print-cfg" => print_cfg::subtest(parsed),
+        "compile" => compile::subtest(parsed),
         "domtree" => domtree::subtest(parsed),
-        "verifier" => verifier::subtest(parsed),
         "legalizer" => legalizer::subtest(parsed),
         "licm" => licm::subtest(parsed),
+        "print-cfg" => print_cfg::subtest(parsed),
         "regalloc" => regalloc::subtest(parsed),
-        "binemit" => binemit::subtest(parsed),
         "simple-gvn" => simple_gvn::subtest(parsed),
+        "verifier" => verifier::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }

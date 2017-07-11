@@ -9,6 +9,7 @@
 //! contexts concurrently. Typically, you would have one context per compilation thread and only a
 //! single ISA instance.
 
+use binemit::{CodeOffset, relax_branches};
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir::Function;
@@ -16,7 +17,7 @@ use loop_analysis::LoopAnalysis;
 use isa::TargetIsa;
 use legalize_function;
 use regalloc;
-use result::CtonResult;
+use result::{CtonError, CtonResult};
 use verifier;
 use simple_gvn::do_simple_gvn;
 use licm::do_licm;
@@ -52,6 +53,22 @@ impl Context {
             regalloc: regalloc::Context::new(),
             loop_analysis: LoopAnalysis::new(),
         }
+    }
+
+    /// Compile the function.
+    ///
+    /// Run the function through all the passes necessary to generate code for the target ISA
+    /// represented by `isa`. This does not include the final step of emitting machine code into a
+    /// code sink.
+    ///
+    /// Returns the size of the function's code.
+    pub fn compile(&mut self, isa: &TargetIsa) -> Result<CodeOffset, CtonError> {
+        self.flowgraph();
+        self.verify_if(isa)?;
+
+        self.legalize(isa)?;
+        self.regalloc(isa)?;
+        self.relax_branches(isa)
     }
 
     /// Run the verifier on the function.
@@ -106,5 +123,13 @@ impl Context {
     pub fn regalloc(&mut self, isa: &TargetIsa) -> CtonResult {
         self.regalloc
             .run(isa, &mut self.func, &self.cfg, &self.domtree)
+    }
+
+    /// Run the branch relaxation pass and return the final code size.
+    pub fn relax_branches(&mut self, isa: &TargetIsa) -> Result<CodeOffset, CtonError> {
+        let code_size = relax_branches(&mut self.func, isa)?;
+        self.verify_if(isa)?;
+
+        Ok(code_size)
     }
 }
