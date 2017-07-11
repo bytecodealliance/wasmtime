@@ -1,8 +1,9 @@
 from __future__ import absolute_import
 from base.instructions import vselect, vsplit, vconcat, iconst, iadd, bint,\
-    b1, icmp, iadd_cout, iadd_cin
+    b1, icmp, iadd_cout, iadd_cin, uextend, ireduce
 from base.legalize import narrow, expand
 from base.immediates import intcc
+from base.types import i32, i8
 from .typevar import TypeVar
 from .ast import Var, Def
 from .xform import Rtl, XForm
@@ -171,7 +172,7 @@ class TestRTL(TypeCheckingBaseTest):
         )
         ti = TypeEnv()
         self.assertEqual(ti_rtl(r, ti),
-                         "On line 1: fail ti on `typeof_v2` <: `2`: " +
+                         "On line 1: fail ti on `typeof_v2` <: `1`: " +
                          "Error: empty type created when unifying " +
                          "`typeof_v2` and `half_vector(typeof_v2)`")
 
@@ -303,6 +304,21 @@ class TestRTL(TypeCheckingBaseTest):
             self.v0:    itype,
         }, []))
 
+    def test_fully_bound_inst_inference_bad(self):
+        # Incompatible bound instructions fail accordingly
+        r = Rtl(
+                self.v3 << uextend.i32(self.v1),
+                self.v4 << uextend.i16(self.v2),
+                self.v5 << iadd(self.v3, self.v4),
+            )
+        ti = TypeEnv()
+        typing = ti_rtl(r, ti)
+
+        self.assertEqual(typing,
+                         "On line 2: fail ti on `typeof_v4` <: `4`: " +
+                         "Error: empty type created when unifying " +
+                         "`typeof_v4` and `typeof_v5`")
+
 
 class TestXForm(TypeCheckingBaseTest):
     def test_iadd_cout(self):
@@ -414,3 +430,89 @@ class TestXForm(TypeCheckingBaseTest):
             # xform
             for concrete_typing in concrete_typings_list:
                 check_concrete_typing_xform(concrete_typing, xform)
+
+    def test_bound_inst_inference(self):
+        # First example from issue #26
+        x = XForm(
+            Rtl(
+                self.v0 << iadd(self.v1, self.v2),
+            ),
+            Rtl(
+                self.v3 << uextend.i32(self.v1),
+                self.v4 << uextend.i32(self.v2),
+                self.v5 << iadd(self.v3, self.v4),
+                self.v0 << ireduce(self.v5)
+            ))
+        itype = TypeVar("t", "", ints=True, simd=True)
+        i32t = TypeVar.singleton(i32)
+
+        check_typing(x.ti, ({
+            self.v0:    itype,
+            self.v1:    itype,
+            self.v2:    itype,
+            self.v3:    i32t,
+            self.v4:    i32t,
+            self.v5:    i32t,
+        }, []), x.symtab)
+
+    def test_bound_inst_inference1(self):
+        # Second example taken from issue #26
+        x = XForm(
+            Rtl(
+                self.v0 << iadd(self.v1, self.v2),
+            ),
+            Rtl(
+                self.v3 << uextend(self.v1),
+                self.v4 << uextend(self.v2),
+                self.v5 << iadd.i32(self.v3, self.v4),
+                self.v0 << ireduce(self.v5)
+            ))
+        itype = TypeVar("t", "", ints=True, simd=True)
+        i32t = TypeVar.singleton(i32)
+
+        check_typing(x.ti, ({
+            self.v0:    itype,
+            self.v1:    itype,
+            self.v2:    itype,
+            self.v3:    i32t,
+            self.v4:    i32t,
+            self.v5:    i32t,
+        }, []), x.symtab)
+
+    def test_fully_bound_inst_inference(self):
+        # Second example taken from issue #26 with complete bounds
+        x = XForm(
+            Rtl(
+                self.v0 << iadd(self.v1, self.v2),
+            ),
+            Rtl(
+                self.v3 << uextend.i32.i8(self.v1),
+                self.v4 << uextend.i32.i8(self.v2),
+                self.v5 << iadd(self.v3, self.v4),
+                self.v0 << ireduce(self.v5)
+            ))
+        i8t = TypeVar.singleton(i8)
+        i32t = TypeVar.singleton(i32)
+
+        check_typing(x.ti, ({
+            self.v0:    i8t,
+            self.v1:    i8t,
+            self.v2:    i8t,
+            self.v3:    i32t,
+            self.v4:    i32t,
+            self.v5:    i32t,
+        }, []), x.symtab)
+
+    def test_fully_bound_inst_inference_bad(self):
+        # Can't force a mistyped XForm using bound instructions
+        with self.assertRaises(AssertionError):
+            XForm(
+                Rtl(
+                    self.v0 << iadd(self.v1, self.v2),
+                ),
+                Rtl(
+                    self.v3 << uextend.i32.i8(self.v1),
+                    self.v4 << uextend.i32.i16(self.v2),
+                    self.v5 << iadd(self.v3, self.v4),
+                    self.v0 << ireduce(self.v5)
+                ))

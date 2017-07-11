@@ -606,13 +606,18 @@ def ti_def(definition, typ):
     expr = definition.expr
     inst = expr.inst
 
-    # Create a map m mapping each free typevar in the signature of definition
-    # to a fresh copy of itself
-    all_formal_tvs = \
-        [inst.outs[i].typevar for i in inst.value_results] +\
-        [inst.ins[i].typevar for i in inst.value_opnums]
-    free_formal_tvs = [tv for tv in all_formal_tvs if not tv.is_derived]
+    # Create a dict m mapping each free typevar in the signature of definition
+    # to a fresh copy of itself.
+    if inst.is_polymorphic:
+        free_formal_tvs = [inst.ctrl_typevar] + inst.other_typevars
+    else:
+        free_formal_tvs = []
+
     m = {tv: tv.get_fresh_copy(str(typ.get_uid())) for tv in free_formal_tvs}
+
+    # Update m with any explicitly bound type vars
+    for (idx, bound_typ) in enumerate(expr.typevars):
+        m[free_formal_tvs[idx]] = TypeVar.singleton(bound_typ)
 
     # Get fresh copies for each typevar in the signature (both free and
     # derived)
