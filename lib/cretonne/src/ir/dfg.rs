@@ -728,6 +728,37 @@ impl DataFlowGraph {
         num as usize
     }
 
+    /// Removes `val` from `ebb`'s arguments by a standard linear time list removal which preserves
+    /// ordering. Also updates the values' data.
+    pub fn remove_ebb_arg(&mut self, val: Value) {
+        let (ebb, num) = if let ValueData::Arg { num, ebb, .. } = self.values[val] {
+            (ebb, num)
+        } else {
+            panic!("{} must be an EBB argument", val);
+        };
+        self.ebbs[ebb]
+            .args
+            .remove(num as usize, &mut self.value_lists);
+        for index in num..(self.ebb_args(ebb).len() as u16) {
+            match self.values[self.ebbs[ebb]
+                      .args
+                      .get(index as usize, &self.value_lists)
+                      .unwrap()] {
+                ValueData::Arg { ref mut num, .. } => {
+                    *num -= 1;
+                }
+                _ => {
+                    panic!("{} must be an EBB argument",
+                           self.ebbs[ebb]
+                               .args
+                               .get(index as usize, &self.value_lists)
+                               .unwrap())
+                }
+            }
+        }
+    }
+
+
     /// Append an existing argument value to `ebb`.
     ///
     /// The appended value can't already be attached to something else.
