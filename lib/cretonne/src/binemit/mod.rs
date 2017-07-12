@@ -53,5 +53,5 @@ pub trait CodeSink {
 pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
     panic!("Bad encoding {} for {}",
            func.encodings[inst],
-           func.dfg.display_inst(inst));
+           func.dfg.display_inst(inst, None));
 }

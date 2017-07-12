@@ -474,7 +474,7 @@ pub fn handle_call_abi(dfg: &mut DataFlowGraph, cfg: &ControlFlowGraph, pos: &mu
 
     debug_assert!(check_call_signature(dfg, inst).is_ok(),
                   "Signature still wrong: {}, {}{}",
-                  dfg.display_inst(inst),
+                  dfg.display_inst(inst, None),
                   sig_ref,
                   dfg.signatures[sig_ref]);
 
@@ -523,7 +523,7 @@ pub fn handle_return_abi(dfg: &mut DataFlowGraph,
     if special_args > 0 {
         dbg!("Adding {} special-purpose arguments to {}",
              special_args,
-             dfg.display_inst(inst));
+             dfg.display_inst(inst, None));
         let mut vlist = dfg[inst].take_value_list().unwrap();
         for arg in &sig.return_types[abi_args..] {
             match arg.purpose {
@@ -550,7 +550,7 @@ pub fn handle_return_abi(dfg: &mut DataFlowGraph,
 
     debug_assert!(check_return_signature(dfg, inst, sig),
                   "Signature still wrong: {} / signature {}",
-                  dfg.display_inst(inst),
+                  dfg.display_inst(inst, None),
                   sig);
 
     // Yes, we changed stuff.

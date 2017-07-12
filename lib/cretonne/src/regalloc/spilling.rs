@@ -246,7 +246,9 @@ impl<'a> Context<'a> {
                   pos: &mut Cursor,
                   dfg: &mut DataFlowGraph,
                   tracker: &mut LiveValueTracker) {
-        dbg!("Inst {}, {}", dfg.display_inst(inst), self.pressure);
+        dbg!("Inst {}, {}",
+             dfg.display_inst(inst, self.isa),
+             self.pressure);
 
         // We may need to resolve register constraints if there are any noteworthy uses.
         assert!(self.reg_uses.is_empty());
@@ -292,7 +294,7 @@ impl<'a> Context<'a> {
                         None => {
                             panic!("Ran out of {} registers for {}",
                                    op.regclass,
-                                   dfg.display_inst(inst))
+                                   dfg.display_inst(inst, self.isa))
                         }
                     }
                 }
@@ -429,7 +431,7 @@ impl<'a> Context<'a> {
                         None => {
                             panic!("Ran out of {} registers when inserting copy before {}",
                                    rc,
-                                   dfg.display_inst(inst))
+                                   dfg.display_inst(inst, self.isa))
                         }
                     }
                 }

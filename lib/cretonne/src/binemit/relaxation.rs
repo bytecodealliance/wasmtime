@@ -135,7 +135,7 @@ fn relax_branch(dfg: &mut DataFlowGraph,
     let inst = pos.current_inst().unwrap();
     dbg!("Relaxing [{}] {} for {:#x}-{:#x} range",
          encinfo.display(encodings[inst]),
-         dfg.display_inst(inst),
+         dfg.display_inst(inst, None),
          offset,
          dest_offset);
     unimplemented!();
