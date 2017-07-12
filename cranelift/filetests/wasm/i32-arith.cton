@@ -2,10 +2,10 @@
 test compile
 
 set is_64bit=0
-isa intel
+isa intel has_sse42 has_popcnt
 
 set is_64bit=1
-isa intel
+isa intel has_sse42 has_popcnt
 
 ; Constants.
 
