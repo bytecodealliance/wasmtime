@@ -66,12 +66,19 @@ I64.enc(base.iconst.i64, *r.uid.rex(0xc7, rrr=0, w=1))
 # Finally, the 0xb8 opcode takes an 8-byte immediate with a REX.W prefix.
 I64.enc(base.iconst.i64, *r.puiq.rex(0xb8, w=1))
 
-# 32-bit shifts and rotates.
+# Shifts and rotates.
 # Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
 # and 16-bit shifts would need explicit masking.
-I32.enc(base.ishl.i32.i32, *r.rc(0xd3, rrr=4))
-I32.enc(base.ushr.i32.i32, *r.rc(0xd3, rrr=5))
-I32.enc(base.sshr.i32.i32, *r.rc(0xd3, rrr=7))
+for inst,           rrr in [
+        (base.rotl, 0),
+        (base.rotr, 1),
+        (base.ishl, 4),
+        (base.ushr, 5),
+        (base.sshr, 7)]:
+    I32.enc(inst.i32.i32, *r.rc(0xd3, rrr=rrr))
+    I64.enc(inst.i64.i64, *r.rc.rex(0xd3, rrr=rrr, w=1))
+    I64.enc(inst.i32.i32, *r.rc.rex(0xd3, rrr=rrr))
+    I64.enc(inst.i32.i32, *r.rc(0xd3, rrr=rrr))
 
 # Loads and stores.
 I32.enc(base.store.i32.i32, *r.st(0x89))

@@ -65,13 +65,27 @@ ebb0:
     ; asm: xorq %rcx, %r10
     [-,%r10]             v52 = bxor v3, v1       ; bin: 49 31 ca
 
-    ; asm: movq %rsi, %rcx
-    [-,%rcx]             v60 = copy v2           ; bin: 48 89 f1
-    ; asm: movq %r10, %rsi
-    [-,%rsi]             v61 = copy v3           ; bin: 4c 89 d6
-    ; asm: movq %rcx, %r10
-    [-,%r10]             v62 = copy v1           ; bin: 49 89 ca
+    ; asm: shlq %cl, %rsi
+    [-,%rsi]             v60 = ishl v2, v1       ; bin: 48 d3 e6
+    ; asm: shlq %cl, %r10
+    [-,%r10]             v61 = ishl v3, v1       ; bin: 49 d3 e2
+    ; asm: sarq %cl, %rsi
+    [-,%rsi]             v62 = sshr v2, v1       ; bin: 48 d3 fe
+    ; asm: sarq %cl, %r10
+    [-,%r10]             v63 = sshr v3, v1       ; bin: 49 d3 fa
+    ; asm: shrq %cl, %rsi
+    [-,%rsi]             v64 = ushr v2, v1       ; bin: 48 d3 ee
+    ; asm: shrq %cl, %r10
+    [-,%r10]             v65 = ushr v3, v1       ; bin: 49 d3 ea
 
+    ; asm: rolq %cl, %rsi
+    [-,%rsi]             v66 = rotl v2, v1       ; bin: 48 d3 c6
+    ; asm: rolq %cl, %r10
+    [-,%r10]             v67 = rotl v3, v1       ; bin: 49 d3 c2
+    ; asm: rorq %cl, %rsi
+    [-,%rsi]             v68 = rotr v2, v1       ; bin: 48 d3 ce
+    ; asm: rorq %cl, %r10
+    [-,%r10]             v69 = rotr v3, v1       ; bin: 49 d3 ca
 
     ; Integer Register-Immediate Operations.
     ; These 64-bit ops all use a 32-bit immediate that is sign-extended to 64 bits.
@@ -121,6 +135,15 @@ ebb0:
     [-,%r8]      v103 = bxor_imm v4, 100         ; bin: 49 83 f0 64
     ; asm: xorq $-100, %r14
     [-,%r14]     v104 = bxor_imm v5, -100        ; bin: 49 83 f6 9c
+
+    ; Register copies.
+
+    ; asm: movq %rsi, %rcx
+    [-,%rcx]             v110 = copy v2          ; bin: 48 89 f1
+    ; asm: movq %r10, %rsi
+    [-,%rsi]             v111 = copy v3          ; bin: 4c 89 d6
+    ; asm: movq %rcx, %r10
+    [-,%r10]             v112 = copy v1          ; bin: 49 89 ca
 
     return                                       ; bin: c3
 }
@@ -187,13 +210,27 @@ ebb0:
     ; asm: xorl %ecx, %r10d
     [-,%r10]             v52 = bxor v3, v1       ; bin: 41 31 ca
 
-    ; asm: movl %esi, %ecx
-    [-,%rcx]             v60 = copy v2           ; bin: 40 89 f1
-    ; asm: movl %r10d, %esi
-    [-,%rsi]             v61 = copy v3           ; bin: 44 89 d6
-    ; asm: movl %ecx, %r10d
-    [-,%r10]             v62 = copy v1           ; bin: 41 89 ca
+    ; asm: shll %cl, %esi
+    [-,%rsi]             v60 = ishl v2, v1       ; bin: 40 d3 e6
+    ; asm: shll %cl, %r10d
+    [-,%r10]             v61 = ishl v3, v1       ; bin: 41 d3 e2
+    ; asm: sarl %cl, %esi
+    [-,%rsi]             v62 = sshr v2, v1       ; bin: 40 d3 fe
+    ; asm: sarl %cl, %r10d
+    [-,%r10]             v63 = sshr v3, v1       ; bin: 41 d3 fa
+    ; asm: shrl %cl, %esi
+    [-,%rsi]             v64 = ushr v2, v1       ; bin: 40 d3 ee
+    ; asm: shrl %cl, %r10d
+    [-,%r10]             v65 = ushr v3, v1       ; bin: 41 d3 ea
 
+    ; asm: roll %cl, %esi
+    [-,%rsi]             v66 = rotl v2, v1       ; bin: 40 d3 c6
+    ; asm: roll %cl, %r10d
+    [-,%r10]             v67 = rotl v3, v1       ; bin: 41 d3 c2
+    ; asm: rorl %cl, %esi
+    [-,%rsi]             v68 = rotr v2, v1       ; bin: 40 d3 ce
+    ; asm: rorl %cl, %r10d
+    [-,%r10]             v69 = rotr v3, v1       ; bin: 41 d3 ca
 
     ; Integer Register-Immediate Operations.
     ; These 64-bit ops all use a 32-bit immediate that is sign-extended to 64 bits.
@@ -243,6 +280,15 @@ ebb0:
     [-,%r8]      v103 = bxor_imm v4, 100         ; bin: 41 83 f0 64
     ; asm: xorl $-100, %r14d
     [-,%r14]     v104 = bxor_imm v5, -100        ; bin: 41 83 f6 9c
+
+    ; Register copies.
+
+    ; asm: movl %esi, %ecx
+    [-,%rcx]             v110 = copy v2          ; bin: 40 89 f1
+    ; asm: movl %r10d, %esi
+    [-,%rsi]             v111 = copy v3          ; bin: 44 89 d6
+    ; asm: movl %ecx, %r10d
+    [-,%r10]             v112 = copy v1          ; bin: 41 89 ca
 
     return                                       ; bin: c3
 }
