@@ -123,7 +123,7 @@ fn split_any(dfg: &mut DataFlowGraph,
             let branch_opc = dfg[inst].opcode();
             assert!(branch_opc.is_branch(),
                     "Predecessor not a branch: {}",
-                    dfg.display_inst(inst));
+                    dfg.display_inst(inst, None));
             let fixed_args = branch_opc.constraints().fixed_value_arguments();
             let mut args = dfg[inst]
                 .take_value_list()

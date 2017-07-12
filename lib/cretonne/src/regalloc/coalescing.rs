@@ -399,7 +399,7 @@ impl<'a> Context<'a> {
             dbg!("Checking {}: {}: {}",
                  pred_val,
                  pred_ebb,
-                 self.func.dfg.display_inst(pred_inst));
+                 self.func.dfg.display_inst(pred_inst, self.isa));
 
             // Never coalesce incoming function arguments on the stack. These arguments are
             // pre-spilled, and the rest of the virtual register would be forced to spill to the
@@ -474,9 +474,9 @@ impl<'a> Context<'a> {
         let ty = self.func.dfg.value_type(copy);
 
         dbg!("Inserted {}, before {}: {}",
-             self.func.dfg.display_inst(inst),
+             self.func.dfg.display_inst(inst, self.isa),
              pred_ebb,
-             self.func.dfg.display_inst(pred_inst));
+             self.func.dfg.display_inst(pred_inst, self.isa));
 
         // Give it an encoding.
         let encoding = self.isa
@@ -519,7 +519,7 @@ impl<'a> Context<'a> {
         self.liveness.move_def_locally(succ_val, inst);
 
         dbg!("Inserted {}, following {}({}: {})",
-             self.func.dfg.display_inst(inst),
+             self.func.dfg.display_inst(inst, self.isa),
              ebb,
              new_val,
              ty);

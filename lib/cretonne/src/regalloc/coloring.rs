@@ -73,6 +73,7 @@ pub struct Coloring {
 /// Immutable context information and mutable references that don't need to be borrowed across
 /// method calls should go in this struct.
 struct Context<'a> {
+    isa: &'a TargetIsa,
     // Cached ISA information.
     // We save it here to avoid frequent virtual function calls on the `TargetIsa` trait object.
     reginfo: RegInfo,
@@ -111,6 +112,7 @@ impl Coloring {
                tracker: &mut LiveValueTracker) {
         dbg!("Coloring for:\n{}", func.display(isa));
         let mut ctx = Context {
+            isa,
             reginfo: isa.register_info(),
             encinfo: isa.encoding_info(),
             domtree,
@@ -279,7 +281,7 @@ impl<'a> Context<'a> {
                   locations: &mut ValueLocations,
                   func_signature: &Signature) {
         dbg!("Coloring {}\n          {}",
-             dfg.display_inst(inst),
+             dfg.display_inst(inst, self.isa),
              regs.display(&self.reginfo));
 
         // EBB whose arguments should be colored to match the current branch instruction's
@@ -308,7 +310,7 @@ impl<'a> Context<'a> {
                 assert_eq!(dfg.inst_variable_args(inst).len(),
                            0,
                            "Can't handle EBB arguments: {}",
-                           dfg.display_inst(inst));
+                           dfg.display_inst(inst, self.isa));
                 self.undivert_regs(|lr| !lr.is_local());
             }
         }

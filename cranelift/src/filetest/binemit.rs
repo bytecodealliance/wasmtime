@@ -127,7 +127,7 @@ impl SubTest for TestBinEmit {
                     AnyEntity::Inst(inst) => {
                         if let Some(prev) = bins.insert(inst, want) {
                             return Err(format!("multiple 'bin:' directives on {}: '{}' and '{}'",
-                                               func.dfg.display_inst(inst),
+                                               func.dfg.display_inst(inst, isa),
                                                prev,
                                                want));
                         }
@@ -166,7 +166,7 @@ impl SubTest for TestBinEmit {
                                encinfo.bytes(enc),
                                "Inconsistent size for [{}] {}",
                                encinfo.display(enc),
-                               func.dfg.display_inst(inst));
+                               func.dfg.display_inst(inst, isa));
                 }
 
                 // Check against bin: directives.
@@ -174,13 +174,13 @@ impl SubTest for TestBinEmit {
                     if !enc.is_legal() {
                         return Err(format!("{} can't be encoded: {}",
                                            inst,
-                                           func.dfg.display_inst(inst)));
+                                           func.dfg.display_inst(inst, isa)));
                     }
                     let have = sink.text.trim();
                     if have != want {
                         return Err(format!("Bad machine code for {}: {}\nWant: {}\nGot:  {}",
                                            inst,
-                                           func.dfg.display_inst(inst),
+                                           func.dfg.display_inst(inst, isa),
                                            want,
                                            have));
                     }

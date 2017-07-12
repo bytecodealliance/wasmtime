@@ -1,6 +1,7 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
 use entity_map::{EntityMap, PrimaryEntityData};
+use isa::TargetIsa;
 use ir::builder::{InsertBuilder, ReplaceBuilder};
 use ir::extfunc::ExtFuncData;
 use ir::instructions::{Opcode, InstructionData, CallInfo};
@@ -162,7 +163,7 @@ impl DataFlowGraph {
                            self.results[inst].get(num as usize, &self.value_lists),
                            "Dangling result value {}: {}",
                            v,
-                           self.display_inst(inst));
+                           self.display_inst(inst, None));
                 ValueDef::Res(inst, num as usize)
             }
             ValueData::Arg { ebb, num, .. } => {
@@ -376,8 +377,11 @@ impl DataFlowGraph {
     }
 
     /// Returns an object that displays `inst`.
-    pub fn display_inst(&self, inst: Inst) -> DisplayInst {
-        DisplayInst(self, inst)
+    pub fn display_inst<'a, I: Into<Option<&'a TargetIsa>>>(&'a self,
+                                                            inst: Inst,
+                                                            isa: I)
+                                                            -> DisplayInst<'a> {
+        DisplayInst(self, isa.into(), inst)
     }
 
     /// Get all value arguments on `inst` as a slice.
@@ -552,7 +556,7 @@ impl DataFlowGraph {
                    old_value,
                    "{} wasn't detached from {}",
                    old_value,
-                   self.display_inst(inst));
+                   self.display_inst(inst, None));
         new_value
     }
 
@@ -830,14 +834,15 @@ impl EbbData {
 }
 
 /// Object that can display an instruction.
-pub struct DisplayInst<'a>(&'a DataFlowGraph, Inst);
+pub struct DisplayInst<'a>(&'a DataFlowGraph, Option<&'a TargetIsa>, Inst);
 
 impl<'a> fmt::Display for DisplayInst<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let dfg = self.0;
-        let inst = &dfg[self.1];
+        let isa = self.1;
+        let inst = self.2;
 
-        if let Some((first, rest)) = dfg.inst_results(self.1).split_first() {
+        if let Some((first, rest)) = dfg.inst_results(inst).split_first() {
             write!(f, "{}", first)?;
             for v in rest {
                 write!(f, ", {}", v)?;
@@ -846,13 +851,13 @@ impl<'a> fmt::Display for DisplayInst<'a> {
         }
 
 
-        let typevar = dfg.ctrl_typevar(self.1);
+        let typevar = dfg.ctrl_typevar(inst);
         if typevar.is_void() {
-            write!(f, "{}", inst.opcode())?;
+            write!(f, "{}", dfg[inst].opcode())?;
         } else {
-            write!(f, "{}.{}", inst.opcode(), typevar)?;
+            write!(f, "{}.{}", dfg[inst].opcode(), typevar)?;
         }
-        write_operands(f, dfg, None, self.1)
+        write_operands(f, dfg, isa, inst)
     }
 }
 
@@ -870,7 +875,7 @@ mod tests {
         let inst = dfg.make_inst(idata);
         dfg.make_inst_results(inst, types::I32);
         assert_eq!(inst.to_string(), "inst0");
-        assert_eq!(dfg.display_inst(inst).to_string(), "v0 = iconst.i32");
+        assert_eq!(dfg.display_inst(inst, None).to_string(), "v0 = iconst.i32");
 
         // Immutable reference resolution.
         {
@@ -902,7 +907,7 @@ mod tests {
 
         let idata = InstructionData::Nullary { opcode: Opcode::Trap };
         let inst = dfg.make_inst(idata);
-        assert_eq!(dfg.display_inst(inst).to_string(), "trap");
+        assert_eq!(dfg.display_inst(inst, None).to_string(), "trap");
 
         // Result slice should be empty.
         assert_eq!(dfg.inst_results(inst), &[]);

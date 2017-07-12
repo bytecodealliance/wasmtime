@@ -42,7 +42,7 @@ pub fn pretty_verifier_error(func: &ir::Function,
     let mut msg = err.to_string();
     match err.location {
         AnyEntity::Inst(inst) => {
-            write!(msg, "\n{}: {}\n\n", inst, func.dfg.display_inst(inst)).unwrap()
+            write!(msg, "\n{}: {}\n\n", inst, func.dfg.display_inst(inst, isa)).unwrap()
         }
         _ => msg.push('\n'),
     }
