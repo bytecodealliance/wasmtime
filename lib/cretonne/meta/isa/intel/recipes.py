@@ -6,6 +6,7 @@ from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Call, IndirectCall, Store, Load
+from base.formats import RegMove
 from .registers import GPR, ABCD
 
 try:
@@ -203,6 +204,14 @@ ur = TailRecipe(
         emit='''
         PUT_OP(bits, rex2(out_reg0, in_reg0), sink);
         modrm_rr(out_reg0, in_reg0, sink);
+        ''')
+
+# XX /r, for regmove instructions.
+rmov = TailRecipe(
+        'ur', RegMove, size=1, ins=GPR, outs=(),
+        emit='''
+        PUT_OP(bits, rex2(dst, src), sink);
+        modrm_rr(dst, src, sink);
         ''')
 
 # XX /n with one arg in %rcx, for shifts.

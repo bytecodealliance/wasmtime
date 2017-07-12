@@ -23,10 +23,14 @@ for inst,           opc in [
     I64.enc(inst.i32, *r.rr(opc))
 
 I32.enc(base.copy.i32, *r.ur(0x89))
-
 I64.enc(base.copy.i64, *r.ur.rex(0x89, w=1))
 I64.enc(base.copy.i32, *r.ur.rex(0x89))
 I64.enc(base.copy.i32, *r.ur(0x89))
+
+I32.enc(base.regmove.i32, *r.rmov(0x89))
+I64.enc(base.regmove.i64, *r.rmov.rex(0x89, w=1))
+I64.enc(base.regmove.i32, *r.rmov.rex(0x89))
+I64.enc(base.regmove.i32, *r.rmov(0x89))
 
 # Immediate instructions with sign-extended 8-bit and 32-bit immediate.
 for inst,               rrr in [
