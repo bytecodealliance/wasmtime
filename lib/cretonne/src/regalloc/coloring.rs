@@ -43,7 +43,8 @@
 //! The exception is the entry block whose arguments are colored from the ABI requirements.
 
 use dominator_tree::DominatorTree;
-use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph, Layout, ValueLocations};
+use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph, Layout};
+use ir::{InstEncodings, ValueLocations};
 use ir::{InstBuilder, Signature, ArgumentType, ArgumentLoc};
 use isa::{RegUnit, RegClass, RegInfo, regs_overlap};
 use isa::{TargetIsa, EncInfo, RecipeConstraints, OperandConstraint, ConstraintKind};
@@ -156,6 +157,7 @@ impl<'a> Context<'a> {
                                 tracker,
                                 &mut regs,
                                 &mut func.locations,
+                                &mut func.encodings,
                                 &func.signature);
             } else {
                 let (_throughs, kills) = tracker.process_ghost(inst);
@@ -279,6 +281,7 @@ impl<'a> Context<'a> {
                   tracker: &mut LiveValueTracker,
                   regs: &mut AllocatableSet,
                   locations: &mut ValueLocations,
+                  encodings: &mut InstEncodings,
                   func_signature: &Signature) {
         dbg!("Coloring {}\n          {}",
              dfg.display_inst(inst, self.isa),
@@ -354,7 +357,7 @@ impl<'a> Context<'a> {
 
         // The solution and/or fixed input constraints may require us to shuffle the set of live
         // registers around.
-        self.shuffle_inputs(pos, dfg, regs);
+        self.shuffle_inputs(pos, dfg, regs, encodings);
 
         // If this is the first time we branch to `dest`, color its arguments to match the current
         // register state.
@@ -695,12 +698,18 @@ impl<'a> Context<'a> {
     fn shuffle_inputs(&mut self,
                       pos: &mut Cursor,
                       dfg: &mut DataFlowGraph,
-                      regs: &mut AllocatableSet) {
+                      regs: &mut AllocatableSet,
+                      encodings: &mut InstEncodings) {
         self.solver.schedule_moves(regs);
 
         for m in self.solver.moves() {
+            let ty = dfg.value_type(m.value);
             self.divert.regmove(m.value, m.from, m.to);
-            dfg.ins(pos).regmove(m.value, m.from, m.to);
+            let inst = dfg.ins(pos).regmove(m.value, m.from, m.to);
+            match self.isa.encode(dfg, &dfg[inst], ty) {
+                Ok(encoding) => *encodings.ensure(inst) = encoding,
+                _ => panic!("Can't encode {} {}", m.rc, dfg.display_inst(inst, self.isa)),
+            }
         }
     }
 
