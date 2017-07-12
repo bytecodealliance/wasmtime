@@ -236,6 +236,13 @@ impl Type {
     pub fn index(self) -> usize {
         self.0 as usize
     }
+
+    /// True iff:
+    ///     1) self.lane_count() == other.lane_count() and
+    ///     2) self.lane_bits() >= other.lane_bits()
+    pub fn wider_or_equal(self, other: Type) -> bool {
+        self.lane_count() == other.lane_count() && self.lane_bits() >= other.lane_bits()
+    }
 }
 
 impl Display for Type {

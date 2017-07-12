@@ -10,8 +10,10 @@ try:
     if TYPE_CHECKING:
         from .ast import Expr, Apply  # noqa
         from .typevar import TypeVar  # noqa
+        from .ti import TypeConstraint  # noqa
         # List of operands for ins/outs:
         OpList = Union[Sequence[Operand], Operand]
+        ConstrList = Union[Sequence[TypeConstraint], TypeConstraint]
         MaybeBoundInst = Union['Instruction', 'BoundInstruction']
 except ImportError:
     pass
@@ -80,6 +82,7 @@ class Instruction(object):
                 operands and other operand kinds.
     :param outs: Tuple of output operands. The output operands must be SSA
                 values or `variable_args`.
+    :param constraints: Tuple of instruction-specific TypeConstraints.
     :param is_terminator: This is a terminator instruction.
     :param is_branch: This is a branch instruction.
     :param is_call: This is a call instruction.
@@ -102,13 +105,14 @@ class Instruction(object):
             'can_trap': 'Can this instruction cause a trap?',
             }
 
-    def __init__(self, name, doc, ins=(), outs=(), **kwargs):
-        # type: (str, str, OpList, OpList, **Any) -> None # noqa
+    def __init__(self, name, doc, ins=(), outs=(), constraints=(), **kwargs):
+        # type: (str, str, OpList, OpList, ConstrList, **Any) -> None
         self.name = name
         self.camel_name = camel_case(name)
         self.__doc__ = doc
         self.ins = self._to_operand_tuple(ins)
         self.outs = self._to_operand_tuple(outs)
+        self.constraints = self._to_constraint_tuple(constraints)
         self.format = InstructionFormat.lookup(self.ins, self.outs)
 
         # Opcode number, assigned by gen_instr.py.
@@ -266,6 +270,23 @@ class Instruction(object):
             x = tuple(x)
         for op in x:
             assert isinstance(op, Operand)
+        return x
+
+    @staticmethod
+    def _to_constraint_tuple(x):
+        # type: (ConstrList) -> Tuple[TypeConstraint, ...]
+        """
+        Allow a single TypeConstraint instance instead of the awkward singleton
+        tuple syntax.
+        """
+        # import placed here to avoid circular dependency
+        from .ti import TypeConstraint  # noqa
+        if isinstance(x, TypeConstraint):
+            x = (x,)
+        else:
+            x = tuple(x)
+        for op in x:
+            assert isinstance(op, TypeConstraint)
         return x
 
     def bind(self, *args):
