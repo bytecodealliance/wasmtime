@@ -43,7 +43,7 @@ impl SubTest for TestLegalizer {
         comp_ctx.flowgraph();
         comp_ctx
             .legalize(isa)
-            .map_err(|e| pretty_error(&comp_ctx.func, e))?;
+            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
 
         let mut text = String::new();
         write!(&mut text, "{}", &comp_ctx.func.display(Some(isa)))
