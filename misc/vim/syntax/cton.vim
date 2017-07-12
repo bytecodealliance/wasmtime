@@ -22,8 +22,8 @@ syn match ctonEntity /\<\(v\|ss\|jt\|fn\|sig\)\d\+\>/
 syn match ctonLabel /\<ebb\d+\>/
 syn match ctonName /%\w\+\>/
 
-syn match ctonNumber /-\?\<\d\+\>/
-syn match ctonNumber /-\?\<0x\x\+\(\.\x*\)\(p[+-]\?\d\+\)\?\>/
+syn match ctonNumber /-\?\<[0-9_]\+\>/
+syn match ctonNumber /-\?\<0x[0-9a-fA-F_]\+\(\.[0-9a-fA-F_]*\)\?\(p[+-]\?\d\+\)\?\>/
 syn match ctonHexSeq /#\x\+\>/
 
 syn region ctonCommentLine start=";" end="$" contains=ctonFilecheck
