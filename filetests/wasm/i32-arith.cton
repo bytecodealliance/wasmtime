@@ -2,10 +2,10 @@
 test compile
 
 set is_64bit=0
-isa intel has_sse42 has_popcnt
+isa intel haswell
 
 set is_64bit=1
-isa intel has_sse42 has_popcnt
+isa intel haswell
 
 ; Constants.
 
@@ -17,8 +17,17 @@ ebb0:
 
 ; Unary operations.
 
-; function %i32_clz(i32) -> i32
-; function %i32_ctz(i32) -> i32
+function %i32_clz(i32) -> i32 {
+ebb0(v0: i32):
+    v1 = clz v0
+    return v1
+}
+
+function %i32_ctz(i32) -> i32 {
+ebb0(v0: i32):
+    v1 = ctz v0
+    return v1
+}
 
 function %i32_popcnt(i32) -> i32 {
 ebb0(v0: i32):

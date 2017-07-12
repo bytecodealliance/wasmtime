@@ -1,6 +1,6 @@
 ; binary emission of 32-bit code.
 test binemit
-isa intel has_sse42 has_popcnt
+isa intel haswell
 
 ; The binary encodings can be verified with the command:
 ;
@@ -223,6 +223,16 @@ ebb0:
     [-,%rcx]            v200 = popcnt v2        ; bin: f3 0f b8 ce
     ; asm: popcntl %ecx, %esi
     [-,%rsi]            v201 = popcnt v1        ; bin: f3 0f b8 f1
+
+    ; asm: lzcntl %esi, %ecx
+    [-,%rcx]            v202 = clz v2           ; bin: f3 0f bd ce
+    ; asm: lzcntl %ecx, %esi
+    [-,%rsi]            v203 = clz v1           ; bin: f3 0f bd f1
+
+    ; asm: tzcntl %esi, %ecx
+    [-,%rcx]            v204 = ctz v2           ; bin: f3 0f bc ce
+    ; asm: tzcntl %ecx, %esi
+    [-,%rsi]            v205 = ctz v1           ; bin: f3 0f bc f1
 
     ; asm: call foo
     call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
