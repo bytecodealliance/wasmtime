@@ -1,7 +1,7 @@
 ; binary emission of 64-bit code.
 test binemit
 set is_64bit
-isa intel has_sse42 has_popcnt
+isa intel haswell
 
 ; The binary encodings can be verified with the command:
 ;
@@ -154,6 +154,20 @@ ebb0:
     ; asm: popcntq %rcx, %r10
     [-,%r10]            v202 = popcnt v1        ; bin: f3 4c 0f b8 d1
 
+    ; asm: lzcntq %rsi, %rcx
+    [-,%rcx]            v203 = clz v2           ; bin: f3 48 0f bd ce
+    ; asm: lzcntq %r10, %rsi
+    [-,%rsi]            v204 = clz v3           ; bin: f3 49 0f bd f2
+    ; asm: lzcntq %rcx, %r10
+    [-,%r10]            v205 = clz v1           ; bin: f3 4c 0f bd d1
+
+    ; asm: tzcntq %rsi, %rcx
+    [-,%rcx]            v206 = ctz v2           ; bin: f3 48 0f bc ce
+    ; asm: tzcntq %r10, %rsi
+    [-,%rsi]            v207 = ctz v3           ; bin: f3 49 0f bc f2
+    ; asm: tzcntq %rcx, %r10
+    [-,%r10]            v208 = ctz v1           ; bin: f3 4c 0f bc d1
+
     return                                       ; bin: c3
 }
 
@@ -302,11 +316,25 @@ ebb0:
     ; Bit-counting instructions.
 
     ; asm: popcntl %esi, %ecx
-    [-,%rcx]            v200 = popcnt v2        ; bin: f3 40 0f b8 ce
+    [-,%rcx]            v200 = popcnt v2         ; bin: f3 40 0f b8 ce
     ; asm: popcntl %r10d, %esi
-    [-,%rsi]            v201 = popcnt v3        ; bin: f3 41 0f b8 f2
+    [-,%rsi]            v201 = popcnt v3         ; bin: f3 41 0f b8 f2
     ; asm: popcntl %ecx, %r10d
-    [-,%r10]            v202 = popcnt v1        ; bin: f3 44 0f b8 d1
+    [-,%r10]            v202 = popcnt v1         ; bin: f3 44 0f b8 d1
+
+    ; asm: lzcntl %esi, %ecx
+    [-,%rcx]            v203 = clz v2            ; bin: f3 40 0f bd ce
+    ; asm: lzcntl %r10d, %esi
+    [-,%rsi]            v204 = clz v3            ; bin: f3 41 0f bd f2
+    ; asm: lzcntl %ecx, %r10d
+    [-,%r10]            v205 = clz v1            ; bin: f3 44 0f bd d1
+
+    ; asm: tzcntl %esi, %ecx
+    [-,%rcx]            v206 = ctz v2            ; bin: f3 40 0f bc ce
+    ; asm: tzcntl %r10d, %esi
+    [-,%rsi]            v207 = ctz v3            ; bin: f3 41 0f bc f2
+    ; asm: tzcntl %ecx, %r10d
+    [-,%r10]            v208 = ctz v1            ; bin: f3 44 0f bc d1
 
     return                                       ; bin: c3
 }
