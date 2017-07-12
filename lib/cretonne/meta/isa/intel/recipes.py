@@ -198,12 +198,21 @@ rr = TailRecipe(
         ''')
 
 # XX /r, but for a unary operator with separate input/output register, like
-# copies.
-ur = TailRecipe(
-        'ur', Unary, size=1, ins=GPR, outs=GPR,
+# copies. MR form.
+umr = TailRecipe(
+        'umr', Unary, size=1, ins=GPR, outs=GPR,
         emit='''
         PUT_OP(bits, rex2(out_reg0, in_reg0), sink);
         modrm_rr(out_reg0, in_reg0, sink);
+        ''')
+
+# XX /r, but for a unary operator with separate input/output register.
+# RM form.
+urm = TailRecipe(
+        'urm', Unary, size=1, ins=GPR, outs=GPR,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_rr(in_reg0, out_reg0, sink);
         ''')
 
 # XX /r, for regmove instructions.

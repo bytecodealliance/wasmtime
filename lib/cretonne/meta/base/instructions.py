@@ -8,7 +8,7 @@ from __future__ import absolute_import
 from cdsl.operands import Operand, VARIABLE_ARGS
 from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
-from base.types import i8, f32, f64, b1
+from base.types import f32, f64, b1
 from base.immediates import imm64, uimm8, ieee32, ieee64, offset32, uoffset32
 from base.immediates import intcc, floatcc, memflags, regunit
 from base import entities
@@ -1050,7 +1050,7 @@ sshr_imm = Instruction(
 #
 
 x = Operand('x', iB)
-a = Operand('a', i8)
+a = Operand('a', iB)
 
 clz = Instruction(
         'clz', r"""

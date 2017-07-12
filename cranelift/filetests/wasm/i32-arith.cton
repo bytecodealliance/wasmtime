@@ -19,7 +19,12 @@ ebb0:
 
 ; function %i32_clz(i32) -> i32
 ; function %i32_ctz(i32) -> i32
-; function %i32_popcnt(i32) -> i32
+
+function %i32_popcnt(i32) -> i32 {
+ebb0(v0: i32):
+    v1 = popcnt v0
+    return v1
+}
 
 ; Binary operations.
 

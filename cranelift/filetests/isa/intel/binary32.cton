@@ -217,6 +217,13 @@ ebb0:
     ; asm: movsbl -50000(%esi), %edx
     [-,%rdx]            v129 = sload8.i32 v2-50000         ; bin: 0f be 96 ffff3cb0
 
+    ; Bit-counting instructions.
+
+    ; asm: popcntl %esi, %ecx
+    [-,%rcx]            v200 = popcnt v2        ; bin: f3 0f b8 ce
+    ; asm: popcntl %ecx, %esi
+    [-,%rsi]            v201 = popcnt v1        ; bin: f3 0f b8 f1
+
     ; asm: call foo
     call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
 
