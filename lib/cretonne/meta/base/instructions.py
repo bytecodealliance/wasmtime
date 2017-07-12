@@ -484,7 +484,8 @@ regmove = Instruction(
         before the value leaves the EBB. At the entry to a new EBB, all live
         values must be in their originally assigned registers.
         """,
-        ins=(x, src, dst))
+        ins=(x, src, dst),
+        other_side_effects=True)
 
 #
 # Vector operations
