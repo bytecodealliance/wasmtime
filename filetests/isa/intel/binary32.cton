@@ -1,6 +1,6 @@
 ; binary emission of 32-bit code.
 test binemit
-isa intel
+isa intel has_sse42 has_popcnt
 
 ; The binary encodings can be verified with the command:
 ;

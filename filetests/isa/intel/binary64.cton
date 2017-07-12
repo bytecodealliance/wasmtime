@@ -1,7 +1,7 @@
 ; binary emission of 64-bit code.
 test binemit
 set is_64bit
-isa intel
+isa intel has_sse42 has_popcnt
 
 ; The binary encodings can be verified with the command:
 ;

@@ -7,6 +7,7 @@ from base import instructions as base
 from base.formats import UnaryImm
 from .defs import I32, I64
 from . import recipes as r
+from . import settings as cfg
 
 for inst,           opc in [
         (base.iadd, 0x01),
@@ -81,10 +82,11 @@ for inst,           rrr in [
     I64.enc(inst.i32.i32, *r.rc(0xd3, rrr=rrr))
 
 # Population count.
-I32.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8))
-I64.enc(base.popcnt.i64, *r.urm.rex(0xf3, 0x0f, 0xb8, w=1))
-I64.enc(base.popcnt.i32, *r.urm.rex(0xf3, 0x0f, 0xb8))
-I64.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8))
+I32.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
+I64.enc(base.popcnt.i64, *r.urm.rex(0xf3, 0x0f, 0xb8, w=1),
+        isap=cfg.use_popcnt)
+I64.enc(base.popcnt.i32, *r.urm.rex(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
+I64.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
 
 # Loads and stores.
 I32.enc(base.store.i32.i32, *r.st(0x89))
