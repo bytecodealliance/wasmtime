@@ -55,11 +55,14 @@ ebb0:
     [-,%rsi]             v24 = sshr v2, v1       ; bin: d3 fe
     ; asm: sarl %cl, %ecx
     [-,%rcx]             v25 = sshr v1, v1       ; bin: d3 f9
-
-    ; asm: movl %esi, %ecx
-    [-,%rcx]             v26 = copy v2           ; bin: 89 f1
-    ; asm: movl %ecx, %esi
-    [-,%rsi]             v27 = copy v1           ; bin: 89 ce
+    ; asm: roll %cl, %esi
+    [-,%rsi]             v26 = rotl v2, v1       ; bin: d3 c6
+    ; asm: roll %cl, %ecx
+    [-,%rcx]             v27 = rotl v1, v1       ; bin: d3 c1
+    ; asm: rorl %cl, %esi
+    [-,%rsi]             v28 = rotr v2, v1       ; bin: d3 ce
+    ; asm: rorl %cl, %ecx
+    [-,%rcx]             v29 = rotr v1, v1       ; bin: d3 c9
 
     ; Integer Register - Immediate 8-bit operations.
     ; The 8-bit immediate is sign-extended.
@@ -101,6 +104,13 @@ ebb0:
     [-,%rcx]             v46 = bxor_imm v1, -128000 ; bin: 81 f1 fffe0c00
     ; asm: xorl $1000000, %esi
     [-,%rsi]             v47 = bxor_imm v2, 1000000 ; bin: 81 f6 000f4240
+
+    ; Register copies.
+
+    ; asm: movl %esi, %ecx
+    [-,%rcx]             v80 = copy v2           ; bin: 89 f1
+    ; asm: movl %ecx, %esi
+    [-,%rsi]             v81 = copy v1           ; bin: 89 ce
 
     ; Load/Store instructions.
 
