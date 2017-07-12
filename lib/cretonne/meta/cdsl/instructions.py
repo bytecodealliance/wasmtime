@@ -90,6 +90,7 @@ class Instruction(object):
     :param can_trap: This instruction can trap.
     :param can_load: This instruction can load from memory.
     :param can_store: This instruction can store to memory.
+    :param other_side_effects: Instruction has other side effects.
     """
 
     # Boolean instruction attributes that can be passed as keyword arguments to
@@ -103,6 +104,8 @@ class Instruction(object):
             'can_load': 'Can this instruction read from memory?',
             'can_store': 'Can this instruction write to memory?',
             'can_trap': 'Can this instruction cause a trap?',
+            'other_side_effects':
+            'Does this instruction have other side effects besides can_*',
             }
 
     def __init__(self, name, doc, ins=(), outs=(), constraints=(), **kwargs):
