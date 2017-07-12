@@ -41,7 +41,7 @@ impl SubTest for TestLICM {
         comp_ctx.flowgraph();
         comp_ctx
             .licm()
-            .map_err(|e| pretty_error(&comp_ctx.func, e))?;
+            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
 
         let mut text = String::new();
         write!(&mut text, "{}", &comp_ctx.func)

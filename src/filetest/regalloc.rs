@@ -48,10 +48,10 @@ impl SubTest for TestRegalloc {
         // TODO: Should we have an option to skip legalization?
         comp_ctx
             .legalize(isa)
-            .map_err(|e| pretty_error(&comp_ctx.func, e))?;
+            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
         comp_ctx
             .regalloc(isa)
-            .map_err(|e| pretty_error(&comp_ctx.func, e))?;
+            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
 
         let mut text = String::new();
         write!(&mut text, "{}", &comp_ctx.func.display(Some(isa)))

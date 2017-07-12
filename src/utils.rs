@@ -3,6 +3,7 @@
 use cretonne::ir::entities::AnyEntity;
 use cretonne::{ir, verifier};
 use cretonne::result::CtonError;
+use cretonne::isa::TargetIsa;
 use std::fmt::Write;
 use std::fs::File;
 use std::io::{Result, Read};
@@ -34,7 +35,10 @@ pub fn match_directive<'a>(comment: &'a str, directive: &str) -> Option<&'a str>
 }
 
 /// Pretty-print a verifier error.
-pub fn pretty_verifier_error(func: &ir::Function, err: verifier::Error) -> String {
+pub fn pretty_verifier_error(func: &ir::Function,
+                             isa: Option<&TargetIsa>,
+                             err: verifier::Error)
+                             -> String {
     let mut msg = err.to_string();
     match err.location {
         AnyEntity::Inst(inst) => {
@@ -42,14 +46,14 @@ pub fn pretty_verifier_error(func: &ir::Function, err: verifier::Error) -> Strin
         }
         _ => msg.push('\n'),
     }
-    write!(msg, "{}", func).unwrap();
+    write!(msg, "{}", func.display(isa)).unwrap();
     msg
 }
 
 /// Pretty-print a Cretonne error.
-pub fn pretty_error(func: &ir::Function, err: CtonError) -> String {
+pub fn pretty_error(func: &ir::Function, isa: Option<&TargetIsa>, err: CtonError) -> String {
     if let CtonError::Verifier(e) = err {
-        pretty_verifier_error(func, e)
+        pretty_verifier_error(func, isa, e)
     } else {
         err.to_string()
     }
