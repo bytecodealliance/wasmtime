@@ -1,13 +1,14 @@
 from __future__ import absolute_import
 from base.instructions import vselect, vsplit, vconcat, iconst, iadd, bint,\
-    b1, icmp, iadd_cout, iadd_cin, uextend, ireduce
+    b1, icmp, iadd_cout, iadd_cin, uextend, sextend, ireduce, fpromote, \
+    fdemote
 from base.legalize import narrow, expand
 from base.immediates import intcc
 from base.types import i32, i8
 from .typevar import TypeVar
 from .ast import Var, Def
 from .xform import Rtl, XForm
-from .ti import ti_rtl, subst, TypeEnv, get_type_env, ConstrainTVsEqual
+from .ti import ti_rtl, subst, TypeEnv, get_type_env, TypesEqual, WiderOrEq
 from unittest import TestCase
 from functools import reduce
 
@@ -52,9 +53,10 @@ def agree(me, other):
 
     # Translate our constraints using m, and sort
     me_equiv_constr = sorted([constr.translate(m)
-                              for constr in me.constraints])
+                              for constr in me.constraints], key=repr)
     # Sort other's constraints
-    other_equiv_constr = sorted(other.constraints)
+    other_equiv_constr = sorted([constr.translate(other)
+                                 for constr in other.constraints], key=repr)
     return me_equiv_constr == other_equiv_constr
 
 
@@ -78,7 +80,7 @@ def check_typing(got_or_err, expected, symtab=None):
         tv_m = {subst(k.get_typevar(), subst_m): v for (k, v) in m.items()}
         # Rewrite the TVs in the input constraints to their XForm internal
         # versions
-        c = [(subst(a, subst_m), subst(b, subst_m)) for (a, b) in c]
+        c = [constr.translate(subst_m) for constr in c]
     else:
         # If no symtab, just convert m from Var->TypeVar map to a
         # TypeVar->TypeVar map
@@ -209,7 +211,7 @@ class TestRTL(TypeCheckingBaseTest):
             self.v3: txn,
             self.v4: txn,
             self.v5: txn,
-        }, [ConstrainTVsEqual(ixn.as_bool(), txn.as_bool())]))
+        }, [TypesEqual(ixn.as_bool(), txn.as_bool())]))
 
     def test_vselect_vsplits(self):
         # type: () -> None
@@ -318,6 +320,90 @@ class TestRTL(TypeCheckingBaseTest):
                          "On line 2: fail ti on `typeof_v4` <: `4`: " +
                          "Error: empty type created when unifying " +
                          "`typeof_v4` and `typeof_v5`")
+
+    def test_extend_reduce(self):
+        # type: () -> None
+        r = Rtl(
+            self.v1 << uextend(self.v0),
+            self.v2 << ireduce(self.v1),
+            self.v3 << sextend(self.v2),
+        )
+        ti = TypeEnv()
+        typing = ti_rtl(r, ti)
+        typing = typing.extract()
+
+        itype0 = TypeVar("t", "", ints=True, simd=(1, 256))
+        itype1 = TypeVar("t1", "", ints=True, simd=(1, 256))
+        itype2 = TypeVar("t2", "", ints=True, simd=(1, 256))
+        itype3 = TypeVar("t3", "", ints=True, simd=(1, 256))
+
+        check_typing(typing, ({
+            self.v0:    itype0,
+            self.v1:    itype1,
+            self.v2:    itype2,
+            self.v3:    itype3,
+        }, [WiderOrEq(itype1, itype0),
+            WiderOrEq(itype1, itype2),
+            WiderOrEq(itype3, itype2)]))
+
+    def test_extend_reduce_enumeration(self):
+        # type: () -> None
+        for op in (uextend, sextend, ireduce):
+            r = Rtl(
+                self.v1 << op(self.v0),
+            )
+            ti = TypeEnv()
+            typing = ti_rtl(r, ti).extract()
+
+            # The number of possible typings is 9 * (3+ 2*2 + 3) = 90
+            l = [(t[self.v0], t[self.v1]) for t in typing.concrete_typings()]
+            assert (len(l) == len(set(l)) and len(l) == 90)
+            for (tv0, tv1) in l:
+                typ0, typ1 = (tv0.singleton_type(), tv1.singleton_type())
+                if (op == ireduce):
+                    assert typ0.wider_or_equal(typ1)
+                else:
+                    assert typ1.wider_or_equal(typ0)
+
+    def test_fpromote_fdemote(self):
+        # type: () -> None
+        r = Rtl(
+            self.v1 << fpromote(self.v0),
+            self.v2 << fdemote(self.v1),
+        )
+        ti = TypeEnv()
+        typing = ti_rtl(r, ti)
+        typing = typing.extract()
+
+        ftype0 = TypeVar("t", "", floats=True, simd=(1, 256))
+        ftype1 = TypeVar("t1", "", floats=True, simd=(1, 256))
+        ftype2 = TypeVar("t2", "", floats=True, simd=(1, 256))
+
+        check_typing(typing, ({
+            self.v0:    ftype0,
+            self.v1:    ftype1,
+            self.v2:    ftype2,
+        }, [WiderOrEq(ftype1, ftype0),
+            WiderOrEq(ftype1, ftype2)]))
+
+    def test_fpromote_fdemote_enumeration(self):
+        # type: () -> None
+        for op in (fpromote, fdemote):
+            r = Rtl(
+                self.v1 << op(self.v0),
+            )
+            ti = TypeEnv()
+            typing = ti_rtl(r, ti).extract()
+
+            # The number of possible typings is 9*(2 + 1) = 27
+            l = [(t[self.v0], t[self.v1]) for t in typing.concrete_typings()]
+            assert (len(l) == len(set(l)) and len(l) == 27)
+            for (tv0, tv1) in l:
+                (typ0, typ1) = (tv0.singleton_type(), tv1.singleton_type())
+                if (op == fdemote):
+                    assert typ0.wider_or_equal(typ1)
+                else:
+                    assert typ1.wider_or_equal(typ0)
 
 
 class TestXForm(TypeCheckingBaseTest):
@@ -453,7 +539,7 @@ class TestXForm(TypeCheckingBaseTest):
             self.v3:    i32t,
             self.v4:    i32t,
             self.v5:    i32t,
-        }, []), x.symtab)
+        }, [WiderOrEq(i32t, itype)]), x.symtab)
 
     def test_bound_inst_inference1(self):
         # Second example taken from issue #26
@@ -477,7 +563,7 @@ class TestXForm(TypeCheckingBaseTest):
             self.v3:    i32t,
             self.v4:    i32t,
             self.v5:    i32t,
-        }, []), x.symtab)
+        }, [WiderOrEq(i32t, itype)]), x.symtab)
 
     def test_fully_bound_inst_inference(self):
         # Second example taken from issue #26 with complete bounds
@@ -494,6 +580,7 @@ class TestXForm(TypeCheckingBaseTest):
         i8t = TypeVar.singleton(i8)
         i32t = TypeVar.singleton(i32)
 
+        # Note no constraints here since they are all trivial
         check_typing(x.ti, ({
             self.v0:    i8t,
             self.v1:    i8t,

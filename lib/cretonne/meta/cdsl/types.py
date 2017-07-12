@@ -49,6 +49,26 @@ class ValueType(object):
         else:
             raise AttributeError("No type named '{}'".format(name))
 
+    def lane_bits(self):
+        # type: () -> int
+        """Return the number of bits in a lane."""
+        assert False, "Abstract"
+
+    def lane_count(self):
+        # type: () -> int
+        """Return the number of lanes."""
+        assert False, "Abstract"
+
+    def wider_or_equal(self, other):
+        # type: (ValueType) -> bool
+        """
+        Return true iff:
+            1. self and other have equal number of lanes
+            2. each lane in self has at least as many bits as a lane in other
+        """
+        return (self.lane_count() == other.lane_count() and
+                self.lane_bits() >= other.lane_bits())
+
 
 class ScalarType(ValueType):
     """
@@ -85,6 +105,11 @@ class ScalarType(ValueType):
             self._vectors[lanes] = v
             return v
 
+    def lane_count(self):
+        # type: () -> int
+        """Return the number of lanes."""
+        return 1
+
 
 class VectorType(ValueType):
     """
@@ -112,6 +137,16 @@ class VectorType(ValueType):
         return ('VectorType(base={}, lanes={})'
                 .format(self.base.name, self.lanes))
 
+    def lane_count(self):
+        # type: () -> int
+        """Return the number of lanes."""
+        return self.lanes
+
+    def lane_bits(self):
+        # type: () -> int
+        """Return the number of bits in a lane."""
+        return self.base.lane_bits()
+
 
 class IntType(ScalarType):
     """A concrete scalar integer type."""
@@ -137,6 +172,11 @@ class IntType(ScalarType):
             return cast(IntType, typ)
         else:
             return typ
+
+    def lane_bits(self):
+        # type: () -> int
+        """Return the number of bits in a lane."""
+        return self.bits
 
 
 class FloatType(ScalarType):
@@ -164,6 +204,11 @@ class FloatType(ScalarType):
         else:
             return typ
 
+    def lane_bits(self):
+        # type: () -> int
+        """Return the number of bits in a lane."""
+        return self.bits
+
 
 class BoolType(ScalarType):
     """A concrete scalar boolean type."""
@@ -189,3 +234,8 @@ class BoolType(ScalarType):
             return cast(BoolType, typ)
         else:
             return typ
+
+    def lane_bits(self):
+        # type: () -> int
+        """Return the number of bits in a lane."""
+        return self.bits

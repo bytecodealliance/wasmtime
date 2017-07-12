@@ -11,8 +11,8 @@ from __future__ import absolute_import
 from srcgen import Formatter
 from base import legalize, instructions
 from cdsl.ast import Var
-from cdsl.ti import ti_rtl, TypeEnv, get_type_env, ConstrainTVsEqual,\
-    ConstrainTVInTypeset
+from cdsl.ti import ti_rtl, TypeEnv, get_type_env, TypesEqual,\
+    InTypeset, WiderOrEq
 from unique_table import UniqueTable
 from gen_instr import gen_typesets_table
 from cdsl.typevar import TypeVar
@@ -66,7 +66,7 @@ def get_runtime_typechecks(xform):
 
         assert xform_ts.issubset(src_ts)
         if src_ts != xform_ts:
-            check_l.append(ConstrainTVInTypeset(xform.ti[v], xform_ts))
+            check_l.append(InTypeset(xform.ti[v], xform_ts))
 
     # 2,3) Add any constraints that appear in xform.ti
     check_l.extend(xform.ti.constraints)
@@ -81,6 +81,14 @@ def emit_runtime_typecheck(check, fmt, type_sets):
     """
     def build_derived_expr(tv):
         # type: (TypeVar) -> str
+        """
+        Build an expression of type Option<Type> corresponding to a concrete
+        type transformed by the sequence of derivation functions in tv.
+
+        We are using Option<Type>, as some constraints may cause an
+        over/underflow on patterns that do not match them. We want to capture
+        this without panicking at runtime.
+        """
         if not tv.is_derived:
             assert tv.name.startswith('typeof_')
             return "Some({})".format(tv.name)
@@ -102,7 +110,8 @@ def emit_runtime_typecheck(check, fmt, type_sets):
         else:
             assert False, "Unknown derived function {}".format(tv.derived_func)
 
-    if (isinstance(check, ConstrainTVInTypeset)):
+    if (isinstance(check, InTypeset)):
+        assert not check.tv.is_derived
         tv = check.tv.name
         if check.ts not in type_sets.index:
             type_sets.add(check.ts)
@@ -112,11 +121,28 @@ def emit_runtime_typecheck(check, fmt, type_sets):
         with fmt.indented('if !TYPE_SETS[{}].contains({}) {{'.format(ts, tv),
                           '};'):
             fmt.line('return false;')
-    elif (isinstance(check, ConstrainTVsEqual)):
-        tv1 = build_derived_expr(check.tv1)
-        tv2 = build_derived_expr(check.tv2)
-        with fmt.indented('if {} != {} {{'.format(tv1, tv2), '};'):
-            fmt.line('return false;')
+    elif (isinstance(check, TypesEqual)):
+        with fmt.indented('{', '};'):
+            fmt.line('let a = {};'.format(build_derived_expr(check.tv1)))
+            fmt.line('let b = {};'.format(build_derived_expr(check.tv2)))
+
+            fmt.comment('On overflow constraint doesn\'t appply')
+            with fmt.indented('if a.is_none() || b.is_none() {', '};'):
+                fmt.line('return false;')
+
+            with fmt.indented('if a != b {', '};'):
+                fmt.line('return false;')
+    elif (isinstance(check, WiderOrEq)):
+        with fmt.indented('{', '};'):
+            fmt.line('let a = {};'.format(build_derived_expr(check.tv1)))
+            fmt.line('let b = {};'.format(build_derived_expr(check.tv2)))
+
+            fmt.comment('On overflow constraint doesn\'t appply')
+            with fmt.indented('if a.is_none() || b.is_none() {', '};'):
+                fmt.line('return false;')
+
+            with fmt.indented('if !a.wider_or_equal(b) {', '};'):
+                fmt.line('return false;')
     else:
         assert False, "Unknown check {}".format(check)
 

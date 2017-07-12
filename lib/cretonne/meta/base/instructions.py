@@ -12,6 +12,7 @@ from base.types import i8, f32, f64, b1
 from base.immediates import imm64, uimm8, ieee32, ieee64, offset32, uoffset32
 from base.immediates import intcc, floatcc, memflags, regunit
 from base import entities
+from cdsl.ti import WiderOrEq
 import base.formats  # noqa
 
 GROUP = InstructionGroup("base", "Shared base instruction set")
@@ -1405,7 +1406,7 @@ ireduce = Instruction(
         and each lane must not have more bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         """,
-        ins=x, outs=a)
+        ins=x, outs=a, constraints=WiderOrEq(Int, IntTo))
 
 
 IntTo = TypeVar(
@@ -1427,7 +1428,7 @@ uextend = Instruction(
         and each lane must not have fewer bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         """,
-        ins=x, outs=a)
+        ins=x, outs=a, constraints=WiderOrEq(IntTo, Int))
 
 sextend = Instruction(
         'sextend', r"""
@@ -1441,7 +1442,7 @@ sextend = Instruction(
         and each lane must not have fewer bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         """,
-        ins=x, outs=a)
+        ins=x, outs=a, constraints=WiderOrEq(IntTo, Int))
 
 FloatTo = TypeVar(
         'FloatTo', 'A scalar or vector floating point number',
@@ -1457,14 +1458,14 @@ fpromote = Instruction(
         Each lane in `x` is converted to the destination floating point format.
         This is an exact operation.
 
-        Since Cretonne currently only supports two floating point formats, this
-        instruction always converts :type:`f32` to :type:`f64`. This may change
-        in the future.
+        Cretonne currently only supports two floating point formats
+        - :type:`f32` and :type:`f64`.  This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
-        and the result lanes must be larger than the input lanes.
+        and the result lanes must not have fewer bits than the input lanes. If
+        the input and output types are the same, this is a no-op.
         """,
-        ins=x, outs=a)
+        ins=x, outs=a, constraints=WiderOrEq(FloatTo, Float))
 
 fdemote = Instruction(
         'fdemote', r"""
@@ -1473,14 +1474,14 @@ fdemote = Instruction(
         Each lane in `x` is converted to the destination floating point format
         by rounding to nearest, ties to even.
 
-        Since Cretonne currently only supports two floating point formats, this
-        instruction always converts :type:`f64` to :type:`f32`. This may change
-        in the future.
+        Cretonne currently only supports two floating point formats
+        - :type:`f32` and :type:`f64`.  This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
-        and the result lanes must be smaller than the input lanes.
+        and the result lanes must not have more bits than the input lanes.  If
+        the input and output types are the same, this is a no-op.
         """,
-        ins=x, outs=a)
+        ins=x, outs=a, constraints=WiderOrEq(Float, FloatTo))
 
 x = Operand('x', Float)
 a = Operand('a', IntTo)

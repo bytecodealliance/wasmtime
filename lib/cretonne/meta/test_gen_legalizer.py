@@ -4,7 +4,7 @@ from unittest import TestCase
 from srcgen import Formatter
 from gen_legalizer import get_runtime_typechecks, emit_runtime_typecheck
 from base.instructions import vselect, vsplit, isplit, iconcat, vconcat, \
-    iconst, b1, icmp, copy # noqa
+    iconst, b1, icmp, copy, sextend, uextend, ireduce, fdemote, fpromote # noqa
 from base.legalize import narrow, expand # noqa
 from base.immediates import intcc # noqa
 from cdsl.typevar import TypeVar, TypeSet
@@ -57,9 +57,32 @@ def equiv_check(tv1, tv2):
     # type: (TypeVar, TypeVar) -> CheckProducer
     return lambda typesets: format_check(
         typesets,
-        'if Some({}).map(|t: Type| -> t.as_bool()) != ' +
-        'Some({}).map(|t: Type| -> t.as_bool()) ' +
-        '{{\n    return false;\n}};\n', tv1, tv2)
+        '{{\n' +
+        '    let a = {};\n' +
+        '    let b = {};\n' +
+        '    if a.is_none() || b.is_none() {{\n' +
+        '        return false;\n' +
+        '    }};\n' +
+        '    if a != b {{\n' +
+        '        return false;\n' +
+        '    }};\n' +
+        '}};\n', tv1, tv2)
+
+
+def wider_check(tv1, tv2):
+    # type: (TypeVar, TypeVar) -> CheckProducer
+    return lambda typesets: format_check(
+        typesets,
+        '{{\n' +
+        '    let a = {};\n' +
+        '    let b = {};\n' +
+        '    if a.is_none() || b.is_none() {{\n' +
+        '        return false;\n' +
+        '    }};\n' +
+        '    if !a.wider_or_equal(b) {{\n' +
+        '        return false;\n' +
+        '    }};\n' +
+        '}};\n', tv1, tv2)
 
 
 def sequence(*args):
@@ -138,8 +161,49 @@ class TestRuntimeChecks(TestCase):
                 self.v5 << vselect(self.v1, self.v3, self.v4),
         )
         x = XForm(r, r)
+        tv2_exp = 'Some({}).map(|t: Type| -> t.as_bool())'\
+            .format(self.v2.get_typevar().name)
+        tv3_exp = 'Some({}).map(|t: Type| -> t.as_bool())'\
+            .format(self.v3.get_typevar().name)
 
         self.check_yo_check(
             x, sequence(typeset_check(self.v3, ts),
-                        equiv_check(self.v2.get_typevar(),
-                                    self.v3.get_typevar())))
+                        equiv_check(tv2_exp, tv3_exp)))
+
+    def test_reduce_extend(self):
+        # type: () -> None
+        r = Rtl(
+            self.v1 << uextend(self.v0),
+            self.v2 << ireduce(self.v1),
+            self.v3 << sextend(self.v2),
+        )
+        x = XForm(r, r)
+
+        tv0_exp = 'Some({})'.format(self.v0.get_typevar().name)
+        tv1_exp = 'Some({})'.format(self.v1.get_typevar().name)
+        tv2_exp = 'Some({})'.format(self.v2.get_typevar().name)
+        tv3_exp = 'Some({})'.format(self.v3.get_typevar().name)
+
+        self.check_yo_check(
+            x, sequence(wider_check(tv1_exp, tv0_exp),
+                        wider_check(tv1_exp, tv2_exp),
+                        wider_check(tv3_exp, tv2_exp)))
+
+    def test_demote_promote(self):
+        # type: () -> None
+        r = Rtl(
+            self.v1 << fpromote(self.v0),
+            self.v2 << fdemote(self.v1),
+            self.v3 << fpromote(self.v2),
+        )
+        x = XForm(r, r)
+
+        tv0_exp = 'Some({})'.format(self.v0.get_typevar().name)
+        tv1_exp = 'Some({})'.format(self.v1.get_typevar().name)
+        tv2_exp = 'Some({})'.format(self.v2.get_typevar().name)
+        tv3_exp = 'Some({})'.format(self.v3.get_typevar().name)
+
+        self.check_yo_check(
+            x, sequence(wider_check(tv1_exp, tv0_exp),
+                        wider_check(tv1_exp, tv2_exp),
+                        wider_check(tv3_exp, tv2_exp)))
