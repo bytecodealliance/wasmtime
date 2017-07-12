@@ -22,10 +22,10 @@ for inst,           opc in [
     # default. Otherwise reg-alloc would never use r8 and up.
     I64.enc(inst.i32, *r.rr(opc))
 
-I32.enc(base.copy.i32, *r.ur(0x89))
-I64.enc(base.copy.i64, *r.ur.rex(0x89, w=1))
-I64.enc(base.copy.i32, *r.ur.rex(0x89))
-I64.enc(base.copy.i32, *r.ur(0x89))
+I32.enc(base.copy.i32, *r.umr(0x89))
+I64.enc(base.copy.i64, *r.umr.rex(0x89, w=1))
+I64.enc(base.copy.i32, *r.umr.rex(0x89))
+I64.enc(base.copy.i32, *r.umr(0x89))
 
 I32.enc(base.regmove.i32, *r.rmov(0x89))
 I64.enc(base.regmove.i64, *r.rmov.rex(0x89, w=1))
@@ -79,6 +79,12 @@ for inst,           rrr in [
     I64.enc(inst.i64.i64, *r.rc.rex(0xd3, rrr=rrr, w=1))
     I64.enc(inst.i32.i32, *r.rc.rex(0xd3, rrr=rrr))
     I64.enc(inst.i32.i32, *r.rc(0xd3, rrr=rrr))
+
+# Population count.
+I32.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8))
+I64.enc(base.popcnt.i64, *r.urm.rex(0xf3, 0x0f, 0xb8, w=1))
+I64.enc(base.popcnt.i32, *r.urm.rex(0xf3, 0x0f, 0xb8))
+I64.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8))
 
 # Loads and stores.
 I32.enc(base.store.i32.i32, *r.st(0x89))

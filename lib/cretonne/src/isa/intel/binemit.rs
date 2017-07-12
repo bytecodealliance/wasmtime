@@ -57,7 +57,7 @@ fn rex_prefix<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
 // Emit a single-byte opcode with no REX prefix.
 fn put_op1<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     debug_assert_eq!(bits & 0x8f00, 0, "Invalid encoding bits for Op1*");
-    debug_assert_eq!(rex, BASE_REX, "Invalid registers for REX-less encoding");
+    debug_assert_eq!(rex, BASE_REX, "Invalid registers for REX-less Op1 encoding");
     sink.put1(bits as u8);
 }
 
@@ -71,17 +71,37 @@ fn put_rexop1<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
 // Emit two-byte opcode: 0F XX
 fn put_op2<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     debug_assert_eq!(bits & 0x8f00, 0x0400, "Invalid encoding bits for Op2*");
-    debug_assert_eq!(rex, BASE_REX, "Invalid registers for REX-less encoding");
+    debug_assert_eq!(rex, BASE_REX, "Invalid registers for REX-less Op2 encoding");
     sink.put1(0x0f);
     sink.put1(bits as u8);
 }
 
 // Emit single-byte opcode with mandatory prefix.
 fn put_mp1<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
-    debug_assert_eq!(bits & 0x0c00, 0, "Invalid encoding bits for Mp1*");
+    debug_assert_eq!(bits & 0x8c00, 0, "Invalid encoding bits for Mp1*");
     let pp = (bits >> 8) & 3;
     sink.put1(PREFIX[(pp - 1) as usize]);
-    debug_assert_eq!(rex, BASE_REX, "Invalid registers for REX-less encoding");
+    debug_assert_eq!(rex, BASE_REX, "Invalid registers for REX-less Mp1 encoding");
+    sink.put1(bits as u8);
+}
+
+// Emit two-byte opcode (0F XX) with mandatory prefix.
+fn put_mp2<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
+    debug_assert_eq!(bits & 0x8c00, 0x0400, "Invalid encoding bits for Mp2*");
+    let pp = (bits >> 8) & 3;
+    sink.put1(PREFIX[(pp - 1) as usize]);
+    debug_assert_eq!(rex, BASE_REX, "Invalid registers for REX-less Mp2 encoding");
+    sink.put1(0x0f);
+    sink.put1(bits as u8);
+}
+
+// Emit two-byte opcode (0F XX) with mandatory prefix and REX.
+fn put_rexmp2<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
+    debug_assert_eq!(bits & 0x0c00, 0x0400, "Invalid encoding bits for Mp2*");
+    let pp = (bits >> 8) & 3;
+    sink.put1(PREFIX[(pp - 1) as usize]);
+    rex_prefix(bits, rex, sink);
+    sink.put1(0x0f);
     sink.put1(bits as u8);
 }
 

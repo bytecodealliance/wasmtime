@@ -145,6 +145,15 @@ ebb0:
     ; asm: movq %rcx, %r10
     [-,%r10]             v112 = copy v1          ; bin: 49 89 ca
 
+    ; Bit-counting instructions.
+
+    ; asm: popcntq %rsi, %rcx
+    [-,%rcx]            v200 = popcnt v2        ; bin: f3 48 0f b8 ce
+    ; asm: popcntq %r10, %rsi
+    [-,%rsi]            v201 = popcnt v3        ; bin: f3 49 0f b8 f2
+    ; asm: popcntq %rcx, %r10
+    [-,%r10]            v202 = popcnt v1        ; bin: f3 4c 0f b8 d1
+
     return                                       ; bin: c3
 }
 
@@ -289,6 +298,15 @@ ebb0:
     [-,%rsi]             v111 = copy v3          ; bin: 44 89 d6
     ; asm: movl %ecx, %r10d
     [-,%r10]             v112 = copy v1          ; bin: 41 89 ca
+
+    ; Bit-counting instructions.
+
+    ; asm: popcntl %esi, %ecx
+    [-,%rcx]            v200 = popcnt v2        ; bin: f3 40 0f b8 ce
+    ; asm: popcntl %r10d, %esi
+    [-,%rsi]            v201 = popcnt v3        ; bin: f3 41 0f b8 f2
+    ; asm: popcntl %ecx, %r10d
+    [-,%r10]            v202 = popcnt v1        ; bin: f3 44 0f b8 d1
 
     return                                       ; bin: c3
 }
