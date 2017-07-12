@@ -59,7 +59,7 @@ ebb0(v0: i32):
     brnz v0, ebb1(v0)
     v1 = iadd_imm v0, 7
     ; v1 and v0 interfere here:
-    trapnz v0
+    v2 = iadd_imm v0, 8
     ; check: $(cp1=$V) = copy $v1
     ; not: copy
     ; check: jump $ebb1($cp1)

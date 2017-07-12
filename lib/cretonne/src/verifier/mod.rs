@@ -666,30 +666,70 @@ impl<'a> Verifier<'a> {
     /// If the verifier has been set up with an ISA, make sure that the recorded encoding for the
     /// instruction (if any) matches how the ISA would encode it.
     fn verify_encoding(&self, inst: Inst) -> Result {
-        if let Some(isa) = self.isa {
-            let encoding = self.func.encodings.get_or_default(inst);
-            if encoding.is_legal() {
-                let verify_encoding =
-                    isa.encode(&self.func.dfg,
-                               &self.func.dfg[inst],
-                               self.func.dfg.ctrl_typevar(inst));
-                match verify_encoding {
-                    Ok(verify_encoding) => {
-                        if verify_encoding != encoding {
-                            return err!(inst,
-                                        "Instruction re-encoding {} doesn't match {}",
-                                        isa.encoding_info().display(verify_encoding),
-                                        isa.encoding_info().display(encoding));
-                        }
-                    }
-                    Err(e) => {
+        // When the encodings table is empty, we don't require any instructions to be encoded.
+        //
+        // Once some instructions are encoded, we require all side-effecting instructions to have a
+        // legal encoding.
+        if self.func.encodings.is_empty() {
+            return Ok(());
+        }
+
+        let isa = match self.isa {
+            Some(isa) => isa,
+            None => return Ok(()),
+        };
+
+        let encoding = self.func.encodings.get_or_default(inst);
+        if encoding.is_legal() {
+            let verify_encoding =
+                isa.encode(&self.func.dfg,
+                           &self.func.dfg[inst],
+                           self.func.dfg.ctrl_typevar(inst));
+            match verify_encoding {
+                Ok(verify_encoding) => {
+                    if verify_encoding != encoding {
                         return err!(inst,
-                                    "Instruction failed to re-encode {}: {:?}",
-                                    isa.encoding_info().display(encoding),
-                                    e)
+                                    "Instruction re-encoding {} doesn't match {}",
+                                    isa.encoding_info().display(verify_encoding),
+                                    isa.encoding_info().display(encoding));
                     }
                 }
+                Err(e) => {
+                    return err!(inst,
+                                "Instruction failed to re-encode {}: {:?}",
+                                isa.encoding_info().display(encoding),
+                                e)
+                }
             }
+            return Ok(());
+        }
+
+        // Instruction is not encoded, so it is a ghost instruction.
+        // Instructions with side effects are not allowed to be ghost instructions.
+        let opcode = self.func.dfg[inst].opcode();
+
+        if opcode.is_branch() {
+            return err!(inst, "Branch must have an encoding");
+        }
+
+        if opcode.is_call() {
+            return err!(inst, "Call must have an encoding");
+        }
+
+        if opcode.is_return() {
+            return err!(inst, "Return must have an encoding");
+        }
+
+        if opcode.can_store() {
+            return err!(inst, "Store must have an encoding");
+        }
+
+        if opcode.can_trap() {
+            return err!(inst, "Trapping instruction must have an encoding");
+        }
+
+        if opcode.other_side_effects() {
+            return err!(inst, "Instruction with side effects must have an encoding");
         }
 
         Ok(())
