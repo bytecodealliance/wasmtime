@@ -14,7 +14,7 @@ from cdsl.predicates import IsSignedInt
 from cdsl.registers import Stack
 from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
 from base.formats import Unary, UnaryImm, BranchIcmp, Branch, Jump
-from base.formats import Call, IndirectCall
+from base.formats import Call, IndirectCall, RegMove
 from .registers import GPR
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
@@ -155,6 +155,11 @@ Icall = EncRecipe(
 Icopy = EncRecipe(
         'Icopy', Unary, size=4, ins=GPR, outs=GPR,
         emit='put_i(bits, in_reg0, 0, out_reg0, sink);')
+
+# Same for a GPR regmove.
+Irmov = EncRecipe(
+        'Irmov', RegMove, size=4, ins=GPR, outs=(),
+        emit='put_i(bits, src, 0, dst, sink);')
 
 # U-type instructions have a 20-bit immediate that targets bits 12-31.
 U = EncRecipe(

@@ -8,7 +8,7 @@ from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH, JALR, JAL
 from .recipes import LOAD, STORE
 from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
-from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi
+from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov
 from .settings import use_m
 from cdsl.ast import Var
 
@@ -135,3 +135,7 @@ RV64.enc(base.fill.i64, GPfi, LOAD(0b011))
 RV32.enc(base.copy.i32, Icopy, OPIMM(0b000))
 RV64.enc(base.copy.i64, Icopy, OPIMM(0b000))
 RV64.enc(base.copy.i32, Icopy, OPIMM32(0b000))
+
+RV32.enc(base.regmove.i32, Irmov, OPIMM(0b000))
+RV64.enc(base.regmove.i64, Irmov, OPIMM(0b000))
+RV64.enc(base.regmove.i32, Irmov, OPIMM32(0b000))
