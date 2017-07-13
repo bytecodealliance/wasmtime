@@ -17,7 +17,7 @@ use regalloc::spilling::Spilling;
 use regalloc::virtregs::VirtRegs;
 use result::CtonResult;
 use topo_order::TopoOrder;
-use verifier::{verify_context, verify_liveness};
+use verifier::{verify_context, verify_liveness, verify_cssa};
 
 /// Persistent memory allocations for register allocation.
 pub struct Context {
@@ -85,6 +85,7 @@ impl Context {
         if isa.flags().enable_verifier() {
             verify_context(func, cfg, domtree, Some(isa))?;
             verify_liveness(isa, func, cfg, &self.liveness)?;
+            verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
         }
 
 
@@ -101,6 +102,7 @@ impl Context {
         if isa.flags().enable_verifier() {
             verify_context(func, cfg, domtree, Some(isa))?;
             verify_liveness(isa, func, cfg, &self.liveness)?;
+            verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
         }
 
         // Pass: Reload.
@@ -115,6 +117,7 @@ impl Context {
         if isa.flags().enable_verifier() {
             verify_context(func, cfg, domtree, Some(isa))?;
             verify_liveness(isa, func, cfg, &self.liveness)?;
+            verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
         }
 
         // Pass: Coloring.
@@ -124,6 +127,7 @@ impl Context {
         if isa.flags().enable_verifier() {
             verify_context(func, cfg, domtree, Some(isa))?;
             verify_liveness(isa, func, cfg, &self.liveness)?;
+            verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
         }
         Ok(())
     }

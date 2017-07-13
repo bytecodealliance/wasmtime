@@ -65,6 +65,7 @@ use std::result;
 use std::collections::BTreeSet;
 
 pub use self::liveness::verify_liveness;
+pub use self::cssa::verify_cssa;
 
 // Create an `Err` variant of `Result<X>` from a location and `format!` arguments.
 macro_rules! err {
@@ -83,6 +84,7 @@ macro_rules! err {
     };
 }
 
+mod cssa;
 mod liveness;
 
 /// A verifier error.
