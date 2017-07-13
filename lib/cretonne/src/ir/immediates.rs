@@ -87,7 +87,7 @@ fn parse_i64(s: &str) -> Result<i64, &'static str> {
                         return Err("Too many hexadecimal digits");
                     }
                     // This can't overflow given the digit limit.
-                    value = (value << 4) | digit as u64;
+                    value = (value << 4) | u64::from(digit);
                 }
                 None => {
                     // Allow embedded underscores, but fail on anything else.
@@ -107,7 +107,7 @@ fn parse_i64(s: &str) -> Result<i64, &'static str> {
                         None => return Err("Too large decimal number"),
                         Some(v) => value = v,
                     }
-                    match value.checked_add(digit as u64) {
+                    match value.checked_add(u64::from(digit)) {
                         None => return Err("Too large decimal number"),
                         Some(v) => value = v,
                     }
@@ -221,7 +221,7 @@ impl Into<i32> for Offset32 {
 
 impl Into<i64> for Offset32 {
     fn into(self) -> i64 {
-        self.0 as i64
+        i64::from(self.0)
     }
 }
 
@@ -241,7 +241,7 @@ impl Display for Offset32 {
         // Always include a sign.
         write!(f, "{}", if self.0 < 0 { '-' } else { '+' })?;
 
-        let val = (self.0 as i64).abs();
+        let val = i64::from(self.0).abs();
         if val < 10_000 {
             write!(f, "{}", val)
         } else {
@@ -259,7 +259,9 @@ impl FromStr for Offset32 {
         if !(s.starts_with('-') || s.starts_with('+')) {
             return Err("Offset must begin with sign");
         }
-        parse_i64(s).and_then(|x| if i32::MIN as i64 <= x && x <= i32::MAX as i64 {
+        parse_i64(s).and_then(|x| if i64::from(i32::MIN) as i64 <= x &&
+            x <= i64::from(i32::MAX)
+        {
             Ok(Offset32::new(x as i32))
         } else {
             Err("Offset out of range")
@@ -288,7 +290,7 @@ impl Into<u32> for Uoffset32 {
 
 impl Into<i64> for Uoffset32 {
     fn into(self) -> i64 {
-        self.0 as i64
+        i64::from(self.0)
     }
 }
 
@@ -310,7 +312,7 @@ impl Display for Uoffset32 {
             write!(f, "+{}", self.0)
         } else {
             write!(f, "+")?;
-            write_hex(self.0 as i64, f)
+            write_hex(i64::from(self.0), f)
         }
 
     }
@@ -324,7 +326,7 @@ impl FromStr for Uoffset32 {
         if !s.starts_with('+') {
             return Err("Unsigned offset must begin with '+' sign");
         }
-        parse_i64(s).and_then(|x| if 0 <= x && x <= u32::MAX as i64 {
+        parse_i64(s).and_then(|x| if 0 <= x && x <= i64::from(u32::MAX) {
             Ok(Uoffset32::new(x as u32))
         } else {
             Err("Offset out of range")
@@ -386,7 +388,13 @@ fn format_float(bits: u64, w: u8, t: u8, f: &mut Formatter) -> fmt::Result {
             write!(f, "0.0")
         } else {
             // Subnormal.
-            write!(f, "0x0.{0:01$x}p{2}", left_t_bits, digits as usize, emin)
+            write!(
+                f,
+                "0x0.{0:01$x}p{2}",
+                left_t_bits,
+                usize::from(digits),
+                emin
+            )
         }
     } else if e_bits == max_e_bits {
         // Always print a `+` or `-` sign for these special values.
@@ -414,7 +422,7 @@ fn format_float(bits: u64, w: u8, t: u8, f: &mut Formatter) -> fmt::Result {
         }
     } else {
         // Normal number.
-        write!(f, "0x1.{0:01$x}p{2}", left_t_bits, digits as usize, e)
+        write!(f, "0x1.{0:01$x}p{2}", left_t_bits, usize::from(digits), e)
     }
 }
 
@@ -511,7 +519,7 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
                         if digits > 16 {
                             return Err("Too many digits");
                         }
-                        significand = (significand << 4) | digit as u64;
+                        significand = (significand << 4) | u64::from(digit);
                     }
                     None => return Err("Invalid character"),
                 }
@@ -596,7 +604,7 @@ impl Ieee32 {
 impl Display for Ieee32 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let bits: u32 = self.0;
-        format_float(bits as u64, 8, 23, f)
+        format_float(u64::from(bits), 8, 23, f)
     }
 }
 

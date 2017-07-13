@@ -212,7 +212,7 @@ pub mod detail {
         /// Get enumerators corresponding to a `Details::Enum`.
         pub fn enums(&self, last: u8, enumerators: u16) -> &[&'static str] {
             let from = enumerators as usize;
-            let len = last as usize + 1;
+            let len = usize::from(last) + 1;
             &self.enumerators[from..from + len]
         }
 
@@ -230,7 +230,7 @@ pub mod detail {
                 Detail::Enum { last, enumerators } => {
                     if byte <= last {
                         let tags = self.enums(last, enumerators);
-                        write!(f, "\"{}\"", tags[byte as usize])
+                        write!(f, "\"{}\"", tags[usize::from(byte)])
                     } else {
                         write!(f, "{}", byte)
                     }

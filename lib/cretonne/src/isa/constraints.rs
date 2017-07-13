@@ -105,7 +105,7 @@ impl BranchRange {
     ///
     /// This method does not detect if the range is larger than 2 GB.
     pub fn contains(self, branch: CodeOffset, dest: CodeOffset) -> bool {
-        let d = dest.wrapping_sub(branch + self.origin as CodeOffset) as i32;
+        let d = dest.wrapping_sub(branch + CodeOffset::from(self.origin)) as i32;
         let s = 32 - self.bits;
         d == d << s >> s
     }

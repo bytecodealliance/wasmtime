@@ -26,7 +26,7 @@ impl Args {
     fn new(bits: u16, enable_e: bool) -> Args {
         Args {
             pointer_bits: bits,
-            pointer_bytes: bits as u32 / 8,
+            pointer_bytes: u32::from(bits) / 8,
             pointer_type: Type::int(bits).unwrap(),
             regs: 0,
             reg_limit: if enable_e { 6 } else { 8 },

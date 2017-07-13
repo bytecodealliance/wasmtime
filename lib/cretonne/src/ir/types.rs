@@ -194,12 +194,12 @@ impl Type {
 
     /// Get the total number of bits used to represent this type.
     pub fn bits(self) -> u16 {
-        self.lane_bits() as u16 * self.lane_count()
+        u16::from(self.lane_bits()) * self.lane_count()
     }
 
     /// Get the number of bytes used to store this type in memory.
     pub fn bytes(self) -> u32 {
-        (self.bits() as u32 + 7) / 8
+        (u32::from(self.bits()) + 7) / 8
     }
 
     /// Get a SIMD vector type with `n` times more lanes than this one.
@@ -213,7 +213,7 @@ impl Type {
             return None;
         }
         let log2_lanes: u32 = n.trailing_zeros();
-        let new_type = self.0 as u32 + (log2_lanes << 4);
+        let new_type = u32::from(self.0) + (log2_lanes << 4);
         if new_type < 0x90 {
             Some(Type(new_type as u8))
         } else {
@@ -234,7 +234,7 @@ impl Type {
 
     /// Index of this type, for use with hash tables etc.
     pub fn index(self) -> usize {
-        self.0 as usize
+        usize::from(self.0)
     }
 
     /// True iff:

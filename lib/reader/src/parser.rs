@@ -1115,7 +1115,7 @@ impl<'a> Parser<'a> {
         if bytes < 0 {
             return err!(self.loc, "negative stack slot size");
         }
-        if bytes > u32::MAX as i64 {
+        if bytes > i64::from(u32::MAX) {
             return err!(self.loc, "stack slot too large");
         }
         let mut data = StackSlotData::new(kind, bytes as u32);
