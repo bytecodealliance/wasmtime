@@ -10,7 +10,7 @@ from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
 from base.types import f32, f64, b1
 from base.immediates import imm64, uimm8, ieee32, ieee64, offset32, uoffset32
-from base.immediates import intcc, floatcc, memflags, regunit
+from base.immediates import boolean, intcc, floatcc, memflags, regunit
 from base import entities
 from cdsl.ti import WiderOrEq
 import base.formats  # noqa
@@ -18,6 +18,8 @@ import base.formats  # noqa
 GROUP = InstructionGroup("base", "Shared base instruction set")
 
 Int = TypeVar('Int', 'A scalar or vector integer type', ints=True, simd=True)
+Bool = TypeVar('Bool', 'A scalar or vector boolean type',
+               bools=True, simd=True)
 iB = TypeVar('iB', 'A scalar integer type', ints=True)
 iAddr = TypeVar('iAddr', 'An integer address type', ints=(32, 64))
 Testable = TypeVar(
@@ -414,6 +416,17 @@ f64const = Instruction(
 
         Create a :type:`f64` SSA value with an immediate constant value, or a
         floating point vector where all the lanes have the same value.
+        """,
+        ins=N, outs=a)
+
+N = Operand('N', boolean)
+a = Operand('a', Bool, doc='A constant boolean scalar or vector value')
+bconst = Instruction(
+        'bconst', r"""
+        Boolean constant.
+
+        Create a scalar boolean SSA value with an immediate constant value, or
+        a boolean vector where all the lanes have the same value.
         """,
         ins=N, outs=a)
 

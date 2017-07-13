@@ -9,7 +9,7 @@ from __future__ import absolute_import
 from cdsl.formats import InstructionFormat
 from cdsl.operands import VALUE, VARIABLE_ARGS
 from .immediates import imm64, uimm8, ieee32, ieee64, offset32, uoffset32
-from .immediates import intcc, floatcc, memflags, regunit
+from .immediates import boolean, intcc, floatcc, memflags, regunit
 from .entities import ebb, sig_ref, func_ref, jump_table, stack_slot
 
 Nullary = InstructionFormat()
@@ -18,6 +18,7 @@ Unary = InstructionFormat(VALUE)
 UnaryImm = InstructionFormat(imm64)
 UnaryIeee32 = InstructionFormat(ieee32)
 UnaryIeee64 = InstructionFormat(ieee64)
+UnaryBool = InstructionFormat(boolean)
 
 Binary = InstructionFormat(VALUE, VALUE)
 BinaryImm = InstructionFormat(VALUE, imm64)

@@ -107,6 +107,7 @@ pub enum InstructionData {
     UnaryImm { opcode: Opcode, imm: Imm64 },
     UnaryIeee32 { opcode: Opcode, imm: Ieee32 },
     UnaryIeee64 { opcode: Opcode, imm: Ieee64 },
+    UnaryBool { opcode: Opcode, imm: bool },
     Binary { opcode: Opcode, args: [Value; 2] },
     BinaryImm {
         opcode: Opcode,

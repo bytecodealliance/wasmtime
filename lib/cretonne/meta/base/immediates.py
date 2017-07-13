@@ -45,6 +45,13 @@ ieee32 = ImmediateKind('ieee32', 'A 32-bit immediate floating point number.')
 #: IEEE 754-2008 binary64 interchange format.
 ieee64 = ImmediateKind('ieee64', 'A 64-bit immediate floating point number.')
 
+#: An immediate boolean operand.
+#:
+#: This type of immediate boolean can interact with SSA values with any
+#: :py:class:`cretonne.BoolType` type.
+boolean = ImmediateKind('boolean', 'An immediate boolean.',
+                        rust_type='bool')
+
 #: A condition code for comparing integer values.
 #:
 #: This enumerated operand kind is used for the :cton:inst:`icmp` instruction

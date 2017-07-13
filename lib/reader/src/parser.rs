@@ -498,6 +498,20 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume a boolean immediate.
+    fn match_bool(&mut self, err_msg: &str) -> Result<bool> {
+        if let Some(Token::Identifier(text)) = self.token() {
+            self.consume();
+            match text {
+                "true" => Ok(true),
+                "false" => Ok(false),
+                _ => err!(self.loc, err_msg),
+            }
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
     // Match and consume an enumerated immediate, like one of the condition codes.
     fn match_enum<T: FromStr>(&mut self, err_msg: &str) -> Result<T> {
         if let Some(Token::Identifier(text)) = self.token() {
@@ -1481,6 +1495,12 @@ impl<'a> Parser<'a> {
                 InstructionData::UnaryIeee64 {
                     opcode,
                     imm: self.match_ieee64("expected immediate 64-bit float operand")?,
+                }
+            }
+            InstructionFormat::UnaryBool => {
+                InstructionData::UnaryBool {
+                    opcode,
+                    imm: self.match_bool("expected immediate boolean operand")?,
                 }
             }
             InstructionFormat::Binary => {
