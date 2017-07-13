@@ -25,6 +25,23 @@ ebb0:
 ; nextln:     $v2 = ishl $v0, $v1
 ; nextln: }
 
+; Create and use values.
+; Polymorphic instructions with type suffix.
+function %bvalues() {
+ebb0:
+    v0 = bconst.b32 true
+    v1 = bconst.b8 false
+    v2 = bextend.b32 v1
+    v3 = bxor v0, v2
+}
+; sameln: function %bvalues() {
+; nextln: ebb0:
+; nextln:     $v0 = bconst.b32 true
+; nextln:     $v1 = bconst.b8 false
+; nextln:     $v2 = bextend.b32 v1
+; nextln:     $v3 = bxor v0, v2
+; nextln: }
+
 ; Polymorphic istruction controlled by second operand.
 function %select() {
 ebb0(v90: i32, v91: i32, v92: b1):
