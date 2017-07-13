@@ -41,7 +41,7 @@ pub fn parse_options<'a, I>(iter: I, config: &mut Configurable, loc: &Location) 
     for opt in iter.map(TestOption::new) {
         match opt {
             TestOption::Flag(name) => {
-                match config.set_bool(name, true) {
+                match config.enable(name) {
                     Ok(_) => {}
                     Err(SetError::BadName) => return err!(loc, "unknown flag '{}'", opt),
                     Err(_) => return err!(loc, "not a boolean flag: '{}'", opt),

@@ -10,10 +10,10 @@ from cdsl.settings import BoolSetting, NumSetting, EnumSetting
 from base import settings
 
 try:
-    from typing import Sequence, Set, Tuple, List, TYPE_CHECKING  # noqa
+    from typing import Sequence, Set, Tuple, List, Union, TYPE_CHECKING  # noqa
     if TYPE_CHECKING:
         from cdsl.isa import TargetISA  # noqa
-        from cdsl.settings import Setting, SettingGroup  # noqa
+        from cdsl.settings import Setting, Preset, SettingGroup  # noqa
         from cdsl.predicates import Predicate, PredContext  # noqa
 except ImportError:
     pass
@@ -106,14 +106,14 @@ def gen_getters(sgrp, fmt):
 def gen_descriptors(sgrp, fmt):
     # type: (SettingGroup, srcgen.Formatter) -> None
     """
-    Generate the DESCRIPTORS and ENUMERATORS tables.
+    Generate the DESCRIPTORS, ENUMERATORS, and PRESETS tables.
     """
 
     enums = UniqueSeqTable()
 
     with fmt.indented(
             'static DESCRIPTORS: [detail::Descriptor; {}] = ['
-            .format(len(sgrp.settings)),
+            .format(len(sgrp.settings) + len(sgrp.presets)),
             '];'):
         for idx, setting in enumerate(sgrp.settings):
             setting.descriptor_index = idx
@@ -135,6 +135,13 @@ def gen_descriptors(sgrp, fmt):
                 else:
                     raise AssertionError("Unknown setting kind")
 
+        for idx, preset in enumerate(sgrp.presets):
+            preset.descriptor_index = len(sgrp.settings) + idx
+            with fmt.indented('detail::Descriptor {', '},'):
+                fmt.line('name: "{}",'.format(preset.name))
+                fmt.line('offset: {},'.format(idx * sgrp.settings_size))
+                fmt.line('detail: detail::Detail::Preset,')
+
     with fmt.indented(
             'static ENUMERATORS: [&str; {}] = ['
             .format(len(enums.table)),
@@ -143,10 +150,13 @@ def gen_descriptors(sgrp, fmt):
             fmt.line('"{}",'.format(txt))
 
     def hash_setting(s):
-        # type: (Setting) -> int
+        # type: (Union[Setting, Preset]) -> int
         return constant_hash.simple_hash(s.name)
 
-    hash_table = constant_hash.compute_quadratic(sgrp.settings, hash_setting)
+    hash_elems = []  # type: List[Union[Setting, Preset]]
+    hash_elems.extend(sgrp.settings)
+    hash_elems.extend(sgrp.presets)
+    hash_table = constant_hash.compute_quadratic(hash_elems, hash_setting)
     with fmt.indented(
             'static HASH_TABLE: [u16; {}] = ['
             .format(len(hash_table)),
@@ -156,6 +166,15 @@ def gen_descriptors(sgrp, fmt):
                 fmt.line('0xffff,')
             else:
                 fmt.line('{},'.format(h.descriptor_index))
+
+    with fmt.indented(
+            'static PRESETS: [(u8, u8); {}] = ['
+            .format(len(sgrp.presets) * sgrp.settings_size),
+            '];'):
+        for preset in sgrp.presets:
+            fmt.comment(preset.name)
+            for mask, value in preset.layout():
+                fmt.format('(0b{:08b}, 0b{:08b}),', mask, value)
 
 
 def gen_template(sgrp, fmt):
@@ -175,6 +194,7 @@ def gen_template(sgrp, fmt):
         fmt.line('hash_table: &HASH_TABLE,')
         vs = ', '.join('{:#04x}'.format(x) for x in v)
         fmt.line('defaults: &[ {} ],'.format(vs))
+        fmt.line('presets: &PRESETS,')
 
     fmt.doc_comment(
             'Create a `settings::Builder` for the {} settings group.'

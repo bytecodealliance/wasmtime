@@ -108,8 +108,8 @@ impl settings::Configurable for Builder {
         self.setup.set(name, value)
     }
 
-    fn set_bool(&mut self, name: &str, value: bool) -> settings::Result<()> {
-        self.setup.set_bool(name, value)
+    fn enable(&mut self, name: &str) -> settings::Result<()> {
+        self.setup.enable(name)
     }
 }
 
