@@ -142,8 +142,8 @@ impl Pressure {
     ///
     /// This is the out-of-line slow path for `check_avail()`.
     fn check_avail_aliased(&self, entry: &TopRC) -> RegClassMask {
-        let first = entry.first_toprc as usize;
-        let num = entry.num_toprcs as usize;
+        let first = usize::from(entry.first_toprc);
+        let num = usize::from(entry.num_toprcs);
         let width = entry.width as u32;
         let ulimit = entry.limit * width;
 

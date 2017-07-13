@@ -28,7 +28,7 @@ struct Args {
 impl Args {
     fn new(bits: u16, gpr: &'static [RU], fpr_limit: usize) -> Args {
         Args {
-            pointer_bytes: bits as u32 / 8,
+            pointer_bytes: u32::from(bits) / 8,
             pointer_bits: bits,
             pointer_type: ir::Type::int(bits).unwrap(),
             gpr,

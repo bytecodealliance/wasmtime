@@ -124,7 +124,7 @@ impl EncInfo {
     pub fn bytes(&self, enc: Encoding) -> CodeOffset {
         self.sizing
             .get(enc.recipe())
-            .map(|s| s.bytes as CodeOffset)
+            .map(|s| CodeOffset::from(s.bytes))
             .unwrap_or(0)
     }
 

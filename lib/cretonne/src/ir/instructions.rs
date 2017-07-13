@@ -463,7 +463,7 @@ impl OpcodeConstraints {
     /// Get the offset into `TYPE_SETS` for the controlling type variable.
     /// Returns `None` if the instruction is not polymorphic.
     fn typeset_offset(self) -> Option<usize> {
-        let offset = self.typeset_offset as usize;
+        let offset = usize::from(self.typeset_offset);
         if offset < TYPE_SETS.len() {
             Some(offset)
         } else {

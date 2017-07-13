@@ -174,7 +174,7 @@ impl RegClassData {
 
     /// Get a specific register unit in this class.
     pub fn unit(&self, offset: usize) -> RegUnit {
-        let uoffset = offset * self.width as usize;
+        let uoffset = offset * usize::from(self.width);
         self.first + uoffset as RegUnit
     }
 
@@ -209,7 +209,7 @@ impl EntityRef for RegClassIndex {
     }
 
     fn index(self) -> usize {
-        self.0 as usize
+        usize::from(self.0)
     }
 }
 

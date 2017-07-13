@@ -171,8 +171,8 @@ U = EncRecipe(
 UJ = EncRecipe(
         'UJ', Jump, size=4, ins=(), outs=(), branch_range=(0, 21),
         emit='''
-        let dest = func.offsets[destination] as i64;
-        let disp = dest - sink.offset() as i64;
+        let dest = i64::from(func.offsets[destination]);
+        let disp = dest - i64::from(sink.offset());
         put_uj(bits, disp, 0, sink);
         ''')
 
@@ -190,8 +190,8 @@ SB = EncRecipe(
         ins=(GPR, GPR), outs=(),
         branch_range=(0, 13),
         emit='''
-        let dest = func.offsets[destination] as i64;
-        let disp = dest - sink.offset() as i64;
+        let dest = i64::from(func.offsets[destination]);
+        let disp = dest - i64::from(sink.offset());
         put_sb(bits, disp, in_reg0, in_reg1, sink);
         ''')
 
@@ -201,8 +201,8 @@ SBzero = EncRecipe(
         ins=(GPR), outs=(),
         branch_range=(0, 13),
         emit='''
-        let dest = func.offsets[destination] as i64;
-        let disp = dest - sink.offset() as i64;
+        let dest = i64::from(func.offsets[destination]);
+        let disp = dest - i64::from(sink.offset());
         put_sb(bits, disp, in_reg0, 0, sink);
         ''')
 
