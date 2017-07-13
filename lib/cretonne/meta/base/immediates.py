@@ -49,7 +49,7 @@ ieee64 = ImmediateKind('ieee64', 'A 64-bit immediate floating point number.')
 #:
 #: This type of immediate boolean can interact with SSA values with any
 #: :py:class:`cretonne.BoolType` type.
-boolean = ImmediateKind('boolean', 'An immediate boolean.',
+boolean = ImmediateKind('bool', 'An immediate boolean.',
                         rust_type='bool')
 
 #: A condition code for comparing integer values.

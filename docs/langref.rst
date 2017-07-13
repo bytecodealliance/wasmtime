@@ -265,6 +265,13 @@ indicate the different kinds of immediate operands on an instruction.
     A 64-bit immediate floating point number in the IEEE 754-2008 binary64
     interchange format. All bit patterns are allowed.
 
+.. type:: bool
+
+    A boolean immediate value, either false or true.
+
+    In the textual format, :type:`bool` immediates appear as 'false'
+    and 'true'.
+
 .. type:: intcc
 
     An integer condition code. See the :inst:`icmp` instruction for details.
