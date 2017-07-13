@@ -7,6 +7,7 @@ pub mod liveness;
 pub mod allocatable_set;
 pub mod live_value_tracker;
 pub mod coloring;
+pub mod virtregs;
 
 mod affinity;
 mod coalescing;
@@ -16,7 +17,6 @@ mod pressure;
 mod reload;
 mod solver;
 mod spilling;
-mod virtregs;
 
 pub use self::allocatable_set::AllocatableSet;
 pub use self::context::Context;

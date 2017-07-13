@@ -12,11 +12,12 @@
 //! memory-to-memory copies when a spilled value is passed as an EBB argument.
 
 use entity_list::{EntityList, ListPool};
-use entity_map::{EntityMap, PrimaryEntityData};
+use entity_map::{EntityMap, PrimaryEntityData, Keys};
 use ir::Value;
 use packed_option::PackedOption;
 use ref_slice::ref_slice;
 
+/// A virtual register reference.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct VirtReg(u32);
 entity_impl!(VirtReg, "vreg");
@@ -69,6 +70,11 @@ impl VirtRegs {
     /// their definition points.
     pub fn values(&self, vreg: VirtReg) -> &[Value] {
         self.vregs[vreg].as_slice(&self.pool)
+    }
+
+    /// Get an iterator over all virtual registers.
+    pub fn all_virtregs(&self) -> Keys<VirtReg> {
+        self.vregs.keys()
     }
 
     /// Get the congruence class of `value`.
