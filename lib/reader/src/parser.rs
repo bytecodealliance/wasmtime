@@ -609,7 +609,7 @@ impl<'a> Parser<'a> {
         // would slow down normal compilation, but when we're reading IL from a text file we're
         // either testing or debugging Cretonne, and verification makes sense.
         flag_builder
-            .set_bool("enable_verifier", true)
+            .enable("enable_verifier")
             .expect("Missing enable_verifier setting");
 
         while let Some(Token::Identifier(command)) = self.token() {

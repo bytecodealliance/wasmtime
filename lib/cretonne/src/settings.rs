@@ -35,10 +35,10 @@ pub trait Configurable {
     /// This can set any type of setting whether it is numeric, boolean, or enumerated.
     fn set(&mut self, name: &str, value: &str) -> Result<()>;
 
-    /// Set the value of a boolean setting by name.
+    /// Enable a boolean setting or apply a preset.
     ///
-    /// If the identified setting isn't a boolean, a `BadType` error is returned.
-    fn set_bool(&mut self, name: &str, value: bool) -> Result<()>;
+    /// If the identified setting isn't a boolean or a preset, a `BadType` error is returned.
+    fn enable(&mut self, name: &str) -> Result<()>;
 }
 
 /// Collect settings values based on a template.
@@ -73,6 +73,13 @@ impl Builder {
         }
     }
 
+    /// Apply a preset. The argument is a slice of (mask, value) bytes.
+    fn apply_preset(&mut self, values: &[(u8, u8)]) {
+        for (byte, &(mask, value)) in self.bytes.iter_mut().zip(values) {
+            *byte = (*byte & !mask) | value;
+        }
+    }
+
     /// Look up a descriptor by name.
     fn lookup(&self, name: &str) -> Result<(usize, detail::Detail)> {
         match probe(self.template, name, simple_hash(name)) {
@@ -101,14 +108,19 @@ fn parse_enum_value(value: &str, choices: &[&str]) -> Result<u8> {
 }
 
 impl Configurable for Builder {
-    fn set_bool(&mut self, name: &str, value: bool) -> Result<()> {
+    fn enable(&mut self, name: &str) -> Result<()> {
         use self::detail::Detail;
         let (offset, detail) = self.lookup(name)?;
-        if let Detail::Bool { bit } = detail {
-            self.set_bit(offset, bit, value);
-            Ok(())
-        } else {
-            Err(Error::BadType)
+        match detail {
+            Detail::Bool { bit } => {
+                self.set_bit(offset, bit, true);
+                Ok(())
+            }
+            Detail::Preset => {
+                self.apply_preset(&self.template.presets[offset..]);
+                Ok(())
+            }
+            _ => Err(Error::BadType),
         }
     }
 
@@ -128,6 +140,7 @@ impl Configurable for Builder {
                 self.bytes[offset] = parse_enum_value(value,
                                                       self.template.enums(last, enumerators))?;
             }
+            Detail::Preset => return Err(Error::BadName),
         }
         Ok(())
     }
@@ -169,6 +182,8 @@ pub mod detail {
         pub hash_table: &'static [u16],
         /// Default values.
         pub defaults: &'static [u8],
+        /// Pairs of (mask, value) for presets.
+        pub presets: &'static [(u8, u8)],
     }
 
     impl Template {
@@ -197,6 +212,8 @@ pub mod detail {
                         write!(f, "{}", byte)
                     }
                 }
+                // Presets aren't printed. They are reflected in the other settings.
+                Detail::Preset { .. } => Ok(()),
             }
         }
     }
@@ -251,6 +268,11 @@ pub mod detail {
             /// First enumerator in the ENUMERATORS table.
             enumerators: u16,
         },
+
+        /// A preset is not an individual setting, it is a collection of settings applied at once.
+        ///
+        /// The `Descriptor::offset` field refers to the `PRESETS` table.
+        Preset,
     }
 }
 
@@ -284,9 +306,9 @@ mod tests {
     #[test]
     fn modify_bool() {
         let mut b = builder();
-        assert_eq!(b.set_bool("not_there", true), Err(BadName));
-        assert_eq!(b.set_bool("enable_simd", true), Ok(()));
-        assert_eq!(b.set_bool("enable_simd", false), Ok(()));
+        assert_eq!(b.enable("not_there"), Err(BadName));
+        assert_eq!(b.enable("enable_simd"), Ok(()));
+        assert_eq!(b.set("enable_simd", "false"), Ok(()));
 
         let f = Flags::new(&b);
         assert_eq!(f.enable_simd(), false);

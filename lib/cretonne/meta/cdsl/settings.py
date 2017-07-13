@@ -4,7 +4,8 @@ from collections import OrderedDict
 from .predicates import Predicate
 
 try:
-    from typing import Set, List, Dict, Any, TYPE_CHECKING  # noqa
+    from typing import Tuple, Set, List, Dict, Any, Union, TYPE_CHECKING  # noqa
+    BoolOrPresetOrDict = Union['BoolSetting', 'Preset', Dict['Setting', Any]]
     if TYPE_CHECKING:
         from .predicates import PredLeaf, PredNode  # noqa
 except ImportError:
@@ -47,6 +48,17 @@ class Setting(object):
         # type: () -> int
         raise NotImplementedError("default_byte is an abstract method")
 
+    def byte_for_value(self, value):
+        # type: (Any) -> int
+        """Get the setting byte value that corresponds to `value`"""
+        raise NotImplementedError("byte_for_value is an abstract method")
+
+    def byte_mask(self):
+        # type: () -> int
+        """Get a mask of bits in our byte that are relevant to this setting."""
+        # Only BoolSetting has a different mask.
+        return 0xff
+
 
 class BoolSetting(Setting):
     """
@@ -72,6 +84,17 @@ class BoolSetting(Setting):
             return 1 << self.bit_offset
         else:
             return 0
+
+    def byte_for_value(self, value):
+        # type: (Any) -> int
+        if value:
+            return 1 << self.bit_offset
+        else:
+            return 0
+
+    def byte_mask(self):
+        # type: () -> int
+        return 1 << self.bit_offset
 
     def predicate_leafs(self, leafs):
         # type: (Set[PredLeaf]) -> None
@@ -107,6 +130,12 @@ class NumSetting(Setting):
         # type: () -> int
         return self.default
 
+    def byte_for_value(self, value):
+        # type: (Any) -> int
+        assert isinstance(value, int), "NumSetting must be set to an int"
+        assert value >= 0 and value <= 255
+        return value
+
 
 class EnumSetting(Setting):
     """
@@ -128,6 +157,10 @@ class EnumSetting(Setting):
     def default_byte(self):
         # type: () -> int
         return 0
+
+    def byte_for_value(self, value):
+        # type: (Any) -> int
+        return self.values.index(value)
 
 
 class SettingGroup(object):
@@ -160,6 +193,7 @@ class SettingGroup(object):
         # - Added parent predicates that are replicated in this group.
         # Maps predicate -> number.
         self.predicate_number = OrderedDict()  # type: OrderedDict[PredNode, int]  # noqa
+        self.presets = []  # type: List[Preset]
 
         # Fully qualified Rust module name. See gen_settings.py.
         self.qual_mod = None  # type: str
@@ -199,6 +233,10 @@ class SettingGroup(object):
                     assert obj.name is None
                     obj.name = name
                     self.named_predicates.append(obj)
+                if isinstance(obj, Preset):
+                    assert obj.name is None, obj.name
+                    obj.name = name
+
         self.layout()
 
     @staticmethod
@@ -207,6 +245,14 @@ class SettingGroup(object):
         g = SettingGroup._current
         assert g, "Open a setting group before defining settings."
         g.settings.append(setting)
+        return g
+
+    @staticmethod
+    def append_preset(preset):
+        # type: (Preset) -> SettingGroup
+        g = SettingGroup._current
+        assert g, "Open a setting group before defining presets."
+        g.presets.append(preset)
         return g
 
     def number_predicate(self, pred):
@@ -295,3 +341,65 @@ class SettingGroup(object):
         predcate bits rounded up to a whole number of bytes.
         """
         return self.boolean_offset + (len(self.predicate_number) + 7) // 8
+
+
+class Preset(object):
+    """
+    A collection of setting values that are applied at once.
+
+    A `Preset` represents a shorthand notation for applying a number of
+    settings at once. Example:
+
+        nehalem = Preset(has_sse41, has_cmov, has_avx=0)
+
+    Enabling the `nehalem` setting is equivalent to enabling `has_sse41` and
+    `has_cmov` while disabling the `has_avx` setting.
+    """
+
+    def __init__(self, *args):
+        # type: (*BoolOrPresetOrDict) -> None
+        self.name = None  # type: str  # Assigned later by `SettingGroup`.
+        # Each tuple provides the value for a setting.
+        self.values = list()  # type: List[Tuple[Setting, Any]]
+
+        for arg in args:
+            if isinstance(arg, Preset):
+                # Any presets in args are immediately expanded.
+                self.values.extend(arg.values)
+            elif isinstance(arg, dict):
+                # A dictionary of key: value pairs.
+                self.values.extend(arg.items())
+            else:
+                # A BoolSetting to enable.
+                assert isinstance(arg, BoolSetting)
+                self.values.append((arg, True))
+
+        self.group = SettingGroup.append_preset(self)
+        # Index into the generated DESCRIPTORS table.
+        self.descriptor_index = None  # type: int
+
+    def layout(self):
+        # type: () -> List[Tuple[int, int]]
+        """
+        Compute a list of (mask, byte) pairs that incorporate all values in
+        this preset.
+
+        The list will have an entry for each setting byte in the settings
+        group.
+        """
+        l = [(0, 0)] * self.group.settings_size
+
+        # Apply setting values in order.
+        for s, v in self.values:
+            ofs = s.byte_offset
+            s_mask = s.byte_mask()
+            s_val = s.byte_for_value(v)
+            assert (s_val & ~s_mask) == 0
+            l_mask, l_val = l[ofs]
+            # Accumulated mask of modified bits.
+            l_mask |= s_mask
+            # Overwrite the relevant bits with the new value.
+            l_val = (l_val & ~s_mask) | s_val
+            l[ofs] = (l_mask, l_val)
+
+        return l

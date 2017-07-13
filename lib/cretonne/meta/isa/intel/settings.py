@@ -2,7 +2,7 @@
 Intel settings.
 """
 from __future__ import absolute_import
-from cdsl.settings import SettingGroup, BoolSetting
+from cdsl.settings import SettingGroup, BoolSetting, Preset
 from cdsl.predicates import And
 import base.settings as shared
 from .defs import ISA
@@ -37,5 +37,11 @@ use_sse42 = And(has_sse42, use_sse41)
 use_popcnt = And(has_popcnt, has_sse42)
 use_bmi1 = And(has_bmi1)
 use_lzcnt = And(has_lzcnt)
+
+# Presets corresponding to Intel CPUs.
+
+nehalem = Preset(
+        has_sse2, has_sse3, has_ssse3, has_sse41, has_sse42, has_popcnt)
+haswell = Preset(nehalem, has_bmi1, has_lzcnt)
 
 ISA.settings.close(globals())
