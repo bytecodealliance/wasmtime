@@ -112,6 +112,19 @@ ebb0:
     ; asm: imull %ecx, %esi
     [-,%rsi]             v51 = imul v2, v1       ; bin: 0f af f1
 
+    ; asm: movl $1, %eax
+    [-,%rax]      v52 = iconst.i32 1                    ; bin: b8 00000001
+    ; asm: movl $2, %edx
+    [-,%rdx]      v53 = iconst.i32 2                    ; bin: ba 00000002
+    ; asm: idivl %ecx
+    [-,%rax,%rdx] v54, v55 = x86_sdivmodx v52, v53, v1  ; bin: f7 f9
+    ; asm: idivl %esi
+    [-,%rax,%rdx] v56, v57 = x86_sdivmodx v52, v53, v2  ; bin: f7 fe
+    ; asm: divl %ecx
+    [-,%rax,%rdx] v58, v59 = x86_udivmodx v52, v53, v1  ; bin: f7 f1
+    ; asm: divl %esi
+    [-,%rax,%rdx] v60, v61 = x86_udivmodx v52, v53, v2  ; bin: f7 f6
+
     ; Register copies.
 
     ; asm: movl %esi, %ecx

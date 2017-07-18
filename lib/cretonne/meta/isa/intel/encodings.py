@@ -8,6 +8,7 @@ from base.formats import UnaryImm
 from .defs import I32, I64
 from . import recipes as r
 from . import settings as cfg
+from . import instructions as x86
 
 for inst,           opc in [
         (base.iadd, 0x01),
@@ -27,6 +28,14 @@ I32.enc(base.imul.i32, *r.rrx(0x0f, 0xaf))
 I64.enc(base.imul.i64, *r.rrx.rex(0x0f, 0xaf, w=1))
 I64.enc(base.imul.i32, *r.rrx.rex(0x0f, 0xaf))
 I64.enc(base.imul.i32, *r.rrx(0x0f, 0xaf))
+
+for inst,              rrr in [
+        (x86.sdivmodx, 7),
+        (x86.udivmodx, 6)]:
+    I32.enc(inst.i32, *r.div(0xf7, rrr=rrr))
+    I64.enc(inst.i64, *r.div.rex(0xf7, rrr=rrr, w=1))
+    I64.enc(inst.i32, *r.div.rex(0xf7, rrr=rrr))
+    I64.enc(inst.i32, *r.div(0xf7, rrr=rrr))
 
 I32.enc(base.copy.i32, *r.umr(0x89))
 I64.enc(base.copy.i64, *r.umr.rex(0x89, w=1))

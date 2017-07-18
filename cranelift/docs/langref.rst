@@ -775,15 +775,31 @@ the target ISA.
 .. autoinst:: isplit
 .. autoinst:: iconcat
 
-Base instruction group
-======================
+ISA-specific instructions
+=========================
+
+Target ISAs can define supplemental instructions that do not make sense to
+support generally.
+
+Intel
+-----
+
+Instructions that can only be used by the Intel target ISA.
+
+.. autoinst:: isa.intel.instructions.sdivmodx
+.. autoinst:: isa.intel.instructions.udivmodx
+
+Instruction groups
+==================
 
 All of the shared instructions are part of the :instgroup:`base` instruction
 group.
 
 .. autoinstgroup:: base.instructions.GROUP
 
-Target ISAs may define further instructions in their own instruction groups.
+Target ISAs may define further instructions in their own instruction groups:
+
+.. autoinstgroup:: isa.intel.instructions.GROUP
 
 Implementation limits
 =====================
