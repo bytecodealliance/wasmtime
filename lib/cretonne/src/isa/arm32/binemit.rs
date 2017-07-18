@@ -2,6 +2,7 @@
 
 use binemit::{CodeSink, bad_encoding};
 use ir::{Function, Inst};
+use regalloc::RegDiversions;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-arm32.rs"));
 

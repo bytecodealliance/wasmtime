@@ -91,8 +91,12 @@ impl TargetIsa for Isa {
         abi::allocatable_registers(func)
     }
 
-    fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut CodeSink) {
-        binemit::emit_inst(func, inst, sink)
+    fn emit_inst(&self,
+                 func: &ir::Function,
+                 inst: ir::Inst,
+                 divert: &mut regalloc::RegDiversions,
+                 sink: &mut CodeSink) {
+        binemit::emit_inst(func, inst, divert, sink)
     }
 
     fn emit_function(&self, func: &ir::Function, sink: &mut MemoryCodeSink) {
