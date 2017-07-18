@@ -31,6 +31,9 @@ def gen_recipe(recipe, fmt):
     want_outs = any(isinstance(o, RegClass) or isinstance(o, Stack)
                     for o in recipe.outs)
 
+    # Regmove instructions get special treatment.
+    is_regmove = (recipe.format.name == 'RegMove')
+
     # First unpack the instruction.
     with fmt.indented(
             'if let InstructionData::{} {{'.format(iform.name),
@@ -46,7 +49,7 @@ def gen_recipe(recipe, fmt):
         fmt.outdented_line('} = func.dfg[inst] {')
 
         # Normalize to an `args` array.
-        if want_args:
+        if want_args and not is_regmove:
             if iform.has_value_list:
                 fmt.line('let args = args.as_slice(&func.dfg.value_lists);')
             elif nvops == 1:
@@ -56,11 +59,11 @@ def gen_recipe(recipe, fmt):
         # Don't bother with fixed registers.
         args = ''
         for i, arg in enumerate(recipe.ins):
-            if isinstance(arg, RegClass):
+            if isinstance(arg, RegClass) and not is_regmove:
                 v = 'in_reg{}'.format(i)
                 args += ', ' + v
                 fmt.line(
-                    'let {} = func.locations[args[{}]].unwrap_reg();'
+                    'let {} = divert.reg(args[{}], &func.locations);'
                     .format(v, i))
             elif isinstance(arg, Stack):
                 v = 'in_ss{}'.format(i)
@@ -93,6 +96,11 @@ def gen_recipe(recipe, fmt):
                         'let {} = func.locations[results[{}]].unwrap_stack();'
                         .format(v, i))
 
+        # Special handling for regmove instructions. Update the register
+        # diversion tracker.
+        if recipe.format.name == 'RegMove':
+            fmt.line('divert.regmove(arg, src, dst);')
+
         # Call hand-written code. If the recipe contains a code snippet, use
         # that. Otherwise cal a recipe function in the target ISA's binemit
         # module.
@@ -118,13 +126,15 @@ def gen_isa(isa, fmt):
         # No encoding recipes: Emit a stub.
         with fmt.indented(
                 'pub fn emit_inst<CS: CodeSink + ?Sized>'
-                '(func: &Function, inst: Inst, _sink: &mut CS) {', '}'):
+                '(func: &Function, inst: Inst, '
+                '_divert: &mut RegDiversions, _sink: &mut CS) {', '}'):
             fmt.line('bad_encoding(func, inst)')
     else:
         fmt.line('#[allow(unused_variables, unreachable_code)]')
         with fmt.indented(
                 'pub fn emit_inst<CS: CodeSink + ?Sized>'
-                '(func: &Function, inst: Inst, sink: &mut CS) {', '}'):
+                '(func: &Function, inst: Inst, '
+                'divert: &mut RegDiversions, sink: &mut CS) {', '}'):
             fmt.line('let bits = func.encodings[inst].bits();')
             with fmt.indented('match func.encodings[inst].recipe() {', '}'):
                 for i, recipe in enumerate(isa.all_recipes):

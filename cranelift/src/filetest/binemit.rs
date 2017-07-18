@@ -10,6 +10,7 @@ use cretonne::binemit;
 use cretonne::ir;
 use cretonne::ir::entities::AnyEntity;
 use cretonne::isa::TargetIsa;
+use cretonne::regalloc::RegDiversions;
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result};
 use utils::{match_directive, pretty_error};
@@ -147,7 +148,9 @@ impl SubTest for TestBinEmit {
 
         // Now emit all instructions.
         let mut sink = TextSink::new(isa);
+        let mut divert = RegDiversions::new();
         for ebb in func.layout.ebbs() {
+            divert.clear();
             // Correct header offsets should have been computed by `relax_branches()`.
             assert_eq!(sink.offset,
                        func.offsets[ebb],
@@ -160,7 +163,7 @@ impl SubTest for TestBinEmit {
                 // Send legal encodings into the emitter.
                 if enc.is_legal() {
                     let before = sink.offset;
-                    isa.emit_inst(&func, inst, &mut sink);
+                    isa.emit_inst(&func, inst, &mut divert, &mut sink);
                     let emitted = sink.offset - before;
                     // Verify the encoding recipe sizes against the ISAs emit_inst implementation.
                     assert_eq!(emitted,

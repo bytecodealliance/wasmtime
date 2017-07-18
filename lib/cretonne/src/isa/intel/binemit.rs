@@ -3,6 +3,7 @@
 use binemit::{CodeSink, Reloc, bad_encoding};
 use ir::{Function, Inst, InstructionData};
 use isa::RegUnit;
+use regalloc::RegDiversions;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-intel.rs"));
 

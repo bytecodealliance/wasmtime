@@ -215,7 +215,11 @@ pub trait TargetIsa {
     ///
     /// Note that this will call `put*` methods on the trait object via its vtable which is not the
     /// fastest way of emitting code.
-    fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut binemit::CodeSink);
+    fn emit_inst(&self,
+                 func: &ir::Function,
+                 inst: ir::Inst,
+                 divert: &mut regalloc::RegDiversions,
+                 sink: &mut binemit::CodeSink);
 
     /// Emit a whole function into memory.
     ///

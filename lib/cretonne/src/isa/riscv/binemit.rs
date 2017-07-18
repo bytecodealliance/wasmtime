@@ -4,6 +4,7 @@ use binemit::{CodeSink, Reloc, bad_encoding};
 use ir::{Function, Inst, InstructionData};
 use isa::RegUnit;
 use predicates::is_signed_int;
+use regalloc::RegDiversions;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-riscv.rs"));
 

@@ -10,6 +10,7 @@ pub use self::relaxation::relax_branches;
 pub use self::memorysink::{MemoryCodeSink, RelocSink};
 
 use ir::{Ebb, FuncRef, JumpTable, Function, Inst};
+use regalloc::RegDiversions;
 
 /// Offset in bytes from the beginning of the function.
 ///
@@ -64,13 +65,14 @@ pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
 /// appropriate instruction emitter.
 pub fn emit_function<CS, EI>(func: &Function, emit_inst: EI, sink: &mut CS)
     where CS: CodeSink,
-          EI: Fn(&Function, Inst, &mut CS)
+          EI: Fn(&Function, Inst, &mut RegDiversions, &mut CS)
 {
+    let mut divert = RegDiversions::new();
     for ebb in func.layout.ebbs() {
+        divert.clear();
         assert_eq!(func.offsets[ebb], sink.offset());
         for inst in func.layout.ebb_insts(ebb) {
-            emit_inst(func, inst, sink);
+            emit_inst(func, inst, &mut divert, sink);
         }
-
     }
 }
