@@ -9,7 +9,7 @@
 //! contexts concurrently. Typically, you would have one context per compilation thread and only a
 //! single ISA instance.
 
-use binemit::{CodeOffset, relax_branches};
+use binemit::{CodeOffset, relax_branches, MemoryCodeSink, RelocSink};
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir::Function;
@@ -69,6 +69,16 @@ impl Context {
         self.legalize(isa)?;
         self.regalloc(isa)?;
         self.relax_branches(isa)
+    }
+
+    /// Emit machine code directly into raw memory.
+    ///
+    /// Write all of the function's machine code to the memory at `mem`. The size of the machine
+    /// code is returned by `compile` above.
+    ///
+    /// The machine code is not relocated. Instead, any relocations are emitted into `relocs`.
+    pub fn emit_to_memory(&self, mem: *mut u8, relocs: &mut RelocSink, isa: &TargetIsa) {
+        isa.emit_function(&self.func, &mut MemoryCodeSink::new(mem, relocs));
     }
 
     /// Run the verifier on the function.

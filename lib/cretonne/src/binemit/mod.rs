@@ -4,8 +4,10 @@
 //! binary machine code.
 
 mod relaxation;
+mod memorysink;
 
 pub use self::relaxation::relax_branches;
+pub use self::memorysink::{MemoryCodeSink, RelocSink};
 
 use ir::{Ebb, FuncRef, JumpTable, Function, Inst};
 
@@ -54,4 +56,21 @@ pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
     panic!("Bad encoding {} for {}",
            func.encodings[inst],
            func.dfg.display_inst(inst, None));
+}
+
+/// Emit a function to `sink`, given an instruction emitter function.
+///
+/// This function is called from the `TargetIsa::emit_function()` implementations with the
+/// appropriate instruction emitter.
+pub fn emit_function<CS, EI>(func: &Function, emit_inst: EI, sink: &mut CS)
+    where CS: CodeSink,
+          EI: Fn(&Function, Inst, &mut CS)
+{
+    for ebb in func.layout.ebbs() {
+        assert_eq!(func.offsets[ebb], sink.offset());
+        for inst in func.layout.ebb_insts(ebb) {
+            emit_inst(func, inst, sink);
+        }
+
+    }
 }
