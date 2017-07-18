@@ -44,7 +44,7 @@ pub use isa::constraints::{RecipeConstraints, OperandConstraint, ConstraintKind,
 pub use isa::encoding::{Encoding, EncInfo};
 pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex, regs_overlap};
 
-use binemit::CodeSink;
+use binemit;
 use settings;
 use ir;
 use regalloc;
@@ -215,7 +215,12 @@ pub trait TargetIsa {
     ///
     /// Note that this will call `put*` methods on the trait object via its vtable which is not the
     /// fastest way of emitting code.
-    fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut CodeSink);
+    fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut binemit::CodeSink);
+
+    /// Emit a whole function into memory.
+    ///
+    /// This is more performant than calling `emit_inst` for each instruction.
+    fn emit_function(&self, func: &ir::Function, sink: &mut binemit::MemoryCodeSink);
 
     /// Get a static array of names associated with relocations in this ISA.
     ///

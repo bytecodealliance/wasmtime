@@ -51,12 +51,9 @@ impl SubTest for TestCompile {
 
         // Finally verify that the returned code size matches the emitted bytes.
         let mut sink = SizeSink { offset: 0 };
-        for ebb in comp_ctx.func.layout.ebbs() {
-            assert_eq!(sink.offset, comp_ctx.func.offsets[ebb]);
-            for inst in comp_ctx.func.layout.ebb_insts(ebb) {
-                isa.emit_inst(&comp_ctx.func, inst, &mut sink);
-            }
-        }
+        binemit::emit_function(&comp_ctx.func,
+                               |func, inst, sink| isa.emit_inst(func, inst, sink),
+                               &mut sink);
 
         if sink.offset != code_size {
             return Err(format!("Expected code size {}, got {}", code_size, sink.offset));

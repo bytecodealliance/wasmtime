@@ -6,7 +6,7 @@ mod binemit;
 mod enc_tables;
 mod registers;
 
-use binemit::CodeSink;
+use binemit::{CodeSink, MemoryCodeSink, emit_function};
 use super::super::settings as shared_settings;
 use isa::enc_tables::{lookup_enclist, Encodings};
 use isa::Builder as IsaBuilder;
@@ -86,6 +86,10 @@ impl TargetIsa for Isa {
 
     fn emit_inst(&self, func: &ir::Function, inst: ir::Inst, sink: &mut CodeSink) {
         binemit::emit_inst(func, inst, sink)
+    }
+
+    fn emit_function(&self, func: &ir::Function, sink: &mut MemoryCodeSink) {
+        emit_function(func, binemit::emit_inst, sink)
     }
 
     fn reloc_names(&self) -> &'static [&'static str] {
