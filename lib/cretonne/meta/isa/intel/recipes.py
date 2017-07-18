@@ -6,7 +6,7 @@ from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Call, IndirectCall, Store, Load
-from base.formats import RegMove, Ternary
+from base.formats import RegMove, Ternary, Jump, Branch
 from .registers import GPR, ABCD
 
 try:
@@ -419,4 +419,48 @@ ret = TailRecipe(
         'ret', MultiAry, size=0, ins=(), outs=(),
         emit='''
         PUT_OP(bits, BASE_REX, sink);
+        ''')
+
+#
+# Branches
+#
+jmpb = TailRecipe(
+        'jmpb', Jump, size=1, ins=(), outs=(),
+        branch_range=(2, 8),
+        emit='''
+        PUT_OP(bits, BASE_REX, sink);
+        disp1(destination, func, sink);
+        ''')
+
+jmpd = TailRecipe(
+        'jmpd', Jump, size=4, ins=(), outs=(),
+        branch_range=(5, 32),
+        emit='''
+        PUT_OP(bits, BASE_REX, sink);
+        disp4(destination, func, sink);
+        ''')
+
+# Test-and-branch.
+#
+# This recipe represents the macro fusion of a test and a conditional branch.
+# This serves two purposes:
+#
+# 1. Guarantee that the test and branch get scheduled next to each other so
+#    macro fusion is guaranteed to be possible.
+# 2. Hide the status flags from Cretonne which doesn't currently model flags.
+#
+# The encoding bits affect both the test and the branch instruction:
+#
+# Bits 0-7 are the Jcc opcode.
+# Bits 8-15 control the test instruction which always has opcode byte 0x85.
+tjccb = TailRecipe(
+        'tjcc', Branch, size=1 + 2, ins=GPR, outs=(),
+        branch_range=(2, 8),
+        emit='''
+        // test r, r.
+        PUT_OP((bits & 0xff00) | 0x85, rex2(in_reg0, in_reg0), sink);
+        modrm_rr(in_reg0, in_reg0, sink);
+        // Jcc instruction.
+        sink.put1(bits as u8);
+        disp1(destination, func, sink);
         ''')

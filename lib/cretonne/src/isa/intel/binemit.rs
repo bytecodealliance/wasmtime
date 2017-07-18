@@ -1,7 +1,7 @@
 //! Emitting binary Intel machine code.
 
 use binemit::{CodeSink, Reloc, bad_encoding};
-use ir::{Function, Inst, InstructionData};
+use ir::{Function, Inst, Ebb, InstructionData};
 use isa::RegUnit;
 use regalloc::RegDiversions;
 
@@ -168,4 +168,16 @@ fn modrm_disp32<CS: CodeSink + ?Sized>(rm: RegUnit, reg: RegUnit, sink: &mut CS)
     b |= reg << 3;
     b |= rm;
     sink.put1(b);
+}
+
+/// Emit a single-byte branch displacement to `destination`.
+fn disp1<CS: CodeSink + ?Sized>(destination: Ebb, func: &Function, sink: &mut CS) {
+    let delta = func.offsets[destination].wrapping_sub(sink.offset() + 1);
+    sink.put1(delta as u8);
+}
+
+/// Emit a single-byte branch displacement to `destination`.
+fn disp4<CS: CodeSink + ?Sized>(destination: Ebb, func: &Function, sink: &mut CS) {
+    let delta = func.offsets[destination].wrapping_sub(sink.offset() + 4);
+    sink.put4(delta);
 }

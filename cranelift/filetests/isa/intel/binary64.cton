@@ -192,7 +192,35 @@ ebb0:
     ; asm: tzcntq %rcx, %r10
     [-,%r10]            v208 = ctz v1           ; bin: f3 4c 0f bc d1
 
+    ; asm: testq %rcx, %ecx
+    ; asm: je ebb1
+    brz v1, ebb1                                ; bin: 48 85 c9 74 1b
+    ; asm: testq %rsi, %esi
+    ; asm: je ebb1
+    brz v2, ebb1                                ; bin: 48 85 f6 74 16
+    ; asm: testq %r10, %r10d
+    ; asm: je ebb1
+    brz v3, ebb1                                ; bin: 4d 85 d2 74 11
+    ; asm: testq %rcx, %ecx
+    ; asm: jne ebb1
+    brnz v1, ebb1                               ; bin: 48 85 c9 75 0c
+    ; asm: test %rsi, %esi
+    ; asm: jne ebb1
+    brnz v2, ebb1                               ; bin: 48 85 f6 75 07
+    ; asm: testq %r10, %r10d
+    ; asm: jne ebb1
+    brnz v3, ebb1                               ; bin: 4d 85 d2 75 02
+
+    ; asm: jmp ebb2
+    jump ebb2                                   ; bin: eb 01
+
+    ; asm: ebb1:
+ebb1:
     return                                       ; bin: c3
+
+    ; asm: ebb2:
+ebb2:
+    jump ebb1                                   ; bin: eb fd
 }
 
 ; Tests for i32 instructions in 64-bit mode.
@@ -384,5 +412,33 @@ ebb0:
     ; asm: tzcntl %ecx, %r10d
     [-,%r10]            v208 = ctz v1            ; bin: f3 44 0f bc d1
 
+    ; asm: testl %ecx, %ecx
+    ; asm: je ebb1
+    brz v1, ebb1                                ; bin: 40 85 c9 74 1b
+    ; asm: testl %esi, %esi
+    ; asm: je ebb1
+    brz v2, ebb1                                ; bin: 40 85 f6 74 16
+    ; asm: testl %r10d, %r10d
+    ; asm: je ebb1
+    brz v3, ebb1                                ; bin: 45 85 d2 74 11
+    ; asm: testl %ecx, %ecx
+    ; asm: jne ebb1
+    brnz v1, ebb1                               ; bin: 40 85 c9 75 0c
+    ; asm: test %esi, %esi
+    ; asm: jne ebb1
+    brnz v2, ebb1                               ; bin: 40 85 f6 75 07
+    ; asm: testl %r10d, %r10d
+    ; asm: jne ebb1
+    brnz v3, ebb1                               ; bin: 45 85 d2 75 02
+
+    ; asm: jmp ebb2
+    jump ebb2                                   ; bin: eb 01
+
+    ; asm: ebb1:
+ebb1:
     return                                       ; bin: c3
+
+    ; asm: ebb2:
+ebb2:
+    jump ebb1                                   ; bin: eb fd
 }
