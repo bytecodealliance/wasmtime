@@ -23,6 +23,11 @@ for inst,           opc in [
     # default. Otherwise reg-alloc would never use r8 and up.
     I64.enc(inst.i32, *r.rr(opc))
 
+I32.enc(base.imul.i32, *r.rrx(0x0f, 0xaf))
+I64.enc(base.imul.i64, *r.rrx.rex(0x0f, 0xaf, w=1))
+I64.enc(base.imul.i32, *r.rrx.rex(0x0f, 0xaf))
+I64.enc(base.imul.i32, *r.rrx(0x0f, 0xaf))
+
 I32.enc(base.copy.i32, *r.umr(0x89))
 I64.enc(base.copy.i64, *r.umr.rex(0x89, w=1))
 I64.enc(base.copy.i32, *r.umr.rex(0x89))

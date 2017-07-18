@@ -76,6 +76,14 @@ fn put_op2<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     sink.put1(bits as u8);
 }
 
+// Emit two-byte opcode: 0F XX with REX prefix.
+fn put_rexop2<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
+    debug_assert_eq!(bits & 0x0f00, 0x0400, "Invalid encoding bits for RexOp2*");
+    rex_prefix(bits, rex, sink);
+    sink.put1(0x0f);
+    sink.put1(bits as u8);
+}
+
 // Emit single-byte opcode with mandatory prefix.
 fn put_mp1<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     debug_assert_eq!(bits & 0x8c00, 0, "Invalid encoding bits for Mp1*");

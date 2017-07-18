@@ -145,6 +145,15 @@ ebb0:
     ; asm: movq %rcx, %r10
     [-,%r10]             v112 = copy v1          ; bin: 49 89 ca
 
+    ; More arithmetic.
+
+    ; asm: imulq %rsi, %rcx
+    [-,%rcx]             v120 = imul v1, v2       ; bin: 48 0f af ce
+    ; asm: imulq %r10, %rsi
+    [-,%rsi]             v121 = imul v2, v3       ; bin: 49 0f af f2
+    ; asm: imulq %rcx, %r10
+    [-,%r10]             v122 = imul v3, v1       ; bin: 4c 0f af d1
+
     ; Bit-counting instructions.
 
     ; asm: popcntq %rsi, %rcx
@@ -312,6 +321,15 @@ ebb0:
     [-,%rsi]             v111 = copy v3          ; bin: 44 89 d6
     ; asm: movl %ecx, %r10d
     [-,%r10]             v112 = copy v1          ; bin: 41 89 ca
+
+    ; More arithmetic.
+
+    ; asm: imull %esi, %ecx
+    [-,%rcx]             v120 = imul v1, v2       ; bin: 40 0f af ce
+    ; asm: imull %r10d, %esi
+    [-,%rsi]             v121 = imul v2, v3       ; bin: 41 0f af f2
+    ; asm: imull %ecx, %r10d
+    [-,%r10]             v122 = imul v3, v1       ; bin: 44 0f af d1
 
     ; Bit-counting instructions.
 
