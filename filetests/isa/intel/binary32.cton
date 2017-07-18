@@ -105,6 +105,13 @@ ebb0:
     ; asm: xorl $1000000, %esi
     [-,%rsi]             v47 = bxor_imm v2, 1000000 ; bin: 81 f6 000f4240
 
+    ; More arithmetic.
+
+    ; asm: imull %esi, %ecx
+    [-,%rcx]             v50 = imul v1, v2       ; bin: 0f af ce
+    ; asm: imull %ecx, %esi
+    [-,%rsi]             v51 = imul v2, v1       ; bin: 0f af f1
+
     ; Register copies.
 
     ; asm: movl %esi, %ecx

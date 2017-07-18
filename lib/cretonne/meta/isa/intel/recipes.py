@@ -197,6 +197,14 @@ rr = TailRecipe(
         modrm_rr(in_reg0, in_reg1, sink);
         ''')
 
+# XX /r with operands swapped. (RM form).
+rrx = TailRecipe(
+        'rrx', Binary, size=1, ins=(GPR, GPR), outs=0,
+        emit='''
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
+        modrm_rr(in_reg1, in_reg0, sink);
+        ''')
+
 # XX /r, but for a unary operator with separate input/output register, like
 # copies. MR form.
 umr = TailRecipe(
