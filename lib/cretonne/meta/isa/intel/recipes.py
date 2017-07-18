@@ -6,7 +6,7 @@ from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Call, IndirectCall, Store, Load
-from base.formats import RegMove
+from base.formats import RegMove, Ternary
 from .registers import GPR, ABCD
 
 try:
@@ -237,6 +237,15 @@ rc = TailRecipe(
         emit='''
         PUT_OP(bits, rex1(in_reg0), sink);
         modrm_r_bits(in_reg0, bits, sink);
+        ''')
+
+# XX /n for division: inputs in %rax, %rdx, r. Outputs in %rax, %rdx.
+div = TailRecipe(
+        'div', Ternary, size=1,
+        ins=(GPR.rax, GPR.rdx, GPR), outs=(GPR.rax, GPR.rdx),
+        emit='''
+        PUT_OP(bits, rex1(in_reg2), sink);
+        modrm_r_bits(in_reg2, bits, sink);
         ''')
 
 # XX /n ib with 8-bit immediate sign-extended.

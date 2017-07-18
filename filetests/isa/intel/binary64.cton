@@ -154,6 +154,21 @@ ebb0:
     ; asm: imulq %rcx, %r10
     [-,%r10]             v122 = imul v3, v1       ; bin: 4c 0f af d1
 
+    [-,%rax]      v130 = iconst.i64 1
+    [-,%rdx]      v131 = iconst.i64 2
+    ; asm: idivq %rcx
+    [-,%rax,%rdx] v132, v133 = x86_sdivmodx v130, v131, v1  ; bin: 48 f7 f9
+    ; asm: idivq %rsi
+    [-,%rax,%rdx] v134, v135 = x86_sdivmodx v130, v131, v2  ; bin: 48 f7 fe
+    ; asm: idivq %r10
+    [-,%rax,%rdx] v136, v137 = x86_sdivmodx v130, v131, v3  ; bin: 49 f7 fa
+    ; asm: divq %rcx
+    [-,%rax,%rdx] v138, v139 = x86_udivmodx v130, v131, v1  ; bin: 48 f7 f1
+    ; asm: divq %rsi
+    [-,%rax,%rdx] v140, v141 = x86_udivmodx v130, v131, v2  ; bin: 48 f7 f6
+    ; asm: divq %r10
+    [-,%rax,%rdx] v142, v143 = x86_udivmodx v130, v131, v3  ; bin: 49 f7 f2
+
     ; Bit-counting instructions.
 
     ; asm: popcntq %rsi, %rcx
@@ -330,6 +345,21 @@ ebb0:
     [-,%rsi]             v121 = imul v2, v3       ; bin: 41 0f af f2
     ; asm: imull %ecx, %r10d
     [-,%r10]             v122 = imul v3, v1       ; bin: 44 0f af d1
+
+    [-,%rax]      v130 = iconst.i32 1
+    [-,%rdx]      v131 = iconst.i32 2
+    ; asm: idivl %rcx
+    [-,%rax,%rdx] v132, v133 = x86_sdivmodx v130, v131, v1  ; bin: 40 f7 f9
+    ; asm: idivl %rsi
+    [-,%rax,%rdx] v134, v135 = x86_sdivmodx v130, v131, v2  ; bin: 40 f7 fe
+    ; asm: idivl %r10d
+    [-,%rax,%rdx] v136, v137 = x86_sdivmodx v130, v131, v3  ; bin: 41 f7 fa
+    ; asm: divl %rcx
+    [-,%rax,%rdx] v138, v139 = x86_udivmodx v130, v131, v1  ; bin: 40 f7 f1
+    ; asm: divl %rsi
+    [-,%rax,%rdx] v140, v141 = x86_udivmodx v130, v131, v2  ; bin: 40 f7 f6
+    ; asm: divl %r10d
+    [-,%rax,%rdx] v142, v143 = x86_udivmodx v130, v131, v3  ; bin: 41 f7 f2
 
     ; Bit-counting instructions.
 
