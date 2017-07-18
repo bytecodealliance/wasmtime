@@ -156,3 +156,21 @@ I32.enc(base.call, *r.call_id(0xe8))
 I32.enc(base.call_indirect.i32, *r.call_r(0xff, rrr=2))
 I32.enc(base.x_return, *r.ret(0xc3))
 I64.enc(base.x_return, *r.ret(0xc3))
+
+#
+# Branches
+#
+I32.enc(base.jump, *r.jmpb(0xeb))
+I32.enc(base.jump, *r.jmpd(0xe9))
+I64.enc(base.jump, *r.jmpb(0xeb))
+I64.enc(base.jump, *r.jmpd(0xe9))
+
+I32.enc(base.brz.i32, *r.tjccb(0x74))
+I64.enc(base.brz.i64, *r.tjccb.rex(0x74, w=1))
+I64.enc(base.brz.i32, *r.tjccb.rex(0x74))
+I64.enc(base.brz.i32, *r.tjccb(0x74))
+
+I32.enc(base.brnz.i32, *r.tjccb(0x75))
+I64.enc(base.brnz.i64, *r.tjccb.rex(0x75, w=1))
+I64.enc(base.brnz.i32, *r.tjccb.rex(0x75))
+I64.enc(base.brnz.i32, *r.tjccb(0x75))

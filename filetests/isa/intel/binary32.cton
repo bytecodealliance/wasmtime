@@ -262,6 +262,28 @@ ebb0:
     ; asm: call *%esi
     call_indirect sig0, v2()                    ; bin: ff d6
 
+    ; asm: testl %ecx, %ecx
+    ; asm: je ebb1
+    brz v1, ebb1                                ; bin: 85 c9 74 0e
+    ; asm: testl %esi, %esi
+    ; asm: je ebb1
+    brz v2, ebb1                                ; bin: 85 f6 74 0a
+    ; asm: testl %ecx, %ecx
+    ; asm: jne ebb1
+    brnz v1, ebb1                               ; bin: 85 c9 75 06
+    ; asm: testl %esi, %esi
+    ; asm: jne ebb1
+    brnz v2, ebb1                               ; bin: 85 f6 75 02
+
+    ; asm: jmp ebb2
+    jump ebb2                                   ; bin: eb 01
+
+    ; asm: ebb1:
+ebb1:
     ; asm: ret
     return                                      ; bin: c3
+
+    ; asm: ebb2:
+ebb2:
+    jump ebb1                                   ; bin: eb fd
 }
