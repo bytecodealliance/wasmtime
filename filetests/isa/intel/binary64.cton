@@ -264,6 +264,13 @@ ebb0:
     ; asm: setbe %dl
     [-,%rdx]            v319 = icmp ule v2, v3  ; bin: 4c 39 d6 0f 96 c2
 
+    ; Bool-to-int conversions.
+
+    ; asm: movzbq %bl, %rcx
+    [-,%rcx]             v350 = bint.i64 v300   ; bin: 48 0f b6 cb
+    ; asm: movzbq %dl, %rsi
+    [-,%rsi]             v351 = bint.i64 v301   ; bin: 48 0f b6 f2
+
     ; asm: testq %rcx, %rcx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 48 85 c9 74 1b
@@ -555,6 +562,13 @@ ebb0:
     ; asm: cmpl %r10d, %esi
     ; asm: setbe %dl
     [-,%rdx]            v319 = icmp ule v2, v3  ; bin: 44 39 d6 0f 96 c2
+
+    ; Bool-to-int conversions.
+
+    ; asm: movzbl %bl, %ecx
+    [-,%rcx]             v350 = bint.i32 v300   ; bin: 40 0f b6 cb
+    ; asm: movzbl %dl, %esi
+    [-,%rsi]             v351 = bint.i32 v301   ; bin: 40 0f b6 f2
 
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1x

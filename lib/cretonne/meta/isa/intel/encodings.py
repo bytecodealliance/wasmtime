@@ -182,3 +182,14 @@ I32.enc(base.icmp.i32, *r.icscc(0x39))
 I64.enc(base.icmp.i64, *r.icscc.rex(0x39, w=1))
 I64.enc(base.icmp.i32, *r.icscc.rex(0x39))
 I64.enc(base.icmp.i32, *r.icscc(0x39))
+
+#
+# Convert bool to int.
+#
+# This assumes that b1 is represented as an 8-bit low register with the value 0
+# or 1.
+I32.enc(base.bint.i32.b1, *r.urm_abcd(0x0f, 0xb6))
+I64.enc(base.bint.i64.b1, *r.urm.rex(0x0f, 0xb6, w=1))
+I64.enc(base.bint.i64.b1, *r.urm_abcd(0x0f, 0xb6))  # zext to i64 implicit.
+I64.enc(base.bint.i32.b1, *r.urm.rex(0x0f, 0xb6))
+I64.enc(base.bint.i32.b1, *r.urm_abcd(0x0f, 0xb6))
