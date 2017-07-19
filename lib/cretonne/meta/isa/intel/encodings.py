@@ -176,6 +176,12 @@ I64.enc(base.brnz.i32, *r.tjccb.rex(0x75))
 I64.enc(base.brnz.i32, *r.tjccb(0x75))
 
 #
+# Trap as ud2
+#
+I32.enc(base.trap, *r.noop(0x0f, 0x0b))
+I64.enc(base.trap, *r.noop(0x0f, 0x0b))
+
+#
 # Comparisons
 #
 I32.enc(base.icmp.i32, *r.icscc(0x39))
