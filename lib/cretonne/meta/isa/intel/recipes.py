@@ -190,6 +190,10 @@ class TailRecipe:
         return (self.recipes[name], bits)
 
 
+# A null unary instruction that takes a GPR register. Can be used for identity
+# copies and no-op conversions.
+null = EncRecipe('null', Unary, size=0, ins=GPR, outs=0, emit='')
+
 # XX /r
 rr = TailRecipe(
         'rr', Binary, size=1, ins=(GPR, GPR), outs=0,

@@ -193,3 +193,8 @@ I64.enc(base.bint.i64.b1, *r.urm.rex(0x0f, 0xb6, w=1))
 I64.enc(base.bint.i64.b1, *r.urm_abcd(0x0f, 0xb6))  # zext to i64 implicit.
 I64.enc(base.bint.i32.b1, *r.urm.rex(0x0f, 0xb6))
 I64.enc(base.bint.i32.b1, *r.urm_abcd(0x0f, 0xb6))
+
+# Numerical conversions.
+
+# Converting i64 to i32 is a no-op in 64-bit mode.
+I64.enc(base.ireduce.i32.i64, r.null, 0)
