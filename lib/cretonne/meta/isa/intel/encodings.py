@@ -208,3 +208,17 @@ I64.enc(base.sextend.i64.i32, *r.urm.rex(0x63, w=1))
 # A 32-bit register copy clears the high 32 bits.
 I64.enc(base.uextend.i64.i32, *r.umr.rex(0x89))
 I64.enc(base.uextend.i64.i32, *r.umr(0x89))
+
+#
+# Floating point
+#
+
+# cvtsi2ss
+I32.enc(base.fcvt_from_sint.f32.i32, *r.furm(0xf3, 0x0f, 0x2A))
+I64.enc(base.fcvt_from_sint.f32.i32, *r.furm.rex(0xf3, 0x0f, 0x2A))
+I64.enc(base.fcvt_from_sint.f32.i32, *r.furm(0xf3, 0x0f, 0x2A))
+
+# cvtsi2sd
+I32.enc(base.fcvt_from_sint.f64.i32, *r.furm(0xf2, 0x0f, 0x2A))
+I64.enc(base.fcvt_from_sint.f64.i32, *r.furm.rex(0xf2, 0x0f, 0x2A))
+I64.enc(base.fcvt_from_sint.f64.i32, *r.furm(0xf2, 0x0f, 0x2A))

@@ -1,0 +1,49 @@
+; Binary emission of 64-bit floating point code.
+test binemit
+set is_64bit
+isa intel has_sse2
+
+; The binary encodings can be verified with the command:
+;
+;   sed -ne 's/^ *; asm: *//p' filetests/isa/intel/binary64-float.cton | llvm-mc -show-encoding -triple=x86_64
+;
+
+function %F32() {
+ebb0:
+    [-,%r11]            v0 = iconst.i32 1
+    [-,%rsi]            v1 = iconst.i32 2
+    [-,%rax]            v2 = iconst.i64 11
+    [-,%r14]            v3 = iconst.i64 12
+
+    ; asm: cvtsi2ssl %r11d, %xmm5
+    [-,%xmm5]           v10 = fcvt_from_sint.f32 v0             ; bin: f3 41 0f 2a eb
+    ; asm: cvtsi2ssl %esi, %xmm10
+    [-,%xmm10]          v11 = fcvt_from_sint.f32 v1             ; bin: f3 44 0f 2a d6
+
+    ; asm: cvtsi2ssq %rax, %xmm5
+    [-,%xmm5]           v12 = fcvt_from_sint.f32 v2             ; TODO: f3 48 0f 2a e8
+    ; asm: cvtsi2ssq %r14, %xmm10
+    [-,%xmm10]          v13 = fcvt_from_sint.f32 v3             ; TODO: f3 4d 0f 2a d6
+
+    return
+}
+
+function %F64() {
+ebb0:
+    [-,%r11]            v0 = iconst.i32 1
+    [-,%rsi]            v1 = iconst.i32 2
+    [-,%rax]            v2 = iconst.i64 11
+    [-,%r14]            v3 = iconst.i64 12
+
+    ; asm: cvtsi2sdl %r11d, %xmm5
+    [-,%xmm5]           v10 = fcvt_from_sint.f64 v0             ; bin: f2 41 0f 2a eb
+    ; asm: cvtsi2sdl %esi, %xmm10
+    [-,%xmm10]          v11 = fcvt_from_sint.f64 v1             ; bin: f2 44 0f 2a d6
+
+    ; asm: cvtsi2sdq %rax, %xmm5
+    [-,%xmm5]           v12 = fcvt_from_sint.f64 v2             ; TODO: f2 48 0f 2a e8
+    ; asm: cvtsi2sdq %r14, %xmm10
+    [-,%xmm10]          v13 = fcvt_from_sint.f64 v3             ; TODO: f2 4d 0f 2a d6
+
+    return
+}

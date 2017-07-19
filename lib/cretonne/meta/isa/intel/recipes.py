@@ -8,7 +8,7 @@ from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Nullary, Call, IndirectCall, Store, Load
 from base.formats import IntCompare
 from base.formats import RegMove, Ternary, Jump, Branch
-from .registers import GPR, ABCD
+from .registers import GPR, ABCD, FPR
 
 try:
     from typing import Tuple, Dict  # noqa
@@ -236,6 +236,14 @@ urm = TailRecipe(
 # XX /r. Same as urm, but input limited to ABCD.
 urm_abcd = TailRecipe(
         'urm_abcd', Unary, size=1, ins=ABCD, outs=GPR,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_rr(in_reg0, out_reg0, sink);
+        ''')
+
+# XX /r, RM form, GPR -> FPR.
+furm = TailRecipe(
+        'furm', Unary, size=1, ins=GPR, outs=FPR,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rr(in_reg0, out_reg0, sink);
