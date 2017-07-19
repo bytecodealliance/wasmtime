@@ -326,6 +326,13 @@ ebb0:
     ; asm: setbe %dl
     [-,%rdx]            v319 = icmp ule v2, v1  ; bin: 39 ce 0f 96 c2
 
+    ; Bool-to-int conversions.
+
+    ; asm: movzbl %bl, %ecx
+    [-,%rcx]             v350 = bint.i32 v300   ; bin: 0f b6 cb
+    ; asm: movzbl %dl, %esi
+    [-,%rsi]             v351 = bint.i32 v301   ; bin: 0f b6 f2
+
     ; asm: call foo
     call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
 

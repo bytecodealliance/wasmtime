@@ -224,6 +224,14 @@ urm = TailRecipe(
         modrm_rr(in_reg0, out_reg0, sink);
         ''')
 
+# XX /r. Same as urm, but input limited to ABCD.
+urm_abcd = TailRecipe(
+        'urm_abcd', Unary, size=1, ins=ABCD, outs=GPR,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_rr(in_reg0, out_reg0, sink);
+        ''')
+
 # XX /r, for regmove instructions.
 rmov = TailRecipe(
         'ur', RegMove, size=1, ins=GPR, outs=(),
