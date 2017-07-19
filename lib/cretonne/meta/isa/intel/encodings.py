@@ -174,3 +174,11 @@ I32.enc(base.brnz.i32, *r.tjccb(0x75))
 I64.enc(base.brnz.i64, *r.tjccb.rex(0x75, w=1))
 I64.enc(base.brnz.i32, *r.tjccb.rex(0x75))
 I64.enc(base.brnz.i32, *r.tjccb(0x75))
+
+#
+# Comparisons
+#
+I32.enc(base.icmp.i32, *r.icscc(0x39))
+I64.enc(base.icmp.i64, *r.icscc.rex(0x39, w=1))
+I64.enc(base.icmp.i32, *r.icscc.rex(0x39))
+I64.enc(base.icmp.i32, *r.icscc(0x39))

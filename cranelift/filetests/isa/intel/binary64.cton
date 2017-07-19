@@ -192,22 +192,94 @@ ebb0:
     ; asm: tzcntq %rcx, %r10
     [-,%r10]            v208 = ctz v1           ; bin: f3 4c 0f bc d1
 
-    ; asm: testq %rcx, %ecx
+    ; Integer comparisons.
+
+    ; asm: cmpq %rsi, %rcx
+    ; asm: sete %bl
+    [-,%rbx]            v300 = icmp eq v1, v2   ; bin: 48 39 f1 0f 94 c3
+    ; asm: cmpq %r10, %rsi
+    ; asm: sete %dl
+    [-,%rdx]            v301 = icmp eq v2, v3   ; bin: 4c 39 d6 0f 94 c2
+
+    ; asm: cmpq %rsi, %rcx
+    ; asm: setne %bl
+    [-,%rbx]            v302 = icmp ne v1, v2   ; bin: 48 39 f1 0f 95 c3
+    ; asm: cmpq %r10, %rsi
+    ; asm: setne %dl
+    [-,%rdx]            v303 = icmp ne v2, v3   ; bin: 4c 39 d6 0f 95 c2
+
+    ; asm: cmpq %rsi, %rcx
+    ; asm: setl %bl
+    [-,%rbx]            v304 = icmp slt v1, v2  ; bin: 48 39 f1 0f 9c c3
+    ; asm: cmpq %r10, %rsi
+    ; asm: setl %dl
+    [-,%rdx]            v305 = icmp slt v2, v3  ; bin: 4c 39 d6 0f 9c c2
+
+    ; asm: cmpq %rsi, %rcx
+    ; asm: setge %bl
+    [-,%rbx]            v306 = icmp sge v1, v2  ; bin: 48 39 f1 0f 9d c3
+    ; asm: cmpq %r10, %rsi
+    ; asm: setge %dl
+    [-,%rdx]            v307 = icmp sge v2, v3  ; bin: 4c 39 d6 0f 9d c2
+
+    ; asm: cmpq %rsi, %rcx
+    ; asm: setg %bl
+    [-,%rbx]            v308 = icmp sgt v1, v2  ; bin: 48 39 f1 0f 9f c3
+    ; asm: cmpq %r10, %rsi
+    ; asm: setg %dl
+    [-,%rdx]            v309 = icmp sgt v2, v3  ; bin: 4c 39 d6 0f 9f c2
+
+    ; asm: cmpq %rsi, %rcx
+    ; asm: setle %bl
+    [-,%rbx]            v310 = icmp sle v1, v2  ; bin: 48 39 f1 0f 9e c3
+    ; asm: cmpq %r10, %rsi
+    ; asm: setle %dl
+    [-,%rdx]            v311 = icmp sle v2, v3  ; bin: 4c 39 d6 0f 9e c2
+
+    ; asm: cmpq %rsi, %rcx
+    ; asm: setb %bl
+    [-,%rbx]            v312 = icmp ult v1, v2  ; bin: 48 39 f1 0f 92 c3
+    ; asm: cmpq %r10, %rsi
+    ; asm: setb %dl
+    [-,%rdx]            v313 = icmp ult v2, v3  ; bin: 4c 39 d6 0f 92 c2
+
+    ; asm: cmpq %rsi, %rcx
+    ; asm: setae %bl
+    [-,%rbx]            v314 = icmp uge v1, v2  ; bin: 48 39 f1 0f 93 c3
+    ; asm: cmpq %r10, %rsi
+    ; asm: setae %dl
+    [-,%rdx]            v315 = icmp uge v2, v3  ; bin: 4c 39 d6 0f 93 c2
+
+    ; asm: cmpq %rsi, %rcx
+    ; asm: seta %bl
+    [-,%rbx]            v316 = icmp ugt v1, v2  ; bin: 48 39 f1 0f 97 c3
+    ; asm: cmpq %r10, %rsi
+    ; asm: seta %dl
+    [-,%rdx]            v317 = icmp ugt v2, v3  ; bin: 4c 39 d6 0f 97 c2
+
+    ; asm: cmpq %rsi, %rcx
+    ; asm: setbe %bl
+    [-,%rbx]            v318 = icmp ule v1, v2  ; bin: 48 39 f1 0f 96 c3
+    ; asm: cmpq %r10, %rsi
+    ; asm: setbe %dl
+    [-,%rdx]            v319 = icmp ule v2, v3  ; bin: 4c 39 d6 0f 96 c2
+
+    ; asm: testq %rcx, %rcx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 48 85 c9 74 1b
-    ; asm: testq %rsi, %esi
+    ; asm: testq %rsi, %rsi
     ; asm: je ebb1
     brz v2, ebb1                                ; bin: 48 85 f6 74 16
-    ; asm: testq %r10, %r10d
+    ; asm: testq %r10, %r10
     ; asm: je ebb1
     brz v3, ebb1                                ; bin: 4d 85 d2 74 11
-    ; asm: testq %rcx, %ecx
+    ; asm: testq %rcx, %rcx
     ; asm: jne ebb1
     brnz v1, ebb1                               ; bin: 48 85 c9 75 0c
-    ; asm: test %rsi, %esi
+    ; asm: testq %rsi, %rsi
     ; asm: jne ebb1
     brnz v2, ebb1                               ; bin: 48 85 f6 75 07
-    ; asm: testq %r10, %r10d
+    ; asm: testq %r10, %r10
     ; asm: jne ebb1
     brnz v3, ebb1                               ; bin: 4d 85 d2 75 02
 
@@ -376,15 +448,15 @@ ebb0:
 
     [-,%rax]      v130 = iconst.i32 1
     [-,%rdx]      v131 = iconst.i32 2
-    ; asm: idivl %rcx
+    ; asm: idivl %ecx
     [-,%rax,%rdx] v132, v133 = x86_sdivmodx v130, v131, v1  ; bin: 40 f7 f9
-    ; asm: idivl %rsi
+    ; asm: idivl %esi
     [-,%rax,%rdx] v134, v135 = x86_sdivmodx v130, v131, v2  ; bin: 40 f7 fe
     ; asm: idivl %r10d
     [-,%rax,%rdx] v136, v137 = x86_sdivmodx v130, v131, v3  ; bin: 41 f7 fa
-    ; asm: divl %rcx
+    ; asm: divl %ecx
     [-,%rax,%rdx] v138, v139 = x86_udivmodx v130, v131, v1  ; bin: 40 f7 f1
-    ; asm: divl %rsi
+    ; asm: divl %esi
     [-,%rax,%rdx] v140, v141 = x86_udivmodx v130, v131, v2  ; bin: 40 f7 f6
     ; asm: divl %r10d
     [-,%rax,%rdx] v142, v143 = x86_udivmodx v130, v131, v3  ; bin: 41 f7 f2
@@ -412,33 +484,105 @@ ebb0:
     ; asm: tzcntl %ecx, %r10d
     [-,%r10]            v208 = ctz v1            ; bin: f3 44 0f bc d1
 
+    ; Integer comparisons.
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: sete %bl
+    [-,%rbx]            v300 = icmp eq v1, v2   ; bin: 40 39 f1 0f 94 c3
+    ; asm: cmpl %r10d, %esi
+    ; asm: sete %dl
+    [-,%rdx]            v301 = icmp eq v2, v3   ; bin: 44 39 d6 0f 94 c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setne %bl
+    [-,%rbx]            v302 = icmp ne v1, v2   ; bin: 40 39 f1 0f 95 c3
+    ; asm: cmpl %r10d, %esi
+    ; asm: setne %dl
+    [-,%rdx]            v303 = icmp ne v2, v3   ; bin: 44 39 d6 0f 95 c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setl %bl
+    [-,%rbx]            v304 = icmp slt v1, v2  ; bin: 40 39 f1 0f 9c c3
+    ; asm: cmpl %r10d, %esi
+    ; asm: setl %dl
+    [-,%rdx]            v305 = icmp slt v2, v3  ; bin: 44 39 d6 0f 9c c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setge %bl
+    [-,%rbx]            v306 = icmp sge v1, v2  ; bin: 40 39 f1 0f 9d c3
+    ; asm: cmpl %r10d, %esi
+    ; asm: setge %dl
+    [-,%rdx]            v307 = icmp sge v2, v3  ; bin: 44 39 d6 0f 9d c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setg %bl
+    [-,%rbx]            v308 = icmp sgt v1, v2  ; bin: 40 39 f1 0f 9f c3
+    ; asm: cmpl %r10d, %esi
+    ; asm: setg %dl
+    [-,%rdx]            v309 = icmp sgt v2, v3  ; bin: 44 39 d6 0f 9f c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setle %bl
+    [-,%rbx]            v310 = icmp sle v1, v2  ; bin: 40 39 f1 0f 9e c3
+    ; asm: cmpl %r10d, %esi
+    ; asm: setle %dl
+    [-,%rdx]            v311 = icmp sle v2, v3  ; bin: 44 39 d6 0f 9e c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setb %bl
+    [-,%rbx]            v312 = icmp ult v1, v2  ; bin: 40 39 f1 0f 92 c3
+    ; asm: cmpl %r10d, %esi
+    ; asm: setb %dl
+    [-,%rdx]            v313 = icmp ult v2, v3  ; bin: 44 39 d6 0f 92 c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setae %bl
+    [-,%rbx]            v314 = icmp uge v1, v2  ; bin: 40 39 f1 0f 93 c3
+    ; asm: cmpl %r10d, %esi
+    ; asm: setae %dl
+    [-,%rdx]            v315 = icmp uge v2, v3  ; bin: 44 39 d6 0f 93 c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: seta %bl
+    [-,%rbx]            v316 = icmp ugt v1, v2  ; bin: 40 39 f1 0f 97 c3
+    ; asm: cmpl %r10d, %esi
+    ; asm: seta %dl
+    [-,%rdx]            v317 = icmp ugt v2, v3  ; bin: 44 39 d6 0f 97 c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setbe %bl
+    [-,%rbx]            v318 = icmp ule v1, v2  ; bin: 40 39 f1 0f 96 c3
+    ; asm: cmpl %r10d, %esi
+    ; asm: setbe %dl
+    [-,%rdx]            v319 = icmp ule v2, v3  ; bin: 44 39 d6 0f 96 c2
+
     ; asm: testl %ecx, %ecx
-    ; asm: je ebb1
+    ; asm: je ebb1x
     brz v1, ebb1                                ; bin: 40 85 c9 74 1b
     ; asm: testl %esi, %esi
-    ; asm: je ebb1
+    ; asm: je ebb1x
     brz v2, ebb1                                ; bin: 40 85 f6 74 16
     ; asm: testl %r10d, %r10d
-    ; asm: je ebb1
+    ; asm: je ebb1x
     brz v3, ebb1                                ; bin: 45 85 d2 74 11
     ; asm: testl %ecx, %ecx
-    ; asm: jne ebb1
+    ; asm: jne ebb1x
     brnz v1, ebb1                               ; bin: 40 85 c9 75 0c
-    ; asm: test %esi, %esi
-    ; asm: jne ebb1
+    ; asm: testl %esi, %esi
+    ; asm: jne ebb1x
     brnz v2, ebb1                               ; bin: 40 85 f6 75 07
     ; asm: testl %r10d, %r10d
-    ; asm: jne ebb1
+    ; asm: jne ebb1x
     brnz v3, ebb1                               ; bin: 45 85 d2 75 02
 
-    ; asm: jmp ebb2
+    ; asm: jmp ebb2x
     jump ebb2                                   ; bin: eb 01
 
-    ; asm: ebb1:
+    ; asm: ebb1x:
 ebb1:
     return                                       ; bin: c3
 
-    ; asm: ebb2:
+    ; asm: ebb2x:
 ebb2:
     jump ebb1                                   ; bin: eb fd
 }

@@ -11,7 +11,8 @@ from .immediates import intcc
 from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry, iadd_imm
 from .instructions import isub, isub_bin, isub_bout, isub_borrow
 from .instructions import band, bor, bxor, isplit, iconcat
-from .instructions import icmp, iconst, bint
+from .instructions import icmp, icmp_imm
+from .instructions import iconst, bint
 from cdsl.ast import Var
 from cdsl.xform import Rtl, XFormGroup
 
@@ -53,6 +54,7 @@ yl = Var('yl')
 yh = Var('yh')
 al = Var('al')
 ah = Var('ah')
+cc = Var('cc')
 
 narrow.legalize(
         a << iadd(x, y),
@@ -135,10 +137,17 @@ expand.legalize(
             b << bor(b1, b2)
         ))
 
-# Expansions for immediates that are too large.
+# Expansions for immediate operands that are out of range.
 expand.legalize(
         a << iadd_imm(x, y),
         Rtl(
             a1 << iconst(y),
             a << iadd(x, a1)
+        ))
+
+expand.legalize(
+        a << icmp_imm(cc, x, y),
+        Rtl(
+            a1 << iconst(y),
+            a << icmp(cc, x, a1)
         ))

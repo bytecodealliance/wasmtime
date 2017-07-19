@@ -6,6 +6,7 @@ from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Call, IndirectCall, Store, Load
+from base.formats import IntCompare
 from base.formats import RegMove, Ternary, Jump, Branch
 from .registers import GPR, ABCD
 
@@ -463,4 +464,45 @@ tjccb = TailRecipe(
         // Jcc instruction.
         sink.put1(bits as u8);
         disp1(destination, func, sink);
+        ''')
+
+# Comparison that produces a `b1` result in a GPR.
+#
+# This is a macro of a `cmp` instruction followed by a `setCC` instruction.
+# This is not a great solution because:
+#
+# - The cmp+setcc combination is not recognized by CPU's macro fusion.
+# - The 64-bit encoding has issues with REX prefixes. The `cmp` and `setCC`
+#   instructions may need a REX independently.
+# - Modeling CPU flags in the type system would be better.
+#
+# Since the `setCC` instructions only write an 8-bit register, we use that as
+# our `b1` representation: A `b1` value is represented as a GPR where the low 8
+# bits are known to be 0 or 1. The high bits are undefined.
+#
+# This bandaid macro doesn't support a REX prefix for the final `setCC`
+# instruction, so it is limited to the `ABCD` register class for booleans.
+icscc = TailRecipe(
+        'cscc', IntCompare, size=1 + 3, ins=(GPR, GPR), outs=ABCD,
+        emit='''
+        // Comparison instruction.
+        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        modrm_rr(in_reg0, in_reg1, sink);
+        // `setCC` instruction, no REX.
+        use ir::condcodes::IntCC::*;
+        let setcc = match cond {
+            Equal => 0x94,
+            NotEqual => 0x95,
+            SignedLessThan => 0x9c,
+            SignedGreaterThanOrEqual => 0x9d,
+            SignedGreaterThan => 0x9f,
+            SignedLessThanOrEqual => 0x9e,
+            UnsignedLessThan => 0x92,
+            UnsignedGreaterThanOrEqual => 0x93,
+            UnsignedGreaterThan => 0x97,
+            UnsignedLessThanOrEqual => 0x96,
+        };
+        sink.put1(0x0f);
+        sink.put1(setcc);
+        modrm_rr(out_reg0, 0, sink);
         ''')
