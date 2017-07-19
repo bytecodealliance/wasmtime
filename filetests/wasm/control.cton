@@ -43,3 +43,8 @@ ebb0(v0: i32):
 ebb1(v2: i32):
     return v2
 }
+
+function %undefined() {
+ebb0:
+    trap
+}

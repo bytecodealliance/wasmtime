@@ -5,7 +5,7 @@ from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
-from base.formats import Call, IndirectCall, Store, Load
+from base.formats import Nullary, Call, IndirectCall, Store, Load
 from base.formats import IntCompare
 from base.formats import RegMove, Ternary, Jump, Branch
 from .registers import GPR, ABCD
@@ -193,6 +193,11 @@ class TailRecipe:
 # A null unary instruction that takes a GPR register. Can be used for identity
 # copies and no-op conversions.
 null = EncRecipe('null', Unary, size=0, ins=GPR, outs=0, emit='')
+
+# XX opcode, no ModR/M.
+noop = TailRecipe(
+        'noop', Nullary, size=0, ins=(), outs=(),
+        emit='PUT_OP(bits, 0, sink);')
 
 # XX /r
 rr = TailRecipe(

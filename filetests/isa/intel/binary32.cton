@@ -364,5 +364,5 @@ ebb1:
 
     ; asm: ebb2:
 ebb2:
-    jump ebb1                                   ; bin: eb fd
+    trap                                        ; bin: 0f 0b
 }
