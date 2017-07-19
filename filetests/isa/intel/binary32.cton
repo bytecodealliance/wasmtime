@@ -254,6 +254,78 @@ ebb0:
     ; asm: tzcntl %ecx, %esi
     [-,%rsi]            v205 = ctz v1           ; bin: f3 0f bc f1
 
+    ; Integer comparisons.
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: sete %bl
+    [-,%rbx]            v300 = icmp eq v1, v2   ; bin: 39 f1 0f 94 c3
+    ; asm: cmpl %ecx, %esi
+    ; asm: sete %dl
+    [-,%rdx]            v301 = icmp eq v2, v1   ; bin: 39 ce 0f 94 c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setne %bl
+    [-,%rbx]            v302 = icmp ne v1, v2   ; bin: 39 f1 0f 95 c3
+    ; asm: cmpl %ecx, %esi
+    ; asm: setne %dl
+    [-,%rdx]            v303 = icmp ne v2, v1   ; bin: 39 ce 0f 95 c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setl %bl
+    [-,%rbx]            v304 = icmp slt v1, v2  ; bin: 39 f1 0f 9c c3
+    ; asm: cmpl %ecx, %esi
+    ; asm: setl %dl
+    [-,%rdx]            v305 = icmp slt v2, v1  ; bin: 39 ce 0f 9c c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setge %bl
+    [-,%rbx]            v306 = icmp sge v1, v2  ; bin: 39 f1 0f 9d c3
+    ; asm: cmpl %ecx, %esi
+    ; asm: setge %dl
+    [-,%rdx]            v307 = icmp sge v2, v1  ; bin: 39 ce 0f 9d c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setg %bl
+    [-,%rbx]            v308 = icmp sgt v1, v2  ; bin: 39 f1 0f 9f c3
+    ; asm: cmpl %ecx, %esi
+    ; asm: setg %dl
+    [-,%rdx]            v309 = icmp sgt v2, v1  ; bin: 39 ce 0f 9f c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setle %bl
+    [-,%rbx]            v310 = icmp sle v1, v2  ; bin: 39 f1 0f 9e c3
+    ; asm: cmpl %ecx, %esi
+    ; asm: setle %dl
+    [-,%rdx]            v311 = icmp sle v2, v1  ; bin: 39 ce 0f 9e c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setb %bl
+    [-,%rbx]            v312 = icmp ult v1, v2  ; bin: 39 f1 0f 92 c3
+    ; asm: cmpl %ecx, %esi
+    ; asm: setb %dl
+    [-,%rdx]            v313 = icmp ult v2, v1  ; bin: 39 ce 0f 92 c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setae %bl
+    [-,%rbx]            v314 = icmp uge v1, v2  ; bin: 39 f1 0f 93 c3
+    ; asm: cmpl %ecx, %esi
+    ; asm: setae %dl
+    [-,%rdx]            v315 = icmp uge v2, v1  ; bin: 39 ce 0f 93 c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: seta %bl
+    [-,%rbx]            v316 = icmp ugt v1, v2  ; bin: 39 f1 0f 97 c3
+    ; asm: cmpl %ecx, %esi
+    ; asm: seta %dl
+    [-,%rdx]            v317 = icmp ugt v2, v1  ; bin: 39 ce 0f 97 c2
+
+    ; asm: cmpl %esi, %ecx
+    ; asm: setbe %bl
+    [-,%rbx]            v318 = icmp ule v1, v2  ; bin: 39 f1 0f 96 c3
+    ; asm: cmpl %ecx, %esi
+    ; asm: setbe %dl
+    [-,%rdx]            v319 = icmp ule v2, v1  ; bin: 39 ce 0f 96 c2
+
     ; asm: call foo
     call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
 
