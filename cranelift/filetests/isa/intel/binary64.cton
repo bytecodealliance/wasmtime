@@ -600,3 +600,31 @@ ebb1:
 ebb2:
     jump ebb1                                   ; bin: eb fd
 }
+
+; Tests for i64/i32 conversion instructions.
+function %I64_I32() {
+ebb0:
+    [-,%rcx]            v1 = iconst.i64 1
+    [-,%rsi]            v2 = iconst.i64 2
+    [-,%r10]            v3 = iconst.i64 3
+
+    [-,%rcx]            v11 = ireduce.i32 v1            ; bin:
+    [-,%rsi]            v12 = ireduce.i32 v2            ; bin:
+    [-,%r10]            v13 = ireduce.i32 v3            ; bin:
+
+    ; asm: movslq %ecx, %rsi
+    [-,%rsi]            v20 = sextend.i64 v11           ; bin: 48 63 f1
+    ; asm: movslq %esi, %r10
+    [-,%r10]            v21 = sextend.i64 v12           ; bin: 4c 63 d6
+    ; asm: movslq %r10d, %rcx
+    [-,%rcx]            v22 = sextend.i64 v13           ; bin: 49 63 ca
+
+    ; asm: movl %ecx, %esi
+    [-,%rsi]            v30 = uextend.i64 v11           ; bin: 40 89 ce
+    ; asm: movl %esi, %r10d
+    [-,%r10]            v31 = uextend.i64 v12           ; bin: 41 89 f2
+    ; asm: movl %r10d, %ecx
+    [-,%rcx]            v32 = uextend.i64 v13           ; bin: 44 89 d1
+
+    return
+}

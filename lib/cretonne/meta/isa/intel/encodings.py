@@ -198,3 +198,7 @@ I64.enc(base.bint.i32.b1, *r.urm_abcd(0x0f, 0xb6))
 
 # Converting i64 to i32 is a no-op in 64-bit mode.
 I64.enc(base.ireduce.i32.i64, r.null, 0)
+I64.enc(base.sextend.i64.i32, *r.urm.rex(0x63, w=1))
+# A 32-bit register copy clears the high 32 bits.
+I64.enc(base.uextend.i64.i32, *r.umr.rex(0x89))
+I64.enc(base.uextend.i64.i32, *r.umr(0x89))
