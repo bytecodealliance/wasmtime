@@ -21,3 +21,29 @@ ebb0(v0: i32):
     v1 = uextend.i64 v0
     return v1
 }
+
+function %f32_convert_s_i32(i32) -> f32 {
+ebb0(v0: i32):
+    v1 = fcvt_from_sint.f32 v0
+    return v1
+}
+
+function %f64_convert_s_i32(i32) -> f64 {
+ebb0(v0: i32):
+    v1 = fcvt_from_sint.f64 v0
+    return v1
+}
+
+function %f32_convert_s_i64(i64) -> f32 {
+ebb0(v0: i64):
+    v1 = fcvt_from_sint.f32 v0
+    return v1
+}
+
+function %f64_convert_s_i64(i64) -> f64 {
+ebb0(v0: i64):
+    v1 = fcvt_from_sint.f64 v0
+    return v1
+}
+
+; TODO: f*_convert_u_i* (Don't exist on Intel).

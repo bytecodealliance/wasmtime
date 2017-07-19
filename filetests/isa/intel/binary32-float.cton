@@ -1,0 +1,34 @@
+; Binary emission of 32-bit floating point code.
+test binemit
+isa intel has_sse2
+
+; The binary encodings can be verified with the command:
+;
+;   sed -ne 's/^ *; asm: *//p' filetests/isa/intel/binary32-float.cton | llvm-mc -show-encoding -triple=i386
+;
+
+function %F32() {
+ebb0:
+    [-,%rcx]            v0 = iconst.i32 1
+    [-,%rsi]            v1 = iconst.i32 2
+
+    ; asm: cvtsi2ss %ecx, %xmm5
+    [-,%xmm5]           v10 = fcvt_from_sint.f32 v0             ; bin: f3 0f 2a e9
+    ; asm: cvtsi2ss %esi, %xmm2
+    [-,%xmm2]           v11 = fcvt_from_sint.f32 v1             ; bin: f3 0f 2a d6
+
+    return
+}
+
+function %F64() {
+ebb0:
+    [-,%rcx]            v0 = iconst.i32 1
+    [-,%rsi]            v1 = iconst.i32 2
+
+    ; asm: cvtsi2sd %ecx, %xmm5
+    [-,%xmm5]           v10 = fcvt_from_sint.f64 v0             ; bin: f2 0f 2a e9
+    ; asm: cvtsi2sd %esi, %xmm2
+    [-,%xmm2]           v11 = fcvt_from_sint.f64 v1             ; bin: f2 0f 2a d6
+
+    return
+}
