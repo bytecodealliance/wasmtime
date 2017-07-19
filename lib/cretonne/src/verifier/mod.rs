@@ -57,7 +57,7 @@ use flowgraph::ControlFlowGraph;
 use ir::entities::AnyEntity;
 use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallInfo};
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
-         Value, Type};
+         Value, Type, Opcode};
 use isa::TargetIsa;
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter};
@@ -710,6 +710,12 @@ impl<'a> Verifier<'a> {
         // Instruction is not encoded, so it is a ghost instruction.
         // Instructions with side effects are not allowed to be ghost instructions.
         let opcode = self.func.dfg[inst].opcode();
+
+        // The `fallthrough` instruction is marked as a terminator and a branch, but it is not
+        // required to have an encoding.
+        if opcode == Opcode::Fallthrough {
+            return Ok(());
+        }
 
         if opcode.is_branch() {
             return err!(inst, "Branch must have an encoding");

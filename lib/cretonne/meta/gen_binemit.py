@@ -135,14 +135,18 @@ def gen_isa(isa, fmt):
                 'pub fn emit_inst<CS: CodeSink + ?Sized>'
                 '(func: &Function, inst: Inst, '
                 'divert: &mut RegDiversions, sink: &mut CS) {', '}'):
-            fmt.line('let bits = func.encodings[inst].bits();')
+            fmt.line('let encoding = func.encodings[inst];')
+            fmt.line('let bits = encoding.bits();')
             with fmt.indented('match func.encodings[inst].recipe() {', '}'):
                 for i, recipe in enumerate(isa.all_recipes):
                     fmt.comment(recipe.name)
                     with fmt.indented('{} => {{'.format(i), '}'):
                         gen_recipe(recipe, fmt)
                 fmt.line('_ => {}')
-            fmt.line('bad_encoding(func, inst);')
+            # Allow for un-encoded ghost instructions.
+            # Verifier checks the details.
+            with fmt.indented('if encoding.is_legal() {', '}'):
+                fmt.line('bad_encoding(func, inst);')
 
 
 def generate(isas, out_dir):
