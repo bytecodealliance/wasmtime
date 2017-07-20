@@ -39,6 +39,29 @@ ebb0:
     ; asm: divss %xmm5, %xmm2
     [-,%xmm2]           v27 = fdiv v11, v10                     ; bin: f3 0f 5e d5
 
+    ; Bitwise ops.
+    ; We use the *ps SSE instructions for everything because they are smaller.
+
+    ; asm: andps %xmm2, %xmm5
+    [-,%xmm5]           v30 = band v10, v11                     ; bin: 0f 54 ea
+    ; asm: andps %xmm5, %xmm2
+    [-,%xmm2]           v31 = band v11, v10                     ; bin: 0f 54 d5
+
+    ; asm: andnps %xmm2, %xmm5
+    [-,%xmm5]           v32 = band_not v10, v11                 ; bin: 0f 55 ea
+    ; asm: andnps %xmm5, %xmm2
+    [-,%xmm2]           v33 = band_not v11, v10                 ; bin: 0f 55 d5
+
+    ; asm: orps %xmm2, %xmm5
+    [-,%xmm5]           v34 = bor v10, v11                      ; bin: 0f 56 ea
+    ; asm: orps %xmm5, %xmm2
+    [-,%xmm2]           v35 = bor v11, v10                      ; bin: 0f 56 d5
+
+    ; asm: xorps %xmm2, %xmm5
+    [-,%xmm5]           v36 = bxor v10, v11                     ; bin: 0f 57 ea
+    ; asm: xorps %xmm5, %xmm2
+    [-,%xmm2]           v37 = bxor v11, v10                     ; bin: 0f 57 d5
+
     return
 }
 
@@ -73,6 +96,29 @@ ebb0:
     [-,%xmm5]           v26 = fdiv v10, v11                     ; bin: f2 0f 5e ea
     ; asm: divsd %xmm5, %xmm2
     [-,%xmm2]           v27 = fdiv v11, v10                     ; bin: f2 0f 5e d5
+
+    ; Bitwise ops.
+    ; We use the *ps SSE instructions for everything because they are smaller.
+
+    ; asm: andps %xmm2, %xmm5
+    [-,%xmm5]           v30 = band v10, v11                     ; bin: 0f 54 ea
+    ; asm: andps %xmm5, %xmm2
+    [-,%xmm2]           v31 = band v11, v10                     ; bin: 0f 54 d5
+
+    ; asm: andnps %xmm2, %xmm5
+    [-,%xmm5]           v32 = band_not v10, v11                 ; bin: 0f 55 ea
+    ; asm: andnps %xmm5, %xmm2
+    [-,%xmm2]           v33 = band_not v11, v10                 ; bin: 0f 55 d5
+
+    ; asm: orps %xmm2, %xmm5
+    [-,%xmm5]           v34 = bor v10, v11                      ; bin: 0f 56 ea
+    ; asm: orps %xmm5, %xmm2
+    [-,%xmm2]           v35 = bor v11, v10                      ; bin: 0f 56 d5
+
+    ; asm: xorps %xmm2, %xmm5
+    [-,%xmm5]           v36 = bxor v10, v11                     ; bin: 0f 57 ea
+    ; asm: xorps %xmm5, %xmm2
+    [-,%xmm2]           v37 = bxor v11, v10                     ; bin: 0f 57 d5
 
     return
 }
