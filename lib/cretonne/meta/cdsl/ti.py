@@ -15,7 +15,7 @@ try:
     from .typevar import TypeSet # noqa
     if TYPE_CHECKING:
         TypeMap = Dict[TypeVar, TypeVar]
-        VarMap = Dict[Var, TypeVar]
+        VarTyping = Dict[Var, TypeVar]
 except ImportError:
     TYPE_CHECKING = False
     pass
@@ -257,6 +257,7 @@ class TypeEnv(object):
         Lookup the canonical representative for a Var/TypeVar.
         """
         if (isinstance(arg, Var)):
+            assert arg in self.vars
             tv = arg.get_typevar()
         else:
             assert (isinstance(arg, TypeVar))
@@ -290,8 +291,16 @@ class TypeEnv(object):
         """
         Add a new constraint
         """
-        if (constr not in self.constraints):
-            self.constraints.append(constr)
+        if (constr in self.constraints):
+            return
+
+        # InTypeset constraints can be expressed by constraining the typeset of
+        # a variable. No need to add them to self.constraints
+        if (isinstance(constr, InTypeset)):
+            self[constr.tv].constrain_types_by_ts(constr.ts)
+            return
+
+        self.constraints.append(constr)
 
     def get_uid(self):
         # type: () -> str
@@ -436,7 +445,7 @@ class TypeEnv(object):
         return t
 
     def concrete_typings(self):
-        # type: () -> Iterable[VarMap]
+        # type: () -> Iterable[VarTyping]
         """
         Return an iterable over all possible concrete typings permitted by this
         TypeEnv.
@@ -463,6 +472,35 @@ class TypeEnv(object):
                 continue
 
             yield concrete_var_map
+
+    def permits(self, concrete_typing):
+        # type: (VarTyping) -> bool
+        """
+        Return true iff this TypeEnv permits the (possibly partial) concrete
+        variable type mapping concrete_typing.
+        """
+        # Each variable has a concrete type, that is a subset of its inferred
+        # typeset.
+        for (v, typ) in concrete_typing.items():
+            assert typ.singleton_type() is not None
+            if not typ.get_typeset().issubset(self[v].get_typeset()):
+                return False
+
+        m = {self[v]: typ for (v, typ) in concrete_typing.items()}
+
+        # Constraints involving vars in concrete_typing are satisfied
+        for constr in self.constraints:
+            try:
+                # If the constraint includes only vars in concrete_typing, we
+                # can translate it using m. Otherwise we encounter a KeyError
+                # and ignore it
+                constr = constr.translate(m)
+                if not constr.eval():
+                    return False
+            except KeyError:
+                pass
+
+        return True
 
     def dot(self):
         # type: () -> str

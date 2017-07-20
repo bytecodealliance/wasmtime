@@ -7,14 +7,16 @@ from .formats import InstructionFormat
 
 try:
     from typing import Union, Sequence, List, Tuple, Any, TYPE_CHECKING  # noqa
+    from typing import Dict # noqa
     if TYPE_CHECKING:
-        from .ast import Expr, Apply  # noqa
+        from .ast import Expr, Apply, Var  # noqa
         from .typevar import TypeVar  # noqa
         from .ti import TypeConstraint  # noqa
         # List of operands for ins/outs:
         OpList = Union[Sequence[Operand], Operand]
         ConstrList = Union[Sequence[TypeConstraint], TypeConstraint]
         MaybeBoundInst = Union['Instruction', 'BoundInstruction']
+        VarTyping = Dict[Var, TypeVar]
 except ImportError:
     pass
 
