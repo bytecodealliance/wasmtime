@@ -222,3 +222,17 @@ I64.enc(base.fcvt_from_sint.f32.i32, *r.furm(0xf3, 0x0f, 0x2A))
 I32.enc(base.fcvt_from_sint.f64.i32, *r.furm(0xf2, 0x0f, 0x2A))
 I64.enc(base.fcvt_from_sint.f64.i32, *r.furm.rex(0xf2, 0x0f, 0x2A))
 I64.enc(base.fcvt_from_sint.f64.i32, *r.furm(0xf2, 0x0f, 0x2A))
+
+# Binary arithmetic ops.
+for inst, opc in [
+        (base.fadd, 0x58),
+        (base.fsub, 0x5c),
+        (base.fmul, 0x59),
+        (base.fdiv, 0x5e)]:
+    I32.enc(inst.f32, *r.frm(0xf3, 0x0f, opc))
+    I64.enc(inst.f32, *r.frm.rex(0xf3, 0x0f, opc))
+    I64.enc(inst.f32, *r.frm(0xf3, 0x0f, opc))
+
+    I32.enc(inst.f64, *r.frm(0xf2, 0x0f, opc))
+    I64.enc(inst.f64, *r.frm.rex(0xf2, 0x0f, opc))
+    I64.enc(inst.f64, *r.frm(0xf2, 0x0f, opc))
