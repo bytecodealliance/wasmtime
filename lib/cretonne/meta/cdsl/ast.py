@@ -11,15 +11,17 @@ from .predicates import IsEqual, And
 
 try:
     from typing import Union, Tuple, Sequence, TYPE_CHECKING, Dict, List  # noqa
+    from typing import Optional, Set # noqa
     if TYPE_CHECKING:
         from .operands import ImmediateKind  # noqa
         from .predicates import PredNode  # noqa
+        VarMap = Dict["Var", "Var"]
 except ImportError:
     pass
 
 
 def replace_var(arg, m):
-    # type: (Expr, Dict[Var, Var]) -> Expr
+    # type: (Expr, VarMap) -> Expr
     """
     Given a var v return either m[v] or a new variable v' (and remember
     m[v]=v'). Otherwise return the argument unchanged
@@ -74,7 +76,7 @@ class Def(object):
                     ', '.join(map(str, self.defs)), self.expr)
 
     def copy(self, m):
-        # type: (Dict[Var, Var]) -> Def
+        # type: (VarMap) -> Def
         """
         Return a copy of this Def with vars replaced with fresh variables,
         in accordance with the map m. Update m as neccessary.
@@ -87,6 +89,40 @@ class Def(object):
             new_defs.append(new_v)
 
         return Def(tuple(new_defs), new_expr)
+
+    def definitions(self):
+        # type: () -> Set[Var]
+        """ Return the set of all Vars that are defined by self"""
+        return set(self.defs)
+
+    def uses(self):
+        # type: () -> Set[Var]
+        """ Return the set of all Vars that are used(read) by self"""
+        return set(self.expr.vars())
+
+    def vars(self):
+        # type: () -> Set[Var]
+        """ Return the set of all Vars that appear in self"""
+        return self.definitions().union(self.uses())
+
+    def substitution(self, other, s):
+        # type: (Def, VarMap) -> Optional[VarMap]
+        """
+        If the Defs self and other agree structurally, return a variable
+        substitution to transform self ot other. Two Defs agree structurally
+        if the contained Apply's agree structurally.
+        """
+        s = self.expr.substitution(other.expr, s)
+
+        if (s is None):
+            return s
+
+        assert len(self.defs) == len(other.defs)
+        for (self_d, other_d) in zip(self.defs, other.defs):
+            assert self_d not in s  # Guaranteed by SSA form
+            s[self_d] = other_d
+
+        return s
 
 
 class Expr(object):
@@ -332,13 +368,50 @@ class Apply(Expr):
         return pred
 
     def copy(self, m):
-        # type: (Dict[Var, Var]) -> Apply
+        # type: (VarMap) -> Apply
         """
         Return a copy of this Expr with vars replaced with fresh variables,
         in accordance with the map m. Update m as neccessary.
         """
         return Apply(self.inst, tuple(map(lambda e: replace_var(e, m),
                                           self.args)))
+
+    def vars(self):
+        # type: () -> Set[Var]
+        """ Return the set of all Vars that appear in self"""
+        res = set()
+        for i in self.inst.value_opnums:
+            arg = self.args[i]
+            assert isinstance(arg, Var)
+            res.add(arg)
+        return res
+
+    def substitution(self, other, s):
+        # type: (Apply, VarMap) -> Optional[VarMap]
+        """
+        If the application self and other agree structurally, return a variable
+        substitution to transform self ot other. Two applications agree
+        structurally if:
+            1) They are over the same instruction
+            2) Every Var v in self, maps to a single Var w in other. I.e for
+               each use of v in self, w is used in the corresponding place in
+               other.
+        """
+        if self.inst != other.inst:
+            return None
+
+        # TODO: Should we check imm/cond codes here as well?
+        for i in self.inst.value_opnums:
+            self_a = self.args[i]
+            other_a = other.args[i]
+
+            assert isinstance(self_a, Var) and isinstance(other_a, Var)
+            if (self_a not in s):
+                s[self_a] = other_a
+            else:
+                if (s[self_a] != other_a):
+                    return None
+        return s
 
 
 class Enumerator(Expr):

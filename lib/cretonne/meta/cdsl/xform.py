@@ -4,10 +4,12 @@ Instruction transformations.
 from __future__ import absolute_import
 from .ast import Def, Var, Apply
 from .ti import ti_xform, TypeEnv, get_type_env
+from functools import reduce
 
 try:
     from typing import Union, Iterator, Sequence, Iterable, List, Dict  # noqa
-    from .ast import Expr  # noqa
+    from typing import Optional, Set # noqa
+    from .ast import Expr, VarMap  # noqa
     DefApply = Union[Def, Apply]
 except ImportError:
     pass
@@ -42,12 +44,44 @@ class Rtl(object):
         self.rtl = tuple(map(canonicalize_defapply, args))
 
     def copy(self, m):
-        # type: (Dict[Var, Var]) -> Rtl
+        # type: (VarMap) -> Rtl
         """
         Return a copy of this rtl with all Vars substituted with copies or
         according to m. Update m as neccessary.
         """
         return Rtl(*[d.copy(m) for d in self.rtl])
+
+    def vars(self):
+        # type: () -> Set[Var]
+        """ Return the set of all Vars that appear in self"""
+        return reduce(lambda x, y:  x.union(y),
+                      [d.vars() for d in self.rtl],
+                      set([]))
+
+    def definitions(self):
+        # type: () -> Set[Var]
+        """ Return the set of all Vars defined in self"""
+        return reduce(lambda x, y:  x.union(y),
+                      [d.definitions() for d in self.rtl],
+                      set([]))
+
+    def substitution(self, other, s):
+        # type: (Rtl, VarMap) -> Optional[VarMap]
+        """
+        If the Rtl self agrees structurally with the Rtl other, return a
+        substitution to transform self to other. Two Rtls agree structurally if
+        they have the same sequence of Defs, that agree structurally.
+        """
+        if len(self.rtl) != len(other.rtl):
+            return None
+
+        for i in range(len(self.rtl)):
+            s = self.rtl[i].substitution(other.rtl[i], s)
+
+            if s is None:
+                return None
+
+        return s
 
 
 class XForm(object):

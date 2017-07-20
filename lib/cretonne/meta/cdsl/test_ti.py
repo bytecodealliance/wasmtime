@@ -13,7 +13,7 @@ from unittest import TestCase
 from functools import reduce
 
 try:
-    from .ti import TypeMap, ConstraintList, VarMap, TypingOrError # noqa
+    from .ti import TypeMap, ConstraintList, VarTyping, TypingOrError # noqa
     from typing import List, Dict, Tuple, TYPE_CHECKING, cast # noqa
 except ImportError:
     TYPE_CHECKING = False
@@ -61,7 +61,7 @@ def agree(me, other):
 
 
 def check_typing(got_or_err, expected, symtab=None):
-    # type: (TypingOrError, Tuple[VarMap, ConstraintList], Dict[str, Var]) -> None # noqa
+    # type: (TypingOrError, Tuple[VarTyping, ConstraintList], Dict[str, Var]) -> None # noqa
     """
     Check that a the typing we received (got_or_err) complies with the
     expected typing (expected). If symtab is specified, substitute the Vars in
@@ -93,7 +93,7 @@ def check_typing(got_or_err, expected, symtab=None):
 
 
 def check_concrete_typing_rtl(var_types, rtl):
-    # type: (VarMap, Rtl) -> None
+    # type: (VarTyping, Rtl) -> None
     """
     Check that a concrete type assignment var_types (Dict[Var, TypeVar]) is
     valid for an Rtl rtl.  Specifically check that:
@@ -136,7 +136,7 @@ def check_concrete_typing_rtl(var_types, rtl):
 
 
 def check_concrete_typing_xform(var_types, xform):
-    # type: (VarMap, XForm) -> None
+    # type: (VarTyping, XForm) -> None
     """
     Check a concrete type assignment var_types for an XForm xform
     """
