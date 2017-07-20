@@ -920,6 +920,30 @@ bnot = Instruction(
         """,
         ins=x, outs=a)
 
+band_not = Instruction(
+        'band_not', """
+        Bitwise and not.
+
+        Computes `x & ~y`.
+        """,
+        ins=(x, y), outs=a)
+
+bor_not = Instruction(
+        'bor_not', """
+        Bitwise or not.
+
+        Computes `x | ~y`.
+        """,
+        ins=(x, y), outs=a)
+
+bxor_not = Instruction(
+        'bxor_not', """
+        Bitwise xor not.
+
+        Computes `x ^ ~y`.
+        """,
+        ins=(x, y), outs=a)
+
 # Bitwise binary ops with immediate arg.
 x = Operand('x', iB)
 Y = Operand('Y', imm64)
