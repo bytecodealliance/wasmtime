@@ -197,7 +197,7 @@ null = EncRecipe('null', Unary, size=0, ins=GPR, outs=0, emit='')
 # XX opcode, no ModR/M.
 noop = TailRecipe(
         'noop', Nullary, size=0, ins=(), outs=(),
-        emit='PUT_OP(bits, 0, sink);')
+        emit='PUT_OP(bits, BASE_REX, sink);')
 
 # XX /r
 rr = TailRecipe(
@@ -210,6 +210,14 @@ rr = TailRecipe(
 # XX /r with operands swapped. (RM form).
 rrx = TailRecipe(
         'rrx', Binary, size=1, ins=(GPR, GPR), outs=0,
+        emit='''
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
+        modrm_rr(in_reg1, in_reg0, sink);
+        ''')
+
+# XX /r with FPR ins and outs. RM form.
+frm = TailRecipe(
+        'frr', Binary, size=1, ins=(FPR, FPR), outs=0,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rr(in_reg1, in_reg0, sink);

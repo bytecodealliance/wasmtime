@@ -1,0 +1,52 @@
+; Test basic code generation for f32 arithmetic WebAssembly instructions.
+test compile
+
+set is_64bit=0
+isa intel haswell
+
+set is_64bit=1
+isa intel haswell
+
+; Constants.
+
+; function %f32_const() -> f32
+
+; Unary operations
+
+; function %f32_abs(f32) -> f32
+; function %f32_neg(f32) -> f32
+; function %f32_sqrt(f32) -> f32
+; function %f32_ceil(f32) -> f32
+; function %f32_floor(f32) -> f32
+; function %f32_trunc(f32) -> f32
+; function %f32_nearest (f32) -> f32
+
+; Binary Operations
+
+function %f32_add(f32, f32) -> f32 {
+ebb0(v0: f32, v1: f32):
+    v2 = fadd v0, v1
+    return v2
+}
+
+function %f32_sub(f32, f32) -> f32 {
+ebb0(v0: f32, v1: f32):
+    v2 = fsub v0, v1
+    return v2
+}
+
+function %f32_mul(f32, f32) -> f32 {
+ebb0(v0: f32, v1: f32):
+    v2 = fmul v0, v1
+    return v2
+}
+
+function %f32_div(f32, f32) -> f32 {
+ebb0(v0: f32, v1: f32):
+    v2 = fdiv v0, v1
+    return v2
+}
+
+; function %f32_min(f32, f32) -> f32
+; function %f32_max(f32, f32) -> f32
+; function %f32_copysign(f32, f32) -> f32

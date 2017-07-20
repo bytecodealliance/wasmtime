@@ -25,6 +25,28 @@ ebb0:
     ; asm: cvtsi2ssq %r14, %xmm10
     [-,%xmm10]          v13 = fcvt_from_sint.f32 v3             ; TODO: f3 4d 0f 2a d6
 
+    ; Binary arithmetic.
+
+    ; asm: addss %xmm10, %xmm5
+    [-,%xmm5]           v20 = fadd v10, v11                     ; bin: f3 41 0f 58 ea
+    ; asm: addss %xmm5, %xmm10
+    [-,%xmm10]           v21 = fadd v11, v10                    ; bin: f3 44 0f 58 d5 
+
+    ; asm: subss %xmm10, %xmm5
+    [-,%xmm5]           v22 = fsub v10, v11                     ; bin: f3 41 0f 5c ea
+    ; asm: subss %xmm5, %xmm10
+    [-,%xmm10]           v23 = fsub v11, v10                    ; bin: f3 44 0f 5c d5
+
+    ; asm: mulss %xmm10, %xmm5
+    [-,%xmm5]           v24 = fmul v10, v11                     ; bin: f3 41 0f 59 ea
+    ; asm: mulss %xmm5, %xmm10
+    [-,%xmm10]           v25 = fmul v11, v10                    ; bin: f3 44 0f 59 d5
+
+    ; asm: divss %xmm10, %xmm5
+    [-,%xmm5]           v26 = fdiv v10, v11                     ; bin: f3 41 0f 5e ea
+    ; asm: divss %xmm5, %xmm10
+    [-,%xmm10]           v27 = fdiv v11, v10                    ; bin: f3 44 0f 5e d5
+
     return
 }
 
@@ -44,6 +66,28 @@ ebb0:
     [-,%xmm5]           v12 = fcvt_from_sint.f64 v2             ; TODO: f2 48 0f 2a e8
     ; asm: cvtsi2sdq %r14, %xmm10
     [-,%xmm10]          v13 = fcvt_from_sint.f64 v3             ; TODO: f2 4d 0f 2a d6
+
+    ; Binary arithmetic.
+
+    ; asm: addsd %xmm10, %xmm5
+    [-,%xmm5]           v20 = fadd v10, v11                     ; bin: f2 41 0f 58 ea
+    ; asm: addsd %xmm5, %xmm10
+    [-,%xmm10]           v21 = fadd v11, v10                    ; bin: f2 44 0f 58 d5 
+
+    ; asm: subsd %xmm10, %xmm5
+    [-,%xmm5]           v22 = fsub v10, v11                     ; bin: f2 41 0f 5c ea
+    ; asm: subsd %xmm5, %xmm10
+    [-,%xmm10]           v23 = fsub v11, v10                    ; bin: f2 44 0f 5c d5
+
+    ; asm: mulsd %xmm10, %xmm5
+    [-,%xmm5]           v24 = fmul v10, v11                     ; bin: f2 41 0f 59 ea
+    ; asm: mulsd %xmm5, %xmm10
+    [-,%xmm10]           v25 = fmul v11, v10                    ; bin: f2 44 0f 59 d5
+
+    ; asm: divsd %xmm10, %xmm5
+    [-,%xmm5]           v26 = fdiv v10, v11                     ; bin: f2 41 0f 5e ea
+    ; asm: divsd %xmm5, %xmm10
+    [-,%xmm10]           v27 = fdiv v11, v10                    ; bin: f2 44 0f 5e d5
 
     return
 }
