@@ -11,6 +11,7 @@ from .immediates import intcc
 from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry, iadd_imm
 from .instructions import isub, isub_bin, isub_bout, isub_borrow
 from .instructions import band, bor, bxor, isplit, iconcat
+from .instructions import bnot, band_not, bor_not, bxor_not
 from .instructions import icmp, icmp_imm
 from .instructions import iconst, bint
 from cdsl.ast import Var
@@ -151,3 +152,15 @@ expand.legalize(
             a1 << iconst(y),
             a << icmp(cc, x, a1)
         ))
+
+# Expansions for *_not variants of bitwise ops.
+for inst_not,      inst in [
+        (band_not, band),
+        (bor_not,  bor),
+        (bxor_not, bxor)]:
+    expand.legalize(
+            a << inst_not(x, y),
+            Rtl(
+                a1 << bnot(y),
+                a << inst(x, a1)
+            ))

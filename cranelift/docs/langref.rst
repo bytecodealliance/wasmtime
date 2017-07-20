@@ -667,11 +667,9 @@ operating on boolean values, the bitwise operations work as logical operators.
 .. autoinst:: bxor
 .. autoinst:: bxor_imm
 .. autoinst:: bnot
-
-.. todo:: Redundant bitwise operators.
-
-    ARM has instructions like ``bic(x,y) = x & ~y``, ``orn(x,y) = x | ~y``, and
-    ``eon(x,y) = x ^ ~y``.
+.. autoinst:: band_not
+.. autoinst:: bor_not
+.. autoinst:: bxor_not
 
 The shift and rotate operations only work on integer types (scalar and vector).
 The shift amount does not have to be the same type as the value being shifted.
