@@ -224,7 +224,7 @@ I64.enc(base.fcvt_from_sint.f64.i32, *r.furm.rex(0xf2, 0x0f, 0x2A))
 I64.enc(base.fcvt_from_sint.f64.i32, *r.furm(0xf2, 0x0f, 0x2A))
 
 # Binary arithmetic ops.
-for inst, opc in [
+for inst,           opc in [
         (base.fadd, 0x58),
         (base.fsub, 0x5c),
         (base.fmul, 0x59),
@@ -236,3 +236,17 @@ for inst, opc in [
     I32.enc(inst.f64, *r.frm(0xf2, 0x0f, opc))
     I64.enc(inst.f64, *r.frm.rex(0xf2, 0x0f, opc))
     I64.enc(inst.f64, *r.frm(0xf2, 0x0f, opc))
+
+# Binary bitwise ops.
+for inst,               opc in [
+        (base.band,     0x54),
+        (base.band_not, 0x55),
+        (base.bor,      0x56),
+        (base.bxor,     0x57)]:
+    I32.enc(inst.f32, *r.frm(0x0f, opc))
+    I64.enc(inst.f32, *r.frm.rex(0x0f, opc))
+    I64.enc(inst.f32, *r.frm(0x0f, opc))
+
+    I32.enc(inst.f64, *r.frm(0x0f, opc))
+    I64.enc(inst.f64, *r.frm.rex(0x0f, opc))
+    I64.enc(inst.f64, *r.frm(0x0f, opc))
