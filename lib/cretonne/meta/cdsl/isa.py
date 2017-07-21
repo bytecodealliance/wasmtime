@@ -23,6 +23,9 @@ try:
         # instructions.
         InstSpec = Union[MaybeBoundInst, Apply]
         BranchRange = Sequence[int]
+        # A recipe predicate consisting of an ISA predicate and an instruction
+        # predicate.
+        RecipePred = Tuple[PredNode, PredNode]
 except ImportError:
     pass
 
@@ -62,7 +65,7 @@ class TargetISA(object):
         Finish the definition of a target ISA after adding all CPU modes and
         settings.
 
-        This computes some derived properties that are used in multilple
+        This computes some derived properties that are used in multiple
         places.
 
         :returns self:
@@ -86,6 +89,9 @@ class TargetISA(object):
                     recipe.number = len(rcps)
                     rcps.add(recipe)
                     self.all_recipes.append(recipe)
+                    # Make sure ISA predicates are registered.
+                    if recipe.isap:
+                        self.settings.number_predicate(recipe.isap)
 
     def _collect_predicates(self):
         # type: () -> None
@@ -336,6 +342,19 @@ class EncRecipe(object):
                 o2i[o] = i
         return (i2o, o2i)
 
+    def recipe_pred(self):
+        # type: () -> RecipePred
+        """
+        Get the combined recipe predicate which includes both the ISA predicate
+        and the instruction predicate.
+
+        Return `None` if this recipe has neither predicate.
+        """
+        if self.isap is None and self.instp is None:
+            return None
+        else:
+            return (self.isap, self.instp)
+
 
 class Encoding(object):
     """
@@ -386,9 +405,9 @@ class Encoding(object):
 
         self.recipe = recipe
         self.encbits = encbits
-        # Combine recipe predicates with the manually specified ones.
-        self.instp = And.combine(recipe.instp, instp)
-        self.isap = And.combine(recipe.isap, isap)
+        # Record specific predicates. Note that the recipe also has predicates.
+        self.instp = instp
+        self.isap = isap
 
     def __str__(self):
         # type: () -> str

@@ -11,11 +11,12 @@ are allocated.
 
 This is the information available to us:
 
-- The instruction to be encoded as an `Inst` reference.
-- The data-flow graph containing the instruction, giving us access to the
-  `InstructionData` representation and the types of all values involved.
-- A target ISA instance with shared and ISA-specific settings for evaluating
-  ISA predicates.
+- The instruction to be encoded as an `InstructionData` reference.
+- The controlling type variable.
+- The data-flow graph giving us access to the types of all values involved.
+  This is needed for testing any secondary type variables.
+- A `PredicateView` reference for the ISA-specific settings for evaluating ISA
+  predicates.
 - The currently active CPU mode is determined by the ISA.
 
 ## Level 1 table lookup
@@ -62,7 +63,7 @@ from cdsl.predicates import FieldPredicate
 try:
     from typing import Sequence, Set, Tuple, List, Dict, Iterable, DefaultDict, TYPE_CHECKING  # noqa
     if TYPE_CHECKING:
-        from cdsl.isa import TargetISA, OperandConstraint, Encoding, CPUMode, EncRecipe  # noqa
+        from cdsl.isa import TargetISA, OperandConstraint, Encoding, CPUMode, EncRecipe, RecipePred  # noqa
         from cdsl.predicates import PredNode, PredLeaf  # noqa
         from cdsl.types import ValueType  # noqa
         from cdsl.instructions import Instruction  # noqa
@@ -77,8 +78,8 @@ def emit_instp(instp, fmt):
     Emit code for matching an instruction predicate against an
     `InstructionData` reference called `inst`.
 
-    The generated code is a pattern match that falls through if the instruction
-    has an unexpected format. This should lead to a panic.
+    The generated code is an `if let` pattern match that falls through if the
+    instruction has an unexpected format. This should lead to a panic.
     """
     iform = instp.predicate_context()
 
@@ -94,11 +95,10 @@ def emit_instp(instp, fmt):
         fnames.add(p.field.rust_name())
     fields = ', '.join(sorted(fnames))
 
-    with fmt.indented('{} => {{'.format(instp.number), '}'):
-        with fmt.indented(
-                'if let InstructionData::{} {{ {}, .. }} = *inst {{'
-                .format(iform.name, fields), '}'):
-            fmt.line('return {};'.format(instp.rust_predicate(0)))
+    with fmt.indented(
+            'if let InstructionData::{} {{ {}, .. }} = *inst {{'
+            .format(iform.name, fields), '}'):
+        fmt.line('return {};'.format(instp.rust_predicate(0)))
 
 
 def emit_instps(instps, fmt):
@@ -122,7 +122,8 @@ def emit_instps(instps, fmt):
         fmt.line('use ir::instructions::InstructionFormat;')
         with fmt.indented('match instp_idx {', '}'):
             for instp in instps:
-                emit_instp(instp, fmt)
+                with fmt.indented('{} => {{'.format(instp.number), '}'):
+                    emit_instp(instp, fmt)
             fmt.line('_ => panic!("Invalid instruction predicate")')
 
         # The match cases will fall through if the instruction format is wrong.
@@ -130,6 +131,55 @@ def emit_instps(instps, fmt):
         fmt.line('       InstructionFormat::from(inst),')
         fmt.line('       inst.opcode(),')
         fmt.line('       instp_idx);')
+
+
+def emit_recipe_predicates(recipes, fmt):
+    # type: (Sequence[EncRecipe], srcgen.Formatter) -> None
+    """
+    Emit private functions for checking recipe predicates as well as a static
+    `RECIPE_PREDICATES` array indexed by recipe number.
+
+    A recipe predicate is a combination of an ISA predicate and an instruction
+    predicates. Many recipes have identical predicates.
+    """
+    # Table for uniquing recipe predicates. Maps predicate to generated
+    # function name.
+    pname = dict()  # type: Dict[RecipePred, str]
+
+    # Generate unique recipe predicates.
+    for rcp in recipes:
+        p = rcp.recipe_pred()
+        if p is None or p in pname:
+            continue
+        name = 'recipe_predicate_{}'.format(rcp.name.lower())
+        pname[p] = name
+        isap, instp = p
+
+        # Generate the predicate function.
+        with fmt.indented(
+                'fn {}({}: ::settings::PredicateView, '
+                'inst: &InstructionData) -> bool {{'
+                .format(
+                    name,
+                    'isap' if isap else '_'), '}'):
+            if isap:
+                with fmt.indented(
+                        'if isap.test({})'.format(isap.number),
+                        '}'):
+                    fmt.line('return false;')
+            emit_instp(instp, fmt)
+            fmt.line('unreachable!();')
+
+    # Generate the static table.
+    with fmt.indented(
+            'pub static RECIPE_PREDICATES: [RecipePredicate; {}] = ['
+            .format(len(recipes)), '];'):
+        for rcp in recipes:
+            p = rcp.recipe_pred()
+            if p is None:
+                fmt.line('None,')
+            else:
+                fmt.format('Some({}),', pname[p])
 
 
 # Encoding lists are represented as u16 arrays.
@@ -604,8 +654,11 @@ def emit_recipe_sizing(isa, fmt):
 
 def gen_isa(isa, fmt):
     # type: (TargetISA, srcgen.Formatter) -> None
-    # First assign numbers to relevant instruction predicates and generate the
-    # check_instp() function..
+
+    # Make the `RECIPE_PREDICATES` table.
+    emit_recipe_predicates(isa.all_recipes, fmt)
+
+    # Generate the check_instp() function..
     emit_instps(isa.all_instps, fmt)
 
     # Level1 tables, one per CPU mode

@@ -66,6 +66,7 @@ impl TargetIsa for Isa {
                 .and_then(|enclist_offset| {
                               Ok(Encodings::new(enclist_offset,
                                                 &enc_tables::ENCLISTS[..],
+                                                &enc_tables::RECIPE_PREDICATES[..],
                                                 inst,
                                                 enc_tables::check_instp,
                                                 self.isa_flags.predicate_view()))
