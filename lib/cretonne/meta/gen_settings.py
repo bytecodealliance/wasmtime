@@ -87,16 +87,20 @@ def gen_getters(sgrp, fmt):
     """
     fmt.doc_comment("User-defined settings.")
     with fmt.indented('impl Flags {', '}'):
-        fmt.doc_comment('Returns inner slice of bytes.')
-        fmt.doc_comment('The byte-sized settings are not included.')
-        with fmt.indented('pub fn predicate_bytes(&self) -> &[u8] {', '}'):
-            fmt.line('&self.bytes[{}..]'.format(sgrp.boolean_offset))
-        fmt.doc_comment('Dynamic numbered predicate getter.')
+        fmt.doc_comment('Get a view of the boolean predicates.')
         with fmt.indented(
-                'pub fn numbered_predicate(&self, p: usize) -> bool {', '}'):
-            fmt.line(
-                    'self.bytes[{} + p/8] & (1 << (p%8)) != 0'
-                    .format(sgrp.boolean_offset))
+                'pub fn predicate_view(&self) -> ::settings::PredicateView {',
+                '}'):
+            fmt.format(
+                    '::settings::PredicateView::new(&self.bytes[{}..])',
+                    sgrp.boolean_offset)
+        if sgrp.settings:
+            fmt.doc_comment('Dynamic numbered predicate getter.')
+            with fmt.indented(
+                    'fn numbered_predicate(&self, p: usize) -> bool {', '}'):
+                fmt.line(
+                        'self.bytes[{} + p / 8] & (1 << (p % 8)) != 0'
+                        .format(sgrp.boolean_offset))
         for setting in sgrp.settings:
             gen_getter(setting, sgrp, fmt)
         for pred in sgrp.named_predicates:

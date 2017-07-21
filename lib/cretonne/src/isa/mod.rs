@@ -138,11 +138,11 @@ pub trait TargetIsa {
     fn register_info(&self) -> RegInfo;
 
     /// Returns an iterartor over legal encodings for the instruction.
-    fn legal_encodings<'a, 'b>(&'a self,
-                               dfg: &'b ir::DataFlowGraph,
-                               inst: &'b ir::InstructionData,
-                               ctrl_typevar: ir::Type)
-                               -> Result<Encodings<'a, 'b>, Legalize>;
+    fn legal_encodings<'a>(&'a self,
+                           dfg: &'a ir::DataFlowGraph,
+                           inst: &'a ir::InstructionData,
+                           ctrl_typevar: ir::Type)
+                           -> Result<Encodings<'a>, Legalize>;
 
     /// Encode an instruction after determining it is legal.
     ///
