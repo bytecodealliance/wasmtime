@@ -9,6 +9,13 @@ use isa::{Encoding, Legalize};
 use settings::PredicateView;
 use std::ops::Range;
 
+/// A recipe predicate.
+///
+/// This is a predicate function capable of testing ISA and instruction predicates simultaneously.
+///
+/// A None predicate is always satisfied.
+pub type RecipePredicate = Option<fn(PredicateView, &InstructionData) -> bool>;
+
 /// Legalization action to perform when no encoding can be found for an instruction.
 ///
 /// This is an index into an ISA-specific table of legalization actions.
@@ -147,6 +154,7 @@ pub struct Encodings<'a> {
     inst: &'a InstructionData,
     instp: fn(&InstructionData, EncListEntry) -> bool,
     isa_predicates: PredicateView<'a>,
+    recipe_predicates: &'static [RecipePredicate],
 }
 
 impl<'a> Encodings<'a> {
@@ -155,8 +163,9 @@ impl<'a> Encodings<'a> {
     /// # Parameters
     ///
     /// - `offset` an offset into encoding list returned by `lookup_enclist` function.
-    /// - `inst` the current instruction.
     /// - `enclist` a list of encoding entries.
+    /// - `recipe_predicates` is a slice of recipe predicate functions.
+    /// - `inst` the current instruction.
     /// - `instp` an instruction predicate number to be evaluated on the current instruction.
     /// - `isa_predicate_bytes` an ISA flags as a slice of bytes to evaluate an ISA predicate number
     /// on the current instruction.
@@ -166,6 +175,7 @@ impl<'a> Encodings<'a> {
     /// or `None`.
     pub fn new(offset: usize,
                enclist: &'static [EncListEntry],
+               recipe_predicates: &'static [RecipePredicate],
                inst: &'a InstructionData,
                instp: fn(&InstructionData, EncListEntry) -> bool,
                isa_predicates: PredicateView<'a>)
@@ -176,6 +186,15 @@ impl<'a> Encodings<'a> {
             inst,
             instp,
             isa_predicates,
+            recipe_predicates,
+        }
+    }
+
+    /// Check if the predicate for `recipe` is satisfied.
+    fn check_recipe(&self, recipe: u16) -> bool {
+        match self.recipe_predicates[recipe as usize] {
+            Some(p) => p(self.isa_predicates, self.inst),
+            None => true,
         }
     }
 }
@@ -188,13 +207,13 @@ impl<'a> Iterator for Encodings<'a> {
             let pred = self.enclist[self.offset];
             if pred <= CODE_ALWAYS {
                 // This is an instruction predicate followed by recipe and encbits entries.
+                self.offset += 3;
                 if pred == CODE_ALWAYS || (self.instp)(self.inst, pred) {
-                    let encoding = Encoding::new(self.enclist[self.offset + 1],
-                                                 self.enclist[self.offset + 2]);
-                    self.offset += 3;
-                    return Some(encoding);
-                } else {
-                    self.offset += 3;
+                    let recipe = self.enclist[self.offset - 2];
+                    if self.check_recipe(recipe) {
+                        let encoding = Encoding::new(recipe, self.enclist[self.offset - 1]);
+                        return Some(encoding);
+                    }
                 }
             } else {
                 // This is an ISA predicate entry.
