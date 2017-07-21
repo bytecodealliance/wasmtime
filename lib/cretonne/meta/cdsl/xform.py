@@ -10,6 +10,8 @@ try:
     from typing import Union, Iterator, Sequence, Iterable, List, Dict  # noqa
     from typing import Optional, Set # noqa
     from .ast import Expr, VarMap  # noqa
+    from .ti import TypeConstraint  # noqa
+    from .typevar import TypeVar  # noqa
     DefApply = Union[Def, Apply]
 except ImportError:
     pass
@@ -89,7 +91,8 @@ class XForm(object):
     An instruction transformation consists of a source and destination pattern.
 
     Patterns are expressed in *register transfer language* as tuples of
-    `ast.Def` or `ast.Expr` nodes.
+    `ast.Def` or `ast.Expr` nodes. A pattern may optionally have a sequence of
+    TypeConstraints, that additionally limit the set of cases when it applies.
 
     A legalization pattern must have a source pattern containing only a single
     instruction.
@@ -111,8 +114,8 @@ class XForm(object):
     )
     """
 
-    def __init__(self, src, dst):
-        # type: (Rtl, Rtl) -> None
+    def __init__(self, src, dst, constraints=None):
+        # type: (Rtl, Rtl, Optional[Sequence[TypeConstraint]]) -> None
         self.src = src
         self.dst = dst
         # Variables that are inputs to the source pattern.
@@ -145,6 +148,18 @@ class XForm(object):
         raw_ti = get_type_env(ti_xform(self, TypeEnv()))
         raw_ti.normalize()
         self.ti = raw_ti.extract()
+
+        def interp_tv(tv):
+            # type: (TypeVar) -> TypeVar
+            """ Convert typevars according to symtab """
+            if not tv.name.startswith("typeof_"):
+                return tv
+            return symtab[tv.name[len("typeof_"):]].get_typevar()
+
+        if constraints is not None:
+            for c in constraints:
+                type_m = {tv: interp_tv(tv) for tv in c.tvs()}
+                self.ti.add_constraint(c.translate(type_m))
 
         # Sanity: The set of inferred free typevars should be a subset of the
         # TVs corresponding to Vars appearing in src

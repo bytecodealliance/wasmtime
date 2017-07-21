@@ -59,6 +59,11 @@ class ValueType(object):
         """Return the number of lanes."""
         assert False, "Abstract"
 
+    def width(self):
+        # type: () -> int
+        """Return the total number of bits of an instance of this type."""
+        return self.lane_count() * self.lane_bits()
+
     def wider_or_equal(self, other):
         # type: (ValueType) -> bool
         """

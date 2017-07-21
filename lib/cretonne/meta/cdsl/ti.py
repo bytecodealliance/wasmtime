@@ -54,8 +54,8 @@ class TypeConstraint(object):
         """
         Return true iff all typevars in the constraint are singletons.
         """
-        tvs = filter(lambda x:  isinstance(x, TypeVar), self._args())
-        return [] == list(filter(lambda x:  x.singleton_type() is None, tvs))
+        return [] == list(filter(lambda x:  x.singleton_type() is None,
+                                 self.tvs()))
 
     def __hash__(self):
         # type: () -> int
@@ -68,6 +68,13 @@ class TypeConstraint(object):
         this object.
         """
         assert False, "Abstract"
+
+    def tvs(self):
+        # type: () -> Iterable[TypeVar]
+        """
+        Return the typevars contained in this constraint.
+        """
+        return filter(lambda x:  isinstance(x, TypeVar), self._args())
 
     def is_trivial(self):
         # type: () -> bool
@@ -216,6 +223,47 @@ class WiderOrEq(TypeConstraint):
         typ2 = self.tv2.singleton_type()
 
         return typ1.wider_or_equal(typ2)
+
+
+class SameWidth(TypeConstraint):
+    """
+    Constraint specifying that two types have the same width. E.g. i32x2 has
+    the same width as i64x1, i16x4, f32x2, f64, b1x64 etc.
+    """
+    def __init__(self, tv1, tv2):
+        # type: (TypeVar, TypeVar) -> None
+        self.tv1 = tv1
+        self.tv2 = tv2
+
+    def _args(self):
+        # type: () -> Tuple[Any,...]
+        """ See TypeConstraint._args() """
+        return (self.tv1, self.tv2)
+
+    def is_trivial(self):
+        # type: () -> bool
+        """ See TypeConstraint.is_trivial() """
+        # Trivially true
+        if (self.tv1 == self.tv2):
+            return True
+
+        ts1 = self.tv1.get_typeset()
+        ts2 = self.tv2.get_typeset()
+
+        # Trivially False
+        if len(ts1.widths().intersection(ts2.widths())) == 0:
+            return True
+
+        return self.is_concrete()
+
+    def eval(self):
+        # type: () -> bool
+        """ See TypeConstraint.eval() """
+        assert self.is_concrete()
+        typ1 = self.tv1.singleton_type()
+        typ2 = self.tv2.singleton_type()
+
+        return (typ1.width() == typ2.width())
 
 
 class TypeEnv(object):
@@ -537,6 +585,10 @@ class TypeEnv(object):
             elif isinstance(constr, WiderOrEq):
                 assert constr.tv1 in nodes and constr.tv2 in nodes
                 edges.add((constr.tv1, constr.tv2, "dashed", "forward", ">="))
+            elif isinstance(constr, SameWidth):
+                assert constr.tv1 in nodes and constr.tv2 in nodes
+                edges.add((constr.tv1, constr.tv2, "dashed", "none",
+                           "same_width"))
             else:
                 assert False, "Can't display constraint {}".format(constr)
 

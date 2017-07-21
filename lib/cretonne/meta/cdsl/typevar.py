@@ -513,6 +513,13 @@ class TypeSet(object):
         assert len(types) == 1
         return types[0]
 
+    def widths(self):
+        # type: () -> Set[int]
+        """ Return a set of the widths of all possible types in self"""
+        scalar_w = self.ints.union(self.floats.union(self.bools))
+        scalar_w = scalar_w.union(self.bitvecs)
+        return set(w * l for l in self.lanes for w in scalar_w)
+
 
 class TypeVar(object):
     """
