@@ -12,11 +12,12 @@ try:
         from .ast import Expr, Apply, Var  # noqa
         from .typevar import TypeVar  # noqa
         from .ti import TypeConstraint  # noqa
+        from .xform import XForm
         # List of operands for ins/outs:
         OpList = Union[Sequence[Operand], Operand]
         ConstrList = Union[Sequence[TypeConstraint], TypeConstraint]
         MaybeBoundInst = Union['Instruction', 'BoundInstruction']
-        VarTyping = Dict[Var, TypeVar]
+        InstructionSemantics = List[XForm]
 except ImportError:
     pass
 
@@ -119,6 +120,7 @@ class Instruction(object):
         self.outs = self._to_operand_tuple(outs)
         self.constraints = self._to_constraint_tuple(constraints)
         self.format = InstructionFormat.lookup(self.ins, self.outs)
+        self.semantics = None  # type: InstructionSemantics
 
         # Opcode number, assigned by gen_instr.py.
         self.number = None  # type: int
@@ -333,6 +335,17 @@ class Instruction(object):
         """
         from .ast import Apply  # noqa
         return Apply(self, args)
+
+    def set_semantics(self, sem):
+        # type: (Union[XForm, InstructionSemantics]) -> None
+        """Set our semantics."""
+        from semantics import verify_semantics
+
+        if not isinstance(sem, list):
+            sem = [sem]
+
+        verify_semantics(self, sem)
+        self.semantics = sem
 
 
 class BoundInstruction(object):
