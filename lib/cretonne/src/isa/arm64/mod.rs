@@ -54,11 +54,11 @@ impl TargetIsa for Isa {
         enc_tables::INFO.clone()
     }
 
-    fn legal_encodings<'a, 'b>(&'a self,
-                               _dfg: &'b ir::DataFlowGraph,
-                               inst: &'b ir::InstructionData,
-                               ctrl_typevar: ir::Type)
-                               -> Result<Encodings<'a, 'b>, Legalize> {
+    fn legal_encodings<'a>(&'a self,
+                           _dfg: &'a ir::DataFlowGraph,
+                           inst: &'a ir::InstructionData,
+                           ctrl_typevar: ir::Type)
+                           -> Result<Encodings<'a>, Legalize> {
         lookup_enclist(ctrl_typevar,
                        inst.opcode(),
                        &enc_tables::LEVEL1_A64[..],
@@ -68,7 +68,7 @@ impl TargetIsa for Isa {
                                                 &enc_tables::ENCLISTS[..],
                                                 inst,
                                                 enc_tables::check_instp,
-                                                self.isa_flags.predicate_bytes()))
+                                                self.isa_flags.predicate_view()))
                           })
     }
 
