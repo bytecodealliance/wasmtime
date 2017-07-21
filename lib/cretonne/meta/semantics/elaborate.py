@@ -81,6 +81,7 @@ def find_matching_xform(d):
 
     for x in d.expr.inst.semantics:
         subst = d.substitution(x.src.rtl[0], {})
+        assert subst is not None
 
         if x.ti.permits({subst[v]: tv for (v, tv) in typing.items()}):
             res.append(x)

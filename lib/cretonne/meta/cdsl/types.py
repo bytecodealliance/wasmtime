@@ -89,10 +89,7 @@ class ScalarType(ValueType):
         self._vectors = dict()  # type: Dict[int, VectorType]
         # Assign numbers starting from 1. (0 is VOID).
         ValueType.all_scalars.append(self)
-        # Numbers are only valid for Cretone types that get emitted to Rust.
-        # This excludes BVTypes
-        self.number = len([x for x in ValueType.all_scalars
-                           if not isinstance(x, BVType)])
+        self.number = len(ValueType.all_scalars)
         assert self.number < 16, 'Too many scalar types'
 
     def __repr__(self):
@@ -249,7 +246,7 @@ class BoolType(ScalarType):
         return self.bits
 
 
-class BVType(ScalarType):
+class BVType(ValueType):
     """A flat bitvector type. Used for semantics description only."""
 
     def __init__(self, bits):
@@ -268,7 +265,11 @@ class BVType(ScalarType):
     @staticmethod
     def with_bits(bits):
         # type: (int) -> BVType
-        typ = ValueType.by_name('bv{:d}'.format(bits))
+        name = 'bv{:d}'.format(bits)
+        if name not in ValueType._registry:
+            return BVType(bits)
+
+        typ = ValueType.by_name(name)
         if TYPE_CHECKING:
             return cast(BVType, typ)
         else:
@@ -278,3 +279,8 @@ class BVType(ScalarType):
         # type: () -> int
         """Return the number of bits in a lane."""
         return self.bits
+
+    def lane_count(self):
+        # type: () -> int
+        """Return the number of lane. For BVtypes always 1."""
+        return 1

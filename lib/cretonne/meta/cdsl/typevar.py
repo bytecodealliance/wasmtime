@@ -501,7 +501,8 @@ class TypeSet(object):
             for bits in self.bools:
                 yield by(types.BoolType.with_bits(bits), nlanes)
             for bits in self.bitvecs:
-                yield by(types.BVType.with_bits(bits), nlanes)
+                assert nlanes == 1
+                yield types.BVType.with_bits(bits)
 
     def get_singleton(self):
         # type: () -> types.ValueType
@@ -572,10 +573,15 @@ class TypeVar(object):
     def singleton(typ):
         # type: (types.ValueType) -> TypeVar
         """Create a type variable that can only assume a single type."""
+        scalar = None  # type: ValueType
         if isinstance(typ, types.VectorType):
             scalar = typ.base
             lanes = (typ.lanes, typ.lanes)
         elif isinstance(typ, types.ScalarType):
+            scalar = typ
+            lanes = (1, 1)
+        else:
+            assert isinstance(typ, types.BVType)
             scalar = typ
             lanes = (1, 1)
 

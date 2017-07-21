@@ -4,52 +4,45 @@ from cdsl.ti import TypeEnv, ti_rtl, get_type_env
 try:
     from typing import List, Dict, Tuple # noqa
     from cdsl.ast import Var # noqa
-    from cdsl.xform import XForm # noqa
+    from cdsl.xform import XForm, Rtl # noqa
     from cdsl.ti import VarTyping # noqa
     from cdsl.instructions import Instruction, InstructionSemantics # noqa
 except ImportError:
     pass
 
 
-def verify_semantics(inst, sem):
-    # type: (Instruction, InstructionSemantics) -> None
+def verify_semantics(inst, src, xforms):
+    # type: (Instruction, Rtl, InstructionSemantics) -> None
     """
-    Verify that the semantics sem correctly describes the instruction inst.
-    This involves checking that:
-        1) For all XForms x \in sem, x.src consists of a single instance of
-           inst
-        2) For any possible concrete typing of inst there is exactly 1 XForm x
-           in sem that applies.
+    Verify that the semantics transforms in xforms correctly describe the
+    instruction described by the src Rtl.  This involves checking that:
+        1) For all XForms x \in xforms, there is a Var substitution form src to
+           x.src
+        2) For any possible concrete typing of src there is exactly 1 XForm x
+           in xforms that applies.
     """
-    # 1) The source rtl is always a single instance of inst.
-    for xform in sem:
-        assert len(xform.src.rtl) == 1 and\
-            xform.src.rtl[0].expr.inst == inst,\
-            "XForm {} doesn't describe instruction {}."\
-            .format(xform, inst)
+    # 0) The source rtl is always a single instruction
+    assert len(src.rtl) == 1
+
+    # 1) For all XForms x, x.src is structurally equivalent to src
+    for x in xforms:
+        assert src.substitution(x.src, {}) is not None,\
+            "XForm {} doesn't describe instruction {}.".format(x, src)
 
     # 2) Any possible typing for the instruction should be covered by
     #    exactly ONE semantic XForm
-    inst_rtl = sem[0].src
-    typenv = get_type_env(ti_rtl(inst_rtl, TypeEnv()))
-
-    # This bit is awkward. Concrete typing is defined in terms of the vars
-    # of one Rtl. We arbitrarily picked that Rtl to be sem[0].src. For any
-    # other XForms in sem, we must build a substitution form
-    # sem[0].src->sem[N].src, before we can check if sem[N] permits one of
-    # the concrete typings of our Rtl.
-    # TODO: Can this be made cleaner?
-    subst = [inst_rtl.substitution(x.src, {}) for x in sem]
-    assert not any(x is None for x in subst)
-    sub_sem = list(zip(subst, sem))  # type: List[Tuple[Dict[Var, Var], XForm]] # noqa
-
-    def subst_typing(typing, sub):
-        # type: (VarTyping, Dict[Var, Var]) -> VarTyping
-        return {sub[v]: tv for (v, tv) in typing.items()}
+    typenv = get_type_env(ti_rtl(src, TypeEnv()))
+    typenv.normalize()
+    typenv = typenv.extract()
 
     for t in typenv.concrete_typings():
-        matching_xforms = [x for (s, x) in sub_sem
-                           if x.ti.permits(subst_typing(t, s))]
+        matching_xforms = []  # type: List[XForm]
+        for x in xforms:
+            # Translate t using x.symtab
+            t = {x.symtab[str(v)]:  tv for (v, tv) in t.items()}
+            if (x.ti.permits(t)):
+                matching_xforms.append(x)
+
         assert len(matching_xforms) == 1,\
             ("Possible typing {} of {} not matched by exactly one case " +
              ": {}").format(t, inst, matching_xforms)
