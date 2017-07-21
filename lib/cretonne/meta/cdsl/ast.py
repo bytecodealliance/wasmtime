@@ -102,15 +102,17 @@ class Def(object):
 
     def vars(self):
         # type: () -> Set[Var]
-        """ Return the set of all Vars that appear in self"""
+        """Return the set of all Vars in self that correspond to SSA values"""
         return self.definitions().union(self.uses())
 
     def substitution(self, other, s):
         # type: (Def, VarMap) -> Optional[VarMap]
         """
         If the Defs self and other agree structurally, return a variable
-        substitution to transform self ot other. Two Defs agree structurally
-        if the contained Apply's agree structurally.
+        substitution to transform self to other. Otherwise return None. Two
+        Defs agree structurally if there exists a Var substitution, that can
+        transform one into the other. See Apply.substitution() for more
+        details.
         """
         s = self.expr.substitution(other.expr, s)
 
@@ -378,7 +380,7 @@ class Apply(Expr):
 
     def vars(self):
         # type: () -> Set[Var]
-        """ Return the set of all Vars that appear in self"""
+        """Return the set of all Vars in self that correspond to SSA values"""
         res = set()
         for i in self.inst.value_opnums:
             arg = self.args[i]
@@ -390,8 +392,8 @@ class Apply(Expr):
         # type: (Apply, VarMap) -> Optional[VarMap]
         """
         If the application self and other agree structurally, return a variable
-        substitution to transform self ot other. Two applications agree
-        structurally if:
+        substitution to transform self to other. Otherwise return None. Two
+        applications agree structurally if:
             1) They are over the same instruction
             2) Every Var v in self, maps to a single Var w in other. I.e for
                each use of v in self, w is used in the corresponding place in

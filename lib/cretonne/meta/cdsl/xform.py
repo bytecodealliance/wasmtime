@@ -55,7 +55,7 @@ class Rtl(object):
 
     def vars(self):
         # type: () -> Set[Var]
-        """ Return the set of all Vars that appear in self"""
+        """Return the set of all Vars in self that correspond to SSA values"""
         return reduce(lambda x, y:  x.union(y),
                       [d.vars() for d in self.rtl],
                       set([]))

@@ -232,16 +232,16 @@ class TestElaborate(TestCase):
     def test_elaborate_iadd_simple(self):
         # type: () -> None
         i32.by(2)  # Make sure i32x2 exists.
-        r = Rtl(
-                self.v0 << iadd.i32(self.v1, self.v2),
-        )
-        sem = elaborate(cleanup_concrete_rtl(r))
         x = Var('x')
         y = Var('y')
         a = Var('a')
         bvx = Var('bvx')
         bvy = Var('bvy')
         bva = Var('bva')
+        r = Rtl(
+                a << iadd.i32(x, y),
+        )
+        sem = elaborate(cleanup_concrete_rtl(r))
 
         assert concrete_rtls_eq(sem, cleanup_concrete_rtl(Rtl(
             bvx << prim_to_bv.i32(x),
