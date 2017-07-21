@@ -11,5 +11,5 @@ from . import instructions as x86
 ISA = TargetISA('intel', [base.instructions.GROUP, x86.GROUP])
 
 # CPU modes for 32-bit and 64-bit operation.
-I32 = CPUMode('I32', ISA)
 I64 = CPUMode('I64', ISA)
+I32 = CPUMode('I32', ISA)
