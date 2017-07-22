@@ -83,8 +83,8 @@ impl Builder {
     /// Look up a descriptor by name.
     fn lookup(&self, name: &str) -> Result<(usize, detail::Detail)> {
         match probe(self.template, name, simple_hash(name)) {
-            None => Err(Error::BadName),
-            Some(entry) => {
+            Err(_) => Err(Error::BadName),
+            Ok(entry) => {
                 let d = &self.template.descriptors[self.template.hash_table[entry] as usize];
                 Ok((d.offset as usize, d.detail))
             }

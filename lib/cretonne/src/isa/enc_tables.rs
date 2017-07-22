@@ -5,6 +5,7 @@
 use ir::{Type, Opcode, InstructionData};
 use isa::{Encoding, Legalize};
 use constant_hash::{Table, probe};
+use std::ops::Range;
 
 /// Level 1 hash table entry.
 ///
@@ -25,6 +26,14 @@ pub struct Level1Entry<OffT: Into<u32> + Copy> {
     pub ty: Type,
     pub log2len: u8,
     pub offset: OffT,
+}
+
+impl<OffT: Into<u32> + Copy> Level1Entry<OffT> {
+    /// Get the level 2 table range indicated by this entry.
+    fn range(&self) -> Range<usize> {
+        let b = self.offset.into() as usize;
+        b..b + (1 << self.log2len)
+    }
 }
 
 impl<OffT: Into<u32> + Copy> Table<Type> for [Level1Entry<OffT>] {
@@ -83,20 +92,23 @@ pub fn lookup_enclist<OffT1, OffT2>(ctrl_typevar: Type,
           OffT2: Into<u32> + Copy
 {
     // TODO: The choice of legalization actions here is naive. This needs to be configurable.
-    probe(level1_table, ctrl_typevar, ctrl_typevar.index())
-        .ok_or_else(|| if ctrl_typevar.lane_type().bits() > 32 {
-                        Legalize::Narrow
-                    } else {
-                        Legalize::Expand
-                    })
-        .and_then(|l1idx| {
-                      let l1ent = &level1_table[l1idx];
-                      let l2off = l1ent.offset.into() as usize;
-                      let l2tab = &level2_table[l2off..l2off + (1 << l1ent.log2len)];
-                      probe(l2tab, opcode, opcode as usize)
-                          .map(|l2idx| l2tab[l2idx].offset.into() as usize)
-                          .ok_or(Legalize::Expand)
-                  })
+    match probe(level1_table, ctrl_typevar, ctrl_typevar.index()) {
+        Err(_) => {
+            // No level 1 entry for the type.
+            Err(if ctrl_typevar.lane_type().bits() > 32 {
+                    Legalize::Narrow
+                } else {
+                    Legalize::Expand
+                })
+        }
+        Ok(l1idx) => {
+            let l1ent = &level1_table[l1idx];
+            let l2tab = &level2_table[l1ent.range()];
+            probe(l2tab, opcode, opcode as usize)
+                .map(|l2idx| l2tab[l2idx].offset.into() as usize)
+                .map_err(|_| Legalize::Expand)
+        }
+    }
 }
 
 /// Encoding list entry.
