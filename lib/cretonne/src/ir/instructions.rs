@@ -85,10 +85,10 @@ impl FromStr for Opcode {
         }
 
         match probe::<&str, [Option<Opcode>]>(&OPCODE_HASH_TABLE, s, simple_hash(s)) {
-            None => Err("Unknown opcode"),
+            Err(_) => Err("Unknown opcode"),
             // We unwrap here because probe() should have ensured that the entry
             // at this index is not None.
-            Some(i) => Ok(OPCODE_HASH_TABLE[i].unwrap()),
+            Ok(i) => Ok(OPCODE_HASH_TABLE[i].unwrap()),
         }
     }
 }

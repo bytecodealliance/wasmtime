@@ -24,8 +24,12 @@ pub trait Table<K: Copy + Eq> {
 /// The provided `hash` value must have been computed from `key` using the same hash function that
 /// was used to construct the table.
 ///
-/// Returns the table index containing the found entry, or `None` if no entry could be found.
-pub fn probe<K: Copy + Eq, T: Table<K> + ?Sized>(table: &T, key: K, hash: usize) -> Option<usize> {
+/// Returns `Ok(idx)` with the table index containing the found entry, or `Err(idx)` with the empty
+/// sentinel entry if no entry could be found.
+pub fn probe<K: Copy + Eq, T: Table<K> + ?Sized>(table: &T,
+                                                 key: K,
+                                                 hash: usize)
+                                                 -> Result<usize, usize> {
     debug_assert!(table.len().is_power_of_two());
     let mask = table.len() - 1;
 
@@ -36,8 +40,8 @@ pub fn probe<K: Copy + Eq, T: Table<K> + ?Sized>(table: &T, key: K, hash: usize)
         idx &= mask;
 
         match table.key(idx) {
-            None => return None,
-            Some(k) if k == key => return Some(idx),
+            None => return Err(idx),
+            Some(k) if k == key => return Ok(idx),
             _ => {}
         }
 
