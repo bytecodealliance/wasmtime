@@ -43,3 +43,5 @@ sdivmodx = Instruction(
         Return both quotient and remainder.
         """,
         ins=(nlo, nhi, d), outs=(q, r), can_trap=True)
+
+GROUP.close()
