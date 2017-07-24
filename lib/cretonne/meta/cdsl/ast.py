@@ -402,16 +402,30 @@ class Apply(Expr):
         if self.inst != other.inst:
             return None
 
-        # TODO: Should we check imm/cond codes here as well?
-        for i in self.inst.value_opnums:
-            self_a = self.args[i]
-            other_a = other.args[i]
+        # Guaranteed by self.inst == other.inst
+        assert (len(self.args) == len(other.args))
 
-            assert isinstance(self_a, Var) and isinstance(other_a, Var)
-            if (self_a not in s):
-                s[self_a] = other_a
+        for (self_a, other_a) in zip(self.args, other.args):
+            if (isinstance(self_a, Var)):
+                if not isinstance(other_a, Var):
+                    return None
+
+                if (self_a not in s):
+                    s[self_a] = other_a
+                else:
+                    if (s[self_a] != other_a):
+                        return None
             else:
-                if (s[self_a] != other_a):
+                assert isinstance(self_a, Enumerator)
+
+                if not isinstance(other_a, Enumerator):
+                    # Currently don't support substitutions Var->Enumerator
+                    return None
+
+                # Guaranteed by self.inst == other.inst
+                assert self_a.kind == other_a.kind
+
+                if (self_a.value != other_a.value):
                     return None
         return s
 
