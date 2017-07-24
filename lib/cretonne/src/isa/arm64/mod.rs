@@ -67,8 +67,8 @@ impl TargetIsa for Isa {
                               Ok(Encodings::new(enclist_offset,
                                                 &enc_tables::ENCLISTS[..],
                                                 &enc_tables::RECIPE_PREDICATES[..],
+                                                &enc_tables::INST_PREDICATES[..],
                                                 inst,
-                                                enc_tables::check_instp,
                                                 self.isa_flags.predicate_view()))
                           })
     }

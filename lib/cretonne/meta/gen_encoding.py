@@ -101,36 +101,27 @@ def emit_instp(instp, fmt):
         fmt.line('return {};'.format(instp.rust_predicate(0)))
 
 
-def emit_instps(instps, fmt):
+def emit_inst_predicates(instps, fmt):
     # type: (Sequence[PredNode], srcgen.Formatter) -> None
     """
-    Emit a function for matching instruction predicates.
+    Emit private functions for matching instruction predicates as well as a
+    static `INST_PREDICATES` array indexed by predicate number.
     """
-
-    if not instps:
-        # If the ISA has no predicates, just emit a stub.
+    for instp in instps:
+        name = 'inst_predicate_{}'.format(instp.number)
         with fmt.indented(
-                'pub fn check_instp(_: &InstructionData, _: u16) ' +
-                '-> bool {', '}'):
-            fmt.line('unimplemented!()')
-        return
+                'fn {}(inst: &InstructionData) -> bool {{'
+                .format(name),
+                '}'):
+            emit_instp(instp, fmt)
+            fmt.line('unreachable!();')
 
+    # Generate the static table.
     with fmt.indented(
-            'pub fn check_instp(inst: &InstructionData, instp_idx: u16) ' +
-            '-> bool {', '}'):
-        # The matches emitted by `emit_instp` need this.
-        fmt.line('use ir::instructions::InstructionFormat;')
-        with fmt.indented('match instp_idx {', '}'):
-            for instp in instps:
-                with fmt.indented('{} => {{'.format(instp.number), '}'):
-                    emit_instp(instp, fmt)
-            fmt.line('_ => panic!("Invalid instruction predicate")')
-
-        # The match cases will fall through if the instruction format is wrong.
-        fmt.line('panic!("Bad format {:?}/{} for instp {}",')
-        fmt.line('       InstructionFormat::from(inst),')
-        fmt.line('       inst.opcode(),')
-        fmt.line('       instp_idx);')
+            'pub static INST_PREDICATES: [InstPredicate; {}] = ['
+            .format(len(instps)), '];'):
+        for instp in instps:
+            fmt.format('inst_predicate_{},', instp.number)
 
 
 def emit_recipe_predicates(recipes, fmt):
@@ -658,8 +649,8 @@ def gen_isa(isa, fmt):
     # Make the `RECIPE_PREDICATES` table.
     emit_recipe_predicates(isa.all_recipes, fmt)
 
-    # Generate the check_instp() function..
-    emit_instps(isa.all_instps, fmt)
+    # Make the `INST_PREDICATES` table.
+    emit_inst_predicates(isa.all_instps, fmt)
 
     # Level1 tables, one per CPU mode
     level1_tables = dict()
