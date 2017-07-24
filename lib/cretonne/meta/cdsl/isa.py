@@ -5,6 +5,7 @@ from .predicates import And
 from .registers import RegClass, Register, Stack
 from .ast import Apply
 from .types import ValueType
+from .instructions import InstructionGroup
 
 # The typing module is only required by mypy, and we don't use these imports
 # outside type comments.
@@ -46,6 +47,10 @@ class TargetISA(object):
         self.regbanks = list()  # type: List[RegBank]
         self.regclasses = list()  # type: List[RegClass]
         self.legalize_codes = OrderedDict()  # type: OrderedDict[XFormGroup, int]  # noqa
+
+        assert InstructionGroup._current is None,\
+            "InstructionGroup {} is still open!"\
+            .format(InstructionGroup._current.name)
 
     def __str__(self):
         # type: () -> str
