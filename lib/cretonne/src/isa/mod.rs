@@ -126,6 +126,20 @@ pub enum Legalize {
     Expand,
 }
 
+/// Translate a legalization code into a `Legalize` enum.
+///
+/// This mapping is going away soon. It depends on matching the `TargetISA.legalize_code()`
+/// mapping.
+impl From<u8> for Legalize {
+    fn from(x: u8) -> Legalize {
+        match x {
+            0 => Legalize::Narrow,
+            1 => Legalize::Expand,
+            _ => panic!("Unknown legalization code {}"),
+        }
+    }
+}
+
 /// Methods that are specialized to a target ISA.
 pub trait TargetIsa {
     /// Get the name of this ISA.

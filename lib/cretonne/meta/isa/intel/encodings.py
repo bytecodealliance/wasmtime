@@ -9,6 +9,20 @@ from .defs import I32, I64
 from . import recipes as r
 from . import settings as cfg
 from . import instructions as x86
+from base.legalize import narrow, expand
+
+I32.legalize_type(
+        default=narrow,
+        i32=expand,
+        f32=expand,
+        f64=expand)
+
+I64.legalize_type(
+        default=narrow,
+        i32=expand,
+        i64=expand,
+        f32=expand,
+        f64=expand)
 
 for inst,           opc in [
         (base.iadd, 0x01),

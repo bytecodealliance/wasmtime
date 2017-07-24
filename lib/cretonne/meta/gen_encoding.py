@@ -66,6 +66,7 @@ try:
         from cdsl.predicates import PredNode, PredLeaf  # noqa
         from cdsl.types import ValueType  # noqa
         from cdsl.instructions import Instruction  # noqa
+        from cdsl.xform import XFormGroup  # noqa
 except ImportError:
     pass
 
@@ -261,12 +262,17 @@ class Level2Table(object):
     """
     Level 2 table mapping instruction opcodes to `EncList` objects.
 
+    A level 2 table can be completely empty if it only holds a custom
+    legalization action for `ty`.
+
     :param ty: Controlling type variable of all entries, or `None`.
+    :param legalize: Default legalize action for `ty`.
     """
 
-    def __init__(self, ty):
-        # type: (ValueType) -> None
+    def __init__(self, ty, legalize):
+        # type: (ValueType, XFormGroup) -> None
         self.ty = ty
+        self.legalize = legalize
         # Maps inst -> EncList
         self.lists = OrderedDict()  # type: OrderedDict[Instruction, EncList]
 
@@ -277,6 +283,16 @@ class Level2Table(object):
             ls = EncList(inst, self.ty)
             self.lists[inst] = ls
         return ls
+
+    def is_empty(self):
+        # type: () -> bool
+        """
+        Check if this level 2 table is completely empty.
+
+        This can happen if the associated type simply has an overridden
+        legalize action.
+        """
+        return len(self.lists) == 0
 
     def enclists(self):
         # type: () -> Iterable[EncList]
@@ -310,21 +326,32 @@ class Level1Table(object):
     Level 1 table mapping types to `Level2` objects.
     """
 
-    def __init__(self):
-        # type: () -> None
+    def __init__(self, cpumode):
+        # type: (CPUMode) -> None
+        self.cpumode = cpumode
         self.tables = OrderedDict()  # type: OrderedDict[ValueType, Level2Table]  # noqa
+
+        if cpumode.default_legalize is None:
+            raise AssertionError(
+                    'CPU mode {}.{} needs a default legalize action'
+                    .format(cpumode.isa, cpumode))
+        self.legalize_code = cpumode.isa.legalize_code(
+                cpumode.default_legalize)
 
     def __getitem__(self, ty):
         # type: (ValueType) -> Level2Table
         tbl = self.tables.get(ty)
         if not tbl:
-            tbl = Level2Table(ty)
+            legalize = self.cpumode.get_legalize_action(ty)
+            # Allocate a legalization code in a predictable order.
+            self.cpumode.isa.legalize_code(legalize)
+            tbl = Level2Table(ty, legalize)
             self.tables[ty] = tbl
         return tbl
 
     def l2tables(self):
         # type: () -> Iterable[Level2Table]
-        return iter(self.tables.values())
+        return (l2 for l2 in self.tables.values() if not l2.is_empty())
 
 
 def make_tables(cpumode):
@@ -332,11 +359,17 @@ def make_tables(cpumode):
     """
     Generate tables for `cpumode` as described above.
     """
-    table = Level1Table()
+    table = Level1Table(cpumode)
     for enc in cpumode.encodings:
         ty = enc.ctrl_typevar()
         inst = enc.inst
         table[ty][inst].encodings.append(enc)
+
+    # Ensure there are level 1 table entries for all types with a custom
+    # legalize action. Try to be stable relative to dict ordering.
+    for ty in sorted(cpumode.type_legalize.keys(), key=str):
+        table[ty]
+
     return table
 
 
@@ -412,22 +445,42 @@ def emit_level1_hashtable(cpumode, level1, offt, fmt):
             'pub static LEVEL1_{}: [Level1Entry<{}>; {}] = ['
             .format(cpumode.name.upper(), offt, len(hash_table)), '];'):
         for level2 in hash_table:
-            if level2:
-                l2l = int(math.log(level2.hash_table_len, 2))
-                assert l2l > 0, "Hash table too small"
-                tyname = level2.ty.name if level2.ty is not None else 'void'
-                fmt.line(
-                        'Level1Entry ' +
-                        '{{ ty: types::{}, log2len: {}, offset: {:#08x} }},'
-                        .format(
-                            tyname.upper(),
-                            l2l,
-                            level2.hash_table_offset))
+            # Empty hash table entry. Include the default legalization action.
+            if not level2:
+                fmt.format(
+                        'Level1Entry {{ ty: types::VOID, log2len: !0, '
+                        'offset: 0, legalize: {} }},',
+                        level1.legalize_code)
+                continue
+
+            if level2.ty is not None:
+                tyname = level2.ty.rust_name()
             else:
-                # Empty entry.
-                fmt.line(
-                        'Level1Entry ' +
-                        '{ ty: types::VOID, log2len: 0, offset: 0 },')
+                tyname = 'types::VOID'
+
+            lcode = cpumode.isa.legalize_code(level2.legalize)
+
+            # Empty level 2 table: Only a specialized legalization action, no
+            # actual table.
+            # Set an offset that is out of bounds, but make sure it doesn't
+            # overflow its type when adding `1<<log2len`.
+            if level2.is_empty():
+                fmt.format(
+                        'Level1Entry {{ '
+                        'ty: {}, log2len: 0, offset: !0 - 1, '
+                        'legalize: {} }}, // {}',
+                        tyname, lcode, level2.legalize)
+                continue
+
+            # Proper level 2 hash table.
+            l2l = int(math.log(level2.hash_table_len, 2))
+            assert l2l > 0, "Level2 hash table too small"
+            fmt.format(
+                    'Level1Entry {{ '
+                    'ty: {}, log2len: {}, offset: {:#08x}, '
+                    'legalize: {} }}, // {}',
+                    tyname, l2l, level2.hash_table_offset,
+                    lcode, level2.legalize)
 
 
 def offset_type(length):

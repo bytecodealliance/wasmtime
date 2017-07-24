@@ -9,6 +9,11 @@ use isa::{Encoding, Legalize};
 use settings::PredicateView;
 use std::ops::Range;
 
+/// Legalization action to perform when no encoding can be found for an instruction.
+///
+/// This is an index into an ISA-specific table of legalization actions.
+pub type LegalizeCode = u8;
+
 /// Level 1 hash table entry.
 ///
 /// One level 1 hash table is generated per CPU mode. This table is keyed by the controlling type
@@ -19,14 +24,15 @@ use std::ops::Range;
 /// have a power-of-two size.
 ///
 /// Entries are generic over the offset type. It will typically be `u32` or `u16`, depending on the
-/// size of the `LEVEL2` table. A `u16` offset allows entries to shrink to 32 bits each, but some
-/// ISAs may have tables so large that `u32` offsets are needed.
+/// size of the `LEVEL2` table.
 ///
-/// Empty entries are encoded with a 0 `log2len`. This is on the assumption that no level 2 tables
-/// have only a single entry.
+/// Empty entries are encoded with a `!0` value for `log2len` which will always be out of range.
+/// Entries that have a `legalize` value but no level 2 table have an `offset` field that is out f
+/// bounds.
 pub struct Level1Entry<OffT: Into<u32> + Copy> {
     pub ty: Type,
     pub log2len: u8,
+    pub legalize: LegalizeCode,
     pub offset: OffT,
 }
 
@@ -44,7 +50,7 @@ impl<OffT: Into<u32> + Copy> Table<Type> for [Level1Entry<OffT>] {
     }
 
     fn key(&self, idx: usize) -> Option<Type> {
-        if self[idx].log2len != 0 {
+        if self[idx].log2len != !0 {
             Some(self[idx].ty)
         } else {
             None
@@ -55,7 +61,7 @@ impl<OffT: Into<u32> + Copy> Table<Type> for [Level1Entry<OffT>] {
 /// Level 2 hash table entry.
 ///
 /// The second level hash tables are keyed by `Opcode`, and contain an offset into the `ENCLISTS`
-/// table where the encoding recipes for the instrution are stored.
+/// table where the encoding recipes for the instruction are stored.
 ///
 /// Entries are generic over the offset type which depends on the size of `ENCLISTS`. A `u16`
 /// offset allows the entries to be only 32 bits each. There is no benefit to dropping down to `u8`
@@ -93,22 +99,28 @@ pub fn lookup_enclist<OffT1, OffT2>(ctrl_typevar: Type,
     where OffT1: Into<u32> + Copy,
           OffT2: Into<u32> + Copy
 {
-    // TODO: The choice of legalization actions here is naive. This needs to be configurable.
     match probe(level1_table, ctrl_typevar, ctrl_typevar.index()) {
-        Err(_) => {
-            // No level 1 entry for the type.
-            Err(if ctrl_typevar.lane_type().bits() > 32 {
-                    Legalize::Narrow
-                } else {
-                    Legalize::Expand
-                })
+        Err(l1idx) => {
+            // No level 1 entry found for the type.
+            // We have a sentinel entry with the default legalization code.
+            let l1ent = &level1_table[l1idx];
+            Err(l1ent.legalize.into())
         }
         Ok(l1idx) => {
+            // We have a valid level 1 entry for this type.
             let l1ent = &level1_table[l1idx];
-            let l2tab = &level2_table[l1ent.range()];
-            probe(l2tab, opcode, opcode as usize)
-                .map(|l2idx| l2tab[l2idx].offset.into() as usize)
-                .map_err(|_| Legalize::Expand)
+            match level2_table.get(l1ent.range()) {
+                Some(l2tab) => {
+                    probe(l2tab, opcode, opcode as usize)
+                        .map(|l2idx| l2tab[l2idx].offset.into() as usize)
+                        .map_err(|_| l1ent.legalize.into())
+                }
+                None => {
+                    // The l1ent range is invalid. This means that we just have a customized
+                    // legalization code for this type. The level 2 table is empty.
+                    Err(l1ent.legalize.into())
+                }
+            }
         }
     }
 }
