@@ -1,8 +1,10 @@
 """Defining instruction set architectures."""
 from __future__ import absolute_import
+from collections import OrderedDict
 from .predicates import And
 from .registers import RegClass, Register, Stack
 from .ast import Apply
+from .types import ValueType
 
 # The typing module is only required by mypy, and we don't use these imports
 # outside type comments.
@@ -12,8 +14,8 @@ try:
         from .instructions import MaybeBoundInst, InstructionGroup, InstructionFormat  # noqa
         from .predicates import PredNode  # noqa
         from .settings import SettingGroup  # noqa
-        from .types import ValueType  # noqa
         from .registers import RegBank  # noqa
+        from .xform import XFormGroup  # noqa
         OperandConstraint = Union[RegClass, Register, int, Stack]
         ConstraintSeq = Union[OperandConstraint, Tuple[OperandConstraint, ...]]
         # Instruction specification for encodings. Allows for predicated
@@ -43,6 +45,11 @@ class TargetISA(object):
         self.cpumodes = list()  # type: List[CPUMode]
         self.regbanks = list()  # type: List[RegBank]
         self.regclasses = list()  # type: List[RegClass]
+        self.legalize_codes = OrderedDict()  # type: OrderedDict[XFormGroup, int]  # noqa
+
+    def __str__(self):
+        # type: () -> str
+        return self.name
 
     def finish(self):
         # type: () -> TargetISA
@@ -138,6 +145,25 @@ class TargetISA(object):
         # `isa/registers.rs`.
         assert len(self.regclasses) <= 32, "Too many register classes"
 
+    def legalize_code(self, xgrp):
+        # type: (XFormGroup) -> int
+        """
+        Get the legalization code for the transform group `xgrp`. Assign one if
+        necessary.
+
+        Each target ISA has its own list of legalization actions with
+        associated legalize codes that appear in the encoding tables.
+
+        This method is used to maintain the registry of legalization actions
+        and their table codes.
+        """
+        if xgrp in self.legalize_codes:
+            code = self.legalize_codes[xgrp]
+        else:
+            code = len(self.legalize_codes)
+            self.legalize_codes[xgrp] = code
+        return code
+
 
 class CPUMode(object):
     """
@@ -157,6 +183,11 @@ class CPUMode(object):
         self.encodings = []  # type: List[Encoding]
         isa.cpumodes.append(self)
 
+        # Tables for configuring legalization actions when no valid encoding
+        # exists for an instruction.
+        self.default_legalize = None  # type: XFormGroup
+        self.type_legalize = dict()  # type: Dict[ValueType, XFormGroup]
+
     def __str__(self):
         # type: () -> str
         return self.name
@@ -170,6 +201,36 @@ class CPUMode(object):
         `CPUMode argument which is implied.
         """
         self.encodings.append(Encoding(self, *args, **kwargs))
+
+    def legalize_type(self, default=None, **kwargs):
+        # type: (XFormGroup, **XFormGroup) -> None
+        """
+        Configure the legalization action per controlling type variable.
+
+        Instructions that have a controlling type variable mentioned in one of
+        the arguments will be legalized according to the action specified here
+        instead of  using the `legalize_default` action.
+
+        The keyword arguments are value type names:
+
+            mode.legalize_type(i8=widen, i16=widen, i32=expand)
+
+        The `default` argument specifies the action to take for controlling
+        type variables that don't have an explicitly configured action.
+        """
+        if default is not None:
+            self.default_legalize = default
+
+        for name, xgrp in kwargs.items():
+            ty = ValueType.by_name(name)
+            self.type_legalize[ty] = xgrp
+
+    def get_legalize_action(self, ty):
+        # type: (ValueType) -> XFormGroup
+        """
+        Get the legalization action to use for `ty`.
+        """
+        return self.type_legalize.get(ty, self.default_legalize)
 
 
 class EncRecipe(object):

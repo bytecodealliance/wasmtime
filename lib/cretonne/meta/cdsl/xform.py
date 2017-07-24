@@ -241,6 +241,10 @@ class XFormGroup(object):
         self.name = name
         self.__doc__ = doc
 
+    def __str__(self):
+        # type: () -> str
+        return self.name
+
     def legalize(self, src, dst):
         # type: (Union[Def, Apply], Rtl) -> None
         """

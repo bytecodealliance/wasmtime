@@ -27,6 +27,13 @@ narrow = XFormGroup('narrow', """
         operations are expressed in terms of smaller integer types.
         """)
 
+widen = XFormGroup('widen', """
+        Legalize instructions by widening.
+
+        The transformations in the 'widen' group work by expressing
+        instructions in terms of larger types.
+        """)
+
 expand = XFormGroup('expand', """
         Legalize instructions by expansion.
 

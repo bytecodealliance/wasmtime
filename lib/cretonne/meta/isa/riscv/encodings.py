@@ -11,6 +11,20 @@ from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov
 from .settings import use_m
 from cdsl.ast import Var
+from base.legalize import narrow, expand
+
+RV32.legalize_type(
+        default=narrow,
+        i32=expand,
+        f32=expand,
+        f64=expand)
+
+RV64.legalize_type(
+        default=narrow,
+        i32=expand,
+        i64=expand,
+        f32=expand,
+        f64=expand)
 
 # Dummies for instruction predicates.
 x = Var('x')
