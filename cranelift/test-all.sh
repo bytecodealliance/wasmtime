@@ -35,7 +35,7 @@ else
     needcheck=yes
 fi
 if [ -n "$needcheck" ]; then
-    banner $(python --version 2>&1)
+    banner "$(python --version 2>&1), $(python3 --version 2>&1)"
     $topdir/lib/cretonne/meta/check.sh
     touch $tsfile || echo no target directory
 fi
