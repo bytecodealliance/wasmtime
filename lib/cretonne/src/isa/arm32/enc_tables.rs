@@ -1,6 +1,5 @@
 //! Encoding tables for ARM32 ISA.
 
-use ir::InstructionData;
 use ir::types;
 use isa::EncInfo;
 use isa::constraints::*;

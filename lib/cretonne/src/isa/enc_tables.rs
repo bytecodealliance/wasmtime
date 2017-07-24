@@ -16,6 +16,12 @@ use std::ops::Range;
 /// A None predicate is always satisfied.
 pub type RecipePredicate = Option<fn(PredicateView, &InstructionData) -> bool>;
 
+/// An instruction predicate.
+///
+/// This is a predicate function that needs to be tested in addition to the recipe predicate. It
+/// can't depend on ISA settings.
+pub type InstPredicate = fn(&InstructionData) -> bool;
+
 /// Legalization action to perform when no encoding can be found for an instruction.
 ///
 /// This is an index into an ISA-specific table of legalization actions.
@@ -152,9 +158,9 @@ pub struct Encodings<'a> {
     offset: usize,
     enclist: &'static [EncListEntry],
     inst: &'a InstructionData,
-    instp: fn(&InstructionData, EncListEntry) -> bool,
     isa_predicates: PredicateView<'a>,
     recipe_predicates: &'static [RecipePredicate],
+    inst_predicates: &'static [InstPredicate],
 }
 
 impl<'a> Encodings<'a> {
@@ -176,17 +182,17 @@ impl<'a> Encodings<'a> {
     pub fn new(offset: usize,
                enclist: &'static [EncListEntry],
                recipe_predicates: &'static [RecipePredicate],
+               inst_predicates: &'static [InstPredicate],
                inst: &'a InstructionData,
-               instp: fn(&InstructionData, EncListEntry) -> bool,
                isa_predicates: PredicateView<'a>)
                -> Self {
         Encodings {
             offset,
             enclist,
             inst,
-            instp,
             isa_predicates,
             recipe_predicates,
+            inst_predicates,
         }
     }
 
@@ -208,7 +214,11 @@ impl<'a> Iterator for Encodings<'a> {
             if pred <= CODE_ALWAYS {
                 // This is an instruction predicate followed by recipe and encbits entries.
                 self.offset += 3;
-                if pred == CODE_ALWAYS || (self.instp)(self.inst, pred) {
+                let satisfied = match self.inst_predicates.get(pred as usize) {
+                    Some(p) => p(self.inst),
+                    None => true,
+                };
+                if satisfied {
                     let recipe = self.enclist[self.offset - 2];
                     if self.check_recipe(recipe) {
                         let encoding = Encoding::new(recipe, self.enclist[self.offset - 1]);
