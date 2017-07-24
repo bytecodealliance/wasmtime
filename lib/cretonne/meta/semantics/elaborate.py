@@ -7,11 +7,12 @@ from .primitives import GROUP as PRIMITIVES, prim_to_bv, prim_from_bv
 from cdsl.ti import ti_rtl, TypeEnv, get_type_env
 from cdsl.typevar import TypeVar
 from cdsl.xform import Rtl
+from cdsl.ast import Var
 
 try:
     from typing import TYPE_CHECKING, Dict, Union, List, Set, Tuple # noqa
     from cdsl.xform import XForm # noqa
-    from cdsl.ast import Var, Def, VarMap # noqa
+    from cdsl.ast import Def, VarMap # noqa
     from cdsl.ti import VarTyping # noqa
 except ImportError:
     TYPE_CHECKING = False
