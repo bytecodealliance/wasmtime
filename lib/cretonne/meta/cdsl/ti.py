@@ -104,7 +104,6 @@ class TypesEqual(TypeConstraint):
     """
     def __init__(self, tv1, tv2):
         # type: (TypeVar, TypeVar) -> None
-        assert tv1.is_derived and tv2.is_derived
         (self.tv1, self.tv2) = sorted([tv1, tv2], key=repr)
 
     def _args(self):
@@ -279,7 +278,7 @@ class TypeEnv(object):
         :attribute idx: counter used to get fresh ids
     """
 
-    RANK_DERIVED = 5
+    RANK_SINGLETON = 5
     RANK_INPUT = 4
     RANK_INTERMEDIATE = 3
     RANK_OUTPUT = 2
@@ -364,12 +363,18 @@ class TypeEnv(object):
         # type: (TypeVar) -> int
         """
         Get the rank of tv in the partial order. TVs directly associated with a
-        Var get their rank from the Var (see register()).
-        Internally generated non-derived TVs implicitly get the lowest rank (0)
-        Derived variables get the highest rank.
+        Var get their rank from the Var (see register()).  Internally generated
+        non-derived TVs implicitly get the lowest rank (0). Derived variables
+        get their rank from their free typevar.  Singletons have the highest
+        rank. TVs associated with vars in a source pattern have a higher rank
+        than TVs associted with temporary vars.
         """
-        default_rank = TypeEnv.RANK_DERIVED if tv.is_derived else\
-            TypeEnv.RANK_INTERNAL
+        default_rank = TypeEnv.RANK_INTERNAL if tv.singleton_type() is None \
+            else TypeEnv.RANK_SINGLETON
+
+        if tv.is_derived:
+            tv = tv.free_typevar()
+
         return self.ranks.get(tv, default_rank)
 
     def register(self, v):
@@ -565,28 +570,36 @@ class TypeEnv(object):
 
         # Add all registered TVs (as some of them may be singleton nodes not
         # appearing in the graph
-        nodes = set([v.get_typevar() for v in self.vars])  # type: Set[TypeVar]
+        nodes = set()  # type: Set[TypeVar]
         edges = set()  # type: Set[Tuple[TypeVar, TypeVar, str, str, Optional[str]]] # noqa
 
-        for (k, v) in self.type_map.items():
+        def add_nodes(*args):
+            # type: (*TypeVar) -> None
+            for tv in args:
+                nodes.add(tv)
+                while (tv.is_derived):
+                    nodes.add(tv.base)
+                    edges.add((tv, tv.base, "solid", "forward",
+                               tv.derived_func))
+                    tv = tv.base
+
+        for v in self.vars:
+            add_nodes(v.get_typevar())
+
+        for (tv1, tv2) in self.type_map.items():
             # Add all intermediate TVs appearing in edges
-            nodes.add(k)
-            nodes.add(v)
-            edges.add((k, v, "dotted", "forward", None))
-            while (v.is_derived):
-                nodes.add(v.base)
-                edges.add((v, v.base, "solid", "forward", v.derived_func))
-                v = v.base
+            add_nodes(tv1, tv2)
+            edges.add((tv1, tv2, "dotted", "forward", None))
 
         for constr in self.constraints:
             if isinstance(constr, TypesEqual):
-                assert constr.tv1 in nodes and constr.tv2 in nodes
+                add_nodes(constr.tv1, constr.tv2)
                 edges.add((constr.tv1, constr.tv2, "dashed", "none", "equal"))
             elif isinstance(constr, WiderOrEq):
-                assert constr.tv1 in nodes and constr.tv2 in nodes
+                add_nodes(constr.tv1, constr.tv2)
                 edges.add((constr.tv1, constr.tv2, "dashed", "forward", ">="))
             elif isinstance(constr, SameWidth):
-                assert constr.tv1 in nodes and constr.tv2 in nodes
+                add_nodes(constr.tv1, constr.tv2)
                 edges.add((constr.tv1, constr.tv2, "dashed", "none",
                            "same_width"))
             else:
@@ -640,7 +653,9 @@ def get_type_env(typing_or_err):
     """
     Helper function to appease mypy when checking the result of typing.
     """
-    assert isinstance(typing_or_err, TypeEnv)
+    assert isinstance(typing_or_err, TypeEnv), \
+        "Unexpected error: {}".format(typing_or_err)
+
     if (TYPE_CHECKING):
         return cast(TypeEnv, typing_or_err)
     else:
@@ -751,8 +766,6 @@ def unify(tv1, tv2, typ):
     if not tv1.is_derived:
         typ.equivalent(tv1, tv2)
         return typ
-
-    assert tv2.is_derived, "Ordering gives us !tv1.is_derived==>tv2.is_derived"
 
     if (tv1.is_derived and TypeVar.is_bijection(tv1.derived_func)):
         inv_f = TypeVar.inverse_func(tv1.derived_func)

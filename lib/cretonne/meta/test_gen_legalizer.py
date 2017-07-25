@@ -153,8 +153,7 @@ class TestRuntimeChecks(TestCase):
 
     def test_vselect_imm(self):
         # type: () -> None
-        ts = TypeSet(lanes=(2, 256), ints=(8, 64),
-                     floats=(32, 64), bools=(8, 64))
+        ts = TypeSet(lanes=(2, 256), ints=(8, 64))
         r = Rtl(
                 self.v0 << iconst(self.imm0),
                 self.v1 << icmp(intcc.eq, self.v2, self.v0),
@@ -167,7 +166,7 @@ class TestRuntimeChecks(TestCase):
             .format(self.v3.get_typevar().name)
 
         self.check_yo_check(
-            x, sequence(typeset_check(self.v3, ts),
+            x, sequence(typeset_check(self.v2, ts),
                         equiv_check(tv2_exp, tv3_exp)))
 
     def test_reduce_extend(self):

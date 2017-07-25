@@ -31,6 +31,7 @@ def verify_semantics(inst, src, xforms):
 
     # 2) Any possible typing for the instruction should be covered by
     #    exactly ONE semantic XForm
+    src = src.copy({})
     typenv = get_type_env(ti_rtl(src, TypeEnv()))
     typenv.normalize()
     typenv = typenv.extract()
