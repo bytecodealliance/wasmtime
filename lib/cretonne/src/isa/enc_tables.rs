@@ -4,8 +4,8 @@
 //! `lib/cretonne/meta/gen_encoding.py`.
 
 use constant_hash::{Table, probe};
-use ir::{Type, Opcode, InstructionData};
-use isa::{Encoding, Legalize};
+use ir::{Type, Opcode, DataFlowGraph, InstructionData};
+use isa::Encoding;
 use settings::PredicateView;
 use std::ops::Range;
 
@@ -97,45 +97,59 @@ impl<OffT: Into<u32> + Copy> Table<Opcode> for [Level2Entry<OffT>] {
     }
 }
 
-/// Two-level hash table lookup.
+/// Two-level hash table lookup and iterator construction.
 ///
 /// Given the controlling type variable and instruction opcode, find the corresponding encoding
 /// list.
 ///
-/// Returns an offset into the ISA's `ENCLIST` table, or `None` if the opcode/type combination is
-/// not legal.
-pub fn lookup_enclist<OffT1, OffT2>(ctrl_typevar: Type,
-                                    opcode: Opcode,
-                                    level1_table: &[Level1Entry<OffT1>],
-                                    level2_table: &[Level2Entry<OffT2>])
-                                    -> Result<usize, Legalize>
+/// Returns an iterator that produces legal encodings for `inst`.
+pub fn lookup_enclist<'a, OffT1, OffT2>(ctrl_typevar: Type,
+                                        inst: &'a InstructionData,
+                                        _dfg: &'a DataFlowGraph,
+                                        level1_table: &'static [Level1Entry<OffT1>],
+                                        level2_table: &'static [Level2Entry<OffT2>],
+                                        enclist: &'static [EncListEntry],
+                                        recipe_preds: &'static [RecipePredicate],
+                                        inst_preds: &'static [InstPredicate],
+                                        isa_preds: PredicateView<'a>)
+                                        -> Encodings<'a>
     where OffT1: Into<u32> + Copy,
           OffT2: Into<u32> + Copy
 {
-    match probe(level1_table, ctrl_typevar, ctrl_typevar.index()) {
+    let (offset, legalize) = match probe(level1_table, ctrl_typevar, ctrl_typevar.index()) {
         Err(l1idx) => {
             // No level 1 entry found for the type.
             // We have a sentinel entry with the default legalization code.
-            let l1ent = &level1_table[l1idx];
-            Err(l1ent.legalize.into())
+            (!0, level1_table[l1idx].legalize)
         }
         Ok(l1idx) => {
             // We have a valid level 1 entry for this type.
             let l1ent = &level1_table[l1idx];
-            match level2_table.get(l1ent.range()) {
+            let offset = match level2_table.get(l1ent.range()) {
                 Some(l2tab) => {
-                    probe(l2tab, opcode, opcode as usize)
-                        .map(|l2idx| l2tab[l2idx].offset.into() as usize)
-                        .map_err(|_| l1ent.legalize.into())
+                    let opcode = inst.opcode();
+                    match probe(l2tab, opcode, opcode as usize) {
+                        Ok(l2idx) => l2tab[l2idx].offset.into() as usize,
+                        Err(_) => !0,
+                    }
                 }
-                None => {
-                    // The l1ent range is invalid. This means that we just have a customized
-                    // legalization code for this type. The level 2 table is empty.
-                    Err(l1ent.legalize.into())
-                }
-            }
+                // The l1ent range is invalid. This means that we just have a customized
+                // legalization code for this type. The level 2 table is empty.
+                None => !0,
+            };
+            (offset, l1ent.legalize)
         }
-    }
+    };
+
+    // Now we have an offset into `enclist` that is `!0` when no encoding list could be found.
+    // The default legalization code is always valid.
+    Encodings::new(offset,
+                   legalize,
+                   inst,
+                   enclist,
+                   recipe_preds,
+                   inst_preds,
+                   isa_preds)
 }
 
 /// Encoding list entry.
@@ -153,11 +167,13 @@ const PRED_START: usize = 0x1000;
 pub struct Encodings<'a> {
     // Current offset into `enclist`, or out of bounds after we've reached the end.
     offset: usize,
+    // Legalization code to use of no encoding is found.
+    legalize: LegalizeCode,
     inst: &'a InstructionData,
-    isa_predicates: PredicateView<'a>,
     enclist: &'static [EncListEntry],
-    recipe_predicates: &'static [RecipePredicate],
-    inst_predicates: &'static [InstPredicate],
+    recipe_preds: &'static [RecipePredicate],
+    inst_preds: &'static [InstPredicate],
+    isa_preds: PredicateView<'a>,
 }
 
 impl<'a> Encodings<'a> {
@@ -167,37 +183,49 @@ impl<'a> Encodings<'a> {
     /// encoding lists are laid out such that first call to `next` returns valid entry in the list
     /// or `None`.
     pub fn new(offset: usize,
-               enclist: &'static [EncListEntry],
-               recipe_predicates: &'static [RecipePredicate],
-               inst_predicates: &'static [InstPredicate],
+               legalize: LegalizeCode,
                inst: &'a InstructionData,
-               isa_predicates: PredicateView<'a>)
+               enclist: &'static [EncListEntry],
+               recipe_preds: &'static [RecipePredicate],
+               inst_preds: &'static [InstPredicate],
+               isa_preds: PredicateView<'a>)
                -> Self {
         Encodings {
             offset,
-            enclist,
             inst,
-            isa_predicates,
-            recipe_predicates,
-            inst_predicates,
+            legalize,
+            isa_preds,
+            recipe_preds,
+            inst_preds,
+            enclist,
         }
+    }
+
+    /// Get the legalization action that caused the enumeration of encodings to stop.
+    /// This can be the default legalization action for the type or a custom code for the
+    /// instruction.
+    ///
+    /// This method must only be called after the iterator returns `None`.
+    pub fn legalize(&self) -> LegalizeCode {
+        debug_assert_eq!(self.offset, !0, "Premature Encodings::legalize()");
+        self.legalize
     }
 
     /// Check if the `rpred` recipe predicate s satisfied.
     fn check_recipe(&self, rpred: RecipePredicate) -> bool {
         match rpred {
-            Some(p) => p(self.isa_predicates, self.inst),
+            Some(p) => p(self.isa_preds, self.inst),
             None => true,
         }
     }
 
     /// Check an instruction or isa predicate.
     fn check_pred(&self, pred: usize) -> bool {
-        if let Some(&p) = self.inst_predicates.get(pred) {
+        if let Some(&p) = self.inst_preds.get(pred) {
             p(self.inst)
         } else {
-            let pred = pred - self.inst_predicates.len();
-            self.isa_predicates.test(pred)
+            let pred = pred - self.inst_preds.len();
+            self.isa_preds.test(pred)
         }
     }
 }
@@ -211,7 +239,7 @@ impl<'a> Iterator for Encodings<'a> {
 
             // Check for "recipe+bits".
             let recipe = entry >> 1;
-            if let Some(&rpred) = self.recipe_predicates.get(recipe) {
+            if let Some(&rpred) = self.recipe_preds.get(recipe) {
                 let bits = self.offset + 1;
                 if entry & 1 == 0 {
                     self.offset += 2; // Next entry.
@@ -226,7 +254,9 @@ impl<'a> Iterator for Encodings<'a> {
 
             // Check for "stop with legalize".
             if entry < PRED_START {
-                unimplemented!();
+                self.legalize = (entry - 2 * self.recipe_preds.len()) as LegalizeCode;
+                self.offset = !0; // Stop.
+                return None;
             }
 
             // Finally, this must be a predicate entry.
@@ -237,7 +267,8 @@ impl<'a> Iterator for Encodings<'a> {
             if self.check_pred(pred) {
                 self.offset += 1;
             } else if skip == 0 {
-                self.offset = !0 // This means stop.
+                self.offset = !0; // Stop.
+                return None;
             } else {
                 self.offset += 1 + skip;
             }

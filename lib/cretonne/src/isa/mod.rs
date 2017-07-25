@@ -156,7 +156,7 @@ pub trait TargetIsa {
                            dfg: &'a ir::DataFlowGraph,
                            inst: &'a ir::InstructionData,
                            ctrl_typevar: ir::Type)
-                           -> Result<Encodings<'a>, Legalize>;
+                           -> Encodings<'a>;
 
     /// Encode an instruction after determining it is legal.
     ///
@@ -169,8 +169,8 @@ pub trait TargetIsa {
               inst: &ir::InstructionData,
               ctrl_typevar: ir::Type)
               -> Result<Encoding, Legalize> {
-        self.legal_encodings(dfg, inst, ctrl_typevar)
-            .and_then(|mut iter| iter.next().ok_or(Legalize::Expand))
+        let mut iter = self.legal_encodings(dfg, inst, ctrl_typevar);
+        iter.next().ok_or(iter.legalize().into())
     }
 
     /// Get a data structure describing the instruction encodings in this ISA.

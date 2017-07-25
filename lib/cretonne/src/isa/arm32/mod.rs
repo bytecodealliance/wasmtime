@@ -10,7 +10,7 @@ use binemit::{CodeSink, MemoryCodeSink, emit_function};
 use super::super::settings as shared_settings;
 use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encodings};
 use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, RegInfo, RegClass, EncInfo, Legalize};
+use isa::{TargetIsa, RegInfo, RegClass, EncInfo};
 use ir;
 use regalloc;
 
@@ -62,22 +62,19 @@ impl TargetIsa for Isa {
     }
 
     fn legal_encodings<'a>(&'a self,
-                           _dfg: &'a ir::DataFlowGraph,
+                           dfg: &'a ir::DataFlowGraph,
                            inst: &'a ir::InstructionData,
                            ctrl_typevar: ir::Type)
-                           -> Result<Encodings<'a>, Legalize> {
+                           -> Encodings<'a> {
         lookup_enclist(ctrl_typevar,
-                       inst.opcode(),
+                       inst,
+                       dfg,
                        self.cpumode,
-                       &enc_tables::LEVEL2[..])
-                .and_then(|enclist_offset| {
-                              Ok(Encodings::new(enclist_offset,
-                                                &enc_tables::ENCLISTS[..],
-                                                &enc_tables::RECIPE_PREDICATES[..],
-                                                &enc_tables::INST_PREDICATES[..],
-                                                inst,
-                                                self.isa_flags.predicate_view()))
-                          })
+                       &enc_tables::LEVEL2[..],
+                       &enc_tables::ENCLISTS[..],
+                       &enc_tables::RECIPE_PREDICATES[..],
+                       &enc_tables::INST_PREDICATES[..],
+                       self.isa_flags.predicate_view())
     }
 
     fn legalize_signature(&self, sig: &mut ir::Signature, current: bool) {
