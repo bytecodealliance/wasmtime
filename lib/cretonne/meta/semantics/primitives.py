@@ -9,7 +9,6 @@ from __future__ import absolute_import
 from cdsl.operands import Operand
 from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
-from cdsl.ti import SameWidth
 import base.formats # noqa
 
 GROUP = InstructionGroup("primitive", "Primitive instruction set")
@@ -39,8 +38,7 @@ prim_from_bv = Instruction(
         'prim_from_bv', r"""
         Convert a flat bitvector to a real SSA Value.
         """,
-        ins=(x), outs=(real),
-        constraints=SameWidth(BV, Real))
+        ins=(fromReal), outs=(real))
 
 xh = Operand('xh', BV.half_width(),
              doc="A semantic value representing the upper half of X")

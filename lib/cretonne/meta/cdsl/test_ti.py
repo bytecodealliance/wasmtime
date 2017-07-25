@@ -158,8 +158,7 @@ class TypeCheckingBaseTest(TestCase):
         self.v8 = Var("v8")
         self.v9 = Var("v9")
         self.imm0 = Var("imm0")
-        self.IxN_nonscalar = TypeVar("IxN_nonscalar", "", ints=True,
-                                     scalars=False, simd=True)
+        self.IxN = TypeVar("IxN", "", ints=True, scalars=True, simd=True)
         self.TxN = TypeVar("TxN", "", ints=True, bools=True, floats=True,
                            scalars=False, simd=True)
         self.b1 = TypeVar.singleton(b1)
@@ -176,7 +175,7 @@ class TestRTL(TypeCheckingBaseTest):
         self.assertEqual(ti_rtl(r, ti),
                          "On line 1: fail ti on `typeof_v2` <: `1`: " +
                          "Error: empty type created when unifying " +
-                         "`typeof_v2` and `half_vector(typeof_v2)`")
+                         "`typeof_v3` and `half_vector(typeof_v3)`")
 
     def test_vselect(self):
         # type: () -> None
@@ -202,11 +201,11 @@ class TestRTL(TypeCheckingBaseTest):
         )
         ti = TypeEnv()
         typing = ti_rtl(r, ti)
-        ixn = self.IxN_nonscalar.get_fresh_copy("IxN1")
+        ixn = self.IxN.get_fresh_copy("IxN1")
         txn = self.TxN.get_fresh_copy("TxN1")
         check_typing(typing, ({
             self.v0: ixn,
-            self.v1: ixn.as_bool(),
+            self.v1: txn.as_bool(),
             self.v2: ixn,
             self.v3: txn,
             self.v4: txn,
@@ -319,7 +318,7 @@ class TestRTL(TypeCheckingBaseTest):
         self.assertEqual(typing,
                          "On line 2: fail ti on `typeof_v4` <: `4`: " +
                          "Error: empty type created when unifying " +
-                         "`typeof_v4` and `typeof_v5`")
+                         "`i16` and `i32`")
 
     def test_extend_reduce(self):
         # type: () -> None
@@ -471,7 +470,7 @@ class TestXForm(TypeCheckingBaseTest):
             assert var_m[v0] == var_m[v2] and \
                    var_m[v3] == var_m[v4] and\
                    var_m[v5] == var_m[v3] and\
-                   var_m[v1] == var_m[v2].as_bool() and\
+                   var_m[v1] == var_m[v5].as_bool() and\
                    var_m[v1].get_typeset() == var_m[v3].as_bool().get_typeset()
             check_concrete_typing_xform(var_m, xform)
 
