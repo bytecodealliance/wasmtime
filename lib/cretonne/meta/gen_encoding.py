@@ -39,13 +39,13 @@ types, so many of the level 2 tables will be cold.
 An encoding list is a non-empty sequence of list entries. Each entry has
 one of these forms:
 
-1. Instruction predicate, encoding recipe, and encoding bits. If the
-   instruction predicate is true, use this recipe and bits.
-2. ISA predicate and skip-count. If the ISA predicate is false, skip the next
-   *skip-count* entries in the list. If the skip count is zero, stop
-   completely.
-3. Stop. End of list marker. If this is reached, the instruction does not have
-   a legal encoding.
+1. Recipe + bits. Use this encoding if the recipe predicate is satisfied.
+2. Recipe + bits, final entry. Use this encoding if the recipe predicate is
+   satisfied. Otherwise, stop with the default legalization code.
+3. Stop with legalization code.
+4. Predicate + skip count. Test predicate and skip N entries if it is false.
+4. Predicate + stop. Test predicate and stop with the default legalization code
+   if it is false.
 
 The instruction predicate is also used to distinguish between polymorphic
 instructions with different types for secondary type variables.
@@ -56,9 +56,10 @@ from constant_hash import compute_quadratic
 from unique_table import UniqueSeqTable
 from collections import OrderedDict, defaultdict
 import math
-import itertools
+from itertools import groupby
 from cdsl.registers import RegClass, Register, Stack
 from cdsl.predicates import FieldPredicate
+from cdsl.settings import SettingGroup
 
 try:
     from typing import Sequence, Set, Tuple, List, Dict, Iterable, DefaultDict, TYPE_CHECKING  # noqa
@@ -173,42 +174,228 @@ def emit_recipe_predicates(recipes, fmt):
                 fmt.format('Some({}),', pname[p])
 
 
-# Encoding lists are represented as u16 arrays.
-CODE_BITS = 16
-PRED_BITS = 12
-PRED_MASK = (1 << PRED_BITS) - 1
-
-# 0..CODE_ALWAYS means: Check instruction predicate and use the next two
-# entries as a (recipe, encbits) pair if true. CODE_ALWAYS is the always-true
-# predicate, smaller numbers refer to instruction predicates.
-CODE_ALWAYS = PRED_MASK
-
-# Codes above CODE_ALWAYS indicate an ISA predicate to be tested.
-# `x & PRED_MASK` is the ISA predicate number to test.
-# `(x >> PRED_BITS)*3` is the number of u16 table entries to skip if the ISA
-# predicate is false. (The factor of three corresponds to the (inst-pred,
-# recipe, encbits) triples.
+# The u16 values in an encoding list entry are interpreted as follows:
 #
-# Finally, CODE_FAIL indicates the end of the list.
-CODE_FAIL = (1 << CODE_BITS) - 1
+# NR = len(all_recipes)
+#
+# entry < 2*NR
+#     Try Encoding(entry/2, next_entry) if the recipe predicate is satisfied.
+#     If bit 0 is set, stop with the default legalization code.
+#     If bit 0 is clear, keep going down the list.
+# entry < PRED_START
+#     Stop with legalization code `entry - 2*NR`.
+#
+# Remaining entries are interpreted as (skip, pred) pairs, where:
+#
+#     skip = (entry - PRED_START) >> PRED_BITS
+#     pred = (entry - PRED_START) & PRED_MASK
+#
+# If the predicate is satisfied, keep going. Otherwise skip over the next
+# `skip` entries. If skip == 0, stop with the default legalization code.
+#
+# The `pred` predicate number is interpreted as an instruction predicate if it
+# is in range, otherwise an ISA predicate.
 
 
-def seq_doc(enc):
-    # type: (Encoding) -> Tuple[Tuple[int, int, int], str]
+class Encoder:
     """
-    Return a tuple containing u16 representations of the instruction predicate
-    an recipe / encbits.
+    Encoder for the list format above.
 
-    Also return a doc string.
+    Two parameters are needed:
+
+    :param NR: Number of recipes.
+    :param NI: Number of instruction predicates.
     """
-    if enc.instp:
-        p = enc.instp.number
-        doc = '--> {} when {}'.format(enc, enc.instp)
-    else:
-        p = CODE_ALWAYS
+
+    def __init__(self, isa):
+        # type: (TargetISA) -> None
+        self.isa = isa
+        self.NR = len(isa.all_recipes)
+        self.NI = len(isa.all_instps)
+        # u16 encoding list words.
+        self.words = list()  # type: List[int]
+        # Documentation comments: Index into `words` + comment.
+        self.docs = list()  # type: List[Tuple[int, str]]
+
+    # Encoding lists are represented as u16 arrays.
+    CODE_BITS = 16
+
+    # Beginning of the predicate code words.
+    PRED_START = 0x1000
+
+    # Number of bits used to hold a predicate number (instruction + ISA
+    # predicates.
+    PRED_BITS = 12
+
+    # Mask for extracting the predicate number.
+    PRED_MASK = (1 << PRED_BITS) - 1
+
+    def max_skip(self):
+        # type: () -> int
+        """The maximum number of entries that a predicate can skip."""
+        return (1 << (self.CODE_BITS - self.PRED_BITS)) - 1
+
+    def recipe(self, enc, final):
+        # type: (Encoding, bool) -> None
+        """Add a recipe+bits entry to the list."""
+        offset = len(self.words)
+        code = 2 * enc.recipe.number
         doc = '--> {}'.format(enc)
-    assert p <= CODE_ALWAYS
-    return ((p, enc.recipe.number, enc.encbits), doc)
+        if final:
+            code += 1
+            doc += ' and stop'
+
+        assert(code < self.PRED_START)
+        self.words.extend((code, enc.encbits))
+        self.docs.append((offset, doc))
+
+    def _pred(self, pred, skip, n):
+        # type: (PredNode, int, int) -> None
+        """Add a predicate entry."""
+        assert n <= self.PRED_MASK
+        code = n | (skip << self.PRED_BITS)
+        code += self.PRED_START
+        assert code < (1 << self.CODE_BITS)
+
+        if skip == 0:
+            doc = 'stop'
+        else:
+            doc = 'skip ' + str(skip)
+        doc = '{} unless {}'.format(doc, pred)
+
+        self.docs.append((len(self.words), doc))
+        self.words.append(code)
+
+    def instp(self, pred, skip):
+        # type: (PredNode, int) -> None
+        """Add an instruction predicate entry."""
+        self._pred(pred, skip, pred.number)
+
+    def isap(self, pred, skip):
+        # type: (PredNode, int) -> None
+        """Add an ISA predicate entry."""
+        n = self.isa.settings.predicate_number[pred]
+        # ISA predicates follow the instruction predicates.
+        self._pred(pred, skip, self.NI + n)
+
+
+class EncNode(object):
+    """
+    An abstract node in the encoder tree for an instruction.
+
+    This tree is used to simplify the predicates guarding recipe+bits entries.
+    """
+
+    def size(self):
+        # type: () -> int
+        """Get the number of list entries needed to encode this tree."""
+        raise NotImplementedError('EncNode.size() is abstract')
+
+    def encode(self, encoder, final):
+        # type: (Encoder, bool) -> None
+        """Encode this tree."""
+        raise NotImplementedError('EncNode.encode() is abstract')
+
+    def optimize(self):
+        # type: () -> EncNode
+        """Transform this encoder tree into something simpler."""
+        return self
+
+    def predicate(self):
+        # type: () -> PredNode
+        """Get the predicate guarding this tree, or `None` for always"""
+        return None
+
+
+class EncPred(EncNode):
+    """
+    An encoder tree node which asserts a predicate on its child nodes.
+
+    A `None` predicate is always satisfied.
+    """
+
+    def __init__(self, pred, children):
+        # type: (PredNode, List[EncNode]) -> None
+        self.pred = pred
+        self.children = children
+
+    def size(self):
+        # type: () -> int
+        s = 1 if self.pred else 0
+        s += sum(c.size() for c in self.children)
+        return s
+
+    def encode(self, encoder, final):
+        # type: (Encoder, bool) -> None
+        if self.pred:
+            skip = 0 if final else self.size() - 1
+            ctx = self.pred.predicate_context()
+            if isinstance(ctx, SettingGroup):
+                encoder.isap(self.pred, skip)
+            else:
+                encoder.instp(self.pred, skip)
+
+        final_idx = len(self.children) - 1 if final else -1
+        for idx, node in enumerate(self.children):
+            node.encode(encoder, idx == final_idx)
+
+    def predicate(self):
+        # type: () -> PredNode
+        return self.pred
+
+    def optimize(self):
+        # type: () -> EncNode
+        """
+        Optimize a predicate node in the tree by combining child nodes that
+        have identical predicates.
+        """
+        cnodes = list()  # type: List[EncNode]
+        for pred, niter in groupby(
+                map(lambda c: c.optimize(), self.children),
+                key=lambda c: c.predicate()):
+            nodes = list(niter)
+            if pred is None or len(nodes) <= 1:
+                cnodes.extend(nodes)
+                continue
+
+            # We have multiple children with identical predicates.
+            # Group them all into `n0`.
+            n0 = nodes[0]
+            assert isinstance(n0, EncPred)
+            for n in nodes[1:]:
+                assert isinstance(n, EncPred)
+                n0.children.extend(n.children)
+
+            cnodes.append(n0)
+
+        # Finally strip a redundant grouping node.
+        if self.pred is None and len(cnodes) == 1:
+            return cnodes[0]
+        else:
+            self.children = cnodes
+            return self
+
+
+class EncLeaf(EncNode):
+    """
+    A leaf in the encoder tree.
+
+    This represents a single `Encoding`, without its predicates (they are
+    represented in the tree by parent nodes.
+    """
+
+    def __init__(self, encoding):
+        # type: (Encoding) -> None
+        self.encoding = encoding
+
+    def size(self):
+        # type: () -> int
+        # recipe + bits.
+        return 2
+
+    def encode(self, encoder, final):
+        # type: (Encoder, bool) -> None
+        encoder.recipe(self.encoding, final)
 
 
 class EncList(object):
@@ -239,25 +426,23 @@ class EncList(object):
             name += ' ({})'.format(self.encodings[0].cpumode)
         return name
 
-    def by_isap(self):
-        # type: () -> Iterable[Tuple[PredNode, Tuple[Encoding, ...]]]
+    def encoder_tree(self):
+        # type: () -> EncNode
         """
-        Group the encodings by ISA predicate without reordering them.
+        Generate an optimized encoder tree for this list. The tree represents
+        all of the encodings with parent nodes for the predicates that need
+        checking.
+        """
+        forest = list()  # type: List[EncNode]
+        for enc in self.encodings:
+            n = EncLeaf(enc)  # type: EncNode
+            if enc.instp:
+                n = EncPred(enc.instp, [n])
+            if enc.isap:
+                n = EncPred(enc.isap, [n])
+            forest.append(n)
 
-        Yield a sequence of `(isap, (encs...))` tuples where `isap` is the ISA
-        predicate or `None`, and `(encs...)` is a tuple of encodings that all
-        have the same ISA predicate.
-        """
-        maxlen = CODE_FAIL >> PRED_BITS
-        for isap, groupi in itertools.groupby(
-                self.encodings, lambda enc: enc.isap):
-            group = tuple(groupi)
-            # This probably never happens, but we can't express more than
-            # maxlen encodings per isap.
-            while len(group) > maxlen:
-                yield (isap, group[0:maxlen])
-                group = group[maxlen:]
-            yield (isap, group)
+        return EncPred(None, forest).optimize()
 
     def encode(self, seq_table, doc_table, isa):
         # type: (UniqueSeqTable, DefaultDict[int, List[str]], TargetISA) -> None  # noqa
@@ -269,34 +454,20 @@ class EncList(object):
 
         Adds comment lines to `doc_table` keyed by seq_table offsets.
         """
-        words = list()  # type: List[int]
-        docs = list()  # type: List[Tuple[int, str]]
+        # Use an encoder object to hold the parameters.
+        encoder = Encoder(isa)
+        tree = self.encoder_tree()
+        tree.encode(encoder, True)
 
-        # Group our encodings by isap.
-        for isap, group in self.by_isap():
-            if isap:
-                # We have an ISA predicate covering `glen` encodings.
-                pnum = isa.settings.predicate_number[isap]
-                glen = len(group)
-                doc = 'skip {}x3 unless {}'.format(glen, isap)
-                docs.append((len(words), doc))
-                words.append((glen << PRED_BITS) | pnum)
-
-            for enc in group:
-                seq, doc = seq_doc(enc)
-                docs.append((len(words), doc))
-                words.extend(seq)
-
-        # Terminate the list.
-        words.append(CODE_FAIL)
-
-        self.offset = seq_table.add(words)
+        self.offset = seq_table.add(encoder.words)
 
         # Add doc comments.
         doc_table[self.offset].append(
                 '{:06x}: {}'.format(self.offset, self.name()))
-        for pos, doc in docs:
+        for pos, doc in encoder.docs:
             doc_table[self.offset + pos].append(doc)
+        doc_table[self.offset + len(encoder.words)].insert(
+                0, 'end of: {}'.format(self.name()))
 
 
 class Level2Table(object):

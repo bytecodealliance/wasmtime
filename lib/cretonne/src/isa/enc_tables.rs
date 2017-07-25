@@ -143,38 +143,25 @@ pub fn lookup_enclist<OffT1, OffT2>(ctrl_typevar: Type,
 /// Encoding lists are represented as sequences of u16 words.
 pub type EncListEntry = u16;
 
-/// Number of bits used to represent a predicate. c.f. `meta.gen_encoding.py`.
+/// Number of bits used to represent a predicate. c.f. `meta/gen_encoding.py`.
 const PRED_BITS: u8 = 12;
-const PRED_MASK: EncListEntry = (1 << PRED_BITS) - 1;
-
-/// The match-always instruction predicate. c.f. `meta.gen_encoding.py`.
-const CODE_ALWAYS: EncListEntry = PRED_MASK;
-
-/// The encoding list terminator.
-const CODE_FAIL: EncListEntry = 0xffff;
+const PRED_MASK: usize = (1 << PRED_BITS) - 1;
+/// First code word representing a predicate check. c.f. `meta/gen_encoding.py`.
+const PRED_START: usize = 0x1000;
 
 /// An iterator over legal encodings for the instruction.
 pub struct Encodings<'a> {
+    // Current offset into `enclist`, or out of bounds after we've reached the end.
     offset: usize,
-    enclist: &'static [EncListEntry],
     inst: &'a InstructionData,
     isa_predicates: PredicateView<'a>,
+    enclist: &'static [EncListEntry],
     recipe_predicates: &'static [RecipePredicate],
     inst_predicates: &'static [InstPredicate],
 }
 
 impl<'a> Encodings<'a> {
     /// Creates a new instance of `Encodings`.
-    ///
-    /// # Parameters
-    ///
-    /// - `offset` an offset into encoding list returned by `lookup_enclist` function.
-    /// - `enclist` a list of encoding entries.
-    /// - `recipe_predicates` is a slice of recipe predicate functions.
-    /// - `inst` the current instruction.
-    /// - `instp` an instruction predicate number to be evaluated on the current instruction.
-    /// - `isa_predicate_bytes` an ISA flags as a slice of bytes to evaluate an ISA predicate number
-    /// on the current instruction.
     ///
     /// This iterator provides search for encodings that applies to the given instruction. The
     /// encoding lists are laid out such that first call to `next` returns valid entry in the list
@@ -196,11 +183,21 @@ impl<'a> Encodings<'a> {
         }
     }
 
-    /// Check if the predicate for `recipe` is satisfied.
-    fn check_recipe(&self, recipe: u16) -> bool {
-        match self.recipe_predicates[recipe as usize] {
+    /// Check if the `rpred` recipe predicate s satisfied.
+    fn check_recipe(&self, rpred: RecipePredicate) -> bool {
+        match rpred {
             Some(p) => p(self.isa_predicates, self.inst),
             None => true,
+        }
+    }
+
+    /// Check an instruction or isa predicate.
+    fn check_pred(&self, pred: usize) -> bool {
+        if let Some(&p) = self.inst_predicates.get(pred) {
+            p(self.inst)
+        } else {
+            let pred = pred - self.inst_predicates.len();
+            self.isa_predicates.test(pred)
         }
     }
 }
@@ -209,29 +206,40 @@ impl<'a> Iterator for Encodings<'a> {
     type Item = Encoding;
 
     fn next(&mut self) -> Option<Encoding> {
-        while self.enclist[self.offset] != CODE_FAIL {
-            let pred = self.enclist[self.offset];
-            if pred <= CODE_ALWAYS {
-                // This is an instruction predicate followed by recipe and encbits entries.
-                self.offset += 3;
-                let satisfied = match self.inst_predicates.get(pred as usize) {
-                    Some(p) => p(self.inst),
-                    None => true,
-                };
-                if satisfied {
-                    let recipe = self.enclist[self.offset - 2];
-                    if self.check_recipe(recipe) {
-                        let encoding = Encoding::new(recipe, self.enclist[self.offset - 1]);
-                        return Some(encoding);
-                    }
+        while let Some(entryref) = self.enclist.get(self.offset) {
+            let entry = *entryref as usize;
+
+            // Check for "recipe+bits".
+            let recipe = entry >> 1;
+            if let Some(&rpred) = self.recipe_predicates.get(recipe) {
+                let bits = self.offset + 1;
+                if entry & 1 == 0 {
+                    self.offset += 2; // Next entry.
+                } else {
+                    self.offset = !0; // Stop.
                 }
-            } else {
-                // This is an ISA predicate entry.
+                if self.check_recipe(rpred) {
+                    return Some(Encoding::new(recipe as u16, self.enclist[bits]));
+                }
+                continue;
+            }
+
+            // Check for "stop with legalize".
+            if entry < PRED_START {
+                unimplemented!();
+            }
+
+            // Finally, this must be a predicate entry.
+            let pred_entry = entry - PRED_START;
+            let skip = pred_entry >> PRED_BITS;
+            let pred = pred_entry & PRED_MASK;
+
+            if self.check_pred(pred) {
                 self.offset += 1;
-                if !self.isa_predicates.test((pred & PRED_MASK) as usize) {
-                    // ISA predicate failed, skip the next N entries.
-                    self.offset += 3 * (pred >> PRED_BITS) as usize;
-                }
+            } else if skip == 0 {
+                self.offset = !0 // This means stop.
+            } else {
+                self.offset += 1 + skip;
             }
         }
         None
