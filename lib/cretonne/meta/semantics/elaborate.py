@@ -83,7 +83,12 @@ def find_matching_xform(d):
 
     for x in d.expr.inst.semantics:
         subst = d.substitution(x.src.rtl[0], {})
-        assert subst is not None
+
+        # There may not be a substitution if there are concrete Enumerator
+        # values in the src pattern. (e.g. specifying the semantics of icmp.eq,
+        # icmp.ge... as separate transforms)
+        if (subst is None):
+            continue
 
         if x.ti.permits({subst[v]: tv for (v, tv) in typing.items()}):
             res.append(x)
