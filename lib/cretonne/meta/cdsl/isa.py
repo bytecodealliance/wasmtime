@@ -13,7 +13,7 @@ try:
     from typing import Tuple, Union, Any, Iterable, Sequence, List, Set, Dict, TYPE_CHECKING  # noqa
     if TYPE_CHECKING:
         from .instructions import MaybeBoundInst, InstructionGroup, InstructionFormat  # noqa
-        from .predicates import PredNode  # noqa
+        from .predicates import PredNode, PredKey  # noqa
         from .settings import SettingGroup  # noqa
         from .registers import RegBank  # noqa
         from .xform import XFormGroup  # noqa
@@ -50,6 +50,8 @@ class TargetISA(object):
         self.regbanks = list()  # type: List[RegBank]
         self.regclasses = list()  # type: List[RegClass]
         self.legalize_codes = OrderedDict()  # type: OrderedDict[XFormGroup, int]  # noqa
+        # Unique copies of all predicates.
+        self._predicates = dict()  # type: Dict[PredKey, PredNode]
 
         assert InstructionGroup._current is None,\
             "InstructionGroup {} is still open!"\
@@ -86,12 +88,15 @@ class TargetISA(object):
             for enc in cpumode.encodings:
                 recipe = enc.recipe
                 if recipe not in rcps:
+                    assert recipe.number is None
                     recipe.number = len(rcps)
                     rcps.add(recipe)
                     self.all_recipes.append(recipe)
                     # Make sure ISA predicates are registered.
                     if recipe.isap:
+                        recipe.isap = self.unique_pred(recipe.isap)
                         self.settings.number_predicate(recipe.isap)
+                    recipe.instp = self.unique_pred(recipe.instp)
 
     def _collect_predicates(self):
         # type: () -> None
@@ -111,6 +116,7 @@ class TargetISA(object):
                 instp = enc.instp
                 if instp and instp not in instps:
                     # assign predicate number starting from 0.
+                    assert instp.number is None
                     instp.number = len(instps)
                     instps.add(instp)
                     self.all_instps.append(instp)
@@ -174,6 +180,21 @@ class TargetISA(object):
             code = len(self.legalize_codes)
             self.legalize_codes[xgrp] = code
         return code
+
+    def unique_pred(self, pred):
+        # type: (PredNode) -> PredNode
+        """
+        Get a unique predicate that is equivalent to `pred`.
+        """
+        if pred is None:
+            return pred
+        # TODO: We could actually perform some algebraic simplifications. It's
+        # not clear if it is worthwhile.
+        k = pred.predicate_key()
+        if k in self._predicates:
+            return self._predicates[k]
+        self._predicates[k] = pred
+        return pred
 
 
 class CPUMode(object):
@@ -413,8 +434,8 @@ class Encoding(object):
                 instp = And.combine(instp, typred)
 
         # Record specific predicates. Note that the recipe also has predicates.
-        self.instp = instp
-        self.isap = isap
+        self.instp = self.cpumode.isa.unique_pred(instp)
+        self.isap = self.cpumode.isa.unique_pred(isap)
 
     def __str__(self):
         # type: () -> str

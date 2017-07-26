@@ -37,6 +37,9 @@ try:
                             InstructionContext]
         PredLeaf = Union[BoolSetting, 'FieldPredicate', 'TypePredicate']
         PredNode = Union[PredLeaf, 'Predicate']
+        # A predicate key is a (recursive) tuple of primitive types that
+        # uniquely describes a predicate. It is used for interning.
+        PredKey = Tuple[Any, ...]
 except ImportError:
     pass
 
@@ -84,6 +87,7 @@ class Predicate(object):
                 _descendant,
                 (p.predicate_context() for p in parts))
         assert self.context, "Incompatible predicate parts"
+        self.predkey = None  # type: PredKey
 
     def __str__(self):
         # type: () -> str
@@ -109,6 +113,14 @@ class Predicate(object):
     def rust_predicate(self, prec):
         # type: (int) -> str
         raise NotImplementedError("rust_predicate is an abstract method")
+
+    def predicate_key(self):
+        # type: () -> PredKey
+        """Tuple uniquely identifying a predicate."""
+        if not self.predkey:
+            p = tuple(p.predicate_key() for p in self.parts)  # type: PredKey
+            self.predkey = (type(self).__name__,) + p
+        return self.predkey
 
 
 class And(Predicate):
@@ -224,6 +236,11 @@ class FieldPredicate(object):
         iform = self.field.format  # type: InstructionFormat
         return iform
 
+    def predicate_key(self):
+        # type: () -> PredKey
+        a = tuple(map(str, self.args))
+        return (self.function, str(self.field)) + a
+
     def predicate_leafs(self, leafs):
         # type: (Set[PredLeaf]) -> None
         leafs.add(self)
@@ -331,6 +348,10 @@ class TypePredicate(object):
     def predicate_context(self):
         # type: () -> PredContext
         return instruction_context
+
+    def predicate_key(self):
+        # type: () -> PredKey
+        return ('typecheck', self.value_arg, self.value_type.name)
 
     def predicate_leafs(self, leafs):
         # type: (Set[PredLeaf]) -> None

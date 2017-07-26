@@ -7,7 +7,7 @@ try:
     from typing import Tuple, Set, List, Dict, Any, Union, TYPE_CHECKING  # noqa
     BoolOrPresetOrDict = Union['BoolSetting', 'Preset', Dict['Setting', Any]]
     if TYPE_CHECKING:
-        from .predicates import PredLeaf, PredNode  # noqa
+        from .predicates import PredLeaf, PredNode, PredKey  # noqa
 except ImportError:
     pass
 
@@ -35,14 +35,6 @@ class Setting(object):
     def __str__(self):
         # type: () -> str
         return '{}.{}'.format(self.group.name, self.name)
-
-    def predicate_context(self):
-        # type: () -> SettingGroup
-        """
-        Return the context where this setting can be evaluated as a (leaf)
-        predicate.
-        """
-        return self.group
 
     def default_byte(self):
         # type: () -> int
@@ -95,6 +87,19 @@ class BoolSetting(Setting):
     def byte_mask(self):
         # type: () -> int
         return 1 << self.bit_offset
+
+    def predicate_context(self):
+        # type: () -> SettingGroup
+        """
+        Return the context where this setting can be evaluated as a (leaf)
+        predicate.
+        """
+        return self.group
+
+    def predicate_key(self):
+        # type: () -> PredKey
+        assert self.name, "Can't compute key before setting is named"
+        return ('setting', self.group.name, self.name)
 
     def predicate_leafs(self, leafs):
         # type: (Set[PredLeaf]) -> None
