@@ -4,8 +4,6 @@ equivalent primitive version. Its elaborated primitive version contains only
 primitive cretonne instructions, which map well to SMTLIB functions.
 """
 from .primitives import GROUP as PRIMITIVES, prim_to_bv, prim_from_bv
-from cdsl.ti import ti_rtl, TypeEnv, get_type_env
-from cdsl.typevar import TypeVar
 from cdsl.xform import Rtl
 from cdsl.ast import Var
 
@@ -16,60 +14,6 @@ try:
     from cdsl.ti import VarTyping # noqa
 except ImportError:
     TYPE_CHECKING = False
-
-
-def is_rtl_concrete(r):
-    # type: (Rtl) -> bool
-    """Return True iff every Var in the Rtl r has a single type."""
-    return all(v.get_typevar().singleton_type() is not None for v in r.vars())
-
-
-def cleanup_concrete_rtl(r):
-    # type: (Rtl) -> Rtl
-    """
-    Given an Rtl r
-    1) assert that there is only 1 possible concrete typing T for r
-    2) Assign a singleton TV with the single type t \in T for each Var v \in r
-    """
-    # 1) Infer the types of any of the remaining vars in res
-    typenv = get_type_env(ti_rtl(r, TypeEnv()))
-    typenv.normalize()
-    typenv = typenv.extract()
-
-    # 2) Make sure there is only one possible type assignment
-    typings = list(typenv.concrete_typings())
-    assert len(typings) == 1
-    typing = typings[0]
-
-    # 3) Assign the only possible type to each variable.
-    for v in typenv.vars:
-        if v.get_typevar().singleton_type() is not None:
-            continue
-
-        v.set_typevar(TypeVar.singleton(typing[v].singleton_type()))
-
-    return r
-
-
-def apply(r, x, suffix=None):
-    # type: (Rtl, XForm, str) -> Rtl
-    """
-    Given a concrete Rtl r and XForm x, s.t. r matches x.src, return the
-    corresponding concrete x.dst. If suffix is provided, any temporary defs are
-    renamed with '.suffix' appended to their old name.
-    """
-    assert is_rtl_concrete(r)
-    s = x.src.substitution(r, {})  # type: VarMap
-    assert s is not None
-
-    if (suffix is not None):
-        for v in x.dst.vars():
-            if v.is_temp():
-                assert v not in s
-                s[v] = Var(v.name + '.' + suffix)
-
-    dst = x.dst.copy(s)
-    return cleanup_concrete_rtl(dst)
 
 
 def find_matching_xform(d):
@@ -93,39 +37,8 @@ def find_matching_xform(d):
         if x.ti.permits({subst[v]: tv for (v, tv) in typing.items()}):
             res.append(x)
 
-    assert len(res) == 1
+    assert len(res) == 1, "Couldn't find semantic transform for {}".format(d)
     return res[0]
-
-
-def elaborate(r):
-    # type: (Rtl) -> Rtl
-    """
-    Given an Rtl r, return a semantically equivalent Rtl r1 consisting only
-    primitive instructions.
-    """
-    fp = False
-    primitives = set(PRIMITIVES.instructions)
-    idx = 0
-
-    while not fp:
-        assert is_rtl_concrete(r)
-        new_defs = []  # type: List[Def]
-        fp = True
-
-        for d in r.rtl:
-            inst = d.expr.inst
-
-            if (inst not in primitives):
-                transformed = apply(Rtl(d), find_matching_xform(d), str(idx))
-                idx += 1
-                new_defs.extend(transformed.rtl)
-                fp = False
-            else:
-                new_defs.append(d)
-
-        r.rtl = tuple(new_defs)
-
-    return r
 
 
 def cleanup_semantics(r, outputs):
@@ -176,3 +89,37 @@ def cleanup_semantics(r, outputs):
                                             d.defs[0] not in live)]
 
     return Rtl(*new_defs)
+
+
+def elaborate(r):
+    # type: (Rtl) -> Rtl
+    """
+    Given a concrete Rtl r, return a semantically equivalent Rtl r1 containing
+    only primitive instructions.
+    """
+    fp = False
+    primitives = set(PRIMITIVES.instructions)
+    idx = 0
+
+    outputs = r.definitions()
+
+    while not fp:
+        assert r.is_concrete()
+        new_defs = []  # type: List[Def]
+        fp = True
+
+        for d in r.rtl:
+            inst = d.expr.inst
+
+            if (inst not in primitives):
+                t = find_matching_xform(d)
+                transformed = t.apply(Rtl(d), str(idx))
+                idx += 1
+                new_defs.extend(transformed.rtl)
+                fp = False
+            else:
+                new_defs.append(d)
+
+        r.rtl = tuple(new_defs)
+
+    return cleanup_semantics(r, outputs)
