@@ -103,23 +103,17 @@ class TargetISA(object):
         """
         Collect and number all predicates in use.
 
-        Sets `instp.number` for all used instruction predicates and places them
-        in `self.all_instps` in numerical order.
-
         Ensures that all ISA predicates have an assigned bit number in
         `self.settings`.
         """
-        self.all_instps = list()  # type: List[PredNode]
-        instps = set()  # type: Set[PredNode]
+        self.instp_number = OrderedDict()  # type: OrderedDict[PredNode, int]
         for cpumode in self.cpumodes:
             for enc in cpumode.encodings:
                 instp = enc.instp
-                if instp and instp not in instps:
+                if instp and instp not in self.instp_number:
                     # assign predicate number starting from 0.
-                    assert instp.number is None
-                    instp.number = len(instps)
-                    instps.add(instp)
-                    self.all_instps.append(instp)
+                    n = len(self.instp_number)
+                    self.instp_number[instp] = n
 
                 # All referenced ISA predicates must have a number in
                 # `self.settings`. This may cause some parent predicates to be

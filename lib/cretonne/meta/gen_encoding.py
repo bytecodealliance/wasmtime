@@ -124,13 +124,13 @@ def emit_instp(instp, fmt, has_dfg=False):
 
 
 def emit_inst_predicates(instps, fmt):
-    # type: (Sequence[PredNode], srcgen.Formatter) -> None
+    # type: (OrderedDict[PredNode, int], srcgen.Formatter) -> None
     """
     Emit private functions for matching instruction predicates as well as a
     static `INST_PREDICATES` array indexed by predicate number.
     """
-    for instp in instps:
-        name = 'inst_predicate_{}'.format(instp.number)
+    for instp, number in instps.items():
+        name = 'inst_predicate_{}'.format(number)
         with fmt.indented(
                 'fn {}(dfg: &ir::DataFlowGraph, inst: &ir::InstructionData)'
                 '-> bool {{'.format(name), '}'):
@@ -140,12 +140,12 @@ def emit_inst_predicates(instps, fmt):
     with fmt.indented(
             'pub static INST_PREDICATES: [InstPredicate; {}] = ['
             .format(len(instps)), '];'):
-        for instp in instps:
-            fmt.format('inst_predicate_{},', instp.number)
+        for instp, number in instps.items():
+            fmt.format('inst_predicate_{},', number)
 
 
-def emit_recipe_predicates(recipes, fmt):
-    # type: (Sequence[EncRecipe], srcgen.Formatter) -> None
+def emit_recipe_predicates(isa, fmt):
+    # type: (TargetISA, srcgen.Formatter) -> None
     """
     Emit private functions for checking recipe predicates as well as a static
     `RECIPE_PREDICATES` array indexed by recipe number.
@@ -158,7 +158,7 @@ def emit_recipe_predicates(recipes, fmt):
     pname = dict()  # type: Dict[RecipePred, str]
 
     # Generate unique recipe predicates.
-    for rcp in recipes:
+    for rcp in isa.all_recipes:
         p = rcp.recipe_pred()
         if p is None or p in pname:
             continue
@@ -174,17 +174,16 @@ def emit_recipe_predicates(recipes, fmt):
                     name,
                     'isap' if isap else '_'), '}'):
             if isap:
-                with fmt.indented(
-                        'if isap.test({})'.format(isap.number),
-                        '}'):
+                n = isa.settings.predicate_number[isap]
+                with fmt.indented('if isap.test({})'.format(n), '}'):
                     fmt.line('return false;')
             emit_instp(instp, fmt)
 
     # Generate the static table.
     with fmt.indented(
             'pub static RECIPE_PREDICATES: [RecipePredicate; {}] = ['
-            .format(len(recipes)), '];'):
-        for rcp in recipes:
+            .format(len(isa.all_recipes)), '];'):
+        for rcp in isa.all_recipes:
             p = rcp.recipe_pred()
             if p is None:
                 fmt.line('None,')
@@ -229,7 +228,7 @@ class Encoder:
         # type: (TargetISA) -> None
         self.isa = isa
         self.NR = len(isa.all_recipes)
-        self.NI = len(isa.all_instps)
+        self.NI = len(isa.instp_number)
         # u16 encoding list words.
         self.words = list()  # type: List[int]
         # Documentation comments: Index into `words` + comment.
@@ -287,7 +286,8 @@ class Encoder:
     def instp(self, pred, skip):
         # type: (PredNode, int) -> None
         """Add an instruction predicate entry."""
-        self._pred(pred, skip, pred.number)
+        number = self.isa.instp_number[pred]
+        self._pred(pred, skip, number)
 
     def isap(self, pred, skip):
         # type: (PredNode, int) -> None
@@ -836,10 +836,10 @@ def gen_isa(isa, fmt):
     # type: (TargetISA, srcgen.Formatter) -> None
 
     # Make the `RECIPE_PREDICATES` table.
-    emit_recipe_predicates(isa.all_recipes, fmt)
+    emit_recipe_predicates(isa, fmt)
 
     # Make the `INST_PREDICATES` table.
-    emit_inst_predicates(isa.all_instps, fmt)
+    emit_inst_predicates(isa.instp_number, fmt)
 
     # Level1 tables, one per CPU mode
     level1_tables = dict()
