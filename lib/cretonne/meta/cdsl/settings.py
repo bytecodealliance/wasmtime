@@ -23,7 +23,6 @@ class Setting(object):
     def __init__(self, doc):
         # type: (str) -> None
         self.name = None  # type: str  # Assigned later by `extract_names()`.
-        self.number = None  # type: int
         self.__doc__ = doc
         # Offset of byte in settings vector containing this setting.
         self.byte_offset = None  # type: int

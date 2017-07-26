@@ -80,7 +80,6 @@ class Predicate(object):
 
     def __init__(self, parts):
         # type: (Sequence[PredNode]) -> None
-        self.number = None  # type: int
         self.parts = parts
         self.context = reduce(
                 _descendant,
@@ -210,7 +209,6 @@ class FieldPredicate(object):
 
     def __init__(self, field, function, args):
         # type: (FormatField, str, Sequence[Any]) -> None
-        self.number = None  # type: int
         self.field = field
         self.function = function
         self.args = args
@@ -330,7 +328,6 @@ class TypePredicate(object):
         assert value_type is not None
         self.value_arg = value_arg
         self.value_type = value_type
-        self.number = None  # type: int
 
     def __str__(self):
         # type: () -> str
