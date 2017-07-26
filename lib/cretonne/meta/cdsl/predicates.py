@@ -23,14 +23,19 @@ predicate, the context is the instruction format.
 """
 from __future__ import absolute_import
 from functools import reduce
+from .formats import instruction_context
 
 try:
     from typing import Sequence, Tuple, Set, Any, Union, TYPE_CHECKING  # noqa
     if TYPE_CHECKING:
-        from .formats import InstructionFormat, FormatField  # noqa
+        from .formats import InstructionFormat, InstructionContext, FormatField  # noqa
+        from .instructions import Instruction  # noqa
         from .settings import BoolSetting, SettingGroup  # noqa
-        PredContext = Union[SettingGroup, InstructionFormat]
-        PredLeaf = Union[BoolSetting, 'FieldPredicate']
+        from .types import ValueType  # noqa
+        from .typevar import TypeVar  # noqa
+        PredContext = Union[SettingGroup, InstructionFormat,
+                            InstructionContext]
+        PredLeaf = Union[BoolSetting, 'FieldPredicate', 'TypePredicate']
         PredNode = Union[PredLeaf, 'Predicate']
 except ImportError:
     pass
@@ -52,7 +57,7 @@ def _descendant(a, b):
     If a is a parent of b or b is a parent of a, return the descendant of the
     two.
 
-    If neiher is a parent of the other, return None.
+    If neither is a parent of the other, return None.
     """
     if _is_parent(a, b):
         return b
@@ -293,3 +298,69 @@ class IsUnsignedInt(FieldPredicate):
         self.scale = scale
         assert width >= 0 and width <= 64
         assert scale >= 0 and scale < width
+
+
+class TypePredicate(object):
+    """
+    An instruction predicate that checks the type of an SSA argument value.
+
+    Type predicates are used to implement encodings for instructions with
+    multiple type variables. The encoding tables are keyed by the controlling
+    type variable, type predicates check any secondary type variables.
+
+    A type predicate is not bound to any specific instruction format.
+
+    :param value_arg: Index of the value argument to type check.
+    :param value_type: The required value type.
+    """
+
+    def __init__(self, value_arg, value_type):
+        # type: (int, ValueType) -> None
+        assert value_arg >= 0
+        assert value_type is not None
+        self.value_arg = value_arg
+        self.value_type = value_type
+        self.number = None  # type: int
+        # All PredNode members must have a name field. This will never be set.
+        self.name = None  # type: str
+
+    def __str__(self):
+        # type: () -> str
+        return 'args[{}]:{}'.format(self.value_arg, self.value_type)
+
+    def predicate_context(self):
+        # type: () -> PredContext
+        return instruction_context
+
+    def predicate_leafs(self, leafs):
+        # type: (Set[PredLeaf]) -> None
+        leafs.add(self)
+
+    @staticmethod
+    def typevar_check(inst, typevar, value_type):
+        # type: (Instruction, TypeVar, ValueType) -> TypePredicate
+        """
+        Return a type check predicate for the given type variable in `inst`.
+
+        The type variable must appear directly as the type of one of the
+        operands to `inst`, so this is only guaranteed to work for secondary
+        type variables.
+
+        Find an `inst` value operand whose type is determined by `typevar` and
+        create a `TypePredicate` that checks that the type variable has the
+        value `value_type`.
+        """
+        # Find the first value operand whose type is `typevar`.
+        value_arg = next(i for i, opnum in enumerate(inst.value_opnums)
+                         if inst.ins[opnum].typevar == typevar)
+        return TypePredicate(value_arg, value_type)
+
+    def rust_predicate(self, prec):
+        # type: (int) -> str
+        """
+        Return Rust code for evaluating this predicate.
+
+        It is assumed that the context has `dfg` and `args` variables.
+        """
+        return 'dfg.value_type(args[{}]) == {}'.format(
+                self.value_arg, self.value_type.rust_name())

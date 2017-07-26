@@ -20,7 +20,7 @@ pub type RecipePredicate = Option<fn(PredicateView, &InstructionData) -> bool>;
 ///
 /// This is a predicate function that needs to be tested in addition to the recipe predicate. It
 /// can't depend on ISA settings.
-pub type InstPredicate = fn(&InstructionData) -> bool;
+pub type InstPredicate = fn(&DataFlowGraph, &InstructionData) -> bool;
 
 /// Legalization action to perform when no encoding can be found for an instruction.
 ///
@@ -105,7 +105,7 @@ impl<OffT: Into<u32> + Copy> Table<Opcode> for [Level2Entry<OffT>] {
 /// Returns an iterator that produces legal encodings for `inst`.
 pub fn lookup_enclist<'a, OffT1, OffT2>(ctrl_typevar: Type,
                                         inst: &'a InstructionData,
-                                        _dfg: &'a DataFlowGraph,
+                                        dfg: &'a DataFlowGraph,
                                         level1_table: &'static [Level1Entry<OffT1>],
                                         level2_table: &'static [Level2Entry<OffT2>],
                                         enclist: &'static [EncListEntry],
@@ -146,6 +146,7 @@ pub fn lookup_enclist<'a, OffT1, OffT2>(ctrl_typevar: Type,
     Encodings::new(offset,
                    legalize,
                    inst,
+                   dfg,
                    enclist,
                    recipe_preds,
                    inst_preds,
@@ -170,6 +171,7 @@ pub struct Encodings<'a> {
     // Legalization code to use of no encoding is found.
     legalize: LegalizeCode,
     inst: &'a InstructionData,
+    dfg: &'a DataFlowGraph,
     enclist: &'static [EncListEntry],
     recipe_preds: &'static [RecipePredicate],
     inst_preds: &'static [InstPredicate],
@@ -185,6 +187,7 @@ impl<'a> Encodings<'a> {
     pub fn new(offset: usize,
                legalize: LegalizeCode,
                inst: &'a InstructionData,
+               dfg: &'a DataFlowGraph,
                enclist: &'static [EncListEntry],
                recipe_preds: &'static [RecipePredicate],
                inst_preds: &'static [InstPredicate],
@@ -193,6 +196,7 @@ impl<'a> Encodings<'a> {
         Encodings {
             offset,
             inst,
+            dfg,
             legalize,
             isa_preds,
             recipe_preds,
@@ -222,7 +226,7 @@ impl<'a> Encodings<'a> {
     /// Check an instruction or isa predicate.
     fn check_pred(&self, pred: usize) -> bool {
         if let Some(&p) = self.inst_preds.get(pred) {
-            p(self.inst)
+            p(self.dfg, self.inst)
         } else {
             let pred = pred - self.inst_preds.len();
             self.isa_preds.test(pred)

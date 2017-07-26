@@ -21,9 +21,9 @@ ebb0:
     [-,%xmm10]          v11 = fcvt_from_sint.f32 v1             ; bin: f3 44 0f 2a d6
 
     ; asm: cvtsi2ssq %rax, %xmm5
-    [-,%xmm5]           v12 = fcvt_from_sint.f32 v2             ; TODO: f3 48 0f 2a e8
+    [-,%xmm5]           v12 = fcvt_from_sint.f32 v2             ; bin: f3 48 0f 2a e8
     ; asm: cvtsi2ssq %r14, %xmm10
-    [-,%xmm10]          v13 = fcvt_from_sint.f32 v3             ; TODO: f3 4d 0f 2a d6
+    [-,%xmm10]          v13 = fcvt_from_sint.f32 v3             ; bin: f3 4d 0f 2a d6
 
     ; Binary arithmetic.
 
@@ -86,9 +86,9 @@ ebb0:
     [-,%xmm10]          v11 = fcvt_from_sint.f64 v1             ; bin: f2 44 0f 2a d6
 
     ; asm: cvtsi2sdq %rax, %xmm5
-    [-,%xmm5]           v12 = fcvt_from_sint.f64 v2             ; TODO: f2 48 0f 2a e8
+    [-,%xmm5]           v12 = fcvt_from_sint.f64 v2             ; bin: f2 48 0f 2a e8
     ; asm: cvtsi2sdq %r14, %xmm10
-    [-,%xmm10]          v13 = fcvt_from_sint.f64 v3             ; TODO: f2 4d 0f 2a d6
+    [-,%xmm10]          v13 = fcvt_from_sint.f64 v3             ; bin: f2 4d 0f 2a d6
 
     ; Binary arithmetic.
 

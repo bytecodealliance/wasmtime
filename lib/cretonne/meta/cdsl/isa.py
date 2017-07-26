@@ -1,7 +1,7 @@
 """Defining instruction set architectures."""
 from __future__ import absolute_import
 from collections import OrderedDict
-from .predicates import And
+from .predicates import And, TypePredicate
 from .registers import RegClass, Register, Stack
 from .ast import Apply
 from .types import ValueType
@@ -405,6 +405,13 @@ class Encoding(object):
 
         self.recipe = recipe
         self.encbits = encbits
+
+        # Add secondary type variables to the instruction predicate.
+        if len(self.typevars) > 1:
+            for tv, vt in zip(self.inst.other_typevars, self.typevars[1:]):
+                typred = TypePredicate.typevar_check(self.inst, tv, vt)
+                instp = And.combine(instp, typred)
+
         # Record specific predicates. Note that the recipe also has predicates.
         self.instp = instp
         self.isap = isap

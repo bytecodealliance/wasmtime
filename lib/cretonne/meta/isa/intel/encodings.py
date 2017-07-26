@@ -229,11 +229,13 @@ I64.enc(base.uextend.i64.i32, *r.umr(0x89))
 
 # cvtsi2ss
 I32.enc(base.fcvt_from_sint.f32.i32, *r.furm(0xf3, 0x0f, 0x2A))
+I64.enc(base.fcvt_from_sint.f32.i64, *r.furm.rex(0xf3, 0x0f, 0x2A, w=1))
 I64.enc(base.fcvt_from_sint.f32.i32, *r.furm.rex(0xf3, 0x0f, 0x2A))
 I64.enc(base.fcvt_from_sint.f32.i32, *r.furm(0xf3, 0x0f, 0x2A))
 
 # cvtsi2sd
 I32.enc(base.fcvt_from_sint.f64.i32, *r.furm(0xf2, 0x0f, 0x2A))
+I64.enc(base.fcvt_from_sint.f64.i64, *r.furm.rex(0xf2, 0x0f, 0x2A, w=1))
 I64.enc(base.fcvt_from_sint.f64.i32, *r.furm.rex(0xf2, 0x0f, 0x2A))
 I64.enc(base.fcvt_from_sint.f64.i32, *r.furm(0xf2, 0x0f, 0x2A))
 
