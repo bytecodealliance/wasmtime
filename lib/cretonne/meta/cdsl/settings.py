@@ -190,7 +190,7 @@ class SettingGroup(object):
         self.settings = []  # type: List[Setting]
         # Named predicates computed from settings in this group or its
         # parents.
-        self.named_predicates = []  # type: List[Predicate]
+        self.named_predicates = OrderedDict()  # type: OrderedDict[str, Predicate]  # noqa
         # All boolean predicates that can be accessed by number. This includes:
         # - All boolean settings in this group.
         # - All named predicates.
@@ -235,9 +235,7 @@ class SettingGroup(object):
                     assert obj.name is None, obj.name
                     obj.name = name
                 if isinstance(obj, Predicate):
-                    assert obj.name is None
-                    obj.name = name
-                    self.named_predicates.append(obj)
+                    self.named_predicates[name] = obj
                 if isinstance(obj, Preset):
                     assert obj.name is None, obj.name
                     obj.name = name
@@ -333,8 +331,8 @@ class SettingGroup(object):
         self.settings_size = self.byte_size()
 
         # Now assign numbers to all our named predicates.
-        for p in self.named_predicates:
-            self.number_predicate(p)
+        for name, pred in self.named_predicates.items():
+            self.number_predicate(pred)
 
     def byte_size(self):
         # type: () -> int

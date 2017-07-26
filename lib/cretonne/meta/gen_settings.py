@@ -67,13 +67,13 @@ def gen_getter(setting, sgrp, fmt):
         raise AssertionError("Unknown setting kind")
 
 
-def gen_pred_getter(pred, sgrp, fmt):
-    # type: (Predicate, SettingGroup, srcgen.Formatter) -> None
+def gen_pred_getter(name, pred, sgrp, fmt):
+    # type: (str, Predicate, SettingGroup, srcgen.Formatter) -> None
     """
-    Emit a getter for a pre-computed predicate.
+    Emit a getter for a named pre-computed predicate.
     """
     fmt.doc_comment('Computed predicate `{}`.'.format(pred.rust_predicate(0)))
-    proto = 'pub fn {}(&self) -> bool'.format(pred.name)
+    proto = 'pub fn {}(&self) -> bool'.format(name)
     with fmt.indented(proto + ' {', '}'):
         fmt.line(
                 'self.numbered_predicate({})'
@@ -103,8 +103,8 @@ def gen_getters(sgrp, fmt):
                         .format(sgrp.boolean_offset))
         for setting in sgrp.settings:
             gen_getter(setting, sgrp, fmt)
-        for pred in sgrp.named_predicates:
-            gen_pred_getter(pred, sgrp, fmt)
+        for name, pred in sgrp.named_predicates.items():
+            gen_pred_getter(name, pred, sgrp, fmt)
 
 
 def gen_descriptors(sgrp, fmt):
@@ -262,11 +262,7 @@ def gen_constructor(sgrp, parent, fmt):
                 # Don't compute our own settings.
                 if number < sgrp.boolean_settings:
                     continue
-                if pred.name:
-                    fmt.comment(
-                            'Precompute #{} ({}).'.format(number, pred.name))
-                else:
-                    fmt.comment('Precompute #{}.'.format(number))
+                fmt.comment('Precompute #{}.'.format(number))
                 with fmt.indented(
                         'if {} {{'.format(pred.rust_predicate(0)),
                         '}'):
