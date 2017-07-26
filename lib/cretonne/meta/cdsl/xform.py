@@ -5,6 +5,7 @@ from __future__ import absolute_import
 from .ast import Def, Var, Apply
 from .ti import ti_xform, TypeEnv, get_type_env
 from functools import reduce
+from .typevar import TypeVar
 
 try:
     from typing import Union, Iterator, Sequence, Iterable, List, Dict  # noqa
@@ -12,7 +13,6 @@ try:
     from .ast import Expr, VarMap  # noqa
     from .isa import TargetISA  # noqa
     from .ti import TypeConstraint  # noqa
-    from .typevar import TypeVar  # noqa
     DefApply = Union[Def, Apply]
 except ImportError:
     pass
@@ -85,6 +85,37 @@ class Rtl(object):
                 return None
 
         return s
+
+    def is_concrete(self):
+        # type: (Rtl) -> bool
+        """Return True iff every Var in the self has a singleton type."""
+        return all(v.get_typevar().singleton_type() is not None
+                   for v in self.vars())
+
+    def cleanup_concrete_rtl(self):
+        # type: (Rtl) -> None
+        """
+        Given that there is only 1 possible concrete typing T for self, assign
+        a singleton TV with the single type t=T[v] for each Var v \in self.
+        Its an error to call this on an Rtl with more than 1 possible typing.
+        """
+        from .ti import ti_rtl, TypeEnv
+        # 1) Infer the types of all vars in res
+        typenv = get_type_env(ti_rtl(self, TypeEnv()))
+        typenv.normalize()
+        typenv = typenv.extract()
+
+        # 2) Make sure there is only one possible type assignment
+        typings = list(typenv.concrete_typings())
+        assert len(typings) == 1
+        typing = typings[0]
+
+        # 3) Assign the only possible type to each variable.
+        for v in typenv.vars:
+            if v.get_typevar().singleton_type() is not None:
+                continue
+
+            v.set_typevar(TypeVar.singleton(typing[v].singleton_type()))
 
 
 class XForm(object):
@@ -278,6 +309,27 @@ class XForm(object):
             if not d.is_output():
                 raise AssertionError(
                         '{} not defined in dest pattern'.format(d))
+
+    def apply(self, r, suffix=None):
+        # type: (Rtl, str) -> Rtl
+        """
+        Given a concrete Rtl r s.t. r matches self.src, return the
+        corresponding concrete self.dst. If suffix is provided, any temporary
+        defs are renamed with '.suffix' appended to their old name.
+        """
+        assert r.is_concrete()
+        s = self.src.substitution(r, {})  # type: VarMap
+        assert s is not None
+
+        if (suffix is not None):
+            for v in self.dst.vars():
+                if v.is_temp():
+                    assert v not in s
+                    s[v] = Var(v.name + '.' + suffix)
+
+        dst = self.dst.copy(s)
+        dst.cleanup_concrete_rtl()
+        return dst
 
 
 class XFormGroup(object):
