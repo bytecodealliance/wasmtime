@@ -58,8 +58,9 @@ from collections import OrderedDict, defaultdict
 import math
 from itertools import groupby
 from cdsl.registers import RegClass, Register, Stack
-from cdsl.predicates import FieldPredicate
+from cdsl.predicates import FieldPredicate, TypePredicate
 from cdsl.settings import SettingGroup
+from cdsl.formats import instruction_context, InstructionFormat
 
 try:
     from typing import Sequence, Set, Tuple, List, Dict, Iterable, DefaultDict, TYPE_CHECKING  # noqa
@@ -73,8 +74,8 @@ except ImportError:
     pass
 
 
-def emit_instp(instp, fmt):
-    # type: (PredNode, srcgen.Formatter) -> None
+def emit_instp(instp, fmt, has_dfg=False):
+    # type: (PredNode, srcgen.Formatter, bool) -> None
     """
     Emit code for matching an instruction predicate against an
     `InstructionData` reference called `inst`.
@@ -84,22 +85,42 @@ def emit_instp(instp, fmt):
     """
     iform = instp.predicate_context()
 
+    # Deal with pure type check predicates which apply to any instruction.
+    if iform == instruction_context:
+        fmt.line('let args = inst.arguments(&dfg.value_lists);')
+        fmt.format('return {};', instp.rust_predicate(0))
+        return
+
+    assert isinstance(iform, InstructionFormat)
+
     # Which fields do we need in the InstructionData pattern match?
+    has_type_check = False
     # Collect the leaf predicates.
     leafs = set()  # type: Set[PredLeaf]
     instp.predicate_leafs(leafs)
-    # All the leafs are FieldPredicate instances. Here we just care about
-    # the field names.
+    # All the leafs are FieldPredicate or TypePredicate instances. Here we just
+    # care about the field names.
     fnames = set()  # type: Set[str]
     for p in leafs:
-        assert isinstance(p, FieldPredicate)
-        fnames.add(p.field.rust_name())
+        if isinstance(p, FieldPredicate):
+            fnames.add(p.field.rust_name())
+        else:
+            assert isinstance(p, TypePredicate)
+            has_type_check = True
     fields = ', '.join(sorted(fnames))
 
     with fmt.indented(
-            'if let InstructionData::{} {{ {}, .. }} = *inst {{'
+            'if let ir::InstructionData::{} {{ {}, .. }} = *inst {{'
             .format(iform.name, fields), '}'):
-        fmt.line('return {};'.format(instp.rust_predicate(0)))
+        if has_type_check:
+            # We could implement this if we need to.
+            assert has_dfg, "Recipe predicates can't check type variables."
+            fmt.line('let args = inst.arguments(&dfg.value_lists);')
+        elif has_dfg:
+            # Silence dead argument warning.
+            fmt.line('let _ = dfg;')
+        fmt.format('return {};', instp.rust_predicate(0))
+    fmt.line('unreachable!();')
 
 
 def emit_inst_predicates(instps, fmt):
@@ -111,11 +132,9 @@ def emit_inst_predicates(instps, fmt):
     for instp in instps:
         name = 'inst_predicate_{}'.format(instp.number)
         with fmt.indented(
-                'fn {}(inst: &InstructionData) -> bool {{'
-                .format(name),
-                '}'):
-            emit_instp(instp, fmt)
-            fmt.line('unreachable!();')
+                'fn {}(dfg: &ir::DataFlowGraph, inst: &ir::InstructionData)'
+                '-> bool {{'.format(name), '}'):
+            emit_instp(instp, fmt, has_dfg=True)
 
     # Generate the static table.
     with fmt.indented(
@@ -150,7 +169,7 @@ def emit_recipe_predicates(recipes, fmt):
         # Generate the predicate function.
         with fmt.indented(
                 'fn {}({}: ::settings::PredicateView, '
-                'inst: &InstructionData) -> bool {{'
+                'inst: &ir::InstructionData) -> bool {{'
                 .format(
                     name,
                     'isap' if isap else '_'), '}'):
@@ -160,7 +179,6 @@ def emit_recipe_predicates(recipes, fmt):
                         '}'):
                     fmt.line('return false;')
             emit_instp(instp, fmt)
-            fmt.line('unreachable!();')
 
     # Generate the static table.
     with fmt.indented(

@@ -11,6 +11,29 @@ except ImportError:
     pass
 
 
+class InstructionContext(object):
+    """
+    Most instruction predicates refer to immediate fields of a specific
+    instruction format, so their `predicate_context()` method returns the
+    specific instruction format.
+
+    Predicates that only care about the types of SSA values are independent of
+    the instruction format. They can be evaluated in the context of any
+    instruction.
+
+    The singleton `InstructionContext` class serves as the predicate context
+    for these predicates.
+    """
+
+    def __init__(self):
+        # type: () -> None
+        self.name = 'inst'
+
+
+# Singleton instance.
+instruction_context = InstructionContext()
+
+
 class InstructionFormat(object):
     """
     Every instruction opcode has a corresponding instruction format which
@@ -48,6 +71,7 @@ class InstructionFormat(object):
     def __init__(self, *kinds, **kwargs):
         # type: (*Union[OperandKind, Tuple[str, OperandKind]], **Any) -> None # noqa
         self.name = kwargs.get('name', None)  # type: str
+        self.parent = instruction_context
 
         # The number of value operands stored in the format, or `None` when
         # `has_value_list` is set.
