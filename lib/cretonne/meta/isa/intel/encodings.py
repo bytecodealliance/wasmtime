@@ -104,10 +104,10 @@ for inst,           rrr in [
         (base.ishl, 4),
         (base.ushr, 5),
         (base.sshr, 7)]:
-    I32.enc(inst.i32.i32, *r.rc(0xd3, rrr=rrr))
-    I64.enc(inst.i64.i64, *r.rc.rex(0xd3, rrr=rrr, w=1))
-    I64.enc(inst.i32.i32, *r.rc.rex(0xd3, rrr=rrr))
-    I64.enc(inst.i32.i32, *r.rc(0xd3, rrr=rrr))
+    I32.enc(inst.i32.any, *r.rc(0xd3, rrr=rrr))
+    I64.enc(inst.i64.any, *r.rc.rex(0xd3, rrr=rrr, w=1))
+    I64.enc(inst.i32.any, *r.rc.rex(0xd3, rrr=rrr))
+    I64.enc(inst.i32.any, *r.rc(0xd3, rrr=rrr))
 
 # Population count.
 I32.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
@@ -131,37 +131,37 @@ I64.enc(base.ctz.i32, *r.urm.rex(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
 I64.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
 
 # Loads and stores.
-I32.enc(base.store.i32.i32, *r.st(0x89))
-I32.enc(base.store.i32.i32, *r.stDisp8(0x89))
-I32.enc(base.store.i32.i32, *r.stDisp32(0x89))
+I32.enc(base.store.i32.any, *r.st(0x89))
+I32.enc(base.store.i32.any, *r.stDisp8(0x89))
+I32.enc(base.store.i32.any, *r.stDisp32(0x89))
 
-I32.enc(base.istore16.i32.i32, *r.st(0x66, 0x89))
-I32.enc(base.istore16.i32.i32, *r.stDisp8(0x66, 0x89))
-I32.enc(base.istore16.i32.i32, *r.stDisp32(0x66, 0x89))
+I32.enc(base.istore16.i32.any, *r.st(0x66, 0x89))
+I32.enc(base.istore16.i32.any, *r.stDisp8(0x66, 0x89))
+I32.enc(base.istore16.i32.any, *r.stDisp32(0x66, 0x89))
 
-I32.enc(base.istore8.i32.i32, *r.st_abcd(0x88))
-I32.enc(base.istore8.i32.i32, *r.stDisp8_abcd(0x88))
-I32.enc(base.istore8.i32.i32, *r.stDisp32_abcd(0x88))
+I32.enc(base.istore8.i32.any, *r.st_abcd(0x88))
+I32.enc(base.istore8.i32.any, *r.stDisp8_abcd(0x88))
+I32.enc(base.istore8.i32.any, *r.stDisp32_abcd(0x88))
 
-I32.enc(base.load.i32.i32, *r.ld(0x8b))
-I32.enc(base.load.i32.i32, *r.ldDisp8(0x8b))
-I32.enc(base.load.i32.i32, *r.ldDisp32(0x8b))
+I32.enc(base.load.i32.any, *r.ld(0x8b))
+I32.enc(base.load.i32.any, *r.ldDisp8(0x8b))
+I32.enc(base.load.i32.any, *r.ldDisp32(0x8b))
 
-I32.enc(base.uload16.i32.i32, *r.ld(0x0f, 0xb7))
-I32.enc(base.uload16.i32.i32, *r.ldDisp8(0x0f, 0xb7))
-I32.enc(base.uload16.i32.i32, *r.ldDisp32(0x0f, 0xb7))
+I32.enc(base.uload16.i32.any, *r.ld(0x0f, 0xb7))
+I32.enc(base.uload16.i32.any, *r.ldDisp8(0x0f, 0xb7))
+I32.enc(base.uload16.i32.any, *r.ldDisp32(0x0f, 0xb7))
 
-I32.enc(base.sload16.i32.i32, *r.ld(0x0f, 0xbf))
-I32.enc(base.sload16.i32.i32, *r.ldDisp8(0x0f, 0xbf))
-I32.enc(base.sload16.i32.i32, *r.ldDisp32(0x0f, 0xbf))
+I32.enc(base.sload16.i32.any, *r.ld(0x0f, 0xbf))
+I32.enc(base.sload16.i32.any, *r.ldDisp8(0x0f, 0xbf))
+I32.enc(base.sload16.i32.any, *r.ldDisp32(0x0f, 0xbf))
 
-I32.enc(base.uload8.i32.i32, *r.ld(0x0f, 0xb6))
-I32.enc(base.uload8.i32.i32, *r.ldDisp8(0x0f, 0xb6))
-I32.enc(base.uload8.i32.i32, *r.ldDisp32(0x0f, 0xb6))
+I32.enc(base.uload8.i32.any, *r.ld(0x0f, 0xb6))
+I32.enc(base.uload8.i32.any, *r.ldDisp8(0x0f, 0xb6))
+I32.enc(base.uload8.i32.any, *r.ldDisp32(0x0f, 0xb6))
 
-I32.enc(base.sload8.i32.i32, *r.ld(0x0f, 0xbe))
-I32.enc(base.sload8.i32.i32, *r.ldDisp8(0x0f, 0xbe))
-I32.enc(base.sload8.i32.i32, *r.ldDisp32(0x0f, 0xbe))
+I32.enc(base.sload8.i32.any, *r.ld(0x0f, 0xbe))
+I32.enc(base.sload8.i32.any, *r.ldDisp8(0x0f, 0xbe))
+I32.enc(base.sload8.i32.any, *r.ldDisp32(0x0f, 0xbe))
 
 #
 # Call/return

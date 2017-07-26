@@ -424,6 +424,9 @@ class Encoding(object):
         # Add secondary type variables to the instruction predicate.
         if len(self.typevars) > 1:
             for tv, vt in zip(self.inst.other_typevars, self.typevars[1:]):
+                # A None tv is an 'any' wild card: `ishl.i32.any`.
+                if vt is None:
+                    continue
                 typred = TypePredicate.typevar_check(self.inst, tv, vt)
                 instp = And.combine(instp, typred)
 
