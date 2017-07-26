@@ -1382,7 +1382,7 @@ breduce = Instruction(
         The result type must have the same number of vector lanes as the input,
         and each lane must not have more bits that the input lanes. If the
         input and output types are the same, this is a no-op.
-        """, ins=x, outs=a)
+        """, ins=x, outs=a, constraints=WiderOrEq(Bool, BoolTo))
 
 BoolTo = TypeVar(
         'BoolTo',
@@ -1399,7 +1399,7 @@ bextend = Instruction(
         The result type must have the same number of vector lanes as the input,
         and each lane must not have fewer bits that the input lanes. If the
         input and output types are the same, this is a no-op.
-        """, ins=x, outs=a)
+        """, ins=x, outs=a, constraints=WiderOrEq(BoolTo, Bool))
 
 IntTo = TypeVar(
         'IntTo', 'An integer type with the same number of lanes',
