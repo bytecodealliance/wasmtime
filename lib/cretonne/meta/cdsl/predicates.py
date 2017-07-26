@@ -80,7 +80,6 @@ class Predicate(object):
 
     def __init__(self, parts):
         # type: (Sequence[PredNode]) -> None
-        self.name = None  # type: str
         self.number = None  # type: int
         self.parts = parts
         self.context = reduce(
@@ -91,12 +90,8 @@ class Predicate(object):
 
     def __str__(self):
         # type: () -> str
-        if self.name:
-            return '{}.{}'.format(self.context.name, self.name)
-        else:
-            return '{}({})'.format(
-                    type(self).__name__,
-                    ', '.join(map(str, self.parts)))
+        return '{}({})'.format(type(self).__name__,
+                               ', '.join(map(str, self.parts)))
 
     def predicate_context(self):
         # type: () -> PredContext
@@ -219,8 +214,6 @@ class FieldPredicate(object):
         self.field = field
         self.function = function
         self.args = args
-        # All PredNode members must have a name field. This will never be set.
-        self.name = None  # type: str
 
     def __str__(self):
         # type: () -> str
@@ -338,8 +331,6 @@ class TypePredicate(object):
         self.value_arg = value_arg
         self.value_type = value_type
         self.number = None  # type: int
-        # All PredNode members must have a name field. This will never be set.
-        self.name = None  # type: str
 
     def __str__(self):
         # type: () -> str
