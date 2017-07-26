@@ -101,14 +101,15 @@ def elaborate(r):
     primitives = set(PRIMITIVES.instructions)
     idx = 0
 
-    outputs = r.definitions()
+    res = Rtl(*r.rtl)
+    outputs = res.definitions()
 
     while not fp:
-        assert r.is_concrete()
+        assert res.is_concrete()
         new_defs = []  # type: List[Def]
         fp = True
 
-        for d in r.rtl:
+        for d in res.rtl:
             inst = d.expr.inst
 
             if (inst not in primitives):
@@ -120,6 +121,6 @@ def elaborate(r):
             else:
                 new_defs.append(d)
 
-        r.rtl = tuple(new_defs)
+        res.rtl = tuple(new_defs)
 
-    return cleanup_semantics(r, outputs)
+    return cleanup_semantics(res, outputs)
