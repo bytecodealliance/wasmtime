@@ -314,6 +314,7 @@ class Instruction(object):
 
         >>> iadd.i32
         """
+        assert name != 'any', 'Wildcard not allowed for ctrl_typevar'
         return self.bind(ValueType.by_name(name))
 
     def fully_bound(self):
@@ -386,6 +387,10 @@ class BoundInstruction(object):
 
         >>> uext.i32.i8
         """
+        if name == 'any':
+            # This is a wild card bind represented as a None type variable.
+            return self.bind(None)
+
         return self.bind(ValueType.by_name(name))
 
     def fully_bound(self):
