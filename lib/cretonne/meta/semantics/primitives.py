@@ -9,11 +9,13 @@ from __future__ import absolute_import
 from cdsl.operands import Operand
 from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
+from cdsl.ti import WiderOrEq
 import base.formats # noqa
 
 GROUP = InstructionGroup("primitive", "Primitive instruction set")
 
 BV = TypeVar('BV', 'A bitvector type.', bitvecs=True)
+BV1 = TypeVar('BV1', 'A single bit bitvector.', bitvecs=(1, 1))
 Real = TypeVar('Real', 'Any real type.', ints=True, floats=True,
                bools=True, simd=True)
 
@@ -65,5 +67,19 @@ bvadd = Instruction(
         of the operands.
         """,
         ins=(x, y), outs=a)
+
+# Bitvector comparisons
+cmp_res = Operand('cmp_res', BV1, doc="Single bit boolean")
+bvult = Instruction(
+        'bvult', r"""Unsigned bitvector comparison""",
+        ins=(x, y), outs=cmp_res)
+
+# Extensions
+ToBV = TypeVar('ToBV', 'A bitvector type.', bitvecs=True)
+x1 = Operand('x1', ToBV, doc="")
+
+bvzeroext = Instruction(
+        'bvzeroext', r"""Unsigned bitvector extension""",
+        ins=x, outs=x1, constraints=WiderOrEq(ToBV, BV))
 
 GROUP.close()
