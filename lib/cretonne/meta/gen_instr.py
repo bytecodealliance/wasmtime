@@ -345,6 +345,8 @@ def gen_typesets_table(fmt, type_sets):
     """
     Generate the table of ValueTypeSets described by type_sets.
     """
+    if len(type_sets.table) == 0:
+        return
     fmt.comment('Table of value type sets.')
     assert len(type_sets.table) <= typeset_limit, "Too many type sets"
     with fmt.indented(

@@ -9,7 +9,7 @@ the input instruction.
 """
 from __future__ import absolute_import
 from srcgen import Formatter
-from base import legalize, instructions
+from base import instructions
 from cdsl.ast import Var
 from cdsl.ti import ti_rtl, TypeEnv, get_type_env, TypesEqual,\
     InTypeset, WiderOrEq
@@ -18,7 +18,7 @@ from gen_instr import gen_typesets_table
 from cdsl.typevar import TypeVar
 
 try:
-    from typing import Sequence, List, Dict # noqa
+    from typing import Sequence, List, Dict, Set # noqa
     from cdsl.isa import TargetISA  # noqa
     from cdsl.ast import Def  # noqa
     from cdsl.xform import XForm, XFormGroup  # noqa
@@ -167,7 +167,7 @@ def unwrap_inst(iref, node, fmt):
 
     # The tuple of locals we're extracting is `expr.args`.
     with fmt.indented(
-            'let ({}) = if let InstructionData::{} {{'
+            'let ({}) = if let ir::InstructionData::{} {{'
             .format(', '.join(map(str, expr.args)), iform.name), '};'):
         # Fields are encoded directly.
         for f in iform.imm_fields:
@@ -348,9 +348,11 @@ def gen_xform_group(xgrp, fmt, type_sets):
     fmt.doc_comment("Legalize the instruction pointed to by `pos`.")
     fmt.line('#[allow(unused_variables,unused_assignments)]')
     with fmt.indented(
-            'fn {}(dfg: &mut DataFlowGraph, '
-            'cfg: &mut ControlFlowGraph, pos: &mut Cursor) -> '
+            'pub fn {}(dfg: &mut ir::DataFlowGraph, '
+            'cfg: &mut ::flowgraph::ControlFlowGraph, '
+            'pos: &mut ir::Cursor) -> '
             'bool {{'.format(xgrp.name), '}'):
+        fmt.line('use ir::InstBuilder;')
 
         # Gen the instruction to be legalized. The cursor we're passed must be
         # pointing at an instruction.
@@ -360,21 +362,55 @@ def gen_xform_group(xgrp, fmt, type_sets):
             for xform in xgrp.xforms:
                 inst = xform.src.rtl[0].expr.inst
                 with fmt.indented(
-                        'Opcode::{} => {{'.format(inst.camel_name), '}'):
+                        'ir::Opcode::{} => {{'.format(inst.camel_name), '}'):
                     gen_xform(xform, fmt, type_sets)
             # We'll assume there are uncovered opcodes.
-            fmt.line('_ => return false,')
+            if xgrp.chain:
+                fmt.format('_ => return {}(dfg, cfg, pos),',
+                           xgrp.chain.rust_name())
+            else:
+                fmt.line('_ => return false,')
         fmt.line('true')
+
+
+def gen_isa(isa, fmt, shared_groups):
+    # type: (TargetISA, Formatter, Set[XFormGroup]) -> None
+    """
+    Generate legalization functions for `isa` and add any shared `XFormGroup`s
+    encountered to `shared_groups`.
+
+    Generate `TYPE_SETS` and `LEGALIZE_ACTION` tables.
+    """
+    type_sets = UniqueTable()
+    for xgrp in isa.legalize_codes.keys():
+        if xgrp.isa is None:
+            shared_groups.add(xgrp)
+        else:
+            assert xgrp.isa == isa
+            gen_xform_group(xgrp, fmt, type_sets)
+
+    gen_typesets_table(fmt, type_sets)
+
+    with fmt.indented(
+            'pub static LEGALIZE_ACTIONS: [isa::Legalize; {}] = ['
+            .format(len(isa.legalize_codes)), '];'):
+        for xgrp in isa.legalize_codes.keys():
+            fmt.format('{},', xgrp.rust_name())
 
 
 def generate(isas, out_dir):
     # type: (Sequence[TargetISA], str) -> None
+    shared_groups = set()  # type: Set[XFormGroup]
+
+    for isa in isas:
+        fmt = Formatter()
+        gen_isa(isa, fmt, shared_groups)
+        fmt.update_file('legalize-{}.rs'.format(isa.name), out_dir)
+
+    # Shared xform groups.
     fmt = Formatter()
-    # Table of TypeSet instances
     type_sets = UniqueTable()
-
-    gen_xform_group(legalize.narrow, fmt, type_sets)
-    gen_xform_group(legalize.expand, fmt, type_sets)
-
+    for xgrp in sorted(shared_groups, key=lambda g: g.name):
+        gen_xform_group(xgrp, fmt, type_sets)
     gen_typesets_table(fmt, type_sets)
     fmt.update_file('legalizer.rs', out_dir)

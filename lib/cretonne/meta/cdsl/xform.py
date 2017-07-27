@@ -10,6 +10,7 @@ try:
     from typing import Union, Iterator, Sequence, Iterable, List, Dict  # noqa
     from typing import Optional, Set # noqa
     from .ast import Expr, VarMap  # noqa
+    from .isa import TargetISA  # noqa
     from .ti import TypeConstraint  # noqa
     from .typevar import TypeVar  # noqa
     DefApply = Union[Def, Apply]
@@ -282,17 +283,37 @@ class XForm(object):
 class XFormGroup(object):
     """
     A group of related transformations.
+
+    :param isa: A target ISA whose instructions are allowed.
+    :param chain: A next level group to try if this one doesn't match.
     """
 
-    def __init__(self, name, doc):
-        # type: (str, str) -> None
+    def __init__(self, name, doc, isa=None, chain=None):
+        # type: (str, str, TargetISA, XFormGroup) -> None
         self.xforms = list()  # type: List[XForm]
         self.name = name
         self.__doc__ = doc
+        self.isa = isa
+        self.chain = chain
 
     def __str__(self):
         # type: () -> str
-        return self.name
+        if self.isa:
+            return '{}.{}'.format(self.isa.name, self.name)
+        else:
+            return self.name
+
+    def rust_name(self):
+        # type: () -> str
+        """
+        Get the Rust name of this function implementing this transform.
+        """
+        if self.isa:
+            # This is a function in the same module as the LEGALIZE_ACTION
+            # table referring to it.
+            return self.name
+        else:
+            return '::legalizer::{}'.format(self.name)
 
     def legalize(self, src, dst):
         # type: (Union[Def, Apply], Rtl) -> None

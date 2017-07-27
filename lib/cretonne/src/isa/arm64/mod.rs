@@ -65,6 +65,7 @@ impl TargetIsa for Isa {
                        &enc_tables::LEVEL1_A64[..],
                        &enc_tables::LEVEL2[..],
                        &enc_tables::ENCLISTS[..],
+                       &enc_tables::LEGALIZE_ACTIONS[..],
                        &enc_tables::RECIPE_PREDICATES[..],
                        &enc_tables::INST_PREDICATES[..],
                        self.isa_flags.predicate_view())

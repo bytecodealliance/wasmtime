@@ -697,11 +697,10 @@ impl<'a> Verifier<'a> {
                                     isa.encoding_info().display(encoding));
                     }
                 }
-                Err(e) => {
+                Err(_) => {
                     return err!(inst,
-                                "Instruction failed to re-encode {}: {:?}",
-                                isa.encoding_info().display(encoding),
-                                e)
+                                "Instruction failed to re-encode {}",
+                                isa.encoding_info().display(encoding))
                 }
             }
             return Ok(());

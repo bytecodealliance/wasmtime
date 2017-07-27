@@ -2,7 +2,7 @@
 
 use ir::condcodes::IntCC;
 use ir::{self, types, Opcode};
-use isa::EncInfo;
+use isa;
 use isa::constraints::*;
 use isa::enc_tables::*;
 use isa::encoding::RecipeSizing;
@@ -16,3 +16,4 @@ use super::registers::*;
 // - `ENCLIST`
 // - `INFO`
 include!(concat!(env!("OUT_DIR"), "/encoding-riscv.rs"));
+include!(concat!(env!("OUT_DIR"), "/legalize-riscv.rs"));

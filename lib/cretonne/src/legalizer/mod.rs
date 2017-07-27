@@ -15,9 +15,9 @@
 
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
-use ir::{Function, Cursor, DataFlowGraph, InstructionData, Opcode, InstBuilder};
+use ir::{self, Function, Cursor};
 use ir::condcodes::IntCC;
-use isa::{TargetIsa, Legalize};
+use isa::TargetIsa;
 use bitset::BitSet;
 use ir::instructions::ValueTypeSet;
 
@@ -73,22 +73,7 @@ pub fn legalize_function(func: &mut Function,
                 Ok(encoding) => *func.encodings.ensure(inst) = encoding,
                 Err(action) => {
                     // We should transform the instruction into legal equivalents.
-                    // Possible strategies are:
-                    // 1. Legalize::Expand: Expand instruction into sequence of legal instructions.
-                    //    Possibly iteratively. ()
-                    // 2. Legalize::Narrow: Split the controlling type variable into high and low
-                    //    parts. This applies both to SIMD vector types which can be halved and to
-                    //    integer types such as `i64` used on a 32-bit ISA. ().
-                    // 3. TODO: Promote the controlling type variable to a larger type. This
-                    //    typically means expressing `i8` and `i16` arithmetic in terms if `i32`
-                    //    operations on RISC targets. (It may or may not be beneficial to promote
-                    //    small vector types versus splitting them.)
-                    // 4. TODO: Convert to library calls. For example, floating point operations on
-                    //    an ISA with no IEEE 754 support.
-                    let changed = match action {
-                        Legalize::Expand => expand(&mut func.dfg, cfg, &mut pos),
-                        Legalize::Narrow => narrow(&mut func.dfg, cfg, &mut pos),
-                    };
+                    let changed = action(&mut func.dfg, cfg, &mut pos);
                     // If the current instruction was replaced, we need to double back and revisit
                     // the expanded sequence. This is both to assign encodings and possible to
                     // expand further.
