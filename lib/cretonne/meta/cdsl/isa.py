@@ -75,6 +75,7 @@ class TargetISA(object):
         self._collect_encoding_recipes()
         self._collect_predicates()
         self._collect_regclasses()
+        self._collect_legalize_codes()
         return self
 
     def _collect_encoding_recipes(self):
@@ -155,6 +156,17 @@ class TargetISA(object):
         # be coordinated with the `RegClassMask` and `RegClassIndex` types in
         # `isa/registers.rs`.
         assert len(self.regclasses) <= 32, "Too many register classes"
+
+    def _collect_legalize_codes(self):
+        # type: () -> None
+        """
+        Make sure all legalization transforms have been assigned a code.
+        """
+        for cpumode in self.cpumodes:
+            self.legalize_code(cpumode.default_legalize)
+            for x in sorted(cpumode.type_legalize.values(),
+                            key=lambda x: x.name):
+                self.legalize_code(x)
 
     def legalize_code(self, xgrp):
         # type: (XFormGroup) -> int
