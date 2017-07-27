@@ -57,20 +57,29 @@ def cleanup_semantics(r, outputs):
     new_defs = []  # type: List[Def]
     subst_m = {v: v for v in r.vars()}  # type: VarMap
     definition = {}  # type: Dict[Var, Def]
+    prim_to_bv_map = {}  # type: Dict[Var, Def]
 
     # Pass 1: Remove redundant prim_to_bv
     for d in r.rtl:
         inst = d.expr.inst
 
         if (inst == prim_to_bv):
-            if d.expr.args[0] in definition:
-                assert isinstance(d.expr.args[0], Var)
-                def_loc = definition[d.expr.args[0]]
+            arg = d.expr.args[0]
+            df = d.defs[0]
+            assert isinstance(arg, Var)
 
+            if arg in definition:
+                def_loc = definition[arg]
                 if def_loc.expr.inst == prim_from_bv:
                     assert isinstance(def_loc.expr.args[0], Var)
-                    subst_m[d.defs[0]] = def_loc.expr.args[0]
+                    subst_m[df] = def_loc.expr.args[0]
                     continue
+
+            if arg in prim_to_bv_map:
+                subst_m[df] = prim_to_bv_map[arg].defs[0]
+                continue
+
+            prim_to_bv_map[arg] = d
 
         new_def = d.copy(subst_m)
 
