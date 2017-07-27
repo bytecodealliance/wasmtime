@@ -170,7 +170,7 @@ pub trait TargetIsa {
               ctrl_typevar: ir::Type)
               -> Result<Encoding, Legalize> {
         let mut iter = self.legal_encodings(dfg, inst, ctrl_typevar);
-        iter.next().ok_or(iter.legalize().into())
+        iter.next().ok_or_else(|| iter.legalize().into())
     }
 
     /// Get a data structure describing the instruction encodings in this ISA.
