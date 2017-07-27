@@ -220,9 +220,10 @@ impl<'a> Context<'a> {
 
             let reg = dfg.ins(pos).fill(cand.value);
             let fill = dfg.value_def(reg).unwrap_inst();
-            *encodings.ensure(fill) = self.isa
-                .encode(dfg, &dfg[fill], dfg.value_type(reg))
-                .expect("Can't encode fill");
+            match self.isa.encode(dfg, &dfg[fill], dfg.value_type(reg)) {
+                Ok(e) => *encodings.ensure(fill) = e,
+                Err(_) => panic!("Can't encode fill {}", cand.value),
+            }
 
             self.reloads
                 .insert(ReloadedValue {
@@ -351,9 +352,10 @@ impl<'a> Context<'a> {
             .Unary(Opcode::Spill, ty, reg);
 
         // Give it an encoding.
-        *encodings.ensure(inst) = self.isa
-            .encode(dfg, &dfg[inst], ty)
-            .expect("Can't encode spill");
+        match self.isa.encode(dfg, &dfg[inst], ty) {
+            Ok(e) => *encodings.ensure(inst) = e,
+            Err(_) => panic!("Can't encode spill.{}", ty),
+        }
 
         // Update live ranges.
         self.liveness.move_def_locally(stack, inst);

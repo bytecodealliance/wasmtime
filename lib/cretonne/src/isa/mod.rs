@@ -45,6 +45,7 @@ pub use isa::encoding::{Encoding, EncInfo};
 pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex, regs_overlap};
 
 use binemit;
+use flowgraph;
 use settings;
 use ir;
 use regalloc;
@@ -116,29 +117,11 @@ impl settings::Configurable for Builder {
 /// After determining that an instruction doesn't have an encoding, how should we proceed to
 /// legalize it?
 ///
-/// These actions correspond to the transformation groups defined in `meta/cretonne/legalize.py`.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Legalize {
-    /// Legalize in terms of narrower types.
-    Narrow,
-
-    /// Expanding in terms of other instructions using the same types.
-    Expand,
-}
-
-/// Translate a legalization code into a `Legalize` enum.
-///
-/// This mapping is going away soon. It depends on matching the `TargetISA.legalize_code()`
-/// mapping.
-impl From<u8> for Legalize {
-    fn from(x: u8) -> Legalize {
-        match x {
-            0 => Legalize::Narrow,
-            1 => Legalize::Expand,
-            _ => panic!("Unknown legalization code {}"),
-        }
-    }
-}
+/// The `Encodings` iterator returns a legalization function to call.
+pub type Legalize = fn(&mut ir::DataFlowGraph,
+                       &mut flowgraph::ControlFlowGraph,
+                       &mut ir::Cursor)
+                       -> bool;
 
 /// Methods that are specialized to a target ISA.
 pub trait TargetIsa {

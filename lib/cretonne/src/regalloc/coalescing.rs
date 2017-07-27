@@ -479,9 +479,10 @@ impl<'a> Context<'a> {
              self.func.dfg.display_inst(pred_inst, self.isa));
 
         // Give it an encoding.
-        let encoding = self.isa
-            .encode(&self.func.dfg, &self.func.dfg[inst], ty)
-            .expect("Can't encode copy");
+        let encoding = match self.isa.encode(&self.func.dfg, &self.func.dfg[inst], ty) {
+            Ok(e) => e,
+            Err(_) => panic!("Can't encode copy.{}", ty),
+        };
         *self.func.encodings.ensure(inst) = encoding;
 
         // Create a live range for the new value.
@@ -525,9 +526,10 @@ impl<'a> Context<'a> {
              ty);
 
         // Give it an encoding.
-        let encoding = self.isa
-            .encode(&self.func.dfg, &self.func.dfg[inst], ty)
-            .expect("Can't encode copy");
+        let encoding = match self.isa.encode(&self.func.dfg, &self.func.dfg[inst], ty) {
+            Ok(e) => e,
+            Err(_) => panic!("Can't encode copy.{}", ty),
+        };
         *self.func.encodings.ensure(inst) = encoding;
 
         // Create a live range for the new value.

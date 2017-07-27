@@ -533,10 +533,10 @@ impl<'a> Context<'a> {
         let ty = dfg.value_type(copy);
 
         // Give it an encoding.
-        let encoding = self.isa
-            .encode(dfg, &dfg[inst], ty)
-            .expect("Can't encode copy");
-        *self.encodings.ensure(inst) = encoding;
+        match self.isa.encode(dfg, &dfg[inst], ty) {
+            Ok(e) => *self.encodings.ensure(inst) = e,
+            Err(_) => panic!("Can't encode {}", dfg.display_inst(inst, self.isa)),
+        }
 
         // Update live ranges.
         self.liveness.create_dead(copy, inst, Affinity::Reg(rci));

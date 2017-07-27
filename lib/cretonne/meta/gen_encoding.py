@@ -875,7 +875,7 @@ def gen_isa(isa, fmt):
     emit_recipe_sizing(isa, fmt)
 
     # Finally, tie it all together in an `EncInfo`.
-    with fmt.indented('pub static INFO: EncInfo = EncInfo {', '};'):
+    with fmt.indented('pub static INFO: isa::EncInfo = isa::EncInfo {', '};'):
         fmt.line('constraints: &RECIPE_CONSTRAINTS,')
         fmt.line('sizing: &RECIPE_SIZING,')
         fmt.line('names: &RECIPE_NAMES,')

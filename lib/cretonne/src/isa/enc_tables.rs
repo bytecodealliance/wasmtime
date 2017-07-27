@@ -5,7 +5,7 @@
 
 use constant_hash::{Table, probe};
 use ir::{Type, Opcode, DataFlowGraph, InstructionData};
-use isa::Encoding;
+use isa::{Encoding, Legalize};
 use settings::PredicateView;
 use std::ops::Range;
 
@@ -109,6 +109,7 @@ pub fn lookup_enclist<'a, OffT1, OffT2>(ctrl_typevar: Type,
                                         level1_table: &'static [Level1Entry<OffT1>],
                                         level2_table: &'static [Level2Entry<OffT2>],
                                         enclist: &'static [EncListEntry],
+                                        legalize_actions: &'static [Legalize],
                                         recipe_preds: &'static [RecipePredicate],
                                         inst_preds: &'static [InstPredicate],
                                         isa_preds: PredicateView<'a>)
@@ -148,6 +149,7 @@ pub fn lookup_enclist<'a, OffT1, OffT2>(ctrl_typevar: Type,
                    inst,
                    dfg,
                    enclist,
+                   legalize_actions,
                    recipe_preds,
                    inst_preds,
                    isa_preds)
@@ -173,6 +175,7 @@ pub struct Encodings<'a> {
     inst: &'a InstructionData,
     dfg: &'a DataFlowGraph,
     enclist: &'static [EncListEntry],
+    legalize_actions: &'static [Legalize],
     recipe_preds: &'static [RecipePredicate],
     inst_preds: &'static [InstPredicate],
     isa_preds: PredicateView<'a>,
@@ -189,6 +192,7 @@ impl<'a> Encodings<'a> {
                inst: &'a InstructionData,
                dfg: &'a DataFlowGraph,
                enclist: &'static [EncListEntry],
+               legalize_actions: &'static [Legalize],
                recipe_preds: &'static [RecipePredicate],
                inst_preds: &'static [InstPredicate],
                isa_preds: PredicateView<'a>)
@@ -202,6 +206,7 @@ impl<'a> Encodings<'a> {
             recipe_preds,
             inst_preds,
             enclist,
+            legalize_actions,
         }
     }
 
@@ -210,9 +215,9 @@ impl<'a> Encodings<'a> {
     /// instruction.
     ///
     /// This method must only be called after the iterator returns `None`.
-    pub fn legalize(&self) -> LegalizeCode {
+    pub fn legalize(&self) -> Legalize {
         debug_assert_eq!(self.offset, !0, "Premature Encodings::legalize()");
-        self.legalize
+        self.legalize_actions[self.legalize as usize]
     }
 
     /// Check if the `rpred` recipe predicate s satisfied.
