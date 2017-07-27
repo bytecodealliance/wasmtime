@@ -1,15 +1,15 @@
 from __future__ import absolute_import
 from base.instructions import vselect, vsplit, vconcat, iconst, iadd, bint
-from base.instructions import b1, icmp, ireduce
+from base.instructions import b1, icmp, ireduce, iadd_cout
 from base.immediates import intcc
 from base.types import i64, i8, b32, i32, i16, f32
 from cdsl.typevar import TypeVar
 from cdsl.ast import Var
 from cdsl.xform import Rtl
 from unittest import TestCase
-from .elaborate import cleanup_concrete_rtl, elaborate, is_rtl_concrete,\
-    cleanup_semantics
-from .primitives import prim_to_bv, bvsplit, prim_from_bv, bvconcat, bvadd
+from .elaborate import elaborate
+from .primitives import prim_to_bv, bvsplit, prim_from_bv, bvconcat, bvadd, \
+    bvult
 import base.semantics  # noqa
 
 
@@ -21,8 +21,8 @@ def concrete_rtls_eq(r1, r2):
         them)
         2) Corresponding Vars between them have the same singleton type.
     """
-    assert is_rtl_concrete(r1)
-    assert is_rtl_concrete(r2)
+    assert r1.is_concrete()
+    assert r2.is_concrete()
 
     s = r1.substitution(r2, {})
 
@@ -50,13 +50,14 @@ class TestCleanupConcreteRtl(TestCase):
         lo = Var('lo')
         hi = Var('hi')
 
-        x.set_typevar(TypeVar.singleton(typ))
         r = Rtl(
                 (lo, hi) << vsplit(x),
         )
-        r1 = cleanup_concrete_rtl(r)
-
+        r1 = r.copy({})
         s = r.substitution(r1, {})
+
+        s[x].set_typevar(TypeVar.singleton(typ))
+        r1.cleanup_concrete_rtl()
         assert s is not None
         assert s[x].get_typevar().singleton_type() == typ
         assert s[lo].get_typevar().singleton_type() == i64.by(2)
@@ -72,20 +73,20 @@ class TestCleanupConcreteRtl(TestCase):
         )
 
         with self.assertRaises(AssertionError):
-            cleanup_concrete_rtl(r)
+            r.cleanup_concrete_rtl()
 
     def test_cleanup_concrete_rtl_ireduce(self):
         # type: () -> None
         x = Var('x')
         y = Var('y')
-        x.set_typevar(TypeVar.singleton(i8.by(2)))
         r = Rtl(
                 y << ireduce(x),
         )
-
-        r1 = cleanup_concrete_rtl(r)
-
+        r1 = r.copy({})
         s = r.substitution(r1, {})
+        s[x].set_typevar(TypeVar.singleton(i8.by(2)))
+        r1.cleanup_concrete_rtl()
+
         assert s is not None
         assert s[x].get_typevar().singleton_type() == i8.by(2)
         assert s[y].get_typevar().singleton_type() == i8.by(2)
@@ -100,7 +101,7 @@ class TestCleanupConcreteRtl(TestCase):
         )
 
         with self.assertRaises(AssertionError):
-            cleanup_concrete_rtl(r)
+            r.cleanup_concrete_rtl()
 
     def test_vselect_icmpimm(self):
         # type: () -> None
@@ -112,18 +113,19 @@ class TestCleanupConcreteRtl(TestCase):
         zeroes = Var('zeroes')
         imm0 = Var("imm0")
 
-        zeroes.set_typevar(TypeVar.singleton(i32.by(4)))
-        z.set_typevar(TypeVar.singleton(f32.by(4)))
-
         r = Rtl(
                 zeroes << iconst(imm0),
                 y << icmp(intcc.eq, x, zeroes),
                 v << vselect(y, z, w),
         )
-
-        r1 = cleanup_concrete_rtl(r)
+        r1 = r.copy({})
 
         s = r.substitution(r1, {})
+        s[zeroes].set_typevar(TypeVar.singleton(i32.by(4)))
+        s[z].set_typevar(TypeVar.singleton(f32.by(4)))
+
+        r1.cleanup_concrete_rtl()
+
         assert s is not None
         assert s[zeroes].get_typevar().singleton_type() == i32.by(4)
         assert s[x].get_typevar().singleton_type() == i32.by(4)
@@ -141,20 +143,20 @@ class TestCleanupConcreteRtl(TestCase):
         v = Var('v')
         u = Var('u')
 
-        x.set_typevar(TypeVar.singleton(i32.by(8)))
-        z.set_typevar(TypeVar.singleton(i32.by(8)))
-        # TODO: Relax this to simd=True
-        v.set_typevar(TypeVar('v', '', bools=(1, 1), simd=(8, 8)))
-
         r = Rtl(
             z << iadd(x, y),
             w << bint(v),
             u << iadd(z, w)
         )
-
-        r1 = cleanup_concrete_rtl(r)
-
+        r1 = r.copy({})
         s = r.substitution(r1, {})
+
+        s[x].set_typevar(TypeVar.singleton(i32.by(8)))
+        s[z].set_typevar(TypeVar.singleton(i32.by(8)))
+        # TODO: Relax this to simd=True
+        s[v].set_typevar(TypeVar('v', '', bools=(1, 1), simd=(8, 8)))
+        r1.cleanup_concrete_rtl()
+
         assert s is not None
         assert s[x].get_typevar().singleton_type() == i32.by(8)
         assert s[y].get_typevar().singleton_type() == i32.by(8)
@@ -194,7 +196,8 @@ class TestElaborate(TestCase):
         r = Rtl(
                 (self.v0, self.v1) << vsplit.i32x4(self.v2),
         )
-        sem = elaborate(cleanup_concrete_rtl(r))
+        r.cleanup_concrete_rtl()
+        sem = elaborate(r)
         bvx = Var('bvx')
         bvlo = Var('bvlo')
         bvhi = Var('bvhi')
@@ -202,11 +205,15 @@ class TestElaborate(TestCase):
         lo = Var('lo')
         hi = Var('hi')
 
-        assert concrete_rtls_eq(sem, cleanup_concrete_rtl(Rtl(
+        exp = Rtl(
             bvx << prim_to_bv.i32x4(x),
             (bvlo, bvhi) << bvsplit.bv128(bvx),
             lo << prim_from_bv.i32x2(bvlo),
-            hi << prim_from_bv.i32x2(bvhi))))
+            hi << prim_from_bv.i32x2(bvhi)
+        )
+        exp.cleanup_concrete_rtl()
+
+        assert concrete_rtls_eq(sem, exp)
 
     def test_elaborate_vconcat(self):
         # type: () -> None
@@ -215,7 +222,8 @@ class TestElaborate(TestCase):
         r = Rtl(
                 self.v0 << vconcat.i32x2(self.v1, self.v2),
         )
-        sem = elaborate(cleanup_concrete_rtl(r))
+        r.cleanup_concrete_rtl()
+        sem = elaborate(r)
         bvx = Var('bvx')
         bvlo = Var('bvlo')
         bvhi = Var('bvhi')
@@ -223,11 +231,15 @@ class TestElaborate(TestCase):
         lo = Var('lo')
         hi = Var('hi')
 
-        assert concrete_rtls_eq(sem, cleanup_concrete_rtl(Rtl(
+        exp = Rtl(
             bvlo << prim_to_bv.i32x2(lo),
             bvhi << prim_to_bv.i32x2(hi),
             bvx << bvconcat.bv64(bvlo, bvhi),
-            x << prim_from_bv.i32x4(bvx))))
+            x << prim_from_bv.i32x4(bvx)
+        )
+        exp.cleanup_concrete_rtl()
+
+        assert concrete_rtls_eq(sem, exp)
 
     def test_elaborate_iadd_simple(self):
         # type: () -> None
@@ -241,13 +253,17 @@ class TestElaborate(TestCase):
         r = Rtl(
                 a << iadd.i32(x, y),
         )
-        sem = elaborate(cleanup_concrete_rtl(r))
-
-        assert concrete_rtls_eq(sem, cleanup_concrete_rtl(Rtl(
+        r.cleanup_concrete_rtl()
+        sem = elaborate(r)
+        exp = Rtl(
             bvx << prim_to_bv.i32(x),
             bvy << prim_to_bv.i32(y),
             bva << bvadd.bv32(bvx, bvy),
-            a << prim_from_bv.i32(bva))))
+            a << prim_from_bv.i32(bva)
+        )
+        exp.cleanup_concrete_rtl()
+
+        assert concrete_rtls_eq(sem, exp)
 
     def test_elaborate_iadd_elaborate_1(self):
         # type: () -> None
@@ -255,8 +271,8 @@ class TestElaborate(TestCase):
         r = Rtl(
                 self.v0 << iadd.i32x2(self.v1, self.v2),
         )
-        sem = cleanup_semantics(elaborate(cleanup_concrete_rtl(r)),
-                                set([self.v0]))
+        r.cleanup_concrete_rtl()
+        sem = elaborate(r)
         x = Var('x')
         y = Var('y')
         a = Var('a')
@@ -271,7 +287,7 @@ class TestElaborate(TestCase):
         bva_3 = Var('bva_3')
         bva_4 = Var('bva_4')
 
-        assert concrete_rtls_eq(sem, cleanup_concrete_rtl(Rtl(
+        exp = Rtl(
             bvx_1 << prim_to_bv.i32x2(x),
             (bvlo_1, bvhi_1) << bvsplit.bv64(bvx_1),
             bvx_2 << prim_to_bv.i32x2(y),
@@ -279,7 +295,11 @@ class TestElaborate(TestCase):
             bva_3 << bvadd.bv32(bvlo_1, bvlo_2),
             bva_4 << bvadd.bv32(bvhi_1, bvhi_2),
             bvx_5 << bvconcat.bv32(bva_3, bva_4),
-            a << prim_from_bv.i32x2(bvx_5))))
+            a << prim_from_bv.i32x2(bvx_5)
+        )
+        exp.cleanup_concrete_rtl()
+
+        assert concrete_rtls_eq(sem, exp)
 
     def test_elaborate_iadd_elaborate_2(self):
         # type: () -> None
@@ -287,9 +307,9 @@ class TestElaborate(TestCase):
         r = Rtl(
                 self.v0 << iadd.i8x4(self.v1, self.v2),
         )
+        r.cleanup_concrete_rtl()
 
-        sem = cleanup_semantics(elaborate(cleanup_concrete_rtl(r)),
-                                set([self.v0]))
+        sem = elaborate(r)
         x = Var('x')
         y = Var('y')
         a = Var('a')
@@ -318,7 +338,7 @@ class TestElaborate(TestCase):
         bva_13 = Var('bva_13')
         bva_14 = Var('bva_14')
 
-        assert concrete_rtls_eq(sem, cleanup_concrete_rtl(Rtl(
+        exp = Rtl(
             bvx_1 << prim_to_bv.i8x4(x),
             (bvlo_1, bvhi_1) << bvsplit.bv32(bvx_1),
             bvx_2 << prim_to_bv.i8x4(y),
@@ -334,4 +354,34 @@ class TestElaborate(TestCase):
             bva_14 << bvadd.bv8(bvhi_11, bvhi_12),
             bvx_15 << bvconcat.bv8(bva_13, bva_14),
             bvx_5 << bvconcat.bv16(bvx_10, bvx_15),
-            a << prim_from_bv.i8x4(bvx_5))))
+            a << prim_from_bv.i8x4(bvx_5)
+        )
+        exp.cleanup_concrete_rtl()
+        assert concrete_rtls_eq(sem, exp)
+
+    def test_elaborate_iadd_cout_simple(self):
+        # type: () -> None
+        x = Var('x')
+        y = Var('y')
+        a = Var('a')
+        c_out = Var('c_out')
+        bvc_out = Var('bvc_out')
+        bvx = Var('bvx')
+        bvy = Var('bvy')
+        bva = Var('bva')
+        r = Rtl(
+                (a, c_out) << iadd_cout.i32(x, y),
+        )
+        r.cleanup_concrete_rtl()
+        sem = elaborate(r)
+        exp = Rtl(
+            bvx << prim_to_bv.i32(x),
+            bvy << prim_to_bv.i32(y),
+            bva << bvadd.bv32(bvx, bvy),
+            bvc_out << bvult.bv32(bva, bvx),
+            a << prim_from_bv.i32(bva),
+            c_out << prim_from_bv.b1(bvc_out)
+        )
+        exp.cleanup_concrete_rtl()
+
+        assert concrete_rtls_eq(sem, exp)
