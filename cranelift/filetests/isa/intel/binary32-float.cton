@@ -17,6 +17,21 @@ ebb0:
     ; asm: cvtsi2ss %esi, %xmm2
     [-,%xmm2]           v11 = fcvt_from_sint.f32 v1             ; bin: f3 0f 2a d6
 
+    ; asm: cvtss2sd %xmm2, %xmm5
+    [-,%xmm5]           v12 = fpromote.f64 v11                  ; bin: f3 0f 5a ea
+    ; asm: cvtss2sd %xmm5, %xmm2
+    [-,%xmm2]           v13 = fpromote.f64 v10                  ; bin: f3 0f 5a d5
+
+    ; asm: movd %ecx, %xmm5
+    [-,%xmm5]           v14 = bitcast.f32 v0                    ; bin: 66 0f 6e e9
+    ; asm: movd %esi, %xmm2
+    [-,%xmm2]           v15 = bitcast.f32 v1                    ; bin: 66 0f 6e d6
+
+    ; asm: movd %xmm5, %ecx
+    [-,%rcx]            v16 = bitcast.i32 v10                   ; bin: 66 0f 7e e9
+    ; asm: movd %xmm2, %esi
+    [-,%rsi]            v17 = bitcast.i32 v11                   ; bin: 66 0f 7e d6
+
     ; Binary arithmetic.
 
     ; asm: addss %xmm2, %xmm5
@@ -70,12 +85,19 @@ ebb0:
     [-,%rcx]            v0 = iconst.i32 1
     [-,%rsi]            v1 = iconst.i32 2
 
-    ; Binary arithmetic.
-
     ; asm: cvtsi2sd %ecx, %xmm5
     [-,%xmm5]           v10 = fcvt_from_sint.f64 v0             ; bin: f2 0f 2a e9
     ; asm: cvtsi2sd %esi, %xmm2
     [-,%xmm2]           v11 = fcvt_from_sint.f64 v1             ; bin: f2 0f 2a d6
+
+    ; asm: cvtsd2ss %xmm2, %xmm5
+    [-,%xmm5]           v12 = fdemote.f32 v11                   ; bin: f2 0f 5a ea
+    ; asm: cvtsd2ss %xmm5, %xmm2
+    [-,%xmm2]           v13 = fdemote.f32 v10                   ; bin: f2 0f 5a d5
+
+    ; No i64 <-> f64 bitcasts in 32-bit mode.
+
+    ; Binary arithmetic.
 
     ; asm: addsd %xmm2, %xmm5
     [-,%xmm5]           v20 = fadd v10, v11                     ; bin: f2 0f 58 ea

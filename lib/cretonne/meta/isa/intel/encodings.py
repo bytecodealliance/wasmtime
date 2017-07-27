@@ -11,6 +11,14 @@ from . import settings as cfg
 from . import instructions as x86
 from base.legalize import narrow, expand
 
+try:
+    from typing import TYPE_CHECKING
+    if TYPE_CHECKING:
+        from cdsl.instructions import MaybeBoundInst  # noqa
+except ImportError:
+    pass
+
+
 I32.legalize_type(
         default=narrow,
         i32=expand,
@@ -24,42 +32,52 @@ I64.legalize_type(
         f32=expand,
         f64=expand)
 
+
+#
+# Helper functions for generating encodings.
+#
+
+def enc_i32_i64(inst, recipe, *args, **kwargs):
+    # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
+    """
+    Add encodings for `inst.i32` to I32.
+    Add encodings for `inst.i32` to I64 with and without REX.
+    Add encodings for `inst.i64` to I64 with a REX.W prefix.
+    """
+    I32.enc(inst.i32, *recipe(*args, **kwargs))
+
+    # REX-less encoding must come after REX encoding so we don't use it by
+    # default. Otherwise reg-alloc would never use r8 and up.
+    I64.enc(inst.i32, *recipe.rex(*args, **kwargs))
+    I64.enc(inst.i32, *recipe(*args, **kwargs))
+
+    I64.enc(inst.i64, *recipe.rex(*args, w=1, **kwargs))
+
+
+def enc_flt(inst, recipe, *args, **kwargs):
+    # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
+    """
+    Add encodings for floating point instruction `inst` to both I32 and I64.
+    """
+    I32.enc(inst, *recipe(*args, **kwargs))
+    I64.enc(inst, *recipe.rex(*args, **kwargs))
+    I64.enc(inst, *recipe(*args, **kwargs))
+
+
 for inst,           opc in [
         (base.iadd, 0x01),
         (base.isub, 0x29),
         (base.band, 0x21),
         (base.bor,  0x09),
         (base.bxor, 0x31)]:
-    I32.enc(inst.i32, *r.rr(opc))
+    enc_i32_i64(inst, r.rr, opc)
 
-    I64.enc(inst.i64, *r.rr.rex(opc, w=1))
-    I64.enc(inst.i32, *r.rr.rex(opc))
-    # REX-less encoding must come after REX encoding so we don't use it by
-    # default. Otherwise reg-alloc would never use r8 and up.
-    I64.enc(inst.i32, *r.rr(opc))
+enc_i32_i64(base.imul, r.rrx, 0x0f, 0xaf)
+enc_i32_i64(x86.sdivmodx, r.div, 0xf7, rrr=7)
+enc_i32_i64(x86.udivmodx, r.div, 0xf7, rrr=6)
 
-I32.enc(base.imul.i32, *r.rrx(0x0f, 0xaf))
-I64.enc(base.imul.i64, *r.rrx.rex(0x0f, 0xaf, w=1))
-I64.enc(base.imul.i32, *r.rrx.rex(0x0f, 0xaf))
-I64.enc(base.imul.i32, *r.rrx(0x0f, 0xaf))
-
-for inst,              rrr in [
-        (x86.sdivmodx, 7),
-        (x86.udivmodx, 6)]:
-    I32.enc(inst.i32, *r.div(0xf7, rrr=rrr))
-    I64.enc(inst.i64, *r.div.rex(0xf7, rrr=rrr, w=1))
-    I64.enc(inst.i32, *r.div.rex(0xf7, rrr=rrr))
-    I64.enc(inst.i32, *r.div(0xf7, rrr=rrr))
-
-I32.enc(base.copy.i32, *r.umr(0x89))
-I64.enc(base.copy.i64, *r.umr.rex(0x89, w=1))
-I64.enc(base.copy.i32, *r.umr.rex(0x89))
-I64.enc(base.copy.i32, *r.umr(0x89))
-
-I32.enc(base.regmove.i32, *r.rmov(0x89))
-I64.enc(base.regmove.i64, *r.rmov.rex(0x89, w=1))
-I64.enc(base.regmove.i32, *r.rmov.rex(0x89))
-I64.enc(base.regmove.i32, *r.rmov(0x89))
+enc_i32_i64(base.copy, r.umr, 0x89)
+enc_i32_i64(base.regmove, r.rmov, 0x89)
 
 # Immediate instructions with sign-extended 8-bit and 32-bit immediate.
 for inst,               rrr in [
@@ -67,15 +85,8 @@ for inst,               rrr in [
         (base.band_imm, 4),
         (base.bor_imm,  1),
         (base.bxor_imm, 6)]:
-    I32.enc(inst.i32, *r.rib(0x83, rrr=rrr))
-    I32.enc(inst.i32, *r.rid(0x81, rrr=rrr))
-
-    I64.enc(inst.i64, *r.rib.rex(0x83, rrr=rrr, w=1))
-    I64.enc(inst.i64, *r.rid.rex(0x81, rrr=rrr, w=1))
-    I64.enc(inst.i32, *r.rib.rex(0x83, rrr=rrr))
-    I64.enc(inst.i32, *r.rid.rex(0x81, rrr=rrr))
-    I64.enc(inst.i32, *r.rib(0x83, rrr=rrr))
-    I64.enc(inst.i32, *r.rid(0x81, rrr=rrr))
+    enc_i32_i64(inst, r.rib, 0x83, rrr=rrr)
+    enc_i32_i64(inst, r.rid, 0x81, rrr=rrr)
 
 # TODO: band_imm.i64 with an unsigned 32-bit immediate can be encoded as
 # band_imm.i32. Can even use the single-byte immediate for 0xffff_ffXX masks.
@@ -179,15 +190,8 @@ I32.enc(base.jump, *r.jmpd(0xe9))
 I64.enc(base.jump, *r.jmpb(0xeb))
 I64.enc(base.jump, *r.jmpd(0xe9))
 
-I32.enc(base.brz.i32, *r.tjccb(0x74))
-I64.enc(base.brz.i64, *r.tjccb.rex(0x74, w=1))
-I64.enc(base.brz.i32, *r.tjccb.rex(0x74))
-I64.enc(base.brz.i32, *r.tjccb(0x74))
-
-I32.enc(base.brnz.i32, *r.tjccb(0x75))
-I64.enc(base.brnz.i64, *r.tjccb.rex(0x75, w=1))
-I64.enc(base.brnz.i32, *r.tjccb.rex(0x75))
-I64.enc(base.brnz.i32, *r.tjccb(0x75))
+enc_i32_i64(base.brz, r.tjccb, 0x74)
+enc_i32_i64(base.brnz, r.tjccb, 0x75)
 
 #
 # Trap as ud2
@@ -198,10 +202,7 @@ I64.enc(base.trap, *r.noop(0x0f, 0x0b))
 #
 # Comparisons
 #
-I32.enc(base.icmp.i32, *r.icscc(0x39))
-I64.enc(base.icmp.i64, *r.icscc.rex(0x39, w=1))
-I64.enc(base.icmp.i32, *r.icscc.rex(0x39))
-I64.enc(base.icmp.i32, *r.icscc(0x39))
+enc_i32_i64(base.icmp, r.icscc, 0x39)
 
 #
 # Convert bool to int.
@@ -223,21 +224,31 @@ I64.enc(base.sextend.i64.i32, *r.urm.rex(0x63, w=1))
 I64.enc(base.uextend.i64.i32, *r.umr.rex(0x89))
 I64.enc(base.uextend.i64.i32, *r.umr(0x89))
 
+
 #
 # Floating point
 #
 
+# movd
+enc_flt(base.bitcast.f32.i32, r.frurm, 0x66, 0x0f, 0x6e)
+enc_flt(base.bitcast.i32.f32, r.rfumr, 0x66, 0x0f, 0x7e)
+
+# movq
+I64.enc(base.bitcast.f64.i64, *r.frurm.rex(0x66, 0x0f, 0x6e, w=1))
+I64.enc(base.bitcast.i64.f64, *r.rfumr.rex(0x66, 0x0f, 0x7e, w=1))
+
 # cvtsi2ss
-I32.enc(base.fcvt_from_sint.f32.i32, *r.furm(0xf3, 0x0f, 0x2A))
-I64.enc(base.fcvt_from_sint.f32.i64, *r.furm.rex(0xf3, 0x0f, 0x2A, w=1))
-I64.enc(base.fcvt_from_sint.f32.i32, *r.furm.rex(0xf3, 0x0f, 0x2A))
-I64.enc(base.fcvt_from_sint.f32.i32, *r.furm(0xf3, 0x0f, 0x2A))
+enc_i32_i64(base.fcvt_from_sint.f32, r.frurm, 0xf3, 0x0f, 0x2a)
 
 # cvtsi2sd
-I32.enc(base.fcvt_from_sint.f64.i32, *r.furm(0xf2, 0x0f, 0x2A))
-I64.enc(base.fcvt_from_sint.f64.i64, *r.furm.rex(0xf2, 0x0f, 0x2A, w=1))
-I64.enc(base.fcvt_from_sint.f64.i32, *r.furm.rex(0xf2, 0x0f, 0x2A))
-I64.enc(base.fcvt_from_sint.f64.i32, *r.furm(0xf2, 0x0f, 0x2A))
+enc_i32_i64(base.fcvt_from_sint.f64, r.frurm, 0xf2, 0x0f, 0x2a)
+
+# cvtss2sd
+enc_flt(base.fpromote.f64.f32, r.furm, 0xf3, 0x0f, 0x5a)
+
+# cvtsd2ss
+enc_flt(base.fdemote.f32.f64, r.furm, 0xf2, 0x0f, 0x5a)
+
 
 # Binary arithmetic ops.
 for inst,           opc in [
@@ -245,13 +256,8 @@ for inst,           opc in [
         (base.fsub, 0x5c),
         (base.fmul, 0x59),
         (base.fdiv, 0x5e)]:
-    I32.enc(inst.f32, *r.frm(0xf3, 0x0f, opc))
-    I64.enc(inst.f32, *r.frm.rex(0xf3, 0x0f, opc))
-    I64.enc(inst.f32, *r.frm(0xf3, 0x0f, opc))
-
-    I32.enc(inst.f64, *r.frm(0xf2, 0x0f, opc))
-    I64.enc(inst.f64, *r.frm.rex(0xf2, 0x0f, opc))
-    I64.enc(inst.f64, *r.frm(0xf2, 0x0f, opc))
+    enc_flt(inst.f32, r.frm, 0xf3, 0x0f, opc)
+    enc_flt(inst.f64, r.frm, 0xf2, 0x0f, opc)
 
 # Binary bitwise ops.
 for inst,               opc in [
@@ -259,10 +265,5 @@ for inst,               opc in [
         (base.band_not, 0x55),
         (base.bor,      0x56),
         (base.bxor,     0x57)]:
-    I32.enc(inst.f32, *r.frm(0x0f, opc))
-    I64.enc(inst.f32, *r.frm.rex(0x0f, opc))
-    I64.enc(inst.f32, *r.frm(0x0f, opc))
-
-    I32.enc(inst.f64, *r.frm(0x0f, opc))
-    I64.enc(inst.f64, *r.frm.rex(0x0f, opc))
-    I64.enc(inst.f64, *r.frm(0x0f, opc))
+    enc_flt(inst.f32, r.frm, 0x0f, opc)
+    enc_flt(inst.f64, r.frm, 0x0f, opc)

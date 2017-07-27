@@ -22,6 +22,27 @@ ebb0(v0: i32):
     return v1
 }
 
+; function %i32_trunc_s_f32(f32) -> i32
+; function %i32_trunc_u_f32(f32) -> i32
+; function %i32_trunc_s_f64(f64) -> i32
+; function %i32_trunc_u_f64(f64) -> i32
+; function %i64_trunc_s_f32(f32) -> i64
+; function %i64_trunc_u_f32(f32) -> i64
+; function %i64_trunc_s_f64(f64) -> i64
+; function %i64_trunc_u_f64(f64) -> i64
+
+function %f32_trunc_f64(f64) -> f32 {
+ebb0(v0: f64):
+    v1 = fdemote.f32 v0
+    return v1
+}
+
+function %f64_promote_f32(f32) -> f64 {
+ebb0(v0: f32):
+    v1 = fpromote.f64 v0
+    return v1
+}
+
 function %f32_convert_s_i32(i32) -> f32 {
 ebb0(v0: i32):
     v1 = fcvt_from_sint.f32 v0
@@ -47,3 +68,27 @@ ebb0(v0: i64):
 }
 
 ; TODO: f*_convert_u_i* (Don't exist on Intel).
+
+function %i32_reinterpret_f32(f32) -> i32 {
+ebb0(v0: f32):
+    v1 = bitcast.i32 v0
+    return v1
+}
+
+function %f32_reinterpret_i32(i32) -> f32 {
+ebb0(v0: i32):
+    v1 = bitcast.f32 v0
+    return v1
+}
+
+function %i64_reinterpret_f64(f64) -> i64 {
+ebb0(v0: f64):
+    v1 = bitcast.i64 v0
+    return v1
+}
+
+function %f64_reinterpret_i64(i64) -> f64 {
+ebb0(v0: i64):
+    v1 = bitcast.f64 v0
+    return v1
+}

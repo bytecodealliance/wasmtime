@@ -232,6 +232,14 @@ umr = TailRecipe(
         modrm_rr(out_reg0, in_reg0, sink);
         ''')
 
+# Same as umr, but with FPR -> GPR registers.
+rfumr = TailRecipe(
+        'rfumr', Unary, size=1, ins=FPR, outs=GPR,
+        emit='''
+        PUT_OP(bits, rex2(out_reg0, in_reg0), sink);
+        modrm_rr(out_reg0, in_reg0, sink);
+        ''')
+
 # XX /r, but for a unary operator with separate input/output register.
 # RM form.
 urm = TailRecipe(
@@ -249,9 +257,17 @@ urm_abcd = TailRecipe(
         modrm_rr(in_reg0, out_reg0, sink);
         ''')
 
-# XX /r, RM form, GPR -> FPR.
+# XX /r, RM form, FPR -> FPR.
 furm = TailRecipe(
-        'furm', Unary, size=1, ins=GPR, outs=FPR,
+        'furm', Unary, size=1, ins=FPR, outs=FPR,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_rr(in_reg0, out_reg0, sink);
+        ''')
+
+# XX /r, RM form, GPR -> FPR.
+frurm = TailRecipe(
+        'frurm', Unary, size=1, ins=GPR, outs=FPR,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rr(in_reg0, out_reg0, sink);
