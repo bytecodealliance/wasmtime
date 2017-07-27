@@ -72,7 +72,7 @@ class Rtl(object):
         # type: () -> Set[Var]
         """ Return the set of free Vars used in self"""
         def flow_f(s, d):
-            # type: (Set[Var], Def):    Set[Var]
+            # type: (Set[Var], Def) -> Set[Var]
             """Compute the change in the set of free vars across a Def"""
             s = s.difference(set(d.defs))
             return s.union(set(a for a in d.expr.args if isinstance(a, Var)))
