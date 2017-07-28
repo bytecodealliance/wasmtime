@@ -5,7 +5,6 @@ from __future__ import absolute_import
 from .ast import Def, Var, Apply
 from .ti import ti_xform, TypeEnv, get_type_env
 from functools import reduce
-from .typevar import TypeVar
 
 try:
     from typing import Union, Iterator, Sequence, Iterable, List, Dict  # noqa
@@ -13,6 +12,7 @@ try:
     from .ast import Expr, VarMap  # noqa
     from .isa import TargetISA  # noqa
     from .ti import TypeConstraint  # noqa
+    from .typevar import TypeVar  # noqa
     DefApply = Union[Def, Apply]
 except ImportError:
     pass
@@ -70,12 +70,17 @@ class Rtl(object):
 
     def free_vars(self):
         # type: () -> Set[Var]
-        """ Return the set of free Vars used in self"""
+        """Return the set of free Vars corresp. to SSA vals used in self"""
         def flow_f(s, d):
             # type: (Set[Var], Def) -> Set[Var]
             """Compute the change in the set of free vars across a Def"""
             s = s.difference(set(d.defs))
-            return s.union(set(a for a in d.expr.args if isinstance(a, Var)))
+            uses = set(d.expr.args[i] for i in d.expr.inst.value_opnums)
+            for v in uses:
+                assert isinstance(v, Var)
+                s.add(v)
+
+            return s
 
         return reduce(flow_f, reversed(self.rtl), set([]))
 
@@ -107,8 +112,9 @@ class Rtl(object):
         # type: (Rtl) -> None
         """
         Given that there is only 1 possible concrete typing T for self, assign
-        a singleton TV with the single type t=T[v] for each Var v \in self.
-        Its an error to call this on an Rtl with more than 1 possible typing.
+        a singleton TV with type t=T[v] for each Var v \in self.  Its an error
+        to call this on an Rtl with more than 1 possible typing.  This modifies
+        the Rtl in-place.
         """
         from .ti import ti_rtl, TypeEnv
         # 1) Infer the types of all vars in res
@@ -123,10 +129,8 @@ class Rtl(object):
 
         # 3) Assign the only possible type to each variable.
         for v in typenv.vars:
-            if v.get_typevar().singleton_type() is not None:
-                continue
-
-            v.set_typevar(TypeVar.singleton(typing[v].singleton_type()))
+            assert typing[v].singleton_type() is not None
+            v.set_typevar(typing[v])
 
 
 class XForm(object):
