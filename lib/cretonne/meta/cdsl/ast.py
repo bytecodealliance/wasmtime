@@ -350,8 +350,8 @@ class Apply(Expr):
         on this instruction.
 
         Immediate operands in a source pattern can be either free variables or
-        constants like `Enumerator`. We don't currently support constraints on
-        free variables, but we may in the future.
+        constants like `ConstantInt` and `Enumerator`. We don't currently
+        support constraints on free variables, but we may in the future.
         """
         pred = None  # type: PredNode
         iform = self.inst.format
@@ -415,6 +415,12 @@ class Apply(Expr):
                 else:
                     if (s[self_a] != other_a):
                         return None
+            elif isinstance(self_a, ConstantInt):
+                if not isinstance(other_a, ConstantInt):
+                    return None
+                assert self_a.kind == other_a.kind
+                if (self_a.value != other_a.value):
+                    return None
             else:
                 assert isinstance(self_a, Enumerator)
 
@@ -428,6 +434,32 @@ class Apply(Expr):
                 if (self_a.value != other_a.value):
                     return None
         return s
+
+
+class ConstantInt(Expr):
+    """
+    A value of an integer immediate operand.
+
+    Immediate operands like `imm64` or `offset32` can be specified in AST
+    expressions using the call syntax: `imm64(5)` which greates a `ConstantInt`
+    node.
+    """
+
+    def __init__(self, kind, value):
+        # type: (ImmediateKind, int) -> None
+        self.kind = kind
+        self.value = value
+
+    def __str__(self):
+        # type: () -> str
+        """
+        Get the Rust expression form of this constant.
+        """
+        return str(self.value)
+
+    def __repr__(self):
+        # type: () -> str
+        return '{}({})'.format(self.kind, self.value)
 
 
 class Enumerator(Expr):
