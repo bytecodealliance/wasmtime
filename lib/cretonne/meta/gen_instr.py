@@ -350,10 +350,10 @@ def gen_typesets_table(fmt, type_sets):
     fmt.comment('Table of value type sets.')
     assert len(type_sets.table) <= typeset_limit, "Too many type sets"
     with fmt.indented(
-            'const TYPE_SETS : [ValueTypeSet; {}] = ['
+            'const TYPE_SETS : [ir::instructions::ValueTypeSet; {}] = ['
             .format(len(type_sets.table)), '];'):
         for ts in type_sets.table:
-            with fmt.indented('ValueTypeSet {', '},'):
+            with fmt.indented('ir::instructions::ValueTypeSet {', '},'):
                 ts.emit_fields(fmt)
 
 

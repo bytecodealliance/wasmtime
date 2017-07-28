@@ -39,7 +39,7 @@ class ValueType(object):
 
     def rust_name(self):
         # type: () -> str
-        return 'types::' + self.name.upper()
+        return 'ir::types::' + self.name.upper()
 
     @staticmethod
     def by_name(name):

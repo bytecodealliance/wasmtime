@@ -653,7 +653,7 @@ def emit_level2_hashtables(level2_hashtables, offt, level2_doc, fmt):
             if entry:
                 fmt.line(
                         'Level2Entry ' +
-                        '{{ opcode: Some(Opcode::{}), offset: {:#08x} }},'
+                        '{{ opcode: Some(ir::Opcode::{}), offset: {:#08x} }},'
                         .format(entry.inst.camel_name, entry.offset))
             else:
                 fmt.line(
@@ -678,7 +678,7 @@ def emit_level1_hashtable(cpumode, level1, offt, fmt):
             # Empty hash table entry. Include the default legalization action.
             if not level2:
                 fmt.format(
-                        'Level1Entry {{ ty: types::VOID, log2len: !0, '
+                        'Level1Entry {{ ty: ir::types::VOID, log2len: !0, '
                         'offset: 0, legalize: {} }},',
                         level1.legalize_code)
                 continue
@@ -686,7 +686,7 @@ def emit_level1_hashtable(cpumode, level1, offt, fmt):
             if level2.ty is not None:
                 tyname = level2.ty.rust_name()
             else:
-                tyname = 'types::VOID'
+                tyname = 'ir::types::VOID'
 
             lcode = cpumode.isa.legalize_code(level2.legalize)
 
