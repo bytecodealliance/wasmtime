@@ -49,39 +49,27 @@ def typeset_check(v, ts):
     # type: (Var, TypeSet) -> CheckProducer
     return lambda typesets: format_check(
         typesets,
-        'if !TYPE_SETS[{}].contains(typeof_{}) ' +
-        '{{\n    return false;\n}};\n', ts, v)
+        'let predicate = predicate && TYPE_SETS[{}].contains(typeof_{});\n',
+        ts, v)
 
 
 def equiv_check(tv1, tv2):
-    # type: (TypeVar, TypeVar) -> CheckProducer
+    # type: (str, str) -> CheckProducer
     return lambda typesets: format_check(
         typesets,
-        '{{\n' +
-        '    let a = {};\n' +
-        '    let b = {};\n' +
-        '    if a.is_none() || b.is_none() {{\n' +
-        '        return false;\n' +
-        '    }};\n' +
-        '    if a != b {{\n' +
-        '        return false;\n' +
-        '    }};\n' +
+        'let predicate = predicate && match ({}, {}) {{\n'
+        '    (Some(a), Some(b)) => a == b,\n'
+        '    _ => false,\n'
         '}};\n', tv1, tv2)
 
 
 def wider_check(tv1, tv2):
-    # type: (TypeVar, TypeVar) -> CheckProducer
+    # type: (str, str) -> CheckProducer
     return lambda typesets: format_check(
         typesets,
-        '{{\n' +
-        '    let a = {};\n' +
-        '    let b = {};\n' +
-        '    if a.is_none() || b.is_none() {{\n' +
-        '        return false;\n' +
-        '    }};\n' +
-        '    if !a.wider_or_equal(b) {{\n' +
-        '        return false;\n' +
-        '    }};\n' +
+        'let predicate = predicate && match ({}, {}) {{\n'
+        '    (Some(a), Some(b)) => a.wider_or_equal(b),\n'
+        '    _ => false,\n'
         '}};\n', tv1, tv2)
 
 
