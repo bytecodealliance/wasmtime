@@ -6,17 +6,19 @@ target ISA.
 """
 
 from cdsl.operands import Operand
+from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
-from base.instructions import iB
 
 
 GROUP = InstructionGroup("x86", "Intel-specific instruction set")
 
-nlo = Operand('nlo', iB, doc='Low part of numerator')
-nhi = Operand('nhi', iB, doc='High part of numerator')
-d = Operand('d', iB, doc='Denominator')
-q = Operand('q', iB, doc='Quotient')
-r = Operand('r', iB, doc='Remainder')
+iWord = TypeVar('iWord', 'A scalar integer machine word', ints=(32, 64))
+
+nlo = Operand('nlo', iWord, doc='Low part of numerator')
+nhi = Operand('nhi', iWord, doc='High part of numerator')
+d = Operand('d', iWord, doc='Denominator')
+q = Operand('q', iWord, doc='Quotient')
+r = Operand('r', iWord, doc='Remainder')
 
 udivmodx = Instruction(
         'x86_udivmodx', r"""

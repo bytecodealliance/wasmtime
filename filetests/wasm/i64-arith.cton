@@ -52,9 +52,29 @@ ebb0(v0: i64, v1: i64):
     return v2
 }
 
-; function %i64_div(i64, i64) -> i64
-; function %i64_rem_s(i64, i64) -> i64
-; function %i64_rem_u(i64, i64) -> i64
+function %i32_div_s(i32, i32) -> i32 {
+ebb0(v0: i32, v1: i32):
+    v2 = sdiv v0, v1
+    return v2
+}
+
+function %i32_div_u(i32, i32) -> i32 {
+ebb0(v0: i32, v1: i32):
+    v2 = udiv v0, v1
+    return v2
+}
+
+function %i32_rem_s(i32, i32) -> i32 {
+ebb0(v0: i32, v1: i32):
+    v2 = srem v0, v1
+    return v2
+}
+
+function %i32_rem_u(i32, i32) -> i32 {
+ebb0(v0: i32, v1: i32):
+    v2 = urem v0, v1
+    return v2
+}
 
 function %i64_and(i64, i64) -> i64 {
 ebb0(v0: i64, v1: i64):

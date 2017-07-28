@@ -14,6 +14,8 @@ from .instructions import band, bor, bxor, isplit, iconcat
 from .instructions import bnot, band_not, bor_not, bxor_not
 from .instructions import icmp, icmp_imm
 from .instructions import iconst, bint
+from .instructions import ishl, ishl_imm, sshr, sshr_imm, ushr, ushr_imm
+from .instructions import rotl, rotl_imm, rotr, rotr_imm
 from cdsl.ast import Var
 from cdsl.xform import Rtl, XFormGroup
 
@@ -152,6 +154,20 @@ expand.legalize(
             a1 << iconst(y),
             a << iadd(x, a1)
         ))
+
+# Rotates and shifts.
+for inst_imm,      inst in [
+        (rotl_imm, rotl),
+        (rotr_imm, rotr),
+        (ishl_imm, ishl),
+        (sshr_imm, sshr),
+        (ushr_imm, ushr)]:
+    expand.legalize(
+            a << inst_imm(x, y),
+            Rtl(
+                a1 << iconst.i32(y),
+                a << inst(x, a1)
+            ))
 
 expand.legalize(
         a << icmp_imm(cc, x, y),

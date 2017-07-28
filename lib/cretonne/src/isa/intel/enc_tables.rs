@@ -1,10 +1,11 @@
 //! Encoding tables for Intel ISAs.
 
+use bitset::BitSet;
 use ir;
-use isa;
 use isa::constraints::*;
 use isa::enc_tables::*;
 use isa::encoding::RecipeSizing;
+use isa;
 use predicates;
 use super::registers::*;
 
