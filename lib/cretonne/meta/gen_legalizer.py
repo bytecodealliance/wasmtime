@@ -154,6 +154,9 @@ def unwrap_inst(iref, node, fmt):
 
     Create local variables named after the `Var` instances in `node`.
 
+    Also create a local variable named `predicate` with the value of the
+    evaluated instruction predicate, or `true` if the node has no predicate.
+
     :param iref: Name of the `Inst` reference to unwrap.
     :param node: `Def` node providing variable names.
     :returns: True if the instruction arguments were not detached, expecting a
@@ -166,7 +169,7 @@ def unwrap_inst(iref, node, fmt):
 
     # The tuple of locals we're extracting is `expr.args`.
     with fmt.indented(
-            'let ({}) = if let ir::InstructionData::{} {{'
+            'let ({}, predicate) = if let ir::InstructionData::{} {{'
             .format(', '.join(map(str, expr.args)), iform.name), '};'):
         # Fields are encoded directly.
         for f in iform.imm_fields:
@@ -179,20 +182,20 @@ def unwrap_inst(iref, node, fmt):
         fmt.outdented_line('} = dfg[inst] {')
         if iform.has_value_list:
             fmt.line('let args = args.as_slice(&dfg.value_lists);')
+        elif nvops == 1:
+            fmt.line('let args = [arg];')
         # Generate the values for the tuple.
-        outs = list()
-        for opnum, op in enumerate(expr.inst.ins):
-            if op.is_immediate():
-                n = expr.inst.imm_opnums.index(opnum)
-                outs.append(iform.imm_fields[n].member)
-            elif op.is_value():
-                if nvops == 1:
-                    arg = 'arg'
-                else:
+        with fmt.indented('(', ')'):
+            for opnum, op in enumerate(expr.inst.ins):
+                if op.is_immediate():
+                    n = expr.inst.imm_opnums.index(opnum)
+                    fmt.format('{},', iform.imm_fields[n].member)
+                elif op.is_value():
                     n = expr.inst.value_opnums.index(opnum)
-                    arg = 'args[{}]'.format(n)
-                outs.append('dfg.resolve_aliases({})'.format(arg))
-        fmt.line('({})'.format(', '.join(outs)))
+                    fmt.format('dfg.resolve_aliases(args[{}]),', n)
+            # Evaluate the instruction predicate, if any.
+            instp = expr.inst_predicate()
+            fmt.line(instp.rust_predicate(0) if instp else 'true')
         fmt.outdented_line('} else {')
         fmt.line('unreachable!("bad instruction format")')
 
@@ -320,14 +323,8 @@ def gen_xform(xform, fmt, type_sets):
     # variables.
     replace_inst = unwrap_inst('inst', xform.src.rtl[0], fmt)
 
-    # Check instruction predicate and emit type checks.
-    instp = xform.src.rtl[0].expr.inst_predicate()
-    # TODO: The instruction predicate should be evaluated with all the inst
-    # immediate fields available. Probably by unwrap_inst().
-    fmt.format('let predicate = {};',
-               instp.rust_predicate(0) if instp else 'true')
-
     # Emit any runtime checks.
+    # These will rebind `predicate` emitted by unwrap_inst().
     for check in get_runtime_typechecks(xform):
         emit_runtime_typecheck(check, fmt, type_sets)
 
