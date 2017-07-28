@@ -420,6 +420,16 @@ class Encoding(object):
         else:
             self.inst, self.typevars = inst.fully_bound()
 
+            # Add secondary type variables to the instruction predicate.
+            # This is already included by Apply.inst_predicate() above.
+            if len(self.typevars) > 1:
+                for tv, vt in zip(self.inst.other_typevars, self.typevars[1:]):
+                    # A None tv is an 'any' wild card: `ishl.i32.any`.
+                    if vt is None:
+                        continue
+                    typred = TypePredicate.typevar_check(self.inst, tv, vt)
+                    instp = And.combine(instp, typred)
+
         self.cpumode = cpumode
         assert self.inst.format == recipe.format, (
                 "Format {} must match recipe: {}".format(
@@ -432,15 +442,6 @@ class Encoding(object):
 
         self.recipe = recipe
         self.encbits = encbits
-
-        # Add secondary type variables to the instruction predicate.
-        if len(self.typevars) > 1:
-            for tv, vt in zip(self.inst.other_typevars, self.typevars[1:]):
-                # A None tv is an 'any' wild card: `ishl.i32.any`.
-                if vt is None:
-                    continue
-                typred = TypePredicate.typevar_check(self.inst, tv, vt)
-                instp = And.combine(instp, typred)
 
         # Record specific predicates. Note that the recipe also has predicates.
         self.instp = self.cpumode.isa.unique_pred(instp)

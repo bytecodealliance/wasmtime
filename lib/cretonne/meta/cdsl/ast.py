@@ -7,7 +7,7 @@ for patern matching an rewriting of cretonne instructions.
 from __future__ import absolute_import
 from . import instructions
 from .typevar import TypeVar
-from .predicates import IsEqual, And
+from .predicates import IsEqual, And, TypePredicate
 
 try:
     from typing import Union, Tuple, Sequence, TYPE_CHECKING, Dict, List  # noqa
@@ -366,6 +366,13 @@ class Apply(Expr):
                 continue
 
             pred = And.combine(pred, IsEqual(ffield, arg))
+
+        # Add checks for any bound type variables.
+        for bound_ty, tv in zip(self.typevars, self.inst.all_typevars()):
+            if bound_ty is None:
+                continue
+            type_chk = TypePredicate.typevar_check(self.inst, tv, bound_ty)
+            pred = And.combine(pred, type_chk)
 
         return pred
 
