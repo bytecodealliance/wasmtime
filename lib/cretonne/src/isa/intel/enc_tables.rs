@@ -1,6 +1,6 @@
 //! Encoding tables for Intel ISAs.
 
-use ir::{self, types, Opcode};
+use ir;
 use isa;
 use isa::constraints::*;
 use isa::enc_tables::*;

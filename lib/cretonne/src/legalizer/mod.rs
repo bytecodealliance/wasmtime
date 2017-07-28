@@ -19,7 +19,6 @@ use ir::{self, Function, Cursor};
 use ir::condcodes::IntCC;
 use isa::TargetIsa;
 use bitset::BitSet;
-use ir::instructions::ValueTypeSet;
 
 mod boundary;
 mod split;
