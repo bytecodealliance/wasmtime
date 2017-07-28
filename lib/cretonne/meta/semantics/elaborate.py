@@ -44,15 +44,20 @@ def find_matching_xform(d):
 def cleanup_semantics(r, outputs):
     # type: (Rtl, Set[Var]) -> Rtl
     """
-    The elaboration process creates a lot of redundant instruction pairs of the
-    shape:
+    The elaboration process creates a lot of redundant prim_to_bv conversions.
+    Cleanup the following cases:
 
+    1) prim_to_bv/prim_from_bv pair:
         a.0 << prim_from_bv(bva.0)
         ...
-        bva.1 << prim_to_bv(a.0)
+        bva.1 << prim_to_bv(a.0)  <-- redundant, replace by bva.0
         ...
 
-    Contract these to ease manual inspection.
+    2) prim_to_bv/prim_to-bv pair:
+        bva.0 << prim_to_bv(a)
+        ...
+        bva.1 << prim_to_bv(a) <-- redundant, replace by bva.0
+        ...
     """
     new_defs = []  # type: List[Def]
     subst_m = {v: v for v in r.vars()}  # type: VarMap
