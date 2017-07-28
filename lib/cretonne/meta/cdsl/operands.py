@@ -8,7 +8,7 @@ try:
     from typing import Union, Dict, TYPE_CHECKING  # noqa
     OperandSpec = Union['OperandKind', ValueType, TypeVar]
     if TYPE_CHECKING:
-        from .ast import Enumerator  # noqa
+        from .ast import Enumerator, ConstantInt  # noqa
 except ImportError:
     pass
 
@@ -106,6 +106,20 @@ class ImmediateKind(OperandKind):
                     'No such {n} enumerator: {n}.{a}'.format(
                         n=self.name, a=value))
         return Enumerator(self, value)
+
+    def __call__(self, value):
+        # type: (int) -> ConstantInt
+        """
+        Create an AST node representing a constant integer:
+
+            iconst(imm64(0))
+        """
+        from .ast import ConstantInt  # noqa
+        if self.values:
+            raise AssertionError(
+                    "{}({}): Can't make a constant numeric value for an enum"
+                    .format(self.name, value))
+        return ConstantInt(self, value)
 
     def rust_enumerator(self, value):
         # type: (str) -> str
