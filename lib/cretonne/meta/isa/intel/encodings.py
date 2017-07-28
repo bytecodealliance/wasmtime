@@ -9,6 +9,7 @@ from .defs import I32, I64
 from . import recipes as r
 from . import settings as cfg
 from . import instructions as x86
+from .legalize import intel_expand
 from base.legalize import narrow, expand
 
 try:
@@ -21,14 +22,14 @@ except ImportError:
 
 I32.legalize_type(
         default=narrow,
-        i32=expand,
+        i32=intel_expand,
         f32=expand,
         f64=expand)
 
 I64.legalize_type(
         default=narrow,
-        i32=expand,
-        i64=expand,
+        i32=intel_expand,
+        i64=intel_expand,
         f32=expand,
         f64=expand)
 
