@@ -267,6 +267,16 @@ class Instruction(object):
 
         return other_tvs
 
+    def all_typevars(self):
+        # type: () -> List[TypeVar]
+        """
+        Get a list of all type variables in the instruction.
+        """
+        if self.is_polymorphic:
+            return [self.ctrl_typevar] + self.other_typevars
+        else:
+            return []
+
     @staticmethod
     def _to_operand_tuple(x):
         # type: (Union[Sequence[Operand], Operand]) -> Tuple[Operand, ...]

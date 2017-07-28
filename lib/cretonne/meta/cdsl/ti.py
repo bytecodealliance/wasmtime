@@ -796,11 +796,7 @@ def ti_def(definition, typ):
 
     # Create a dict m mapping each free typevar in the signature of definition
     # to a fresh copy of itself.
-    if inst.is_polymorphic:
-        free_formal_tvs = [inst.ctrl_typevar] + inst.other_typevars
-    else:
-        free_formal_tvs = []
-
+    free_formal_tvs = inst.all_typevars()
     m = {tv: tv.get_fresh_copy(str(typ.get_uid())) for tv in free_formal_tvs}
 
     # Update m with any explicitly bound type vars
