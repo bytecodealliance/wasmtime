@@ -700,6 +700,7 @@ impl Solver {
 }
 
 #[cfg(test)]
+#[cfg(build_arm32)]
 mod tests {
     use entity_ref::EntityRef;
     use ir::Value;
@@ -716,7 +717,7 @@ mod tests {
         let shared_builder = settings::builder();
         let shared_flags = settings::Flags::new(&shared_builder);
 
-        isa::lookup("arm32").map(|b| b.finish(shared_flags))
+        isa::lookup("arm32").ok().map(|b| b.finish(shared_flags))
     }
 
     // Get a register class by name.
