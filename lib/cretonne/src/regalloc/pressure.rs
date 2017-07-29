@@ -247,6 +247,7 @@ impl fmt::Display for Pressure {
 }
 
 #[cfg(test)]
+#[cfg(build_arm32)]
 mod tests {
     use isa::{TargetIsa, RegClass};
     use regalloc::AllocatableSet;
@@ -261,7 +262,7 @@ mod tests {
         let shared_builder = settings::builder();
         let shared_flags = settings::Flags::new(&shared_builder);
 
-        isa::lookup("arm32").map(|b| b.finish(shared_flags))
+        isa::lookup("arm32").ok().map(|b| b.finish(shared_flags))
     }
 
     // Get a register class by name.

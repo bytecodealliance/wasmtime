@@ -621,8 +621,6 @@ impl<'a> Parser<'a> {
                                            &self.loc)?;
                 }
                 "isa" => {
-                    last_set_loc = None;
-                    seen_isa = true;
                     let loc = self.loc;
                     // Grab the whole line so the lexer won't go looking for tokens on the
                     // following lines.
@@ -633,9 +631,16 @@ impl<'a> Parser<'a> {
                         Some(w) => w,
                     };
                     let mut isa_builder = match isa::lookup(isa_name) {
-                        None => return err!(loc, "unknown ISA '{}'", isa_name),
-                        Some(b) => b,
+                        Err(isa::LookupError::Unknown) => {
+                            return err!(loc, "unknown ISA '{}'", isa_name)
+                        }
+                        Err(isa::LookupError::Unsupported) => {
+                            continue;
+                        }
+                        Ok(b) => b,
                     };
+                    last_set_loc = None;
+                    seen_isa = true;
                     // Apply the ISA-specific settings to `isa_builder`.
                     isaspec::parse_options(words, &mut isa_builder, &self.loc)?;
 
@@ -1939,6 +1944,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(build_riscv)]
     fn isa_spec() {
         assert!(parse_test("isa
                             function %foo() {}")
