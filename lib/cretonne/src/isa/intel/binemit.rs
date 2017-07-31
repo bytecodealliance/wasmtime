@@ -114,6 +114,15 @@ fn put_rexmp2<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     sink.put1(bits as u8);
 }
 
+// Emit single-byte opcode with mandatory prefix and REX.
+fn put_rexmp1<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
+    debug_assert_eq!(bits & 0x0c00, 0, "Invalid encoding bits for Mp1*");
+    let pp = (bits >> 8) & 3;
+    sink.put1(PREFIX[(pp - 1) as usize]);
+    rex_prefix(bits, rex, sink);
+    sink.put1(bits as u8);
+}
+
 /// Emit a ModR/M byte for reg-reg operands.
 fn modrm_rr<CS: CodeSink + ?Sized>(rm: RegUnit, reg: RegUnit, sink: &mut CS) {
     let reg = reg as u8 & 7;

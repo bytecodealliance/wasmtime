@@ -271,7 +271,7 @@ istore16 = Instruction(
         'istore16', r"""
         Store the low 16 bits of ``x`` to memory at ``p + Offset``.
 
-        This is equivalent to ``ireduce.i16`` followed by ``store.i8``.
+        This is equivalent to ``ireduce.i16`` followed by ``store.i16``.
         """,
         ins=(Flags, x, p, Offset), can_store=True)
 
@@ -301,7 +301,7 @@ istore32 = Instruction(
         'istore32', r"""
         Store the low 32 bits of ``x`` to memory at ``p + Offset``.
 
-        This is equivalent to ``ireduce.i32`` followed by ``store.i8``.
+        This is equivalent to ``ireduce.i32`` followed by ``store.i32``.
         """,
         ins=(Flags, x, p, Offset), can_store=True)
 
