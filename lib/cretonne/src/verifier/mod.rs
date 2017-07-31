@@ -57,7 +57,7 @@ use flowgraph::ControlFlowGraph;
 use ir::entities::AnyEntity;
 use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallInfo};
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
-         Value, Type, Opcode};
+         StackSlotKind, Value, Type, Opcode, ValueLoc, ArgumentLoc};
 use isa::TargetIsa;
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter};
@@ -552,6 +552,7 @@ impl<'a> Verifier<'a> {
                     .iter()
                     .map(|a| a.value_type);
                 self.typecheck_variable_args_iterator(inst, arg_types)?;
+                self.check_outgoing_args(inst, sig_ref)?;
             }
             CallInfo::Indirect(sig_ref, _) => {
                 let arg_types = self.func.dfg.signatures[sig_ref]
@@ -559,6 +560,7 @@ impl<'a> Verifier<'a> {
                     .iter()
                     .map(|a| a.value_type);
                 self.typecheck_variable_args_iterator(inst, arg_types)?;
+                self.check_outgoing_args(inst, sig_ref)?;
             }
             CallInfo::NotACall => {}
         }
@@ -595,6 +597,64 @@ impl<'a> Verifier<'a> {
                         "mismatched argument count, got {}, expected {}",
                         variable_args.len(),
                         i);
+        }
+        Ok(())
+    }
+
+    /// Check the locations assigned to outgoing call arguments.
+    ///
+    /// When a signature has been legalized, all values passed as outgoing arguments on the stack
+    /// must be assigned to a matching `OutgoingArg` stack slot.
+    fn check_outgoing_args(&self, inst: Inst, sig_ref: SigRef) -> Result {
+        let sig = &self.func.dfg.signatures[sig_ref];
+
+        // Before legalization, there's nothing to check.
+        if sig.argument_bytes.is_none() {
+            return Ok(());
+        }
+
+        let args = self.func.dfg.inst_variable_args(inst);
+        let expected_args = &sig.argument_types[..];
+
+        for (&arg, &abi) in args.iter().zip(expected_args) {
+            // Value types have already been checked by `typecheck_variable_args_iterator()`.
+            if let ArgumentLoc::Stack(offset) = abi.location {
+                let arg_loc = self.func.locations.get_or_default(arg);
+                if let ValueLoc::Stack(ss) = arg_loc {
+                    // Argument value is assigned to a stack slot as expected.
+                    self.verify_stack_slot(inst, ss)?;
+                    let slot = &self.func.stack_slots[ss];
+                    if slot.kind != StackSlotKind::OutgoingArg {
+                        return err!(inst,
+                                    "Outgoing stack argument {} in wrong stack slot: {} = {}",
+                                    arg,
+                                    ss,
+                                    slot);
+                    }
+                    if slot.offset != offset {
+                        return err!(inst,
+                                    "Outgoing stack argument {} should have offset {}: {} = {}",
+                                    arg,
+                                    offset,
+                                    ss,
+                                    slot);
+                    }
+                    if slot.size != abi.value_type.bytes() {
+                        return err!(inst,
+                                    "Outgoing stack argument {} wrong size for {}: {} = {}",
+                                    arg,
+                                    abi.value_type,
+                                    ss,
+                                    slot);
+                    }
+                } else {
+                    let reginfo = self.isa.map(|i| i.register_info());
+                    return err!(inst,
+                                "Outgoing stack argument {} in wrong location: {}",
+                                arg,
+                                arg_loc.display(reginfo.as_ref()));
+                }
+            }
         }
         Ok(())
     }
