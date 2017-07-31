@@ -82,4 +82,8 @@ bvzeroext = Instruction(
         'bvzeroext', r"""Unsigned bitvector extension""",
         ins=x, outs=x1, constraints=WiderOrEq(ToBV, BV))
 
+bvsignext = Instruction(
+        'bvsignext', r"""Signed bitvector extension""",
+        ins=x, outs=x1, constraints=WiderOrEq(ToBV, BV))
+
 GROUP.close()

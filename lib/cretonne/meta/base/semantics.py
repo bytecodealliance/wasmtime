@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from semantics.primitives import prim_to_bv, prim_from_bv, bvsplit, bvconcat,\
-    bvadd, bvult, bvzeroext
+    bvadd, bvult, bvzeroext, bvsignext
 from .instructions import vsplit, vconcat, iadd, iadd_cout, icmp, bextend, \
     isplit, iconcat, iadd_cin, iadd_carry
 from .immediates import intcc
@@ -116,7 +116,7 @@ bextend.set_semantics(
     a << bextend(x),
     (Rtl(
         bvx << prim_to_bv(x),
-        bvy << bvzeroext(bvx),
+        bvy << bvsignext(bvx),
         a << prim_from_bv(bvy)
     ), [InTypeset(x.get_typevar(), ScalarTS)]),
     Rtl(
