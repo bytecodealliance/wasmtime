@@ -75,6 +75,9 @@ pub struct StackSlotData {
     /// On Intel ISAs, the base address is the stack pointer *before* the return address was
     /// pushed. On RISC ISAs, the base address is the value of the stack pointer on entry to the
     /// function.
+    ///
+    /// For `OutgoingArg` stack slots, the offset is relative to the current function's stack
+    /// pointer immediately before the call.
     pub offset: i32,
 }
 
@@ -106,19 +109,27 @@ impl PrimaryEntityData for StackSlotData {}
 /// Keep track of all the stack slots used by a function.
 #[derive(Clone, Debug)]
 pub struct StackSlots {
+    /// All allocated stack slots.
     slots: EntityMap<StackSlot, StackSlotData>,
+
+    /// All the outgoing stack slots, ordered by offset.
+    outgoing: Vec<StackSlot>,
 }
 
 /// Stack slot manager functions that behave mostly like an entity map.
 impl StackSlots {
     /// Create an empty stack slot manager.
     pub fn new() -> StackSlots {
-        StackSlots { slots: EntityMap::new() }
+        StackSlots {
+            slots: EntityMap::new(),
+            outgoing: Vec::new(),
+        }
     }
 
     /// Clear out everything.
     pub fn clear(&mut self) {
         self.slots.clear();
+        self.outgoing.clear();
     }
 
     /// Allocate a new stack slot.
@@ -161,6 +172,33 @@ impl StackSlots {
         data.offset = offset;
         self.push(data)
     }
+
+    /// Get a stack slot representing an outgoing argument.
+    ///
+    /// This may create a new stack slot, or reuse an existing outgoing stack slot with the
+    /// requested offset and size.
+    ///
+    /// The requested offset is relative to this function's stack pointer immediately before making
+    /// the call.
+    pub fn get_outgoing_arg(&mut self, ty: Type, offset: i32) -> StackSlot {
+        let size = ty.bytes();
+
+        // Look for an existing outgoing stack slot with the same offset and size.
+        let inspos = match self.outgoing
+                  .binary_search_by_key(&(offset, size),
+                                        |&ss| (self[ss].offset, self[ss].size)) {
+            Ok(idx) => return self.outgoing[idx],
+            Err(idx) => idx,
+        };
+
+        // No existing slot found. Make one and insert it into `outgoing`.
+        let mut data = StackSlotData::new(StackSlotKind::OutgoingArg, size);
+        assert!(offset <= i32::max_value() - size as i32);
+        data.offset = offset;
+        let ss = self.slots.push(data);
+        self.outgoing.insert(inspos, ss);
+        ss
+    }
 }
 
 impl Index<StackSlot> for StackSlots {
@@ -174,6 +212,7 @@ impl Index<StackSlot> for StackSlots {
 #[cfg(test)]
 mod tests {
     use ir::Function;
+    use ir::types;
     use super::*;
 
     #[test]
@@ -192,5 +231,27 @@ mod tests {
 
         assert_eq!(func.stack_slots[ss0].to_string(), "incoming_arg 4");
         assert_eq!(func.stack_slots[ss1].to_string(), "spill_slot 8");
+    }
+
+    #[test]
+    fn outgoing() {
+        let mut sss = StackSlots::new();
+
+        let ss0 = sss.get_outgoing_arg(types::I32, 8);
+        let ss1 = sss.get_outgoing_arg(types::I32, 4);
+        let ss2 = sss.get_outgoing_arg(types::I64, 8);
+
+        assert_eq!(sss[ss0].offset, 8);
+        assert_eq!(sss[ss0].size, 4);
+
+        assert_eq!(sss[ss1].offset, 4);
+        assert_eq!(sss[ss1].size, 4);
+
+        assert_eq!(sss[ss2].offset, 8);
+        assert_eq!(sss[ss2].size, 8);
+
+        assert_eq!(sss.get_outgoing_arg(types::I32, 8), ss0);
+        assert_eq!(sss.get_outgoing_arg(types::I32, 4), ss1);
+        assert_eq!(sss.get_outgoing_arg(types::I64, 8), ss2);
     }
 }
