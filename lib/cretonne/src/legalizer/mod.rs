@@ -51,7 +51,12 @@ pub fn legalize_function(func: &mut Function,
             let opcode = func.dfg[inst].opcode();
 
             // Check for ABI boundaries that need to be converted to the legalized signature.
-            if opcode.is_call() && boundary::handle_call_abi(&mut func.dfg, cfg, &mut pos) {
+            if opcode.is_call() &&
+               boundary::handle_call_abi(&mut func.dfg,
+                                         &mut func.locations,
+                                         &mut func.stack_slots,
+                                         cfg,
+                                         &mut pos) {
                 // Go back and legalize the inserted argument conversion instructions.
                 pos.set_position(prev_pos);
                 continue;

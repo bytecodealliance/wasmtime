@@ -3,6 +3,8 @@ test legalizer
 isa riscv
 
 ; regex: V=v\d+
+; regex: SS=ss\d+
+; regex: WS=\s+
 
 function %int_split_args(i64) -> i64 {
 ebb0(v0: i64):
@@ -116,5 +118,17 @@ function %indirect_arg(i32, f32x2) {
 ebb0(v0: i32, v1: f32x2):
     call_indirect sig1, v0(v1)
     ; check: call_indirect $sig1, $v0($V, $V)
+    return
+}
+
+; Call a function that takes arguments on the stack.
+function %stack_args(i32) {
+    ; check: $(ss0=$SS) = outgoing_arg 4
+    fn1 = function %foo(i64, i64, i64, i64, i32)
+ebb0(v0: i32):
+    v1 = iconst.i64 1
+    call fn1(v1, v1, v1, v1, v0)
+    ; check: [GPsp#48,$ss0]$WS $(v0s=$V) = spill $v0
+    ; check: call $fn1($(=.*), $v0s)
     return
 }

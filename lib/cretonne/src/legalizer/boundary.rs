@@ -20,7 +20,8 @@
 use abi::{legalize_abi_value, ValueConversion};
 use flowgraph::ControlFlowGraph;
 use ir::{Function, Cursor, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value, Signature, SigRef,
-         ArgumentType, ArgumentPurpose};
+         ArgumentType, ArgumentPurpose, ArgumentLoc, ValueLoc, ValueLocations, StackSlots,
+         StackSlotKind};
 use ir::instructions::CallInfo;
 use isa::TargetIsa;
 use legalizer::split::{isplit, vsplit};
@@ -32,12 +33,15 @@ use legalizer::split::{isplit, vsplit};
 /// in a state with type discrepancies.
 pub fn legalize_signatures(func: &mut Function, isa: &TargetIsa) {
     isa.legalize_signature(&mut func.signature, true);
+    func.signature.compute_argument_bytes();
     for sig in func.dfg.signatures.keys() {
         isa.legalize_signature(&mut func.dfg.signatures[sig], false);
+        func.dfg.signatures[sig].compute_argument_bytes();
     }
 
     if let Some(entry) = func.layout.entry_block() {
         legalize_entry_arguments(func, entry);
+        spill_entry_arguments(func, entry);
     }
 }
 
@@ -448,13 +452,18 @@ fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
 /// original return values. The call's result values will be adapted to match the new signature.
 ///
 /// Returns `true` if any instructions were inserted.
-pub fn handle_call_abi(dfg: &mut DataFlowGraph, cfg: &ControlFlowGraph, pos: &mut Cursor) -> bool {
+pub fn handle_call_abi(dfg: &mut DataFlowGraph,
+                       locations: &mut ValueLocations,
+                       stack_slots: &mut StackSlots,
+                       cfg: &ControlFlowGraph,
+                       pos: &mut Cursor)
+                       -> bool {
     let mut inst = pos.current_inst()
         .expect("Cursor must point to a call instruction");
 
     // Start by checking if the argument types already match the signature.
     let sig_ref = match check_call_signature(dfg, inst) {
-        Ok(_) => return false,
+        Ok(_) => return spill_call_arguments(dfg, locations, stack_slots, pos),
         Err(s) => s,
     };
 
@@ -477,6 +486,10 @@ pub fn handle_call_abi(dfg: &mut DataFlowGraph, cfg: &ControlFlowGraph, pos: &mu
                   dfg.display_inst(inst, None),
                   sig_ref,
                   dfg.signatures[sig_ref]);
+
+    // Go back and insert spills for any stack arguments.
+    pos.goto_inst(inst);
+    spill_call_arguments(dfg, locations, stack_slots, pos);
 
     // Yes, we changed stuff.
     true
@@ -554,5 +567,85 @@ pub fn handle_return_abi(dfg: &mut DataFlowGraph,
                   sig);
 
     // Yes, we changed stuff.
+    true
+}
+
+/// Assign stack slots to incoming function arguments on the stack.
+///
+/// Values that are passed into the function on the stack must be assigned to an `IncomingArg`
+/// stack slot already during legalization.
+fn spill_entry_arguments(func: &mut Function, entry: Ebb) {
+    for (abi, &arg) in func.signature
+            .argument_types
+            .iter()
+            .zip(func.dfg.ebb_args(entry)) {
+        if let ArgumentLoc::Stack(offset) = abi.location {
+            let ss = func.stack_slots.make_incoming_arg(abi.value_type, offset);
+            *func.locations.ensure(arg) = ValueLoc::Stack(ss);
+        }
+    }
+}
+
+/// Assign stack slots to outgoing function arguments on the stack.
+///
+/// Values that are passed to a called function on the stack must be assigned to a matching
+/// `OutgoingArg` stack slot. The assignment must happen immediately before the call.
+///
+/// TODO: The outgoing stack slots can be written a bit earlier, as long as there are no branches
+/// or calls between writing the stack slots and the call instruction. Writing the slots earlier
+/// could help reduce register pressure before the call.
+fn spill_call_arguments(dfg: &mut DataFlowGraph,
+                        locations: &mut ValueLocations,
+                        stack_slots: &mut StackSlots,
+                        pos: &mut Cursor)
+                        -> bool {
+    let inst = pos.current_inst()
+        .expect("Cursor must point to a call instruction");
+    let sig_ref = dfg.call_signature(inst)
+        .expect("Call instruction expected.");
+
+    // Start by building a list of stack slots and arguments to be replaced.
+    // This requires borrowing `dfg`, so we can't change anything.
+    let arglist = dfg.inst_variable_args(inst)
+        .iter()
+        .zip(&dfg.signatures[sig_ref].argument_types)
+        .enumerate()
+        .filter_map(|(idx, (&arg, abi))| {
+            match abi.location {
+                ArgumentLoc::Stack(offset) => {
+                    // Is `arg` already in the right kind of stack slot?
+                    match locations.get(arg) {
+                        Some(&ValueLoc::Stack(ss)) => {
+                            // We won't reassign `arg` to a different stack slot. Assert out of
+                            // the stack slot is wrong.
+                            assert_eq!(stack_slots[ss].kind, StackSlotKind::OutgoingArg);
+                            assert_eq!(stack_slots[ss].offset, offset);
+                            assert_eq!(stack_slots[ss].size, abi.value_type.bytes());
+                            None
+                        }
+                        _ => {
+                            // Assign `arg` to a new stack slot.
+                            let ss = stack_slots.get_outgoing_arg(abi.value_type, offset);
+                            Some((idx, arg, ss))
+                        }
+                    }
+                }
+                _ => None,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    if arglist.is_empty() {
+        return false;
+    }
+
+    // Insert the spill instructions and rewrite call arguments.
+    for (idx, arg, ss) in arglist {
+        let stack_val = dfg.ins(pos).spill(arg);
+        *locations.ensure(stack_val) = ValueLoc::Stack(ss);
+        dfg.inst_variable_args_mut(inst)[idx] = stack_val;
+    }
+
+    // We changed stuff.
     true
 }
