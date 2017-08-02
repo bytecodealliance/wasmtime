@@ -9,7 +9,7 @@ isa intel haswell
 
 function %I32() {
     fn0 = function %foo()
-    sig0 = signature()
+    sig0 = ()
 
 ebb0:
     ; asm: movl $1, %ecx

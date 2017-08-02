@@ -572,7 +572,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 mod tests {
 
     use cretonne::entity_ref::EntityRef;
-    use cretonne::ir::{FunctionName, Function, Signature, ArgumentType, InstBuilder};
+    use cretonne::ir::{FunctionName, Function, CallConv, Signature, ArgumentType, InstBuilder};
     use cretonne::ir::types::*;
     use frontend::{ILBuilder, FunctionBuilder};
     use cretonne::verifier::verify_function;
@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn sample_function() {
-        let mut sig = Signature::new();
+        let mut sig = Signature::new(CallConv::Native);
         sig.return_types.push(ArgumentType::new(I32));
         sig.argument_types.push(ArgumentType::new(I32));
 

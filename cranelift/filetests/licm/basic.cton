@@ -14,7 +14,7 @@ ebb2(v5: i32):
     return v5
 
 }
-; sameln: function %simple_loop(i32) -> i32 {
+; sameln: function %simple_loop
 ; nextln: ebb2(v6: i32):
 ; nextln:     v1 = iconst.i32 1
 ; nextln:     v2 = iconst.i32 2

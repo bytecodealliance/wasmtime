@@ -9,9 +9,9 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::{u16, u32};
 use std::mem;
-use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, StackSlotData, JumpTable,
-                   JumpTableData, Signature, ArgumentType, ArgumentExtension, ExtFuncData, SigRef,
-                   FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags};
+use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, CallConv, StackSlotData,
+                   JumpTable, JumpTableData, Signature, ArgumentType, ArgumentExtension,
+                   ExtFuncData, SigRef, FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags};
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Offset32, Uoffset32, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
@@ -767,13 +767,14 @@ impl<'a> Parser<'a> {
 
     // Parse a function signature.
     //
-    // signature ::=  * "(" [arglist] ")" ["->" retlist] [call_conv]
+    // signature ::=  * "(" [arglist] ")" ["->" retlist] [callconv]
     //
     fn parse_signature(&mut self, unique_isa: Option<&TargetIsa>) -> Result<Signature> {
-        let mut sig = Signature::new();
+        // Calling convention defaults to `native`, but can be changed.
+        let mut sig = Signature::new(CallConv::Native);
 
         self.match_token(Token::LPar, "expected function signature: ( args... )")?;
-        // signature ::=  "(" * [arglist] ")" ["->" retlist] [call_conv]
+        // signature ::=  "(" * [arglist] ")" ["->" retlist] [callconv]
         if self.token() != Some(Token::RPar) {
             sig.argument_types = self.parse_argument_list(unique_isa)?;
         }
@@ -782,11 +783,20 @@ impl<'a> Parser<'a> {
             sig.return_types = self.parse_argument_list(unique_isa)?;
         }
 
+        // The calling convention is optional.
+        if let Some(Token::Identifier(text)) = self.token() {
+            match text.parse() {
+                Ok(cc) => {
+                    self.consume();
+                    sig.call_conv = cc;
+                }
+                _ => return err!(self.loc, "unknown calling convention: {}", text),
+            }
+        }
+
         if sig.argument_types.iter().all(|a| a.location.is_assigned()) {
             sig.compute_argument_bytes();
         }
-
-        // TBD: calling convention.
 
         Ok(sig)
     }
@@ -951,12 +961,11 @@ impl<'a> Parser<'a> {
 
     // Parse a signature decl.
     //
-    // signature-decl ::= SigRef(sigref) "=" "signature" signature
+    // signature-decl ::= SigRef(sigref) "=" signature
     //
     fn parse_signature_decl(&mut self, unique_isa: Option<&TargetIsa>) -> Result<(u32, Signature)> {
         let number = self.match_sig("expected signature number: sig«n»")?;
         self.match_token(Token::Equal, "expected '=' in signature decl")?;
-        self.match_identifier("signature", "expected 'signature'")?;
         let data = self.parse_signature(unique_isa)?;
         Ok((number, data))
     }
@@ -1755,7 +1764,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne::ir::{ArgumentExtension, ArgumentPurpose};
+    use cretonne::ir::{CallConv, ArgumentExtension, ArgumentPurpose};
     use cretonne::ir::types;
     use cretonne::ir::StackSlotKind;
     use cretonne::ir::entities::AnyEntity;
@@ -1777,7 +1786,7 @@ mod tests {
 
     #[test]
     fn aliases() {
-        let (func, details) = Parser::new("function %qux() {
+        let (func, details) = Parser::new("function %qux() native {
                                            ebb0:
                                              v4 = iconst.i8 6
                                              v3 -> v4
@@ -1801,15 +1810,26 @@ mod tests {
 
     #[test]
     fn signature() {
-        let sig = Parser::new("()").parse_signature(None).unwrap();
+        let sig = Parser::new("()native").parse_signature(None).unwrap();
         assert_eq!(sig.argument_types.len(), 0);
         assert_eq!(sig.return_types.len(), 0);
+        assert_eq!(sig.call_conv, CallConv::Native);
 
-        let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64")
+        let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 spiderwasm")
             .parse_signature(None)
             .unwrap();
         assert_eq!(sig2.to_string(),
-                   "(i8 uext, f32, f64, i32 sret) -> i32 sext, f64");
+                   "(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 spiderwasm");
+        assert_eq!(sig2.call_conv, CallConv::SpiderWASM);
+
+        // Old-style signature without a calling convention.
+        assert_eq!(Parser::new("()").parse_signature(None).unwrap().to_string(),
+                   "() native");
+        assert_eq!(Parser::new("() notacc")
+                       .parse_signature(None)
+                       .unwrap_err()
+                       .to_string(),
+                   "1: unknown calling convention: notacc");
 
         // `void` is not recognized as a type by the lexer. It should not appear in files.
         assert_eq!(Parser::new("() -> void")
@@ -1831,7 +1851,7 @@ mod tests {
 
     #[test]
     fn stack_slot_decl() {
-        let (func, _) = Parser::new("function %foo() {
+        let (func, _) = Parser::new("function %foo() native {
                                        ss3 = incoming_arg 13
                                        ss1 = spill_slot 1
                                      }")
@@ -1850,7 +1870,7 @@ mod tests {
         assert_eq!(iter.next(), None);
 
         // Catch duplicate definitions.
-        assert_eq!(Parser::new("function %bar() {
+        assert_eq!(Parser::new("function %bar() native {
                                     ss1  = spill_slot 13
                                     ss1  = spill_slot 1
                                 }")
@@ -1862,7 +1882,7 @@ mod tests {
 
     #[test]
     fn ebb_header() {
-        let (func, _) = Parser::new("function %ebbs() {
+        let (func, _) = Parser::new("function %ebbs() native {
                                      ebb0:
                                      ebb4(v3: i32):
                                      }")
@@ -1884,7 +1904,7 @@ mod tests {
     #[test]
     fn comments() {
         let (func, Details { comments, .. }) = Parser::new("; before
-                         function %comment() { ; decl
+                         function %comment() native { ; decl
                             ss10  = outgoing_arg 13 ; stackslot.
                             ; Still stackslot.
                             jt10 = jump_table ebb0
@@ -1924,7 +1944,7 @@ mod tests {
                              test verify
                              set enable_float=false
                              ; still preamble
-                             function %comment() {}")
+                             function %comment() native {}")
                 .unwrap();
         assert_eq!(tf.commands.len(), 2);
         assert_eq!(tf.commands[0].command, "cfg");
@@ -1947,17 +1967,17 @@ mod tests {
     #[cfg(build_riscv)]
     fn isa_spec() {
         assert!(parse_test("isa
-                            function %foo() {}")
+                            function %foo() native {}")
                         .is_err());
 
         assert!(parse_test("isa riscv
                             set enable_float=false
-                            function %foo() {}")
+                            function %foo() native {}")
                         .is_err());
 
         match parse_test("set enable_float=false
                           isa riscv
-                          function %foo() {}")
+                          function %foo() native {}")
                       .unwrap()
                       .isa_spec {
             IsaSpec::None(_) => panic!("Expected some ISA"),
@@ -1971,7 +1991,7 @@ mod tests {
     #[test]
     fn binary_function_name() {
         // Valid characters in the name.
-        let func = Parser::new("function #1234567890AbCdEf() {
+        let func = Parser::new("function #1234567890AbCdEf() native {
                                            ebb0:
                                              trap
                                            }")
@@ -1981,21 +2001,21 @@ mod tests {
         assert_eq!(func.name.to_string(), "#1234567890abcdef");
 
         // Invalid characters in the name.
-        let mut parser = Parser::new("function #12ww() {
+        let mut parser = Parser::new("function #12ww() native {
                                            ebb0:
                                              trap
                                            }");
         assert!(parser.parse_function(None).is_err());
 
         // The length of binary function name should be multiple of two.
-        let mut parser = Parser::new("function #1() {
+        let mut parser = Parser::new("function #1() native {
                                            ebb0:
                                              trap
                                            }");
         assert!(parser.parse_function(None).is_err());
 
         // Empty binary function name should be valid.
-        let func = Parser::new("function #() {
+        let func = Parser::new("function #() native {
                                            ebb0:
                                              trap
                                            }")

@@ -39,7 +39,7 @@ ebb5(v16: i32):
     return v17
 }
 
-; sameln: function %complex(i32) -> i32 {
+; sameln: function %complex
 ; nextln: ebb6(v20: i32):
 ; nextln:     v1 = iconst.i32 1
 ; nextln:     v2 = iconst.i32 4
