@@ -383,8 +383,8 @@ impl<'a> Context<'a> {
                     succ_val: Value,
                     preds: &[BasicBlock])
                     -> Option<Value> {
-        /// Initialize the value list with the split values. These are guaranteed to be
-        /// interference free, and anything that interferes with them must be split away.
+        // Initialize the value list with the split values. These are guaranteed to be
+        // interference free, and anything that interferes with them must be split away.
         self.reset_values();
         dbg!("Trying {} with split values: {:?}", succ_val, self.values);
 
