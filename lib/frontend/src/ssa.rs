@@ -490,9 +490,9 @@ impl<Variable> SSABuilder<Variable>
                 let val = if ty.is_int() {
                     dfg.ins(&mut cur).iconst(ty, 0)
                 } else if ty == F32 {
-                    dfg.ins(&mut cur).f32const(Ieee32::new(0.0))
+                    dfg.ins(&mut cur).f32const(Ieee32::with_bits(0))
                 } else if ty == F64 {
-                    dfg.ins(&mut cur).f64const(Ieee64::new(0.0))
+                    dfg.ins(&mut cur).f64const(Ieee64::with_bits(0))
                 } else {
                     panic!("value used but never declared and initialization not supported")
                 };
