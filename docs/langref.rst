@@ -410,13 +410,6 @@ This simple example illustrates direct function calls and signatures::
 
 Indirect function calls use a signature declared in the preamble.
 
-.. inst:: SIG = signature signature
-
-    Declare a function signature for use with indirect calls.
-
-    :arg signature: Function signature. See :token:`signature`.
-    :result SIG: A signature identifier.
-
 .. autoinst:: call_indirect
 
 .. todo:: Define safe indirect function calls.

@@ -54,7 +54,7 @@ fn write_preamble(w: &mut Write,
     for sig in func.dfg.signatures.keys() {
         any = true;
         writeln!(w,
-                 "    {} = signature{}",
+                 "    {} = {}",
                  sig,
                  func.dfg.signatures[sig].display(regs))?;
     }
@@ -366,26 +366,27 @@ mod tests {
     #[test]
     fn basic() {
         let mut f = Function::new();
-        assert_eq!(f.to_string(), "function %() {\n}\n");
+        assert_eq!(f.to_string(), "function %() native {\n}\n");
 
         f.name = FunctionName::new("foo");
-        assert_eq!(f.to_string(), "function %foo() {\n}\n");
+        assert_eq!(f.to_string(), "function %foo() native {\n}\n");
 
         f.stack_slots
             .push(StackSlotData::new(StackSlotKind::Local, 4));
-        assert_eq!(f.to_string(), "function %foo() {\n    ss0 = local 4\n}\n");
+        assert_eq!(f.to_string(),
+                   "function %foo() native {\n    ss0 = local 4\n}\n");
 
         let ebb = f.dfg.make_ebb();
         f.layout.append_ebb(ebb);
         assert_eq!(f.to_string(),
-                   "function %foo() {\n    ss0 = local 4\n\nebb0:\n}\n");
+                   "function %foo() native {\n    ss0 = local 4\n\nebb0:\n}\n");
 
         f.dfg.append_ebb_arg(ebb, types::I8);
         assert_eq!(f.to_string(),
-                   "function %foo() {\n    ss0 = local 4\n\nebb0(v0: i8):\n}\n");
+                   "function %foo() native {\n    ss0 = local 4\n\nebb0(v0: i8):\n}\n");
 
         f.dfg.append_ebb_arg(ebb, types::F32.by(4).unwrap());
         assert_eq!(f.to_string(),
-                   "function %foo() {\n    ss0 = local 4\n\nebb0(v0: i8, v1: f32x4):\n}\n");
+                   "function %foo() native {\n    ss0 = local 4\n\nebb0(v0: i8, v1: f32x4):\n}\n");
     }
 }

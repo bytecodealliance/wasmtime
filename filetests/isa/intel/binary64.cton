@@ -11,7 +11,7 @@ isa intel haswell
 ; Tests for i64 instructions.
 function %I64() {
     fn0 = function %foo()
-    sig0 = signature()
+    sig0 = ()
 
 ebb0:
 
@@ -457,7 +457,7 @@ ebb2:
 ; be done by an instruction shrinking pass.
 function %I32() {
     fn0 = function %foo()
-    sig0 = signature()
+    sig0 = ()
 
 ebb0:
 

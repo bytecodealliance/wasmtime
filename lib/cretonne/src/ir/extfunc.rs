@@ -25,6 +25,9 @@ pub struct Signature {
     /// Types returned from the function.
     pub return_types: Vec<ArgumentType>,
 
+    /// Calling convention.
+    pub call_conv: CallConv,
+
     /// When the signature has been legalized to a specific ISA, this holds the size of the
     /// argument array on the stack. Before legalization, this is `None`.
     ///
@@ -35,10 +38,11 @@ pub struct Signature {
 
 impl Signature {
     /// Create a new blank signature.
-    pub fn new() -> Signature {
+    pub fn new(call_conv: CallConv) -> Signature {
         Signature {
             argument_types: Vec::new(),
             return_types: Vec::new(),
+            call_conv,
             argument_bytes: None,
         }
     }
@@ -94,7 +98,7 @@ impl<'a> fmt::Display for DisplaySignature<'a> {
             write!(f, " -> ")?;
             write_list(f, &self.0.return_types, self.1)?;
         }
-        Ok(())
+        write!(f, " {}", self.0.call_conv)
     }
 }
 
@@ -278,6 +282,46 @@ impl fmt::Display for ExtFuncData {
     }
 }
 
+/// A Calling convention.
+///
+/// A function's calling convention determines exactly how arguments and return values are passed,
+/// and how stack frames are managed. Since all of these details depend on both the instruction set
+/// architecture and possibly the operating system, a function's calling convention is only fully
+/// determined by a `(TargetIsa, CallConv)` tuple.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CallConv {
+    /// The C calling convention.
+    ///
+    /// This is the native calling convention that a C compiler would use on the platform.
+    Native,
+
+    /// A JIT-compiled WebAssembly function in the SpiderMonkey VM.
+    SpiderWASM,
+}
+
+impl fmt::Display for CallConv {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::CallConv::*;
+        f.write_str(match *self {
+                        Native => "native",
+                        SpiderWASM => "spiderwasm",
+                    })
+    }
+}
+
+impl FromStr for CallConv {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use self::CallConv::*;
+        match s {
+            "native" => Ok(Native),
+            "spiderwasm" => Ok(SpiderWASM),
+            _ => Err(()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,18 +351,25 @@ mod tests {
     }
 
     #[test]
+    fn call_conv() {
+        for &cc in &[CallConv::Native, CallConv::SpiderWASM] {
+            assert_eq!(Ok(cc), cc.to_string().parse())
+        }
+    }
+
+    #[test]
     fn signatures() {
-        let mut sig = Signature::new();
-        assert_eq!(sig.to_string(), "()");
+        let mut sig = Signature::new(CallConv::SpiderWASM);
+        assert_eq!(sig.to_string(), "() spiderwasm");
         sig.argument_types.push(ArgumentType::new(I32));
-        assert_eq!(sig.to_string(), "(i32)");
+        assert_eq!(sig.to_string(), "(i32) spiderwasm");
         sig.return_types.push(ArgumentType::new(F32));
-        assert_eq!(sig.to_string(), "(i32) -> f32");
+        assert_eq!(sig.to_string(), "(i32) -> f32 spiderwasm");
         sig.argument_types
             .push(ArgumentType::new(I32.by(4).unwrap()));
-        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32");
+        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32 spiderwasm");
         sig.return_types.push(ArgumentType::new(B8));
-        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8");
+        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8 spiderwasm");
 
         // Test the offset computation algorithm.
         assert_eq!(sig.argument_bytes, None);
@@ -332,6 +383,7 @@ mod tests {
         assert_eq!(sig.argument_bytes, Some(28));
 
         // Writing ABI-annotated signatures.
-        assert_eq!(sig.to_string(), "(i32 [24], i32x4 [8]) -> f32, b8");
+        assert_eq!(sig.to_string(),
+                   "(i32 [24], i32x4 [8]) -> f32, b8 spiderwasm");
     }
 }

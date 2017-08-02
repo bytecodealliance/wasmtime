@@ -4,7 +4,7 @@
 //! instructions.
 
 use entity_map::{EntityMap, PrimaryEntityData};
-use ir::{FunctionName, Signature, JumpTableData, DataFlowGraph, Layout};
+use ir::{FunctionName, CallConv, Signature, JumpTableData, DataFlowGraph, Layout};
 use ir::{JumpTables, InstEncodings, ValueLocations, StackSlots, EbbOffsets};
 use isa::TargetIsa;
 use std::fmt;
@@ -67,9 +67,9 @@ impl Function {
         }
     }
 
-    /// Create a new empty, anonymous function.
+    /// Create a new empty, anonymous function with a native calling convention.
     pub fn new() -> Function {
-        Self::with_name_signature(FunctionName::default(), Signature::new())
+        Self::with_name_signature(FunctionName::default(), Signature::new(CallConv::Native))
     }
 
     /// Return an object that can display this function with correct ISA-specific annotations.
