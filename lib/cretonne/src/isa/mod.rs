@@ -49,6 +49,7 @@ use flowgraph;
 use settings;
 use ir;
 use regalloc;
+use result;
 use isa::enc_tables::Encodings;
 
 #[cfg(build_riscv)]
@@ -226,6 +227,18 @@ pub trait TargetIsa {
     /// This set excludes reserved registers like the stack pointer and other special-purpose
     /// registers.
     fn allocatable_registers(&self, func: &ir::Function) -> regalloc::AllocatableSet;
+
+    /// Compute the stack layout and insert prologue and epilogue code into `func`.
+    ///
+    /// Return an error if the stack frame is too large.
+    fn prologue_epilogue(&self, func: &mut ir::Function) -> result::CtonResult {
+        // This default implementation is unlikely to be good enough.
+        use stack_layout::layout_stack;
+
+        let align = if self.flags().is_64bit() { 8 } else { 4 };
+        layout_stack(&mut func.stack_slots, align)?;
+        Ok(())
+    }
 
     /// Emit binary machine code for a single instruction into the `sink` trait object.
     ///
