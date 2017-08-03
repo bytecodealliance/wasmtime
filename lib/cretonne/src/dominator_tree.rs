@@ -388,7 +388,7 @@ impl DominatorTree {
 #[cfg(test)]
 mod test {
     use flowgraph::ControlFlowGraph;
-    use ir::{Function, InstBuilder, Cursor, types};
+    use ir::{Function, InstBuilder, Cursor, CursorBase, types};
     use super::*;
     use ir::types::*;
     use verifier::verify_context;

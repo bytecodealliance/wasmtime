@@ -43,7 +43,7 @@
 //! The exception is the entry block whose arguments are colored from the ABI requirements.
 
 use dominator_tree::DominatorTree;
-use ir::{Ebb, Inst, Value, Function, Cursor, ValueLoc, DataFlowGraph, Layout};
+use ir::{Ebb, Inst, Value, Function, Cursor, CursorBase, ValueLoc, DataFlowGraph, Layout};
 use ir::{InstEncodings, ValueLocations};
 use ir::{InstBuilder, Signature, ArgumentType, ArgumentLoc};
 use isa::{RegUnit, RegClass, RegInfo, regs_overlap};

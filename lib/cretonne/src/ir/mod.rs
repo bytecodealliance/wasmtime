@@ -27,7 +27,7 @@ pub use ir::stackslot::{StackSlots, StackSlotKind, StackSlotData};
 pub use ir::jumptable::JumpTableData;
 pub use ir::valueloc::{ValueLoc, ArgumentLoc};
 pub use ir::dfg::{DataFlowGraph, ValueDef};
-pub use ir::layout::{Layout, Cursor};
+pub use ir::layout::{Layout, CursorBase, Cursor};
 pub use ir::function::Function;
 pub use ir::builder::InstBuilder;
 pub use ir::progpoint::{ProgramPoint, ProgramOrder, ExpandedProgramPoint};

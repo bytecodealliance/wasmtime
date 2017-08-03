@@ -199,7 +199,7 @@ impl LoopAnalysis {
 #[cfg(test)]
 mod test {
 
-    use ir::{Function, InstBuilder, Cursor, types};
+    use ir::{Function, InstBuilder, Cursor, CursorBase, types};
     use loop_analysis::{Loop, LoopAnalysis};
     use flowgraph::ControlFlowGraph;
     use dominator_tree::DominatorTree;

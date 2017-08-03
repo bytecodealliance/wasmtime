@@ -658,40 +658,34 @@ pub enum CursorPosition {
     After(Ebb),
 }
 
-impl<'f> Cursor<'f> {
-    /// Create a new `Cursor` for `layout`.
-    /// The cursor holds a mutable reference to `layout` for its entire lifetime.
-    pub fn new(layout: &'f mut Layout) -> Cursor {
-        Cursor {
-            layout,
-            pos: CursorPosition::Nowhere,
-        }
-    }
+/// All cursor types implement the `CursorBase` which provides common navigation operations.
+pub trait CursorBase {
+    /// Get the current cursor position.
+    fn position(&self) -> CursorPosition;
 
-    /// Get the current position.
-    pub fn position(&self) -> CursorPosition {
-        self.pos
-    }
+    /// Set the current position.
+    fn set_position(&mut self, pos: CursorPosition);
 
-    /// Move the cursor to a new position.
-    pub fn set_position(&mut self, pos: CursorPosition) {
-        self.pos = pos;
-    }
+    /// Borrow a reference to the function layout that this cursor is navigating.
+    fn layout(&self) -> &Layout;
+
+    /// Borrow a mutable reference to the function layout that this cursor is navigating.
+    fn layout_mut(&mut self) -> &mut Layout;
 
     /// Get the EBB corresponding to the current position.
-    pub fn current_ebb(&self) -> Option<Ebb> {
+    fn current_ebb(&self) -> Option<Ebb> {
         use self::CursorPosition::*;
-        match self.pos {
+        match self.position() {
             Nowhere => None,
-            At(inst) => self.layout.inst_ebb(inst),
+            At(inst) => self.layout().inst_ebb(inst),
             Before(ebb) | After(ebb) => Some(ebb),
         }
     }
 
     /// Get the instruction corresponding to the current position, if any.
-    pub fn current_inst(&self) -> Option<Inst> {
+    fn current_inst(&self) -> Option<Inst> {
         use self::CursorPosition::*;
-        match self.pos {
+        match self.position() {
             At(inst) => Some(inst),
             _ => None,
         }
@@ -699,24 +693,24 @@ impl<'f> Cursor<'f> {
 
     /// Go to a specific instruction which must be inserted in the layout.
     /// New instructions will be inserted before `inst`.
-    pub fn goto_inst(&mut self, inst: Inst) {
-        assert!(self.layout.inst_ebb(inst).is_some());
-        self.pos = CursorPosition::At(inst);
+    fn goto_inst(&mut self, inst: Inst) {
+        assert!(self.layout().inst_ebb(inst).is_some());
+        self.set_position(CursorPosition::At(inst));
     }
 
     /// Go to the top of `ebb` which must be inserted into the layout.
     /// At this position, instructions cannot be inserted, but `next_inst()` will move to the first
     /// instruction in `ebb`.
-    pub fn goto_top(&mut self, ebb: Ebb) {
-        assert!(self.layout.is_ebb_inserted(ebb));
-        self.pos = CursorPosition::Before(ebb);
+    fn goto_top(&mut self, ebb: Ebb) {
+        assert!(self.layout().is_ebb_inserted(ebb));
+        self.set_position(CursorPosition::Before(ebb));
     }
 
     /// Go to the bottom of `ebb` which must be inserted into the layout.
     /// At this position, inserted instructions will be appended to `ebb`.
-    pub fn goto_bottom(&mut self, ebb: Ebb) {
-        assert!(self.layout.is_ebb_inserted(ebb));
-        self.pos = CursorPosition::After(ebb);
+    fn goto_bottom(&mut self, ebb: Ebb) {
+        assert!(self.layout().is_ebb_inserted(ebb));
+        self.set_position(CursorPosition::After(ebb));
     }
 
     /// Go to the top of the next EBB in layout order and return it.
@@ -731,7 +725,7 @@ impl<'f> Cursor<'f> {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::ir::layout::Cursor;
+    /// # use cretonne::ir::layout::{Cursor, CursorBase};
     /// fn edit_func(func: &mut Function) {
     ///     let mut cursor = Cursor::new(&mut func.layout);
     ///     while let Some(ebb) = cursor.next_ebb() {
@@ -739,16 +733,16 @@ impl<'f> Cursor<'f> {
     ///     }
     /// }
     /// ```
-    pub fn next_ebb(&mut self) -> Option<Ebb> {
+    fn next_ebb(&mut self) -> Option<Ebb> {
         let next = if let Some(ebb) = self.current_ebb() {
-            self.layout.ebbs[ebb].next.expand()
+            self.layout().ebbs[ebb].next.expand()
         } else {
-            self.layout.first_ebb
+            self.layout().first_ebb
         };
-        self.pos = match next {
-            Some(ebb) => CursorPosition::Before(ebb),
-            None => CursorPosition::Nowhere,
-        };
+        self.set_position(match next {
+                              Some(ebb) => CursorPosition::Before(ebb),
+                              None => CursorPosition::Nowhere,
+                          });
         next
     }
 
@@ -764,7 +758,7 @@ impl<'f> Cursor<'f> {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::ir::layout::Cursor;
+    /// # use cretonne::ir::layout::{Cursor, CursorBase};
     /// fn edit_func(func: &mut Function) {
     ///     let mut cursor = Cursor::new(&mut func.layout);
     ///     while let Some(ebb) = cursor.prev_ebb() {
@@ -772,16 +766,16 @@ impl<'f> Cursor<'f> {
     ///     }
     /// }
     /// ```
-    pub fn prev_ebb(&mut self) -> Option<Ebb> {
+    fn prev_ebb(&mut self) -> Option<Ebb> {
         let prev = if let Some(ebb) = self.current_ebb() {
-            self.layout.ebbs[ebb].prev.expand()
+            self.layout().ebbs[ebb].prev.expand()
         } else {
-            self.layout.last_ebb
+            self.layout().last_ebb
         };
-        self.pos = match prev {
-            Some(ebb) => CursorPosition::After(ebb),
-            None => CursorPosition::Nowhere,
-        };
+        self.set_position(match prev {
+                              Some(ebb) => CursorPosition::After(ebb),
+                              None => CursorPosition::Nowhere,
+                          });
         prev
     }
 
@@ -801,7 +795,7 @@ impl<'f> Cursor<'f> {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::ir::layout::Cursor;
+    /// # use cretonne::ir::layout::{Cursor, CursorBase};
     /// fn edit_ebb(func: &mut Function, ebb: Ebb) {
     ///     let mut cursor = Cursor::new(&mut func.layout);
     ///     cursor.goto_top(ebb);
@@ -816,7 +810,7 @@ impl<'f> Cursor<'f> {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::ir::layout::Cursor;
+    /// # use cretonne::ir::layout::{Cursor, CursorBase};
     /// fn edit_func(func: &mut Function) {
     ///     let mut cursor = Cursor::new(&mut func.layout);
     ///     while let Some(ebb) = cursor.next_ebb() {
@@ -826,27 +820,28 @@ impl<'f> Cursor<'f> {
     ///     }
     /// }
     /// ```
-    pub fn next_inst(&mut self) -> Option<Inst> {
+    fn next_inst(&mut self) -> Option<Inst> {
         use self::CursorPosition::*;
-        match self.pos {
+        match self.position() {
             Nowhere | After(..) => None,
             At(inst) => {
-                if let Some(next) = self.layout.insts[inst].next.expand() {
-                    self.pos = At(next);
+                if let Some(next) = self.layout().insts[inst].next.expand() {
+                    self.set_position(At(next));
                     Some(next)
                 } else {
-                    self.pos = After(self.layout
-                                         .inst_ebb(inst)
-                                         .expect("current instruction removed?"));
+                    let pos = After(self.layout()
+                                        .inst_ebb(inst)
+                                        .expect("current instruction removed?"));
+                    self.set_position(pos);
                     None
                 }
             }
             Before(ebb) => {
-                if let Some(next) = self.layout.ebbs[ebb].first_inst.expand() {
-                    self.pos = At(next);
+                if let Some(next) = self.layout().ebbs[ebb].first_inst.expand() {
+                    self.set_position(At(next));
                     Some(next)
                 } else {
-                    self.pos = After(ebb);
+                    self.set_position(After(ebb));
                     None
                 }
             }
@@ -869,7 +864,7 @@ impl<'f> Cursor<'f> {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::ir::layout::Cursor;
+    /// # use cretonne::ir::layout::{Cursor, CursorBase};
     /// fn edit_ebb(func: &mut Function, ebb: Ebb) {
     ///     let mut cursor = Cursor::new(&mut func.layout);
     ///     cursor.goto_bottom(ebb);
@@ -878,27 +873,28 @@ impl<'f> Cursor<'f> {
     ///     }
     /// }
     /// ```
-    pub fn prev_inst(&mut self) -> Option<Inst> {
+    fn prev_inst(&mut self) -> Option<Inst> {
         use self::CursorPosition::*;
-        match self.pos {
+        match self.position() {
             Nowhere | Before(..) => None,
             At(inst) => {
-                if let Some(prev) = self.layout.insts[inst].prev.expand() {
-                    self.pos = At(prev);
+                if let Some(prev) = self.layout().insts[inst].prev.expand() {
+                    self.set_position(At(prev));
                     Some(prev)
                 } else {
-                    self.pos = Before(self.layout
-                                          .inst_ebb(inst)
-                                          .expect("current instruction removed?"));
+                    let pos = Before(self.layout()
+                                         .inst_ebb(inst)
+                                         .expect("current instruction removed?"));
+                    self.set_position(pos);
                     None
                 }
             }
             After(ebb) => {
-                if let Some(prev) = self.layout.ebbs[ebb].last_inst.expand() {
-                    self.pos = At(prev);
+                if let Some(prev) = self.layout().ebbs[ebb].last_inst.expand() {
+                    self.set_position(At(prev));
                     Some(prev)
                 } else {
-                    self.pos = Before(ebb);
+                    self.set_position(Before(ebb));
                     None
                 }
             }
@@ -914,12 +910,12 @@ impl<'f> Cursor<'f> {
     ///
     /// In either case, the cursor is not moved, such that repeated calls to `insert_inst()` causes
     /// instructions to appear in insertion order in the EBB.
-    pub fn insert_inst(&mut self, inst: Inst) {
+    fn insert_inst(&mut self, inst: Inst) {
         use self::CursorPosition::*;
-        match self.pos {
+        match self.position() {
             Nowhere | Before(..) => panic!("Invalid insert_inst position"),
-            At(cur) => self.layout.insert_inst(inst, cur),
-            After(ebb) => self.layout.append_inst(inst, ebb),
+            At(cur) => self.layout_mut().insert_inst(inst, cur),
+            After(ebb) => self.layout_mut().append_inst(inst, ebb),
         }
     }
 
@@ -928,10 +924,10 @@ impl<'f> Cursor<'f> {
     /// The cursor is left pointing at the position following the current instruction.
     ///
     /// Return the instruction that was removed.
-    pub fn remove_inst(&mut self) -> Inst {
+    fn remove_inst(&mut self) -> Inst {
         let inst = self.current_inst().expect("No instruction to remove");
         self.next_inst();
-        self.layout.remove_inst(inst);
+        self.layout_mut().remove_inst(inst);
         inst
     }
 
@@ -940,10 +936,10 @@ impl<'f> Cursor<'f> {
     /// The cursor is left pointing at the position preceding the current instruction.
     ///
     /// Return the instruction that was removed.
-    pub fn remove_inst_and_step_back(&mut self) -> Inst {
+    fn remove_inst_and_step_back(&mut self) -> Inst {
         let inst = self.current_inst().expect("No instruction to remove");
         self.prev_inst();
-        self.layout.remove_inst(inst);
+        self.layout_mut().remove_inst(inst);
         inst
     }
 
@@ -961,27 +957,56 @@ impl<'f> Cursor<'f> {
     ///
     /// This means that is is always valid to call this method, and it always leaves the cursor in
     /// a state that will insert instructions into the new EBB.
-    pub fn insert_ebb(&mut self, new_ebb: Ebb) {
+    fn insert_ebb(&mut self, new_ebb: Ebb) {
         use self::CursorPosition::*;
-        match self.pos {
+        match self.position() {
             At(inst) => {
-                self.layout.split_ebb(new_ebb, inst);
+                self.layout_mut().split_ebb(new_ebb, inst);
                 // All other cases move to `After(ebb)`, but in this case we we'll stay `At(inst)`.
                 return;
             }
-            Nowhere => self.layout.append_ebb(new_ebb),
-            Before(ebb) => self.layout.insert_ebb(new_ebb, ebb),
-            After(ebb) => self.layout.insert_ebb_after(new_ebb, ebb),
+            Nowhere => self.layout_mut().append_ebb(new_ebb),
+            Before(ebb) => self.layout_mut().insert_ebb(new_ebb, ebb),
+            After(ebb) => self.layout_mut().insert_ebb_after(new_ebb, ebb),
         }
         // For everything but `At(inst)` we end up appending to the new EBB.
-        self.pos = After(new_ebb);
+        self.set_position(After(new_ebb));
+    }
+}
+
+impl<'f> CursorBase for Cursor<'f> {
+    fn position(&self) -> CursorPosition {
+        self.pos
+    }
+
+    fn set_position(&mut self, pos: CursorPosition) {
+        self.pos = pos;
+    }
+
+    fn layout(&self) -> &Layout {
+        self.layout
+    }
+
+    fn layout_mut(&mut self) -> &mut Layout {
+        self.layout
+    }
+}
+
+impl<'f> Cursor<'f> {
+    /// Create a new `Cursor` for `layout`.
+    /// The cursor holds a mutable reference to `layout` for its entire lifetime.
+    pub fn new(layout: &'f mut Layout) -> Cursor {
+        Cursor {
+            layout,
+            pos: CursorPosition::Nowhere,
+        }
     }
 }
 
 
 #[cfg(test)]
 mod tests {
-    use super::{Layout, Cursor, CursorPosition};
+    use super::{Layout, Cursor, CursorBase, CursorPosition};
     use entity_ref::EntityRef;
     use ir::{Ebb, Inst, ProgramOrder};
     use std::cmp::Ordering;

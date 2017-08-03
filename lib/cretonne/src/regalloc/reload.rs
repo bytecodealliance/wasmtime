@@ -11,7 +11,7 @@
 
 use dominator_tree::DominatorTree;
 use ir::{Ebb, Inst, Value, Function, Signature, DataFlowGraph, InstEncodings};
-use ir::layout::{Cursor, CursorPosition};
+use ir::layout::{Cursor, CursorBase, CursorPosition};
 use ir::{InstBuilder, Opcode, ArgumentType, ArgumentLoc};
 use isa::RegClass;
 use isa::{TargetIsa, Encoding, EncInfo, RecipeConstraints, ConstraintKind};

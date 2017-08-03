@@ -81,7 +81,7 @@ impl TopoOrder {
 mod test {
     use flowgraph::ControlFlowGraph;
     use dominator_tree::DominatorTree;
-    use ir::{Function, InstBuilder, Cursor};
+    use ir::{Function, InstBuilder, Cursor, CursorBase};
     use std::iter;
     use super::*;
 

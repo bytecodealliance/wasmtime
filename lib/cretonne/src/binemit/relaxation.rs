@@ -28,7 +28,7 @@
 //! ```
 
 use binemit::CodeOffset;
-use ir::{Function, DataFlowGraph, Cursor, InstructionData, Opcode, InstEncodings};
+use ir::{Function, DataFlowGraph, Cursor, CursorBase, InstructionData, Opcode, InstEncodings};
 use isa::{TargetIsa, EncInfo};
 use iterators::IteratorExtras;
 use result::CtonError;

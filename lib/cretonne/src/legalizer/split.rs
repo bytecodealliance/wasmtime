@@ -65,8 +65,8 @@
 //! instructions. These loops will remain in the program.
 
 use flowgraph::ControlFlowGraph;
-use ir::{DataFlowGraph, Ebb, Inst, Cursor, Value, Type, Opcode, ValueDef, InstructionData,
-         InstBuilder};
+use ir::{DataFlowGraph, Ebb, Inst, Cursor, CursorBase, Value, Type, Opcode, ValueDef,
+         InstructionData, InstBuilder};
 use std::iter;
 
 /// Split `value` into two values using the `isplit` semantics. Do this by reusing existing values

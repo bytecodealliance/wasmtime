@@ -15,7 +15,7 @@
 
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
-use ir::{self, Function, Cursor};
+use ir::{self, Function, Cursor, CursorBase};
 use ir::condcodes::IntCC;
 use isa::TargetIsa;
 use bitset::BitSet;

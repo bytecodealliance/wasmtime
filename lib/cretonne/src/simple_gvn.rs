@@ -2,7 +2,7 @@
 
 use flowgraph::ControlFlowGraph;
 use dominator_tree::DominatorTree;
-use ir::{Cursor, InstructionData, Function, Inst, Opcode};
+use ir::{Cursor, CursorBase, InstructionData, Function, Inst, Opcode};
 use std::collections::HashMap;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
