@@ -5,7 +5,8 @@
 //! In: Jhala R., De Bosschere K. (eds) Compiler Construction. CC 2013.
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
-use cretonne::ir::{Ebb, Value, Inst, Type, DataFlowGraph, JumpTables, Layout, Cursor, InstBuilder};
+use cretonne::ir::{Ebb, Value, Inst, Type, DataFlowGraph, JumpTables, Layout, Cursor, CursorBase,
+                   InstBuilder};
 use cretonne::ir::instructions::BranchInfo;
 use std::hash::Hash;
 use cretonne::entity_map::{EntityMap, PrimaryEntityData};
@@ -607,7 +608,7 @@ impl<Variable> SSABuilder<Variable>
 #[cfg(test)]
 mod tests {
     use cretonne::entity_ref::EntityRef;
-    use cretonne::ir::{Function, InstBuilder, Cursor, Inst, JumpTableData};
+    use cretonne::ir::{Function, InstBuilder, Cursor, CursorBase, Inst, JumpTableData};
     use cretonne::ir::types::*;
     use cretonne::verify_function;
     use cretonne::ir::instructions::BranchInfo;

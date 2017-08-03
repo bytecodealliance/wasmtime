@@ -16,7 +16,7 @@
 //!    operands.
 
 use dominator_tree::DominatorTree;
-use ir::{DataFlowGraph, Layout, Cursor, InstBuilder};
+use ir::{DataFlowGraph, Layout, Cursor, CursorBase, InstBuilder};
 use ir::{Function, Ebb, Inst, Value, ValueLoc, SigRef};
 use ir::{InstEncodings, StackSlots, ValueLocations};
 use isa::registers::{RegClassMask, RegClassIndex};

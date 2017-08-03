@@ -355,7 +355,7 @@ def gen_xform_group(xgrp, fmt, type_sets):
             'cfg: &mut ::flowgraph::ControlFlowGraph, '
             'pos: &mut ir::Cursor) -> '
             'bool {{'.format(xgrp.name), '}'):
-        fmt.line('use ir::InstBuilder;')
+        fmt.line('use ir::{InstBuilder, CursorBase};')
 
         # Gen the instruction to be legalized. The cursor we're passed must be
         # pointing at an instruction.

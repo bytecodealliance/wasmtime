@@ -1,6 +1,6 @@
 //! A Loop Invariant Code Motion optimization pass
 
-use ir::{Function, Ebb, Inst, Value, Cursor, Type, InstBuilder, Layout};
+use ir::{Function, Ebb, Inst, Value, Cursor, CursorBase, Type, InstBuilder, Layout};
 use flowgraph::ControlFlowGraph;
 use std::collections::HashSet;
 use dominator_tree::DominatorTree;

@@ -8,7 +8,7 @@
 use dbg::DisplayList;
 use dominator_tree::DominatorTree;
 use flowgraph::{ControlFlowGraph, BasicBlock};
-use ir::{DataFlowGraph, Layout, Cursor, InstBuilder, ValueDef};
+use ir::{DataFlowGraph, Layout, Cursor, CursorBase, InstBuilder, ValueDef};
 use ir::{Function, Ebb, Inst, Value, ExpandedProgramPoint};
 use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;

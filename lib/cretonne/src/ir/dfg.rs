@@ -865,7 +865,7 @@ impl<'a> fmt::Display for DisplayInst<'a> {
 mod tests {
     use super::*;
     use ir::types;
-    use ir::{Function, Cursor, Opcode, InstructionData};
+    use ir::{Function, Cursor, CursorBase, Opcode, InstructionData};
 
     #[test]
     fn make_inst() {

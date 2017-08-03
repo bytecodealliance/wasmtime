@@ -4,7 +4,7 @@
 //! function. Many of its methods are generated from the meta language instruction definitions.
 
 use ir::types;
-use ir::{InstructionData, DataFlowGraph, Cursor};
+use ir::{InstructionData, DataFlowGraph, Cursor, CursorBase};
 use ir::{Opcode, Type, Inst, Value, Ebb, JumpTable, SigRef, FuncRef, StackSlot, ValueList,
          MemFlags};
 use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32, Uoffset32};
@@ -185,7 +185,7 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
 
 #[cfg(test)]
 mod tests {
-    use ir::{Function, Cursor, InstBuilder, ValueDef};
+    use ir::{Function, Cursor, CursorBase, InstBuilder, ValueDef};
     use ir::types::*;
     use ir::condcodes::*;
 

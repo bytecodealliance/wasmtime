@@ -19,9 +19,9 @@
 
 use abi::{legalize_abi_value, ValueConversion};
 use flowgraph::ControlFlowGraph;
-use ir::{Function, Cursor, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value, Signature, SigRef,
-         ArgumentType, ArgumentPurpose, ArgumentLoc, ValueLoc, ValueLocations, StackSlots,
-         StackSlotKind};
+use ir::{Function, Cursor, CursorBase, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value,
+         Signature, SigRef, ArgumentType, ArgumentPurpose, ArgumentLoc, ValueLoc, ValueLocations,
+         StackSlots, StackSlotKind};
 use ir::instructions::CallInfo;
 use isa::TargetIsa;
 use legalizer::split::{isplit, vsplit};
