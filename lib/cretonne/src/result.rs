@@ -7,7 +7,7 @@ use std::fmt;
 /// A compilation error.
 ///
 /// When Cretonne fails to compile a function, it will return one of these error codes.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CtonError {
     /// An IL verifier error.
     ///

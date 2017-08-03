@@ -41,5 +41,6 @@ mod partition_slice;
 mod predicates;
 mod ref_slice;
 mod simple_gvn;
+mod stack_layout;
 mod topo_order;
 mod write;

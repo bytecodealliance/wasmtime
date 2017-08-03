@@ -5,7 +5,6 @@
 
 use entity_map::{EntityMap, PrimaryEntityData, Keys};
 use ir::{Type, StackSlot};
-use std::cmp::{min, max};
 use std::fmt;
 use std::ops::Index;
 use std::str::FromStr;
@@ -15,12 +14,12 @@ use std::str::FromStr;
 /// We don't use `usize` to represent object sizes on the target platform because Cretonne supports
 /// cross-compilation, and `usize` is a type that depends on the host platform, not the target
 /// platform.
-type StackSize = u32;
+pub type StackSize = u32;
 
 /// A stack offset.
 ///
 /// The location of a stack offset relative to a stack pointer or frame pointer.
-type StackOffset = i32;
+pub type StackOffset = i32;
 
 /// The kind of a stack slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -179,6 +178,11 @@ impl StackSlots {
         self.slots.is_valid(ss)
     }
 
+    /// Set the offset of a stack slot.
+    pub fn set_offset(&mut self, ss: StackSlot, offset: StackOffset) {
+        self.slots[ss].offset = offset;
+    }
+
     /// Get an iterator over all the stack slot keys.
     pub fn keys(&self) -> Keys<StackSlot> {
         self.slots.keys()
@@ -240,103 +244,6 @@ impl StackSlots {
         let ss = self.slots.push(data);
         self.outgoing.insert(inspos, ss);
         ss
-    }
-
-    /// Compute the stack frame layout.
-    ///
-    /// Determine the total size of this function's stack frame and assign offsets to all `Spill`
-    /// and `Local` stack slots.
-    ///
-    /// The total frame size will be a multiple of `alignment` which must be a power of two.
-    ///
-    /// Returns the total stack frame size which is also saved in `self.frame_size`.
-    pub fn layout(&mut self, alignment: StackSize) -> StackSize {
-        assert!(alignment.is_power_of_two() && alignment <= StackOffset::max_value() as StackSize,
-                "Invalid stack alignment {}",
-                alignment);
-
-        // We assume a stack that grows toward lower addresses as implemented by modern ISAs. The
-        // stack layout from high to low addresses will be:
-        //
-        // 1. incoming arguments.
-        // 2. spills + locals.
-        // 3. outgoing arguments.
-        //
-        // The incoming arguments can have both positive and negative offsets. A negative offset
-        // incoming arguments is usually the x86 return address pushed by the call instruction, but
-        // it can also be fixed stack slots pushed by an externally generated prologue.
-        //
-        // Both incoming and outgoing argument slots have fixed offsets that are treated as
-        // reserved zones by the layout algorithm.
-
-        let mut incoming_min = 0;
-        let mut outgoing_max = 0;
-        let mut min_align = alignment;
-
-        for ss in self.keys() {
-            let slot = &self[ss];
-            assert!(slot.size <= StackOffset::max_value() as StackSize);
-            match slot.kind {
-                StackSlotKind::IncomingArg => {
-                    incoming_min = min(incoming_min, slot.offset);
-                }
-                StackSlotKind::OutgoingArg => {
-                    let offset = slot.offset
-                        .checked_add(slot.size as StackOffset)
-                        .expect("Outgoing call argument overflows stack");
-                    outgoing_max = max(outgoing_max, offset);
-                }
-                StackSlotKind::SpillSlot | StackSlotKind::Local => {
-                    // Determine the smallest alignment of any local or spill slot.
-                    min_align = slot.alignment(min_align);
-                }
-            }
-        }
-
-        // Lay out spill slots and locals below the incoming arguments.
-        // The offset is negative, growing downwards.
-        // Start with the smallest alignments for better packing.
-        let mut offset = incoming_min;
-        assert!(min_align.is_power_of_two());
-        while min_align <= alignment {
-            for ss in self.keys() {
-                let slot = &mut self.slots[ss];
-
-                // Pick out locals and spill slots with exact alignment `min_align`.
-                match slot.kind {
-                    StackSlotKind::SpillSlot | StackSlotKind::Local => {
-                        if slot.alignment(alignment) != min_align {
-                            continue;
-                        }
-                    }
-                    _ => continue,
-                }
-
-                // These limits should never be exceeded by spill slots, but locals can be
-                // arbitrarily large.
-                assert!(slot.size <= StackOffset::max_value() as StackSize);
-                offset = offset
-                    .checked_sub(slot.size as StackOffset)
-                    .expect("Stack frame larger than 2 GB");
-
-                // Aligning the negative offset can never cause overflow. We're only clearing bits.
-                offset &= -(min_align as StackOffset);
-                slot.offset = offset;
-            }
-
-            // Move on to the next higher alignment.
-            min_align *= 2;
-        }
-
-        // Finally, make room for the outgoing arguments.
-        offset = offset
-            .checked_sub(outgoing_max)
-            .expect("Stack frame larger than 2 GB");
-        offset &= -(alignment as StackOffset);
-
-        let frame_size = (offset as StackSize).wrapping_neg();
-        self.frame_size = Some(frame_size);
-        frame_size
     }
 }
 
@@ -400,76 +307,5 @@ mod tests {
         assert_eq!(slot2.alignment(8), 8);
         assert_eq!(slot2.alignment(16), 8);
         assert_eq!(slot2.alignment(32), 8);
-    }
-
-    #[test]
-    fn layout() {
-        let mut sss = StackSlots::new();
-
-        // An empty layout should have 0-sized stack frame.
-        assert_eq!(sss.layout(1), 0);
-        assert_eq!(sss.layout(16), 0);
-
-        // Same for incoming arguments with non-negative offsets.
-        let in0 = sss.make_incoming_arg(types::I64, 0);
-        let in1 = sss.make_incoming_arg(types::I64, 8);
-
-        assert_eq!(sss.layout(1), 0);
-        assert_eq!(sss.layout(16), 0);
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-
-        // Add some spill slots.
-        let ss0 = sss.make_spill_slot(types::I64);
-        let ss1 = sss.make_spill_slot(types::I32);
-
-        assert_eq!(sss.layout(1), 12);
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-        assert_eq!(sss[ss0].offset, -8);
-        assert_eq!(sss[ss1].offset, -12);
-
-        assert_eq!(sss.layout(16), 16);
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-        assert_eq!(sss[ss0].offset, -16);
-        assert_eq!(sss[ss1].offset, -4);
-
-        // An incoming argument with negative offset counts towards the total frame size, but it
-        // should still pack nicely with the spill slots.
-        let in2 = sss.make_incoming_arg(types::I32, -4);
-
-        assert_eq!(sss.layout(1), 16);
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-        assert_eq!(sss[in2].offset, -4);
-        assert_eq!(sss[ss0].offset, -12);
-        assert_eq!(sss[ss1].offset, -16);
-
-        assert_eq!(sss.layout(16), 16);
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-        assert_eq!(sss[in2].offset, -4);
-        assert_eq!(sss[ss0].offset, -16);
-        assert_eq!(sss[ss1].offset, -8);
-
-        // Finally, make sure there is room for the outgoing args.
-        let out0 = sss.get_outgoing_arg(types::I32, 0);
-
-        assert_eq!(sss.layout(1), 20);
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-        assert_eq!(sss[in2].offset, -4);
-        assert_eq!(sss[ss0].offset, -12);
-        assert_eq!(sss[ss1].offset, -16);
-        assert_eq!(sss[out0].offset, 0);
-
-        assert_eq!(sss.layout(16), 32);
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-        assert_eq!(sss[in2].offset, -4);
-        assert_eq!(sss[ss0].offset, -16);
-        assert_eq!(sss[ss1].offset, -8);
-        assert_eq!(sss[out0].offset, 0);
     }
 }
