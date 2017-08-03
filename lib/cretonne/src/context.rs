@@ -68,6 +68,7 @@ impl Context {
 
         self.legalize(isa)?;
         self.regalloc(isa)?;
+        self.prologue_epilogue(isa)?;
         self.relax_branches(isa)
     }
 
@@ -133,6 +134,12 @@ impl Context {
     pub fn regalloc(&mut self, isa: &TargetIsa) -> CtonResult {
         self.regalloc
             .run(isa, &mut self.func, &self.cfg, &self.domtree)
+    }
+
+    /// Insert prologue and epilogues after computing the stack frame layout.
+    pub fn prologue_epilogue(&mut self, isa: &TargetIsa) -> CtonResult {
+        isa.prologue_epilogue(&mut self.func)?;
+        self.verify_if(isa)
     }
 
     /// Run the branch relaxation pass and return the final code size.
