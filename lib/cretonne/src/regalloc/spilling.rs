@@ -15,10 +15,9 @@
 //!    be compatible. Otherwise, the value must be copied into a new register for some of the
 //!    operands.
 
+use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
-use ir::{DataFlowGraph, Layout, Cursor, CursorBase, InstBuilder};
-use ir::{Function, Ebb, Inst, Value, ValueLoc, SigRef};
-use ir::{InstEncodings, StackSlots, ValueLocations};
+use ir::{InstBuilder, Function, Ebb, Inst, Value, ValueLoc, SigRef};
 use isa::registers::{RegClassMask, RegClassIndex};
 use isa::{TargetIsa, RegInfo, EncInfo, RecipeConstraints, ConstraintKind};
 use regalloc::affinity::Affinity;
@@ -37,15 +36,12 @@ pub struct Spilling {
 
 /// Context data structure that gets instantiated once per pass.
 struct Context<'a> {
-    isa: &'a TargetIsa,
+    // Current instruction as well as reference to function and ISA.
+    cur: EncCursor<'a>,
+
     // Cached ISA information.
     reginfo: RegInfo,
     encinfo: EncInfo,
-
-    // References to parts of the current function.
-    encodings: &'a mut InstEncodings,
-    stack_slots: &'a mut StackSlots,
-    locations: &'a mut ValueLocations,
 
     // References to contextual data structures we need.
     domtree: &'a DominatorTree,
@@ -87,12 +83,9 @@ impl Spilling {
         let reginfo = isa.register_info();
         let usable_regs = isa.allocatable_registers(func);
         let mut ctx = Context {
-            isa,
+            cur: EncCursor::new(func, isa),
             reginfo: isa.register_info(),
             encinfo: isa.encoding_info(),
-            encodings: &mut func.encodings,
-            stack_slots: &mut func.stack_slots,
-            locations: &mut func.locations,
             domtree,
             liveness,
             virtregs,
@@ -101,35 +94,29 @@ impl Spilling {
             spills: &mut self.spills,
             reg_uses: &mut self.reg_uses,
         };
-        ctx.run(&mut func.layout, &mut func.dfg, tracker)
+        ctx.run(tracker)
     }
 }
 
 impl<'a> Context<'a> {
-    fn run(&mut self,
-           layout: &mut Layout,
-           dfg: &mut DataFlowGraph,
-           tracker: &mut LiveValueTracker) {
-        self.topo.reset(layout.ebbs());
-        while let Some(ebb) = self.topo.next(layout, self.domtree) {
-            self.visit_ebb(ebb, layout, dfg, tracker);
+    fn run(&mut self, tracker: &mut LiveValueTracker) {
+        self.topo.reset(self.cur.func.layout.ebbs());
+        while let Some(ebb) = self.topo.next(&self.cur.func.layout, self.domtree) {
+            self.visit_ebb(ebb, tracker);
         }
     }
 
-    fn visit_ebb(&mut self,
-                 ebb: Ebb,
-                 layout: &mut Layout,
-                 dfg: &mut DataFlowGraph,
-                 tracker: &mut LiveValueTracker) {
+    fn visit_ebb(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
         dbg!("Spilling {}:", ebb);
-        self.visit_ebb_header(ebb, layout, dfg, tracker);
+        self.cur.goto_top(ebb);
+        self.visit_ebb_header(ebb, tracker);
         tracker.drop_dead_args();
 
-        let mut pos = Cursor::new(layout);
-        pos.goto_top(ebb);
-        while let Some(inst) = pos.next_inst() {
-            if let Some(constraints) = self.encinfo.operand_constraints(self.encodings[inst]) {
-                self.visit_inst(inst, ebb, constraints, &mut pos, dfg, tracker);
+        while let Some(inst) = self.cur.next_inst() {
+            if let Some(constraints) =
+                self.encinfo
+                    .operand_constraints(self.cur.func.encodings[inst]) {
+                self.visit_inst(inst, ebb, constraints, tracker);
             } else {
                 let (_throughs, kills) = tracker.process_ghost(inst);
                 self.free_regs(kills);
@@ -162,12 +149,12 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn visit_ebb_header(&mut self,
-                        ebb: Ebb,
-                        layout: &mut Layout,
-                        dfg: &mut DataFlowGraph,
-                        tracker: &mut LiveValueTracker) {
-        let (liveins, args) = tracker.ebb_top(ebb, dfg, self.liveness, layout, self.domtree);
+    fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
+        let (liveins, args) = tracker.ebb_top(ebb,
+                                              &self.cur.func.dfg,
+                                              self.liveness,
+                                              &self.cur.func.layout,
+                                              self.domtree);
 
         // Count the live-in registers. These should already fit in registers; they did at the
         // dominator.
@@ -184,13 +171,13 @@ impl<'a> Context<'a> {
                          rc,
                          lv.value,
                          liveins.len());
-                    match self.spill_candidate(mask, liveins, dfg, layout) {
+                    match self.spill_candidate(mask, liveins) {
                         Some(cand) => {
                             dbg!("Spilling live-in {} to make room for {} EBB argument {}",
                                  cand,
                                  rc,
                                  lv.value);
-                            self.spill_reg(cand, dfg);
+                            self.spill_reg(cand);
                         }
                         None => {
                             // We can't spill any of the live-in registers, so we have to spill an
@@ -200,7 +187,7 @@ impl<'a> Context<'a> {
 
                             // Since `spill_reg` will free a register, add the current one here.
                             self.pressure.take(rc);
-                            self.spill_reg(lv.value, dfg);
+                            self.spill_reg(lv.value);
                             break 'try_take;
                         }
                     }
@@ -216,29 +203,27 @@ impl<'a> Context<'a> {
                   inst: Inst,
                   ebb: Ebb,
                   constraints: &RecipeConstraints,
-                  pos: &mut Cursor,
-                  dfg: &mut DataFlowGraph,
                   tracker: &mut LiveValueTracker) {
-        dbg!("Inst {}, {}",
-             dfg.display_inst(inst, self.isa),
-             self.pressure);
+        dbg!("Inst {}, {}", self.cur.display_inst(inst), self.pressure);
+        debug_assert_eq!(self.cur.current_inst(), Some(inst));
+        debug_assert_eq!(self.cur.current_ebb(), Some(ebb));
 
         // We may need to resolve register constraints if there are any noteworthy uses.
         assert!(self.reg_uses.is_empty());
-        self.collect_reg_uses(inst, ebb, constraints, dfg, pos.layout);
+        self.collect_reg_uses(inst, ebb, constraints);
 
         // Calls usually have fixed register uses.
-        let call_sig = dfg.call_signature(inst);
+        let call_sig = self.cur.func.dfg.call_signature(inst);
         if let Some(sig) = call_sig {
-            self.collect_abi_reg_uses(inst, sig, dfg);
+            self.collect_abi_reg_uses(inst, sig);
         }
 
         if !self.reg_uses.is_empty() {
-            self.process_reg_uses(inst, pos, dfg, tracker);
+            self.process_reg_uses(inst, tracker);
         }
 
         // Update the live value tracker with this instruction.
-        let (throughs, kills, defs) = tracker.process_inst(inst, dfg, self.liveness);
+        let (throughs, kills, defs) = tracker.process_inst(inst, &self.cur.func.dfg, self.liveness);
 
         // Remove kills from the pressure tracker.
         self.free_regs(kills);
@@ -249,7 +234,7 @@ impl<'a> Context<'a> {
         if call_sig.is_some() {
             for lv in throughs {
                 if lv.affinity.is_reg() && !self.spills.contains(&lv.value) {
-                    self.spill_reg(lv.value, dfg);
+                    self.spill_reg(lv.value);
                 }
             }
         }
@@ -262,12 +247,12 @@ impl<'a> Context<'a> {
                 // Add register def to pressure, spill if needed.
                 while let Err(mask) = self.pressure.take_transient(op.regclass) {
                     dbg!("Need {} reg from {} throughs", op.regclass, throughs.len());
-                    match self.spill_candidate(mask, throughs, dfg, pos.layout) {
-                        Some(cand) => self.spill_reg(cand, dfg),
+                    match self.spill_candidate(mask, throughs) {
+                        Some(cand) => self.spill_reg(cand),
                         None => {
                             panic!("Ran out of {} registers for {}",
                                    op.regclass,
-                                   dfg.display_inst(inst, self.isa))
+                                   self.cur.display_inst(inst))
                         }
                     }
                 }
@@ -290,13 +275,8 @@ impl<'a> Context<'a> {
     // We are assuming here that if a value is used both by a fixed register operand and a register
     // class operand, they two are compatible. We are also assuming that two register class
     // operands are always compatible.
-    fn collect_reg_uses(&mut self,
-                        inst: Inst,
-                        ebb: Ebb,
-                        constraints: &RecipeConstraints,
-                        dfg: &DataFlowGraph,
-                        layout: &Layout) {
-        let args = dfg.inst_args(inst);
+    fn collect_reg_uses(&mut self, inst: Inst, ebb: Ebb, constraints: &RecipeConstraints) {
+        let args = self.cur.func.dfg.inst_args(inst);
         for (idx, (op, &arg)) in constraints.ins.iter().zip(args).enumerate() {
             let mut reguse = RegUse::new(arg, idx, op.regclass.into());
             let lr = &self.liveness[arg];
@@ -305,7 +285,7 @@ impl<'a> Context<'a> {
                 ConstraintKind::FixedReg(_) => reguse.fixed = true,
                 ConstraintKind::Tied(_) => {
                     // A tied operand must kill the used value.
-                    reguse.tied = !lr.killed_at(inst, ebb, layout);
+                    reguse.tied = !lr.killed_at(inst, ebb, &self.cur.func.layout);
                 }
                 ConstraintKind::Reg => {}
             }
@@ -322,11 +302,14 @@ impl<'a> Context<'a> {
     }
 
     // Collect register uses from the ABI input constraints.
-    fn collect_abi_reg_uses(&mut self, inst: Inst, sig: SigRef, dfg: &DataFlowGraph) {
-        let fixed_args = dfg[inst].opcode().constraints().fixed_value_arguments();
-        let args = dfg.inst_variable_args(inst);
+    fn collect_abi_reg_uses(&mut self, inst: Inst, sig: SigRef) {
+        let fixed_args = self.cur.func.dfg[inst]
+            .opcode()
+            .constraints()
+            .fixed_value_arguments();
+        let args = self.cur.func.dfg.inst_variable_args(inst);
         for (idx, (abi, &arg)) in
-            dfg.signatures[sig]
+            self.cur.func.dfg.signatures[sig]
                 .argument_types
                 .iter()
                 .zip(args)
@@ -335,7 +318,7 @@ impl<'a> Context<'a> {
                 let (rci, spilled) = match self.liveness[arg].affinity {
                     Affinity::Reg(rci) => (rci, false),
                     Affinity::Stack => {
-                        (self.isa.regclass_for_abi_type(abi.value_type).into(), true)
+                        (self.cur.isa.regclass_for_abi_type(abi.value_type).into(), true)
                     }
                     Affinity::None => panic!("Missing affinity for {}", arg),
                 };
@@ -353,11 +336,7 @@ impl<'a> Context<'a> {
     // Trigger spilling if any of the temporaries cause the register pressure to become too high.
     //
     // Leave `self.reg_uses` empty.
-    fn process_reg_uses(&mut self,
-                        inst: Inst,
-                        pos: &mut Cursor,
-                        dfg: &mut DataFlowGraph,
-                        tracker: &LiveValueTracker) {
+    fn process_reg_uses(&mut self, inst: Inst, tracker: &LiveValueTracker) {
         // We're looking for multiple uses of the same value, so start by sorting by value. The
         // secondary `opidx` key makes it possible to use an unstable sort once that is available
         // outside nightly Rust.
@@ -381,8 +360,8 @@ impl<'a> Context<'a> {
             };
 
             if need_copy {
-                let copy = self.insert_copy(ru.value, ru.rci, pos, dfg);
-                dfg.inst_args_mut(inst)[ru.opidx as usize] = copy;
+                let copy = self.insert_copy(ru.value, ru.rci);
+                self.cur.func.dfg.inst_args_mut(inst)[ru.opidx as usize] = copy;
             }
 
             // Even if we don't insert a copy, we may need to account for register pressure for the
@@ -393,18 +372,18 @@ impl<'a> Context<'a> {
                     dbg!("Copy of {} reg causes spill", rc);
                     // Spill a live register that is *not* used by the current instruction.
                     // Spilling a use wouldn't help.
-                    let args = dfg.inst_args(inst);
-                    match self.spill_candidate(mask,
-                                               tracker.live().iter().filter(|lv| {
-                        !args.contains(&lv.value)
-                    }),
-                                               dfg,
-                                               &pos.layout) {
-                        Some(cand) => self.spill_reg(cand, dfg),
+                    match {
+                              let args = self.cur.func.dfg.inst_args(inst);
+                              self.spill_candidate(mask,
+                                                   tracker.live().iter().filter(|lv| {
+                            !args.contains(&lv.value)
+                        }))
+                          } {
+                        Some(cand) => self.spill_reg(cand),
                         None => {
                             panic!("Ran out of {} registers when inserting copy before {}",
                                    rc,
-                                   dfg.display_inst(inst, self.isa))
+                                   self.cur.display_inst(inst))
                         }
                     }
                 }
@@ -415,12 +394,7 @@ impl<'a> Context<'a> {
     }
 
     // Find a spill candidate from `candidates` whose top-level register class is in `mask`.
-    fn spill_candidate<'ii, II>(&self,
-                                mask: RegClassMask,
-                                candidates: II,
-                                dfg: &DataFlowGraph,
-                                layout: &Layout)
-                                -> Option<Value>
+    fn spill_candidate<'ii, II>(&self, mask: RegClassMask, candidates: II) -> Option<Value>
         where II: IntoIterator<Item = &'ii LiveValue>
     {
         // Find the best viable spill candidate.
@@ -448,7 +422,9 @@ impl<'a> Context<'a> {
             .min_by(|&a, &b| {
                         // Find the minimum candidate according to the RPO of their defs.
                         self.domtree
-                            .rpo_cmp(dfg.value_def(a), dfg.value_def(b), layout)
+                            .rpo_cmp(self.cur.func.dfg.value_def(a),
+                                     self.cur.func.dfg.value_def(b),
+                                     &self.cur.func.layout)
                     })
     }
 
@@ -460,7 +436,7 @@ impl<'a> Context<'a> {
     ///
     /// Note that this does not update the cached affinity in the live value tracker. Call
     /// `process_spills` to do that.
-    fn spill_reg(&mut self, value: Value, dfg: &DataFlowGraph) {
+    fn spill_reg(&mut self, value: Value) {
         if let Affinity::Reg(rci) = self.liveness.spill(value) {
             let rc = self.reginfo.rc(rci);
             self.pressure.free(rc);
@@ -471,10 +447,13 @@ impl<'a> Context<'a> {
         }
 
         // Assign a spill slot for the whole virtual register.
-        let ss = self.stack_slots.make_spill_slot(dfg.value_type(value));
+        let ss = self.cur
+            .func
+            .stack_slots
+            .make_spill_slot(self.cur.func.dfg.value_type(value));
         for &v in self.virtregs.congruence_class(&value) {
             self.liveness.spill(v);
-            *self.locations.ensure(v) = ValueLoc::Stack(ss);
+            *self.cur.func.locations.ensure(v) = ValueLoc::Stack(ss);
         }
     }
 
@@ -492,32 +471,21 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// Insert a `copy value` before `pos` and give it a live range extending to `pos`.
+    /// Insert a `copy value` before the current instruction and give it a live range extending to
+    /// the current instruction.
     ///
     /// Returns the new local value created.
-    fn insert_copy(&mut self,
-                   value: Value,
-                   rci: RegClassIndex,
-                   pos: &mut Cursor,
-                   dfg: &mut DataFlowGraph)
-                   -> Value {
-        let copy = dfg.ins(pos).copy(value);
-        let inst = dfg.value_def(copy).unwrap_inst();
-        let ty = dfg.value_type(copy);
-
-        // Give it an encoding.
-        match self.isa.encode(dfg, &dfg[inst], ty) {
-            Ok(e) => *self.encodings.ensure(inst) = e,
-            Err(_) => panic!("Can't encode {}", dfg.display_inst(inst, self.isa)),
-        }
+    fn insert_copy(&mut self, value: Value, rci: RegClassIndex) -> Value {
+        let copy = self.cur.ins().copy(value);
+        let inst = self.cur.built_inst();
 
         // Update live ranges.
         self.liveness.create_dead(copy, inst, Affinity::Reg(rci));
         self.liveness
             .extend_locally(copy,
-                            pos.layout.pp_ebb(inst),
-                            pos.current_inst().expect("must be at an instruction"),
-                            pos.layout);
+                            self.cur.func.layout.pp_ebb(inst),
+                            self.cur.current_inst().expect("must be at an instruction"),
+                            &self.cur.func.layout);
 
         copy
     }
