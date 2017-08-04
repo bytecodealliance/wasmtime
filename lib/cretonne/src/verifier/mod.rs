@@ -63,6 +63,8 @@ use std::error as std_error;
 use std::fmt::{self, Display, Formatter};
 use std::result;
 use std::collections::BTreeSet;
+use std::cmp::Ordering;
+use iterators::IteratorExtras;
 
 pub use self::liveness::verify_liveness;
 pub use self::cssa::verify_cssa;
@@ -407,6 +409,34 @@ impl<'a> Verifier<'a> {
                             ebb,
                             expected,
                             got);
+            }
+        }
+        // We also verify if the postorder defined by `DominatorTree` is sane
+        if self.domtree.cfg_postorder().len() != domtree.cfg_postorder().len() {
+            return err!(AnyEntity::Function,
+                        "incorrect number of Ebbs in postorder traversal");
+        }
+        for (index, (&true_ebb, &test_ebb)) in
+            self.domtree
+                .cfg_postorder()
+                .iter()
+                .zip(domtree.cfg_postorder().iter())
+                .enumerate() {
+            if true_ebb != test_ebb {
+                return err!(test_ebb,
+                            "invalid domtree, postorder ebb number {} should be {}, got {}",
+                            index,
+                            true_ebb,
+                            test_ebb);
+            }
+        }
+        // We verify rpo_cmp on pairs of adjacent ebbs in the postorder
+        for (&prev_ebb, &next_ebb) in self.domtree.cfg_postorder().iter().adjacent_pairs() {
+            if domtree.rpo_cmp(prev_ebb, next_ebb, &self.func.layout) != Ordering::Greater {
+                return err!(next_ebb,
+                            "invalid domtree, rpo_cmp does not says {} is greater than {}",
+                            prev_ebb,
+                            next_ebb);
             }
         }
         Ok(())
