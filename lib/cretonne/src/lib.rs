@@ -34,6 +34,7 @@ pub mod verifier;
 mod abi;
 mod constant_hash;
 mod context;
+mod cursor;
 mod iterators;
 mod legalizer;
 mod licm;

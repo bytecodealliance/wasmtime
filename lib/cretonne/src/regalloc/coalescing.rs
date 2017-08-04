@@ -5,10 +5,11 @@
 //! and inserting copies where necessary such that all values passed to an EBB argument will belong
 //! to the same virtual register as the EBB argument value itself.
 
+use cursor::{Cursor, EncCursor};
 use dbg::DisplayList;
 use dominator_tree::DominatorTree;
 use flowgraph::{ControlFlowGraph, BasicBlock};
-use ir::{DataFlowGraph, Layout, Cursor, CursorBase, InstBuilder, ValueDef};
+use ir::{DataFlowGraph, Layout, InstBuilder, ValueDef};
 use ir::{Function, Ebb, Inst, Value, ExpandedProgramPoint};
 use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
@@ -464,37 +465,26 @@ impl<'a> Context<'a> {
                   argnum: usize,
                   pred_val: Value)
                   -> Value {
-        let copy;
-        {
-            let mut pos = Cursor::new(&mut self.func.layout).at_inst(pred_inst);
-            copy = self.func.dfg.ins(&mut pos).copy(pred_val);
-        }
-        let inst = self.func.dfg.value_def(copy).unwrap_inst();
-        let ty = self.func.dfg.value_type(copy);
+        let mut pos = EncCursor::new(self.func, self.isa).at_inst(pred_inst);
+        let copy = pos.ins().copy(pred_val);
+        let inst = pos.built_inst();
 
         dbg!("Inserted {}, before {}: {}",
-             self.func.dfg.display_inst(inst, self.isa),
+             pos.display_inst(inst),
              pred_ebb,
-             self.func.dfg.display_inst(pred_inst, self.isa));
-
-        // Give it an encoding.
-        let encoding = match self.isa.encode(&self.func.dfg, &self.func.dfg[inst], ty) {
-            Ok(e) => e,
-            Err(_) => panic!("Can't encode copy.{}", ty),
-        };
-        *self.func.encodings.ensure(inst) = encoding;
+             pos.display_inst(pred_inst));
 
         // Create a live range for the new value.
         let affinity = Affinity::new(&self.encinfo
-                                          .operand_constraints(encoding)
+                                          .operand_constraints(pos.func.encodings[inst])
                                           .expect("Bad copy encoding")
                                           .outs
                                           [0]);
         self.liveness.create_dead(copy, inst, affinity);
         self.liveness
-            .extend_locally(copy, pred_ebb, pred_inst, &self.func.layout);
+            .extend_locally(copy, pred_ebb, pred_inst, &pos.func.layout);
 
-        self.func.dfg.inst_variable_args_mut(pred_inst)[argnum] = copy;
+        pos.func.dfg.inst_variable_args_mut(pred_inst)[argnum] = copy;
         self.split_values.push(copy);
         copy
     }
@@ -505,39 +495,26 @@ impl<'a> Context<'a> {
         let new_val = self.func.dfg.replace_ebb_arg(succ_val, ty);
 
         // Insert a copy instruction at the top of ebb.
-        {
-            let mut pos = Cursor::new(&mut self.func.layout).at_first_inst(ebb);
-            self.func
-                .dfg
-                .ins(&mut pos)
-                .with_result(succ_val)
-                .copy(new_val);
-        }
-        let inst = self.func.dfg.value_def(succ_val).unwrap_inst();
+        let mut pos = EncCursor::new(self.func, self.isa).at_first_inst(ebb);
+        pos.ins().with_result(succ_val).copy(new_val);
+        let inst = pos.built_inst();
         self.liveness.move_def_locally(succ_val, inst);
 
         dbg!("Inserted {}, following {}({}: {})",
-             self.func.dfg.display_inst(inst, self.isa),
+             pos.display_inst(inst),
              ebb,
              new_val,
              ty);
 
-        // Give it an encoding.
-        let encoding = match self.isa.encode(&self.func.dfg, &self.func.dfg[inst], ty) {
-            Ok(e) => e,
-            Err(_) => panic!("Can't encode copy.{}", ty),
-        };
-        *self.func.encodings.ensure(inst) = encoding;
-
         // Create a live range for the new value.
         let affinity = Affinity::new(&self.encinfo
-                                          .operand_constraints(encoding)
+                                          .operand_constraints(pos.func.encodings[inst])
                                           .expect("Bad copy encoding")
                                           .outs
                                           [0]);
         self.liveness.create_dead(new_val, ebb, affinity);
         self.liveness
-            .extend_locally(new_val, ebb, inst, &self.func.layout);
+            .extend_locally(new_val, ebb, inst, &pos.func.layout);
 
         self.split_values.push(new_val);
         new_val
