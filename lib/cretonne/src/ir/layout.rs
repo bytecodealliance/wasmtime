@@ -672,6 +672,47 @@ pub trait CursorBase {
     /// Borrow a mutable reference to the function layout that this cursor is navigating.
     fn layout_mut(&mut self) -> &mut Layout;
 
+    /// Rebuild this cursor positioned at `inst`.
+    ///
+    /// This is intended to be used as a builder method:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb, Inst};
+    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// fn edit_func(func: &mut Function, inst: Inst) {
+    ///     let mut pos = Cursor::new(&mut func.layout).at_inst(inst);
+    ///
+    ///     // Use `pos`...
+    /// }
+    /// ```
+    fn at_inst(mut self, inst: Inst) -> Self
+        where Self: Sized
+    {
+        self.goto_inst(inst);
+        self
+    }
+
+    /// Rebuild this cursor positioned at the first instruction in `ebb`.
+    ///
+    /// This is intended to be used as a builder method:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb, Inst};
+    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// fn edit_func(func: &mut Function, ebb: Ebb) {
+    ///     let mut pos = Cursor::new(&mut func.layout).at_first_inst(ebb);
+    ///
+    ///     // Use `pos`...
+    /// }
+    /// ```
+    fn at_first_inst(mut self, ebb: Ebb) -> Self
+        where Self: Sized
+    {
+        let inst = self.layout().ebbs[ebb].first_inst.expect("Empty EBB");
+        self.goto_inst(inst);
+        self
+    }
+
     /// Get the EBB corresponding to the current position.
     fn current_ebb(&self) -> Option<Ebb> {
         use self::CursorPosition::*;
