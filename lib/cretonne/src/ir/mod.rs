@@ -17,22 +17,21 @@ mod memflags;
 mod progpoint;
 mod valueloc;
 
-pub use ir::funcname::FunctionName;
+pub use ir::builder::{InstBuilder, InstBuilderBase, InstInserterBase, InsertBuilder};
+pub use ir::dfg::{DataFlowGraph, ValueDef};
+pub use ir::entities::{Ebb, Inst, Value, StackSlot, JumpTable, FuncRef, SigRef};
 pub use ir::extfunc::{Signature, CallConv, ArgumentType, ArgumentExtension, ArgumentPurpose,
                       ExtFuncData};
-pub use ir::types::Type;
-pub use ir::entities::{Ebb, Inst, Value, StackSlot, JumpTable, FuncRef, SigRef};
-pub use ir::instructions::{Opcode, InstructionData, VariableArgs, ValueList, ValueListPool};
-pub use ir::stackslot::{StackSlots, StackSlotKind, StackSlotData};
-pub use ir::jumptable::JumpTableData;
-pub use ir::valueloc::{ValueLoc, ArgumentLoc};
-pub use ir::dfg::{DataFlowGraph, ValueDef};
-pub use ir::layout::{Layout, CursorBase, Cursor};
+pub use ir::funcname::FunctionName;
 pub use ir::function::Function;
-pub use ir::builder::InstBuilder;
-pub use ir::progpoint::{ProgramPoint, ProgramOrder, ExpandedProgramPoint};
+pub use ir::instructions::{Opcode, InstructionData, VariableArgs, ValueList, ValueListPool};
+pub use ir::jumptable::JumpTableData;
+pub use ir::layout::{Layout, CursorBase, Cursor};
 pub use ir::memflags::MemFlags;
-pub use ir::builder::InstBuilderBase;
+pub use ir::progpoint::{ProgramPoint, ProgramOrder, ExpandedProgramPoint};
+pub use ir::stackslot::{StackSlots, StackSlotKind, StackSlotData};
+pub use ir::types::Type;
+pub use ir::valueloc::{ValueLoc, ArgumentLoc};
 
 use binemit;
 use entity_map::EntityMap;
