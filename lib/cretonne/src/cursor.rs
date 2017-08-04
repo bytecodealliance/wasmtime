@@ -10,6 +10,67 @@ pub use ir::layout::CursorBase as Cursor;
 pub use ir::layout::CursorPosition;
 pub use ir::layout::Cursor as LayoutCursor;
 
+/// Function cursor.
+///
+/// A `FuncCursor` holds a mutable reference to a whole `ir::Function` while keeping a position
+/// too. The function can be re-borrowed by accessing the public `cur.func` member.
+///
+/// This cursor is for use before legalization. The inserted instructions are not given an
+/// encoding.
+pub struct FuncCursor<'f> {
+    pos: CursorPosition,
+    pub func: &'f mut ir::Function,
+}
+
+impl<'f> FuncCursor<'f> {
+    /// Create a new `FuncCursor` pointing nowhere.
+    pub fn new(func: &'f mut ir::Function) -> FuncCursor<'f> {
+        FuncCursor {
+            pos: CursorPosition::Nowhere,
+            func,
+        }
+    }
+
+    /// Create an instruction builder that inserts an instruction at the current position.
+    pub fn ins(&mut self) -> ir::InsertBuilder<&mut FuncCursor<'f>> {
+        ir::InsertBuilder::new(self)
+    }
+}
+
+impl<'f> Cursor for FuncCursor<'f> {
+    fn position(&self) -> CursorPosition {
+        self.pos
+    }
+
+    fn set_position(&mut self, pos: CursorPosition) {
+        self.pos = pos
+    }
+
+    fn layout(&self) -> &ir::Layout {
+        &self.func.layout
+    }
+
+    fn layout_mut(&mut self) -> &mut ir::Layout {
+        &mut self.func.layout
+    }
+}
+
+impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
+    fn data_flow_graph(&self) -> &ir::DataFlowGraph {
+        &self.func.dfg
+    }
+
+    fn data_flow_graph_mut(&mut self) -> &mut ir::DataFlowGraph {
+        &mut self.func.dfg
+    }
+
+    fn insert_built_inst(self, inst: ir::Inst, _: ir::Type) -> &'c mut ir::DataFlowGraph {
+        self.insert_inst(inst);
+        &mut self.func.dfg
+    }
+}
+
+
 /// Encoding cursor.
 ///
 /// An `EncCursor` can be used to insert instructions that are immediately assigned an encoding.

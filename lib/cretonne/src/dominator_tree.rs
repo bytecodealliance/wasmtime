@@ -387,8 +387,9 @@ impl DominatorTree {
 
 #[cfg(test)]
 mod test {
+    use cursor::{Cursor, FuncCursor};
     use flowgraph::ControlFlowGraph;
-    use ir::{Function, InstBuilder, Cursor, CursorBase, types};
+    use ir::{Function, InstBuilder, types};
     use super::*;
     use ir::types::*;
     use verifier::verify_context;
@@ -411,45 +412,38 @@ mod test {
         let ebb2 = func.dfg.make_ebb();
         let ebb0 = func.dfg.make_ebb();
 
-        let jmp_ebb3_ebb1;
-        let br_ebb1_ebb0;
-        let jmp_ebb1_ebb2;
+        let mut cur = FuncCursor::new(&mut func);
 
-        {
-            let dfg = &mut func.dfg;
-            let cur = &mut Cursor::new(&mut func.layout);
+        cur.insert_ebb(ebb3);
+        let jmp_ebb3_ebb1 = cur.ins().jump(ebb1, &[]);
 
-            cur.insert_ebb(ebb3);
-            jmp_ebb3_ebb1 = dfg.ins(cur).jump(ebb1, &[]);
+        cur.insert_ebb(ebb1);
+        let br_ebb1_ebb0 = cur.ins().brnz(cond, ebb0, &[]);
+        let jmp_ebb1_ebb2 = cur.ins().jump(ebb2, &[]);
 
-            cur.insert_ebb(ebb1);
-            br_ebb1_ebb0 = dfg.ins(cur).brnz(cond, ebb0, &[]);
-            jmp_ebb1_ebb2 = dfg.ins(cur).jump(ebb2, &[]);
+        cur.insert_ebb(ebb2);
+        cur.ins().jump(ebb0, &[]);
 
-            cur.insert_ebb(ebb2);
-            dfg.ins(cur).jump(ebb0, &[]);
+        cur.insert_ebb(ebb0);
 
-            cur.insert_ebb(ebb0);
-        }
+        let cfg = ControlFlowGraph::with_function(cur.func);
+        let dt = DominatorTree::with_function(cur.func, &cfg);
 
-        let cfg = ControlFlowGraph::with_function(&func);
-        let dt = DominatorTree::with_function(&func, &cfg);
-
-        assert_eq!(func.layout.entry_block().unwrap(), ebb3);
+        assert_eq!(cur.func.layout.entry_block().unwrap(), ebb3);
         assert_eq!(dt.idom(ebb3), None);
         assert_eq!(dt.idom(ebb1).unwrap(), jmp_ebb3_ebb1);
         assert_eq!(dt.idom(ebb2).unwrap(), jmp_ebb1_ebb2);
         assert_eq!(dt.idom(ebb0).unwrap(), br_ebb1_ebb0);
 
-        assert!(dt.dominates(br_ebb1_ebb0, br_ebb1_ebb0, &func.layout));
-        assert!(!dt.dominates(br_ebb1_ebb0, jmp_ebb3_ebb1, &func.layout));
-        assert!(dt.dominates(jmp_ebb3_ebb1, br_ebb1_ebb0, &func.layout));
+        assert!(dt.dominates(br_ebb1_ebb0, br_ebb1_ebb0, &cur.func.layout));
+        assert!(!dt.dominates(br_ebb1_ebb0, jmp_ebb3_ebb1, &cur.func.layout));
+        assert!(dt.dominates(jmp_ebb3_ebb1, br_ebb1_ebb0, &cur.func.layout));
 
-        assert_eq!(dt.rpo_cmp(ebb3, ebb3, &func.layout), Ordering::Equal);
-        assert_eq!(dt.rpo_cmp(ebb3, ebb1, &func.layout), Ordering::Less);
-        assert_eq!(dt.rpo_cmp(ebb3, jmp_ebb3_ebb1, &func.layout),
+        assert_eq!(dt.rpo_cmp(ebb3, ebb3, &cur.func.layout), Ordering::Equal);
+        assert_eq!(dt.rpo_cmp(ebb3, ebb1, &cur.func.layout), Ordering::Less);
+        assert_eq!(dt.rpo_cmp(ebb3, jmp_ebb3_ebb1, &cur.func.layout),
                    Ordering::Less);
-        assert_eq!(dt.rpo_cmp(jmp_ebb3_ebb1, jmp_ebb1_ebb2, &func.layout),
+        assert_eq!(dt.rpo_cmp(jmp_ebb3_ebb1, jmp_ebb1_ebb2, &cur.func.layout),
                    Ordering::Less);
 
         assert_eq!(dt.cfg_postorder(), &[ebb2, ebb0, ebb1, ebb3]);
@@ -462,72 +456,66 @@ mod test {
         let ebb1 = func.dfg.make_ebb();
         let ebb2 = func.dfg.make_ebb();
 
-        let jmp02;
-        let jmp21;
-        let trap;
-        {
-            let dfg = &mut func.dfg;
-            let cur = &mut Cursor::new(&mut func.layout);
+        let mut cur = FuncCursor::new(&mut func);
 
-            cur.insert_ebb(ebb0);
-            jmp02 = dfg.ins(cur).jump(ebb2, &[]);
+        cur.insert_ebb(ebb0);
+        let jmp02 = cur.ins().jump(ebb2, &[]);
 
-            cur.insert_ebb(ebb1);
-            trap = dfg.ins(cur).trap();
+        cur.insert_ebb(ebb1);
+        let trap = cur.ins().trap();
 
-            cur.insert_ebb(ebb2);
-            jmp21 = dfg.ins(cur).jump(ebb1, &[]);
-        }
+        cur.insert_ebb(ebb2);
+        let jmp21 = cur.ins().jump(ebb1, &[]);
 
-        let cfg = ControlFlowGraph::with_function(&func);
-        let dt = DominatorTree::with_function(&func, &cfg);
+        let cfg = ControlFlowGraph::with_function(cur.func);
+        let dt = DominatorTree::with_function(cur.func, &cfg);
 
-        assert_eq!(func.layout.entry_block(), Some(ebb0));
+        assert_eq!(cur.func.layout.entry_block(), Some(ebb0));
         assert_eq!(dt.idom(ebb0), None);
         assert_eq!(dt.idom(ebb1), Some(jmp21));
         assert_eq!(dt.idom(ebb2), Some(jmp02));
 
-        assert!(dt.dominates(ebb0, ebb0, &func.layout));
-        assert!(dt.dominates(ebb0, jmp02, &func.layout));
-        assert!(dt.dominates(ebb0, ebb1, &func.layout));
-        assert!(dt.dominates(ebb0, trap, &func.layout));
-        assert!(dt.dominates(ebb0, ebb2, &func.layout));
-        assert!(dt.dominates(ebb0, jmp21, &func.layout));
+        assert!(dt.dominates(ebb0, ebb0, &cur.func.layout));
+        assert!(dt.dominates(ebb0, jmp02, &cur.func.layout));
+        assert!(dt.dominates(ebb0, ebb1, &cur.func.layout));
+        assert!(dt.dominates(ebb0, trap, &cur.func.layout));
+        assert!(dt.dominates(ebb0, ebb2, &cur.func.layout));
+        assert!(dt.dominates(ebb0, jmp21, &cur.func.layout));
 
-        assert!(!dt.dominates(jmp02, ebb0, &func.layout));
-        assert!(dt.dominates(jmp02, jmp02, &func.layout));
-        assert!(dt.dominates(jmp02, ebb1, &func.layout));
-        assert!(dt.dominates(jmp02, trap, &func.layout));
-        assert!(dt.dominates(jmp02, ebb2, &func.layout));
-        assert!(dt.dominates(jmp02, jmp21, &func.layout));
+        assert!(!dt.dominates(jmp02, ebb0, &cur.func.layout));
+        assert!(dt.dominates(jmp02, jmp02, &cur.func.layout));
+        assert!(dt.dominates(jmp02, ebb1, &cur.func.layout));
+        assert!(dt.dominates(jmp02, trap, &cur.func.layout));
+        assert!(dt.dominates(jmp02, ebb2, &cur.func.layout));
+        assert!(dt.dominates(jmp02, jmp21, &cur.func.layout));
 
-        assert!(!dt.dominates(ebb1, ebb0, &func.layout));
-        assert!(!dt.dominates(ebb1, jmp02, &func.layout));
-        assert!(dt.dominates(ebb1, ebb1, &func.layout));
-        assert!(dt.dominates(ebb1, trap, &func.layout));
-        assert!(!dt.dominates(ebb1, ebb2, &func.layout));
-        assert!(!dt.dominates(ebb1, jmp21, &func.layout));
+        assert!(!dt.dominates(ebb1, ebb0, &cur.func.layout));
+        assert!(!dt.dominates(ebb1, jmp02, &cur.func.layout));
+        assert!(dt.dominates(ebb1, ebb1, &cur.func.layout));
+        assert!(dt.dominates(ebb1, trap, &cur.func.layout));
+        assert!(!dt.dominates(ebb1, ebb2, &cur.func.layout));
+        assert!(!dt.dominates(ebb1, jmp21, &cur.func.layout));
 
-        assert!(!dt.dominates(trap, ebb0, &func.layout));
-        assert!(!dt.dominates(trap, jmp02, &func.layout));
-        assert!(!dt.dominates(trap, ebb1, &func.layout));
-        assert!(dt.dominates(trap, trap, &func.layout));
-        assert!(!dt.dominates(trap, ebb2, &func.layout));
-        assert!(!dt.dominates(trap, jmp21, &func.layout));
+        assert!(!dt.dominates(trap, ebb0, &cur.func.layout));
+        assert!(!dt.dominates(trap, jmp02, &cur.func.layout));
+        assert!(!dt.dominates(trap, ebb1, &cur.func.layout));
+        assert!(dt.dominates(trap, trap, &cur.func.layout));
+        assert!(!dt.dominates(trap, ebb2, &cur.func.layout));
+        assert!(!dt.dominates(trap, jmp21, &cur.func.layout));
 
-        assert!(!dt.dominates(ebb2, ebb0, &func.layout));
-        assert!(!dt.dominates(ebb2, jmp02, &func.layout));
-        assert!(dt.dominates(ebb2, ebb1, &func.layout));
-        assert!(dt.dominates(ebb2, trap, &func.layout));
-        assert!(dt.dominates(ebb2, ebb2, &func.layout));
-        assert!(dt.dominates(ebb2, jmp21, &func.layout));
+        assert!(!dt.dominates(ebb2, ebb0, &cur.func.layout));
+        assert!(!dt.dominates(ebb2, jmp02, &cur.func.layout));
+        assert!(dt.dominates(ebb2, ebb1, &cur.func.layout));
+        assert!(dt.dominates(ebb2, trap, &cur.func.layout));
+        assert!(dt.dominates(ebb2, ebb2, &cur.func.layout));
+        assert!(dt.dominates(ebb2, jmp21, &cur.func.layout));
 
-        assert!(!dt.dominates(jmp21, ebb0, &func.layout));
-        assert!(!dt.dominates(jmp21, jmp02, &func.layout));
-        assert!(dt.dominates(jmp21, ebb1, &func.layout));
-        assert!(dt.dominates(jmp21, trap, &func.layout));
-        assert!(!dt.dominates(jmp21, ebb2, &func.layout));
-        assert!(dt.dominates(jmp21, jmp21, &func.layout));
+        assert!(!dt.dominates(jmp21, ebb0, &cur.func.layout));
+        assert!(!dt.dominates(jmp21, jmp02, &cur.func.layout));
+        assert!(dt.dominates(jmp21, ebb1, &cur.func.layout));
+        assert!(dt.dominates(jmp21, trap, &cur.func.layout));
+        assert!(!dt.dominates(jmp21, ebb2, &cur.func.layout));
+        assert!(dt.dominates(jmp21, jmp21, &cur.func.layout));
     }
 
     #[test]
@@ -536,63 +524,47 @@ mod test {
         let ebb0 = func.dfg.make_ebb();
         let ebb100 = func.dfg.make_ebb();
 
-        let inst2;
-        let inst3;
-        let inst4;
-        let inst5;
-        {
-            let dfg = &mut func.dfg;
-            let cur = &mut Cursor::new(&mut func.layout);
+        let mut cur = FuncCursor::new(&mut func);
 
-            cur.insert_ebb(ebb0);
-            let cond = dfg.ins(cur).iconst(I32, 0);
-            inst2 = dfg.ins(cur).brz(cond, ebb0, &[]);
-            inst3 = dfg.ins(cur).brz(cond, ebb0, &[]);
-            inst4 = dfg.ins(cur).brz(cond, ebb0, &[]);
-            inst5 = dfg.ins(cur).brz(cond, ebb0, &[]);
-            dfg.ins(cur).jump(ebb100, &[]);
-            cur.insert_ebb(ebb100);
-            dfg.ins(cur).return_(&[]);
-        }
-        let mut cfg = ControlFlowGraph::with_function(&func);
-        let mut dt = DominatorTree::with_function(&func, &cfg);
+        cur.insert_ebb(ebb0);
+        let cond = cur.ins().iconst(I32, 0);
+        let inst2 = cur.ins().brz(cond, ebb0, &[]);
+        let inst3 = cur.ins().brz(cond, ebb0, &[]);
+        let inst4 = cur.ins().brz(cond, ebb0, &[]);
+        let inst5 = cur.ins().brz(cond, ebb0, &[]);
+        cur.ins().jump(ebb100, &[]);
+        cur.insert_ebb(ebb100);
+        cur.ins().return_(&[]);
 
-        let ebb1 = func.dfg.make_ebb();
-        func.layout.split_ebb(ebb1, inst2);
-        let middle_jump_inst = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
-            func.dfg.ins(cur).jump(ebb1, &[])
-        };
+        let mut cfg = ControlFlowGraph::with_function(cur.func);
+        let mut dt = DominatorTree::with_function(cur.func, &cfg);
+
+        let ebb1 = cur.func.dfg.make_ebb();
+        cur.func.layout.split_ebb(ebb1, inst2);
+        cur.goto_bottom(ebb0);
+        let middle_jump_inst = cur.ins().jump(ebb1, &[]);
+
         dt.recompute_split_ebb(ebb0, ebb1, middle_jump_inst);
 
-        let ebb2 = func.dfg.make_ebb();
-        func.layout.split_ebb(ebb2, inst3);
-        let middle_jump_inst = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb1);
-            func.dfg.ins(cur).jump(ebb2, &[])
-        };
+        let ebb2 = cur.func.dfg.make_ebb();
+        cur.func.layout.split_ebb(ebb2, inst3);
+        cur.goto_bottom(ebb1);
+        let middle_jump_inst = cur.ins().jump(ebb2, &[]);
         dt.recompute_split_ebb(ebb1, ebb2, middle_jump_inst);
 
-        let ebb3 = func.dfg.make_ebb();
-        func.layout.split_ebb(ebb3, inst4);
-        let middle_jump_inst = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb2);
-            func.dfg.ins(cur).jump(ebb3, &[])
-        };
+        let ebb3 = cur.func.dfg.make_ebb();
+        cur.func.layout.split_ebb(ebb3, inst4);
+        cur.goto_bottom(ebb2);
+        let middle_jump_inst = cur.ins().jump(ebb3, &[]);
         dt.recompute_split_ebb(ebb2, ebb3, middle_jump_inst);
 
-        let ebb4 = func.dfg.make_ebb();
-        func.layout.split_ebb(ebb4, inst5);
-        let middle_jump_inst = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb3);
-            func.dfg.ins(cur).jump(ebb4, &[])
-        };
+        let ebb4 = cur.func.dfg.make_ebb();
+        cur.func.layout.split_ebb(ebb4, inst5);
+        cur.goto_bottom(ebb3);
+        let middle_jump_inst = cur.ins().jump(ebb4, &[]);
         dt.recompute_split_ebb(ebb3, ebb4, middle_jump_inst);
-        cfg.compute(&func);
-        verify_context(&func, &cfg, &dt, None).unwrap();
+
+        cfg.compute(cur.func);
+        verify_context(cur.func, &cfg, &dt, None).unwrap();
     }
 }
