@@ -5,7 +5,7 @@ use isa::TargetIsa;
 use ir::builder::{InsertBuilder, ReplaceBuilder};
 use ir::extfunc::ExtFuncData;
 use ir::instructions::{Opcode, InstructionData, CallInfo};
-use ir::layout::Cursor;
+use ir::layout::{Cursor, LayoutCursorInserter};
 use ir::types;
 use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
 use write::write_operands;
@@ -486,8 +486,8 @@ impl DataFlowGraph {
     /// Create an `InsertBuilder` that will insert an instruction at the cursor's current position.
     pub fn ins<'c, 'fc: 'c, 'fd>(&'fd mut self,
                                  at: &'c mut Cursor<'fc>)
-                                 -> InsertBuilder<'c, 'fc, 'fd> {
-        InsertBuilder::new(self, at)
+                                 -> InsertBuilder<'fd, LayoutCursorInserter<'c, 'fc, 'fd>> {
+        InsertBuilder::new(LayoutCursorInserter::new(at, self))
     }
 
     /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.

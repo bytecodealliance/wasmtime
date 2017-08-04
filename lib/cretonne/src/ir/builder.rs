@@ -4,7 +4,7 @@
 //! function. Many of its methods are generated from the meta language instruction definitions.
 
 use ir::types;
-use ir::{InstructionData, DataFlowGraph, Cursor, CursorBase};
+use ir::{InstructionData, DataFlowGraph};
 use ir::{Opcode, Type, Inst, Value, Ebb, JumpTable, SigRef, FuncRef, StackSlot, ValueList,
          MemFlags};
 use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32, Uoffset32};
@@ -43,23 +43,44 @@ include!(concat!(env!("OUT_DIR"), "/builder.rs"));
 /// Any type implementing `InstBuilderBase` gets all the `InstBuilder` methods for free.
 impl<'f, T: InstBuilderBase<'f>> InstBuilder<'f> for T {}
 
-/// Builder that inserts an instruction at the current cursor position.
+/// Base trait for instruction inserters.
 ///
-/// An `InsertBuilder` holds mutable references to a data flow graph and a layout cursor. It
-/// provides convenience methods for creating and inserting instructions at the current cursor
-/// position.
-pub struct InsertBuilder<'c, 'fc: 'c, 'fd> {
-    pos: &'c mut Cursor<'fc>,
-    dfg: &'fd mut DataFlowGraph,
+/// This is an alternative base trait for an instruction builder to implement.
+///
+/// An instruction inserter can be adapted into an instruction builder by wrapping it in an
+/// `InsertBuilder`. This provides some common functionality for instruction builders that insert
+/// new instructions, as opposed to the `ReplaceBuilder` which overwrites existing instructions.
+pub trait InstInserterBase<'f>: Sized {
+    /// Get an immutable reference to the data flow graph.
+    fn data_flow_graph(&self) -> &DataFlowGraph;
+
+    /// Get a mutable reference to the data flow graph.
+    fn data_flow_graph_mut(&mut self) -> &mut DataFlowGraph;
+
+    /// Insert a new instruction which belongs to the DFG.
+    fn insert_built_inst(self, inst: Inst, ctrl_typevar: Type) -> &'f mut DataFlowGraph;
 }
 
-impl<'c, 'fc, 'fd> InsertBuilder<'c, 'fc, 'fd> {
+use std::marker::PhantomData;
+
+/// Builder that inserts an instruction at the current position.
+///
+/// An `InsertBuilder` is a wrapper for an `InstInserterBase` that turns it into an instruction
+/// builder with some additional facilities for creating instructions that reuse existing values as
+/// their results.
+pub struct InsertBuilder<'f, IIB: InstInserterBase<'f>> {
+    inserter: IIB,
+    unused: PhantomData<&'f u32>,
+}
+
+impl<'f, IIB: InstInserterBase<'f>> InsertBuilder<'f, IIB> {
     /// Create a new builder which inserts instructions at `pos`.
     /// The `dfg` and `pos.layout` references should be from the same `Function`.
-    pub fn new(dfg: &'fd mut DataFlowGraph,
-               pos: &'c mut Cursor<'fc>)
-               -> InsertBuilder<'c, 'fc, 'fd> {
-        InsertBuilder { dfg, pos }
+    pub fn new(inserter: IIB) -> InsertBuilder<'f, IIB> {
+        InsertBuilder {
+            inserter,
+            unused: PhantomData,
+        }
     }
 
     /// Reuse result values in `reuse`.
@@ -69,13 +90,13 @@ impl<'c, 'fc, 'fd> InsertBuilder<'c, 'fc, 'fd> {
     /// missing result values will be allocated as normal.
     ///
     /// The `reuse` argument is expected to be an array of `Option<Value>`.
-    pub fn with_results<Array>(self, reuse: Array) -> InsertReuseBuilder<'c, 'fc, 'fd, Array>
+    pub fn with_results<Array>(self, reuse: Array) -> InsertReuseBuilder<'f, IIB, Array>
         where Array: AsRef<[Option<Value>]>
     {
         InsertReuseBuilder {
-            dfg: self.dfg,
-            pos: self.pos,
+            inserter: self.inserter,
             reuse,
+            unused: PhantomData,
         }
     }
 
@@ -86,57 +107,65 @@ impl<'c, 'fc, 'fd> InsertBuilder<'c, 'fc, 'fd> {
     ///
     /// This method should only be used when building an instruction with exactly one result. Use
     /// `with_results()` for the more general case.
-    pub fn with_result(self, v: Value) -> InsertReuseBuilder<'c, 'fc, 'fd, [Option<Value>; 1]> {
+    pub fn with_result(self, v: Value) -> InsertReuseBuilder<'f, IIB, [Option<Value>; 1]> {
         // TODO: Specialize this to return a different builder that just attaches `v` instead of
         // calling `make_inst_results_reusing()`.
         self.with_results([Some(v)])
     }
 }
 
-impl<'c, 'fc, 'fd> InstBuilderBase<'fd> for InsertBuilder<'c, 'fc, 'fd> {
+impl<'f, IIB: InstInserterBase<'f>> InstBuilderBase<'f> for InsertBuilder<'f, IIB> {
     fn data_flow_graph(&self) -> &DataFlowGraph {
-        self.dfg
+        self.inserter.data_flow_graph()
     }
 
     fn data_flow_graph_mut(&mut self) -> &mut DataFlowGraph {
-        self.dfg
+        self.inserter.data_flow_graph_mut()
     }
 
-    fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'fd mut DataFlowGraph) {
-        let inst = self.dfg.make_inst(data);
-        self.dfg.make_inst_results(inst, ctrl_typevar);
-        self.pos.insert_inst(inst);
-        (inst, self.dfg)
+    fn build(mut self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'f mut DataFlowGraph) {
+        let inst;
+        {
+            let dfg = self.inserter.data_flow_graph_mut();
+            inst = dfg.make_inst(data);
+            dfg.make_inst_results(inst, ctrl_typevar);
+        }
+        (inst, self.inserter.insert_built_inst(inst, ctrl_typevar))
     }
 }
 
 /// Builder that inserts a new instruction like `InsertBuilder`, but reusing result values.
-pub struct InsertReuseBuilder<'c, 'fc: 'c, 'fd, Array>
-    where Array: AsRef<[Option<Value>]>
+pub struct InsertReuseBuilder<'f, IIB, Array>
+    where IIB: InstInserterBase<'f>,
+          Array: AsRef<[Option<Value>]>
 {
-    pos: &'c mut Cursor<'fc>,
-    dfg: &'fd mut DataFlowGraph,
+    inserter: IIB,
     reuse: Array,
+    unused: PhantomData<&'f u32>,
 }
 
-impl<'c, 'fc, 'fd, Array> InstBuilderBase<'fd> for InsertReuseBuilder<'c, 'fc, 'fd, Array>
-    where Array: AsRef<[Option<Value>]>
+impl<'f, IIB, Array> InstBuilderBase<'f> for InsertReuseBuilder<'f, IIB, Array>
+    where IIB: InstInserterBase<'f>,
+          Array: AsRef<[Option<Value>]>
 {
     fn data_flow_graph(&self) -> &DataFlowGraph {
-        self.dfg
+        self.inserter.data_flow_graph()
     }
 
     fn data_flow_graph_mut(&mut self) -> &mut DataFlowGraph {
-        self.dfg
+        self.inserter.data_flow_graph_mut()
     }
 
-    fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'fd mut DataFlowGraph) {
-        let inst = self.dfg.make_inst(data);
-        // Make an `Interator<Item = Option<Value>>`.
-        let ru = self.reuse.as_ref().iter().cloned();
-        self.dfg.make_inst_results_reusing(inst, ctrl_typevar, ru);
-        self.pos.insert_inst(inst);
-        (inst, self.dfg)
+    fn build(mut self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'f mut DataFlowGraph) {
+        let inst;
+        {
+            let dfg = self.inserter.data_flow_graph_mut();
+            inst = dfg.make_inst(data);
+            // Make an `Interator<Item = Option<Value>>`.
+            let ru = self.reuse.as_ref().iter().cloned();
+            dfg.make_inst_results_reusing(inst, ctrl_typevar, ru);
+        }
+        (inst, self.inserter.insert_built_inst(inst, ctrl_typevar))
     }
 }
 

@@ -7,7 +7,8 @@ use std::cmp;
 use std::iter::{Iterator, IntoIterator};
 use entity_map::EntityMap;
 use packed_option::PackedOption;
-use ir::entities::{Ebb, Inst};
+use ir::{Ebb, Inst, Type, DataFlowGraph};
+use ir::builder::InstInserterBase;
 use ir::progpoint::{ProgramOrder, ExpandedProgramPoint};
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
@@ -1044,6 +1045,38 @@ impl<'f> Cursor<'f> {
     }
 }
 
+/// An instruction inserter which can be used to build and insert instructions at a cursor
+/// position.
+///
+/// This is used by `dfg.ins()`.
+pub struct LayoutCursorInserter<'c, 'fc: 'c, 'fd> {
+    pos: &'c mut Cursor<'fc>,
+    dfg: &'fd mut DataFlowGraph,
+}
+
+impl<'c, 'fc: 'c, 'fd> LayoutCursorInserter<'c, 'fc, 'fd> {
+    /// Create a new inserter. Don't use this, use `dfg.ins(pos)`.
+    pub fn new(pos: &'c mut Cursor<'fc>,
+               dfg: &'fd mut DataFlowGraph)
+               -> LayoutCursorInserter<'c, 'fc, 'fd> {
+        LayoutCursorInserter { pos, dfg }
+    }
+}
+
+impl<'c, 'fc: 'c, 'fd> InstInserterBase<'fd> for LayoutCursorInserter<'c, 'fc, 'fd> {
+    fn data_flow_graph(&self) -> &DataFlowGraph {
+        self.dfg
+    }
+
+    fn data_flow_graph_mut(&mut self) -> &mut DataFlowGraph {
+        self.dfg
+    }
+
+    fn insert_built_inst(self, inst: Inst, _ctrl_typevar: Type) -> &'fd mut DataFlowGraph {
+        self.pos.insert_inst(inst);
+        self.dfg
+    }
+}
 
 #[cfg(test)]
 mod tests {
