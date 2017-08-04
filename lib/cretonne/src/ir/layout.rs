@@ -709,8 +709,7 @@ pub trait CursorBase {
     fn at_first_inst(mut self, ebb: Ebb) -> Self
         where Self: Sized
     {
-        let inst = self.layout().ebbs[ebb].first_inst.expect("Empty EBB");
-        self.goto_inst(inst);
+        self.goto_first_inst(ebb);
         self
     }
 
@@ -737,6 +736,12 @@ pub trait CursorBase {
     /// New instructions will be inserted before `inst`.
     fn goto_inst(&mut self, inst: Inst) {
         assert!(self.layout().inst_ebb(inst).is_some());
+        self.set_position(CursorPosition::At(inst));
+    }
+
+    /// Go to the first instruction in `ebb`.
+    fn goto_first_inst(&mut self, ebb: Ebb) {
+        let inst = self.layout().ebbs[ebb].first_inst.expect("Empty EBB");
         self.set_position(CursorPosition::At(inst));
     }
 
