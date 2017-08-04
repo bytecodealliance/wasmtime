@@ -28,7 +28,8 @@
 //! ```
 
 use binemit::CodeOffset;
-use ir::{Function, DataFlowGraph, Cursor, CursorBase, InstructionData, Opcode, InstEncodings};
+use cursor::{Cursor, FuncCursor};
+use ir::{Function, InstructionData, Opcode};
 use isa::{TargetIsa, EncInfo};
 use iterators::IteratorExtras;
 use result::CtonError;
@@ -55,34 +56,29 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> Result<CodeOffset
         offset = 0;
 
         // Visit all instructions in layout order
-        let mut pos = Cursor::new(&mut func.layout);
-        while let Some(ebb) = pos.next_ebb() {
+        let mut cur = FuncCursor::new(func);
+        while let Some(ebb) = cur.next_ebb() {
             // Record the offset for `ebb` and make sure we iterate until offsets are stable.
-            if func.offsets[ebb] != offset {
-                assert!(func.offsets[ebb] < offset,
+            if cur.func.offsets[ebb] != offset {
+                assert!(cur.func.offsets[ebb] < offset,
                         "Code shrinking during relaxation");
-                func.offsets[ebb] = offset;
+                cur.func.offsets[ebb] = offset;
                 go_again = true;
             }
 
-            while let Some(inst) = pos.next_inst() {
-                let enc = func.encodings.get_or_default(inst);
+            while let Some(inst) = cur.next_inst() {
+                let enc = cur.func.encodings.get_or_default(inst);
                 let size = encinfo.bytes(enc);
 
                 // See if this might be a branch that is out of range.
                 if let Some(range) = encinfo.branch_range(enc) {
-                    if let Some(dest) = func.dfg[inst].branch_destination() {
-                        let dest_offset = func.offsets[dest];
+                    if let Some(dest) = cur.func.dfg[inst].branch_destination() {
+                        let dest_offset = cur.func.offsets[dest];
                         if !range.contains(offset, dest_offset) {
                             // This is an out-of-range branch.
                             // Relax it unless the destination offset has not been computed yet.
-                            if dest_offset != 0 || Some(dest) == pos.layout.entry_block() {
-                                offset += relax_branch(&mut func.dfg,
-                                                       &mut func.encodings,
-                                                       &encinfo,
-                                                       &mut pos,
-                                                       offset,
-                                                       dest_offset);
+                            if dest_offset != 0 || Some(dest) == cur.func.layout.entry_block() {
+                                offset += relax_branch(&mut cur, offset, dest_offset, &encinfo);
                                 continue;
                             }
                         }
@@ -130,17 +126,15 @@ fn fallthroughs(func: &mut Function) {
 ///
 /// Return the size of the replacement instructions up to and including the location where `pos` is
 /// left.
-fn relax_branch(dfg: &mut DataFlowGraph,
-                encodings: &mut InstEncodings,
-                encinfo: &EncInfo,
-                pos: &mut Cursor,
+fn relax_branch(cur: &mut FuncCursor,
                 offset: CodeOffset,
-                dest_offset: CodeOffset)
+                dest_offset: CodeOffset,
+                encinfo: &EncInfo)
                 -> CodeOffset {
-    let inst = pos.current_inst().unwrap();
+    let inst = cur.current_inst().unwrap();
     dbg!("Relaxing [{}] {} for {:#x}-{:#x} range",
-         encinfo.display(encodings[inst]),
-         dfg.display_inst(inst, None),
+         encinfo.display(cur.func.encodings[inst]),
+         cur.func.dfg.display_inst(inst, None),
          offset,
          dest_offset);
     unimplemented!();
