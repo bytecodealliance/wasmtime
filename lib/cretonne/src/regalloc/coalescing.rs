@@ -466,8 +466,7 @@ impl<'a> Context<'a> {
                   -> Value {
         let copy;
         {
-            let mut pos = Cursor::new(&mut self.func.layout);
-            pos.goto_inst(pred_inst);
+            let mut pos = Cursor::new(&mut self.func.layout).at_inst(pred_inst);
             copy = self.func.dfg.ins(&mut pos).copy(pred_val);
         }
         let inst = self.func.dfg.value_def(copy).unwrap_inst();
@@ -507,9 +506,7 @@ impl<'a> Context<'a> {
 
         // Insert a copy instruction at the top of ebb.
         {
-            let mut pos = Cursor::new(&mut self.func.layout);
-            pos.goto_top(ebb);
-            pos.next_inst();
+            let mut pos = Cursor::new(&mut self.func.layout).at_first_inst(ebb);
             self.func
                 .dfg
                 .ins(&mut pos)
