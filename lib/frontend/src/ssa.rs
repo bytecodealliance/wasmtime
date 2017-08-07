@@ -57,6 +57,15 @@ pub struct SideEffects {
     pub instructions_added_to_ebbs: Vec<Ebb>,
 }
 
+impl SideEffects {
+    fn new() -> SideEffects {
+        SideEffects {
+            split_ebbs_created: Vec::new(),
+            instructions_added_to_ebbs: Vec::new(),
+        }
+    }
+}
+
 // Describes the current position of a basic block in the control flow graph.
 enum BlockData<Variable> {
     // A block at the top of an `Ebb`.
@@ -209,11 +218,7 @@ impl<Variable> SSABuilder<Variable>
         // First we lookup for the current definition of the variable in this block
         if let Some(var_defs) = self.variables.get(var) {
             if let Some(val) = var_defs.get(&block) {
-                return (*val,
-                        SideEffects {
-                            split_ebbs_created: Vec::new(),
-                            instructions_added_to_ebbs: Vec::new(),
-                        });
+                return (*val, SideEffects::new());
             }
         };
         // At this point if we haven't returned it means that we have to search in the
@@ -252,11 +257,7 @@ impl<Variable> SSABuilder<Variable>
             // definition for the variable.
             UseVarCases::Unsealed(val) => {
                 self.def_var(var, val, block);
-                (val,
-                 SideEffects {
-                     split_ebbs_created: Vec::new(),
-                     instructions_added_to_ebbs: Vec::new(),
-                 })
+                (val, SideEffects::new())
             }
             UseVarCases::SealedMultiplePredecessors(preds, val, ebb) => {
                 // If multiple predecessor we look up a use_var in each of them:
@@ -377,10 +378,7 @@ impl<Variable> SSABuilder<Variable>
             }
         };
 
-        let mut side_effects = SideEffects {
-            split_ebbs_created: Vec::new(),
-            instructions_added_to_ebbs: Vec::new(),
-        };
+        let mut side_effects = SideEffects::new();
         // For each undef var we look up values in the predecessors and create an Ebb argument
         // only if necessary.
         for (var, val) in undef_vars {
@@ -420,10 +418,7 @@ impl<Variable> SSABuilder<Variable>
         // TODO: find a way not not allocate a vector
         let mut jump_args_to_append: Vec<(Block, Inst, Value)> = Vec::new();
         let ty = dfg.value_type(temp_arg_val);
-        let mut side_effects = SideEffects {
-            split_ebbs_created: Vec::new(),
-            instructions_added_to_ebbs: Vec::new(),
-        };
+        let mut side_effects = SideEffects::new();
         for &(pred, last_inst) in preds.iter() {
             // For undef value  and each predecessor we query what is the local SSA value
             // corresponding to var and we put it as an argument of the branch instruction.
