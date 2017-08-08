@@ -297,7 +297,7 @@ impl<'a> Verifier<'a> {
     }
 
     fn verify_ebb(&self, inst: Inst, e: Ebb) -> Result {
-        if !self.func.dfg.ebb_is_valid(e) {
+        if !self.func.dfg.ebb_is_valid(e) || !self.func.layout.is_ebb_inserted(e) {
             err!(inst, "invalid ebb reference {}", e)
         } else {
             Ok(())
