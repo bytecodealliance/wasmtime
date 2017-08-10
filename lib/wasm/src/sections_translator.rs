@@ -224,7 +224,7 @@ pub fn parse_global_section(parser: &mut Parser,
 
 pub fn parse_data_section(parser: &mut Parser,
                           runtime: &mut WasmRuntime,
-                          globals: &Vec<Global>)
+                          globals: &[Global])
                           -> Result<(), SectionParsingError> {
     loop {
         let memory_index = match *parser.read() {
@@ -314,7 +314,7 @@ pub fn parse_table_section(parser: &mut Parser,
 /// Retrieves the tables from the table section
 pub fn parse_elements_section(parser: &mut Parser,
                               runtime: &mut WasmRuntime,
-                              globals: &Vec<Global>)
+                              globals: &[Global])
                               -> Result<(), SectionParsingError> {
     loop {
         let table_index = match *parser.read() {

@@ -156,10 +156,10 @@ impl FunctionImports {
 pub fn translate_function_body(parser: &mut Parser,
                                function_index: FunctionIndex,
                                sig: Signature,
-                               locals: &Vec<(usize, Type)>,
+                               locals: &[(usize, Type)],
                                exports: &Option<HashMap<FunctionIndex, String>>,
-                               signatures: &Vec<Signature>,
-                               functions: &Vec<SignatureIndex>,
+                               signatures: &[Signature],
+                               functions: &[SignatureIndex],
                                il_builder: &mut ILBuilder<Local>,
                                runtime: &mut WasmRuntime)
                                -> Result<(Function, FunctionImports), String> {
@@ -288,8 +288,8 @@ fn translate_operator(op: &Operator,
                       control_stack: &mut Vec<ControlStackFrame>,
                       state: &mut TranslationState,
                       sig: &Signature,
-                      functions: &Vec<SignatureIndex>,
-                      signatures: &Vec<Signature>,
+                      functions: &[SignatureIndex],
+                      signatures: &[Signature],
                       exports: &Option<HashMap<FunctionIndex, String>>,
                       func_imports: &mut FunctionImports) {
     // This big match treats all Wasm code operators.
@@ -1290,8 +1290,8 @@ fn translate_unreachable_operator(op: &Operator,
 }
 
 fn args_count(index: FunctionIndex,
-              functions: &Vec<SignatureIndex>,
-              signatures: &Vec<Signature>)
+              functions: &[SignatureIndex],
+              signatures: &[Signature])
               -> usize {
     signatures[functions[index] as usize].argument_types.len()
 }
@@ -1301,9 +1301,9 @@ fn args_count(index: FunctionIndex,
 fn find_function_import(index: FunctionIndex,
                         builder: &mut FunctionBuilder<Local>,
                         func_imports: &mut FunctionImports,
-                        functions: &Vec<SignatureIndex>,
+                        functions: &[SignatureIndex],
                         exports: &Option<HashMap<FunctionIndex, String>>,
-                        signatures: &Vec<Signature>)
+                        signatures: &[Signature])
                         -> FuncRef {
     match func_imports.functions.get(&index) {
         Some(local_index) => return *local_index,
@@ -1358,7 +1358,7 @@ fn find_function_import(index: FunctionIndex,
 fn find_signature_import(sig_index: SignatureIndex,
                          builder: &mut FunctionBuilder<Local>,
                          func_imports: &mut FunctionImports,
-                         signatures: &Vec<Signature>)
+                         signatures: &[Signature])
                          -> SigRef {
     match func_imports.signatures.get(&(sig_index as usize)) {
         Some(local_sig_index) => return *local_sig_index,

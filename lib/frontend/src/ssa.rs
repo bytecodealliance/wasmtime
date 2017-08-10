@@ -433,7 +433,7 @@ impl<Variable> SSABuilder<Variable>
                            temp_arg_val: Value,
                            temp_arg_var: Variable,
                            dest_ebb: Ebb,
-                           preds: &Vec<(Block, Inst)>)
+                           preds: &[(Block, Inst)])
                            -> (Value, SideEffects) {
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
         // TODO: find a way not not allocate a vector
