@@ -1,0 +1,11 @@
+[package]
+name = "wasmstandalone"
+version = "0.0.0"
+authors = ["The Cretonne Project Developers"]
+publish = false
+
+[dependencies]
+cretonne = { path = "../cretonne" }
+cretonne-frontend = { path = "../frontend" }
+wasm2cretonne = { path = "../wasm2cretonne" }
+region = "0.0.8"

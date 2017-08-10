@@ -1,0 +1,10 @@
+[package]
+name = "wasm2cretonne"
+version = "0.0.0"
+authors = ["The Cretonne Project Developers"]
+publish = false
+
+[dependencies]
+wasmparser = "0.6.1"
+cretonne = { path = "../cretonne" }
+cretonne-frontend = { path = "../frontend" }
