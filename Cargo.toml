@@ -15,11 +15,15 @@ path = "src/cton-util.rs"
 [dependencies]
 cretonne = { path = "lib/cretonne" }
 cretonne-reader = { path = "lib/reader" }
-cretonne-frontend = { path ="lib/frontend" }
+cretonne-frontend = { path = "lib/frontend" }
+cretonne-wasm = { path = "lib/wasm" }
 filecheck = { path = "lib/filecheck" }
+wasmparser = "0.6.1"
 docopt = "0.8.0"
 serde = "1.0.8"
 serde_derive = "1.0.8"
 num_cpus = "1.5.1"
+tempdir="0.3.5"
+term = "0.4.6"
 
 [workspace]
