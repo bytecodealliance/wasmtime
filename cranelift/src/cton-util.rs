@@ -1,12 +1,16 @@
 #[macro_use(dbg)]
 extern crate cretonne;
 extern crate cton_reader;
+extern crate cretonne_wasm;
+extern crate wasmparser;
 extern crate docopt;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate filecheck;
 extern crate num_cpus;
+extern crate tempdir;
+extern crate term;
 
 use cretonne::VERSION;
 use docopt::Docopt;
@@ -18,6 +22,7 @@ mod filetest;
 mod cat;
 mod print_cfg;
 mod rsfilecheck;
+mod wasm;
 
 const USAGE: &str = "
 Cretonne code generator utility
@@ -27,12 +32,15 @@ Usage:
     cton-util cat <file>...
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
+    cton-util wasm [-cvo] <file>...
     cton-util --help | --version
 
 Options:
-    -v, --verbose  be more verbose
-    -h, --help     print this help message
-    --version      print the Cretonne version
+    -v, --verbose   be more verbose
+    -c, --check     checks the correctness of Cretonne IL translated from WebAssembly
+    -o, --optimize  runs otpimization passes on translated WebAssembly functions
+    -h, --help      print this help message
+    --version       print the Cretonne version
 
 ";
 
@@ -42,7 +50,10 @@ struct Args {
     cmd_cat: bool,
     cmd_filecheck: bool,
     cmd_print_cfg: bool,
+    cmd_wasm: bool,
     arg_file: Vec<String>,
+    flag_check: bool,
+    flag_optimize: bool,
     flag_verbose: bool,
 }
 
@@ -69,6 +80,11 @@ fn cton_util() -> CommandResult {
         rsfilecheck::run(args.arg_file, args.flag_verbose)
     } else if args.cmd_print_cfg {
         print_cfg::run(args.arg_file)
+    } else if args.cmd_wasm {
+        wasm::run(args.arg_file,
+                  args.flag_verbose,
+                  args.flag_optimize,
+                  args.flag_check)
     } else {
         // Debugging / shouldn't happen with proper command line handling above.
         Err(format!("Unhandled args: {:?}", args))
