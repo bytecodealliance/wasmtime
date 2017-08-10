@@ -492,7 +492,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 
     fn fill_function_args_values(&mut self, ebb: Ebb) {
         debug_assert!(self.pristine);
-        for argtyp in self.func.signature.argument_types.iter() {
+        for argtyp in &self.func.signature.argument_types {
             self.builder
                 .function_args_values
                 .push(self.func.dfg.append_ebb_arg(ebb, argtyp.value_type));

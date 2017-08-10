@@ -142,10 +142,10 @@ pub fn translate_type(ty: wasmparser::Type) -> Result<Vec<cretonne::ir::Type>, (
 pub fn invert_hashmaps(imports: code_translator::FunctionImports)
                        -> module_translator::ImportMappings {
     let mut new_imports = module_translator::ImportMappings::new();
-    for (func_index, func_ref) in imports.functions.iter() {
+    for (func_index, func_ref) in &imports.functions {
         new_imports.functions.insert(*func_ref, *func_index);
     }
-    for (sig_index, sig_ref) in imports.signatures.iter() {
+    for (sig_index, sig_ref) in &imports.signatures {
         new_imports.signatures.insert(*sig_ref, *sig_index);
     }
     new_imports
