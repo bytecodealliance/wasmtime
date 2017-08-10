@@ -420,8 +420,8 @@ fn translate_operator(op: &Operator,
             // We take the control frame pushed by the if, use its ebb as the else body
             // and push a new control frame with a new ebb for the code after the if/then/else
             // At the end of the then clause we jump to the destination
-            let (destination, return_values, branch_inst) = match &control_stack[control_stack.len() -
-                                                                   1] {
+            let i = control_stack.len() - 1;
+            let (destination, return_values, branch_inst) = match &control_stack[i] {
                 &ControlStackFrame::If {
                     destination,
                     ref return_values,

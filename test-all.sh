@@ -40,7 +40,8 @@ if [ -n "$needcheck" ]; then
     touch $tsfile || echo no target directory
 fi
 
-PKGS="cretonne cretonne-reader cretonne-tools cretonne-frontend filecheck"
+PKGS="cretonne cretonne-reader cretonne-tools cretonne-frontend filecheck \
+    wasm2cretonne"
 cd "$topdir"
 for PKG in $PKGS
 do

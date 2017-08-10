@@ -239,7 +239,8 @@ pub fn parse_data_section(parser: &mut Parser,
         let offset = match *parser.read() {
             ParserState::InitExpressionOperator(Operator::I32Const { value }) => {
                 if value < 0 {
-                    return Err(SectionParsingError::WrongSectionContent(String::from("negative offset value",),),);
+                    return Err(SectionParsingError::WrongSectionContent(String::from("negative \
+                    offset value")));
                 } else {
                     value as usize
                 }
@@ -248,13 +249,15 @@ pub fn parse_data_section(parser: &mut Parser,
                 match globals[global_index as usize].initializer {
                     GlobalInit::I32Const(value) => {
                         if value < 0 {
-                            return Err(SectionParsingError::WrongSectionContent(String::from("negative offset value",),),);
+                            return Err(SectionParsingError::WrongSectionContent(String::from("\
+                            negative offset value")));
                         } else {
                             value as usize
                         }
                     }
                     GlobalInit::Import() => {
-                        return Err(SectionParsingError::WrongSectionContent(String::from("imported globals not supported",),),)
+                        return Err(SectionParsingError::WrongSectionContent(String::from("\
+                        imported globals not supported")))
                     } // TODO: add runtime support
                     _ => panic!("should not happen"),
                 }
@@ -326,7 +329,8 @@ pub fn parse_elements_section(parser: &mut Parser,
         let offset = match *parser.read() {
             ParserState::InitExpressionOperator(Operator::I32Const { value }) => {
                 if value < 0 {
-                    return Err(SectionParsingError::WrongSectionContent(String::from("negative offset value",),),);
+                    return Err(SectionParsingError::WrongSectionContent(String::from("negative \
+                    offset value")));
                 } else {
                     value as usize
                 }
@@ -335,7 +339,8 @@ pub fn parse_elements_section(parser: &mut Parser,
                 match globals[global_index as usize].initializer {
                     GlobalInit::I32Const(value) => {
                         if value < 0 {
-                            return Err(SectionParsingError::WrongSectionContent(String::from("negative offset value",),),);
+                            return Err(SectionParsingError::WrongSectionContent(String::from("\
+                            negative offset value")));
                         } else {
                             value as usize
                         }
