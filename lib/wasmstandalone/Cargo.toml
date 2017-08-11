@@ -3,6 +3,9 @@ name = "wasmstandalone"
 version = "0.0.0"
 authors = ["The Cretonne Project Developers"]
 publish = false
+description = "Standalone JIT-style runtime support for WebAsssembly code in Cretonne"
+repository = "https://github.com/stoklund/cretonne"
+license = "Apache-2.0"
 
 [dependencies]
 cretonne = { path = "../cretonne" }

@@ -3,6 +3,9 @@ name = "wasm2cretonne-util"
 version = "0.0.0"
 authors = ["The Cretonne Project Developers"]
 publish = false
+description = "Utility binary to translate and execute WebAssembly modules using Cretonne"
+repository = "https://github.com/stoklund/cretonne"
+license = "Apache-2.0"
 
 [[bin]]
 name = "wasm2cretonne-util"
