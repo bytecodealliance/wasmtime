@@ -9,7 +9,7 @@ try:
     from typing import Union, Sequence, List, Tuple, Any, TYPE_CHECKING  # noqa
     from typing import Dict # noqa
     if TYPE_CHECKING:
-        from .ast import Expr, Apply, Var, Def  # noqa
+        from .ast import Expr, Apply, Var, Def, VarAtomMap  # noqa
         from .typevar import TypeVar  # noqa
         from .ti import TypeConstraint  # noqa
         from .xform import XForm, Rtl
@@ -18,7 +18,7 @@ try:
         ConstrList = Union[Sequence[TypeConstraint], TypeConstraint]
         MaybeBoundInst = Union['Instruction', 'BoundInstruction']
         InstructionSemantics = Sequence[XForm]
-        RtlCase = Union[Rtl, Tuple[Rtl, Sequence[TypeConstraint]]]
+        SemDefCase = Union[Rtl, Tuple[Rtl, Sequence[TypeConstraint]], XForm]
 except ImportError:
     pass
 
@@ -349,7 +349,7 @@ class Instruction(object):
         return Apply(self, args)
 
     def set_semantics(self, src, *dsts):
-        # type: (Union[Def, Apply], *RtlCase) -> None
+        # type: (Union[Def, Apply], *SemDefCase) -> None
         """Set our semantics."""
         from semantics import verify_semantics
         from .xform import XForm, Rtl
@@ -358,6 +358,11 @@ class Instruction(object):
         for dst in dsts:
             if isinstance(dst, Rtl):
                 sem.append(XForm(Rtl(src).copy({}), dst))
+            elif isinstance(dst, XForm):
+                sem.append(XForm(
+                    dst.src.copy({}),
+                    dst.dst.copy({}),
+                    dst.constraints))
             else:
                 assert isinstance(dst, tuple)
                 sem.append(XForm(Rtl(src).copy({}), dst[0],

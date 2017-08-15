@@ -1,13 +1,24 @@
 from __future__ import absolute_import
 from semantics.primitives import prim_to_bv, prim_from_bv, bvsplit, bvconcat,\
-    bvadd, bvult, bvzeroext, bvsignext
+    bvadd, bvzeroext, bvsignext
+from semantics.primitives import bveq, bvne, bvsge, bvsgt, bvsle, bvslt,\
+        bvuge, bvugt, bvule, bvult
+from semantics.macros import bool2bv
 from .instructions import vsplit, vconcat, iadd, iadd_cout, icmp, bextend, \
     isplit, iconcat, iadd_cin, iadd_carry
 from .immediates import intcc
-from cdsl.xform import Rtl
+from cdsl.xform import Rtl, XForm
 from cdsl.ast import Var
 from cdsl.typevar import TypeSet
 from cdsl.ti import InTypeset
+
+try:
+    from typing import TYPE_CHECKING # noqa
+    if TYPE_CHECKING:
+        from cdsl.ast import Enumerator # noqa
+        from cdsl.instructions import Instruction # noqa
+except ImportError:
+    TYPE_CHECKING = False
 
 x = Var('x')
 y = Var('y')
@@ -15,6 +26,8 @@ a = Var('a')
 b = Var('b')
 c_out = Var('c_out')
 c_in = Var('c_in')
+CC = Var('CC')
+bc_out = Var('bc_out')
 bvc_out = Var('bvc_out')
 bvc_in = Var('bvc_in')
 xhi = Var('xhi')
@@ -93,7 +106,8 @@ iadd_cout.set_semantics(
         bvx << prim_to_bv(x),
         bvy << prim_to_bv(y),
         bva << bvadd(bvx, bvy),
-        bvc_out << bvult(bva, bvx),
+        bc_out << bvult(bva, bvx),
+        bvc_out << bool2bv(bc_out),
         a << prim_from_bv(bva),
         c_out << prim_from_bv(bvc_out)
     ))
@@ -107,7 +121,8 @@ iadd_carry.set_semantics(
         bvs << bvzeroext(bvc_in),
         bvt << bvadd(bvx, bvy),
         bva << bvadd(bvt, bvs),
-        bvc_out << bvult(bva, bvx),
+        bc_out << bvult(bva, bvx),
+        bvc_out << bool2bv(bc_out),
         a << prim_from_bv(bva),
         c_out << prim_from_bv(bvc_out)
     ))
@@ -126,23 +141,45 @@ bextend.set_semantics(
         a << vconcat(alo, ahi)
     ))
 
+
+def create_comp_xform(cc, bvcmp_func):
+    # type: (Enumerator, Instruction) -> XForm
+    ba = Var('ba')
+    return XForm(
+               Rtl(
+                   a << icmp(cc, x, y)
+               ),
+               Rtl(
+                   bvx << prim_to_bv(x),
+                   bvy << prim_to_bv(y),
+                   ba << bvcmp_func(bvx, bvy),
+                   bva << bool2bv(ba),
+                   bva_wide << bvzeroext(bva),
+                   a << prim_from_bv(bva_wide),
+               ),
+               constraints=InTypeset(x.get_typevar(), ScalarTS))
+
+
 icmp.set_semantics(
-    a << icmp(intcc.ult, x, y),
-    (Rtl(
-        bvx << prim_to_bv(x),
-        bvy << prim_to_bv(y),
-        bva << bvult(bvx, bvy),
-        bva_wide << bvzeroext(bva),
-        a << prim_from_bv(bva_wide),
-    ), [InTypeset(x.get_typevar(), ScalarTS)]),
+    a << icmp(CC, x, y),
     Rtl(
         (xlo, xhi) << vsplit(x),
         (ylo, yhi) << vsplit(y),
-        alo << icmp(intcc.ult, xlo, ylo),
-        ahi << icmp(intcc.ult, xhi, yhi),
+        alo << icmp(CC, xlo, ylo),
+        ahi << icmp(CC, xhi, yhi),
         b << vconcat(alo, ahi),
         a << bextend(b)
-    ))
+    ),
+    create_comp_xform(intcc.eq, bveq),
+    create_comp_xform(intcc.ne, bvne),
+    create_comp_xform(intcc.sge, bvsge),
+    create_comp_xform(intcc.sgt, bvsgt),
+    create_comp_xform(intcc.sle, bvsle),
+    create_comp_xform(intcc.slt, bvslt),
+    create_comp_xform(intcc.uge, bvuge),
+    create_comp_xform(intcc.ugt, bvugt),
+    create_comp_xform(intcc.ule, bvule),
+    create_comp_xform(intcc.ult, bvult))
 
 #
 # Legalization helper instructions.

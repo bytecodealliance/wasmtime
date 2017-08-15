@@ -10,6 +10,8 @@ from cdsl.operands import Operand
 from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
 from cdsl.ti import WiderOrEq
+from base.types import b1
+from base.immediates import imm64
 import base.formats # noqa
 
 GROUP = InstructionGroup("primitive", "Primitive instruction set")
@@ -22,25 +24,39 @@ Real = TypeVar('Real', 'Any real type.', ints=True, floats=True,
 x = Operand('x', BV, doc="A semantic value X")
 y = Operand('x', BV, doc="A semantic value Y (same width as X)")
 a = Operand('a', BV, doc="A semantic value A (same width as X)")
+cond = Operand('b', TypeVar.singleton(b1), doc='A b1 value')
 
 real = Operand('real', Real, doc="A real cretonne value")
 fromReal = Operand('fromReal', Real.to_bitvec(),
                    doc="A real cretonne value converted to a BV")
 
+#
+# BV Conversion/Materialization
+#
 prim_to_bv = Instruction(
         'prim_to_bv', r"""
         Convert an SSA Value to a flat bitvector
         """,
         ins=(real), outs=(fromReal))
 
-# Note that when converting from BV->real values, we use a constraint and not a
-# derived function. This reflects that fact that to_bitvec() is not a
-# bijection.
 prim_from_bv = Instruction(
         'prim_from_bv', r"""
         Convert a flat bitvector to a real SSA Value.
         """,
         ins=(fromReal), outs=(real))
+
+N = Operand('N', imm64)
+bv_from_imm64 = Instruction(
+        'bv_from_imm64', r"""Materialize an imm64 as a bitvector.""",
+        ins=(N), outs=a)
+
+#
+# Generics
+#
+bvite = Instruction(
+        'bvite', r"""Bitvector ternary operator""",
+        ins=(cond, x, y), outs=a)
+
 
 xh = Operand('xh', BV.half_width(),
              doc="A semantic value representing the upper half of X")
@@ -67,12 +83,40 @@ bvadd = Instruction(
         of the operands.
         """,
         ins=(x, y), outs=a)
-
+#
 # Bitvector comparisons
-cmp_res = Operand('cmp_res', BV1, doc="Single bit boolean")
+#
+
+bveq = Instruction(
+        'bveq', r"""Unsigned bitvector equality""",
+        ins=(x, y), outs=cond)
+bvne = Instruction(
+        'bveq', r"""Unsigned bitvector inequality""",
+        ins=(x, y), outs=cond)
+bvsge = Instruction(
+        'bvsge', r"""Signed bitvector greater or equal""",
+        ins=(x, y), outs=cond)
+bvsgt = Instruction(
+        'bvsgt', r"""Signed bitvector greater than""",
+        ins=(x, y), outs=cond)
+bvsle = Instruction(
+        'bvsle', r"""Signed bitvector less than or equal""",
+        ins=(x, y), outs=cond)
+bvslt = Instruction(
+        'bvslt', r"""Signed bitvector less than""",
+        ins=(x, y), outs=cond)
+bvuge = Instruction(
+        'bvuge', r"""Unsigned bitvector greater or equal""",
+        ins=(x, y), outs=cond)
+bvugt = Instruction(
+        'bvugt', r"""Unsigned bitvector greater than""",
+        ins=(x, y), outs=cond)
+bvule = Instruction(
+        'bvule', r"""Unsigned bitvector less than or equal""",
+        ins=(x, y), outs=cond)
 bvult = Instruction(
-        'bvult', r"""Unsigned bitvector comparison""",
-        ins=(x, y), outs=cmp_res)
+        'bvult', r"""Unsigned bitvector less than""",
+        ins=(x, y), outs=cond)
 
 # Extensions
 ToBV = TypeVar('ToBV', 'A bitvector type.', bitvecs=True)
