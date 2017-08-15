@@ -14,7 +14,7 @@ from z3.z3core import Z3_mk_eq
 try:
     from typing import TYPE_CHECKING, Tuple, Dict, List # noqa
     from cdsl.xform import Rtl, XForm # noqa
-    from cdsl.ast import VarMap # noqa
+    from cdsl.ast import VarAtomMap, Atom # noqa
     from cdsl.ti import VarTyping # noqa
     if TYPE_CHECKING:
         from z3 import ExprRef, BitVecRef # noqa
@@ -137,13 +137,13 @@ def to_smt(r):
 
 
 def equivalent(r1, r2, inp_m, out_m):
-    # type: (Rtl, Rtl, VarMap, VarMap) -> List[ExprRef]
+    # type: (Rtl, Rtl, VarAtomMap, VarAtomMap) -> List[ExprRef]
     """
     Given:
         - concrete source Rtl r1
         - concrete dest Rtl r2
-        - VarMap inp_m mapping r1's non-bitvector inputs to r2
-        - VarMap out_m mapping r1's non-bitvector outputs to r2
+        - VarAtomMap inp_m mapping r1's non-bitvector inputs to r2
+        - VarAtomMap out_m mapping r1's non-bitvector outputs to r2
 
     Build a query checking whether r1 and r2 are semantically equivalent.
     If the returned query is unsatisfiable, then r1 and r2 are equivalent.
@@ -156,17 +156,31 @@ def equivalent(r1, r2, inp_m, out_m):
     assert set(r2.free_vars()) == set(inp_m.values())
 
     # Note that the same rule is not expected to hold for out_m due to
-    # temporaries/intermediates.
+    # temporaries/intermediates. out_m specified which values are enough for
+    # equivalence.
 
     # Rename the vars in r1 and r2 with unique suffixes to avoid conflicts
-    src_m = {v: Var(v.name + ".a", v.get_typevar()) for v in r1.vars()}
-    dst_m = {v: Var(v.name + ".b", v.get_typevar()) for v in r2.vars()}
+    src_m = {v: Var(v.name + ".a", v.get_typevar()) for v in r1.vars()}  # type: VarAtomMap # noqa
+    dst_m = {v: Var(v.name + ".b", v.get_typevar()) for v in r2.vars()}  # type: VarAtomMap # noqa
     r1 = r1.copy(src_m)
     r2 = r2.copy(dst_m)
 
+    def _translate(m, k_m, v_m):
+        # type: (VarAtomMap, VarAtomMap, VarAtomMap) -> VarAtomMap
+        """Obtain a new map from m, by mapping m's keys with k_m and m's values
+        with v_m"""
+        res = {}  # type: VarAtomMap
+        for (k, v) in m1.items():
+            new_k = k_m[k]
+            new_v = v_m[v]
+            assert isinstance(new_k, Var)
+            res[new_k] = new_v
+
+        return res
+
     # Convert inp_m, out_m in terms of variables with the .a/.b suffixes
-    inp_m = {src_m[k]: dst_m[v] for (k, v) in inp_m.items()}
-    out_m = {src_m[k]: dst_m[v] for (k, v) in out_m.items()}
+    inp_m = _translate(inp_m, src_m, dst_m)
+    out_m = _translate(out_m, src_m, dst_m)
 
     # Encode r1 and r2 as SMT queries
     (q1, m1) = to_smt(r1)
@@ -175,12 +189,14 @@ def equivalent(r1, r2, inp_m, out_m):
     # Build an expression for the equality of real Cretone inputs of r1 and r2
     args_eq_exp = []  # type: List[ExprRef]
 
-    for v in r1.free_vars():
-        args_eq_exp.append(mk_eq(m1[v], m2[inp_m[v]]))
+    for (v1, v2) in inp_m.items():
+        assert isinstance(v2, Var)
+        args_eq_exp.append(mk_eq(m1[v1], m2[v2]))
 
     # Build an expression for the equality of real Cretone outputs of r1 and r2
     results_eq_exp = []  # type: List[ExprRef]
     for (v1, v2) in out_m.items():
+        assert isinstance(v2, Var)
         results_eq_exp.append(mk_eq(m1[v1], m2[v2]))
 
     # Put the whole query toghether
@@ -196,20 +212,22 @@ def xform_correct(x, typing):
     assert x.ti.permits(typing)
 
     # Create copies of the x.src and x.dst with their concrete types
-    src_m = {v: Var(v.name, typing[v]) for v in x.src.vars()}
+    src_m = {v: Var(v.name, typing[v]) for v in x.src.vars()}  # type: VarAtomMap # noqa
     src = x.src.copy(src_m)
     dst = x.apply(src)
     dst_m = x.dst.substitution(dst, {})
 
     # Build maps for the inputs/outputs for src->dst
-    inp_m = {}
-    out_m = {}
+    inp_m = {}  # type: VarAtomMap
+    out_m = {}  # type: VarAtomMap
 
     for v in x.src.vars():
+        src_v = src_m[v]
+        assert isinstance(src_v, Var)
         if v.is_input():
-            inp_m[src_m[v]] = dst_m[v]
+            inp_m[src_v] = dst_m[v]
         elif v.is_output():
-            out_m[src_m[v]] = dst_m[v]
+            out_m[src_v] = dst_m[v]
 
     # Get the primitive semantic Rtls for src and dst
     prim_src = elaborate(src)

@@ -21,7 +21,7 @@ from cdsl.typevar import TypeVar
 try:
     from typing import Sequence, List, Dict, Set, DefaultDict # noqa
     from cdsl.isa import TargetISA  # noqa
-    from cdsl.ast import Def  # noqa
+    from cdsl.ast import Def, VarAtomMap  # noqa
     from cdsl.xform import XForm, XFormGroup  # noqa
     from cdsl.typevar import TypeSet # noqa
     from cdsl.ti import TypeConstraint # noqa
@@ -45,7 +45,7 @@ def get_runtime_typechecks(xform):
     # 1) Perform ti only on the source RTL. Accumulate any free tvs that have a
     #    different inferred type in src, compared to the type inferred for both
     #    src and dst.
-    symtab = {}  # type: Dict[Var, Var]
+    symtab = {}  # type: VarAtomMap
     src_copy = xform.src.copy(symtab)
     src_typenv = get_type_env(ti_rtl(src_copy, TypeEnv()))
 
@@ -62,7 +62,9 @@ def get_runtime_typechecks(xform):
             assert v.get_typevar().singleton_type() is not None
             continue
 
-        src_ts = src_typenv[symtab[v]].get_typeset()
+        inner_v = symtab[v]
+        assert isinstance(inner_v, Var)
+        src_ts = src_typenv[inner_v].get_typeset()
         xform_ts = xform.ti[v].get_typeset()
 
         assert xform_ts.issubset(src_ts)

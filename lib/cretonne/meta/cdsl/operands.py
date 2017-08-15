@@ -5,10 +5,10 @@ from .types import ValueType
 from .typevar import TypeVar
 
 try:
-    from typing import Union, Dict, TYPE_CHECKING  # noqa
+    from typing import Union, Dict, TYPE_CHECKING, Iterable  # noqa
     OperandSpec = Union['OperandKind', ValueType, TypeVar]
     if TYPE_CHECKING:
-        from .ast import Enumerator, ConstantInt  # noqa
+        from .ast import Enumerator, ConstantInt, Literal  # noqa
 except ImportError:
     pass
 
@@ -127,6 +127,17 @@ class ImmediateKind(OperandKind):
         Get the qualified Rust name of the enumerator value `value`.
         """
         return '{}::{}'.format(self.rust_type, self.values[value])
+
+    def is_enumerable(self):
+        # type: () -> bool
+        return self.values is not None
+
+    def possible_values(self):
+        # type: () -> Iterable[Literal]
+        from cdsl.ast import Enumerator # noqa
+        assert self.is_enumerable()
+        for v in self.values.keys():
+            yield Enumerator(self, v)
 
 
 # Instances of entity reference operand types are provided in the

@@ -11,23 +11,23 @@ from .predicates import IsEqual, And, TypePredicate
 
 try:
     from typing import Union, Tuple, Sequence, TYPE_CHECKING, Dict, List  # noqa
-    from typing import Optional, Set # noqa
+    from typing import Optional, Set, Any # noqa
     if TYPE_CHECKING:
         from .operands import ImmediateKind  # noqa
         from .predicates import PredNode  # noqa
-        VarMap = Dict["Var", "Var"]
+        VarAtomMap = Dict["Var", "Atom"]
 except ImportError:
     pass
 
 
 def replace_var(arg, m):
-    # type: (Expr, VarMap) -> Expr
+    # type: (Expr, VarAtomMap) -> Expr
     """
     Given a var v return either m[v] or a new variable v' (and remember
     m[v]=v'). Otherwise return the argument unchanged
     """
     if isinstance(arg, Var):
-        new_arg = m.get(arg, Var(arg.name))  # type: Var
+        new_arg = m.get(arg, Var(arg.name))  # type: Atom
         m[arg] = new_arg
         return new_arg
     return arg
@@ -76,7 +76,7 @@ class Def(object):
                     ', '.join(map(str, self.defs)), self.expr)
 
     def copy(self, m):
-        # type: (VarMap) -> Def
+        # type: (VarAtomMap) -> Def
         """
         Return a copy of this Def with vars replaced with fresh variables,
         in accordance with the map m. Update m as neccessary.
@@ -106,7 +106,7 @@ class Def(object):
         return self.definitions().union(self.uses())
 
     def substitution(self, other, s):
-        # type: (Def, VarMap) -> Optional[VarMap]
+        # type: (Def, VarAtomMap) -> Optional[VarAtomMap]
         """
         If the Defs self and other agree structurally, return a variable
         substitution to transform self to other. Otherwise return None. Two
@@ -133,7 +133,13 @@ class Expr(object):
     """
 
 
-class Var(Expr):
+class Atom(Expr):
+    """
+    An Atom in the DSL is either a literal or a Var
+    """
+
+
+class Var(Atom):
     """
     A free variable.
 
@@ -304,6 +310,16 @@ class Apply(Expr):
         self.args = args
         assert len(self.inst.ins) == len(args)
 
+        # Check that the kinds of Literals arguments match the expected Operand
+        for op_idx in self.inst.imm_opnums:
+            arg = self.args[op_idx]
+            op = self.inst.ins[op_idx]
+
+            if isinstance(arg, Literal):
+                assert arg.kind == op.kind, \
+                    "Passing literal {} to field of wrong kind {}."\
+                    .format(arg, op.kind)
+
     def __rlshift__(self, other):
         # type: (Union[Var, Tuple[Var, ...]]) -> Def
         """
@@ -377,7 +393,7 @@ class Apply(Expr):
         return pred
 
     def copy(self, m):
-        # type: (VarMap) -> Apply
+        # type: (VarAtomMap) -> Apply
         """
         Return a copy of this Expr with vars replaced with fresh variables,
         in accordance with the map m. Update m as neccessary.
@@ -396,15 +412,12 @@ class Apply(Expr):
         return res
 
     def substitution(self, other, s):
-        # type: (Apply, VarMap) -> Optional[VarMap]
+        # type: (Apply, VarAtomMap) -> Optional[VarAtomMap]
         """
-        If the application self and other agree structurally, return a variable
-        substitution to transform self to other. Otherwise return None. Two
-        applications agree structurally if:
-            1) They are over the same instruction
-            2) Every Var v in self, maps to a single Var w in other. I.e for
-               each use of v in self, w is used in the corresponding place in
-               other.
+        If there is a substituion from Var->Atom that converts self to other,
+        return it, otherwise return None. Note that this is strictly weaker
+        than unification (see TestXForm.test_subst_enum_bad_var_const for
+        example).
         """
         if self.inst != other.inst:
             return None
@@ -413,37 +426,62 @@ class Apply(Expr):
         assert (len(self.args) == len(other.args))
 
         for (self_a, other_a) in zip(self.args, other.args):
-            if (isinstance(self_a, Var)):
-                if not isinstance(other_a, Var):
-                    return None
+            assert isinstance(self_a, Atom) and isinstance(other_a, Atom)
 
+            if (isinstance(self_a, Var)):
                 if (self_a not in s):
                     s[self_a] = other_a
                 else:
                     if (s[self_a] != other_a):
                         return None
-            elif isinstance(self_a, ConstantInt):
-                if not isinstance(other_a, ConstantInt):
-                    return None
-                assert self_a.kind == other_a.kind
-                if (self_a.value != other_a.value):
-                    return None
+            elif isinstance(other_a, Var):
+                assert isinstance(self_a, Literal)
+                if (other_a not in s):
+                    s[other_a] = self_a
+                else:
+                    if s[other_a] != self_a:
+                        return None
             else:
-                assert isinstance(self_a, Enumerator)
-
-                if not isinstance(other_a, Enumerator):
-                    # Currently don't support substitutions Var->Enumerator
-                    return None
-
+                assert (isinstance(self_a, Literal) and
+                        isinstance(other_a, Literal))
                 # Guaranteed by self.inst == other.inst
                 assert self_a.kind == other_a.kind
-
                 if (self_a.value != other_a.value):
                     return None
+
         return s
 
 
-class ConstantInt(Expr):
+class Literal(Atom):
+    """
+    Base Class for all literal expressions in the DSL.
+    """
+    def __init__(self, kind, value):
+        # type: (ImmediateKind, Any) -> None
+        self.kind = kind
+        self.value = value
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if not isinstance(other, Literal):
+            return False
+
+        if self.kind != other.kind:
+            return False
+
+        # Can't just compare value here, as comparison Any <> Any returns Any
+        return repr(self) == repr(other)
+
+    def __ne__(self, other):
+        # type: (Any) -> bool
+        return not self.__eq__(other)
+
+    def __repr__(self):
+        # type: () -> str
+        return '{}.{}'.format(self.kind, self.value)
+
+
+class ConstantInt(Literal):
     """
     A value of an integer immediate operand.
 
@@ -454,8 +492,7 @@ class ConstantInt(Expr):
 
     def __init__(self, kind, value):
         # type: (ImmediateKind, int) -> None
-        self.kind = kind
-        self.value = value
+        super(ConstantInt, self).__init__(kind, value)
 
     def __str__(self):
         # type: () -> str
@@ -464,12 +501,8 @@ class ConstantInt(Expr):
         """
         return str(self.value)
 
-    def __repr__(self):
-        # type: () -> str
-        return '{}({})'.format(self.kind, self.value)
 
-
-class Enumerator(Expr):
+class Enumerator(Literal):
     """
     A value of an enumerated immediate operand.
 
@@ -486,8 +519,7 @@ class Enumerator(Expr):
 
     def __init__(self, kind, value):
         # type: (ImmediateKind, str) -> None
-        self.kind = kind
-        self.value = value
+        super(Enumerator, self).__init__(kind, value)
 
     def __str__(self):
         # type: () -> str
@@ -495,7 +527,3 @@ class Enumerator(Expr):
         Get the Rust expression form of this enumerator.
         """
         return self.kind.rust_enumerator(self.value)
-
-    def __repr__(self):
-        # type: () -> str
-        return '{}.{}'.format(self.kind, self.value)

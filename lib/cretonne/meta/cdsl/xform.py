@@ -3,16 +3,16 @@ Instruction transformations.
 """
 from __future__ import absolute_import
 from .ast import Def, Var, Apply
-from .ti import ti_xform, TypeEnv, get_type_env
+from .ti import ti_xform, TypeEnv, get_type_env, TypeConstraint
 from functools import reduce
 
 try:
     from typing import Union, Iterator, Sequence, Iterable, List, Dict  # noqa
     from typing import Optional, Set # noqa
-    from .ast import Expr, VarMap  # noqa
+    from .ast import Expr, VarAtomMap  # noqa
     from .isa import TargetISA  # noqa
-    from .ti import TypeConstraint  # noqa
     from .typevar import TypeVar  # noqa
+    from .instructions import ConstrList # noqa
     DefApply = Union[Def, Apply]
 except ImportError:
     pass
@@ -47,7 +47,7 @@ class Rtl(object):
         self.rtl = tuple(map(canonicalize_defapply, args))
 
     def copy(self, m):
-        # type: (VarMap) -> Rtl
+        # type: (VarAtomMap) -> Rtl
         """
         Return a copy of this rtl with all Vars substituted with copies or
         according to m. Update m as neccessary.
@@ -85,7 +85,7 @@ class Rtl(object):
         return reduce(flow_f, reversed(self.rtl), set([]))
 
     def substitution(self, other, s):
-        # type: (Rtl, VarMap) -> Optional[VarMap]
+        # type: (Rtl, VarAtomMap) -> Optional[VarAtomMap]
         """
         If the Rtl self agrees structurally with the Rtl other, return a
         substitution to transform self to other. Two Rtls agree structurally if
@@ -132,6 +132,10 @@ class Rtl(object):
             assert typing[v].singleton_type() is not None
             v.set_typevar(typing[v])
 
+    def __str__(self):
+        # type: () -> str
+        return "\n".join(map(str, self.rtl))
+
 
 class XForm(object):
     """
@@ -162,7 +166,7 @@ class XForm(object):
     """
 
     def __init__(self, src, dst, constraints=None):
-        # type: (Rtl, Rtl, Optional[Sequence[TypeConstraint]]) -> None
+        # type: (Rtl, Rtl, Optional[ConstrList]) -> None
         self.src = src
         self.dst = dst
         # Variables that are inputs to the source pattern.
@@ -203,10 +207,18 @@ class XForm(object):
                 return tv
             return symtab[tv.name[len("typeof_"):]].get_typevar()
 
+        self.constraints = []  # type: List[TypeConstraint]
         if constraints is not None:
-            for c in constraints:
+            if isinstance(constraints, TypeConstraint):
+                constr_list = [constraints]  # type: Sequence[TypeConstraint]
+            else:
+                constr_list = constraints
+
+            for c in constr_list:
                 type_m = {tv: interp_tv(tv) for tv in c.tvs()}
-                self.ti.add_constraint(c.translate(type_m))
+                inner_c = c.translate(type_m)
+                self.constraints.append(inner_c)
+                self.ti.add_constraint(inner_c)
 
         # Sanity: The set of inferred free typevars should be a subset of the
         # TVs corresponding to Vars appearing in src
@@ -333,7 +345,7 @@ class XForm(object):
         defs are renamed with '.suffix' appended to their old name.
         """
         assert r.is_concrete()
-        s = self.src.substitution(r, {})  # type: VarMap
+        s = self.src.substitution(r, {})  # type: VarAtomMap
         assert s is not None
 
         if (suffix is not None):

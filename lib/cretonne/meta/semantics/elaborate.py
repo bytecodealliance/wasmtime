@@ -10,7 +10,7 @@ from cdsl.ast import Var
 try:
     from typing import TYPE_CHECKING, Dict, Union, List, Set, Tuple # noqa
     from cdsl.xform import XForm # noqa
-    from cdsl.ast import Def, VarMap # noqa
+    from cdsl.ast import Def, VarAtomMap # noqa
     from cdsl.ti import VarTyping # noqa
 except ImportError:
     TYPE_CHECKING = False
@@ -34,7 +34,13 @@ def find_matching_xform(d):
         if (subst is None):
             continue
 
-        if x.ti.permits({subst[v]: tv for (v, tv) in typing.items()}):
+        inner_typing = {}  # type: VarTyping
+        for (v, tv) in typing.items():
+            inner_v = subst[v]
+            assert isinstance(inner_v, Var)
+            inner_typing[inner_v] = tv
+
+        if x.ti.permits(inner_typing):
             res.append(x)
 
     assert len(res) == 1, "Couldn't find semantic transform for {}".format(d)
@@ -60,7 +66,7 @@ def cleanup_semantics(r, outputs):
         ...
     """
     new_defs = []  # type: List[Def]
-    subst_m = {v: v for v in r.vars()}  # type: VarMap
+    subst_m = {v: v for v in r.vars()}  # type: VarAtomMap
     definition = {}  # type: Dict[Var, Def]
     prim_to_bv_map = {}  # type: Dict[Var, Def]
 
