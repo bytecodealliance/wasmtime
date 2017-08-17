@@ -346,6 +346,18 @@ stack_addr = Instruction(
         ins=(SS, Offset), outs=addr)
 
 #
+# Global variables.
+#
+
+GV = Operand('GV', entities.global_var)
+
+global_addr = Instruction(
+        'global_addr', r"""
+        Compute the address of global variable GV.
+        """,
+        ins=GV, outs=addr)
+
+#
 # WebAssembly bounds-checked heap accesses.
 #
 # TODO: Add a `heap` operand that selects between multiple heaps.

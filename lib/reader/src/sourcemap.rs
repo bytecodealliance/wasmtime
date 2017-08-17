@@ -7,11 +7,12 @@
 //! The `SourceMap` struct defined in this module makes the same mapping available to parser
 //! clients.
 
-use std::collections::HashMap;
-use cretonne::ir::{StackSlot, JumpTable, Ebb, Value, SigRef, FuncRef};
+use cretonne::entity_ref::EntityRef;
 use cretonne::ir::entities::AnyEntity;
+use cretonne::ir::{StackSlot, GlobalVar, JumpTable, Ebb, Value, SigRef, FuncRef};
 use error::{Result, Location};
 use lexer::split_entity_name;
+use std::collections::HashMap;
 
 /// Mapping from source entity names to entity references that are valid in the parsed function.
 #[derive(Debug)]
@@ -19,6 +20,7 @@ pub struct SourceMap {
     values: HashMap<Value, Value>, // vNN
     ebbs: HashMap<Ebb, Ebb>, // ebbNN
     stack_slots: HashMap<u32, StackSlot>, // ssNN
+    global_vars: HashMap<u32, GlobalVar>, // gvNN
     signatures: HashMap<u32, SigRef>, // sigNN
     functions: HashMap<u32, FuncRef>, // fnNN
     jump_tables: HashMap<u32, JumpTable>, // jtNN
@@ -42,6 +44,11 @@ impl SourceMap {
     /// Look up a stack slot entity by its source number.
     pub fn get_ss(&self, src_num: u32) -> Option<StackSlot> {
         self.stack_slots.get(&src_num).cloned()
+    }
+
+    /// Look up a global variable entity by its source number.
+    pub fn get_gv(&self, src_num: u32) -> Option<GlobalVar> {
+        self.global_vars.get(&src_num).cloned()
     }
 
     /// Look up a signature entity by its source number.
@@ -74,6 +81,7 @@ impl SourceMap {
                                                      .map(AnyEntity::Ebb)
                                              }
                                              "ss" => self.get_ss(num).map(AnyEntity::StackSlot),
+                                             "gv" => self.get_gv(num).map(AnyEntity::GlobalVar),
                                              "sig" => self.get_sig(num).map(AnyEntity::SigRef),
                                              "fn" => self.get_fn(num).map(AnyEntity::FuncRef),
                                              "jt" => self.get_jt(num).map(AnyEntity::JumpTable),
@@ -124,6 +132,21 @@ impl SourceMap {
         }
         Ok(())
     }
+
+    /// Rewrite a `GlobalVar` reference.
+    pub fn rewrite_gv(&self, gv: &mut GlobalVar, loc: AnyEntity) -> Result<()> {
+        match self.get_gv(gv.index() as u32) {
+            Some(new) => {
+                *gv = new;
+                Ok(())
+            }
+            None => {
+                err!(self.location(loc).unwrap_or_default(),
+                     "undefined reference: {}",
+                     gv)
+            }
+        }
+    }
 }
 
 
@@ -137,6 +160,7 @@ pub trait MutableSourceMap {
     fn def_value(&mut self, src: Value, entity: Value, loc: &Location) -> Result<()>;
     fn def_ebb(&mut self, src: Ebb, entity: Ebb, loc: &Location) -> Result<()>;
     fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()>;
+    fn def_gv(&mut self, src_num: u32, entity: GlobalVar, loc: &Location) -> Result<()>;
     fn def_sig(&mut self, src_num: u32, entity: SigRef, loc: &Location) -> Result<()>;
     fn def_fn(&mut self, src_num: u32, entity: FuncRef, loc: &Location) -> Result<()>;
     fn def_jt(&mut self, src_num: u32, entity: JumpTable, loc: &Location) -> Result<()>;
@@ -152,6 +176,7 @@ impl MutableSourceMap for SourceMap {
             values: HashMap::new(),
             ebbs: HashMap::new(),
             stack_slots: HashMap::new(),
+            global_vars: HashMap::new(),
             signatures: HashMap::new(),
             functions: HashMap::new(),
             jump_tables: HashMap::new(),
@@ -178,6 +203,14 @@ impl MutableSourceMap for SourceMap {
     fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()> {
         if self.stack_slots.insert(src_num, entity).is_some() {
             err!(loc, "duplicate stack slot: ss{}", src_num)
+        } else {
+            self.def_entity(entity.into(), loc)
+        }
+    }
+
+    fn def_gv(&mut self, src_num: u32, entity: GlobalVar, loc: &Location) -> Result<()> {
+        if self.global_vars.insert(src_num, entity).is_some() {
+            err!(loc, "duplicate global variable: gv{}", src_num)
         } else {
             self.def_entity(entity.into(), loc)
         }

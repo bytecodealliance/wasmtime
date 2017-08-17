@@ -59,7 +59,7 @@ VARIABLE_ARGS = OperandKind(
         'variable_args', """
         A variable size list of `value` operands.
 
-        Use this to represent arguemtns passed to a function call, arguments
+        Use this to represent arguments passed to a function call, arguments
         passed to an extended basic block, or a variable number of results
         returned from an instruction.
         """,
