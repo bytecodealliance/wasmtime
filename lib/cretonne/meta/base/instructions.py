@@ -190,7 +190,7 @@ call_indirect = Instruction(
 #
 
 SS = Operand('SS', entities.stack_slot)
-Offset = Operand('Offset', offset32, 'In-bounds offset into stack slot')
+Offset = Operand('Offset', offset32, 'Byte offset from base address')
 x = Operand('x', Mem, doc='Value to be stored')
 a = Operand('a', Mem, doc='Value loaded')
 p = Operand('p', iAddr)
@@ -307,6 +307,7 @@ istore32 = Instruction(
 
 x = Operand('x', Mem, doc='Value to be stored')
 a = Operand('a', Mem, doc='Value loaded')
+Offset = Operand('Offset', offset32, 'In-bounds offset into stack slot')
 
 stack_load = Instruction(
         'stack_load', r"""
