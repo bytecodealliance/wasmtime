@@ -424,38 +424,36 @@ Memory
 ======
 
 Cretonne provides fully general :inst:`load` and :inst:`store` instructions for
-accessing memory. However, it can be very complicated to verify the safety of
-general loads and stores when compiling code for a sandboxed environment, so
-Cretonne also provides more restricted memory operations that are always safe.
+accessing memory, as well as :ref:`extending loads and truncating stores
+<extload-truncstore>`. There are also more restricted operations for accessing
+specific types of memory objects.
 
 .. autoinst:: load
 .. autoinst:: store
 
+Memory operation flags
+----------------------
+
+Loads and stores can have flags that loosen their semantics in order to enable
+optimizations.
+
+======= =========================================
+Flag    Description
+======= =========================================
+notrap  Trapping is not required.
+aligned Trapping allowed for misaligned accesses.
+======= =========================================
+
+Trapping is part of the semantics of memory accesses. The operating system may
+have configured parts of the address space to cause a trap when read and/or
+written, and Cretonne's memory instructions respect that. When the ``notrap``
+flat is set, the trapping behavior is optional. This allows the optimizer to
+delete loads whose results are not used.
+
 Loads and stores are *misaligned* if the resultant address is not a multiple of
-the expected alignment. Depending on the target architecture, misaligned memory
-accesses may trap, or they may work. Sometimes, operating systems catch
-alignment traps and emulate the misaligned memory access.
-
-
-Extending loads and truncating stores
--------------------------------------
-
-Most ISAs provide instructions that load an integer value smaller than a register
-and extends it to the width of the register. Similarly, store instructions that
-only write the low bits of an integer register are common.
-
-Cretonne provides extending loads and truncation stores for 8, 16, and 32-bit
-memory accesses.
-
-.. autoinst:: uload8
-.. autoinst:: sload8
-.. autoinst:: istore8
-.. autoinst:: uload16
-.. autoinst:: sload16
-.. autoinst:: istore16
-.. autoinst:: uload32
-.. autoinst:: sload32
-.. autoinst:: istore32
+the expected alignment. By default, misaligned loads and stores are allowed,
+but when the ``aligned`` flag is set, a misaligned memory access is allowed to
+trap.
 
 Local variables
 ---------------
@@ -547,8 +545,6 @@ depends on the runtime environment.
 
 Operations
 ==========
-
-The remaining instruction set is mostly arithmetic.
 
 A few instructions have variants that take immediate operands (e.g.,
 :inst:`band` / :inst:`band_imm`), but in general an instruction is required to
@@ -765,6 +761,29 @@ the target ISA.
 
 .. autoinst:: isplit
 .. autoinst:: iconcat
+
+.. _extload-truncstore:
+
+Extending loads and truncating stores
+-------------------------------------
+
+Most ISAs provide instructions that load an integer value smaller than a register
+and extends it to the width of the register. Similarly, store instructions that
+only write the low bits of an integer register are common.
+
+In addition to the normal :inst:`load` and :inst:`store` instructions, Cretonne
+provides extending loads and truncation stores for 8, 16, and 32-bit memory
+accesses.
+
+.. autoinst:: uload8
+.. autoinst:: sload8
+.. autoinst:: istore8
+.. autoinst:: uload16
+.. autoinst:: sload16
+.. autoinst:: istore16
+.. autoinst:: uload32
+.. autoinst:: sload32
+.. autoinst:: istore32
 
 ISA-specific instructions
 =========================
