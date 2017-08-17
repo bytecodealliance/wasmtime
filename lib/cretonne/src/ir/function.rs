@@ -4,8 +4,8 @@
 //! instructions.
 
 use entity_map::{EntityMap, PrimaryEntityData};
-use ir::{FunctionName, CallConv, Signature, JumpTableData, DataFlowGraph, Layout};
-use ir::{JumpTables, InstEncodings, ValueLocations, StackSlots, EbbOffsets};
+use ir::{FunctionName, CallConv, Signature, JumpTableData, GlobalVarData, DataFlowGraph, Layout};
+use ir::{JumpTables, InstEncodings, ValueLocations, StackSlots, GlobalVars, EbbOffsets};
 use isa::TargetIsa;
 use std::fmt;
 use write::write_function;
@@ -24,6 +24,9 @@ pub struct Function {
 
     /// Stack slots allocated in this function.
     pub stack_slots: StackSlots,
+
+    /// Global variables referenced.
+    pub global_vars: GlobalVars,
 
     /// Jump tables used in this function.
     pub jump_tables: JumpTables,
@@ -50,6 +53,7 @@ pub struct Function {
 }
 
 impl PrimaryEntityData for JumpTableData {}
+impl PrimaryEntityData for GlobalVarData {}
 
 impl Function {
     /// Create a function with the given name and signature.
@@ -58,6 +62,7 @@ impl Function {
             name,
             signature: sig,
             stack_slots: StackSlots::new(),
+            global_vars: GlobalVars::new(),
             jump_tables: EntityMap::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),

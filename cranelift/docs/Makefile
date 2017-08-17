@@ -58,7 +58,7 @@ html:
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
 
 autohtml: html
-	$(SPHINXABUILD) -z ../lib/cretonne/meta --ignore '.*.sw?' -b html -E $(ALLSPHINXOPTS) $(BUILDDIR)/html
+	$(SPHINXABUILD) -z ../lib/cretonne/meta --ignore '.*' -b html -E $(ALLSPHINXOPTS) $(BUILDDIR)/html
 
 dirhtml:
 	$(SPHINXBUILD) -b dirhtml $(ALLSPHINXOPTS) $(BUILDDIR)/dirhtml

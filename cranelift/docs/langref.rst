@@ -495,6 +495,62 @@ instructions before instruction selection::
     v9 = stack_addr ss3, 16
     v1 = load.f64 v9
 
+Global variables
+----------------
+
+A *global variable* is an object in memory whose address is not known at
+compile time. The address is computed at runtime by :inst:`global_addr`,
+possibly using information provided by the linker via relocations. There are
+multiple kinds of global variables using different methods for determining
+their address. Cretonne does not track the type or even the size of global
+variables, they are just pointers to non-stack memory.
+
+When Cretonne is generating code for a virtual machine environment, globals can
+be used to access data structures in the VM's runtime. This requires functions
+to have access to a *VM context pointer* which is used as the base address.
+Typically, the VM context pointer is passed as a hidden function argument to
+Cretonne functions.
+
+.. inst:: GV = vmctx+Offset
+
+    Declare a global variable in the VM context struct.
+
+    This declares a global variable whose address is a constant offset from the
+    VM context pointer which is passed as a hidden argument to all functions
+    JIT-compiled for the VM.
+
+    Typically, the VM context is a C struct, and the declared global variable
+    is a member of the struct.
+
+    :arg Offset: Byte offset from the VM context pointer to the global
+                 variable.
+    :result GV: Global variable.
+
+The address of a global variable can also be derived by treating another global
+variable as a struct pointer. This makes it possible to chase pointers into VM
+runtime data structures.
+
+.. inst:: GV = deref(BaseGV)+Offset
+
+    Declare a global variable in a struct pointed to by BaseGV.
+
+    The address of GV can be computed by first loading a pointer from BaseGV
+    and adding Offset to it.
+
+    It is assumed the BaseGV resides in readable memory with the apropriate
+    alignment for storing a pointer.
+
+    Chains of ``deref`` global variables are possible, but cycles are not
+    allowed. They will be caught by the IL verifier.
+
+    :arg BaseGV: Global variable containing the base pointer.
+    :arg Offset: Byte offset from the loaded base pointer to the global
+                 variable.
+    :result GV: Global variable.
+
+.. autoinst:: global_addr
+
+
 Heaps
 -----
 

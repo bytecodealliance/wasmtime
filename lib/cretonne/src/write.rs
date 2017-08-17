@@ -49,6 +49,11 @@ fn write_preamble(w: &mut Write,
         writeln!(w, "    {} = {}", ss, func.stack_slots[ss])?;
     }
 
+    for gv in func.global_vars.keys() {
+        any = true;
+        writeln!(w, "    {} = {}", gv, func.global_vars[gv])?;
+    }
+
     // Write out all signatures before functions since function declarations can refer to
     // signatures.
     for sig in func.dfg.signatures.keys() {
@@ -244,6 +249,7 @@ pub fn write_operands(w: &mut Write,
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
         UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
         UnaryBool { imm, .. } => write!(w, " {}", imm),
+        UnaryGlobalVar { global_var, .. } => write!(w, " {}", global_var),
         Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
         BinaryImm { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
         Ternary { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
@@ -338,7 +344,6 @@ pub fn write_operands(w: &mut Write,
                 write!(w, " {}, %{} -> %{}", arg, src, dst)
             }
         }
-
     }
 }
 

@@ -57,7 +57,7 @@ use flowgraph::ControlFlowGraph;
 use ir::entities::AnyEntity;
 use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallInfo};
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
-         StackSlotKind, Value, Type, Opcode, ValueLoc, ArgumentLoc};
+         StackSlotKind, GlobalVar, Value, Type, Opcode, ValueLoc, ArgumentLoc};
 use isa::TargetIsa;
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter};
@@ -270,6 +270,9 @@ impl<'a> Verifier<'a> {
             StackStore { stack_slot, .. } => {
                 self.verify_stack_slot(inst, stack_slot)?;
             }
+            UnaryGlobalVar { global_var, .. } => {
+                self.verify_global_var(inst, global_var)?;
+            }
 
             // Exhaustive list so we can't forget to add new formats
             Nullary { .. } |
@@ -323,6 +326,14 @@ impl<'a> Verifier<'a> {
     fn verify_stack_slot(&self, inst: Inst, ss: StackSlot) -> Result {
         if !self.func.stack_slots.is_valid(ss) {
             err!(inst, "invalid stack slot {}", ss)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn verify_global_var(&self, inst: Inst, gv: GlobalVar) -> Result {
+        if !self.func.global_vars.is_valid(gv) {
+            err!(inst, "invalid global variable {}", gv)
         } else {
             Ok(())
         }

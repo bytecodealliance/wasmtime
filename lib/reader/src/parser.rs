@@ -11,7 +11,8 @@ use std::{u16, u32};
 use std::mem;
 use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, CallConv, StackSlotData,
                    JumpTable, JumpTableData, Signature, ArgumentType, ArgumentExtension,
-                   ExtFuncData, SigRef, FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags};
+                   ExtFuncData, SigRef, FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags,
+                   GlobalVar, GlobalVarData};
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Offset32, Uoffset32, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
@@ -127,6 +128,20 @@ impl<'a> Context<'a> {
         }
     }
 
+    // Allocate a global variable slot and add a mapping number -> GlobalVar.
+    fn add_gv(&mut self, number: u32, data: GlobalVarData, loc: &Location) -> Result<()> {
+        self.map
+            .def_gv(number, self.function.global_vars.push(data), loc)
+    }
+
+    // Resolve a reference to a global variable.
+    fn get_gv(&self, number: u32, loc: &Location) -> Result<GlobalVar> {
+        match self.map.get_gv(number) {
+            Some(gv) => Ok(gv),
+            None => err!(loc, "undefined stack slot ss{}", number),
+        }
+    }
+
     // Allocate a new signature and add a mapping number -> SigRef.
     fn add_sig(&mut self, number: u32, data: Signature, loc: &Location) -> Result<()> {
         self.map
@@ -225,6 +240,18 @@ impl<'a> Context<'a> {
                     // Convert back to a packed option.
                     *ebb_ref = ebb.into();
                 }
+            }
+        }
+
+        // Rewrite base references in `deref` globals. Other `GlobalVar` references are already
+        // resolved.
+        for gv in self.function.global_vars.keys() {
+            let loc = gv.into();
+            match self.function.global_vars[gv] {
+                GlobalVarData::Deref { ref mut base, .. } => {
+                    self.map.rewrite_gv(base, loc)?;
+                }
+                _ => {}
             }
         }
 
@@ -339,6 +366,16 @@ impl<'a> Parser<'a> {
         if let Some(Token::StackSlot(ss)) = self.token() {
             self.consume();
             Ok(ss)
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume a global variable reference.
+    fn match_gv(&mut self, err_msg: &str) -> Result<u32> {
+        if let Some(Token::GlobalVar(gv)) = self.token() {
+            self.consume();
+            Ok(gv)
         } else {
             err!(self.loc, err_msg)
         }
@@ -903,6 +940,11 @@ impl<'a> Parser<'a> {
                     self.parse_stack_slot_decl()
                         .and_then(|(num, dat)| ctx.add_ss(num, dat, &loc))
                 }
+                Some(Token::GlobalVar(..)) => {
+                    self.gather_comments(ctx.function.global_vars.next_key());
+                    self.parse_global_var_decl()
+                        .and_then(|(num, dat)| ctx.add_gv(num, dat, &self.loc))
+                }
                 Some(Token::SigRef(..)) => {
                     self.gather_comments(ctx.function.dfg.signatures.next_key());
                     self.parse_signature_decl(ctx.unique_isa)
@@ -956,6 +998,40 @@ impl<'a> Parser<'a> {
         }
 
         // TBD: stack-slot-decl ::= StackSlot(ss) "=" stack-slot-kind Bytes * {"," stack-slot-flag}
+        Ok((number, data))
+    }
+
+    // Parse a global variable decl.
+    //
+    // global-var-decl ::= * GlobalVar(gv) "=" global-var-desc
+    // global-var-desc ::= "vmctx" offset32
+    //                   | "deref" "(" GlobalVar(base) ")" offset32
+    //
+    fn parse_global_var_decl(&mut self) -> Result<(u32, GlobalVarData)> {
+        let number = self.match_gv("expected global variable number: gv«n»")?;
+        self.match_token(Token::Equal, "expected '=' in global variable declaration")?;
+
+        let data = match self.match_any_identifier("expected global variable kind")? {
+            "vmctx" => {
+                let offset = self.optional_offset32()?;
+                GlobalVarData::VmCtx { offset }
+            }
+            "deref" => {
+                self.match_token(Token::LPar, "expected '(' in 'deref' global variable decl")?;
+                let base_num = self.match_gv("expected global variable: gv«n»")?;
+                // The base global variable may not have been declared yet, so create a fake
+                // reference using the source number. We'll rewrite these later.
+                let base = match GlobalVar::with_number(base_num) {
+                    Some(gv) => gv,
+                    None => return err!(self.loc, "Invalid global variable number for deref base"),
+                };
+                self.match_token(Token::RPar, "expected ')' in 'deref' global variable decl")?;
+                let offset = self.optional_offset32()?;
+                GlobalVarData::Deref { base, offset }
+            }
+            other => return err!(self.loc, "Unknown global variable kind '{}'", other),
+        };
+
         Ok((number, data))
     }
 
@@ -1515,6 +1591,13 @@ impl<'a> Parser<'a> {
                 InstructionData::UnaryBool {
                     opcode,
                     imm: self.match_bool("expected immediate boolean operand")?,
+                }
+            }
+            InstructionFormat::UnaryGlobalVar => {
+                InstructionData::UnaryGlobalVar {
+                    opcode,
+                    global_var: self.match_gv("expected global variable")
+                        .and_then(|num| ctx.get_gv(num, &self.loc))?,
                 }
             }
             InstructionFormat::Binary => {

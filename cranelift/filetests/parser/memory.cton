@@ -1,0 +1,37 @@
+test cat
+test verifier
+
+function %vmglobal() -> i32 {
+    gv3 = vmctx+16
+    ; check: $gv3 = vmctx+16
+    gv4 = vmctx+0
+    ; check: $gv4 = vmctx
+    ; not: +0
+    gv5 = vmctx -256
+    ; check: $gv5 = vmctx-256
+ebb0:
+    v1 = global_addr.i32 gv3
+    ; check: $v1 = global_addr.i32 $gv3
+    return v1
+}
+
+function %deref() -> i32 {
+    gv3 = vmctx+16
+    gv4 = deref(gv3)-32
+    ; check: $gv4 = deref($gv3)-32
+ebb0:
+    v1 = global_addr.i32 gv4
+    ; check: $v1 = global_addr.i32 $gv4
+    return v1
+}
+
+; Refer to a global variable before it's been declared.
+function %backref() -> i32 {
+    gv1 = deref(gv2)-32
+    ; check: $gv1 = deref($gv2)-32
+    gv2 = vmctx+16
+    ; check: $gv2 = vmctx+16
+ebb0:
+    v1 = global_addr.i32 gv1
+    return v1
+}

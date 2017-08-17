@@ -65,6 +65,24 @@ entity_impl!(Inst, "inst");
 pub struct StackSlot(u32);
 entity_impl!(StackSlot, "ss");
 
+/// An opaque reference to a global variable.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct GlobalVar(u32);
+entity_impl!(GlobalVar, "gv");
+
+impl GlobalVar {
+    /// Create a new global variable reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<GlobalVar> {
+        if n < u32::MAX {
+            Some(GlobalVar(n))
+        } else {
+            None
+        }
+    }
+}
+
 /// An opaque reference to a jump table.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct JumpTable(u32);
@@ -93,6 +111,8 @@ pub enum AnyEntity {
     Value(Value),
     /// A stack slot.
     StackSlot(StackSlot),
+    /// A Global variable.
+    GlobalVar(GlobalVar),
     /// A jump table.
     JumpTable(JumpTable),
     /// An external function.
@@ -109,6 +129,7 @@ impl fmt::Display for AnyEntity {
             AnyEntity::Inst(r) => r.fmt(f),
             AnyEntity::Value(r) => r.fmt(f),
             AnyEntity::StackSlot(r) => r.fmt(f),
+            AnyEntity::GlobalVar(r) => r.fmt(f),
             AnyEntity::JumpTable(r) => r.fmt(f),
             AnyEntity::FuncRef(r) => r.fmt(f),
             AnyEntity::SigRef(r) => r.fmt(f),
@@ -137,6 +158,12 @@ impl From<Value> for AnyEntity {
 impl From<StackSlot> for AnyEntity {
     fn from(r: StackSlot) -> AnyEntity {
         AnyEntity::StackSlot(r)
+    }
+}
+
+impl From<GlobalVar> for AnyEntity {
+    fn from(r: GlobalVar) -> AnyEntity {
+        AnyEntity::GlobalVar(r)
     }
 }
 
