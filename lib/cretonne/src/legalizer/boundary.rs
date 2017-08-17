@@ -452,18 +452,13 @@ fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
 /// original return values. The call's result values will be adapted to match the new signature.
 ///
 /// Returns `true` if any instructions were inserted.
-pub fn handle_call_abi(dfg: &mut DataFlowGraph,
-                       locations: &mut ValueLocations,
-                       stack_slots: &mut StackSlots,
-                       cfg: &ControlFlowGraph,
-                       pos: &mut Cursor)
-                       -> bool {
-    let mut inst = pos.current_inst()
-        .expect("Cursor must point to a call instruction");
+pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGraph) -> bool {
+    let dfg = &mut func.dfg;
+    let pos = &mut Cursor::new(&mut func.layout).at_inst(inst);
 
     // Start by checking if the argument types already match the signature.
     let sig_ref = match check_call_signature(dfg, inst) {
-        Ok(_) => return spill_call_arguments(dfg, locations, stack_slots, pos),
+        Ok(_) => return spill_call_arguments(dfg, &mut func.locations, &mut func.stack_slots, pos),
         Err(s) => s,
     };
 
@@ -489,22 +484,19 @@ pub fn handle_call_abi(dfg: &mut DataFlowGraph,
 
     // Go back and insert spills for any stack arguments.
     pos.goto_inst(inst);
-    spill_call_arguments(dfg, locations, stack_slots, pos);
+    spill_call_arguments(dfg, &mut func.locations, &mut func.stack_slots, pos);
 
     // Yes, we changed stuff.
     true
 }
 
-/// Insert ABI conversion code before and after the return instruction at `pos`.
+/// Insert ABI conversion code before and after the return instruction at `inst`.
 ///
 /// Return `true` if any instructions were inserted.
-pub fn handle_return_abi(dfg: &mut DataFlowGraph,
-                         cfg: &ControlFlowGraph,
-                         pos: &mut Cursor,
-                         sig: &Signature)
-                         -> bool {
-    let inst = pos.current_inst()
-        .expect("Cursor must point to a return instruction");
+pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph) -> bool {
+    let dfg = &mut func.dfg;
+    let sig = &mut func.signature;
+    let pos = &mut Cursor::new(&mut func.layout).at_inst(inst);
 
     // Check if the returned types already match the signature.
     if check_return_signature(dfg, inst, sig) {
