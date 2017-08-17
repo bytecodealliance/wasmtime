@@ -184,6 +184,11 @@ impl<K, V> SparseMap<K, V>
     pub fn values(&self) -> slice::Iter<V> {
         self.dense.iter()
     }
+
+    /// Get the values as a slice.
+    pub fn as_slice(&self) -> &[V] {
+        self.dense.as_slice()
+    }
 }
 
 /// Iterating over the elements of a set.

@@ -40,6 +40,10 @@
 //!    - All return instructions must have return value operands matching the current
 //!      function signature.
 //!
+//!   Global variables
+//!
+//!   - Detect cycles in deref(base) declarations.
+//!
 //! TODO:
 //!   Ad hoc checking
 //!
@@ -52,13 +56,16 @@
 //!    - Swizzle and shuffle instructions take a variable number of lane arguments. The number
 //!      of arguments must match the destination type, and the lane indexes must be in range.
 
+use dbg::DisplayList;
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
+use ir;
 use ir::entities::AnyEntity;
 use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallInfo};
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
          StackSlotKind, GlobalVar, Value, Type, Opcode, ValueLoc, ArgumentLoc};
 use isa::TargetIsa;
+use sparse_map::SparseSet;
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter};
 use std::result;
@@ -148,6 +155,27 @@ impl<'a> Verifier<'a> {
             domtree,
             isa,
         }
+    }
+
+    // Check for cycles in the global variable declarations.
+    fn verify_global_vars(&self) -> Result {
+        let mut seen = SparseSet::new();
+
+        for gv in self.func.global_vars.keys() {
+            seen.clear();
+            seen.insert(gv);
+
+            let mut cur = gv;
+            while let &ir::GlobalVarData::Deref { base, .. } = &self.func.global_vars[cur] {
+                if seen.insert(base).is_some() {
+                    return err!(gv, "deref cycle: {}", DisplayList(seen.as_slice()));
+                }
+
+                cur = base;
+            }
+        }
+
+        Ok(())
     }
 
     fn ebb_integrity(&self, ebb: Ebb, inst: Inst) -> Result {
@@ -845,6 +873,7 @@ impl<'a> Verifier<'a> {
     }
 
     pub fn run(&self) -> Result {
+        self.verify_global_vars()?;
         self.typecheck_entry_block_arguments()?;
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {

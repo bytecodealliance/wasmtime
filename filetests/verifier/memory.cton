@@ -1,0 +1,16 @@
+test verifier
+
+function %deref_cycle() {
+    gv1 = deref(gv2)-32 ; error: deref cycle: [gv0, gv1]
+    gv2 = deref(gv1)
+
+ebb1:
+    return
+}
+
+function %self_cycle() {
+    gv0 = deref(gv0)-32 ; error: deref cycle: [gv0]
+
+ebb1:
+    return
+}
