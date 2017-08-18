@@ -373,7 +373,7 @@ calling convention:
     retlist   : arglist
     arg       : type [argext] [argspecial]
     argext    : "uext" | "sext"
-    argspecial: "sret" | "link" | "fp" | "csr"
+    argspecial: "sret" | "link" | "fp" | "csr" | "vmctx"
     callconv  : `string`
 
 Arguments and return values have flags whose meaning is mostly target
