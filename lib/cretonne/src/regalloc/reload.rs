@@ -11,6 +11,7 @@
 
 use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
+use entity::{SparseMap, SparseMapValue};
 use ir::{Ebb, Inst, Value, Function};
 use ir::{InstBuilder, ArgumentType, ArgumentLoc};
 use isa::RegClass;
@@ -18,7 +19,6 @@ use isa::{TargetIsa, Encoding, EncInfo, RecipeConstraints, ConstraintKind};
 use regalloc::affinity::Affinity;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
-use sparse_map::{SparseMap, SparseMapValue};
 use topo_order::TopoOrder;
 
 /// Reusable data structures for the reload pass.

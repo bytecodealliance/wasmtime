@@ -1,8 +1,8 @@
 //! Topological order of EBBs, according to the dominator tree.
 
+use entity::SparseSet;
 use dominator_tree::DominatorTree;
 use ir::{Ebb, Layout};
-use sparse_map::SparseSet;
 
 /// Present EBBs in a topological order such that all dominating EBBs are guaranteed to be visited
 /// before the current EBB.

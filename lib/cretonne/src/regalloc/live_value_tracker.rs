@@ -5,7 +5,7 @@
 //! instruction, starting at the EBB header.
 
 use dominator_tree::DominatorTree;
-use entity_list::{EntityList, ListPool};
+use entity::{EntityList, ListPool};
 use ir::instructions::BranchInfo;
 use ir::{Inst, Ebb, Value, DataFlowGraph, Layout, ExpandedProgramPoint};
 use partition_slice::partition_slice;

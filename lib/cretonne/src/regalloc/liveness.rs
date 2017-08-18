@@ -175,13 +175,13 @@
 //!
 //! There is some room for improvement.
 
+use entity::SparseMap;
 use flowgraph::ControlFlowGraph;
 use ir::dfg::ValueDef;
 use ir::{Function, Value, Inst, Ebb, Layout, ProgramPoint};
 use isa::{TargetIsa, EncInfo};
 use regalloc::affinity::Affinity;
 use regalloc::liverange::LiveRange;
-use sparse_map::SparseMap;
 use std::mem;
 use std::ops::Index;
 

@@ -58,6 +58,7 @@
 
 use dbg::DisplayList;
 use dominator_tree::DominatorTree;
+use entity::SparseSet;
 use flowgraph::ControlFlowGraph;
 use ir;
 use ir::entities::AnyEntity;
@@ -65,7 +66,6 @@ use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallIn
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
          StackSlotKind, GlobalVar, Value, Type, Opcode, ValueLoc, ArgumentLoc};
 use isa::TargetIsa;
-use sparse_map::SparseSet;
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter};
 use std::result;

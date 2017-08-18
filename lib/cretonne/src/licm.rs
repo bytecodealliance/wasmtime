@@ -4,7 +4,7 @@ use ir::{Function, Ebb, Inst, Value, Cursor, CursorBase, Type, InstBuilder, Layo
 use flowgraph::ControlFlowGraph;
 use std::collections::HashSet;
 use dominator_tree::DominatorTree;
-use entity_list::{EntityList, ListPool};
+use entity::{EntityList, ListPool};
 use loop_analysis::{Loop, LoopAnalysis};
 
 /// Performs the LICM pass by detecting loops within the CFG and moving
