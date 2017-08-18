@@ -151,6 +151,54 @@ impl FromStr for Imm64 {
 /// This is used to indicate lane indexes typically.
 pub type Uimm8 = u8;
 
+/// A 32-bit unsigned integer immediate operand.
+///
+/// This is used to represent sizes of memory objects.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+pub struct Uimm32(u32);
+
+impl Into<u32> for Uimm32 {
+    fn into(self) -> u32 {
+        self.0
+    }
+}
+
+impl Into<i64> for Uimm32 {
+    fn into(self) -> i64 {
+        self.0 as i64
+    }
+}
+
+impl From<u32> for Uimm32 {
+    fn from(x: u32) -> Self {
+        Uimm32(x)
+    }
+}
+
+impl Display for Uimm32 {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if self.0 < 10_000 {
+            write!(f, "{}", self.0)
+        } else {
+            write_hex(self.0 as i64, f)
+        }
+
+    }
+}
+
+impl FromStr for Uimm32 {
+    type Err = &'static str;
+
+    // Parse a decimal or hexadecimal `Uimm32`, formatted as above.
+    fn from_str(s: &str) -> Result<Uimm32, &'static str> {
+        parse_i64(s).and_then(|x| if 0 <= x && x <= u32::MAX as i64 {
+                                  Ok(Uimm32(x as u32))
+                              } else {
+                                  Err("Uimm32 out of range")
+                              })
+    }
+}
+
 /// 32-bit signed immediate offset.
 ///
 /// This is used to encode an immediate offset for load/store instructions. All supported ISAs have
