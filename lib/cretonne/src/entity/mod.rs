@@ -5,6 +5,14 @@
 //!
 //! Various data structures based on the entity references are defined in sub-modules.
 
+mod keys;
+mod map;
+mod primary;
+
+pub use self::keys::Keys;
+pub use self::map::EntityMap;
+pub use self::primary::PrimaryMap;
+
 /// A type wrapping a small integer index should implement `EntityRef` so it can be used as the key
 /// of an `EntityMap` or `SparseMap`.
 pub trait EntityRef: Copy + Eq {

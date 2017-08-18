@@ -3,7 +3,7 @@
 //! The `StackSlotData` struct keeps track of a single stack slot in a function.
 //!
 
-use entity_map::{EntityMap, PrimaryEntityData, Keys};
+use entity::{PrimaryMap, Keys};
 use ir::{Type, StackSlot};
 use std::fmt;
 use std::ops::Index;
@@ -124,15 +124,13 @@ impl fmt::Display for StackSlotData {
     }
 }
 
-impl PrimaryEntityData for StackSlotData {}
-
 /// Stack frame manager.
 ///
 /// Keep track of all the stack slots used by a function.
 #[derive(Clone, Debug)]
 pub struct StackSlots {
     /// All allocated stack slots.
-    slots: EntityMap<StackSlot, StackSlotData>,
+    slots: PrimaryMap<StackSlot, StackSlotData>,
 
     /// All the outgoing stack slots, ordered by offset.
     outgoing: Vec<StackSlot>,
@@ -152,7 +150,7 @@ impl StackSlots {
     /// Create an empty stack slot manager.
     pub fn new() -> StackSlots {
         StackSlots {
-            slots: EntityMap::new(),
+            slots: PrimaryMap::new(),
             outgoing: Vec::new(),
             frame_size: None,
         }

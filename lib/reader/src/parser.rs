@@ -1388,7 +1388,7 @@ impl<'a> Parser<'a> {
             .expect("duplicate inst references created");
 
         if let Some(encoding) = encoding {
-            *ctx.function.encodings.ensure(inst) = encoding;
+            ctx.function.encodings[inst] = encoding;
         }
 
         if results.len() != num_results {
@@ -1421,7 +1421,7 @@ impl<'a> Parser<'a> {
                     .inst_results(inst)
                     .iter()
                     .zip(result_locations) {
-                *ctx.function.locations.ensure(value) = loc;
+                ctx.function.locations[value] = loc;
             }
         }
 

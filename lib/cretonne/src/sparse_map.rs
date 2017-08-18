@@ -35,8 +35,7 @@
 //! - `SparseMap` requires the values to implement `SparseMapValue<K>` which means that they must
 //!   contain their own key.
 
-use entity_map::EntityMap;
-use entity::EntityRef;
+use entity::{EntityRef, EntityMap};
 use std::mem;
 use std::slice;
 use std::u32;
@@ -151,7 +150,7 @@ impl<K, V> SparseMap<K, V>
         let idx = self.dense.len();
         assert!(idx <= u32::MAX as usize, "SparseMap overflow");
         self.dense.push(value);
-        *self.sparse.ensure(key) = idx as u32;
+        self.sparse[key] = idx as u32;
         None
     }
 

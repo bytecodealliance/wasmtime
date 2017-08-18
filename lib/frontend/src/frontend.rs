@@ -6,8 +6,7 @@ use cretonne::ir::instructions::BranchInfo;
 use cretonne::ir::function::DisplayFunction;
 use cretonne::isa::TargetIsa;
 use ssa::{SSABuilder, SideEffects, Block};
-use cretonne::entity_map::{EntityMap, PrimaryEntityData};
-use cretonne::entity::EntityRef;
+use cretonne::entity::{EntityRef, EntityMap};
 use std::hash::Hash;
 
 /// Permanent structure used for translating into Cretonne IL.
@@ -37,8 +36,6 @@ struct EbbData {
     pristine: bool,
     user_arg_count: usize,
 }
-
-impl PrimaryEntityData for EbbData {}
 
 struct Position {
     ebb: Ebb,
@@ -231,7 +228,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     pub fn create_ebb(&mut self) -> Ebb {
         let ebb = self.func.dfg.make_ebb();
         self.builder.ssa.declare_ebb_header_block(ebb);
-        *self.builder.ebbs.ensure(ebb) = EbbData {
+        self.builder.ebbs[ebb] = EbbData {
             filled: false,
             pristine: true,
             user_arg_count: 0,
@@ -286,7 +283,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 
     /// In order to use a variable in a `use_var`, you need to declare its type with this method.
     pub fn declare_var(&mut self, var: Variable, ty: Type) {
-        *self.builder.types.ensure(var) = ty;
+        self.builder.types[var] = ty;
     }
 
     /// Returns the Cretonne IL value corresponding to the utilization at the current program
@@ -560,7 +557,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 
     fn handle_ssa_side_effects(&mut self, side_effects: SideEffects) {
         for split_ebb in side_effects.split_ebbs_created {
-            self.builder.ebbs.ensure(split_ebb).filled = true
+            self.builder.ebbs[split_ebb].filled = true
         }
         for modified_ebb in side_effects.instructions_added_to_ebbs {
             self.builder.ebbs[modified_ebb].pristine = false

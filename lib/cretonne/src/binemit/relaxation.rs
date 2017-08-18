@@ -67,7 +67,7 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> Result<CodeOffset
             }
 
             while let Some(inst) = cur.next_inst() {
-                let enc = cur.func.encodings.get_or_default(inst);
+                let enc = cur.func.encodings[inst];
                 let size = encinfo.bytes(enc);
 
                 // See if this might be a branch that is out of range.
