@@ -46,7 +46,7 @@
 //! The index stored in an `EntityList` points to part 2, the list elements. The value 0 is
 //! reserved for the empty list which isn't allocated in the vector.
 
-use entity_ref::EntityRef;
+use entity::EntityRef;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::mem;
@@ -483,7 +483,7 @@ mod tests {
     use super::*;
     use super::{sclass_size, sclass_for_length};
     use ir::Inst;
-    use entity_ref::EntityRef;
+    use entity::EntityRef;
 
     #[test]
     fn size_classes() {

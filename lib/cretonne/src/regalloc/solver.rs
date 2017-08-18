@@ -702,7 +702,7 @@ impl Solver {
 #[cfg(test)]
 #[cfg(build_arm32)]
 mod tests {
-    use entity_ref::EntityRef;
+    use entity::EntityRef;
     use ir::Value;
     use isa::{TargetIsa, RegClass, RegUnit};
     use regalloc::AllocatableSet;

@@ -13,7 +13,7 @@ pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 #[macro_use]
 pub mod dbg;
 #[macro_use]
-pub mod entity_ref;
+pub mod entity;
 
 pub mod binemit;
 pub mod bitset;

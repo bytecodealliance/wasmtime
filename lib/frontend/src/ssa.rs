@@ -10,7 +10,7 @@ use cretonne::ir::{Ebb, Value, Inst, Type, DataFlowGraph, JumpTables, Layout, Cu
 use cretonne::ir::instructions::BranchInfo;
 use std::hash::Hash;
 use cretonne::entity_map::{EntityMap, PrimaryEntityData};
-use cretonne::entity_ref::EntityRef;
+use cretonne::entity::EntityRef;
 use cretonne::packed_option::PackedOption;
 use cretonne::packed_option::ReservedValue;
 use std::u32;
@@ -607,7 +607,7 @@ impl<Variable> SSABuilder<Variable>
 
 #[cfg(test)]
 mod tests {
-    use cretonne::entity_ref::EntityRef;
+    use cretonne::entity::EntityRef;
     use cretonne::ir::{Function, InstBuilder, Cursor, CursorBase, Inst, JumpTableData};
     use cretonne::ir::types::*;
     use cretonne::verify_function;

@@ -7,7 +7,7 @@
 //! The `SourceMap` struct defined in this module makes the same mapping available to parser
 //! clients.
 
-use cretonne::entity_ref::EntityRef;
+use cretonne::entity::EntityRef;
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::{StackSlot, GlobalVar, JumpTable, Ebb, Value, SigRef, FuncRef};
 use error::{Result, Location};

@@ -9,7 +9,7 @@
 //! - A *secondary* `EntityMap` contains additional data about entities kept in a primary map. The
 //!   values need to implement `Clone + Default` traits so the map can be grown with `ensure`.
 
-use entity_ref::EntityRef;
+use entity::EntityRef;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
