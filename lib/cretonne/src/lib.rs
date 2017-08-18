@@ -18,7 +18,6 @@ pub mod entity;
 pub mod binemit;
 pub mod bitset;
 pub mod dominator_tree;
-pub mod entity_list;
 pub mod flowgraph;
 pub mod ir;
 pub mod isa;
@@ -27,7 +26,6 @@ pub mod packed_option;
 pub mod regalloc;
 pub mod result;
 pub mod settings;
-pub mod sparse_map;
 pub mod verifier;
 
 mod abi;

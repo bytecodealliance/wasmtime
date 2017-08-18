@@ -11,7 +11,7 @@
 //! If any values in a virtual register are spilled, they will use the same stack slot. This avoids
 //! memory-to-memory copies when a spilled value is passed as an EBB argument.
 
-use entity_list::{EntityList, ListPool};
+use entity::{EntityList, ListPool};
 use entity::{PrimaryMap, EntityMap, Keys};
 use ir::Value;
 use packed_option::PackedOption;
