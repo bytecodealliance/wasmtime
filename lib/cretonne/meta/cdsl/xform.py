@@ -4,6 +4,7 @@ Instruction transformations.
 from __future__ import absolute_import
 from .ast import Def, Var, Apply
 from .ti import ti_xform, TypeEnv, get_type_env, TypeConstraint
+from collections import OrderedDict
 from functools import reduce
 
 try:
@@ -12,7 +13,7 @@ try:
     from .ast import Expr, VarAtomMap  # noqa
     from .isa import TargetISA  # noqa
     from .typevar import TypeVar  # noqa
-    from .instructions import ConstrList # noqa
+    from .instructions import ConstrList, Instruction # noqa
     DefApply = Union[Def, Apply]
 except ImportError:
     pass
@@ -370,6 +371,7 @@ class XFormGroup(object):
     def __init__(self, name, doc, isa=None, chain=None):
         # type: (str, str, TargetISA, XFormGroup) -> None
         self.xforms = list()  # type: List[XForm]
+        self.custom = OrderedDict()  # type: OrderedDict[Instruction, str]
         self.name = name
         self.__doc__ = doc
         self.isa = isa
@@ -405,3 +407,17 @@ class XFormGroup(object):
         xform = XForm(Rtl(src), dst)
         xform.verify_legalize()
         self.xforms.append(xform)
+
+    def custom_legalize(self, inst, funcname):
+        # type: (Instruction, str) -> None
+        """
+        Add a custom legalization action for `inst`.
+
+        The `funcname` parameter is the fully qualified name of a Rust function
+        which takes the same arguments as the `isa::Legalize` actions.
+
+        The custom function will be called to legalize `inst` and any return
+        value is ignored.
+        """
+        assert inst not in self.custom, "Duplicate custom_legalize"
+        self.custom[inst] = funcname
