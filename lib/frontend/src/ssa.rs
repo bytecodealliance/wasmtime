@@ -9,8 +9,7 @@ use cretonne::ir::{Ebb, Value, Inst, Type, DataFlowGraph, JumpTables, Layout, Cu
                    InstBuilder};
 use cretonne::ir::instructions::BranchInfo;
 use std::hash::Hash;
-use cretonne::entity_map::{EntityMap, PrimaryEntityData};
-use cretonne::entity::EntityRef;
+use cretonne::entity::{EntityRef, PrimaryMap, EntityMap};
 use cretonne::packed_option::PackedOption;
 use cretonne::packed_option::ReservedValue;
 use std::u32;
@@ -41,7 +40,7 @@ pub struct SSABuilder<Variable>
     variables: EntityMap<Variable, HashMap<Block, Value>>,
     // Records the position of the basic blocks and the list of values used but not defined in the
     // block.
-    blocks: EntityMap<Block, BlockData<Variable>>,
+    blocks: PrimaryMap<Block, BlockData<Variable>>,
     // Records the basic blocks at the beginning of the `Ebb`s.
     ebb_headers: EntityMap<Ebb, PackedOption<Block>>,
 }
@@ -66,7 +65,6 @@ enum BlockData<Variable> {
     // The block is implicitely sealed at creation.
     EbbBody { predecessor: Block },
 }
-impl<Variable> PrimaryEntityData for BlockData<Variable> {}
 
 impl<Variable> BlockData<Variable> {
     fn add_predecessor(&mut self, pred: Block, inst: Inst) {
@@ -135,7 +133,7 @@ impl<Variable> SSABuilder<Variable>
     pub fn new() -> SSABuilder<Variable> {
         SSABuilder {
             variables: EntityMap::new(),
-            blocks: EntityMap::new(),
+            blocks: PrimaryMap::new(),
             ebb_headers: EntityMap::new(),
         }
     }
@@ -193,7 +191,7 @@ impl<Variable> SSABuilder<Variable>
     /// The SSA value is passed as an argument because it should be created with
     /// `ir::DataFlowGraph::append_result`.
     pub fn def_var(&mut self, var: Variable, val: Value, block: Block) {
-        self.variables.ensure(var).insert(block, val);
+        self.variables[var].insert(block, val);
     }
 
     /// Declares a use of a variable in a given basic block. Returns the SSA value corresponding
@@ -296,7 +294,7 @@ impl<Variable> SSABuilder<Variable>
                                            ebb: ebb,
                                            undef_variables: Vec::new(),
                                        }));
-        *self.ebb_headers.ensure(ebb) = block.into();
+        self.ebb_headers[ebb] = block.into();
         block
     }
     /// Gets the header block corresponding to an Ebb, panics if the Ebb or the header block

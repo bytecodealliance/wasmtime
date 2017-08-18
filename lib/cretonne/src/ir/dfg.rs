@@ -1,6 +1,6 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use entity_map::{EntityMap, PrimaryEntityData};
+use entity::{PrimaryMap, EntityMap};
 use isa::TargetIsa;
 use ir::builder::{InsertBuilder, ReplaceBuilder};
 use ir::extfunc::ExtFuncData;
@@ -27,7 +27,7 @@ pub struct DataFlowGraph {
     /// Data about all of the instructions in the function, including opcodes and operands.
     /// The instructions in this map are not in program order. That is tracked by `Layout`, along
     /// with the EBB containing each instruction.
-    insts: EntityMap<Inst, InstructionData>,
+    insts: PrimaryMap<Inst, InstructionData>,
 
     /// List of result values for each instruction.
     ///
@@ -38,7 +38,7 @@ pub struct DataFlowGraph {
     /// Extended basic blocks in the function and their arguments.
     /// This map is not in program order. That is handled by `Layout`, and so is the sequence of
     /// instructions contained in each EBB.
-    ebbs: EntityMap<Ebb, EbbData>,
+    ebbs: PrimaryMap<Ebb, EbbData>,
 
     /// Memory pool of value lists.
     ///
@@ -50,33 +50,27 @@ pub struct DataFlowGraph {
     pub value_lists: ValueListPool,
 
     /// Primary value table with entries for all values.
-    values: EntityMap<Value, ValueData>,
+    values: PrimaryMap<Value, ValueData>,
 
     /// Function signature table. These signatures are referenced by indirect call instructions as
     /// well as the external function references.
-    pub signatures: EntityMap<SigRef, Signature>,
+    pub signatures: PrimaryMap<SigRef, Signature>,
 
     /// External function references. These are functions that can be called directly.
-    pub ext_funcs: EntityMap<FuncRef, ExtFuncData>,
+    pub ext_funcs: PrimaryMap<FuncRef, ExtFuncData>,
 }
-
-impl PrimaryEntityData for InstructionData {}
-impl PrimaryEntityData for EbbData {}
-impl PrimaryEntityData for ValueData {}
-impl PrimaryEntityData for Signature {}
-impl PrimaryEntityData for ExtFuncData {}
 
 impl DataFlowGraph {
     /// Create a new empty `DataFlowGraph`.
     pub fn new() -> DataFlowGraph {
         DataFlowGraph {
-            insts: EntityMap::new(),
+            insts: PrimaryMap::new(),
             results: EntityMap::new(),
-            ebbs: EntityMap::new(),
+            ebbs: PrimaryMap::new(),
             value_lists: ValueListPool::new(),
-            values: EntityMap::new(),
-            signatures: EntityMap::new(),
-            ext_funcs: EntityMap::new(),
+            values: PrimaryMap::new(),
+            signatures: PrimaryMap::new(),
+            ext_funcs: PrimaryMap::new(),
         }
     }
 
@@ -115,7 +109,7 @@ impl DataFlowGraph {
 /// Resolve value aliases.
 ///
 /// Find the original SSA value that `value` aliases.
-fn resolve_aliases(values: &EntityMap<Value, ValueData>, value: Value) -> Value {
+fn resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) -> Value {
     let mut v = value;
 
     // Note that values may be empty here.

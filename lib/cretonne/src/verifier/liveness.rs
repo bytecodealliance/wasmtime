@@ -63,7 +63,7 @@ impl<'a> LivenessVerifier<'a> {
     fn check_insts(&self) -> Result {
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
-                let encoding = self.func.encodings.get_or_default(inst);
+                let encoding = self.func.encodings[inst];
 
                 // Check the defs.
                 for &val in self.func.dfg.inst_results(inst) {

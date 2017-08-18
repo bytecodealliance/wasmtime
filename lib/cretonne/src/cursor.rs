@@ -157,7 +157,7 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
         // Assign an encoding.
         match self.isa
                   .encode(&self.func.dfg, &self.func.dfg[inst], ctrl_typevar) {
-            Ok(e) => *self.func.encodings.ensure(inst) = e,
+            Ok(e) => self.func.encodings[inst] = e,
             Err(_) => panic!("can't encode {}", self.display_inst(inst)),
         }
 

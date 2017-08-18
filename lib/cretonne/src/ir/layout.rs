@@ -5,7 +5,7 @@
 
 use std::cmp;
 use std::iter::{Iterator, IntoIterator};
-use entity_map::EntityMap;
+use entity::EntityMap;
 use packed_option::PackedOption;
 use ir::{Ebb, Inst, Type, DataFlowGraph};
 use ir::builder::InstInserterBase;
@@ -278,7 +278,7 @@ impl Layout {
 impl Layout {
     /// Is `ebb` currently part of the layout?
     pub fn is_ebb_inserted(&self, ebb: Ebb) -> bool {
-        Some(ebb) == self.first_ebb || (self.ebbs.is_valid(ebb) && self.ebbs[ebb].prev.is_some())
+        Some(ebb) == self.first_ebb || self.ebbs[ebb].prev.is_some()
     }
 
     /// Insert `ebb` as the last EBB in the layout.
@@ -286,7 +286,7 @@ impl Layout {
         assert!(!self.is_ebb_inserted(ebb),
                 "Cannot append EBB that is already in the layout");
         {
-            let node = self.ebbs.ensure(ebb);
+            let node = &mut self.ebbs[ebb];
             assert!(node.first_inst.is_none() && node.last_inst.is_none());
             node.prev = self.last_ebb.into();
             node.next = None.into();
@@ -308,7 +308,7 @@ impl Layout {
                 "EBB Insertion point not in the layout");
         let after = self.ebbs[before].prev;
         {
-            let node = self.ebbs.ensure(ebb);
+            let node = &mut self.ebbs[ebb];
             node.next = before.into();
             node.prev = after;
         }
@@ -328,7 +328,7 @@ impl Layout {
                 "EBB Insertion point not in the layout");
         let before = self.ebbs[after].next;
         {
-            let node = self.ebbs.ensure(ebb);
+            let node = &mut self.ebbs[ebb];
             node.next = before;
             node.prev = after.into();
         }
@@ -406,11 +406,7 @@ impl<'f> IntoIterator for &'f Layout {
 impl Layout {
     /// Get the EBB containing `inst`, or `None` if `inst` is not inserted in the layout.
     pub fn inst_ebb(&self, inst: Inst) -> Option<Ebb> {
-        if self.insts.is_valid(inst) {
-            self.insts[inst].ebb.into()
-        } else {
-            None
-        }
+        self.insts[inst].ebb.into()
     }
 
     /// Get the EBB containing the program point `pp`. Panic if `pp` is not in the layout.
@@ -433,7 +429,7 @@ impl Layout {
         {
             let ebb_node = &mut self.ebbs[ebb];
             {
-                let inst_node = self.insts.ensure(inst);
+                let inst_node = &mut self.insts[inst];
                 inst_node.ebb = ebb.into();
                 inst_node.prev = ebb_node.last_inst;
                 assert!(inst_node.next.is_none());
@@ -465,7 +461,7 @@ impl Layout {
             .expect("Instruction before insertion point not in the layout");
         let after = self.insts[before].prev;
         {
-            let inst_node = self.insts.ensure(inst);
+            let inst_node = &mut self.insts[inst];
             inst_node.ebb = ebb.into();
             inst_node.next = before.into();
             inst_node.prev = after;
@@ -543,7 +539,7 @@ impl Layout {
         let next_ebb = self.ebbs[old_ebb].next;
         let last_inst = self.ebbs[old_ebb].last_inst;
         {
-            let node = self.ebbs.ensure(new_ebb);
+            let node = &mut self.ebbs[new_ebb];
             node.prev = old_ebb.into();
             node.next = next_ebb;
             node.first_inst = before.into();

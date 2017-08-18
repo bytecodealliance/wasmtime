@@ -2,7 +2,8 @@
 //! and parent in the loop tree.
 
 use dominator_tree::DominatorTree;
-use entity_map::{EntityMap, PrimaryEntityData, Keys};
+use entity::{PrimaryMap, Keys};
+use entity::EntityMap;
 use flowgraph::ControlFlowGraph;
 use ir::{Function, Ebb, Layout};
 use packed_option::PackedOption;
@@ -17,7 +18,7 @@ entity_impl!(Loop, "loop");
 /// Loops are referenced by the Loop object, and for each loop you can access its header EBB,
 /// its eventual parent in the loop tree and all the EBB belonging to the loop.
 pub struct LoopAnalysis {
-    loops: EntityMap<Loop, LoopData>,
+    loops: PrimaryMap<Loop, LoopData>,
     ebb_loop_map: EntityMap<Ebb, PackedOption<Loop>>,
 }
 
@@ -25,8 +26,6 @@ struct LoopData {
     header: Ebb,
     parent: PackedOption<Loop>,
 }
-
-impl PrimaryEntityData for LoopData {}
 
 impl LoopData {
     /// Creates a `LoopData` object with the loop header and its eventual parent in the loop tree.
@@ -44,7 +43,7 @@ impl LoopAnalysis {
     /// a function.
     pub fn new() -> LoopAnalysis {
         LoopAnalysis {
-            loops: EntityMap::new(),
+            loops: PrimaryMap::new(),
             ebb_loop_map: EntityMap::new(),
         }
     }

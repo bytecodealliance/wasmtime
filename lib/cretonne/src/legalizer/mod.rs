@@ -73,7 +73,7 @@ pub fn legalize_function(func: &mut ir::Function,
             match isa.encode(&pos.func.dfg,
                              &pos.func.dfg[inst],
                              pos.func.dfg.ctrl_typevar(inst)) {
-                Ok(encoding) => *pos.func.encodings.ensure(inst) = encoding,
+                Ok(encoding) => pos.func.encodings[inst] = encoding,
                 Err(action) => {
                     // We should transform the instruction into legal equivalents.
                     let changed = action(inst, pos.func, cfg);

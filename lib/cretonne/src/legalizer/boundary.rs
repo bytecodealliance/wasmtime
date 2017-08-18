@@ -585,7 +585,7 @@ fn spill_entry_arguments(func: &mut Function, entry: Ebb) {
             .zip(func.dfg.ebb_args(entry)) {
         if let ArgumentLoc::Stack(offset) = abi.location {
             let ss = func.stack_slots.make_incoming_arg(abi.value_type, offset);
-            *func.locations.ensure(arg) = ValueLoc::Stack(ss);
+            func.locations[arg] = ValueLoc::Stack(ss);
         }
     }
 }
@@ -646,7 +646,7 @@ fn spill_call_arguments(dfg: &mut DataFlowGraph,
     // Insert the spill instructions and rewrite call arguments.
     for (idx, arg, ss) in arglist {
         let stack_val = dfg.ins(pos).spill(arg);
-        *locations.ensure(stack_val) = ValueLoc::Stack(ss);
+        locations[stack_val] = ValueLoc::Stack(ss);
         dfg.inst_variable_args_mut(inst)[idx] = stack_val;
     }
 

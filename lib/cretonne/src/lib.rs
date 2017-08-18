@@ -19,7 +19,6 @@ pub mod binemit;
 pub mod bitset;
 pub mod dominator_tree;
 pub mod entity_list;
-pub mod entity_map;
 pub mod flowgraph;
 pub mod ir;
 pub mod isa;

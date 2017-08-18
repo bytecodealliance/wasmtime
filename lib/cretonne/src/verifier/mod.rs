@@ -688,7 +688,7 @@ impl<'a> Verifier<'a> {
         for (&arg, &abi) in args.iter().zip(expected_args) {
             // Value types have already been checked by `typecheck_variable_args_iterator()`.
             if let ArgumentLoc::Stack(offset) = abi.location {
-                let arg_loc = self.func.locations.get_or_default(arg);
+                let arg_loc = self.func.locations[arg];
                 if let ValueLoc::Stack(ss) = arg_loc {
                     // Argument value is assigned to a stack slot as expected.
                     self.verify_stack_slot(inst, ss)?;
@@ -811,7 +811,7 @@ impl<'a> Verifier<'a> {
             None => return Ok(()),
         };
 
-        let encoding = self.func.encodings.get_or_default(inst);
+        let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
             let verify_encoding =
                 isa.encode(&self.func.dfg,

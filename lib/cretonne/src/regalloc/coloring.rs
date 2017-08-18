@@ -707,7 +707,7 @@ impl<'a> Context<'a> {
             self.divert.regmove(m.value, m.from, m.to);
             let inst = dfg.ins(pos).regmove(m.value, m.from, m.to);
             match self.isa.encode(dfg, &dfg[inst], ty) {
-                Ok(encoding) => *encodings.ensure(inst) = encoding,
+                Ok(encoding) => encodings[inst] = encoding,
                 _ => panic!("Can't encode {} {}", m.rc, dfg.display_inst(inst, self.isa)),
             }
         }

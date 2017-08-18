@@ -107,11 +107,11 @@ impl SubTest for TestBinEmit {
         // Give an encoding to any instruction that doesn't already have one.
         for ebb in func.layout.ebbs() {
             for inst in func.layout.ebb_insts(ebb) {
-                if !func.encodings.get_or_default(inst).is_legal() {
+                if !func.encodings[inst].is_legal() {
                     if let Ok(enc) = isa.encode(&func.dfg,
                                                 &func.dfg[inst],
                                                 func.dfg.ctrl_typevar(inst)) {
-                        *func.encodings.ensure(inst) = enc;
+                        func.encodings[inst] = enc;
                     }
                 }
             }
@@ -158,7 +158,7 @@ impl SubTest for TestBinEmit {
                        ebb);
             for inst in func.layout.ebb_insts(ebb) {
                 sink.text.clear();
-                let enc = func.encodings.get_or_default(inst);
+                let enc = func.encodings[inst];
 
                 // Send legal encodings into the emitter.
                 if enc.is_legal() {

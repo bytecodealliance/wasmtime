@@ -12,7 +12,7 @@
 //! memory-to-memory copies when a spilled value is passed as an EBB argument.
 
 use entity_list::{EntityList, ListPool};
-use entity_map::{EntityMap, PrimaryEntityData, Keys};
+use entity::{PrimaryMap, EntityMap, Keys};
 use ir::Value;
 use packed_option::PackedOption;
 use ref_slice::ref_slice;
@@ -23,7 +23,6 @@ pub struct VirtReg(u32);
 entity_impl!(VirtReg, "vreg");
 
 type ValueList = EntityList<Value>;
-impl PrimaryEntityData for ValueList {}
 
 /// Collection of virtual registers.
 ///
@@ -37,7 +36,7 @@ pub struct VirtRegs {
     ///
     /// The list of values ion a virtual register is kept sorted according to the dominator tree's
     /// RPO of the value defs.
-    vregs: EntityMap<VirtReg, ValueList>,
+    vregs: PrimaryMap<VirtReg, ValueList>,
 
     /// Each value belongs to at most one virtual register.
     value_vregs: EntityMap<Value, PackedOption<VirtReg>>,
@@ -49,7 +48,7 @@ impl VirtRegs {
     pub fn new() -> VirtRegs {
         VirtRegs {
             pool: ListPool::new(),
-            vregs: EntityMap::new(),
+            vregs: PrimaryMap::new(),
             value_vregs: EntityMap::new(),
         }
     }
@@ -63,7 +62,7 @@ impl VirtRegs {
 
     /// Get the virtual register containing `value`, if any.
     pub fn get(&self, value: Value) -> Option<VirtReg> {
-        self.value_vregs.get_or_default(value).into()
+        self.value_vregs[value].into()
     }
 
     /// Get the list of values in `vreg`. The values are ordered according to `DomTree::rpo_cmp` of
@@ -133,7 +132,7 @@ impl VirtRegs {
 
         self.vregs[vreg].extend(values.iter().cloned(), &mut self.pool);
         for &v in values {
-            *self.value_vregs.ensure(v) = vreg.into();
+            self.value_vregs[v] = vreg.into();
         }
 
         vreg

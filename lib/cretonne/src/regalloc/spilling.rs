@@ -453,7 +453,7 @@ impl<'a> Context<'a> {
             .make_spill_slot(self.cur.func.dfg.value_type(value));
         for &v in self.virtregs.congruence_class(&value) {
             self.liveness.spill(v);
-            *self.cur.func.locations.ensure(v) = ValueLoc::Stack(ss);
+            self.cur.func.locations[v] = ValueLoc::Stack(ss);
         }
     }
 

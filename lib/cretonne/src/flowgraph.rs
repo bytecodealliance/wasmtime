@@ -25,7 +25,7 @@
 
 use ir::{Function, Inst, Ebb};
 use ir::instructions::BranchInfo;
-use entity_map::EntityMap;
+use entity::EntityMap;
 use std::mem;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
