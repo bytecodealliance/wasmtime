@@ -559,44 +559,82 @@ all process memory. Instead, it is given a small set of memory areas to work
 in, and all accesses are bounds checked. Cretonne models this through the
 concept of *heaps*.
 
-A heap is declared in the function preamble and can be accessed with restricted
-instructions that trap on out-of-bounds accesses. Heap addresses can be smaller
-than the native pointer size, for example unsigned :type:`i32` offsets on a
-64-bit architecture.
+A heap is declared in the function preamble and can be accessed with the
+:inst:`heap_addr` instruction that traps on out-of-bounds accesses or returns a
+pointer that is guaranteed to trap. Heap addresses can be smaller than the
+native pointer size, for example unsigned :type:`i32` offsets on a 64-bit
+architecture.
 
-.. inst:: H = heap Name
+.. digraph:: static
+    :align: center
+    :caption: Heap address space layout
 
-    Declare a heap in the function preamble.
+    node [
+        shape=record,
+        fontsize=10,
+        fontname="Vera Sans, DejaVu Sans, Liberation Sans, Arial, Helvetica, sans"
+    ]
+    "static" [label="mapped\npages|unmapped\npages|guard\npages"]
 
-    This doesn't allocate memory, it just retrieves a handle to a sandbox from
-    the runtime environment.
+A heap appears as three consecutive ranges of address space:
 
-    :arg Name: String identifying the heap in the runtime environment.
-    :result H: Heap identifier.
+1. The *mapped pages* are the usable memory range in the heap. Loads and stores
+   to this range won't trap. A heap may have a minimum guaranteed size which
+   means that some mapped pages are always present.
+2. The *unmapped pages* is a possibly empty range of address space that may be
+   mapped in the future when the heap is grown.
+3. The *guard pages* is a range of address space that is guaranteed to cause a
+   trap when accessed. It is used to optimize bounds checking for heap accesses
+   with a shared base pointer.
 
-.. autoinst:: heap_load
-.. autoinst:: heap_store
-
-When optimizing heap accesses, Cretonne may separate the heap bounds checking
-and address computations from the memory accesses.
+The *heap bound* is the total size of the mapped and unmapped pages. This is
+the bound that :inst:`heap_addr` checks against. Memory accesses inside the
+heap bounds can trap if they hit an unmapped page.
 
 .. autoinst:: heap_addr
 
-A small example using heaps::
+Two styles of heaps are supported, *static* and *dynamic*. They behave
+differently when resized.
 
-    function %vdup(i32, i32) {
-        h1 = heap "main"
+Static heaps
+~~~~~~~~~~~~
 
-    ebb1(v1: i32, v2: i32):
-        v3 = heap_load.i32x4 h1, v1, 0
-        v4 = heap_addr h1, v2, 32      ; Shared range check for two stores.
-        store v3, v4, 0
-        store v3, v4, 16
-        return
-    }
+A *static heap* starts out with all the address space it will ever need, so it
+never moves to a different address. At the base address is a number of mapped
+pages corresponding to the heap's current size. Then follows a number of
+unmapped pages where the heap can grow up to its maximum size. After the
+unmapped pages follow the guard pages which are also guaranteed to generate a
+trap when accessed.
 
-The final expansion of the :inst:`heap_addr` range check and address conversion
-depends on the runtime environment.
+.. inst:: H = static Base, min MinBytes, bound BoundBytes, guard GuardBytes
+
+    Declare a static heap in the preamble.
+
+    :arg Base: Global variable holding the heap's base address or
+            ``reserved_reg``.
+    :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
+            size will never trap.
+    :arg BoundBytes: Fixed heap bound in bytes. This defines the amount of
+            address space reserved for the heap, not including the guard pages.
+    :arg GuardBytes: Size of the guard pages in bytes.
+
+Dynamic heaps
+~~~~~~~~~~~~~
+
+A *dynamic heap* can be relocated to a different base address when it is
+resized, and its bound can move dynamically. The guard pages move when the heap
+is resized. The bound of a dynamic heap is stored in a global variable.
+
+.. inst:: H = dynamic Base, min MinBytes, bound BoundGV, guard GuardBytes
+
+    Declare a dynamic heap in the preamble.
+
+    :arg Base: Global variable holding the heap's base address or
+            ``reserved_reg``.
+    :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
+            size will never trap.
+    :arg BoundGV: Global variable containing the current heap bound in bytes.
+    :arg GuardBytes: Size of the guard pages in bytes.
 
 
 Operations

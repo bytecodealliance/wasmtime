@@ -30,3 +30,6 @@ func_ref = EntityRefKind('func_ref', 'An external function.')
 #: A reference to a jump table declared in the function preamble.
 jump_table = EntityRefKind(
         'jump_table', 'A jump table.', default_member='table')
+
+#: A reference to a heap declared in the function preamble.
+heap = EntityRefKind('heap', 'A heap.')

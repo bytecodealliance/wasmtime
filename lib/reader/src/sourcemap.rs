@@ -9,7 +9,7 @@
 
 use cretonne::entity::EntityRef;
 use cretonne::ir::entities::AnyEntity;
-use cretonne::ir::{StackSlot, GlobalVar, JumpTable, Ebb, Value, SigRef, FuncRef};
+use cretonne::ir::{StackSlot, GlobalVar, Heap, JumpTable, Ebb, Value, SigRef, FuncRef};
 use error::{Result, Location};
 use lexer::split_entity_name;
 use std::collections::HashMap;
@@ -21,6 +21,7 @@ pub struct SourceMap {
     ebbs: HashMap<Ebb, Ebb>, // ebbNN
     stack_slots: HashMap<u32, StackSlot>, // ssNN
     global_vars: HashMap<u32, GlobalVar>, // gvNN
+    heaps: HashMap<u32, Heap>, // heapNN
     signatures: HashMap<u32, SigRef>, // sigNN
     functions: HashMap<u32, FuncRef>, // fnNN
     jump_tables: HashMap<u32, JumpTable>, // jtNN
@@ -49,6 +50,11 @@ impl SourceMap {
     /// Look up a global variable entity by its source number.
     pub fn get_gv(&self, src_num: u32) -> Option<GlobalVar> {
         self.global_vars.get(&src_num).cloned()
+    }
+
+    /// Look up a heap entity by its source number.
+    pub fn get_heap(&self, src_num: u32) -> Option<Heap> {
+        self.heaps.get(&src_num).cloned()
     }
 
     /// Look up a signature entity by its source number.
@@ -82,6 +88,7 @@ impl SourceMap {
                                              }
                                              "ss" => self.get_ss(num).map(AnyEntity::StackSlot),
                                              "gv" => self.get_gv(num).map(AnyEntity::GlobalVar),
+                                             "heap" => self.get_heap(num).map(AnyEntity::Heap),
                                              "sig" => self.get_sig(num).map(AnyEntity::SigRef),
                                              "fn" => self.get_fn(num).map(AnyEntity::FuncRef),
                                              "jt" => self.get_jt(num).map(AnyEntity::JumpTable),
@@ -161,6 +168,7 @@ pub trait MutableSourceMap {
     fn def_ebb(&mut self, src: Ebb, entity: Ebb, loc: &Location) -> Result<()>;
     fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()>;
     fn def_gv(&mut self, src_num: u32, entity: GlobalVar, loc: &Location) -> Result<()>;
+    fn def_heap(&mut self, src_num: u32, entity: Heap, loc: &Location) -> Result<()>;
     fn def_sig(&mut self, src_num: u32, entity: SigRef, loc: &Location) -> Result<()>;
     fn def_fn(&mut self, src_num: u32, entity: FuncRef, loc: &Location) -> Result<()>;
     fn def_jt(&mut self, src_num: u32, entity: JumpTable, loc: &Location) -> Result<()>;
@@ -177,6 +185,7 @@ impl MutableSourceMap for SourceMap {
             ebbs: HashMap::new(),
             stack_slots: HashMap::new(),
             global_vars: HashMap::new(),
+            heaps: HashMap::new(),
             signatures: HashMap::new(),
             functions: HashMap::new(),
             jump_tables: HashMap::new(),
@@ -211,6 +220,14 @@ impl MutableSourceMap for SourceMap {
     fn def_gv(&mut self, src_num: u32, entity: GlobalVar, loc: &Location) -> Result<()> {
         if self.global_vars.insert(src_num, entity).is_some() {
             err!(loc, "duplicate global variable: gv{}", src_num)
+        } else {
+            self.def_entity(entity.into(), loc)
+        }
+    }
+
+    fn def_heap(&mut self, src_num: u32, entity: Heap, loc: &Location) -> Result<()> {
+        if self.heaps.insert(src_num, entity).is_some() {
+            err!(loc, "duplicate heap: heap{}", src_num)
         } else {
             self.def_entity(entity.into(), loc)
         }

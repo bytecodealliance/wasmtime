@@ -29,6 +29,9 @@ pub struct Function {
     /// Global variables referenced.
     pub global_vars: PrimaryMap<ir::GlobalVar, ir::GlobalVarData>,
 
+    /// Heaps referenced.
+    pub heaps: PrimaryMap<ir::Heap, ir::HeapData>,
+
     /// Jump tables used in this function.
     pub jump_tables: JumpTables,
 
@@ -61,6 +64,7 @@ impl Function {
             signature: sig,
             stack_slots: StackSlots::new(),
             global_vars: PrimaryMap::new(),
+            heaps: PrimaryMap::new(),
             jump_tables: PrimaryMap::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),

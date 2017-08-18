@@ -13,7 +13,7 @@ ebb1(v1: i32, v2: i32):
 ebb2(v5: i32):
     v6 = imul_imm v5, 4
     v7 = iadd v1, v6
-    v8 = heap_load.f32 v7         ; array[i]
+    v8 = load.f32 v7              ; array[i]
     v9 = fpromote.f64 v8
     v10 = stack_load.f64 ss1
     v11 = fadd v9, v10

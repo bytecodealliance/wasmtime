@@ -54,6 +54,11 @@ fn write_preamble(w: &mut Write,
         writeln!(w, "    {} = {}", gv, func.global_vars[gv])?;
     }
 
+    for heap in func.heaps.keys() {
+        any = true;
+        writeln!(w, "    {} = {}", heap, func.heaps[heap])?;
+    }
+
     // Write out all signatures before functions since function declarations can refer to
     // signatures.
     for sig in func.dfg.signatures.keys() {
@@ -325,6 +330,7 @@ pub fn write_operands(w: &mut Write,
         } => write!(w, " {}, {}{}", arg, stack_slot, offset),
         HeapLoad { arg, offset, .. } => write!(w, " {}{}", arg, offset),
         HeapStore { args, offset, .. } => write!(w, " {}, {}{}", args[0], args[1], offset),
+        HeapAddr { heap, arg, imm, .. } => write!(w, " {}, {}, {}", heap, arg, imm),
         Load { flags, arg, offset, .. } => write!(w, "{} {}{}", flags, arg, offset),
         Store {
             flags,
