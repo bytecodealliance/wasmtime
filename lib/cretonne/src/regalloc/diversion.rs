@@ -104,7 +104,7 @@ impl RegDiversions {
 mod tests {
     use super::*;
     use ir::Value;
-    use entity_ref::EntityRef;
+    use entity::EntityRef;
 
     #[test]
     fn inserts() {

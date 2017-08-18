@@ -122,7 +122,7 @@ impl Display for JumpTableData {
 mod tests {
     use super::JumpTableData;
     use ir::Ebb;
-    use entity_ref::EntityRef;
+    use entity::EntityRef;
 
     #[test]
     fn empty() {

@@ -2,6 +2,8 @@
 //!
 //! This module defines an `EntityRef` trait that should be implemented by reference types wrapping
 //! a small integer index.
+//!
+//! Various data structures based on the entity references are defined in sub-modules.
 
 /// A type wrapping a small integer index should implement `EntityRef` so it can be used as the key
 /// of an `EntityMap` or `SparseMap`.
@@ -19,7 +21,7 @@ pub trait EntityRef: Copy + Eq {
 macro_rules! entity_impl {
     // Basic traits.
     ($entity:ident) => {
-        impl $crate::entity_ref::EntityRef for $entity {
+        impl $crate::entity::EntityRef for $entity {
             fn new(index: usize) -> Self {
                 assert!(index < (::std::u32::MAX as usize));
                 $entity(index as u32)

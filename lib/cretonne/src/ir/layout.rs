@@ -1086,7 +1086,7 @@ impl<'c, 'fc: 'c, 'fd> InstInserterBase<'fd> for LayoutCursorInserter<'c, 'fc, '
 #[cfg(test)]
 mod tests {
     use super::{Layout, Cursor, CursorBase, CursorPosition};
-    use entity_ref::EntityRef;
+    use entity::EntityRef;
     use ir::{Ebb, Inst, ProgramOrder};
     use std::cmp::Ordering;
 

@@ -36,7 +36,7 @@
 //!   contain their own key.
 
 use entity_map::EntityMap;
-use entity_ref::EntityRef;
+use entity::EntityRef;
 use std::mem;
 use std::slice;
 use std::u32;
@@ -221,7 +221,7 @@ pub type SparseSet<T> = SparseMap<T, T>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entity_ref::EntityRef;
+    use entity::EntityRef;
     use ir::Inst;
 
     // Mock key-value object for testing.

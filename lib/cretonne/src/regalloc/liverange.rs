@@ -435,7 +435,7 @@ impl SparseMapValue<Value> for LiveRange {
 mod tests {
     use super::LiveRange;
     use ir::{Inst, Ebb, Value};
-    use entity_ref::EntityRef;
+    use entity::EntityRef;
     use ir::{ProgramOrder, ExpandedProgramPoint};
     use std::cmp::Ordering;
 

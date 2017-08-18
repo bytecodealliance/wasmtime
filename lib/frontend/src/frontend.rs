@@ -7,7 +7,7 @@ use cretonne::ir::function::DisplayFunction;
 use cretonne::isa::TargetIsa;
 use ssa::{SSABuilder, SideEffects, Block};
 use cretonne::entity_map::{EntityMap, PrimaryEntityData};
-use cretonne::entity_ref::EntityRef;
+use cretonne::entity::EntityRef;
 use std::hash::Hash;
 
 /// Permanent structure used for translating into Cretonne IL.
@@ -571,7 +571,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 #[cfg(test)]
 mod tests {
 
-    use cretonne::entity_ref::EntityRef;
+    use cretonne::entity::EntityRef;
     use cretonne::ir::{FunctionName, Function, CallConv, Signature, ArgumentType, InstBuilder};
     use cretonne::ir::types::*;
     use frontend::{ILBuilder, FunctionBuilder};

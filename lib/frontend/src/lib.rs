@@ -35,7 +35,7 @@
 //! extern crate cretonne;
 //! extern crate cton_frontend;
 //!
-//! use cretonne::entity_ref::EntityRef;
+//! use cretonne::entity::EntityRef;
 //! use cretonne::ir::{FunctionName, CallConv, Function, Signature, ArgumentType, InstBuilder};
 //! use cretonne::ir::types::*;
 //! use cton_frontend::{ILBuilder, FunctionBuilder};
