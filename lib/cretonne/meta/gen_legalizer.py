@@ -367,16 +367,27 @@ def gen_xform_group(xgrp, fmt, type_sets):
             xforms[inst.camel_name].append(xform)
 
         with fmt.indented('{', '}'):
-            fmt.line(
-                    'let pos = &mut ir::Cursor::new(&mut func.layout)'
-                    '.at_inst(inst);')
-            fmt.line('let dfg = &mut func.dfg;')
-            with fmt.indented('match dfg[inst].opcode() {', '}'):
+            with fmt.indented('match func.dfg[inst].opcode() {', '}'):
                 for camel_name in sorted(xforms.keys()):
                     with fmt.indented(
                             'ir::Opcode::{} => {{'.format(camel_name), '}'):
+                        fmt.line(
+                                'let pos = &mut '
+                                'ir::Cursor::new(&mut func.layout)'
+                                '.at_inst(inst);')
+                        fmt.line('let dfg = &mut func.dfg;')
                         for xform in xforms[camel_name]:
                             gen_xform(xform, fmt, type_sets)
+
+                # Emit the custom transforms. The Rust compiler will complain
+                # about any overlap with the normal xforms.
+                for inst, funcname in xgrp.custom.items():
+                    with fmt.indented(
+                            'ir::Opcode::{} => {{'
+                            .format(inst.camel_name), '}'):
+                        fmt.format('{}(inst, func, cfg);', funcname)
+                        fmt.line('return true;')
+
                 # We'll assume there are uncovered opcodes.
                 fmt.line('_ => {},')
 
