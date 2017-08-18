@@ -17,6 +17,9 @@ imm64 = ImmediateKind('imm64', 'A 64-bit immediate integer.')
 #: immediate bit counts on shift instructions.
 uimm8 = ImmediateKind('uimm8', 'An 8-bit immediate unsigned integer.')
 
+#: An unsigned 32-bit immediate integer operand.
+uimm32 = ImmediateKind('uimm32', 'A 32-bit immediate unsigned integer.')
+
 #: A 32-bit immediate signed offset.
 #:
 #: This is used to represent an immediate address offset in load/store
