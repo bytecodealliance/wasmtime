@@ -98,6 +98,11 @@ entity_impl!(FuncRef, "fn");
 pub struct SigRef(u32);
 entity_impl!(SigRef, "sig");
 
+/// A reference to a heap.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Heap(u32);
+entity_impl!(Heap, "heap");
+
 /// A reference to any of the entities defined in this module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum AnyEntity {
@@ -119,6 +124,8 @@ pub enum AnyEntity {
     FuncRef(FuncRef),
     /// A function call signature.
     SigRef(SigRef),
+    /// A heap.
+    Heap(Heap),
 }
 
 impl fmt::Display for AnyEntity {
@@ -133,6 +140,7 @@ impl fmt::Display for AnyEntity {
             AnyEntity::JumpTable(r) => r.fmt(f),
             AnyEntity::FuncRef(r) => r.fmt(f),
             AnyEntity::SigRef(r) => r.fmt(f),
+            AnyEntity::Heap(r) => r.fmt(f),
         }
     }
 }
@@ -182,6 +190,12 @@ impl From<FuncRef> for AnyEntity {
 impl From<SigRef> for AnyEntity {
     fn from(r: SigRef) -> AnyEntity {
         AnyEntity::SigRef(r)
+    }
+}
+
+impl From<Heap> for AnyEntity {
+    fn from(r: Heap) -> AnyEntity {
+        AnyEntity::Heap(r)
     }
 }
 

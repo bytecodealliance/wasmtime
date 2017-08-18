@@ -12,9 +12,9 @@ use std::mem;
 use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, CallConv, StackSlotData,
                    JumpTable, JumpTableData, Signature, ArgumentType, ArgumentExtension,
                    ExtFuncData, SigRef, FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags,
-                   GlobalVar, GlobalVarData};
+                   GlobalVar, GlobalVarData, Heap, HeapData, HeapStyle, HeapBase};
 use cretonne::ir::types::VOID;
-use cretonne::ir::immediates::{Imm64, Offset32, Uoffset32, Ieee32, Ieee64};
+use cretonne::ir::immediates::{Imm64, Uimm32, Offset32, Uoffset32, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs};
 use cretonne::isa::{self, TargetIsa, Encoding, RegUnit};
@@ -138,7 +138,21 @@ impl<'a> Context<'a> {
     fn get_gv(&self, number: u32, loc: &Location) -> Result<GlobalVar> {
         match self.map.get_gv(number) {
             Some(gv) => Ok(gv),
-            None => err!(loc, "undefined stack slot ss{}", number),
+            None => err!(loc, "undefined global variable gv{}", number),
+        }
+    }
+
+    // Allocate a heap slot and add a mapping number -> Heap.
+    fn add_heap(&mut self, number: u32, data: HeapData, loc: &Location) -> Result<()> {
+        self.map
+            .def_heap(number, self.function.heaps.push(data), loc)
+    }
+
+    // Resolve a reference to a heap.
+    fn get_heap(&self, number: u32, loc: &Location) -> Result<Heap> {
+        match self.map.get_heap(number) {
+            Some(heap) => Ok(heap),
+            None => err!(loc, "undefined heap heap{}", number),
         }
     }
 
@@ -250,6 +264,23 @@ impl<'a> Context<'a> {
             match self.function.global_vars[gv] {
                 GlobalVarData::Deref { ref mut base, .. } => {
                     self.map.rewrite_gv(base, loc)?;
+                }
+                _ => {}
+            }
+        }
+
+        // Rewrite references to global variables in heaps.
+        for heap in self.function.heaps.keys() {
+            let loc = heap.into();
+            match self.function.heaps[heap].base {
+                HeapBase::GlobalVar(ref mut base) => {
+                    self.map.rewrite_gv(base, loc)?;
+                }
+                _ => {}
+            }
+            match self.function.heaps[heap].style {
+                HeapStyle::Dynamic { ref mut bound_gv } => {
+                    self.map.rewrite_gv(bound_gv, loc)?;
                 }
                 _ => {}
             }
@@ -381,6 +412,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume a global variable reference in the preamble where it can't be rewritten.
+    //
+    // Any global variable references appearing in the preamble need to be rewritten after parsing
+    // the whole preamble.
+    fn match_gv_preamble(&mut self, err_msg: &str) -> Result<GlobalVar> {
+        match GlobalVar::with_number(self.match_gv(err_msg)?) {
+            Some(gv) => Ok(gv),
+            None => err!(self.loc, "Invalid global variable number"),
+        }
+    }
+
     // Match and consume a function reference.
     fn match_fn(&mut self, err_msg: &str) -> Result<u32> {
         if let Some(Token::FuncRef(fnref)) = self.token() {
@@ -396,6 +438,16 @@ impl<'a> Parser<'a> {
         if let Some(Token::SigRef(sigref)) = self.token() {
             self.consume();
             Ok(sigref)
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume a heap reference.
+    fn match_heap(&mut self, err_msg: &str) -> Result<u32> {
+        if let Some(Token::Heap(heap)) = self.token() {
+            self.consume();
+            Ok(heap)
         } else {
             err!(self.loc, err_msg)
         }
@@ -445,6 +497,18 @@ impl<'a> Parser<'a> {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
             // Parse it as an Imm64 to check for overflow and other issues.
+            text.parse().map_err(|e| self.error(e))
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume a Uimm32 immediate.
+    fn match_uimm32(&mut self, err_msg: &str) -> Result<Uimm32> {
+        if let Some(Token::Integer(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like an integer.
+            // Parse it as an Uimm32 to check for overflow and other issues.
             text.parse().map_err(|e| self.error(e))
         } else {
             err!(self.loc, err_msg)
@@ -945,6 +1009,11 @@ impl<'a> Parser<'a> {
                     self.parse_global_var_decl()
                         .and_then(|(num, dat)| ctx.add_gv(num, dat, &self.loc))
                 }
+                Some(Token::Heap(..)) => {
+                    self.gather_comments(ctx.function.heaps.next_key());
+                    self.parse_heap_decl()
+                        .and_then(|(num, dat)| ctx.add_heap(num, dat, &self.loc))
+                }
                 Some(Token::SigRef(..)) => {
                     self.gather_comments(ctx.function.dfg.signatures.next_key());
                     self.parse_signature_decl(ctx.unique_isa)
@@ -1018,19 +1087,82 @@ impl<'a> Parser<'a> {
             }
             "deref" => {
                 self.match_token(Token::LPar, "expected '(' in 'deref' global variable decl")?;
-                let base_num = self.match_gv("expected global variable: gv«n»")?;
-                // The base global variable may not have been declared yet, so create a fake
-                // reference using the source number. We'll rewrite these later.
-                let base = match GlobalVar::with_number(base_num) {
-                    Some(gv) => gv,
-                    None => return err!(self.loc, "Invalid global variable number for deref base"),
-                };
+                let base = self.match_gv_preamble("expected global variable: gv«n»")?;
                 self.match_token(Token::RPar, "expected ')' in 'deref' global variable decl")?;
                 let offset = self.optional_offset32()?;
                 GlobalVarData::Deref { base, offset }
             }
             other => return err!(self.loc, "Unknown global variable kind '{}'", other),
         };
+
+        Ok((number, data))
+    }
+
+    // Parse a heap decl.
+    //
+    // heap-decl ::= * Heap(heap) "=" heap-desc
+    // heap-desc ::= heap-style heap-base { "," heap-attr }
+    // heap-style ::= "static" | "dynamic"
+    // heap-base ::= "reserved_reg"
+    //             | GlobalVar(base)
+    // heap-attr ::= "min" Imm64(bytes)
+    //             | "max" Imm64(bytes)
+    //             | "guard" Imm64(bytes)
+    //
+    fn parse_heap_decl(&mut self) -> Result<(u32, HeapData)> {
+        let number = self.match_heap("expected heap number: heap«n»")?;
+        self.match_token(Token::Equal, "expected '=' in heap declaration")?;
+
+        let style_name = self.match_any_identifier("expected 'static' or 'dynamic'")?;
+
+        // heap-desc ::= heap-style * heap-base { "," heap-attr }
+        // heap-base ::= * "reserved_reg"
+        //             | * GlobalVar(base)
+        let base = match self.token() {
+            Some(Token::Identifier("reserved_reg")) => HeapBase::ReservedReg,
+            Some(Token::GlobalVar(base_num)) => {
+                let base_gv = match GlobalVar::with_number(base_num) {
+                    Some(gv) => gv,
+                    None => return err!(self.loc, "invalid global variable number for heap base"),
+                };
+                HeapBase::GlobalVar(base_gv)
+            }
+            _ => return err!(self.loc, "expected heap base"),
+        };
+        self.consume();
+
+        let mut data = HeapData {
+            base,
+            min_size: 0.into(),
+            guard_size: 0.into(),
+            style: HeapStyle::Static { bound: 0.into() },
+        };
+
+        // heap-desc ::= heap-style heap-base * { "," heap-attr }
+        while self.optional(Token::Comma) {
+            match self.match_any_identifier("expected heap attribute name")? {
+                "min" => {
+                    data.min_size = self.match_imm64("expected integer min size")?;
+                }
+                "bound" => {
+                    data.style = match style_name {
+                        "dynamic" => {
+                            HeapStyle::Dynamic {
+                                bound_gv: self.match_gv_preamble("expected gv bound")?,
+                            }
+                        }
+                        "static" => {
+                            HeapStyle::Static { bound: self.match_imm64("expected integer bound")? }
+                        }
+                        t => return err!(self.loc, "unknown heap style '{}'", t),
+                    };
+                }
+                "guard" => {
+                    data.guard_size = self.match_imm64("expected integer guard size")?;
+                }
+                t => return err!(self.loc, "unknown heap attribute '{}'", t),
+            }
+        }
 
         Ok((number, data))
     }
@@ -1800,6 +1932,20 @@ impl<'a> Parser<'a> {
                     opcode,
                     args: [arg, addr],
                     offset,
+                }
+            }
+            InstructionFormat::HeapAddr => {
+                let heap = self.match_heap("expected heap identifier")
+                    .and_then(|h| ctx.get_heap(h, &self.loc))?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let arg = self.match_value("expected SSA value heap address")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let imm = self.match_uimm32("expected 32-bit integer size")?;
+                InstructionData::HeapAddr {
+                    opcode,
+                    heap,
+                    arg,
+                    imm,
                 }
             }
             InstructionFormat::Load => {

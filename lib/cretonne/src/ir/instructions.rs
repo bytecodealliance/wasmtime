@@ -12,7 +12,7 @@ use std::ops::{Deref, DerefMut};
 
 use ir;
 use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef, StackSlot, MemFlags};
-use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32, Uoffset32};
+use ir::immediates::{Imm64, Uimm8, Uimm32, Ieee32, Ieee64, Offset32, Uoffset32};
 use ir::condcodes::*;
 use ir::types;
 use isa::RegUnit;
@@ -198,6 +198,12 @@ pub enum InstructionData {
         opcode: Opcode,
         args: [Value; 2],
         offset: Uoffset32,
+    },
+    HeapAddr {
+        opcode: Opcode,
+        heap: ir::Heap,
+        arg: Value,
+        imm: Uimm32,
     },
     Load {
         opcode: Opcode,

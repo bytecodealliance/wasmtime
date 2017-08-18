@@ -14,18 +14,20 @@ mod builder;
 mod extfunc;
 mod funcname;
 mod globalvar;
+mod heap;
 mod memflags;
 mod progpoint;
 mod valueloc;
 
 pub use ir::builder::{InstBuilder, InstBuilderBase, InstInserterBase, InsertBuilder};
 pub use ir::dfg::{DataFlowGraph, ValueDef};
-pub use ir::entities::{Ebb, Inst, Value, StackSlot, GlobalVar, JumpTable, FuncRef, SigRef};
+pub use ir::entities::{Ebb, Inst, Value, StackSlot, GlobalVar, JumpTable, FuncRef, SigRef, Heap};
 pub use ir::extfunc::{Signature, CallConv, ArgumentType, ArgumentExtension, ArgumentPurpose,
                       ExtFuncData};
 pub use ir::funcname::FunctionName;
 pub use ir::function::Function;
 pub use ir::globalvar::GlobalVarData;
+pub use ir::heap::{HeapData, HeapStyle, HeapBase};
 pub use ir::instructions::{Opcode, InstructionData, VariableArgs, ValueList, ValueListPool};
 pub use ir::jumptable::JumpTableData;
 pub use ir::layout::{Layout, CursorBase, Cursor};

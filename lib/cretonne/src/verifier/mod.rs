@@ -301,6 +301,9 @@ impl<'a> Verifier<'a> {
             UnaryGlobalVar { global_var, .. } => {
                 self.verify_global_var(inst, global_var)?;
             }
+            HeapAddr { heap, .. } => {
+                self.verify_heap(inst, heap)?;
+            }
 
             // Exhaustive list so we can't forget to add new formats
             Nullary { .. } |
@@ -362,6 +365,14 @@ impl<'a> Verifier<'a> {
     fn verify_global_var(&self, inst: Inst, gv: GlobalVar) -> Result {
         if !self.func.global_vars.is_valid(gv) {
             err!(inst, "invalid global variable {}", gv)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn verify_heap(&self, inst: Inst, heap: ir::Heap) -> Result {
+        if !self.func.heaps.is_valid(heap) {
+            err!(inst, "invalid heap {}", heap)
         } else {
             Ok(())
         }
