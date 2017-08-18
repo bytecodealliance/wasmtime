@@ -240,10 +240,16 @@ pub enum ArgumentPurpose {
     /// Some calling conventions have registers that must be saved by the callee. These registers
     /// are represented as `CalleeSaved` arguments and return values.
     CalleeSaved,
+
+    /// A VM context pointer.
+    ///
+    /// This is a pointer to a context struct containing details about the current sandbox. It is
+    /// used as a base pointer for `vmctx` global variables.
+    VMContext,
 }
 
 /// Text format names of the `ArgumentPurpose` variants.
-static PURPOSE_NAMES: [&str; 5] = ["normal", "sret", "link", "fp", "csr"];
+static PURPOSE_NAMES: [&str; 6] = ["normal", "sret", "link", "fp", "csr", "vmctx"];
 
 impl fmt::Display for ArgumentPurpose {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -260,6 +266,7 @@ impl FromStr for ArgumentPurpose {
             "link" => Ok(ArgumentPurpose::Link),
             "fp" => Ok(ArgumentPurpose::FramePointer),
             "csr" => Ok(ArgumentPurpose::CalleeSaved),
+            "vmctx" => Ok(ArgumentPurpose::VMContext),
             _ => Err(()),
         }
     }
@@ -343,7 +350,8 @@ mod tests {
                            ArgumentPurpose::StructReturn,
                            ArgumentPurpose::Link,
                            ArgumentPurpose::FramePointer,
-                           ArgumentPurpose::CalleeSaved];
+                           ArgumentPurpose::CalleeSaved,
+                           ArgumentPurpose::VMContext];
         for (&e, &n) in all_purpose.iter().zip(PURPOSE_NAMES.iter()) {
             assert_eq!(e.to_string(), n);
             assert_eq!(Ok(e), n.parse());

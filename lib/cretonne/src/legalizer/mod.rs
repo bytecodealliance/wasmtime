@@ -22,7 +22,10 @@ use isa::TargetIsa;
 use bitset::BitSet;
 
 mod boundary;
+mod globalvar;
 mod split;
+
+use self::globalvar::expand_global_addr;
 
 /// Legalize `func` for `isa`.
 ///

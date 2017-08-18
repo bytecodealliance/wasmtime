@@ -1,0 +1,29 @@
+; Test the legalization of memory objects.
+test legalizer
+set is_64bit
+isa intel
+
+; regex: V=v\d+
+
+function %vmctx(i64 vmctx) -> i64 {
+    gv1 = vmctx-16
+
+ebb1(v1: i64):
+    v2 = global_addr.i64 gv1
+    ; check: $v2 = iadd_imm $v1, -16
+    return v2
+    ; check: return $v2
+}
+
+function %deref(i64 vmctx) -> i64 {
+    gv1 = vmctx-16
+    gv2 = deref(gv1)+32
+
+ebb1(v1: i64):
+    v2 = global_addr.i64 gv2
+    ; check: $(a1=$V) = iadd_imm $v1, -16
+    ; check: $(p1=$V) = load.i64 $a1
+    ; check: $v2 = iadd_imm $p1, 32
+    return v2
+    ; check: return $v2
+}

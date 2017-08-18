@@ -8,6 +8,7 @@ instructions that are legal.
 """
 from __future__ import absolute_import
 from .immediates import intcc
+from . import instructions as insts
 from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry, iadd_imm
 from .instructions import isub, isub_bin, isub_bout, isub_borrow
 from .instructions import band, bor, bxor, isplit, iconcat
@@ -42,6 +43,9 @@ expand = XFormGroup('expand', """
         Rewrite instructions in terms of other instructions, generally
         operating on the same types as the original instructions.
         """)
+
+# Custom expansions for memory objects.
+expand.custom_legalize(insts.global_addr, 'expand_global_addr')
 
 x = Var('x')
 y = Var('y')
