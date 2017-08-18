@@ -62,7 +62,8 @@ boolean = ImmediateKind('bool', 'An immediate boolean.',
 intcc = ImmediateKind(
         'intcc',
         'An integer comparison condition code.',
-        default_member='cond', rust_type='IntCC',
+        default_member='cond',
+        rust_type='ir::condcodes::IntCC',
         values={
             'eq':  'Equal',
             'ne':  'NotEqual',
@@ -83,7 +84,8 @@ intcc = ImmediateKind(
 floatcc = ImmediateKind(
         'floatcc',
         'A floating point comparison condition code.',
-        default_member='cond', rust_type='FloatCC',
+        default_member='cond',
+        rust_type='ir::condcodes::FloatCC',
         values={
             'ord': 'Ordered',
             'uno': 'Unordered',
@@ -105,10 +107,10 @@ floatcc = ImmediateKind(
 memflags = ImmediateKind(
         'memflags',
         'Memory operation flags',
-        default_member='flags', rust_type='MemFlags')
+        default_member='flags', rust_type='ir::MemFlags')
 
 #: A register unit in the current target ISA.
 regunit = ImmediateKind(
         'regunit',
         'A register unit in the target ISA',
-        rust_type='RegUnit')
+        rust_type='isa::RegUnit')

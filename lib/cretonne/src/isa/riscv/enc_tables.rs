@@ -1,6 +1,5 @@
 //! Encoding tables for RISC-V.
 
-use ir::condcodes::IntCC;
 use ir;
 use isa;
 use isa::constraints::*;
