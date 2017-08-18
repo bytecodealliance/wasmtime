@@ -3,13 +3,11 @@
 //! A `Builder` provides a convenient interface for inserting instructions into a Cretonne
 //! function. Many of its methods are generated from the meta language instruction definitions.
 
+use ir;
 use ir::types;
 use ir::{InstructionData, DataFlowGraph};
-use ir::{Opcode, Type, Inst, Value, Ebb, JumpTable, SigRef, FuncRef, StackSlot, GlobalVar,
-         ValueList, MemFlags};
-use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32, Uoffset32};
-use ir::condcodes::{IntCC, FloatCC};
-use isa::RegUnit;
+use ir::{Opcode, Type, Inst, Value};
+use isa;
 
 /// Base trait for instruction builders.
 ///

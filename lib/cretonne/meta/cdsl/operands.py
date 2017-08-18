@@ -32,7 +32,7 @@ class OperandKind(object):
         self.default_member = default_member
         # The camel-cased name of an operand kind is also the Rust type used to
         # represent it.
-        self.rust_type = rust_type or camel_case(name)
+        self.rust_type = rust_type or ('ir::' + camel_case(name))
 
     def __str__(self):
         # type: () -> str
@@ -82,6 +82,8 @@ class ImmediateKind(OperandKind):
             rust_type=None,
             values=None):
         # type: (str, str, str, str, Dict[str, str]) -> None
+        if rust_type is None:
+            rust_type = 'ir::immediates::' + camel_case(name)
         super(ImmediateKind, self).__init__(
                 name, doc, default_member, rust_type)
         self.values = values

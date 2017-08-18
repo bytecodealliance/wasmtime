@@ -68,7 +68,8 @@ def gen_arguments_method(fmt, is_mut):
         as_slice = 'as_mut_slice'
 
     with fmt.indented(
-            'pub fn {f}<\'a>(&\'a {m}self, pool: &\'a {m}ValueListPool) -> '
+            'pub fn {f}<\'a>(&\'a {m}self, '
+            'pool: &\'a {m}ir::ValueListPool) -> '
             '&{m}[Value] {{'
             .format(f=method, m=mut), '}'):
         with fmt.indented('match *self {', '}'):
@@ -111,8 +112,8 @@ def gen_instruction_data_impl(fmt):
     - `pub fn opcode(&self) -> Opcode`
     - `pub fn arguments(&self, &pool) -> &[Value]`
     - `pub fn arguments_mut(&mut self, &pool) -> &mut [Value]`
-    - `pub fn take_value_list(&mut self) -> Option<ValueList>`
-    - `pub fn put_value_list(&mut self, args: ValueList>`
+    - `pub fn take_value_list(&mut self) -> Option<ir::ValueList>`
+    - `pub fn put_value_list(&mut self, args: ir::ValueList>`
     """
 
     # The `opcode` method simply reads the `opcode` members. This is really a
@@ -128,7 +129,7 @@ def gen_instruction_data_impl(fmt):
 
         fmt.doc_comment('Get the controlling type variable operand.')
         with fmt.indented(
-                'pub fn typevar_operand(&self, pool: &ValueListPool) -> '
+                'pub fn typevar_operand(&self, pool: &ir::ValueListPool) -> '
                 'Option<Value> {', '}'):
             with fmt.indented('match *self {', '}'):
                 for f in InstructionFormat.all_formats:
@@ -174,7 +175,7 @@ def gen_instruction_data_impl(fmt):
                 `put_value_list` to put the value list back.
                 """)
         with fmt.indented(
-                'pub fn take_value_list(&mut self) -> Option<ValueList> {',
+                'pub fn take_value_list(&mut self) -> Option<ir::ValueList> {',
                 '}'):
             with fmt.indented('match *self {', '}'):
                 for f in InstructionFormat.all_formats:
@@ -194,7 +195,8 @@ def gen_instruction_data_impl(fmt):
                 list is empty. This avoids leaking list pool memory.
                 """)
         with fmt.indented(
-                'pub fn put_value_list(&mut self, vlist: ValueList) {', '}'):
+                'pub fn put_value_list(&mut self, vlist: ir::ValueList) {',
+                '}'):
             with fmt.indented('let args = match *self {', '};'):
                 for f in InstructionFormat.all_formats:
                     n = 'InstructionData::' + f.name
@@ -466,21 +468,22 @@ def gen_format_constructor(iform, fmt):
     if iform.has_value_list:
         # Take all value arguments as a finished value list. The value lists
         # are created by the individual instruction constructors.
-        args.append('args: ValueList')
+        args.append('args: ir::ValueList')
     else:
         # Take a fixed number of value operands.
         for i in range(iform.num_value_operands):
             args.append('arg{}: Value'.format(i))
 
     proto = '{}({})'.format(iform.name, ', '.join(args))
-    proto += " -> (Inst, &'f mut DataFlowGraph)"
+    proto += " -> (Inst, &'f mut ir::DataFlowGraph)"
 
     fmt.doc_comment(str(iform))
     fmt.line('#[allow(non_snake_case)]')
     with fmt.indented('fn {} {{'.format(proto), '}'):
         # Generate the instruction data.
         with fmt.indented(
-                'let data = InstructionData::{} {{'.format(iform.name), '};'):
+                'let data = ir::InstructionData::{} {{'.format(iform.name),
+                '};'):
             fmt.line('opcode,')
             gen_member_inits(iform, fmt)
 
@@ -527,7 +530,7 @@ def gen_inst_builder(inst, fmt):
     # The controlling type variable will be inferred from the input values if
     # possible. Otherwise, it is the first method argument.
     if inst.is_polymorphic and not inst.use_typevar_operand:
-        args.append('{}: Type'.format(inst.ctrl_typevar.name))
+        args.append('{}: ir::Type'.format(inst.ctrl_typevar.name))
 
     tmpl_types = list()  # type: List[str]
     into_args = list()  # type: List[str]
@@ -590,7 +593,7 @@ def gen_inst_builder(inst, fmt):
         # Finally, the value operands.
         if inst.format.has_value_list:
             # We need to build a value list with all the arguments.
-            fmt.line('let mut vlist = ValueList::default();')
+            fmt.line('let mut vlist = ir::ValueList::default();')
             args.append('vlist')
             with fmt.indented('{', '}'):
                 fmt.line(
