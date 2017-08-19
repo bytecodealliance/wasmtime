@@ -1,14 +1,17 @@
 //! Densely numbered entity references as mapping keys.
-//!
-//! The `EntityMap` data structure uses the dense index space to implement a map with a vector.
-//! Unlike `PrimaryMap`, and `EntityMap` can't be used to allocate entity references. It is used to
-//! associate secondary information with entities.
 
 use entity::{EntityRef, Keys};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
 /// A mapping `K -> V` for densely indexed entity references.
+///
+/// The `EntityMap` data structure uses the dense index space to implement a map with a vector.
+/// Unlike `PrimaryMap`, an `EntityMap` can't be used to allocate entity references. It is used to
+/// associate secondary information with entities.
+///
+/// The map does not track if an entry for a key has been inserted or not. Instead it behaves as if
+/// all keys have a default entry from the beginning.
 #[derive(Debug, Clone)]
 pub struct EntityMap<K, V>
     where K: EntityRef,

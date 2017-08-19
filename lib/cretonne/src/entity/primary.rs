@@ -1,18 +1,17 @@
 //! Densely numbered entity references as mapping keys.
-//!
-//! The `PrimaryMap` data structure uses the dense index space to implement a map with a vector.
-//!
-//! A primary map contains the main definition of an entity, and it can be used to allocate new
-//! entity references with the `push` method.
-//!
-//! There should only be a single `PrimaryMap` instance for a given `EntityRef` type, otherwise
-//! conflicting references will be created.
-
 use entity::{EntityRef, Keys};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
-/// A mapping `K -> V` for densely indexed entity references.
+/// A primary mapping `K -> V` allocating dense entity references.
+///
+/// The `PrimaryMap` data structure uses the dense index space to implement a map with a vector.
+///
+/// A primary map contains the main definition of an entity, and it can be used to allocate new
+/// entity references with the `push` method.
+///
+/// There should only be a single `PrimaryMap` instance for a given `EntityRef` type, otherwise
+/// conflicting references will be created. Using unknown keys for indexing will cause a panic.
 #[derive(Debug, Clone)]
 pub struct PrimaryMap<K, V>
     where K: EntityRef
