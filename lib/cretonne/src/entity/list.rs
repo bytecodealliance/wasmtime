@@ -1,51 +1,4 @@
 //! Small lists of entity references.
-//!
-//! This module defines an `EntityList<T>` type which provides similar functionality to `Vec<T>`,
-//! but with some important differences in the implementation:
-//!
-//! 1. Memory is allocated from a `ListPool<T>` instead of the global heap.
-//! 2. The footprint of an entity list is 4 bytes, compared with the 24 bytes for `Vec<T>`.
-//! 3. An entity list doesn't implement `Drop`, leaving it to the pool to manage memory.
-//!
-//! The list pool is intended to be used as a LIFO allocator. After building up a larger data
-//! structure with many list references, the whole thing can be discarded quickly by clearing the
-//! pool.
-//!
-//! # Safety
-//!
-//! Entity lists are not as safe to use as `Vec<T>`, but they never jeopardize Rust's memory safety
-//! guarantees. These are the problems to be aware of:
-//!
-//! - If you lose track of an entity list, its memory won't be recycled until the pool is cleared.
-//!   This can cause the pool to grow very large with leaked lists.
-//! - If entity lists are used after their pool is cleared, they may contain garbage data, and
-//!   modifying them may corrupt other lists in the pool.
-//! - If an entity list is used with two different pool instances, both pools are likely to become
-//!   corrupted.
-//!
-//! # Implementation
-//!
-//! The `EntityList` itself is designed to have the smallest possible footprint. This is important
-//! because it is used inside very compact data structures like `InstructionData`. The list
-//! contains only a 32-bit index into the pool's memory vector, pointing to the first element of
-//! the list.
-//!
-//! The pool is just a single `Vec<T>` containing all of the allocated lists. Each list is
-//! represented as three contiguous parts:
-//!
-//! 1. The number of elements in the list.
-//! 2. The list elements.
-//! 3. Excess capacity elements.
-//!
-//! The total size of the three parts is always a power of two, and the excess capacity is always
-//! as small as possible. This means that shrinking a list may cause the excess capacity to shrink
-//! if a smaller power-of-two size becomes available.
-//!
-//! Both growing and shrinking a list may cause it to be reallocated in the pool vector.
-//!
-//! The index stored in an `EntityList` points to part 2, the list elements. The value 0 is
-//! reserved for the empty list which isn't allocated in the vector.
-
 use entity::EntityRef;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
@@ -53,8 +6,28 @@ use std::mem;
 
 /// A small list of entity references allocated from a pool.
 ///
-/// All of the list methods that take a pool reference must be given the same pool reference every
-/// time they are called. Otherwise data structures will be corrupted.
+/// An `EntityList<T>` type provides similar functionality to `Vec<T>`, but with some important
+/// differences in the implementation:
+///
+/// 1. Memory is allocated from a `ListPool<T>` instead of the global heap.
+/// 2. The footprint of an entity list is 4 bytes, compared with the 24 bytes for `Vec<T>`.
+/// 3. An entity list doesn't implement `Drop`, leaving it to the pool to manage memory.
+///
+/// The list pool is intended to be used as a LIFO allocator. After building up a larger data
+/// structure with many list references, the whole thing can be discarded quickly by clearing the
+/// pool.
+///
+/// # Safety
+///
+/// Entity lists are not as safe to use as `Vec<T>`, but they never jeopardize Rust's memory safety
+/// guarantees. These are the problems to be aware of:
+///
+/// - If you lose track of an entity list, its memory won't be recycled until the pool is cleared.
+///   This can cause the pool to grow very large with leaked lists.
+/// - If entity lists are used after their pool is cleared, they may contain garbage data, and
+///   modifying them may corrupt other lists in the pool.
+/// - If an entity list is used with two different pool instances, both pools are likely to become
+///   corrupted.
 ///
 /// Entity lists can be cloned, but that operation should only be used as part of cloning the whole
 /// function they belong to. *Cloning an entity list does not allocate new memory for the clone*.
@@ -63,6 +36,29 @@ use std::mem;
 /// Entity lists can also be hashed and compared for equality, but those operations just panic if,
 /// they're ever actually called, because it's not possible to compare the contents of the list
 /// without the pool reference.
+///
+/// # Implementation
+///
+/// The `EntityList` itself is designed to have the smallest possible footprint. This is important
+/// because it is used inside very compact data structures like `InstructionData`. The list
+/// contains only a 32-bit index into the pool's memory vector, pointing to the first element of
+/// the list.
+///
+/// The pool is just a single `Vec<T>` containing all of the allocated lists. Each list is
+/// represented as three contiguous parts:
+///
+/// 1. The number of elements in the list.
+/// 2. The list elements.
+/// 3. Excess capacity elements.
+///
+/// The total size of the three parts is always a power of two, and the excess capacity is always
+/// as small as possible. This means that shrinking a list may cause the excess capacity to shrink
+/// if a smaller power-of-two size becomes available.
+///
+/// Both growing and shrinking a list may cause it to be reallocated in the pool vector.
+///
+/// The index stored in an `EntityList` points to part 2, the list elements. The value 0 is
+/// reserved for the empty list which isn't allocated in the vector.
 #[derive(Clone, Debug)]
 pub struct EntityList<T: EntityRef> {
     index: u32,
