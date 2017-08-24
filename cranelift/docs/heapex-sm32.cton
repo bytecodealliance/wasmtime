@@ -1,0 +1,14 @@
+test verifier
+
+function %add_members(i32) -> f32 spiderwasm {
+    gv0 = vmctx+64
+    heap0 = static gv0, min 0x1000, bound 0x10_0000, guard 0x1000
+
+ebb0(v0: i32):
+    v1 = heap_addr.i32 heap0, v0, 1
+    v2 = load.f32 v1+16
+    v3 = load.f32 v1+20
+    v4 = fadd v2, v3
+    return v4
+}
+

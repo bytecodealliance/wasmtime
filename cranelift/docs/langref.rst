@@ -636,6 +636,37 @@ is resized. The bound of a dynamic heap is stored in a global variable.
     :arg BoundGV: Global variable containing the current heap bound in bytes.
     :arg GuardBytes: Size of the guard pages in bytes.
 
+Heap examples
+~~~~~~~~~~~~~
+
+The SpiderMonkey VM prefers to use fixed heaps with a 4 GB bound and 2 GB of
+guard pages when running WebAssembly code on 64-bit CPUs. The combination of a
+4 GB fixed bound and 1-byte bounds checks means that no code needs to be
+generated for bounds checks at all:
+
+.. literalinclude:: heapex-sm64.cton
+    :language: cton
+    :lines: 2-
+
+A static heap can also be used for 32-bit code when the WebAssembly module
+declares a small upper bound on its memory. A 1 MB static bound with a single 4
+KB guard page still has opportunities for sharing bounds checking code:
+
+.. literalinclude:: heapex-sm32.cton
+    :language: cton
+    :lines: 2-
+
+If the upper bound on the heap size is too large, a dynamic heap is required
+instead.
+
+Finally, a runtime environment that simply allocates a heap with
+:c:func:`malloc()` may not have any guard pages at all. In that case, full
+bounds checking is required for each access:
+
+.. literalinclude:: heapex-dyn.cton
+    :language: cton
+    :lines: 2-
+
 
 Operations
 ==========

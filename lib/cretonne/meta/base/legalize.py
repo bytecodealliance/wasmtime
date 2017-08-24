@@ -46,6 +46,7 @@ expand = XFormGroup('expand', """
 
 # Custom expansions for memory objects.
 expand.custom_legalize(insts.global_addr, 'expand_global_addr')
+expand.custom_legalize(insts.heap_addr, 'expand_heap_addr')
 
 x = Var('x')
 y = Var('y')
