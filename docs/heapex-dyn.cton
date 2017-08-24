@@ -1,0 +1,15 @@
+test verifier
+
+function %add_members(i32) -> f32 spiderwasm {
+    gv0 = vmctx+64
+    gv1 = vmctx+72
+    heap0 = dynamic gv0, min 0x1000, bound gv1, guard 0
+
+ebb0(v0: i32):
+    v1 = heap_addr.i64 heap0, v0, 20
+    v2 = load.f32 v1+16
+    v3 = heap_addr.i64 heap0, v0, 24
+    v4 = load.f32 v3+20
+    v5 = fadd v2, v4
+    return v5
+}

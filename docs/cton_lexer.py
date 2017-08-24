@@ -31,16 +31,13 @@ class CretonneLexer(RegexLexer):
                 bygroups(Comment.Single, Comment.Special, Comment.Single)),
             # Plain comments.
             (r';.*?$', Comment.Single),
-            # Strings are in double quotes, support \xx escapes only.
-            (r'"([^"\\]+|\\[0-9a-fA-F]{2})*"', String),
-            # A naked function name following 'function' is also a string.
-            (r'\b(function)([ \t]+)(\w+)\b',
-                bygroups(Keyword, Whitespace, String.Symbol)),
+            # Strings are prefixed by % or # with hex.
+            (r'%\w+|#[0-9a-fA-F]*', String),
             # Numbers.
-            (r'[-+]?0[xX][0-9a-fA-F]+', Number.Hex),
-            (r'[-+]?0[xX][0-9a-fA-F]*\.[0-9a-fA-F]*([pP]\d+)?', Number.Hex),
-            (r'[-+]?(\d+\.\d+([eE]\d+)?|s?NaN|Inf)', Number.Float),
-            (r'[-+]?\d+', Number.Integer),
+            (r'[-+]?0[xX][0-9a-fA-F_]+', Number.Hex),
+            (r'[-+]?0[xX][0-9a-fA-F_]*\.[0-9a-fA-F_]*([pP]\d+)?', Number.Hex),
+            (r'[-+]?([0-9_]+\.[0-9_]+([eE]\d+)?|s?NaN|Inf)', Number.Float),
+            (r'[-+]?[0-9_]+', Number.Integer),
             # Known attributes.
             (keywords('uext', 'sext'), Name.Attribute),
             # Well known value types.
@@ -48,7 +45,7 @@ class CretonneLexer(RegexLexer):
             # v<nn> = value
             # ss<nn> = stack slot
             # jt<nn> = jump table
-            (r'(v|ss|jt)\d+', Name.Variable),
+            (r'(v|ss|gv|jt|fn|sig|heap)\d+', Name.Variable),
             # ebb<nn> = extended basic block
             (r'(ebb)\d+', Name.Label),
             # Match instruction names in context.

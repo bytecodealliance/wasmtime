@@ -22,9 +22,11 @@ use bitset::BitSet;
 
 mod boundary;
 mod globalvar;
+mod heap;
 mod split;
 
 use self::globalvar::expand_global_addr;
+use self::heap::expand_heap_addr;
 
 /// Legalize `func` for `isa`.
 ///
