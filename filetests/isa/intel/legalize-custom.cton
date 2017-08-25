@@ -1,0 +1,30 @@
+; Test the custom legalizations.
+test legalizer
+isa intel
+set is_64bit
+isa intel
+
+; regex: V=v\d+
+; regex: EBB=ebb\d+
+
+function %cond_trap(i32) {
+ebb0(v1: i32):
+    trapz v1
+    return
+    ; check: $ebb0($v1: i32):
+    ; nextln: brnz $v1, $(new=$EBB)
+    ; nextln: trap
+    ; check: $new:
+    ; nextln: return
+}
+
+function %cond_trap2(i32) {
+ebb0(v1: i32):
+    trapnz v1
+    return
+    ; check: $ebb0($v1: i32):
+    ; nextln: brz $v1, $(new=$EBB)
+    ; nextln: trap
+    ; check: $new:
+    ; nextln: return
+}

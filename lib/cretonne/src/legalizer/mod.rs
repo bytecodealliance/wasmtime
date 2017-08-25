@@ -15,7 +15,7 @@
 
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
-use ir;
+use ir::{self, InstBuilder};
 use isa::TargetIsa;
 use bitset::BitSet;
 
@@ -96,3 +96,49 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
 //
 // Concretely, this defines private functions `narrow()`, and `expand()`.
 include!(concat!(env!("OUT_DIR"), "/legalizer.rs"));
+
+/// Custom expansion for conditional trap instructions.
+/// TODO: Add CFG support to the Python patterns so we won't have to do this.
+fn expand_cond_trap(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+    // Parse the instruction.
+    let trapz;
+    let arg = match func.dfg[inst] {
+        ir::InstructionData::Unary { opcode, arg } => {
+            // We want to branch *over* an unconditional trap.
+            trapz = match opcode {
+                ir::Opcode::Trapz => true,
+                ir::Opcode::Trapnz => false,
+                _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst, None)),
+            };
+            arg
+        }
+        _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst, None)),
+    };
+
+    // Split the EBB after `inst`:
+    //
+    //     trapnz arg
+    //
+    // Becomes:
+    //
+    //     brz arg, new_ebb
+    //     trap
+    //   new_ebb:
+    //
+    let old_ebb = func.layout.pp_ebb(inst);
+    let new_ebb = func.dfg.make_ebb();
+    if trapz {
+        func.dfg.replace(inst).brnz(arg, new_ebb, &[]);
+    } else {
+        func.dfg.replace(inst).brz(arg, new_ebb, &[]);
+    }
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.next_inst();
+    pos.ins().trap();
+    pos.insert_ebb(new_ebb);
+
+    // Finally update the CFG.
+    cfg.recompute_ebb(pos.func, old_ebb);
+    cfg.recompute_ebb(pos.func, new_ebb);
+}
