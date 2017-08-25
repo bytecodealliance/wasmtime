@@ -48,6 +48,11 @@ expand = XFormGroup('expand', """
 expand.custom_legalize(insts.global_addr, 'expand_global_addr')
 expand.custom_legalize(insts.heap_addr, 'expand_heap_addr')
 
+# Custom expansions that need to change the CFG.
+# TODO: Add sufficient XForm syntax that we don't need to hand-code these.
+expand.custom_legalize(insts.trapz, 'expand_cond_trap')
+expand.custom_legalize(insts.trapnz, 'expand_cond_trap')
+
 x = Var('x')
 y = Var('y')
 a = Var('a')
