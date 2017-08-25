@@ -14,7 +14,6 @@
 //! from the encoding recipes, and solved later by the register allocator.
 
 use cursor::{Cursor, FuncCursor};
-use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir;
 use isa::TargetIsa;
@@ -33,21 +32,16 @@ use self::heap::expand_heap_addr;
 /// - Transform any instructions that don't have a legal representation in `isa`.
 /// - Fill out `func.encodings`.
 ///
-pub fn legalize_function(func: &mut ir::Function,
-                         cfg: &mut ControlFlowGraph,
-                         domtree: &DominatorTree,
-                         isa: &TargetIsa) {
+pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa: &TargetIsa) {
     boundary::legalize_signatures(func, isa);
 
     func.encodings.resize(func.dfg.num_insts());
 
     let mut pos = FuncCursor::new(func);
 
-    // Process EBBs in a reverse post-order. This minimizes the number of split instructions we
-    // need.
-    for &ebb in domtree.cfg_postorder().iter().rev() {
-        pos.goto_top(ebb);
-
+    // Process EBBs in layout order. Some legalization actions may split the current EBB or append
+    // new ones to the end. We need to make sure we visit those new EBBs too.
+    while let Some(_ebb) = pos.next_ebb() {
         // Keep track of the cursor position before the instruction being processed, so we can
         // double back when replacing instructions.
         let mut prev_pos = pos.position();
