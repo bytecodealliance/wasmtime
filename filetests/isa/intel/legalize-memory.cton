@@ -4,6 +4,7 @@ set is_64bit
 isa intel
 
 ; regex: V=v\d+
+; regex: EBB=ebb\d+
 
 function %vmctx(i64 vmctx) -> i64 {
     gv1 = vmctx-16
@@ -49,4 +50,28 @@ ebb0(v0: i32, v999: i64):
     ; nextln: $v3 = load.f32 $v1+20
     v4 = fadd v2, v3
     return v4
+}
+
+; SpiderMonkey VM-style static 4+2 GB heap.
+; Offsets >= 2 GB do require a boundscheck.
+function %staticheap_sm64(i32, i64 vmctx) -> f32 spiderwasm {
+    gv0 = vmctx+64
+    heap0 = static gv0, min 0x1000, bound 0x1_0000_0000, guard 0x8000_0000
+
+ebb0(v0: i32, v999: i64):
+    ; check: $ebb0(
+    v1 = heap_addr.i64 heap0, v0, 0x8000_0000
+    ; Boundscheck code
+    ; check: $(oob=$V) = icmp
+    ; nextln: brz $oob, $(ok=$EBB)
+    ; nextln: trap
+    ; check: $ok:
+    ; Checks here are assuming that no pipehole opts fold the load offsets.
+    ; nextln: $(xoff=$V) = uextend.i64 $v0
+    ; nextln: $(haddr=$V) = iadd_imm.i64 $v999, 64
+    ; nextln: $(hbase=$V) = load.i64 $haddr
+    ; nextln: $v1 = iadd $hbase, $xoff
+    v2 = load.f32 v1+0x7fff_ffff
+    ; nextln: $v2 = load.f32 $v1+0x7fff_ffff
+    return v2
 }
