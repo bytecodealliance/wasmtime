@@ -63,7 +63,7 @@ impl Context {
     ///
     /// Returns the size of the function's code.
     pub fn compile(&mut self, isa: &TargetIsa) -> Result<CodeOffset, CtonError> {
-        self.flowgraph();
+        self.cfg.compute(&self.func);
         self.verify_if(isa)?;
 
         self.legalize(isa)?;
@@ -103,6 +103,8 @@ impl Context {
 
     /// Run the legalizer for `isa` on the function.
     pub fn legalize(&mut self, isa: &TargetIsa) -> CtonResult {
+        // Legalization invalidates the domtree by mutating the CFG.
+        self.domtree.clear();
         legalize_function(&mut self.func, &mut self.cfg, isa);
         self.verify_if(isa)
     }
@@ -111,6 +113,13 @@ impl Context {
     pub fn flowgraph(&mut self) {
         self.cfg.compute(&self.func);
         self.domtree.compute(&self.func, &self.cfg);
+    }
+
+    /// Ensure that a valid domtree exists.
+    pub fn ensure_domtree(&mut self) {
+        if !self.domtree.is_valid() {
+            self.domtree.compute(&self.func, &self.cfg);
+        }
     }
 
     /// Perform simple GVN on the function.
@@ -123,6 +132,7 @@ impl Context {
 
     /// Perform LICM on the function.
     pub fn licm(&mut self) -> CtonResult {
+        self.ensure_domtree();
         do_licm(&mut self.func,
                 &mut self.cfg,
                 &mut self.domtree,
@@ -132,6 +142,7 @@ impl Context {
 
     /// Run the register allocator.
     pub fn regalloc(&mut self, isa: &TargetIsa) -> CtonResult {
+        self.ensure_domtree();
         self.regalloc
             .run(isa, &mut self.func, &self.cfg, &self.domtree)
     }
