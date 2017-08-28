@@ -515,6 +515,22 @@ tjccb = TailRecipe(
         disp1(destination, func, sink);
         ''')
 
+# 8-bit test-and-branch.
+#
+# Same as tjccb, but only looks at the low 8 bits of the register, for b1
+# types.
+t8jccb_abcd = TailRecipe(
+        't8jccb_abcd', Branch, size=1 + 2, ins=ABCD, outs=(),
+        branch_range=(2, 8),
+        emit='''
+        // test8 r, r.
+        PUT_OP(0x84, rex2(in_reg0, in_reg0), sink);
+        modrm_rr(in_reg0, in_reg0, sink);
+        // Jcc instruction.
+        sink.put1(bits as u8);
+        disp1(destination, func, sink);
+        ''')
+
 # Comparison that produces a `b1` result in a GPR.
 #
 # This is a macro of a `cmp` instruction followed by a `setCC` instruction.

@@ -28,3 +28,27 @@ ebb0(v1: i32):
     ; check: $new:
     ; nextln: return
 }
+
+function %cond_trap_b1(i32) {
+ebb0(v1: i32):
+    v2 = icmp_imm eq v1, 6
+    trapz v2
+    return
+    ; check: $ebb0($v1: i32):
+    ; check: brnz $v2, $(new=$EBB)
+    ; nextln: trap
+    ; check: $new:
+    ; nextln: return
+}
+
+function %cond_trap2_b1(i32) {
+ebb0(v1: i32):
+    v2 = icmp_imm eq v1, 6
+    trapnz v2
+    return
+    ; check: $ebb0($v1: i32):
+    ; check: brz $v2, $(new=$EBB)
+    ; nextln: trap
+    ; check: $new:
+    ; nextln: return
+}

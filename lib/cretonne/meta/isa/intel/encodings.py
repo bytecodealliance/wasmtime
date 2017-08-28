@@ -22,12 +22,14 @@ except ImportError:
 
 I32.legalize_type(
         default=narrow,
+        b1=expand,
         i32=intel_expand,
         f32=expand,
         f64=expand)
 
 I64.legalize_type(
         default=narrow,
+        b1=expand,
         i32=intel_expand,
         i64=intel_expand,
         f32=expand,
@@ -237,6 +239,16 @@ I64.enc(base.jump, *r.jmpd(0xe9))
 
 enc_i32_i64(base.brz, r.tjccb, 0x74)
 enc_i32_i64(base.brnz, r.tjccb, 0x75)
+
+# Branch on a b1 value in a register only looks at the low 8 bits. See also
+# bint encodings below.
+I32.enc(base.brz.b1, *r.t8jccb_abcd(0x74))
+I64.enc(base.brz.b1, *r.t8jccb_abcd.rex(0x74))
+I64.enc(base.brz.b1, *r.t8jccb_abcd(0x74))
+I32.enc(base.brnz.b1, *r.t8jccb_abcd(0x75))
+I64.enc(base.brnz.b1, *r.t8jccb_abcd.rex(0x75))
+I64.enc(base.brnz.b1, *r.t8jccb_abcd(0x75))
+
 
 #
 # Trap as ud2
