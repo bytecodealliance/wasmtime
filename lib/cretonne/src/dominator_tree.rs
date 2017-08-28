@@ -205,14 +205,30 @@ impl DominatorTree {
         self.compute_domtree(func, cfg);
     }
 
+    /// Clear the data structures used to represent the dominator tree. This will leave the tree in
+    /// a state where `is_valid()` returns false.
+    pub fn clear(&mut self) {
+        self.nodes.clear();
+        self.postorder.clear();
+        assert!(self.stack.is_empty());
+    }
+
+    /// Check if the dominator tree is in a valid state.
+    ///
+    /// Note that this doesn't perform any kind of validity checks. It simply checks if the
+    /// `compute()` method has been called since the last `clear()`. It does not check that the
+    /// dominator tree is consistent
+    /// with the CFG>
+    pub fn is_valid(&self) -> bool {
+        !self.nodes.is_empty()
+    }
+
     /// Reset all internal data structures and compute a post-order for `cfg`.
     ///
     /// This leaves `rpo_number == 1` for all reachable EBBs, 0 for unreachable ones.
     fn compute_postorder(&mut self, func: &Function, cfg: &ControlFlowGraph) {
-        self.nodes.clear();
+        self.clear();
         self.nodes.resize(func.dfg.num_ebbs());
-        self.postorder.clear();
-        assert!(self.stack.is_empty());
 
         // During this algorithm only, use `rpo_number` to hold the following state:
         //

@@ -134,7 +134,9 @@ pub fn verify_context(func: &Function,
                       -> Result {
     let verifier = Verifier::new(func, isa);
     verifier.cfg_integrity(cfg)?;
-    verifier.domtree_integrity(domtree)?;
+    if domtree.is_valid() {
+        verifier.domtree_integrity(domtree)?;
+    }
     verifier.run()
 }
 
