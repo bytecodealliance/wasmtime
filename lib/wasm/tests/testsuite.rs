@@ -61,7 +61,7 @@ fn handle_module(path: PathBuf) -> Result<(), String> {
     };
     let mut dummy_runtime = DummyRuntime::new();
     let translation = {
-        let mut runtime: &mut WasmRuntime = &mut dummy_runtime;
+        let runtime: &mut WasmRuntime = &mut dummy_runtime;
         match translate_module(&data, runtime) {
             Ok(x) => x,
             Err(string) => {
