@@ -2,7 +2,6 @@
 extern crate cretonne;
 extern crate cton_reader;
 extern crate cretonne_wasm;
-extern crate wasmparser;
 extern crate docopt;
 extern crate serde;
 #[macro_use]
