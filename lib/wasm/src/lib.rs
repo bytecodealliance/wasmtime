@@ -10,6 +10,8 @@
 //!
 //! The main function of this module is [`translate_module`](fn.translate_module.html).
 
+#![deny(missing_docs)]
+
 extern crate wasmparser;
 extern crate cton_frontend;
 extern crate cretonne;

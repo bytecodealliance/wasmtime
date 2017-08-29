@@ -32,27 +32,39 @@ pub enum Import {
 /// WebAssembly global.
 #[derive(Debug,Clone,Copy)]
 pub struct Global {
+    /// The type of the value stored in the global.
     pub ty: cretonne::ir::Type,
+    /// A flag indicating whether the value may change at runtime.
     pub mutability: bool,
+    /// The source of the initial value.
     pub initializer: GlobalInit,
 }
 
 /// Globals are initialized via the four `const` operators or by referring to another import.
 #[derive(Debug,Clone,Copy)]
 pub enum GlobalInit {
+    /// An `i32.const`.
     I32Const(i32),
+    /// An `i64.const`.
     I64Const(i64),
+    /// An `f32.const`.
     F32Const(u32),
+    /// An `f64.const`.
     F64Const(u64),
-    Import(),
+    /// A `get_global` of another global.
     GlobalRef(GlobalIndex),
+    ///< The global is imported from, and thus initialized by, a different module.
+    Import(),
 }
 
 /// WebAssembly table.
 #[derive(Debug,Clone,Copy)]
 pub struct Table {
+    /// The type of data stored in elements of the table.
     pub ty: TableElementType,
+    /// The minimum number of elements in the table.
     pub size: usize,
+    /// The maximum number of elements in the table.
     pub maximum: Option<usize>,
 }
 
@@ -66,7 +78,9 @@ pub enum TableElementType {
 /// WebAssembly linear memory.
 #[derive(Debug,Clone,Copy)]
 pub struct Memory {
+    /// The minimum number of pages in the memory.
     pub pages_count: usize,
+    /// The maximum number of pages in the memory.
     pub maximum: Option<usize>,
 }
 

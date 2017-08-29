@@ -12,22 +12,25 @@ use cton_frontend::ILBuilder;
 use std::collections::HashMap;
 use runtime::WasmRuntime;
 
-/// Output of the [`translate_module`](fn.translate_module.html) function. Contains the translated
-/// functions and when present the index of the function defined as `start` of the module.
+/// Output of the [`translate_module`](fn.translate_module.html) function.
 pub struct TranslationResult {
+    /// The translated functions.
     pub functions: Vec<FunctionTranslation>,
+    /// When present, the index of the function defined as `start` of the module.
     pub start_index: Option<FunctionIndex>,
 }
 
-/// A function in a WebAssembly module can be either imported, or defined inside it. If it is
-/// defined inside it, then the translation in Cretonne IL is available as well as the mappings
-/// between Cretonne imports and indexes in the function index space.
+/// A function in a WebAssembly module can be either imported, or defined inside it.
 #[derive(Clone)]
 pub enum FunctionTranslation {
+    /// A function defined inside the WebAssembly module.
     Code {
+        /// The translation in Cretonne IL.
         il: Function,
+        /// The mappings between Cretonne imports and indexes in the function index space.
         imports: ImportMappings,
     },
+    /// An imported function.
     Import(),
 }
 
@@ -42,6 +45,7 @@ pub struct ImportMappings {
 }
 
 impl ImportMappings {
+    /// Create a new empty `ImportMappings`.
     pub fn new() -> ImportMappings {
         ImportMappings {
             functions: HashMap::new(),
