@@ -1,6 +1,6 @@
 //! Translation skeletton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
-use wasmparser::{ParserState, SectionCode, ParserInput, Parser, WasmDecoder};
+use wasmparser::{ParserState, SectionCode, ParserInput, Parser, WasmDecoder, BinaryReaderError};
 use sections_translator::{SectionParsingError, parse_function_signatures, parse_import_section,
                           parse_function_section, parse_export_section, parse_memory_section,
                           parse_global_section, parse_table_section, parse_elements_section,
@@ -64,6 +64,9 @@ pub fn translate_module(data: &Vec<u8>,
     let mut parser = Parser::new(data.as_slice());
     match *parser.read() {
         ParserState::BeginWasm { .. } => {}
+        ParserState::Error(BinaryReaderError { message, offset }) => {
+            return Err(format!("at offset {}: {}", offset, message));
+        }
         ref s @ _ => panic!("modules should begin properly: {:?}", s),
     }
     let mut signatures = None;
