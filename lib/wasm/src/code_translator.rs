@@ -126,11 +126,9 @@ impl ControlStackFrame {
 
 /// Contains information passed along during the translation and that records:
 ///
-/// - if the last instruction added was a `return`;
 /// - the depth of the two unreachable control blocks stacks, that are manipulated when translating
 ///   unreachable code;
 struct TranslationState {
-    last_inst_return: bool,
     phantom_unreachable_stack_depth: usize,
     real_unreachable_stack_depth: usize,
 }
@@ -216,7 +214,6 @@ pub fn translate_function_body(parser: &mut Parser,
             }
         }
         let mut state = TranslationState {
-            last_inst_return: false,
             phantom_unreachable_stack_depth: 0,
             real_unreachable_stack_depth: 0,
         };
@@ -265,8 +262,7 @@ pub fn translate_function_body(parser: &mut Parser,
         }
         // In WebAssembly, the final return instruction is implicit so we need to build it
         // explicitely in Cretonne IL.
-        if !state.last_inst_return && !builder.is_filled() &&
-           (!builder.is_unreachable() || !builder.is_pristine()) {
+        if !builder.is_filled() && (!builder.is_unreachable() || !builder.is_pristine()) {
             let cut_index = stack.len() - sig.return_types.len();
             let return_vals = stack.split_off(cut_index);
             builder.ins().return_(return_vals.as_slice());
@@ -300,7 +296,6 @@ fn translate_operator(op: &Operator,
                       signatures: &Vec<Signature>,
                       exports: &Option<HashMap<FunctionIndex, String>>,
                       func_imports: &mut FunctionImports) {
-    state.last_inst_return = false;
     // This big match treats all Wasm code operators.
     match *op {
         /********************************** Locals ****************************************
@@ -600,7 +595,6 @@ fn translate_operator(op: &Operator,
             let cut_index = stack.len() - return_count;
             let return_args = stack.split_off(cut_index);
             builder.ins().return_(return_args.as_slice());
-            state.last_inst_return = true;
             state.real_unreachable_stack_depth = 1;
         }
         /************************************ Calls ****************************************
@@ -1265,7 +1259,6 @@ fn translate_unreachable_operator(op: &Operator,
                     stack.extend_from_slice(builder.ebb_args(frame.following_code()));
                 }
                 state.real_unreachable_stack_depth -= 1;
-                state.last_inst_return = false;
             }
         }
         Operator::Else => {
@@ -1292,7 +1285,6 @@ fn translate_unreachable_operator(op: &Operator,
                 // by unreachable code that hasn't been translated
                 stack.truncate(original_stack_size);
                 state.real_unreachable_stack_depth = 0;
-                state.last_inst_return = false;
             }
         }
         _ => {
