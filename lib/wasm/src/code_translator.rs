@@ -167,10 +167,6 @@ pub fn translate_function_body(parser: &mut Parser,
     // First we build the Function object with its name and signature
     let mut func = Function::new();
     let args_num: usize = sig.argument_types.len();
-    let args_types: Vec<Type> = sig.argument_types
-        .iter()
-        .map(|arg| arg.value_type)
-        .collect();
     func.signature = sig.clone();
     match exports {
         &None => (),
@@ -190,11 +186,11 @@ pub fn translate_function_body(parser: &mut Parser,
         let first_ebb = builder.create_ebb();
         builder.switch_to_block(first_ebb, &[]);
         builder.seal_block(first_ebb);
-        for i in 0..args_num {
+        for (i, arg_type) in sig.argument_types.iter().enumerate() {
             // First we declare the function arguments' as non-SSA vars because they will be
             // accessed by get_local
             let arg_value = builder.arg_value(i as usize);
-            builder.declare_var(Local(i as u32), args_types[i]);
+            builder.declare_var(Local(i as u32), arg_type.value_type);
             builder.def_var(Local(i as u32), arg_value);
         }
         // We also declare and initialize to 0 the local variables
