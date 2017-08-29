@@ -58,10 +58,10 @@ impl ImportMappings {
 /// [`Function`](../cretonne/ir/function/struct.Function.html).
 /// Returns the functions and also the mappings for imported functions and signature between the
 /// indexes in the wasm module and the indexes inside each functions.
-pub fn translate_module(data: &Vec<u8>,
+pub fn translate_module(data: &[u8],
                         runtime: &mut WasmRuntime)
                         -> Result<TranslationResult, String> {
-    let mut parser = Parser::new(data.as_slice());
+    let mut parser = Parser::new(data);
     match *parser.read() {
         ParserState::BeginWasm { .. } => {}
         ParserState::Error(BinaryReaderError { message, offset }) => {
