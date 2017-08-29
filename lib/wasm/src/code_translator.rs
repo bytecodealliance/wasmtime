@@ -236,8 +236,9 @@ pub fn translate_function_body(parser: &mut Parser,
             let parser_state = parser.read();
             match *parser_state {
                 ParserState::CodeOperator(ref op) => {
-                    if state.phantom_unreachable_stack_depth +
-                       state.real_unreachable_stack_depth > 0 {
+                    debug_assert!(state.phantom_unreachable_stack_depth == 0 ||
+                                  state.real_unreachable_stack_depth > 0);
+                    if state.real_unreachable_stack_depth > 0 {
                         translate_unreachable_operator(op,
                                                        &mut builder,
                                                        &mut stack,
