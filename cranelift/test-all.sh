@@ -43,21 +43,19 @@ if [ -n "$needcheck" ]; then
 fi
 
 cd "$topdir"
-banner "Rust unit tests"
-cargo test --all
 
-# Build cton-util for parser testing.
-cd "$topdir"
-banner "Rust documentation"
-echo "open $topdir/target/doc/cretonne/index.html"
+# Make sure the code builds in debug mode.
+banner "Rust debug build"
+cargo build
+
+# Make sure the code builds in release mode, and run the unit tests. We run
+# these in release mode for speed, but note that the top-level Cargo.toml file
+# does enable debug assertions in release builds.
+banner "Rust release build and unit tests"
+cargo test --all --release
+
+# Make sure the documentation builds.
+banner "Rust documentation: $topdir/target/doc/cretonne/index.html"
 cargo doc
-banner "Rust release build"
-cargo build --release
-
-export CTONUTIL="$topdir/target/release/cton-util"
-
-cd "$topdir"
-banner "File tests"
-"$CTONUTIL" test filetests docs
 
 banner "OK"

@@ -19,6 +19,7 @@ pub mod entity;
 
 pub mod bforest;
 pub mod binemit;
+pub mod cfg_printer;
 pub mod cursor;
 pub mod dominator_tree;
 pub mod flowgraph;

@@ -324,6 +324,22 @@ Test the simple GVN pass.
 The simple GVN pass is run on each function, and then results are run
 through filecheck.
 
+`test licm`
+-----------------
+
+Test the LICM pass.
+
+The LICM pass is run on each function, and then results are run
+through filecheck.
+
+`test preopt`
+-----------------
+
+Test the preopt pass.
+
+The preopt pass is run on each function, and then results are run
+through filecheck.
+
 `test compile`
 --------------
 
