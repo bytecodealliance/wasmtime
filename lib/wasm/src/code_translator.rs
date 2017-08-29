@@ -129,8 +129,6 @@ impl ControlStackFrame {
 /// - if the last instruction added was a `return`;
 /// - the depth of the two unreachable control blocks stacks, that are manipulated when translating
 ///   unreachable code;
-/// - all the `Ebb`s referenced by `br_table` instructions, because those are always reachable even
-///   if they are at a point of the code that would have been unreachable otherwise.
 struct TranslationState {
     last_inst_return: bool,
     phantom_unreachable_stack_depth: usize,
