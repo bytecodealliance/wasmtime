@@ -18,13 +18,6 @@
 //!   assignments. Some are used by the instruction, some are not.
 //! - A subset of the live register values that are killed by the instruction.
 //! - A set of new register values that are defined by the instruction.
-//! The constraint solver addresses the problem of satisfying the constraints of a single
-//! instruction. We have:
-//!
-//! - A set of values that are live in registers before the instruction, with current register
-//!   assignments. Some are used by the instruction, some are not.
-//! - A subset of the live register values that are killed by the instruction.
-//! - A set of new register values that are defined by the instruction.
 //!
 //! We are not concerned with stack values at all. The reload pass ensures that all values required
 //! to be in a register by the instruction are already in a register.
@@ -32,7 +25,7 @@
 //! A solution to the register coloring problem consists of:
 //!
 //! - Register reassignment prescriptions for a subset of the live register values.
-//! - Register assignments for the defined values.
+//! - Register assignments for the instruction's defined values.
 //!
 //! The solution ensures that when live registers are reassigned as prescribed before the
 //! instruction, all its operand constraints are satisfied, and the definition assignments won't
@@ -105,6 +98,7 @@
 //! appropriate candidate among the set of live register values, add it as a variable and start
 //! over.
 
+use dbg::DisplayList;
 use entity::{SparseMap, SparseMapValue};
 use ir::Value;
 use isa::{RegInfo, RegClass, RegUnit};
@@ -235,6 +229,17 @@ impl SparseMapValue<Value> for Assignment {
     }
 }
 
+impl fmt::Display for Assignment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,
+               "{}:{}(%{} -> %{})",
+               self.value,
+               self.rc,
+               self.from,
+               self.to)
+    }
+}
+
 #[cfg(test)]
 impl PartialEq for Assignment {
     fn eq(&self, other: &Assignment) -> bool {
@@ -263,10 +268,12 @@ impl PartialEq for Assignment {
 ///
 pub struct Solver {
     /// Register reassignments that are required or decided as part of a full solution.
+    /// This includes identity assignments for values that are already in the correct fixed
+    /// register.
     assignments: SparseMap<Value, Assignment>,
 
     /// Variables are the values that should be reassigned as part of a solution.
-    /// Values with a fixed register constraints are not considered variables. They are represented
+    /// Values with fixed register constraints are not considered variables. They are represented
     /// in the `assignments` vector if necessary.
     vars: Vec<Variable>,
 
@@ -346,13 +353,14 @@ impl Solver {
     /// In either case, `to` will not be available for variables on the input side of the
     /// instruction.
     pub fn reassign_in(&mut self, value: Value, rc: RegClass, from: RegUnit, to: RegUnit) {
+        dbg!("reassign_in({}:{}, %{} -> %{})", value, rc, from, to);
         debug_assert!(!self.inputs_done);
         if self.regs_in.is_avail(rc, from) {
             // It looks like `value` was already removed from the register set. It must have been
             // added as a variable previously. A fixed constraint beats a variable, so convert it.
             if let Some(idx) = self.vars.iter().position(|v| v.value == value) {
                 let v = self.vars.remove(idx);
-                dbg!("Converting variable {} to a fixed constraint", v);
+                dbg!("-> converting variable {} to a fixed constraint", v);
                 // The spiller is responsible for ensuring that all constraints on the uses of a
                 // value are compatible.
                 assert!(v.constraint.contains(to),
@@ -364,15 +372,13 @@ impl Solver {
         }
         self.regs_in.free(rc, from);
         self.regs_out.take(rc, to);
-        if from != to {
-            self.assignments
-                .insert(Assignment {
-                            value,
-                            rc,
-                            from,
-                            to,
-                        });
-        }
+        self.assignments
+            .insert(Assignment {
+                        value,
+                        rc,
+                        from,
+                        to,
+                    });
     }
 
     /// Add a variable representing an input side value with an existing register assignment.
@@ -389,8 +395,16 @@ impl Solver {
                    reginfo: &RegInfo) {
         // Check for existing entries for this value.
         if self.regs_in.is_avail(constraint, from) {
-            // There cold be an existing variable entry.
+            dbg!("add_var({}:{}, from={}/%{}) for existing entry",
+                 value,
+                 constraint,
+                 reginfo.display_regunit(from),
+                 from);
+
+            // There could be an existing variable entry.
             if let Some(v) = self.vars.iter_mut().find(|v| v.value == value) {
+                dbg!("-> combining constraint with {}", v);
+
                 // We have an existing variable entry for `value`. Combine the constraints.
                 if let Some(rci) = v.constraint.intersect(constraint) {
                     v.constraint = reginfo.rc(rci);
@@ -404,19 +418,30 @@ impl Solver {
 
             // No variable, then it must be a fixed reassignment.
             if let Some(a) = self.assignments.get(value) {
+                dbg!("-> already fixed assignment {}", a);
                 assert!(constraint.contains(a.to),
                         "Incompatible constraints for {}",
                         value);
                 return;
             }
 
+            dbg!("{}", self);
             panic!("Wrong from register for {}", value);
         }
+
+        let new_var = Variable::new_live(value, constraint, from);
+        dbg!("add_var({}:{}, from={}/%{}) new entry: {}",
+             value,
+             constraint,
+             reginfo.display_regunit(from),
+             from,
+             new_var);
+
         self.regs_in.free(constraint, from);
         if self.inputs_done {
             self.regs_out.free(constraint, from);
         }
-        self.vars.push(Variable::new_live(value, constraint, from));
+        self.vars.push(new_var);
     }
 
     /// Check for conflicts between fixed input assignments and existing live values.
@@ -608,7 +633,15 @@ impl Solver {
             }
         }
 
-        self.moves.extend(self.assignments.values().cloned());
+        // Convert all of the fixed register assignments into moves, but omit the ones that are
+        // already in the right register.
+        self.moves
+            .extend(self.assignments
+                        .values()
+                        .cloned()
+                        .filter(|v| v.from != v.to));
+
+        dbg!("collect_moves: {}", DisplayList(self.moves.as_slice()));
     }
 
     /// Try to schedule a sequence of `regmove` instructions that will shuffle registers into
@@ -636,6 +669,7 @@ impl Solver {
                 let m = &self.moves[i];
                 avail.take(m.rc, m.to);
                 avail.free(m.rc, m.from);
+                dbg!("move #{}: {}", i, m);
                 i += 1;
                 continue;
             }
@@ -666,6 +700,8 @@ impl Solver {
 
             let m = self.moves[i].clone();
             if let Some(reg) = avail.iter(m.rc).next() {
+                dbg!("breaking cycle at {} with available register %{}", m, reg);
+
                 // Alter the move so it is guaranteed to be picked up when we loop. It is important
                 // that this move is scheduled immediately, otherwise we would have multiple moves
                 // of the same value, and they would not be commutable.
@@ -696,6 +732,18 @@ impl Solver {
     /// Borrow the scheduled set of register moves that was computed by `schedule_moves()`.
     pub fn moves(&self) -> &[Assignment] {
         &self.moves
+    }
+}
+
+impl fmt::Display for Solver {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Solver {{ inputs_done: {},", self.inputs_done)?;
+        writeln!(f,
+                 "  assignments: {}",
+                 DisplayList(self.assignments.as_slice()))?;
+        writeln!(f, "  vars: {}", DisplayList(self.vars.as_slice()))?;
+        writeln!(f, "  moves: {}", DisplayList(self.moves.as_slice()))?;
+        writeln!(f, "}}")
     }
 }
 
