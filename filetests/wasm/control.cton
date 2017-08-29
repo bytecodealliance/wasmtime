@@ -1,0 +1,50 @@
+; Test basic code generation for control flow WebAssembly instructions.
+test compile
+
+set is_64bit=0
+isa intel haswell
+
+set is_64bit=1
+isa intel haswell
+
+function %br_if(i32) -> i32 {
+ebb0(v0: i32):
+    v1 = iconst.i32 1
+    brz v0, ebb1(v1)
+    jump ebb2
+
+ebb1(v2: i32):
+    return v2
+
+ebb2:
+    jump ebb1(v0)
+}
+
+function %br_if_not(i32) -> i32 {
+ebb0(v0: i32):
+    v1 = iconst.i32 1
+    brnz v0, ebb1(v0)
+    jump ebb2
+
+ebb1(v2: i32):
+    return v2
+
+ebb2:
+    jump ebb1(v0)
+}
+
+function %br_if_fallthrough(i32) -> i32 {
+ebb0(v0: i32):
+    v1 = iconst.i32 1
+    brz v0, ebb1(v1)
+    ; This jump gets converted to a fallthrough.
+    jump ebb1(v0)
+
+ebb1(v2: i32):
+    return v2
+}
+
+function %undefined() {
+ebb0:
+    trap
+}

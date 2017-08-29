@@ -1,0 +1,36 @@
+; Test the parser's support for encoding annotations.
+test legalizer
+isa riscv
+
+function %parse_encoding(i32 [%x5]) -> i32 [%x10] {
+    ; check: function %parse_encoding(i32 [%x5], i32 link [%x1]) -> i32 [%x10], i32 link [%x1] native {
+
+    sig0 = (i32 [%x10]) -> i32 [%x10] native
+    ; check: sig0 = (i32 [%x10]) -> i32 [%x10] native
+
+    sig1 = (i32 [%x10], i32 [%x11]) -> b1 [%x10] native
+    ; check: sig1 = (i32 [%x10], i32 [%x11]) -> b1 [%x10] native
+
+    sig2 = (f32 [%f10], i32 [%x12], i32 [%x13]) -> f64 [%f10] native
+    ; check: sig2 = (f32 [%f10], i32 [%x12], i32 [%x13]) -> f64 [%f10] native
+
+    ; Arguments on stack where not necessary
+    sig3 = (f64 [%f10], i32 [0], i32 [4]) -> f64 [%f10] native
+    ; check: sig3 = (f64 [%f10], i32 [0], i32 [4]) -> f64 [%f10] native
+
+    ; Stack argument before register argument
+    sig4 = (f32 [72], i32 [%x10]) native
+    ; check: sig4 = (f32 [72], i32 [%x10]) native
+
+    ; Return value on stack
+    sig5 = () -> f32 [0] native
+    ; check: sig5 = () -> f32 [0] native
+
+    ; function + signature
+    fn15 = function %bar(i32 [%x10]) -> b1 [%x10] native
+    ; check: sig6 = (i32 [%x10]) -> b1 [%x10] native
+    ; nextln: fn0 = sig6 %bar
+
+ebb0(v0: i32):
+    return v0
+}

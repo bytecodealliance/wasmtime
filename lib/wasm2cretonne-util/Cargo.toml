@@ -1,0 +1,25 @@
+[package]
+name = "wasm2cretonne-util"
+version = "0.0.0"
+authors = ["The Cretonne Project Developers"]
+publish = false
+description = "Utility binary to translate and execute WebAssembly modules using Cretonne"
+repository = "https://github.com/stoklund/cretonne"
+license = "Apache-2.0"
+
+[[bin]]
+name = "wasm2cretonne-util"
+path = "src/main.rs"
+
+[dependencies]
+wasm2cretonne = { path = "../wasm2cretonne" }
+wasmstandalone = { path = "../wasmstandalone" }
+wasmparser = "0.6.1"
+cretonne = { path = "../cretonne" }
+cretonne-frontend = { path = "../frontend" }
+wasmtext = { git = "https://github.com/yurydelendik/wasmtext" }
+docopt = "0.8.0"
+serde = "1.0.8"
+serde_derive = "1.0.8"
+term = "*"
+tempdir="*"

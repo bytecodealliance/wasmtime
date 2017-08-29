@@ -1,0 +1,26 @@
+[package]
+name = "cretonne-tools"
+authors = ["The Cretonne Project Developers"]
+version = "0.0.0"
+description = "Binaries for testing the Cretonne library"
+license = "Apache-2.0"
+documentation = "https://cretonne.readthedocs.io/"
+repository = "https://github.com/stoklund/cretonne"
+publish = false
+
+[[bin]]
+name = "cton-util"
+path = "src/cton-util.rs"
+
+[dependencies]
+cretonne = { path = "lib/cretonne" }
+cretonne-reader = { path = "lib/reader" }
+cretonne-frontend = { path = "lib/frontend" }
+wasm2cretonne-util = { path = "lib/wasm2cretonne-util" }
+filecheck = { path = "lib/filecheck" }
+docopt = "0.8.0"
+serde = "1.0.8"
+serde_derive = "1.0.8"
+num_cpus = "1.5.1"
+
+[workspace]

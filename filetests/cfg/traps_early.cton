@@ -1,0 +1,21 @@
+; For testing cfg generation. This code explores the implications of encountering
+; a terminating instruction before any connections have been made.
+test print-cfg
+test verifier
+
+function %nonsense(i32) {
+; check: digraph %nonsense {
+
+ebb0(v1: i32):
+    trap            ; error: terminator instruction was encountered before the end
+    brnz v1, ebb2   ; unordered: ebb0:inst1 -> ebb2
+    jump ebb1       ; unordered: ebb0:inst2 -> ebb1
+
+ebb1:
+    v2 = iconst.i32 0
+    v3 = iadd v1, v3
+    jump ebb0(v3)   ; unordered: ebb1:inst5 -> ebb0
+
+ebb2:
+    return v1
+}

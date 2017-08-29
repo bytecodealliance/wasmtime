@@ -1,0 +1,19 @@
+test verifier
+
+function %test(i32) {
+    ebb0(v0: i32):
+        jump ebb1       ; error: terminator
+        return
+    ebb1:
+        jump ebb2
+        brz v0, ebb3
+    ebb2:
+        jump ebb3
+    ebb3:
+        return
+}
+
+function %test(i32) {    ; Ok
+    ebb0(v0: i32):
+        return
+}

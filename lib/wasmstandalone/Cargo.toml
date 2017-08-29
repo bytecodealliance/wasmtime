@@ -1,0 +1,14 @@
+[package]
+name = "wasmstandalone"
+version = "0.0.0"
+authors = ["The Cretonne Project Developers"]
+publish = false
+description = "Standalone JIT-style runtime support for WebAsssembly code in Cretonne"
+repository = "https://github.com/stoklund/cretonne"
+license = "Apache-2.0"
+
+[dependencies]
+cretonne = { path = "../cretonne" }
+cretonne-frontend = { path = "../frontend" }
+wasm2cretonne = { path = "../wasm2cretonne" }
+region = "0.0.8"
