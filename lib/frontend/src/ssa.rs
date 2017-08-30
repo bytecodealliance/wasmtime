@@ -298,15 +298,11 @@ impl<Variable> SSABuilder<Variable>
     /// Gets the header block corresponding to an Ebb, panics if the Ebb or the header block
     /// isn't declared.
     pub fn header_block(&self, ebb: Ebb) -> Block {
-        match self.ebb_headers.get(ebb) {
-            Some(&header) => {
-                match header.expand() {
-                    Some(header) => header,
-                    None => panic!("the header block has not been defined"),
-                }
-            }
-            None => panic!("the ebb has not been declared"),
-        }
+        self.ebb_headers
+            .get(ebb)
+            .expect("the ebb has not been declared")
+            .expand()
+            .expect("the header block has not been defined")
     }
 
     /// Declares a new predecessor for an `Ebb` header block and record the branch instruction
