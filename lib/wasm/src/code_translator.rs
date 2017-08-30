@@ -523,17 +523,15 @@ fn translate_operator(op: &Operator,
             if jump_args_count == 0 {
                 // No jump arguments
                 let val = stack.pop().unwrap();
-                if depths.len() > 0 {
-                    let jt = builder.create_jump_table();
-                    for (index, depth) in depths.iter().enumerate() {
-                        let i = control_stack.len() - 1 - (*depth as usize);
-                        let frame = &mut control_stack[i];
-                        let ebb = frame.br_destination();
-                        builder.insert_jump_table_entry(jt, index, ebb);
-                        frame.set_reachable();
-                    }
-                    builder.ins().br_table(val, jt);
+                let jt = builder.create_jump_table();
+                for (index, depth) in depths.iter().enumerate() {
+                    let i = control_stack.len() - 1 - (*depth as usize);
+                    let frame = &mut control_stack[i];
+                    let ebb = frame.br_destination();
+                    builder.insert_jump_table_entry(jt, index, ebb);
+                    frame.set_reachable();
                 }
+                builder.ins().br_table(val, jt);
                 let i = control_stack.len() - 1 - (default as usize);
                 let frame = &mut control_stack[i];
                 let ebb = frame.br_destination();
@@ -546,44 +544,36 @@ fn translate_operator(op: &Operator,
                 let val = stack.pop().unwrap();
                 let cut_index = stack.len() - jump_args_count;
                 let jump_args = stack.split_off(cut_index);
-                if depths.len() > 0 {
-                    let jt = builder.create_jump_table();
-                    let dest_ebbs: HashMap<usize, Ebb> = depths
-                        .iter()
-                        .enumerate()
-                        .fold(HashMap::new(), |mut acc, (index, &depth)| {
-                            if acc.get(&(depth as usize)).is_none() {
-                                let branch_ebb = builder.create_ebb();
-                                builder.insert_jump_table_entry(jt, index, branch_ebb);
-                                acc.insert(depth as usize, branch_ebb);
-                                return acc;
-                            };
-                            let branch_ebb = acc.get(&(depth as usize)).unwrap().clone();
+                let jt = builder.create_jump_table();
+                let dest_ebbs: HashMap<usize, Ebb> = depths
+                    .iter()
+                    .enumerate()
+                    .fold(HashMap::new(), |mut acc, (index, &depth)| {
+                        if acc.get(&(depth as usize)).is_none() {
+                            let branch_ebb = builder.create_ebb();
                             builder.insert_jump_table_entry(jt, index, branch_ebb);
-                            acc
-                        });
-                    builder.ins().br_table(val, jt);
-                    let default_ebb = control_stack[control_stack.len() - 1 - (default as usize)]
-                        .br_destination();
-                    builder.ins().jump(default_ebb, jump_args.as_slice());
-                    stack.extend(jump_args.clone());
-                    for (depth, dest_ebb) in dest_ebbs {
-                        builder.switch_to_block(dest_ebb, &[]);
-                        builder.seal_block(dest_ebb);
-                        let i = control_stack.len() - 1 - (depth as usize);
-                        let frame = &mut control_stack[i];
-                        let real_dest_ebb = frame.br_destination();
-                        builder.ins().jump(real_dest_ebb, jump_args.as_slice());
-                        frame.set_reachable();
-                    }
-                    state.real_unreachable_stack_depth = 1 + min_depth as usize;
-                } else {
-                    let ebb = control_stack[control_stack.len() - 1 - (default as usize)]
-                        .br_destination();
-                    builder.ins().jump(ebb, jump_args.as_slice());
-                    stack.extend(jump_args);
-                    state.real_unreachable_stack_depth = 1 + min_depth as usize;
+                            acc.insert(depth as usize, branch_ebb);
+                            return acc;
+                        };
+                        let branch_ebb = acc.get(&(depth as usize)).unwrap().clone();
+                        builder.insert_jump_table_entry(jt, index, branch_ebb);
+                        acc
+                    });
+                builder.ins().br_table(val, jt);
+                let default_ebb = control_stack[control_stack.len() - 1 - (default as usize)]
+                    .br_destination();
+                builder.ins().jump(default_ebb, jump_args.as_slice());
+                stack.extend(jump_args.clone());
+                for (depth, dest_ebb) in dest_ebbs {
+                    builder.switch_to_block(dest_ebb, &[]);
+                    builder.seal_block(dest_ebb);
+                    let i = control_stack.len() - 1 - (depth as usize);
+                    let frame = &mut control_stack[i];
+                    let real_dest_ebb = frame.br_destination();
+                    builder.ins().jump(real_dest_ebb, jump_args.as_slice());
+                    frame.set_reachable();
                 }
+                state.real_unreachable_stack_depth = 1 + min_depth as usize;
             }
         }
         Operator::Return => {
