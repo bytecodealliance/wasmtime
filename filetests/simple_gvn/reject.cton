@@ -9,3 +9,17 @@ ebb0(v0: i32):
 ; check: regmove v0, %10 -> %20
     return v0
 }
+
+function %differing_typevars() -> i64 {
+ebb0:
+    v0 = iconst.i32 7
+    v1 = iconst.i64 7
+    v2 = iconst.i64 8
+; check: v0 = iconst.i32 7
+; check: v1 = iconst.i64 7
+; check: v2 = iconst.i64 8
+    v3 = uextend.i64 v0
+    v4 = iadd v2, v1
+    v5 = iadd v4, v3
+    return v5
+}
