@@ -23,7 +23,7 @@ use std::fmt::{self, Display, Debug, Formatter};
 ///
 /// SIMD vector types have power-of-two lanes, up to 256. Lanes can be any int/float/bool type.
 ///
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Type(u8);
 
 /// No type. Used for functions without a return value. Can't be loaded or stored. Can't be part of

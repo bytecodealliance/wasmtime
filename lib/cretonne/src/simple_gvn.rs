@@ -2,7 +2,7 @@
 
 use flowgraph::ControlFlowGraph;
 use dominator_tree::DominatorTree;
-use ir::{Cursor, CursorBase, InstructionData, Function, Inst, Opcode};
+use ir::{Cursor, CursorBase, InstructionData, Function, Inst, Opcode, Type};
 use std::collections::HashMap;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
@@ -14,7 +14,7 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
 /// Perform simple GVN on `func`.
 ///
 pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
-    let mut visible_values: HashMap<InstructionData, Inst> = HashMap::new();
+    let mut visible_values: HashMap<(InstructionData, Type), Inst> = HashMap::new();
 
     let domtree = DominatorTree::with_function(func, cfg);
 
@@ -26,6 +26,7 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
 
         while let Some(inst) = pos.next_inst() {
             let opcode = func.dfg[inst].opcode();
+            let ctrl_typevar = func.dfg.ctrl_typevar(inst);
 
             // Resolve aliases, particularly aliases we created earlier.
             func.dfg.resolve_aliases_in_arguments(inst);
@@ -42,7 +43,7 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
                 continue;
             }
 
-            let key = func.dfg[inst].clone();
+            let key = (func.dfg[inst].clone(), ctrl_typevar);
             let entry = visible_values.entry(key);
             use std::collections::hash_map::Entry::*;
             match entry {
