@@ -242,7 +242,7 @@ impl<Variable> SSABuilder<Variable>
                     UseVarCases::Unsealed(val)
                 }
             }
-            BlockData::EbbBody { predecessor: pred, .. } => UseVarCases::SealedOnePredecessor(pred),
+            BlockData::EbbBody { predecessor: pred } => UseVarCases::SealedOnePredecessor(pred),
         };
         // TODO: avoid recursion for the calls to use_var and predecessors_lookup.
         match case {
