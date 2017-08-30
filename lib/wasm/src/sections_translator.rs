@@ -139,7 +139,6 @@ pub fn parse_export_section(parser: &mut Parser)
                     &ExternalKind::Function => {
                         exports.insert(index as FunctionIndex,
                                        String::from(from_utf8(field).unwrap()));
-                        ()
                     }
                     _ => (),//TODO: deal with other kind of exports
                 }
