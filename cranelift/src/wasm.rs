@@ -196,6 +196,18 @@ fn handle_module(flag_verbose: bool,
                     }
                 }
             };
+            match context.simple_gvn() {
+                Ok(())=> (),
+                Err(error) => {
+                    match error {
+                        CtonError::Verifier(err) => {
+                            return Err(pretty_verifier_error(&context.func, None, err));
+                        }
+                        CtonError::ImplLimitExceeded |
+                        CtonError::CodeTooLarge => return Err(String::from(error.description())),
+                    }
+                }
+            };
             match verifier::verify_context(&context.func, &context.cfg, &context.domtree, None) {
                 Ok(()) => (),
                 Err(err) => return Err(pretty_verifier_error(&context.func, None, err)),
