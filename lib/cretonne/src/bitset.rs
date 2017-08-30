@@ -31,7 +31,7 @@ impl<T> BitSet<T>
     pub fn contains(&self, num: u8) -> bool {
         assert!((num as usize) < Self::bits());
         assert!((num as usize) < Self::max_bits());
-        return self.0.into() & (1 << num) != 0;
+        self.0.into() & (1 << num) != 0
     }
 
 /// Return the smallest number contained in the bitset or None if empty
