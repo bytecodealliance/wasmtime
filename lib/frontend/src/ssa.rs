@@ -397,7 +397,7 @@ impl<Variable> SSABuilder<Variable>
         };
         // For each undef var we look up values in the predecessors and create an Ebb argument
         // only if necessary.
-        for &(var, val) in &undef_vars {
+        for (var, val) in undef_vars {
             let (_, mut local_side_effects) =
                 self.predecessors_lookup(dfg, layout, jts, val, var, ebb, &predecessors);
             side_effects
