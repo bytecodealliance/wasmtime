@@ -252,26 +252,25 @@ impl<Variable> SSABuilder<Variable>
             UseVarCases::SealedOnePredecessor(pred) => {
                 let (val, mids) = self.use_var(dfg, layout, jts, var, ty, pred);
                 self.def_var(var, val, block);
-                return (val, mids);
+                (val, mids)
             }
             // The block has multiple predecessors, we register the ebb argument as the current
             // definition for the variable.
             UseVarCases::Unsealed(val) => {
                 self.def_var(var, val, block);
-                return (val,
-                        SideEffects {
-                            split_ebbs_created: Vec::new(),
-                            instructions_added_to_ebbs: Vec::new(),
-                        });
+                (val,
+                 SideEffects {
+                     split_ebbs_created: Vec::new(),
+                     instructions_added_to_ebbs: Vec::new(),
+                 })
             }
             UseVarCases::SealedMultiplePredecessors(preds, val, ebb) => {
                 // If multiple predecessor we look up a use_var in each of them:
                 // if they all yield the same value no need for an Ebb argument
                 self.def_var(var, val, block);
-                return self.predecessors_lookup(dfg, layout, jts, val, var, ebb, &preds);
+                self.predecessors_lookup(dfg, layout, jts, val, var, ebb, &preds)
             }
-        };
-
+        }
     }
 
     /// Declares a new basic block belonging to the body of a certain `Ebb` and having `pred`
