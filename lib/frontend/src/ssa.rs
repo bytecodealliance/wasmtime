@@ -72,7 +72,6 @@ impl<Variable> BlockData<Variable> {
             &mut BlockData::EbbBody { .. } => panic!("you can't add a predecessor to a body block"),
             &mut BlockData::EbbHeader(ref mut data) => {
                 data.predecessors.insert(pred, inst);
-                ()
             }
         }
     }
