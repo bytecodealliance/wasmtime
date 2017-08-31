@@ -156,7 +156,7 @@ impl FunctionImports {
 pub fn translate_function_body(
     parser: &mut Parser,
     function_index: FunctionIndex,
-    sig: Signature,
+    sig: &Signature,
     locals: &[(usize, Type)],
     exports: &Option<HashMap<FunctionIndex, String>>,
     signatures: &[Signature],

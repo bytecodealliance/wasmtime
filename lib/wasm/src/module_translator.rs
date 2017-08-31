@@ -260,7 +260,7 @@ pub fn translate_module(
         match translate_function_body(
             &mut parser,
             function_index,
-            signature,
+            &signature,
             &locals,
             &exports,
             &signatures,
@@ -271,7 +271,7 @@ pub fn translate_module(
             Ok((il_func, imports)) => {
                 il_functions.push(FunctionTranslation::Code {
                     il: il_func,
-                    imports: invert_hashmaps(imports),
+                    imports: invert_hashmaps(&imports),
                 })
             }
             Err(s) => return Err(s),
