@@ -11,8 +11,8 @@ use ir::condcodes::IntCC;
 /// Expand a `heap_addr` instruction according to the definition of the heap.
 pub fn expand_heap_addr(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut ControlFlowGraph) {
     // Unpack the instruction.
-    let (heap, offset, size) = match &func.dfg[inst] {
-        &ir::InstructionData::HeapAddr {
+    let (heap, offset, size) = match func.dfg[inst] {
+        ir::InstructionData::HeapAddr {
             opcode,
             heap,
             arg,
