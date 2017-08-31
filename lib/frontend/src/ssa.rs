@@ -334,6 +334,8 @@ where
     ///
     /// This method modifies the function's `Layout` by adding arguments to the `Ebb`s to
     /// take into account the Phi function placed by the SSA algorithm.
+    ///
+    /// Returns the list of newly created ebbs for critical edge splitting.
     pub fn seal_ebb_header_block(
         &mut self,
         ebb: Ebb,
@@ -343,42 +345,13 @@ where
     ) -> SideEffects {
         let block = self.header_block(ebb);
 
-        // Sanity check
-        match self.blocks[block] {
-            BlockData::EbbBody { .. } => panic!("you can't seal an Ebb body block"),
-            BlockData::EbbHeader(ref data) => {
-                assert!(!data.sealed);
-            }
-        }
-
-        // Recurse over the predecessors to find good definitions.
-        let side_effects = self.resolve_undef_vars(block, dfg, layout, jts);
-
-        // Then we mark the block as sealed.
-        match self.blocks[block] {
-            BlockData::EbbBody { .. } => panic!("this should not happen"),
-            BlockData::EbbHeader(ref mut data) => data.sealed = true,
-        };
-        side_effects
-    }
-
-    // For each undef_var in an Ebb header block, lookup in the predecessors to append the right
-    // jump argument to the branch instruction.
-    // Panics if called with a non-header block.
-    // Returns the list of newly created ebbs for critical edge splitting.
-    fn resolve_undef_vars(
-        &mut self,
-        block: Block,
-        dfg: &mut DataFlowGraph,
-        layout: &mut Layout,
-        jts: &mut JumpTables,
-    ) -> SideEffects {
         // TODO: find a way to not allocate vectors
         let (predecessors, undef_vars, ebb): (Vec<(Block, Inst)>,
                                               Vec<(Variable, Value)>,
                                               Ebb) = match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => {
+                assert!(!data.sealed);
                 (
                     data.predecessors.clone(),
                     data.undef_variables.clone(),
@@ -406,7 +379,9 @@ where
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => {
+                assert!(!data.sealed);
                 data.undef_variables.clear();
+                data.sealed = true;
             }
         };
         side_effects
