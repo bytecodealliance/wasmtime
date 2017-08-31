@@ -319,8 +319,9 @@ where
     /// Register a new definition of a user variable. Panics if the type of the value is not the
     /// same as the type registered for the variable.
     pub fn def_var(&mut self, var: Variable, val: Value) {
-        debug_assert!(
-            self.func.dfg.value_type(val) == self.builder.types[var],
+        debug_assert_eq!(
+            self.func.dfg.value_type(val),
+            self.builder.types[var],
             "the type of the value is not the type registered for the variable"
         );
         self.builder.ssa.def_var(
@@ -557,8 +558,9 @@ where
                 // The Ebb already has predecessors
                 // We check that the arguments supplied match those supplied
                 // previously.
-                debug_assert!(
-                    jump_args.len() == self.builder.ebbs[dest_ebb].user_arg_count,
+                debug_assert_eq!(
+                    jump_args.len(),
+                    self.builder.ebbs[dest_ebb].user_arg_count,
                     "the jump instruction doesn't have the same \
                       number of arguments as its destination Ebb \
                       ({} vs {}).",
