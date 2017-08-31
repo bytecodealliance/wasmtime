@@ -1312,7 +1312,7 @@ impl<'a> Parser<'a> {
         let mut data = JumpTableData::new();
 
         // jump-table-decl ::= JumpTable(jt) "=" "jump_table" * jt-entry {"," jt-entry}
-        for idx in 0usize.. {
+        for idx in 0_usize.. {
             if let Some(dest) = self.parse_jump_table_entry()? {
                 data.set_entry(idx, dest);
             }
