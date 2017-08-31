@@ -225,9 +225,23 @@ where
             if let Some(val) = var_defs.get(&block) {
                 return (*val, SideEffects::new());
             }
-        };
-        // At this point if we haven't returned it means that we have to search in the
-        // predecessors.
+        }
+
+        // Otherwise, we have to do a non-local lookup.
+        self.use_var_nonlocal(dfg, layout, jts, var, ty, block)
+    }
+
+    // The non-local case of use_var. Query each predecessor for a value and add branch
+    // arguments as needed to satisfy the use.
+    fn use_var_nonlocal(
+        &mut self,
+        dfg: &mut DataFlowGraph,
+        layout: &mut Layout,
+        jts: &mut JumpTables,
+        var: Variable,
+        ty: Type,
+        block: Block,
+    ) -> (Value, SideEffects) {
         let case = match self.blocks[block] {
             BlockData::EbbHeader(ref mut data) => {
                 // The block has multiple predecessors so we append an Ebb argument that
