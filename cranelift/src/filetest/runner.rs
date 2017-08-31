@@ -41,11 +41,13 @@ impl Display for QueueEntry {
         let p = self.path.to_string_lossy();
         match self.state {
             State::Done(Ok(dur)) => {
-                write!(f,
-                       "{}.{:03} {}",
-                       dur.as_secs(),
-                       dur.subsec_nanos() / 1000000,
-                       p)
+                write!(
+                    f,
+                    "{}.{:03} {}",
+                    dur.as_secs(),
+                    dur.subsec_nanos() / 1000000,
+                    p
+                )
             }
             State::Done(Err(ref e)) => write!(f, "FAIL {}: {}", p, e),
             _ => write!(f, "{}", p),
@@ -104,11 +106,10 @@ impl TestRunner {
     ///
     /// Any problems reading `file` as a test case file will be reported as a test failure.
     pub fn push_test<P: Into<PathBuf>>(&mut self, file: P) {
-        self.tests
-            .push(QueueEntry {
-                      path: file.into(),
-                      state: State::New,
-                  });
+        self.tests.push(QueueEntry {
+            path: file.into(),
+            state: State::New,
+        });
     }
 
     /// Begin running tests concurrently.
@@ -240,10 +241,12 @@ impl TestRunner {
             Reply::Tick => {
                 self.ticks_since_progress += 1;
                 if self.ticks_since_progress == TIMEOUT_SLOW {
-                    println!("STALLED for {} seconds with {}/{} tests finished",
-                             self.ticks_since_progress,
-                             self.reported_tests,
-                             self.tests.len());
+                    println!(
+                        "STALLED for {} seconds with {}/{} tests finished",
+                        self.ticks_since_progress,
+                        self.reported_tests,
+                        self.tests.len()
+                    );
                     for jobid in self.reported_tests..self.tests.len() {
                         if self.tests[jobid].state == State::Running {
                             println!("slow: {}", self.tests[jobid]);
@@ -251,8 +254,10 @@ impl TestRunner {
                     }
                 }
                 if self.ticks_since_progress >= TIMEOUT_PANIC {
-                    panic!("worker threads stalled for {} seconds.",
-                           self.ticks_since_progress);
+                    panic!(
+                        "worker threads stalled for {} seconds.",
+                        self.ticks_since_progress
+                    );
                 }
             }
         }
@@ -278,9 +283,9 @@ impl TestRunner {
         let mut times = self.tests
             .iter()
             .filter_map(|entry| match *entry {
-                            QueueEntry { state: State::Done(Ok(dur)), .. } => Some(dur),
-                            _ => None,
-                        })
+                QueueEntry { state: State::Done(Ok(dur)), .. } => Some(dur),
+                _ => None,
+            })
             .collect::<Vec<_>>();
 
         // Get me some real data, kid.
@@ -304,12 +309,11 @@ impl TestRunner {
             return;
         }
 
-        for t in self.tests
-                .iter()
-                .filter(|entry| match **entry {
-                            QueueEntry { state: State::Done(Ok(dur)), .. } => dur > cut,
-                            _ => false,
-                        }) {
+        for t in self.tests.iter().filter(|entry| match **entry {
+            QueueEntry { state: State::Done(Ok(dur)), .. } => dur > cut,
+            _ => false,
+        })
+        {
             println!("slow: {}", t)
         }
 

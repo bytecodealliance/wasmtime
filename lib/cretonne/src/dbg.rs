@@ -69,18 +69,17 @@ pub fn writeln_with_format_args(args: fmt::Arguments) -> io::Result<()> {
 /// Open the tracing file for the current thread.
 fn open_file() -> io::BufWriter<File> {
     let file = match thread::current().name() {
-            None => File::create("cretonne.dbg"),
-            Some(name) => {
-                let mut path = "cretonne.dbg.".to_owned();
-                for ch in name.chars() {
-                    if ch.is_ascii() && ch.is_alphanumeric() {
-                        path.push(ch);
-                    }
+        None => File::create("cretonne.dbg"),
+        Some(name) => {
+            let mut path = "cretonne.dbg.".to_owned();
+            for ch in name.chars() {
+                if ch.is_ascii() && ch.is_alphanumeric() {
+                    path.push(ch);
                 }
-                File::create(path)
             }
+            File::create(path)
         }
-        .expect("Can't open tracing file");
+    }.expect("Can't open tracing file");
     io::BufWriter::new(file)
 }
 
@@ -99,10 +98,13 @@ macro_rules! dbg {
 }
 
 /// Helper for printing lists.
-pub struct DisplayList<'a, T>(pub &'a [T]) where T: 'a + fmt::Display;
+pub struct DisplayList<'a, T>(pub &'a [T])
+where
+    T: 'a + fmt::Display;
 
 impl<'a, T> fmt::Display for DisplayList<'a, T>
-    where T: 'a + fmt::Display
+where
+    T: 'a + fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0.split_first() {

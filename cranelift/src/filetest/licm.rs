@@ -39,13 +39,14 @@ impl SubTest for TestLICM {
         comp_ctx.func = func.into_owned();
 
         comp_ctx.flowgraph();
-        comp_ctx
-            .licm()
-            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
+        comp_ctx.licm().map_err(|e| {
+            pretty_error(&comp_ctx.func, context.isa, e)
+        })?;
 
         let mut text = String::new();
-        write!(&mut text, "{}", &comp_ctx.func)
-            .map_err(|e| e.to_string())?;
+        write!(&mut text, "{}", &comp_ctx.func).map_err(
+            |e| e.to_string(),
+        )?;
         run_filecheck(&text, context)
     }
 }

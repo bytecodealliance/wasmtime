@@ -81,11 +81,12 @@ impl VirtRegs {
     /// If `value` belongs to a virtual register, the congruence class is the values of the virtual
     /// register. Otherwise it is just the value itself.
     pub fn congruence_class<'a, 'b>(&'a self, value: &'b Value) -> &'b [Value]
-        where 'a: 'b
+    where
+        'a: 'b,
     {
-        self.get(*value)
-            .map(|vr| self.values(vr))
-            .unwrap_or(ref_slice(value))
+        self.get(*value).map(|vr| self.values(vr)).unwrap_or(
+            ref_slice(value),
+        )
     }
 
     /// Check if `a` and `b` belong to the same congruence class.
@@ -126,9 +127,11 @@ impl VirtRegs {
             .min()
             .unwrap_or_else(|| self.vregs.push(Default::default()));
 
-        assert_eq!(values.len(),
-                   singletons + cleared,
-                   "Can't unify partial virtual registers");
+        assert_eq!(
+            values.len(),
+            singletons + cleared,
+            "Can't unify partial virtual registers"
+        );
 
         self.vregs[vreg].extend(values.iter().cloned(), &mut self.pool);
         for &v in values {

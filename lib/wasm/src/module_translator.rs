@@ -34,7 +34,7 @@ pub enum FunctionTranslation {
     Import(),
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 /// Mappings describing the relations between imports of the Cretonne IL functions and the
 /// functions in the WebAssembly module.
 pub struct ImportMappings {
@@ -58,9 +58,10 @@ impl ImportMappings {
 /// [`Function`](../cretonne/ir/function/struct.Function.html).
 /// Returns the functions and also the mappings for imported functions and signature between the
 /// indexes in the wasm module and the indexes inside each functions.
-pub fn translate_module(data: &[u8],
-                        runtime: &mut WasmRuntime)
-                        -> Result<TranslationResult, String> {
+pub fn translate_module(
+    data: &[u8],
+    runtime: &mut WasmRuntime,
+) -> Result<TranslationResult, String> {
     let mut parser = Parser::new(data);
     match *parser.read() {
         ParserState::BeginWasm { .. } => {}
@@ -207,9 +208,9 @@ pub fn translate_module(data: &[u8],
             }
             ParserState::EndWasm => {
                 return Ok(TranslationResult {
-                              functions: Vec::new(),
-                              start_index: None,
-                          })
+                    functions: Vec::new(),
+                    start_index: None,
+                })
             }
             ParserState::BeginSection { code: SectionCode::Data, .. } => {
                 match parse_data_section(&mut parser, runtime, &globals) {
@@ -242,32 +243,36 @@ pub fn translate_module(data: &[u8],
                 locals
                     .iter()
                     .map(|&(index, ref ty)| {
-                             (index as usize,
-                              match type_to_type(ty) {
-                                  Ok(ty) => ty,
-                                  Err(()) => panic!("unsupported type for local variable"),
-                              })
-                         })
+                        (
+                            index as usize,
+                            match type_to_type(ty) {
+                                Ok(ty) => ty,
+                                Err(()) => panic!("unsupported type for local variable"),
+                            },
+                        )
+                    })
                     .collect()
             }
             ParserState::EndSection => break,
             _ => return Err(String::from(format!("wrong content in code section"))),
         };
         let signature = signatures[functions[function_index as usize] as usize].clone();
-        match translate_function_body(&mut parser,
-                                      function_index,
-                                      signature,
-                                      &locals,
-                                      &exports,
-                                      &signatures,
-                                      &functions,
-                                      &mut il_builder,
-                                      runtime) {
+        match translate_function_body(
+            &mut parser,
+            function_index,
+            signature,
+            &locals,
+            &exports,
+            &signatures,
+            &functions,
+            &mut il_builder,
+            runtime,
+        ) {
             Ok((il_func, imports)) => {
                 il_functions.push(FunctionTranslation::Code {
-                                      il: il_func,
-                                      imports: invert_hashmaps(imports),
-                                  })
+                    il: il_func,
+                    imports: invert_hashmaps(imports),
+                })
             }
             Err(s) => return Err(s),
         }
@@ -285,9 +290,9 @@ pub fn translate_module(data: &[u8],
             }
             ParserState::EndWasm => {
                 return Ok(TranslationResult {
-                              functions: il_functions,
-                              start_index,
-                          })
+                    functions: il_functions,
+                    start_index,
+                })
             }
             _ => (),
         }

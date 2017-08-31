@@ -14,8 +14,9 @@ use std::ops::{Index, IndexMut};
 /// all keys have a default entry from the beginning.
 #[derive(Debug, Clone)]
 pub struct EntityMap<K, V>
-    where K: EntityRef,
-          V: Clone
+where
+    K: EntityRef,
+    V: Clone,
 {
     elems: Vec<V>,
     default: V,
@@ -24,12 +25,14 @@ pub struct EntityMap<K, V>
 
 /// Shared `EntityMap` implementation for all value types.
 impl<K, V> EntityMap<K, V>
-    where K: EntityRef,
-          V: Clone
+where
+    K: EntityRef,
+    V: Clone,
 {
     /// Create a new empty map.
     pub fn new() -> Self
-        where V: Default
+    where
+        V: Default,
     {
         EntityMap {
             elems: Vec::new(),
@@ -68,8 +71,9 @@ impl<K, V> EntityMap<K, V>
 ///
 /// All keys are permitted. Untouched entries have the default value.
 impl<K, V> Index<K> for EntityMap<K, V>
-    where K: EntityRef,
-          V: Clone
+where
+    K: EntityRef,
+    V: Clone,
 {
     type Output = V;
 
@@ -82,8 +86,9 @@ impl<K, V> Index<K> for EntityMap<K, V>
 ///
 /// The map grows as needed to accommodate new keys.
 impl<K, V> IndexMut<K> for EntityMap<K, V>
-    where K: EntityRef,
-          V: Clone
+where
+    K: EntityRef,
+    V: Clone,
 {
     fn index_mut(&mut self, k: K) -> &mut V {
         let i = k.index();

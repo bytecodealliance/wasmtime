@@ -10,10 +10,12 @@ use loop_analysis::{Loop, LoopAnalysis};
 /// Performs the LICM pass by detecting loops within the CFG and moving
 /// loop-invariant instructions out of them.
 /// Changes the CFG and domtree in-place during the operation.
-pub fn do_licm(func: &mut Function,
-               cfg: &mut ControlFlowGraph,
-               domtree: &mut DominatorTree,
-               loop_analysis: &mut LoopAnalysis) {
+pub fn do_licm(
+    func: &mut Function,
+    cfg: &mut ControlFlowGraph,
+    domtree: &mut DominatorTree,
+    loop_analysis: &mut LoopAnalysis,
+) {
     loop_analysis.compute(func, cfg, domtree);
     for lp in loop_analysis.loops() {
         // For each loop that we want to optimize we determine the set of loop-invariant
@@ -53,11 +55,12 @@ pub fn do_licm(func: &mut Function,
 
 // Insert a pre-header before the header, modifying the function layout and CFG to reflect it.
 // A jump instruction to the header is placed at the end of the pre-header.
-fn create_pre_header(header: Ebb,
-                     func: &mut Function,
-                     cfg: &mut ControlFlowGraph,
-                     domtree: &DominatorTree)
-                     -> Ebb {
+fn create_pre_header(
+    header: Ebb,
+    func: &mut Function,
+    cfg: &mut ControlFlowGraph,
+    domtree: &DominatorTree,
+) -> Ebb {
     let pool = &mut ListPool::<Value>::new();
     let header_args_values: Vec<Value> = func.dfg.ebb_args(header).into_iter().cloned().collect();
     let header_args_types: Vec<Type> = header_args_values
@@ -82,9 +85,10 @@ fn create_pre_header(header: Ebb,
         // Inserts the pre-header at the right place in the layout.
         pos.insert_ebb(pre_header);
         pos.next_inst();
-        func.dfg
-            .ins(&mut pos)
-            .jump(header, pre_header_args_value.as_slice(pool));
+        func.dfg.ins(&mut pos).jump(
+            header,
+            pre_header_args_value.as_slice(pool),
+        );
     }
     pre_header
 }
@@ -94,11 +98,12 @@ fn create_pre_header(header: Ebb,
 // A loop header has a pre-header if there is only one predecessor that the header doesn't
 // dominate.
 // Returns the pre-header Ebb and the instruction jumping to  the header.
-fn has_pre_header(layout: &Layout,
-                  cfg: &ControlFlowGraph,
-                  domtree: &DominatorTree,
-                  header: Ebb)
-                  -> Option<(Ebb, Inst)> {
+fn has_pre_header(
+    layout: &Layout,
+    cfg: &ControlFlowGraph,
+    domtree: &DominatorTree,
+    header: Ebb,
+) -> Option<(Ebb, Inst)> {
     let mut result = None;
     let mut found = false;
     for &(pred_ebb, last_inst) in cfg.get_predecessors(header) {
@@ -129,11 +134,12 @@ fn change_branch_jump_destination(inst: Inst, new_ebb: Ebb, func: &mut Function)
 // Traverses a loop in reverse post-order from a header EBB and identify loop-invariant
 // instructions. These loop-invariant instructions are then removed from the code and returned
 // (in reverse post-order) for later use.
-fn remove_loop_invariant_instructions(lp: Loop,
-                                      func: &mut Function,
-                                      cfg: &ControlFlowGraph,
-                                      loop_analysis: &LoopAnalysis)
-                                      -> Vec<Inst> {
+fn remove_loop_invariant_instructions(
+    lp: Loop,
+    func: &mut Function,
+    cfg: &ControlFlowGraph,
+    loop_analysis: &LoopAnalysis,
+) -> Vec<Inst> {
     let mut loop_values: HashSet<Value> = HashSet::new();
     let mut invariant_inst: Vec<Inst> = Vec::new();
     let mut pos = Cursor::new(&mut func.layout);
@@ -146,10 +152,10 @@ fn remove_loop_invariant_instructions(lp: Loop,
         pos.goto_top(*ebb);
         while let Some(inst) = pos.next_inst() {
             if func.dfg.has_results(inst) &&
-               func.dfg
-                   .inst_args(inst)
-                   .into_iter()
-                   .all(|arg| !loop_values.contains(arg)) {
+                func.dfg.inst_args(inst).into_iter().all(|arg| {
+                    !loop_values.contains(arg)
+                })
+            {
                 // If all the instruction's argument are defined outside the loop
                 // then this instruction is loop-invariant
                 invariant_inst.push(inst);

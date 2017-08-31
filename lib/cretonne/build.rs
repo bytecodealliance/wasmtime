@@ -49,8 +49,10 @@ fn main() {
     // Make sure we rebuild is this build script changes.
     // I guess that won't happen if you have non-UTF8 bytes in your path names.
     // The `build.py` script prints out its own dependencies.
-    println!("cargo:rerun-if-changed={}",
-             crate_dir.join("build.rs").to_string_lossy());
+    println!(
+        "cargo:rerun-if-changed={}",
+        crate_dir.join("build.rs").to_string_lossy()
+    );
 
     // Scripts are in `$crate_dir/meta`.
     let meta_dir = crate_dir.join("meta");
@@ -130,9 +132,11 @@ fn isa_targets(cretonne_targets: Option<&str>, target_triple: &str) -> Result<Ve
             Isa::from_arch(target_triple.split('-').next().unwrap())
                 .map(|isa| vec![isa])
                 .ok_or_else(|| {
-                                format!("no supported isa found for target triple `{}`",
-                                        target_triple)
-                            })
+                    format!(
+                        "no supported isa found for target triple `{}`",
+                        target_triple
+                    )
+                })
         }
         Some(targets) => {
             let unknown_isa_targets = targets
@@ -143,7 +147,10 @@ fn isa_targets(cretonne_targets: Option<&str>, target_triple: &str) -> Result<Ve
             match (unknown_isa_targets.is_empty(), isa_targets.is_empty()) {
                 (true, true) => Ok(Isa::all().to_vec()),
                 (true, _) => Ok(isa_targets),
-                (_, _) => Err(format!("unknown isa targets: `{}`", unknown_isa_targets.join(", "))),
+                (_, _) => Err(format!(
+                    "unknown isa targets: `{}`",
+                    unknown_isa_targets.join(", ")
+                )),
             }
         }
         None => Ok(Isa::all().to_vec()),

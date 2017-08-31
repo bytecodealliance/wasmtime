@@ -21,19 +21,20 @@ impl DummyRuntime {
 }
 
 impl WasmRuntime for DummyRuntime {
-    fn translate_get_global(&self,
-                            builder: &mut FunctionBuilder<Local>,
-                            global_index: GlobalIndex)
-                            -> Value {
+    fn translate_get_global(
+        &self,
+        builder: &mut FunctionBuilder<Local>,
+        global_index: GlobalIndex,
+    ) -> Value {
         let ref glob = self.globals.get(global_index as usize).unwrap();
         match glob.ty {
             I32 => builder.ins().iconst(glob.ty, -1),
             I64 => builder.ins().iconst(glob.ty, -1),
             F32 => builder.ins().f32const(Ieee32::with_bits(0xbf800000)), // -1.0
             F64 => {
-                builder
-                    .ins()
-                    .f64const(Ieee64::with_bits(0xbff0000000000000))
+                builder.ins().f64const(
+                    Ieee64::with_bits(0xbff0000000000000),
+                )
             } // -1.0
             _ => panic!("should not happen"),
         }
@@ -48,19 +49,21 @@ impl WasmRuntime for DummyRuntime {
     fn translate_current_memory(&mut self, builder: &mut FunctionBuilder<Local>) -> Value {
         builder.ins().iconst(I32, -1)
     }
-    fn translate_call_indirect<'a>(&self,
-                                   builder: &'a mut FunctionBuilder<Local>,
-                                   sig_ref: SigRef,
-                                   index_val: Value,
-                                   call_args: &[Value])
-                                   -> &'a [Value] {
+    fn translate_call_indirect<'a>(
+        &self,
+        builder: &'a mut FunctionBuilder<Local>,
+        sig_ref: SigRef,
+        index_val: Value,
+        call_args: &[Value],
+    ) -> &'a [Value] {
         let call_inst = builder.ins().call_indirect(sig_ref, index_val, call_args);
         builder.inst_results(call_inst)
     }
-    fn translate_memory_base_address(&self,
-                                     builder: &mut FunctionBuilder<Local>,
-                                     _: MemoryIndex)
-                                     -> Value {
+    fn translate_memory_base_address(
+        &self,
+        builder: &mut FunctionBuilder<Local>,
+        _: MemoryIndex,
+    ) -> Value {
         builder.ins().iconst(I64, 0)
     }
     fn declare_global(&mut self, global: Global) {
@@ -75,11 +78,12 @@ impl WasmRuntime for DummyRuntime {
     fn declare_memory(&mut self, _: Memory) {
         //We do nothing
     }
-    fn declare_data_initialization(&mut self,
-                                   _: MemoryIndex,
-                                   _: usize,
-                                   _: &[u8])
-                                   -> Result<(), String> {
+    fn declare_data_initialization(
+        &mut self,
+        _: MemoryIndex,
+        _: usize,
+        _: &[u8],
+    ) -> Result<(), String> {
         // We do nothing
         Ok(())
     }

@@ -15,7 +15,7 @@
 # With the --install option, also tries to install the right version.
 
 # This version should always be bumped to the newest version available.
-VERS="0.8.4"
+VERS="0.9.0"
 
 if cargo install --list | grep -q "^rustfmt v$VERS"; then
     exit 0

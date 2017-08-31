@@ -132,14 +132,15 @@ impl DomForest {
     ///
     /// If the merge succeeds, returns `Ok(())`. The merged sequence can be extracted with
     /// `swap()`.
-    pub fn try_merge(&mut self,
-                     va: &[Value],
-                     vb: &[Value],
-                     dfg: &DataFlowGraph,
-                     layout: &Layout,
-                     domtree: &DominatorTree,
-                     liveness: &Liveness)
-                     -> Result<(), (Value, Value)> {
+    pub fn try_merge(
+        &mut self,
+        va: &[Value],
+        vb: &[Value],
+        dfg: &DataFlowGraph,
+        layout: &Layout,
+        domtree: &DominatorTree,
+        liveness: &Liveness,
+    ) -> Result<(), (Value, Value)> {
         self.stack.clear();
         self.values.clear();
         self.values.reserve(va.len() + vb.len());
@@ -154,16 +155,16 @@ impl DomForest {
         for node in merged {
             if let Some(parent) = self.push_node(node, layout, domtree) {
                 // Check if `parent` live range contains `node.def`.
-                let lr = liveness
-                    .get(parent)
-                    .expect("No live range for parent value");
+                let lr = liveness.get(parent).expect(
+                    "No live range for parent value",
+                );
                 if lr.overlaps_def(node.def, layout.pp_ebb(node.def), layout) {
                     // Interference detected. Get the `(a, b)` order right in the error.
                     return Err(if node.set == 0 {
-                                   (node.value, parent)
-                               } else {
-                                   (parent, node.value)
-                               });
+                        (node.value, parent)
+                    } else {
+                        (parent, node.value)
+                    });
                 }
             }
         }
@@ -177,8 +178,9 @@ impl DomForest {
 /// Given two ordered sequences of nodes, yield an ordered sequence containing all of them.
 /// Duplicates are removed.
 struct MergedNodes<'a, IA, IB>
-    where IA: Iterator<Item = Node>,
-          IB: Iterator<Item = Node>
+where
+    IA: Iterator<Item = Node>,
+    IB: Iterator<Item = Node>,
 {
     a: Peekable<IA>,
     b: Peekable<IB>,
@@ -187,8 +189,9 @@ struct MergedNodes<'a, IA, IB>
 }
 
 impl<'a, IA, IB> Iterator for MergedNodes<'a, IA, IB>
-    where IA: Iterator<Item = Node>,
-          IB: Iterator<Item = Node>
+where
+    IA: Iterator<Item = Node>,
+    IB: Iterator<Item = Node>,
 {
     type Item = Node;
 
@@ -198,9 +201,12 @@ impl<'a, IA, IB> Iterator for MergedNodes<'a, IA, IB>
                 // If the two values are defined at the same point, compare value numbers instead
                 // this is going to cause an interference conflict unless its actually the same
                 // value appearing in both streams.
-                self.domtree
-                    .rpo_cmp(a.def, b.def, self.layout)
-                    .then(Ord::cmp(&a.value, &b.value))
+                self.domtree.rpo_cmp(a.def, b.def, self.layout).then(
+                    Ord::cmp(
+                        &a.value,
+                        &b.value,
+                    ),
+                )
             }
             (Some(_), None) => Ordering::Less,
             (None, Some(_)) => Ordering::Greater,
@@ -256,13 +262,15 @@ impl Coalescing {
     }
 
     /// Convert `func` to conventional SSA form and build virtual registers in the process.
-    pub fn conventional_ssa(&mut self,
-                            isa: &TargetIsa,
-                            func: &mut Function,
-                            cfg: &ControlFlowGraph,
-                            domtree: &DominatorTree,
-                            liveness: &mut Liveness,
-                            virtregs: &mut VirtRegs) {
+    pub fn conventional_ssa(
+        &mut self,
+        isa: &TargetIsa,
+        func: &mut Function,
+        cfg: &ControlFlowGraph,
+        domtree: &DominatorTree,
+        liveness: &mut Liveness,
+        virtregs: &mut VirtRegs,
+    ) {
         dbg!("Coalescing for:\n{}", func.display(isa));
         let mut context = Context {
             isa,
@@ -329,9 +337,11 @@ impl<'a> Context<'a> {
             //
             // Try to catch infinite splitting loops. The values created by splitting should never
             // have irreconcilable interferences.
-            assert!(!self.split_values.contains(&bad_value),
-                    "{} was already isolated",
-                    bad_value);
+            assert!(
+                !self.split_values.contains(&bad_value),
+                "{} was already isolated",
+                bad_value
+            );
             let split_len = self.split_values.len();
 
             // The bad value can be both the successor value and a predecessor value at the same
@@ -349,18 +359,22 @@ impl<'a> Context<'a> {
             }
 
             // Second loop check.
-            assert_ne!(split_len,
-                       self.split_values.len(),
-                       "Couldn't isolate {}",
-                       bad_value);
+            assert_ne!(
+                split_len,
+                self.split_values.len(),
+                "Couldn't isolate {}",
+                bad_value
+            );
         }
 
         let vreg = self.virtregs.unify(self.values);
-        dbg!("Coalesced {} arg {} into {} = {}",
-             ebb,
-             argnum,
-             vreg,
-             DisplayList(self.virtregs.values(vreg)));
+        dbg!(
+            "Coalesced {} arg {} into {} = {}",
+            ebb,
+            argnum,
+            vreg,
+            DisplayList(self.virtregs.values(vreg))
+        );
     }
 
     /// Reset `self.values` to just the set of split values.
@@ -369,21 +383,21 @@ impl<'a> Context<'a> {
         self.values.extend_from_slice(self.split_values);
         let domtree = &self.domtree;
         let func = &self.func;
-        self.values
-            .sort_by(|&a, &b| {
-                         domtree.rpo_cmp(func.dfg.value_def(a), func.dfg.value_def(b), &func.layout)
-                     });
+        self.values.sort_by(|&a, &b| {
+            domtree.rpo_cmp(func.dfg.value_def(a), func.dfg.value_def(b), &func.layout)
+        });
     }
 
     /// Try coalescing predecessors with `succ_val`.
     ///
     /// Returns a value from a congruence class that needs to be split before starting over, or
     /// `None` if everything was successfully coalesced into `self.values`.
-    fn try_coalesce(&mut self,
-                    argnum: usize,
-                    succ_val: Value,
-                    preds: &[BasicBlock])
-                    -> Option<Value> {
+    fn try_coalesce(
+        &mut self,
+        argnum: usize,
+        succ_val: Value,
+        preds: &[BasicBlock],
+    ) -> Option<Value> {
         // Initialize the value list with the split values. These are guaranteed to be
         // interference free, and anything that interferes with them must be split away.
         self.reset_values();
@@ -397,19 +411,22 @@ impl<'a> Context<'a> {
 
         for &(pred_ebb, pred_inst) in preds {
             let pred_val = self.func.dfg.inst_variable_args(pred_inst)[argnum];
-            dbg!("Checking {}: {}: {}",
-                 pred_val,
-                 pred_ebb,
-                 self.func.dfg.display_inst(pred_inst, self.isa));
+            dbg!(
+                "Checking {}: {}: {}",
+                pred_val,
+                pred_ebb,
+                self.func.dfg.display_inst(pred_inst, self.isa)
+            );
 
             // Never coalesce incoming function arguments on the stack. These arguments are
             // pre-spilled, and the rest of the virtual register would be forced to spill to the
             // `incoming_arg` stack slot too.
             if let ValueDef::Arg(def_ebb, def_num) = self.func.dfg.value_def(pred_val) {
                 if Some(def_ebb) == self.func.layout.entry_block() &&
-                   self.func.signature.argument_types[def_num]
-                       .location
-                       .is_stack() {
+                    self.func.signature.argument_types[def_num]
+                        .location
+                        .is_stack()
+                {
                     dbg!("Isolating incoming stack parameter {}", pred_val);
                     let new_val = self.split_pred(pred_inst, pred_ebb, argnum, pred_val);
                     assert!(self.add_class(new_val).is_ok());
@@ -424,9 +441,10 @@ impl<'a> Context<'a> {
                 //
                 // Check if the `a` live range is fundamentally incompatible with `pred_inst`.
                 if self.liveness
-                       .get(a)
-                       .expect("No live range for interfering value")
-                       .reaches_use(pred_inst, pred_ebb, &self.func.layout) {
+                    .get(a)
+                    .expect("No live range for interfering value")
+                    .reaches_use(pred_inst, pred_ebb, &self.func.layout)
+                {
                     // Splitting at `pred_inst` wouldn't resolve the interference, so we need to
                     // start over.
                     return Some(a);
@@ -435,8 +453,10 @@ impl<'a> Context<'a> {
                 // The local conflict could be avoided by splitting at this predecessor, so try
                 // that. This split is not necessarily required, but it allows us to make progress.
                 let new_val = self.split_pred(pred_inst, pred_ebb, argnum, pred_val);
-                assert!(self.add_class(new_val).is_ok(),
-                        "Splitting didn't resolve conflict.");
+                assert!(
+                    self.add_class(new_val).is_ok(),
+                    "Splitting didn't resolve conflict."
+                );
             }
         }
 
@@ -447,42 +467,52 @@ impl<'a> Context<'a> {
     ///
     /// Leave `self.values` unchanged on failure.
     fn add_class(&mut self, value: Value) -> Result<(), (Value, Value)> {
-        self.forest
-            .try_merge(&self.values,
-                       self.virtregs.congruence_class(&value),
-                       &self.func.dfg,
-                       &self.func.layout,
-                       self.domtree,
-                       self.liveness)?;
+        self.forest.try_merge(
+            &self.values,
+            self.virtregs.congruence_class(&value),
+            &self.func.dfg,
+            &self.func.layout,
+            self.domtree,
+            self.liveness,
+        )?;
         self.forest.swap(&mut self.values);
         Ok(())
     }
 
     /// Split the congruence class for the `argnum` argument to `pred_inst` by inserting a copy.
-    fn split_pred(&mut self,
-                  pred_inst: Inst,
-                  pred_ebb: Ebb,
-                  argnum: usize,
-                  pred_val: Value)
-                  -> Value {
+    fn split_pred(
+        &mut self,
+        pred_inst: Inst,
+        pred_ebb: Ebb,
+        argnum: usize,
+        pred_val: Value,
+    ) -> Value {
         let mut pos = EncCursor::new(self.func, self.isa).at_inst(pred_inst);
         let copy = pos.ins().copy(pred_val);
         let inst = pos.built_inst();
 
-        dbg!("Inserted {}, before {}: {}",
-             pos.display_inst(inst),
-             pred_ebb,
-             pos.display_inst(pred_inst));
+        dbg!(
+            "Inserted {}, before {}: {}",
+            pos.display_inst(inst),
+            pred_ebb,
+            pos.display_inst(pred_inst)
+        );
 
         // Create a live range for the new value.
-        let affinity = Affinity::new(&self.encinfo
-                                          .operand_constraints(pos.func.encodings[inst])
-                                          .expect("Bad copy encoding")
-                                          .outs
-                                          [0]);
+        let affinity = Affinity::new(
+            &self.encinfo
+                .operand_constraints(pos.func.encodings[inst])
+                .expect("Bad copy encoding")
+                .outs
+                [0],
+        );
         self.liveness.create_dead(copy, inst, affinity);
-        self.liveness
-            .extend_locally(copy, pred_ebb, pred_inst, &pos.func.layout);
+        self.liveness.extend_locally(
+            copy,
+            pred_ebb,
+            pred_inst,
+            &pos.func.layout,
+        );
 
         pos.func.dfg.inst_variable_args_mut(pred_inst)[argnum] = copy;
         self.split_values.push(copy);
@@ -500,21 +530,29 @@ impl<'a> Context<'a> {
         let inst = pos.built_inst();
         self.liveness.move_def_locally(succ_val, inst);
 
-        dbg!("Inserted {}, following {}({}: {})",
-             pos.display_inst(inst),
-             ebb,
-             new_val,
-             ty);
+        dbg!(
+            "Inserted {}, following {}({}: {})",
+            pos.display_inst(inst),
+            ebb,
+            new_val,
+            ty
+        );
 
         // Create a live range for the new value.
-        let affinity = Affinity::new(&self.encinfo
-                                          .operand_constraints(pos.func.encodings[inst])
-                                          .expect("Bad copy encoding")
-                                          .outs
-                                          [0]);
+        let affinity = Affinity::new(
+            &self.encinfo
+                .operand_constraints(pos.func.encodings[inst])
+                .expect("Bad copy encoding")
+                .outs
+                [0],
+        );
         self.liveness.create_dead(new_val, ebb, affinity);
-        self.liveness
-            .extend_locally(new_val, ebb, inst, &pos.func.layout);
+        self.liveness.extend_locally(
+            new_val,
+            ebb,
+            inst,
+            &pos.func.layout,
+        );
 
         self.split_values.push(new_val);
         new_val

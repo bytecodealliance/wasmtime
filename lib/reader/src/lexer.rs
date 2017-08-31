@@ -57,9 +57,9 @@ pub struct LocatedToken<'a> {
 /// Wrap up a `Token` with the given location.
 fn token<'a>(token: Token<'a>, loc: Location) -> Result<LocatedToken<'a>, LocatedError> {
     Ok(LocatedToken {
-           token,
-           location: loc,
-       })
+        token,
+        location: loc,
+    })
 }
 
 /// An error from the lexical analysis.
@@ -78,9 +78,9 @@ pub struct LocatedError {
 /// Wrap up an `Error` with the given location.
 fn error<'a>(error: Error, loc: Location) -> Result<LocatedToken<'a>, LocatedError> {
     Err(LocatedError {
-            error,
-            location: loc,
-        })
+        error,
+        location: loc,
+    })
 }
 
 /// Get the number of decimal digits at the end of `s`.
@@ -180,10 +180,11 @@ impl<'a> Lexer<'a> {
     }
 
     // Scan a multi-char token.
-    fn scan_chars(&mut self,
-                  count: usize,
-                  tok: Token<'a>)
-                  -> Result<LocatedToken<'a>, LocatedError> {
+    fn scan_chars(
+        &mut self,
+        count: usize,
+        tok: Token<'a>,
+    ) -> Result<LocatedToken<'a>, LocatedError> {
         let loc = self.loc();
         for _ in 0..count {
             assert_ne!(self.lookahead, None);
@@ -294,13 +295,16 @@ impl<'a> Lexer<'a> {
         let text = &self.source[begin..self.pos];
 
         // Look for numbered well-known entities like ebb15, v45, ...
-        token(split_entity_name(text)
-                  .and_then(|(prefix, number)| {
-                                Self::numbered_entity(prefix, number)
-                                    .or_else(|| Self::value_type(text, prefix, number))
-                            })
-                  .unwrap_or(Token::Identifier(text)),
-              loc)
+        token(
+            split_entity_name(text)
+                .and_then(|(prefix, number)| {
+                    Self::numbered_entity(prefix, number).or_else(|| {
+                        Self::value_type(text, prefix, number)
+                    })
+                })
+                .unwrap_or(Token::Identifier(text)),
+            loc,
+        )
     }
 
     // If prefix is a well-known entity prefix and suffix is a valid entity number, return the
@@ -391,40 +395,40 @@ impl<'a> Lexer<'a> {
         loop {
             let loc = self.loc();
             return match self.lookahead {
-                       None => None,
-                       Some(';') => Some(self.scan_comment()),
-                       Some('(') => Some(self.scan_char(Token::LPar)),
-                       Some(')') => Some(self.scan_char(Token::RPar)),
-                       Some('{') => Some(self.scan_char(Token::LBrace)),
-                       Some('}') => Some(self.scan_char(Token::RBrace)),
-                       Some('[') => Some(self.scan_char(Token::LBracket)),
-                       Some(']') => Some(self.scan_char(Token::RBracket)),
-                       Some(',') => Some(self.scan_char(Token::Comma)),
-                       Some('.') => Some(self.scan_char(Token::Dot)),
-                       Some(':') => Some(self.scan_char(Token::Colon)),
-                       Some('=') => Some(self.scan_char(Token::Equal)),
-                       Some('+') => Some(self.scan_number()),
-                       Some('-') => {
-                           if self.looking_at("->") {
-                               Some(self.scan_chars(2, Token::Arrow))
-                           } else {
-                               Some(self.scan_number())
-                           }
-                       }
-                       Some(ch) if ch.is_digit(10) => Some(self.scan_number()),
-                       Some(ch) if ch.is_alphabetic() => Some(self.scan_word()),
-                       Some('%') => Some(self.scan_name()),
-                       Some('#') => Some(self.scan_hex_sequence()),
-                       Some(ch) if ch.is_whitespace() => {
-                           self.next_ch();
-                           continue;
-                       }
-                       _ => {
-                           // Skip invalid char, return error.
-                           self.next_ch();
-                           Some(error(Error::InvalidChar, loc))
-                       }
-                   };
+                None => None,
+                Some(';') => Some(self.scan_comment()),
+                Some('(') => Some(self.scan_char(Token::LPar)),
+                Some(')') => Some(self.scan_char(Token::RPar)),
+                Some('{') => Some(self.scan_char(Token::LBrace)),
+                Some('}') => Some(self.scan_char(Token::RBrace)),
+                Some('[') => Some(self.scan_char(Token::LBracket)),
+                Some(']') => Some(self.scan_char(Token::RBracket)),
+                Some(',') => Some(self.scan_char(Token::Comma)),
+                Some('.') => Some(self.scan_char(Token::Dot)),
+                Some(':') => Some(self.scan_char(Token::Colon)),
+                Some('=') => Some(self.scan_char(Token::Equal)),
+                Some('+') => Some(self.scan_number()),
+                Some('-') => {
+                    if self.looking_at("->") {
+                        Some(self.scan_chars(2, Token::Arrow))
+                    } else {
+                        Some(self.scan_number())
+                    }
+                }
+                Some(ch) if ch.is_digit(10) => Some(self.scan_number()),
+                Some(ch) if ch.is_alphabetic() => Some(self.scan_word()),
+                Some('%') => Some(self.scan_name()),
+                Some('#') => Some(self.scan_hex_sequence()),
+                Some(ch) if ch.is_whitespace() => {
+                    self.next_ch();
+                    continue;
+                }
+                _ => {
+                    // Skip invalid char, return error.
+                    self.next_ch();
+                    Some(error(Error::InvalidChar, loc))
+                }
+            };
         }
     }
 }
@@ -530,14 +534,20 @@ mod tests {
 
     #[test]
     fn lex_identifiers() {
-        let mut lex = Lexer::new("v0 v00 vx01 ebb1234567890 ebb5234567890 v1x vx1 vxvx4 \
-                                  function0 function b1 i32x4 f32x5");
-        assert_eq!(lex.next(),
-                   token(Token::Value(Value::with_number(0).unwrap()), 1));
+        let mut lex = Lexer::new(
+            "v0 v00 vx01 ebb1234567890 ebb5234567890 v1x vx1 vxvx4 \
+                                  function0 function b1 i32x4 f32x5",
+        );
+        assert_eq!(
+            lex.next(),
+            token(Token::Value(Value::with_number(0).unwrap()), 1)
+        );
         assert_eq!(lex.next(), token(Token::Identifier("v00"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("vx01"), 1));
-        assert_eq!(lex.next(),
-                   token(Token::Ebb(Ebb::with_number(1234567890).unwrap()), 1));
+        assert_eq!(
+            lex.next(),
+            token(Token::Ebb(Ebb::with_number(1234567890).unwrap()), 1)
+        );
         assert_eq!(lex.next(), token(Token::Identifier("ebb5234567890"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("v1x"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("vx1"), 1));

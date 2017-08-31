@@ -65,9 +65,11 @@ impl SubTest for TestVerifier {
                         if want_loc == got.location {
                             Ok(())
                         } else {
-                            Err(format!("correct error reported on {}, but wanted {}",
-                                        got.location,
-                                        want_loc))
+                            Err(format!(
+                                "correct error reported on {}, but wanted {}",
+                                got.location,
+                                want_loc
+                            ))
                         }
                     }
                     Some(_) => Err(format!("mismatching error: {}", got)),

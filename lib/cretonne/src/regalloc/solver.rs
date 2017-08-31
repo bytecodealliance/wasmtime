@@ -231,12 +231,14 @@ impl SparseMapValue<Value> for Assignment {
 
 impl fmt::Display for Assignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "{}:{}(%{} -> %{})",
-               self.value,
-               self.rc,
-               self.from,
-               self.to)
+        write!(
+            f,
+            "{}:{}(%{} -> %{})",
+            self.value,
+            self.rc,
+            self.from,
+            self.to
+        )
     }
 }
 
@@ -244,7 +246,7 @@ impl fmt::Display for Assignment {
 impl PartialEq for Assignment {
     fn eq(&self, other: &Assignment) -> bool {
         self.value == other.value && self.from == other.from && self.to == other.to &&
-        self.rc.index == other.rc.index
+            self.rc.index == other.rc.index
     }
 }
 
@@ -363,22 +365,23 @@ impl Solver {
                 dbg!("-> converting variable {} to a fixed constraint", v);
                 // The spiller is responsible for ensuring that all constraints on the uses of a
                 // value are compatible.
-                assert!(v.constraint.contains(to),
-                        "Incompatible constraints for {}",
-                        value);
+                assert!(
+                    v.constraint.contains(to),
+                    "Incompatible constraints for {}",
+                    value
+                );
             } else {
                 panic!("Invalid from register for fixed {} constraint", value);
             }
         }
         self.regs_in.free(rc, from);
         self.regs_out.take(rc, to);
-        self.assignments
-            .insert(Assignment {
-                        value,
-                        rc,
-                        from,
-                        to,
-                    });
+        self.assignments.insert(Assignment {
+            value,
+            rc,
+            from,
+            to,
+        });
     }
 
     /// Add a variable representing an input side value with an existing register assignment.
@@ -388,18 +391,22 @@ impl Solver {
     ///
     /// It is assumed initially that the value is also live on the output side of the instruction.
     /// This can be changed by calling to `add_kill()`.
-    pub fn add_var(&mut self,
-                   value: Value,
-                   constraint: RegClass,
-                   from: RegUnit,
-                   reginfo: &RegInfo) {
+    pub fn add_var(
+        &mut self,
+        value: Value,
+        constraint: RegClass,
+        from: RegUnit,
+        reginfo: &RegInfo,
+    ) {
         // Check for existing entries for this value.
         if self.regs_in.is_avail(constraint, from) {
-            dbg!("add_var({}:{}, from={}/%{}) for existing entry",
-                 value,
-                 constraint,
-                 reginfo.display_regunit(from),
-                 from);
+            dbg!(
+                "add_var({}:{}, from={}/%{}) for existing entry",
+                value,
+                constraint,
+                reginfo.display_regunit(from),
+                from
+            );
 
             // There could be an existing variable entry.
             if let Some(v) = self.vars.iter_mut().find(|v| v.value == value) {
@@ -419,9 +426,11 @@ impl Solver {
             // No variable, then it must be a fixed reassignment.
             if let Some(a) = self.assignments.get(value) {
                 dbg!("-> already fixed assignment {}", a);
-                assert!(constraint.contains(a.to),
-                        "Incompatible constraints for {}",
-                        value);
+                assert!(
+                    constraint.contains(a.to),
+                    "Incompatible constraints for {}",
+                    value
+                );
                 return;
             }
 
@@ -430,12 +439,14 @@ impl Solver {
         }
 
         let new_var = Variable::new_live(value, constraint, from);
-        dbg!("add_var({}:{}, from={}/%{}) new entry: {}",
-             value,
-             constraint,
-             reginfo.display_regunit(from),
-             from,
-             new_var);
+        dbg!(
+            "add_var({}:{}, from={}/%{}) new entry: {}",
+            value,
+            constraint,
+            reginfo.display_regunit(from),
+            from,
+            new_var
+        );
 
         self.regs_in.free(constraint, from);
         if self.inputs_done {
@@ -623,23 +634,20 @@ impl Solver {
         // Collect moves from the chosen solution for all non-define variables.
         for v in &self.vars {
             if let Some(from) = v.from {
-                self.moves
-                    .push(Assignment {
-                              value: v.value,
-                              from,
-                              to: v.solution,
-                              rc: v.constraint,
-                          });
+                self.moves.push(Assignment {
+                    value: v.value,
+                    from,
+                    to: v.solution,
+                    rc: v.constraint,
+                });
             }
         }
 
         // Convert all of the fixed register assignments into moves, but omit the ones that are
         // already in the right register.
-        self.moves
-            .extend(self.assignments
-                        .values()
-                        .cloned()
-                        .filter(|v| v.from != v.to));
+        self.moves.extend(self.assignments.values().cloned().filter(
+            |v| v.from != v.to,
+        ));
 
         dbg!("collect_moves: {}", DisplayList(self.moves.as_slice()));
     }
@@ -661,9 +669,10 @@ impl Solver {
         let mut i = 0;
         while i < self.moves.len() {
             // Find the first move that can be executed now.
-            if let Some(j) = self.moves[i..]
-                   .iter()
-                   .position(|m| avail.is_avail(m.rc, m.to)) {
+            if let Some(j) = self.moves[i..].iter().position(
+                |m| avail.is_avail(m.rc, m.to),
+            )
+            {
                 // This move can be executed now.
                 self.moves.swap(i, i + j);
                 let m = &self.moves[i];
@@ -709,17 +718,16 @@ impl Solver {
                 // Append a fixup move so we end up in the right place. This move will be scheduled
                 // later. That's ok because it is the single remaining move of `m.value` after the
                 // next iteration.
-                self.moves
-                    .push(Assignment {
-                              value: m.value,
-                              rc: m.rc,
-                              from: reg,
-                              to: m.to,
-                          });
-                // TODO: What if allocating an extra register is not enough to break a cycle? This
-                // can happen when there are registers of different widths in a cycle. For ARM, we
-                // may have to move two S-registers out of the way before we can resolve a cycle
-                // involving a D-register.
+                self.moves.push(Assignment {
+                    value: m.value,
+                    rc: m.rc,
+                    from: reg,
+                    to: m.to,
+                });
+            // TODO: What if allocating an extra register is not enough to break a cycle? This
+            // can happen when there are registers of different widths in a cycle. For ARM, we
+            // may have to move two S-registers out of the way before we can resolve a cycle
+            // involving a D-register.
             } else {
                 panic!("Not enough registers in {} to schedule moves", m.rc);
             }
@@ -738,9 +746,11 @@ impl Solver {
 impl fmt::Display for Solver {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "Solver {{ inputs_done: {},", self.inputs_done)?;
-        writeln!(f,
-                 "  assignments: {}",
-                 DisplayList(self.assignments.as_slice()))?;
+        writeln!(
+            f,
+            "  assignments: {}",
+            DisplayList(self.assignments.as_slice())
+        )?;
         writeln!(f, "  vars: {}", DisplayList(self.vars.as_slice()))?;
         writeln!(f, "  moves: {}", DisplayList(self.moves.as_slice()))?;
         writeln!(f, "}}")
@@ -817,8 +827,10 @@ mod tests {
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
-        assert_eq!(solver.moves(),
-                   &[mov(v11, gpr, r1, r2), mov(v10, gpr, r0, r1)]);
+        assert_eq!(
+            solver.moves(),
+            &[mov(v11, gpr, r1, r2), mov(v10, gpr, r0, r1)]
+        );
 
         // Swap r0 and r1 in three moves using r2 as a scratch.
         solver.reset(&regs);
@@ -827,10 +839,14 @@ mod tests {
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
-        assert_eq!(solver.moves(),
-                   &[mov(v10, gpr, r0, r2),
-                     mov(v11, gpr, r1, r0),
-                     mov(v10, gpr, r2, r1)]);
+        assert_eq!(
+            solver.moves(),
+            &[
+                mov(v10, gpr, r0, r2),
+                mov(v11, gpr, r1, r0),
+                mov(v10, gpr, r2, r1),
+            ]
+        );
     }
 
     #[test]
@@ -862,11 +878,15 @@ mod tests {
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
-        assert_eq!(solver.moves(),
-                   &[mov(v10, d, d0, d2),
-                     mov(v11, s, s2, s0),
-                     mov(v12, s, s3, s1),
-                     mov(v10, d, d2, d1)]);
+        assert_eq!(
+            solver.moves(),
+            &[
+                mov(v10, d, d0, d2),
+                mov(v11, s, s2, s0),
+                mov(v12, s, s3, s1),
+                mov(v10, d, d2, d1),
+            ]
+        );
 
         // Same problem in the other direction: Swap (s0, s1) <-> d1.
         //
@@ -879,10 +899,14 @@ mod tests {
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
-        assert_eq!(solver.moves(),
-                   &[mov(v10, d, d1, d2),
-                     mov(v12, s, s1, s3),
-                     mov(v11, s, s0, s2),
-                     mov(v10, d, d2, d0)]);
+        assert_eq!(
+            solver.moves(),
+            &[
+                mov(v10, d, d1, d2),
+                mov(v12, s, s1, s3),
+                mov(v11, s, s0, s2),
+                mov(v10, d, d2, d0),
+            ]
+        );
     }
 }

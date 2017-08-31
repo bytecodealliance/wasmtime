@@ -137,8 +137,8 @@ impl Configurable for Builder {
                 self.bytes[offset] = value.parse().map_err(|_| Error::BadValue)?;
             }
             Detail::Enum { last, enumerators } => {
-                self.bytes[offset] = parse_enum_value(value,
-                                                      self.template.enums(last, enumerators))?;
+                self.bytes[offset] =
+                    parse_enum_value(value, self.template.enums(last, enumerators))?;
             }
             Detail::Preset => return Err(Error::BadName),
         }
@@ -218,11 +218,12 @@ pub mod detail {
 
         /// Format a setting value as a TOML string. This is mostly for use by the generated
         /// `Display` implementation.
-        pub fn format_toml_value(&self,
-                                 detail: Detail,
-                                 byte: u8,
-                                 f: &mut fmt::Formatter)
-                                 -> fmt::Result {
+        pub fn format_toml_value(
+            &self,
+            detail: Detail,
+            byte: u8,
+            f: &mut fmt::Formatter,
+        ) -> fmt::Result {
             match detail {
                 Detail::Bool { bit } => write!(f, "{}", (byte & (1 << bit)) != 0),
                 Detail::Num => write!(f, "{}", byte),
@@ -312,15 +313,17 @@ mod tests {
     fn display_default() {
         let b = builder();
         let f = Flags::new(&b);
-        assert_eq!(f.to_string(),
-                   "[shared]\n\
+        assert_eq!(
+            f.to_string(),
+            "[shared]\n\
                     opt_level = \"default\"\n\
                     enable_verifier = false\n\
                     is_64bit = false\n\
                     is_compressed = false\n\
                     enable_float = true\n\
                     enable_simd = true\n\
-                    enable_atomics = true\n");
+                    enable_atomics = true\n"
+        );
         assert_eq!(f.opt_level(), super::OptLevel::Default);
         assert_eq!(f.enable_simd(), true);
     }

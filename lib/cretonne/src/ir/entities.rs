@@ -218,7 +218,9 @@ mod tests {
         use std::mem;
         use packed_option::PackedOption;
         // This is the whole point of `PackedOption`.
-        assert_eq!(mem::size_of::<Value>(),
-                   mem::size_of::<PackedOption<Value>>());
+        assert_eq!(
+            mem::size_of::<Value>(),
+            mem::size_of::<PackedOption<Value>>()
+        );
     }
 }

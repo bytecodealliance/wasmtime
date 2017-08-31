@@ -91,7 +91,8 @@ impl Affinity {
                 // If the preferred register class is a subclass of the constraint, there's no need
                 // to change anything.
                 if constraint.kind != ConstraintKind::Stack &&
-                   !constraint.regclass.has_subclass(rc) {
+                    !constraint.regclass.has_subclass(rc)
+                {
                     // If the register classes don't overlap, `intersect` returns `None`, and we
                     // just keep our previous affinity.
                     if let Some(subclass) = constraint.regclass.intersect(reg_info.rc(rc)) {

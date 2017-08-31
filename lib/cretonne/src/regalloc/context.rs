@@ -53,12 +53,13 @@ impl Context {
     ///
     /// After register allocation, all values in `func` have been assigned to a register or stack
     /// location that is consistent with instruction encoding constraints.
-    pub fn run(&mut self,
-               isa: &TargetIsa,
-               func: &mut Function,
-               cfg: &ControlFlowGraph,
-               domtree: &DominatorTree)
-               -> CtonResult {
+    pub fn run(
+        &mut self,
+        isa: &TargetIsa,
+        func: &mut Function,
+        cfg: &ControlFlowGraph,
+        domtree: &DominatorTree,
+    ) -> CtonResult {
         // `Liveness` and `Coloring` are self-clearing.
         self.virtregs.clear();
 
@@ -74,13 +75,14 @@ impl Context {
         }
 
         // Pass: Coalesce and create conventional SSA form.
-        self.coalescing
-            .conventional_ssa(isa,
-                              func,
-                              cfg,
-                              domtree,
-                              &mut self.liveness,
-                              &mut self.virtregs);
+        self.coalescing.conventional_ssa(
+            isa,
+            func,
+            cfg,
+            domtree,
+            &mut self.liveness,
+            &mut self.virtregs,
+        );
 
         if isa.flags().enable_verifier() {
             verify_context(func, cfg, domtree, Some(isa))?;
@@ -90,14 +92,15 @@ impl Context {
 
 
         // Pass: Spilling.
-        self.spilling
-            .run(isa,
-                 func,
-                 domtree,
-                 &mut self.liveness,
-                 &self.virtregs,
-                 &mut self.topo,
-                 &mut self.tracker);
+        self.spilling.run(
+            isa,
+            func,
+            domtree,
+            &mut self.liveness,
+            &self.virtregs,
+            &mut self.topo,
+            &mut self.tracker,
+        );
 
         if isa.flags().enable_verifier() {
             verify_context(func, cfg, domtree, Some(isa))?;
@@ -106,13 +109,14 @@ impl Context {
         }
 
         // Pass: Reload.
-        self.reload
-            .run(isa,
-                 func,
-                 domtree,
-                 &mut self.liveness,
-                 &mut self.topo,
-                 &mut self.tracker);
+        self.reload.run(
+            isa,
+            func,
+            domtree,
+            &mut self.liveness,
+            &mut self.topo,
+            &mut self.tracker,
+        );
 
         if isa.flags().enable_verifier() {
             verify_context(func, cfg, domtree, Some(isa))?;
@@ -121,8 +125,13 @@ impl Context {
         }
 
         // Pass: Coloring.
-        self.coloring
-            .run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
+        self.coloring.run(
+            isa,
+            func,
+            domtree,
+            &mut self.liveness,
+            &mut self.tracker,
+        );
 
         if isa.flags().enable_verifier() {
             verify_context(func, cfg, domtree, Some(isa))?;

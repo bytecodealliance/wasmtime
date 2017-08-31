@@ -87,9 +87,7 @@ impl ArgAssigner for Args {
 }
 
 /// Legalize `sig`.
-pub fn legalize_signature(sig: &mut ir::Signature,
-                          flags: &shared_settings::Flags,
-                          _current: bool) {
+pub fn legalize_signature(sig: &mut ir::Signature, flags: &shared_settings::Flags, _current: bool) {
     let bits = if flags.is_64bit() { 64 } else { 32 };
 
     let mut args = Args::new(bits, &ARG_GPRS, 8);
@@ -105,9 +103,10 @@ pub fn regclass_for_abi_type(ty: ir::Type) -> RegClass {
 }
 
 /// Get the set of allocatable registers for `func`.
-pub fn allocatable_registers(_func: &ir::Function,
-                             flags: &shared_settings::Flags)
-                             -> AllocatableSet {
+pub fn allocatable_registers(
+    _func: &ir::Function,
+    flags: &shared_settings::Flags,
+) -> AllocatableSet {
     let mut regs = AllocatableSet::new();
     regs.take(GPR, RU::rsp as RegUnit);
     regs.take(GPR, RU::rbp as RegUnit);

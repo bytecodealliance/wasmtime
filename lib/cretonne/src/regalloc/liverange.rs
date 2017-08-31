@@ -224,13 +224,13 @@ impl LiveRange {
         self.liveins
             .binary_search_by(|intv| order.cmp(intv.begin, ebb))
             .or_else(|n| {
-                         // The interval at `n-1` may cover `ebb`.
-                         if n > 0 && order.cmp(self.liveins[n - 1].end, ebb) == Ordering::Greater {
-                             Ok(n - 1)
-                         } else {
-                             Err(n)
-                         }
-                     })
+                // The interval at `n-1` may cover `ebb`.
+                if n > 0 && order.cmp(self.liveins[n - 1].end, ebb) == Ordering::Greater {
+                    Ok(n - 1)
+                } else {
+                    Err(n)
+                }
+            })
     }
 
     /// Extend the local interval for `ebb` so it reaches `to` which must belong to `ebb`.
@@ -250,11 +250,14 @@ impl LiveRange {
         // We're assuming here that `to` never precedes `def_begin` in the same EBB, but we can't
         // check it without a method for getting `to`'s EBB.
         if order.cmp(ebb, self.def_end) != Ordering::Greater &&
-           order.cmp(to, self.def_begin) != Ordering::Less {
+            order.cmp(to, self.def_begin) != Ordering::Less
+        {
             let to_pp = to.into();
-            assert_ne!(to_pp,
-                       self.def_begin,
-                       "Can't use value in the defining instruction.");
+            assert_ne!(
+                to_pp,
+                self.def_begin,
+                "Can't use value in the defining instruction."
+            );
             if order.cmp(to, self.def_end) == Ordering::Greater {
                 self.def_end = to_pp;
             }
@@ -288,8 +291,10 @@ impl LiveRange {
                     let prev = n.checked_sub(1).and_then(|i| self.liveins.get(i));
                     let next = self.liveins.get(n);
 
-                    (prev.map_or(false, |prev| order.is_ebb_gap(prev.end, ebb)),
-                     next.map_or(false, |next| order.is_ebb_gap(to, next.begin)))
+                    (
+                        prev.map_or(false, |prev| order.is_ebb_gap(prev.end, ebb)),
+                        next.map_or(false, |next| order.is_ebb_gap(to, next.begin)),
+                    )
                 };
 
                 match (coalesce_prev, coalesce_next) {
@@ -309,12 +314,13 @@ impl LiveRange {
                     }
                     // Cannot coalesce; insert new interval
                     (false, false) => {
-                        self.liveins
-                            .insert(n,
-                                    Interval {
-                                        begin: ebb,
-                                        end: to,
-                                    });
+                        self.liveins.insert(
+                            n,
+                            Interval {
+                                begin: ebb,
+                                end: to,
+                            },
+                        );
                     }
                 }
 
@@ -372,9 +378,9 @@ impl LiveRange {
     /// answer, but it is also possible that an even later program point is returned. So don't
     /// depend on the returned `Inst` to belong to `ebb`.
     pub fn livein_local_end<PO: ProgramOrder>(&self, ebb: Ebb, order: &PO) -> Option<Inst> {
-        self.find_ebb_interval(ebb, order)
-            .ok()
-            .map(|n| self.liveins[n].end)
+        self.find_ebb_interval(ebb, order).ok().map(|n| {
+            self.liveins[n].end
+        })
     }
 
     /// Get all the live-in intervals.
@@ -384,11 +390,13 @@ impl LiveRange {
 
     /// Check if this live range overlaps a definition in `ebb`.
     pub fn overlaps_def<PO>(&self, def: ExpandedProgramPoint, ebb: Ebb, order: &PO) -> bool
-        where PO: ProgramOrder
+    where
+        PO: ProgramOrder,
     {
         // Check for an overlap with the local range.
         if order.cmp(def, self.def_begin) != Ordering::Less &&
-           order.cmp(def, self.def_end) == Ordering::Less {
+            order.cmp(def, self.def_end) == Ordering::Less
+        {
             return true;
         }
 
@@ -401,11 +409,13 @@ impl LiveRange {
 
     /// Check if this live range reaches a use at `user` in `ebb`.
     pub fn reaches_use<PO>(&self, user: Inst, ebb: Ebb, order: &PO) -> bool
-        where PO: ProgramOrder
+    where
+        PO: ProgramOrder,
     {
         // Check for an overlap with the local range.
         if order.cmp(user, self.def_begin) == Ordering::Greater &&
-           order.cmp(user, self.def_end) != Ordering::Greater {
+            order.cmp(user, self.def_end) != Ordering::Greater
+        {
             return true;
         }
 
@@ -418,7 +428,8 @@ impl LiveRange {
 
     /// Check if this live range is killed at `user` in `ebb`.
     pub fn killed_at<PO>(&self, user: Inst, ebb: Ebb, order: &PO) -> bool
-        where PO: ProgramOrder
+    where
+        PO: ProgramOrder,
     {
         self.def_local_end() == user.into() || self.livein_local_end(ebb, order) == Some(user)
     }
@@ -447,8 +458,9 @@ mod tests {
 
     impl ProgramOrder for ProgOrder {
         fn cmp<A, B>(&self, a: A, b: B) -> Ordering
-            where A: Into<ExpandedProgramPoint>,
-                  B: Into<ExpandedProgramPoint>
+        where
+            A: Into<ExpandedProgramPoint>,
+            B: Into<ExpandedProgramPoint>,
         {
             fn idx(pp: ExpandedProgramPoint) -> usize {
                 match pp {
@@ -505,9 +517,11 @@ mod tests {
                     assert_eq!(self.cmp(e, li.begin), Ordering::Less);
                 }
 
-                assert!(self.cmp(lr.def_end, li.begin) == Ordering::Less ||
+                assert!(
+                    self.cmp(lr.def_end, li.begin) == Ordering::Less ||
                         self.cmp(lr.def_begin, li.end) == Ordering::Greater,
-                        "Interval can't overlap the def EBB");
+                    "Interval can't overlap the def EBB"
+                );
 
                 // Save for next round.
                 prev_end = Some(li.end);

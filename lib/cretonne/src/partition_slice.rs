@@ -7,7 +7,8 @@
 ///
 /// Returns the number of elements where `p(t)` is true.
 pub fn partition_slice<'a, T: 'a, F>(s: &'a mut [T], mut p: F) -> usize
-    where F: FnMut(&T) -> bool
+where
+    F: FnMut(&T) -> bool,
 {
     // Count the length of the prefix where `p` returns true.
     let mut count = match s.iter().position(|t| !p(t)) {

@@ -135,7 +135,7 @@ struct TranslationState {
 
 /// Holds mappings between the function and signatures indexes in the Wasm module and their
 /// references as imports of the Cretonne IL function.
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct FunctionImports {
     /// Mappings index in function index space -> index in function local imports
     pub functions: HashMap<FunctionIndex, FuncRef>,
@@ -153,16 +153,17 @@ impl FunctionImports {
 }
 
 /// Returns a well-formed Cretonne IL function from a wasm function body and a signature.
-pub fn translate_function_body(parser: &mut Parser,
-                               function_index: FunctionIndex,
-                               sig: Signature,
-                               locals: &[(usize, Type)],
-                               exports: &Option<HashMap<FunctionIndex, String>>,
-                               signatures: &[Signature],
-                               functions: &[SignatureIndex],
-                               il_builder: &mut ILBuilder<Local>,
-                               runtime: &mut WasmRuntime)
-                               -> Result<(Function, FunctionImports), String> {
+pub fn translate_function_body(
+    parser: &mut Parser,
+    function_index: FunctionIndex,
+    sig: Signature,
+    locals: &[(usize, Type)],
+    exports: &Option<HashMap<FunctionIndex, String>>,
+    signatures: &[Signature],
+    functions: &[SignatureIndex],
+    il_builder: &mut ILBuilder<Local>,
+    runtime: &mut WasmRuntime,
+) -> Result<(Function, FunctionImports), String> {
     runtime.next_function();
     // First we build the Function object with its name and signature
     let mut func = Function::new();
@@ -216,39 +217,45 @@ pub fn translate_function_body(parser: &mut Parser,
         // We initialize the control stack with the implicit function block
         let end_ebb = builder.create_ebb();
         control_stack.push(ControlStackFrame::Block {
-                               destination: end_ebb,
-                               original_stack_size: 0,
-                               return_values: sig.return_types
-                                   .iter()
-                                   .map(|argty| argty.value_type)
-                                   .collect(),
-                               reachable: false,
-                           });
+            destination: end_ebb,
+            original_stack_size: 0,
+            return_values: sig.return_types
+                .iter()
+                .map(|argty| argty.value_type)
+                .collect(),
+            reachable: false,
+        });
         // Now the main loop that reads every wasm instruction and translates it
         loop {
             let parser_state = parser.read();
             match *parser_state {
                 ParserState::CodeOperator(ref op) => {
-                    debug_assert!(state.phantom_unreachable_stack_depth == 0 ||
-                                  state.real_unreachable_stack_depth > 0);
+                    debug_assert!(
+                        state.phantom_unreachable_stack_depth == 0 ||
+                            state.real_unreachable_stack_depth > 0
+                    );
                     if state.real_unreachable_stack_depth > 0 {
-                        translate_unreachable_operator(op,
-                                                       &mut builder,
-                                                       &mut stack,
-                                                       &mut control_stack,
-                                                       &mut state)
+                        translate_unreachable_operator(
+                            op,
+                            &mut builder,
+                            &mut stack,
+                            &mut control_stack,
+                            &mut state,
+                        )
                     } else {
-                        translate_operator(op,
-                                           &mut builder,
-                                           runtime,
-                                           &mut stack,
-                                           &mut control_stack,
-                                           &mut state,
-                                           &sig,
-                                           &functions,
-                                           &signatures,
-                                           &exports,
-                                           &mut func_imports)
+                        translate_operator(
+                            op,
+                            &mut builder,
+                            runtime,
+                            &mut stack,
+                            &mut control_stack,
+                            &mut state,
+                            &sig,
+                            &functions,
+                            &signatures,
+                            &exports,
+                            &mut func_imports,
+                        )
                     }
                 }
 
@@ -281,17 +288,19 @@ pub fn translate_function_body(parser: &mut Parser,
 
 /// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
 /// a return.
-fn translate_operator(op: &Operator,
-                      builder: &mut FunctionBuilder<Local>,
-                      runtime: &mut WasmRuntime,
-                      stack: &mut Vec<Value>,
-                      control_stack: &mut Vec<ControlStackFrame>,
-                      state: &mut TranslationState,
-                      sig: &Signature,
-                      functions: &[SignatureIndex],
-                      signatures: &[Signature],
-                      exports: &Option<HashMap<FunctionIndex, String>>,
-                      func_imports: &mut FunctionImports) {
+fn translate_operator(
+    op: &Operator,
+    builder: &mut FunctionBuilder<Local>,
+    runtime: &mut WasmRuntime,
+    stack: &mut Vec<Value>,
+    control_stack: &mut Vec<ControlStackFrame>,
+    state: &mut TranslationState,
+    sig: &Signature,
+    functions: &[SignatureIndex],
+    signatures: &[Signature],
+    exports: &Option<HashMap<FunctionIndex, String>>,
+    func_imports: &mut FunctionImports,
+) {
     // This big match treats all Wasm code operators.
     match *op {
         /********************************** Locals ****************************************
@@ -357,11 +366,11 @@ fn translate_operator(op: &Operator,
                 Err(_) => {}
             }
             control_stack.push(ControlStackFrame::Block {
-                                   destination: next,
-                                   return_values: translate_type(ty).unwrap(),
-                                   original_stack_size: stack.len(),
-                                   reachable: false,
-                               });
+                destination: next,
+                return_values: translate_type(ty).unwrap(),
+                original_stack_size: stack.len(),
+                reachable: false,
+            });
         }
         Operator::Loop { ty } => {
             let loop_body = builder.create_ebb();
@@ -374,12 +383,12 @@ fn translate_operator(op: &Operator,
             }
             builder.ins().jump(loop_body, &[]);
             control_stack.push(ControlStackFrame::Loop {
-                                   destination: next,
-                                   header: loop_body,
-                                   return_values: translate_type(ty).unwrap(),
-                                   original_stack_size: stack.len(),
-                                   reachable: false,
-                               });
+                destination: next,
+                header: loop_body,
+                return_values: translate_type(ty).unwrap(),
+                original_stack_size: stack.len(),
+                reachable: false,
+            });
             builder.switch_to_block(loop_body, &[]);
         }
         Operator::If { ty } => {
@@ -399,12 +408,12 @@ fn translate_operator(op: &Operator,
                 Err(_) => {}
             }
             control_stack.push(ControlStackFrame::If {
-                                   destination: if_not,
-                                   branch_inst: jump_inst,
-                                   return_values: translate_type(ty).unwrap(),
-                                   original_stack_size: stack.len(),
-                                   reachable: false,
-                               });
+                destination: if_not,
+                branch_inst: jump_inst,
+                return_values: translate_type(ty).unwrap(),
+                original_stack_size: stack.len(),
+                reachable: false,
+            });
         }
         Operator::Else => {
             // We take the control frame pushed by the if, use its ebb as the else body
@@ -434,9 +443,10 @@ fn translate_operator(op: &Operator,
             if !builder.is_unreachable() || !builder.is_pristine() {
                 let cut_index = stack.len() - frame.return_values().len();
                 let jump_args = stack.split_off(cut_index);
-                builder
-                    .ins()
-                    .jump(frame.following_code(), jump_args.as_slice());
+                builder.ins().jump(
+                    frame.following_code(),
+                    jump_args.as_slice(),
+                );
             }
             builder.switch_to_block(frame.following_code(), frame.return_values());
             builder.seal_block(frame.following_code());
@@ -478,9 +488,10 @@ fn translate_operator(op: &Operator,
                 let cut_index = stack.len() - frame.return_values().len();
                 stack.split_off(cut_index)
             };
-            builder
-                .ins()
-                .jump(frame.br_destination(), jump_args.as_slice());
+            builder.ins().jump(
+                frame.br_destination(),
+                jump_args.as_slice(),
+            );
             // We signal that all the code that follows until the next End is unreachable
             frame.set_reachable();
             state.real_unreachable_stack_depth = 1 + relative_depth as usize;
@@ -495,9 +506,11 @@ fn translate_operator(op: &Operator,
                 let cut_index = stack.len() - frame.return_values().len();
                 stack.split_off(cut_index)
             };
-            builder
-                .ins()
-                .brnz(val, frame.br_destination(), jump_args.as_slice());
+            builder.ins().brnz(
+                val,
+                frame.br_destination(),
+                jump_args.as_slice(),
+            );
             // The values returned by the branch are still available for the reachable
             // code that comes after it
             frame.set_reachable();
@@ -545,10 +558,9 @@ fn translate_operator(op: &Operator,
                 let cut_index = stack.len() - jump_args_count;
                 let jump_args = stack.split_off(cut_index);
                 let jt = builder.create_jump_table();
-                let dest_ebbs: HashMap<usize, Ebb> = depths
-                    .iter()
-                    .enumerate()
-                    .fold(HashMap::new(), |mut acc, (index, &depth)| {
+                let dest_ebbs: HashMap<usize, Ebb> =
+                    depths.iter().enumerate().fold(HashMap::new(), |mut acc,
+                     (index, &depth)| {
                         if acc.get(&(depth as usize)).is_none() {
                             let branch_ebb = builder.create_ebb();
                             builder.insert_jump_table_entry(jt, index, branch_ebb);
@@ -592,15 +604,18 @@ fn translate_operator(op: &Operator,
             let args_num = args_count(function_index as usize, functions, signatures);
             let cut_index = stack.len() - args_num;
             let call_args = stack.split_off(cut_index);
-            let internal_function_index = find_function_import(function_index as usize,
-                                                               builder,
-                                                               func_imports,
-                                                               functions,
-                                                               exports,
-                                                               signatures);
-            let call_inst = builder
-                .ins()
-                .call(internal_function_index, call_args.as_slice());
+            let internal_function_index = find_function_import(
+                function_index as usize,
+                builder,
+                func_imports,
+                functions,
+                exports,
+                signatures,
+            );
+            let call_inst = builder.ins().call(
+                internal_function_index,
+                call_args.as_slice(),
+            );
             let ret_values = builder.inst_results(call_inst);
             for val in ret_values {
                 stack.push(*val);
@@ -1107,9 +1122,11 @@ fn translate_operator(op: &Operator,
         Operator::I32LeU | Operator::I64LeU => {
             let arg2 = stack.pop().unwrap();
             let arg1 = stack.pop().unwrap();
-            let val = builder
-                .ins()
-                .icmp(IntCC::UnsignedLessThanOrEqual, arg1, arg2);
+            let val = builder.ins().icmp(
+                IntCC::UnsignedLessThanOrEqual,
+                arg1,
+                arg2,
+            );
             stack.push(builder.ins().bint(I32, val));
         }
         Operator::I32GtS | Operator::I64GtS => {
@@ -1127,17 +1144,21 @@ fn translate_operator(op: &Operator,
         Operator::I32GeS | Operator::I64GeS => {
             let arg2 = stack.pop().unwrap();
             let arg1 = stack.pop().unwrap();
-            let val = builder
-                .ins()
-                .icmp(IntCC::SignedGreaterThanOrEqual, arg1, arg2);
+            let val = builder.ins().icmp(
+                IntCC::SignedGreaterThanOrEqual,
+                arg1,
+                arg2,
+            );
             stack.push(builder.ins().bint(I32, val));
         }
         Operator::I32GeU | Operator::I64GeU => {
             let arg2 = stack.pop().unwrap();
             let arg1 = stack.pop().unwrap();
-            let val = builder
-                .ins()
-                .icmp(IntCC::UnsignedGreaterThanOrEqual, arg1, arg2);
+            let val = builder.ins().icmp(
+                IntCC::UnsignedGreaterThanOrEqual,
+                arg1,
+                arg2,
+            );
             stack.push(builder.ins().bint(I32, val));
         }
         Operator::I32Eqz | Operator::I64Eqz => {
@@ -1199,11 +1220,13 @@ fn translate_operator(op: &Operator,
 /// Deals with a Wasm instruction located in an unreachable portion of the code. Most of them
 /// are dropped but special ones like `End` or `Else` signal the potential end of the unreachable
 /// portion so the translation state muts be updated accordingly.
-fn translate_unreachable_operator(op: &Operator,
-                                  builder: &mut FunctionBuilder<Local>,
-                                  stack: &mut Vec<Value>,
-                                  control_stack: &mut Vec<ControlStackFrame>,
-                                  state: &mut TranslationState) {
+fn translate_unreachable_operator(
+    op: &Operator,
+    builder: &mut FunctionBuilder<Local>,
+    stack: &mut Vec<Value>,
+    control_stack: &mut Vec<ControlStackFrame>,
+    state: &mut TranslationState,
+) {
     // We don't translate because the code is unreachable
     // Nevertheless we have to record a phantom stack for this code
     // to know when the unreachable code ends
@@ -1253,15 +1276,15 @@ fn translate_unreachable_operator(op: &Operator,
             } else {
                 // Encountering an real else means that the code in the else
                 // clause is reachable again
-                let (branch_inst, original_stack_size) = match &control_stack[control_stack.len() -
-                                                                1] {
-                    &ControlStackFrame::If {
-                        branch_inst,
-                        original_stack_size,
-                        ..
-                    } => (branch_inst, original_stack_size),
-                    _ => panic!("should not happen"),
-                };
+                let (branch_inst, original_stack_size) =
+                    match &control_stack[control_stack.len() - 1] {
+                        &ControlStackFrame::If {
+                            branch_inst,
+                            original_stack_size,
+                            ..
+                        } => (branch_inst, original_stack_size),
+                        _ => panic!("should not happen"),
+                    };
                 // We change the target of the branch instruction
                 let else_ebb = builder.create_ebb();
                 builder.change_jump_destination(branch_inst, else_ebb);
@@ -1279,22 +1302,24 @@ fn translate_unreachable_operator(op: &Operator,
     }
 }
 
-fn args_count(index: FunctionIndex,
-              functions: &[SignatureIndex],
-              signatures: &[Signature])
-              -> usize {
+fn args_count(
+    index: FunctionIndex,
+    functions: &[SignatureIndex],
+    signatures: &[Signature],
+) -> usize {
     signatures[functions[index] as usize].argument_types.len()
 }
 
 // Given a index in the function index space, search for it in the function imports and if it is
 // not there add it to the function imports.
-fn find_function_import(index: FunctionIndex,
-                        builder: &mut FunctionBuilder<Local>,
-                        func_imports: &mut FunctionImports,
-                        functions: &[SignatureIndex],
-                        exports: &Option<HashMap<FunctionIndex, String>>,
-                        signatures: &[Signature])
-                        -> FuncRef {
+fn find_function_import(
+    index: FunctionIndex,
+    builder: &mut FunctionBuilder<Local>,
+    func_imports: &mut FunctionImports,
+    functions: &[SignatureIndex],
+    exports: &Option<HashMap<FunctionIndex, String>>,
+    signatures: &[Signature],
+) -> FuncRef {
     match func_imports.functions.get(&index) {
         Some(local_index) => return *local_index,
         None => {}
@@ -1303,21 +1328,18 @@ fn find_function_import(index: FunctionIndex,
     let sig_index = functions[index];
     match func_imports.signatures.get(&(sig_index as usize)) {
         Some(local_sig_index) => {
-            let local_func_index =
-                builder.import_function(ExtFuncData {
-                                            name: match exports {
-                                                &None => FunctionName::new(""),
-                                                &Some(ref exports) => {
-                                                    match exports.get(&index) {
-                                                        None => FunctionName::new(""),
-                                                        Some(name) => {
-                                                            FunctionName::new(name.clone())
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            signature: *local_sig_index,
-                                        });
+            let local_func_index = builder.import_function(ExtFuncData {
+                name: match exports {
+                    &None => FunctionName::new(""),
+                    &Some(ref exports) => {
+                        match exports.get(&index) {
+                            None => FunctionName::new(""),
+                            Some(name) => FunctionName::new(name.clone()),
+                        }
+                    }
+                },
+                signature: *local_sig_index,
+            });
             func_imports.functions.insert(index, local_func_index);
             return local_func_index;
         }
@@ -1325,38 +1347,40 @@ fn find_function_import(index: FunctionIndex,
     };
     // We have to import the signature
     let sig_local_index = builder.import_signature(signatures[sig_index as usize].clone());
-    func_imports
-        .signatures
-        .insert(sig_index as usize, sig_local_index);
-    let local_func_index =
-        builder.import_function(ExtFuncData {
-                                    name: match exports {
-                                        &None => FunctionName::new(""),
-                                        &Some(ref exports) => {
-                                            match exports.get(&index) {
-                                                None => FunctionName::new(""),
-                                                Some(name) => FunctionName::new(name.clone()),
-                                            }
-                                        }
-                                    },
-                                    signature: sig_local_index,
-                                });
+    func_imports.signatures.insert(
+        sig_index as usize,
+        sig_local_index,
+    );
+    let local_func_index = builder.import_function(ExtFuncData {
+        name: match exports {
+            &None => FunctionName::new(""),
+            &Some(ref exports) => {
+                match exports.get(&index) {
+                    None => FunctionName::new(""),
+                    Some(name) => FunctionName::new(name.clone()),
+                }
+            }
+        },
+        signature: sig_local_index,
+    });
     func_imports.functions.insert(index, local_func_index);
     local_func_index
 }
 
-fn find_signature_import(sig_index: SignatureIndex,
-                         builder: &mut FunctionBuilder<Local>,
-                         func_imports: &mut FunctionImports,
-                         signatures: &[Signature])
-                         -> SigRef {
+fn find_signature_import(
+    sig_index: SignatureIndex,
+    builder: &mut FunctionBuilder<Local>,
+    func_imports: &mut FunctionImports,
+    signatures: &[Signature],
+) -> SigRef {
     match func_imports.signatures.get(&(sig_index as usize)) {
         Some(local_sig_index) => return *local_sig_index,
         None => {}
     }
     let sig_local_index = builder.import_signature(signatures[sig_index as usize].clone());
-    func_imports
-        .signatures
-        .insert(sig_index as usize, sig_local_index);
+    func_imports.signatures.insert(
+        sig_index as usize,
+        sig_local_index,
+    );
     sig_local_index
 }

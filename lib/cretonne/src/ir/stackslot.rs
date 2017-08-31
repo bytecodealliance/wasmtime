@@ -65,11 +65,11 @@ impl fmt::Display for StackSlotKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::StackSlotKind::*;
         f.write_str(match *self {
-                        Local => "local",
-                        SpillSlot => "spill_slot",
-                        IncomingArg => "incoming_arg",
-                        OutgoingArg => "outgoing_arg",
-                    })
+            Local => "local",
+            SpillSlot => "spill_slot",
+            IncomingArg => "incoming_arg",
+            OutgoingArg => "outgoing_arg",
+        })
     }
 }
 
@@ -228,9 +228,9 @@ impl StackSlots {
         let size = ty.bytes();
 
         // Look for an existing outgoing stack slot with the same offset and size.
-        let inspos = match self.outgoing
-                  .binary_search_by_key(&(offset, size),
-                                        |&ss| (self[ss].offset, self[ss].size)) {
+        let inspos = match self.outgoing.binary_search_by_key(&(offset, size), |&ss| {
+            (self[ss].offset, self[ss].size)
+        }) {
             Ok(idx) => return self.outgoing[idx],
             Err(idx) => idx,
         };
@@ -255,10 +255,14 @@ mod tests {
     fn stack_slot() {
         let mut func = Function::new();
 
-        let ss0 = func.stack_slots
-            .push(StackSlotData::new(StackSlotKind::IncomingArg, 4));
-        let ss1 = func.stack_slots
-            .push(StackSlotData::new(StackSlotKind::SpillSlot, 8));
+        let ss0 = func.stack_slots.push(StackSlotData::new(
+            StackSlotKind::IncomingArg,
+            4,
+        ));
+        let ss1 = func.stack_slots.push(StackSlotData::new(
+            StackSlotKind::SpillSlot,
+            8,
+        ));
         assert_eq!(ss0.to_string(), "ss0");
         assert_eq!(ss1.to_string(), "ss1");
 

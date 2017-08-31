@@ -21,11 +21,12 @@ use verifier::Result;
 ///
 /// We don't verify that live ranges are minimal. This would require recomputing live ranges for
 /// all values.
-pub fn verify_liveness(isa: &TargetIsa,
-                       func: &Function,
-                       cfg: &ControlFlowGraph,
-                       liveness: &Liveness)
-                       -> Result {
+pub fn verify_liveness(
+    isa: &TargetIsa,
+    func: &Function,
+    cfg: &ControlFlowGraph,
+    liveness: &Liveness,
+) -> Result {
     let verifier = LivenessVerifier {
         isa,
         func,
@@ -76,18 +77,22 @@ impl<'a> LivenessVerifier<'a> {
                     if encoding.is_legal() {
                         // A legal instruction is not allowed to define ghost values.
                         if lr.affinity.is_none() {
-                            return err!(inst,
-                                        "{} is a ghost value defined by a real [{}] instruction",
-                                        val,
-                                        self.isa.encoding_info().display(encoding));
+                            return err!(
+                                inst,
+                                "{} is a ghost value defined by a real [{}] instruction",
+                                val,
+                                self.isa.encoding_info().display(encoding)
+                            );
                         }
                     } else {
                         // A non-encoded instruction can only define ghost values.
                         if !lr.affinity.is_none() {
-                            return err!(inst,
-                                        "{} is a real {} value defined by a ghost instruction",
-                                        val,
-                                        lr.affinity.display(&self.isa.register_info()));
+                            return err!(
+                                inst,
+                                "{} is a real {} value defined by a ghost instruction",
+                                val,
+                                lr.affinity.display(&self.isa.register_info())
+                            );
                         }
                     }
                 }
@@ -108,10 +113,12 @@ impl<'a> LivenessVerifier<'a> {
                         // A branch argument can be a ghost value if the corresponding destination
                         // EBB argument is a ghost value.
                         if lr.affinity.is_none() && !self.is_ghost_branch_argument(inst, idx) {
-                            return err!(inst,
-                                        "{} is a ghost value used by a real [{}] instruction",
-                                        val,
-                                        self.isa.encoding_info().display(encoding));
+                            return err!(
+                                inst,
+                                "{} is a ghost value used by a real [{}] instruction",
+                                val,
+                                self.isa.encoding_info().display(encoding)
+                            );
                         }
                     }
                 }
@@ -126,7 +133,8 @@ impl<'a> LivenessVerifier<'a> {
 
         // Check if `inst` is in the def range, not including the def itself.
         if l.cmp(lr.def(), inst) == Ordering::Less &&
-           l.cmp(inst, lr.def_local_end()) != Ordering::Greater {
+            l.cmp(inst, lr.def_local_end()) != Ordering::Greater
+        {
             return true;
         }
 
@@ -205,11 +213,13 @@ impl<'a> LivenessVerifier<'a> {
             let end_ebb = match l.inst_ebb(livein.end) {
                 Some(e) => e,
                 None => {
-                    return err!(loc,
-                                "{} livein for {} ends at {} which is not in the layout",
-                                val,
-                                ebb,
-                                livein.end)
+                    return err!(
+                        loc,
+                        "{} livein for {} ends at {} which is not in the layout",
+                        val,
+                        ebb,
+                        livein.end
+                    )
                 }
             };
 
@@ -218,10 +228,12 @@ impl<'a> LivenessVerifier<'a> {
                 // If `val` is live-in at `ebb`, it must be live at all the predecessors.
                 for &(_, pred) in self.cfg.get_predecessors(ebb) {
                     if !self.live_at_use(lr, pred) {
-                        return err!(pred,
-                                    "{} is live in to {} but not live at predecessor",
-                                    val,
-                                    ebb);
+                        return err!(
+                            pred,
+                            "{} is live in to {} but not live at predecessor",
+                            val,
+                            ebb
+                        );
                     }
                 }
 

@@ -38,7 +38,8 @@ impl TopoOrder {
     /// Reset and initialize with a preferred sequence of EBBs. The resulting topological order is
     /// guaranteed to contain all of the EBBs in `preferred` as well as any dominators.
     pub fn reset<Ebbs>(&mut self, preferred: Ebbs)
-        where Ebbs: IntoIterator<Item = Ebb>
+    where
+        Ebbs: IntoIterator<Item = Ebb>,
     {
         self.preferred.clear();
         self.preferred.extend(preferred);

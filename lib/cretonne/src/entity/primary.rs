@@ -14,14 +14,16 @@ use std::ops::{Index, IndexMut};
 /// conflicting references will be created. Using unknown keys for indexing will cause a panic.
 #[derive(Debug, Clone)]
 pub struct PrimaryMap<K, V>
-    where K: EntityRef
+where
+    K: EntityRef,
 {
     elems: Vec<V>,
     unused: PhantomData<K>,
 }
 
 impl<K, V> PrimaryMap<K, V>
-    where K: EntityRef
+where
+    K: EntityRef,
 {
     /// Create a new empty map.
     pub fn new() -> Self {
@@ -77,7 +79,8 @@ impl<K, V> PrimaryMap<K, V>
 /// Immutable indexing into an `PrimaryMap`.
 /// The indexed value must be in the map.
 impl<K, V> Index<K> for PrimaryMap<K, V>
-    where K: EntityRef
+where
+    K: EntityRef,
 {
     type Output = V;
 
@@ -88,7 +91,8 @@ impl<K, V> Index<K> for PrimaryMap<K, V>
 
 /// Mutable indexing into an `PrimaryMap`.
 impl<K, V> IndexMut<K> for PrimaryMap<K, V>
-    where K: EntityRef
+where
+    K: EntityRef,
 {
     fn index_mut(&mut self, k: K) -> &mut V {
         &mut self.elems[k.index()]

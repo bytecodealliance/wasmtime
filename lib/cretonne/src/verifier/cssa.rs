@@ -22,12 +22,13 @@ use verifier::Result;
 /// - The values in a virtual register are ordered according to the dominator tree's `rpo_cmp()`.
 ///
 /// We don't verify that virtual registers are minimal. Minimal CSSA is not required.
-pub fn verify_cssa(func: &Function,
-                   cfg: &ControlFlowGraph,
-                   domtree: &DominatorTree,
-                   liveness: &Liveness,
-                   virtregs: &VirtRegs)
-                   -> Result {
+pub fn verify_cssa(
+    func: &Function,
+    cfg: &ControlFlowGraph,
+    domtree: &DominatorTree,
+    liveness: &Liveness,
+    virtregs: &VirtRegs,
+) -> Result {
     let verifier = CssaVerifier {
         func,
         cfg,
@@ -77,10 +78,12 @@ impl<'a> CssaVerifier<'a> {
                             return err!(val, "Value in {} has same def as {}", vreg, prev_val);
                         }
                         Ordering::Greater => {
-                            return err!(val,
-                                        "Value in {} in wrong order relative to {}",
-                                        vreg,
-                                        prev_val);
+                            return err!(
+                                val,
+                                "Value in {} in wrong order relative to {}",
+                                vreg,
+                                prev_val
+                            );
                         }
                     }
 
@@ -102,16 +105,20 @@ impl<'a> CssaVerifier<'a> {
             for &(_, pred) in self.cfg.get_predecessors(ebb) {
                 let pred_args = self.func.dfg.inst_variable_args(pred);
                 // This should have been caught by an earlier verifier pass.
-                assert_eq!(ebb_args.len(),
-                           pred_args.len(),
-                           "Wrong arguments on branch.");
+                assert_eq!(
+                    ebb_args.len(),
+                    pred_args.len(),
+                    "Wrong arguments on branch."
+                );
 
                 for (&ebb_arg, &pred_arg) in ebb_args.iter().zip(pred_args) {
                     if !self.virtregs.same_class(ebb_arg, pred_arg) {
-                        return err!(pred,
-                                    "{} and {} must be in the same virtual register",
-                                    ebb_arg,
-                                    pred_arg);
+                        return err!(
+                            pred,
+                            "{} and {} must be in the same virtual register",
+                            ebb_arg,
+                            pred_arg
+                        );
                     }
                 }
             }

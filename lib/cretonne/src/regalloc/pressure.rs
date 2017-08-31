@@ -103,10 +103,10 @@ impl Pressure {
         }
 
         // Compute per-class limits from `usable`.
-        for (toprc, rc) in p.toprc
-                .iter_mut()
-                .take_while(|t| t.num_toprcs > 0)
-                .zip(reginfo.classes) {
+        for (toprc, rc) in p.toprc.iter_mut().take_while(|t| t.num_toprcs > 0).zip(
+            reginfo.classes,
+        )
+        {
             toprc.limit = usable.iter(rc).len() as u32;
             toprc.width = rc.width;
         }

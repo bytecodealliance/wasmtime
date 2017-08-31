@@ -155,11 +155,12 @@ pub trait TargetIsa {
     fn register_info(&self) -> RegInfo;
 
     /// Returns an iterartor over legal encodings for the instruction.
-    fn legal_encodings<'a>(&'a self,
-                           dfg: &'a ir::DataFlowGraph,
-                           inst: &'a ir::InstructionData,
-                           ctrl_typevar: ir::Type)
-                           -> Encodings<'a>;
+    fn legal_encodings<'a>(
+        &'a self,
+        dfg: &'a ir::DataFlowGraph,
+        inst: &'a ir::InstructionData,
+        ctrl_typevar: ir::Type,
+    ) -> Encodings<'a>;
 
     /// Encode an instruction after determining it is legal.
     ///
@@ -167,11 +168,12 @@ pub trait TargetIsa {
     /// Otherwise, return `Legalize` action.
     ///
     /// This is also the main entry point for determining if an instruction is legal.
-    fn encode(&self,
-              dfg: &ir::DataFlowGraph,
-              inst: &ir::InstructionData,
-              ctrl_typevar: ir::Type)
-              -> Result<Encoding, Legalize> {
+    fn encode(
+        &self,
+        dfg: &ir::DataFlowGraph,
+        inst: &ir::InstructionData,
+        ctrl_typevar: ir::Type,
+    ) -> Result<Encoding, Legalize> {
         let mut iter = self.legal_encodings(dfg, inst, ctrl_typevar);
         iter.next().ok_or_else(|| iter.legalize().into())
     }
@@ -244,11 +246,13 @@ pub trait TargetIsa {
     ///
     /// Note that this will call `put*` methods on the trait object via its vtable which is not the
     /// fastest way of emitting code.
-    fn emit_inst(&self,
-                 func: &ir::Function,
-                 inst: ir::Inst,
-                 divert: &mut regalloc::RegDiversions,
-                 sink: &mut binemit::CodeSink);
+    fn emit_inst(
+        &self,
+        func: &ir::Function,
+        inst: ir::Inst,
+        divert: &mut regalloc::RegDiversions,
+        sink: &mut binemit::CodeSink,
+    );
 
     /// Emit a whole function into memory.
     ///

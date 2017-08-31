@@ -30,7 +30,8 @@ impl FunctionName {
     /// assert_eq!(name.to_string(), "#0a0908");
     /// ```
     pub fn new<T>(v: T) -> FunctionName
-        where T: Into<Vec<u8>>
+    where
+        T: Into<Vec<u8>>,
     {
         let vec = v.into();
         if vec.len() <= NAME_LENGTH_THRESHOLD {
@@ -39,9 +40,9 @@ impl FunctionName {
                 bytes[i] = byte;
             }
             FunctionName(NameRepr::Short {
-                             length: vec.len() as u8,
-                             bytes: bytes,
-                         })
+                length: vec.len() as u8,
+                bytes: bytes,
+            })
         } else {
             FunctionName(NameRepr::Long(vec))
         }
@@ -114,11 +115,17 @@ mod tests {
         assert_eq!(FunctionName::new("x").to_string(), "%x");
         assert_eq!(FunctionName::new("x_1").to_string(), "%x_1");
         assert_eq!(FunctionName::new(" ").to_string(), "#20");
-        assert_eq!(FunctionName::new("кретон").to_string(),
-                   "#d0bad180d0b5d182d0bed0bd");
-        assert_eq!(FunctionName::new("印花棉布").to_string(),
-                   "#e58db0e88ab1e6a389e5b883");
-        assert_eq!(FunctionName::new(vec![0, 1, 2, 3, 4, 5]).to_string(),
-                   "#000102030405");
+        assert_eq!(
+            FunctionName::new("кретон").to_string(),
+            "#d0bad180d0b5d182d0bed0bd"
+        );
+        assert_eq!(
+            FunctionName::new("印花棉布").to_string(),
+            "#e58db0e88ab1e6a389e5b883"
+        );
+        assert_eq!(
+            FunctionName::new(vec![0, 1, 2, 3, 4, 5]).to_string(),
+            "#000102030405"
+        );
     }
 }

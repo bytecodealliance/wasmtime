@@ -24,8 +24,10 @@ pub fn read_to_string<P: AsRef<Path>>(path: P) -> Result<String> {
 ///
 /// Return the comment text following the directive.
 pub fn match_directive<'a>(comment: &'a str, directive: &str) -> Option<&'a str> {
-    assert!(directive.ends_with(':'),
-            "Directive must include trailing colon");
+    assert!(
+        directive.ends_with(':'),
+        "Directive must include trailing colon"
+    );
     let text = comment.trim_left_matches(';').trim_left();
     if text.starts_with(directive) {
         Some(text[directive.len()..].trim())
@@ -35,10 +37,11 @@ pub fn match_directive<'a>(comment: &'a str, directive: &str) -> Option<&'a str>
 }
 
 /// Pretty-print a verifier error.
-pub fn pretty_verifier_error(func: &ir::Function,
-                             isa: Option<&TargetIsa>,
-                             err: verifier::Error)
-                             -> String {
+pub fn pretty_verifier_error(
+    func: &ir::Function,
+    isa: Option<&TargetIsa>,
+    err: verifier::Error,
+) -> String {
     let mut msg = err.to_string();
     match err.location {
         AnyEntity::Inst(inst) => {

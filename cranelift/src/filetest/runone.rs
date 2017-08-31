@@ -76,10 +76,11 @@ pub fn run(path: &Path) -> TestResult {
 }
 
 // Given a slice of tests, generate a vector of (test, flags, isa) tuples.
-fn test_tuples<'a>(tests: &'a [Box<SubTest>],
-                   isa_spec: &'a IsaSpec,
-                   no_isa_flags: &'a Flags)
-                   -> Result<Vec<(&'a SubTest, &'a Flags, Option<&'a TargetIsa>)>> {
+fn test_tuples<'a>(
+    tests: &'a [Box<SubTest>],
+    isa_spec: &'a IsaSpec,
+    no_isa_flags: &'a Flags,
+) -> Result<Vec<(&'a SubTest, &'a Flags, Option<&'a TargetIsa>)>> {
     let mut out = Vec::new();
     for test in tests {
         if test.needs_isa() {
@@ -104,10 +105,11 @@ fn test_tuples<'a>(tests: &'a [Box<SubTest>],
     Ok(out)
 }
 
-fn run_one_test<'a>(tuple: (&'a SubTest, &'a Flags, Option<&'a TargetIsa>),
-                    func: Cow<Function>,
-                    context: &mut Context<'a>)
-                    -> Result<()> {
+fn run_one_test<'a>(
+    tuple: (&'a SubTest, &'a Flags, Option<&'a TargetIsa>),
+    func: Cow<Function>,
+    context: &mut Context<'a>,
+) -> Result<()> {
     let (test, flags, isa) = tuple;
     let name = format!("{}({})", test.name(), func.name);
     dbg!("Test: {} {}", name, isa.map(TargetIsa::name).unwrap_or("-"));
@@ -117,11 +119,13 @@ fn run_one_test<'a>(tuple: (&'a SubTest, &'a Flags, Option<&'a TargetIsa>),
 
     // Should we run the verifier before this test?
     if !context.verified && test.needs_verifier() {
-        verify_function(&func, isa)
-            .map_err(|e| pretty_verifier_error(&func, isa, e))?;
+        verify_function(&func, isa).map_err(|e| {
+            pretty_verifier_error(&func, isa, e)
+        })?;
         context.verified = true;
     }
 
-    test.run(func, context)
-        .map_err(|e| format!("{}: {}", name, e))
+    test.run(func, context).map_err(
+        |e| format!("{}: {}", name, e),
+    )
 }

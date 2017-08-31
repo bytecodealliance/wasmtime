@@ -70,7 +70,9 @@ impl Pattern {
     /// Return the allocated def number.
     fn add_def(&mut self, v: &str) -> Result<usize> {
         if self.defines_var(v) {
-            Err(Error::DuplicateDef(format!("duplicate definition of ${} in same pattern", v)))
+            Err(Error::DuplicateDef(
+                format!("duplicate definition of ${} in same pattern", v),
+            ))
         } else {
             let idx = self.defs.len();
             self.defs.push(v.to_string());
@@ -111,8 +113,10 @@ impl Pattern {
 
         // All remaining possibilities start with `$(`.
         if s.len() < 2 || !s.starts_with("$(") {
-            return Err(Error::Syntax("pattern syntax error, use $$ to match a single $"
-                                         .to_string()));
+            return Err(Error::Syntax(
+                "pattern syntax error, use $$ to match a single $"
+                    .to_string(),
+            ));
         }
 
         // Match the variable name, allowing for an empty varname in `$()`, or `$(=...)`.
@@ -137,7 +141,9 @@ impl Pattern {
                 // Variable definition. Fall through.
             }
             Some(ch) => {
-                return Err(Error::Syntax(format!("syntax error in $({}... '{}'", varname, ch)));
+                return Err(Error::Syntax(
+                    format!("syntax error in $({}... '{}'", varname, ch),
+                ));
             }
         }
 
@@ -155,23 +161,31 @@ impl Pattern {
             let refname_begin = varname_end + 2;
             let refname_end = refname_begin + varname_prefix(&s[refname_begin..]);
             if refname_begin == refname_end {
-                return Err(Error::Syntax(format!("expected variable name in $({}=$...", varname)));
+                return Err(Error::Syntax(
+                    format!("expected variable name in $({}=$...", varname),
+                ));
             }
             if !s[refname_end..].starts_with(')') {
-                return Err(Error::Syntax(format!("expected ')' after $({}=${}...",
-                                                 varname,
-                                                 &s[refname_begin..refname_end])));
+                return Err(Error::Syntax(format!(
+                    "expected ')' after $({}=${}...",
+                    varname,
+                    &s[refname_begin..refname_end]
+                )));
             }
             let refname = s[refname_begin..refname_end].to_string();
             return if let Some(defidx) = def {
-                       Ok((Part::DefVar {
-                               def: defidx,
-                               var: refname,
-                           },
-                           refname_end + 1))
-                   } else {
-                       Err(Error::Syntax(format!("expected variable name in $(=${})", refname)))
-                   };
+                Ok((
+                    Part::DefVar {
+                        def: defidx,
+                        var: refname,
+                    },
+                    refname_end + 1,
+                ))
+            } else {
+                Err(Error::Syntax(
+                    format!("expected variable name in $(=${})", refname),
+                ))
+            };
         }
 
         // Last case: `$(var=...)` where `...` is a regular expression, possibly containing matched
@@ -193,9 +207,11 @@ impl Pattern {
             };
             Ok((part, rx_end + 1))
         } else {
-            Err(Error::Syntax(format!("missing ')' after regex in $({}={}",
-                                      varname,
-                                      &s[rx_begin..rx_end])))
+            Err(Error::Syntax(format!(
+                "missing ')' after regex in $({}={}",
+                varname,
+                &s[rx_begin..rx_end]
+            )))
         }
     }
 }
@@ -273,9 +289,11 @@ impl FromStr for Pattern {
             let (part, len) = pat.parse_part(&s[pos..])?;
             if let Some(v) = part.ref_var() {
                 if pat.defines_var(v) {
-                    return Err(Error::Backref(format!("unsupported back-reference to '${}' \
+                    return Err(Error::Backref(format!(
+                        "unsupported back-reference to '${}' \
                                                        defined in same pattern",
-                                                      v)));
+                        v
+                    )));
                 }
             }
             pat.parts.push(part);
@@ -410,49 +428,87 @@ mod tests {
         // This is dubious, should we panic instead?
         assert_eq!(pat.parse_part("").unwrap(), (Part::Text("".to_string()), 0));
 
-        assert_eq!(pat.parse_part("x").unwrap(),
-                   (Part::Text("x".to_string()), 1));
-        assert_eq!(pat.parse_part("x2").unwrap(),
-                   (Part::Text("x2".to_string()), 2));
-        assert_eq!(pat.parse_part("x$").unwrap(),
-                   (Part::Text("x".to_string()), 1));
-        assert_eq!(pat.parse_part("x$$").unwrap(),
-                   (Part::Text("x".to_string()), 1));
+        assert_eq!(
+            pat.parse_part("x").unwrap(),
+            (Part::Text("x".to_string()), 1)
+        );
+        assert_eq!(pat.parse_part("x2").unwrap(), (
+            Part::Text("x2".to_string()),
+            2,
+        ));
+        assert_eq!(pat.parse_part("x$").unwrap(), (
+            Part::Text("x".to_string()),
+            1,
+        ));
+        assert_eq!(pat.parse_part("x$$").unwrap(), (
+            Part::Text("x".to_string()),
+            1,
+        ));
 
-        assert_eq!(pat.parse_part("$").unwrap_err().to_string(),
-                   "pattern syntax error, use $$ to match a single $");
+        assert_eq!(
+            pat.parse_part("$").unwrap_err().to_string(),
+            "pattern syntax error, use $$ to match a single $"
+        );
 
-        assert_eq!(pat.parse_part("$$").unwrap(),
-                   (Part::Text("$".to_string()), 2));
-        assert_eq!(pat.parse_part("$$ ").unwrap(),
-                   (Part::Text("$".to_string()), 2));
+        assert_eq!(pat.parse_part("$$").unwrap(), (
+            Part::Text("$".to_string()),
+            2,
+        ));
+        assert_eq!(pat.parse_part("$$ ").unwrap(), (
+            Part::Text("$".to_string()),
+            2,
+        ));
 
-        assert_eq!(pat.parse_part("$0").unwrap(),
-                   (Part::Var("0".to_string()), 2));
-        assert_eq!(pat.parse_part("$xx=").unwrap(),
-                   (Part::Var("xx".to_string()), 3));
-        assert_eq!(pat.parse_part("$xx$").unwrap(),
-                   (Part::Var("xx".to_string()), 3));
+        assert_eq!(
+            pat.parse_part("$0").unwrap(),
+            (Part::Var("0".to_string()), 2)
+        );
+        assert_eq!(pat.parse_part("$xx=").unwrap(), (
+            Part::Var("xx".to_string()),
+            3,
+        ));
+        assert_eq!(pat.parse_part("$xx$").unwrap(), (
+            Part::Var("xx".to_string()),
+            3,
+        ));
 
-        assert_eq!(pat.parse_part("$(0)").unwrap(),
-                   (Part::Var("0".to_string()), 4));
-        assert_eq!(pat.parse_part("$()").unwrap(),
-                   (Part::Text("".to_string()), 3));
+        assert_eq!(pat.parse_part("$(0)").unwrap(), (
+            Part::Var("0".to_string()),
+            4,
+        ));
+        assert_eq!(pat.parse_part("$()").unwrap(), (
+            Part::Text("".to_string()),
+            3,
+        ));
 
-        assert_eq!(pat.parse_part("$(0").unwrap_err().to_string(),
-                   ("unterminated $(0..."));
-        assert_eq!(pat.parse_part("$(foo:").unwrap_err().to_string(),
-                   ("syntax error in $(foo... ':'"));
-        assert_eq!(pat.parse_part("$(foo =").unwrap_err().to_string(),
-                   ("syntax error in $(foo... ' '"));
-        assert_eq!(pat.parse_part("$(eo0=$bar").unwrap_err().to_string(),
-                   ("expected ')' after $(eo0=$bar..."));
-        assert_eq!(pat.parse_part("$(eo1=$bar}").unwrap_err().to_string(),
-                   ("expected ')' after $(eo1=$bar..."));
-        assert_eq!(pat.parse_part("$(eo2=$)").unwrap_err().to_string(),
-                   ("expected variable name in $(eo2=$..."));
-        assert_eq!(pat.parse_part("$(eo3=$-)").unwrap_err().to_string(),
-                   ("expected variable name in $(eo3=$..."));
+        assert_eq!(
+            pat.parse_part("$(0").unwrap_err().to_string(),
+            ("unterminated $(0...")
+        );
+        assert_eq!(
+            pat.parse_part("$(foo:").unwrap_err().to_string(),
+            ("syntax error in $(foo... ':'")
+        );
+        assert_eq!(
+            pat.parse_part("$(foo =").unwrap_err().to_string(),
+            ("syntax error in $(foo... ' '")
+        );
+        assert_eq!(
+            pat.parse_part("$(eo0=$bar").unwrap_err().to_string(),
+            ("expected ')' after $(eo0=$bar...")
+        );
+        assert_eq!(
+            pat.parse_part("$(eo1=$bar}").unwrap_err().to_string(),
+            ("expected ')' after $(eo1=$bar...")
+        );
+        assert_eq!(
+            pat.parse_part("$(eo2=$)").unwrap_err().to_string(),
+            ("expected variable name in $(eo2=$...")
+        );
+        assert_eq!(
+            pat.parse_part("$(eo3=$-)").unwrap_err().to_string(),
+            ("expected variable name in $(eo3=$...")
+        );
     }
 
     #[test]
@@ -460,48 +516,65 @@ mod tests {
         use super::{Pattern, Part};
         let mut pat = Pattern::new();
 
-        assert_eq!(pat.parse_part("$(foo=$bar)").unwrap(),
-                   (Part::DefVar {
-                        def: 0,
-                        var: "bar".to_string(),
-                    },
-                    11));
-        assert_eq!(pat.parse_part("$(foo=$bar)").unwrap_err().to_string(),
-                   "duplicate definition of $foo in same pattern");
+        assert_eq!(pat.parse_part("$(foo=$bar)").unwrap(), (
+            Part::DefVar {
+                def: 0,
+                var: "bar".to_string(),
+            },
+            11,
+        ));
+        assert_eq!(
+            pat.parse_part("$(foo=$bar)").unwrap_err().to_string(),
+            "duplicate definition of $foo in same pattern"
+        );
 
-        assert_eq!(pat.parse_part("$(fxo=$bar)x").unwrap(),
-                   (Part::DefVar {
-                        def: 1,
-                        var: "bar".to_string(),
-                    },
-                    11));
+        assert_eq!(pat.parse_part("$(fxo=$bar)x").unwrap(), (
+            Part::DefVar {
+                def: 1,
+                var: "bar".to_string(),
+            },
+            11,
+        ));
 
-        assert_eq!(pat.parse_part("$(fo2=[a-z])").unwrap(),
-                   (Part::DefLit {
-                        def: 2,
-                        regex: "(?P<fo2>[a-z])".to_string(),
-                    },
-                    12));
-        assert_eq!(pat.parse_part("$(fo3=[a-)])").unwrap(),
-                   (Part::DefLit {
-                        def: 3,
-                        regex: "(?P<fo3>[a-)])".to_string(),
-                    },
-                    12));
-        assert_eq!(pat.parse_part("$(fo4=)").unwrap(),
-                   (Part::DefLit {
-                        def: 4,
-                        regex: "(?P<fo4>)".to_string(),
-                    },
-                    7));
+        assert_eq!(pat.parse_part("$(fo2=[a-z])").unwrap(), (
+            Part::DefLit {
+                def: 2,
+                regex: "(?P<fo2>[a-z])".to_string(),
+            },
+            12,
+        ));
+        assert_eq!(pat.parse_part("$(fo3=[a-)])").unwrap(), (
+            Part::DefLit {
+                def: 3,
+                regex: "(?P<fo3>[a-)])".to_string(),
+            },
+            12,
+        ));
+        assert_eq!(pat.parse_part("$(fo4=)").unwrap(), (
+            Part::DefLit {
+                def: 4,
+                regex: "(?P<fo4>)".to_string(),
+            },
+            7,
+        ));
 
-        assert_eq!(pat.parse_part("$(=.*)").unwrap(),
-                   (Part::Regex("(?:.*)".to_string()), 6));
+        assert_eq!(pat.parse_part("$(=.*)").unwrap(), (
+            Part::Regex(
+                "(?:.*)".to_string(),
+            ),
+            6,
+        ));
 
-        assert_eq!(pat.parse_part("$(=)").unwrap(),
-                   (Part::Regex("(?:)".to_string()), 4));
-        assert_eq!(pat.parse_part("$()").unwrap(),
-                   (Part::Text("".to_string()), 3));
+        assert_eq!(pat.parse_part("$(=)").unwrap(), (
+            Part::Regex(
+                "(?:)".to_string(),
+            ),
+            4,
+        ));
+        assert_eq!(pat.parse_part("$()").unwrap(), (
+            Part::Text("".to_string()),
+            3,
+        ));
     }
 
     #[test]
@@ -512,7 +585,9 @@ mod tests {
         assert_eq!(format!("{:?}", p.parts), "[Text(\"Hello world!\")]");
 
         let p: Pattern = "  $foo=$(bar)  ".parse().unwrap();
-        assert_eq!(format!("{:?}", p.parts),
-                   "[Var(\"foo\"), Text(\"=\"), Var(\"bar\")]");
+        assert_eq!(
+            format!("{:?}", p.parts),
+            "[Var(\"foo\"), Text(\"=\"), Var(\"bar\")]"
+        );
     }
 }

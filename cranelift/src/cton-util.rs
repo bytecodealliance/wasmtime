@@ -64,10 +64,10 @@ fn cton_util() -> CommandResult {
     // Parse command line arguments.
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| {
-                      d.help(true)
-                          .version(Some(format!("Cretonne {}", VERSION)))
-                          .deserialize()
-                  })
+            d.help(true)
+                .version(Some(format!("Cretonne {}", VERSION)))
+                .deserialize()
+        })
         .unwrap_or_else(|e| e.exit());
 
     // Find the sub-command to execute.
@@ -80,10 +80,12 @@ fn cton_util() -> CommandResult {
     } else if args.cmd_print_cfg {
         print_cfg::run(args.arg_file)
     } else if args.cmd_wasm {
-        wasm::run(args.arg_file,
-                  args.flag_verbose,
-                  args.flag_optimize,
-                  args.flag_check)
+        wasm::run(
+            args.arg_file,
+            args.flag_verbose,
+            args.flag_optimize,
+            args.flag_check,
+        )
     } else {
         // Debugging / shouldn't happen with proper command line handling above.
         Err(format!("Unhandled args: {:?}", args))

@@ -29,11 +29,7 @@ impl Into<Reloc> for RelocKind {
 ///       25  20  15     12  7      0
 ///
 /// Encoding bits: `opcode[6:2] | (funct3 << 5) | (funct7 << 8)`.
-fn put_r<CS: CodeSink + ?Sized>(bits: u16,
-                                rs1: RegUnit,
-                                rs2: RegUnit,
-                                rd: RegUnit,
-                                sink: &mut CS) {
+fn put_r<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, rs2: RegUnit, rd: RegUnit, sink: &mut CS) {
     let bits = bits as u32;
     let opcode5 = bits & 0x1f;
     let funct3 = (bits >> 5) & 0x7;
@@ -63,11 +59,13 @@ fn put_r<CS: CodeSink + ?Sized>(bits: u16,
 /// Both funct7 and shamt contribute to bit 25. In RV64, shamt uses it for shifts > 31.
 ///
 /// Encoding bits: `opcode[6:2] | (funct3 << 5) | (funct7 << 8)`.
-fn put_rshamt<CS: CodeSink + ?Sized>(bits: u16,
-                                     rs1: RegUnit,
-                                     shamt: i64,
-                                     rd: RegUnit,
-                                     sink: &mut CS) {
+fn put_rshamt<CS: CodeSink + ?Sized>(
+    bits: u16,
+    rs1: RegUnit,
+    shamt: i64,
+    rd: RegUnit,
+    sink: &mut CS,
+) {
     let bits = bits as u32;
     let opcode5 = bits & 0x1f;
     let funct3 = (bits >> 5) & 0x7;

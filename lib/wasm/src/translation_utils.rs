@@ -21,7 +21,7 @@ pub type RawByte = u8;
 pub type MemoryAddress = usize;
 
 /// WebAssembly import.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum Import {
     Function { sig_index: u32 },
     Memory(Memory),
@@ -30,7 +30,7 @@ pub enum Import {
 }
 
 /// WebAssembly global.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Global {
     /// The type of the value stored in the global.
     pub ty: cretonne::ir::Type,
@@ -41,7 +41,7 @@ pub struct Global {
 }
 
 /// Globals are initialized via the four `const` operators or by referring to another import.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum GlobalInit {
     /// An `i32.const`.
     I32Const(i32),
@@ -58,7 +58,7 @@ pub enum GlobalInit {
 }
 
 /// WebAssembly table.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Table {
     /// The type of data stored in elements of the table.
     pub ty: TableElementType,
@@ -69,14 +69,14 @@ pub struct Table {
 }
 
 /// WebAssembly table element. Can be a function or a scalar type.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum TableElementType {
     Val(cretonne::ir::Type),
     Func(),
 }
 
 /// WebAssembly linear memory.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Memory {
     /// The minimum number of pages in the memory.
     pub pages_count: usize,
@@ -139,8 +139,9 @@ pub fn translate_type(ty: wasmparser::Type) -> Result<Vec<cretonne::ir::Type>, (
 /// Inverts the key-value relation in the imports hashmap. Indeed, these hashmaps are built by
 /// feeding the function indexes in the module but are used by the runtime with the `FuncRef` as
 /// keys.
-pub fn invert_hashmaps(imports: code_translator::FunctionImports)
-                       -> module_translator::ImportMappings {
+pub fn invert_hashmaps(
+    imports: code_translator::FunctionImports,
+) -> module_translator::ImportMappings {
     let mut new_imports = module_translator::ImportMappings::new();
     for (func_index, func_ref) in &imports.functions {
         new_imports.functions.insert(*func_ref, *func_index);

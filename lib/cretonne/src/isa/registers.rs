@@ -74,24 +74,23 @@ impl RegBank {
     /// Try to parse a regunit name. The name is not expected to begin with `%`.
     fn parse_regunit(&self, name: &str) -> Option<RegUnit> {
         match self.names.iter().position(|&x| x == name) {
-                Some(offset) => {
-                    // This is one of the special-cased names.
-                    Some(offset as RegUnit)
-                }
-                None => {
-                    // Try a regular prefixed name.
-                    if name.starts_with(self.prefix) {
-                        name[self.prefix.len()..].parse().ok()
-                    } else {
-                        None
-                    }
+            Some(offset) => {
+                // This is one of the special-cased names.
+                Some(offset as RegUnit)
+            }
+            None => {
+                // Try a regular prefixed name.
+                if name.starts_with(self.prefix) {
+                    name[self.prefix.len()..].parse().ok()
+                } else {
+                    None
                 }
             }
-            .and_then(|offset| if offset < self.units {
-                          Some(offset + self.first_unit)
-                      } else {
-                          None
-                      })
+        }.and_then(|offset| if offset < self.units {
+            Some(offset + self.first_unit)
+        } else {
+            None
+        })
     }
 
     /// Write `regunit` to `w`, assuming that it belongs to this bank.

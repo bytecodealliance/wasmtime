@@ -108,9 +108,12 @@ impl SubTest for TestBinEmit {
         for ebb in func.layout.ebbs() {
             for inst in func.layout.ebb_insts(ebb) {
                 if !func.encodings[inst].is_legal() {
-                    if let Ok(enc) = isa.encode(&func.dfg,
-                                                &func.dfg[inst],
-                                                func.dfg.ctrl_typevar(inst)) {
+                    if let Ok(enc) = isa.encode(
+                        &func.dfg,
+                        &func.dfg[inst],
+                        func.dfg.ctrl_typevar(inst),
+                    )
+                    {
                         func.encodings[inst] = enc;
                     }
                 }
@@ -118,8 +121,9 @@ impl SubTest for TestBinEmit {
         }
 
         // Relax branches and compute EBB offsets based on the encodings.
-        let code_size = binemit::relax_branches(&mut func, isa)
-            .map_err(|e| pretty_error(&func, context.isa, e))?;
+        let code_size = binemit::relax_branches(&mut func, isa).map_err(|e| {
+            pretty_error(&func, context.isa, e)
+        })?;
 
         // Collect all of the 'bin:' directives on instructions.
         let mut bins = HashMap::new();
@@ -128,16 +132,20 @@ impl SubTest for TestBinEmit {
                 match comment.entity {
                     AnyEntity::Inst(inst) => {
                         if let Some(prev) = bins.insert(inst, want) {
-                            return Err(format!("multiple 'bin:' directives on {}: '{}' and '{}'",
-                                               func.dfg.display_inst(inst, isa),
-                                               prev,
-                                               want));
+                            return Err(format!(
+                                "multiple 'bin:' directives on {}: '{}' and '{}'",
+                                func.dfg.display_inst(inst, isa),
+                                prev,
+                                want
+                            ));
                         }
                     }
                     _ => {
-                        return Err(format!("'bin:' directive on non-inst {}: {}",
-                                           comment.entity,
-                                           comment.text))
+                        return Err(format!(
+                            "'bin:' directive on non-inst {}: {}",
+                            comment.entity,
+                            comment.text
+                        ))
                     }
                 }
             }
@@ -152,10 +160,12 @@ impl SubTest for TestBinEmit {
         for ebb in func.layout.ebbs() {
             divert.clear();
             // Correct header offsets should have been computed by `relax_branches()`.
-            assert_eq!(sink.offset,
-                       func.offsets[ebb],
-                       "Inconsistent {} header offset",
-                       ebb);
+            assert_eq!(
+                sink.offset,
+                func.offsets[ebb],
+                "Inconsistent {} header offset",
+                ebb
+            );
             for inst in func.layout.ebb_insts(ebb) {
                 sink.text.clear();
                 let enc = func.encodings[inst];
@@ -166,34 +176,44 @@ impl SubTest for TestBinEmit {
                     isa.emit_inst(&func, inst, &mut divert, &mut sink);
                     let emitted = sink.offset - before;
                     // Verify the encoding recipe sizes against the ISAs emit_inst implementation.
-                    assert_eq!(emitted,
-                               encinfo.bytes(enc),
-                               "Inconsistent size for [{}] {}",
-                               encinfo.display(enc),
-                               func.dfg.display_inst(inst, isa));
+                    assert_eq!(
+                        emitted,
+                        encinfo.bytes(enc),
+                        "Inconsistent size for [{}] {}",
+                        encinfo.display(enc),
+                        func.dfg.display_inst(inst, isa)
+                    );
                 }
 
                 // Check against bin: directives.
                 if let Some(want) = bins.remove(&inst) {
                     if !enc.is_legal() {
-                        return Err(format!("{} can't be encoded: {}",
-                                           inst,
-                                           func.dfg.display_inst(inst, isa)));
+                        return Err(format!(
+                            "{} can't be encoded: {}",
+                            inst,
+                            func.dfg.display_inst(inst, isa)
+                        ));
                     }
                     let have = sink.text.trim();
                     if have != want {
-                        return Err(format!("Bad machine code for {}: {}\nWant: {}\nGot:  {}",
-                                           inst,
-                                           func.dfg.display_inst(inst, isa),
-                                           want,
-                                           have));
+                        return Err(format!(
+                            "Bad machine code for {}: {}\nWant: {}\nGot:  {}",
+                            inst,
+                            func.dfg.display_inst(inst, isa),
+                            want,
+                            have
+                        ));
                     }
                 }
             }
         }
 
         if sink.offset != code_size {
-            return Err(format!("Expected code size {}, got {}", code_size, sink.offset));
+            return Err(format!(
+                "Expected code size {}, got {}",
+                code_size,
+                sink.offset
+            ));
         }
 
         Ok(())

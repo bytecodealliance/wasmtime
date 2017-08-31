@@ -481,7 +481,8 @@ impl OpcodeConstraints {
     pub fn result_type(self, n: usize, ctrl_type: Type) -> Type {
         assert!(n < self.fixed_results(), "Invalid result index");
         if let ResolvedConstraint::Bound(t) =
-            OPERAND_CONSTRAINTS[self.constraint_offset() + n].resolve(ctrl_type) {
+            OPERAND_CONSTRAINTS[self.constraint_offset() + n].resolve(ctrl_type)
+        {
             t
         } else {
             panic!("Result constraints can't be free");
@@ -494,8 +495,10 @@ impl OpcodeConstraints {
     /// Unlike results, it is possible for some input values to vary freely within a specific
     /// `ValueTypeSet`. This is represented with the `ArgumentConstraint::Free` variant.
     pub fn value_argument_constraint(self, n: usize, ctrl_type: Type) -> ResolvedConstraint {
-        assert!(n < self.fixed_value_arguments(),
-                "Invalid value argument index");
+        assert!(
+            n < self.fixed_value_arguments(),
+            "Invalid value argument index"
+        );
         let offset = self.constraint_offset() + self.fixed_results();
         OPERAND_CONSTRAINTS[offset + n].resolve(ctrl_type)
     }
@@ -613,14 +616,14 @@ impl OperandConstraint {
             AsBool => Bound(ctrl_type.as_bool()),
             HalfWidth => Bound(ctrl_type.half_width().expect("invalid type for half_width")),
             DoubleWidth => {
-                Bound(ctrl_type
-                          .double_width()
-                          .expect("invalid type for double_width"))
+                Bound(ctrl_type.double_width().expect(
+                    "invalid type for double_width",
+                ))
             }
             HalfVector => {
-                Bound(ctrl_type
-                          .half_vector()
-                          .expect("invalid type for half_vector"))
+                Bound(ctrl_type.half_vector().expect(
+                    "invalid type for half_vector",
+                ))
             }
             DoubleVector => Bound(ctrl_type.by(2).expect("invalid type for double_vector")),
         }
@@ -688,10 +691,14 @@ mod tests {
         assert_eq!(a.fixed_value_arguments(), 2);
         assert_eq!(a.result_type(0, types::I32), types::I32);
         assert_eq!(a.result_type(0, types::I8), types::I8);
-        assert_eq!(a.value_argument_constraint(0, types::I32),
-                   ResolvedConstraint::Bound(types::I32));
-        assert_eq!(a.value_argument_constraint(1, types::I32),
-                   ResolvedConstraint::Bound(types::I32));
+        assert_eq!(
+            a.value_argument_constraint(0, types::I32),
+            ResolvedConstraint::Bound(types::I32)
+        );
+        assert_eq!(
+            a.value_argument_constraint(1, types::I32),
+            ResolvedConstraint::Bound(types::I32)
+        );
 
         let b = Opcode::Bitcast.constraints();
         assert!(!b.use_typevar_operand());

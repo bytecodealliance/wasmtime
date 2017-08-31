@@ -51,9 +51,9 @@ pub enum HeapStyle {
 impl fmt::Display for HeapData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self.style {
-                           HeapStyle::Dynamic { .. } => "dynamic",
-                           HeapStyle::Static { .. } => "static",
-                       })?;
+            HeapStyle::Dynamic { .. } => "dynamic",
+            HeapStyle::Static { .. } => "static",
+        })?;
 
         match self.base {
             HeapBase::ReservedReg => write!(f, " reserved_reg")?,

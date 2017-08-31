@@ -42,10 +42,12 @@ fn no_matches() {
 #[test]
 fn simple() {
     let c = CheckerBuilder::new()
-        .text("
+        .text(
+            "
         check: one
         check: two
-        ")
+        ",
+        )
         .unwrap()
         .finish();
 
@@ -71,10 +73,12 @@ fn simple() {
 #[test]
 fn sameln() {
     let c = CheckerBuilder::new()
-        .text("
+        .text(
+            "
         check: one
         sameln: two
-        ")
+        ",
+        )
         .unwrap()
         .finish();
 
@@ -106,10 +110,12 @@ fn sameln() {
 #[test]
 fn nextln() {
     let c = CheckerBuilder::new()
-        .text("
+        .text(
+            "
         check: one
         nextln: two
-        ")
+        ",
+        )
         .unwrap()
         .finish();
 
@@ -149,10 +155,12 @@ fn leading_nextln() {
     // A leading nextln directive should match from line 2.
     // This is somewhat arbitrary, but consistent with a preceeding 'check: $()' directive.
     let c = CheckerBuilder::new()
-        .text("
+        .text(
+            "
         nextln: one
         nextln: two
-        ")
+        ",
+        )
         .unwrap()
         .finish();
 
@@ -174,10 +182,12 @@ fn leading_nextln() {
 fn leading_sameln() {
     // A leading sameln directive should match from line 1.
     let c = CheckerBuilder::new()
-        .text("
+        .text(
+            "
         sameln: one
         sameln: two
-        ")
+        ",
+        )
         .unwrap()
         .finish();
 
@@ -197,11 +207,13 @@ fn leading_sameln() {
 #[test]
 fn not() {
     let c = CheckerBuilder::new()
-        .text("
+        .text(
+            "
         check: one$()
         not: $()eat$()
         check: $()two
-        ")
+        ",
+        )
         .unwrap()
         .finish();
 
@@ -221,12 +233,14 @@ fn not() {
 #[test]
 fn notnot() {
     let c = CheckerBuilder::new()
-        .text("
+        .text(
+            "
         check: one$()
         not: $()eat$()
         not: half
         check: $()two
-        ")
+        ",
+        )
         .unwrap()
         .finish();
 
@@ -254,87 +268,135 @@ fn notnot() {
 #[test]
 fn unordered() {
     let c = CheckerBuilder::new()
-        .text("
+        .text(
+            "
         check: one
         unordered: two
         unordered: three
         check: four
-        ")
+        ",
+        )
         .unwrap()
         .finish();
 
-    assert_eq!(c.check("one two three four", NO_VARIABLES).map_err(e2s),
-               Ok(true));
-    assert_eq!(c.check("one three two four", NO_VARIABLES).map_err(e2s),
-               Ok(true));
+    assert_eq!(
+        c.check("one two three four", NO_VARIABLES).map_err(e2s),
+        Ok(true)
+    );
+    assert_eq!(
+        c.check("one three two four", NO_VARIABLES).map_err(e2s),
+        Ok(true)
+    );
 
-    assert_eq!(c.check("one two four three four", NO_VARIABLES)
-                   .map_err(e2s),
-               Ok(true));
-    assert_eq!(c.check("one three four two four", NO_VARIABLES)
-                   .map_err(e2s),
-               Ok(true));
+    assert_eq!(
+        c.check("one two four three four", NO_VARIABLES).map_err(
+            e2s,
+        ),
+        Ok(true)
+    );
+    assert_eq!(
+        c.check("one three four two four", NO_VARIABLES).map_err(
+            e2s,
+        ),
+        Ok(true)
+    );
 
-    assert_eq!(c.check("one two four three", NO_VARIABLES).map_err(e2s),
-               Ok(false));
-    assert_eq!(c.check("one three four two", NO_VARIABLES).map_err(e2s),
-               Ok(false));
+    assert_eq!(
+        c.check("one two four three", NO_VARIABLES).map_err(e2s),
+        Ok(false)
+    );
+    assert_eq!(
+        c.check("one three four two", NO_VARIABLES).map_err(e2s),
+        Ok(false)
+    );
 }
 
 #[test]
 fn leading_unordered() {
     let c = CheckerBuilder::new()
-        .text("
+        .text(
+            "
         unordered: two
         unordered: three
         check: four
-        ")
+        ",
+        )
         .unwrap()
         .finish();
 
-    assert_eq!(c.check("one two three four", NO_VARIABLES).map_err(e2s),
-               Ok(true));
-    assert_eq!(c.check("one three two four", NO_VARIABLES).map_err(e2s),
-               Ok(true));
+    assert_eq!(
+        c.check("one two three four", NO_VARIABLES).map_err(e2s),
+        Ok(true)
+    );
+    assert_eq!(
+        c.check("one three two four", NO_VARIABLES).map_err(e2s),
+        Ok(true)
+    );
 
-    assert_eq!(c.check("one two four three four", NO_VARIABLES)
-                   .map_err(e2s),
-               Ok(true));
-    assert_eq!(c.check("one three four two four", NO_VARIABLES)
-                   .map_err(e2s),
-               Ok(true));
+    assert_eq!(
+        c.check("one two four three four", NO_VARIABLES).map_err(
+            e2s,
+        ),
+        Ok(true)
+    );
+    assert_eq!(
+        c.check("one three four two four", NO_VARIABLES).map_err(
+            e2s,
+        ),
+        Ok(true)
+    );
 
-    assert_eq!(c.check("one two four three", NO_VARIABLES).map_err(e2s),
-               Ok(false));
-    assert_eq!(c.check("one three four two", NO_VARIABLES).map_err(e2s),
-               Ok(false));
+    assert_eq!(
+        c.check("one two four three", NO_VARIABLES).map_err(e2s),
+        Ok(false)
+    );
+    assert_eq!(
+        c.check("one three four two", NO_VARIABLES).map_err(e2s),
+        Ok(false)
+    );
 }
 
 #[test]
 fn trailing_unordered() {
     let c = CheckerBuilder::new()
-        .text("
+        .text(
+            "
         check: one
         unordered: two
         unordered: three
-        ")
+        ",
+        )
         .unwrap()
         .finish();
 
-    assert_eq!(c.check("one two three four", NO_VARIABLES).map_err(e2s),
-               Ok(true));
-    assert_eq!(c.check("one three two four", NO_VARIABLES).map_err(e2s),
-               Ok(true));
+    assert_eq!(
+        c.check("one two three four", NO_VARIABLES).map_err(e2s),
+        Ok(true)
+    );
+    assert_eq!(
+        c.check("one three two four", NO_VARIABLES).map_err(e2s),
+        Ok(true)
+    );
 
-    assert_eq!(c.check("one two four three four", NO_VARIABLES)
-                   .map_err(e2s),
-               Ok(true));
-    assert_eq!(c.check("one three four two four", NO_VARIABLES)
-                   .map_err(e2s),
-               Ok(true));
+    assert_eq!(
+        c.check("one two four three four", NO_VARIABLES).map_err(
+            e2s,
+        ),
+        Ok(true)
+    );
+    assert_eq!(
+        c.check("one three four two four", NO_VARIABLES).map_err(
+            e2s,
+        ),
+        Ok(true)
+    );
 
-    assert_eq!(c.check("one two four three", NO_VARIABLES).map_err(e2s),
-               Ok(true));
-    assert_eq!(c.check("one three four two", NO_VARIABLES).map_err(e2s),
-               Ok(true));
+    assert_eq!(
+        c.check("one two four three", NO_VARIABLES).map_err(e2s),
+        Ok(true)
+    );
+    assert_eq!(
+        c.check("one three four two", NO_VARIABLES).map_err(e2s),
+        Ok(true)
+    );
 }

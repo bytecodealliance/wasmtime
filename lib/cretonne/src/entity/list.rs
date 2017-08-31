@@ -212,12 +212,13 @@ impl<T: EntityRef> ListPool<T> {
     /// Reallocate a block to a different size class.
     ///
     /// Copy `elems_to_copy` elements from the old to the new block.
-    fn realloc(&mut self,
-               block: usize,
-               from_sclass: SizeClass,
-               to_sclass: SizeClass,
-               elems_to_copy: usize)
-               -> usize {
+    fn realloc(
+        &mut self,
+        block: usize,
+        from_sclass: SizeClass,
+        to_sclass: SizeClass,
+        elems_to_copy: usize,
+    ) -> usize {
         assert!(elems_to_copy <= sclass_size(from_sclass));
         assert!(elems_to_copy <= sclass_size(to_sclass));
         let new_block = self.alloc(to_sclass);
@@ -384,7 +385,8 @@ impl<T: EntityRef> EntityList<T> {
 
     /// Appends multiple elements to the back of the list.
     pub fn extend<I>(&mut self, elements: I, pool: &mut ListPool<T>)
-        where I: IntoIterator<Item = T>
+    where
+        I: IntoIterator<Item = T>,
     {
         // TODO: use `size_hint()` to reduce reallocations.
         for x in elements {
@@ -597,8 +599,10 @@ mod tests {
 
         list.extend([i1, i1, i2, i2, i3, i3, i4, i4].iter().cloned(), pool);
         assert_eq!(list.len(pool), 12);
-        assert_eq!(list.as_slice(pool),
-                   &[i1, i2, i3, i4, i1, i1, i2, i2, i3, i3, i4, i4]);
+        assert_eq!(
+            list.as_slice(pool),
+            &[i1, i2, i3, i4, i1, i1, i2, i2, i3, i3, i4, i4]
+        );
     }
 
     #[test]

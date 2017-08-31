@@ -71,9 +71,9 @@ impl JumpTableData {
 
     /// Checks if any of the entries branch to `ebb`.
     pub fn branches_to(&self, ebb: Ebb) -> bool {
-        self.table
-            .iter()
-            .any(|target_ebb| target_ebb.expand() == Some(ebb))
+        self.table.iter().any(|target_ebb| {
+            target_ebb.expand() == Some(ebb)
+        })
     }
 
     /// Access the whole table as a mutable slice.
@@ -148,8 +148,10 @@ mod tests {
         jt.set_entry(0, e2);
         jt.set_entry(10, e1);
 
-        assert_eq!(jt.to_string(),
-                   "jump_table ebb2, 0, 0, 0, 0, 0, 0, 0, 0, 0, ebb1");
+        assert_eq!(
+            jt.to_string(),
+            "jump_table ebb2, 0, 0, 0, 0, 0, 0, 0, 0, 0, ebb1"
+        );
 
         let v: Vec<(usize, Ebb)> = jt.entries().collect();
         assert_eq!(v, [(0, e2), (10, e1)]);

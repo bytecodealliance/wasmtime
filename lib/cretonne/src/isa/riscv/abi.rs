@@ -86,10 +86,12 @@ impl ArgAssigner for Args {
 }
 
 /// Legalize `sig` for RISC-V.
-pub fn legalize_signature(sig: &mut ir::Signature,
-                          flags: &shared_settings::Flags,
-                          isa_flags: &settings::Flags,
-                          current: bool) {
+pub fn legalize_signature(
+    sig: &mut ir::Signature,
+    flags: &shared_settings::Flags,
+    isa_flags: &settings::Flags,
+    current: bool,
+) {
     let bits = if flags.is_64bit() { 64 } else { 32 };
 
     let mut args = Args::new(bits, isa_flags.enable_e());

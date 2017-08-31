@@ -38,10 +38,11 @@ fn write_spec(w: &mut Write, func: &Function, regs: Option<&RegInfo>) -> Result 
     write!(w, "function {}{}", func.name, func.signature.display(regs))
 }
 
-fn write_preamble(w: &mut Write,
-                  func: &Function,
-                  regs: Option<&RegInfo>)
-                  -> result::Result<bool, Error> {
+fn write_preamble(
+    w: &mut Write,
+    func: &Function,
+    regs: Option<&RegInfo>,
+) -> result::Result<bool, Error> {
     let mut any = false;
 
     for ss in func.stack_slots.keys() {
@@ -63,10 +64,12 @@ fn write_preamble(w: &mut Write,
     // signatures.
     for sig in func.dfg.signatures.keys() {
         any = true;
-        writeln!(w,
-                 "    {} = {}",
-                 sig,
-                 func.dfg.signatures[sig].display(regs))?;
+        writeln!(
+            w,
+            "    {} = {}",
+            sig,
+            func.dfg.signatures[sig].display(regs)
+        )?;
     }
 
     for fnref in func.dfg.ext_funcs.keys() {
@@ -163,8 +166,10 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
     }
 
     let rtype = func.dfg.ctrl_typevar(inst);
-    assert!(!rtype.is_void(),
-            "Polymorphic instruction must produce a result");
+    assert!(
+        !rtype.is_void(),
+        "Polymorphic instruction must produce a result"
+    );
     Some(rtype)
 }
 
@@ -179,11 +184,12 @@ fn write_value_aliases(w: &mut Write, func: &Function, inst: Inst, indent: usize
     Ok(())
 }
 
-fn write_instruction(w: &mut Write,
-                     func: &Function,
-                     isa: Option<&TargetIsa>,
-                     inst: Inst)
-                     -> Result {
+fn write_instruction(
+    w: &mut Write,
+    func: &Function,
+    isa: Option<&TargetIsa>,
+    inst: Inst,
+) -> Result {
     // Indent all instructions to col 24 if any encodings are present.
     let indent = if func.encodings.is_empty() { 4 } else { 24 };
 
@@ -240,11 +246,12 @@ fn write_instruction(w: &mut Write,
 }
 
 /// Write the operands of `inst` to `w` with a prepended space.
-pub fn write_operands(w: &mut Write,
-                      dfg: &DataFlowGraph,
-                      isa: Option<&TargetIsa>,
-                      inst: Inst)
-                      -> Result {
+pub fn write_operands(
+    w: &mut Write,
+    dfg: &DataFlowGraph,
+    isa: Option<&TargetIsa>,
+    inst: Inst,
+) -> Result {
     let pool = &dfg.value_lists;
     use ir::instructions::InstructionData::*;
     match dfg[inst] {
@@ -278,10 +285,12 @@ pub fn write_operands(w: &mut Write,
             if args.is_empty() {
                 write!(w, " {}", destination)
             } else {
-                write!(w,
-                       " {}({})",
-                       destination,
-                       DisplayValues(args.as_slice(pool)))
+                write!(
+                    w,
+                    " {}({})",
+                    destination,
+                    DisplayValues(args.as_slice(pool))
+                )
             }
         }
         Branch {
@@ -315,11 +324,13 @@ pub fn write_operands(w: &mut Write,
         }
         IndirectCall { sig_ref, ref args, .. } => {
             let args = args.as_slice(pool);
-            write!(w,
-                   " {}, {}({})",
-                   sig_ref,
-                   args[0],
-                   DisplayValues(&args[1..]))
+            write!(
+                w,
+                " {}, {}({})",
+                sig_ref,
+                args[0],
+                DisplayValues(&args[1..])
+            )
         }
         StackLoad { stack_slot, offset, .. } => write!(w, " {}{}", stack_slot, offset),
         StackStore {
@@ -341,11 +352,13 @@ pub fn write_operands(w: &mut Write,
         RegMove { arg, src, dst, .. } => {
             if let Some(isa) = isa {
                 let regs = isa.register_info();
-                write!(w,
-                       " {}, {} -> {}",
-                       arg,
-                       regs.display_regunit(src),
-                       regs.display_regunit(dst))
+                write!(
+                    w,
+                    " {}, {} -> {}",
+                    arg,
+                    regs.display_regunit(src),
+                    regs.display_regunit(dst)
+                )
             } else {
                 write!(w, " {}, %{} -> %{}", arg, src, dst)
             }
@@ -382,22 +395,31 @@ mod tests {
         f.name = FunctionName::new("foo");
         assert_eq!(f.to_string(), "function %foo() native {\n}\n");
 
-        f.stack_slots
-            .push(StackSlotData::new(StackSlotKind::Local, 4));
-        assert_eq!(f.to_string(),
-                   "function %foo() native {\n    ss0 = local 4\n}\n");
+        f.stack_slots.push(
+            StackSlotData::new(StackSlotKind::Local, 4),
+        );
+        assert_eq!(
+            f.to_string(),
+            "function %foo() native {\n    ss0 = local 4\n}\n"
+        );
 
         let ebb = f.dfg.make_ebb();
         f.layout.append_ebb(ebb);
-        assert_eq!(f.to_string(),
-                   "function %foo() native {\n    ss0 = local 4\n\nebb0:\n}\n");
+        assert_eq!(
+            f.to_string(),
+            "function %foo() native {\n    ss0 = local 4\n\nebb0:\n}\n"
+        );
 
         f.dfg.append_ebb_arg(ebb, types::I8);
-        assert_eq!(f.to_string(),
-                   "function %foo() native {\n    ss0 = local 4\n\nebb0(v0: i8):\n}\n");
+        assert_eq!(
+            f.to_string(),
+            "function %foo() native {\n    ss0 = local 4\n\nebb0(v0: i8):\n}\n"
+        );
 
         f.dfg.append_ebb_arg(ebb, types::F32.by(4).unwrap());
-        assert_eq!(f.to_string(),
-                   "function %foo() native {\n    ss0 = local 4\n\nebb0(v0: i8, v1: f32x4):\n}\n");
+        assert_eq!(
+            f.to_string(),
+            "function %foo() native {\n    ss0 = local 4\n\nebb0(v0: i8, v1: f32x4):\n}\n"
+        );
     }
 }

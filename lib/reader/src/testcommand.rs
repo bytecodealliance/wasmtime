@@ -95,7 +95,9 @@ mod tests {
         assert_eq!(&TestCommand::new("cat").to_string(), "cat\n");
         assert_eq!(&TestCommand::new("cat  ").to_string(), "cat\n");
         assert_eq!(&TestCommand::new("cat  1  ").to_string(), "cat 1\n");
-        assert_eq!(&TestCommand::new("cat  one=4   two t").to_string(),
-                   "cat one=4 two t\n");
+        assert_eq!(
+            &TestCommand::new("cat  one=4   two t").to_string(),
+            "cat one=4 two t\n"
+        );
     }
 }
