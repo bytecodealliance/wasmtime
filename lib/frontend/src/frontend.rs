@@ -147,15 +147,14 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                 }
                 None => {
 // branch_destination() doesn't detect jump_tables
-                    match data {
 // If jump table we declare all entries successor
 // TODO: not collect with vector?
-                        InstructionData::BranchTable { table, .. } => {
+                    if let InstructionData::BranchTable { table, .. } = data {
 // Unlike all other jumps/branches, jump tables are
 // capable of having the same successor appear
 // multiple times. Use a HashSet to deduplicate.
-                            let mut unique = HashSet::new();
-                            for dest_ebb in self.builder
+                        let mut unique = HashSet::new();
+                        for dest_ebb in self.builder
                                     .func
                                     .jump_tables
                                     .get(table)
@@ -166,9 +165,6 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                                     .collect::<Vec<Ebb>>() {
                                 self.builder.declare_successor(dest_ebb, inst)
                             }
-                        }
-// If not we do nothing
-                        _ => {}
                     }
                 }
             }
