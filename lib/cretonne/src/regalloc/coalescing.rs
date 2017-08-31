@@ -468,7 +468,7 @@ impl<'a> Context<'a> {
     /// Leave `self.values` unchanged on failure.
     fn add_class(&mut self, value: Value) -> Result<(), (Value, Value)> {
         self.forest.try_merge(
-            &self.values,
+            self.values,
             self.virtregs.congruence_class(&value),
             &self.func.dfg,
             &self.func.layout,
