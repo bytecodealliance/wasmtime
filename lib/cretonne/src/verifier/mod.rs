@@ -169,7 +169,7 @@ impl<'a> Verifier<'a> {
             seen.insert(gv);
 
             let mut cur = gv;
-            while let &ir::GlobalVarData::Deref { base, .. } = &self.func.global_vars[cur] {
+            while let ir::GlobalVarData::Deref { base, .. } = self.func.global_vars[cur] {
                 if seen.insert(base).is_some() {
                     return err!(gv, "deref cycle: {}", DisplayList(seen.as_slice()));
                 }

@@ -10,8 +10,8 @@ use ir::{self, InstBuilder};
 /// Expand a `global_addr` instruction according to the definition of the global variable.
 pub fn expand_global_addr(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut ControlFlowGraph) {
     // Unpack the instruction.
-    let gv = match &func.dfg[inst] {
-        &ir::InstructionData::UnaryGlobalVar { opcode, global_var } => {
+    let gv = match func.dfg[inst] {
+        ir::InstructionData::UnaryGlobalVar { opcode, global_var } => {
             assert_eq!(opcode, ir::Opcode::GlobalAddr);
             global_var
         }

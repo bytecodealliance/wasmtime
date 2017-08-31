@@ -420,8 +420,8 @@ fn translate_operator(
             // and push a new control frame with a new ebb for the code after the if/then/else
             // At the end of the then clause we jump to the destination
             let i = control_stack.len() - 1;
-            let (destination, return_values, branch_inst) = match &control_stack[i] {
-                &ControlStackFrame::If {
+            let (destination, return_values, branch_inst) = match control_stack[i] {
+                ControlStackFrame::If {
                     destination,
                     ref return_values,
                     branch_inst,
@@ -1276,15 +1276,15 @@ fn translate_unreachable_operator(
             } else {
                 // Encountering an real else means that the code in the else
                 // clause is reachable again
-                let (branch_inst, original_stack_size) =
-                    match &control_stack[control_stack.len() - 1] {
-                        &ControlStackFrame::If {
-                            branch_inst,
-                            original_stack_size,
-                            ..
-                        } => (branch_inst, original_stack_size),
-                        _ => panic!("should not happen"),
-                    };
+                let (branch_inst, original_stack_size) = match control_stack[control_stack.len() -
+                                                                                   1] {
+                    ControlStackFrame::If {
+                        branch_inst,
+                        original_stack_size,
+                        ..
+                    } => (branch_inst, original_stack_size),
+                    _ => panic!("should not happen"),
+                };
                 // We change the target of the branch instruction
                 let else_ebb = builder.create_ebb();
                 builder.change_jump_destination(branch_inst, else_ebb);
