@@ -88,7 +88,7 @@ def emit_instp(instp, fmt, has_dfg=False):
     # Deal with pure type check predicates which apply to any instruction.
     if iform == instruction_context:
         fmt.line('let args = inst.arguments(&dfg.value_lists);')
-        fmt.format('return {};', instp.rust_predicate(0))
+        fmt.line(instp.rust_predicate(0))
         return
 
     assert isinstance(iform, InstructionFormat)
