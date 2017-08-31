@@ -57,7 +57,7 @@ pub fn run(
     flag_optimize: bool,
     flag_check: bool,
 ) -> Result<(), String> {
-    for filename in files.iter() {
+    for filename in files {
         let path = Path::new(&filename);
         let name = String::from(path.as_os_str().to_string_lossy());
         match handle_module(
@@ -148,7 +148,7 @@ fn handle_module(
         terminal.fg(term::color::MAGENTA).unwrap();
         vprint!(flag_verbose, "Checking...   ");
         terminal.reset().unwrap();
-        for func in translation.functions.iter() {
+        for func in &translation.functions {
             let il = match *func {
                 FunctionTranslation::Import() => continue,
                 FunctionTranslation::Code { ref il, .. } => il.clone(),
@@ -166,7 +166,7 @@ fn handle_module(
         terminal.fg(term::color::MAGENTA).unwrap();
         vprint!(flag_verbose, "Optimizing... ");
         terminal.reset().unwrap();
-        for func in translation.functions.iter() {
+        for func in &translation.functions {
             let mut il = match *func {
                 FunctionTranslation::Import() => continue,
                 FunctionTranslation::Code { ref il, .. } => il.clone(),

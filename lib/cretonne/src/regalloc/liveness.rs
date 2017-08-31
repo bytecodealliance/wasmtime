@@ -433,7 +433,7 @@ impl Liveness {
         assert!(self.ebb_args.is_empty());
 
         for ebb in func.layout.ebbs() {
-            for &arg in func.dfg.ebb_args(ebb).iter() {
+            for &arg in func.dfg.ebb_args(ebb) {
                 let affinity = self.ranges.get(arg).unwrap().affinity;
                 if affinity.is_none() {
                     continue;

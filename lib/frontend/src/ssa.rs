@@ -421,7 +421,7 @@ where
         // `use_var`'s traversal won't revisit these predecesors.
         let mut preds = Vec::new();
         mem::swap(&mut preds, &mut self.predecessors_mut(dest_ebb));
-        for &(pred, last_inst) in preds.iter() {
+        for &(pred, last_inst) in &preds {
             // For each predecessor, we query what is the local SSA value corresponding
             // to var and we put it as an argument of the branch instruction.
             let (pred_val, mut local_side_effects) =
