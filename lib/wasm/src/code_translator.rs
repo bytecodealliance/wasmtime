@@ -72,54 +72,54 @@ enum ControlStackFrame {
 /// Helper methods for the control stack objects.
 impl ControlStackFrame {
     fn return_values(&self) -> &[Type] {
-        match self {
-            &ControlStackFrame::If { ref return_values, .. } |
-            &ControlStackFrame::Block { ref return_values, .. } |
-            &ControlStackFrame::Loop { ref return_values, .. } => return_values.as_slice(),
+        match *self {
+            ControlStackFrame::If { ref return_values, .. } |
+            ControlStackFrame::Block { ref return_values, .. } |
+            ControlStackFrame::Loop { ref return_values, .. } => return_values.as_slice(),
         }
     }
     fn following_code(&self) -> Ebb {
-        match self {
-            &ControlStackFrame::If { destination, .. } |
-            &ControlStackFrame::Block { destination, .. } |
-            &ControlStackFrame::Loop { destination, .. } => destination,
+        match *self {
+            ControlStackFrame::If { destination, .. } |
+            ControlStackFrame::Block { destination, .. } |
+            ControlStackFrame::Loop { destination, .. } => destination,
         }
     }
     fn br_destination(&self) -> Ebb {
-        match self {
-            &ControlStackFrame::If { destination, .. } |
-            &ControlStackFrame::Block { destination, .. } => destination,
-            &ControlStackFrame::Loop { header, .. } => header,
+        match *self {
+            ControlStackFrame::If { destination, .. } |
+            ControlStackFrame::Block { destination, .. } => destination,
+            ControlStackFrame::Loop { header, .. } => header,
         }
     }
     fn original_stack_size(&self) -> usize {
-        match self {
-            &ControlStackFrame::If { original_stack_size, .. } |
-            &ControlStackFrame::Block { original_stack_size, .. } |
-            &ControlStackFrame::Loop { original_stack_size, .. } => original_stack_size,
+        match *self {
+            ControlStackFrame::If { original_stack_size, .. } |
+            ControlStackFrame::Block { original_stack_size, .. } |
+            ControlStackFrame::Loop { original_stack_size, .. } => original_stack_size,
         }
     }
     fn is_loop(&self) -> bool {
-        match self {
-            &ControlStackFrame::If { .. } |
-            &ControlStackFrame::Block { .. } => false,
-            &ControlStackFrame::Loop { .. } => true,
+        match *self {
+            ControlStackFrame::If { .. } |
+            ControlStackFrame::Block { .. } => false,
+            ControlStackFrame::Loop { .. } => true,
         }
     }
 
     fn is_reachable(&self) -> bool {
-        match self {
-            &ControlStackFrame::If { reachable, .. } |
-            &ControlStackFrame::Block { reachable, .. } |
-            &ControlStackFrame::Loop { reachable, .. } => reachable,
+        match *self {
+            ControlStackFrame::If { reachable, .. } |
+            ControlStackFrame::Block { reachable, .. } |
+            ControlStackFrame::Loop { reachable, .. } => reachable,
         }
     }
 
     fn set_reachable(&mut self) {
-        match self {
-            &mut ControlStackFrame::If { ref mut reachable, .. } |
-            &mut ControlStackFrame::Block { ref mut reachable, .. } |
-            &mut ControlStackFrame::Loop { ref mut reachable, .. } => *reachable = true,
+        match *self {
+            ControlStackFrame::If { ref mut reachable, .. } |
+            ControlStackFrame::Block { ref mut reachable, .. } |
+            ControlStackFrame::Loop { ref mut reachable, .. } => *reachable = true,
         }
     }
 }
@@ -1314,9 +1314,9 @@ fn find_function_import(
     let sig_index = functions[index];
     if let Some(local_sig_index) = func_imports.signatures.get(&(sig_index as usize)) {
         let local_func_index = builder.import_function(ExtFuncData {
-            name: match exports {
-                &None => FunctionName::new(""),
-                &Some(ref exports) => {
+            name: match *exports {
+                None => FunctionName::new(""),
+                Some(ref exports) => {
                     match exports.get(&index) {
                         None => FunctionName::new(""),
                         Some(name) => FunctionName::new(name.clone()),
@@ -1335,9 +1335,9 @@ fn find_function_import(
         sig_local_index,
     );
     let local_func_index = builder.import_function(ExtFuncData {
-        name: match exports {
-            &None => FunctionName::new(""),
-            &Some(ref exports) => {
+        name: match *exports {
+            None => FunctionName::new(""),
+            Some(ref exports) => {
                 match exports.get(&index) {
                     None => FunctionName::new(""),
                     Some(name) => FunctionName::new(name.clone()),

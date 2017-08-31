@@ -29,9 +29,9 @@ pub enum GlobalVarData {
 
 impl fmt::Display for GlobalVarData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &GlobalVarData::VmCtx { offset } => write!(f, "vmctx{}", offset),
-            &GlobalVarData::Deref { base, offset } => write!(f, "deref({}){}", base, offset),
+        match *self {
+            GlobalVarData::VmCtx { offset } => write!(f, "vmctx{}", offset),
+            GlobalVarData::Deref { base, offset } => write!(f, "deref({}){}", base, offset),
         }
     }
 }

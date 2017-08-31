@@ -149,9 +149,9 @@ fn handle_module(
         vprint!(flag_verbose, "Checking...   ");
         terminal.reset().unwrap();
         for func in translation.functions.iter() {
-            let il = match func {
-                &FunctionTranslation::Import() => continue,
-                &FunctionTranslation::Code { ref il, .. } => il.clone(),
+            let il = match *func {
+                FunctionTranslation::Import() => continue,
+                FunctionTranslation::Code { ref il, .. } => il.clone(),
             };
             match verifier::verify_function(&il, None) {
                 Ok(()) => (),
@@ -167,9 +167,9 @@ fn handle_module(
         vprint!(flag_verbose, "Optimizing... ");
         terminal.reset().unwrap();
         for func in translation.functions.iter() {
-            let mut il = match func {
-                &FunctionTranslation::Import() => continue,
-                &FunctionTranslation::Code { ref il, .. } => il.clone(),
+            let mut il = match *func {
+                FunctionTranslation::Import() => continue,
+                FunctionTranslation::Code { ref il, .. } => il.clone(),
             };
             let mut loop_analysis = LoopAnalysis::new();
             let mut cfg = ControlFlowGraph::new();
