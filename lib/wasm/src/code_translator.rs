@@ -567,7 +567,7 @@ fn translate_operator(
                             acc.insert(depth as usize, branch_ebb);
                             return acc;
                         };
-                        let branch_ebb = acc.get(&(depth as usize)).unwrap().clone();
+                        let branch_ebb = acc[&(depth as usize)].clone();
                         builder.insert_jump_table_entry(jt, index, branch_ebb);
                         acc
                     });
