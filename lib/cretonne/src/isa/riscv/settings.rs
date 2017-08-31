@@ -18,14 +18,16 @@ mod tests {
         let shared = settings::Flags::new(&settings::builder());
         let b = builder();
         let f = Flags::new(&shared, &b);
-        assert_eq!(f.to_string(),
-                   "[riscv]\n\
+        assert_eq!(
+            f.to_string(),
+            "[riscv]\n\
                     supports_m = false\n\
                     supports_a = false\n\
                     supports_f = false\n\
                     supports_d = false\n\
                     enable_m = true\n\
-                    enable_e = false\n");
+                    enable_e = false\n"
+        );
         // Predicates are not part of the Display output.
         assert_eq!(f.full_float(), false);
     }

@@ -35,12 +35,14 @@ pub fn expand_heap_addr(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut Cont
 }
 
 /// Expand a `heap_addr` for a dynamic heap.
-fn dynamic_addr(inst: ir::Inst,
-                heap: ir::Heap,
-                offset: ir::Value,
-                size: u32,
-                bound_gv: ir::GlobalVar,
-                func: &mut ir::Function) {
+fn dynamic_addr(
+    inst: ir::Inst,
+    heap: ir::Heap,
+    offset: ir::Value,
+    size: u32,
+    bound_gv: ir::GlobalVar,
+    func: &mut ir::Function,
+) {
     let size = size as i64;
     let offset_ty = func.dfg.value_type(offset);
     let addr_ty = func.dfg.value_type(func.dfg.first_result(inst));
@@ -54,21 +56,30 @@ fn dynamic_addr(inst: ir::Inst,
     let oob;
     if size == 1 {
         // `offset > bound - 1` is the same as `offset >= bound`.
-        oob = pos.ins()
-            .icmp(IntCC::UnsignedGreaterThanOrEqual, offset, bound);
+        oob = pos.ins().icmp(
+            IntCC::UnsignedGreaterThanOrEqual,
+            offset,
+            bound,
+        );
     } else if size <= min_size {
         // We know that bound >= min_size, so here we can compare `offset > bound - size` without
         // wrapping.
         let adj_bound = pos.ins().iadd_imm(bound, -size);
-        oob = pos.ins()
-            .icmp(IntCC::UnsignedGreaterThan, offset, adj_bound);
+        oob = pos.ins().icmp(
+            IntCC::UnsignedGreaterThan,
+            offset,
+            adj_bound,
+        );
     } else {
         // We need an overflow check for the adjusted offset.
         let size_val = pos.ins().iconst(offset_ty, size);
         let (adj_offset, overflow) = pos.ins().iadd_cout(offset, size_val);
         pos.ins().trapnz(overflow);
-        oob = pos.ins()
-            .icmp(IntCC::UnsignedGreaterThan, adj_offset, bound);
+        oob = pos.ins().icmp(
+            IntCC::UnsignedGreaterThan,
+            adj_offset,
+            bound,
+        );
     }
     pos.ins().trapnz(oob);
 
@@ -76,12 +87,14 @@ fn dynamic_addr(inst: ir::Inst,
 }
 
 /// Expand a `heap_addr` for a static heap.
-fn static_addr(inst: ir::Inst,
-               heap: ir::Heap,
-               offset: ir::Value,
-               size: u32,
-               bound: i64,
-               func: &mut ir::Function) {
+fn static_addr(
+    inst: ir::Inst,
+    heap: ir::Heap,
+    offset: ir::Value,
+    size: u32,
+    bound: i64,
+    func: &mut ir::Function,
+) {
     let size = size as i64;
     let offset_ty = func.dfg.value_type(offset);
     let addr_ty = func.dfg.value_type(func.dfg.first_result(inst));
@@ -104,11 +117,17 @@ fn static_addr(inst: ir::Inst,
         let oob = if limit & 1 == 1 {
             // Prefer testing `offset >= limit - 1` when limit is odd because an even number is
             // likely to be a convenient constant on ARM and other RISC architectures.
-            pos.ins()
-                .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, offset, limit - 1)
+            pos.ins().icmp_imm(
+                IntCC::UnsignedGreaterThanOrEqual,
+                offset,
+                limit - 1,
+            )
         } else {
-            pos.ins()
-                .icmp_imm(IntCC::UnsignedGreaterThan, offset, limit)
+            pos.ins().icmp_imm(
+                IntCC::UnsignedGreaterThan,
+                offset,
+                limit,
+            )
         };
         pos.ins().trapnz(oob);
     }
@@ -119,12 +138,14 @@ fn static_addr(inst: ir::Inst,
 /// Emit code for the base address computation of a `heap_addr` instruction.
 ///
 ///
-fn offset_addr(inst: ir::Inst,
-               heap: ir::Heap,
-               addr_ty: ir::Type,
-               mut offset: ir::Value,
-               offset_ty: ir::Type,
-               func: &mut ir::Function) {
+fn offset_addr(
+    inst: ir::Inst,
+    heap: ir::Heap,
+    addr_ty: ir::Type,
+    mut offset: ir::Value,
+    offset_ty: ir::Type,
+    func: &mut ir::Function,
+) {
     let mut pos = FuncCursor::new(func).at_inst(inst);
 
     // Convert `offset` to `addr_ty`.

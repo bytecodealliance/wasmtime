@@ -123,8 +123,9 @@ pub trait ProgramOrder {
     /// directly. Depending on the implementation, there is a good chance performance will be
     /// improved for those cases where the type of either argument is known statically.
     fn cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
-        where A: Into<ExpandedProgramPoint>,
-              B: Into<ExpandedProgramPoint>;
+    where
+        A: Into<ExpandedProgramPoint>,
+        B: Into<ExpandedProgramPoint>;
 
     /// Is the range from `inst` to `ebb` just the gap between consecutive EBBs?
     ///

@@ -51,19 +51,22 @@ fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
 }
 
 
-pub fn run(files: Vec<String>,
-           flag_verbose: bool,
-           flag_optimize: bool,
-           flag_check: bool)
-           -> Result<(), String> {
+pub fn run(
+    files: Vec<String>,
+    flag_verbose: bool,
+    flag_optimize: bool,
+    flag_check: bool,
+) -> Result<(), String> {
     for filename in files.iter() {
         let path = Path::new(&filename);
         let name = String::from(path.as_os_str().to_string_lossy());
-        match handle_module(flag_verbose,
-                            flag_optimize,
-                            flag_check,
-                            path.to_path_buf(),
-                            name) {
+        match handle_module(
+            flag_verbose,
+            flag_optimize,
+            flag_check,
+            path.to_path_buf(),
+            name,
+        ) {
             Ok(()) => {}
             Err(message) => return Err(message),
         }
@@ -71,12 +74,13 @@ pub fn run(files: Vec<String>,
     Ok(())
 }
 
-fn handle_module(flag_verbose: bool,
-                 flag_optimize: bool,
-                 flag_check: bool,
-                 path: PathBuf,
-                 name: String)
-                 -> Result<(), String> {
+fn handle_module(
+    flag_verbose: bool,
+    flag_optimize: bool,
+    flag_check: bool,
+    path: PathBuf,
+    name: String,
+) -> Result<(), String> {
     let mut terminal = term::stdout().unwrap();
     terminal.fg(term::color::YELLOW).unwrap();
     vprint!(flag_verbose, "Handling: ");
@@ -109,10 +113,10 @@ fn handle_module(flag_verbose: bool,
                         .arg(file_path.to_str().unwrap())
                         .output()
                         .or_else(|e| if let io::ErrorKind::NotFound = e.kind() {
-                                     return Err(String::from("wast2wasm not found"));
-                                 } else {
-                                     return Err(String::from(e.description()));
-                                 })
+                            return Err(String::from("wast2wasm not found"));
+                        } else {
+                            return Err(String::from(e.description()));
+                        })
                         .unwrap();
                     match read_wasm_file(file_path) {
                         Ok(data) => data,
@@ -221,17 +225,20 @@ fn handle_module(flag_verbose: bool,
 }
 
 /// Pretty-print a verifier error.
-pub fn pretty_verifier_error(func: &ir::Function,
-                             isa: Option<&TargetIsa>,
-                             err: verifier::Error)
-                             -> String {
+pub fn pretty_verifier_error(
+    func: &ir::Function,
+    isa: Option<&TargetIsa>,
+    err: verifier::Error,
+) -> String {
     let msg = err.to_string();
     let str1 = match err.location {
         AnyEntity::Inst(inst) => {
-            format!("{}\n{}: {}\n\n",
-                    msg,
-                    inst,
-                    func.dfg.display_inst(inst, isa))
+            format!(
+                "{}\n{}: {}\n\n",
+                msg,
+                inst,
+                func.dfg.display_inst(inst, isa)
+            )
         }
         _ => String::from(format!("{}\n", msg)),
     };

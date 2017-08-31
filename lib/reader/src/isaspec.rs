@@ -36,7 +36,8 @@ impl IsaSpec {
 
 /// Parse an iterator of command line options and apply them to `config`.
 pub fn parse_options<'a, I>(iter: I, config: &mut Configurable, loc: &Location) -> Result<()>
-    where I: Iterator<Item = &'a str>
+where
+    I: Iterator<Item = &'a str>,
 {
     for opt in iter.map(TestOption::new) {
         match opt {

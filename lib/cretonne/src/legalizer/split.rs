@@ -71,21 +71,23 @@ use std::iter;
 
 /// Split `value` into two values using the `isplit` semantics. Do this by reusing existing values
 /// if possible.
-pub fn isplit(dfg: &mut DataFlowGraph,
-              cfg: &ControlFlowGraph,
-              pos: &mut Cursor,
-              value: Value)
-              -> (Value, Value) {
+pub fn isplit(
+    dfg: &mut DataFlowGraph,
+    cfg: &ControlFlowGraph,
+    pos: &mut Cursor,
+    value: Value,
+) -> (Value, Value) {
     split_any(dfg, cfg, pos, value, Opcode::Iconcat)
 }
 
 /// Split `value` into halves using the `vsplit` semantics. Do this by reusing existing values if
 /// possible.
-pub fn vsplit(dfg: &mut DataFlowGraph,
-              cfg: &ControlFlowGraph,
-              pos: &mut Cursor,
-              value: Value)
-              -> (Value, Value) {
+pub fn vsplit(
+    dfg: &mut DataFlowGraph,
+    cfg: &ControlFlowGraph,
+    pos: &mut Cursor,
+    value: Value,
+) -> (Value, Value) {
     split_any(dfg, cfg, pos, value, Opcode::Vconcat)
 }
 
@@ -107,12 +109,13 @@ struct Repair {
 }
 
 /// Generic version of `isplit` and `vsplit` controlled by the `concat` opcode.
-fn split_any(dfg: &mut DataFlowGraph,
-             cfg: &ControlFlowGraph,
-             pos: &mut Cursor,
-             value: Value,
-             concat: Opcode)
-             -> (Value, Value) {
+fn split_any(
+    dfg: &mut DataFlowGraph,
+    cfg: &ControlFlowGraph,
+    pos: &mut Cursor,
+    value: Value,
+    concat: Opcode,
+) -> (Value, Value) {
     let saved_pos = pos.position();
     let mut repairs = Vec::new();
     let result = split_value(dfg, pos, value, concat, &mut repairs);
@@ -121,17 +124,20 @@ fn split_any(dfg: &mut DataFlowGraph,
     while let Some(repair) = repairs.pop() {
         for &(_, inst) in cfg.get_predecessors(repair.ebb) {
             let branch_opc = dfg[inst].opcode();
-            assert!(branch_opc.is_branch(),
-                    "Predecessor not a branch: {}",
-                    dfg.display_inst(inst, None));
+            assert!(
+                branch_opc.is_branch(),
+                "Predecessor not a branch: {}",
+                dfg.display_inst(inst, None)
+            );
             let fixed_args = branch_opc.constraints().fixed_value_arguments();
-            let mut args = dfg[inst]
-                .take_value_list()
-                .expect("Branches must have value lists.");
+            let mut args = dfg[inst].take_value_list().expect(
+                "Branches must have value lists.",
+            );
             let num_args = args.len(&dfg.value_lists);
             // Get the old value passed to the EBB argument we're repairing.
-            let old_arg = args.get(fixed_args + repair.num, &dfg.value_lists)
-                .expect("Too few branch arguments");
+            let old_arg = args.get(fixed_args + repair.num, &dfg.value_lists).expect(
+                "Too few branch arguments",
+            );
 
             // It's possible that the CFG's predecessor list has duplicates. Detect them here.
             if dfg.value_type(old_arg) == repair.split_type {
@@ -145,19 +151,21 @@ fn split_any(dfg: &mut DataFlowGraph,
 
             // The `lo` part replaces the original argument.
             *args.get_mut(fixed_args + repair.num, &mut dfg.value_lists)
-                 .unwrap() = lo;
+                .unwrap() = lo;
 
             // The `hi` part goes at the end. Since multiple repairs may have been scheduled to the
             // same EBB, there could be multiple arguments missing.
             if num_args > fixed_args + repair.hi_num {
                 *args.get_mut(fixed_args + repair.hi_num, &mut dfg.value_lists)
-                     .unwrap() = hi;
+                    .unwrap() = hi;
             } else {
                 // We need to append one or more arguments. If we're adding more than one argument,
                 // there must be pending repairs on the stack that will fill in the correct values
                 // instead of `hi`.
-                args.extend(iter::repeat(hi).take(1 + fixed_args + repair.hi_num - num_args),
-                            &mut dfg.value_lists);
+                args.extend(
+                    iter::repeat(hi).take(1 + fixed_args + repair.hi_num - num_args),
+                    &mut dfg.value_lists,
+                );
             }
 
             // Put the value list back after manipulating it.
@@ -175,12 +183,13 @@ fn split_any(dfg: &mut DataFlowGraph,
 /// instruction.
 ///
 /// Return the two new values representing the parts of `value`.
-fn split_value(dfg: &mut DataFlowGraph,
-               pos: &mut Cursor,
-               value: Value,
-               concat: Opcode,
-               repairs: &mut Vec<Repair>)
-               -> (Value, Value) {
+fn split_value(
+    dfg: &mut DataFlowGraph,
+    pos: &mut Cursor,
+    value: Value,
+    concat: Opcode,
+    repairs: &mut Vec<Repair>,
+) -> (Value, Value) {
     let value = dfg.resolve_copies(value);
     let mut reuse = None;
 
@@ -228,9 +237,12 @@ fn split_value(dfg: &mut DataFlowGraph,
                 // need to insert a split instruction before returning.
                 pos.goto_top(ebb);
                 pos.next_inst();
-                dfg.ins(pos)
-                    .with_result(value)
-                    .Binary(concat, split_type, lo, hi);
+                dfg.ins(pos).with_result(value).Binary(
+                    concat,
+                    split_type,
+                    lo,
+                    hi,
+                );
 
                 // Finally, splitting the EBB argument is not enough. We also have to repair all
                 // of the predecessor instructions that branch here.
@@ -254,19 +266,21 @@ fn split_value(dfg: &mut DataFlowGraph,
 }
 
 // Add a repair entry to the work list.
-fn add_repair(concat: Opcode,
-              split_type: Type,
-              ebb: Ebb,
-              num: usize,
-              hi_num: usize,
-              repairs: &mut Vec<Repair>) {
+fn add_repair(
+    concat: Opcode,
+    split_type: Type,
+    ebb: Ebb,
+    num: usize,
+    hi_num: usize,
+    repairs: &mut Vec<Repair>,
+) {
     repairs.push(Repair {
-                     concat,
-                     split_type,
-                     ebb,
-                     num,
-                     hi_num,
-                 });
+        concat,
+        split_type,
+        ebb,
+        num,
+        hi_num,
+    });
 }
 
 /// Strip concat-split chains. Return a simpler way of computing the same value.

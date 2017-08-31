@@ -63,7 +63,8 @@ impl<K: Default, V: Default> NodePool<K, V> {
 }
 
 impl<K: Default, V: Default> BTree<K, V> {
-    /// Search for `key` and return a `Cursor` that either points at `key` or the position where it would be inserted.
+    /// Search for `key` and return a `Cursor` that either points at `key` or the position
+    /// where it would be inserted.
     pub fn search(&mut self, key: K) -> Cursor<K, V> {
         unimplemented!()
     }

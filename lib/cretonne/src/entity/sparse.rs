@@ -51,16 +51,18 @@ pub trait SparseMapValue<K> {
 /// - `SparseMap` requires the values to implement `SparseMapValue<K>` which means that they must
 ///   contain their own key.
 pub struct SparseMap<K, V>
-    where K: EntityRef,
-          V: SparseMapValue<K>
+where
+    K: EntityRef,
+    V: SparseMapValue<K>,
 {
     sparse: EntityMap<K, u32>,
     dense: Vec<V>,
 }
 
 impl<K, V> SparseMap<K, V>
-    where K: EntityRef,
-          V: SparseMapValue<K>
+where
+    K: EntityRef,
+    V: SparseMapValue<K>,
 {
     /// Create a new empty mapping.
     pub fn new() -> Self {
@@ -191,8 +193,9 @@ impl<K, V> SparseMap<K, V>
 
 /// Iterating over the elements of a set.
 impl<'a, K, V> IntoIterator for &'a SparseMap<K, V>
-    where K: EntityRef,
-          V: SparseMapValue<K>
+where
+    K: EntityRef,
+    V: SparseMapValue<K>,
 {
     type Item = &'a V;
     type IntoIter = slice::Iter<'a, V>;
@@ -204,7 +207,8 @@ impl<'a, K, V> IntoIterator for &'a SparseMap<K, V>
 
 /// Any `EntityRef` can be used as a sparse map value representing itself.
 impl<T> SparseMapValue<T> for T
-    where T: EntityRef
+where
+    T: EntityRef,
 {
     fn key(&self) -> T {
         *self
@@ -290,8 +294,10 @@ mod tests {
         assert_eq!(map.insert(Obj(i0, "baz")), None);
 
         // Iteration order = insertion order when nothing has been removed yet.
-        assert_eq!(map.values().map(|obj| obj.1).collect::<Vec<_>>(),
-                   ["foo", "bar", "baz"]);
+        assert_eq!(
+            map.values().map(|obj| obj.1).collect::<Vec<_>>(),
+            ["foo", "bar", "baz"]
+        );
 
         assert_eq!(map.len(), 3);
         assert_eq!(map.get(i0), Some(&Obj(i0, "baz")));

@@ -133,18 +133,24 @@ impl Context {
     /// Perform LICM on the function.
     pub fn licm(&mut self) -> CtonResult {
         self.ensure_domtree();
-        do_licm(&mut self.func,
-                &mut self.cfg,
-                &mut self.domtree,
-                &mut self.loop_analysis);
+        do_licm(
+            &mut self.func,
+            &mut self.cfg,
+            &mut self.domtree,
+            &mut self.loop_analysis,
+        );
         self.verify(None).map_err(Into::into)
     }
 
     /// Run the register allocator.
     pub fn regalloc(&mut self, isa: &TargetIsa) -> CtonResult {
         self.ensure_domtree();
-        self.regalloc
-            .run(isa, &mut self.func, &self.cfg, &self.domtree)
+        self.regalloc.run(
+            isa,
+            &mut self.func,
+            &self.cfg,
+            &self.domtree,
+        )
     }
 
     /// Insert prologue and epilogues after computing the stack frame layout.

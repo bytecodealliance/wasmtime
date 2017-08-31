@@ -127,11 +127,12 @@ pub fn verify_function(func: &Function, isa: Option<&TargetIsa>) -> Result {
 
 /// Verify `func` after checking the integrity of associated context data structures `cfg` and
 /// `domtree`.
-pub fn verify_context(func: &Function,
-                      cfg: &ControlFlowGraph,
-                      domtree: &DominatorTree,
-                      isa: Option<&TargetIsa>)
-                      -> Result {
+pub fn verify_context(
+    func: &Function,
+    cfg: &ControlFlowGraph,
+    domtree: &DominatorTree,
+    isa: Option<&TargetIsa>,
+) -> Result {
     let verifier = Verifier::new(func, isa);
     verifier.cfg_integrity(cfg)?;
     if domtree.is_valid() {
@@ -187,9 +188,11 @@ impl<'a> Verifier<'a> {
 
         if is_terminator && !is_last_inst {
             // Terminating instructions only occur at the end of blocks.
-            return err!(inst,
-                        "a terminator instruction was encountered before the end of {}",
-                        ebb);
+            return err!(
+                inst,
+                "a terminator instruction was encountered before the end of {}",
+                ebb
+            );
         }
         if is_last_inst && !is_terminator {
             return err!(ebb, "block does not end in a terminator instruction!");
@@ -237,10 +240,12 @@ impl<'a> Verifier<'a> {
         // All result values for multi-valued instructions are created
         let got_results = dfg.inst_results(inst).len();
         if got_results != total_results {
-            return err!(inst,
-                        "expected {} result values, found {}",
-                        total_results,
-                        got_results);
+            return err!(
+                inst,
+                "expected {} result values, found {}",
+                total_results,
+                got_results
+            );
         }
 
         self.verify_entity_references(inst)
@@ -407,22 +412,30 @@ impl<'a> Verifier<'a> {
             ValueDef::Res(def_inst, _) => {
                 // Value is defined by an instruction that exists.
                 if !dfg.inst_is_valid(def_inst) {
-                    return err!(loc_inst,
-                                "{} is defined by invalid instruction {}",
-                                v,
-                                def_inst);
+                    return err!(
+                        loc_inst,
+                        "{} is defined by invalid instruction {}",
+                        v,
+                        def_inst
+                    );
                 }
                 // Defining instruction is inserted in an EBB.
                 if self.func.layout.inst_ebb(def_inst) == None {
-                    return err!(loc_inst,
-                                "{} is defined by {} which has no EBB",
-                                v,
-                                def_inst);
+                    return err!(
+                        loc_inst,
+                        "{} is defined by {} which has no EBB",
+                        v,
+                        def_inst
+                    );
                 }
                 // Defining instruction dominates the instruction that uses the value.
                 if self.domtree.is_reachable(self.func.layout.pp_ebb(loc_inst)) &&
-                   !self.domtree
-                        .dominates(def_inst, loc_inst, &self.func.layout) {
+                    !self.domtree.dominates(
+                        def_inst,
+                        loc_inst,
+                        &self.func.layout,
+                    )
+                {
                     return err!(loc_inst, "uses value from non-dominating {}", def_inst);
                 }
             }
@@ -433,14 +446,17 @@ impl<'a> Verifier<'a> {
                 }
                 // Defining EBB is inserted in the layout
                 if !self.func.layout.is_ebb_inserted(ebb) {
-                    return err!(loc_inst,
-                                "{} is defined by {} which is not in the layout",
-                                v,
-                                ebb);
+                    return err!(
+                        loc_inst,
+                        "{} is defined by {} which is not in the layout",
+                        v,
+                        ebb
+                    );
                 }
                 // The defining EBB dominates the instruction using this value.
                 if self.domtree.is_reachable(ebb) &&
-                   !self.domtree.dominates(ebb, loc_inst, &self.func.layout) {
+                    !self.domtree.dominates(ebb, loc_inst, &self.func.layout)
+                {
                     return err!(loc_inst, "uses value arg from non-dominating {}", ebb);
                 }
             }
@@ -456,39 +472,48 @@ impl<'a> Verifier<'a> {
             let expected = domtree.idom(ebb);
             let got = self.domtree.idom(ebb);
             if got != expected {
-                return err!(ebb,
-                            "invalid domtree, expected idom({}) = {:?}, got {:?}",
-                            ebb,
-                            expected,
-                            got);
+                return err!(
+                    ebb,
+                    "invalid domtree, expected idom({}) = {:?}, got {:?}",
+                    ebb,
+                    expected,
+                    got
+                );
             }
         }
         // We also verify if the postorder defined by `DominatorTree` is sane
         if self.domtree.cfg_postorder().len() != domtree.cfg_postorder().len() {
-            return err!(AnyEntity::Function,
-                        "incorrect number of Ebbs in postorder traversal");
+            return err!(
+                AnyEntity::Function,
+                "incorrect number of Ebbs in postorder traversal"
+            );
         }
         for (index, (&true_ebb, &test_ebb)) in
             self.domtree
                 .cfg_postorder()
                 .iter()
                 .zip(domtree.cfg_postorder().iter())
-                .enumerate() {
+                .enumerate()
+        {
             if true_ebb != test_ebb {
-                return err!(test_ebb,
-                            "invalid domtree, postorder ebb number {} should be {}, got {}",
-                            index,
-                            true_ebb,
-                            test_ebb);
+                return err!(
+                    test_ebb,
+                    "invalid domtree, postorder ebb number {} should be {}, got {}",
+                    index,
+                    true_ebb,
+                    test_ebb
+                );
             }
         }
         // We verify rpo_cmp on pairs of adjacent ebbs in the postorder
         for (&prev_ebb, &next_ebb) in self.domtree.cfg_postorder().iter().adjacent_pairs() {
             if domtree.rpo_cmp(prev_ebb, next_ebb, &self.func.layout) != Ordering::Greater {
-                return err!(next_ebb,
-                            "invalid domtree, rpo_cmp does not says {} is greater than {}",
-                            prev_ebb,
-                            next_ebb);
+                return err!(
+                    next_ebb,
+                    "invalid domtree, rpo_cmp does not says {} is greater than {}",
+                    prev_ebb,
+                    next_ebb
+                );
             }
         }
         Ok(())
@@ -506,11 +531,13 @@ impl<'a> Verifier<'a> {
             for (i, &arg) in self.func.dfg.ebb_args(ebb).iter().enumerate() {
                 let arg_type = self.func.dfg.value_type(arg);
                 if arg_type != expected_types[i].value_type {
-                    return err!(ebb,
-                                "entry block argument {} expected to have type {}, got {}",
-                                i,
-                                expected_types[i],
-                                arg_type);
+                    return err!(
+                        ebb,
+                        "entry block argument {} expected to have type {}, got {}",
+                        i,
+                        expected_types[i],
+                        arg_type
+                    );
                 }
             }
         }
@@ -551,12 +578,14 @@ impl<'a> Verifier<'a> {
             let expected_type = self.func.dfg.compute_result_type(inst, i, ctrl_type);
             if let Some(expected_type) = expected_type {
                 if result_type != expected_type {
-                    return err!(inst,
-                                "expected result {} ({}) to have type {}, found {}",
-                                i,
-                                result,
-                                expected_type,
-                                result_type);
+                    return err!(
+                        inst,
+                        "expected result {} ({}) to have type {}, found {}",
+                        i,
+                        result,
+                        expected_type,
+                        result_type
+                    );
                 }
             } else {
                 return err!(inst, "has more result values than expected");
@@ -579,22 +608,26 @@ impl<'a> Verifier<'a> {
             match constraints.value_argument_constraint(i, ctrl_type) {
                 ResolvedConstraint::Bound(expected_type) => {
                     if arg_type != expected_type {
-                        return err!(inst,
-                                    "arg {} ({}) has type {}, expected {}",
-                                    i,
-                                    arg,
-                                    arg_type,
-                                    expected_type);
+                        return err!(
+                            inst,
+                            "arg {} ({}) has type {}, expected {}",
+                            i,
+                            arg,
+                            arg_type,
+                            expected_type
+                        );
                     }
                 }
                 ResolvedConstraint::Free(type_set) => {
                     if !type_set.contains(arg_type) {
-                        return err!(inst,
-                                    "arg {} ({}) with type {} failed to satisfy type set {:?}",
-                                    i,
-                                    arg,
-                                    arg_type,
-                                    type_set);
+                        return err!(
+                            inst,
+                            "arg {} ({}) with type {} failed to satisfy type set {:?}",
+                            i,
+                            arg,
+                            arg_type,
+                            type_set
+                        );
                     }
                 }
             }
@@ -605,21 +638,21 @@ impl<'a> Verifier<'a> {
     fn typecheck_variable_args(&self, inst: Inst) -> Result {
         match self.func.dfg[inst].analyze_branch(&self.func.dfg.value_lists) {
             BranchInfo::SingleDest(ebb, _) => {
-                let iter = self.func
-                    .dfg
-                    .ebb_args(ebb)
-                    .iter()
-                    .map(|&v| self.func.dfg.value_type(v));
+                let iter = self.func.dfg.ebb_args(ebb).iter().map(|&v| {
+                    self.func.dfg.value_type(v)
+                });
                 self.typecheck_variable_args_iterator(inst, iter)?;
             }
             BranchInfo::Table(table) => {
                 for (_, ebb) in self.func.jump_tables[table].entries() {
                     let arg_count = self.func.dfg.num_ebb_args(ebb);
                     if arg_count != 0 {
-                        return err!(inst,
-                                    "takes no arguments, but had target {} with {} arguments",
-                                    ebb,
-                                    arg_count);
+                        return err!(
+                            inst,
+                            "takes no arguments, but had target {} with {} arguments",
+                            ebb,
+                            arg_count
+                        );
                     }
                 }
             }
@@ -649,10 +682,11 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn typecheck_variable_args_iterator<I: Iterator<Item = Type>>(&self,
-                                                                  inst: Inst,
-                                                                  iter: I)
-                                                                  -> Result {
+    fn typecheck_variable_args_iterator<I: Iterator<Item = Type>>(
+        &self,
+        inst: Inst,
+        iter: I,
+    ) -> Result {
         let variable_args = self.func.dfg.inst_variable_args(inst);
         let mut i = 0;
 
@@ -665,20 +699,24 @@ impl<'a> Verifier<'a> {
             let arg = variable_args[i];
             let arg_type = self.func.dfg.value_type(arg);
             if expected_type != arg_type {
-                return err!(inst,
-                            "arg {} ({}) has type {}, expected {}",
-                            i,
-                            variable_args[i],
-                            arg_type,
-                            expected_type);
+                return err!(
+                    inst,
+                    "arg {} ({}) has type {}, expected {}",
+                    i,
+                    variable_args[i],
+                    arg_type,
+                    expected_type
+                );
             }
             i += 1;
         }
         if i != variable_args.len() {
-            return err!(inst,
-                        "mismatched argument count, got {}, expected {}",
-                        variable_args.len(),
-                        i);
+            return err!(
+                inst,
+                "mismatched argument count, got {}, expected {}",
+                variable_args.len(),
+                i
+            );
         }
         Ok(())
     }
@@ -707,34 +745,42 @@ impl<'a> Verifier<'a> {
                     self.verify_stack_slot(inst, ss)?;
                     let slot = &self.func.stack_slots[ss];
                     if slot.kind != StackSlotKind::OutgoingArg {
-                        return err!(inst,
-                                    "Outgoing stack argument {} in wrong stack slot: {} = {}",
-                                    arg,
-                                    ss,
-                                    slot);
+                        return err!(
+                            inst,
+                            "Outgoing stack argument {} in wrong stack slot: {} = {}",
+                            arg,
+                            ss,
+                            slot
+                        );
                     }
                     if slot.offset != offset {
-                        return err!(inst,
-                                    "Outgoing stack argument {} should have offset {}: {} = {}",
-                                    arg,
-                                    offset,
-                                    ss,
-                                    slot);
+                        return err!(
+                            inst,
+                            "Outgoing stack argument {} should have offset {}: {} = {}",
+                            arg,
+                            offset,
+                            ss,
+                            slot
+                        );
                     }
                     if slot.size != abi.value_type.bytes() {
-                        return err!(inst,
-                                    "Outgoing stack argument {} wrong size for {}: {} = {}",
-                                    arg,
-                                    abi.value_type,
-                                    ss,
-                                    slot);
+                        return err!(
+                            inst,
+                            "Outgoing stack argument {} wrong size for {}: {} = {}",
+                            arg,
+                            abi.value_type,
+                            ss,
+                            slot
+                        );
                     }
                 } else {
                     let reginfo = self.isa.map(|i| i.register_info());
-                    return err!(inst,
-                                "Outgoing stack argument {} in wrong location: {}",
-                                arg,
-                                arg_loc.display(reginfo.as_ref()));
+                    return err!(
+                        inst,
+                        "Outgoing stack argument {} in wrong location: {}",
+                        arg,
+                        arg_loc.display(reginfo.as_ref())
+                    );
                 }
             }
         }
@@ -751,12 +797,14 @@ impl<'a> Verifier<'a> {
             for (i, (&arg, &expected_type)) in args.iter().zip(expected_types).enumerate() {
                 let arg_type = self.func.dfg.value_type(arg);
                 if arg_type != expected_type.value_type {
-                    return err!(inst,
-                                "arg {} ({}) has type {}, must match function signature of {}",
-                                i,
-                                arg,
-                                arg_type,
-                                expected_type);
+                    return err!(
+                        inst,
+                        "arg {} ({}) has type {}, must match function signature of {}",
+                        i,
+                        arg,
+                        arg_type,
+                        expected_type
+                    );
                 }
             }
         }
@@ -775,9 +823,11 @@ impl<'a> Verifier<'a> {
 
             let missing_succs: Vec<Ebb> = expected_succs.difference(&got_succs).cloned().collect();
             if !missing_succs.is_empty() {
-                return err!(ebb,
-                            "cfg lacked the following successor(s) {:?}",
-                            missing_succs);
+                return err!(
+                    ebb,
+                    "cfg lacked the following successor(s) {:?}",
+                    missing_succs
+                );
             }
 
             let excess_succs: Vec<Ebb> = got_succs.difference(&expected_succs).cloned().collect();
@@ -790,9 +840,11 @@ impl<'a> Verifier<'a> {
 
             let missing_preds: Vec<Inst> = expected_preds.difference(&got_preds).cloned().collect();
             if !missing_preds.is_empty() {
-                return err!(ebb,
-                            "cfg lacked the following predecessor(s) {:?}",
-                            missing_preds);
+                return err!(
+                    ebb,
+                    "cfg lacked the following predecessor(s) {:?}",
+                    missing_preds
+                );
             }
 
             let excess_preds: Vec<Inst> = got_preds.difference(&expected_preds).cloned().collect();
@@ -826,23 +878,28 @@ impl<'a> Verifier<'a> {
 
         let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
-            let verify_encoding =
-                isa.encode(&self.func.dfg,
-                           &self.func.dfg[inst],
-                           self.func.dfg.ctrl_typevar(inst));
+            let verify_encoding = isa.encode(
+                &self.func.dfg,
+                &self.func.dfg[inst],
+                self.func.dfg.ctrl_typevar(inst),
+            );
             match verify_encoding {
                 Ok(verify_encoding) => {
                     if verify_encoding != encoding {
-                        return err!(inst,
-                                    "Instruction re-encoding {} doesn't match {}",
-                                    isa.encoding_info().display(verify_encoding),
-                                    isa.encoding_info().display(encoding));
+                        return err!(
+                            inst,
+                            "Instruction re-encoding {} doesn't match {}",
+                            isa.encoding_info().display(verify_encoding),
+                            isa.encoding_info().display(encoding)
+                        );
                     }
                 }
                 Err(_) => {
-                    return err!(inst,
-                                "Instruction failed to re-encode {}",
-                                isa.encoding_info().display(encoding))
+                    return err!(
+                        inst,
+                        "Instruction failed to re-encode {}",
+                        isa.encoding_info().display(encoding)
+                    )
                 }
             }
             return Ok(());
@@ -932,9 +989,9 @@ mod tests {
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();
         func.layout.append_ebb(ebb0);
-        let nullary_with_bad_opcode =
-            func.dfg
-                .make_inst(InstructionData::Nullary { opcode: Opcode::Jump });
+        let nullary_with_bad_opcode = func.dfg.make_inst(
+            InstructionData::Nullary { opcode: Opcode::Jump },
+        );
         func.layout.append_inst(nullary_with_bad_opcode, ebb0);
         let verifier = Verifier::new(&func, None);
         assert_err_with_msg!(verifier.run(), "instruction format");

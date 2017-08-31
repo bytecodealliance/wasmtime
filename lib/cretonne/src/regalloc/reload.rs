@@ -54,13 +54,15 @@ impl Reload {
     }
 
     /// Run the reload algorithm over `func`.
-    pub fn run(&mut self,
-               isa: &TargetIsa,
-               func: &mut Function,
-               domtree: &DominatorTree,
-               liveness: &mut Liveness,
-               topo: &mut TopoOrder,
-               tracker: &mut LiveValueTracker) {
+    pub fn run(
+        &mut self,
+        isa: &TargetIsa,
+        func: &mut Function,
+        domtree: &DominatorTree,
+        liveness: &mut Liveness,
+        topo: &mut TopoOrder,
+        tracker: &mut LiveValueTracker,
+    ) {
         dbg!("Reload for:\n{}", func.display(isa));
         let mut ctx = Context {
             cur: EncCursor::new(func, isa),
@@ -125,11 +127,13 @@ impl<'a> Context<'a> {
 
     /// Process the EBB parameters. Move to the next instruction in the EBB to be processed
     fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
-        let (liveins, args) = tracker.ebb_top(ebb,
-                                              &self.cur.func.dfg,
-                                              self.liveness,
-                                              &self.cur.func.layout,
-                                              self.domtree);
+        let (liveins, args) = tracker.ebb_top(
+            ebb,
+            &self.cur.func.dfg,
+            self.liveness,
+            &self.cur.func.layout,
+            self.domtree,
+        );
 
         if self.cur.func.layout.entry_block() == Some(ebb) {
             assert_eq!(liveins.len(), 0);
@@ -172,15 +176,17 @@ impl<'a> Context<'a> {
 
     /// Process the instruction pointed to by `pos`, and advance the cursor to the next instruction
     /// that needs processing.
-    fn visit_inst(&mut self,
-                  ebb: Ebb,
-                  inst: Inst,
-                  encoding: Encoding,
-                  tracker: &mut LiveValueTracker) {
+    fn visit_inst(
+        &mut self,
+        ebb: Ebb,
+        inst: Inst,
+        encoding: Encoding,
+        tracker: &mut LiveValueTracker,
+    ) {
         // Get the operand constraints for `inst` that we are trying to satisfy.
-        let constraints = self.encinfo
-            .operand_constraints(encoding)
-            .expect("Missing instruction encoding");
+        let constraints = self.encinfo.operand_constraints(encoding).expect(
+            "Missing instruction encoding",
+        );
 
         // Identify reload candidates.
         assert!(self.candidates.is_empty());
@@ -195,17 +201,20 @@ impl<'a> Context<'a> {
             let reg = self.cur.ins().fill(cand.value);
             let fill = self.cur.built_inst();
 
-            self.reloads
-                .insert(ReloadedValue {
-                            stack: cand.value,
-                            reg: reg,
-                        });
+            self.reloads.insert(ReloadedValue {
+                stack: cand.value,
+                reg: reg,
+            });
 
             // Create a live range for the new reload.
             let affinity = Affinity::Reg(cand.regclass.into());
             self.liveness.create_dead(reg, fill, affinity);
-            self.liveness
-                .extend_locally(reg, ebb, inst, &self.cur.func.layout);
+            self.liveness.extend_locally(
+                reg,
+                ebb,
+                inst,
+                &self.cur.func.layout,
+            );
         }
 
         // Rewrite arguments.
@@ -218,8 +227,8 @@ impl<'a> Context<'a> {
         // TODO: Reuse reloads for future instructions.
         self.reloads.clear();
 
-        let (_throughs, _kills, defs) = tracker
-            .process_inst(inst, &self.cur.func.dfg, self.liveness);
+        let (_throughs, _kills, defs) =
+            tracker.process_inst(inst, &self.cur.func.dfg, self.liveness);
 
         // Advance to the next instruction so we can insert any spills after the instruction.
         self.cur.next_inst();
@@ -255,11 +264,10 @@ impl<'a> Context<'a> {
         for (op, &arg) in constraints.ins.iter().zip(args) {
             if op.kind != ConstraintKind::Stack {
                 if self.liveness[arg].affinity.is_stack() {
-                    self.candidates
-                        .push(ReloadCandidate {
-                                  value: arg,
-                                  regclass: op.regclass,
-                              })
+                    self.candidates.push(ReloadCandidate {
+                        value: arg,
+                        regclass: op.regclass,
+                    })
                 }
             }
         }
@@ -272,17 +280,21 @@ impl<'a> Context<'a> {
 
         // Handle ABI arguments.
         if let Some(sig) = self.cur.func.dfg.call_signature(inst) {
-            handle_abi_args(self.candidates,
-                            &self.cur.func.dfg.signatures[sig].argument_types,
-                            var_args,
-                            self.cur.isa,
-                            self.liveness);
+            handle_abi_args(
+                self.candidates,
+                &self.cur.func.dfg.signatures[sig].argument_types,
+                var_args,
+                self.cur.isa,
+                self.liveness,
+            );
         } else if self.cur.func.dfg[inst].opcode().is_return() {
-            handle_abi_args(self.candidates,
-                            &self.cur.func.signature.return_types,
-                            var_args,
-                            self.cur.isa,
-                            self.liveness);
+            handle_abi_args(
+                self.candidates,
+                &self.cur.func.signature.return_types,
+                var_args,
+                self.cur.isa,
+                self.liveness,
+            );
         }
     }
 
@@ -297,27 +309,33 @@ impl<'a> Context<'a> {
 
         // Update live ranges.
         self.liveness.move_def_locally(stack, inst);
-        self.liveness
-            .extend_locally(reg, ebb, inst, &self.cur.func.layout);
+        self.liveness.extend_locally(
+            reg,
+            ebb,
+            inst,
+            &self.cur.func.layout,
+        );
     }
 }
 
 /// Find reload candidates in the instruction's ABI variable arguments. This handles both
 /// return values and call arguments.
-fn handle_abi_args(candidates: &mut Vec<ReloadCandidate>,
-                   abi_types: &[ArgumentType],
-                   var_args: &[Value],
-                   isa: &TargetIsa,
-                   liveness: &Liveness) {
+fn handle_abi_args(
+    candidates: &mut Vec<ReloadCandidate>,
+    abi_types: &[ArgumentType],
+    var_args: &[Value],
+    isa: &TargetIsa,
+    liveness: &Liveness,
+) {
     assert_eq!(abi_types.len(), var_args.len());
     for (abi, &arg) in abi_types.iter().zip(var_args) {
         if abi.location.is_reg() {
             let lv = liveness.get(arg).expect("Missing live range for ABI arg");
             if lv.affinity.is_stack() {
                 candidates.push(ReloadCandidate {
-                                    value: arg,
-                                    regclass: isa.regclass_for_abi_type(abi.value_type),
-                                });
+                    value: arg,
+                    regclass: isa.regclass_for_abi_type(abi.value_type),
+                });
             }
         }
     }

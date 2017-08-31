@@ -60,8 +60,10 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> Result<CodeOffset
         while let Some(ebb) = cur.next_ebb() {
             // Record the offset for `ebb` and make sure we iterate until offsets are stable.
             if cur.func.offsets[ebb] != offset {
-                assert!(cur.func.offsets[ebb] < offset,
-                        "Code shrinking during relaxation");
+                assert!(
+                    cur.func.offsets[ebb] < offset,
+                    "Code shrinking during relaxation"
+                );
                 cur.func.offsets[ebb] = offset;
                 go_again = true;
             }
@@ -99,10 +101,11 @@ fn fallthroughs(func: &mut Function) {
     for (ebb, succ) in func.layout.ebbs().adjacent_pairs() {
         let term = func.layout.last_inst(ebb).expect("EBB has no terminator.");
         if let InstructionData::Jump {
-                   ref mut opcode,
-                   destination,
-                   ..
-               } = func.dfg[term] {
+            ref mut opcode,
+            destination,
+            ..
+        } = func.dfg[term]
+        {
             match *opcode {
                 Opcode::Fallthrough => {
                     // Somebody used a fall-through instruction before the branch relaxation pass.
@@ -126,16 +129,19 @@ fn fallthroughs(func: &mut Function) {
 ///
 /// Return the size of the replacement instructions up to and including the location where `pos` is
 /// left.
-fn relax_branch(cur: &mut FuncCursor,
-                offset: CodeOffset,
-                dest_offset: CodeOffset,
-                encinfo: &EncInfo)
-                -> CodeOffset {
+fn relax_branch(
+    cur: &mut FuncCursor,
+    offset: CodeOffset,
+    dest_offset: CodeOffset,
+    encinfo: &EncInfo,
+) -> CodeOffset {
     let inst = cur.current_inst().unwrap();
-    dbg!("Relaxing [{}] {} for {:#x}-{:#x} range",
-         encinfo.display(cur.func.encodings[inst]),
-         cur.func.dfg.display_inst(inst, None),
-         offset,
-         dest_offset);
+    dbg!(
+        "Relaxing [{}] {} for {:#x}-{:#x} range",
+        encinfo.display(cur.func.encodings[inst]),
+        cur.func.dfg.display_inst(inst, None),
+        offset,
+        dest_offset
+    );
     unimplemented!();
 }

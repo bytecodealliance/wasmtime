@@ -41,9 +41,9 @@ impl SubTest for TestLegalizer {
         let isa = context.isa.expect("legalizer needs an ISA");
 
         comp_ctx.flowgraph();
-        comp_ctx
-            .legalize(isa)
-            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
+        comp_ctx.legalize(isa).map_err(|e| {
+            pretty_error(&comp_ctx.func, context.isa, e)
+        })?;
 
         let mut text = String::new();
         write!(&mut text, "{}", &comp_ctx.func.display(Some(isa)))

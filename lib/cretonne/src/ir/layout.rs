@@ -96,8 +96,9 @@ fn test_midpoint() {
 
 impl ProgramOrder for Layout {
     fn cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
-        where A: Into<ExpandedProgramPoint>,
-              B: Into<ExpandedProgramPoint>
+    where
+        A: Into<ExpandedProgramPoint>,
+        B: Into<ExpandedProgramPoint>,
     {
         let a_seq = self.seq(a);
         let b_seq = self.seq(b);
@@ -166,8 +167,9 @@ impl Layout {
     /// Assign a valid sequence number to `inst` such that the numbers are still monotonic. This may
     /// require renumbering.
     fn assign_inst_seq(&mut self, inst: Inst) {
-        let ebb = self.inst_ebb(inst)
-            .expect("inst must be inserted before assigning an seq");
+        let ebb = self.inst_ebb(inst).expect(
+            "inst must be inserted before assigning an seq",
+        );
 
         // Get the sequence number immediately before `inst`.
         let prev_seq = match self.insts[inst].prev.expand() {
@@ -283,8 +285,10 @@ impl Layout {
 
     /// Insert `ebb` as the last EBB in the layout.
     pub fn append_ebb(&mut self, ebb: Ebb) {
-        assert!(!self.is_ebb_inserted(ebb),
-                "Cannot append EBB that is already in the layout");
+        assert!(
+            !self.is_ebb_inserted(ebb),
+            "Cannot append EBB that is already in the layout"
+        );
         {
             let node = &mut self.ebbs[ebb];
             assert!(node.first_inst.is_none() && node.last_inst.is_none());
@@ -302,10 +306,14 @@ impl Layout {
 
     /// Insert `ebb` in the layout before the existing EBB `before`.
     pub fn insert_ebb(&mut self, ebb: Ebb, before: Ebb) {
-        assert!(!self.is_ebb_inserted(ebb),
-                "Cannot insert EBB that is already in the layout");
-        assert!(self.is_ebb_inserted(before),
-                "EBB Insertion point not in the layout");
+        assert!(
+            !self.is_ebb_inserted(ebb),
+            "Cannot insert EBB that is already in the layout"
+        );
+        assert!(
+            self.is_ebb_inserted(before),
+            "EBB Insertion point not in the layout"
+        );
         let after = self.ebbs[before].prev;
         {
             let node = &mut self.ebbs[ebb];
@@ -322,10 +330,14 @@ impl Layout {
 
     /// Insert `ebb` in the layout *after* the existing EBB `after`.
     pub fn insert_ebb_after(&mut self, ebb: Ebb, after: Ebb) {
-        assert!(!self.is_ebb_inserted(ebb),
-                "Cannot insert EBB that is already in the layout");
-        assert!(self.is_ebb_inserted(after),
-                "EBB Insertion point not in the layout");
+        assert!(
+            !self.is_ebb_inserted(ebb),
+            "Cannot insert EBB that is already in the layout"
+        );
+        assert!(
+            self.is_ebb_inserted(after),
+            "EBB Insertion point not in the layout"
+        );
         let before = self.ebbs[after].next;
         {
             let node = &mut self.ebbs[ebb];
@@ -411,7 +423,8 @@ impl Layout {
 
     /// Get the EBB containing the program point `pp`. Panic if `pp` is not in the layout.
     pub fn pp_ebb<PP>(&self, pp: PP) -> Ebb
-        where PP: Into<ExpandedProgramPoint>
+    where
+        PP: Into<ExpandedProgramPoint>,
     {
         match pp.into() {
             ExpandedProgramPoint::Ebb(ebb) => ebb,
@@ -424,8 +437,10 @@ impl Layout {
     /// Append `inst` to the end of `ebb`.
     pub fn append_inst(&mut self, inst: Inst, ebb: Ebb) {
         assert_eq!(self.inst_ebb(inst), None);
-        assert!(self.is_ebb_inserted(ebb),
-                "Cannot append instructions to EBB not in layout");
+        assert!(
+            self.is_ebb_inserted(ebb),
+            "Cannot append instructions to EBB not in layout"
+        );
         {
             let ebb_node = &mut self.ebbs[ebb];
             {
@@ -457,8 +472,9 @@ impl Layout {
     /// Insert `inst` before the instruction `before` in the same EBB.
     pub fn insert_inst(&mut self, inst: Inst, before: Inst) {
         assert_eq!(self.inst_ebb(inst), None);
-        let ebb = self.inst_ebb(before)
-            .expect("Instruction before insertion point not in the layout");
+        let ebb = self.inst_ebb(before).expect(
+            "Instruction before insertion point not in the layout",
+        );
         let after = self.insts[before].prev;
         {
             let inst_node = &mut self.insts[inst];
@@ -531,8 +547,9 @@ impl Layout {
     ///     i4
     /// ```
     pub fn split_ebb(&mut self, new_ebb: Ebb, before: Inst) {
-        let old_ebb = self.inst_ebb(before)
-            .expect("The `before` instruction must be in the layout");
+        let old_ebb = self.inst_ebb(before).expect(
+            "The `before` instruction must be in the layout",
+        );
         assert!(!self.is_ebb_inserted(new_ebb));
 
         // Insert new_ebb after old_ebb.
@@ -683,7 +700,8 @@ pub trait CursorBase {
     /// }
     /// ```
     fn at_inst(mut self, inst: Inst) -> Self
-        where Self: Sized
+    where
+        Self: Sized,
     {
         self.goto_inst(inst);
         self
@@ -703,7 +721,8 @@ pub trait CursorBase {
     /// }
     /// ```
     fn at_first_inst(mut self, ebb: Ebb) -> Self
-        where Self: Sized
+    where
+        Self: Sized,
     {
         self.goto_first_inst(ebb);
         self
@@ -783,9 +802,9 @@ pub trait CursorBase {
             self.layout().first_ebb
         };
         self.set_position(match next {
-                              Some(ebb) => CursorPosition::Before(ebb),
-                              None => CursorPosition::Nowhere,
-                          });
+            Some(ebb) => CursorPosition::Before(ebb),
+            None => CursorPosition::Nowhere,
+        });
         next
     }
 
@@ -816,9 +835,9 @@ pub trait CursorBase {
             self.layout().last_ebb
         };
         self.set_position(match prev {
-                              Some(ebb) => CursorPosition::After(ebb),
-                              None => CursorPosition::Nowhere,
-                          });
+            Some(ebb) => CursorPosition::After(ebb),
+            None => CursorPosition::Nowhere,
+        });
         prev
     }
 
@@ -872,9 +891,9 @@ pub trait CursorBase {
                     self.set_position(At(next));
                     Some(next)
                 } else {
-                    let pos = After(self.layout()
-                                        .inst_ebb(inst)
-                                        .expect("current instruction removed?"));
+                    let pos = After(self.layout().inst_ebb(inst).expect(
+                        "current instruction removed?",
+                    ));
                     self.set_position(pos);
                     None
                 }
@@ -925,9 +944,9 @@ pub trait CursorBase {
                     self.set_position(At(prev));
                     Some(prev)
                 } else {
-                    let pos = Before(self.layout()
-                                         .inst_ebb(inst)
-                                         .expect("current instruction removed?"));
+                    let pos = Before(self.layout().inst_ebb(inst).expect(
+                        "current instruction removed?",
+                    ));
                     self.set_position(pos);
                     None
                 }
@@ -1057,9 +1076,10 @@ pub struct LayoutCursorInserter<'c, 'fc: 'c, 'fd> {
 
 impl<'c, 'fc: 'c, 'fd> LayoutCursorInserter<'c, 'fc, 'fd> {
     /// Create a new inserter. Don't use this, use `dfg.ins(pos)`.
-    pub fn new(pos: &'c mut Cursor<'fc>,
-               dfg: &'fd mut DataFlowGraph)
-               -> LayoutCursorInserter<'c, 'fc, 'fd> {
+    pub fn new(
+        pos: &'c mut Cursor<'fc>,
+        dfg: &'fd mut DataFlowGraph,
+    ) -> LayoutCursorInserter<'c, 'fc, 'fd> {
         LayoutCursorInserter { pos, dfg }
     }
 }

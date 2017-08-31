@@ -50,9 +50,11 @@ impl SubTest for TestDomtree {
                 let inst = match comment.entity {
                     AnyEntity::Inst(inst) => inst,
                     _ => {
-                        return Err(format!("annotation on non-inst {}: {}",
-                                           comment.entity,
-                                           comment.text))
+                        return Err(format!(
+                            "annotation on non-inst {}: {}",
+                            comment.entity,
+                            comment.text
+                        ))
                     }
                 };
                 for src_ebb in tail.split_whitespace() {
@@ -69,17 +71,21 @@ impl SubTest for TestDomtree {
                     // Compare to computed domtree.
                     match domtree.idom(ebb) {
                         Some(got_inst) if got_inst != inst => {
-                            return Err(format!("mismatching idoms for {}:\n\
+                            return Err(format!(
+                                "mismatching idoms for {}:\n\
                                                 want: {}, got: {}",
-                                               src_ebb,
-                                               inst,
-                                               got_inst));
+                                src_ebb,
+                                inst,
+                                got_inst
+                            ));
                         }
                         None => {
-                            return Err(format!("mismatching idoms for {}:\n\
+                            return Err(format!(
+                                "mismatching idoms for {}:\n\
                                                 want: {}, got: unreachable",
-                                               src_ebb,
-                                               inst));
+                                src_ebb,
+                                inst
+                            ));
                         }
                         _ => {}
                     }
@@ -89,15 +95,17 @@ impl SubTest for TestDomtree {
 
         // Now we know that everything in `expected` is consistent with `domtree`.
         // All other EBB's should be either unreachable or the entry block.
-        for ebb in func.layout
-                .ebbs()
-                .skip(1)
-                .filter(|ebb| !expected.contains_key(&ebb)) {
+        for ebb in func.layout.ebbs().skip(1).filter(
+            |ebb| !expected.contains_key(&ebb),
+        )
+        {
             if let Some(got_inst) = domtree.idom(ebb) {
-                return Err(format!("mismatching idoms for renumbered {}:\n\
+                return Err(format!(
+                    "mismatching idoms for renumbered {}:\n\
                                     want: unrechable, got: {}",
-                                   ebb,
-                                   got_inst));
+                    ebb,
+                    got_inst
+                ));
             }
         }
 

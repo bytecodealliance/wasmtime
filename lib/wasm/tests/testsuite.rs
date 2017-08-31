@@ -84,17 +84,20 @@ fn handle_module(path: PathBuf) -> Result<(), String> {
 
 
 /// Pretty-print a verifier error.
-pub fn pretty_verifier_error(func: &ir::Function,
-                             isa: Option<&TargetIsa>,
-                             err: verifier::Error)
-                             -> String {
+pub fn pretty_verifier_error(
+    func: &ir::Function,
+    isa: Option<&TargetIsa>,
+    err: verifier::Error,
+) -> String {
     let msg = err.to_string();
     let str1 = match err.location {
         AnyEntity::Inst(inst) => {
-            format!("{}\n{}: {}\n\n",
-                    msg,
-                    inst,
-                    func.dfg.display_inst(inst, isa))
+            format!(
+                "{}\n{}: {}\n\n",
+                msg,
+                inst,
+                func.dfg.display_inst(inst, isa)
+            )
         }
         _ => String::from(format!("{}\n", msg)),
     };

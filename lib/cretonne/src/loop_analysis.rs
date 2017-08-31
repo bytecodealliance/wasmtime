@@ -105,10 +105,12 @@ impl LoopAnalysis {
 
     // Traverses the CFG in reverse postorder and create a loop object for every EBB having a
     // back edge.
-    fn find_loop_headers(&mut self,
-                         cfg: &ControlFlowGraph,
-                         domtree: &DominatorTree,
-                         layout: &Layout) {
+    fn find_loop_headers(
+        &mut self,
+        cfg: &ControlFlowGraph,
+        domtree: &DominatorTree,
+        layout: &Layout,
+    ) {
         // We traverse the CFG in reverse postorder
         for &ebb in domtree.cfg_postorder().iter().rev() {
             for &(_, pred_inst) in cfg.get_predecessors(ebb) {
@@ -127,10 +129,12 @@ impl LoopAnalysis {
     // Intended to be called after `find_loop_headers`. For each detected loop header,
     // discovers all the ebb belonging to the loop and its inner loops. After a call to this
     // function, the loop tree is fully constructed.
-    fn discover_loop_blocks(&mut self,
-                            cfg: &ControlFlowGraph,
-                            domtree: &DominatorTree,
-                            layout: &Layout) {
+    fn discover_loop_blocks(
+        &mut self,
+        cfg: &ControlFlowGraph,
+        domtree: &DominatorTree,
+        layout: &Layout,
+    ) {
         let mut stack: Vec<Ebb> = Vec::new();
         // We handle each loop header in reverse order, corresponding to a pesudo postorder
         // traversal of the graph.

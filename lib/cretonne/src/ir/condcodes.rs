@@ -89,17 +89,17 @@ impl Display for IntCC {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         use self::IntCC::*;
         f.write_str(match *self {
-                        Equal => "eq",
-                        NotEqual => "ne",
-                        SignedGreaterThan => "sgt",
-                        SignedGreaterThanOrEqual => "sge",
-                        SignedLessThan => "slt",
-                        SignedLessThanOrEqual => "sle",
-                        UnsignedGreaterThan => "ugt",
-                        UnsignedGreaterThanOrEqual => "uge",
-                        UnsignedLessThan => "ult",
-                        UnsignedLessThanOrEqual => "ule",
-                    })
+            Equal => "eq",
+            NotEqual => "ne",
+            SignedGreaterThan => "sgt",
+            SignedGreaterThanOrEqual => "sge",
+            SignedLessThan => "slt",
+            SignedLessThanOrEqual => "sle",
+            UnsignedGreaterThan => "ugt",
+            UnsignedGreaterThanOrEqual => "uge",
+            UnsignedLessThan => "ult",
+            UnsignedLessThanOrEqual => "ule",
+        })
     }
 }
 
@@ -220,21 +220,21 @@ impl Display for FloatCC {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         use self::FloatCC::*;
         f.write_str(match *self {
-                        Ordered => "ord",
-                        Unordered => "uno",
-                        Equal => "eq",
-                        NotEqual => "ne",
-                        OrderedNotEqual => "one",
-                        UnorderedOrEqual => "ueq",
-                        LessThan => "lt",
-                        LessThanOrEqual => "le",
-                        GreaterThan => "gt",
-                        GreaterThanOrEqual => "ge",
-                        UnorderedOrLessThan => "ult",
-                        UnorderedOrLessThanOrEqual => "ule",
-                        UnorderedOrGreaterThan => "ugt",
-                        UnorderedOrGreaterThanOrEqual => "uge",
-                    })
+            Ordered => "ord",
+            Unordered => "uno",
+            Equal => "eq",
+            NotEqual => "ne",
+            OrderedNotEqual => "one",
+            UnorderedOrEqual => "ueq",
+            LessThan => "lt",
+            LessThanOrEqual => "le",
+            GreaterThan => "gt",
+            GreaterThanOrEqual => "ge",
+            UnorderedOrLessThan => "ult",
+            UnorderedOrLessThanOrEqual => "ule",
+            UnorderedOrGreaterThan => "ugt",
+            UnorderedOrGreaterThanOrEqual => "uge",
+        })
     }
 }
 
@@ -267,16 +267,18 @@ impl FromStr for FloatCC {
 mod tests {
     use super::*;
 
-    static INT_ALL: [IntCC; 10] = [IntCC::Equal,
-                                   IntCC::NotEqual,
-                                   IntCC::SignedLessThan,
-                                   IntCC::SignedGreaterThanOrEqual,
-                                   IntCC::SignedGreaterThan,
-                                   IntCC::SignedLessThanOrEqual,
-                                   IntCC::UnsignedLessThan,
-                                   IntCC::UnsignedGreaterThanOrEqual,
-                                   IntCC::UnsignedGreaterThan,
-                                   IntCC::UnsignedLessThanOrEqual];
+    static INT_ALL: [IntCC; 10] = [
+        IntCC::Equal,
+        IntCC::NotEqual,
+        IntCC::SignedLessThan,
+        IntCC::SignedGreaterThanOrEqual,
+        IntCC::SignedGreaterThan,
+        IntCC::SignedLessThanOrEqual,
+        IntCC::UnsignedLessThan,
+        IntCC::UnsignedGreaterThanOrEqual,
+        IntCC::UnsignedGreaterThan,
+        IntCC::UnsignedLessThanOrEqual,
+    ];
 
     #[test]
     fn int_inverse() {
@@ -306,20 +308,22 @@ mod tests {
         assert_eq!("bogus".parse::<IntCC>(), Err(()));
     }
 
-    static FLOAT_ALL: [FloatCC; 14] = [FloatCC::Ordered,
-                                       FloatCC::Unordered,
-                                       FloatCC::Equal,
-                                       FloatCC::NotEqual,
-                                       FloatCC::OrderedNotEqual,
-                                       FloatCC::UnorderedOrEqual,
-                                       FloatCC::LessThan,
-                                       FloatCC::LessThanOrEqual,
-                                       FloatCC::GreaterThan,
-                                       FloatCC::GreaterThanOrEqual,
-                                       FloatCC::UnorderedOrLessThan,
-                                       FloatCC::UnorderedOrLessThanOrEqual,
-                                       FloatCC::UnorderedOrGreaterThan,
-                                       FloatCC::UnorderedOrGreaterThanOrEqual];
+    static FLOAT_ALL: [FloatCC; 14] = [
+        FloatCC::Ordered,
+        FloatCC::Unordered,
+        FloatCC::Equal,
+        FloatCC::NotEqual,
+        FloatCC::OrderedNotEqual,
+        FloatCC::UnorderedOrEqual,
+        FloatCC::LessThan,
+        FloatCC::LessThanOrEqual,
+        FloatCC::GreaterThan,
+        FloatCC::GreaterThanOrEqual,
+        FloatCC::UnorderedOrLessThan,
+        FloatCC::UnorderedOrLessThanOrEqual,
+        FloatCC::UnorderedOrGreaterThan,
+        FloatCC::UnorderedOrGreaterThanOrEqual,
+    ];
 
     #[test]
     fn float_inverse() {

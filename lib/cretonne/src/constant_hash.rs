@@ -26,10 +26,11 @@ pub trait Table<K: Copy + Eq> {
 ///
 /// Returns `Ok(idx)` with the table index containing the found entry, or `Err(idx)` with the empty
 /// sentinel entry if no entry could be found.
-pub fn probe<K: Copy + Eq, T: Table<K> + ?Sized>(table: &T,
-                                                 key: K,
-                                                 hash: usize)
-                                                 -> Result<usize, usize> {
+pub fn probe<K: Copy + Eq, T: Table<K> + ?Sized>(
+    table: &T,
+    key: K,
+    hash: usize,
+) -> Result<usize, usize> {
     debug_assert!(table.len().is_power_of_two());
     let mask = table.len() - 1;
 

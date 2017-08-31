@@ -89,7 +89,8 @@ impl<'f, IIB: InstInserterBase<'f>> InsertBuilder<'f, IIB> {
     ///
     /// The `reuse` argument is expected to be an array of `Option<Value>`.
     pub fn with_results<Array>(self, reuse: Array) -> InsertReuseBuilder<'f, IIB, Array>
-        where Array: AsRef<[Option<Value>]>
+    where
+        Array: AsRef<[Option<Value>]>,
     {
         InsertReuseBuilder {
             inserter: self.inserter,
@@ -134,8 +135,9 @@ impl<'f, IIB: InstInserterBase<'f>> InstBuilderBase<'f> for InsertBuilder<'f, II
 
 /// Builder that inserts a new instruction like `InsertBuilder`, but reusing result values.
 pub struct InsertReuseBuilder<'f, IIB, Array>
-    where IIB: InstInserterBase<'f>,
-          Array: AsRef<[Option<Value>]>
+where
+    IIB: InstInserterBase<'f>,
+    Array: AsRef<[Option<Value>]>,
 {
     inserter: IIB,
     reuse: Array,

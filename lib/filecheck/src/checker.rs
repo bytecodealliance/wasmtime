@@ -47,9 +47,11 @@ impl Directive {
             "unordered" => Ok(Directive::Unordered(pat)),
             "not" => {
                 if !pat.defs().is_empty() {
-                    let msg = format!("can't define variables '$({}=...' in not: {}",
-                                      pat.defs()[0],
-                                      rest);
+                    let msg = format!(
+                        "can't define variables '$({}=...' in not: {}",
+                        pat.defs()[0],
+                        rest
+                    );
                     Err(Error::DuplicateDef(msg))
                 } else {
                     Ok(Directive::Not(pat))
@@ -63,16 +65,23 @@ impl Directive {
     fn regex(rest: &str) -> Result<Directive> {
         let varlen = varname_prefix(rest);
         if varlen == 0 {
-            return Err(Error::Syntax(format!("invalid variable name in regex: {}", rest)));
+            return Err(Error::Syntax(
+                format!("invalid variable name in regex: {}", rest),
+            ));
         }
         let var = rest[0..varlen].to_string();
         if !rest[varlen..].starts_with('=') {
-            return Err(Error::Syntax(format!("expected '=' after variable '{}' in regex: {}",
-                                             var,
-                                             rest)));
+            return Err(Error::Syntax(format!(
+                "expected '=' after variable '{}' in regex: {}",
+                var,
+                rest
+            )));
         }
         // Ignore trailing white space in the regex, including CR.
-        Ok(Directive::Regex(var, rest[varlen + 1..].trim_right().to_string()))
+        Ok(Directive::Regex(
+            var,
+            rest[varlen + 1..].trim_right().to_string(),
+        ))
     }
 }
 
@@ -183,13 +192,13 @@ impl Checker {
                     continue;
                 }
                 Directive::Regex(ref var, ref rx) => {
-                    state
-                        .vars
-                        .insert(var.clone(),
-                                VarDef {
-                                    value: Value::Regex(Cow::Borrowed(rx)),
-                                    offset: 0,
-                                });
+                    state.vars.insert(
+                        var.clone(),
+                        VarDef {
+                            value: Value::Regex(Cow::Borrowed(rx)),
+                            offset: 0,
+                        },
+                    );
                     continue;
                 }
             };
@@ -210,15 +219,16 @@ impl Checker {
                         state.recorder.directive(not_idx);
                         if let Some(mat) = rx.find(&text[not_begin..match_begin]) {
                             // Matched `not:` pattern.
-                            state
-                                .recorder
-                                .matched_not(rx.as_str(),
-                                             (not_begin + mat.start(), not_begin + mat.end()));
+                            state.recorder.matched_not(rx.as_str(), (
+                                not_begin + mat.start(),
+                                not_begin + mat.end(),
+                            ));
                             return Ok(false);
                         } else {
-                            state
-                                .recorder
-                                .missed_not(rx.as_str(), (not_begin, match_begin));
+                            state.recorder.missed_not(
+                                rx.as_str(),
+                                (not_begin, match_begin),
+                            );
                         }
                     }
                 }
@@ -354,13 +364,13 @@ impl<'a> State<'a> {
             })
         };
         Ok(if let Some(mat) = matched_range {
-               let r = (range.0 + mat.start(), range.0 + mat.end());
-               self.recorder.matched_check(rx.as_str(), r);
-               Some(r)
-           } else {
-               self.recorder.missed_check(rx.as_str(), range);
-               None
-           })
+            let r = (range.0 + mat.start(), range.0 + mat.end());
+            self.recorder.matched_check(rx.as_str(), r);
+            Some(r)
+        } else {
+            self.recorder.missed_check(rx.as_str(), range);
+            None
+        })
     }
 }
 
@@ -413,20 +423,32 @@ mod tests {
         let mut b = CheckerBuilder::new();
 
         assert_eq!(b.directive("not here: more text").map_err(e2s), Ok(false));
-        assert_eq!(b.directive("not here: regex: X=more text").map_err(e2s),
-                   Ok(true));
-        assert_eq!(b.directive("regex: X = tommy").map_err(e2s),
-                   Err("expected '=' after variable 'X' in regex: X = tommy".to_string()));
-        assert_eq!(b.directive("[arm]not:    patt $x $(y) here").map_err(e2s),
-                   Ok(true));
-        assert_eq!(b.directive("[x86]sameln: $x $(y=[^]]*) there").map_err(e2s),
-                   Ok(true));
+        assert_eq!(
+            b.directive("not here: regex: X=more text").map_err(e2s),
+            Ok(true)
+        );
+        assert_eq!(
+            b.directive("regex: X = tommy").map_err(e2s),
+            Err(
+                "expected '=' after variable 'X' in regex: X = tommy".to_string(),
+            )
+        );
+        assert_eq!(
+            b.directive("[arm]not:    patt $x $(y) here").map_err(e2s),
+            Ok(true)
+        );
+        assert_eq!(
+            b.directive("[x86]sameln: $x $(y=[^]]*) there").map_err(e2s),
+            Ok(true)
+        );
         // Windows line ending sneaking in.
         assert_eq!(b.directive("regex: Y=foo\r").map_err(e2s), Ok(true));
 
         let c = b.finish();
-        assert_eq!(c.to_string(),
-                   "#0 regex: X=more text\n#1 not: patt $(x) $(y) here\n#2 sameln: $(x) \
-                    $(y=[^]]*) there\n#3 regex: Y=foo\n");
+        assert_eq!(
+            c.to_string(),
+            "#0 regex: X=more text\n#1 not: patt $(x) $(y) here\n#2 sameln: $(x) \
+                    $(y=[^]]*) there\n#3 regex: Y=foo\n"
+        );
     }
 }

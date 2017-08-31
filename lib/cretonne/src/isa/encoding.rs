@@ -66,10 +66,12 @@ pub struct DisplayEncoding {
 impl fmt::Display for DisplayEncoding {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.encoding.is_legal() {
-            write!(f,
-                   "{}#{:02x}",
-                   self.recipe_names[self.encoding.recipe()],
-                   self.encoding.bits)
+            write!(
+                f,
+                "{}#{:02x}",
+                self.recipe_names[self.encoding.recipe()],
+                self.encoding.bits
+            )
         } else {
             write!(f, "-")
         }

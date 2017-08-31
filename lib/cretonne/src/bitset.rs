@@ -14,27 +14,34 @@ use std::convert::{Into, From};
 pub struct BitSet<T>(pub T);
 
 impl<T> BitSet<T>
-    where T: Into<u32> + From<u8> + BitOr<T, Output = T> + Shl<u8, Output = T> + Sub<T, Output=T> +
-             Add<T, Output=T> + PartialEq + Copy
+where
+    T: Into<u32>
+        + From<u8>
+        + BitOr<T, Output = T>
+        + Shl<u8, Output = T>
+        + Sub<T, Output = T>
+        + Add<T, Output = T>
+        + PartialEq
+        + Copy,
 {
-/// Maximum number of bits supported by this BitSet instance
+    /// Maximum number of bits supported by this BitSet instance
     pub fn bits() -> usize {
         size_of::<T>() * 8
     }
 
-/// Maximum number of bits supported by any bitset instance atm.
+    /// Maximum number of bits supported by any bitset instance atm.
     pub fn max_bits() -> usize {
         size_of::<u32>() * 8
     }
 
-/// Check if this BitSet contains the number num
+    /// Check if this BitSet contains the number num
     pub fn contains(&self, num: u8) -> bool {
         assert!((num as usize) < Self::bits());
         assert!((num as usize) < Self::max_bits());
         self.0.into() & (1 << num) != 0
     }
 
-/// Return the smallest number contained in the bitset or None if empty
+    /// Return the smallest number contained in the bitset or None if empty
     pub fn min(&self) -> Option<u8> {
         if self.0.into() == 0 {
             None
@@ -43,7 +50,7 @@ impl<T> BitSet<T>
         }
     }
 
-/// Return the largest number contained in the bitset or None if empty
+    /// Return the largest number contained in the bitset or None if empty
     pub fn max(&self) -> Option<u8> {
         if self.0.into() == 0 {
             None
@@ -53,17 +60,17 @@ impl<T> BitSet<T>
         }
     }
 
-/// Construct a BitSet with the half-open range [lo,hi) filled in
+    /// Construct a BitSet with the half-open range [lo,hi) filled in
     pub fn from_range(lo: u8, hi: u8) -> BitSet<T> {
         assert!(lo <= hi);
         assert!((hi as usize) <= Self::bits());
-        let one : T = T::from(1);
-// I can't just do (one << hi) - one here as the shift may overflow
+        let one: T = T::from(1);
+        // I can't just do (one << hi) - one here as the shift may overflow
         let hi_rng = if hi >= 1 {
-                (one << (hi-1)) + ((one << (hi-1)) - one)
-            } else {
-                T::from(0)
-            };
+            (one << (hi - 1)) + ((one << (hi - 1)) - one)
+        } else {
+            T::from(0)
+        };
 
         let lo_rng = (one << lo) - one;
 
@@ -94,14 +101,15 @@ mod tests {
         assert!(!s2.contains(7));
 
         let s3 = BitSet::<u8>(2 | 4 | 64);
-        assert!(!s3.contains(0) && !s3.contains(3) && !s3.contains(4) && !s3.contains(5) &&
-                !s3.contains(7));
+        assert!(!s3.contains(0) && !s3.contains(3) && !s3.contains(4));
+        assert!(!s3.contains(5) && !s3.contains(7));
         assert!(s3.contains(1) && s3.contains(2) && s3.contains(6));
 
         let s4 = BitSet::<u16>(4 | 8 | 256 | 1024);
-        assert!(!s4.contains(0) && !s4.contains(1) && !s4.contains(4) && !s4.contains(5) &&
-                !s4.contains(6) && !s4.contains(7) &&
-                !s4.contains(9) && !s4.contains(11));
+        assert!(
+            !s4.contains(0) && !s4.contains(1) && !s4.contains(4) && !s4.contains(5) &&
+                !s4.contains(6) && !s4.contains(7) && !s4.contains(9) && !s4.contains(11)
+        );
         assert!(s4.contains(2) && s4.contains(3) && s4.contains(8) && s4.contains(10));
     }
 

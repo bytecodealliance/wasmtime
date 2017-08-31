@@ -146,17 +146,21 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
         &mut self.func.dfg
     }
 
-    fn insert_built_inst(self,
-                         inst: ir::Inst,
-                         ctrl_typevar: ir::Type)
-                         -> &'c mut ir::DataFlowGraph {
+    fn insert_built_inst(
+        self,
+        inst: ir::Inst,
+        ctrl_typevar: ir::Type,
+    ) -> &'c mut ir::DataFlowGraph {
         // Insert the instruction and remember the reference.
         self.insert_inst(inst);
         self.built_inst = Some(inst);
 
         // Assign an encoding.
-        match self.isa
-                  .encode(&self.func.dfg, &self.func.dfg[inst], ctrl_typevar) {
+        match self.isa.encode(
+            &self.func.dfg,
+            &self.func.dfg[inst],
+            ctrl_typevar,
+        ) {
             Ok(e) => self.func.encodings[inst] = e,
             Err(_) => panic!("can't encode {}", self.display_inst(inst)),
         }

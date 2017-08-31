@@ -41,22 +41,30 @@ impl SubTest for TestCompile {
         let mut comp_ctx = cretonne::Context::new();
         comp_ctx.func = func.into_owned();
 
-        let code_size = comp_ctx
-            .compile(isa)
-            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
+        let code_size = comp_ctx.compile(isa).map_err(|e| {
+            pretty_error(&comp_ctx.func, context.isa, e)
+        })?;
 
-        dbg!("Generated {} bytes of code:\n{}",
-             code_size,
-             comp_ctx.func.display(isa));
+        dbg!(
+            "Generated {} bytes of code:\n{}",
+            code_size,
+            comp_ctx.func.display(isa)
+        );
 
         // Finally verify that the returned code size matches the emitted bytes.
         let mut sink = SizeSink { offset: 0 };
-        binemit::emit_function(&comp_ctx.func,
-                               |func, inst, div, sink| isa.emit_inst(func, inst, div, sink),
-                               &mut sink);
+        binemit::emit_function(
+            &comp_ctx.func,
+            |func, inst, div, sink| isa.emit_inst(func, inst, div, sink),
+            &mut sink,
+        );
 
         if sink.offset != code_size {
-            return Err(format!("Expected code size {}, got {}", code_size, sink.offset));
+            return Err(format!(
+                "Expected code size {}, got {}",
+                code_size,
+                sink.offset
+            ));
         }
 
         Ok(())

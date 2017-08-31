@@ -38,7 +38,8 @@ impl<T: ReservedValue> PackedOption<T> {
 
     /// Maps a `PackedOption<T>` to `Option<U>` by applying a function to a contained value.
     pub fn map<U, F>(self, f: F) -> Option<U>
-        where F: FnOnce(T) -> U
+    where
+        F: FnOnce(T) -> U,
     {
         self.expand().map(f)
     }
@@ -69,8 +70,10 @@ impl<T: ReservedValue> Default for PackedOption<T> {
 impl<T: ReservedValue> From<T> for PackedOption<T> {
     /// Convert `t` into a packed `Some(x)`.
     fn from(t: T) -> PackedOption<T> {
-        debug_assert!(t != T::reserved_value(),
-                      "Can't make a PackedOption from the reserved value.");
+        debug_assert!(
+            t != T::reserved_value(),
+            "Can't make a PackedOption from the reserved value."
+        );
         PackedOption(t)
     }
 }
@@ -92,7 +95,8 @@ impl<T: ReservedValue> Into<Option<T>> for PackedOption<T> {
 }
 
 impl<T> fmt::Debug for PackedOption<T>
-    where T: ReservedValue + fmt::Debug
+where
+    T: ReservedValue + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.is_none() {

@@ -54,9 +54,11 @@ pub trait CodeSink {
 /// Report a bad encoding error.
 #[inline(never)]
 pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
-    panic!("Bad encoding {} for {}",
-           func.encodings[inst],
-           func.dfg.display_inst(inst, None));
+    panic!(
+        "Bad encoding {} for {}",
+        func.encodings[inst],
+        func.dfg.display_inst(inst, None)
+    );
 }
 
 /// Emit a function to `sink`, given an instruction emitter function.
@@ -64,8 +66,9 @@ pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
 /// This function is called from the `TargetIsa::emit_function()` implementations with the
 /// appropriate instruction emitter.
 pub fn emit_function<CS, EI>(func: &Function, emit_inst: EI, sink: &mut CS)
-    where CS: CodeSink,
-          EI: Fn(&Function, Inst, &mut RegDiversions, &mut CS)
+where
+    CS: CodeSink,
+    EI: Fn(&Function, Inst, &mut RegDiversions, &mut CS),
 {
     let mut divert = RegDiversions::new();
     for ebb in func.layout.ebbs() {

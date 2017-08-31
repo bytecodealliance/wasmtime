@@ -55,11 +55,11 @@ impl Signature {
         let bytes = self.argument_types
             .iter()
             .filter_map(|arg| match arg.location {
-                            ArgumentLoc::Stack(offset) if offset >= 0 => {
-                                Some(offset as u32 + arg.value_type.bytes())
-                            }
-                            _ => None,
-                        })
+                ArgumentLoc::Stack(offset) if offset >= 0 => {
+                    Some(offset as u32 + arg.value_type.bytes())
+                }
+                _ => None,
+            })
             .fold(0, cmp::max);
         self.argument_bytes = Some(bytes);
     }
@@ -73,10 +73,11 @@ impl Signature {
 /// Wrapper type capable of displaying a `Signature` with correct register names.
 pub struct DisplaySignature<'a>(&'a Signature, Option<&'a RegInfo>);
 
-fn write_list(f: &mut fmt::Formatter,
-              args: &[ArgumentType],
-              regs: Option<&RegInfo>)
-              -> fmt::Result {
+fn write_list(
+    f: &mut fmt::Formatter,
+    args: &[ArgumentType],
+    regs: Option<&RegInfo>,
+) -> fmt::Result {
     match args.split_first() {
         None => {}
         Some((first, rest)) => {
@@ -310,9 +311,9 @@ impl fmt::Display for CallConv {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::CallConv::*;
         f.write_str(match *self {
-                        Native => "native",
-                        SpiderWASM => "spiderwasm",
-                    })
+            Native => "native",
+            SpiderWASM => "spiderwasm",
+        })
     }
 }
 
@@ -346,12 +347,14 @@ mod tests {
 
     #[test]
     fn argument_purpose() {
-        let all_purpose = [ArgumentPurpose::Normal,
-                           ArgumentPurpose::StructReturn,
-                           ArgumentPurpose::Link,
-                           ArgumentPurpose::FramePointer,
-                           ArgumentPurpose::CalleeSaved,
-                           ArgumentPurpose::VMContext];
+        let all_purpose = [
+            ArgumentPurpose::Normal,
+            ArgumentPurpose::StructReturn,
+            ArgumentPurpose::Link,
+            ArgumentPurpose::FramePointer,
+            ArgumentPurpose::CalleeSaved,
+            ArgumentPurpose::VMContext,
+        ];
         for (&e, &n) in all_purpose.iter().zip(PURPOSE_NAMES.iter()) {
             assert_eq!(e.to_string(), n);
             assert_eq!(Ok(e), n.parse());
@@ -373,8 +376,9 @@ mod tests {
         assert_eq!(sig.to_string(), "(i32) spiderwasm");
         sig.return_types.push(ArgumentType::new(F32));
         assert_eq!(sig.to_string(), "(i32) -> f32 spiderwasm");
-        sig.argument_types
-            .push(ArgumentType::new(I32.by(4).unwrap()));
+        sig.argument_types.push(
+            ArgumentType::new(I32.by(4).unwrap()),
+        );
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32 spiderwasm");
         sig.return_types.push(ArgumentType::new(B8));
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8 spiderwasm");
@@ -391,7 +395,9 @@ mod tests {
         assert_eq!(sig.argument_bytes, Some(28));
 
         // Writing ABI-annotated signatures.
-        assert_eq!(sig.to_string(),
-                   "(i32 [24], i32x4 [8]) -> f32, b8 spiderwasm");
+        assert_eq!(
+            sig.to_string(),
+            "(i32 [24], i32x4 [8]) -> f32, b8 spiderwasm"
+        );
     }
 }

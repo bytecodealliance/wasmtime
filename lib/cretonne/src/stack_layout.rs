@@ -51,9 +51,9 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
                 incoming_min = min(incoming_min, slot.offset);
             }
             StackSlotKind::OutgoingArg => {
-                let offset = slot.offset
-                    .checked_add(slot.size as StackOffset)
-                    .ok_or(CtonError::ImplLimitExceeded)?;
+                let offset = slot.offset.checked_add(slot.size as StackOffset).ok_or(
+                    CtonError::ImplLimitExceeded,
+                )?;
                 outgoing_max = max(outgoing_max, offset);
             }
             StackSlotKind::SpillSlot | StackSlotKind::Local => {
@@ -82,9 +82,9 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
                 _ => continue,
             }
 
-            offset = offset
-                .checked_sub(slot.size as StackOffset)
-                .ok_or(CtonError::ImplLimitExceeded)?;
+            offset = offset.checked_sub(slot.size as StackOffset).ok_or(
+                CtonError::ImplLimitExceeded,
+            )?;
 
             // Aligning the negative offset can never cause overflow. We're only clearing bits.
             offset &= -(min_align as StackOffset);
@@ -96,9 +96,9 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
     }
 
     // Finally, make room for the outgoing arguments.
-    offset = offset
-        .checked_sub(outgoing_max)
-        .ok_or(CtonError::ImplLimitExceeded)?;
+    offset = offset.checked_sub(outgoing_max).ok_or(
+        CtonError::ImplLimitExceeded,
+    )?;
     offset &= -(alignment as StackOffset);
 
     let frame_size = (offset as StackSize).wrapping_neg();

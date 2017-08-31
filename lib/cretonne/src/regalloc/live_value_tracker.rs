@@ -74,14 +74,13 @@ impl LiveValueVec {
 
     /// Add a new live value to `values`. Copy some properties from `lr`.
     fn push(&mut self, value: Value, endpoint: Inst, lr: &LiveRange) {
-        self.values
-            .push(LiveValue {
-                      value,
-                      endpoint,
-                      affinity: lr.affinity,
-                      is_local: lr.is_local(),
-                      is_dead: lr.is_dead(),
-                  });
+        self.values.push(LiveValue {
+            value,
+            endpoint,
+            affinity: lr.affinity,
+            is_local: lr.is_local(),
+            is_dead: lr.is_dead(),
+        });
     }
 
     /// Remove all elements.
@@ -157,13 +156,14 @@ impl LiveValueTracker {
     /// from the immediate dominator. The second slice is the set of `ebb` arguments that are live.
     ///
     /// Dead arguments with no uses are included in `args`. Call `drop_dead_args()` to remove them.
-    pub fn ebb_top(&mut self,
-                   ebb: Ebb,
-                   dfg: &DataFlowGraph,
-                   liveness: &Liveness,
-                   layout: &Layout,
-                   domtree: &DominatorTree)
-                   -> (&[LiveValue], &[LiveValue]) {
+    pub fn ebb_top(
+        &mut self,
+        ebb: Ebb,
+        dfg: &DataFlowGraph,
+        liveness: &Liveness,
+        layout: &Layout,
+        domtree: &DominatorTree,
+    ) -> (&[LiveValue], &[LiveValue]) {
         // Start over, compute the set of live values at the top of the EBB from two sources:
         //
         // 1. Values that were live before `ebb`'s immediate dominator, filtered for those that are
@@ -179,14 +179,14 @@ impl LiveValueTracker {
             // If the immediate dominator exits, we must have a stored list for it. This is a
             // requirement to the order EBBs are visited: All dominators must have been processed
             // before the current EBB.
-            let idom_live_list = self.idom_sets
-                .get(&idom)
-                .expect("No stored live set for dominator");
+            let idom_live_list = self.idom_sets.get(&idom).expect(
+                "No stored live set for dominator",
+            );
             // Get just the values that are live-in to `ebb`.
             for &value in idom_live_list.as_slice(&self.idom_pool) {
-                let lr = liveness
-                    .get(value)
-                    .expect("Immediate dominator value has no live range");
+                let lr = liveness.get(value).expect(
+                    "Immediate dominator value has no live range",
+                );
 
                 // Check if this value is live-in here.
                 if let Some(endpoint) = lr.livein_local_end(ebb, layout) {
@@ -198,9 +198,9 @@ impl LiveValueTracker {
         // Now add all the live arguments to `ebb`.
         let first_arg = self.live.values.len();
         for &value in dfg.ebb_args(ebb) {
-            let lr = liveness
-                .get(value)
-                .expect("EBB argument value has no live range");
+            let lr = liveness.get(value).expect(
+                "EBB argument value has no live range",
+            );
             assert_eq!(lr.def(), ebb.into());
             match lr.def_local_end().into() {
                 ExpandedProgramPoint::Inst(endpoint) => {
@@ -209,13 +209,18 @@ impl LiveValueTracker {
                 ExpandedProgramPoint::Ebb(local_ebb) => {
                     // This is a dead EBB argument which is not even live into the first
                     // instruction in the EBB.
-                    assert_eq!(local_ebb,
-                               ebb,
-                               "EBB argument live range ends at wrong EBB header");
+                    assert_eq!(
+                        local_ebb,
+                        ebb,
+                        "EBB argument live range ends at wrong EBB header"
+                    );
                     // Give this value a fake endpoint that is the first instruction in the EBB.
                     // We expect it to be removed by calling `drop_dead_args()`.
-                    self.live
-                        .push(value, layout.first_inst(ebb).expect("Empty EBB"), lr);
+                    self.live.push(
+                        value,
+                        layout.first_inst(ebb).expect("Empty EBB"),
+                        lr,
+                    );
                 }
             }
         }
@@ -241,11 +246,12 @@ impl LiveValueTracker {
     ///
     /// The `drop_dead()` method must be called next to actually remove the dead values from the
     /// tracked set after the two returned slices are no longer needed.
-    pub fn process_inst(&mut self,
-                        inst: Inst,
-                        dfg: &DataFlowGraph,
-                        liveness: &Liveness)
-                        -> (&[LiveValue], &[LiveValue], &[LiveValue]) {
+    pub fn process_inst(
+        &mut self,
+        inst: Inst,
+        dfg: &DataFlowGraph,
+        liveness: &Liveness,
+    ) -> (&[LiveValue], &[LiveValue], &[LiveValue]) {
         // Save a copy of the live values before any branches or jumps that could be somebody's
         // immediate dominator.
         match dfg[inst].analyze_branch(&dfg.value_lists) {
@@ -272,9 +278,11 @@ impl LiveValueTracker {
             }
         }
 
-        (&self.live.values[0..first_kill],
-         &self.live.values[first_kill..first_def],
-         &self.live.values[first_def..])
+        (
+            &self.live.values[0..first_kill],
+            &self.live.values[first_kill..first_def],
+            &self.live.values[first_def..],
+        )
     }
 
     /// Prepare to move past a ghost instruction.
@@ -310,7 +318,8 @@ impl LiveValueTracker {
     /// Any values where `f` returns true are spilled and will be treated as if their affinity was
     /// `Stack`.
     pub fn process_spills<F>(&mut self, mut f: F)
-        where F: FnMut(Value) -> bool
+    where
+        F: FnMut(Value) -> bool,
     {
         for lv in &mut self.live.values {
             if f(lv.value) {
@@ -324,12 +333,10 @@ impl LiveValueTracker {
         let values = self.live.values.iter().map(|lv| lv.value);
         let pool = &mut self.idom_pool;
         // If there already is a set saved for `idom`, just keep it.
-        self.idom_sets
-            .entry(idom)
-            .or_insert_with(|| {
-                                let mut list = ValueList::default();
-                                list.extend(values, pool);
-                                list
-                            });
+        self.idom_sets.entry(idom).or_insert_with(|| {
+            let mut list = ValueList::default();
+            list.extend(values, pool);
+            list
+        });
     }
 }

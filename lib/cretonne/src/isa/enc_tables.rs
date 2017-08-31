@@ -103,19 +103,21 @@ impl<OffT: Into<u32> + Copy> Table<Opcode> for [Level2Entry<OffT>] {
 /// list.
 ///
 /// Returns an iterator that produces legal encodings for `inst`.
-pub fn lookup_enclist<'a, OffT1, OffT2>(ctrl_typevar: Type,
-                                        inst: &'a InstructionData,
-                                        dfg: &'a DataFlowGraph,
-                                        level1_table: &'static [Level1Entry<OffT1>],
-                                        level2_table: &'static [Level2Entry<OffT2>],
-                                        enclist: &'static [EncListEntry],
-                                        legalize_actions: &'static [Legalize],
-                                        recipe_preds: &'static [RecipePredicate],
-                                        inst_preds: &'static [InstPredicate],
-                                        isa_preds: PredicateView<'a>)
-                                        -> Encodings<'a>
-    where OffT1: Into<u32> + Copy,
-          OffT2: Into<u32> + Copy
+pub fn lookup_enclist<'a, OffT1, OffT2>(
+    ctrl_typevar: Type,
+    inst: &'a InstructionData,
+    dfg: &'a DataFlowGraph,
+    level1_table: &'static [Level1Entry<OffT1>],
+    level2_table: &'static [Level2Entry<OffT2>],
+    enclist: &'static [EncListEntry],
+    legalize_actions: &'static [Legalize],
+    recipe_preds: &'static [RecipePredicate],
+    inst_preds: &'static [InstPredicate],
+    isa_preds: PredicateView<'a>,
+) -> Encodings<'a>
+where
+    OffT1: Into<u32> + Copy,
+    OffT2: Into<u32> + Copy,
 {
     let (offset, legalize) = match probe(level1_table, ctrl_typevar, ctrl_typevar.index()) {
         Err(l1idx) => {
@@ -144,15 +146,17 @@ pub fn lookup_enclist<'a, OffT1, OffT2>(ctrl_typevar: Type,
 
     // Now we have an offset into `enclist` that is `!0` when no encoding list could be found.
     // The default legalization code is always valid.
-    Encodings::new(offset,
-                   legalize,
-                   inst,
-                   dfg,
-                   enclist,
-                   legalize_actions,
-                   recipe_preds,
-                   inst_preds,
-                   isa_preds)
+    Encodings::new(
+        offset,
+        legalize,
+        inst,
+        dfg,
+        enclist,
+        legalize_actions,
+        recipe_preds,
+        inst_preds,
+        isa_preds,
+    )
 }
 
 /// Encoding list entry.
@@ -187,16 +191,17 @@ impl<'a> Encodings<'a> {
     /// This iterator provides search for encodings that applies to the given instruction. The
     /// encoding lists are laid out such that first call to `next` returns valid entry in the list
     /// or `None`.
-    pub fn new(offset: usize,
-               legalize: LegalizeCode,
-               inst: &'a InstructionData,
-               dfg: &'a DataFlowGraph,
-               enclist: &'static [EncListEntry],
-               legalize_actions: &'static [Legalize],
-               recipe_preds: &'static [RecipePredicate],
-               inst_preds: &'static [InstPredicate],
-               isa_preds: PredicateView<'a>)
-               -> Self {
+    pub fn new(
+        offset: usize,
+        legalize: LegalizeCode,
+        inst: &'a InstructionData,
+        dfg: &'a DataFlowGraph,
+        enclist: &'static [EncListEntry],
+        legalize_actions: &'static [Legalize],
+        recipe_preds: &'static [RecipePredicate],
+        inst_preds: &'static [InstPredicate],
+        isa_preds: PredicateView<'a>,
+    ) -> Self {
         Encodings {
             offset,
             inst,

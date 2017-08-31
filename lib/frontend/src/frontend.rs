@@ -12,7 +12,8 @@ use std::hash::Hash;
 
 /// Permanent structure used for translating into Cretonne IL.
 pub struct ILBuilder<Variable>
-    where Variable: EntityRef + Hash + Default
+where
+    Variable: EntityRef + Hash + Default,
 {
     ssa: SSABuilder<Variable>,
     ebbs: EntityMap<Ebb, EbbData>,
@@ -23,7 +24,8 @@ pub struct ILBuilder<Variable>
 
 /// Temporary object used to build a Cretonne IL `Function`.
 pub struct FunctionBuilder<'a, Variable: 'a>
-    where Variable: EntityRef + Hash + Default
+where
+    Variable: EntityRef + Hash + Default,
 {
     func: &'a mut Function,
     builder: &'a mut ILBuilder<Variable>,
@@ -44,7 +46,8 @@ struct Position {
 }
 
 impl<Variable> ILBuilder<Variable>
-    where Variable: EntityRef + Hash + Default
+where
+    Variable: EntityRef + Hash + Default,
 {
     /// Creates a ILBuilder structure. The structure is automatically cleared each time it is
     /// passed to a [`FunctionBuilder`](struct.FunctionBuilder.html) for creation.
@@ -68,7 +71,8 @@ impl<Variable> ILBuilder<Variable>
 /// Implementation of the [`InstBuilder`](../cretonne/ir/builder/trait.InstBuilder.html) that has
 /// one convenience method per Cretonne IL instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short, Variable: 'long>
-    where Variable: EntityRef + Hash + Default
+where
+    Variable: EntityRef + Hash + Default,
 {
     builder: &'short mut FunctionBuilder<'long, Variable>,
     ebb: Ebb,
@@ -103,7 +107,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
             self.builder
                 .check_return_args(data.arguments(&self.builder.func.dfg.value_lists))
         }
-        // We only insert the Ebb in the layout when an instruction is added to it
+// We only insert the Ebb in the layout when an instruction is added to it
         if self.builder.builder.ebbs[self.builder.position.ebb].pristine {
             if !self.builder
                     .func
@@ -125,9 +129,9 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
         if data.opcode().is_branch() {
             match data.branch_destination() {
                 Some(dest_ebb) => {
-                    // If the user has supplied jump arguments we must adapt the arguments of
-                    // the destination ebb
-                    // TODO: find a way not to allocate a vector
+// If the user has supplied jump arguments we must adapt the arguments of
+// the destination ebb
+// TODO: find a way not to allocate a vector
                     let args_types: Vec<Type> =
                         match data.analyze_branch(&self.builder.func.dfg.value_lists) {
                             BranchInfo::SingleDest(_, args) => {
@@ -142,14 +146,14 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                     self.builder.declare_successor(dest_ebb, inst);
                 }
                 None => {
-                    // branch_destination() doesn't detect jump_tables
+// branch_destination() doesn't detect jump_tables
                     match data {
-                        // If jump table we declare all entries successor
-                        // TODO: not collect with vector?
+// If jump table we declare all entries successor
+// TODO: not collect with vector?
                         InstructionData::BranchTable { table, .. } => {
-                            // Unlike all other jumps/branches, jump tables are
-                            // capable of having the same successor appear
-                            // multiple times. Use a HashSet to deduplicate.
+// Unlike all other jumps/branches, jump tables are
+// capable of having the same successor appear
+// multiple times. Use a HashSet to deduplicate.
                             let mut unique = HashSet::new();
                             for dest_ebb in self.builder
                                     .func
@@ -163,7 +167,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                                 self.builder.declare_successor(dest_ebb, inst)
                             }
                         }
-                        // If not we do nothing
+// If not we do nothing
                         _ => {}
                     }
                 }
@@ -211,13 +215,15 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 /// `Ebb` when you haven't filled the current one with a terminator instruction, inserting a
 /// return instruction with arguments that don't match the function's signature.
 impl<'a, Variable> FunctionBuilder<'a, Variable>
-    where Variable: EntityRef + Hash + Default
+where
+    Variable: EntityRef + Hash + Default,
 {
     /// Creates a new FunctionBuilder structure that will operate on a `Function` using a
     /// `IlBuilder`.
-    pub fn new(func: &'a mut Function,
-               builder: &'a mut ILBuilder<Variable>)
-               -> FunctionBuilder<'a, Variable> {
+    pub fn new(
+        func: &'a mut Function,
+        builder: &'a mut ILBuilder<Variable>,
+    ) -> FunctionBuilder<'a, Variable> {
         builder.clear();
         FunctionBuilder {
             func: func,
@@ -255,12 +261,16 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         }
         if !self.builder.ebbs[self.position.ebb].pristine {
             // First we check that the previous block has been filled.
-            debug_assert!(self.is_unreachable() || self.builder.ebbs[self.position.ebb].filled,
-                          "you have to fill your block before switching");
+            debug_assert!(
+                self.is_unreachable() || self.builder.ebbs[self.position.ebb].filled,
+                "you have to fill your block before switching"
+            );
         }
         // We cannot switch to a filled block
-        debug_assert!(!self.builder.ebbs[ebb].filled,
-                      "you cannot switch to a block which is already filled");
+        debug_assert!(
+            !self.builder.ebbs[ebb].filled,
+            "you cannot switch to a block which is already filled"
+        );
 
         let basic_block = self.builder.ssa.header_block(ebb);
         // Then we change the cursor position.
@@ -278,12 +288,12 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     /// created. Forgetting to call this method on every block will cause inconsistences in the
     /// produced functions.
     pub fn seal_block(&mut self, ebb: Ebb) {
-        let side_effects = self.builder
-            .ssa
-            .seal_ebb_header_block(ebb,
-                                   &mut self.func.dfg,
-                                   &mut self.func.layout,
-                                   &mut self.func.jump_tables);
+        let side_effects = self.builder.ssa.seal_ebb_header_block(
+            ebb,
+            &mut self.func.dfg,
+            &mut self.func.layout,
+            &mut self.func.jump_tables,
+        );
         self.handle_ssa_side_effects(side_effects);
     }
 
@@ -295,18 +305,17 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     /// Returns the Cretonne IL value corresponding to the utilization at the current program
     /// position of a previously defined user variable.
     pub fn use_var(&mut self, var: Variable) -> Value {
-        let ty = *self.builder
-                      .types
-                      .get(var)
-                      .expect("this variable is used but its type has not been declared");
-        let (val, side_effects) = self.builder
-            .ssa
-            .use_var(&mut self.func.dfg,
-                     &mut self.func.layout,
-                     &mut self.func.jump_tables,
-                     var,
-                     ty,
-                     self.position.basic_block);
+        let ty = *self.builder.types.get(var).expect(
+            "this variable is used but its type has not been declared",
+        );
+        let (val, side_effects) = self.builder.ssa.use_var(
+            &mut self.func.dfg,
+            &mut self.func.layout,
+            &mut self.func.jump_tables,
+            var,
+            ty,
+            self.position.basic_block,
+        );
         self.handle_ssa_side_effects(side_effects);
         val
     }
@@ -314,11 +323,15 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     /// Register a new definition of a user variable. Panics if the type of the value is not the
     /// same as the type registered for the variable.
     pub fn def_var(&mut self, var: Variable, val: Value) {
-        debug_assert!(self.func.dfg.value_type(val) == self.builder.types[var],
-                      "the type of the value is not the type registered for the variable");
-        self.builder
-            .ssa
-            .def_var(var, val, self.position.basic_block);
+        debug_assert!(
+            self.func.dfg.value_type(val) == self.builder.types[var],
+            "the type of the value is not the type registered for the variable"
+        );
+        self.builder.ssa.def_var(
+            var,
+            val,
+            self.position.basic_block,
+        );
     }
 
     /// Returns the value corresponding to the `i`-th argument of the function as defined by
@@ -369,7 +382,8 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 /// function. The functions below help you inspect the function you're creating and modify it
 /// in ways that can be unsafe if used incorrectly.
 impl<'a, Variable> FunctionBuilder<'a, Variable>
-    where Variable: EntityRef + Hash + Default
+where
+    Variable: EntityRef + Hash + Default,
 {
     /// Retrieves all the arguments for an `Ebb` currently infered from the jump instructions
     /// inserted that target it and the SSA construction.
@@ -402,15 +416,16 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     /// **Note:** You are responsible for maintaining the coherence with the arguments of
     /// other jump instructions.
     pub fn change_jump_destination(&mut self, inst: Inst, new_dest: Ebb) {
-        let old_dest =
-            self.func.dfg[inst]
-                .branch_destination_mut()
-                .expect("you want to change the jump destination of a non-jump instruction");
+        let old_dest = self.func.dfg[inst].branch_destination_mut().expect(
+            "you want to change the jump destination of a non-jump instruction",
+        );
         let pred = self.builder.ssa.remove_ebb_predecessor(*old_dest, inst);
         *old_dest = new_dest;
-        self.builder
-            .ssa
-            .declare_ebb_predecessor(new_dest, pred, inst);
+        self.builder.ssa.declare_ebb_predecessor(
+            new_dest,
+            pred,
+            inst,
+        );
     }
 
     /// Returns `true` if and only if the current `Ebb` is sealed and has no predecessors declared.
@@ -422,7 +437,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
             Some(entry) => self.position.ebb == entry,
         };
         (!is_entry && self.builder.ssa.is_sealed(self.position.ebb) &&
-         self.builder.ssa.predecessors(self.position.ebb).is_empty())
+             self.builder.ssa.predecessors(self.position.ebb).is_empty())
     }
 
     /// Returns `true` if and only if no instructions have been added since the last call to
@@ -446,31 +461,31 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 }
 
 impl<'a, Variable> Drop for FunctionBuilder<'a, Variable>
-    where Variable: EntityRef + Hash + Default
+where
+    Variable: EntityRef + Hash + Default,
 {
     /// When a `FunctionBuilder` goes out of scope, it means that the function is fully built.
     /// We then proceed to check if all the `Ebb`s are filled and sealed
     fn drop(&mut self) {
-        debug_assert!(self.builder
-                          .ebbs
-                          .keys()
-                          .all(|ebb| {
-                                   self.builder.ebbs[ebb].pristine ||
-                                   (self.builder.ssa.is_sealed(ebb) &&
-                                    self.builder.ebbs[ebb].filled)
-                               }),
-                      "all blocks should be filled and sealed before dropping a FunctionBuilder")
+        debug_assert!(
+            self.builder.ebbs.keys().all(|ebb| {
+                self.builder.ebbs[ebb].pristine ||
+                    (self.builder.ssa.is_sealed(ebb) && self.builder.ebbs[ebb].filled)
+            }),
+            "all blocks should be filled and sealed before dropping a FunctionBuilder"
+        )
     }
 }
 
 // Helper functions
 impl<'a, Variable> FunctionBuilder<'a, Variable>
-    where Variable: EntityRef + Hash + Default
+where
+    Variable: EntityRef + Hash + Default,
 {
     fn move_to_next_basic_block(&mut self) {
-        self.position.basic_block = self.builder
-            .ssa
-            .declare_ebb_body_block(self.position.basic_block);
+        self.position.basic_block = self.builder.ssa.declare_ebb_body_block(
+            self.position.basic_block,
+        );
     }
 
     fn fill_current_block(&mut self) {
@@ -478,30 +493,36 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     }
 
     fn declare_successor(&mut self, dest_ebb: Ebb, jump_inst: Inst) {
-        self.builder
-            .ssa
-            .declare_ebb_predecessor(dest_ebb, self.position.basic_block, jump_inst);
+        self.builder.ssa.declare_ebb_predecessor(
+            dest_ebb,
+            self.position.basic_block,
+            jump_inst,
+        );
     }
 
     fn check_return_args(&self, args: &[Value]) {
-        debug_assert_eq!(args.len(),
-                         self.func.signature.return_types.len(),
-                         "the number of returned values doesn't match the function signature ");
+        debug_assert_eq!(
+            args.len(),
+            self.func.signature.return_types.len(),
+            "the number of returned values doesn't match the function signature "
+        );
         for (i, arg) in args.iter().enumerate() {
             let valty = self.func.dfg.value_type(*arg);
-            debug_assert_eq!(valty,
-                             self.func.signature.return_types[i].value_type,
-                             "the types of the values returned don't match the \
-                             function signature");
+            debug_assert_eq!(
+                valty,
+                self.func.signature.return_types[i].value_type,
+                "the types of the values returned don't match the \
+                             function signature"
+            );
         }
     }
 
     fn fill_function_args_values(&mut self, ebb: Ebb) {
         debug_assert!(self.pristine);
         for argtyp in &self.func.signature.argument_types {
-            self.builder
-                .function_args_values
-                .push(self.func.dfg.append_ebb_arg(ebb, argtyp.value_type));
+            self.builder.function_args_values.push(
+                self.func.dfg.append_ebb_arg(ebb, argtyp.value_type),
+            );
         }
         self.pristine = false;
     }
@@ -510,48 +531,56 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     fn ebb_args_adjustement(&mut self, dest_ebb: Ebb, jump_args: &[Type]) {
         let ty_to_append: Option<Vec<Type>> =
             if self.builder.ssa.predecessors(dest_ebb).len() == 0 ||
-               self.builder.ebbs[dest_ebb].pristine {
+                self.builder.ebbs[dest_ebb].pristine
+            {
                 // This is the first jump instruction targeting this Ebb
                 // so the jump arguments supplied here are this Ebb' arguments
                 // However some of the arguments might already be there
                 // in the Ebb so we have to check they're consistent
                 let dest_ebb_args = self.func.dfg.ebb_args(dest_ebb);
-                debug_assert!(dest_ebb_args
-                                  .iter()
-                                  .zip(jump_args.iter().take(dest_ebb_args.len()))
-                                  .all(|(dest_arg, jump_arg)| {
-                                           *jump_arg == self.func.dfg.value_type(*dest_arg)
-                                       }),
-                              "the jump argument supplied has not the \
-                same type as the corresponding dest ebb argument");
+                debug_assert!(
+                    dest_ebb_args
+                        .iter()
+                        .zip(jump_args.iter().take(dest_ebb_args.len()))
+                        .all(|(dest_arg, jump_arg)| {
+                            *jump_arg == self.func.dfg.value_type(*dest_arg)
+                        }),
+                    "the jump argument supplied has not the \
+                same type as the corresponding dest ebb argument"
+                );
                 self.builder.ebbs[dest_ebb].user_arg_count = jump_args.len();
-                Some(jump_args
-                         .iter()
-                         .skip(dest_ebb_args.len())
-                         .cloned()
-                         .collect())
+                Some(
+                    jump_args
+                        .iter()
+                        .skip(dest_ebb_args.len())
+                        .cloned()
+                        .collect(),
+                )
             } else {
                 let dest_ebb_args = self.func.dfg.ebb_args(dest_ebb);
                 // The Ebb already has predecessors
                 // We check that the arguments supplied match those supplied
                 // previously.
-                debug_assert!(jump_args.len() == self.builder.ebbs[dest_ebb].user_arg_count,
-                              "the jump instruction doesn't have the same \
+                debug_assert!(
+                    jump_args.len() == self.builder.ebbs[dest_ebb].user_arg_count,
+                    "the jump instruction doesn't have the same \
                       number of arguments as its destination Ebb \
                       ({} vs {}).",
-                              jump_args.len(),
-                              dest_ebb_args.len());
-                debug_assert!(jump_args
-                                  .iter()
-                                  .zip(dest_ebb_args
-                                      .iter()
-                                      .take(self.builder.ebbs[dest_ebb].user_arg_count)
-                                  )
-                                  .all(|(jump_arg, dest_arg)| {
-                                           *jump_arg == self.func.dfg.value_type(*dest_arg)
-                                       }),
-                              "the jump argument supplied has not the \
-                    same type as the corresponding dest ebb argument");
+                    jump_args.len(),
+                    dest_ebb_args.len()
+                );
+                debug_assert!(
+                    jump_args
+                        .iter()
+                        .zip(dest_ebb_args.iter().take(
+                            self.builder.ebbs[dest_ebb].user_arg_count,
+                        ))
+                        .all(|(jump_arg, dest_arg)| {
+                            *jump_arg == self.func.dfg.value_type(*dest_arg)
+                        }),
+                    "the jump argument supplied has not the \
+                    same type as the corresponding dest ebb argument"
+                );
                 None
             };
         if let Some(ty_args) = ty_to_append {

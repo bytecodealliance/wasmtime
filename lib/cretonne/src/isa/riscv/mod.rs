@@ -29,19 +29,20 @@ pub fn isa_builder() -> IsaBuilder {
     }
 }
 
-fn isa_constructor(shared_flags: shared_settings::Flags,
-                   builder: &shared_settings::Builder)
-                   -> Box<TargetIsa> {
+fn isa_constructor(
+    shared_flags: shared_settings::Flags,
+    builder: &shared_settings::Builder,
+) -> Box<TargetIsa> {
     let level1 = if shared_flags.is_64bit() {
         &enc_tables::LEVEL1_RV64[..]
     } else {
         &enc_tables::LEVEL1_RV32[..]
     };
     Box::new(Isa {
-                 isa_flags: settings::Flags::new(&shared_flags, builder),
-                 shared_flags,
-                 cpumode: level1,
-             })
+        isa_flags: settings::Flags::new(&shared_flags, builder),
+        shared_flags,
+        cpumode: level1,
+    })
 }
 
 impl TargetIsa for Isa {
@@ -61,21 +62,24 @@ impl TargetIsa for Isa {
         enc_tables::INFO.clone()
     }
 
-    fn legal_encodings<'a>(&'a self,
-                           dfg: &'a ir::DataFlowGraph,
-                           inst: &'a ir::InstructionData,
-                           ctrl_typevar: ir::Type)
-                           -> Encodings<'a> {
-        lookup_enclist(ctrl_typevar,
-                       inst,
-                       dfg,
-                       self.cpumode,
-                       &enc_tables::LEVEL2[..],
-                       &enc_tables::ENCLISTS[..],
-                       &enc_tables::LEGALIZE_ACTIONS[..],
-                       &enc_tables::RECIPE_PREDICATES[..],
-                       &enc_tables::INST_PREDICATES[..],
-                       self.isa_flags.predicate_view())
+    fn legal_encodings<'a>(
+        &'a self,
+        dfg: &'a ir::DataFlowGraph,
+        inst: &'a ir::InstructionData,
+        ctrl_typevar: ir::Type,
+    ) -> Encodings<'a> {
+        lookup_enclist(
+            ctrl_typevar,
+            inst,
+            dfg,
+            self.cpumode,
+            &enc_tables::LEVEL2[..],
+            &enc_tables::ENCLISTS[..],
+            &enc_tables::LEGALIZE_ACTIONS[..],
+            &enc_tables::RECIPE_PREDICATES[..],
+            &enc_tables::INST_PREDICATES[..],
+            self.isa_flags.predicate_view(),
+        )
     }
 
     fn legalize_signature(&self, sig: &mut ir::Signature, current: bool) {
@@ -90,11 +94,13 @@ impl TargetIsa for Isa {
         abi::allocatable_registers(func, &self.isa_flags)
     }
 
-    fn emit_inst(&self,
-                 func: &ir::Function,
-                 inst: ir::Inst,
-                 divert: &mut regalloc::RegDiversions,
-                 sink: &mut CodeSink) {
+    fn emit_inst(
+        &self,
+        func: &ir::Function,
+        inst: ir::Inst,
+        divert: &mut regalloc::RegDiversions,
+        sink: &mut CodeSink,
+    ) {
         binemit::emit_inst(func, inst, divert, sink)
     }
 

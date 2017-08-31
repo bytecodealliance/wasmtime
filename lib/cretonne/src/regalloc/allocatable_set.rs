@@ -86,10 +86,9 @@ impl AllocatableSet {
     ///
     /// This assumes that unused bits are 1.
     pub fn interferes_with(&self, other: &AllocatableSet) -> bool {
-        self.avail
-            .iter()
-            .zip(&other.avail)
-            .any(|(&x, &y)| (x | y) != !0)
+        self.avail.iter().zip(&other.avail).any(
+            |(&x, &y)| (x | y) != !0,
+        )
     }
 
     /// Intersect this set of allocatable registers with `other`. This has the effect of removing

@@ -93,10 +93,11 @@ impl RegDiversions {
     ///
     /// Returns the `to` register of the removed diversion.
     pub fn remove(&mut self, value: Value) -> Option<RegUnit> {
-        self.current
-            .iter()
-            .position(|d| d.value == value)
-            .map(|i| self.current.swap_remove(i).to)
+        self.current.iter().position(|d| d.value == value).map(
+            |i| {
+                self.current.swap_remove(i).to
+            },
+        )
     }
 }
 
@@ -113,12 +114,14 @@ mod tests {
         let v2 = Value::new(2);
 
         divs.regmove(v1, 10, 12);
-        assert_eq!(divs.diversion(v1),
-                   Some(&Diversion {
-                            value: v1,
-                            from: 10,
-                            to: 12,
-                        }));
+        assert_eq!(
+            divs.diversion(v1),
+            Some(&Diversion {
+                value: v1,
+                from: 10,
+                to: 12,
+            })
+        );
         assert_eq!(divs.diversion(v2), None);
 
         divs.regmove(v1, 12, 11);

@@ -150,8 +150,10 @@ pub fn legalize_abi_value(have: Type, arg: &ArgumentType) -> ValueConversion {
     match have_bits.cmp(&arg_bits) {
         // We have fewer bits than the ABI argument.
         Ordering::Less => {
-            assert!(have.is_int() && arg.value_type.is_int(),
-                    "Can only extend integer values");
+            assert!(
+                have.is_int() && arg.value_type.is_int(),
+                "Can only extend integer values"
+            );
             match arg.extension {
                 ArgumentExtension::Uext => ValueConversion::Uext(arg.value_type),
                 ArgumentExtension::Sext => ValueConversion::Sext(arg.value_type),
@@ -192,22 +194,34 @@ mod tests {
     fn legalize() {
         let mut arg = ArgumentType::new(types::I32);
 
-        assert_eq!(legalize_abi_value(types::I64X2, &arg),
-                   ValueConversion::VectorSplit);
-        assert_eq!(legalize_abi_value(types::I64, &arg),
-                   ValueConversion::IntSplit);
+        assert_eq!(
+            legalize_abi_value(types::I64X2, &arg),
+            ValueConversion::VectorSplit
+        );
+        assert_eq!(
+            legalize_abi_value(types::I64, &arg),
+            ValueConversion::IntSplit
+        );
 
         // Vector of integers is broken down, then sign-extended.
         arg.extension = ArgumentExtension::Sext;
-        assert_eq!(legalize_abi_value(types::I16X4, &arg),
-                   ValueConversion::VectorSplit);
-        assert_eq!(legalize_abi_value(types::I16.by(2).unwrap(), &arg),
-                   ValueConversion::VectorSplit);
-        assert_eq!(legalize_abi_value(types::I16, &arg),
-                   ValueConversion::Sext(types::I32));
+        assert_eq!(
+            legalize_abi_value(types::I16X4, &arg),
+            ValueConversion::VectorSplit
+        );
+        assert_eq!(
+            legalize_abi_value(types::I16.by(2).unwrap(), &arg),
+            ValueConversion::VectorSplit
+        );
+        assert_eq!(
+            legalize_abi_value(types::I16, &arg),
+            ValueConversion::Sext(types::I32)
+        );
 
         // 64-bit float is split as an integer.
-        assert_eq!(legalize_abi_value(types::F64, &arg),
-                   ValueConversion::IntBits);
+        assert_eq!(
+            legalize_abi_value(types::F64, &arg),
+            ValueConversion::IntBits
+        );
     }
 }

@@ -153,17 +153,21 @@ impl DataFlowGraph {
     pub fn value_def(&self, v: Value) -> ValueDef {
         match self.values[v] {
             ValueData::Inst { inst, num, .. } => {
-                assert_eq!(Some(v),
-                           self.results[inst].get(num as usize, &self.value_lists),
-                           "Dangling result value {}: {}",
-                           v,
-                           self.display_inst(inst, None));
+                assert_eq!(
+                    Some(v),
+                    self.results[inst].get(num as usize, &self.value_lists),
+                    "Dangling result value {}: {}",
+                    v,
+                    self.display_inst(inst, None)
+                );
                 ValueDef::Res(inst, num as usize)
             }
             ValueData::Arg { ebb, num, .. } => {
-                assert_eq!(Some(v),
-                           self.ebbs[ebb].args.get(num as usize, &self.value_lists),
-                           "Dangling EBB argument value");
+                assert_eq!(
+                    Some(v),
+                    self.ebbs[ebb].args.get(num as usize, &self.value_lists),
+                    "Dangling EBB argument value"
+                );
                 ValueDef::Arg(ebb, num as usize)
             }
             ValueData::Alias { original, .. } => {
@@ -247,19 +251,23 @@ impl DataFlowGraph {
         // Try to create short alias chains by finding the original source value.
         // This also avoids the creation of loops.
         let original = self.resolve_aliases(src);
-        assert_ne!(dest,
-                   original,
-                   "Aliasing {} to {} would create a loop",
-                   dest,
-                   src);
+        assert_ne!(
+            dest,
+            original,
+            "Aliasing {} to {} would create a loop",
+            dest,
+            src
+        );
         let ty = self.value_type(original);
-        assert_eq!(self.value_type(dest),
-                   ty,
-                   "Aliasing {} to {} would change its type {} to {}",
-                   dest,
-                   src,
-                   self.value_type(dest),
-                   ty);
+        assert_eq!(
+            self.value_type(dest),
+            ty,
+            "Aliasing {} to {} would change its type {} to {}",
+            dest,
+            src,
+            self.value_type(dest),
+            ty
+        );
 
         self.values[dest] = ValueData::Alias { ty, original };
     }
@@ -274,29 +282,36 @@ impl DataFlowGraph {
     /// cleared, so it likely needs to be removed from the graph.
     ///
     pub fn replace_with_aliases(&mut self, dest_inst: Inst, src_inst: Inst) {
-        debug_assert_ne!(dest_inst,
-                         src_inst,
-                         "Replacing {} with itself would create a loop",
-                         dest_inst);
-        debug_assert_eq!(self.results[dest_inst].len(&self.value_lists),
-                         self.results[src_inst].len(&self.value_lists),
-                         "Replacing {} with {} would produce a different number of results.",
-                         dest_inst,
-                         src_inst);
+        debug_assert_ne!(
+            dest_inst,
+            src_inst,
+            "Replacing {} with itself would create a loop",
+            dest_inst
+        );
+        debug_assert_eq!(
+            self.results[dest_inst].len(&self.value_lists),
+            self.results[src_inst].len(&self.value_lists),
+            "Replacing {} with {} would produce a different number of results.",
+            dest_inst,
+            src_inst
+        );
 
         for (&dest, &src) in self.results[dest_inst]
-                .as_slice(&self.value_lists)
-                .iter()
-                .zip(self.results[src_inst].as_slice(&self.value_lists)) {
+            .as_slice(&self.value_lists)
+            .iter()
+            .zip(self.results[src_inst].as_slice(&self.value_lists))
+        {
             let original = src;
             let ty = self.value_type(original);
-            assert_eq!(self.value_type(dest),
-                       ty,
-                       "Aliasing {} to {} would change its type {} to {}",
-                       dest,
-                       src,
-                       self.value_type(dest),
-                       ty);
+            assert_eq!(
+                self.value_type(dest),
+                ty,
+                "Aliasing {} to {} would change its type {} to {}",
+                dest,
+                src,
+                self.value_type(dest),
+                ty
+            );
 
             self.values[dest] = ValueData::Alias { ty, original };
         }
@@ -371,10 +386,11 @@ impl DataFlowGraph {
     }
 
     /// Returns an object that displays `inst`.
-    pub fn display_inst<'a, I: Into<Option<&'a TargetIsa>>>(&'a self,
-                                                            inst: Inst,
-                                                            isa: I)
-                                                            -> DisplayInst<'a> {
+    pub fn display_inst<'a, I: Into<Option<&'a TargetIsa>>>(
+        &'a self,
+        inst: Inst,
+        isa: I,
+    ) -> DisplayInst<'a> {
         DisplayInst(self, isa.into(), inst)
     }
 
@@ -433,12 +449,14 @@ impl DataFlowGraph {
     /// Create a new set of result values for `inst` using `ctrl_typevar` to determine the result
     /// types. Any values provided by `reuse` will be reused. When `reuse` is exhausted or when it
     /// produces `None`, a new value is created.
-    pub fn make_inst_results_reusing<I>(&mut self,
-                                        inst: Inst,
-                                        ctrl_typevar: Type,
-                                        reuse: I)
-                                        -> usize
-        where I: Iterator<Item = Option<Value>>
+    pub fn make_inst_results_reusing<I>(
+        &mut self,
+        inst: Inst,
+        ctrl_typevar: Type,
+        reuse: I,
+    ) -> usize
+    where
+        I: Iterator<Item = Option<Value>>,
     {
         let mut reuse = reuse.fuse();
         let constraints = self.insts[inst].opcode().constraints();
@@ -478,9 +496,10 @@ impl DataFlowGraph {
     }
 
     /// Create an `InsertBuilder` that will insert an instruction at the cursor's current position.
-    pub fn ins<'c, 'fc: 'c, 'fd>(&'fd mut self,
-                                 at: &'c mut Cursor<'fc>)
-                                 -> InsertBuilder<'fd, LayoutCursorInserter<'c, 'fc, 'fd>> {
+    pub fn ins<'c, 'fc: 'c, 'fd>(
+        &'fd mut self,
+        at: &'c mut Cursor<'fc>,
+    ) -> InsertBuilder<'fd, LayoutCursorInserter<'c, 'fc, 'fd>> {
         InsertBuilder::new(LayoutCursorInserter::new(at, self))
     }
 
@@ -537,20 +556,24 @@ impl DataFlowGraph {
             _ => panic!("{} is not an instruction result value", old_value),
         };
         let new_value = self.make_value(ValueData::Inst {
-                                            ty: new_type,
-                                            num,
-                                            inst,
-                                        });
+            ty: new_type,
+            num,
+            inst,
+        });
         let num = num as usize;
-        let attached = mem::replace(self.results[inst]
-                                        .get_mut(num, &mut self.value_lists)
-                                        .expect("Replacing detached result"),
-                                    new_value);
-        assert_eq!(attached,
-                   old_value,
-                   "{} wasn't detached from {}",
-                   old_value,
-                   self.display_inst(inst, None));
+        let attached = mem::replace(
+            self.results[inst]
+                .get_mut(num, &mut self.value_lists)
+                .expect("Replacing detached result"),
+            new_value,
+        );
+        assert_eq!(
+            attached,
+            old_value,
+            "{} wasn't detached from {}",
+            old_value,
+            self.display_inst(inst, None)
+        );
         new_value
     }
 
@@ -560,19 +583,19 @@ impl DataFlowGraph {
         let num = self.results[inst].push(res, &mut self.value_lists);
         assert!(num <= u16::MAX as usize, "Too many result values");
         self.make_value(ValueData::Inst {
-                            ty,
-                            inst,
-                            num: num as u16,
-                        })
+            ty,
+            inst,
+            num: num as u16,
+        })
     }
 
     /// Append a new value argument to an instruction.
     ///
     /// Panics if the instruction doesn't support arguments.
     pub fn append_inst_arg(&mut self, inst: Inst, new_arg: Value) {
-        let mut branch_values = self.insts[inst]
-            .take_value_list()
-            .expect("the instruction doesn't have value arguments");
+        let mut branch_values = self.insts[inst].take_value_list().expect(
+            "the instruction doesn't have value arguments",
+        );
         branch_values.push(new_arg, &mut self.value_lists);
         self.insts[inst].put_value_list(branch_values)
     }
@@ -581,9 +604,9 @@ impl DataFlowGraph {
     ///
     /// This function panics if the instruction doesn't have any result.
     pub fn first_result(&self, inst: Inst) -> Value {
-        self.results[inst]
-            .first(&self.value_lists)
-            .expect("Instruction has no results")
+        self.results[inst].first(&self.value_lists).expect(
+            "Instruction has no results",
+        )
     }
 
     /// Test if `inst` has any result values currently.
@@ -613,11 +636,12 @@ impl DataFlowGraph {
     /// called first.
     ///
     /// Returns `None` if asked about a result index that is too large.
-    pub fn compute_result_type(&self,
-                               inst: Inst,
-                               result_idx: usize,
-                               ctrl_typevar: Type)
-                               -> Option<Type> {
+    pub fn compute_result_type(
+        &self,
+        inst: Inst,
+        result_idx: usize,
+        ctrl_typevar: Type,
+    ) -> Option<Type> {
         let constraints = self.insts[inst].opcode().constraints();
         let fixed_results = constraints.fixed_results();
 
@@ -626,13 +650,12 @@ impl DataFlowGraph {
         }
 
         // Not a fixed result, try to extract a return type from the call signature.
-        self.call_signature(inst)
-            .and_then(|sigref| {
-                          self.signatures[sigref]
-                              .return_types
-                              .get(result_idx - fixed_results)
-                              .map(|&arg| arg.value_type)
-                      })
+        self.call_signature(inst).and_then(|sigref| {
+            self.signatures[sigref]
+                .return_types
+                .get(result_idx - fixed_results)
+                .map(|&arg| arg.value_type)
+        })
     }
 
     /// Get the controlling type variable, or `VOID` if `inst` isn't polymorphic.
@@ -644,8 +667,9 @@ impl DataFlowGraph {
         } else if constraints.requires_typevar_operand() {
             // Not all instruction formats have a designated operand, but in that case
             // `requires_typevar_operand()` should never be true.
-            self.value_type(self[inst].typevar_operand(&self.value_lists)
-                .expect("Instruction format doesn't have a designated operand, bad opcode."))
+            self.value_type(self[inst].typevar_operand(&self.value_lists).expect(
+                "Instruction format doesn't have a designated operand, bad opcode.",
+            ))
         } else {
             self.value_type(self.first_result(inst))
         }
@@ -691,10 +715,10 @@ impl DataFlowGraph {
         let num = self.ebbs[ebb].args.push(arg, &mut self.value_lists);
         assert!(num <= u16::MAX as usize, "Too many arguments to EBB");
         self.make_value(ValueData::Arg {
-                            ty,
-                            num: num as u16,
-                            ebb,
-                        })
+            ty,
+            num: num as u16,
+            ebb,
+        })
     }
 
     /// Removes `val` from `ebb`'s argument by swapping it with the last argument of `ebb`.
@@ -712,9 +736,10 @@ impl DataFlowGraph {
         } else {
             panic!("{} must be an EBB argument", val);
         };
-        self.ebbs[ebb]
-            .args
-            .swap_remove(num as usize, &mut self.value_lists);
+        self.ebbs[ebb].args.swap_remove(
+            num as usize,
+            &mut self.value_lists,
+        );
         if let Some(last_arg_val) = self.ebbs[ebb].args.get(num as usize, &self.value_lists) {
             // We update the position of the old last arg.
             if let ValueData::Arg { num: ref mut old_num, .. } = self.values[last_arg_val] {
@@ -734,23 +759,26 @@ impl DataFlowGraph {
         } else {
             panic!("{} must be an EBB argument", val);
         };
-        self.ebbs[ebb]
-            .args
-            .remove(num as usize, &mut self.value_lists);
+        self.ebbs[ebb].args.remove(
+            num as usize,
+            &mut self.value_lists,
+        );
         for index in num..(self.ebb_args(ebb).len() as u16) {
             match self.values[self.ebbs[ebb]
-                      .args
-                      .get(index as usize, &self.value_lists)
-                      .unwrap()] {
+                                    .args
+                                    .get(index as usize, &self.value_lists)
+                                    .unwrap()] {
                 ValueData::Arg { ref mut num, .. } => {
                     *num -= 1;
                 }
                 _ => {
-                    panic!("{} must be an EBB argument",
-                           self.ebbs[ebb]
-                               .args
-                               .get(index as usize, &self.value_lists)
-                               .unwrap())
+                    panic!(
+                        "{} must be an EBB argument",
+                        self.ebbs[ebb]
+                            .args
+                            .get(index as usize, &self.value_lists)
+                            .unwrap()
+                    )
                 }
             }
         }
@@ -791,10 +819,10 @@ impl DataFlowGraph {
             panic!("{} must be an EBB argument", old_arg);
         };
         let new_arg = self.make_value(ValueData::Arg {
-                                          ty: new_type,
-                                          num,
-                                          ebb,
-                                      });
+            ty: new_type,
+            num,
+            ebb,
+        });
 
         self.ebbs[ebb].args.as_mut_slice(&mut self.value_lists)[num as usize] = new_arg;
         new_arg

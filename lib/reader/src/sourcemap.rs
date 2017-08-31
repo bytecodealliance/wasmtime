@@ -76,24 +76,24 @@ impl SourceMap {
     /// Returns the entity reference corresponding to `name`, if it exists.
     pub fn lookup_str(&self, name: &str) -> Option<AnyEntity> {
         split_entity_name(name).and_then(|(ent, num)| match ent {
-                                             "v" => {
-                                                 Value::with_number(num)
-                                                     .and_then(|v| self.get_value(v))
-                                                     .map(AnyEntity::Value)
-                                             }
-                                             "ebb" => {
-                                                 Ebb::with_number(num)
-                                                     .and_then(|e| self.get_ebb(e))
-                                                     .map(AnyEntity::Ebb)
-                                             }
-                                             "ss" => self.get_ss(num).map(AnyEntity::StackSlot),
-                                             "gv" => self.get_gv(num).map(AnyEntity::GlobalVar),
-                                             "heap" => self.get_heap(num).map(AnyEntity::Heap),
-                                             "sig" => self.get_sig(num).map(AnyEntity::SigRef),
-                                             "fn" => self.get_fn(num).map(AnyEntity::FuncRef),
-                                             "jt" => self.get_jt(num).map(AnyEntity::JumpTable),
-                                             _ => None,
-                                         })
+            "v" => {
+                Value::with_number(num)
+                    .and_then(|v| self.get_value(v))
+                    .map(AnyEntity::Value)
+            }
+            "ebb" => {
+                Ebb::with_number(num).and_then(|e| self.get_ebb(e)).map(
+                    AnyEntity::Ebb,
+                )
+            }
+            "ss" => self.get_ss(num).map(AnyEntity::StackSlot),
+            "gv" => self.get_gv(num).map(AnyEntity::GlobalVar),
+            "heap" => self.get_heap(num).map(AnyEntity::Heap),
+            "sig" => self.get_sig(num).map(AnyEntity::SigRef),
+            "fn" => self.get_fn(num).map(AnyEntity::FuncRef),
+            "jt" => self.get_jt(num).map(AnyEntity::JumpTable),
+            _ => None,
+        })
     }
 
     /// Get the source location where an entity was defined.
@@ -110,9 +110,11 @@ impl SourceMap {
                 Ok(())
             }
             None => {
-                err!(self.location(loc).unwrap_or_default(),
-                     "undefined reference: {}",
-                     ebb)
+                err!(
+                    self.location(loc).unwrap_or_default(),
+                    "undefined reference: {}",
+                    ebb
+                )
             }
         }
     }
@@ -125,9 +127,11 @@ impl SourceMap {
                 Ok(())
             }
             None => {
-                err!(self.location(loc).unwrap_or_default(),
-                     "undefined reference: {}",
-                     val)
+                err!(
+                    self.location(loc).unwrap_or_default(),
+                    "undefined reference: {}",
+                    val
+                )
             }
         }
     }
@@ -148,9 +152,11 @@ impl SourceMap {
                 Ok(())
             }
             None => {
-                err!(self.location(loc).unwrap_or_default(),
-                     "undefined reference: {}",
-                     gv)
+                err!(
+                    self.location(loc).unwrap_or_default(),
+                    "undefined reference: {}",
+                    gv
+                )
             }
         }
     }
@@ -272,13 +278,14 @@ mod tests {
 
     #[test]
     fn details() {
-        let tf = parse_test("function %detail() {
+        let tf = parse_test(
+            "function %detail() {
                                ss10 = incoming_arg 13
                                jt10 = jump_table ebb0
                              ebb0(v4: i32, v7: i32):
                                v10 = iadd v4, v7
-                             }")
-                .unwrap();
+                             }",
+        ).unwrap();
         let map = &tf.functions[0].1.map;
 
         assert_eq!(map.lookup_str("v0"), None);

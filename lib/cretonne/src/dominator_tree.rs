@@ -85,13 +85,15 @@ impl DominatorTree {
     ///
     /// If `a` and `b` belong to the same EBB, compare their relative position in the EBB.
     pub fn rpo_cmp<A, B>(&self, a: A, b: B, layout: &Layout) -> Ordering
-        where A: Into<ExpandedProgramPoint>,
-              B: Into<ExpandedProgramPoint>
+    where
+        A: Into<ExpandedProgramPoint>,
+        B: Into<ExpandedProgramPoint>,
     {
         let a = a.into();
         let b = b.into();
-        self.rpo_cmp_ebb(layout.pp_ebb(a), layout.pp_ebb(b))
-            .then(layout.cmp(a, b))
+        self.rpo_cmp_ebb(layout.pp_ebb(a), layout.pp_ebb(b)).then(
+            layout.cmp(a, b),
+        )
     }
 
     /// Returns `true` if `a` dominates `b`.
@@ -104,8 +106,9 @@ impl DominatorTree {
     ///
     /// An instruction is considered to dominate itself.
     pub fn dominates<A, B>(&self, a: A, b: B, layout: &Layout) -> bool
-        where A: Into<ExpandedProgramPoint>,
-              B: Into<ExpandedProgramPoint>
+    where
+        A: Into<ExpandedProgramPoint>,
+        B: Into<ExpandedProgramPoint>,
     {
         let a = a.into();
         let b = b.into();
@@ -126,12 +129,16 @@ impl DominatorTree {
     /// Find the last instruction in `a` that dominates `b`.
     /// If no instructions in `a` dominate `b`, return `None`.
     fn last_dominator<B>(&self, a: Ebb, b: B, layout: &Layout) -> Option<Inst>
-        where B: Into<ExpandedProgramPoint>
+    where
+        B: Into<ExpandedProgramPoint>,
     {
         let (mut ebb_b, mut inst_b) = match b.into() {
             ExpandedProgramPoint::Ebb(ebb) => (ebb, None),
             ExpandedProgramPoint::Inst(inst) => {
-                (layout.inst_ebb(inst).expect("Instruction not in layout."), Some(inst))
+                (
+                    layout.inst_ebb(inst).expect("Instruction not in layout."),
+                    Some(inst),
+                )
             }
         };
         let rpo_a = self.nodes[a].rpo_number;
@@ -149,22 +156,29 @@ impl DominatorTree {
     /// Compute the common dominator of two basic blocks.
     ///
     /// Both basic blocks are assumed to be reachable.
-    pub fn common_dominator(&self,
-                            mut a: BasicBlock,
-                            mut b: BasicBlock,
-                            layout: &Layout)
-                            -> BasicBlock {
+    pub fn common_dominator(
+        &self,
+        mut a: BasicBlock,
+        mut b: BasicBlock,
+        layout: &Layout,
+    ) -> BasicBlock {
         loop {
             match self.rpo_cmp_ebb(a.0, b.0) {
                 Ordering::Less => {
                     // `a` comes before `b` in the RPO. Move `b` up.
                     let idom = self.nodes[b.0].idom.expect("Unreachable basic block?");
-                    b = (layout.inst_ebb(idom).expect("Dangling idom instruction"), idom);
+                    b = (
+                        layout.inst_ebb(idom).expect("Dangling idom instruction"),
+                        idom,
+                    );
                 }
                 Ordering::Greater => {
                     // `b` comes before `a` in the RPO. Move `a` up.
                     let idom = self.nodes[a.0].idom.expect("Unreachable basic block?");
-                    a = (layout.inst_ebb(idom).expect("Dangling idom instruction"), idom);
+                    a = (
+                        layout.inst_ebb(idom).expect("Dangling idom instruction"),
+                        idom,
+                    );
                 }
                 Ordering::Equal => break,
             }
@@ -327,15 +341,16 @@ impl DominatorTree {
         // Get an iterator with just the reachable, already visited predecessors to `ebb`.
         // Note that during the first pass, `rpo_number` is 1 for reachable blocks that haven't
         // been visited yet, 0 for unreachable blocks.
-        let mut reachable_preds = cfg.get_predecessors(ebb)
-            .iter()
-            .cloned()
-            .filter(|&(pred, _)| self.nodes[pred].rpo_number > 1);
+        let mut reachable_preds = cfg.get_predecessors(ebb).iter().cloned().filter(
+            |&(pred, _)| {
+                self.nodes[pred].rpo_number > 1
+            },
+        );
 
         // The RPO must visit at least one predecessor before this node.
-        let mut idom = reachable_preds
-            .next()
-            .expect("EBB node must have one reachable predecessor");
+        let mut idom = reachable_preds.next().expect(
+            "EBB node must have one reachable predecessor",
+        );
 
         for pred in reachable_preds {
             idom = self.common_dominator(idom, pred, layout);
@@ -383,10 +398,11 @@ impl DominatorTree {
         // forward in RPO numbers and backwards in the postorder list of EBBs, renumbering the Ebbs
         // until we find a gap
         for (&current_ebb, current_rpo) in
-            self.postorder[0..ebb_postorder_index]
-                .iter()
-                .rev()
-                .zip(inserted_rpo_number + 1..) {
+            self.postorder[0..ebb_postorder_index].iter().rev().zip(
+                inserted_rpo_number +
+                    1..,
+            )
+        {
             if self.nodes[current_ebb].rpo_number < current_rpo {
                 // There is no gap, we renumber
                 self.nodes[current_ebb].rpo_number = current_rpo;
@@ -457,10 +473,14 @@ mod test {
 
         assert_eq!(dt.rpo_cmp(ebb3, ebb3, &cur.func.layout), Ordering::Equal);
         assert_eq!(dt.rpo_cmp(ebb3, ebb1, &cur.func.layout), Ordering::Less);
-        assert_eq!(dt.rpo_cmp(ebb3, jmp_ebb3_ebb1, &cur.func.layout),
-                   Ordering::Less);
-        assert_eq!(dt.rpo_cmp(jmp_ebb3_ebb1, jmp_ebb1_ebb2, &cur.func.layout),
-                   Ordering::Less);
+        assert_eq!(
+            dt.rpo_cmp(ebb3, jmp_ebb3_ebb1, &cur.func.layout),
+            Ordering::Less
+        );
+        assert_eq!(
+            dt.rpo_cmp(jmp_ebb3_ebb1, jmp_ebb1_ebb2, &cur.func.layout),
+            Ordering::Less
+        );
 
         assert_eq!(dt.cfg_postorder(), &[ebb2, ebb0, ebb1, ebb3]);
     }

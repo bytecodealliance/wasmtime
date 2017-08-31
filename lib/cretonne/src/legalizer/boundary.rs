@@ -98,9 +98,11 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
             // Compute the value we want for `arg` from the legalized ABI arguments.
             let mut get_arg = |dfg: &mut DataFlowGraph, ty| {
                 let abi_type = abi_types[abi_arg];
-                assert_eq!(abi_type.purpose,
-                           ArgumentPurpose::Normal,
-                           "Can't legalize special-purpose argument");
+                assert_eq!(
+                    abi_type.purpose,
+                    ArgumentPurpose::Normal,
+                    "Can't legalize special-purpose argument"
+                );
                 if ty == abi_type.value_type {
                     abi_arg += 1;
                     Ok(dfg.append_ebb_arg(entry, ty))
@@ -159,14 +161,17 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
 /// This function is very similar to the `legalize_entry_arguments` function above.
 ///
 /// Returns the possibly new instruction representing the call.
-fn legalize_inst_results<ResType>(dfg: &mut DataFlowGraph,
-                                  pos: &mut Cursor,
-                                  mut get_abi_type: ResType)
-                                  -> Inst
-    where ResType: FnMut(&DataFlowGraph, usize) -> ArgumentType
+fn legalize_inst_results<ResType>(
+    dfg: &mut DataFlowGraph,
+    pos: &mut Cursor,
+    mut get_abi_type: ResType,
+) -> Inst
+where
+    ResType: FnMut(&DataFlowGraph, usize) -> ArgumentType,
 {
-    let call = pos.current_inst()
-        .expect("Cursor must point to a call instruction");
+    let call = pos.current_inst().expect(
+        "Cursor must point to a call instruction",
+    );
 
     // We theoretically allow for call instructions that return a number of fixed results before
     // the call return values. In practice, it doesn't happen.
@@ -216,13 +221,15 @@ fn legalize_inst_results<ResType>(dfg: &mut DataFlowGraph,
 /// - `Err(arg_type)` if further conversions are needed from the ABI argument `arg_type`.
 ///
 /// If the `into_result` value is provided, the converted result will be written into that value.
-fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
-                            pos: &mut Cursor,
-                            ty: Type,
-                            into_result: Option<Value>,
-                            get_arg: &mut GetArg)
-                            -> Value
-    where GetArg: FnMut(&mut DataFlowGraph, Type) -> Result<Value, ArgumentType>
+fn convert_from_abi<GetArg>(
+    dfg: &mut DataFlowGraph,
+    pos: &mut Cursor,
+    ty: Type,
+    into_result: Option<Value>,
+    get_arg: &mut GetArg,
+) -> Value
+where
+    GetArg: FnMut(&mut DataFlowGraph, Type) -> Result<Value, ArgumentType>,
 {
     // Terminate the recursion when we get the desired type.
     let arg_type = match get_arg(dfg, ty) {
@@ -246,11 +253,13 @@ fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
             let abi_ty = ty.half_width().expect("Invalid type for conversion");
             let lo = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
             let hi = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
-            dbg!("intsplit {}: {}, {}: {}",
-                 lo,
-                 dfg.value_type(lo),
-                 hi,
-                 dfg.value_type(hi));
+            dbg!(
+                "intsplit {}: {}, {}: {}",
+                lo,
+                dfg.value_type(lo),
+                hi,
+                dfg.value_type(hi)
+            );
             dfg.ins(pos).with_results([into_result]).iconcat(lo, hi)
         }
         // Construct a `ty` by concatenating two halves of a vector.
@@ -296,12 +305,14 @@ fn convert_from_abi<GetArg>(dfg: &mut DataFlowGraph,
 /// 2. If the suggested argument doesn't have the right value type, don't change anything, but
 ///    return the `Err(ArgumentType)` that is needed.
 ///
-fn convert_to_abi<PutArg>(dfg: &mut DataFlowGraph,
-                          cfg: &ControlFlowGraph,
-                          pos: &mut Cursor,
-                          value: Value,
-                          put_arg: &mut PutArg)
-    where PutArg: FnMut(&mut DataFlowGraph, Value) -> Result<(), ArgumentType>
+fn convert_to_abi<PutArg>(
+    dfg: &mut DataFlowGraph,
+    cfg: &ControlFlowGraph,
+    pos: &mut Cursor,
+    value: Value,
+    put_arg: &mut PutArg,
+) where
+    PutArg: FnMut(&mut DataFlowGraph, Value) -> Result<(), ArgumentType>,
 {
     // Start by invoking the closure to either terminate the recursion or get the argument type
     // we're trying to match.
@@ -360,7 +371,8 @@ fn check_call_signature(dfg: &DataFlowGraph, inst: Inst) -> Result<(), SigRef> {
     let sig = &dfg.signatures[sig_ref];
 
     if check_arg_types(dfg, args, &sig.argument_types[..]) &&
-       check_arg_types(dfg, dfg.inst_results(inst), &sig.return_types[..]) {
+        check_arg_types(dfg, dfg.inst_results(inst), &sig.return_types[..])
+    {
         // All types check out.
         Ok(())
     } else {
@@ -380,20 +392,23 @@ fn check_return_signature(dfg: &DataFlowGraph, inst: Inst, sig: &Signature) -> b
 /// - `get_abi_type` is a closure that can provide the desired `ArgumentType` for a given ABI
 ///   argument number in `0..abi_args`.
 ///
-fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
-                                    cfg: &ControlFlowGraph,
-                                    pos: &mut Cursor,
-                                    abi_args: usize,
-                                    mut get_abi_type: ArgType)
-    where ArgType: FnMut(&DataFlowGraph, usize) -> ArgumentType
+fn legalize_inst_arguments<ArgType>(
+    dfg: &mut DataFlowGraph,
+    cfg: &ControlFlowGraph,
+    pos: &mut Cursor,
+    abi_args: usize,
+    mut get_abi_type: ArgType,
+) where
+    ArgType: FnMut(&DataFlowGraph, usize) -> ArgumentType,
 {
-    let inst = pos.current_inst()
-        .expect("Cursor must point to a call instruction");
+    let inst = pos.current_inst().expect(
+        "Cursor must point to a call instruction",
+    );
 
     // Lift the value list out of the call instruction so we modify it.
-    let mut vlist = dfg[inst]
-        .take_value_list()
-        .expect("Call must have a value list");
+    let mut vlist = dfg[inst].take_value_list().expect(
+        "Call must have a value list",
+    );
 
     // The value list contains all arguments to the instruction, including the callee on an
     // indirect call which isn't part of the call arguments that must match the ABI signature.
@@ -474,23 +489,23 @@ pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGra
 
     // OK, we need to fix the call arguments to match the ABI signature.
     let abi_args = dfg.signatures[sig_ref].argument_types.len();
-    legalize_inst_arguments(dfg,
-                            cfg,
-                            pos,
-                            abi_args,
-                            |dfg, abi_arg| dfg.signatures[sig_ref].argument_types[abi_arg]);
+    legalize_inst_arguments(dfg, cfg, pos, abi_args, |dfg, abi_arg| {
+        dfg.signatures[sig_ref].argument_types[abi_arg]
+    });
 
     if !dfg.signatures[sig_ref].return_types.is_empty() {
-        inst = legalize_inst_results(dfg,
-                                     pos,
-                                     |dfg, abi_res| dfg.signatures[sig_ref].return_types[abi_res]);
+        inst = legalize_inst_results(dfg, pos, |dfg, abi_res| {
+            dfg.signatures[sig_ref].return_types[abi_res]
+        });
     }
 
-    debug_assert!(check_call_signature(dfg, inst).is_ok(),
-                  "Signature still wrong: {}, {}{}",
-                  dfg.display_inst(inst, None),
-                  sig_ref,
-                  dfg.signatures[sig_ref]);
+    debug_assert!(
+        check_call_signature(dfg, inst).is_ok(),
+        "Signature still wrong: {}, {}{}",
+        dfg.display_inst(inst, None),
+        sig_ref,
+        dfg.signatures[sig_ref]
+    );
 
     // Go back and insert spills for any stack arguments.
     pos.goto_inst(inst);
@@ -519,27 +534,30 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
         .iter()
         .rev()
         .take_while(|&rt| {
-                        rt.purpose == ArgumentPurpose::Link ||
-                        rt.purpose == ArgumentPurpose::StructReturn ||
-                        rt.purpose == ArgumentPurpose::VMContext
-                    })
+            rt.purpose == ArgumentPurpose::Link || rt.purpose == ArgumentPurpose::StructReturn ||
+                rt.purpose == ArgumentPurpose::VMContext
+        })
         .count();
 
     let abi_args = sig.return_types.len() - special_args;
-    legalize_inst_arguments(dfg,
-                            cfg,
-                            pos,
-                            abi_args,
-                            |_, abi_arg| sig.return_types[abi_arg]);
+    legalize_inst_arguments(
+        dfg,
+        cfg,
+        pos,
+        abi_args,
+        |_, abi_arg| sig.return_types[abi_arg],
+    );
     assert_eq!(dfg.inst_variable_args(inst).len(), abi_args);
 
     // Append special return arguments for any `sret`, `link`, and `vmctx` return values added to
     // the legalized signature. These values should simply be propagated from the entry block
     // arguments.
     if special_args > 0 {
-        dbg!("Adding {} special-purpose arguments to {}",
-             special_args,
-             dfg.display_inst(inst, None));
+        dbg!(
+            "Adding {} special-purpose arguments to {}",
+            special_args,
+            dfg.display_inst(inst, None)
+        );
         let mut vlist = dfg[inst].take_value_list().unwrap();
         for arg in &sig.return_types[abi_args..] {
             match arg.purpose {
@@ -565,10 +583,12 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
         dfg[inst].put_value_list(vlist);
     }
 
-    debug_assert!(check_return_signature(dfg, inst, sig),
-                  "Signature still wrong: {} / signature {}",
-                  dfg.display_inst(inst, None),
-                  sig);
+    debug_assert!(
+        check_return_signature(dfg, inst, sig),
+        "Signature still wrong: {} / signature {}",
+        dfg.display_inst(inst, None),
+        sig
+    );
 
     // Yes, we changed stuff.
     true
@@ -579,10 +599,10 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
 /// Values that are passed into the function on the stack must be assigned to an `IncomingArg`
 /// stack slot already during legalization.
 fn spill_entry_arguments(func: &mut Function, entry: Ebb) {
-    for (abi, &arg) in func.signature
-            .argument_types
-            .iter()
-            .zip(func.dfg.ebb_args(entry)) {
+    for (abi, &arg) in func.signature.argument_types.iter().zip(
+        func.dfg.ebb_args(entry),
+    )
+    {
         if let ArgumentLoc::Stack(offset) = abi.location {
             let ss = func.stack_slots.make_incoming_arg(abi.value_type, offset);
             func.locations[arg] = ValueLoc::Stack(ss);
@@ -598,15 +618,18 @@ fn spill_entry_arguments(func: &mut Function, entry: Ebb) {
 /// TODO: The outgoing stack slots can be written a bit earlier, as long as there are no branches
 /// or calls between writing the stack slots and the call instruction. Writing the slots earlier
 /// could help reduce register pressure before the call.
-fn spill_call_arguments(dfg: &mut DataFlowGraph,
-                        locations: &mut ValueLocations,
-                        stack_slots: &mut StackSlots,
-                        pos: &mut Cursor)
-                        -> bool {
-    let inst = pos.current_inst()
-        .expect("Cursor must point to a call instruction");
-    let sig_ref = dfg.call_signature(inst)
-        .expect("Call instruction expected.");
+fn spill_call_arguments(
+    dfg: &mut DataFlowGraph,
+    locations: &mut ValueLocations,
+    stack_slots: &mut StackSlots,
+    pos: &mut Cursor,
+) -> bool {
+    let inst = pos.current_inst().expect(
+        "Cursor must point to a call instruction",
+    );
+    let sig_ref = dfg.call_signature(inst).expect(
+        "Call instruction expected.",
+    );
 
     // Start by building a list of stack slots and arguments to be replaced.
     // This requires borrowing `dfg`, so we can't change anything.

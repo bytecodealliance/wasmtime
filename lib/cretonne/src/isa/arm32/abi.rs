@@ -7,9 +7,11 @@ use settings as shared_settings;
 use super::registers::{S, D, Q, GPR};
 
 /// Legalize `sig`.
-pub fn legalize_signature(_sig: &mut ir::Signature,
-                          _flags: &shared_settings::Flags,
-                          _current: bool) {
+pub fn legalize_signature(
+    _sig: &mut ir::Signature,
+    _flags: &shared_settings::Flags,
+    _current: bool,
+) {
     unimplemented!()
 }
 

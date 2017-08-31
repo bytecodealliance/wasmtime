@@ -71,14 +71,16 @@ impl Spilling {
     }
 
     /// Run the spilling algorithm over `func`.
-    pub fn run(&mut self,
-               isa: &TargetIsa,
-               func: &mut Function,
-               domtree: &DominatorTree,
-               liveness: &mut Liveness,
-               virtregs: &VirtRegs,
-               topo: &mut TopoOrder,
-               tracker: &mut LiveValueTracker) {
+    pub fn run(
+        &mut self,
+        isa: &TargetIsa,
+        func: &mut Function,
+        domtree: &DominatorTree,
+        liveness: &mut Liveness,
+        virtregs: &VirtRegs,
+        topo: &mut TopoOrder,
+        tracker: &mut LiveValueTracker,
+    ) {
         dbg!("Spilling for:\n{}", func.display(isa));
         let reginfo = isa.register_info();
         let usable_regs = isa.allocatable_registers(func);
@@ -114,8 +116,10 @@ impl<'a> Context<'a> {
 
         while let Some(inst) = self.cur.next_inst() {
             if let Some(constraints) =
-                self.encinfo
-                    .operand_constraints(self.cur.func.encodings[inst]) {
+                self.encinfo.operand_constraints(
+                    self.cur.func.encodings[inst],
+                )
+            {
                 self.visit_inst(inst, ebb, constraints, tracker);
             } else {
                 let (_throughs, kills) = tracker.process_ghost(inst);
@@ -150,11 +154,13 @@ impl<'a> Context<'a> {
     }
 
     fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
-        let (liveins, args) = tracker.ebb_top(ebb,
-                                              &self.cur.func.dfg,
-                                              self.liveness,
-                                              &self.cur.func.layout,
-                                              self.domtree);
+        let (liveins, args) = tracker.ebb_top(
+            ebb,
+            &self.cur.func.dfg,
+            self.liveness,
+            &self.cur.func.layout,
+            self.domtree,
+        );
 
         // Count the live-in registers. These should already fit in registers; they did at the
         // dominator.
@@ -167,16 +173,20 @@ impl<'a> Context<'a> {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
                 'try_take: while let Err(mask) = self.pressure.take_transient(rc) {
-                    dbg!("Need {} reg for EBB argument {} from {} live-ins",
-                         rc,
-                         lv.value,
-                         liveins.len());
+                    dbg!(
+                        "Need {} reg for EBB argument {} from {} live-ins",
+                        rc,
+                        lv.value,
+                        liveins.len()
+                    );
                     match self.spill_candidate(mask, liveins) {
                         Some(cand) => {
-                            dbg!("Spilling live-in {} to make room for {} EBB argument {}",
-                                 cand,
-                                 rc,
-                                 lv.value);
+                            dbg!(
+                                "Spilling live-in {} to make room for {} EBB argument {}",
+                                cand,
+                                rc,
+                                lv.value
+                            );
                             self.spill_reg(cand);
                         }
                         None => {
@@ -199,11 +209,13 @@ impl<'a> Context<'a> {
         self.pressure.preserve_transient();
     }
 
-    fn visit_inst(&mut self,
-                  inst: Inst,
-                  ebb: Ebb,
-                  constraints: &RecipeConstraints,
-                  tracker: &mut LiveValueTracker) {
+    fn visit_inst(
+        &mut self,
+        inst: Inst,
+        ebb: Ebb,
+        constraints: &RecipeConstraints,
+        tracker: &mut LiveValueTracker,
+    ) {
         dbg!("Inst {}, {}", self.cur.display_inst(inst), self.pressure);
         debug_assert_eq!(self.cur.current_inst(), Some(inst));
         debug_assert_eq!(self.cur.current_ebb(), Some(ebb));
@@ -250,9 +262,11 @@ impl<'a> Context<'a> {
                     match self.spill_candidate(mask, throughs) {
                         Some(cand) => self.spill_reg(cand),
                         None => {
-                            panic!("Ran out of {} registers for {}",
-                                   op.regclass,
-                                   self.cur.display_inst(inst))
+                            panic!(
+                                "Ran out of {} registers for {}",
+                                op.regclass,
+                                self.cur.display_inst(inst)
+                            )
                         }
                     }
                 }
@@ -313,12 +327,16 @@ impl<'a> Context<'a> {
                 .argument_types
                 .iter()
                 .zip(args)
-                .enumerate() {
+                .enumerate()
+        {
             if abi.location.is_reg() {
                 let (rci, spilled) = match self.liveness[arg].affinity {
                     Affinity::Reg(rci) => (rci, false),
                     Affinity::Stack => {
-                        (self.cur.isa.regclass_for_abi_type(abi.value_type).into(), true)
+                        (
+                            self.cur.isa.regclass_for_abi_type(abi.value_type).into(),
+                            true,
+                        )
                     }
                     Affinity::None => panic!("Missing affinity for {}", arg),
                 };
@@ -373,17 +391,19 @@ impl<'a> Context<'a> {
                     // Spill a live register that is *not* used by the current instruction.
                     // Spilling a use wouldn't help.
                     match {
-                              let args = self.cur.func.dfg.inst_args(inst);
-                              self.spill_candidate(mask,
-                                                   tracker.live().iter().filter(|lv| {
-                            !args.contains(&lv.value)
-                        }))
-                          } {
+                        let args = self.cur.func.dfg.inst_args(inst);
+                        self.spill_candidate(
+                            mask,
+                            tracker.live().iter().filter(|lv| !args.contains(&lv.value)),
+                        )
+                    } {
                         Some(cand) => self.spill_reg(cand),
                         None => {
-                            panic!("Ran out of {} registers when inserting copy before {}",
-                                   rc,
-                                   self.cur.display_inst(inst))
+                            panic!(
+                                "Ran out of {} registers when inserting copy before {}",
+                                rc,
+                                self.cur.display_inst(inst)
+                            )
                         }
                     }
                 }
@@ -395,7 +415,8 @@ impl<'a> Context<'a> {
 
     // Find a spill candidate from `candidates` whose top-level register class is in `mask`.
     fn spill_candidate<'ii, II>(&self, mask: RegClassMask, candidates: II) -> Option<Value>
-        where II: IntoIterator<Item = &'ii LiveValue>
+    where
+        II: IntoIterator<Item = &'ii LiveValue>,
     {
         // Find the best viable spill candidate.
         //
@@ -420,12 +441,13 @@ impl<'a> Context<'a> {
                 None
             })
             .min_by(|&a, &b| {
-                        // Find the minimum candidate according to the RPO of their defs.
-                        self.domtree
-                            .rpo_cmp(self.cur.func.dfg.value_def(a),
-                                     self.cur.func.dfg.value_def(b),
-                                     &self.cur.func.layout)
-                    })
+                // Find the minimum candidate according to the RPO of their defs.
+                self.domtree.rpo_cmp(
+                    self.cur.func.dfg.value_def(a),
+                    self.cur.func.dfg.value_def(b),
+                    &self.cur.func.layout,
+                )
+            })
     }
 
     /// Spill `value` immediately by
@@ -447,10 +469,9 @@ impl<'a> Context<'a> {
         }
 
         // Assign a spill slot for the whole virtual register.
-        let ss = self.cur
-            .func
-            .stack_slots
-            .make_spill_slot(self.cur.func.dfg.value_type(value));
+        let ss = self.cur.func.stack_slots.make_spill_slot(
+            self.cur.func.dfg.value_type(value),
+        );
         for &v in self.virtregs.congruence_class(&value) {
             self.liveness.spill(v);
             self.cur.func.locations[v] = ValueLoc::Stack(ss);
@@ -481,11 +502,12 @@ impl<'a> Context<'a> {
 
         // Update live ranges.
         self.liveness.create_dead(copy, inst, Affinity::Reg(rci));
-        self.liveness
-            .extend_locally(copy,
-                            self.cur.func.layout.pp_ebb(inst),
-                            self.cur.current_inst().expect("must be at an instruction"),
-                            &self.cur.func.layout);
+        self.liveness.extend_locally(
+            copy,
+            self.cur.func.layout.pp_ebb(inst),
+            self.cur.current_inst().expect("must be at an instruction"),
+            &self.cur.func.layout,
+        );
 
         copy
     }

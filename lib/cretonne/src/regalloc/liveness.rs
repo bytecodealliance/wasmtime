@@ -190,12 +190,13 @@ type LiveRangeSet = SparseMap<Value, LiveRange>;
 
 /// Get a mutable reference to the live range for `value`.
 /// Create it if necessary.
-fn get_or_create<'a>(lrset: &'a mut LiveRangeSet,
-                     value: Value,
-                     isa: &TargetIsa,
-                     func: &Function,
-                     enc_info: &EncInfo)
-                     -> &'a mut LiveRange {
+fn get_or_create<'a>(
+    lrset: &'a mut LiveRangeSet,
+    value: Value,
+    isa: &TargetIsa,
+    func: &Function,
+    enc_info: &EncInfo,
+) -> &'a mut LiveRange {
     // It would be better to use `get_mut()` here, but that leads to borrow checker fighting
     // which can probably only be resolved by non-lexical lifetimes.
     // https://github.com/rust-lang/rfcs/issues/811
@@ -233,12 +234,14 @@ fn get_or_create<'a>(lrset: &'a mut LiveRangeSet,
 }
 
 /// Extend the live range for `value` so it reaches `to` which must live in `ebb`.
-fn extend_to_use(lr: &mut LiveRange,
-                 ebb: Ebb,
-                 to: Inst,
-                 worklist: &mut Vec<Ebb>,
-                 func: &Function,
-                 cfg: &ControlFlowGraph) {
+fn extend_to_use(
+    lr: &mut LiveRange,
+    ebb: Ebb,
+    to: Inst,
+    worklist: &mut Vec<Ebb>,
+    func: &Function,
+    cfg: &ControlFlowGraph,
+) {
     // This is our scratch working space, and we'll leave it empty when we return.
     assert!(worklist.is_empty());
 
@@ -309,10 +312,12 @@ impl Liveness {
     ///
     /// This asserts that `value` does not have an existing live range.
     pub fn create_dead<PP>(&mut self, value: Value, def: PP, affinity: Affinity)
-        where PP: Into<ProgramPoint>
+    where
+        PP: Into<ProgramPoint>,
     {
-        let old = self.ranges
-            .insert(LiveRange::new(value, def.into(), affinity));
+        let old = self.ranges.insert(
+            LiveRange::new(value, def.into(), affinity),
+        );
         assert!(old.is_none(), "{} already has a live range", value);
     }
 
@@ -320,7 +325,8 @@ impl Liveness {
     ///
     /// The old and new def points must be in the same EBB, and before the end of the live range.
     pub fn move_def_locally<PP>(&mut self, value: Value, def: PP)
-        where PP: Into<ProgramPoint>
+    where
+        PP: Into<ProgramPoint>,
     {
         let mut lr = self.ranges.get_mut(value).expect("Value has no live range");
         lr.move_def_locally(def.into());
@@ -331,12 +337,13 @@ impl Liveness {
     /// It is assumed the `value` is already live before `user` in `ebb`.
     ///
     /// Returns a mutable reference to the value's affinity in case that also needs to be updated.
-    pub fn extend_locally(&mut self,
-                          value: Value,
-                          ebb: Ebb,
-                          user: Inst,
-                          layout: &Layout)
-                          -> &mut Affinity {
+    pub fn extend_locally(
+        &mut self,
+        value: Value,
+        ebb: Ebb,
+        user: Inst,
+        layout: &Layout,
+    ) -> &mut Affinity {
         debug_assert_eq!(Some(ebb), layout.inst_ebb(user));
         let mut lr = self.ranges.get_mut(value).expect("Value has no live range");
         let livein = lr.extend_in_ebb(ebb, user, layout);
@@ -401,7 +408,8 @@ impl Liveness {
                     if let Some(constraint) = operand_constraints.next() {
                         lr.affinity.merge(constraint, &reg_info);
                     } else if lr.affinity.is_none() && encoding.is_legal() &&
-                              !func.dfg[inst].opcode().is_branch() {
+                               !func.dfg[inst].opcode().is_branch()
+                    {
                         // This is a real encoded instruction using a value that doesn't yet have a
                         // concrete affinity. Most likely a call argument or a return value. Give
                         // the value a register affinity matching the ABI type.
