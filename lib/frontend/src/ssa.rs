@@ -16,6 +16,7 @@ use std::u32;
 use cretonne::ir::types::{F32, F64};
 use cretonne::ir::immediates::{Ieee32, Ieee64};
 use std::collections::HashMap;
+use std::mem;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
@@ -352,11 +353,11 @@ where
             BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => {
                 assert!(!data.sealed);
-                (
-                    data.predecessors.clone(),
-                    data.undef_variables.clone(),
-                    data.ebb,
-                )
+                // Extract the undef_variables data from the block so that we
+                // can iterate over it without borrowing the whole builder.
+                let mut undef_variables = Vec::new();
+                mem::swap(&mut data.undef_variables, &mut undef_variables);
+                (data.predecessors.clone(), undef_variables, data.ebb)
             }
         };
 
@@ -375,12 +376,12 @@ where
             );
         }
 
-        // Then we clear the undef_vars and mark the block as sealed.
+        // Then we mark the block as sealed.
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => {
                 assert!(!data.sealed);
-                data.undef_variables.clear();
+                assert!(data.undef_variables.is_empty());
                 data.sealed = true;
             }
         };
