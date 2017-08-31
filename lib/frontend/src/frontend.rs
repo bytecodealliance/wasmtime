@@ -530,7 +530,7 @@ where
 
     fn ebb_args_adjustement(&mut self, dest_ebb: Ebb, jump_args: &[Type]) {
         let ty_to_append: Option<Vec<Type>> =
-            if self.builder.ssa.predecessors(dest_ebb).len() == 0 ||
+            if self.builder.ssa.predecessors(dest_ebb).is_empty() ||
                 self.builder.ebbs[dest_ebb].pristine
             {
                 // This is the first jump instruction targeting this Ebb
