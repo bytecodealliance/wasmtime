@@ -250,10 +250,10 @@ pub fn translate_function_body(
                             &mut stack,
                             &mut control_stack,
                             &mut state,
-                            &sig,
-                            &functions,
-                            &signatures,
-                            &exports,
+                            sig,
+                            functions,
+                            signatures,
+                            exports,
                             &mut func_imports,
                         )
                     }
