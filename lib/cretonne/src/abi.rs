@@ -162,7 +162,7 @@ pub fn legalize_abi_value(have: Type, arg: &ArgumentType) -> ValueConversion {
         }
         // We have the same number of bits as the argument.
         Ordering::Equal => {
-            // This must  be an integer vector that is split and then extended.
+            // This must be an integer vector that is split and then extended.
             assert!(arg.value_type.is_int());
             assert!(!have.is_scalar());
             ValueConversion::VectorSplit

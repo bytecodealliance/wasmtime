@@ -422,8 +422,8 @@ where
         let mut preds = Vec::new();
         mem::swap(&mut preds, &mut self.predecessors_mut(dest_ebb));
         for &(pred, last_inst) in preds.iter() {
-            // For undef value  and each predecessor we query what is the local SSA value
-            // corresponding to var and we put it as an argument of the branch instruction.
+            // For each predecessor, we query what is the local SSA value corresponding
+            // to var and we put it as an argument of the branch instruction.
             let (pred_val, mut local_side_effects) =
                 self.use_var(dfg, layout, jts, temp_arg_var, ty, pred);
             pred_values = match pred_values {
@@ -527,7 +527,7 @@ where
     ) -> Option<Ebb> {
         match dfg[jump_inst].analyze_branch(&dfg.value_lists) {
             BranchInfo::NotABranch => {
-                panic!("you have declared a non-branch instruction  as a predecessor to an ebb");
+                panic!("you have declared a non-branch instruction as a predecessor to an ebb");
             }
             // For a single destination appending a jump argument to the instruction
             // is sufficient.
