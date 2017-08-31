@@ -169,13 +169,9 @@ pub fn translate_function_body(
     let mut func = Function::new();
     let args_num: usize = sig.argument_types.len();
     func.signature = sig.clone();
-    match exports {
-        &None => (),
-        &Some(ref exports) => {
-            match exports.get(&function_index) {
-                None => (),
-                Some(name) => func.name = FunctionName::new(name.clone()),
-            }
+    if let Some(ref exports) = *exports {
+        if let Some(name) = exports.get(&function_index) {
+            func.name = FunctionName::new(name.clone());
         }
     }
     let mut func_imports = FunctionImports::new();
@@ -359,11 +355,8 @@ fn translate_operator(
          ***********************************************************************************/
         Operator::Block { ty } => {
             let next = builder.create_ebb();
-            match type_to_type(&ty) {
-                Ok(ty_cre) => {
-                    builder.append_ebb_arg(next, ty_cre);
-                }
-                Err(_) => {}
+            if let Ok(ty_cre) = type_to_type(&ty) {
+                builder.append_ebb_arg(next, ty_cre);
             }
             control_stack.push(ControlStackFrame::Block {
                 destination: next,
@@ -375,11 +368,8 @@ fn translate_operator(
         Operator::Loop { ty } => {
             let loop_body = builder.create_ebb();
             let next = builder.create_ebb();
-            match type_to_type(&ty) {
-                Ok(ty_cre) => {
-                    builder.append_ebb_arg(next, ty_cre);
-                }
-                Err(_) => {}
+            if let Ok(ty_cre) = type_to_type(&ty) {
+                builder.append_ebb_arg(next, ty_cre);
             }
             builder.ins().jump(loop_body, &[]);
             control_stack.push(ControlStackFrame::Loop {
@@ -401,11 +391,8 @@ fn translate_operator(
             //   and we add nothing;
             // - either the If have an Else clause, in that case the destination of this jump
             //   instruction will be changed later when we translate the Else operator.
-            match type_to_type(&ty) {
-                Ok(ty_cre) => {
-                    builder.append_ebb_arg(if_not, ty_cre);
-                }
-                Err(_) => {}
+            if let Ok(ty_cre) = type_to_type(&ty) {
+                builder.append_ebb_arg(if_not, ty_cre);
             }
             control_stack.push(ControlStackFrame::If {
                 destination: if_not,
@@ -1320,31 +1307,27 @@ fn find_function_import(
     exports: &Option<HashMap<FunctionIndex, String>>,
     signatures: &[Signature],
 ) -> FuncRef {
-    match func_imports.functions.get(&index) {
-        Some(local_index) => return *local_index,
-        None => {}
+    if let Some(local_index) = func_imports.functions.get(&index) {
+        return *local_index;
     }
     // We have to import the function
     let sig_index = functions[index];
-    match func_imports.signatures.get(&(sig_index as usize)) {
-        Some(local_sig_index) => {
-            let local_func_index = builder.import_function(ExtFuncData {
-                name: match exports {
-                    &None => FunctionName::new(""),
-                    &Some(ref exports) => {
-                        match exports.get(&index) {
-                            None => FunctionName::new(""),
-                            Some(name) => FunctionName::new(name.clone()),
-                        }
+    if let Some(local_sig_index) = func_imports.signatures.get(&(sig_index as usize)) {
+        let local_func_index = builder.import_function(ExtFuncData {
+            name: match exports {
+                &None => FunctionName::new(""),
+                &Some(ref exports) => {
+                    match exports.get(&index) {
+                        None => FunctionName::new(""),
+                        Some(name) => FunctionName::new(name.clone()),
                     }
-                },
-                signature: *local_sig_index,
-            });
-            func_imports.functions.insert(index, local_func_index);
-            return local_func_index;
-        }
-        None => {}
-    };
+                }
+            },
+            signature: *local_sig_index,
+        });
+        func_imports.functions.insert(index, local_func_index);
+        return local_func_index;
+    }
     // We have to import the signature
     let sig_local_index = builder.import_signature(signatures[sig_index as usize].clone());
     func_imports.signatures.insert(
@@ -1373,9 +1356,8 @@ fn find_signature_import(
     func_imports: &mut FunctionImports,
     signatures: &[Signature],
 ) -> SigRef {
-    match func_imports.signatures.get(&(sig_index as usize)) {
-        Some(local_sig_index) => return *local_sig_index,
-        None => {}
+    if let Some(local_sig_index) = func_imports.signatures.get(&(sig_index as usize)) {
+        return *local_sig_index;
     }
     let sig_local_index = builder.import_signature(signatures[sig_index as usize].clone());
     func_imports.signatures.insert(
