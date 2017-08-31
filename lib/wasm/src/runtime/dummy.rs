@@ -26,7 +26,7 @@ impl WasmRuntime for DummyRuntime {
         builder: &mut FunctionBuilder<Local>,
         global_index: GlobalIndex,
     ) -> Value {
-        let ref glob = self.globals[global_index as usize];
+        let glob = self.globals[global_index as usize];
         match glob.ty {
             I32 => builder.ins().iconst(glob.ty, -1),
             I64 => builder.ins().iconst(glob.ty, -1),
