@@ -119,7 +119,7 @@ struct EbbHeaderBlockData<Variable> {
 pub struct Block(u32);
 impl EntityRef for Block {
     fn new(index: usize) -> Self {
-        assert!(index < (u32::MAX as usize));
+        debug_assert!(index < (u32::MAX as usize));
         Block(index as u32)
     }
 
@@ -362,7 +362,7 @@ where
         let (undef_vars, ebb): (Vec<(Variable, Value)>, Ebb) = match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => {
-                assert!(!data.sealed);
+                debug_assert!(!data.sealed);
                 // Extract the undef_variables data from the block so that we
                 // can iterate over it without borrowing the whole builder.
                 let mut undef_variables = Vec::new();
@@ -390,8 +390,8 @@ where
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => {
-                assert!(!data.sealed);
-                assert!(data.undef_variables.is_empty());
+                debug_assert!(!data.sealed);
+                debug_assert!(data.undef_variables.is_empty());
                 data.sealed = true;
             }
         };

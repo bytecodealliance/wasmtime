@@ -89,7 +89,7 @@ pub struct Memory {
 pub struct Local(pub u32);
 impl cretonne::entity::EntityRef for Local {
     fn new(index: usize) -> Self {
-        assert!(index < (u32::MAX as usize));
+        debug_assert!(index < (u32::MAX as usize));
         Local(index as u32)
     }
 
