@@ -71,7 +71,7 @@ impl<Variable> BlockData<Variable> {
         match self {
             &mut BlockData::EbbBody { .. } => panic!("you can't add a predecessor to a body block"),
             &mut BlockData::EbbHeader(ref mut data) => {
-                data.predecessors.insert(pred, inst);
+                data.predecessors.push((pred, inst));
             }
         }
     }
@@ -81,14 +81,12 @@ impl<Variable> BlockData<Variable> {
             &mut BlockData::EbbHeader(ref mut data) => {
                 // This a linear complexity operation but the number of predecessors is low
                 // in all non-pathological cases
-                let pred: Block = match data.predecessors
-                          .iter()
-                          .find(|&(_, &jump_inst)| jump_inst == inst) {
-                    None => panic!("the predecessor you are trying to remove is not declared"),
-                    Some((&b, _)) => b.clone(),
-                };
-                data.predecessors.remove(&pred);
-                pred
+                let pred: usize =
+                    data.predecessors
+                        .iter()
+                        .position(|pair| pair.1 == inst)
+                        .expect("the predecessor you are trying to remove is not declared");
+                data.predecessors.swap_remove(pred).0
             }
         }
     }
@@ -96,7 +94,7 @@ impl<Variable> BlockData<Variable> {
 
 struct EbbHeaderBlockData<Variable> {
     // The predecessors of the Ebb header block, with the block and branch instruction.
-    predecessors: HashMap<Block, Inst>,
+    predecessors: Vec<(Block, Inst)>,
     // A ebb header block is sealed if all of its predecessors have been declared.
     sealed: bool,
     // The ebb which this block is part of.
@@ -227,13 +225,10 @@ impl<Variable> SSABuilder<Variable>
                 if data.sealed {
                     if data.predecessors.len() == 1 {
                         // Only one predecessor, straightforward case
-                        UseVarCases::SealedOnePredecessor(*data.predecessors.keys().next().unwrap())
+                        UseVarCases::SealedOnePredecessor(data.predecessors[0].0)
                     } else {
                         let val = dfg.append_ebb_arg(data.ebb, ty);
-                        let preds = data.predecessors
-                            .iter()
-                            .map(|(&pred, &inst)| (pred, inst))
-                            .collect();
+                        let preds = data.predecessors.clone();
                         UseVarCases::SealedMultiplePredecessors(preds, val, data.ebb)
                     }
                 } else {
@@ -287,7 +282,7 @@ impl<Variable> SSABuilder<Variable>
     pub fn declare_ebb_header_block(&mut self, ebb: Ebb) -> Block {
         let block = self.blocks
             .push(BlockData::EbbHeader(EbbHeaderBlockData {
-                                           predecessors: HashMap::new(),
+                                           predecessors: Vec::new(),
                                            sealed: false,
                                            ebb: ebb,
                                            undef_variables: Vec::new(),
@@ -311,6 +306,9 @@ impl<Variable> SSABuilder<Variable>
     /// Note that the predecessor is a `Block` and not an `Ebb`. This `Block` must be filled
     /// before added as predecessor. Note that you must provide no jump arguments to the branch
     /// instruction when you create it since `SSABuilder` will fill them for you.
+    ///
+    /// Callers are expected to avoid adding the same predecessor more than once in the case
+    /// of a jump table.
     pub fn declare_ebb_predecessor(&mut self, ebb: Ebb, pred: Block, inst: Inst) {
         let header_block = match self.blocks[self.header_block(ebb)] {
             BlockData::EbbBody { .. } => panic!("you can't add predecessors to an Ebb body block"),
@@ -385,9 +383,7 @@ impl<Variable> SSABuilder<Variable>
                                               Ebb) = match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => {
-                (data.predecessors.iter().map(|(&x, &y)| (x, y)).collect(),
-                 data.undef_variables.clone(),
-                 data.ebb)
+                (data.predecessors.clone(), data.undef_variables.clone(), data.ebb)
             }
         };
 
@@ -577,7 +573,7 @@ impl<Variable> SSABuilder<Variable>
     }
 
     /// Returns the list of `Ebb`s that have been declared as predecessors of the argument.
-    pub fn predecessors(&self, ebb: Ebb) -> &HashMap<Block, Inst> {
+    pub fn predecessors(&self, ebb: Ebb) -> &[(Block, Inst)] {
         let block = match self.ebb_headers[ebb].expand() {
             Some(block) => block,
             None => panic!("the ebb has not been declared yet"),
