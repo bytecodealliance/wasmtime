@@ -68,7 +68,7 @@ pub fn translate_module(
         ParserState::Error(BinaryReaderError { message, offset }) => {
             return Err(format!("at offset {}: {}", offset, message));
         }
-        ref s @ _ => panic!("modules should begin properly: {:?}", s),
+        ref s => panic!("modules should begin properly: {:?}", s),
     }
     let mut signatures = None;
     let mut functions: Option<Vec<SignatureIndex>> = None;
