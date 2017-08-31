@@ -97,7 +97,7 @@ fn create_pre_header(
 //
 // A loop header has a pre-header if there is only one predecessor that the header doesn't
 // dominate.
-// Returns the pre-header Ebb and the instruction jumping to  the header.
+// Returns the pre-header Ebb and the instruction jumping to the header.
 fn has_pre_header(
     layout: &Layout,
     cfg: &ControlFlowGraph,
