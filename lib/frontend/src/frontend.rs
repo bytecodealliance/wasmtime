@@ -7,6 +7,7 @@ use cretonne::ir::function::DisplayFunction;
 use cretonne::isa::TargetIsa;
 use ssa::{SSABuilder, SideEffects, Block};
 use cretonne::entity::{EntityRef, EntityMap};
+use std::collections::HashSet;
 use std::hash::Hash;
 
 /// Permanent structure used for translating into Cretonne IL.
@@ -146,6 +147,10 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                         // If jump table we declare all entries successor
                         // TODO: not collect with vector?
                         InstructionData::BranchTable { table, .. } => {
+                            // Unlike all other jumps/branches, jump tables are
+                            // capable of having the same successor appear
+                            // multiple times. Use a HashSet to deduplicate.
+                            let mut unique = HashSet::new();
                             for dest_ebb in self.builder
                                     .func
                                     .jump_tables
@@ -153,6 +158,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                                     .expect("you are referencing an undeclared jump table")
                                     .entries()
                                     .map(|(_, ebb)| ebb)
+                                    .filter(|dest_ebb| unique.insert(*dest_ebb))
                                     .collect::<Vec<Ebb>>() {
                                 self.builder.declare_successor(dest_ebb, inst)
                             }
