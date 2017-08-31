@@ -103,7 +103,7 @@ impl CheckerBuilder {
 
     /// Add a potential directive line.
     ///
-    /// Returns true if this is a a directive with one of the known prefixes.
+    /// Returns true if this is a directive with one of the known prefixes.
     /// Returns false if no known directive was found.
     /// Returns an error if there is a problem with the directive.
     pub fn directive(&mut self, l: &str) -> Result<bool> {
@@ -206,7 +206,7 @@ impl Checker {
             state.recorder.directive(dct_idx);
             if let Some((match_begin, match_end)) = state.match_positive(pat, range)? {
                 if let Directive::Unordered(_) = *dct {
-                    // This was an unordered unordered match.
+                    // This was an unordered match.
                     // Keep track of the largest matched position, but leave `last_ordered` alone.
                     state.max_match = max(state.max_match, match_end);
                 } else {

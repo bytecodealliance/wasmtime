@@ -177,7 +177,7 @@ pub fn translate_function_body(
     let mut func_imports = FunctionImports::new();
     let mut stack: Vec<Value> = Vec::new();
     let mut control_stack: Vec<ControlStackFrame> = Vec::new();
-    // We introduce a arbitrary scope for the FunctionBuilder object
+    // We introduce an arbitrary scope for the FunctionBuilder object
     {
         let mut builder = FunctionBuilder::new(&mut func, il_builder);
         let first_ebb = builder.create_ebb();
@@ -1237,7 +1237,7 @@ fn translate_unreachable_operator(
                 match frame {
                     // If it is a loop we also have to seal the body loop block
                     ControlStackFrame::Loop { header, .. } => builder.seal_block(header),
-                    // If it is a if then the code after is reachable again
+                    // If it is an if then the code after is reachable again
                     ControlStackFrame::If { .. } => {
                         state.real_unreachable_stack_depth = 1;
                     }
@@ -1297,7 +1297,7 @@ fn args_count(
     signatures[functions[index]].argument_types.len()
 }
 
-// Given a index in the function index space, search for it in the function imports and if it is
+// Given an index in the function index space, search for it in the function imports and if it is
 // not there add it to the function imports.
 fn find_function_import(
     index: FunctionIndex,

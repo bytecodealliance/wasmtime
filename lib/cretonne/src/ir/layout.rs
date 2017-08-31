@@ -1017,14 +1017,14 @@ pub trait CursorBase {
     /// - If the cursor points to the top of an EBB, the new EBB is inserted above the current one.
     /// - If the cursor is not pointing at anything, the new EBB is placed last in the layout.
     ///
-    /// This means that is is always valid to call this method, and it always leaves the cursor in
+    /// This means that it is always valid to call this method, and it always leaves the cursor in
     /// a state that will insert instructions into the new EBB.
     fn insert_ebb(&mut self, new_ebb: Ebb) {
         use self::CursorPosition::*;
         match self.position() {
             At(inst) => {
                 self.layout_mut().split_ebb(new_ebb, inst);
-                // All other cases move to `After(ebb)`, but in this case we we'll stay `At(inst)`.
+                // All other cases move to `After(ebb)`, but in this case we'll stay `At(inst)`.
                 return;
             }
             Nowhere => self.layout_mut().append_ebb(new_ebb),
