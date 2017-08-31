@@ -866,7 +866,10 @@ mod tests {
         let mut dfg = DataFlowGraph::new();
 
         let idata = InstructionData::Nullary { opcode: Opcode::Iconst };
+        let next = dfg.next_inst();
         let inst = dfg.make_inst(idata);
+        assert_eq!(next, inst);
+
         dfg.make_inst_results(inst, types::I32);
         assert_eq!(inst.to_string(), "inst0");
         assert_eq!(dfg.display_inst(inst, None).to_string(), "v0 = iconst.i32");
