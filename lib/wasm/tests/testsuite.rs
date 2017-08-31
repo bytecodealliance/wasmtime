@@ -70,9 +70,9 @@ fn handle_module(path: PathBuf) -> Result<(), String> {
         }
     };
     for func in translation.functions.iter() {
-        let il = match func {
-            &FunctionTranslation::Import() => continue,
-            &FunctionTranslation::Code { ref il, .. } => il.clone(),
+        let il = match *func {
+            FunctionTranslation::Import() => continue,
+            FunctionTranslation::Code { ref il, .. } => il.clone(),
         };
         match verifier::verify_function(&il, None) {
             Ok(()) => (),

@@ -78,17 +78,17 @@ enum BlockData<Variable> {
 
 impl<Variable> BlockData<Variable> {
     fn add_predecessor(&mut self, pred: Block, inst: Inst) {
-        match self {
-            &mut BlockData::EbbBody { .. } => panic!("you can't add a predecessor to a body block"),
-            &mut BlockData::EbbHeader(ref mut data) => {
+        match *self {
+            BlockData::EbbBody { .. } => panic!("you can't add a predecessor to a body block"),
+            BlockData::EbbHeader(ref mut data) => {
                 data.predecessors.push((pred, inst));
             }
         }
     }
     fn remove_predecessor(&mut self, inst: Inst) -> Block {
-        match self {
-            &mut BlockData::EbbBody { .. } => panic!("should not happen"),
-            &mut BlockData::EbbHeader(ref mut data) => {
+        match *self {
+            BlockData::EbbBody { .. } => panic!("should not happen"),
+            BlockData::EbbHeader(ref mut data) => {
                 // This a linear complexity operation but the number of predecessors is low
                 // in all non-pathological cases
                 let pred: usize =

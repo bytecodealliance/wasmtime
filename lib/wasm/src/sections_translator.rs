@@ -132,8 +132,8 @@ pub fn parse_export_section(
                 ref kind,
                 index,
             } => {
-                match kind {
-                    &ExternalKind::Function => {
+                match *kind {
+                    ExternalKind::Function => {
                         exports.insert(
                             index as FunctionIndex,
                             String::from(from_utf8(field).unwrap()),
