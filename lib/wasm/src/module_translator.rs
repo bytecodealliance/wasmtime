@@ -108,7 +108,7 @@ pub fn translate_module(
                                     runtime.declare_memory(mem);
                                 }
                                 Import::Global(glob) => {
-                                    runtime.declare_global(glob.clone());
+                                    runtime.declare_global(glob);
                                     globals.push(glob);
                                 }
                                 Import::Table(tab) => {

@@ -211,7 +211,7 @@ pub fn parse_global_section(
             mutability: mutability != 0,
             initializer: initializer,
         };
-        runtime.declare_global(global.clone());
+        runtime.declare_global(global);
         globals.push(global);
         match *parser.read() {
             ParserState::EndGlobalSectionEntry => (),

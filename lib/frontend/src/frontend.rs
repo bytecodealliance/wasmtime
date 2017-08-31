@@ -136,7 +136,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                         match data.analyze_branch(&self.builder.func.dfg.value_lists) {
                             BranchInfo::SingleDest(_, args) => {
                                 args.iter()
-                                    .map(|arg| self.builder.func.dfg.value_type(arg.clone()))
+                                    .map(|arg| self.builder.func.dfg.value_type(*arg))
                                     .collect()
                             }
                             _ => panic!("should not happen"),
