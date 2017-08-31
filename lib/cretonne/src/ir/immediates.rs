@@ -259,7 +259,7 @@ impl FromStr for Offset32 {
         if !(s.starts_with('-') || s.starts_with('+')) {
             return Err("Offset must begin with sign");
         }
-        parse_i64(s).and_then(|x| if i64::from(i32::MIN) as i64 <= x &&
+        parse_i64(s).and_then(|x| if i64::from(i32::MIN) <= x &&
             x <= i64::from(i32::MAX)
         {
             Ok(Offset32::new(x as i32))
