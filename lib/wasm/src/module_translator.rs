@@ -256,7 +256,7 @@ pub fn translate_module(
             ParserState::EndSection => break,
             _ => return Err(String::from("wrong content in code section")),
         };
-        let signature = signatures[functions[function_index as usize] as usize].clone();
+        let signature = signatures[functions[function_index]].clone();
         match translate_function_body(
             &mut parser,
             function_index,

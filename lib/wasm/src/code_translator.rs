@@ -186,7 +186,7 @@ pub fn translate_function_body(
         for (i, arg_type) in sig.argument_types.iter().enumerate() {
             // First we declare the function arguments' as non-SSA vars because they will be
             // accessed by get_local
-            let arg_value = builder.arg_value(i as usize);
+            let arg_value = builder.arg_value(i);
             builder.declare_var(Local(i as u32), arg_type.value_type);
             builder.def_var(Local(i as u32), arg_value);
         }
@@ -566,7 +566,7 @@ fn translate_operator(
                 for (depth, dest_ebb) in dest_ebbs {
                     builder.switch_to_block(dest_ebb, &[]);
                     builder.seal_block(dest_ebb);
-                    let i = control_stack.len() - 1 - (depth as usize);
+                    let i = control_stack.len() - 1 - depth;
                     let frame = &mut control_stack[i];
                     let real_dest_ebb = frame.br_destination();
                     builder.ins().jump(real_dest_ebb, jump_args.as_slice());
@@ -1294,7 +1294,7 @@ fn args_count(
     functions: &[SignatureIndex],
     signatures: &[Signature],
 ) -> usize {
-    signatures[functions[index] as usize].argument_types.len()
+    signatures[functions[index]].argument_types.len()
 }
 
 // Given a index in the function index space, search for it in the function imports and if it is
@@ -1312,7 +1312,7 @@ fn find_function_import(
     }
     // We have to import the function
     let sig_index = functions[index];
-    if let Some(local_sig_index) = func_imports.signatures.get(&(sig_index as usize)) {
+    if let Some(local_sig_index) = func_imports.signatures.get(&sig_index) {
         let local_func_index = builder.import_function(ExtFuncData {
             name: match *exports {
                 None => FunctionName::new(""),
@@ -1329,11 +1329,8 @@ fn find_function_import(
         return local_func_index;
     }
     // We have to import the signature
-    let sig_local_index = builder.import_signature(signatures[sig_index as usize].clone());
-    func_imports.signatures.insert(
-        sig_index as usize,
-        sig_local_index,
-    );
+    let sig_local_index = builder.import_signature(signatures[sig_index].clone());
+    func_imports.signatures.insert(sig_index, sig_local_index);
     let local_func_index = builder.import_function(ExtFuncData {
         name: match *exports {
             None => FunctionName::new(""),
@@ -1356,13 +1353,10 @@ fn find_signature_import(
     func_imports: &mut FunctionImports,
     signatures: &[Signature],
 ) -> SigRef {
-    if let Some(local_sig_index) = func_imports.signatures.get(&(sig_index as usize)) {
+    if let Some(local_sig_index) = func_imports.signatures.get(&sig_index) {
         return *local_sig_index;
     }
-    let sig_local_index = builder.import_signature(signatures[sig_index as usize].clone());
-    func_imports.signatures.insert(
-        sig_index as usize,
-        sig_local_index,
-    );
+    let sig_local_index = builder.import_signature(signatures[sig_index].clone());
+    func_imports.signatures.insert(sig_index, sig_local_index);
     sig_local_index
 }
