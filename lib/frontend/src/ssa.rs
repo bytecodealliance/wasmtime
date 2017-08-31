@@ -310,13 +310,8 @@ impl<Variable> SSABuilder<Variable>
     /// Callers are expected to avoid adding the same predecessor more than once in the case
     /// of a jump table.
     pub fn declare_ebb_predecessor(&mut self, ebb: Ebb, pred: Block, inst: Inst) {
-        let header_block = match self.blocks[self.header_block(ebb)] {
-            BlockData::EbbBody { .. } => panic!("you can't add predecessors to an Ebb body block"),
-            BlockData::EbbHeader(ref data) => {
-                assert!(!data.sealed);
-                self.header_block(ebb)
-            }
-        };
+        debug_assert!(!self.is_sealed(ebb));
+        let header_block = self.header_block(ebb);
         self.blocks[header_block].add_predecessor(pred, inst)
     }
 
@@ -325,13 +320,8 @@ impl<Variable> SSABuilder<Variable>
     ///
     /// Note: use only when you know what you are doing, this might break the SSA bbuilding problem
     pub fn remove_ebb_predecessor(&mut self, ebb: Ebb, inst: Inst) -> Block {
-        let header_block = match self.blocks[self.header_block(ebb)] {
-            BlockData::EbbBody { .. } => panic!("you can't add predecessors to an Ebb body block"),
-            BlockData::EbbHeader(ref data) => {
-                assert!(!data.sealed);
-                self.header_block(ebb)
-            }
-        };
+        debug_assert!(!self.is_sealed(ebb));
+        let header_block = self.header_block(ebb);
         self.blocks[header_block].remove_predecessor(inst)
     }
 
@@ -574,10 +564,7 @@ impl<Variable> SSABuilder<Variable>
 
     /// Returns the list of `Ebb`s that have been declared as predecessors of the argument.
     pub fn predecessors(&self, ebb: Ebb) -> &[(Block, Inst)] {
-        let block = match self.ebb_headers[ebb].expand() {
-            Some(block) => block,
-            None => panic!("the ebb has not been declared yet"),
-        };
+        let block = self.header_block(ebb);
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("should not happen"),
             BlockData::EbbHeader(ref data) => &data.predecessors,
