@@ -169,7 +169,7 @@ enum ZeroOneOrMore<T> {
 enum UseVarCases {
     Unsealed(Value),
     SealedOnePredecessor(Block),
-    SealedMultiplePredecessors(Vec<(Block, Inst)>, Value, Ebb),
+    SealedMultiplePredecessors(Value, Ebb),
 }
 
 /// The following methods are the API of the SSA builder. Here is how it should be used when
@@ -238,8 +238,7 @@ where
                         UseVarCases::SealedOnePredecessor(data.predecessors[0].0)
                     } else {
                         let val = dfg.append_ebb_arg(data.ebb, ty);
-                        let preds = data.predecessors.clone();
-                        UseVarCases::SealedMultiplePredecessors(preds, val, data.ebb)
+                        UseVarCases::SealedMultiplePredecessors(val, data.ebb)
                     }
                 } else {
                     let val = dfg.append_ebb_arg(data.ebb, ty);
@@ -264,11 +263,11 @@ where
                 self.def_var(var, val, block);
                 (val, SideEffects::new())
             }
-            UseVarCases::SealedMultiplePredecessors(preds, val, ebb) => {
+            UseVarCases::SealedMultiplePredecessors(val, ebb) => {
                 // If multiple predecessor we look up a use_var in each of them:
                 // if they all yield the same value no need for an Ebb argument
                 self.def_var(var, val, block);
-                self.predecessors_lookup(dfg, layout, jts, val, var, ebb, &preds)
+                self.predecessors_lookup(dfg, layout, jts, val, var, ebb)
             }
         }
     }
@@ -346,10 +345,7 @@ where
     ) -> SideEffects {
         let block = self.header_block(ebb);
 
-        // TODO: find a way to not allocate vectors
-        let (predecessors, undef_vars, ebb): (Vec<(Block, Inst)>,
-                                              Vec<(Variable, Value)>,
-                                              Ebb) = match self.blocks[block] {
+        let (undef_vars, ebb): (Vec<(Variable, Value)>, Ebb) = match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => {
                 assert!(!data.sealed);
@@ -357,7 +353,7 @@ where
                 // can iterate over it without borrowing the whole builder.
                 let mut undef_variables = Vec::new();
                 mem::swap(&mut data.undef_variables, &mut undef_variables);
-                (data.predecessors.clone(), undef_variables, data.ebb)
+                (undef_variables, data.ebb)
             }
         };
 
@@ -366,7 +362,7 @@ where
         // only if necessary.
         for (var, val) in undef_vars {
             let (_, mut local_side_effects) =
-                self.predecessors_lookup(dfg, layout, jts, val, var, ebb, &predecessors);
+                self.predecessors_lookup(dfg, layout, jts, val, var, ebb);
             side_effects.split_ebbs_created.append(
                 &mut local_side_effects
                     .split_ebbs_created,
@@ -399,13 +395,18 @@ where
         temp_arg_val: Value,
         temp_arg_var: Variable,
         dest_ebb: Ebb,
-        preds: &[(Block, Inst)],
     ) -> (Value, SideEffects) {
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
         // TODO: find a way to not allocate a vector
         let mut jump_args_to_append: Vec<(Block, Inst, Value)> = Vec::new();
         let ty = dfg.value_type(temp_arg_val);
         let mut side_effects = SideEffects::new();
+
+        // Iterate over the predecessors. To avoid borrowing `self` for the whole loop,
+        // temporarily detach the predecessors list and replace it with an empty list.
+        // `use_var`'s traversal won't revisit these predecesors.
+        let mut preds = Vec::new();
+        mem::swap(&mut preds, &mut self.predecessors_mut(dest_ebb));
         for &(pred, last_inst) in preds.iter() {
             // For undef value  and each predecessor we query what is the local SSA value
             // corresponding to var and we put it as an argument of the branch instruction.
@@ -437,6 +438,10 @@ where
                 &mut local_side_effects.instructions_added_to_ebbs,
             );
         }
+        // Now that we're done iterating, move the predecessors list back.
+        debug_assert!(self.predecessors(dest_ebb).is_empty());
+        *self.predecessors_mut(dest_ebb) = preds;
+
         match pred_values {
             ZeroOneOrMore::Zero() => {
                 // The variable is used but never defined before. This is an irregularity in the
@@ -557,6 +562,15 @@ where
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("should not happen"),
             BlockData::EbbHeader(ref data) => &data.predecessors,
+        }
+    }
+
+    /// Same as predecessors, but for &mut.
+    pub fn predecessors_mut(&mut self, ebb: Ebb) -> &mut Vec<(Block, Inst)> {
+        let block = self.header_block(ebb);
+        match self.blocks[block] {
+            BlockData::EbbBody { .. } => panic!("should not happen"),
+            BlockData::EbbHeader(ref mut data) => &mut data.predecessors,
         }
     }
 
