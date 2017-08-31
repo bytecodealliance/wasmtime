@@ -303,6 +303,7 @@ mod tests {
             let cc = *r;
             assert_eq!(cc.to_string().parse(), Ok(cc));
         }
+        assert_eq!("bogus".parse::<IntCC>(), Err(()));
     }
 
     static FLOAT_ALL: [FloatCC; 14] = [FloatCC::Ordered,
@@ -345,5 +346,6 @@ mod tests {
             let cc = *r;
             assert_eq!(cc.to_string().parse(), Ok(cc));
         }
+        assert_eq!("bogus".parse::<FloatCC>(), Err(()));
     }
 }
