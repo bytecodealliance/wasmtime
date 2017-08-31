@@ -111,6 +111,8 @@ mod tests {
     use ir::StackSlots;
     use ir::types;
     use super::layout_stack;
+    use ir::stackslot::StackOffset;
+    use result::CtonError;
 
     #[test]
     fn layout() {
@@ -181,5 +183,9 @@ mod tests {
         assert_eq!(sss[ss0].offset, -16);
         assert_eq!(sss[ss1].offset, -8);
         assert_eq!(sss[out0].offset, 0);
+
+        // Also test that an unsupported offset is rejected.
+        sss.get_outgoing_arg(types::I8, StackOffset::max_value() - 1);
+        assert_eq!(layout_stack(sss, 1), Err(CtonError::ImplLimitExceeded));
     }
 }
