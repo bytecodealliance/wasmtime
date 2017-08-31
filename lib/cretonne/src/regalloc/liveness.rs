@@ -328,7 +328,7 @@ impl Liveness {
     where
         PP: Into<ProgramPoint>,
     {
-        let mut lr = self.ranges.get_mut(value).expect("Value has no live range");
+        let lr = self.ranges.get_mut(value).expect("Value has no live range");
         lr.move_def_locally(def.into());
     }
 
@@ -345,7 +345,7 @@ impl Liveness {
         layout: &Layout,
     ) -> &mut Affinity {
         debug_assert_eq!(Some(ebb), layout.inst_ebb(user));
-        let mut lr = self.ranges.get_mut(value).expect("Value has no live range");
+        let lr = self.ranges.get_mut(value).expect("Value has no live range");
         let livein = lr.extend_in_ebb(ebb, user, layout);
         assert!(!livein, "{} should already be live in {}", value, ebb);
         &mut lr.affinity
@@ -353,7 +353,7 @@ impl Liveness {
 
     /// Change the affinity of `value` to `Stack` and return the previous affinity.
     pub fn spill(&mut self, value: Value) -> Affinity {
-        let mut lr = self.ranges.get_mut(value).expect("Value has no live range");
+        let lr = self.ranges.get_mut(value).expect("Value has no live range");
         mem::replace(&mut lr.affinity, Affinity::Stack)
     }
 
