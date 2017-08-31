@@ -467,7 +467,7 @@ impl<T: EntityRef> EntityList<T> {
     /// Since the memory comes from the pool, this will be either zero entity references or
     /// whatever where in a previously deallocated list.
     pub fn grow_at(&mut self, index: usize, count: usize, pool: &mut ListPool<T>) {
-        let mut data = self.grow(count, pool);
+        let data = self.grow(count, pool);
 
         // Copy elements after `index` up.
         for i in (index + count..data.len()).rev() {
