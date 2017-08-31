@@ -109,7 +109,7 @@ struct EbbHeaderBlockData<Variable> {
     sealed: bool,
     // The ebb which this block is part of.
     ebb: Ebb,
-    // List of current Ebb arguments for which a earlier def has not been found yet.
+    // List of current Ebb arguments for which an earlier def has not been found yet.
     undef_variables: Vec<(Variable, Value)>,
 }
 
@@ -426,7 +426,7 @@ where
         preds: &[(Block, Inst)],
     ) -> (Value, SideEffects) {
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
-        // TODO: find a way not not allocate a vector
+        // TODO: find a way to not allocate a vector
         let mut jump_args_to_append: Vec<(Block, Inst, Value)> = Vec::new();
         let ty = dfg.value_type(temp_arg_val);
         let mut side_effects = SideEffects::new();

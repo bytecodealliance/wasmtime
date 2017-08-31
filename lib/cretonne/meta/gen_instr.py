@@ -451,8 +451,8 @@ def gen_type_constraints(fmt, instrs):
 def gen_format_constructor(iform, fmt):
     # type: (InstructionFormat, srcgen.Formatter) -> None
     """
-    Emit a method for creating and inserting inserting an `iform` instruction,
-    where `iform` is an instruction format.
+    Emit a method for creating and inserting an `iform` instruction, where
+    `iform` is an instruction format.
 
     All instruction formats take an `opcode` argument and a `ctrl_typevar`
     argument for deducing the result types.

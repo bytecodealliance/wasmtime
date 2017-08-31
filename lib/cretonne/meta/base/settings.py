@@ -1,7 +1,7 @@
 """
 Cretonne shared settings.
 
-This module defines settings are are relevant for all code generators.
+This module defines settings relevant for all code generators.
 """
 from __future__ import absolute_import
 from cdsl.settings import SettingGroup, BoolSetting, EnumSetting

@@ -393,7 +393,7 @@ where
         self.func.dfg.signatures.get(sigref)
     }
 
-    /// Creates a argument for a specific `Ebb` by appending it to the list of already existing
+    /// Creates an argument for a specific `Ebb` by appending it to the list of already existing
     /// arguments.
     ///
     /// **Note:** this function has to be called at the creation of the `Ebb` before adding

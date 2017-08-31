@@ -571,7 +571,7 @@ impl<'a> Parser<'a> {
 
     // Match and consume an optional offset32 immediate.
     //
-    // Note that that this will match an empty string as an empty offset, and that if an offset is
+    // Note that this will match an empty string as an empty offset, and that if an offset is
     // present, it must contain a sign.
     fn optional_offset32(&mut self) -> Result<Offset32> {
         if let Some(Token::Integer(text)) = self.token() {
@@ -587,7 +587,7 @@ impl<'a> Parser<'a> {
 
     // Match and consume an optional uoffset32 immediate.
     //
-    // Note that that this will match an empty string as an empty offset, and that if an offset is
+    // Note that this will match an empty string as an empty offset, and that if an offset is
     // present, it must contain a `+` sign.
     fn optional_uoffset32(&mut self) -> Result<Uoffset32> {
         if let Some(Token::Integer(text)) = self.token() {
