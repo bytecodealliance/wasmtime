@@ -283,7 +283,7 @@ pub fn parse_data_section(
             };
             match runtime.declare_data_initialization(memory_index as MemoryIndex, offset, data) {
                 Ok(()) => (),
-                Err(s) => return Err(SectionParsingError::WrongSectionContent(format!("{}", s))),
+                Err(s) => return Err(SectionParsingError::WrongSectionContent(s)),
             };
         }
         match *parser.read() {
