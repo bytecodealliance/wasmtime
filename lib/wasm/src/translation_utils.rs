@@ -140,7 +140,7 @@ pub fn translate_type(ty: wasmparser::Type) -> Result<Vec<cretonne::ir::Type>, (
 /// feeding the function indexes in the module but are used by the runtime with the `FuncRef` as
 /// keys.
 pub fn invert_hashmaps(
-    imports: code_translator::FunctionImports,
+    imports: &code_translator::FunctionImports,
 ) -> module_translator::ImportMappings {
     let mut new_imports = module_translator::ImportMappings::new();
     for (func_index, func_ref) in &imports.functions {
