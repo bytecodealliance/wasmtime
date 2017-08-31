@@ -185,8 +185,8 @@ pub trait MutableSourceMap {
 }
 
 impl MutableSourceMap for SourceMap {
-    fn new() -> SourceMap {
-        SourceMap {
+    fn new() -> Self {
+        Self {
             values: HashMap::new(),
             ebbs: HashMap::new(),
             stack_slots: HashMap::new(),

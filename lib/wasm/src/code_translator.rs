@@ -144,8 +144,8 @@ pub struct FunctionImports {
 }
 
 impl FunctionImports {
-    fn new() -> FunctionImports {
-        FunctionImports {
+    fn new() -> Self {
+        Self {
             functions: HashMap::new(),
             signatures: HashMap::new(),
         }

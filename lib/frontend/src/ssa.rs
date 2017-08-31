@@ -128,7 +128,7 @@ impl EntityRef for Block {
 }
 
 impl ReservedValue for Block {
-    fn reserved_value() -> Block {
+    fn reserved_value() -> Self {
         Block(u32::MAX)
     }
 }
@@ -138,8 +138,8 @@ where
     Variable: EntityRef + Default,
 {
     /// Allocate a new blank SSA builder struct. Use the API function to interact with the struct.
-    pub fn new() -> SSABuilder<Variable> {
-        SSABuilder {
+    pub fn new() -> Self {
+        Self {
             variables: EntityMap::new(),
             blocks: PrimaryMap::new(),
             ebb_headers: EntityMap::new(),

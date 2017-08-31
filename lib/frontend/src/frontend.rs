@@ -51,8 +51,8 @@ where
 {
     /// Creates a ILBuilder structure. The structure is automatically cleared each time it is
     /// passed to a [`FunctionBuilder`](struct.FunctionBuilder.html) for creation.
-    pub fn new() -> ILBuilder<Variable> {
-        ILBuilder {
+    pub fn new() -> Self {
+        Self {
             ssa: SSABuilder::new(),
             ebbs: EntityMap::new(),
             types: EntityMap::new(),

@@ -15,8 +15,8 @@ pub struct DummyRuntime {
 
 impl DummyRuntime {
     /// Allocates the runtime data structures.
-    pub fn new() -> DummyRuntime {
-        DummyRuntime { globals: Vec::new() }
+    pub fn new() -> Self {
+        Self { globals: Vec::new() }
     }
 }
 
