@@ -98,7 +98,7 @@ impl cretonne::entity::EntityRef for Local {
     }
 }
 impl Default for Local {
-    fn default() -> Local {
+    fn default() -> Self {
         Local(u32::MAX)
     }
 }

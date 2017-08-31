@@ -46,8 +46,8 @@ pub struct ImportMappings {
 
 impl ImportMappings {
     /// Create a new empty `ImportMappings`.
-    pub fn new() -> ImportMappings {
-        ImportMappings {
+    pub fn new() -> Self {
+        Self {
             functions: HashMap::new(),
             signatures: HashMap::new(),
         }
