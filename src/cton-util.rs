@@ -3,7 +3,6 @@ extern crate cretonne;
 extern crate cton_reader;
 extern crate cretonne_wasm;
 extern crate docopt;
-extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate filecheck;
