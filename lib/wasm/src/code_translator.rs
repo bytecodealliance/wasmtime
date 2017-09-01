@@ -126,11 +126,25 @@ impl ControlStackFrame {
 
 /// Contains information passed along during the translation and that records:
 ///
-/// - the depth of the two unreachable control blocks stacks, that are manipulated when translating
+/// - The current value and control stacks.
+/// - The depth of the two unreachable control blocks stacks, that are manipulated when translating
 ///   unreachable code;
 struct TranslationState {
+    stack: Vec<Value>,
+    control_stack: Vec<ControlStackFrame>,
     phantom_unreachable_stack_depth: usize,
     real_unreachable_stack_depth: usize,
+}
+
+impl TranslationState {
+    fn new() -> TranslationState {
+        TranslationState {
+            stack: Vec::new(),
+            control_stack: Vec::new(),
+            phantom_unreachable_stack_depth: 0,
+            real_unreachable_stack_depth: 0,
+        }
+    }
 }
 
 /// Holds mappings between the function and signatures indexes in the Wasm module and their
@@ -175,8 +189,6 @@ pub fn translate_function_body(
         }
     }
     let mut func_imports = FunctionImports::new();
-    let mut stack: Vec<Value> = Vec::new();
-    let mut control_stack: Vec<ControlStackFrame> = Vec::new();
     // We introduce an arbitrary scope for the FunctionBuilder object
     {
         let mut builder = FunctionBuilder::new(&mut func, il_builder);
@@ -206,13 +218,12 @@ pub fn translate_function_body(
                 local_index += 1;
             }
         }
-        let mut state = TranslationState {
-            phantom_unreachable_stack_depth: 0,
-            real_unreachable_stack_depth: 0,
-        };
+
+        let mut state = TranslationState::new();
+
         // We initialize the control stack with the implicit function block
         let end_ebb = builder.create_ebb();
-        control_stack.push(ControlStackFrame::Block {
+        state.control_stack.push(ControlStackFrame::Block {
             destination: end_ebb,
             original_stack_size: 0,
             return_values: sig.return_types
@@ -231,20 +242,12 @@ pub fn translate_function_body(
                             state.real_unreachable_stack_depth > 0
                     );
                     if state.real_unreachable_stack_depth > 0 {
-                        translate_unreachable_operator(
-                            op,
-                            &mut builder,
-                            &mut stack,
-                            &mut control_stack,
-                            &mut state,
-                        )
+                        translate_unreachable_operator(op, &mut builder, &mut state)
                     } else {
                         translate_operator(
                             op,
                             &mut builder,
                             runtime,
-                            &mut stack,
-                            &mut control_stack,
                             &mut state,
                             sig,
                             functions,
@@ -262,20 +265,22 @@ pub fn translate_function_body(
         // In WebAssembly, the final return instruction is implicit so we need to build it
         // explicitely in Cretonne IL.
         if !builder.is_filled() && (!builder.is_unreachable() || !builder.is_pristine()) {
-            let cut_index = stack.len() - sig.return_types.len();
-            let return_vals = stack.split_off(cut_index);
+            let cut_index = state.stack.len() - sig.return_types.len();
+            let return_vals = state.stack.split_off(cut_index);
             builder.ins().return_(&return_vals);
         }
         // Because the function has an implicit block as body, we need to explicitely close it.
-        let frame = control_stack.pop().unwrap();
+        let frame = state.control_stack.pop().unwrap();
         builder.switch_to_block(frame.following_code(), frame.return_values());
         builder.seal_block(frame.following_code());
         // If the block is reachable we also have to include a return instruction in it.
         if !builder.is_unreachable() {
-            stack.truncate(frame.original_stack_size());
-            stack.extend_from_slice(builder.ebb_args(frame.following_code()));
-            let cut_index = stack.len() - sig.return_types.len();
-            let return_vals = stack.split_off(cut_index);
+            state.stack.truncate(frame.original_stack_size());
+            state.stack.extend_from_slice(
+                builder.ebb_args(frame.following_code()),
+            );
+            let cut_index = state.stack.len() - sig.return_types.len();
+            let return_vals = state.stack.split_off(cut_index);
             builder.ins().return_(&return_vals);
         }
     }
@@ -288,8 +293,6 @@ fn translate_operator(
     op: &Operator,
     builder: &mut FunctionBuilder<Local>,
     runtime: &mut WasmRuntime,
-    stack: &mut Vec<Value>,
-    control_stack: &mut Vec<ControlStackFrame>,
     state: &mut TranslationState,
     sig: &Signature,
     functions: &[SignatureIndex],
@@ -297,6 +300,9 @@ fn translate_operator(
     exports: &Option<HashMap<FunctionIndex, String>>,
     func_imports: &mut FunctionImports,
 ) {
+    let stack = &mut state.stack;
+    let control_stack = &mut state.control_stack;
+
     // This big match treats all Wasm code operators.
     match *op {
         /********************************** Locals ****************************************
@@ -1197,10 +1203,11 @@ fn translate_operator(
 fn translate_unreachable_operator(
     op: &Operator,
     builder: &mut FunctionBuilder<Local>,
-    stack: &mut Vec<Value>,
-    control_stack: &mut Vec<ControlStackFrame>,
     state: &mut TranslationState,
 ) {
+    let stack = &mut state.stack;
+    let control_stack = &mut state.control_stack;
+
     // We don't translate because the code is unreachable
     // Nevertheless we have to record a phantom stack for this code
     // to know when the unreachable code ends
