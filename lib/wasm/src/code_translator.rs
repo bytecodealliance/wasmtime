@@ -94,11 +94,7 @@ pub fn translate_function_body(
             let parser_state = parser.read();
             match *parser_state {
                 ParserState::CodeOperator(ref op) => {
-                    if state.in_unreachable_code() {
-                        translate_unreachable_operator(op, &mut builder, &mut state)
-                    } else {
-                        translate_operator(op, &mut builder, &mut state, runtime)
-                    }
+                    translate_operator(op, &mut builder, &mut state, runtime)
                 }
 
                 ParserState::EndFunctionBody => break,
@@ -132,12 +128,16 @@ pub fn translate_function_body(
 
 /// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
 /// a return.
-fn translate_operator<FE: FuncEnvironment + ?Sized>(
+pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     op: &Operator,
     builder: &mut FunctionBuilder<Local>,
     state: &mut TranslationState,
-    environ: &FE,
+    environ: &mut FE,
 ) {
+    if state.in_unreachable_code() {
+        return translate_unreachable_operator(op, builder, state);
+    }
+
     // This big match treats all Wasm code operators.
     match *op {
         /********************************** Locals ****************************************
@@ -1027,7 +1027,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     result_ty: ir::Type,
     builder: &mut FunctionBuilder<Local>,
     state: &mut TranslationState,
-    environ: &FE,
+    environ: &mut FE,
 ) {
     let addr32 = state.pop1();
     // We don't yet support multiple linear memories.
@@ -1050,7 +1050,7 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     opcode: ir::Opcode,
     builder: &mut FunctionBuilder<Local>,
     state: &mut TranslationState,
-    environ: &FE,
+    environ: &mut FE,
 ) {
     let (addr32, val) = state.pop2();
     let val_ty = builder.func.dfg.value_type(val);
