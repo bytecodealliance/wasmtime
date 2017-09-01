@@ -161,7 +161,7 @@ where
 enum ZeroOneOrMore<T> {
     Zero(),
     One(T),
-    More(),
+    More(Vec<T>),
 }
 
 #[derive(Debug)]
@@ -409,9 +409,7 @@ where
         temp_arg_var: Variable,
         dest_ebb: Ebb,
     ) -> (Value, SideEffects) {
-        let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
-        // TODO: find a way to not allocate a vector
-        let mut jump_args_to_append: Vec<(Block, Inst, Value)> = Vec::new();
+        let mut pred_values: ZeroOneOrMore<(Block, Inst, Value)> = ZeroOneOrMore::Zero();
         let ty = dfg.value_type(temp_arg_val);
         let mut side_effects = SideEffects::new();
 
@@ -425,24 +423,25 @@ where
             // to var and we put it as an argument of the branch instruction.
             let (pred_val, mut local_side_effects) =
                 self.use_var(dfg, layout, jts, temp_arg_var, ty, pred);
-            pred_values = match pred_values {
+            match pred_values {
                 ZeroOneOrMore::Zero() => {
-                    if pred_val == temp_arg_val {
-                        ZeroOneOrMore::Zero()
-                    } else {
-                        ZeroOneOrMore::One(pred_val)
+                    if pred_val != temp_arg_val {
+                        pred_values = ZeroOneOrMore::One((pred, last_inst, pred_val))
                     }
                 }
-                ZeroOneOrMore::One(old_val) => {
-                    if pred_val == temp_arg_val || pred_val == old_val {
-                        ZeroOneOrMore::One(old_val)
-                    } else {
-                        ZeroOneOrMore::More()
+                ZeroOneOrMore::One((old_pred, old_last_inst, old_val)) => {
+                    if pred_val != temp_arg_val && pred_val != old_val {
+                        // TODO: find a way to not allocate a vector
+                        pred_values = ZeroOneOrMore::More(vec![
+                            (old_pred, old_last_inst, old_val),
+                            (pred, last_inst, pred_val),
+                        ]);
                     }
                 }
-                ZeroOneOrMore::More() => ZeroOneOrMore::More(),
-            };
-            jump_args_to_append.push((pred, last_inst, pred_val));
+                ZeroOneOrMore::More(ref mut jump_args_to_append) => {
+                    jump_args_to_append.push((pred, last_inst, pred_val));
+                }
+            }
             side_effects.split_ebbs_created.append(
                 &mut local_side_effects
                     .split_ebbs_created,
@@ -479,7 +478,7 @@ where
                 side_effects.instructions_added_to_ebbs.push(dest_ebb);
                 (val, side_effects)
             }
-            ZeroOneOrMore::One(pred_val) => {
+            ZeroOneOrMore::One((_, _, pred_val)) => {
                 // Here all the predecessors use a single value to represent our variable
                 // so we don't need to have it as an ebb argument.
                 // We need to replace all the occurences of val with pred_val but since
@@ -488,7 +487,7 @@ where
                 dfg.change_to_alias(temp_arg_val, pred_val);
                 (pred_val, side_effects)
             }
-            ZeroOneOrMore::More() => {
+            ZeroOneOrMore::More(jump_args_to_append) => {
                 // There is disagreement in the predecessors on which value to use so we have
                 // to keep the ebb argument.
                 for (pred_block, last_inst, pred_val) in jump_args_to_append {
