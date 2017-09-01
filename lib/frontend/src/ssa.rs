@@ -168,7 +168,7 @@ where
 enum ZeroOneOrMore<T> {
     Zero(),
     One(T),
-    More(Vec<T>),
+    More(),
 }
 
 #[derive(Debug)]
@@ -409,7 +409,7 @@ where
         temp_arg_var: Variable,
         dest_ebb: Ebb,
     ) -> (Value, SideEffects) {
-        let mut pred_values: ZeroOneOrMore<(Block, Inst, Value)> = ZeroOneOrMore::Zero();
+        let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
         let ty = dfg.value_type(temp_arg_val);
         let mut side_effects = SideEffects::new();
 
@@ -418,7 +418,7 @@ where
         // `use_var`'s traversal won't revisit these predecesors.
         let mut preds = Vec::new();
         mem::swap(&mut preds, &mut self.predecessors_mut(dest_ebb));
-        for &(pred, last_inst) in &preds {
+        for &(pred, _) in &preds {
             // For each predecessor, we query what is the local SSA value corresponding
             // to var and we put it as an argument of the branch instruction.
             let (pred_val, local_side_effects) =
@@ -426,29 +426,21 @@ where
             match pred_values {
                 ZeroOneOrMore::Zero() => {
                     if pred_val != temp_arg_val {
-                        pred_values = ZeroOneOrMore::One((pred, last_inst, pred_val))
+                        pred_values = ZeroOneOrMore::One(pred_val);
                     }
                 }
-                ZeroOneOrMore::One((old_pred, old_last_inst, old_val)) => {
+                ZeroOneOrMore::One(old_val) => {
                     if pred_val != temp_arg_val && pred_val != old_val {
-                        // TODO: find a way to not allocate a vector
-                        pred_values = ZeroOneOrMore::More(vec![
-                            (old_pred, old_last_inst, old_val),
-                            (pred, last_inst, pred_val),
-                        ]);
+                        pred_values = ZeroOneOrMore::More();
                     }
                 }
-                ZeroOneOrMore::More(ref mut jump_args_to_append) => {
-                    jump_args_to_append.push((pred, last_inst, pred_val));
-                }
-            }
+                ZeroOneOrMore::More() => {}
+            };
             side_effects.append(local_side_effects);
         }
-        // Now that we're done iterating, move the predecessors list back.
         debug_assert!(self.predecessors(dest_ebb).is_empty());
-        *self.predecessors_mut(dest_ebb) = preds;
 
-        match pred_values {
+        let result_val = match pred_values {
             ZeroOneOrMore::Zero() => {
                 // The variable is used but never defined before. This is an irregularity in the
                 // code, but rather than throwing an error we silently initialize the variable to
@@ -470,38 +462,54 @@ where
                     panic!("value used but never declared and initialization not supported")
                 };
                 side_effects.instructions_added_to_ebbs.push(dest_ebb);
-                (val, side_effects)
+                val
             }
-            ZeroOneOrMore::One((_, _, pred_val)) => {
+            ZeroOneOrMore::One(pred_val) => {
                 // Here all the predecessors use a single value to represent our variable
                 // so we don't need to have it as an ebb argument.
                 // We need to replace all the occurences of val with pred_val but since
                 // we can't afford a re-writing pass right now we just declare an alias.
                 dfg.remove_ebb_arg(temp_arg_val);
                 dfg.change_to_alias(temp_arg_val, pred_val);
-                (pred_val, side_effects)
+                pred_val
             }
-            ZeroOneOrMore::More(jump_args_to_append) => {
+            ZeroOneOrMore::More() => {
                 // There is disagreement in the predecessors on which value to use so we have
                 // to keep the ebb argument.
-                for (pred_block, last_inst, pred_val) in jump_args_to_append {
-                    match self.append_jump_argument(
-                        dfg,
-                        layout,
-                        last_inst,
-                        pred_block,
-                        dest_ebb,
-                        pred_val,
-                        temp_arg_var,
-                        jts,
-                    ) {
-                        None => (),
-                        Some(middle_ebb) => side_effects.split_ebbs_created.push(middle_ebb),
-                    };
+                for &mut (ref mut pred_block, ref mut last_inst) in &mut preds {
+                    // We already did a full `use_var` above, so we can do just the fast path.
+                    let pred_val = *self.variables
+                        .get(temp_arg_var)
+                        .unwrap()
+                        .get(&pred_block)
+                        .unwrap();
+                    if let Some((middle_ebb, middle_block, middle_jump_inst)) =
+                        self.append_jump_argument(
+                            dfg,
+                            layout,
+                            *last_inst,
+                            *pred_block,
+                            dest_ebb,
+                            pred_val,
+                            temp_arg_var,
+                            jts,
+                        )
+                    {
+                        *pred_block = middle_block;
+                        *last_inst = middle_jump_inst;
+                        side_effects.split_ebbs_created.push(middle_ebb);
+                    }
                 }
-                (temp_arg_val, side_effects)
+                debug_assert!(self.predecessors(dest_ebb).is_empty());
+                temp_arg_val
             }
-        }
+        };
+
+        // Now that we're done, move the predecessors list back.
+        debug_assert!(self.predecessors(dest_ebb).is_empty());
+        *self.predecessors_mut(dest_ebb) = preds;
+
+        (result_val, side_effects)
     }
 
     /// Appends a jump argument to a jump instruction, returns ebb created in case of
@@ -516,7 +524,7 @@ where
         val: Value,
         var: Variable,
         jts: &mut JumpTables,
-    ) -> Option<Ebb> {
+    ) -> Option<(Ebb, Block, Inst)> {
         match dfg[jump_inst].analyze_branch(&dfg.value_lists) {
             BranchInfo::NotABranch => {
                 panic!("you have declared a non-branch instruction as a predecessor to an ebb");
@@ -553,11 +561,8 @@ where
                 let mut cur = Cursor::new(layout);
                 cur.goto_bottom(middle_ebb);
                 let middle_jump_inst = dfg.ins(&mut cur).jump(dest_ebb, &[val]);
-                let dest_header_block = self.header_block(dest_ebb);
-                self.blocks[dest_header_block].add_predecessor(block, middle_jump_inst);
-                self.blocks[dest_header_block].remove_predecessor(jump_inst);
                 self.def_var(var, val, block);
-                Some(middle_ebb)
+                Some((middle_ebb, block, middle_jump_inst))
             }
         }
     }
