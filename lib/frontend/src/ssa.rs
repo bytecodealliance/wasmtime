@@ -539,24 +539,15 @@ where
                 // In the case of a jump table, the situation is tricky because br_table doesn't
                 // support arguments.
                 // We have to split the critical edge
-                let indexes: Vec<usize> = jts[jt].entries().fold(
-                    Vec::new(),
-                    |mut acc, (index, dest)| if dest ==
-                        dest_ebb
-                    {
-                        acc.push(index);
-                        acc
-                    } else {
-                        acc
-                    },
-                );
                 let middle_ebb = dfg.make_ebb();
                 layout.append_ebb(middle_ebb);
                 let block = self.declare_ebb_header_block(middle_ebb);
                 self.blocks[block].add_predecessor(jump_inst_block, jump_inst);
                 self.seal_ebb_header_block(middle_ebb, dfg, layout, jts);
-                for index in indexes {
-                    jts[jt].set_entry(index, middle_ebb)
+                for old_dest in jts[jt].as_mut_slice() {
+                    if old_dest.unwrap() == dest_ebb {
+                        *old_dest = PackedOption::from(middle_ebb);
+                    }
                 }
                 let mut cur = Cursor::new(layout);
                 cur.goto_bottom(middle_ebb);
