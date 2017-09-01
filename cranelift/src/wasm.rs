@@ -195,6 +195,7 @@ fn handle_module(
                         CtonError::Verifier(err) => {
                             return Err(pretty_verifier_error(&context.func, None, err));
                         }
+                        CtonError::InvalidInput |
                         CtonError::ImplLimitExceeded |
                         CtonError::CodeTooLarge => return Err(String::from(error.description())),
                     }
@@ -207,6 +208,7 @@ fn handle_module(
                         CtonError::Verifier(err) => {
                             return Err(pretty_verifier_error(&context.func, None, err));
                         }
+                        CtonError::InvalidInput |
                         CtonError::ImplLimitExceeded |
                         CtonError::CodeTooLarge => return Err(String::from(error.description())),
                     }
