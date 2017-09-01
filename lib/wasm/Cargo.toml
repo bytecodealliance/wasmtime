@@ -8,6 +8,6 @@ repository = "https://github.com/stoklund/cretonne"
 license = "Apache-2.0"
 
 [dependencies]
-wasmparser = "0.6.1"
+wasmparser = "0.8.2"
 cretonne = { path = "../cretonne" }
 cretonne-frontend = { path = "../frontend" }
