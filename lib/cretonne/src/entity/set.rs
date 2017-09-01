@@ -34,8 +34,11 @@ where
     /// Get the element at `k` if it exists.
     pub fn contains(&self, k: K) -> bool {
         let index = k.index();
-        debug_assert!(index < self.len);
-        (self.elems[index / 8] & (1 << (index % 8))) != 0
+        if index < self.len {
+            (self.elems[index / 8] & (1 << (index % 8))) != 0
+        } else {
+            false
+        }
     }
 
     /// Is this set completely empty?
@@ -106,6 +109,7 @@ mod tests {
         assert!(!m.contains(r0));
         assert!(m.contains(r1));
         assert!(m.contains(r2));
+        assert!(!m.contains(E(3)));
         assert!(!m.is_empty());
 
         let v: Vec<E> = m.keys().collect();
@@ -128,6 +132,8 @@ mod tests {
         assert!(m.contains(E(15)));
         assert!(!m.contains(E(16)));
         assert!(!m.contains(E(19)));
+        assert!(!m.contains(E(20)));
+        assert!(!m.contains(E(u32::max_value())));
 
         m.clear();
         assert!(m.is_empty());
