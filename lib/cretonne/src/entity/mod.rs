@@ -4,8 +4,8 @@
 //! `usize` as usual, but by *entity references* which are integers wrapped in new-types. This has
 //! a couple advantages:
 //!
-//! - Improved type safety. The various map types accept a specific key type, so there is no
-//!   confusion about the meaning of an array index, as there is with plain arrays.
+//! - Improved type safety. The various map and set types accept a specific key type, so there is
+//!   no confusion about the meaning of an array index, as there is with plain arrays.
 //! - Smaller indexes. The normal `usize` index is often 64 bits which is way too large for most
 //!   purposes. The entity reference types can be smaller, allowing for more compact data
 //!   structures.
@@ -22,6 +22,9 @@
 //!   number of entities. It tracks accurately which entities have been inserted. This is a
 //!   specialized data structure which can use a lot of memory, so read the documentation before
 //!   using it.
+//! - [`EntitySet`](struct.EntitySet.html) is used to represent a secondary set of entities.
+//!   The set is implemented as a simple vector, so it does not keep track of which entities have
+//!   been inserted into the primary map. Instead, any unknown entities are not in the set.
 //! - [`EntityList`](struct.EntityList.html) is a compact representation of lists of entity
 //!   references allocated from an associated memory pool. It has a much smaller footprint than
 //!   `Vec`.
@@ -31,11 +34,13 @@ mod list;
 mod map;
 mod primary;
 mod sparse;
+mod set;
 
 pub use self::keys::Keys;
 pub use self::list::{EntityList, ListPool};
 pub use self::map::EntityMap;
 pub use self::primary::PrimaryMap;
+pub use self::set::EntitySet;
 pub use self::sparse::{SparseSet, SparseMap, SparseMapValue};
 
 /// A type wrapping a small integer index should implement `EntityRef` so it can be used as the key

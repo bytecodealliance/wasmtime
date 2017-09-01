@@ -6,8 +6,7 @@ use cretonne::ir::instructions::BranchInfo;
 use cretonne::ir::function::DisplayFunction;
 use cretonne::isa::TargetIsa;
 use ssa::{SSABuilder, SideEffects, Block};
-use cretonne::entity::{EntityRef, EntityMap};
-use std::collections::HashSet;
+use cretonne::entity::{EntityRef, EntityMap, EntitySet};
 use std::hash::Hash;
 
 /// Permanent structure used for translating into Cretonne IL.
@@ -151,8 +150,8 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                     if let InstructionData::BranchTable { table, .. } = data {
 // Unlike all other jumps/branches, jump tables are
 // capable of having the same successor appear
-// multiple times. Use a HashSet to deduplicate.
-                        let mut unique = HashSet::new();
+// multiple times, so we must deduplicate.
+                        let mut unique = EntitySet::<Ebb>::new();
                         for dest_ebb in self.builder
                                     .func
                                     .jump_tables
