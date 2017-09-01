@@ -66,6 +66,13 @@ impl SideEffects {
             instructions_added_to_ebbs: Vec::new(),
         }
     }
+
+    fn append(&mut self, mut more: SideEffects) {
+        self.split_ebbs_created.append(&mut more.split_ebbs_created);
+        self.instructions_added_to_ebbs.append(
+            &mut more.instructions_added_to_ebbs,
+        );
+    }
 }
 
 // Describes the current position of a basic block in the control flow graph.
@@ -374,15 +381,8 @@ where
         // For each undef var we look up values in the predecessors and create an Ebb argument
         // only if necessary.
         for (var, val) in undef_vars {
-            let (_, mut local_side_effects) =
-                self.predecessors_lookup(dfg, layout, jts, val, var, ebb);
-            side_effects.split_ebbs_created.append(
-                &mut local_side_effects
-                    .split_ebbs_created,
-            );
-            side_effects.instructions_added_to_ebbs.append(
-                &mut local_side_effects.instructions_added_to_ebbs,
-            );
+            let (_, local_side_effects) = self.predecessors_lookup(dfg, layout, jts, val, var, ebb);
+            side_effects.append(local_side_effects);
         }
 
         // Then we mark the block as sealed.
@@ -421,7 +421,7 @@ where
         for &(pred, last_inst) in &preds {
             // For each predecessor, we query what is the local SSA value corresponding
             // to var and we put it as an argument of the branch instruction.
-            let (pred_val, mut local_side_effects) =
+            let (pred_val, local_side_effects) =
                 self.use_var(dfg, layout, jts, temp_arg_var, ty, pred);
             match pred_values {
                 ZeroOneOrMore::Zero() => {
@@ -442,13 +442,7 @@ where
                     jump_args_to_append.push((pred, last_inst, pred_val));
                 }
             }
-            side_effects.split_ebbs_created.append(
-                &mut local_side_effects
-                    .split_ebbs_created,
-            );
-            side_effects.instructions_added_to_ebbs.append(
-                &mut local_side_effects.instructions_added_to_ebbs,
-            );
+            side_effects.append(local_side_effects);
         }
         // Now that we're done iterating, move the predecessors list back.
         debug_assert!(self.predecessors(dest_ebb).is_empty());
