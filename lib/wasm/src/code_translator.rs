@@ -562,7 +562,7 @@ fn translate_operator(
                 let default_ebb = control_stack[control_stack.len() - 1 - (default as usize)]
                     .br_destination();
                 builder.ins().jump(default_ebb, jump_args.as_slice());
-                stack.extend(jump_args.clone());
+                stack.extend_from_slice(&jump_args);
                 for (depth, dest_ebb) in dest_ebbs {
                     builder.switch_to_block(dest_ebb, &[]);
                     builder.seal_block(dest_ebb);
