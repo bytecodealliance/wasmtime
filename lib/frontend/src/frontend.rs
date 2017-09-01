@@ -141,8 +141,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                             }
                             _ => panic!("should not happen"),
                         };
-                    self.builder
-                        .ebb_args_adjustement(dest_ebb, args_types.as_slice());
+                    self.builder.ebb_args_adjustement(dest_ebb, &args_types);
                     self.builder.declare_successor(dest_ebb, inst);
                 }
                 None => {

@@ -649,7 +649,7 @@ impl Solver {
             |v| v.from != v.to,
         ));
 
-        dbg!("collect_moves: {}", DisplayList(self.moves.as_slice()));
+        dbg!("collect_moves: {}", DisplayList(&self.moves));
     }
 
     /// Try to schedule a sequence of `regmove` instructions that will shuffle registers into
@@ -751,8 +751,8 @@ impl fmt::Display for Solver {
             "  assignments: {}",
             DisplayList(self.assignments.as_slice())
         )?;
-        writeln!(f, "  vars: {}", DisplayList(self.vars.as_slice()))?;
-        writeln!(f, "  moves: {}", DisplayList(self.moves.as_slice()))?;
+        writeln!(f, "  vars: {}", DisplayList(&self.vars))?;
+        writeln!(f, "  moves: {}", DisplayList(&self.moves))?;
         writeln!(f, "}}")
     }
 }
