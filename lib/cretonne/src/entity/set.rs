@@ -56,16 +56,7 @@ where
 
     /// Resize the set to have `n` entries by adding default entries as needed.
     pub fn resize(&mut self, n: usize) {
-        if n < self.len {
-            self.elems.truncate((n + 7) / 8)
-        } else {
-            // TODO: Is there a better way to grow/resize/etc.?
-            let additional = (n - self.len + 7) / 8;
-            self.elems.reserve(additional);
-            for _ in 0..additional {
-                self.elems.push(0)
-            }
-        }
+        self.elems.resize((n + 7) / 8, 0);
         self.len = n
     }
 
