@@ -14,15 +14,18 @@
 
 extern crate wasmparser;
 extern crate cton_frontend;
+#[macro_use(dbg)]
 extern crate cretonne;
 
 mod code_translator;
+mod func_translator;
 mod module_translator;
 mod runtime;
 mod sections_translator;
 mod state;
 mod translation_utils;
 
+pub use func_translator::FuncTranslator;
 pub use module_translator::{translate_module, TranslationResult};
 pub use runtime::{FuncEnvironment, WasmRuntime, DummyRuntime, GlobalValue};
 pub use translation_utils::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, SignatureIndex,
