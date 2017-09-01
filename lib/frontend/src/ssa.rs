@@ -164,7 +164,6 @@ enum ZeroOneOrMore<T> {
     More(),
 }
 
-/// TODO: use entity list instead of vec
 #[derive(Debug)]
 enum UseVarCases {
     Unsealed(Value),
