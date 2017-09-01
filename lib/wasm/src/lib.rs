@@ -16,11 +16,12 @@ extern crate wasmparser;
 extern crate cton_frontend;
 extern crate cretonne;
 
-mod module_translator;
-mod translation_utils;
 mod code_translator;
+mod module_translator;
 mod runtime;
 mod sections_translator;
+mod state;
+mod translation_utils;
 
 pub use module_translator::{translate_module, TranslationResult, FunctionTranslation,
                             ImportMappings};

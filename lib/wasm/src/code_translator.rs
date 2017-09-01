@@ -21,8 +21,8 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
-use cretonne::ir::{Function, Signature, Value, Type, InstBuilder, FunctionName, Ebb, FuncRef,
-                   SigRef, ExtFuncData, Inst, MemFlags};
+use cretonne::ir::{Function, Signature, Type, InstBuilder, FunctionName, Ebb, FuncRef, SigRef,
+                   ExtFuncData, MemFlags};
 use cretonne::ir::types::*;
 use cretonne::ir::immediates::{Ieee32, Ieee64, Offset32};
 use cretonne::ir::condcodes::{IntCC, FloatCC};
@@ -30,122 +30,11 @@ use cton_frontend::{ILBuilder, FunctionBuilder};
 use wasmparser::{Parser, ParserState, Operator, WasmDecoder, MemoryImmediate};
 use translation_utils::{f32_translation, f64_translation, type_to_type, translate_type, Local,
                         GlobalIndex, FunctionIndex, SignatureIndex};
+use state::{TranslationState, ControlStackFrame};
 use std::collections::HashMap;
 use runtime::WasmRuntime;
 use std::u32;
 
-
-/// A control stack frame can be an `if`, a `block` or a `loop`, each one having the following
-/// fields:
-///
-/// - `destination`: reference to the `Ebb` that will hold the code after the control block;
-/// - `return_values`: types of the values returned by the control block;
-/// - `original_stack_size`: size of the value stack at the beginning of the control block.
-///
-/// Moreover, the `if` frame has the `branch_inst` field that points to the `brz` instruction
-/// separating the `true` and `false` branch. The `loop` frame has a `header` field that references
-/// the `Ebb` that contains the beginning of the body of the loop.
-#[derive(Debug)]
-enum ControlStackFrame {
-    If {
-        destination: Ebb,
-        branch_inst: Inst,
-        return_values: Vec<Type>,
-        original_stack_size: usize,
-        reachable: bool,
-    },
-    Block {
-        destination: Ebb,
-        return_values: Vec<Type>,
-        original_stack_size: usize,
-        reachable: bool,
-    },
-    Loop {
-        destination: Ebb,
-        header: Ebb,
-        return_values: Vec<Type>,
-        original_stack_size: usize,
-        reachable: bool,
-    },
-}
-
-/// Helper methods for the control stack objects.
-impl ControlStackFrame {
-    fn return_values(&self) -> &[Type] {
-        match *self {
-            ControlStackFrame::If { ref return_values, .. } |
-            ControlStackFrame::Block { ref return_values, .. } |
-            ControlStackFrame::Loop { ref return_values, .. } => &return_values,
-        }
-    }
-    fn following_code(&self) -> Ebb {
-        match *self {
-            ControlStackFrame::If { destination, .. } |
-            ControlStackFrame::Block { destination, .. } |
-            ControlStackFrame::Loop { destination, .. } => destination,
-        }
-    }
-    fn br_destination(&self) -> Ebb {
-        match *self {
-            ControlStackFrame::If { destination, .. } |
-            ControlStackFrame::Block { destination, .. } => destination,
-            ControlStackFrame::Loop { header, .. } => header,
-        }
-    }
-    fn original_stack_size(&self) -> usize {
-        match *self {
-            ControlStackFrame::If { original_stack_size, .. } |
-            ControlStackFrame::Block { original_stack_size, .. } |
-            ControlStackFrame::Loop { original_stack_size, .. } => original_stack_size,
-        }
-    }
-    fn is_loop(&self) -> bool {
-        match *self {
-            ControlStackFrame::If { .. } |
-            ControlStackFrame::Block { .. } => false,
-            ControlStackFrame::Loop { .. } => true,
-        }
-    }
-
-    fn is_reachable(&self) -> bool {
-        match *self {
-            ControlStackFrame::If { reachable, .. } |
-            ControlStackFrame::Block { reachable, .. } |
-            ControlStackFrame::Loop { reachable, .. } => reachable,
-        }
-    }
-
-    fn set_reachable(&mut self) {
-        match *self {
-            ControlStackFrame::If { ref mut reachable, .. } |
-            ControlStackFrame::Block { ref mut reachable, .. } |
-            ControlStackFrame::Loop { ref mut reachable, .. } => *reachable = true,
-        }
-    }
-}
-
-/// Contains information passed along during the translation and that records:
-///
-/// - The current value and control stacks.
-/// - The depth of the two unreachable control blocks stacks, that are manipulated when translating
-///   unreachable code;
-struct TranslationState {
-    stack: Vec<Value>,
-    control_stack: Vec<ControlStackFrame>,
-    phantom_unreachable_stack_depth: usize,
-    real_unreachable_stack_depth: usize,
-}
-
-impl TranslationState {
-    fn new() -> TranslationState {
-        TranslationState {
-            stack: Vec::new(),
-            control_stack: Vec::new(),
-            phantom_unreachable_stack_depth: 0,
-            real_unreachable_stack_depth: 0,
-        }
-    }
-}
 
 /// Holds mappings between the function and signatures indexes in the Wasm module and their
 /// references as imports of the Cretonne IL function.
@@ -223,15 +112,13 @@ pub fn translate_function_body(
 
         // We initialize the control stack with the implicit function block
         let end_ebb = builder.create_ebb();
-        state.control_stack.push(ControlStackFrame::Block {
-            destination: end_ebb,
-            original_stack_size: 0,
-            return_values: sig.return_types
+        state.push_block(
+            end_ebb,
+            sig.return_types
                 .iter()
                 .map(|argty| argty.value_type)
                 .collect(),
-            reachable: false,
-        });
+        );
         // Now the main loop that reads every wasm instruction and translates it
         loop {
             let parser_state = parser.read();
@@ -300,46 +187,41 @@ fn translate_operator(
     exports: &Option<HashMap<FunctionIndex, String>>,
     func_imports: &mut FunctionImports,
 ) {
-    let stack = &mut state.stack;
-    let control_stack = &mut state.control_stack;
-
     // This big match treats all Wasm code operators.
     match *op {
         /********************************** Locals ****************************************
          *  `get_local` and `set_local` are treated as non-SSA variables and will completely
          *  diseappear in the Cretonne Code
          ***********************************************************************************/
-        Operator::GetLocal { local_index } => stack.push(builder.use_var(Local(local_index))),
+        Operator::GetLocal { local_index } => state.push1(builder.use_var(Local(local_index))),
         Operator::SetLocal { local_index } => {
-            let val = stack.pop().unwrap();
+            let val = state.pop1();
             builder.def_var(Local(local_index), val);
         }
         Operator::TeeLocal { local_index } => {
-            let val = stack.last().unwrap();
-            builder.def_var(Local(local_index), *val);
+            let val = state.peek1();
+            builder.def_var(Local(local_index), val);
         }
         /********************************** Globals ****************************************
          *  `get_global` and `set_global` are handled by the runtime.
          ***********************************************************************************/
         Operator::GetGlobal { global_index } => {
             let val = runtime.translate_get_global(builder, global_index as GlobalIndex);
-            stack.push(val);
+            state.push1(val);
         }
         Operator::SetGlobal { global_index } => {
-            let val = stack.pop().unwrap();
+            let val = state.pop1();
             runtime.translate_set_global(builder, global_index as GlobalIndex, val);
         }
         /********************************* Stack misc ***************************************
          *  `drop`, `nop`,  `unreachable` and `select`.
          ***********************************************************************************/
         Operator::Drop => {
-            stack.pop();
+            state.pop1();
         }
         Operator::Select => {
-            let cond = stack.pop().unwrap();
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().select(cond, arg2, arg1));
+            let (arg1, arg2, cond) = state.pop3();
+            state.push1(builder.ins().select(cond, arg2, arg1));
         }
         Operator::Nop => {
             // We do nothing
@@ -364,12 +246,7 @@ fn translate_operator(
             if let Ok(ty_cre) = type_to_type(&ty) {
                 builder.append_ebb_arg(next, ty_cre);
             }
-            control_stack.push(ControlStackFrame::Block {
-                destination: next,
-                return_values: translate_type(ty).unwrap(),
-                original_stack_size: stack.len(),
-                reachable: false,
-            });
+            state.push_block(next, translate_type(ty).unwrap());
         }
         Operator::Loop { ty } => {
             let loop_body = builder.create_ebb();
@@ -378,17 +255,11 @@ fn translate_operator(
                 builder.append_ebb_arg(next, ty_cre);
             }
             builder.ins().jump(loop_body, &[]);
-            control_stack.push(ControlStackFrame::Loop {
-                destination: next,
-                header: loop_body,
-                return_values: translate_type(ty).unwrap(),
-                original_stack_size: stack.len(),
-                reachable: false,
-            });
+            state.push_loop(loop_body, next, translate_type(ty).unwrap());
             builder.switch_to_block(loop_body, &[]);
         }
         Operator::If { ty } => {
-            let val = stack.pop().unwrap();
+            let val = state.pop1();
             let if_not = builder.create_ebb();
             let jump_inst = builder.ins().brz(val, if_not, &[]);
             // Here we append an argument to an Ebb targeted by an argumentless jump instruction
@@ -400,20 +271,14 @@ fn translate_operator(
             if let Ok(ty_cre) = type_to_type(&ty) {
                 builder.append_ebb_arg(if_not, ty_cre);
             }
-            control_stack.push(ControlStackFrame::If {
-                destination: if_not,
-                branch_inst: jump_inst,
-                return_values: translate_type(ty).unwrap(),
-                original_stack_size: stack.len(),
-                reachable: false,
-            });
+            state.push_if(jump_inst, if_not, translate_type(ty).unwrap());
         }
         Operator::Else => {
             // We take the control frame pushed by the if, use its ebb as the else body
             // and push a new control frame with a new ebb for the code after the if/then/else
             // At the end of the then clause we jump to the destination
-            let i = control_stack.len() - 1;
-            let (destination, return_values, branch_inst) = match control_stack[i] {
+            let i = state.control_stack.len() - 1;
+            let (destination, return_values, branch_inst) = match state.control_stack[i] {
                 ControlStackFrame::If {
                     destination,
                     ref return_values,
@@ -422,8 +287,8 @@ fn translate_operator(
                 } => (destination, return_values, branch_inst),
                 _ => panic!("should not happen"),
             };
-            let cut_index = stack.len() - return_values.len();
-            let jump_args = stack.split_off(cut_index);
+            let cut_index = state.stack.len() - return_values.len();
+            let jump_args = state.stack.split_off(cut_index);
             builder.ins().jump(destination, &jump_args);
             // We change the target of the branch instruction
             let else_ebb = builder.create_ebb();
@@ -432,10 +297,10 @@ fn translate_operator(
             builder.switch_to_block(else_ebb, &[]);
         }
         Operator::End => {
-            let frame = control_stack.pop().unwrap();
+            let frame = state.control_stack.pop().unwrap();
             if !builder.is_unreachable() || !builder.is_pristine() {
-                let cut_index = stack.len() - frame.return_values().len();
-                let jump_args = stack.split_off(cut_index);
+                let cut_index = state.stack.len() - frame.return_values().len();
+                let jump_args = state.stack.split_off(cut_index);
                 builder.ins().jump(frame.following_code(), &jump_args);
             }
             builder.switch_to_block(frame.following_code(), frame.return_values());
@@ -445,8 +310,10 @@ fn translate_operator(
                 ControlStackFrame::Loop { header, .. } => builder.seal_block(header),
                 _ => {}
             }
-            stack.truncate(frame.original_stack_size());
-            stack.extend_from_slice(builder.ebb_args(frame.following_code()));
+            state.stack.truncate(frame.original_stack_size());
+            state.stack.extend_from_slice(
+                builder.ebb_args(frame.following_code()),
+            );
         }
         /**************************** Branch instructions *********************************
          * The branch instructions all have as arguments a target nesting level, which
@@ -470,13 +337,13 @@ fn translate_operator(
          * `br_table`.
          ***********************************************************************************/
         Operator::Br { relative_depth } => {
-            let i = control_stack.len() - 1 - (relative_depth as usize);
-            let frame = &mut control_stack[i];
+            let i = state.control_stack.len() - 1 - (relative_depth as usize);
+            let frame = &mut state.control_stack[i];
             let jump_args = if frame.is_loop() {
                 Vec::new()
             } else {
-                let cut_index = stack.len() - frame.return_values().len();
-                stack.split_off(cut_index)
+                let cut_index = state.stack.len() - frame.return_values().len();
+                state.stack.split_off(cut_index)
             };
             builder.ins().jump(frame.br_destination(), &jump_args);
             // We signal that all the code that follows until the next End is unreachable
@@ -484,20 +351,20 @@ fn translate_operator(
             state.real_unreachable_stack_depth = 1 + relative_depth as usize;
         }
         Operator::BrIf { relative_depth } => {
-            let val = stack.pop().unwrap();
-            let i = control_stack.len() - 1 - (relative_depth as usize);
-            let frame = &mut control_stack[i];
+            let val = state.pop1();
+            let i = state.control_stack.len() - 1 - (relative_depth as usize);
+            let frame = &mut state.control_stack[i];
             let jump_args = if frame.is_loop() {
                 Vec::new()
             } else {
-                let cut_index = stack.len() - frame.return_values().len();
-                stack.split_off(cut_index)
+                let cut_index = state.stack.len() - frame.return_values().len();
+                state.stack.split_off(cut_index)
             };
             builder.ins().brnz(val, frame.br_destination(), &jump_args);
             // The values returned by the branch are still available for the reachable
             // code that comes after it
             frame.set_reachable();
-            stack.extend(jump_args);
+            state.stack.extend(jump_args);
         }
         Operator::BrTable { ref table } => {
             let (depths, default) = table.read_table();
@@ -508,8 +375,8 @@ fn translate_operator(
                 }
             }
             let jump_args_count = {
-                let i = control_stack.len() - 1 - (min_depth as usize);
-                let min_depth_frame = &control_stack[i];
+                let i = state.control_stack.len() - 1 - (min_depth as usize);
+                let min_depth_frame = &state.control_stack[i];
                 if min_depth_frame.is_loop() {
                     0
                 } else {
@@ -518,18 +385,18 @@ fn translate_operator(
             };
             if jump_args_count == 0 {
                 // No jump arguments
-                let val = stack.pop().unwrap();
+                let val = state.pop1();
                 let jt = builder.create_jump_table();
                 for (index, depth) in depths.iter().enumerate() {
-                    let i = control_stack.len() - 1 - (*depth as usize);
-                    let frame = &mut control_stack[i];
+                    let i = state.control_stack.len() - 1 - (*depth as usize);
+                    let frame = &mut state.control_stack[i];
                     let ebb = frame.br_destination();
                     builder.insert_jump_table_entry(jt, index, ebb);
                     frame.set_reachable();
                 }
                 builder.ins().br_table(val, jt);
-                let i = control_stack.len() - 1 - (default as usize);
-                let frame = &mut control_stack[i];
+                let i = state.control_stack.len() - 1 - (default as usize);
+                let frame = &mut state.control_stack[i];
                 let ebb = frame.br_destination();
                 builder.ins().jump(ebb, &[]);
                 state.real_unreachable_stack_depth = 1 + min_depth as usize;
@@ -537,9 +404,9 @@ fn translate_operator(
             } else {
                 // Here we have jump arguments, but Cretonne's br_table doesn't support them
                 // We then proceed to split the edges going out of the br_table
-                let val = stack.pop().unwrap();
-                let cut_index = stack.len() - jump_args_count;
-                let jump_args = stack.split_off(cut_index);
+                let val = state.pop1();
+                let cut_index = state.stack.len() - jump_args_count;
+                let jump_args = state.stack.split_off(cut_index);
                 let jt = builder.create_jump_table();
                 let dest_ebbs: HashMap<usize, Ebb> =
                     depths.iter().enumerate().fold(HashMap::new(), |mut acc,
@@ -555,15 +422,16 @@ fn translate_operator(
                         acc
                     });
                 builder.ins().br_table(val, jt);
-                let default_ebb = control_stack[control_stack.len() - 1 - (default as usize)]
+                let default_ebb = state.control_stack[state.control_stack.len() - 1 -
+                                                          (default as usize)]
                     .br_destination();
                 builder.ins().jump(default_ebb, &jump_args);
-                stack.extend_from_slice(&jump_args);
+                state.stack.extend_from_slice(&jump_args);
                 for (depth, dest_ebb) in dest_ebbs {
                     builder.switch_to_block(dest_ebb, &[]);
                     builder.seal_block(dest_ebb);
-                    let i = control_stack.len() - 1 - depth;
-                    let frame = &mut control_stack[i];
+                    let i = state.control_stack.len() - 1 - depth;
+                    let frame = &mut state.control_stack[i];
                     let real_dest_ebb = frame.br_destination();
                     builder.ins().jump(real_dest_ebb, &jump_args);
                     frame.set_reachable();
@@ -573,8 +441,8 @@ fn translate_operator(
         }
         Operator::Return => {
             let return_count = sig.return_types.len();
-            let cut_index = stack.len() - return_count;
-            let return_args = stack.split_off(cut_index);
+            let cut_index = state.stack.len() - return_count;
+            let return_args = state.stack.split_off(cut_index);
             builder.ins().return_(&return_args);
             state.real_unreachable_stack_depth = 1;
         }
@@ -585,8 +453,8 @@ fn translate_operator(
          ************************************************************************************/
         Operator::Call { function_index } => {
             let args_num = args_count(function_index as usize, functions, signatures);
-            let cut_index = stack.len() - args_num;
-            let call_args = stack.split_off(cut_index);
+            let cut_index = state.stack.len() - args_num;
+            let call_args = state.stack.split_off(cut_index);
             let internal_function_index = find_function_import(
                 function_index as usize,
                 builder,
@@ -598,7 +466,7 @@ fn translate_operator(
             let call_inst = builder.ins().call(internal_function_index, &call_args);
             let ret_values = builder.inst_results(call_inst);
             for val in ret_values {
-                stack.push(*val);
+                state.push1(*val);
             }
         }
         Operator::CallIndirect {
@@ -610,13 +478,13 @@ fn translate_operator(
             // TODO: have runtime support for tables
             let sigref = find_signature_import(index as usize, builder, func_imports, signatures);
             let args_num = builder.signature(sigref).unwrap().argument_types.len();
-            let index_val = stack.pop().unwrap();
-            let cut_index = stack.len() - args_num;
-            let call_args = stack.split_off(cut_index);
+            let index_val = state.pop1();
+            let cut_index = state.stack.len() - args_num;
+            let call_args = state.stack.split_off(cut_index);
             let ret_values =
                 runtime.translate_call_indirect(builder, sigref, index_val, &call_args);
             for val in ret_values {
-                stack.push(*val);
+                state.push1(*val);
             }
         }
         /******************************* Memory management ***********************************
@@ -624,11 +492,11 @@ fn translate_operator(
          * special functions.
          ************************************************************************************/
         Operator::GrowMemory { reserved: _ } => {
-            let val = stack.pop().unwrap();
-            stack.push(runtime.translate_grow_memory(builder, val));
+            let val = state.pop1();
+            state.push1(runtime.translate_grow_memory(builder, val));
         }
         Operator::CurrentMemory { reserved: _ } => {
-            stack.push(runtime.translate_current_memory(builder));
+            state.push1(runtime.translate_current_memory(builder));
         }
         /******************************* Load instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cretonne.
@@ -636,130 +504,130 @@ fn translate_operator(
          * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
         Operator::I32Load8U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().uload8(I32, memflags, addr, memoffset))
+            state.push1(builder.ins().uload8(I32, memflags, addr, memoffset))
         }
         Operator::I32Load16U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().uload8(I32, memflags, addr, memoffset))
+            state.push1(builder.ins().uload8(I32, memflags, addr, memoffset))
         }
         Operator::I32Load8S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().sload8(I32, memflags, addr, memoffset))
+            state.push1(builder.ins().sload8(I32, memflags, addr, memoffset))
         }
         Operator::I32Load16S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().sload8(I32, memflags, addr, memoffset))
+            state.push1(builder.ins().sload8(I32, memflags, addr, memoffset))
         }
         Operator::I64Load8U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().uload8(I64, memflags, addr, memoffset))
+            state.push1(builder.ins().uload8(I64, memflags, addr, memoffset))
         }
         Operator::I64Load16U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().uload16(I64, memflags, addr, memoffset))
+            state.push1(builder.ins().uload16(I64, memflags, addr, memoffset))
         }
         Operator::I64Load8S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().sload8(I64, memflags, addr, memoffset))
+            state.push1(builder.ins().sload8(I64, memflags, addr, memoffset))
         }
         Operator::I64Load16S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().sload16(I64, memflags, addr, memoffset))
+            state.push1(builder.ins().sload16(I64, memflags, addr, memoffset))
         }
         Operator::I64Load32S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().sload32(memflags, addr, memoffset))
+            state.push1(builder.ins().sload32(memflags, addr, memoffset))
         }
         Operator::I64Load32U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().uload32(memflags, addr, memoffset))
+            state.push1(builder.ins().uload32(memflags, addr, memoffset))
         }
         Operator::I32Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().load(I32, memflags, addr, memoffset))
+            state.push1(builder.ins().load(I32, memflags, addr, memoffset))
         }
         Operator::F32Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().load(F32, memflags, addr, memoffset))
+            state.push1(builder.ins().load(F32, memflags, addr, memoffset))
         }
         Operator::I64Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().load(I64, memflags, addr, memoffset))
+            state.push1(builder.ins().load(I64, memflags, addr, memoffset))
         }
         Operator::F64Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = stack.pop().unwrap();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
             let memflags = MemFlags::new();
             let memoffset = Offset32::new(offset as i32);
-            stack.push(builder.ins().load(F64, memflags, addr, memoffset))
+            state.push1(builder.ins().load(F64, memflags, addr, memoffset))
         }
         /****************************** Store instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cretonne.
@@ -770,8 +638,8 @@ fn translate_operator(
         Operator::I64Store { memory_immediate: MemoryImmediate { flags: _, offset } } |
         Operator::F32Store { memory_immediate: MemoryImmediate { flags: _, offset } } |
         Operator::F64Store { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let val = stack.pop().unwrap();
-            let address_i32 = stack.pop().unwrap();
+            let val = state.pop1();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
@@ -781,8 +649,8 @@ fn translate_operator(
         }
         Operator::I32Store8 { memory_immediate: MemoryImmediate { flags: _, offset } } |
         Operator::I64Store8 { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let val = stack.pop().unwrap();
-            let address_i32 = stack.pop().unwrap();
+            let val = state.pop1();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
@@ -792,8 +660,8 @@ fn translate_operator(
         }
         Operator::I32Store16 { memory_immediate: MemoryImmediate { flags: _, offset } } |
         Operator::I64Store16 { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let val = stack.pop().unwrap();
-            let address_i32 = stack.pop().unwrap();
+            let val = state.pop1();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
@@ -802,8 +670,8 @@ fn translate_operator(
             builder.ins().istore16(memflags, val, addr, memoffset);
         }
         Operator::I64Store32 { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let val = stack.pop().unwrap();
-            let address_i32 = stack.pop().unwrap();
+            let val = state.pop1();
+            let address_i32 = state.pop1();
             let base = runtime.translate_memory_base_address(builder, 0);
             let address_i64 = builder.ins().uextend(I64, address_i32);
             let addr = builder.ins().iadd(base, address_i64);
@@ -812,387 +680,349 @@ fn translate_operator(
             builder.ins().istore32(memflags, val, addr, memoffset);
         }
         /****************************** Nullary Operators ************************************/
-        Operator::I32Const { value } => stack.push(builder.ins().iconst(I32, value as i64)),
-        Operator::I64Const { value } => stack.push(builder.ins().iconst(I64, value)),
+        Operator::I32Const { value } => state.push1(builder.ins().iconst(I32, value as i64)),
+        Operator::I64Const { value } => state.push1(builder.ins().iconst(I64, value)),
         Operator::F32Const { value } => {
-            stack.push(builder.ins().f32const(f32_translation(value)));
+            state.push1(builder.ins().f32const(f32_translation(value)));
         }
         Operator::F64Const { value } => {
-            stack.push(builder.ins().f64const(f64_translation(value)));
+            state.push1(builder.ins().f64const(f64_translation(value)));
         }
         /******************************* Unary Operators *************************************/
         Operator::I32Clz => {
-            let arg = stack.pop().unwrap();
+            let arg = state.pop1();
             let val = builder.ins().clz(arg);
-            stack.push(builder.ins().sextend(I32, val));
+            state.push1(builder.ins().sextend(I32, val));
         }
         Operator::I64Clz => {
-            let arg = stack.pop().unwrap();
+            let arg = state.pop1();
             let val = builder.ins().clz(arg);
-            stack.push(builder.ins().sextend(I64, val));
+            state.push1(builder.ins().sextend(I64, val));
         }
         Operator::I32Ctz => {
-            let val = stack.pop().unwrap();
+            let val = state.pop1();
             let short_res = builder.ins().ctz(val);
-            stack.push(builder.ins().sextend(I32, short_res));
+            state.push1(builder.ins().sextend(I32, short_res));
         }
         Operator::I64Ctz => {
-            let val = stack.pop().unwrap();
+            let val = state.pop1();
             let short_res = builder.ins().ctz(val);
-            stack.push(builder.ins().sextend(I64, short_res));
+            state.push1(builder.ins().sextend(I64, short_res));
         }
         Operator::I32Popcnt => {
-            let arg = stack.pop().unwrap();
+            let arg = state.pop1();
             let val = builder.ins().popcnt(arg);
-            stack.push(builder.ins().sextend(I32, val));
+            state.push1(builder.ins().sextend(I32, val));
         }
         Operator::I64Popcnt => {
-            let arg = stack.pop().unwrap();
+            let arg = state.pop1();
             let val = builder.ins().popcnt(arg);
-            stack.push(builder.ins().sextend(I64, val));
+            state.push1(builder.ins().sextend(I64, val));
         }
         Operator::I64ExtendSI32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().sextend(I64, val));
+            let val = state.pop1();
+            state.push1(builder.ins().sextend(I64, val));
         }
         Operator::I64ExtendUI32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().uextend(I64, val));
+            let val = state.pop1();
+            state.push1(builder.ins().uextend(I64, val));
         }
         Operator::I32WrapI64 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().ireduce(I32, val));
+            let val = state.pop1();
+            state.push1(builder.ins().ireduce(I32, val));
         }
         Operator::F32Sqrt |
         Operator::F64Sqrt => {
-            let arg = stack.pop().unwrap();
-            stack.push(builder.ins().sqrt(arg));
+            let arg = state.pop1();
+            state.push1(builder.ins().sqrt(arg));
         }
         Operator::F32Ceil |
         Operator::F64Ceil => {
-            let arg = stack.pop().unwrap();
-            stack.push(builder.ins().ceil(arg));
+            let arg = state.pop1();
+            state.push1(builder.ins().ceil(arg));
         }
         Operator::F32Floor |
         Operator::F64Floor => {
-            let arg = stack.pop().unwrap();
-            stack.push(builder.ins().floor(arg));
+            let arg = state.pop1();
+            state.push1(builder.ins().floor(arg));
         }
         Operator::F32Trunc |
         Operator::F64Trunc => {
-            let arg = stack.pop().unwrap();
-            stack.push(builder.ins().trunc(arg));
+            let arg = state.pop1();
+            state.push1(builder.ins().trunc(arg));
         }
         Operator::F32Nearest |
         Operator::F64Nearest => {
-            let arg = stack.pop().unwrap();
-            stack.push(builder.ins().nearest(arg));
+            let arg = state.pop1();
+            state.push1(builder.ins().nearest(arg));
         }
         Operator::F32Abs | Operator::F64Abs => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().fabs(val));
+            let val = state.pop1();
+            state.push1(builder.ins().fabs(val));
         }
         Operator::F32Neg | Operator::F64Neg => {
-            let arg = stack.pop().unwrap();
-            stack.push(builder.ins().fneg(arg));
+            let arg = state.pop1();
+            state.push1(builder.ins().fneg(arg));
         }
         Operator::F64ConvertUI64 |
         Operator::F64ConvertUI32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().fcvt_from_uint(F64, val));
+            let val = state.pop1();
+            state.push1(builder.ins().fcvt_from_uint(F64, val));
         }
         Operator::F64ConvertSI64 |
         Operator::F64ConvertSI32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().fcvt_from_sint(F64, val));
+            let val = state.pop1();
+            state.push1(builder.ins().fcvt_from_sint(F64, val));
         }
         Operator::F32ConvertSI64 |
         Operator::F32ConvertSI32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().fcvt_from_sint(F32, val));
+            let val = state.pop1();
+            state.push1(builder.ins().fcvt_from_sint(F32, val));
         }
         Operator::F32ConvertUI64 |
         Operator::F32ConvertUI32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().fcvt_from_uint(F32, val));
+            let val = state.pop1();
+            state.push1(builder.ins().fcvt_from_uint(F32, val));
         }
         Operator::F64PromoteF32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().fpromote(F64, val));
+            let val = state.pop1();
+            state.push1(builder.ins().fpromote(F64, val));
         }
         Operator::F32DemoteF64 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().fdemote(F32, val));
+            let val = state.pop1();
+            state.push1(builder.ins().fdemote(F32, val));
         }
         Operator::I64TruncSF64 |
         Operator::I64TruncSF32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().fcvt_to_sint(I64, val));
+            let val = state.pop1();
+            state.push1(builder.ins().fcvt_to_sint(I64, val));
         }
         Operator::I32TruncSF64 |
         Operator::I32TruncSF32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().fcvt_to_sint(I32, val));
+            let val = state.pop1();
+            state.push1(builder.ins().fcvt_to_sint(I32, val));
         }
         Operator::I64TruncUF64 |
         Operator::I64TruncUF32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().fcvt_to_uint(I64, val));
+            let val = state.pop1();
+            state.push1(builder.ins().fcvt_to_uint(I64, val));
         }
         Operator::I32TruncUF64 |
         Operator::I32TruncUF32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().fcvt_to_uint(I32, val));
+            let val = state.pop1();
+            state.push1(builder.ins().fcvt_to_uint(I32, val));
         }
         Operator::F32ReinterpretI32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().bitcast(F32, val));
+            let val = state.pop1();
+            state.push1(builder.ins().bitcast(F32, val));
         }
         Operator::F64ReinterpretI64 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().bitcast(F64, val));
+            let val = state.pop1();
+            state.push1(builder.ins().bitcast(F64, val));
         }
         Operator::I32ReinterpretF32 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().bitcast(I32, val));
+            let val = state.pop1();
+            state.push1(builder.ins().bitcast(I32, val));
         }
         Operator::I64ReinterpretF64 => {
-            let val = stack.pop().unwrap();
-            stack.push(builder.ins().bitcast(I64, val));
+            let val = state.pop1();
+            state.push1(builder.ins().bitcast(I64, val));
         }
         /****************************** Binary Operators ************************************/
         Operator::I32Add | Operator::I64Add => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().iadd(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().iadd(arg1, arg2));
         }
         Operator::I32And | Operator::I64And => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().band(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().band(arg1, arg2));
         }
         Operator::I32Or | Operator::I64Or => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().bor(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().bor(arg1, arg2));
         }
         Operator::I32Xor | Operator::I64Xor => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().bxor(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().bxor(arg1, arg2));
         }
         Operator::I32Shl | Operator::I64Shl => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().ishl(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().ishl(arg1, arg2));
         }
         Operator::I32ShrS |
         Operator::I64ShrS => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().sshr(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().sshr(arg1, arg2));
         }
         Operator::I32ShrU |
         Operator::I64ShrU => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().ushr(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().ushr(arg1, arg2));
         }
         Operator::I32Rotl |
         Operator::I64Rotl => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().rotl(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().rotl(arg1, arg2));
         }
         Operator::I32Rotr |
         Operator::I64Rotr => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().rotr(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().rotr(arg1, arg2));
         }
         Operator::F32Add | Operator::F64Add => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().fadd(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().fadd(arg1, arg2));
         }
         Operator::I32Sub | Operator::I64Sub => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().isub(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().isub(arg1, arg2));
         }
         Operator::F32Sub | Operator::F64Sub => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().fsub(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().fsub(arg1, arg2));
         }
         Operator::I32Mul | Operator::I64Mul => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().imul(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().imul(arg1, arg2));
         }
         Operator::F32Mul | Operator::F64Mul => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().fmul(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().fmul(arg1, arg2));
         }
         Operator::F32Div | Operator::F64Div => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().fdiv(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().fdiv(arg1, arg2));
         }
         Operator::I32DivS |
         Operator::I64DivS => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().sdiv(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().sdiv(arg1, arg2));
         }
         Operator::I32DivU |
         Operator::I64DivU => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().udiv(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().udiv(arg1, arg2));
         }
         Operator::I32RemS |
         Operator::I64RemS => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().srem(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().srem(arg1, arg2));
         }
         Operator::I32RemU |
         Operator::I64RemU => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().urem(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().urem(arg1, arg2));
         }
         Operator::F32Min | Operator::F64Min => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().fmin(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().fmin(arg1, arg2));
         }
         Operator::F32Max | Operator::F64Max => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().fmax(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().fmax(arg1, arg2));
         }
         Operator::F32Copysign |
         Operator::F64Copysign => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
-            stack.push(builder.ins().fcopysign(arg1, arg2));
+            let (arg1, arg2) = state.pop2();
+            state.push1(builder.ins().fcopysign(arg1, arg2));
         }
         /**************************** Comparison Operators **********************************/
         Operator::I32LtS | Operator::I64LtS => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().icmp(IntCC::SignedLessThan, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::I32LtU | Operator::I64LtU => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().icmp(IntCC::UnsignedLessThan, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::I32LeS | Operator::I64LeS => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().icmp(IntCC::SignedLessThanOrEqual, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::I32LeU | Operator::I64LeU => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().icmp(
                 IntCC::UnsignedLessThanOrEqual,
                 arg1,
                 arg2,
             );
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::I32GtS | Operator::I64GtS => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().icmp(IntCC::SignedGreaterThan, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::I32GtU | Operator::I64GtU => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().icmp(IntCC::UnsignedGreaterThan, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::I32GeS | Operator::I64GeS => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().icmp(
                 IntCC::SignedGreaterThanOrEqual,
                 arg1,
                 arg2,
             );
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::I32GeU | Operator::I64GeU => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().icmp(
                 IntCC::UnsignedGreaterThanOrEqual,
                 arg1,
                 arg2,
             );
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::I32Eqz | Operator::I64Eqz => {
-            let arg = stack.pop().unwrap();
+            let arg = state.pop1();
             let val = builder.ins().icmp_imm(IntCC::Equal, arg, 0);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::I32Eq | Operator::I64Eq => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().icmp(IntCC::Equal, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::F32Eq | Operator::F64Eq => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().fcmp(FloatCC::Equal, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::I32Ne | Operator::I64Ne => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().icmp(IntCC::NotEqual, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::F32Ne | Operator::F64Ne => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().fcmp(FloatCC::NotEqual, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::F32Gt | Operator::F64Gt => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().fcmp(FloatCC::GreaterThan, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::F32Ge | Operator::F64Ge => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().fcmp(FloatCC::GreaterThanOrEqual, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::F32Lt | Operator::F64Lt => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().fcmp(FloatCC::LessThan, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
         Operator::F32Le | Operator::F64Le => {
-            let arg2 = stack.pop().unwrap();
-            let arg1 = stack.pop().unwrap();
+            let (arg1, arg2) = state.pop2();
             let val = builder.ins().fcmp(FloatCC::LessThanOrEqual, arg1, arg2);
-            stack.push(builder.ins().bint(I32, val));
+            state.push1(builder.ins().bint(I32, val));
         }
     }
 }
