@@ -10,10 +10,16 @@ extern crate num_cpus;
 extern crate tempdir;
 extern crate term;
 
+#[cfg(unix)]
+extern crate pager;
+
 use cretonne::VERSION;
 use docopt::Docopt;
 use std::io::{self, Write};
 use std::process;
+
+#[cfg(unix)]
+use pager::Pager;
 
 mod utils;
 mod filetest;
@@ -107,7 +113,19 @@ fn cton_util() -> CommandResult {
     }
 }
 
+#[cfg(unix)]
+fn enable_pager() {
+    Pager::new().skip_on_notty().setup();
+}
+
+#[cfg(not(unix))]
+fn enable_pager() {
+    // For now, pager only supports unix-type platforms.
+}
+
 fn main() {
+    enable_pager();
+
     if let Err(mut msg) = cton_util() {
         if !msg.ends_with('\n') {
             msg.push('\n');
