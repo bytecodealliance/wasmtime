@@ -15,7 +15,6 @@ use cretonne::packed_option::ReservedValue;
 use std::u32;
 use cretonne::ir::types::{F32, F64};
 use cretonne::ir::immediates::{Ieee32, Ieee64};
-use std::collections::HashMap;
 use std::mem;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
@@ -39,7 +38,7 @@ where
 {
     // Records for every variable and for every revelant block, the last definition of
     // the variable in the block.
-    variables: EntityMap<Variable, HashMap<Block, Value>>,
+    variables: EntityMap<Variable, EntityMap<Block, PackedOption<Value>>>,
     // Records the position of the basic blocks and the list of values used but not defined in the
     // block.
     blocks: PrimaryMap<Block, BlockData<Variable>>,
@@ -148,7 +147,7 @@ where
     /// Allocate a new blank SSA builder struct. Use the API function to interact with the struct.
     pub fn new() -> Self {
         Self {
-            variables: EntityMap::new(),
+            variables: EntityMap::with_default(EntityMap::new()),
             blocks: PrimaryMap::new(),
             ebb_headers: EntityMap::new(),
         }
@@ -207,7 +206,7 @@ where
     /// The SSA value is passed as an argument because it should be created with
     /// `ir::DataFlowGraph::append_result`.
     pub fn def_var(&mut self, var: Variable, val: Value, block: Block) {
-        self.variables[var].insert(block, val);
+        self.variables[var][block] = PackedOption::from(val);
     }
 
     /// Declares a use of a variable in a given basic block. Returns the SSA value corresponding
@@ -228,8 +227,8 @@ where
     ) -> (Value, SideEffects) {
         // First we lookup for the current definition of the variable in this block
         if let Some(var_defs) = self.variables.get(var) {
-            if let Some(val) = var_defs.get(&block) {
-                return (*val, SideEffects::new());
+            if let Some(val) = var_defs[block].expand() {
+                return (val, SideEffects::new());
             }
         }
 
@@ -478,10 +477,11 @@ where
                 // to keep the ebb argument.
                 for &mut (ref mut pred_block, ref mut last_inst) in &mut preds {
                     // We already did a full `use_var` above, so we can do just the fast path.
-                    let pred_val = *self.variables
+                    let pred_val = self.variables
                         .get(temp_arg_var)
                         .unwrap()
-                        .get(&pred_block)
+                        .get(*pred_block)
+                        .unwrap()
                         .unwrap();
                     if let Some((middle_ebb, middle_block, middle_jump_inst)) =
                         self.append_jump_argument(
