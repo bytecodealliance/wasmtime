@@ -41,6 +41,17 @@ where
         }
     }
 
+    /// Create a new empty map with a specified default value.
+    ///
+    /// This constructor does not require V to implement Default.
+    pub fn with_default(default: V) -> Self {
+        EntityMap {
+            elems: Vec::new(),
+            default: default,
+            unused: PhantomData,
+        }
+    }
+
     /// Get the element at `k` if it exists.
     pub fn get(&self, k: K) -> Option<&V> {
         self.elems.get(k.index())
