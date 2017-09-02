@@ -27,7 +27,7 @@ use cretonne::ir::types::*;
 use cretonne::ir::immediates::{Ieee32, Ieee64};
 use cretonne::ir::condcodes::{IntCC, FloatCC};
 use cton_frontend::{ILBuilder, FunctionBuilder};
-use wasmparser::{Parser, ParserState, Operator, WasmDecoder, MemoryImmediate};
+use wasmparser::{Parser, Operator, WasmDecoder, MemoryImmediate};
 use translation_utils::{f32_translation, f64_translation, type_to_type, translate_type, Local};
 use translation_utils::{TableIndex, SignatureIndex, FunctionIndex, MemoryIndex};
 use state::{TranslationState, ControlStackFrame};
@@ -91,37 +91,15 @@ pub fn translate_function_body(
         state.initialize(sig, end_ebb);
 
         // Now the main loop that reads every wasm instruction and translates it
-        loop {
-            let parser_state = parser.read();
-            match *parser_state {
-                ParserState::CodeOperator(ref op) => {
-                    translate_operator(op, &mut builder, &mut state, runtime)
-                }
-
-                ParserState::EndFunctionBody => break,
-                _ => return Err(String::from("wrong content in function body")),
-            }
+        let mut reader = parser.create_binary_reader();
+        while let Ok(ref op) = reader.read_operator() {
+            translate_operator(op, &mut builder, &mut state, runtime)
         }
-        // In WebAssembly, the final return instruction is implicit so we need to build it
-        // explicitely in Cretonne IL.
-        if !builder.is_filled() && (!builder.is_unreachable() || !builder.is_pristine()) {
-            let cut_index = state.stack.len() - sig.return_types.len();
-            builder.ins().return_(&state.stack[cut_index..]);
-            state.stack.truncate(cut_index);
-        }
-        // Because the function has an implicit block as body, we need to explicitely close it.
-        let frame = state.control_stack.pop().unwrap();
-        builder.switch_to_block(frame.following_code(), frame.return_values());
-        builder.seal_block(frame.following_code());
-        // If the block is reachable we also have to include a return instruction in it.
+        debug_assert!(state.control_stack.is_empty());
+        debug_assert!(builder.is_pristine());
         if !builder.is_unreachable() {
-            state.stack.truncate(frame.original_stack_size());
-            state.stack.extend_from_slice(
-                builder.ebb_args(frame.following_code()),
-            );
-            let cut_index = state.stack.len() - sig.return_types.len();
-            builder.ins().return_(&state.stack[cut_index..]);
-            state.stack.truncate(cut_index);
+            debug_assert!(state.stack.len() == sig.return_types.len());
+            builder.ins().return_(&state.stack);
         }
     }
     Ok(func)
