@@ -21,18 +21,18 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
-use cretonne::ir::{Function, Signature, Type, InstBuilder, FunctionName, Ebb, FuncRef, SigRef,
-                   ExtFuncData, MemFlags};
+use cretonne::ir::{self, Function, Signature, Type, InstBuilder, FunctionName, Ebb, FuncRef,
+                   SigRef, ExtFuncData, MemFlags};
 use cretonne::ir::types::*;
-use cretonne::ir::immediates::{Ieee32, Ieee64, Offset32};
+use cretonne::ir::immediates::{Ieee32, Ieee64};
 use cretonne::ir::condcodes::{IntCC, FloatCC};
 use cton_frontend::{ILBuilder, FunctionBuilder};
 use wasmparser::{Parser, ParserState, Operator, WasmDecoder, MemoryImmediate};
 use translation_utils::{f32_translation, f64_translation, type_to_type, translate_type, Local,
-                        GlobalIndex, FunctionIndex, SignatureIndex};
+                        FunctionIndex, SignatureIndex};
 use state::{TranslationState, ControlStackFrame};
 use std::collections::HashMap;
-use runtime::WasmRuntime;
+use runtime::{FuncEnvironment, GlobalValue, WasmRuntime};
 use std::u32;
 
 
@@ -194,12 +194,28 @@ fn translate_operator(
          *  `get_global` and `set_global` are handled by the runtime.
          ***********************************************************************************/
         Operator::GetGlobal { global_index } => {
-            let val = runtime.translate_get_global(builder, global_index as GlobalIndex);
+            let val = match state.get_global(builder.func, global_index, runtime) {
+                GlobalValue::Const(val) => val,
+                GlobalValue::Memory { gv, ty } => {
+                    let addr = builder.ins().global_addr(runtime.native_pointer(), gv);
+                    // TODO: It is likely safe to set `aligned notrap` flags on a global load.
+                    let flags = ir::MemFlags::new();
+                    builder.ins().load(ty, flags, addr, 0)
+                }
+            };
             state.push1(val);
         }
         Operator::SetGlobal { global_index } => {
-            let val = state.pop1();
-            runtime.translate_set_global(builder, global_index as GlobalIndex, val);
+            match state.get_global(builder.func, global_index, runtime) {
+                GlobalValue::Const(_) => panic!("global #{} is a constant", global_index),
+                GlobalValue::Memory { gv, .. } => {
+                    let addr = builder.ins().global_addr(runtime.native_pointer(), gv);
+                    // TODO: It is likely safe to set `aligned notrap` flags on a global store.
+                    let flags = ir::MemFlags::new();
+                    let val = state.pop1();
+                    builder.ins().store(flags, val, addr, 0);
+                }
+            }
         }
         /********************************* Stack misc ***************************************
          *  `drop`, `nop`,  `unreachable` and `select`.
@@ -508,130 +524,46 @@ fn translate_operator(
          * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
         Operator::I32Load8U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().uload8(I32, memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Uload8, I32, builder, state, runtime);
         }
         Operator::I32Load16U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().uload8(I32, memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Uload16, I32, builder, state, runtime);
         }
         Operator::I32Load8S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().sload8(I32, memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Sload8, I32, builder, state, runtime);
         }
         Operator::I32Load16S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().sload8(I32, memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Sload16, I32, builder, state, runtime);
         }
         Operator::I64Load8U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().uload8(I64, memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Uload8, I64, builder, state, runtime);
         }
         Operator::I64Load16U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().uload16(I64, memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Uload16, I64, builder, state, runtime);
         }
         Operator::I64Load8S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().sload8(I64, memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Sload8, I64, builder, state, runtime);
         }
         Operator::I64Load16S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().sload16(I64, memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Sload16, I64, builder, state, runtime);
         }
         Operator::I64Load32S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().sload32(memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Sload32, I64, builder, state, runtime);
         }
         Operator::I64Load32U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().uload32(memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Uload32, I64, builder, state, runtime);
         }
         Operator::I32Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().load(I32, memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Load, I32, builder, state, runtime);
         }
         Operator::F32Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().load(F32, memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Load, F32, builder, state, runtime);
         }
         Operator::I64Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().load(I64, memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Load, I64, builder, state, runtime);
         }
         Operator::F64Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            state.push1(builder.ins().load(F64, memflags, addr, memoffset))
+            translate_load(offset, ir::Opcode::Load, F64, builder, state, runtime);
         }
         /****************************** Store instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cretonne.
@@ -642,46 +574,18 @@ fn translate_operator(
         Operator::I64Store { memory_immediate: MemoryImmediate { flags: _, offset } } |
         Operator::F32Store { memory_immediate: MemoryImmediate { flags: _, offset } } |
         Operator::F64Store { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let val = state.pop1();
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            builder.ins().store(memflags, val, addr, memoffset);
+            translate_store(offset, ir::Opcode::Store, builder, state, runtime);
         }
         Operator::I32Store8 { memory_immediate: MemoryImmediate { flags: _, offset } } |
         Operator::I64Store8 { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let val = state.pop1();
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            builder.ins().istore8(memflags, val, addr, memoffset);
+            translate_store(offset, ir::Opcode::Istore8, builder, state, runtime);
         }
         Operator::I32Store16 { memory_immediate: MemoryImmediate { flags: _, offset } } |
         Operator::I64Store16 { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let val = state.pop1();
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            builder.ins().istore16(memflags, val, addr, memoffset);
+            translate_store(offset, ir::Opcode::Istore16, builder, state, runtime);
         }
         Operator::I64Store32 { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            let val = state.pop1();
-            let address_i32 = state.pop1();
-            let base = runtime.translate_memory_base_address(builder, 0);
-            let address_i64 = builder.ins().uextend(I64, address_i32);
-            let addr = builder.ins().iadd(base, address_i64);
-            let memflags = MemFlags::new();
-            let memoffset = Offset32::new(offset as i32);
-            builder.ins().istore32(memflags, val, addr, memoffset);
+            translate_store(offset, ir::Opcode::Istore32, builder, state, runtime);
         }
         /****************************** Nullary Operators ************************************/
         Operator::I32Const { value } => state.push1(builder.ins().iconst(I32, value as i64)),
@@ -1117,6 +1021,91 @@ fn translate_unreachable_operator(
     }
 }
 
+// Get the address+offset to use for a heap access.
+fn get_heap_addr(
+    heap: ir::Heap,
+    addr32: ir::Value,
+    offset: u32,
+    addr_ty: ir::Type,
+    builder: &mut FunctionBuilder<Local>,
+) -> (ir::Value, i32) {
+    use std::cmp::min;
+
+    let guard_size: i64 = builder.func.heaps[heap].guard_size.into();
+    assert!(guard_size > 0, "Heap guard pages currently required");
+
+    // Generate `heap_addr` instructions that are friendly to CSE by checking offsets that are
+    // multiples of the guard size. Add one to make sure that we check the pointer itself is in
+    // bounds.
+    //
+    // For accesses on the outer skirts of the guard pages, we expect that we get a trap
+    // even if the access goes beyond the guard pages. This is because the first byte pointed to is
+    // inside the guard pages.
+    let check_size = min(
+        u32::max_value() as i64,
+        1 + (offset as i64 / guard_size) * guard_size,
+    ) as u32;
+    let base = builder.ins().heap_addr(addr_ty, heap, addr32, check_size);
+
+    // Native load/store instructions take a signed `Offset32` immediate, so adjust the base
+    // pointer if necessary.
+    if offset > i32::max_value() as u32 {
+        // Offset doesn't fit in the load/store instruction.
+        let adj = builder.ins().iadd_imm(base, i32::max_value() as i64 + 1);
+        (adj, (offset - (i32::max_value() as u32 + 1)) as i32)
+    } else {
+        (base, offset as i32)
+    }
+}
+
+// Translate a load instruction.
+fn translate_load<FE: FuncEnvironment + ?Sized>(
+    offset: u32,
+    opcode: ir::Opcode,
+    result_ty: ir::Type,
+    builder: &mut FunctionBuilder<Local>,
+    state: &mut TranslationState,
+    environ: &FE,
+) {
+    let addr32 = state.pop1();
+    // We don't yet support multiple linear memories.
+    let heap = state.get_heap(builder.func, 0, environ);
+    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.native_pointer(), builder);
+    let flags = MemFlags::new();
+    let (load, dfg) = builder.ins().Load(
+        opcode,
+        result_ty,
+        flags,
+        offset.into(),
+        base,
+    );
+    state.push1(dfg.first_result(load));
+}
+
+// Translate a store instruction.
+fn translate_store<FE: FuncEnvironment + ?Sized>(
+    offset: u32,
+    opcode: ir::Opcode,
+    builder: &mut FunctionBuilder<Local>,
+    state: &mut TranslationState,
+    environ: &FE,
+) {
+    let (addr32, val) = state.pop2();
+    let val_ty = builder.func.dfg.value_type(val);
+
+    // We don't yet support multiple linear memories.
+    let heap = state.get_heap(builder.func, 0, environ);
+    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.native_pointer(), builder);
+    let flags = MemFlags::new();
+    builder.ins().Store(
+        opcode,
+        val_ty,
+        flags,
+        offset.into(),
+        val,
+        base,
+    );
+}
 fn args_count(
     index: FunctionIndex,
     functions: &[SignatureIndex],
