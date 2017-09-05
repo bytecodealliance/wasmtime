@@ -1,7 +1,7 @@
 #[macro_use(dbg)]
 extern crate cretonne;
 extern crate cton_reader;
-extern crate cretonne_wasm;
+extern crate cton_wasm;
 extern crate docopt;
 #[macro_use]
 extern crate serde_derive;
