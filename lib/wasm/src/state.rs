@@ -3,7 +3,7 @@
 //! The `TranslationState` struct defined in this module is used to keep track of the WebAssembly
 //! value and control stacks during the translation of a single function.
 
-use cretonne::ir::{Ebb, Inst, Type, Value};
+use cretonne::ir::{self, Ebb, Inst, Type, Value};
 
 /// A control stack frame can be an `if`, a `block` or a `loop`, each one having the following
 /// fields:
@@ -114,6 +114,29 @@ impl TranslationState {
             phantom_unreachable_stack_depth: 0,
             real_unreachable_stack_depth: 0,
         }
+    }
+
+    fn clear(&mut self) {
+        self.stack.clear();
+        self.control_stack.clear();
+        self.phantom_unreachable_stack_depth = 0;
+        self.real_unreachable_stack_depth = 0;
+    }
+
+    /// Initialize the state for compiling a function with the given signature.
+    ///
+    /// This resets the state to containing only a single block representing the whole function.
+    /// The exit block is the last block in the function which will contain the return instruction.
+    pub fn initialize(&mut self, sig: &ir::Signature, exit_block: Ebb) {
+        self.clear();
+        self.push_block(
+            exit_block,
+            sig.return_types
+                .iter()
+                .filter(|arg| arg.purpose == ir::ArgumentPurpose::Normal)
+                .map(|argty| argty.value_type)
+                .collect(),
+        );
     }
 
     /// Push a value.

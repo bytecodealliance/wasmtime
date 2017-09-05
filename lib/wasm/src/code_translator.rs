@@ -108,17 +108,11 @@ pub fn translate_function_body(
             }
         }
 
-        let mut state = TranslationState::new();
-
         // We initialize the control stack with the implicit function block
+        let mut state = TranslationState::new();
         let end_ebb = builder.create_ebb();
-        state.push_block(
-            end_ebb,
-            sig.return_types
-                .iter()
-                .map(|argty| argty.value_type)
-                .collect(),
-        );
+        state.initialize(sig, end_ebb);
+
         // Now the main loop that reads every wasm instruction and translates it
         loop {
             let parser_state = parser.read();
