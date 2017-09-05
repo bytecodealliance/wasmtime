@@ -200,4 +200,14 @@ impl TranslationState {
             reachable: false,
         });
     }
+
+    /// Test if the translation state is currently in unreachable code.
+    pub fn in_unreachable_code(&self) -> bool {
+        if self.real_unreachable_stack_depth > 0 {
+            true
+        } else {
+            debug_assert_eq!(self.phantom_unreachable_stack_depth, 0, "in reachable code");
+            false
+        }
+    }
 }
