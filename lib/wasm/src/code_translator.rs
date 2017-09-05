@@ -126,7 +126,6 @@ pub fn translate_function_body(
                             &mut builder,
                             runtime,
                             &mut state,
-                            sig,
                             functions,
                             signatures,
                             exports,
@@ -171,7 +170,6 @@ fn translate_operator(
     builder: &mut FunctionBuilder<Local>,
     runtime: &mut WasmRuntime,
     state: &mut TranslationState,
-    sig: &Signature,
     functions: &[SignatureIndex],
     signatures: &[Signature],
     exports: &Option<HashMap<FunctionIndex, String>>,
@@ -439,7 +437,7 @@ fn translate_operator(
             }
         }
         Operator::Return => {
-            let return_count = sig.return_types.len();
+            let return_count = state.control_stack[0].return_values().len();
             let cut_index = state.stack.len() - return_count;
             builder.ins().return_(&state.stack[cut_index..]);
             state.stack.truncate(cut_index);
