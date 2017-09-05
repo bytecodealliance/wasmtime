@@ -370,8 +370,7 @@ where
                 debug_assert!(!data.sealed);
                 // Extract the undef_variables data from the block so that we
                 // can iterate over it without borrowing the whole builder.
-                let mut undef_variables = Vec::new();
-                mem::swap(&mut data.undef_variables, &mut undef_variables);
+                let undef_variables = mem::replace(&mut data.undef_variables, Vec::new());
                 (undef_variables, data.ebb)
             }
         };
@@ -415,8 +414,7 @@ where
         // Iterate over the predecessors. To avoid borrowing `self` for the whole loop,
         // temporarily detach the predecessors list and replace it with an empty list.
         // `use_var`'s traversal won't revisit these predecesors.
-        let mut preds = Vec::new();
-        mem::swap(&mut preds, &mut self.predecessors_mut(dest_ebb));
+        let mut preds = mem::replace(self.predecessors_mut(dest_ebb), Vec::new());
         for &(pred, _) in &preds {
             // For each predecessor, we query what is the local SSA value corresponding
             // to var and we put it as an argument of the branch instruction.

@@ -132,8 +132,7 @@ impl CheckerBuilder {
     pub fn finish(&mut self) -> Checker {
         // Move directives into the new checker, leaving `self.directives` empty and ready for
         // building a new checker.
-        let mut new_directives = Vec::new();
-        mem::swap(&mut new_directives, &mut self.directives);
+        let new_directives = mem::replace(&mut self.directives, Vec::new());
         Checker::new(new_directives)
     }
 }
