@@ -1,7 +1,7 @@
-extern crate cretonne_wasm;
+extern crate cton_wasm;
 extern crate cretonne;
 
-use cretonne_wasm::{translate_module, FunctionTranslation, DummyRuntime, WasmRuntime};
+use cton_wasm::{translate_module, FunctionTranslation, DummyRuntime, WasmRuntime};
 use std::path::PathBuf;
 use std::fs::File;
 use std::error::Error;

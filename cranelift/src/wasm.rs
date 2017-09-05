@@ -5,7 +5,7 @@
 //! IL. Can also executes the `start` function of the module by laying out the memories, globals
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
-use cretonne_wasm::{translate_module, FunctionTranslation, DummyRuntime, WasmRuntime};
+use cton_wasm::{translate_module, FunctionTranslation, DummyRuntime, WasmRuntime};
 use std::path::PathBuf;
 use cretonne::loop_analysis::LoopAnalysis;
 use cretonne::flowgraph::ControlFlowGraph;
