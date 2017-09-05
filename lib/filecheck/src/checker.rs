@@ -6,6 +6,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::cmp::max;
 use std::fmt::{self, Display, Formatter};
+use std::mem;
 use MatchRange;
 use explain::{Recorder, Explainer};
 
@@ -131,7 +132,9 @@ impl CheckerBuilder {
     pub fn finish(&mut self) -> Checker {
         // Move directives into the new checker, leaving `self.directives` empty and ready for
         // building a new checker.
-        Checker::new(self.directives.split_off(0))
+        let mut new_directives = Vec::new();
+        mem::swap(&mut new_directives, &mut self.directives);
+        Checker::new(new_directives)
     }
 }
 
