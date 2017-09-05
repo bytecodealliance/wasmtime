@@ -118,11 +118,7 @@ pub fn translate_function_body(
             let parser_state = parser.read();
             match *parser_state {
                 ParserState::CodeOperator(ref op) => {
-                    debug_assert!(
-                        state.phantom_unreachable_stack_depth == 0 ||
-                            state.real_unreachable_stack_depth > 0
-                    );
-                    if state.real_unreachable_stack_depth > 0 {
+                    if state.in_unreachable_code() {
                         translate_unreachable_operator(op, &mut builder, &mut state)
                     } else {
                         translate_operator(
