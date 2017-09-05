@@ -1,9 +1,8 @@
-use runtime::WasmRuntime;
+use runtime::{FuncEnvironment, GlobalValue, WasmRuntime};
 use translation_utils::{Local, Global, Memory, Table, GlobalIndex, TableIndex, FunctionIndex,
                         MemoryIndex};
 use cton_frontend::FunctionBuilder;
-use cretonne::ir::{Value, InstBuilder, SigRef};
-use cretonne::ir::immediates::{Ieee32, Ieee64};
+use cretonne::ir::{self, Value, InstBuilder, SigRef};
 use cretonne::ir::types::*;
 
 /// This runtime implementation is a "naïve" one, doing essentially nothing and emitting
@@ -20,29 +19,32 @@ impl DummyRuntime {
     }
 }
 
-impl WasmRuntime for DummyRuntime {
-    fn translate_get_global(
-        &self,
-        builder: &mut FunctionBuilder<Local>,
-        global_index: GlobalIndex,
-    ) -> Value {
-        let glob = self.globals[global_index];
-        match glob.ty {
-            I32 => builder.ins().iconst(glob.ty, -1),
-            I64 => builder.ins().iconst(glob.ty, -1),
-            F32 => builder.ins().f32const(Ieee32::with_bits(0xbf800000)), // -1.0
-            F64 => {
-                builder.ins().f64const(
-                    Ieee64::with_bits(0xbff0000000000000),
-                )
-            } // -1.0
-            _ => panic!("should not happen"),
+impl FuncEnvironment for DummyRuntime {
+    fn native_pointer(&self) -> ir::Type {
+        ir::types::I64
+    }
+
+    fn make_global(&self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
+        // Just create a dummy `vmctx` global.
+        let offset = ((index * 8) as i32 + 8).into();
+        let gv = func.global_vars.push(ir::GlobalVarData::VmCtx { offset });
+        GlobalValue::Memory {
+            gv,
+            ty: self.globals[index].ty,
         }
     }
 
-    fn translate_set_global(&self, _: &mut FunctionBuilder<Local>, _: GlobalIndex, _: Value) {
-        // We do nothing
+    fn make_heap(&self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
+        func.heaps.push(ir::HeapData {
+            base: ir::HeapBase::ReservedReg,
+            min_size: 0.into(),
+            guard_size: 0x8000_0000.into(),
+            style: ir::HeapStyle::Static { bound: 0x1_0000_0000.into() },
+        })
     }
+}
+
+impl WasmRuntime for DummyRuntime {
     fn translate_grow_memory(&mut self, builder: &mut FunctionBuilder<Local>, _: Value) -> Value {
         builder.ins().iconst(I32, -1)
     }
@@ -58,13 +60,6 @@ impl WasmRuntime for DummyRuntime {
     ) -> &'a [Value] {
         let call_inst = builder.ins().call_indirect(sig_ref, index_val, call_args);
         builder.inst_results(call_inst)
-    }
-    fn translate_memory_base_address(
-        &self,
-        builder: &mut FunctionBuilder<Local>,
-        _: MemoryIndex,
-    ) -> Value {
-        builder.ins().iconst(I64, 0)
     }
     fn declare_global(&mut self, global: Global) {
         self.globals.push(global);

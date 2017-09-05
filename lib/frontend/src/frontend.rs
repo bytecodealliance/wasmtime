@@ -26,7 +26,10 @@ pub struct FunctionBuilder<'a, Variable: 'a>
 where
     Variable: EntityRef + Hash + Default,
 {
-    func: &'a mut Function,
+    /// The function currently being built.
+    /// This field is public so the function can be re-borrowed.
+    pub func: &'a mut Function,
+
     builder: &'a mut ILBuilder<Variable>,
     position: Position,
     pristine: bool,

@@ -4,6 +4,9 @@
 //! value and control stacks during the translation of a single function.
 
 use cretonne::ir::{self, Ebb, Inst, Type, Value};
+use runtime::{FuncEnvironment, GlobalValue};
+use std::collections::HashMap;
+use translation_utils::{GlobalIndex, MemoryIndex};
 
 /// A control stack frame can be an `if`, a `block` or a `loop`, each one having the following
 /// fields:
@@ -104,6 +107,12 @@ pub struct TranslationState {
     pub control_stack: Vec<ControlStackFrame>,
     pub phantom_unreachable_stack_depth: usize,
     pub real_unreachable_stack_depth: usize,
+
+    // Map of global variables that have already been created by `FuncEnvironment::make_global`.
+    globals: HashMap<GlobalIndex, GlobalValue>,
+
+    // Map of heaps that have been created by `FuncEnvironment::make_heap`.
+    heaps: HashMap<MemoryIndex, ir::Heap>,
 }
 
 impl TranslationState {
@@ -113,6 +122,8 @@ impl TranslationState {
             control_stack: Vec::new(),
             phantom_unreachable_stack_depth: 0,
             real_unreachable_stack_depth: 0,
+            globals: HashMap::new(),
+            heaps: HashMap::new(),
         }
     }
 
@@ -121,6 +132,8 @@ impl TranslationState {
         self.control_stack.clear();
         self.phantom_unreachable_stack_depth = 0;
         self.real_unreachable_stack_depth = 0;
+        self.globals.clear();
+        self.heaps.clear();
     }
 
     /// Initialize the state for compiling a function with the given signature.
@@ -209,5 +222,37 @@ impl TranslationState {
             debug_assert_eq!(self.phantom_unreachable_stack_depth, 0, "in reachable code");
             false
         }
+    }
+}
+
+/// Methods for handling entity references.
+impl TranslationState {
+    /// Get the `GlobalVar` reference that should be used to access the global variable `index`.
+    /// Create the reference if necessary.
+    /// Also return the WebAssembly type of the global.
+    pub fn get_global<FE: FuncEnvironment + ?Sized>(
+        &mut self,
+        func: &mut ir::Function,
+        index: u32,
+        environ: &FE,
+    ) -> GlobalValue {
+        let index = index as GlobalIndex;
+        *self.globals.entry(index).or_insert_with(
+            || environ.make_global(func, index),
+        )
+    }
+
+    /// Get the `Heap` reference that should be used to access linear memory `index`.
+    /// Create the reference if necessary.
+    pub fn get_heap<FE: FuncEnvironment + ?Sized>(
+        &mut self,
+        func: &mut ir::Function,
+        index: u32,
+        environ: &FE,
+    ) -> ir::Heap {
+        let index = index as MemoryIndex;
+        *self.heaps.entry(index).or_insert_with(
+            || environ.make_heap(func, index),
+        )
     }
 }
