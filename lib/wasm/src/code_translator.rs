@@ -153,8 +153,8 @@ pub fn translate_function_body(
         // explicitely in Cretonne IL.
         if !builder.is_filled() && (!builder.is_unreachable() || !builder.is_pristine()) {
             let cut_index = state.stack.len() - sig.return_types.len();
-            let return_vals = state.stack.split_off(cut_index);
-            builder.ins().return_(&return_vals);
+            builder.ins().return_(&state.stack[cut_index..]);
+            state.stack.truncate(cut_index);
         }
         // Because the function has an implicit block as body, we need to explicitely close it.
         let frame = state.control_stack.pop().unwrap();
@@ -167,8 +167,8 @@ pub fn translate_function_body(
                 builder.ebb_args(frame.following_code()),
             );
             let cut_index = state.stack.len() - sig.return_types.len();
-            let return_vals = state.stack.split_off(cut_index);
-            builder.ins().return_(&return_vals);
+            builder.ins().return_(&state.stack[cut_index..]);
+            state.stack.truncate(cut_index);
         }
     }
     Ok((func, func_imports))
@@ -288,8 +288,8 @@ fn translate_operator(
                 _ => panic!("should not happen"),
             };
             let cut_index = state.stack.len() - return_values.len();
-            let jump_args = state.stack.split_off(cut_index);
-            builder.ins().jump(destination, &jump_args);
+            builder.ins().jump(destination, &state.stack[cut_index..]);
+            state.stack.truncate(cut_index);
             // We change the target of the branch instruction
             let else_ebb = builder.create_ebb();
             builder.change_jump_destination(branch_inst, else_ebb);
@@ -300,8 +300,11 @@ fn translate_operator(
             let frame = state.control_stack.pop().unwrap();
             if !builder.is_unreachable() || !builder.is_pristine() {
                 let cut_index = state.stack.len() - frame.return_values().len();
-                let jump_args = state.stack.split_off(cut_index);
-                builder.ins().jump(frame.following_code(), &jump_args);
+                builder.ins().jump(
+                    frame.following_code(),
+                    &state.stack[cut_index..],
+                );
+                state.stack.truncate(cut_index);
             }
             builder.switch_to_block(frame.following_code(), frame.return_values());
             builder.seal_block(frame.following_code());
@@ -339,13 +342,17 @@ fn translate_operator(
         Operator::Br { relative_depth } => {
             let i = state.control_stack.len() - 1 - (relative_depth as usize);
             let frame = &mut state.control_stack[i];
-            let jump_args = if frame.is_loop() {
-                Vec::new()
-            } else {
-                let cut_index = state.stack.len() - frame.return_values().len();
-                state.stack.split_off(cut_index)
-            };
-            builder.ins().jump(frame.br_destination(), &jump_args);
+            let cut_index = state.stack.len() -
+                if frame.is_loop() {
+                    0
+                } else {
+                    frame.return_values().len()
+                };
+            builder.ins().jump(
+                frame.br_destination(),
+                &state.stack[cut_index..],
+            );
+            state.stack.truncate(cut_index);
             // We signal that all the code that follows until the next End is unreachable
             frame.set_reachable();
             state.real_unreachable_stack_depth = 1 + relative_depth as usize;
@@ -354,17 +361,20 @@ fn translate_operator(
             let val = state.pop1();
             let i = state.control_stack.len() - 1 - (relative_depth as usize);
             let frame = &mut state.control_stack[i];
-            let jump_args = if frame.is_loop() {
-                Vec::new()
-            } else {
-                let cut_index = state.stack.len() - frame.return_values().len();
-                state.stack.split_off(cut_index)
-            };
-            builder.ins().brnz(val, frame.br_destination(), &jump_args);
+            let cut_index = state.stack.len() -
+                if frame.is_loop() {
+                    0
+                } else {
+                    frame.return_values().len()
+                };
+            builder.ins().brnz(
+                val,
+                frame.br_destination(),
+                &state.stack[cut_index..],
+            );
             // The values returned by the branch are still available for the reachable
             // code that comes after it
             frame.set_reachable();
-            state.stack.extend(jump_args);
         }
         Operator::BrTable { ref table } => {
             let (depths, default) = table.read_table();
@@ -406,7 +416,6 @@ fn translate_operator(
                 // We then proceed to split the edges going out of the br_table
                 let val = state.pop1();
                 let cut_index = state.stack.len() - jump_args_count;
-                let jump_args = state.stack.split_off(cut_index);
                 let jt = builder.create_jump_table();
                 let dest_ebbs: HashMap<usize, Ebb> =
                     depths.iter().enumerate().fold(HashMap::new(), |mut acc,
@@ -425,25 +434,25 @@ fn translate_operator(
                 let default_ebb = state.control_stack[state.control_stack.len() - 1 -
                                                           (default as usize)]
                     .br_destination();
-                builder.ins().jump(default_ebb, &jump_args);
-                state.stack.extend_from_slice(&jump_args);
+                builder.ins().jump(default_ebb, &state.stack[cut_index..]);
                 for (depth, dest_ebb) in dest_ebbs {
                     builder.switch_to_block(dest_ebb, &[]);
                     builder.seal_block(dest_ebb);
                     let i = state.control_stack.len() - 1 - depth;
                     let frame = &mut state.control_stack[i];
                     let real_dest_ebb = frame.br_destination();
-                    builder.ins().jump(real_dest_ebb, &jump_args);
+                    builder.ins().jump(real_dest_ebb, &state.stack[cut_index..]);
                     frame.set_reachable();
                 }
+                state.stack.truncate(cut_index);
                 state.real_unreachable_stack_depth = 1 + min_depth as usize;
             }
         }
         Operator::Return => {
             let return_count = sig.return_types.len();
             let cut_index = state.stack.len() - return_count;
-            let return_args = state.stack.split_off(cut_index);
-            builder.ins().return_(&return_args);
+            builder.ins().return_(&state.stack[cut_index..]);
+            state.stack.truncate(cut_index);
             state.real_unreachable_stack_depth = 1;
         }
         /************************************ Calls ****************************************
@@ -454,7 +463,6 @@ fn translate_operator(
         Operator::Call { function_index } => {
             let args_num = args_count(function_index as usize, functions, signatures);
             let cut_index = state.stack.len() - args_num;
-            let call_args = state.stack.split_off(cut_index);
             let internal_function_index = find_function_import(
                 function_index as usize,
                 builder,
@@ -463,7 +471,11 @@ fn translate_operator(
                 exports,
                 signatures,
             );
-            let call_inst = builder.ins().call(internal_function_index, &call_args);
+            let call_inst = builder.ins().call(
+                internal_function_index,
+                &state.stack[cut_index..],
+            );
+            state.stack.truncate(cut_index);
             let ret_values = builder.inst_results(call_inst);
             for val in ret_values {
                 state.push1(*val);
@@ -480,9 +492,13 @@ fn translate_operator(
             let args_num = builder.signature(sigref).unwrap().argument_types.len();
             let index_val = state.pop1();
             let cut_index = state.stack.len() - args_num;
-            let call_args = state.stack.split_off(cut_index);
-            let ret_values =
-                runtime.translate_call_indirect(builder, sigref, index_val, &call_args);
+            let ret_values = runtime.translate_call_indirect(
+                builder,
+                sigref,
+                index_val,
+                &state.stack[cut_index..],
+            );
+            state.stack.truncate(cut_index);
             for val in ret_values {
                 state.push1(*val);
             }
