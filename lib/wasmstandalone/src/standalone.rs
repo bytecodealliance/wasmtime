@@ -78,8 +78,8 @@ impl WasmRuntime for StandaloneRuntime {
         global_index: GlobalIndex,
     ) -> Value {
         debug_assert!(self.instantiated);
-        let ty = self.globals.info[global_index as usize].global.ty;
-        let offset = self.globals.info[global_index as usize].offset;
+        let ty = self.globals.info[global_index].global.ty;
+        let offset = self.globals.info[global_index].offset;
         let memflags = MemFlags::new();
         let memoffset = Offset32::new(offset as i32);
         let addr: i64 = unsafe { transmute(self.globals.data.as_ptr()) };
@@ -92,7 +92,7 @@ impl WasmRuntime for StandaloneRuntime {
         global_index: GlobalIndex,
         val: Value,
     ) {
-        let offset = self.globals.info[global_index as usize].offset;
+        let offset = self.globals.info[global_index].offset;
         let memflags = MemFlags::new();
         let memoffset = Offset32::new(offset as i32);
         let addr: i64 = unsafe { transmute(self.globals.data.as_ptr()) };
@@ -214,7 +214,7 @@ impl WasmRuntime for StandaloneRuntime {
             globalinfo.offset = globals_data_size;
             globals_data_size += globalinfo.global.ty.bytes() as usize;
         }
-        self.globals.data.resize(globals_data_size as usize, 0);
+        self.globals.data.resize(globals_data_size, 0);
         for globalinfo in self.globals.info.iter() {
             match globalinfo.global.initializer {
                 GlobalInit::I32Const(val) => unsafe {
@@ -280,10 +280,10 @@ impl WasmRuntime for StandaloneRuntime {
     }
     fn declare_table(&mut self, table: Table) {
         debug_assert!(!self.instantiated);
-        let mut elements_vec = Vec::with_capacity(table.size as usize);
-        elements_vec.resize(table.size as usize, TableElement::Trap());
-        let mut addresses_vec = Vec::with_capacity(table.size as usize);
-        addresses_vec.resize(table.size as usize, 0);
+        let mut elements_vec = Vec::with_capacity(table.size);
+        elements_vec.resize(table.size, TableElement::Trap());
+        let mut addresses_vec = Vec::with_capacity(table.size);
+        addresses_vec.resize(table.size, 0);
         self.tables.push(TableData {
             info: table,
             data: addresses_vec,
@@ -298,13 +298,13 @@ impl WasmRuntime for StandaloneRuntime {
     ) {
         debug_assert!(!self.instantiated);
         for (i, elt) in elements.iter().enumerate() {
-            self.tables[table_index].elements[offset as usize + i] = TableElement::Function(*elt);
+            self.tables[table_index].elements[offset + i] = TableElement::Function(*elt);
         }
     }
     fn declare_memory(&mut self, memory: Memory) {
         debug_assert!(!self.instantiated);
-        let mut memory_vec = Vec::with_capacity(memory.pages_count as usize * PAGE_SIZE);
-        memory_vec.resize(memory.pages_count as usize * PAGE_SIZE, 0);
+        let mut memory_vec = Vec::with_capacity(memory.pages_count * PAGE_SIZE);
+        memory_vec.resize(memory.pages_count * PAGE_SIZE, 0);
         self.memories.push(MemoryData {
             info: memory,
             data: memory_vec,
