@@ -28,7 +28,7 @@ use cretonne::ir::condcodes::{IntCC, FloatCC};
 use cton_frontend::{ILBuilder, FunctionBuilder};
 use wasmparser::{Parser, ParserState, Operator, WasmDecoder, MemoryImmediate};
 use translation_utils::{f32_translation, f64_translation, type_to_type, translate_type, Local};
-use translation_utils::{TableIndex, SignatureIndex, FunctionIndex};
+use translation_utils::{TableIndex, SignatureIndex, FunctionIndex, MemoryIndex};
 use state::{TranslationState, ControlStackFrame};
 use std::collections::HashMap;
 use runtime::{FuncEnvironment, GlobalValue, WasmRuntime};
@@ -458,12 +458,27 @@ fn translate_operator(
          * Memory management is handled by runtime. It is usually translated into calls to
          * special functions.
          ************************************************************************************/
-        Operator::GrowMemory { reserved: _ } => {
+        Operator::GrowMemory { reserved } => {
+            // The WebAssembly MVP only supports one linear memory, but we expect the reserved
+            // argument to be a memory index.
+            let heap_index = reserved as MemoryIndex;
+            let heap = state.get_heap(builder.func, reserved, runtime);
             let val = state.pop1();
-            state.push1(runtime.translate_grow_memory(builder, val));
+            state.push1(runtime.translate_grow_memory(
+                builder.cursor(),
+                heap_index,
+                heap,
+                val,
+            ))
         }
-        Operator::CurrentMemory { reserved: _ } => {
-            state.push1(runtime.translate_current_memory(builder));
+        Operator::CurrentMemory { reserved } => {
+            let heap_index = reserved as MemoryIndex;
+            let heap = state.get_heap(builder.func, reserved, runtime);
+            state.push1(runtime.translate_current_memory(
+                builder.cursor(),
+                heap_index,
+                heap,
+            ));
         }
         /******************************* Load instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cretonne.
