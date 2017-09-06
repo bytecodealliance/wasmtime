@@ -2,8 +2,6 @@
 use wasmparser;
 use cretonne;
 use std::u32;
-use code_translator;
-use module_translator;
 
 /// Index of a function (imported or defined) inside the WebAssembly module.
 pub type FunctionIndex = usize;
@@ -134,20 +132,4 @@ pub fn translate_type(ty: wasmparser::Type) -> Result<Vec<cretonne::ir::Type>, (
         wasmparser::Type::F64 => Ok(vec![cretonne::ir::types::F64]),
         _ => panic!("unsupported return value type"),
     }
-}
-
-/// Inverts the key-value relation in the imports hashmap. Indeed, these hashmaps are built by
-/// feeding the function indexes in the module but are used by the runtime with the `FuncRef` as
-/// keys.
-pub fn invert_hashmaps(
-    imports: &code_translator::FunctionImports,
-) -> module_translator::ImportMappings {
-    let mut new_imports = module_translator::ImportMappings::new();
-    for (func_index, func_ref) in &imports.functions {
-        new_imports.functions.insert(*func_ref, *func_index);
-    }
-    for (sig_index, sig_ref) in &imports.signatures {
-        new_imports.signatures.insert(*sig_ref, *sig_index);
-    }
-    new_imports
 }

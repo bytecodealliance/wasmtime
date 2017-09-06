@@ -6,7 +6,7 @@
 use cretonne::ir::{self, Ebb, Inst, Type, Value};
 use runtime::{FuncEnvironment, GlobalValue};
 use std::collections::HashMap;
-use translation_utils::{GlobalIndex, MemoryIndex, SignatureIndex};
+use translation_utils::{GlobalIndex, MemoryIndex, SignatureIndex, FunctionIndex};
 
 /// A control stack frame can be an `if`, a `block` or a `loop`, each one having the following
 /// fields:
@@ -118,6 +118,11 @@ pub struct TranslationState {
     // `FuncEnvironment::make_indirect_sig()`.
     // Stores both the signature reference and the number of WebAssembly arguments
     signatures: HashMap<SignatureIndex, (ir::SigRef, usize)>,
+
+    // Imported and local functions that have been created by
+    // `FuncEnvironment::make_direct_func()`.
+    // Stores both the function reference and the number of WebAssembly arguments
+    functions: HashMap<FunctionIndex, (ir::FuncRef, usize)>,
 }
 
 impl TranslationState {
@@ -130,6 +135,7 @@ impl TranslationState {
             globals: HashMap::new(),
             heaps: HashMap::new(),
             signatures: HashMap::new(),
+            functions: HashMap::new(),
         }
     }
 
@@ -141,6 +147,7 @@ impl TranslationState {
         self.globals.clear();
         self.heaps.clear();
         self.signatures.clear();
+        self.functions.clear();
     }
 
     /// Initialize the state for compiling a function with the given signature.
@@ -291,17 +298,37 @@ impl TranslationState {
         index: u32,
         environ: &FE,
     ) -> (ir::SigRef, usize) {
-        let index = index as MemoryIndex;
+        let index = index as SignatureIndex;
         *self.signatures.entry(index).or_insert_with(|| {
             let sig = environ.make_indirect_sig(func, index);
-            // Count the number of normal arguments.
-            // The environment is allowed to add special purpose arguments to the signature.
-            let args = func.dfg.signatures[sig]
-                .argument_types
-                .iter()
-                .filter(|arg| arg.purpose == ir::ArgumentPurpose::Normal)
-                .count();
-            (sig, args)
+            (sig, normal_args(&func.dfg.signatures[sig]))
         })
     }
+
+    /// Get the `FuncRef` reference that should be used to make a direct call to function
+    /// `index`. Also return the number of WebAssembly arguments in the signature.
+    ///
+    /// Create the function reference if necessary.
+    pub fn get_direct_func<FE: FuncEnvironment + ?Sized>(
+        &mut self,
+        func: &mut ir::Function,
+        index: u32,
+        environ: &FE,
+    ) -> (ir::FuncRef, usize) {
+        let index = index as FunctionIndex;
+        *self.functions.entry(index).or_insert_with(|| {
+            let fref = environ.make_direct_func(func, index);
+            let sig = func.dfg.ext_funcs[fref].signature;
+            (fref, normal_args(&func.dfg.signatures[sig]))
+        })
+    }
+}
+
+/// Count the number of normal arguments in a signature.
+/// Exclude special-purpose arguments that represent runtime stuff and not WebAssembly arguments.
+fn normal_args(sig: &ir::Signature) -> usize {
+    sig.argument_types
+        .iter()
+        .filter(|arg| arg.purpose == ir::ArgumentPurpose::Normal)
+        .count()
 }

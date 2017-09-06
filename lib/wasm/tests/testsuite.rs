@@ -1,7 +1,7 @@
 extern crate cton_wasm;
 extern crate cretonne;
 
-use cton_wasm::{translate_module, FunctionTranslation, DummyRuntime, WasmRuntime};
+use cton_wasm::{translate_module, DummyRuntime, WasmRuntime};
 use std::path::PathBuf;
 use std::fs::File;
 use std::error::Error;
@@ -69,14 +69,10 @@ fn handle_module(path: PathBuf) -> Result<(), String> {
             }
         }
     };
-    for func in translation.functions {
-        let il = match func {
-            FunctionTranslation::Import() => continue,
-            FunctionTranslation::Code { ref il, .. } => il.clone(),
-        };
-        match verifier::verify_function(&il, None) {
+    for func in &translation.functions {
+        match verifier::verify_function(func, None) {
             Ok(()) => (),
-            Err(err) => return Err(pretty_verifier_error(&il, None, err)),
+            Err(err) => return Err(pretty_verifier_error(func, None, err)),
         }
     }
     Ok(())

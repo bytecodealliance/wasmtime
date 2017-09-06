@@ -21,39 +21,18 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
-use cretonne::ir::{self, Function, Signature, Type, InstBuilder, FunctionName, Ebb, FuncRef,
-                   SigRef, ExtFuncData, MemFlags};
+use cretonne::ir::{self, Function, Signature, Type, InstBuilder, FunctionName, Ebb, MemFlags};
 use cretonne::ir::types::*;
 use cretonne::ir::immediates::{Ieee32, Ieee64};
 use cretonne::ir::condcodes::{IntCC, FloatCC};
 use cton_frontend::{ILBuilder, FunctionBuilder};
 use wasmparser::{Parser, ParserState, Operator, WasmDecoder, MemoryImmediate};
 use translation_utils::{f32_translation, f64_translation, type_to_type, translate_type, Local,
-                        FunctionIndex, SignatureIndex};
+                        FunctionIndex};
 use state::{TranslationState, ControlStackFrame};
 use std::collections::HashMap;
 use runtime::{FuncEnvironment, GlobalValue, WasmRuntime};
 use std::u32;
-
-
-/// Holds mappings between the function and signatures indexes in the Wasm module and their
-/// references as imports of the Cretonne IL function.
-#[derive(Clone, Debug)]
-pub struct FunctionImports {
-    /// Mappings index in function index space -> index in function local imports
-    pub functions: HashMap<FunctionIndex, FuncRef>,
-    /// Mappings index in signature index space -> index in signature local imports
-    pub signatures: HashMap<SignatureIndex, SigRef>,
-}
-
-impl FunctionImports {
-    fn new() -> Self {
-        Self {
-            functions: HashMap::new(),
-            signatures: HashMap::new(),
-        }
-    }
-}
 
 /// Returns a well-formed Cretonne IL function from a wasm function body and a signature.
 pub fn translate_function_body(
@@ -62,11 +41,9 @@ pub fn translate_function_body(
     sig: &Signature,
     locals: &[(usize, Type)],
     exports: &Option<HashMap<FunctionIndex, String>>,
-    signatures: &[Signature],
-    functions: &[SignatureIndex],
     il_builder: &mut ILBuilder<Local>,
     runtime: &mut WasmRuntime,
-) -> Result<(Function, FunctionImports), String> {
+) -> Result<Function, String> {
     runtime.next_function();
     // First we build the Function object with its name and signature
     let mut func = Function::new();
@@ -77,7 +54,6 @@ pub fn translate_function_body(
             func.name = FunctionName::new(name.clone());
         }
     }
-    let mut func_imports = FunctionImports::new();
     // We introduce an arbitrary scope for the FunctionBuilder object
     {
         let mut builder = FunctionBuilder::new(&mut func, il_builder);
@@ -121,16 +97,7 @@ pub fn translate_function_body(
                     if state.in_unreachable_code() {
                         translate_unreachable_operator(op, &mut builder, &mut state)
                     } else {
-                        translate_operator(
-                            op,
-                            &mut builder,
-                            runtime,
-                            &mut state,
-                            functions,
-                            signatures,
-                            exports,
-                            &mut func_imports,
-                        )
+                        translate_operator(op, &mut builder, &mut state, runtime)
                     }
                 }
 
@@ -160,7 +127,7 @@ pub fn translate_function_body(
             state.stack.truncate(cut_index);
         }
     }
-    Ok((func, func_imports))
+    Ok(func)
 }
 
 /// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
@@ -168,12 +135,8 @@ pub fn translate_function_body(
 fn translate_operator(
     op: &Operator,
     builder: &mut FunctionBuilder<Local>,
-    runtime: &mut WasmRuntime,
     state: &mut TranslationState,
-    functions: &[SignatureIndex],
-    signatures: &[Signature],
-    exports: &Option<HashMap<FunctionIndex, String>>,
-    func_imports: &mut FunctionImports,
+    runtime: &mut WasmRuntime,
 ) {
     // This big match treats all Wasm code operators.
     match *op {
@@ -465,25 +428,13 @@ fn translate_operator(
          * argument referring to an index in the external functions table of the module.
          ************************************************************************************/
         Operator::Call { function_index } => {
-            let args_num = args_count(function_index as usize, functions, signatures);
-            let cut_index = state.stack.len() - args_num;
-            let internal_function_index = find_function_import(
-                function_index as usize,
-                builder,
-                func_imports,
-                functions,
-                exports,
-                signatures,
-            );
-            let call_inst = builder.ins().call(
-                internal_function_index,
-                &state.stack[cut_index..],
-            );
-            state.stack.truncate(cut_index);
+            let (fref, num_args) = state.get_direct_func(builder.func, function_index, runtime);
+            // TODO: Let the function environment override the call instruction. It may want to add
+            // arguments.
+            let call_inst = builder.ins().call(fref, &state.peekn(num_args));
+            state.popn(num_args);
             let ret_values = builder.inst_results(call_inst);
-            for val in ret_values {
-                state.push1(*val);
-            }
+            state.pushn(ret_values);
         }
         Operator::CallIndirect {
             index,
@@ -1097,61 +1048,4 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
         val,
         base,
     );
-}
-fn args_count(
-    index: FunctionIndex,
-    functions: &[SignatureIndex],
-    signatures: &[Signature],
-) -> usize {
-    signatures[functions[index]].argument_types.len()
-}
-
-// Given an index in the function index space, search for it in the function imports and if it is
-// not there add it to the function imports.
-fn find_function_import(
-    index: FunctionIndex,
-    builder: &mut FunctionBuilder<Local>,
-    func_imports: &mut FunctionImports,
-    functions: &[SignatureIndex],
-    exports: &Option<HashMap<FunctionIndex, String>>,
-    signatures: &[Signature],
-) -> FuncRef {
-    if let Some(local_index) = func_imports.functions.get(&index) {
-        return *local_index;
-    }
-    // We have to import the function
-    let sig_index = functions[index];
-    if let Some(local_sig_index) = func_imports.signatures.get(&sig_index) {
-        let local_func_index = builder.import_function(ExtFuncData {
-            name: match *exports {
-                None => FunctionName::new(""),
-                Some(ref exports) => {
-                    match exports.get(&index) {
-                        None => FunctionName::new(""),
-                        Some(name) => FunctionName::new(name.clone()),
-                    }
-                }
-            },
-            signature: *local_sig_index,
-        });
-        func_imports.functions.insert(index, local_func_index);
-        return local_func_index;
-    }
-    // We have to import the signature
-    let sig_local_index = builder.import_signature(signatures[sig_index].clone());
-    func_imports.signatures.insert(sig_index, sig_local_index);
-    let local_func_index = builder.import_function(ExtFuncData {
-        name: match *exports {
-            None => FunctionName::new(""),
-            Some(ref exports) => {
-                match exports.get(&index) {
-                    None => FunctionName::new(""),
-                    Some(name) => FunctionName::new(name.clone()),
-                }
-            }
-        },
-        signature: sig_local_index,
-    });
-    func_imports.functions.insert(index, local_func_index);
-    local_func_index
 }

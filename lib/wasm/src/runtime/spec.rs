@@ -51,6 +51,19 @@ pub trait FuncEnvironment {
     /// The signature will only be used for indirect calls, even if the module has direct function
     /// calls with the same WebAssembly type.
     fn make_indirect_sig(&self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef;
+
+    /// Set up an external function definition in the preamble of `func` that can be used to
+    /// directly call the function `index`.
+    ///
+    /// The index space covers both imported functions and functions defined in the current module.
+    ///
+    /// The function's signature may contain additional arguments needed for a direct call, but the
+    /// arguments marked as `ArgumentPurpose::Normal` must correspond to the WebAssembly signature
+    /// arguments.
+    ///
+    /// The function's signature will only be used for direct calls, even if the module has
+    /// indirect calls with the same WebAssembly type.
+    fn make_direct_func(&self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef;
 }
 
 /// An object satisfyng the `WasmRuntime` trait can be passed as argument to the
@@ -59,6 +72,12 @@ pub trait FuncEnvironment {
 pub trait WasmRuntime: FuncEnvironment {
     /// Declares a function signature to the runtime.
     fn declare_signature(&mut self, sig: &ir::Signature);
+
+    /// Declares a function import to the runtime.
+    fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &[u8], field: &[u8]);
+
+    /// Declares the type (signature) of a local function in the module.
+    fn declare_func_type(&mut self, sig_index: SignatureIndex);
 
     /// Declares a global to the runtime.
     fn declare_global(&mut self, global: Global);
