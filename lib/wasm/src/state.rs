@@ -6,7 +6,7 @@
 use cretonne::ir::{self, Ebb, Inst, Type, Value};
 use runtime::{FuncEnvironment, GlobalValue};
 use std::collections::HashMap;
-use translation_utils::{GlobalIndex, MemoryIndex};
+use translation_utils::{GlobalIndex, MemoryIndex, SignatureIndex};
 
 /// A control stack frame can be an `if`, a `block` or a `loop`, each one having the following
 /// fields:
@@ -113,6 +113,11 @@ pub struct TranslationState {
 
     // Map of heaps that have been created by `FuncEnvironment::make_heap`.
     heaps: HashMap<MemoryIndex, ir::Heap>,
+
+    // Map of indirect call signatures that have been created by
+    // `FuncEnvironment::make_indirect_sig()`.
+    // Stores both the signature reference and the number of WebAssembly arguments
+    signatures: HashMap<SignatureIndex, (ir::SigRef, usize)>,
 }
 
 impl TranslationState {
@@ -124,6 +129,7 @@ impl TranslationState {
             real_unreachable_stack_depth: 0,
             globals: HashMap::new(),
             heaps: HashMap::new(),
+            signatures: HashMap::new(),
         }
     }
 
@@ -134,6 +140,7 @@ impl TranslationState {
         self.real_unreachable_stack_depth = 0;
         self.globals.clear();
         self.heaps.clear();
+        self.signatures.clear();
     }
 
     /// Initialize the state for compiling a function with the given signature.
@@ -155,6 +162,11 @@ impl TranslationState {
     /// Push a value.
     pub fn push1(&mut self, val: Value) {
         self.stack.push(val);
+    }
+
+    /// Push multiple values.
+    pub fn pushn(&mut self, vals: &[Value]) {
+        self.stack.extend_from_slice(vals);
     }
 
     /// Pop one value.
@@ -180,6 +192,19 @@ impl TranslationState {
         let v2 = self.stack.pop().unwrap();
         let v1 = self.stack.pop().unwrap();
         (v1, v2, v3)
+    }
+
+    /// Pop the top `n` values on the stack.
+    ///
+    /// The popped values are not returned. Use `peekn` to look at them before popping.
+    pub fn popn(&mut self, n: usize) {
+        let new_len = self.stack.len() - n;
+        self.stack.truncate(new_len);
+    }
+
+    /// Peek at the top `n` values on the stack in the order they were pushed.
+    pub fn peekn(&self, n: usize) -> &[Value] {
+        &self.stack[self.stack.len() - n..]
     }
 
     // Push a block on the control stack.
@@ -254,5 +279,29 @@ impl TranslationState {
         *self.heaps.entry(index).or_insert_with(
             || environ.make_heap(func, index),
         )
+    }
+
+    /// Get the `SigRef` reference that should be used to make an indirect call with signature
+    /// `index`. Also return the number of WebAssembly arguments in the signature.
+    ///
+    /// Create the signature if necessary.
+    pub fn get_indirect_sig<FE: FuncEnvironment + ?Sized>(
+        &mut self,
+        func: &mut ir::Function,
+        index: u32,
+        environ: &FE,
+    ) -> (ir::SigRef, usize) {
+        let index = index as MemoryIndex;
+        *self.signatures.entry(index).or_insert_with(|| {
+            let sig = environ.make_indirect_sig(func, index);
+            // Count the number of normal arguments.
+            // The environment is allowed to add special purpose arguments to the signature.
+            let args = func.dfg.signatures[sig]
+                .argument_types
+                .iter()
+                .filter(|arg| arg.purpose == ir::ArgumentPurpose::Normal)
+                .count();
+            (sig, args)
+        })
     }
 }

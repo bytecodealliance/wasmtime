@@ -26,6 +26,7 @@ pub enum SectionParsingError {
 /// Reads the Type Section of the wasm module and returns the corresponding function signatures.
 pub fn parse_function_signatures(
     parser: &mut Parser,
+    runtime: &mut WasmRuntime,
 ) -> Result<Vec<Signature>, SectionParsingError> {
     let mut signatures: Vec<Signature> = Vec::new();
     loop {
@@ -53,6 +54,7 @@ pub fn parse_function_signatures(
                     };
                     ArgumentType::new(cret_arg)
                 }));
+                runtime.declare_signature(&sig);
                 signatures.push(sig);
             }
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),

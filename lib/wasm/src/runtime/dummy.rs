@@ -1,6 +1,6 @@
 use runtime::{FuncEnvironment, GlobalValue, WasmRuntime};
-use translation_utils::{Local, Global, Memory, Table, GlobalIndex, TableIndex, FunctionIndex,
-                        MemoryIndex};
+use translation_utils::{Local, Global, Memory, Table, GlobalIndex, TableIndex, SignatureIndex,
+                        FunctionIndex, MemoryIndex};
 use cton_frontend::FunctionBuilder;
 use cretonne::ir::{self, Value, InstBuilder, SigRef};
 use cretonne::ir::types::*;
@@ -9,13 +9,18 @@ use cretonne::ir::types::*;
 /// placeholders when forced to. Don't try to execute code translated with this runtime, it is
 /// essentially here for translation debug purposes.
 pub struct DummyRuntime {
+    // Unprocessed signatures exactly as provided by `declare_signature()`.
+    signatures: Vec<ir::Signature>,
     globals: Vec<Global>,
 }
 
 impl DummyRuntime {
     /// Allocates the runtime data structures.
     pub fn new() -> Self {
-        Self { globals: Vec::new() }
+        Self {
+            signatures: Vec::new(),
+            globals: Vec::new(),
+        }
     }
 }
 
@@ -42,6 +47,12 @@ impl FuncEnvironment for DummyRuntime {
             style: ir::HeapStyle::Static { bound: 0x1_0000_0000.into() },
         })
     }
+
+    fn make_indirect_sig(&self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
+        // A real implementation would probably change the calling convention and add `vmctx` and
+        // signature index arguments.
+        func.dfg.signatures.push(self.signatures[index].clone())
+    }
 }
 
 impl WasmRuntime for DummyRuntime {
@@ -61,6 +72,11 @@ impl WasmRuntime for DummyRuntime {
         let call_inst = builder.ins().call_indirect(sig_ref, index_val, call_args);
         builder.inst_results(call_inst)
     }
+
+    fn declare_signature(&mut self, sig: &ir::Signature) {
+        self.signatures.push(sig.clone());
+    }
+
     fn declare_global(&mut self, global: Global) {
         self.globals.push(global);
     }
