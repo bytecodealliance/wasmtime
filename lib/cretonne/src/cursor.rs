@@ -19,6 +19,8 @@ pub use ir::layout::Cursor as LayoutCursor;
 /// encoding.
 pub struct FuncCursor<'f> {
     pos: CursorPosition,
+
+    /// The referenced function.
     pub func: &'f mut ir::Function,
 }
 
@@ -79,7 +81,11 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
 pub struct EncCursor<'f> {
     pos: CursorPosition,
     built_inst: Option<ir::Inst>,
+
+    /// The referenced function.
     pub func: &'f mut ir::Function,
+
+    /// The target ISA that will be used to encode instructions.
     pub isa: &'f TargetIsa,
 }
 

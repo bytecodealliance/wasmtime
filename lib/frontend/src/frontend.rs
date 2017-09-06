@@ -1,4 +1,5 @@
 //! A frontend for building Cretonne IL from other languages.
+use cretonne::cursor::{Cursor, FuncCursor};
 use cretonne::ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData,
                    StackSlotData, DataFlowGraph, InstructionData, ExtFuncData, FuncRef, SigRef,
                    Signature, InstBuilderBase};
@@ -107,24 +108,11 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
     fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'short mut DataFlowGraph) {
         if data.opcode().is_return() {
             self.builder
-                .check_return_args(data.arguments(&self.builder.func.dfg.value_lists))
+                .check_return_args(data.arguments(&self.builder.func.dfg.value_lists));
         }
 // We only insert the Ebb in the layout when an instruction is added to it
-        if self.builder.builder.ebbs[self.builder.position.ebb].pristine {
-            if !self.builder
-                    .func
-                    .layout
-                    .is_ebb_inserted(self.builder.position.ebb) {
-                self.builder
-                    .func
-                    .layout
-                    .append_ebb(self.builder.position.ebb);
-            }
-            self.builder.builder.ebbs[self.builder.position.ebb].pristine = false;
-        } else {
-            debug_assert!(!self.builder.builder.ebbs[self.builder.position.ebb].filled,
-                          "you cannot add an instruction to a block already filled");
-        }
+        self.builder.ensure_inserted_ebb();
+
         let inst = self.builder.func.dfg.make_inst(data.clone());
         self.builder.func.dfg.make_inst_results(inst, ctrl_typevar);
         self.builder.func.layout.append_inst(inst, self.ebb);
@@ -371,6 +359,31 @@ where
     pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a, Variable> {
         let ebb = self.position.ebb;
         FuncInstBuilder::new(self, ebb)
+    }
+
+    /// Make sure that the current EBB is inserted in the layout.
+    fn ensure_inserted_ebb(&mut self) {
+        let ebb = self.position.ebb;
+        if self.builder.ebbs[ebb].pristine {
+            if !self.func.layout.is_ebb_inserted(ebb) {
+                self.func.layout.append_ebb(ebb);
+            }
+            self.builder.ebbs[ebb].pristine = false;
+        } else {
+            debug_assert!(
+                !self.builder.ebbs[ebb].filled,
+                "you cannot add an instruction to a block already filled"
+            );
+        }
+    }
+
+    /// Returns a `FuncCursor` pointed at the current position ready for inserting instructions.
+    ///
+    /// This can be used to insert SSA code that doesn't need to access locals and that doesn't
+    /// need to know about `FunctionBuilder` at all.
+    pub fn cursor<'f>(&'f mut self) -> FuncCursor<'f> {
+        self.ensure_inserted_ebb();
+        FuncCursor::new(self.func).at_bottom(self.position.ebb)
     }
 }
 

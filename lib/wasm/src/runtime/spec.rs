@@ -1,7 +1,8 @@
 //! All the runtime support necessary for the wasm to cretonne translation is formalized by the
 //! trait `WasmRuntime`.
 use cton_frontend::FunctionBuilder;
-use cretonne::ir::{self, Value, SigRef};
+use cretonne::ir::{self, Value, InstBuilder};
+use cretonne::cursor::FuncCursor;
 use translation_utils::{Local, SignatureIndex, FunctionIndex, TableIndex, GlobalIndex,
                         MemoryIndex, Global, Table, Memory};
 
@@ -64,6 +65,42 @@ pub trait FuncEnvironment {
     /// The function's signature will only be used for direct calls, even if the module has
     /// indirect calls with the same WebAssembly type.
     fn make_direct_func(&self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef;
+
+    /// Translate a `call_indirect` WebAssembly instruction at `pos`.
+    ///
+    /// Insert instructions at `pos` for an indirect call to the function `callee` in the table
+    /// `table_index` with WebAssembly signature `sig_index`. The `callee` value will have type
+    /// `i32`.
+    ///
+    /// The signature `sig_ref` was previously created by `make_indirect_sig()`.
+    ///
+    /// Return the call instruction whose results are the WebAssembly return values.
+    fn translate_call_indirect(
+        &self,
+        pos: FuncCursor,
+        table_index: TableIndex,
+        sig_index: SignatureIndex,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
+    ) -> ir::Inst;
+
+    /// Translate a `call` WebAssembly instruction at `pos`.
+    ///
+    /// Insert instructions at `pos` for a direct call to the function `callee_index`.
+    ///
+    /// The function reference `callee` was previously created by `make_direct_func()`.
+    ///
+    /// Return the call instruction whose results are the WebAssembly return values.
+    fn translate_call(
+        &self,
+        mut pos: FuncCursor,
+        _callee_index: FunctionIndex,
+        callee: ir::FuncRef,
+        call_args: &[ir::Value],
+    ) -> ir::Inst {
+        pos.ins().call(callee, call_args)
+    }
 }
 
 /// An object satisfyng the `WasmRuntime` trait can be passed as argument to the
@@ -108,13 +145,4 @@ pub trait WasmRuntime: FuncEnvironment {
     fn translate_grow_memory(&mut self, builder: &mut FunctionBuilder<Local>, val: Value) -> Value;
     /// Translates a `current_memory` wasm instruction. Returns the size in pages of the memory.
     fn translate_current_memory(&mut self, builder: &mut FunctionBuilder<Local>) -> Value;
-    /// Translates a `call_indirect` wasm instruction. It involves looking up the value contained
-    /// it the table at location `index_val` and calling the corresponding function.
-    fn translate_call_indirect<'a>(
-        &self,
-        builder: &'a mut FunctionBuilder<Local>,
-        sig_ref: SigRef,
-        index_val: Value,
-        call_args: &[Value],
-    ) -> &'a [Value];
 }

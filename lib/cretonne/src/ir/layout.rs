@@ -728,6 +728,27 @@ pub trait CursorBase {
         self
     }
 
+    /// Rebuild this cursor positioned at the bottom of `ebb`.
+    ///
+    /// This is intended to be used as a builder method:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb, Inst};
+    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// fn edit_func(func: &mut Function, ebb: Ebb) {
+    ///     let mut pos = Cursor::new(&mut func.layout).at_bottom(ebb);
+    ///
+    ///     // Use `pos`...
+    /// }
+    /// ```
+    fn at_bottom(mut self, ebb: Ebb) -> Self
+    where
+        Self: Sized,
+    {
+        self.goto_bottom(ebb);
+        self
+    }
+
     /// Get the EBB corresponding to the current position.
     fn current_ebb(&self) -> Option<Ebb> {
         use self::CursorPosition::*;
