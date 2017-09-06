@@ -110,7 +110,7 @@ pub trait FuncEnvironment {
     ///
     /// Returns the old size (in pages) of the memory.
     fn translate_grow_memory(
-        &mut self,
+        &self,
         pos: FuncCursor,
         index: MemoryIndex,
         heap: ir::Heap,
@@ -124,7 +124,7 @@ pub trait FuncEnvironment {
     ///
     /// Returns the size in pages of the memory.
     fn translate_current_memory(
-        &mut self,
+        &self,
         pos: FuncCursor,
         index: MemoryIndex,
         heap: ir::Heap,

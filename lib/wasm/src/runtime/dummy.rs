@@ -89,7 +89,7 @@ impl FuncEnvironment for DummyRuntime {
     }
 
     fn translate_grow_memory(
-        &mut self,
+        &self,
         mut pos: FuncCursor,
         _index: MemoryIndex,
         _heap: ir::Heap,
@@ -99,7 +99,7 @@ impl FuncEnvironment for DummyRuntime {
     }
 
     fn translate_current_memory(
-        &mut self,
+        &self,
         mut pos: FuncCursor,
         _index: MemoryIndex,
         _heap: ir::Heap,
