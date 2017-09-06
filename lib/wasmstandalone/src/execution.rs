@@ -139,7 +139,7 @@ pub fn compile_module(trans_result: &TranslationResult) -> Result<ExecutableCode
     }
 }
 
-// Jumps to the code region of memory and execute the start function of the module.
+/// Jumps to the code region of memory and execute the start function of the module.
 pub fn execute(exec: ExecutableCode) -> Result<(), String> {
     let code_buf = &exec.functions_code[exec.start_index];
     unsafe {
