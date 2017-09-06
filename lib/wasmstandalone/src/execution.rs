@@ -254,7 +254,7 @@ pub fn pretty_verifier_error(
 }
 
 /// Pretty-print a Cretonne error.
-pub fn pretty_error(func: &ir::Function, isa: Option<&TargetIsa>, err: CtonError) -> String {
+pub fn pretty_error(func: &Function, isa: Option<&TargetIsa>, err: CtonError) -> String {
     if let CtonError::Verifier(e) = err {
         pretty_verifier_error(func, isa, e)
     } else {
