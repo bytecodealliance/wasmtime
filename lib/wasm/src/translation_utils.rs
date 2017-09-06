@@ -13,10 +13,6 @@ pub type GlobalIndex = usize;
 pub type MemoryIndex = usize;
 /// Index of a signature (imported or defined) inside the WebAssembly module.
 pub type SignatureIndex = usize;
-/// Raw byte read from memory.
-pub type RawByte = u8;
-/// Pointer referring to a memory address.
-pub type MemoryAddress = usize;
 
 /// WebAssembly import.
 #[derive(Debug, Clone, Copy)]
