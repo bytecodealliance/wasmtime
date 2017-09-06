@@ -132,11 +132,11 @@ pub fn translate_function_body(
 
 /// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
 /// a return.
-fn translate_operator(
+fn translate_operator<FE: FuncEnvironment + ?Sized>(
     op: &Operator,
     builder: &mut FunctionBuilder<Local>,
     state: &mut TranslationState,
-    runtime: &mut WasmRuntime,
+    environ: &FE,
 ) {
     // This big match treats all Wasm code operators.
     match *op {
@@ -157,10 +157,10 @@ fn translate_operator(
          *  `get_global` and `set_global` are handled by the runtime.
          ***********************************************************************************/
         Operator::GetGlobal { global_index } => {
-            let val = match state.get_global(builder.func, global_index, runtime) {
+            let val = match state.get_global(builder.func, global_index, environ) {
                 GlobalValue::Const(val) => val,
                 GlobalValue::Memory { gv, ty } => {
-                    let addr = builder.ins().global_addr(runtime.native_pointer(), gv);
+                    let addr = builder.ins().global_addr(environ.native_pointer(), gv);
                     // TODO: It is likely safe to set `aligned notrap` flags on a global load.
                     let flags = ir::MemFlags::new();
                     builder.ins().load(ty, flags, addr, 0)
@@ -169,10 +169,10 @@ fn translate_operator(
             state.push1(val);
         }
         Operator::SetGlobal { global_index } => {
-            match state.get_global(builder.func, global_index, runtime) {
+            match state.get_global(builder.func, global_index, environ) {
                 GlobalValue::Const(_) => panic!("global #{} is a constant", global_index),
                 GlobalValue::Memory { gv, .. } => {
-                    let addr = builder.ins().global_addr(runtime.native_pointer(), gv);
+                    let addr = builder.ins().global_addr(environ.native_pointer(), gv);
                     // TODO: It is likely safe to set `aligned notrap` flags on a global store.
                     let flags = ir::MemFlags::new();
                     let val = state.pop1();
@@ -428,8 +428,8 @@ fn translate_operator(
          * argument referring to an index in the external functions table of the module.
          ************************************************************************************/
         Operator::Call { function_index } => {
-            let (fref, num_args) = state.get_direct_func(builder.func, function_index, runtime);
-            let call = runtime.translate_call(
+            let (fref, num_args) = state.get_direct_func(builder.func, function_index, environ);
+            let call = environ.translate_call(
                 builder.cursor(),
                 function_index as FunctionIndex,
                 fref,
@@ -441,9 +441,9 @@ fn translate_operator(
         Operator::CallIndirect { index, table_index } => {
             // `index` is the index of the function's signature and `table_index` is the index of
             // the table to search the function in.
-            let (sigref, num_args) = state.get_indirect_sig(builder.func, index, runtime);
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, index, environ);
             let callee = state.pop1();
-            let call = runtime.translate_call_indirect(
+            let call = environ.translate_call_indirect(
                 builder.cursor(),
                 table_index as TableIndex,
                 index as SignatureIndex,
@@ -462,9 +462,9 @@ fn translate_operator(
             // The WebAssembly MVP only supports one linear memory, but we expect the reserved
             // argument to be a memory index.
             let heap_index = reserved as MemoryIndex;
-            let heap = state.get_heap(builder.func, reserved, runtime);
+            let heap = state.get_heap(builder.func, reserved, environ);
             let val = state.pop1();
-            state.push1(runtime.translate_grow_memory(
+            state.push1(environ.translate_grow_memory(
                 builder.cursor(),
                 heap_index,
                 heap,
@@ -473,8 +473,8 @@ fn translate_operator(
         }
         Operator::CurrentMemory { reserved } => {
             let heap_index = reserved as MemoryIndex;
-            let heap = state.get_heap(builder.func, reserved, runtime);
-            state.push1(runtime.translate_current_memory(
+            let heap = state.get_heap(builder.func, reserved, environ);
+            state.push1(environ.translate_current_memory(
                 builder.cursor(),
                 heap_index,
                 heap,
@@ -486,46 +486,46 @@ fn translate_operator(
          * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
         Operator::I32Load8U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Uload8, I32, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Uload8, I32, builder, state, environ);
         }
         Operator::I32Load16U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Uload16, I32, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Uload16, I32, builder, state, environ);
         }
         Operator::I32Load8S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Sload8, I32, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Sload8, I32, builder, state, environ);
         }
         Operator::I32Load16S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Sload16, I32, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Sload16, I32, builder, state, environ);
         }
         Operator::I64Load8U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Uload8, I64, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Uload8, I64, builder, state, environ);
         }
         Operator::I64Load16U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Uload16, I64, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Uload16, I64, builder, state, environ);
         }
         Operator::I64Load8S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Sload8, I64, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Sload8, I64, builder, state, environ);
         }
         Operator::I64Load16S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Sload16, I64, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Sload16, I64, builder, state, environ);
         }
         Operator::I64Load32S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Sload32, I64, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Sload32, I64, builder, state, environ);
         }
         Operator::I64Load32U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Uload32, I64, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Uload32, I64, builder, state, environ);
         }
         Operator::I32Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Load, I32, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Load, I32, builder, state, environ);
         }
         Operator::F32Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Load, F32, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Load, F32, builder, state, environ);
         }
         Operator::I64Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Load, I64, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Load, I64, builder, state, environ);
         }
         Operator::F64Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_load(offset, ir::Opcode::Load, F64, builder, state, runtime);
+            translate_load(offset, ir::Opcode::Load, F64, builder, state, environ);
         }
         /****************************** Store instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cretonne.
@@ -536,18 +536,18 @@ fn translate_operator(
         Operator::I64Store { memory_immediate: MemoryImmediate { flags: _, offset } } |
         Operator::F32Store { memory_immediate: MemoryImmediate { flags: _, offset } } |
         Operator::F64Store { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_store(offset, ir::Opcode::Store, builder, state, runtime);
+            translate_store(offset, ir::Opcode::Store, builder, state, environ);
         }
         Operator::I32Store8 { memory_immediate: MemoryImmediate { flags: _, offset } } |
         Operator::I64Store8 { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_store(offset, ir::Opcode::Istore8, builder, state, runtime);
+            translate_store(offset, ir::Opcode::Istore8, builder, state, environ);
         }
         Operator::I32Store16 { memory_immediate: MemoryImmediate { flags: _, offset } } |
         Operator::I64Store16 { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_store(offset, ir::Opcode::Istore16, builder, state, runtime);
+            translate_store(offset, ir::Opcode::Istore16, builder, state, environ);
         }
         Operator::I64Store32 { memory_immediate: MemoryImmediate { flags: _, offset } } => {
-            translate_store(offset, ir::Opcode::Istore32, builder, state, runtime);
+            translate_store(offset, ir::Opcode::Istore32, builder, state, environ);
         }
         /****************************** Nullary Operators ************************************/
         Operator::I32Const { value } => state.push1(builder.ins().iconst(I32, value as i64)),
