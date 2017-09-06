@@ -3,6 +3,8 @@
 //! the translation the base addresses of regions of memory that will hold the globals, tables and
 //! linear memories.
 
+#![deny(missing_docs)]
+
 extern crate cretonne;
 extern crate cton_frontend;
 extern crate cton_wasm;
