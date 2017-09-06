@@ -17,6 +17,7 @@ pub mod entity;
 
 pub mod binemit;
 pub mod bitset;
+pub mod cursor;
 pub mod dominator_tree;
 pub mod flowgraph;
 pub mod ir;
@@ -31,7 +32,6 @@ pub mod verifier;
 mod abi;
 mod constant_hash;
 mod context;
-mod cursor;
 mod iterators;
 mod legalizer;
 mod licm;

@@ -2,8 +2,9 @@ use runtime::{FuncEnvironment, GlobalValue, WasmRuntime};
 use translation_utils::{Local, Global, Memory, Table, GlobalIndex, TableIndex, SignatureIndex,
                         FunctionIndex, MemoryIndex};
 use cton_frontend::FunctionBuilder;
-use cretonne::ir::{self, Value, InstBuilder, SigRef};
+use cretonne::ir::{self, Value, InstBuilder};
 use cretonne::ir::types::*;
+use cretonne::cursor::FuncCursor;
 
 /// This runtime implementation is a "naïve" one, doing essentially nothing and emitting
 /// placeholders when forced to. Don't try to execute code translated with this runtime, it is
@@ -75,6 +76,18 @@ impl FuncEnvironment for DummyRuntime {
 
         func.dfg.ext_funcs.push(ir::ExtFuncData { name, signature })
     }
+
+    fn translate_call_indirect(
+        &self,
+        mut pos: FuncCursor,
+        _table_index: TableIndex,
+        _sig_index: SignatureIndex,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
+    ) -> ir::Inst {
+        pos.ins().call_indirect(sig_ref, callee, call_args)
+    }
 }
 
 impl WasmRuntime for DummyRuntime {
@@ -83,16 +96,6 @@ impl WasmRuntime for DummyRuntime {
     }
     fn translate_current_memory(&mut self, builder: &mut FunctionBuilder<Local>) -> Value {
         builder.ins().iconst(I32, -1)
-    }
-    fn translate_call_indirect<'a>(
-        &self,
-        builder: &'a mut FunctionBuilder<Local>,
-        sig_ref: SigRef,
-        index_val: Value,
-        call_args: &[Value],
-    ) -> &'a [Value] {
-        let call_inst = builder.ins().call_indirect(sig_ref, index_val, call_args);
-        builder.inst_results(call_inst)
     }
 
     fn declare_signature(&mut self, sig: &ir::Signature) {

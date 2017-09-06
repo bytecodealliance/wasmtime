@@ -27,8 +27,8 @@ use cretonne::ir::immediates::{Ieee32, Ieee64};
 use cretonne::ir::condcodes::{IntCC, FloatCC};
 use cton_frontend::{ILBuilder, FunctionBuilder};
 use wasmparser::{Parser, ParserState, Operator, WasmDecoder, MemoryImmediate};
-use translation_utils::{f32_translation, f64_translation, type_to_type, translate_type, Local,
-                        FunctionIndex};
+use translation_utils::{f32_translation, f64_translation, type_to_type, translate_type, Local};
+use translation_utils::{TableIndex, SignatureIndex, FunctionIndex};
 use state::{TranslationState, ControlStackFrame};
 use std::collections::HashMap;
 use runtime::{FuncEnvironment, GlobalValue, WasmRuntime};
@@ -429,26 +429,30 @@ fn translate_operator(
          ************************************************************************************/
         Operator::Call { function_index } => {
             let (fref, num_args) = state.get_direct_func(builder.func, function_index, runtime);
-            // TODO: Let the function environment override the call instruction. It may want to add
-            // arguments.
-            let call_inst = builder.ins().call(fref, &state.peekn(num_args));
+            let call = runtime.translate_call(
+                builder.cursor(),
+                function_index as FunctionIndex,
+                fref,
+                state.peekn(num_args),
+            );
             state.popn(num_args);
-            let ret_values = builder.inst_results(call_inst);
-            state.pushn(ret_values);
+            state.pushn(builder.func.dfg.inst_results(call));
         }
-        Operator::CallIndirect {
-            index,
-            table_index: _,
-        } => {
+        Operator::CallIndirect { index, table_index } => {
             // `index` is the index of the function's signature and `table_index` is the index of
             // the table to search the function in.
-            // TODO: Have runtime support for tables.
             let (sigref, num_args) = state.get_indirect_sig(builder.func, index, runtime);
-            let index_val = state.pop1();
-            let ret_values =
-                runtime.translate_call_indirect(builder, sigref, index_val, &state.peekn(num_args));
+            let callee = state.pop1();
+            let call = runtime.translate_call_indirect(
+                builder.cursor(),
+                table_index as TableIndex,
+                index as SignatureIndex,
+                sigref,
+                callee,
+                &state.peekn(num_args),
+            );
             state.popn(num_args);
-            state.pushn(ret_values);
+            state.pushn(builder.func.dfg.inst_results(call));
         }
         /******************************* Memory management ***********************************
          * Memory management is handled by runtime. It is usually translated into calls to
