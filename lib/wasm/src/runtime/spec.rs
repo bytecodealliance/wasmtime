@@ -1,10 +1,9 @@
 //! All the runtime support necessary for the wasm to cretonne translation is formalized by the
 //! trait `WasmRuntime`.
-use cton_frontend::FunctionBuilder;
-use cretonne::ir::{self, Value, InstBuilder};
+use cretonne::ir::{self, InstBuilder};
 use cretonne::cursor::FuncCursor;
-use translation_utils::{Local, SignatureIndex, FunctionIndex, TableIndex, GlobalIndex,
-                        MemoryIndex, Global, Table, Memory};
+use translation_utils::{SignatureIndex, FunctionIndex, TableIndex, GlobalIndex, MemoryIndex,
+                        Global, Table, Memory};
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -101,6 +100,35 @@ pub trait FuncEnvironment {
     ) -> ir::Inst {
         pos.ins().call(callee, call_args)
     }
+
+    /// Translate a `grow_memory` WebAssembly instruction.
+    ///
+    /// The `index` provided identifies the linear memory to grow, and `heap` is the heap reference
+    /// returned by `make_heap` for the same index.
+    ///
+    /// The `val` value is the requested memory size in pages.
+    ///
+    /// Returns the old size (in pages) of the memory.
+    fn translate_grow_memory(
+        &mut self,
+        pos: FuncCursor,
+        index: MemoryIndex,
+        heap: ir::Heap,
+        val: ir::Value,
+    ) -> ir::Value;
+
+    /// Translates a `current_memory` WebAssembly instruction.
+    ///
+    /// The `index` provided identifies the linear memory to query, and `heap` is the heap reference
+    /// returned by `make_heap` for the same index.
+    ///
+    /// Returns the size in pages of the memory.
+    fn translate_current_memory(
+        &mut self,
+        pos: FuncCursor,
+        index: MemoryIndex,
+        heap: ir::Heap,
+    ) -> ir::Value;
 }
 
 /// An object satisfyng the `WasmRuntime` trait can be passed as argument to the
@@ -141,8 +169,4 @@ pub trait WasmRuntime: FuncEnvironment {
     fn begin_translation(&mut self);
     /// Call this function between each function body translation.
     fn next_function(&mut self);
-    /// Translates a `grow_memory` wasm instruction. Returns the old size (in pages) of the memory.
-    fn translate_grow_memory(&mut self, builder: &mut FunctionBuilder<Local>, val: Value) -> Value;
-    /// Translates a `current_memory` wasm instruction. Returns the size in pages of the memory.
-    fn translate_current_memory(&mut self, builder: &mut FunctionBuilder<Local>) -> Value;
 }

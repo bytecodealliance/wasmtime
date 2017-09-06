@@ -1,8 +1,7 @@
 use runtime::{FuncEnvironment, GlobalValue, WasmRuntime};
-use translation_utils::{Local, Global, Memory, Table, GlobalIndex, TableIndex, SignatureIndex,
+use translation_utils::{Global, Memory, Table, GlobalIndex, TableIndex, SignatureIndex,
                         FunctionIndex, MemoryIndex};
-use cton_frontend::FunctionBuilder;
-use cretonne::ir::{self, Value, InstBuilder};
+use cretonne::ir::{self, InstBuilder};
 use cretonne::ir::types::*;
 use cretonne::cursor::FuncCursor;
 
@@ -88,16 +87,28 @@ impl FuncEnvironment for DummyRuntime {
     ) -> ir::Inst {
         pos.ins().call_indirect(sig_ref, callee, call_args)
     }
+
+    fn translate_grow_memory(
+        &mut self,
+        mut pos: FuncCursor,
+        _index: MemoryIndex,
+        _heap: ir::Heap,
+        _val: ir::Value,
+    ) -> ir::Value {
+        pos.ins().iconst(I32, -1)
+    }
+
+    fn translate_current_memory(
+        &mut self,
+        mut pos: FuncCursor,
+        _index: MemoryIndex,
+        _heap: ir::Heap,
+    ) -> ir::Value {
+        pos.ins().iconst(I32, -1)
+    }
 }
 
 impl WasmRuntime for DummyRuntime {
-    fn translate_grow_memory(&mut self, builder: &mut FunctionBuilder<Local>, _: Value) -> Value {
-        builder.ins().iconst(I32, -1)
-    }
-    fn translate_current_memory(&mut self, builder: &mut FunctionBuilder<Local>) -> Value {
-        builder.ins().iconst(I32, -1)
-    }
-
     fn declare_signature(&mut self, sig: &ir::Signature) {
         self.signatures.push(sig.clone());
     }
