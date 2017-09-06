@@ -106,10 +106,10 @@ fn main() {
         })
         .unwrap_or_else(|e| e.exit());
     let mut terminal = term::stdout().unwrap();
-    for filename in args.arg_file.iter() {
+    for filename in &args.arg_file {
         let path = Path::new(&filename);
-        let name = String::from(path.as_os_str().to_string_lossy());
-        match handle_module(&args, path.to_path_buf(), name) {
+        let name = path.as_os_str().to_string_lossy();
+        match handle_module(&args, path.to_path_buf(), &name) {
             Ok(()) => {}
             Err(message) => {
                 terminal.fg(term::color::RED).unwrap();
@@ -121,7 +121,7 @@ fn main() {
     }
 }
 
-fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String> {
+fn handle_module(args: &Args, path: PathBuf, name: &str) -> Result<(), String> {
     let mut terminal = term::stdout().unwrap();
     terminal.fg(term::color::YELLOW).unwrap();
     vprint!(args.flag_verbose, "Handling: ");
@@ -194,14 +194,14 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
         terminal.fg(term::color::MAGENTA).unwrap();
         vprint!(args.flag_verbose, "Checking...   ");
         terminal.reset().unwrap();
-        for func in translation.functions.iter() {
-            let il = match func {
-                &FunctionTranslation::Import() => continue,
-                &FunctionTranslation::Code { ref il, .. } => il.clone(),
+        for func in &translation.functions {
+            let il = match *func {
+                FunctionTranslation::Import() => continue,
+                FunctionTranslation::Code { ref il, .. } => il.clone(),
             };
             match verifier::verify_function(&il, None) {
                 Ok(()) => (),
-                Err(err) => return Err(pretty_verifier_error(&il, None, err)),
+                Err(ref err) => return Err(pretty_verifier_error(&il, None, err)),
             }
         }
         terminal.fg(term::color::GREEN).unwrap();
@@ -220,17 +220,17 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
         terminal.fg(term::color::MAGENTA).unwrap();
         vprint!(args.flag_verbose, "Optimizing... ");
         terminal.reset().unwrap();
-        for func in translation.functions.iter() {
-            let mut il = match func {
-                &FunctionTranslation::Import() => continue,
-                &FunctionTranslation::Code { ref il, .. } => il.clone(),
+        for func in &translation.functions {
+            let il = match *func {
+                FunctionTranslation::Import() => continue,
+                FunctionTranslation::Code { ref il, .. } => il.clone(),
             };
             let mut loop_analysis = LoopAnalysis::new();
             let mut cfg = ControlFlowGraph::new();
             cfg.compute(&il);
             let mut domtree = DominatorTree::new();
-            domtree.compute(&mut il, &cfg);
-            loop_analysis.compute(&mut il, &mut cfg, &mut domtree);
+            domtree.compute(&il, &cfg);
+            loop_analysis.compute(&il, &cfg, &domtree);
             let mut context = Context::new();
             context.func = il;
             context.cfg = cfg;
@@ -238,7 +238,7 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
             context.loop_analysis = loop_analysis;
             match verifier::verify_context(&context.func, &context.cfg, &context.domtree, None) {
                 Ok(()) => (),
-                Err(err) => {
+                Err(ref err) => {
                     return Err(pretty_verifier_error(&context.func, None, err));
                 }
             };
@@ -246,7 +246,7 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
                 Ok(())=> (),
                 Err(error) => {
                     match error {
-                        CtonError::Verifier(err) => {
+                        CtonError::Verifier(ref err) => {
                             return Err(pretty_verifier_error(&context.func, None, err));
                         }
                         CtonError::InvalidInput |
@@ -257,7 +257,7 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
             };
             match verifier::verify_context(&context.func, &context.cfg, &context.domtree, None) {
                 Ok(()) => (),
-                Err(err) => return Err(pretty_verifier_error(&context.func, None, err)),
+                Err(ref err) => return Err(pretty_verifier_error(&context.func, None, err)),
             }
         }
         terminal.fg(term::color::GREEN).unwrap();
@@ -269,7 +269,7 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
         vprint!(args.flag_verbose, "Compiling...   ");
         terminal.reset().unwrap();
         match compile_module(&translation) {
-            Ok(exec) => {
+            Ok(ref exec) => {
                 terminal.fg(term::color::GREEN).unwrap();
                 vprintln!(args.flag_verbose, "ok");
                 terminal.reset().unwrap();
@@ -310,7 +310,7 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
                         if input == "quit" {
                             break;
                         }
-                        let split: Vec<&str> = input.split(",").collect();
+                        let split: Vec<&str> = input.split(',').collect();
                         if split.len() != 3 {
                             break;
                         }
@@ -336,32 +336,32 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
 
 // Prints out a Wasm module, and for each function the corresponding translation in Cretonne IL.
 fn pretty_print_translation(
-    filename: &String,
-    data: &Vec<u8>,
+    filename: &str,
+    data: &[u8],
     translation: &TranslationResult,
     writer_wast: &mut Write,
     writer_cretonne: &mut Write,
 ) -> Result<(), io::Error> {
     let mut terminal = term::stdout().unwrap();
-    let mut parser = Parser::new(data.as_slice());
+    let mut parser = Parser::new(data);
     let mut parser_writer = Writer::new(writer_wast);
-    let imports_count = translation.functions.iter().fold(0, |acc, &ref f| match f {
+    let imports_count = translation.functions.iter().fold(0, |acc, f| match f {
         &FunctionTranslation::Import() => acc + 1,
         &FunctionTranslation::Code { .. } => acc,
     });
     match parser.read() {
-        s @ &ParserState::BeginWasm { .. } => parser_writer.write(&s)?,
+        s @ &ParserState::BeginWasm { .. } => parser_writer.write(s)?,
         _ => panic!("modules should begin properly"),
     }
     loop {
         match parser.read() {
             s @ &ParserState::BeginSection { code: SectionCode::Code, .. } => {
                 // The code section begins
-                parser_writer.write(&s)?;
+                parser_writer.write(s)?;
                 break;
             }
             &ParserState::EndWasm => return Ok(()),
-            s @ _ => parser_writer.write(&s)?,
+            s => parser_writer.write(s)?,
         }
     }
     let mut function_index = 0;
@@ -378,10 +378,10 @@ fn pretty_print_translation(
                 terminal.fg(term::color::CYAN).unwrap();
                 write!(writer_cretonne, "Wast ---------->\n")?;
                 terminal.reset().unwrap();
-                parser_writer.write(&s)?;
+                parser_writer.write(s)?;
             }
             s @ &ParserState::EndSection => {
-                parser_writer.write(&s)?;
+                parser_writer.write(s)?;
                 break;
             }
             _ => panic!("wrong content in code section"),
@@ -390,11 +390,11 @@ fn pretty_print_translation(
             loop {
                 match parser.read() {
                     s @ &ParserState::EndFunctionBody => {
-                        parser_writer.write(&s)?;
+                        parser_writer.write(s)?;
                         break;
                     }
-                    s @ _ => {
-                        parser_writer.write(&s)?;
+                    s => {
+                        parser_writer.write(s)?;
                     }
                 };
             }
@@ -417,7 +417,7 @@ fn pretty_print_translation(
     loop {
         match parser.read() {
             &ParserState::EndWasm => return Ok(()),
-            s @ _ => parser_writer.write(&s)?,
+            s => parser_writer.write(s)?,
         }
     }
 }
@@ -426,7 +426,7 @@ fn pretty_print_translation(
 pub fn pretty_verifier_error(
     func: &ir::Function,
     isa: Option<&TargetIsa>,
-    err: verifier::Error,
+    err: &verifier::Error,
 ) -> String {
     let msg = err.to_string();
     let str1 = match err.location {

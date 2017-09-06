@@ -210,12 +210,12 @@ impl WasmRuntime for StandaloneRuntime {
         // At instantiation, we allocate memory for the globals, the memories and the tables
         // First the globals
         let mut globals_data_size = 0;
-        for globalinfo in self.globals.info.iter_mut() {
+        for globalinfo in &mut self.globals.info {
             globalinfo.offset = globals_data_size;
             globals_data_size += globalinfo.global.ty.bytes() as usize;
         }
         self.globals.data.resize(globals_data_size, 0);
-        for globalinfo in self.globals.info.iter() {
+        for globalinfo in &self.globals.info {
             match globalinfo.global.initializer {
                 GlobalInit::I32Const(val) => unsafe {
                     write(

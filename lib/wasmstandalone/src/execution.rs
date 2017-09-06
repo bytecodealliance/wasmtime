@@ -6,7 +6,7 @@ use cretonne::verifier;
 use cretonne::settings::Configurable;
 use cretonne::result::CtonError;
 use cretonne::ir::entities::AnyEntity;
-use cretonne::ir::{self, Ebb, FuncRef, JumpTable, Function};
+use cretonne::ir::{Ebb, FuncRef, JumpTable, Function};
 use cretonne::binemit::{RelocSink, Reloc, CodeOffset};
 use cton_wasm::{TranslationResult, FunctionTranslation, ImportMappings, FunctionIndex};
 use std::mem::transmute;
@@ -140,7 +140,7 @@ pub fn compile_module(trans_result: &TranslationResult) -> Result<ExecutableCode
 }
 
 /// Jumps to the code region of memory and execute the start function of the module.
-pub fn execute(exec: ExecutableCode) -> Result<(), String> {
+pub fn execute(exec: &ExecutableCode) -> Result<(), String> {
     let code_buf = &exec.functions_code[exec.start_index];
     unsafe {
         match protect(
@@ -192,17 +192,17 @@ pub fn execute(exec: ExecutableCode) -> Result<(), String> {
 }
 
 /// Performs the relocations inside the function bytecode, provided the necessary metadata
-fn relocate(functions_metatada: &Vec<FunctionMetaData>, functions_code: &mut Vec<Vec<u8>>) {
+fn relocate(functions_metatada: &[FunctionMetaData], functions_code: &mut Vec<Vec<u8>>) {
     // The relocations are relative to the relocation's address plus four bytes
     for (func_index, function_in_memory) in functions_metatada.iter().enumerate() {
-        match function_in_memory {
-            &FunctionMetaData::Import() => continue,
-            &FunctionMetaData::Local {
+        match *function_in_memory {
+            FunctionMetaData::Import() => continue,
+            FunctionMetaData::Local {
                 ref relocs,
                 ref imports,
                 ref il_func,
             } => {
-                for (_, &(func_ref, offset)) in relocs.funcs.iter() {
+                for &(func_ref, offset) in relocs.funcs.values() {
                     let target_func_index = imports.functions[&func_ref];
                     let target_func_address: isize = functions_code[target_func_index].as_ptr() as
                         isize;
@@ -215,7 +215,7 @@ fn relocate(functions_metatada: &Vec<FunctionMetaData>, functions_code: &mut Vec
                         write_unaligned(reloc_address as *mut i32, reloc_delta_i32);
                     }
                 }
-                for (_, &(ebb, offset)) in relocs.ebbs.iter() {
+                for &(ebb, offset) in relocs.ebbs.values() {
                     unsafe {
                         let reloc_address: isize = functions_code[func_index]
                             .as_mut_ptr()
@@ -240,7 +240,7 @@ fn relocate(functions_metatada: &Vec<FunctionMetaData>, functions_code: &mut Vec
 pub fn pretty_verifier_error(
     func: &Function,
     isa: Option<&TargetIsa>,
-    err: verifier::Error,
+    err: &verifier::Error,
 ) -> String {
     let mut msg = err.to_string();
     match err.location {
@@ -256,7 +256,7 @@ pub fn pretty_verifier_error(
 /// Pretty-print a Cretonne error.
 pub fn pretty_error(func: &Function, isa: Option<&TargetIsa>, err: CtonError) -> String {
     if let CtonError::Verifier(e) = err {
-        pretty_verifier_error(func, isa, e)
+        pretty_verifier_error(func, isa, &e)
     } else {
         err.to_string()
     }
