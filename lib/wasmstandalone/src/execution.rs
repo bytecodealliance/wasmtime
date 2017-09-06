@@ -8,7 +8,7 @@ use cretonne::result::CtonError;
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::{self, Ebb, FuncRef, JumpTable, Function};
 use cretonne::binemit::{RelocSink, Reloc, CodeOffset};
-use wasm2cretonne::{TranslationResult, FunctionTranslation, ImportMappings, FunctionIndex};
+use cton_wasm::{TranslationResult, FunctionTranslation, ImportMappings, FunctionIndex};
 use std::mem::transmute;
 use region::Protection;
 use region::protect;

@@ -1,4 +1,4 @@
-use wasm2cretonne::{Local, FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, RawByte,
+use cton_wasm::{Local, FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, RawByte,
                     MemoryAddress, Global, GlobalInit, Table, Memory, WasmRuntime};
 use cton_frontend::FunctionBuilder;
 use cretonne::ir::{MemFlags, Value, InstBuilder, SigRef, FuncRef, ExtFuncData, FunctionName,
@@ -40,7 +40,7 @@ struct MemoryData {
 const PAGE_SIZE: usize = 65536;
 
 /// Object containing the standalone runtime information. To be passed after creation as argument
-/// to [`wasm2cretonne::translatemodule`](../wasm2cretonne/fn.translate_module.html).
+/// to `cton_wasm::translatemodule`.
 pub struct StandaloneRuntime {
     globals: GlobalsData,
     tables: Vec<TableData>,
@@ -68,7 +68,7 @@ impl StandaloneRuntime {
 }
 
 /// This trait is useful for
-/// [`wasm2cretonne::translatemodule`](../wasm2cretonne/fn.translate_module.html) because it
+/// `cton_wasm::translatemodule` because it
 /// tells how to translate runtime-dependent wasm instructions. These functions should not be
 /// called by the user.
 impl WasmRuntime for StandaloneRuntime {

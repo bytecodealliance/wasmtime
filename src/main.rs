@@ -5,20 +5,19 @@
 //! IL. Can also executes the `start` function of the module by laying out the memories, globals
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
-extern crate wasm2cretonne;
+extern crate cton_wasm;
 extern crate wasmstandalone;
 extern crate wasmparser;
 extern crate cretonne;
 extern crate wasmtext;
 extern crate docopt;
-extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate term;
 extern crate tempdir;
 
-use wasm2cretonne::{translate_module, TranslationResult, FunctionTranslation, DummyRuntime,
-                    WasmRuntime};
+use cton_wasm::{translate_module, TranslationResult, FunctionTranslation, DummyRuntime,
+                WasmRuntime};
 use wasmstandalone::{StandaloneRuntime, compile_module, execute};
 use std::path::PathBuf;
 use wasmparser::{Parser, ParserState, WasmDecoder, SectionCode};
@@ -65,9 +64,9 @@ The translation is dependent on the runtime chosen.
 The default is a dummy runtime that produces placeholder values.
 
 Usage:
-    wasm2cretonne-util [-vcop] <file>...
-    wasm2cretonne-util -e [-mvcop] <file>...
-    wasm2cretonne-util --help | --version
+    wasmstandalone-util [-vcop] <file>...
+    wasmstandalone-util -e [-mvcop] <file>...
+    wasmstandalone-util --help | --version
 
 Options:
     -v, --verbose       displays info on the different steps
@@ -144,7 +143,7 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
                     }
                 }
                 Some("wast") => {
-                    let tmp_dir = TempDir::new("wasm2cretonne").unwrap();
+                    let tmp_dir = TempDir::new("wasmstandalone").unwrap();
                     let file_path = tmp_dir.path().join("module.wasm");
                     File::create(file_path.clone()).unwrap();
                     Command::new("wast2wasm")
@@ -174,7 +173,7 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
     let mut dummy_runtime = DummyRuntime::new();
     let mut standalone_runtime = StandaloneRuntime::new();
     let translation = {
-        let mut runtime: &mut WasmRuntime = if args.flag_execute {
+        let runtime: &mut WasmRuntime = if args.flag_execute {
             &mut standalone_runtime
         } else {
             &mut dummy_runtime
@@ -248,6 +247,7 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
                         CtonError::Verifier(err) => {
                             return Err(pretty_verifier_error(&context.func, None, err));
                         }
+                        CtonError::InvalidInput |
                         CtonError::ImplLimitExceeded |
                         CtonError::CodeTooLarge => return Err(String::from(error.description())),
                     }

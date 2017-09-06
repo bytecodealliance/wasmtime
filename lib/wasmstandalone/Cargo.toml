@@ -8,7 +8,7 @@ repository = "https://github.com/stoklund/cretonne"
 license = "Apache-2.0"
 
 [dependencies]
-cretonne = { path = "../cretonne" }
-cretonne-frontend = { path = "../frontend" }
-wasm2cretonne = { path = "../wasm2cretonne" }
+cretonne = { git = "https://github.com/stoklund/cretonne.git" }
+cretonne-frontend = { git = "https://github.com/stoklund/cretonne.git" }
+cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
 region = "0.0.8"
