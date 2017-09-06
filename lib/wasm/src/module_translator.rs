@@ -81,7 +81,7 @@ pub fn translate_module(
     loop {
         match *parser.read_with_input(next_input) {
             ParserState::BeginSection { code: SectionCode::Type, .. } => {
-                match parse_function_signatures(&mut parser) {
+                match parse_function_signatures(&mut parser, runtime) {
                     Ok(sigs) => signatures = Some(sigs),
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the type section: {}", s))

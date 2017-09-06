@@ -489,23 +489,15 @@ fn translate_operator(
             index,
             table_index: _,
         } => {
-            // index is the index of the function's signature and table_index is the index
-            // of the table to search the function in
-            // TODO: have runtime support for tables
-            let sigref = find_signature_import(index as usize, builder, func_imports, signatures);
-            let args_num = builder.signature(sigref).unwrap().argument_types.len();
+            // `index` is the index of the function's signature and `table_index` is the index of
+            // the table to search the function in.
+            // TODO: Have runtime support for tables.
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, index, runtime);
             let index_val = state.pop1();
-            let cut_index = state.stack.len() - args_num;
-            let ret_values = runtime.translate_call_indirect(
-                builder,
-                sigref,
-                index_val,
-                &state.stack[cut_index..],
-            );
-            state.stack.truncate(cut_index);
-            for val in ret_values {
-                state.push1(*val);
-            }
+            let ret_values =
+                runtime.translate_call_indirect(builder, sigref, index_val, &state.peekn(num_args));
+            state.popn(num_args);
+            state.pushn(ret_values);
         }
         /******************************* Memory management ***********************************
          * Memory management is handled by runtime. It is usually translated into calls to
@@ -1162,18 +1154,4 @@ fn find_function_import(
     });
     func_imports.functions.insert(index, local_func_index);
     local_func_index
-}
-
-fn find_signature_import(
-    sig_index: SignatureIndex,
-    builder: &mut FunctionBuilder<Local>,
-    func_imports: &mut FunctionImports,
-    signatures: &[Signature],
-) -> SigRef {
-    if let Some(local_sig_index) = func_imports.signatures.get(&sig_index) {
-        return *local_sig_index;
-    }
-    let sig_local_index = builder.import_signature(signatures[sig_index].clone());
-    func_imports.signatures.insert(sig_index, sig_local_index);
-    sig_local_index
 }

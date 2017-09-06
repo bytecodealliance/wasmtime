@@ -2,8 +2,8 @@
 //! trait `WasmRuntime`.
 use cton_frontend::FunctionBuilder;
 use cretonne::ir::{self, Value, SigRef};
-use translation_utils::{Local, FunctionIndex, TableIndex, GlobalIndex, MemoryIndex, Global, Table,
-                        Memory};
+use translation_utils::{Local, SignatureIndex, FunctionIndex, TableIndex, GlobalIndex,
+                        MemoryIndex, Global, Table, Memory};
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -40,12 +40,26 @@ pub trait FuncEnvironment {
     ///
     /// The index space covers both imported and locally declared memories.
     fn make_heap(&self, func: &mut ir::Function, index: MemoryIndex) -> ir::Heap;
+
+    /// Set up a signature definition in the preamble of `func` that can be used for an indirect
+    /// call with signature `index`.
+    ///
+    /// The signature may contain additional arguments needed for an indirect call, but the
+    /// arguments marked as `ArgumentPurpose::Normal` must correspond to the WebAssembly signature
+    /// arguments.
+    ///
+    /// The signature will only be used for indirect calls, even if the module has direct function
+    /// calls with the same WebAssembly type.
+    fn make_indirect_sig(&self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef;
 }
 
 /// An object satisfyng the `WasmRuntime` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
 /// by the user, they are only for the `wasm2cretonne` internal use.
 pub trait WasmRuntime: FuncEnvironment {
+    /// Declares a function signature to the runtime.
+    fn declare_signature(&mut self, sig: &ir::Signature);
+
     /// Declares a global to the runtime.
     fn declare_global(&mut self, global: Global);
     /// Declares a table to the runtime.
