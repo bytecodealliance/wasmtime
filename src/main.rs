@@ -101,7 +101,9 @@ fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
 
 fn main() {
     let args: Args = Docopt::new(USAGE)
-        .and_then(|d| d.help(true).version(Some(format!("0.0.0"))).deserialize())
+        .and_then(|d| {
+            d.help(true).version(Some(format!("0.0.0"))).deserialize()
+        })
         .unwrap_or_else(|e| e.exit());
     let mut terminal = term::stdout().unwrap();
     for filename in args.arg_file.iter() {
@@ -152,10 +154,10 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
                         .arg(file_path.to_str().unwrap())
                         .output()
                         .or_else(|e| if let io::ErrorKind::NotFound = e.kind() {
-                                     return Err(String::from("wast2wasm not found"));
-                                 } else {
-                                     return Err(String::from(e.description()));
-                                 })
+                            return Err(String::from("wast2wasm not found"));
+                        } else {
+                            return Err(String::from(e.description()));
+                        })
                         .unwrap();
                     match read_wasm_file(file_path) {
                         Ok(data) => data,
@@ -312,16 +314,15 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
                         if split.len() != 3 {
                             break;
                         }
-                        let memory = standalone_runtime
-                            .inspect_memory(str::parse(split[0]).unwrap(),
-                                            str::parse(split[1]).unwrap(),
-                                            str::parse(split[2]).unwrap());
-                        let mut s = memory
-                            .iter()
-                            .fold(String::from("#"), |mut acc, byte| {
-                                acc.push_str(format!("{:02x}_", byte).as_str());
-                                acc
-                            });
+                        let memory = standalone_runtime.inspect_memory(
+                            str::parse(split[0]).unwrap(),
+                            str::parse(split[1]).unwrap(),
+                            str::parse(split[2]).unwrap(),
+                        );
+                        let mut s = memory.iter().fold(String::from("#"), |mut acc, byte| {
+                            acc.push_str(format!("{:02x}_", byte).as_str());
+                            acc
+                        });
                         s.pop();
                         println!("{}", s);
                     }
@@ -334,22 +335,20 @@ fn handle_module(args: &Args, path: PathBuf, name: String) -> Result<(), String>
 }
 
 // Prints out a Wasm module, and for each function the corresponding translation in Cretonne IL.
-fn pretty_print_translation(filename: &String,
-                            data: &Vec<u8>,
-                            translation: &TranslationResult,
-                            writer_wast: &mut Write,
-                            writer_cretonne: &mut Write)
-                            -> Result<(), io::Error> {
+fn pretty_print_translation(
+    filename: &String,
+    data: &Vec<u8>,
+    translation: &TranslationResult,
+    writer_wast: &mut Write,
+    writer_cretonne: &mut Write,
+) -> Result<(), io::Error> {
     let mut terminal = term::stdout().unwrap();
     let mut parser = Parser::new(data.as_slice());
     let mut parser_writer = Writer::new(writer_wast);
-    let imports_count = translation
-        .functions
-        .iter()
-        .fold(0, |acc, &ref f| match f {
-            &FunctionTranslation::Import() => acc + 1,
-            &FunctionTranslation::Code { .. } => acc,
-        });
+    let imports_count = translation.functions.iter().fold(0, |acc, &ref f| match f {
+        &FunctionTranslation::Import() => acc + 1,
+        &FunctionTranslation::Code { .. } => acc,
+    });
     match parser.read() {
         s @ &ParserState::BeginWasm { .. } => parser_writer.write(&s)?,
         _ => panic!("modules should begin properly"),
@@ -370,10 +369,12 @@ fn pretty_print_translation(filename: &String,
         match parser.read() {
             s @ &ParserState::BeginFunctionBody { .. } => {
                 terminal.fg(term::color::BLUE).unwrap();
-                write!(writer_cretonne,
-                       "====== Function No. {} of module \"{}\" ======\n",
-                       function_index,
-                       filename)?;
+                write!(
+                    writer_cretonne,
+                    "====== Function No. {} of module \"{}\" ======\n",
+                    function_index,
+                    filename
+                )?;
                 terminal.fg(term::color::CYAN).unwrap();
                 write!(writer_cretonne, "Wast ---------->\n")?;
                 terminal.reset().unwrap();
@@ -398,13 +399,13 @@ fn pretty_print_translation(filename: &String,
                 };
             }
         }
-        let mut function_string =
-            format!("  {}",
-                    match translation.functions[function_index + imports_count] {
-                            FunctionTranslation::Code { ref il, .. } => il,
-                            FunctionTranslation::Import() => panic!("should not happen"),
-                        }
-                        .display(None));
+        let mut function_string = format!(
+            "  {}",
+            match translation.functions[function_index + imports_count] {
+                FunctionTranslation::Code { ref il, .. } => il,
+                FunctionTranslation::Import() => panic!("should not happen"),
+            }.display(None)
+        );
         function_string.pop();
         let function_str = str::replace(function_string.as_str(), "\n", "\n  ");
         terminal.fg(term::color::CYAN).unwrap();
@@ -422,17 +423,20 @@ fn pretty_print_translation(filename: &String,
 }
 
 /// Pretty-print a verifier error.
-pub fn pretty_verifier_error(func: &ir::Function,
-                             isa: Option<&TargetIsa>,
-                             err: verifier::Error)
-                             -> String {
+pub fn pretty_verifier_error(
+    func: &ir::Function,
+    isa: Option<&TargetIsa>,
+    err: verifier::Error,
+) -> String {
     let msg = err.to_string();
     let str1 = match err.location {
         AnyEntity::Inst(inst) => {
-            format!("{}\n{}: {}\n\n",
-                    msg,
-                    inst,
-                    func.dfg.display_inst(inst, isa))
+            format!(
+                "{}\n{}: {}\n\n",
+                msg,
+                inst,
+                func.dfg.display_inst(inst, isa)
+            )
         }
         _ => String::from(format!("{}\n", msg)),
     };
