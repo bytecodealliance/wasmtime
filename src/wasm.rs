@@ -5,7 +5,7 @@
 //! IL. Can also executes the `start` function of the module by laying out the memories, globals
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
-use cton_wasm::{translate_module, FunctionTranslation, DummyRuntime, WasmRuntime};
+use cton_wasm::{translate_module, DummyRuntime, WasmRuntime};
 use std::path::PathBuf;
 use cretonne::loop_analysis::LoopAnalysis;
 use cretonne::flowgraph::ControlFlowGraph;
@@ -149,13 +149,9 @@ fn handle_module(
         vprint!(flag_verbose, "Checking...   ");
         terminal.reset().unwrap();
         for func in &translation.functions {
-            let il = match *func {
-                FunctionTranslation::Import() => continue,
-                FunctionTranslation::Code { ref il, .. } => il.clone(),
-            };
-            match verifier::verify_function(&il, None) {
+            match verifier::verify_function(func, None) {
                 Ok(()) => (),
-                Err(err) => return Err(pretty_verifier_error(&il, None, err)),
+                Err(err) => return Err(pretty_verifier_error(func, None, err)),
             }
         }
         terminal.fg(term::color::GREEN).unwrap();
@@ -167,10 +163,7 @@ fn handle_module(
         vprint!(flag_verbose, "Optimizing... ");
         terminal.reset().unwrap();
         for func in &translation.functions {
-            let mut il = match *func {
-                FunctionTranslation::Import() => continue,
-                FunctionTranslation::Code { ref il, .. } => il.clone(),
-            };
+            let mut il = func.clone();
             let mut loop_analysis = LoopAnalysis::new();
             let mut cfg = ControlFlowGraph::new();
             cfg.compute(&il);

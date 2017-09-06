@@ -23,8 +23,7 @@ mod sections_translator;
 mod state;
 mod translation_utils;
 
-pub use module_translator::{translate_module, TranslationResult, FunctionTranslation,
-                            ImportMappings};
-pub use runtime::{WasmRuntime, DummyRuntime};
+pub use module_translator::{translate_module, TranslationResult};
+pub use runtime::{FuncEnvironment, WasmRuntime, DummyRuntime};
 pub use translation_utils::{Local, FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, RawByte,
                             MemoryAddress, SignatureIndex, Global, GlobalInit, Table, Memory};

@@ -64,13 +64,21 @@ pub fn parse_function_signatures(
 }
 
 /// Retrieves the imports from the imports section of the binary.
-pub fn parse_import_section(parser: &mut Parser) -> Result<Vec<Import>, SectionParsingError> {
+pub fn parse_import_section(
+    parser: &mut Parser,
+    runtime: &mut WasmRuntime,
+) -> Result<Vec<Import>, SectionParsingError> {
     let mut imports = Vec::new();
     loop {
         match *parser.read() {
             ParserState::ImportSectionEntry {
-                ty: ImportSectionEntryType::Function(sig), ..
-            } => imports.push(Import::Function { sig_index: sig }),
+                ty: ImportSectionEntryType::Function(sig),
+                module,
+                field,
+            } => {
+                runtime.declare_func_import(sig as SignatureIndex, module, field);
+                imports.push(Import::Function { sig_index: sig });
+            }
             ParserState::ImportSectionEntry {
                 ty: ImportSectionEntryType::Memory(MemoryType { limits: ref memlimits }), ..
             } => {
@@ -110,11 +118,15 @@ pub fn parse_import_section(parser: &mut Parser) -> Result<Vec<Import>, SectionP
 /// Retrieves the correspondances between functions and signatures from the function section
 pub fn parse_function_section(
     parser: &mut Parser,
+    runtime: &mut WasmRuntime,
 ) -> Result<Vec<SignatureIndex>, SectionParsingError> {
     let mut funcs = Vec::new();
     loop {
         match *parser.read() {
-            ParserState::FunctionSectionEntry(sigindex) => funcs.push(sigindex as SignatureIndex),
+            ParserState::FunctionSectionEntry(sigindex) => {
+                runtime.declare_func_type(sigindex as SignatureIndex);
+                funcs.push(sigindex as SignatureIndex);
+            }
             ParserState::EndSection => break,
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };

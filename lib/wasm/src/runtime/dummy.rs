@@ -12,6 +12,12 @@ pub struct DummyRuntime {
     // Unprocessed signatures exactly as provided by `declare_signature()`.
     signatures: Vec<ir::Signature>,
     globals: Vec<Global>,
+
+    // Types of functions, imported and local.
+    func_types: Vec<SignatureIndex>,
+
+    // Names of imported functions.
+    imported_funcs: Vec<ir::FunctionName>,
 }
 
 impl DummyRuntime {
@@ -20,6 +26,8 @@ impl DummyRuntime {
         Self {
             signatures: Vec::new(),
             globals: Vec::new(),
+            func_types: Vec::new(),
+            imported_funcs: Vec::new(),
         }
     }
 }
@@ -53,6 +61,20 @@ impl FuncEnvironment for DummyRuntime {
         // signature index arguments.
         func.dfg.signatures.push(self.signatures[index].clone())
     }
+
+    fn make_direct_func(&self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef {
+        let sigidx = self.func_types[index];
+        // A real implementation would probably add a `vmctx` argument.
+        // And maybe attempt some signature de-duplication.
+        let signature = func.dfg.signatures.push(self.signatures[sigidx].clone());
+
+        let name = match self.imported_funcs.get(index) {
+            Some(name) => name.clone(),
+            None => ir::FunctionName::new(format!("localfunc{}", index)),
+        };
+
+        func.dfg.ext_funcs.push(ir::ExtFuncData { name, signature })
+    }
 }
 
 impl WasmRuntime for DummyRuntime {
@@ -75,6 +97,25 @@ impl WasmRuntime for DummyRuntime {
 
     fn declare_signature(&mut self, sig: &ir::Signature) {
         self.signatures.push(sig.clone());
+    }
+
+    fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &[u8], field: &[u8]) {
+        assert_eq!(
+            self.func_types.len(),
+            self.imported_funcs.len(),
+            "Imported functions must be declared first"
+        );
+        self.func_types.push(sig_index);
+
+        let mut name = Vec::new();
+        name.extend(module.iter().cloned().map(name_fold));
+        name.push(b'_');
+        name.extend(field.iter().cloned().map(name_fold));
+        self.imported_funcs.push(ir::FunctionName::new(name));
+    }
+
+    fn declare_func_type(&mut self, sig_index: SignatureIndex) {
+        self.func_types.push(sig_index);
     }
 
     fn declare_global(&mut self, global: Global) {
@@ -104,5 +145,14 @@ impl WasmRuntime for DummyRuntime {
     }
     fn next_function(&mut self) {
         // We do nothing
+    }
+}
+
+// Generate characters suitable for printable `FuncName`s.
+fn name_fold(c: u8) -> u8 {
+    if (c as char).is_alphanumeric() {
+        c
+    } else {
+        b'_'
     }
 }

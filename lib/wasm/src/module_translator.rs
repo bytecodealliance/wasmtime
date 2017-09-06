@@ -5,8 +5,8 @@ use sections_translator::{SectionParsingError, parse_function_signatures, parse_
                           parse_function_section, parse_export_section, parse_memory_section,
                           parse_global_section, parse_table_section, parse_elements_section,
                           parse_data_section};
-use translation_utils::{type_to_type, Import, SignatureIndex, FunctionIndex, invert_hashmaps};
-use cretonne::ir::{Function, Type, FuncRef, SigRef};
+use translation_utils::{type_to_type, Import, SignatureIndex, FunctionIndex};
+use cretonne::ir::{Function, Type};
 use code_translator::translate_function_body;
 use cton_frontend::ILBuilder;
 use std::collections::HashMap;
@@ -15,43 +15,12 @@ use runtime::WasmRuntime;
 /// Output of the [`translate_module`](fn.translate_module.html) function.
 pub struct TranslationResult {
     /// The translated functions.
-    pub functions: Vec<FunctionTranslation>,
+    pub functions: Vec<Function>,
     /// When present, the index of the function defined as `start` of the module.
+    ///
+    /// Note that this is a WebAssembly function index and not an index into the `functions` vector
+    /// above. The imported functions are numbered before the local functions.
     pub start_index: Option<FunctionIndex>,
-}
-
-/// A function in a WebAssembly module can be either imported, or defined inside it.
-#[derive(Clone)]
-pub enum FunctionTranslation {
-    /// A function defined inside the WebAssembly module.
-    Code {
-        /// The translation in Cretonne IL.
-        il: Function,
-        /// The mappings between Cretonne imports and indexes in the function index space.
-        imports: ImportMappings,
-    },
-    /// An imported function.
-    Import(),
-}
-
-#[derive(Clone, Debug)]
-/// Mappings describing the relations between imports of the Cretonne IL functions and the
-/// functions in the WebAssembly module.
-pub struct ImportMappings {
-    /// Find the index of a function in the WebAssembly module thanks to a `FuncRef`.
-    pub functions: HashMap<FuncRef, FunctionIndex>,
-    /// Find the index of a signature in the WebAssembly module thanks to a `SigRef`.
-    pub signatures: HashMap<SigRef, SignatureIndex>,
-}
-
-impl ImportMappings {
-    /// Create a new empty `ImportMappings`.
-    pub fn new() -> Self {
-        Self {
-            functions: HashMap::new(),
-            signatures: HashMap::new(),
-        }
-    }
 }
 
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cretonne IL
@@ -76,7 +45,6 @@ pub fn translate_module(
     let mut exports: Option<HashMap<FunctionIndex, String>> = None;
     let mut next_input = ParserInput::Default;
     let mut function_index: FunctionIndex = 0;
-    let mut function_imports_count = 0;
     let mut start_index: Option<FunctionIndex> = None;
     loop {
         match *parser.read_with_input(next_input) {
@@ -90,7 +58,7 @@ pub fn translate_module(
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Import, .. } => {
-                match parse_import_section(&mut parser) {
+                match parse_import_section(&mut parser, runtime) {
                     Ok(imps) => {
                         for import in imps {
                             match import {
@@ -121,11 +89,10 @@ pub fn translate_module(
                         return Err(format!("wrong content in the import section: {}", s))
                     }
                 }
-                function_imports_count = function_index;
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Function, .. } => {
-                match parse_function_section(&mut parser) {
+                match parse_function_section(&mut parser, runtime) {
                     Ok(funcs) => {
                         match functions {
                             None => functions = Some(funcs),
@@ -233,8 +200,7 @@ pub fn translate_module(
         None => return Err(String::from("missing a function section")),
         Some(functions) => functions,
     };
-    let mut il_functions: Vec<FunctionTranslation> = Vec::new();
-    il_functions.resize(function_imports_count, FunctionTranslation::Import());
+    let mut il_functions: Vec<Function> = Vec::new();
     let mut il_builder = ILBuilder::new();
     runtime.begin_translation();
     loop {
@@ -263,17 +229,10 @@ pub fn translate_module(
             &signature,
             &locals,
             &exports,
-            &signatures,
-            &functions,
             &mut il_builder,
             runtime,
         ) {
-            Ok((il_func, imports)) => {
-                il_functions.push(FunctionTranslation::Code {
-                    il: il_func,
-                    imports: invert_hashmaps(&imports),
-                })
-            }
+            Ok(il_func) => il_functions.push(il_func),
             Err(s) => return Err(s),
         }
         function_index += 1;
