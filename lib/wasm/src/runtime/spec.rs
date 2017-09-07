@@ -12,7 +12,12 @@ pub enum GlobalValue {
     Const(ir::Value),
 
     /// This is a variable in memory that should be referenced as a `GlobalVar`.
-    Memory { gv: ir::GlobalVar, ty: ir::Type },
+    Memory {
+        /// Which global variable should be referenced.
+        gv: ir::GlobalVar,
+        /// The global variable's type.
+        ty: ir::Type,
+    },
 }
 
 /// Environment affecting the translation of a single WebAssembly function.
