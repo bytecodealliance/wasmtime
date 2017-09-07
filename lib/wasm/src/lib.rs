@@ -24,6 +24,6 @@ mod state;
 mod translation_utils;
 
 pub use module_translator::{translate_module, TranslationResult};
-pub use runtime::{FuncEnvironment, WasmRuntime, DummyRuntime};
+pub use runtime::{FuncEnvironment, WasmRuntime, DummyRuntime, GlobalValue};
 pub use translation_utils::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, SignatureIndex,
                             Global, GlobalInit, Table, Memory};
