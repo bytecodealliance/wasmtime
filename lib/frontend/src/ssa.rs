@@ -1145,9 +1145,9 @@ mod tests {
             func.dfg.ins(cur).iconst(I32, 1)
         };
         ssa.def_var(x_var, x1, block0);
-        let mut jt_data = JumpTableData::new();
-        jt_data.set_entry(0, ebb1);
-        let jt = func.jump_tables.push(jt_data);
+        let mut data = JumpTableData::new();
+        data.push_entry(ebb1);
+        let jt = func.create_jump_table(data);
         ssa.use_var(
             &mut func.dfg,
             &mut func.layout,

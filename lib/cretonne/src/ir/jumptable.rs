@@ -46,6 +46,11 @@ impl JumpTableData {
         self.table[idx] = dest.into();
     }
 
+    /// Append a table entry.
+    pub fn push_entry(&mut self, dest: Ebb) {
+        self.table.push(dest.into())
+    }
+
     /// Clear a table entry.
     ///
     /// The `br_table` instruction will fall through if given an index corresponding to a cleared

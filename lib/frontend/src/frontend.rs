@@ -2,7 +2,7 @@
 use cretonne::cursor::{Cursor, FuncCursor};
 use cretonne::ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData,
                    StackSlotData, DataFlowGraph, InstructionData, ExtFuncData, FuncRef, SigRef,
-                   Signature, InstBuilderBase};
+                   Signature, InstBuilderBase, GlobalVarData, GlobalVar, HeapData, Heap};
 use cretonne::ir::instructions::BranchInfo;
 use cretonne::ir::function::DisplayFunction;
 use cretonne::isa::TargetIsa;
@@ -329,29 +329,39 @@ where
     }
 
     /// Creates a jump table in the function, to be used by `br_table` instructions.
-    pub fn create_jump_table(&mut self) -> JumpTable {
-        self.func.jump_tables.push(JumpTableData::new())
+    pub fn create_jump_table(&mut self, data: JumpTableData) -> JumpTable {
+        self.func.create_jump_table(data)
     }
 
     /// Inserts an entry in a previously declared jump table.
     pub fn insert_jump_table_entry(&mut self, jt: JumpTable, index: usize, ebb: Ebb) {
-        self.func.jump_tables[jt].set_entry(index, ebb);
+        self.func.insert_jump_table_entry(jt, index, ebb)
     }
 
     /// Creates a stack slot in the function, to be used by `stack_load`, `stack_store` and
     /// `stack_addr` instructions.
     pub fn create_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
-        self.func.stack_slots.push(data)
+        self.func.create_stack_slot(data)
     }
 
     /// Adds a signature which can later be used to declare an external function import.
     pub fn import_signature(&mut self, signature: Signature) -> SigRef {
-        self.func.dfg.signatures.push(signature)
+        self.func.import_signature(signature)
     }
 
     /// Declare an external function import.
     pub fn import_function(&mut self, data: ExtFuncData) -> FuncRef {
-        self.func.dfg.ext_funcs.push(data)
+        self.func.import_function(data)
+    }
+
+    /// Declares a global variable accessible to the function.
+    pub fn create_global_var(&mut self, data: GlobalVarData) -> GlobalVar {
+        self.func.create_global_var(data)
+    }
+
+    /// Declares a heap accessible to the function.
+    pub fn create_heap(&mut self, data: HeapData) -> Heap {
+        self.func.create_heap(data)
     }
 
     /// Returns an object with the [`InstBuilder`](../cretonne/ir/builder/trait.InstBuilder.html)

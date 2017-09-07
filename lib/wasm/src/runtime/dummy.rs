@@ -40,7 +40,7 @@ impl FuncEnvironment for DummyRuntime {
     fn make_global(&self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
         // Just create a dummy `vmctx` global.
         let offset = ((index * 8) as i32 + 8).into();
-        let gv = func.global_vars.push(ir::GlobalVarData::VmCtx { offset });
+        let gv = func.create_global_var(ir::GlobalVarData::VmCtx { offset });
         GlobalValue::Memory {
             gv,
             ty: self.globals[index].ty,
@@ -48,7 +48,7 @@ impl FuncEnvironment for DummyRuntime {
     }
 
     fn make_heap(&self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
-        func.heaps.push(ir::HeapData {
+        func.create_heap(ir::HeapData {
             base: ir::HeapBase::ReservedReg,
             min_size: 0.into(),
             guard_size: 0x8000_0000.into(),
@@ -59,21 +59,21 @@ impl FuncEnvironment for DummyRuntime {
     fn make_indirect_sig(&self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
         // A real implementation would probably change the calling convention and add `vmctx` and
         // signature index arguments.
-        func.dfg.signatures.push(self.signatures[index].clone())
+        func.import_signature(self.signatures[index].clone())
     }
 
     fn make_direct_func(&self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef {
         let sigidx = self.func_types[index];
         // A real implementation would probably add a `vmctx` argument.
         // And maybe attempt some signature de-duplication.
-        let signature = func.dfg.signatures.push(self.signatures[sigidx].clone());
+        let signature = func.import_signature(self.signatures[sigidx].clone());
 
         let name = match self.imported_funcs.get(index) {
             Some(name) => name.clone(),
             None => ir::FunctionName::new(format!("localfunc{}", index)),
         };
 
-        func.dfg.ext_funcs.push(ir::ExtFuncData { name, signature })
+        func.import_function(ir::ExtFuncData { name, signature })
     }
 
     fn translate_call_indirect(

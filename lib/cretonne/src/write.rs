@@ -395,9 +395,7 @@ mod tests {
         f.name = FunctionName::new("foo");
         assert_eq!(f.to_string(), "function %foo() native {\n}\n");
 
-        f.stack_slots.push(
-            StackSlotData::new(StackSlotKind::Local, 4),
-        );
+        f.create_stack_slot(StackSlotData::new(StackSlotKind::Local, 4));
         assert_eq!(
             f.to_string(),
             "function %foo() native {\n    ss0 = local 4\n}\n"
