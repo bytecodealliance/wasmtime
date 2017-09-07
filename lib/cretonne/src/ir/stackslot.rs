@@ -255,14 +255,8 @@ mod tests {
     fn stack_slot() {
         let mut func = Function::new();
 
-        let ss0 = func.stack_slots.push(StackSlotData::new(
-            StackSlotKind::IncomingArg,
-            4,
-        ));
-        let ss1 = func.stack_slots.push(StackSlotData::new(
-            StackSlotKind::SpillSlot,
-            8,
-        ));
+        let ss0 = func.create_stack_slot(StackSlotData::new(StackSlotKind::IncomingArg, 4));
+        let ss1 = func.create_stack_slot(StackSlotData::new(StackSlotKind::SpillSlot, 8));
         assert_eq!(ss0.to_string(), "ss0");
         assert_eq!(ss1.to_string(), "ss1");
 

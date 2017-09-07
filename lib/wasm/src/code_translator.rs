@@ -21,7 +21,8 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
-use cretonne::ir::{self, Function, Signature, Type, InstBuilder, FunctionName, Ebb, MemFlags};
+use cretonne::ir::{self, Function, Signature, Type, InstBuilder, FunctionName, Ebb, MemFlags,
+                   JumpTableData};
 use cretonne::ir::types::*;
 use cretonne::ir::immediates::{Ieee32, Ieee64};
 use cretonne::ir::condcodes::{IntCC, FloatCC};
@@ -363,14 +364,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             if jump_args_count == 0 {
                 // No jump arguments
                 let val = state.pop1();
-                let jt = builder.create_jump_table();
-                for (index, depth) in depths.iter().enumerate() {
-                    let i = state.control_stack.len() - 1 - (*depth as usize);
+                let mut data = JumpTableData::new();
+                for depth in depths {
+                    let i = state.control_stack.len() - 1 - (depth as usize);
                     let frame = &mut state.control_stack[i];
                     let ebb = frame.br_destination();
-                    builder.insert_jump_table_entry(jt, index, ebb);
+                    data.push_entry(ebb);
                     frame.set_reachable();
                 }
+                let jt = builder.create_jump_table(data);
                 builder.ins().br_table(val, jt);
                 let i = state.control_stack.len() - 1 - (default as usize);
                 let frame = &mut state.control_stack[i];
@@ -383,20 +385,20 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 // We then proceed to split the edges going out of the br_table
                 let val = state.pop1();
                 let cut_index = state.stack.len() - jump_args_count;
-                let jt = builder.create_jump_table();
-                let dest_ebbs: HashMap<usize, Ebb> =
-                    depths.iter().enumerate().fold(HashMap::new(), |mut acc,
-                     (index, &depth)| {
-                        if acc.get(&(depth as usize)).is_none() {
-                            let branch_ebb = builder.create_ebb();
-                            builder.insert_jump_table_entry(jt, index, branch_ebb);
-                            acc.insert(depth as usize, branch_ebb);
-                            return acc;
-                        };
-                        let branch_ebb = acc[&(depth as usize)];
-                        builder.insert_jump_table_entry(jt, index, branch_ebb);
-                        acc
-                    });
+                let mut data = JumpTableData::new();
+                let dest_ebbs: HashMap<usize, Ebb> = depths.iter().fold(HashMap::new(), |mut acc,
+                 &depth| {
+                    if acc.get(&(depth as usize)).is_none() {
+                        let branch_ebb = builder.create_ebb();
+                        data.push_entry(branch_ebb);
+                        acc.insert(depth as usize, branch_ebb);
+                        return acc;
+                    };
+                    let branch_ebb = acc[&(depth as usize)];
+                    data.push_entry(branch_ebb);
+                    acc
+                });
+                let jt = builder.create_jump_table(data);
                 builder.ins().br_table(val, jt);
                 let default_ebb = state.control_stack[state.control_stack.len() - 1 -
                                                           (default as usize)]

@@ -120,7 +120,7 @@ impl<'a> Context<'a> {
     fn add_ss(&mut self, number: u32, data: StackSlotData, loc: &Location) -> Result<()> {
         self.map.def_ss(
             number,
-            self.function.stack_slots.push(data),
+            self.function.create_stack_slot(data),
             loc,
         )
     }
@@ -137,7 +137,7 @@ impl<'a> Context<'a> {
     fn add_gv(&mut self, number: u32, data: GlobalVarData, loc: &Location) -> Result<()> {
         self.map.def_gv(
             number,
-            self.function.global_vars.push(data),
+            self.function.create_global_var(data),
             loc,
         )
     }
@@ -154,7 +154,7 @@ impl<'a> Context<'a> {
     fn add_heap(&mut self, number: u32, data: HeapData, loc: &Location) -> Result<()> {
         self.map.def_heap(
             number,
-            self.function.heaps.push(data),
+            self.function.create_heap(data),
             loc,
         )
     }
@@ -171,7 +171,7 @@ impl<'a> Context<'a> {
     fn add_sig(&mut self, number: u32, data: Signature, loc: &Location) -> Result<()> {
         self.map.def_sig(
             number,
-            self.function.dfg.signatures.push(data),
+            self.function.import_signature(data),
             loc,
         )
     }
@@ -188,7 +188,7 @@ impl<'a> Context<'a> {
     fn add_fn(&mut self, number: u32, data: ExtFuncData, loc: &Location) -> Result<()> {
         self.map.def_fn(
             number,
-            self.function.dfg.ext_funcs.push(data),
+            self.function.import_function(data),
             loc,
         )
     }
@@ -205,7 +205,7 @@ impl<'a> Context<'a> {
     fn add_jt(&mut self, number: u32, data: JumpTableData, loc: &Location) -> Result<()> {
         self.map.def_jt(
             number,
-            self.function.jump_tables.push(data),
+            self.function.create_jump_table(data),
             loc,
         )
     }
@@ -1275,7 +1275,7 @@ impl<'a> Parser<'a> {
         let data = match self.token() {
             Some(Token::Identifier("function")) => {
                 let (loc, name, sig) = self.parse_function_spec(ctx.unique_isa)?;
-                let sigref = ctx.function.dfg.signatures.push(sig);
+                let sigref = ctx.function.import_signature(sig);
                 ctx.map.def_entity(sigref.into(), &loc).expect(
                     "duplicate SigRef entities created",
                 );

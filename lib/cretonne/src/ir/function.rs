@@ -7,6 +7,8 @@ use entity::{PrimaryMap, EntityMap};
 use ir;
 use ir::{FunctionName, CallConv, Signature, DataFlowGraph, Layout};
 use ir::{InstEncodings, ValueLocations, JumpTables, StackSlots, EbbOffsets};
+use ir::{Ebb, JumpTableData, JumpTable, StackSlotData, StackSlot, SigRef, ExtFuncData, FuncRef,
+         GlobalVarData, GlobalVar, HeapData, Heap};
 use isa::TargetIsa;
 use std::fmt;
 use write::write_function;
@@ -91,6 +93,42 @@ impl Function {
     /// Create a new empty, anonymous function with a native calling convention.
     pub fn new() -> Function {
         Self::with_name_signature(FunctionName::default(), Signature::new(CallConv::Native))
+    }
+
+    /// Creates a jump table in the function, to be used by `br_table` instructions.
+    pub fn create_jump_table(&mut self, data: JumpTableData) -> JumpTable {
+        self.jump_tables.push(data)
+    }
+
+    /// Inserts an entry in a previously declared jump table.
+    pub fn insert_jump_table_entry(&mut self, jt: JumpTable, index: usize, ebb: Ebb) {
+        self.jump_tables[jt].set_entry(index, ebb);
+    }
+
+    /// Creates a stack slot in the function, to be used by `stack_load`, `stack_store` and
+    /// `stack_addr` instructions.
+    pub fn create_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
+        self.stack_slots.push(data)
+    }
+
+    /// Adds a signature which can later be used to declare an external function import.
+    pub fn import_signature(&mut self, signature: Signature) -> SigRef {
+        self.dfg.signatures.push(signature)
+    }
+
+    /// Declare an external function import.
+    pub fn import_function(&mut self, data: ExtFuncData) -> FuncRef {
+        self.dfg.ext_funcs.push(data)
+    }
+
+    /// Declares a global variable accessible to the function.
+    pub fn create_global_var(&mut self, data: GlobalVarData) -> GlobalVar {
+        self.global_vars.push(data)
+    }
+
+    /// Declares a heap accessible to the function.
+    pub fn create_heap(&mut self, data: HeapData) -> Heap {
+        self.heaps.push(data)
     }
 
     /// Return an object that can display this function with correct ISA-specific annotations.
