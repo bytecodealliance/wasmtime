@@ -11,6 +11,6 @@ license = "Apache-2.0"
 name = "cton_wasm"
 
 [dependencies]
-wasmparser = "0.8.2"
+wasmparser = "0.9.3"
 cretonne = { path = "../cretonne" }
 cretonne-frontend = { path = "../frontend" }
