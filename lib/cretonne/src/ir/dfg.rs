@@ -74,6 +74,17 @@ impl DataFlowGraph {
         }
     }
 
+    /// Clear everything.
+    pub fn clear(&mut self) {
+        self.insts.clear();
+        self.results.clear();
+        self.ebbs.clear();
+        self.value_lists.clear();
+        self.values.clear();
+        self.signatures.clear();
+        self.ext_funcs.clear();
+    }
+
     /// Get the total number of instructions created in this function, whether they are currently
     /// inserted in the layout or not.
     ///

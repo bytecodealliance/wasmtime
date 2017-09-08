@@ -51,6 +51,14 @@ impl Layout {
             last_ebb: None,
         }
     }
+
+    /// Clear the layout.
+    pub fn clear(&mut self) {
+        self.ebbs.clear();
+        self.insts.clear();
+        self.first_ebb = None;
+        self.last_ebb = None;
+    }
 }
 
 // Sequence numbers.

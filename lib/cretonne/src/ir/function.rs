@@ -74,6 +74,20 @@ impl Function {
         }
     }
 
+    /// Clear all data structures in this function.
+    pub fn clear(&mut self) {
+        self.signature.clear(ir::CallConv::Native);
+        self.stack_slots.clear();
+        self.global_vars.clear();
+        self.heaps.clear();
+        self.jump_tables.clear();
+        self.dfg.clear();
+        self.layout.clear();
+        self.encodings.clear();
+        self.locations.clear();
+        self.offsets.clear();
+    }
+
     /// Create a new empty, anonymous function with a native calling convention.
     pub fn new() -> Function {
         Self::with_name_signature(FunctionName::default(), Signature::new(CallConv::Native))

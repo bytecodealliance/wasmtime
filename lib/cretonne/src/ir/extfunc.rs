@@ -47,6 +47,14 @@ impl Signature {
         }
     }
 
+    /// Clear the signature so it is identical to a fresh one returned by `new()`.
+    pub fn clear(&mut self, call_conv: CallConv) {
+        self.argument_types.clear();
+        self.return_types.clear();
+        self.call_conv = call_conv;
+        self.argument_bytes = None;
+    }
+
     /// Compute the size of the stack arguments and mark signature as legalized.
     ///
     /// Even if there are no stack arguments, this will set `argument_types` to `Some(0)` instead
