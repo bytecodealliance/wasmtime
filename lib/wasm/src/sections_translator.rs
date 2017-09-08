@@ -250,7 +250,7 @@ pub fn parse_data_section(
             ParserState::BeginInitExpressionBody => (),
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
-        let offset = match *parser.read() {
+        let mut offset = match *parser.read() {
             ParserState::InitExpressionOperator(Operator::I32Const { value }) => {
                 if value < 0 {
                     return Err(SectionParsingError::WrongSectionContent(String::from(
@@ -288,20 +288,22 @@ pub fn parse_data_section(
             ParserState::EndInitExpressionBody => (),
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
-        {
+        match *parser.read() {
+            ParserState::BeginDataSectionEntryBody(_) => (),
+            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+        };
+        loop {
             let data = match *parser.read() {
-                ParserState::DataSectionEntryBody(data) => data,
+                ParserState::DataSectionEntryBodyChunk(data) => data,
+                ParserState::EndDataSectionEntry => break,
                 ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
             };
             match runtime.declare_data_initialization(memory_index as MemoryIndex, offset, data) {
                 Ok(()) => (),
                 Err(s) => return Err(SectionParsingError::WrongSectionContent(s)),
             };
+            offset += data.len();
         }
-        match *parser.read() {
-            ParserState::EndDataSectionEntry => (),
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
-        };
     }
     Ok(())
 }
