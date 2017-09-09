@@ -295,7 +295,7 @@ pub fn parse_data_section(
         loop {
             let data = match *parser.read() {
                 ParserState::DataSectionEntryBodyChunk(data) => data,
-                ParserState::EndDataSectionEntry => break,
+                ParserState::EndDataSectionEntryBody => break,
                 ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
             };
             match runtime.declare_data_initialization(memory_index as MemoryIndex, offset, data) {
@@ -304,6 +304,10 @@ pub fn parse_data_section(
             };
             offset += data.len();
         }
+        match *parser.read() {
+            ParserState::EndDataSectionEntry => (),
+            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+        };
     }
     Ok(())
 }
