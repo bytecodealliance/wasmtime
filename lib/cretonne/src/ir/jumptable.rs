@@ -31,6 +31,14 @@ impl JumpTableData {
         }
     }
 
+    /// Create a new empty jump table with the specified capacity.
+    pub fn with_capacity(capacity: usize) -> JumpTableData {
+        JumpTableData {
+            table: Vec::with_capacity(capacity),
+            holes: 0,
+        }
+    }
+
     /// Set a table entry.
     ///
     /// The table will grow as needed to fit `idx`.
