@@ -364,7 +364,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             if jump_args_count == 0 {
                 // No jump arguments
                 let val = state.pop1();
-                let mut data = JumpTableData::new();
+                let mut data = JumpTableData::with_capacity(depths.len());
                 for depth in depths {
                     let i = state.control_stack.len() - 1 - (depth as usize);
                     let frame = &mut state.control_stack[i];
@@ -385,7 +385,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 // We then proceed to split the edges going out of the br_table
                 let val = state.pop1();
                 let cut_index = state.stack.len() - jump_args_count;
-                let mut data = JumpTableData::new();
+                let mut data = JumpTableData::with_capacity(depths.len());
                 let dest_ebbs: HashMap<usize, Ebb> = depths.iter().fold(HashMap::new(), |mut acc,
                  &depth| {
                     if acc.get(&(depth as usize)).is_none() {
