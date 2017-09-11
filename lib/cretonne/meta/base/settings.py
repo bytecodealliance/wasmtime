@@ -4,7 +4,7 @@ Cretonne shared settings.
 This module defines settings relevant for all code generators.
 """
 from __future__ import absolute_import
-from cdsl.settings import SettingGroup, BoolSetting, EnumSetting
+from cdsl.settings import SettingGroup, BoolSetting, EnumSetting, NumSetting
 
 group = SettingGroup('shared')
 
@@ -51,5 +51,23 @@ enable_simd = BoolSetting(
 enable_atomics = BoolSetting(
         """Enable the use of atomic instructions""",
         default=True)
+
+#
+# Settings specific to the `spiderwasm` calling convention.
+#
+spiderwasm_prologue_words = NumSetting(
+        """
+        Number of pointer-sized words pushed by the spiderwasm prologue.
+
+        Functions with the `spiderwasm` calling convention don't generate their
+        own prologue and epilogue. They depend on externally generated code
+        that pushes a fixed number of words in the prologue and restores them
+        in the epilogue.
+
+        This setting configures the number of pointer-sized words pushed on the
+        stack when the Cretonne-generated code is entered. This includes the
+        pushed return address on Intel ISAs.
+        """)
+
 
 group.close(globals())
