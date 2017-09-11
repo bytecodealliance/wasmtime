@@ -60,9 +60,19 @@ impl FuncTranslator {
         func: &mut ir::Function,
         environ: &mut FE,
     ) -> CtonResult {
+        self.translate_from_reader(BinaryReader::new(code), func, environ)
+    }
+
+    /// Translate a binary WebAssembly function from a `BinaryReader`.
+    pub fn translate_from_reader<FE: FuncEnvironment + ?Sized>(
+        &mut self,
+        mut reader: BinaryReader,
+        func: &mut ir::Function,
+        environ: &mut FE,
+    ) -> CtonResult {
         dbg!(
             "translate({} bytes, {}{})",
-            code.len(),
+            reader.bytes_remaining(),
             func.name,
             func.signature
         );
@@ -81,8 +91,7 @@ impl FuncTranslator {
         let exit_block = builder.create_ebb();
         self.state.initialize(&builder.func.signature, exit_block);
 
-        let reader = &mut BinaryReader::new(code);
-        parse_local_decls(reader, builder, num_args)?;
+        parse_local_decls(&mut reader, builder, num_args)?;
         parse_function_body(reader, builder, &mut self.state, environ)
     }
 }
@@ -120,12 +129,15 @@ fn parse_local_decls(
     num_args: usize,
 ) -> CtonResult {
     let mut next_local = num_args;
-    let local_count = reader.read_var_u32().map_err(|_| CtonError::InvalidInput)?;
+    let local_count = reader.read_local_count().map_err(
+        |_| CtonError::InvalidInput,
+    )?;
 
+    let mut locals_total = 0;
     for _ in 0..local_count {
-        let (count, ty) = reader.read_local_decl().map_err(
-            |_| CtonError::InvalidInput,
-        )?;
+        let (count, ty) = reader.read_local_decl(&mut locals_total).map_err(|_| {
+            CtonError::InvalidInput
+        })?;
         declare_locals(builder, count, ty, &mut next_local)?;
     }
 
@@ -173,7 +185,7 @@ fn declare_locals(
 /// This assumes that the local variable declarations have already been parsed and function
 /// arguments and locals are declared in the builder.
 fn parse_function_body<FE: FuncEnvironment + ?Sized>(
-    reader: &mut BinaryReader,
+    mut reader: BinaryReader,
     builder: &mut FunctionBuilder<Local>,
     state: &mut TranslationState,
     environ: &mut FE,
@@ -192,9 +204,12 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     //
     // If the exit block is unreachable, it may not have the correct arguments, so we would
     // generate a return instruction that doesn't match the signature.
+    debug_assert!(builder.is_pristine());
     if !builder.is_unreachable() {
-        builder.ins().return_(state.stack.as_slice());
+        builder.ins().return_(&state.stack);
     }
+
+    debug_assert!(reader.eof());
 
     Ok(())
 }

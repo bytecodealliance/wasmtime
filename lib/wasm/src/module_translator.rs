@@ -5,11 +5,11 @@ use sections_translator::{SectionParsingError, parse_function_signatures, parse_
                           parse_function_section, parse_export_section, parse_memory_section,
                           parse_global_section, parse_table_section, parse_elements_section,
                           parse_data_section};
-use translation_utils::{type_to_type, Import, SignatureIndex, FunctionIndex};
-use cretonne::ir::{Function, Type};
-use code_translator::translate_function_body;
-use cton_frontend::ILBuilder;
+use translation_utils::{Import, SignatureIndex, FunctionIndex};
+use cretonne::ir::{Function, FunctionName};
+use func_translator::FuncTranslator;
 use std::collections::HashMap;
+use std::error::Error;
 use runtime::WasmRuntime;
 
 /// Output of the [`translate_module`](fn.translate_module.html) function.
@@ -198,38 +198,27 @@ pub fn translate_module(
         Some(functions) => functions,
     };
     let mut il_functions: Vec<Function> = Vec::new();
-    let mut il_builder = ILBuilder::new();
+    let mut trans = FuncTranslator::new();
     runtime.begin_translation();
     loop {
-        let locals: Vec<(usize, Type)> = match *parser.read() {
-            ParserState::BeginFunctionBody { ref locals, .. } => {
-                locals
-                    .iter()
-                    .map(|&(index, ref ty)| {
-                        (
-                            index as usize,
-                            match type_to_type(ty) {
-                                Ok(ty) => ty,
-                                Err(()) => panic!("unsupported type for local variable"),
-                            },
-                        )
-                    })
-                    .collect()
-            }
+        match *parser.read() {
+            ParserState::BeginFunctionBody { .. } => {}
             ParserState::EndSection => break,
             _ => return Err(String::from("wrong content in code section")),
-        };
-        let signature = signatures[functions[function_index]].clone();
-        let il_func = translate_function_body(
-            &mut parser,
-            function_index,
-            &signature,
-            &locals,
-            &exports,
-            &mut il_builder,
-            runtime,
-        )?;
-        il_functions.push(il_func);
+        }
+        runtime.next_function();
+        // First we build the Function object with its name and signature
+        let mut func = Function::new();
+        func.signature = signatures[functions[function_index]].clone();
+        if let Some(ref exports) = exports {
+            if let Some(name) = exports.get(&function_index) {
+                func.name = FunctionName::new(name.clone());
+            }
+        }
+        trans
+            .translate_from_reader(parser.create_binary_reader(), &mut func, runtime)
+            .map_err(|e| String::from(e.description()))?;
+        il_functions.push(func);
         function_index += 1;
     }
     loop {
