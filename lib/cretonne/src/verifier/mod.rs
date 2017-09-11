@@ -942,6 +942,21 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    /// Verify the `return_at_end` property which requires that there are no internal return
+    /// instructions.
+    fn verify_return_at_end(&self) -> Result {
+        for ebb in self.func.layout.ebbs() {
+            let inst = self.func.layout.last_inst(ebb).unwrap();
+            if self.func.dfg[inst].opcode().is_return() &&
+                Some(ebb) != self.func.layout.last_ebb()
+            {
+                return err!(inst, "Internal return not allowed with return_at_end=1");
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn run(&self) -> Result {
         self.verify_global_vars()?;
         self.typecheck_entry_block_arguments()?;
@@ -952,6 +967,10 @@ impl<'a> Verifier<'a> {
                 self.typecheck(inst)?;
                 self.verify_encoding(inst)?;
             }
+        }
+
+        if self.isa.map(|isa| isa.flags().return_at_end()) == Some(true) {
+            self.verify_return_at_end()?;
         }
 
         Ok(())

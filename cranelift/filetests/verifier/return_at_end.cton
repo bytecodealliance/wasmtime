@@ -1,0 +1,26 @@
+test verifier
+set return_at_end
+
+; The verifier doesn't have an API for verifying with flags without also
+; setting an ISA.
+isa riscv
+
+function %ok(i32) {
+ebb0(v0: i32):
+    brnz v0, ebb1
+    trap
+
+ebb1:
+    trapz v0
+    return
+}
+
+function %bad(i32) {
+ebb0(v0: i32):
+    brnz v0, ebb1
+    return ; error: Internal return not allowed
+
+ebb1:
+    trapz v0
+    return
+}

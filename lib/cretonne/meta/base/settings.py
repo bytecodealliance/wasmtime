@@ -28,6 +28,16 @@ enable_verifier = BoolSetting(
 
 is_64bit = BoolSetting("Enable 64-bit code generation")
 
+return_at_end = BoolSetting(
+        """
+        Generate functions with at most a single return instruction at the
+        end of the function.
+
+        This guarantees that functions do not have any internal return
+        instructions. Either they never return, or they have a single return
+        instruction at the end.
+        """)
+
 is_compressed = BoolSetting("Enable compressed instructions")
 
 enable_float = BoolSetting(
