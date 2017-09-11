@@ -374,6 +374,11 @@ impl Layout {
         self.first_ebb
     }
 
+    /// Get the last EBB in the layout.
+    pub fn last_ebb(&self) -> Option<Ebb> {
+        self.last_ebb
+    }
+
     /// Get the block following `ebb` in the layout order.
     pub fn next_ebb(&self, ebb: Ebb) -> Option<Ebb> {
         self.ebbs[ebb].next.expand()
