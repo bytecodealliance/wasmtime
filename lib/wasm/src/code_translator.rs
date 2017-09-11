@@ -224,18 +224,17 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // and push a new control frame with a new ebb for the code after the if/then/else
             // At the end of the then clause we jump to the destination
             let i = state.control_stack.len() - 1;
-            let (destination, return_values, branch_inst) = match state.control_stack[i] {
+            let (destination, return_count, branch_inst) = match state.control_stack[i] {
                 ControlStackFrame::If {
                     destination,
                     ref return_values,
                     branch_inst,
                     ..
-                } => (destination, return_values, branch_inst),
+                } => (destination, return_values.len(), branch_inst),
                 _ => panic!("should not happen"),
             };
-            let cut_index = state.stack.len() - return_values.len();
-            builder.ins().jump(destination, &state.stack[cut_index..]);
-            state.stack.truncate(cut_index);
+            builder.ins().jump(destination, state.peekn(return_count));
+            state.popn(return_count);
             // We change the target of the branch instruction
             let else_ebb = builder.create_ebb();
             builder.change_jump_destination(branch_inst, else_ebb);
@@ -245,12 +244,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::End => {
             let frame = state.control_stack.pop().unwrap();
             if !builder.is_unreachable() || !builder.is_pristine() {
-                let cut_index = state.stack.len() - frame.return_values().len();
+                let return_count = frame.return_values().len();
                 builder.ins().jump(
                     frame.following_code(),
-                    &state.stack[cut_index..],
+                    state.peekn(return_count),
                 );
-                state.stack.truncate(cut_index);
+                state.popn(return_count);
             }
             builder.switch_to_block(frame.following_code(), frame.return_values());
             builder.seal_block(frame.following_code());
@@ -287,40 +286,44 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          ***********************************************************************************/
         Operator::Br { relative_depth } => {
             let i = state.control_stack.len() - 1 - (relative_depth as usize);
-            let frame = &mut state.control_stack[i];
-            let cut_index = state.stack.len() -
-                if frame.is_loop() {
+            let (return_count, br_destination) = {
+                let frame = &mut state.control_stack[i];
+                // We signal that all the code that follows until the next End is unreachable
+                frame.set_reachable();
+                let return_count = if frame.is_loop() {
                     0
                 } else {
                     frame.return_values().len()
                 };
+                (return_count, frame.br_destination())
+            };
             builder.ins().jump(
-                frame.br_destination(),
-                &state.stack[cut_index..],
+                br_destination,
+                state.peekn(return_count),
             );
-            state.stack.truncate(cut_index);
-            // We signal that all the code that follows until the next End is unreachable
-            frame.set_reachable();
+            state.popn(return_count);
             state.real_unreachable_stack_depth = 1 + relative_depth as usize;
         }
         Operator::BrIf { relative_depth } => {
             let val = state.pop1();
             let i = state.control_stack.len() - 1 - (relative_depth as usize);
-            let frame = &mut state.control_stack[i];
-            let cut_index = state.stack.len() -
-                if frame.is_loop() {
+            let (return_count, br_destination) = {
+                let frame = &mut state.control_stack[i];
+                // The values returned by the branch are still available for the reachable
+                // code that comes after it
+                frame.set_reachable();
+                let return_count = if frame.is_loop() {
                     0
                 } else {
                     frame.return_values().len()
                 };
+                (return_count, frame.br_destination())
+            };
             builder.ins().brnz(
                 val,
-                frame.br_destination(),
-                &state.stack[cut_index..],
+                br_destination,
+                state.peekn(return_count),
             );
-            // The values returned by the branch are still available for the reachable
-            // code that comes after it
-            frame.set_reachable();
         }
         Operator::BrTable { ref table } => {
             let (depths, default) = table.read_table();
@@ -362,7 +365,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 // Here we have jump arguments, but Cretonne's br_table doesn't support them
                 // We then proceed to split the edges going out of the br_table
                 let val = state.pop1();
-                let cut_index = state.stack.len() - jump_args_count;
+                let return_count = jump_args_count;
                 let mut data = JumpTableData::with_capacity(depths.len());
                 let dest_ebbs: HashMap<usize, Ebb> = depths.iter().fold(HashMap::new(), |mut acc,
                  &depth| {
@@ -381,25 +384,26 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 let default_ebb = state.control_stack[state.control_stack.len() - 1 -
                                                           (default as usize)]
                     .br_destination();
-                builder.ins().jump(default_ebb, &state.stack[cut_index..]);
+                builder.ins().jump(default_ebb, state.peekn(return_count));
                 for (depth, dest_ebb) in dest_ebbs {
                     builder.switch_to_block(dest_ebb, &[]);
                     builder.seal_block(dest_ebb);
                     let i = state.control_stack.len() - 1 - depth;
-                    let frame = &mut state.control_stack[i];
-                    let real_dest_ebb = frame.br_destination();
-                    builder.ins().jump(real_dest_ebb, &state.stack[cut_index..]);
-                    frame.set_reachable();
+                    let real_dest_ebb = {
+                        let frame = &mut state.control_stack[i];
+                        frame.set_reachable();
+                        frame.br_destination()
+                    };
+                    builder.ins().jump(real_dest_ebb, state.peekn(return_count));
                 }
-                state.stack.truncate(cut_index);
+                state.popn(return_count);
                 state.real_unreachable_stack_depth = 1 + min_depth as usize;
             }
         }
         Operator::Return => {
             let return_count = state.control_stack[0].return_values().len();
-            let cut_index = state.stack.len() - return_count;
-            builder.ins().return_(&state.stack[cut_index..]);
-            state.stack.truncate(cut_index);
+            builder.ins().return_(state.peekn(return_count));
+            state.popn(return_count);
             state.real_unreachable_stack_depth = 1;
         }
         /************************************ Calls ****************************************
@@ -429,7 +433,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 index as SignatureIndex,
                 sigref,
                 callee,
-                &state.peekn(num_args),
+                state.peekn(num_args),
             );
             state.popn(num_args);
             state.pushn(builder.func.dfg.inst_results(call));
