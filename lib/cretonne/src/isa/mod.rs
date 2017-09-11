@@ -236,9 +236,19 @@ pub trait TargetIsa {
     fn prologue_epilogue(&self, func: &mut ir::Function) -> result::CtonResult {
         // This default implementation is unlikely to be good enough.
         use stack_layout::layout_stack;
+        use ir::stackslot::{StackSize, StackOffset};
 
-        let align = if self.flags().is_64bit() { 8 } else { 4 };
-        layout_stack(&mut func.stack_slots, align)?;
+        let word_size = if self.flags().is_64bit() { 8 } else { 4 };
+
+        // Account for the SpiderMonkey standard prologue pushes.
+        if func.signature.call_conv == ir::CallConv::SpiderWASM {
+            let bytes = self.flags().spiderwasm_prologue_words() as StackSize * word_size;
+            let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
+            ss.offset = -(bytes as StackOffset);
+            func.stack_slots.push(ss);
+        }
+
+        layout_stack(&mut func.stack_slots, word_size)?;
         Ok(())
     }
 
