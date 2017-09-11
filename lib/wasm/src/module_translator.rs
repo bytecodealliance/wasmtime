@@ -192,10 +192,7 @@ pub fn translate_module(
     }
     // At this point we've entered the code section
     // First we check that we have all that is necessary to translate a function.
-    let signatures = match signatures {
-        None => Vec::new(),
-        Some(sigs) => sigs,
-    };
+    let signatures = signatures.unwrap_or_default();
     let functions = match functions {
         None => return Err(String::from("missing a function section")),
         Some(functions) => functions,
