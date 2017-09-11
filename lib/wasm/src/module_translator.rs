@@ -220,7 +220,7 @@ pub fn translate_module(
             _ => return Err(String::from("wrong content in code section")),
         };
         let signature = signatures[functions[function_index]].clone();
-        match translate_function_body(
+        let il_func = translate_function_body(
             &mut parser,
             function_index,
             &signature,
@@ -228,10 +228,8 @@ pub fn translate_module(
             &exports,
             &mut il_builder,
             runtime,
-        ) {
-            Ok(il_func) => il_functions.push(il_func),
-            Err(s) => return Err(s),
-        }
+        )?;
+        il_functions.push(il_func);
         function_index += 1;
     }
     loop {
