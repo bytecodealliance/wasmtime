@@ -21,89 +21,17 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
-use cretonne::ir::{self, Function, Signature, Type, InstBuilder, FunctionName, Ebb, MemFlags,
-                   JumpTableData};
+use cretonne::ir::{self, InstBuilder, Ebb, MemFlags, JumpTableData};
 use cretonne::ir::types::*;
-use cretonne::ir::immediates::{Ieee32, Ieee64};
 use cretonne::ir::condcodes::{IntCC, FloatCC};
-use cton_frontend::{ILBuilder, FunctionBuilder};
-use wasmparser::{Parser, Operator, WasmDecoder, MemoryImmediate};
+use cton_frontend::FunctionBuilder;
+use wasmparser::{Operator, MemoryImmediate};
 use translation_utils::{f32_translation, f64_translation, type_to_type, translate_type, Local};
 use translation_utils::{TableIndex, SignatureIndex, FunctionIndex, MemoryIndex};
 use state::{TranslationState, ControlStackFrame};
 use std::collections::HashMap;
-use runtime::{FuncEnvironment, GlobalValue, WasmRuntime};
+use runtime::{FuncEnvironment, GlobalValue};
 use std::u32;
-
-/// Returns a well-formed Cretonne IL function from a wasm function body and a signature.
-pub fn translate_function_body(
-    parser: &mut Parser,
-    function_index: FunctionIndex,
-    sig: &Signature,
-    locals: &[(usize, Type)],
-    exports: &Option<HashMap<FunctionIndex, String>>,
-    il_builder: &mut ILBuilder<Local>,
-    runtime: &mut WasmRuntime,
-) -> Result<Function, String> {
-    runtime.next_function();
-    // First we build the Function object with its name and signature
-    let mut func = Function::new();
-    let args_num: usize = sig.argument_types.len();
-    func.signature = sig.clone();
-    if let Some(ref exports) = *exports {
-        if let Some(name) = exports.get(&function_index) {
-            func.name = FunctionName::new(name.clone());
-        }
-    }
-    // We introduce an arbitrary scope for the FunctionBuilder object
-    {
-        let mut builder = FunctionBuilder::new(&mut func, il_builder);
-        let first_ebb = builder.create_ebb();
-        builder.switch_to_block(first_ebb, &[]);
-        builder.seal_block(first_ebb);
-        for (i, arg_type) in sig.argument_types.iter().enumerate() {
-            // First we declare the function arguments' as non-SSA vars because they will be
-            // accessed by get_local
-            let arg_value = builder.arg_value(i);
-            builder.declare_var(Local(i as u32), arg_type.value_type);
-            builder.def_var(Local(i as u32), arg_value);
-        }
-        // We also declare and initialize to 0 the local variables
-        let mut local_index = args_num;
-        for &(loc_count, ty) in locals {
-            let val = match ty {
-                I32 => builder.ins().iconst(ty, 0),
-                I64 => builder.ins().iconst(ty, 0),
-                F32 => builder.ins().f32const(Ieee32::with_bits(0)),
-                F64 => builder.ins().f64const(Ieee64::with_bits(0)),
-                _ => panic!("should not happen"),
-            };
-            for _ in 0..loc_count {
-                builder.declare_var(Local(local_index as u32), ty);
-                builder.def_var(Local(local_index as u32), val);
-                local_index += 1;
-            }
-        }
-
-        // We initialize the control stack with the implicit function block
-        let mut state = TranslationState::new();
-        let end_ebb = builder.create_ebb();
-        state.initialize(sig, end_ebb);
-
-        // Now the main loop that reads every wasm instruction and translates it
-        let mut reader = parser.create_binary_reader();
-        while let Ok(ref op) = reader.read_operator() {
-            translate_operator(op, &mut builder, &mut state, runtime)
-        }
-        debug_assert!(state.control_stack.is_empty());
-        debug_assert!(builder.is_pristine());
-        if !builder.is_unreachable() {
-            debug_assert!(state.stack.len() == sig.return_types.len());
-            builder.ins().return_(&state.stack);
-        }
-    }
-    Ok(func)
-}
 
 /// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
 /// a return.
