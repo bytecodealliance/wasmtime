@@ -12,9 +12,6 @@ use cretonne::flowgraph::ControlFlowGraph;
 use cretonne::dominator_tree::DominatorTree;
 use cretonne::Context;
 use cretonne::result::CtonError;
-use cretonne::ir;
-use cretonne::ir::entities::AnyEntity;
-use cretonne::isa::TargetIsa;
 use cretonne::verifier;
 use std::fs::File;
 use std::error::Error;
@@ -25,6 +22,7 @@ use std::path::Path;
 use std::process::Command;
 use tempdir::TempDir;
 use term;
+use utils::pretty_verifier_error;
 
 macro_rules! vprintln {
     ($x: expr, $($tts:tt)*) => {
@@ -217,25 +215,4 @@ fn handle_module(
         terminal.reset().unwrap();
     }
     Ok(())
-}
-
-/// Pretty-print a verifier error.
-pub fn pretty_verifier_error(
-    func: &ir::Function,
-    isa: Option<&TargetIsa>,
-    err: verifier::Error,
-) -> String {
-    let msg = err.to_string();
-    let str1 = match err.location {
-        AnyEntity::Inst(inst) => {
-            format!(
-                "{}\n{}: {}\n\n",
-                msg,
-                inst,
-                func.dfg.display_inst(inst, isa)
-            )
-        }
-        _ => String::from(format!("{}\n", msg)),
-    };
-    format!("{}{}", str1, func.display(isa))
 }
