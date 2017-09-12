@@ -225,7 +225,12 @@ enc_i32_i64_ld_st(base.sload8, True, r.ldDisp32, 0x0f, 0xbe)
 # Call/return
 #
 I32.enc(base.call, *r.call_id(0xe8))
+I64.enc(base.call, *r.call_id(0xe8))
+
 I32.enc(base.call_indirect.i32, *r.call_r(0xff, rrr=2))
+I64.enc(base.call_indirect.i64, *r.call_r.rex(0xff, rrr=2))
+I64.enc(base.call_indirect.i64, *r.call_r(0xff, rrr=2))
+
 I32.enc(base.x_return, *r.ret(0xc3))
 I64.enc(base.x_return, *r.ret(0xc3))
 
