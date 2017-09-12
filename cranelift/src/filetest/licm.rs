@@ -38,9 +38,9 @@ impl SubTest for TestLICM {
         let mut comp_ctx = cretonne::Context::new();
         comp_ctx.func = func.into_owned();
 
-        comp_ctx.flowgraph();
-        comp_ctx.licm().map_err(|e| {
-            pretty_error(&comp_ctx.func, context.isa, e)
+        comp_ctx.licm();
+        comp_ctx.verify(context.isa).map_err(|e| {
+            pretty_error(&comp_ctx.func, context.isa, Into::into(e))
         })?;
 
         let mut text = String::new();

@@ -116,22 +116,18 @@ impl Context {
     }
 
     /// Perform simple GVN on the function.
-    pub fn simple_gvn(&mut self) -> CtonResult {
-        do_simple_gvn(&mut self.func, &mut self.cfg);
-        // TODO: Factor things such that we can get a Flags and test
-        // enable_verifier().
-        self.verify(None).map_err(Into::into)
+    pub fn simple_gvn(&mut self) {
+        do_simple_gvn(&mut self.func, &mut self.cfg, &mut self.domtree)
     }
 
     /// Perform LICM on the function.
-    pub fn licm(&mut self) -> CtonResult {
+    pub fn licm(&mut self) {
         do_licm(
             &mut self.func,
             &mut self.cfg,
             &mut self.domtree,
             &mut self.loop_analysis,
-        );
-        self.verify(None).map_err(Into::into)
+        )
     }
 
     /// Run the register allocator.

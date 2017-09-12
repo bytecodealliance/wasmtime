@@ -131,6 +131,23 @@ impl ControlFlowGraph {
     pub fn get_successors(&self, ebb: Ebb) -> &[Ebb] {
         &self.data[ebb].successors
     }
+
+    /// Check if the CFG is in a valid state.
+    ///
+    /// Note that this doesn't perform any kind of validity checks. It simply checks if the
+    /// `compute()` method has been called since the last `clear()`. It does not check that the
+    /// CFG is consistent with the function.
+    pub fn is_valid(&self) -> bool {
+        self.entry_block.is_some()
+    }
+
+    /// Conveneince function to call `compute` if `compute` hasn't been called
+    /// since the last `clear()`.
+    pub fn ensure(&mut self, func: &Function) {
+        if !self.is_valid() {
+            self.compute(func)
+        }
+    }
 }
 
 #[cfg(test)]
