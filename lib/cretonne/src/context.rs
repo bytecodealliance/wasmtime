@@ -115,13 +115,6 @@ impl Context {
         self.domtree.compute(&self.func, &self.cfg);
     }
 
-    /// Ensure that a valid domtree exists.
-    pub fn ensure_domtree(&mut self) {
-        if !self.domtree.is_valid() {
-            self.domtree.compute(&self.func, &self.cfg);
-        }
-    }
-
     /// Perform simple GVN on the function.
     pub fn simple_gvn(&mut self) -> CtonResult {
         do_simple_gvn(&mut self.func, &mut self.cfg);
@@ -132,7 +125,6 @@ impl Context {
 
     /// Perform LICM on the function.
     pub fn licm(&mut self) -> CtonResult {
-        self.ensure_domtree();
         do_licm(
             &mut self.func,
             &mut self.cfg,
@@ -144,12 +136,11 @@ impl Context {
 
     /// Run the register allocator.
     pub fn regalloc(&mut self, isa: &TargetIsa) -> CtonResult {
-        self.ensure_domtree();
         self.regalloc.run(
             isa,
             &mut self.func,
             &self.cfg,
-            &self.domtree,
+            &mut self.domtree,
         )
     }
 

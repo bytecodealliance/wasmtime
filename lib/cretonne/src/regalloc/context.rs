@@ -58,8 +58,11 @@ impl Context {
         isa: &TargetIsa,
         func: &mut Function,
         cfg: &ControlFlowGraph,
-        domtree: &DominatorTree,
+        domtree: &mut DominatorTree,
     ) -> CtonResult {
+        // Ensure that a valid domtree exists.
+        domtree.ensure(func, cfg);
+
         // `Liveness` and `Coloring` are self-clearing.
         self.virtregs.clear();
 
