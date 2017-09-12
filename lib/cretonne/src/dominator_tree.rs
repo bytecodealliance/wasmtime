@@ -237,6 +237,14 @@ impl DominatorTree {
         !self.nodes.is_empty()
     }
 
+    /// Conveneince function to call `compute` if `compute` hasn't been called
+    /// since the last `clear()`.
+    pub fn ensure(&mut self, func: &Function, cfg: &ControlFlowGraph) {
+        if !self.is_valid() {
+            self.compute(func, cfg)
+        }
+    }
+
     /// Reset all internal data structures and compute a post-order for `cfg`.
     ///
     /// This leaves `rpo_number == 1` for all reachable EBBs, 0 for unreachable ones.
