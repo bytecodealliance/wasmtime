@@ -98,6 +98,7 @@ fn main() {
         if !msg.ends_with('\n') {
             msg.push('\n');
         }
+        io::stdout().flush().expect("flushing stdout");
         io::stderr().write_all(msg.as_bytes()).unwrap();
         process::exit(1);
     }
