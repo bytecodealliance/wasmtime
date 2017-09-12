@@ -40,14 +40,9 @@ if [ -n "$needcheck" ]; then
     touch $tsfile || echo no target directory
 fi
 
-PKGS="cretonne cretonne-reader cretonne-tools cretonne-frontend cretonne-wasm \
-      filecheck "
 cd "$topdir"
-for PKG in $PKGS
-do
-    banner "Rust $PKG unit tests"
-    cargo test -p $PKG
-done
+banner "Rust unit tests"
+cargo test --all
 
 # Build cton-util for parser testing.
 cd "$topdir"
