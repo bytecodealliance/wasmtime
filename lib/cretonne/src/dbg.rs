@@ -63,7 +63,11 @@ thread_local! {
 ///
 /// This is for use by the `dbg!` macro.
 pub fn writeln_with_format_args(args: fmt::Arguments) -> io::Result<()> {
-    WRITER.with(|rc| writeln!(*rc.borrow_mut(), "{}", args))
+    WRITER.with(|rc| {
+        let mut w = rc.borrow_mut();
+        writeln!(*w, "{}", args)?;
+        w.flush()
+    })
 }
 
 /// Open the tracing file for the current thread.
