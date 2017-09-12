@@ -14,3 +14,6 @@ name = "cton_wasm"
 wasmparser = "0.10.0"
 cretonne = { path = "../cretonne" }
 cretonne-frontend = { path = "../frontend" }
+
+[dev-dependencies]
+tempdir = "0.3.5"

@@ -2,6 +2,7 @@
 //! trait `WasmRuntime`.
 use cretonne::ir::{self, InstBuilder};
 use cretonne::cursor::FuncCursor;
+use cretonne::settings::Flags;
 use translation_utils::{SignatureIndex, FunctionIndex, TableIndex, GlobalIndex, MemoryIndex,
                         Global, Table, Memory};
 
@@ -26,10 +27,19 @@ pub enum GlobalValue {
 /// IL. The function environment provides information about the WebAssembly module as well as the
 /// runtime environment.
 pub trait FuncEnvironment {
+    /// Get the flags for the current compilation.
+    fn flags(&self) -> &Flags;
+
     /// Get the Cretonne integer type to use for native pointers.
     ///
-    /// This should be `I64` for 64-bit architectures and `I32` for 32-bit architectures.
-    fn native_pointer(&self) -> ir::Type;
+    /// This returns `I64` for 64-bit architectures and `I32` for 32-bit architectures.
+    fn native_pointer(&self) -> ir::Type {
+        if self.flags().is_64bit() {
+            ir::types::I64
+        } else {
+            ir::types::I32
+        }
+    }
 
     /// Set up the necessary preamble definitions in `func` to access the global variable
     /// identified by `index`.
@@ -138,7 +148,7 @@ pub trait FuncEnvironment {
 
 /// An object satisfyng the `WasmRuntime` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
-/// by the user, they are only for the `wasm2cretonne` internal use.
+/// by the user, they are only for `cretonne-wasm` internal use.
 pub trait WasmRuntime: FuncEnvironment {
     /// Declares a function signature to the runtime.
     fn declare_signature(&mut self, sig: &ir::Signature);

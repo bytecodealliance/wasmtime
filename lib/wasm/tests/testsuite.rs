@@ -1,18 +1,24 @@
 extern crate cton_wasm;
 extern crate cretonne;
+extern crate tempdir;
 
 use cton_wasm::{translate_module, DummyRuntime, WasmRuntime};
 use std::path::PathBuf;
+use std::borrow::Borrow;
 use std::fs::File;
 use std::error::Error;
 use std::io;
+use std::str;
 use std::io::BufReader;
 use std::io::prelude::*;
+use std::process::Command;
 use std::fs;
 use cretonne::ir;
 use cretonne::ir::entities::AnyEntity;
-use cretonne::isa::TargetIsa;
+use cretonne::isa::{self, TargetIsa};
+use cretonne::settings::{self, Configurable};
 use cretonne::verifier;
+use tempdir::TempDir;
 
 #[test]
 fn testsuite() {
@@ -23,11 +29,27 @@ fn testsuite() {
     paths.sort_by_key(|dir| dir.path());
     for path in paths {
         let path = path.path();
-        match handle_module(path) {
-            Ok(()) => (),
-            Err(message) => println!("{}", message),
-        };
+        handle_module(path, None);
     }
+}
+
+#[test]
+fn return_at_end() {
+    let mut flag_builder = settings::builder();
+    flag_builder.enable("return_at_end").unwrap();
+    let flags = settings::Flags::new(&flag_builder);
+    // We don't care about the target itself here, so just pick one arbitrarily.
+    let isa = match isa::lookup("riscv") {
+        Err(_) => {
+            println!("riscv target not found; disabled test return_at_end.wat");
+            return;
+        }
+        Ok(isa_builder) => isa_builder.finish(flags),
+    };
+    handle_module(
+        PathBuf::from("../../wasmtests/return_at_end.wat"),
+        Some(isa.borrow()),
+    );
 }
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -38,44 +60,80 @@ fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
     Ok(buf)
 }
 
-fn handle_module(path: PathBuf) -> Result<(), String> {
+fn handle_module(path: PathBuf, isa: Option<&TargetIsa>) {
     let data = match path.extension() {
         None => {
-            return Err(String::from("the file extension is not wasm or wast"));
+            panic!("the file extension is not wasm or wat");
         }
         Some(ext) => {
             match ext.to_str() {
                 Some("wasm") => {
                     match read_wasm_file(path.clone()) {
                         Ok(data) => data,
+                        Err(err) => panic!("error reading wasm file: {}", err.description()),
+                    }
+                }
+                Some("wat") => {
+                    let tmp_dir = TempDir::new("cretonne-wasm").unwrap();
+                    let file_path = tmp_dir.path().join("module.wasm");
+                    File::create(file_path.clone()).unwrap();
+                    let result_output = Command::new("wat2wasm")
+                        .arg(path.clone())
+                        .arg("-o")
+                        .arg(file_path.to_str().unwrap())
+                        .output();
+                    match result_output {
+                        Err(e) => {
+                            if e.kind() == io::ErrorKind::NotFound {
+                                println!(
+                                    "wat2wasm not found; disabled test {}",
+                                    path.to_str().unwrap()
+                                );
+                                return;
+                            }
+                            panic!("error convering wat file: {}", e.description());
+                        }
+                        Ok(output) => {
+                            if !output.status.success() {
+                                panic!(
+                                    "error running wat2wasm: {}",
+                                    str::from_utf8(&output.stderr).expect(
+                                        "wat2wasm's error message should be valid UTF-8",
+                                    )
+                                );
+                            }
+                        }
+                    }
+                    match read_wasm_file(file_path) {
+                        Ok(data) => data,
                         Err(err) => {
-                            return Err(String::from(err.description()));
+                            panic!("error reading converted wasm file: {}", err.description());
                         }
                     }
                 }
-                None | Some(&_) => {
-                    return Err(String::from("the file extension is not wasm or wast"));
-                }
+                None | Some(&_) => panic!("the file extension is not wasm or wat"),
             }
         }
     };
-    let mut dummy_runtime = DummyRuntime::new();
+    let mut dummy_runtime = match isa {
+        Some(isa) => DummyRuntime::with_flags(isa.flags().clone()),
+        None => DummyRuntime::default(),
+    };
     let translation = {
         let runtime: &mut WasmRuntime = &mut dummy_runtime;
         match translate_module(&data, runtime) {
             Ok(x) => x,
             Err(string) => {
-                return Err(string);
+                panic!(string);
             }
         }
     };
     for func in &translation.functions {
-        match verifier::verify_function(func, None) {
+        match verifier::verify_function(func, isa) {
             Ok(()) => (),
-            Err(err) => return Err(pretty_verifier_error(func, None, err)),
+            Err(err) => panic!(pretty_verifier_error(func, isa, err)),
         }
     }
-    Ok(())
 }
 
 

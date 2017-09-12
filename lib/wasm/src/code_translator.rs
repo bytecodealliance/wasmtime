@@ -329,8 +329,20 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             }
         }
         Operator::Return => {
-            let return_count = state.control_stack[0].return_values().len();
-            builder.ins().return_(state.peekn(return_count));
+            let (return_count, br_destination) = {
+                let frame = &mut state.control_stack[0];
+                frame.set_reachable();
+                let return_count = frame.return_values().len();
+                (return_count, frame.br_destination())
+            };
+            {
+                let args = state.peekn(return_count);
+                if environ.flags().return_at_end() {
+                    builder.ins().jump(br_destination, args);
+                } else {
+                    builder.ins().return_(args);
+                }
+            }
             state.popn(return_count);
             state.real_unreachable_stack_depth = 1;
         }
