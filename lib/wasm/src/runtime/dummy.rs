@@ -4,6 +4,7 @@ use translation_utils::{Global, Memory, Table, GlobalIndex, TableIndex, Signatur
 use cretonne::ir::{self, InstBuilder};
 use cretonne::ir::types::*;
 use cretonne::cursor::FuncCursor;
+use cretonne::settings;
 
 /// This runtime implementation is a "naïve" one, doing essentially nothing and emitting
 /// placeholders when forced to. Don't try to execute code translated with this runtime, it is
@@ -18,23 +19,32 @@ pub struct DummyRuntime {
 
     // Names of imported functions.
     imported_funcs: Vec<ir::FunctionName>,
+
+    // Compilation setting flags.
+    flags: settings::Flags,
 }
 
 impl DummyRuntime {
-    /// Allocates the runtime data structures.
-    pub fn new() -> Self {
+    /// Allocates the runtime data structures with default flags.
+    pub fn default() -> Self {
+        Self::with_flags(settings::Flags::new(&settings::builder()))
+    }
+
+    /// Allocates the runtime data structures with the given flags.
+    pub fn with_flags(flags: settings::Flags) -> Self {
         Self {
             signatures: Vec::new(),
             globals: Vec::new(),
             func_types: Vec::new(),
             imported_funcs: Vec::new(),
+            flags,
         }
     }
 }
 
 impl FuncEnvironment for DummyRuntime {
-    fn native_pointer(&self) -> ir::Type {
-        ir::types::I64
+    fn flags(&self) -> &settings::Flags {
+        &self.flags
     }
 
     fn make_global(&self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {

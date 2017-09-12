@@ -30,7 +30,7 @@ Usage:
     cton-util cat <file>...
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
-    cton-util wasm [-cvo] <file>...
+    cton-util wasm [-cvo] [--enable=<flag>]... <file>...
     cton-util --help | --version
 
 Options:
@@ -53,6 +53,7 @@ struct Args {
     flag_check: bool,
     flag_optimize: bool,
     flag_verbose: bool,
+    flag_enable: Vec<String>,
 }
 
 /// A command either succeeds or fails with an error message.
@@ -84,6 +85,7 @@ fn cton_util() -> CommandResult {
             args.flag_verbose,
             args.flag_optimize,
             args.flag_check,
+            args.flag_enable,
         )
     } else {
         // Debugging / shouldn't happen with proper command line handling above.

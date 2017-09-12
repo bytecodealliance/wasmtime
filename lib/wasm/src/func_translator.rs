@@ -237,7 +237,7 @@ mod tests {
         ];
 
         let mut trans = FuncTranslator::new();
-        let mut runtime = DummyRuntime::new();
+        let mut runtime = DummyRuntime::default();
         let mut ctx = Context::new();
 
         ctx.func.name = ir::FunctionName::new("small1");
@@ -271,7 +271,7 @@ mod tests {
         ];
 
         let mut trans = FuncTranslator::new();
-        let mut runtime = DummyRuntime::new();
+        let mut runtime = DummyRuntime::default();
         let mut ctx = Context::new();
 
         ctx.func.name = ir::FunctionName::new("small2");
@@ -314,7 +314,7 @@ mod tests {
         ];
 
         let mut trans = FuncTranslator::new();
-        let mut runtime = DummyRuntime::new();
+        let mut runtime = DummyRuntime::default();
         let mut ctx = Context::new();
 
         ctx.func.name = ir::FunctionName::new("infloop");
