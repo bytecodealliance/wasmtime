@@ -67,17 +67,14 @@ pub fn run(
     for filename in files {
         let path = Path::new(&filename);
         let name = String::from(path.as_os_str().to_string_lossy());
-        match handle_module(
+        handle_module(
             flag_verbose,
             flag_optimize,
             flag_check,
             path.to_path_buf(),
             name,
             &flags,
-        ) {
-            Ok(()) => {}
-            Err(message) => return Err(message),
-        }
+        )?;
     }
     Ok(())
 }
@@ -105,12 +102,9 @@ fn handle_module(
         Some(ext) => {
             match ext.to_str() {
                 Some("wasm") => {
-                    match read_wasm_file(path.clone()) {
-                        Ok(data) => data,
-                        Err(err) => {
-                            return Err(String::from(err.description()));
-                        }
-                    }
+                    read_wasm_file(path.clone()).map_err(|err| {
+                        String::from(err.description())
+                    })?
                 }
                 Some("wat") => {
                     let tmp_dir = TempDir::new("cretonne-wasm").unwrap();
@@ -127,12 +121,9 @@ fn handle_module(
                             return Err(String::from(e.description()));
                         })
                         .unwrap();
-                    match read_wasm_file(file_path) {
-                        Ok(data) => data,
-                        Err(err) => {
-                            return Err(String::from(err.description()));
-                        }
-                    }
+                    read_wasm_file(file_path).map_err(|err| {
+                        String::from(err.description())
+                    })?
                 }
                 None | Some(&_) => {
                     return Err(String::from("the file extension is not wasm or wat"));
@@ -143,12 +134,7 @@ fn handle_module(
     let mut dummy_runtime = DummyRuntime::with_flags(flags.clone());
     let translation = {
         let runtime: &mut WasmRuntime = &mut dummy_runtime;
-        match translate_module(&data, runtime) {
-            Ok(x) => x,
-            Err(string) => {
-                return Err(string);
-            }
-        }
+        translate_module(&data, runtime)?
     };
     terminal.fg(term::color::GREEN).unwrap();
     vprintln!(flag_verbose, " ok");
@@ -158,10 +144,9 @@ fn handle_module(
         vprint!(flag_verbose, "Checking...   ");
         terminal.reset().unwrap();
         for func in &translation.functions {
-            match verifier::verify_function(func, None) {
-                Ok(()) => (),
-                Err(err) => return Err(pretty_verifier_error(func, None, err)),
-            }
+            verifier::verify_function(func, None).map_err(|err| {
+                pretty_verifier_error(func, None, err)
+            })?;
         }
         terminal.fg(term::color::GREEN).unwrap();
         vprintln!(flag_verbose, " ok");
@@ -184,42 +169,22 @@ fn handle_module(
             context.cfg = cfg;
             context.domtree = domtree;
             context.loop_analysis = loop_analysis;
-            match verifier::verify_context(&context.func, &context.cfg, &context.domtree, None) {
-                Ok(()) => (),
-                Err(err) => {
-                    return Err(pretty_verifier_error(&context.func, None, err));
-                }
-            };
-            match context.licm() {
-                Ok(())=> (),
-                Err(error) => {
-                    match error {
-                        CtonError::Verifier(err) => {
-                            return Err(pretty_verifier_error(&context.func, None, err));
-                        }
-                        CtonError::InvalidInput |
-                        CtonError::ImplLimitExceeded |
-                        CtonError::CodeTooLarge => return Err(String::from(error.description())),
-                    }
-                }
-            };
-            match context.simple_gvn() {
-                Ok(())=> (),
-                Err(error) => {
-                    match error {
-                        CtonError::Verifier(err) => {
-                            return Err(pretty_verifier_error(&context.func, None, err));
-                        }
-                        CtonError::InvalidInput |
-                        CtonError::ImplLimitExceeded |
-                        CtonError::CodeTooLarge => return Err(String::from(error.description())),
-                    }
-                }
-            };
-            match verifier::verify_context(&context.func, &context.cfg, &context.domtree, None) {
-                Ok(()) => (),
-                Err(err) => return Err(pretty_verifier_error(&context.func, None, err)),
-            }
+            verifier::verify_context(&context.func, &context.cfg, &context.domtree, None)
+                .map_err(|err| pretty_verifier_error(&context.func, None, err))?;
+            context.licm().map_err(|error| match error {
+                CtonError::Verifier(err) => pretty_verifier_error(&context.func, None, err),
+                CtonError::InvalidInput |
+                CtonError::ImplLimitExceeded |
+                CtonError::CodeTooLarge => String::from(error.description()),
+            })?;
+            context.simple_gvn().map_err(|error| match error {
+                CtonError::Verifier(err) => pretty_verifier_error(&context.func, None, err),
+                CtonError::InvalidInput |
+                CtonError::ImplLimitExceeded |
+                CtonError::CodeTooLarge => String::from(error.description()),
+            })?;
+            verifier::verify_context(&context.func, &context.cfg, &context.domtree, None)
+                .map_err(|err| pretty_verifier_error(&context.func, None, err))?;
         }
         terminal.fg(term::color::GREEN).unwrap();
         vprintln!(flag_verbose, " ok");
