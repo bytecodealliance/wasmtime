@@ -18,7 +18,7 @@ pub fn do_licm(
 ) {
     cfg.ensure(func);
     domtree.ensure(func, cfg);
-    loop_analysis.compute(func, cfg, domtree);
+    loop_analysis.ensure(func, cfg, domtree);
     for lp in loop_analysis.loops() {
         // For each loop that we want to optimize we determine the set of loop-invariant
         // instructions

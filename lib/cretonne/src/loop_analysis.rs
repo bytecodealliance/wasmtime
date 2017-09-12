@@ -18,6 +18,7 @@ entity_impl!(Loop, "loop");
 /// Loops are referenced by the Loop object, and for each loop you can access its header EBB,
 /// its eventual parent in the loop tree and all the EBB belonging to the loop.
 pub struct LoopAnalysis {
+    valid: bool,
     loops: PrimaryMap<Loop, LoopData>,
     ebb_loop_map: EntityMap<Ebb, PackedOption<Loop>>,
 }
@@ -43,6 +44,7 @@ impl LoopAnalysis {
     /// a function.
     pub fn new() -> LoopAnalysis {
         LoopAnalysis {
+            valid: false,
             loops: PrimaryMap::new(),
             ebb_loop_map: EntityMap::new(),
         }
@@ -100,7 +102,25 @@ impl LoopAnalysis {
         self.ebb_loop_map.clear();
         self.ebb_loop_map.resize(func.dfg.num_ebbs());
         self.find_loop_headers(cfg, domtree, &func.layout);
-        self.discover_loop_blocks(cfg, domtree, &func.layout)
+        self.discover_loop_blocks(cfg, domtree, &func.layout);
+        self.valid = true;
+    }
+
+    /// Check if the loop analysis is in a valid state.
+    ///
+    /// Note that this doesn't perform any kind of validity checks. It simply checks if the
+    /// `compute()` method has been called since the last `clear()`. It does not check that the
+    /// loop analysis is consistent with the CFG.
+    pub fn is_valid(&self) -> bool {
+        self.valid
+    }
+
+    /// Conveneince function to call `compute` if `compute` hasn't been called
+    /// since the last `clear()`.
+    pub fn ensure(&mut self, func: &Function, cfg: &ControlFlowGraph, domtree: &DominatorTree) {
+        if !self.is_valid() {
+            self.compute(func, cfg, domtree)
+        }
     }
 
     // Traverses the CFG in reverse postorder and create a loop object for every EBB having a
