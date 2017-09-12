@@ -39,19 +39,15 @@ pub fn parse_function_signatures(
                                           }) => {
                 let mut sig = Signature::new(CallConv::Native);
                 sig.argument_types.extend(params.iter().map(|ty| {
-                    let cret_arg: cretonne::ir::Type = match type_to_type(ty) {
-                        Ok(ty) => ty,
-                        Err(()) => panic!("only numeric types are supported in\
-                                      function signatures"),
-                    };
+                    let cret_arg: cretonne::ir::Type = type_to_type(ty).expect(
+                        "only numeric types are supported in function signatures",
+                    );
                     ArgumentType::new(cret_arg)
                 }));
                 sig.return_types.extend(returns.iter().map(|ty| {
-                    let cret_arg: cretonne::ir::Type = match type_to_type(ty) {
-                        Ok(ty) => ty,
-                        Err(()) => panic!("only numeric types are supported in\
-                                  function signatures"),
-                    };
+                    let cret_arg: cretonne::ir::Type = type_to_type(ty).expect(
+                        "only numeric types are supported in function signatures",
+                    );
                     ArgumentType::new(cret_arg)
                 }));
                 runtime.declare_signature(&sig);

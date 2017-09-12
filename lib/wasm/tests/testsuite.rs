@@ -67,12 +67,7 @@ fn handle_module(path: PathBuf, isa: Option<&TargetIsa>) {
         }
         Some(ext) => {
             match ext.to_str() {
-                Some("wasm") => {
-                    match read_wasm_file(path.clone()) {
-                        Ok(data) => data,
-                        Err(err) => panic!("error reading wasm file: {}", err.description()),
-                    }
-                }
+                Some("wasm") => read_wasm_file(path.clone()).expect("error reading wasm file"),
                 Some("wat") => {
                     let tmp_dir = TempDir::new("cretonne-wasm").unwrap();
                     let file_path = tmp_dir.path().join("module.wasm");
@@ -104,12 +99,7 @@ fn handle_module(path: PathBuf, isa: Option<&TargetIsa>) {
                             }
                         }
                     }
-                    match read_wasm_file(file_path) {
-                        Ok(data) => data,
-                        Err(err) => {
-                            panic!("error reading converted wasm file: {}", err.description());
-                        }
-                    }
+                    read_wasm_file(file_path).expect("error reading converted wasm file")
                 }
                 None | Some(&_) => panic!("the file extension is not wasm or wat"),
             }
@@ -121,18 +111,12 @@ fn handle_module(path: PathBuf, isa: Option<&TargetIsa>) {
     };
     let translation = {
         let runtime: &mut WasmRuntime = &mut dummy_runtime;
-        match translate_module(&data, runtime) {
-            Ok(x) => x,
-            Err(string) => {
-                panic!(string);
-            }
-        }
+        translate_module(&data, runtime).unwrap()
     };
     for func in &translation.functions {
-        match verifier::verify_function(func, isa) {
-            Ok(()) => (),
-            Err(err) => panic!(pretty_verifier_error(func, isa, err)),
-        }
+        verifier::verify_function(func, isa)
+            .map_err(|err| panic!(pretty_verifier_error(func, isa, err)))
+            .unwrap();
     }
 }
 
