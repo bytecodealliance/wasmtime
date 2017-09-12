@@ -155,14 +155,17 @@ fn handle_module(
         for func in &translation.functions {
             let mut context = Context::new();
             context.func = func.clone();
-            verifier::verify_context(&context.func, &context.cfg, &context.domtree, None)
-                .map_err(|err| pretty_verifier_error(&context.func, None, err))?;
+            context.verify(None).map_err(|err| {
+                pretty_verifier_error(&context.func, None, err)
+            })?;
             context.licm();
-            verifier::verify_context(&context.func, &context.cfg, &context.domtree, None)
-                .map_err(|err| pretty_verifier_error(&context.func, None, err))?;
+            context.verify(None).map_err(|err| {
+                pretty_verifier_error(&context.func, None, err)
+            })?;
             context.simple_gvn();
-            verifier::verify_context(&context.func, &context.cfg, &context.domtree, None)
-                .map_err(|err| pretty_verifier_error(&context.func, None, err))?;
+            context.verify(None).map_err(|err| {
+                pretty_verifier_error(&context.func, None, err)
+            })?;
         }
         terminal.fg(term::color::GREEN).unwrap();
         vprintln!(flag_verbose, " ok");
