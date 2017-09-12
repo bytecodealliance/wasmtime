@@ -16,6 +16,7 @@ pub fn do_licm(
     domtree: &mut DominatorTree,
     loop_analysis: &mut LoopAnalysis,
 ) {
+    cfg.ensure(func);
     domtree.ensure(func, cfg);
     loop_analysis.compute(func, cfg, domtree);
     for lp in loop_analysis.loops() {

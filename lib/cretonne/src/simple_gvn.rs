@@ -13,10 +13,11 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
 
 /// Perform simple GVN on `func`.
 ///
-pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
-    let mut visible_values: HashMap<(InstructionData, Type), Inst> = HashMap::new();
+pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph, domtree: &mut DominatorTree) {
+    cfg.ensure(func);
+    domtree.ensure(func, cfg);
 
-    let domtree = DominatorTree::with_function(func, cfg);
+    let mut visible_values: HashMap<(InstructionData, Type), Inst> = HashMap::new();
 
     // Visit EBBs in a reverse post-order.
     let mut pos = Cursor::new(&mut func.layout);

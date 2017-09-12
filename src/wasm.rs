@@ -10,7 +10,6 @@ use cretonne::loop_analysis::LoopAnalysis;
 use cretonne::flowgraph::ControlFlowGraph;
 use cretonne::dominator_tree::DominatorTree;
 use cretonne::Context;
-use cretonne::result::CtonError;
 use cretonne::verifier;
 use cretonne::settings::{self, Configurable};
 use std::fs::File;
@@ -171,18 +170,10 @@ fn handle_module(
             context.loop_analysis = loop_analysis;
             verifier::verify_context(&context.func, &context.cfg, &context.domtree, None)
                 .map_err(|err| pretty_verifier_error(&context.func, None, err))?;
-            context.licm().map_err(|error| match error {
-                CtonError::Verifier(err) => pretty_verifier_error(&context.func, None, err),
-                CtonError::InvalidInput |
-                CtonError::ImplLimitExceeded |
-                CtonError::CodeTooLarge => String::from(error.description()),
-            })?;
-            context.simple_gvn().map_err(|error| match error {
-                CtonError::Verifier(err) => pretty_verifier_error(&context.func, None, err),
-                CtonError::InvalidInput |
-                CtonError::ImplLimitExceeded |
-                CtonError::CodeTooLarge => String::from(error.description()),
-            })?;
+            context.licm();
+            verifier::verify_context(&context.func, &context.cfg, &context.domtree, None)
+                .map_err(|err| pretty_verifier_error(&context.func, None, err))?;
+            context.simple_gvn();
             verifier::verify_context(&context.func, &context.cfg, &context.domtree, None)
                 .map_err(|err| pretty_verifier_error(&context.func, None, err))?;
         }

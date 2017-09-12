@@ -231,8 +231,7 @@ impl DominatorTree {
     ///
     /// Note that this doesn't perform any kind of validity checks. It simply checks if the
     /// `compute()` method has been called since the last `clear()`. It does not check that the
-    /// dominator tree is consistent
-    /// with the CFG>
+    /// dominator tree is consistent with the CFG.
     pub fn is_valid(&self) -> bool {
         !self.nodes.is_empty()
     }
