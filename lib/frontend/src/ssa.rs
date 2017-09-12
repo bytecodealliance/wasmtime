@@ -8,7 +8,6 @@
 use cretonne::ir::{Ebb, Value, Inst, Type, DataFlowGraph, JumpTables, Layout, Cursor, CursorBase,
                    InstBuilder};
 use cretonne::ir::instructions::BranchInfo;
-use std::hash::Hash;
 use cretonne::entity::{EntityRef, PrimaryMap, EntityMap};
 use cretonne::packed_option::PackedOption;
 use cretonne::packed_option::ReservedValue;
@@ -200,7 +199,7 @@ enum UseVarCases {
 ///
 impl<Variable> SSABuilder<Variable>
 where
-    Variable: EntityRef + Hash + Default,
+    Variable: EntityRef + Default,
 {
     /// Declares a new definition of a variable in a given basic block.
     /// The SSA value is passed as an argument because it should be created with
@@ -594,7 +593,7 @@ mod tests {
     use std::u32;
 
     /// An opaque reference to variable.
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    #[derive(Copy, Clone, PartialEq, Eq, Debug)]
     pub struct Variable(u32);
     impl EntityRef for Variable {
         fn new(index: usize) -> Self {

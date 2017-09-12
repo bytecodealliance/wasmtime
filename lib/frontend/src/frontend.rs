@@ -8,12 +8,11 @@ use cretonne::ir::function::DisplayFunction;
 use cretonne::isa::TargetIsa;
 use ssa::{SSABuilder, SideEffects, Block};
 use cretonne::entity::{EntityRef, EntityMap, EntitySet};
-use std::hash::Hash;
 
 /// Permanent structure used for translating into Cretonne IL.
 pub struct ILBuilder<Variable>
 where
-    Variable: EntityRef + Hash + Default,
+    Variable: EntityRef + Default,
 {
     ssa: SSABuilder<Variable>,
     ebbs: EntityMap<Ebb, EbbData>,
@@ -25,7 +24,7 @@ where
 /// Temporary object used to build a Cretonne IL `Function`.
 pub struct FunctionBuilder<'a, Variable: 'a>
 where
-    Variable: EntityRef + Hash + Default,
+    Variable: EntityRef + Default,
 {
     /// The function currently being built.
     /// This field is public so the function can be re-borrowed.
@@ -50,7 +49,7 @@ struct Position {
 
 impl<Variable> ILBuilder<Variable>
 where
-    Variable: EntityRef + Hash + Default,
+    Variable: EntityRef + Default,
 {
     /// Creates a ILBuilder structure. The structure is automatically cleared each time it is
     /// passed to a [`FunctionBuilder`](struct.FunctionBuilder.html) for creation.
@@ -75,24 +74,26 @@ where
 /// one convenience method per Cretonne IL instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short, Variable: 'long>
 where
-    Variable: EntityRef + Hash + Default,
+    Variable: EntityRef + Default,
 {
     builder: &'short mut FunctionBuilder<'long, Variable>,
     ebb: Ebb,
 }
 
 impl<'short, 'long, Variable> FuncInstBuilder<'short, 'long, Variable>
-    where Variable: EntityRef + Hash + Default
+where
+    Variable: EntityRef + Default,
 {
-    fn new<'s, 'l>(builder: &'s mut FunctionBuilder<'l, Variable>,
-                   ebb: Ebb)
-                   -> FuncInstBuilder<'s, 'l, Variable> {
+    fn new<'s, 'l>(
+        builder: &'s mut FunctionBuilder<'l, Variable>,
+        ebb: Ebb,
+    ) -> FuncInstBuilder<'s, 'l, Variable> {
         FuncInstBuilder { builder, ebb }
     }
 }
 
 impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long, Variable>
-    where Variable: EntityRef + Hash + Default
+    where Variable: EntityRef + Default
 {
     fn data_flow_graph(&self) -> &DataFlowGraph {
         &self.builder.func.dfg
@@ -201,7 +202,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 /// return instruction with arguments that don't match the function's signature.
 impl<'a, Variable> FunctionBuilder<'a, Variable>
 where
-    Variable: EntityRef + Hash + Default,
+    Variable: EntityRef + Default,
 {
     /// Creates a new FunctionBuilder structure that will operate on a `Function` using a
     /// `IlBuilder`.
@@ -404,7 +405,7 @@ where
 /// in ways that can be unsafe if used incorrectly.
 impl<'a, Variable> FunctionBuilder<'a, Variable>
 where
-    Variable: EntityRef + Hash + Default,
+    Variable: EntityRef + Default,
 {
     /// Retrieves all the arguments for an `Ebb` currently infered from the jump instructions
     /// inserted that target it and the SSA construction.
@@ -483,7 +484,7 @@ where
 
 impl<'a, Variable> Drop for FunctionBuilder<'a, Variable>
 where
-    Variable: EntityRef + Hash + Default,
+    Variable: EntityRef + Default,
 {
     /// When a `FunctionBuilder` goes out of scope, it means that the function is fully built.
     /// We then proceed to check if all the `Ebb`s are filled and sealed
@@ -501,7 +502,7 @@ where
 // Helper functions
 impl<'a, Variable> FunctionBuilder<'a, Variable>
 where
-    Variable: EntityRef + Hash + Default,
+    Variable: EntityRef + Default,
 {
     fn move_to_next_basic_block(&mut self) {
         self.position.basic_block = self.builder.ssa.declare_ebb_body_block(
@@ -634,7 +635,7 @@ mod tests {
     use std::u32;
 
     // An opaque reference to variable.
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    #[derive(Copy, Clone, PartialEq, Eq, Debug)]
     pub struct Variable(u32);
     impl EntityRef for Variable {
         fn new(index: usize) -> Self {
