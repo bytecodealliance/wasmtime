@@ -6,9 +6,6 @@
 
 use cton_wasm::{translate_module, DummyRuntime, WasmRuntime};
 use std::path::PathBuf;
-use cretonne::loop_analysis::LoopAnalysis;
-use cretonne::flowgraph::ControlFlowGraph;
-use cretonne::dominator_tree::DominatorTree;
 use cretonne::Context;
 use cretonne::verifier;
 use cretonne::settings::{self, Configurable};
@@ -156,18 +153,8 @@ fn handle_module(
         vprint!(flag_verbose, "Optimizing... ");
         terminal.reset().unwrap();
         for func in &translation.functions {
-            let mut il = func.clone();
-            let mut loop_analysis = LoopAnalysis::new();
-            let mut cfg = ControlFlowGraph::new();
-            cfg.compute(&il);
-            let mut domtree = DominatorTree::new();
-            domtree.compute(&mut il, &cfg);
-            loop_analysis.compute(&mut il, &mut cfg, &mut domtree);
             let mut context = Context::new();
-            context.func = il;
-            context.cfg = cfg;
-            context.domtree = domtree;
-            context.loop_analysis = loop_analysis;
+            context.func = func.clone();
             verifier::verify_context(&context.func, &context.cfg, &context.domtree, None)
                 .map_err(|err| pretty_verifier_error(&context.func, None, err))?;
             context.licm();
