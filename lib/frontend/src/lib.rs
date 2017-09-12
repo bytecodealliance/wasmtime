@@ -43,7 +43,7 @@
 //! use std::u32;
 //!
 //! // An opaque reference to variable.
-//! #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+//! #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 //! pub struct Variable(u32);
 //! impl EntityRef for Variable {
 //!     fn new(index: usize) -> Self {
