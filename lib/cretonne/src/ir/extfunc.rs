@@ -76,6 +76,13 @@ impl Signature {
     pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&'a self, regs: R) -> DisplaySignature<'a> {
         DisplaySignature(self, regs.into())
     }
+
+    /// Find the index of a presumed unique special-purpose argument.
+    pub fn special_arg_index(&self, purpose: ArgumentPurpose) -> Option<usize> {
+        self.argument_types.iter().rposition(
+            |arg| arg.purpose == purpose,
+        )
+    }
 }
 
 /// Wrapper type capable of displaying a `Signature` with correct register names.
@@ -142,6 +149,16 @@ impl ArgumentType {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose: ArgumentPurpose::Normal,
+            location: Default::default(),
+        }
+    }
+
+    /// Create a special-purpose argument type that is not (yet) bound to a specific register.
+    pub fn special(vt: Type, purpose: ArgumentPurpose) -> ArgumentType {
+        ArgumentType {
+            value_type: vt,
+            extension: ArgumentExtension::None,
+            purpose,
             location: Default::default(),
         }
     }
@@ -255,10 +272,16 @@ pub enum ArgumentPurpose {
     /// This is a pointer to a context struct containing details about the current sandbox. It is
     /// used as a base pointer for `vmctx` global variables.
     VMContext,
+
+    /// A signature identifier.
+    ///
+    /// This is a special-purpose argument used to identify the calling convention expected by the
+    /// caller in an indirect call. The callee can verify that the expected signature ID matches.
+    SignatureId,
 }
 
 /// Text format names of the `ArgumentPurpose` variants.
-static PURPOSE_NAMES: [&str; 6] = ["normal", "sret", "link", "fp", "csr", "vmctx"];
+static PURPOSE_NAMES: [&str; 7] = ["normal", "sret", "link", "fp", "csr", "vmctx", "sigid"];
 
 impl fmt::Display for ArgumentPurpose {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -276,6 +299,7 @@ impl FromStr for ArgumentPurpose {
             "fp" => Ok(ArgumentPurpose::FramePointer),
             "csr" => Ok(ArgumentPurpose::CalleeSaved),
             "vmctx" => Ok(ArgumentPurpose::VMContext),
+            "sigid" => Ok(ArgumentPurpose::SignatureId),
             _ => Err(()),
         }
     }

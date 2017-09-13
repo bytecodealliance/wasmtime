@@ -57,6 +57,7 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
     let mut has_sret = false;
     let mut has_link = false;
     let mut has_vmctx = false;
+    let mut has_sigid = false;
 
     // Insert position for argument conversion code.
     // We want to insert instructions before the first instruction in the entry block.
@@ -90,6 +91,10 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
                 ArgumentPurpose::VMContext => {
                     assert!(!has_vmctx, "Multiple vmctx arguments found");
                     has_vmctx = true;
+                }
+                ArgumentPurpose::SignatureId => {
+                    assert!(!has_sigid, "Multiple sigid arguments found");
+                    has_sigid = true;
                 }
                 _ => panic!("Unexpected special-purpose arg {}", abi_types[abi_arg]),
             }
@@ -144,6 +149,10 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
             ArgumentPurpose::VMContext => {
                 assert!(!has_vmctx, "Multiple vmctx arguments found");
                 has_vmctx = true;
+            }
+            ArgumentPurpose::SignatureId => {
+                assert!(!has_sigid, "Multiple sigid arguments found");
+                has_sigid = true;
             }
         }
 
