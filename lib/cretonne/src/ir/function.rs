@@ -135,6 +135,16 @@ impl Function {
     pub fn display<'a, I: Into<Option<&'a TargetIsa>>>(&'a self, isa: I) -> DisplayFunction<'a> {
         DisplayFunction(self, isa.into())
     }
+
+    /// Find a presumed unique special-purpose function argument value.
+    ///
+    /// Returns the value of the last `purpose` argument, or `None` if no such argument exists.
+    pub fn special_arg(&self, purpose: ir::ArgumentPurpose) -> Option<ir::Value> {
+        let entry = self.layout.entry_block().expect("Function is empty");
+        self.signature.special_arg_index(purpose).map(|i| {
+            self.dfg.ebb_args(entry)[i]
+        })
+    }
 }
 
 /// Wrapper type capable of displaying a `Function` with correct ISA annotations.
