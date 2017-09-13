@@ -6,7 +6,7 @@ use regalloc::AllocatableSet;
 use settings as shared_settings;
 use super::registers::{GPR, FPR, RU};
 use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
-use ir::{ArgumentType, ArgumentLoc, ArgumentExtension};
+use ir::{ArgumentType, ArgumentPurpose, ArgumentLoc, ArgumentExtension};
 
 /// Argument registers for x86-64
 static ARG_GPRS: [RU; 6] = [RU::rdi, RU::rsi, RU::rdx, RU::rcx, RU::r8, RU::r9];
@@ -61,6 +61,24 @@ impl ArgAssigner for Args {
                 ArgumentExtension::None => {}
                 ArgumentExtension::Uext => return ValueConversion::Uext(self.pointer_type).into(),
                 ArgumentExtension::Sext => return ValueConversion::Sext(self.pointer_type).into(),
+            }
+        }
+
+        // Handle special-purpose arguments.
+        // TODO: The registers below are for `spiderwasm`. Should we check the calling convention?
+        if ty.is_int() {
+            match arg.purpose {
+                // This is SpiderMonkey's `WasmTlsReg`.
+                ArgumentPurpose::VMContext => {
+                    return ArgumentLoc::Reg(if self.pointer_bits == 64 {
+                        RU::r14
+                    } else {
+                        RU::rsi
+                    } as RegUnit).into()
+                }
+                // This is SpiderMonkey's `WasmTableCallSigReg`.
+                ArgumentPurpose::SignatureId => return ArgumentLoc::Reg(RU::rbx as RegUnit).into(),
+                _ => {}
             }
         }
 
