@@ -82,6 +82,12 @@ impl AsRef<[u8]> for NameRepr {
     }
 }
 
+impl AsRef<[u8]> for FunctionName {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
 impl Default for NameRepr {
     fn default() -> Self {
         NameRepr::Short {
