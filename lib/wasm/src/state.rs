@@ -266,7 +266,7 @@ impl TranslationState {
         &mut self,
         func: &mut ir::Function,
         index: u32,
-        environ: &FE,
+        environ: &mut FE,
     ) -> GlobalValue {
         let index = index as GlobalIndex;
         *self.globals.entry(index).or_insert_with(
@@ -280,7 +280,7 @@ impl TranslationState {
         &mut self,
         func: &mut ir::Function,
         index: u32,
-        environ: &FE,
+        environ: &mut FE,
     ) -> ir::Heap {
         let index = index as MemoryIndex;
         *self.heaps.entry(index).or_insert_with(
@@ -296,7 +296,7 @@ impl TranslationState {
         &mut self,
         func: &mut ir::Function,
         index: u32,
-        environ: &FE,
+        environ: &mut FE,
     ) -> (ir::SigRef, usize) {
         let index = index as SignatureIndex;
         *self.signatures.entry(index).or_insert_with(|| {
@@ -313,7 +313,7 @@ impl TranslationState {
         &mut self,
         func: &mut ir::Function,
         index: u32,
-        environ: &FE,
+        environ: &mut FE,
     ) -> (ir::FuncRef, usize) {
         let index = index as FunctionIndex;
         *self.functions.entry(index).or_insert_with(|| {

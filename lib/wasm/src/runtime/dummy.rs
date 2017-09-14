@@ -47,7 +47,7 @@ impl FuncEnvironment for DummyRuntime {
         &self.flags
     }
 
-    fn make_global(&self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
+    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
         // Just create a dummy `vmctx` global.
         let offset = ((index * 8) as i32 + 8).into();
         let gv = func.create_global_var(ir::GlobalVarData::VmCtx { offset });
@@ -57,7 +57,7 @@ impl FuncEnvironment for DummyRuntime {
         }
     }
 
-    fn make_heap(&self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
+    fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
         func.create_heap(ir::HeapData {
             base: ir::HeapBase::ReservedReg,
             min_size: 0.into(),
@@ -66,13 +66,13 @@ impl FuncEnvironment for DummyRuntime {
         })
     }
 
-    fn make_indirect_sig(&self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
+    fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
         // A real implementation would probably change the calling convention and add `vmctx` and
         // signature index arguments.
         func.import_signature(self.signatures[index].clone())
     }
 
-    fn make_direct_func(&self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef {
+    fn make_direct_func(&mut self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef {
         let sigidx = self.func_types[index];
         // A real implementation would probably add a `vmctx` argument.
         // And maybe attempt some signature de-duplication.
@@ -87,7 +87,7 @@ impl FuncEnvironment for DummyRuntime {
     }
 
     fn translate_call_indirect(
-        &self,
+        &mut self,
         mut pos: FuncCursor,
         _table_index: TableIndex,
         _sig_index: SignatureIndex,
@@ -99,7 +99,7 @@ impl FuncEnvironment for DummyRuntime {
     }
 
     fn translate_grow_memory(
-        &self,
+        &mut self,
         mut pos: FuncCursor,
         _index: MemoryIndex,
         _heap: ir::Heap,
@@ -109,7 +109,7 @@ impl FuncEnvironment for DummyRuntime {
     }
 
     fn translate_current_memory(
-        &self,
+        &mut self,
         mut pos: FuncCursor,
         _index: MemoryIndex,
         _heap: ir::Heap,
