@@ -1010,9 +1010,7 @@ impl<'a> Parser<'a> {
                             .map(ArgumentLoc::Reg)
                             .ok_or(self.error("invalid register name"))
                     } else {
-                        // We are unable to parse the register without a TargetISA, so we quietly
-                        // ignore it.
-                        Ok(ArgumentLoc::Unassigned)
+                        err!(self.loc, "argument location requires exactly one isa")
                     }
                 }
                 Some(Token::Integer(_)) => {
@@ -1491,8 +1489,7 @@ impl<'a> Parser<'a> {
                         .map(ValueLoc::Reg)
                         .ok_or(self.error("invalid register value location"))
                 } else {
-                    // For convenience we ignore value locations when no unique ISA is specified
-                    Ok(ValueLoc::Unassigned)
+                    err!(self.loc, "value location requires exactly one isa")
                 }
             }
             Some(Token::Minus) => {
