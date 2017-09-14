@@ -40,7 +40,7 @@ impl SubTest for TestLegalizer {
         comp_ctx.func = func.into_owned();
         let isa = context.isa.expect("legalizer needs an ISA");
 
-        comp_ctx.flowgraph();
+        comp_ctx.compute_cfg();
         comp_ctx.legalize(isa).map_err(|e| {
             pretty_error(&comp_ctx.func, context.isa, e)
         })?;

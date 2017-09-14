@@ -33,6 +33,8 @@ use self::heap::expand_heap_addr;
 /// - Fill out `func.encodings`.
 ///
 pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa: &TargetIsa) {
+    debug_assert!(cfg.is_valid());
+
     boundary::legalize_signatures(func, isa);
 
     func.encodings.resize(func.dfg.num_insts());

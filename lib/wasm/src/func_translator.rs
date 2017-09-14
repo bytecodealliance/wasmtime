@@ -250,7 +250,6 @@ mod tests {
 
         trans.translate(&BODY, &mut ctx.func, &mut runtime).unwrap();
         dbg!("{}", ctx.func.display(None));
-        ctx.flowgraph();
         ctx.verify(None).unwrap();
     }
 
@@ -284,7 +283,6 @@ mod tests {
 
         trans.translate(&BODY, &mut ctx.func, &mut runtime).unwrap();
         dbg!("{}", ctx.func.display(None));
-        ctx.flowgraph();
         ctx.verify(None).unwrap();
     }
 
@@ -324,7 +322,6 @@ mod tests {
 
         trans.translate(&BODY, &mut ctx.func, &mut runtime).unwrap();
         dbg!("{}", ctx.func.display(None));
-        ctx.flowgraph();
         ctx.verify(None).unwrap();
     }
 }
