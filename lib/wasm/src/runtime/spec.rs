@@ -48,13 +48,13 @@ pub trait FuncEnvironment {
     ///
     /// Return the global variable reference that should be used to access the global and the
     /// WebAssembly type of the global.
-    fn make_global(&self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue;
+    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue;
 
     /// Set up the necessary preamble definitions in `func` to access the linear memory identified
     /// by `index`.
     ///
     /// The index space covers both imported and locally declared memories.
-    fn make_heap(&self, func: &mut ir::Function, index: MemoryIndex) -> ir::Heap;
+    fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> ir::Heap;
 
     /// Set up a signature definition in the preamble of `func` that can be used for an indirect
     /// call with signature `index`.
@@ -65,7 +65,7 @@ pub trait FuncEnvironment {
     ///
     /// The signature will only be used for indirect calls, even if the module has direct function
     /// calls with the same WebAssembly type.
-    fn make_indirect_sig(&self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef;
+    fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef;
 
     /// Set up an external function definition in the preamble of `func` that can be used to
     /// directly call the function `index`.
@@ -78,7 +78,7 @@ pub trait FuncEnvironment {
     ///
     /// The function's signature will only be used for direct calls, even if the module has
     /// indirect calls with the same WebAssembly type.
-    fn make_direct_func(&self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef;
+    fn make_direct_func(&mut self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef;
 
     /// Translate a `call_indirect` WebAssembly instruction at `pos`.
     ///
@@ -90,7 +90,7 @@ pub trait FuncEnvironment {
     ///
     /// Return the call instruction whose results are the WebAssembly return values.
     fn translate_call_indirect(
-        &self,
+        &mut self,
         pos: FuncCursor,
         table_index: TableIndex,
         sig_index: SignatureIndex,
@@ -107,7 +107,7 @@ pub trait FuncEnvironment {
     ///
     /// Return the call instruction whose results are the WebAssembly return values.
     fn translate_call(
-        &self,
+        &mut self,
         mut pos: FuncCursor,
         _callee_index: FunctionIndex,
         callee: ir::FuncRef,
@@ -125,7 +125,7 @@ pub trait FuncEnvironment {
     ///
     /// Returns the old size (in pages) of the memory.
     fn translate_grow_memory(
-        &self,
+        &mut self,
         pos: FuncCursor,
         index: MemoryIndex,
         heap: ir::Heap,
@@ -139,7 +139,7 @@ pub trait FuncEnvironment {
     ///
     /// Returns the size in pages of the memory.
     fn translate_current_memory(
-        &self,
+        &mut self,
         pos: FuncCursor,
         index: MemoryIndex,
         heap: ir::Heap,
