@@ -11,6 +11,7 @@ from .immediates import intcc
 from . import instructions as insts
 from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry, iadd_imm
 from .instructions import isub, isub_bin, isub_bout, isub_borrow
+from .instructions import imul, imul_imm
 from .instructions import band, bor, bxor, isplit, iconcat
 from .instructions import bnot, band_not, bor_not, bxor_not
 from .instructions import icmp, icmp_imm
@@ -158,12 +159,15 @@ expand.legalize(
         ))
 
 # Expansions for immediate operands that are out of range.
-expand.legalize(
-        a << iadd_imm(x, y),
-        Rtl(
-            a1 << iconst(y),
-            a << iadd(x, a1)
-        ))
+for inst_imm,      inst in [
+        (iadd_imm, iadd),
+        (imul_imm, imul)]:
+    expand.legalize(
+            a << inst_imm(x, y),
+            Rtl(
+                a1 << iconst(y),
+                a << inst(x, a1)
+            ))
 
 # Rotates and shifts.
 for inst_imm,      inst in [
