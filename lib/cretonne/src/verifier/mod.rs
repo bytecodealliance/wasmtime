@@ -134,7 +134,9 @@ pub fn verify_context(
     isa: Option<&TargetIsa>,
 ) -> Result {
     let verifier = Verifier::new(func, isa);
-    verifier.cfg_integrity(cfg)?;
+    if cfg.is_valid() {
+        verifier.cfg_integrity(cfg)?;
+    }
     if domtree.is_valid() {
         verifier.domtree_integrity(domtree)?;
     }

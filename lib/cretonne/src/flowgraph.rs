@@ -47,6 +47,7 @@ pub struct CFGNode {
 pub struct ControlFlowGraph {
     entry_block: Option<Ebb>,
     data: EntityMap<Ebb, CFGNode>,
+    valid: bool,
 }
 
 impl ControlFlowGraph {
@@ -55,6 +56,7 @@ impl ControlFlowGraph {
         ControlFlowGraph {
             entry_block: None,
             data: EntityMap::new(),
+            valid: false,
         }
     }
 
@@ -76,6 +78,8 @@ impl ControlFlowGraph {
         for ebb in &func.layout {
             self.compute_ebb(func, ebb);
         }
+
+        self.valid = true;
     }
 
     fn compute_ebb(&mut self, func: &Function, ebb: Ebb) {
@@ -113,6 +117,7 @@ impl ControlFlowGraph {
     /// more expensive `compute`, and should be used when we know we don't need to recompute the CFG
     /// from scratch, but rather that our changes have been restricted to specific EBBs.
     pub fn recompute_ebb(&mut self, func: &Function, ebb: Ebb) {
+        debug_assert!(self.is_valid());
         self.invalidate_ebb_successors(ebb);
         self.compute_ebb(func, ebb);
     }
@@ -124,11 +129,13 @@ impl ControlFlowGraph {
 
     /// Get the CFG predecessor basic blocks to `ebb`.
     pub fn get_predecessors(&self, ebb: Ebb) -> &[BasicBlock] {
+        debug_assert!(self.is_valid());
         &self.data[ebb].predecessors
     }
 
     /// Get the CFG successors to `ebb`.
     pub fn get_successors(&self, ebb: Ebb) -> &[Ebb] {
+        debug_assert!(self.is_valid());
         &self.data[ebb].successors
     }
 
@@ -138,15 +145,7 @@ impl ControlFlowGraph {
     /// `compute()` method has been called since the last `clear()`. It does not check that the
     /// CFG is consistent with the function.
     pub fn is_valid(&self) -> bool {
-        self.entry_block.is_some()
-    }
-
-    /// Conveneince function to call `compute` if `compute` hasn't been called
-    /// since the last `clear()`.
-    pub fn ensure(&mut self, func: &Function) {
-        if !self.is_valid() {
-            self.compute(func)
-        }
+        self.valid
     }
 }
 

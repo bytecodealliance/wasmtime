@@ -16,9 +16,10 @@ pub fn do_licm(
     domtree: &mut DominatorTree,
     loop_analysis: &mut LoopAnalysis,
 ) {
-    cfg.ensure(func);
-    domtree.ensure(func, cfg);
-    loop_analysis.ensure(func, cfg, domtree);
+    debug_assert!(cfg.is_valid());
+    debug_assert!(domtree.is_valid());
+    debug_assert!(loop_analysis.is_valid());
+
     for lp in loop_analysis.loops() {
         // For each loop that we want to optimize we determine the set of loop-invariant
         // instructions

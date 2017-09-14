@@ -63,10 +63,11 @@ impl Context {
     ///
     /// Returns the size of the function's code.
     pub fn compile(&mut self, isa: &TargetIsa) -> Result<CodeOffset, CtonError> {
-        self.cfg.compute(&self.func);
         self.verify_if(isa)?;
 
+        self.compute_cfg();
         self.legalize(isa)?;
+        self.compute_domtree();
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
         self.relax_branches(isa)
@@ -103,16 +104,37 @@ impl Context {
 
     /// Run the legalizer for `isa` on the function.
     pub fn legalize(&mut self, isa: &TargetIsa) -> CtonResult {
-        // Legalization invalidates the domtree by mutating the CFG.
+        // Legalization invalidates the domtree and loop_analysis by mutating the CFG.
+        // TODO: Avoid doing this when legalization doesn't actually mutate the CFG.
         self.domtree.clear();
+        self.loop_analysis.clear();
         legalize_function(&mut self.func, &mut self.cfg, isa);
         self.verify_if(isa)
     }
 
-    /// Recompute the control flow graph and dominator tree.
+    /// Compute the control flow graph.
+    pub fn compute_cfg(&mut self) {
+        self.cfg.compute(&self.func)
+    }
+
+    /// Compute dominator tree.
+    pub fn compute_domtree(&mut self) {
+        self.domtree.compute(&self.func, &self.cfg)
+    }
+
+    /// Compute the loop analysis.
+    pub fn compute_loop_analysis(&mut self) {
+        self.loop_analysis.compute(
+            &self.func,
+            &self.cfg,
+            &self.domtree,
+        )
+    }
+
+    /// Compute the control flow graph and dominator tree.
     pub fn flowgraph(&mut self) {
-        self.cfg.compute(&self.func);
-        self.domtree.compute(&self.func, &self.cfg);
+        self.compute_cfg();
+        self.compute_domtree()
     }
 
     /// Perform simple GVN on the function.

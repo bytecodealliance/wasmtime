@@ -18,9 +18,9 @@ entity_impl!(Loop, "loop");
 /// Loops are referenced by the Loop object, and for each loop you can access its header EBB,
 /// its eventual parent in the loop tree and all the EBB belonging to the loop.
 pub struct LoopAnalysis {
-    valid: bool,
     loops: PrimaryMap<Loop, LoopData>,
     ebb_loop_map: EntityMap<Ebb, PackedOption<Loop>>,
+    valid: bool,
 }
 
 struct LoopData {
@@ -115,12 +115,13 @@ impl LoopAnalysis {
         self.valid
     }
 
-    /// Conveneince function to call `compute` if `compute` hasn't been called
-    /// since the last `clear()`.
-    pub fn ensure(&mut self, func: &Function, cfg: &ControlFlowGraph, domtree: &DominatorTree) {
-        if !self.is_valid() {
-            self.compute(func, cfg, domtree)
-        }
+    /// Clear all the data structures contanted in the loop analysis. This will leave the
+    /// analysis in a similar state to a context returned by `new()` except that allocated
+    /// memory be retained.
+    pub fn clear(&mut self) {
+        self.loops.clear();
+        self.ebb_loop_map.clear();
+        self.valid = false;
     }
 
     // Traverses the CFG in reverse postorder and create a loop object for every EBB having a
