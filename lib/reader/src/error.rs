@@ -8,7 +8,8 @@ use std::result;
 /// The location of a `Token` or `Error`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Location {
-    /// Line number, starting from 1.
+    /// Line number. Command-line arguments are line 0 and source file
+    /// lines start from 1.
     pub line_number: usize,
 }
 
@@ -23,7 +24,11 @@ pub struct Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: {}", self.location.line_number, self.message)
+        if self.location.line_number == 0 {
+            write!(f, "command-line arguments: {}", self.message)
+        } else {
+            write!(f, "{}: {}", self.location.line_number, self.message)
+        }
     }
 }
 
