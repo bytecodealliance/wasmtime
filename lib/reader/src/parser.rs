@@ -1449,22 +1449,35 @@ impl<'a> Parser<'a> {
 
     // Parse a single EBB argument declaration, and append it to `ebb`.
     //
-    // ebb-arg ::= * Value(v) ":" Type(t)
+    // ebb-arg ::= * Value(v) ":" Type(t) arg-loc?
+    // arg-loc ::= "[" value-location "]"
     //
     fn parse_ebb_arg(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
-        // ebb-arg ::= * Value(v) ":" Type(t)
+        // ebb-arg ::= * Value(v) ":" Type(t) arg-loc?
         let v = self.match_value("EBB argument must be a value")?;
         let v_location = self.loc;
-        // ebb-arg ::= Value(v) * ":" Type(t)
+        // ebb-arg ::= Value(v) * ":" Type(t) arg-loc?
         self.match_token(
             Token::Colon,
             "expected ':' after EBB argument",
         )?;
-        // ebb-arg ::= Value(v) ":" * Type(t)
+        // ebb-arg ::= Value(v) ":" * Type(t) arg-loc?
         let t = self.match_type("expected EBB argument type")?;
         // Allocate the EBB argument and add the mapping.
         let value = ctx.function.dfg.append_ebb_arg(ebb, t);
-        ctx.map.def_value(v, value, &v_location)
+        ctx.map.def_value(v, value, &v_location)?;
+
+        // ebb-arg ::= Value(v) ":" Type(t) * arg-loc?
+        if self.optional(Token::LBracket) {
+            let loc = self.parse_value_location(ctx)?;
+            ctx.function.locations[value] = loc;
+            self.match_token(
+                Token::RBracket,
+                "expected ']' after value location",
+            )?;
+        }
+
+        Ok(())
     }
 
     fn parse_value_location(&mut self, ctx: &Context) -> Result<ValueLoc> {
