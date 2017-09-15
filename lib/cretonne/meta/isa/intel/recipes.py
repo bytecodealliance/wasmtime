@@ -360,7 +360,7 @@ st = TailRecipe(
         'st', Store, size=1, ins=(GPR, GPR), outs=(),
         instp=IsEqual(Store.offset, 0),
         emit='''
-        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rm(in_reg1, in_reg0, sink);
         ''')
 
@@ -370,7 +370,7 @@ st_abcd = TailRecipe(
         'st_abcd', Store, size=1, ins=(ABCD, GPR), outs=(),
         instp=IsEqual(Store.offset, 0),
         emit='''
-        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rm(in_reg1, in_reg0, sink);
         ''')
 
@@ -379,7 +379,7 @@ stDisp8 = TailRecipe(
         'stDisp8', Store, size=2, ins=(GPR, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 8),
         emit='''
-        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp8(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
         sink.put1(offset as u8);
@@ -388,7 +388,7 @@ stDisp8_abcd = TailRecipe(
         'stDisp8_abcd', Store, size=2, ins=(ABCD, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 8),
         emit='''
-        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp8(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
         sink.put1(offset as u8);
@@ -398,7 +398,7 @@ stDisp8_abcd = TailRecipe(
 stDisp32 = TailRecipe(
         'stDisp32', Store, size=5, ins=(GPR, GPR), outs=(),
         emit='''
-        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp32(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
         sink.put4(offset as u32);
@@ -406,7 +406,7 @@ stDisp32 = TailRecipe(
 stDisp32_abcd = TailRecipe(
         'stDisp32_abcd', Store, size=5, ins=(ABCD, GPR), outs=(),
         emit='''
-        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp32(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
         sink.put4(offset as u32);
@@ -421,7 +421,7 @@ ld = TailRecipe(
         'ld', Load, size=1, ins=(GPR), outs=(GPR),
         instp=IsEqual(Load.offset, 0),
         emit='''
-        PUT_OP(bits, rex2(out_reg0, in_reg0), sink);
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rm(in_reg0, out_reg0, sink);
         ''')
 
@@ -430,7 +430,7 @@ ldDisp8 = TailRecipe(
         'ldDisp8', Load, size=2, ins=(GPR), outs=(GPR),
         instp=IsSignedInt(Load.offset, 8),
         emit='''
-        PUT_OP(bits, rex2(out_reg0, in_reg0), sink);
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp8(in_reg0, out_reg0, sink);
         let offset: i32 = offset.into();
         sink.put1(offset as u8);
@@ -441,7 +441,7 @@ ldDisp32 = TailRecipe(
         'ldDisp32', Load, size=5, ins=(GPR), outs=(GPR),
         instp=IsSignedInt(Load.offset, 32),
         emit='''
-        PUT_OP(bits, rex2(out_reg0, in_reg0), sink);
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp32(in_reg0, out_reg0, sink);
         let offset: i32 = offset.into();
         sink.put4(offset as u32);
