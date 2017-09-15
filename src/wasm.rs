@@ -9,7 +9,7 @@ use cton_reader::{parse_options, Location};
 use std::path::PathBuf;
 use cretonne::Context;
 use cretonne::verifier;
-use cretonne::settings;
+use cretonne::settings::{self, FlagsOrIsa};
 use cretonne::isa::{self, TargetIsa};
 use std::fs::File;
 use std::error::Error;
@@ -46,6 +46,10 @@ fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
     Ok(buf)
 }
 
+enum OwnedFlagsOrIsa {
+    Flags(settings::Flags),
+    Isa(Box<TargetIsa>),
+}
 
 pub fn run(
     files: Vec<String>,
@@ -64,15 +68,19 @@ pub fn run(
 
     let mut words = flag_isa.trim().split_whitespace();
     // Look for `isa foo`.
-    let isa_name = match words.next() {
-        None => return Err(String::from("expected ISA name")),
-        Some(w) => w,
+    let owned_fisa = if let Some(isa_name) = words.next() {
+        let isa_builder = isa::lookup(isa_name).map_err(|err| match err {
+            isa::LookupError::Unknown => format!("unknown ISA '{}'", isa_name),
+            isa::LookupError::Unsupported => format!("support for ISA '{}' not enabled", isa_name),
+        })?;
+        OwnedFlagsOrIsa::Isa(isa_builder.finish(settings::Flags::new(&flag_builder)))
+    } else {
+        OwnedFlagsOrIsa::Flags(settings::Flags::new(&flag_builder))
     };
-    let isa_builder = isa::lookup(isa_name).map_err(|err| match err {
-        isa::LookupError::Unknown => format!("unknown ISA '{}'", isa_name),
-        isa::LookupError::Unsupported => format!("support for ISA '{}' not enabled", isa_name),
-    })?;
-    let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
+    let fisa = match owned_fisa {
+        OwnedFlagsOrIsa::Flags(ref flags) => FlagsOrIsa::from(flags),
+        OwnedFlagsOrIsa::Isa(ref isa) => FlagsOrIsa::from(&**isa),
+    };
 
     for filename in files {
         let path = Path::new(&filename);
@@ -83,7 +91,7 @@ pub fn run(
             flag_check,
             path.to_path_buf(),
             name,
-            &*isa,
+            &fisa,
         )?;
     }
     Ok(())
@@ -95,7 +103,7 @@ fn handle_module(
     flag_check: bool,
     path: PathBuf,
     name: String,
-    isa: &TargetIsa,
+    fisa: &FlagsOrIsa,
 ) -> Result<(), String> {
     let mut terminal = term::stdout().unwrap();
     terminal.fg(term::color::YELLOW).unwrap();
@@ -141,7 +149,7 @@ fn handle_module(
             }
         }
     };
-    let mut dummy_runtime = DummyRuntime::with_flags(isa.flags().clone());
+    let mut dummy_runtime = DummyRuntime::with_flags(fisa.flags.clone());
     let translation = {
         let runtime: &mut WasmRuntime = &mut dummy_runtime;
         translate_module(&data, runtime)?
@@ -154,8 +162,8 @@ fn handle_module(
         vprint!(flag_verbose, "Checking...   ");
         terminal.reset().unwrap();
         for func in &translation.functions {
-            verifier::verify_function(func, isa).map_err(|err| {
-                pretty_verifier_error(func, None, err)
+            verifier::verify_function(func, *fisa).map_err(|err| {
+                pretty_verifier_error(func, fisa.isa, err)
             })?;
         }
         terminal.fg(term::color::GREEN).unwrap();
@@ -169,18 +177,18 @@ fn handle_module(
         for func in &translation.functions {
             let mut context = Context::new();
             context.func = func.clone();
-            context.verify(isa).map_err(|err| {
-                pretty_verifier_error(&context.func, None, err)
+            context.verify(*fisa).map_err(|err| {
+                pretty_verifier_error(&context.func, fisa.isa, err)
             })?;
             context.flowgraph();
             context.compute_loop_analysis();
             context.licm();
-            context.verify(isa).map_err(|err| {
-                pretty_verifier_error(&context.func, None, err)
+            context.verify(*fisa).map_err(|err| {
+                pretty_verifier_error(&context.func, fisa.isa, err)
             })?;
             context.simple_gvn();
-            context.verify(isa).map_err(|err| {
-                pretty_verifier_error(&context.func, None, err)
+            context.verify(*fisa).map_err(|err| {
+                pretty_verifier_error(&context.func, fisa.isa, err)
             })?;
         }
         terminal.fg(term::color::GREEN).unwrap();
