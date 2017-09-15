@@ -30,7 +30,7 @@ Usage:
     cton-util cat <file>...
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
-    cton-util wasm [-cvo] [--enable=<flag>]... <file>...
+    cton-util wasm [-cvo] [--set <set>]... [--isa <isa>] <file>...
     cton-util --help | --version
 
 Options:
@@ -38,6 +38,8 @@ Options:
     -c, --check     checks the correctness of Cretonne IL translated from WebAssembly
     -o, --optimize  runs otpimization passes on translated WebAssembly functions
     -h, --help      print this help message
+    --set=<set>     configure Cretonne settings
+    --isa=<isa>     specify the Cretonne ISA
     --version       print the Cretonne version
 
 ";
@@ -53,7 +55,8 @@ struct Args {
     flag_check: bool,
     flag_optimize: bool,
     flag_verbose: bool,
-    flag_enable: Vec<String>,
+    flag_set: Vec<String>,
+    flag_isa: String,
 }
 
 /// A command either succeeds or fails with an error message.
@@ -85,7 +88,8 @@ fn cton_util() -> CommandResult {
             args.flag_verbose,
             args.flag_optimize,
             args.flag_check,
-            args.flag_enable,
+            args.flag_set,
+            args.flag_isa,
         )
     } else {
         // Debugging / shouldn't happen with proper command line handling above.

@@ -5,10 +5,12 @@
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
 use cton_wasm::{translate_module, DummyRuntime, WasmRuntime};
+use cton_reader::{parse_options, Location};
 use std::path::PathBuf;
 use cretonne::Context;
 use cretonne::verifier;
-use cretonne::settings::{self, Configurable};
+use cretonne::settings;
+use cretonne::isa::{self, TargetIsa};
 use std::fs::File;
 use std::error::Error;
 use std::io;
@@ -50,15 +52,28 @@ pub fn run(
     flag_verbose: bool,
     flag_optimize: bool,
     flag_check: bool,
-    flag_enable: Vec<String>,
+    flag_set: Vec<String>,
+    flag_isa: String,
 ) -> Result<(), String> {
     let mut flag_builder = settings::builder();
-    for enable in flag_enable {
-        flag_builder.enable(&enable).map_err(|_| {
-            format!("unrecognized flag: {}", enable)
-        })?;
-    }
+    parse_options(
+        flag_set.iter().map(|x| x.as_str()),
+        &mut flag_builder,
+        &Location { line_number: 0 },
+    ).map_err(|err| err.to_string())?;
     let flags = settings::Flags::new(&flag_builder);
+
+    let mut words = flag_isa.trim().split_whitespace();
+    // Look for `isa foo`.
+    let isa_name = match words.next() {
+        None => return Err(String::from("expected ISA name")),
+        Some(w) => w,
+    };
+    let isa_builder = isa::lookup(isa_name).map_err(|err| match err {
+        isa::LookupError::Unknown => format!("unknown ISA '{}'", isa_name),
+        isa::LookupError::Unsupported => format!("support for ISA '{}' not enabled", isa_name),
+    })?;
+    let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
 
     for filename in files {
         let path = Path::new(&filename);
@@ -70,6 +85,7 @@ pub fn run(
             path.to_path_buf(),
             name,
             &flags,
+            &*isa,
         )?;
     }
     Ok(())
@@ -82,6 +98,7 @@ fn handle_module(
     path: PathBuf,
     name: String,
     flags: &settings::Flags,
+    isa: &TargetIsa,
 ) -> Result<(), String> {
     let mut terminal = term::stdout().unwrap();
     terminal.fg(term::color::YELLOW).unwrap();
@@ -140,8 +157,8 @@ fn handle_module(
         vprint!(flag_verbose, "Checking...   ");
         terminal.reset().unwrap();
         for func in &translation.functions {
-            verifier::verify_function(func, None).map_err(|err| {
-                pretty_verifier_error(func, None, err)
+            verifier::verify_function(func, Some(isa)).map_err(|err| {
+                pretty_verifier_error(func, Some(isa), err)
             })?;
         }
         terminal.fg(term::color::GREEN).unwrap();
@@ -155,18 +172,18 @@ fn handle_module(
         for func in &translation.functions {
             let mut context = Context::new();
             context.func = func.clone();
-            context.verify(None).map_err(|err| {
-                pretty_verifier_error(&context.func, None, err)
+            context.verify(Some(isa)).map_err(|err| {
+                pretty_verifier_error(&context.func, Some(isa), err)
             })?;
             context.flowgraph();
             context.compute_loop_analysis();
             context.licm();
-            context.verify(None).map_err(|err| {
-                pretty_verifier_error(&context.func, None, err)
+            context.verify(Some(isa)).map_err(|err| {
+                pretty_verifier_error(&context.func, Some(isa), err)
             })?;
             context.simple_gvn();
-            context.verify(None).map_err(|err| {
-                pretty_verifier_error(&context.func, None, err)
+            context.verify(Some(isa)).map_err(|err| {
+                pretty_verifier_error(&context.func, Some(isa), err)
             })?;
         }
         terminal.fg(term::color::GREEN).unwrap();
