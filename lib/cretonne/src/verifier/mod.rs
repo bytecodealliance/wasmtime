@@ -920,28 +920,40 @@ impl<'a> Verifier<'a> {
             return Ok(());
         }
 
+        // Check if this opcode must be encoded.
+        let mut needs_enc = None;
         if opcode.is_branch() {
-            return err!(inst, "Branch must have an encoding");
+            needs_enc = Some("Branch");
+        } else if opcode.is_call() {
+            needs_enc = Some("Call");
+        } else if opcode.is_return() {
+            needs_enc = Some("Return");
+        } else if opcode.can_store() {
+            needs_enc = Some("Store");
+        } else if opcode.can_trap() {
+            needs_enc = Some("Trapping instruction");
+        } else if opcode.other_side_effects() {
+            needs_enc = Some("Instruction with side effects");
         }
 
-        if opcode.is_call() {
-            return err!(inst, "Call must have an encoding");
-        }
-
-        if opcode.is_return() {
-            return err!(inst, "Return must have an encoding");
-        }
-
-        if opcode.can_store() {
-            return err!(inst, "Store must have an encoding");
-        }
-
-        if opcode.can_trap() {
-            return err!(inst, "Trapping instruction must have an encoding");
-        }
-
-        if opcode.other_side_effects() {
-            return err!(inst, "Instruction with side effects must have an encoding");
+        if let Some(text) = needs_enc {
+            // This instruction needs an encoding, so generate an error.
+            // Provide the ISA default encoding as a hint.
+            match isa.encode(
+                &self.func.dfg,
+                &self.func.dfg[inst],
+                self.func.dfg.ctrl_typevar(inst),
+            ) {
+                Ok(enc) => {
+                    return err!(
+                        inst,
+                        "{} must have an encoding (e.g., {})",
+                        text,
+                        isa.encoding_info().display(enc)
+                    )
+                }
+                Err(_) => return err!(inst, "{} must have an encoding", text),
+            }
         }
 
         Ok(())
