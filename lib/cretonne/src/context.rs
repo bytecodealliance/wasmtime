@@ -18,6 +18,7 @@ use isa::TargetIsa;
 use legalize_function;
 use regalloc;
 use result::{CtonError, CtonResult};
+use settings::FlagsOrIsa;
 use verifier;
 use simple_gvn::do_simple_gvn;
 use licm::do_licm;
@@ -86,17 +87,14 @@ impl Context {
     /// Run the verifier on the function.
     ///
     /// Also check that the dominator tree and control flow graph are consistent with the function.
-    ///
-    /// The `isa` argument is currently unused, but the verifier will soon be able to also
-    /// check ISA-dependent constraints.
-    pub fn verify(&self, isa: Option<&TargetIsa>) -> verifier::Result {
-        verifier::verify_context(&self.func, &self.cfg, &self.domtree, isa)
+    pub fn verify<'a, FOI: Into<FlagsOrIsa<'a>>>(&self, fisa: FOI) -> verifier::Result {
+        verifier::verify_context(&self.func, &self.cfg, &self.domtree, fisa)
     }
 
     /// Run the verifier only if the `enable_verifier` setting is true.
     pub fn verify_if(&self, isa: &TargetIsa) -> CtonResult {
         if isa.flags().enable_verifier() {
-            self.verify(Some(isa)).map_err(Into::into)
+            self.verify(isa).map_err(Into::into)
         } else {
             Ok(())
         }

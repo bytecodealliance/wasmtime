@@ -218,7 +218,7 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
 mod tests {
     use cretonne::{ir, Context};
     use cretonne::ir::types::I32;
-    use runtime::DummyRuntime;
+    use runtime::{DummyRuntime, FuncEnvironment};
     use super::FuncTranslator;
 
     #[test]
@@ -250,7 +250,7 @@ mod tests {
 
         trans.translate(&BODY, &mut ctx.func, &mut runtime).unwrap();
         dbg!("{}", ctx.func.display(None));
-        ctx.verify(None).unwrap();
+        ctx.verify(runtime.flags()).unwrap();
     }
 
     #[test]
@@ -283,7 +283,7 @@ mod tests {
 
         trans.translate(&BODY, &mut ctx.func, &mut runtime).unwrap();
         dbg!("{}", ctx.func.display(None));
-        ctx.verify(None).unwrap();
+        ctx.verify(runtime.flags()).unwrap();
     }
 
     #[test]
@@ -322,6 +322,6 @@ mod tests {
 
         trans.translate(&BODY, &mut ctx.func, &mut runtime).unwrap();
         dbg!("{}", ctx.func.display(None));
-        ctx.verify(None).unwrap();
+        ctx.verify(runtime.flags()).unwrap();
     }
 }

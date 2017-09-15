@@ -87,7 +87,7 @@ impl Context {
         );
 
         if isa.flags().enable_verifier() {
-            verify_context(func, cfg, domtree, Some(isa))?;
+            verify_context(func, cfg, domtree, isa)?;
             verify_liveness(isa, func, cfg, &self.liveness)?;
             verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
         }
@@ -105,7 +105,7 @@ impl Context {
         );
 
         if isa.flags().enable_verifier() {
-            verify_context(func, cfg, domtree, Some(isa))?;
+            verify_context(func, cfg, domtree, isa)?;
             verify_liveness(isa, func, cfg, &self.liveness)?;
             verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
         }
@@ -121,7 +121,7 @@ impl Context {
         );
 
         if isa.flags().enable_verifier() {
-            verify_context(func, cfg, domtree, Some(isa))?;
+            verify_context(func, cfg, domtree, isa)?;
             verify_liveness(isa, func, cfg, &self.liveness)?;
             verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
         }
@@ -136,7 +136,7 @@ impl Context {
         );
 
         if isa.flags().enable_verifier() {
-            verify_context(func, cfg, domtree, Some(isa))?;
+            verify_context(func, cfg, domtree, isa)?;
             verify_liveness(isa, func, cfg, &self.liveness)?;
             verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
         }

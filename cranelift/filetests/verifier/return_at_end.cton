@@ -1,10 +1,6 @@
 test verifier
 set return_at_end
 
-; The verifier doesn't have an API for verifying with flags without also
-; setting an ISA.
-isa riscv
-
 function %ok(i32) {
 ebb0(v0: i32):
     brnz v0, ebb1

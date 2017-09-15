@@ -66,6 +66,7 @@ use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallIn
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
          StackSlotKind, GlobalVar, Value, Type, Opcode, ValueLoc, ArgumentLoc};
 use isa::TargetIsa;
+use settings::{Flags, FlagsOrIsa};
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter};
 use std::result;
@@ -121,19 +122,19 @@ impl std_error::Error for Error {
 pub type Result = result::Result<(), Error>;
 
 /// Verify `func`.
-pub fn verify_function(func: &Function, isa: Option<&TargetIsa>) -> Result {
-    Verifier::new(func, isa).run()
+pub fn verify_function<'a, FOI: Into<FlagsOrIsa<'a>>>(func: &Function, fisa: FOI) -> Result {
+    Verifier::new(func, fisa.into()).run()
 }
 
 /// Verify `func` after checking the integrity of associated context data structures `cfg` and
 /// `domtree`.
-pub fn verify_context(
+pub fn verify_context<'a, FOI: Into<FlagsOrIsa<'a>>>(
     func: &Function,
     cfg: &ControlFlowGraph,
     domtree: &DominatorTree,
-    isa: Option<&TargetIsa>,
+    fisa: FOI,
 ) -> Result {
-    let verifier = Verifier::new(func, isa);
+    let verifier = Verifier::new(func, fisa.into());
     if cfg.is_valid() {
         verifier.cfg_integrity(cfg)?;
     }
@@ -147,18 +148,20 @@ struct Verifier<'a> {
     func: &'a Function,
     cfg: ControlFlowGraph,
     domtree: DominatorTree,
+    flags: &'a Flags,
     isa: Option<&'a TargetIsa>,
 }
 
 impl<'a> Verifier<'a> {
-    pub fn new(func: &'a Function, isa: Option<&'a TargetIsa>) -> Verifier<'a> {
+    pub fn new(func: &'a Function, fisa: FlagsOrIsa<'a>) -> Verifier<'a> {
         let cfg = ControlFlowGraph::with_function(func);
         let domtree = DominatorTree::with_function(func, &cfg);
         Verifier {
             func,
             cfg,
             domtree,
-            isa,
+            flags: fisa.flags,
+            isa: fisa.isa,
         }
     }
 
@@ -971,7 +974,7 @@ impl<'a> Verifier<'a> {
             }
         }
 
-        if self.isa.map(|isa| isa.flags().return_at_end()) == Some(true) {
+        if self.flags.return_at_end() {
             self.verify_return_at_end()?;
         }
 
@@ -984,6 +987,7 @@ mod tests {
     use super::{Verifier, Error};
     use ir::Function;
     use ir::instructions::{InstructionData, Opcode};
+    use settings;
 
     macro_rules! assert_err_with_msg {
         ($e:expr, $msg:expr) => (
@@ -1001,7 +1005,8 @@ mod tests {
     #[test]
     fn empty() {
         let func = Function::new();
-        let verifier = Verifier::new(&func, None);
+        let flags = &settings::Flags::new(&settings::builder());
+        let verifier = Verifier::new(&func, flags.into());
         assert_eq!(verifier.run(), Ok(()));
     }
 
@@ -1014,7 +1019,8 @@ mod tests {
             InstructionData::Nullary { opcode: Opcode::Jump },
         );
         func.layout.append_inst(nullary_with_bad_opcode, ebb0);
-        let verifier = Verifier::new(&func, None);
+        let flags = &settings::Flags::new(&settings::builder());
+        let verifier = Verifier::new(&func, flags.into());
         assert_err_with_msg!(verifier.run(), "instruction format");
     }
 }

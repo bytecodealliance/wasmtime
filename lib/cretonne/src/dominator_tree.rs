@@ -427,9 +427,10 @@ impl DominatorTree {
 mod test {
     use cursor::{Cursor, FuncCursor};
     use flowgraph::ControlFlowGraph;
-    use ir::{Function, InstBuilder, types};
-    use super::*;
     use ir::types::*;
+    use ir::{Function, InstBuilder, types};
+    use settings;
+    use super::*;
     use verifier::verify_context;
 
     #[test]
@@ -608,6 +609,8 @@ mod test {
         dt.recompute_split_ebb(ebb3, ebb4, middle_jump_inst);
 
         cfg.compute(cur.func);
-        verify_context(cur.func, &cfg, &dt, None).unwrap();
+
+        let flags = settings::Flags::new(&settings::builder());
+        verify_context(cur.func, &cfg, &dt, &flags).unwrap();
     }
 }

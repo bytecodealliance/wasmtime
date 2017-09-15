@@ -40,7 +40,7 @@ impl SubTest for TestSimpleGVN {
 
         comp_ctx.flowgraph();
         comp_ctx.simple_gvn();
-        comp_ctx.verify(context.isa).map_err(|e| {
+        comp_ctx.verify(context.flags_or_isa()).map_err(|e| {
             pretty_error(&comp_ctx.func, context.isa, Into::into(e))
         })?;
 
