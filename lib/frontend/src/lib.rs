@@ -38,6 +38,7 @@
 //! use cretonne::entity::EntityRef;
 //! use cretonne::ir::{FunctionName, CallConv, Function, Signature, ArgumentType, InstBuilder};
 //! use cretonne::ir::types::*;
+//! use cretonne::settings;
 //! use cton_frontend::{ILBuilder, FunctionBuilder};
 //! use cretonne::verifier::verify_function;
 //! use std::u32;
@@ -133,7 +134,8 @@
 //!         builder.seal_block(block1);
 //!     }
 //!
-//!     let res = verify_function(&func, None);
+//!     let flags = settings::Flags::new(&settings::builder());
+//!     let res = verify_function(&func, &flags);
 //!     println!("{}", func.display(None));
 //!     match res {
 //!         Ok(_) => {}

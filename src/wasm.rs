@@ -61,7 +61,6 @@ pub fn run(
         &mut flag_builder,
         &Location { line_number: 0 },
     ).map_err(|err| err.to_string())?;
-    let flags = settings::Flags::new(&flag_builder);
 
     let mut words = flag_isa.trim().split_whitespace();
     // Look for `isa foo`.
@@ -84,7 +83,6 @@ pub fn run(
             flag_check,
             path.to_path_buf(),
             name,
-            &flags,
             &*isa,
         )?;
     }
@@ -97,7 +95,6 @@ fn handle_module(
     flag_check: bool,
     path: PathBuf,
     name: String,
-    flags: &settings::Flags,
     isa: &TargetIsa,
 ) -> Result<(), String> {
     let mut terminal = term::stdout().unwrap();
@@ -144,7 +141,7 @@ fn handle_module(
             }
         }
     };
-    let mut dummy_runtime = DummyRuntime::with_flags(flags.clone());
+    let mut dummy_runtime = DummyRuntime::with_flags(isa.flags().clone());
     let translation = {
         let runtime: &mut WasmRuntime = &mut dummy_runtime;
         translate_module(&data, runtime)?
@@ -157,8 +154,8 @@ fn handle_module(
         vprint!(flag_verbose, "Checking...   ");
         terminal.reset().unwrap();
         for func in &translation.functions {
-            verifier::verify_function(func, Some(isa)).map_err(|err| {
-                pretty_verifier_error(func, Some(isa), err)
+            verifier::verify_function(func, isa).map_err(|err| {
+                pretty_verifier_error(func, None, err)
             })?;
         }
         terminal.fg(term::color::GREEN).unwrap();
@@ -172,18 +169,18 @@ fn handle_module(
         for func in &translation.functions {
             let mut context = Context::new();
             context.func = func.clone();
-            context.verify(Some(isa)).map_err(|err| {
-                pretty_verifier_error(&context.func, Some(isa), err)
+            context.verify(isa).map_err(|err| {
+                pretty_verifier_error(&context.func, None, err)
             })?;
             context.flowgraph();
             context.compute_loop_analysis();
             context.licm();
-            context.verify(Some(isa)).map_err(|err| {
-                pretty_verifier_error(&context.func, Some(isa), err)
+            context.verify(isa).map_err(|err| {
+                pretty_verifier_error(&context.func, None, err)
             })?;
             context.simple_gvn();
-            context.verify(Some(isa)).map_err(|err| {
-                pretty_verifier_error(&context.func, Some(isa), err)
+            context.verify(isa).map_err(|err| {
+                pretty_verifier_error(&context.func, None, err)
             })?;
         }
         terminal.fg(term::color::GREEN).unwrap();

@@ -631,6 +631,7 @@ mod tests {
     use cretonne::ir::types::*;
     use frontend::{ILBuilder, FunctionBuilder};
     use cretonne::verifier::verify_function;
+    use cretonne::settings;
 
     use std::u32;
 
@@ -727,7 +728,8 @@ mod tests {
             builder.seal_block(block1);
         }
 
-        let res = verify_function(&func, None);
+        let flags = settings::Flags::new(&settings::builder());
+        let res = verify_function(&func, &flags);
         // println!("{}", func.display(None));
         match res {
             Ok(_) => {}

@@ -589,6 +589,7 @@ mod tests {
     use cretonne::ir::types::*;
     use cretonne::verify_function;
     use cretonne::ir::instructions::BranchInfo;
+    use cretonne::settings;
     use ssa::SSABuilder;
     use std::u32;
 
@@ -1194,7 +1195,8 @@ mod tests {
             cur.goto_bottom(ebb1);
             func.dfg.ins(cur).return_(&[])
         };
-        match verify_function(&func, None) {
+        let flags = settings::Flags::new(&settings::builder());
+        match verify_function(&func, &flags) {
             Ok(()) => {}
             Err(err) => panic!(err.message),
         }

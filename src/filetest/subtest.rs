@@ -4,7 +4,7 @@ use std::result;
 use std::borrow::Cow;
 use cretonne::ir::Function;
 use cretonne::isa::TargetIsa;
-use cretonne::settings::Flags;
+use cretonne::settings::{Flags, FlagsOrIsa};
 use cton_reader::{Details, Comment};
 use filecheck::{self, CheckerBuilder, Checker, Value as FCValue};
 
@@ -27,6 +27,16 @@ pub struct Context<'a> {
     /// Target ISA to test against. Only guaranteed to be present for sub-tests whose `needs_isa`
     /// method returned `true`. For other sub-tests, this is set if the test file has a unique ISA.
     pub isa: Option<&'a TargetIsa>,
+}
+
+impl<'a> Context<'a> {
+    /// Get a `FlagsOrIsa` object for passing to the verifier.
+    pub fn flags_or_isa(&self) -> FlagsOrIsa<'a> {
+        FlagsOrIsa {
+            flags: self.flags,
+            isa: self.isa,
+        }
+    }
 }
 
 /// Common interface for implementations of test commands.

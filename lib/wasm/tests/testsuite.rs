@@ -4,7 +4,6 @@ extern crate tempdir;
 
 use cton_wasm::{translate_module, DummyRuntime, WasmRuntime};
 use std::path::PathBuf;
-use std::borrow::Borrow;
 use std::fs::File;
 use std::error::Error;
 use std::io;
@@ -15,8 +14,8 @@ use std::process::Command;
 use std::fs;
 use cretonne::ir;
 use cretonne::ir::entities::AnyEntity;
-use cretonne::isa::{self, TargetIsa};
-use cretonne::settings::{self, Configurable};
+use cretonne::isa::TargetIsa;
+use cretonne::settings::{self, Configurable, Flags};
 use cretonne::verifier;
 use tempdir::TempDir;
 
@@ -27,9 +26,10 @@ fn testsuite() {
         .map(|r| r.unwrap())
         .collect();
     paths.sort_by_key(|dir| dir.path());
+    let flags = Flags::new(&settings::builder());
     for path in paths {
         let path = path.path();
-        handle_module(path, None);
+        handle_module(path, &flags);
     }
 }
 
@@ -37,19 +37,8 @@ fn testsuite() {
 fn return_at_end() {
     let mut flag_builder = settings::builder();
     flag_builder.enable("return_at_end").unwrap();
-    let flags = settings::Flags::new(&flag_builder);
-    // We don't care about the target itself here, so just pick one arbitrarily.
-    let isa = match isa::lookup("riscv") {
-        Err(_) => {
-            println!("riscv target not found; disabled test return_at_end.wat");
-            return;
-        }
-        Ok(isa_builder) => isa_builder.finish(flags),
-    };
-    handle_module(
-        PathBuf::from("../../wasmtests/return_at_end.wat"),
-        Some(isa.borrow()),
-    );
+    let flags = Flags::new(&flag_builder);
+    handle_module(PathBuf::from("../../wasmtests/return_at_end.wat"), &flags);
 }
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -60,7 +49,7 @@ fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
     Ok(buf)
 }
 
-fn handle_module(path: PathBuf, isa: Option<&TargetIsa>) {
+fn handle_module(path: PathBuf, flags: &Flags) {
     let data = match path.extension() {
         None => {
             panic!("the file extension is not wasm or wat");
@@ -105,17 +94,14 @@ fn handle_module(path: PathBuf, isa: Option<&TargetIsa>) {
             }
         }
     };
-    let mut dummy_runtime = match isa {
-        Some(isa) => DummyRuntime::with_flags(isa.flags().clone()),
-        None => DummyRuntime::default(),
-    };
+    let mut dummy_runtime = DummyRuntime::with_flags(flags.clone());
     let translation = {
         let runtime: &mut WasmRuntime = &mut dummy_runtime;
         translate_module(&data, runtime).unwrap()
     };
     for func in &translation.functions {
-        verifier::verify_function(func, isa)
-            .map_err(|err| panic!(pretty_verifier_error(func, isa, err)))
+        verifier::verify_function(func, flags)
+            .map_err(|err| panic!(pretty_verifier_error(func, None, err)))
             .unwrap();
     }
 }
