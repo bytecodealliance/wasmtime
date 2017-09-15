@@ -9,7 +9,8 @@
 
 use entity::EntityMap;
 use ir::{Value, ValueLoc};
-use isa::RegUnit;
+use isa::{RegUnit, RegInfo};
+use std::fmt;
 
 /// A diversion of a value from its original register location to a new register.
 ///
@@ -98,6 +99,35 @@ impl RegDiversions {
                 self.current.swap_remove(i).to
             },
         )
+    }
+
+    /// Return an object that can display the diversions.
+    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&'a self, regs: R) -> DisplayDiversions<'a> {
+        DisplayDiversions(self, regs.into())
+    }
+}
+
+/// Object that displays register diversions.
+pub struct DisplayDiversions<'a>(&'a RegDiversions, Option<&'a RegInfo>);
+
+impl<'a> fmt::Display for DisplayDiversions<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{")?;
+        for div in self.0.all() {
+            match self.1 {
+                Some(regs) => {
+                    write!(
+                        f,
+                        " {}: {} -> {}",
+                        div.value,
+                        regs.display_regunit(div.from),
+                        regs.display_regunit(div.to)
+                    )?
+                }
+                None => write!(f, " {}: %{} -> %{}", div.value, div.from, div.to)?,
+            }
+        }
+        write!(f, " }}")
     }
 }
 
