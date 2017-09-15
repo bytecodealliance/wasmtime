@@ -4,6 +4,7 @@ isa riscv
 ; Test the coalescer.
 ; regex: V=v\d+
 ; regex: WS=\s+
+; regex: LOC=%\w+
 
 ; This function is already CSSA, so no copies should be inserted.
 function %cssa(i32) -> i32 {
@@ -81,7 +82,7 @@ ebb0(v0: i32):
 
 ebb1(v10: i32, v11: i32):
     ; v11 needs to be isolated because it interferes with v10.
-    ; check: $ebb1($v10: i32, $(nv11a=$V): i32)
+    ; check: $ebb1($v10: i32 [$LOC], $(nv11a=$V): i32 [$LOC])
     ; check: $v11 = copy $nv11a
     v12 = iadd v10, v11
     v13 = icmp ult v12, v0

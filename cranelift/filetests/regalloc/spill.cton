@@ -25,7 +25,7 @@ function %pyramid(i32) -> i32 {
 ; check: ss2 = spill_slot 4
 ; not: spill_slot
 ebb0(v1: i32):
-; check: $ebb0($(rv1=$V): i32, $(rlink=$V): i32)
+; check: $ebb0($(rv1=$V): i32 [%x10], $(rlink=$V): i32 [%x1])
     ; check: ,ss0]$WS $v1 = spill $rv1
     ; nextln: ,ss1]$WS $(link=$V) = spill $rlink
     ; not: spill
@@ -155,7 +155,7 @@ function %use_spilled_value(i32) -> i32 {
 ; check: ss1 = spill_slot 4
 ; check: ss2 = spill_slot 4
 ebb0(v1: i32):
-; check: $ebb0($(rv1=$V): i32, $(rlink=$V): i32)
+; check: $ebb0($(rv1=$V): i32 [%x10], $(rlink=$V): i32 [%x1])
     ; check: ,ss0]$WS $v1 = spill $rv1
     ; nextln: ,ss1]$WS $(link=$V) = spill $rlink
     ; not: spill

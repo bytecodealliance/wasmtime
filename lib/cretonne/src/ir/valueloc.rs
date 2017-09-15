@@ -25,6 +25,14 @@ impl Default for ValueLoc {
 }
 
 impl ValueLoc {
+    /// Is this an assigned location? (That is, not `Unassigned`).
+    pub fn is_assigned(&self) -> bool {
+        match *self {
+            ValueLoc::Unassigned => false,
+            _ => true,
+        }
+    }
+
     /// Get the register unit of this location, or panic.
     pub fn unwrap_reg(self) -> RegUnit {
         match self {

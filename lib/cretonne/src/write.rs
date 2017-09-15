@@ -91,11 +91,22 @@ fn write_preamble(
 //
 // ====--------------------------------------------------------------------------------------====//
 
-pub fn write_arg(w: &mut Write, func: &Function, arg: Value) -> Result {
-    write!(w, "{}: {}", arg, func.dfg.value_type(arg))
+pub fn write_arg(w: &mut Write, func: &Function, regs: Option<&RegInfo>, arg: Value) -> Result {
+    write!(w, "{}: {}", arg, func.dfg.value_type(arg))?;
+    let loc = func.locations[arg];
+    if loc.is_assigned() {
+        write!(w, " [{}]", loc.display(regs))?
+    }
+
+    Ok(())
 }
 
-pub fn write_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
+pub fn write_ebb_header(
+    w: &mut Write,
+    func: &Function,
+    isa: Option<&TargetIsa>,
+    ebb: Ebb,
+) -> Result {
     // Write out the basic block header, outdented:
     //
     //    ebb1:
@@ -108,24 +119,27 @@ pub fn write_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
         write!(w, "                    ")?;
     }
 
+    let regs = isa.map(TargetIsa::register_info);
+    let regs = regs.as_ref();
+
     let mut args = func.dfg.ebb_args(ebb).iter().cloned();
     match args.next() {
         None => return writeln!(w, "{}:", ebb),
         Some(arg) => {
             write!(w, "{}(", ebb)?;
-            write_arg(w, func, arg)?;
+            write_arg(w, func, regs, arg)?;
         }
     }
     // Remaining arguments.
     for arg in args {
         write!(w, ", ")?;
-        write_arg(w, func, arg)?;
+        write_arg(w, func, regs, arg)?;
     }
     writeln!(w, "):")
 }
 
 pub fn write_ebb(w: &mut Write, func: &Function, isa: Option<&TargetIsa>, ebb: Ebb) -> Result {
-    write_ebb_header(w, func, ebb)?;
+    write_ebb_header(w, func, isa, ebb)?;
     for inst in func.layout.ebb_insts(ebb) {
         write_instruction(w, func, isa, inst)?;
     }
