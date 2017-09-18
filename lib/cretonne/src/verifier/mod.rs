@@ -68,7 +68,7 @@ use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpT
 use isa::TargetIsa;
 use settings::{Flags, FlagsOrIsa};
 use std::error as std_error;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Display, Formatter, Write};
 use std::result;
 use std::collections::BTreeSet;
 use std::cmp::Ordering;
@@ -883,29 +883,47 @@ impl<'a> Verifier<'a> {
 
         let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
-            let verify_encoding = isa.encode(
+            let mut encodings = isa.legal_encodings(
                 &self.func.dfg,
                 &self.func.dfg[inst],
                 self.func.dfg.ctrl_typevar(inst),
-            );
-            match verify_encoding {
-                Ok(verify_encoding) => {
-                    if verify_encoding != encoding {
-                        return err!(
-                            inst,
-                            "Instruction re-encoding {} doesn't match {}",
-                            isa.encoding_info().display(verify_encoding),
-                            isa.encoding_info().display(encoding)
-                        );
+            ).peekable();
+
+            if encodings.peek().is_none() {
+                return err!(
+                    inst,
+                    "Instruction failed to re-encode {}",
+                    isa.encoding_info().display(encoding)
+                );
+            }
+
+            let has_valid_encoding = encodings
+                .position(|possible_enc| encoding == possible_enc)
+                .is_some();
+
+            if !has_valid_encoding {
+                let mut possible_encodings = String::new();
+
+                for enc in isa.legal_encodings(
+                    &self.func.dfg,
+                    &self.func.dfg[inst],
+                    self.func.dfg.ctrl_typevar(inst),
+                )
+                {
+                    if possible_encodings.len() != 0 {
+                        possible_encodings.push_str(", ");
                     }
+                    possible_encodings
+                        .write_fmt(format_args!("{}", isa.encoding_info().display(enc)))
+                        .unwrap();
                 }
-                Err(_) => {
-                    return err!(
-                        inst,
-                        "Instruction failed to re-encode {}",
-                        isa.encoding_info().display(encoding)
-                    )
-                }
+
+                return err!(
+                    inst,
+                    "Instruction encoding {} doesn't match any possibilities: [{}]",
+                    isa.encoding_info().display(encoding),
+                    possible_encodings
+                );
             }
             return Ok(());
         }
