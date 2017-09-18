@@ -263,6 +263,16 @@ class CPUMode(object):
             ty = ValueType.by_name(name)
             self.type_legalize[ty] = xgrp
 
+    def legalize_monomorphic(self, xgrp):
+        # type: (XFormGroup) -> None
+        """
+        Configure the legalization action to take for monomorphic instructions
+        which don't have a controlling type variable.
+
+        See also `legalize_type()` for polymorphic instructions.
+        """
+        self.type_legalize[None] = xgrp
+
     def get_legalize_action(self, ty):
         # type: (ValueType) -> XFormGroup
         """

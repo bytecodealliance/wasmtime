@@ -599,6 +599,11 @@ impl Ieee32 {
     pub fn with_float(x: f32) -> Ieee32 {
         Ieee32(unsafe { mem::transmute(x) })
     }
+
+    /// Get the bitwise representation.
+    pub fn bits(self) -> u32 {
+        self.0
+    }
 }
 
 impl Display for Ieee32 {
@@ -629,6 +634,11 @@ impl Ieee64 {
     #[cfg(test)]
     pub fn with_float(x: f64) -> Ieee64 {
         Ieee64(unsafe { mem::transmute(x) })
+    }
+
+    /// Get the bitwise representation.
+    pub fn bits(self) -> u64 {
+        self.0
     }
 }
 
