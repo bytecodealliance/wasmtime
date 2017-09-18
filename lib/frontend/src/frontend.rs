@@ -373,7 +373,7 @@ where
     }
 
     /// Make sure that the current EBB is inserted in the layout.
-    fn ensure_inserted_ebb(&mut self) {
+    pub fn ensure_inserted_ebb(&mut self) {
         let ebb = self.position.ebb;
         if self.builder.ebbs[ebb].pristine {
             if !self.func.layout.is_ebb_inserted(ebb) {

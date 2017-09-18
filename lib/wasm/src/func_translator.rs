@@ -84,6 +84,10 @@ impl FuncTranslator {
         let entry_block = builder.create_ebb();
         builder.switch_to_block(entry_block, &[]); // This also creates values for the arguments.
         builder.seal_block(entry_block);
+        // Make sure the entry block is inserted in the layout before we make any callbacks to
+        // `environ`. The callback functions may need to insert things in the entry block.
+        builder.ensure_inserted_ebb();
+
         let num_args = declare_wasm_arguments(builder);
 
         // Set up the translation state with a single pushed control block representing the whole
