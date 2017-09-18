@@ -16,6 +16,6 @@ function %RV32I(i32 link [%x1]) -> i32 link [%x1] {
 ebb0(v9999: i32):
     v1 = iconst.i32 1
     v2 = iconst.i32 2
-    [R#0,-]         v3 = iadd v1, v2 ; error: Instruction re-encoding
+    [R#0,-]         v3 = iadd v1, v2 ; error: Instruction encoding R#00 doesn't match any possibilities
     return v9999
 }
