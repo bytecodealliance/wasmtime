@@ -54,6 +54,11 @@ expand.custom_legalize(insts.heap_addr, 'expand_heap_addr')
 expand.custom_legalize(insts.trapz, 'expand_cond_trap')
 expand.custom_legalize(insts.trapnz, 'expand_cond_trap')
 
+# Custom expansions for floating point constants.
+# These expansions require bit-casting or creating constant pool entries.
+expand.custom_legalize(insts.f32const, 'expand_fconst')
+expand.custom_legalize(insts.f64const, 'expand_fconst')
+
 x = Var('x')
 y = Var('y')
 a = Var('a')

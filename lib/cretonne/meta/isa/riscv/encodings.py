@@ -13,12 +13,14 @@ from .settings import use_m
 from cdsl.ast import Var
 from base.legalize import narrow, expand
 
+RV32.legalize_monomorphic(expand)
 RV32.legalize_type(
         default=narrow,
         i32=expand,
         f32=expand,
         f64=expand)
 
+RV64.legalize_monomorphic(expand)
 RV64.legalize_type(
         default=narrow,
         i32=expand,

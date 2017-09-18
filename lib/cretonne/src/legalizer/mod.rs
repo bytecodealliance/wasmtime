@@ -146,3 +146,25 @@ fn expand_cond_trap(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFl
     cfg.recompute_ebb(pos.func, old_ebb);
     cfg.recompute_ebb(pos.func, new_ebb);
 }
+
+/// Expand illegal `f32const` and `f64const` instructions.
+fn expand_fconst(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut ControlFlowGraph) {
+    let ty = func.dfg.value_type(func.dfg.first_result(inst));
+    assert!(ty.is_scalar(), "Only scalar fconst supported: {}", ty);
+
+    // In the future, we may want to generate constant pool entries for these constants, but for
+    // now use an `iconst` and a bit cast.
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    let ival = match pos.func.dfg[inst] {
+        ir::InstructionData::UnaryIeee32 {
+            opcode: ir::Opcode::F32const,
+            imm,
+        } => pos.ins().iconst(ir::types::I32, imm.bits() as i64),
+        ir::InstructionData::UnaryIeee64 {
+            opcode: ir::Opcode::F64const,
+            imm,
+        } => pos.ins().iconst(ir::types::I64, imm.bits() as i64),
+        _ => panic!("Expected fconst: {}", pos.func.dfg.display_inst(inst, None)),
+    };
+    pos.func.dfg.replace(inst).bitcast(ty, ival);
+}

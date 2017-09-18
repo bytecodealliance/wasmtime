@@ -20,6 +20,7 @@ except ImportError:
     pass
 
 
+I32.legalize_monomorphic(expand)
 I32.legalize_type(
         default=narrow,
         b1=expand,
@@ -27,6 +28,7 @@ I32.legalize_type(
         f32=expand,
         f64=expand)
 
+I64.legalize_monomorphic(expand)
 I64.legalize_type(
         default=narrow,
         b1=expand,
