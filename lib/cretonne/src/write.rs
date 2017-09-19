@@ -346,6 +346,7 @@ pub fn write_operands(
                 DisplayValues(&args[1..])
             )
         }
+        FuncAddr { func_ref, .. } => write!(w, " {}", func_ref),
         StackLoad { stack_slot, offset, .. } => write!(w, " {}{}", stack_slot, offset),
         StackStore {
             arg,

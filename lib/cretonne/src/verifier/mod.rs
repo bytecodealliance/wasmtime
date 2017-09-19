@@ -306,6 +306,9 @@ impl<'a> Verifier<'a> {
                 self.verify_sig_ref(inst, sig_ref)?;
                 self.verify_value_list(inst, args)?;
             }
+            FuncAddr { func_ref, .. } => {
+                self.verify_func_ref(inst, func_ref)?;
+            }
             StackLoad { stack_slot, .. } |
             StackStore { stack_slot, .. } => {
                 self.verify_stack_slot(inst, stack_slot)?;

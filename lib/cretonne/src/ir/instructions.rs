@@ -178,6 +178,7 @@ pub enum InstructionData {
         sig_ref: SigRef,
         args: ValueList,
     },
+    FuncAddr { opcode: Opcode, func_ref: FuncRef },
     StackLoad {
         opcode: Opcode,
         stack_slot: StackSlot,

@@ -411,13 +411,7 @@ This simple example illustrates direct function calls and signatures::
 Indirect function calls use a signature declared in the preamble.
 
 .. autoinst:: call_indirect
-
-.. todo:: Define safe indirect function calls.
-
-    The :inst:`call_indirect` instruction is dangerous to use in a sandboxed
-    environment since it is not easy to verify the callee address.
-    We need a table-driven indirect call instruction, similar to
-    :inst:`br_table`.
+.. autoinst:: func_addr
 
 
 Memory
