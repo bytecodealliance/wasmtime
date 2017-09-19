@@ -374,6 +374,15 @@ st_abcd = TailRecipe(
         modrm_rm(in_reg1, in_reg0, sink);
         ''')
 
+# XX /r register-indirect store of FPR with no offset.
+fst = TailRecipe(
+        'fst', Store, size=1, ins=(FPR, GPR), outs=(),
+        instp=IsEqual(Store.offset, 0),
+        emit='''
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
+        modrm_rm(in_reg1, in_reg0, sink);
+        ''')
+
 # XX /r register-indirect store with 8-bit offset.
 stDisp8 = TailRecipe(
         'stDisp8', Store, size=2, ins=(GPR, GPR), outs=(),
@@ -386,6 +395,15 @@ stDisp8 = TailRecipe(
         ''')
 stDisp8_abcd = TailRecipe(
         'stDisp8_abcd', Store, size=2, ins=(ABCD, GPR), outs=(),
+        instp=IsSignedInt(Store.offset, 8),
+        emit='''
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
+        modrm_disp8(in_reg1, in_reg0, sink);
+        let offset: i32 = offset.into();
+        sink.put1(offset as u8);
+        ''')
+fstDisp8 = TailRecipe(
+        'fstDisp8', Store, size=2, ins=(FPR, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 8),
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
@@ -411,6 +429,14 @@ stDisp32_abcd = TailRecipe(
         let offset: i32 = offset.into();
         sink.put4(offset as u32);
         ''')
+fstDisp32 = TailRecipe(
+        'fstDisp32', Store, size=5, ins=(FPR, GPR), outs=(),
+        emit='''
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
+        modrm_disp32(in_reg1, in_reg0, sink);
+        let offset: i32 = offset.into();
+        sink.put4(offset as u32);
+        ''')
 
 #
 # Load recipes
@@ -419,6 +445,15 @@ stDisp32_abcd = TailRecipe(
 # XX /r load with no offset.
 ld = TailRecipe(
         'ld', Load, size=1, ins=(GPR), outs=(GPR),
+        instp=IsEqual(Load.offset, 0),
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_rm(in_reg0, out_reg0, sink);
+        ''')
+
+# XX /r float load with no offset.
+fld = TailRecipe(
+        'fld', Load, size=1, ins=(GPR), outs=(FPR),
         instp=IsEqual(Load.offset, 0),
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
@@ -436,9 +471,31 @@ ldDisp8 = TailRecipe(
         sink.put1(offset as u8);
         ''')
 
+# XX /r float load with 8-bit offset.
+fldDisp8 = TailRecipe(
+        'fldDisp8', Load, size=2, ins=(GPR), outs=(FPR),
+        instp=IsSignedInt(Load.offset, 8),
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_disp8(in_reg0, out_reg0, sink);
+        let offset: i32 = offset.into();
+        sink.put1(offset as u8);
+        ''')
+
 # XX /r load with 32-bit offset.
 ldDisp32 = TailRecipe(
         'ldDisp32', Load, size=5, ins=(GPR), outs=(GPR),
+        instp=IsSignedInt(Load.offset, 32),
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_disp32(in_reg0, out_reg0, sink);
+        let offset: i32 = offset.into();
+        sink.put4(offset as u32);
+        ''')
+
+# XX /r float load with 32-bit offset.
+fldDisp32 = TailRecipe(
+        'fldDisp32', Load, size=5, ins=(GPR), outs=(FPR),
         instp=IsSignedInt(Load.offset, 32),
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);

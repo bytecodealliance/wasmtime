@@ -224,6 +224,26 @@ enc_i32_i64_ld_st(base.sload8, True, r.ldDisp8, 0x0f, 0xbe)
 enc_i32_i64_ld_st(base.sload8, True, r.ldDisp32, 0x0f, 0xbe)
 
 #
+# Float loads and stores.
+#
+
+enc_flt(base.load.f32.any, r.fld, 0x66, 0x0f, 0x6e)
+enc_flt(base.load.f32.any, r.fldDisp8, 0x66, 0x0f, 0x6e)
+enc_flt(base.load.f32.any, r.fldDisp32, 0x66, 0x0f, 0x6e)
+
+enc_flt(base.load.f64.any, r.fld, 0xf3, 0x0f, 0x7e)
+enc_flt(base.load.f64.any, r.fldDisp8, 0xf3, 0x0f, 0x7e)
+enc_flt(base.load.f64.any, r.fldDisp32, 0xf3, 0x0f, 0x7e)
+
+enc_flt(base.store.f32.any, r.fst, 0x66, 0x0f, 0x7e)
+enc_flt(base.store.f32.any, r.fstDisp8, 0x66, 0x0f, 0x7e)
+enc_flt(base.store.f32.any, r.fstDisp32, 0x66, 0x0f, 0x7e)
+
+enc_flt(base.store.f64.any, r.fst, 0x66, 0x0f, 0xd6)
+enc_flt(base.store.f64.any, r.fstDisp8, 0x66, 0x0f, 0xd6)
+enc_flt(base.store.f64.any, r.fstDisp32, 0x66, 0x0f, 0xd6)
+
+#
 # Call/return
 #
 I32.enc(base.call, *r.call_id(0xe8))
