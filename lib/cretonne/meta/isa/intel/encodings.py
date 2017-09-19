@@ -244,6 +244,13 @@ enc_flt(base.store.f64.any, r.fstDisp8, 0x66, 0x0f, 0xd6)
 enc_flt(base.store.f64.any, r.fstDisp32, 0x66, 0x0f, 0xd6)
 
 #
+# Function addresses.
+#
+
+I32.enc(base.func_addr.i32, *r.fnaddr4(0xb8))
+I64.enc(base.func_addr.i64, *r.fnaddr8.rex(0xb8, w=1))
+
+#
 # Call/return
 #
 I32.enc(base.call, *r.call_id(0xe8))

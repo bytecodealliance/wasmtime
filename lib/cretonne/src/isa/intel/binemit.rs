@@ -11,9 +11,15 @@ include!(concat!(env!("OUT_DIR"), "/binemit-intel.rs"));
 pub enum RelocKind {
     /// A 4-byte relative function reference. Based from relocation + 4 bytes.
     PCRel4,
+
+    /// A 4-byte absolute function reference.
+    Abs4,
+
+    /// An 8-byte absolute function reference.
+    Abs8,
 }
 
-pub static RELOC_NAMES: [&'static str; 1] = ["PCRel4"];
+pub static RELOC_NAMES: [&'static str; 3] = ["PCRel4", "Abs4", "Abs8"];
 
 impl Into<Reloc> for RelocKind {
     fn into(self) -> Reloc {

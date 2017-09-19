@@ -7,7 +7,7 @@ from cdsl.predicates import IsSignedInt, IsEqual
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Nullary, Call, IndirectCall, Store, Load
 from base.formats import IntCompare
-from base.formats import RegMove, Ternary, Jump, Branch
+from base.formats import RegMove, Ternary, Jump, Branch, FuncAddr
 from .registers import GPR, ABCD, FPR
 
 try:
@@ -349,6 +349,26 @@ puiq = TailRecipe(
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         let imm: i64 = imm.into();
         sink.put8(imm as u64);
+        ''')
+
+# XX+rd id with Abs4 function relocation.
+fnaddr4 = TailRecipe(
+        'fnaddr4', FuncAddr, size=4, ins=(), outs=GPR,
+        emit='''
+        PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+        sink.reloc_func(RelocKind::Abs4.into(), func_ref);
+        // Write the immediate as `!0` for the benefit of BaldrMonkey.
+        sink.put4(!0);
+        ''')
+
+# XX+rd iq with Abs8 function relocation.
+fnaddr8 = TailRecipe(
+        'fnaddr8', FuncAddr, size=8, ins=(), outs=GPR,
+        emit='''
+        PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+        sink.reloc_func(RelocKind::Abs8.into(), func_ref);
+        // Write the immediate as `!0` for the benefit of BaldrMonkey.
+        sink.put8(!0);
         ''')
 
 #

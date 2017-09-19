@@ -421,12 +421,19 @@ ebb0:
     ; asm: call foo
     call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
 
+    ; asm: movabsq $-1, %rcx
+    [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(fn0) ffffffffffffffff
+    ; asm: movabsq $-1, %rsi
+    [-,%rsi]            v401 = func_addr.i64 fn0        ; bin: 48 be Abs8(fn0) ffffffffffffffff
+    ; asm: movabsq $-1, %r10
+    [-,%r10]            v402 = func_addr.i64 fn0        ; bin: 49 ba Abs8(fn0) ffffffffffffffff
+
     ; asm: call *%rcx
-    call_indirect sig0, v1()                    ; bin: 40 ff d1
+    call_indirect sig0, v400()                  ; bin: 40 ff d1
     ; asm: call *%rsi
-    call_indirect sig0, v2()                    ; bin: 40 ff d6
+    call_indirect sig0, v401()                  ; bin: 40 ff d6
     ; asm: call *%r10
-    call_indirect sig0, v3()                    ; bin: 41 ff d2
+    call_indirect sig0, v402()                  ; bin: 41 ff d2
 
     ; asm: testq %rcx, %rcx
     ; asm: je ebb1
