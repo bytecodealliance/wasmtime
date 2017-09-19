@@ -69,6 +69,19 @@ ebb0(v0: i64):
 ; check: $v3, $v4 = call_indirect $sig2, $v1()
 ; check: return
 
+function %long_call() {
+    sig0 = ()
+    fn0 = sig0 %none
+
+ebb0:
+    v0 = func_addr.i32 fn0
+    call_indirect sig0, v0()
+    return
+}
+; check: $v0 = func_addr.i32 $fn0
+; check: call_indirect $sig0, $v0()
+; check: return
+
 ; Special purpose function arguments
 function %special1(i32 sret, i32 fp, i32 csr, i32 link) -> i32 link, i32 fp, i32 csr, i32 sret {
 ebb0(v1: i32, v2: i32, v3: i32, v4: i32):

@@ -38,6 +38,8 @@ MemTo = TypeVar(
         'MemTo', 'Any type that can be stored in memory',
         ints=True, floats=True, simd=True)
 
+addr = Operand('addr', iAddr)
+
 #
 # Control flow
 #
@@ -185,6 +187,18 @@ call_indirect = Instruction(
         """,
         ins=(SIG, callee, args), outs=rvals, is_call=True)
 
+func_addr = Instruction(
+        'func_addr', r"""
+        Get the address of a function.
+
+        Compute the absolute address of a function declared in the preamble.
+        The returned address can be used as a ``callee`` argument to
+        :inst:`call_indirect`. This is also a method for calling functions that
+        are too far away to be addressable by a direct :inst:`call`
+        instruction.
+        """,
+        ins=FN, outs=addr)
+
 #
 # Memory operations
 #
@@ -194,7 +208,6 @@ Offset = Operand('Offset', offset32, 'Byte offset from base address')
 x = Operand('x', Mem, doc='Value to be stored')
 a = Operand('a', Mem, doc='Value loaded')
 p = Operand('p', iAddr)
-addr = Operand('addr', iAddr)
 Flags = Operand('Flags', memflags)
 
 load = Instruction(

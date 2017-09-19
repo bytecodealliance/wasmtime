@@ -2098,6 +2098,14 @@ impl<'a> Parser<'a> {
                     args: args.into_value_list(&[callee], &mut ctx.function.dfg.value_lists),
                 }
             }
+            InstructionFormat::FuncAddr => {
+                let func_ref = self.match_fn("expected function reference").and_then(
+                    |num| {
+                        ctx.get_fn(num, &self.loc)
+                    },
+                )?;
+                InstructionData::FuncAddr { opcode, func_ref }
+            }
             InstructionFormat::BranchTable => {
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(
