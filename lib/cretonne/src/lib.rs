@@ -38,6 +38,7 @@ mod licm;
 mod partition_slice;
 mod predicates;
 mod ref_slice;
+mod scoped_hash_map;
 mod simple_gvn;
 mod stack_layout;
 mod topo_order;
