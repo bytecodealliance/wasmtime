@@ -157,7 +157,7 @@ impl LoopAnalysis {
         layout: &Layout,
     ) {
         let mut stack: Vec<Ebb> = Vec::new();
-        // We handle each loop header in reverse order, corresponding to a pesudo postorder
+        // We handle each loop header in reverse order, corresponding to a pseudo postorder
         // traversal of the graph.
         for lp in self.loops().rev() {
             for &(pred, pred_inst) in cfg.get_predecessors(self.loops[lp].header) {
