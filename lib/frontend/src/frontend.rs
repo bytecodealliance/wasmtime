@@ -260,10 +260,7 @@ where
 
         let basic_block = self.builder.ssa.header_block(ebb);
         // Then we change the cursor position.
-        self.position = Position {
-            ebb: ebb,
-            basic_block: basic_block,
-        };
+        self.position = Position { ebb, basic_block };
         self.ebb_args_adjustement(ebb, jump_args);
         self.func.dfg.ebb_args(ebb)
     }
