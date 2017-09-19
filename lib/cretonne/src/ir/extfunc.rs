@@ -173,6 +173,24 @@ impl ArgumentType {
         }
     }
 
+    /// Convert `self` to an argument type with the `uext` flag set.
+    pub fn uext(self) -> ArgumentType {
+        debug_assert!(self.value_type.is_int(), "uext on {} arg", self.value_type);
+        ArgumentType {
+            extension: ArgumentExtension::Uext,
+            ..self
+        }
+    }
+
+    /// Convert `self` to an argument type with the `sext` flag set.
+    pub fn sext(self) -> ArgumentType {
+        debug_assert!(self.value_type.is_int(), "sext on {} arg", self.value_type);
+        ArgumentType {
+            extension: ArgumentExtension::Sext,
+            ..self
+        }
+    }
+
     /// Return an object that can display `self` with correct register names.
     pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&'a self, regs: R) -> DisplayArgumentType<'a> {
         DisplayArgumentType(self, regs.into())
@@ -369,10 +387,11 @@ mod tests {
 
     #[test]
     fn argument_type() {
-        let mut t = ArgumentType::new(I32);
+        let t = ArgumentType::new(I32);
         assert_eq!(t.to_string(), "i32");
-        t.extension = ArgumentExtension::Uext;
+        let mut t = t.uext();
         assert_eq!(t.to_string(), "i32 uext");
+        assert_eq!(t.sext().to_string(), "i32 sext");
         t.purpose = ArgumentPurpose::StructReturn;
         assert_eq!(t.to_string(), "i32 uext sret");
     }
