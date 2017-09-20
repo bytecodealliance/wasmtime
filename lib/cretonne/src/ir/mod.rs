@@ -17,6 +17,7 @@ mod globalvar;
 mod heap;
 mod memflags;
 mod progpoint;
+mod sourceloc;
 mod trapcode;
 mod valueloc;
 
@@ -34,6 +35,7 @@ pub use ir::jumptable::JumpTableData;
 pub use ir::layout::{Layout, CursorBase, Cursor};
 pub use ir::memflags::MemFlags;
 pub use ir::progpoint::{ProgramPoint, ProgramOrder, ExpandedProgramPoint};
+pub use ir::sourceloc::SourceLoc;
 pub use ir::stackslot::{StackSlots, StackSlotKind, StackSlotData};
 pub use ir::trapcode::TrapCode;
 pub use ir::types::Type;
@@ -54,3 +56,6 @@ pub type InstEncodings = EntityMap<Inst, isa::Encoding>;
 
 /// Code offsets for EBBs.
 pub type EbbOffsets = EntityMap<Ebb, binemit::CodeOffset>;
+
+/// Source locations for instructions.
+pub type SourceLocs = EntityMap<Inst, SourceLoc>;

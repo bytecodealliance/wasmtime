@@ -6,7 +6,7 @@
 use entity::{PrimaryMap, EntityMap};
 use ir;
 use ir::{FunctionName, CallConv, Signature, DataFlowGraph, Layout};
-use ir::{InstEncodings, ValueLocations, JumpTables, StackSlots, EbbOffsets};
+use ir::{InstEncodings, ValueLocations, JumpTables, StackSlots, EbbOffsets, SourceLocs};
 use ir::{Ebb, JumpTableData, JumpTable, StackSlotData, StackSlot, SigRef, ExtFuncData, FuncRef,
          GlobalVarData, GlobalVar, HeapData, Heap};
 use isa::TargetIsa;
@@ -56,6 +56,12 @@ pub struct Function {
     /// computes it, and it can easily be recomputed by calling that function. It is not included
     /// in the textual IL format.
     pub offsets: EbbOffsets,
+
+    /// Source locations.
+    ///
+    /// Track the original source location for each instruction. The source locations are not
+    /// interpreted by Cretonne, only preserved.
+    pub srclocs: SourceLocs,
 }
 
 impl Function {
@@ -73,6 +79,7 @@ impl Function {
             encodings: EntityMap::new(),
             locations: EntityMap::new(),
             offsets: EntityMap::new(),
+            srclocs: EntityMap::new(),
         }
     }
 
@@ -88,6 +95,7 @@ impl Function {
         self.encodings.clear();
         self.locations.clear();
         self.offsets.clear();
+        self.srclocs.clear();
     }
 
     /// Create a new empty, anonymous function with a native calling convention.

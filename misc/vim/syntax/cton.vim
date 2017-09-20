@@ -25,6 +25,7 @@ syn match ctonName /%\w\+\>/
 syn match ctonNumber /-\?\<[0-9_]\+\>/
 syn match ctonNumber /-\?\<0x[0-9a-fA-F_]\+\(\.[0-9a-fA-F_]*\)\?\(p[+-]\?\d\+\)\?\>/
 syn match ctonHexSeq /#\x\+\>/
+syn match ctonSourceLoc /@[0-9a-f]\+\>/
 
 syn region ctonCommentLine start=";" end="$" contains=ctonFilecheck
 
@@ -38,5 +39,6 @@ hi def link ctonNumber        Number
 hi def link ctonHexSeq        Number
 hi def link ctonCommentLine   Comment
 hi def link ctonFilecheck     SpecialComment
+hi def link ctonSourceLoc     LineNr
 
 let b:current_syntax = "cton"
