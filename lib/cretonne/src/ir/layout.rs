@@ -482,6 +482,16 @@ impl Layout {
         self.ebbs[ebb].last_inst.into()
     }
 
+    /// Fetch the instruction following `inst`.
+    pub fn next_inst(&self, inst: Inst) -> Option<Inst> {
+        self.insts[inst].next.expand()
+    }
+
+    /// Fetch the instruction preceding `inst`.
+    pub fn prev_inst(&self, inst: Inst) -> Option<Inst> {
+        self.insts[inst].prev.expand()
+    }
+
     /// Insert `inst` before the instruction `before` in the same EBB.
     pub fn insert_inst(&mut self, inst: Inst, before: Inst) {
         assert_eq!(self.inst_ebb(inst), None);
