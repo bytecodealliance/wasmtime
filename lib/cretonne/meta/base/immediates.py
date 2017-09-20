@@ -29,15 +29,6 @@ offset32 = ImmediateKind(
         'A 32-bit immediate signed offset.',
         default_member='offset')
 
-#: A 32-bit immediate unsigned offset.
-#:
-#: This is used to represent an immediate address offset in WebAssembly memory
-#: instructions.
-uoffset32 = ImmediateKind(
-        'uoffset32',
-        'A 32-bit immediate unsigned offset.',
-        default_member='offset')
-
 #: A 32-bit immediate floating point operand.
 #:
 #: IEEE 754-2008 binary32 interchange format.

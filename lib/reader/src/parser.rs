@@ -14,7 +14,7 @@ use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, CallConv, S
                    ExtFuncData, SigRef, FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags,
                    GlobalVar, GlobalVarData, Heap, HeapData, HeapStyle, HeapBase};
 use cretonne::ir::types::VOID;
-use cretonne::ir::immediates::{Imm64, Uimm32, Offset32, Uoffset32, Ieee32, Ieee64};
+use cretonne::ir::immediates::{Imm64, Uimm32, Offset32, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs};
 use cretonne::isa::{self, TargetIsa, Encoding, RegUnit};
@@ -582,22 +582,6 @@ impl<'a> Parser<'a> {
         } else {
             // An offset32 operand can be absent.
             Ok(Offset32::new(0))
-        }
-    }
-
-    // Match and consume an optional uoffset32 immediate.
-    //
-    // Note that this will match an empty string as an empty offset, and that if an offset is
-    // present, it must contain a `+` sign.
-    fn optional_uoffset32(&mut self) -> Result<Uoffset32> {
-        if let Some(Token::Integer(text)) = self.token() {
-            self.consume();
-            // Lexer just gives us raw text that looks like an integer.
-            // Parse it as a `Uoffset32` to check for overflow and other issues.
-            text.parse().map_err(|e| self.error(e))
-        } else {
-            // A uoffset32 operand can be absent.
-            Ok(Uoffset32::new(0))
         }
     }
 
@@ -2138,29 +2122,6 @@ impl<'a> Parser<'a> {
                     opcode,
                     arg,
                     stack_slot: ss,
-                    offset,
-                }
-            }
-            InstructionFormat::HeapLoad => {
-                let addr = self.match_value("expected SSA value address")?;
-                let offset = self.optional_uoffset32()?;
-                InstructionData::HeapLoad {
-                    opcode,
-                    arg: addr,
-                    offset,
-                }
-            }
-            InstructionFormat::HeapStore => {
-                let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
-                let addr = self.match_value("expected SSA value address")?;
-                let offset = self.optional_uoffset32()?;
-                InstructionData::HeapStore {
-                    opcode,
-                    args: [arg, addr],
                     offset,
                 }
             }

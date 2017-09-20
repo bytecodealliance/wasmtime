@@ -335,8 +335,6 @@ impl<'a> Verifier<'a> {
             IntCompare { .. } |
             IntCompareImm { .. } |
             FloatCompare { .. } |
-            HeapLoad { .. } |
-            HeapStore { .. } |
             Load { .. } |
             Store { .. } |
             RegMove { .. } => {}
