@@ -103,7 +103,6 @@ impl FromStr for Opcode {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[allow(missing_docs)]
 pub enum InstructionData {
-    Nullary { opcode: Opcode },
     Unary { opcode: Opcode, arg: Value },
     UnaryImm { opcode: Opcode, imm: Imm64 },
     UnaryIeee32 { opcode: Opcode, imm: Ieee32 },

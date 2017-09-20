@@ -321,7 +321,6 @@ impl<'a> Verifier<'a> {
             }
 
             // Exhaustive list so we can't forget to add new formats
-            Nullary { .. } |
             Unary { .. } |
             UnaryImm { .. } |
             UnaryIeee32 { .. } |
@@ -1048,9 +1047,10 @@ mod tests {
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();
         func.layout.append_ebb(ebb0);
-        let nullary_with_bad_opcode = func.dfg.make_inst(
-            InstructionData::Nullary { opcode: Opcode::Jump },
-        );
+        let nullary_with_bad_opcode = func.dfg.make_inst(InstructionData::UnaryImm {
+            opcode: Opcode::Jump,
+            imm: 0.into(),
+        });
         func.layout.append_inst(nullary_with_bad_opcode, ebb0);
         let flags = &settings::Flags::new(&settings::builder());
         let verifier = Verifier::new(&func, flags.into());
