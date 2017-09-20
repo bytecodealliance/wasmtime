@@ -20,7 +20,7 @@ use std::path::Path;
 use std::process::Command;
 use tempdir::TempDir;
 use term;
-use utils::pretty_verifier_error;
+use utils::{pretty_verifier_error, pretty_error};
 
 macro_rules! vprintln {
     ($x: expr, $($tts:tt)*) => {
@@ -182,13 +182,11 @@ fn handle_module(
             })?;
             context.flowgraph();
             context.compute_loop_analysis();
-            context.licm();
-            context.verify(*fisa).map_err(|err| {
-                pretty_verifier_error(&context.func, fisa.isa, err)
+            context.licm(*fisa).map_err(|err| {
+                pretty_error(&context.func, fisa.isa, err)
             })?;
-            context.simple_gvn();
-            context.verify(*fisa).map_err(|err| {
-                pretty_verifier_error(&context.func, fisa.isa, err)
+            context.simple_gvn(*fisa).map_err(|err| {
+                pretty_error(&context.func, fisa.isa, err)
             })?;
         }
         terminal.fg(term::color::GREEN).unwrap();

@@ -92,9 +92,10 @@ impl Context {
     }
 
     /// Run the verifier only if the `enable_verifier` setting is true.
-    pub fn verify_if(&self, isa: &TargetIsa) -> CtonResult {
-        if isa.flags().enable_verifier() {
-            self.verify(isa).map_err(Into::into)
+    pub fn verify_if<'a, FOI: Into<FlagsOrIsa<'a>>>(&self, fisa: FOI) -> CtonResult {
+        let fisa = fisa.into();
+        if fisa.flags.enable_verifier() {
+            self.verify(fisa).map_err(Into::into)
         } else {
             Ok(())
         }
@@ -136,18 +137,20 @@ impl Context {
     }
 
     /// Perform simple GVN on the function.
-    pub fn simple_gvn(&mut self) {
-        do_simple_gvn(&mut self.func, &mut self.cfg, &mut self.domtree)
+    pub fn simple_gvn<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult {
+        do_simple_gvn(&mut self.func, &mut self.cfg, &mut self.domtree);
+        self.verify_if(fisa)
     }
 
     /// Perform LICM on the function.
-    pub fn licm(&mut self) {
+    pub fn licm<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult {
         do_licm(
             &mut self.func,
             &mut self.cfg,
             &mut self.domtree,
             &mut self.loop_analysis,
-        )
+        );
+        self.verify_if(fisa)
     }
 
     /// Run the register allocator.
