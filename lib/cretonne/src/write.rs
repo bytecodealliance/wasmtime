@@ -354,8 +354,6 @@ pub fn write_operands(
             offset,
             ..
         } => write!(w, " {}, {}{}", arg, stack_slot, offset),
-        HeapLoad { arg, offset, .. } => write!(w, " {}{}", arg, offset),
-        HeapStore { args, offset, .. } => write!(w, " {}, {}{}", args[0], args[1], offset),
         HeapAddr { heap, arg, imm, .. } => write!(w, " {}, {}, {}", heap, arg, imm),
         Load { flags, arg, offset, .. } => write!(w, "{} {}{}", flags, arg, offset),
         Store {
