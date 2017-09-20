@@ -2192,6 +2192,19 @@ impl<'a> Parser<'a> {
                     dst,
                 }
             }
+            InstructionFormat::Trap => {
+                let code = self.match_enum("expected trap code")?;
+                InstructionData::Trap { opcode, code }
+            }
+            InstructionFormat::CondTrap => {
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected ',' between operands",
+                )?;
+                let code = self.match_enum("expected trap code")?;
+                InstructionData::CondTrap { opcode, arg, code }
+            }
         };
         Ok(idata)
     }
@@ -2365,7 +2378,7 @@ mod tests {
                             jt10 = jump_table ebb0
                             ; Jumptable
                          ebb0: ; Basic block
-                         trap ; Instruction
+                         trap user42; Instruction
                          } ; Trailing.
                          ; More trailing.",
         ).parse_function(None)
@@ -2459,7 +2472,7 @@ mod tests {
         let func = Parser::new(
             "function #1234567890AbCdEf() native {
                                            ebb0:
-                                             trap
+                                             trap int_divz
                                            }",
         ).parse_function(None)
             .unwrap()
@@ -2470,7 +2483,7 @@ mod tests {
         let mut parser = Parser::new(
             "function #12ww() native {
                                            ebb0:
-                                             trap
+                                             trap stk_ovf
                                            }",
         );
         assert!(parser.parse_function(None).is_err());
@@ -2479,7 +2492,7 @@ mod tests {
         let mut parser = Parser::new(
             "function #1() native {
                                            ebb0:
-                                             trap
+                                             trap user0
                                            }",
         );
         assert!(parser.parse_function(None).is_err());
@@ -2488,7 +2501,7 @@ mod tests {
         let func = Parser::new(
             "function #() native {
                                            ebb0:
-                                             trap
+                                             trap int_ovf
                                            }",
         ).parse_function(None)
             .unwrap()

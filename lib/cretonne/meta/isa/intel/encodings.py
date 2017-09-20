@@ -287,8 +287,8 @@ I64.enc(base.brnz.b1, *r.t8jccb_abcd(0x75))
 #
 # Trap as ud2
 #
-I32.enc(base.trap, *r.noop(0x0f, 0x0b))
-I64.enc(base.trap, *r.noop(0x0f, 0x0b))
+I32.enc(base.trap, *r.trap(0x0f, 0x0b))
+I64.enc(base.trap, *r.trap(0x0f, 0x0b))
 
 #
 # Comparisons

@@ -106,15 +106,15 @@ include!(concat!(env!("OUT_DIR"), "/legalizer.rs"));
 fn expand_cond_trap(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
     // Parse the instruction.
     let trapz;
-    let arg = match func.dfg[inst] {
-        ir::InstructionData::Unary { opcode, arg } => {
+    let (arg, code) = match func.dfg[inst] {
+        ir::InstructionData::CondTrap { opcode, arg, code } => {
             // We want to branch *over* an unconditional trap.
             trapz = match opcode {
                 ir::Opcode::Trapz => true,
                 ir::Opcode::Trapnz => false,
                 _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst, None)),
             };
-            arg
+            (arg, code)
         }
         _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst, None)),
     };
@@ -138,7 +138,7 @@ fn expand_cond_trap(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFl
     }
 
     let mut pos = FuncCursor::new(func).after_inst(inst);
-    pos.ins().trap();
+    pos.ins().trap(code);
     pos.insert_ebb(new_ebb);
 
     // Finally update the CFG.

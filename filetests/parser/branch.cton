@@ -86,13 +86,13 @@ function %jumptable(i32) {
 
 ebb10(v3: i32):
     br_table v3, jt2
-    trap
+    trap user1
 ebb20:
-    trap
+    trap user2
 ebb30:
-    trap
+    trap user3
 ebb40:
-    trap
+    trap user4
 }
 ; sameln: function %jumptable(i32) native {
 ; nextln:     jt0 = jump_table 0
@@ -100,14 +100,14 @@ ebb40:
 ; nextln: 
 ; nextln: ebb0($v3: i32):
 ; nextln:     br_table $v3, jt1
-; nextln:     trap
+; nextln:     trap user1
 ; nextln: 
 ; nextln: ebb1:
-; nextln:     trap
+; nextln:     trap user2
 ; nextln: 
 ; nextln: ebb2:
-; nextln:     trap
+; nextln:     trap user3
 ; nextln: 
 ; nextln: ebb3:
-; nextln:     trap
+; nextln:     trap user4
 ; nextln: }

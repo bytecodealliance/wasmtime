@@ -74,14 +74,14 @@ fn dynamic_addr(
         // We need an overflow check for the adjusted offset.
         let size_val = pos.ins().iconst(offset_ty, size);
         let (adj_offset, overflow) = pos.ins().iadd_cout(offset, size_val);
-        pos.ins().trapnz(overflow);
+        pos.ins().trapnz(overflow, ir::TrapCode::HeapOutOfBounds);
         oob = pos.ins().icmp(
             IntCC::UnsignedGreaterThan,
             adj_offset,
             bound,
         );
     }
-    pos.ins().trapnz(oob);
+    pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
 
     offset_addr(inst, heap, addr_ty, offset, offset_ty, pos.func);
 }
@@ -103,7 +103,7 @@ fn static_addr(
     // Start with the bounds check. Trap if `offset + size > bound`.
     if size > bound {
         // This will simply always trap since `offset >= 0`.
-        pos.ins().trap();
+        pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
         pos.func.dfg.replace(inst).iconst(addr_ty, 0);
         return;
     }
@@ -129,7 +129,7 @@ fn static_addr(
                 limit,
             )
         };
-        pos.ins().trapnz(oob);
+        pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
     }
 
     offset_addr(inst, heap, addr_ty, offset, offset_ty, pos.func);

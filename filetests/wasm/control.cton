@@ -46,5 +46,5 @@ ebb1(v2: i32):
 
 function %undefined() {
 ebb0:
-    trap
+    trap user0
 }

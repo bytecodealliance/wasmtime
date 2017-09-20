@@ -376,6 +376,8 @@ pub fn write_operands(
                 write!(w, " {}, %{} -> %{}", arg, src, dst)
             }
         }
+        Trap { code, .. } => write!(w, " {}", code),
+        CondTrap { arg, code, .. } => write!(w, " {}, {}", arg, code),
     }
 }
 

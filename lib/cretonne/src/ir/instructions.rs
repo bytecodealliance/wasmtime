@@ -214,6 +214,12 @@ pub enum InstructionData {
         src: RegUnit,
         dst: RegUnit,
     },
+    Trap { opcode: Opcode, code: ir::TrapCode },
+    CondTrap {
+        opcode: Opcode,
+        arg: Value,
+        code: ir::TrapCode,
+    },
 }
 
 /// A variable list of `Value` operands used for function call arguments and passing arguments to

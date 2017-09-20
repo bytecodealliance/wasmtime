@@ -105,3 +105,19 @@ regunit = ImmediateKind(
         'regunit',
         'A register unit in the target ISA',
         rust_type='isa::RegUnit')
+
+#: A trap code indicating the reason for trapping.
+#:
+#: The Rust enum type also has a `User(u16)` variant for user-provided trap
+#: codes.
+trapcode = ImmediateKind(
+        'trapcode',
+        'A trap reason code.',
+        default_member='code',
+        rust_type='ir::TrapCode',
+        values={
+            "stk_ovf": 'StackOverflow',
+            "heap_oob": 'HeapOutOfBounds',
+            "int_ovf": 'IntegerOverflow',
+            "int_divz": 'IntegerDivisionByZero',
+        })
