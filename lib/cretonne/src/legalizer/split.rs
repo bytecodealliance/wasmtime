@@ -235,8 +235,7 @@ fn split_value(
                 //
                 // Note that it is safe to move `pos` here since `reuse` was set above, so we don't
                 // need to insert a split instruction before returning.
-                pos.goto_top(ebb);
-                pos.next_inst();
+                pos.goto_first_inst(ebb);
                 dfg.ins(pos).with_result(value).Binary(
                     concat,
                     split_type,
