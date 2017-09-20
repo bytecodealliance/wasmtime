@@ -720,6 +720,29 @@ pub trait CursorBase {
         self
     }
 
+    /// Rebuild this cursor positioned at the first insertion point for `ebb`.
+    /// This differs from `at_first_inst` in that it doesn't assume that any
+    /// instructions have been inserted into `ebb` yet.
+    ///
+    /// This is intended to be used as a builder method:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb, Inst};
+    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// fn edit_func(func: &mut Function, ebb: Ebb) {
+    ///     let mut pos = Cursor::new(&mut func.layout).at_first_insertion_point(ebb);
+    ///
+    ///     // Use `pos`...
+    /// }
+    /// ```
+    fn at_first_insertion_point(mut self, ebb: Ebb) -> Self
+    where
+        Self: Sized,
+    {
+        self.goto_first_insertion_point(ebb);
+        self
+    }
+
     /// Rebuild this cursor positioned at the first instruction in `ebb`.
     ///
     /// This is intended to be used as a builder method:
@@ -738,6 +761,69 @@ pub trait CursorBase {
         Self: Sized,
     {
         self.goto_first_inst(ebb);
+        self
+    }
+
+    /// Rebuild this cursor positioned at the last instruction in `ebb`.
+    ///
+    /// This is intended to be used as a builder method:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb, Inst};
+    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// fn edit_func(func: &mut Function, ebb: Ebb) {
+    ///     let mut pos = Cursor::new(&mut func.layout).at_last_inst(ebb);
+    ///
+    ///     // Use `pos`...
+    /// }
+    /// ```
+    fn at_last_inst(mut self, ebb: Ebb) -> Self
+    where
+        Self: Sized,
+    {
+        self.goto_last_inst(ebb);
+        self
+    }
+
+    /// Rebuild this cursor positioned after `inst`.
+    ///
+    /// This is intended to be used as a builder method:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb, Inst};
+    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// fn edit_func(func: &mut Function, inst: Inst) {
+    ///     let mut pos = Cursor::new(&mut func.layout).after_inst(inst);
+    ///
+    ///     // Use `pos`...
+    /// }
+    /// ```
+    fn after_inst(mut self, inst: Inst) -> Self
+    where
+        Self: Sized,
+    {
+        self.goto_after_inst(inst);
+        self
+    }
+
+    /// Rebuild this cursor positioned at the top of `ebb`.
+    ///
+    /// This is intended to be used as a builder method:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb, Inst};
+    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// fn edit_func(func: &mut Function, ebb: Ebb) {
+    ///     let mut pos = Cursor::new(&mut func.layout).at_top(ebb);
+    ///
+    ///     // Use `pos`...
+    /// }
+    /// ```
+    fn at_top(mut self, ebb: Ebb) -> Self
+    where
+        Self: Sized,
+    {
+        self.goto_top(ebb);
         self
     }
 
@@ -779,6 +865,20 @@ pub trait CursorBase {
             At(inst) => Some(inst),
             _ => None,
         }
+    }
+
+    /// Go to the position after a specific instruction, which must be inserted
+    /// in the layout. New instructions will be inserted after `inst`.
+    fn goto_after_inst(&mut self, inst: Inst) {
+        debug_assert!(self.layout().inst_ebb(inst).is_some());
+        let new_pos = if let Some(next) = self.layout().insts[inst].next.expand() {
+            CursorPosition::At(next)
+        } else {
+            CursorPosition::After(self.layout().inst_ebb(inst).expect(
+                "current instruction removed?",
+            ))
+        };
+        self.set_position(new_pos);
     }
 
     /// Go to a specific instruction which must be inserted in the layout.
@@ -910,8 +1010,7 @@ pub trait CursorBase {
     /// # use cretonne::ir::{Function, Ebb};
     /// # use cretonne::ir::layout::{Cursor, CursorBase};
     /// fn edit_ebb(func: &mut Function, ebb: Ebb) {
-    ///     let mut cursor = Cursor::new(&mut func.layout);
-    ///     cursor.goto_top(ebb);
+    ///     let mut cursor = Cursor::new(&mut func.layout).at_top(ebb);
     ///     while let Some(inst) = cursor.next_inst() {
     ///         // Edit instructions...
     ///     }
@@ -979,8 +1078,7 @@ pub trait CursorBase {
     /// # use cretonne::ir::{Function, Ebb};
     /// # use cretonne::ir::layout::{Cursor, CursorBase};
     /// fn edit_ebb(func: &mut Function, ebb: Ebb) {
-    ///     let mut cursor = Cursor::new(&mut func.layout);
-    ///     cursor.goto_bottom(ebb);
+    ///     let mut cursor = Cursor::new(&mut func.layout).at_bottom(ebb);
     ///     while let Some(inst) = cursor.prev_inst() {
     ///         // Edit instructions...
     ///     }
@@ -1357,8 +1455,7 @@ mod tests {
         verify(&mut layout, &[(e1, &[i1, i2, i0])]);
 
         // Test cursor positioning.
-        let mut cur = Cursor::new(&mut layout);
-        cur.goto_top(e1);
+        let mut cur = Cursor::new(&mut layout).at_top(e1);
         assert_eq!(cur.position(), CursorPosition::Before(e1));
         assert_eq!(cur.prev_inst(), None);
         assert_eq!(cur.position(), CursorPosition::Before(e1));

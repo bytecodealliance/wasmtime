@@ -33,14 +33,12 @@ pub fn do_licm(
                 None => {
                     let pre_header =
                         create_pre_header(loop_analysis.loop_header(lp), func, cfg, domtree);
-                    pos = Cursor::new(&mut func.layout);
-                    pos.goto_last_inst(pre_header);
+                    pos = Cursor::new(&mut func.layout).at_last_inst(pre_header);
                 }
                 // If there is a natural pre-header we insert new instructions just before the
                 // related jumping instruction (which is not necessarily at the end).
                 Some((_, last_inst)) => {
-                    pos = Cursor::new(&mut func.layout);
-                    pos.goto_inst(last_inst);
+                    pos = Cursor::new(&mut func.layout).at_inst(last_inst);
                 }
             };
             // The last instruction of the pre-header is the termination instruction (usually
@@ -82,8 +80,7 @@ fn create_pre_header(
         }
     }
     {
-        let mut pos = Cursor::new(&mut func.layout);
-        pos.goto_top(header);
+        let mut pos = Cursor::new(&mut func.layout).at_top(header);
         // Inserts the pre-header at the right place in the layout.
         pos.insert_ebb(pre_header);
         pos.next_inst();

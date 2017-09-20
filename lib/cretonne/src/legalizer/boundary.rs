@@ -62,8 +62,7 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
     // Insert position for argument conversion code.
     // We want to insert instructions before the first instruction in the entry block.
     // If the entry block is empty, append instructions to it instead.
-    let mut pos = Cursor::new(&mut func.layout);
-    pos.goto_first_inst(entry);
+    let mut pos = Cursor::new(&mut func.layout).at_first_inst(entry);
 
     // Keep track of the argument types in the ABI-legalized signature.
     let abi_types = &func.signature.argument_types;
