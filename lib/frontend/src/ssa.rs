@@ -445,8 +445,7 @@ where
                     layout.append_ebb(dest_ebb)
                 };
                 let mut cur = Cursor::new(layout);
-                cur.goto_top(dest_ebb);
-                cur.next_inst();
+                cur.goto_first_insertion_point(dest_ebb);
                 let ty = dfg.value_type(temp_arg_val);
                 let val = if ty.is_int() {
                     dfg.ins(&mut cur).iconst(ty, 0)

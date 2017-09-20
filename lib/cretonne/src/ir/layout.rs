@@ -788,10 +788,27 @@ pub trait CursorBase {
         self.set_position(CursorPosition::At(inst));
     }
 
+    /// Go to the position for inserting instructions at the beginning of `ebb`,
+    /// which unlike `goto_first_inst` doesn't assume that any instructions have
+    /// been inserted into `ebb` yet.
+    fn goto_first_insertion_point(&mut self, ebb: Ebb) {
+        if let Some(inst) = self.layout().ebbs[ebb].first_inst.expand() {
+            self.goto_inst(inst);
+        } else {
+            self.goto_bottom(ebb);
+        }
+    }
+
     /// Go to the first instruction in `ebb`.
     fn goto_first_inst(&mut self, ebb: Ebb) {
         let inst = self.layout().ebbs[ebb].first_inst.expect("Empty EBB");
-        self.set_position(CursorPosition::At(inst));
+        self.goto_inst(inst);
+    }
+
+    /// Go to the last instruction in `ebb`.
+    fn goto_last_inst(&mut self, ebb: Ebb) {
+        let inst = self.layout().ebbs[ebb].last_inst.expect("Empty EBB");
+        self.goto_inst(inst);
     }
 
     /// Go to the top of `ebb` which must be inserted into the layout.

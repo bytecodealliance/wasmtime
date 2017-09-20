@@ -34,8 +34,7 @@ pub fn do_licm(
                     let pre_header =
                         create_pre_header(loop_analysis.loop_header(lp), func, cfg, domtree);
                     pos = Cursor::new(&mut func.layout);
-                    pos.goto_bottom(pre_header);
-                    pos.prev_inst();
+                    pos.goto_last_inst(pre_header);
                 }
                 // If there is a natural pre-header we insert new instructions just before the
                 // related jumping instruction (which is not necessarily at the end).
