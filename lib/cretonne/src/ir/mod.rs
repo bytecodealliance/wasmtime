@@ -17,6 +17,7 @@ mod globalvar;
 mod heap;
 mod memflags;
 mod progpoint;
+mod trapcode;
 mod valueloc;
 
 pub use ir::builder::{InstBuilder, InstBuilderBase, InstInserterBase, InsertBuilder};
@@ -34,6 +35,7 @@ pub use ir::layout::{Layout, CursorBase, Cursor};
 pub use ir::memflags::MemFlags;
 pub use ir::progpoint::{ProgramPoint, ProgramOrder, ExpandedProgramPoint};
 pub use ir::stackslot::{StackSlots, StackSlotKind, StackSlotData};
+pub use ir::trapcode::TrapCode;
 pub use ir::types::Type;
 pub use ir::valueloc::{ValueLoc, ArgumentLoc};
 

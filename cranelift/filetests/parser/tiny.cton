@@ -3,11 +3,11 @@ test cat
 ; The smallest possible function.
 function %minimal() {
 ebb0:
-    trap
+    trap user0
 }
 ; sameln: function %minimal() native {
 ; nextln: ebb0:
-; nextln:     trap
+; nextln:     trap user0
 ; nextln: }
 
 ; Create and use values.

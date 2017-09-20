@@ -428,7 +428,7 @@ mod test {
     use cursor::{Cursor, FuncCursor};
     use flowgraph::ControlFlowGraph;
     use ir::types::*;
-    use ir::{Function, InstBuilder, types};
+    use ir::{Function, InstBuilder, types, TrapCode};
     use settings;
     use super::*;
     use verifier::verify_context;
@@ -506,7 +506,7 @@ mod test {
         let jmp02 = cur.ins().jump(ebb2, &[]);
 
         cur.insert_ebb(ebb1);
-        let trap = cur.ins().trap();
+        let trap = cur.ins().trap(TrapCode::User(5));
 
         cur.insert_ebb(ebb2);
         let jmp21 = cur.ins().jump(ebb1, &[]);

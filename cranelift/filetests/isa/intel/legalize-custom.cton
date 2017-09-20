@@ -9,22 +9,22 @@ isa intel
 
 function %cond_trap(i32) {
 ebb0(v1: i32):
-    trapz v1
+    trapz v1, user67
     return
     ; check: $ebb0($v1: i32):
     ; nextln: brnz $v1, $(new=$EBB)
-    ; nextln: trap
+    ; nextln: trap user67
     ; check: $new:
     ; nextln: return
 }
 
 function %cond_trap2(i32) {
 ebb0(v1: i32):
-    trapnz v1
+    trapnz v1, int_ovf
     return
     ; check: $ebb0($v1: i32):
     ; nextln: brz $v1, $(new=$EBB)
-    ; nextln: trap
+    ; nextln: trap int_ovf
     ; check: $new:
     ; nextln: return
 }
@@ -32,11 +32,11 @@ ebb0(v1: i32):
 function %cond_trap_b1(i32) {
 ebb0(v1: i32):
     v2 = icmp_imm eq v1, 6
-    trapz v2
+    trapz v2, user7
     return
     ; check: $ebb0($v1: i32):
     ; check: brnz $v2, $(new=$EBB)
-    ; nextln: trap
+    ; nextln: trap user7
     ; check: $new:
     ; nextln: return
 }
@@ -44,11 +44,11 @@ ebb0(v1: i32):
 function %cond_trap2_b1(i32) {
 ebb0(v1: i32):
     v2 = icmp_imm eq v1, 6
-    trapnz v2
+    trapnz v2, user9
     return
     ; check: $ebb0($v1: i32):
     ; check: brz $v2, $(new=$EBB)
-    ; nextln: trap
+    ; nextln: trap user9
     ; check: $new:
     ; nextln: return
 }

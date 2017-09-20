@@ -369,5 +369,5 @@ ebb1:
 
     ; asm: ebb2:
 ebb2:
-    trap                                        ; bin: 0f 0b
+    trap user0                                  ; bin: 0f 0b
 }

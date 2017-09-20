@@ -337,7 +337,9 @@ impl<'a> Verifier<'a> {
             FloatCompare { .. } |
             Load { .. } |
             Store { .. } |
-            RegMove { .. } => {}
+            RegMove { .. } |
+            Trap { .. } |
+            CondTrap { .. } => {}
         }
 
         Ok(())

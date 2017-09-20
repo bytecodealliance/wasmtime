@@ -44,11 +44,11 @@ fn simple_traversal() {
                 brz v4, ebb4
                 jump ebb5
             ebb3:
-                trap
+                trap user0
             ebb4:
-                trap
+                trap user0
             ebb5:
-                trap
+                trap user0
         }
     ",
         vec![0, 1, 3, 2, 4, 5],
@@ -123,7 +123,7 @@ fn loops_three() {
                 jump ebb6
             ebb5:
                 brz v0, ebb4
-                trap
+                trap user0
             ebb6:
                 jump ebb7
             ebb7:
@@ -152,7 +152,7 @@ fn back_edge_one() {
                 brnz v0, ebb0
                 return
             ebb4:
-                trap
+                trap user0
         }
     ",
         vec![0, 1, 3, 2, 4],

@@ -4,10 +4,10 @@ set return_at_end
 function %ok(i32) {
 ebb0(v0: i32):
     brnz v0, ebb1
-    trap
+    trap int_divz
 
 ebb1:
-    trapz v0
+    trapz v0, user5
     return
 }
 
@@ -17,6 +17,6 @@ ebb0(v0: i32):
     return ; error: Internal return not allowed
 
 ebb1:
-    trapz v0
+    trapz v0, user6
     return
 }

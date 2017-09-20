@@ -11,6 +11,7 @@ from cdsl.instructions import Instruction, InstructionGroup
 from base.types import f32, f64, b1
 from base.immediates import imm64, uimm8, uimm32, ieee32, ieee64, offset32
 from base.immediates import boolean, intcc, floatcc, memflags, regunit
+from base.immediates import trapcode
 from base import entities
 from cdsl.ti import WiderOrEq
 import base.formats  # noqa
@@ -126,11 +127,12 @@ br_table = Instruction(
         """,
         ins=(x, JT), is_branch=True)
 
+code = Operand('code', trapcode)
 trap = Instruction(
         'trap', r"""
         Terminate execution unconditionally.
         """,
-        is_terminator=True, can_trap=True)
+        ins=code, is_terminator=True, can_trap=True)
 
 trapz = Instruction(
         'trapz', r"""
@@ -138,7 +140,7 @@ trapz = Instruction(
 
         if ``c`` is non-zero, execution continues at the following instruction.
         """,
-        ins=c, can_trap=True)
+        ins=(c, code), can_trap=True)
 
 trapnz = Instruction(
         'trapnz', r"""
@@ -146,7 +148,7 @@ trapnz = Instruction(
 
         if ``c`` is zero, execution continues at the following instruction.
         """,
-        ins=c, can_trap=True)
+        ins=(c, code), can_trap=True)
 
 rvals = Operand('rvals', VARIABLE_ARGS, doc='return values')
 

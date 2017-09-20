@@ -861,5 +861,5 @@ ebb0:
     ; asm: movl %r10d, %ecx
     [-,%rcx]            v32 = uextend.i64 v13           ; bin: 44 89 d1
 
-    trap                                                ; bin: 0f 0b
+    trap user0                                          ; bin: 0f 0b
 }

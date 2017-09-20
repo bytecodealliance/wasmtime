@@ -5,7 +5,7 @@ from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
-from base.formats import Nullary, Call, IndirectCall, Store, Load
+from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare
 from base.formats import RegMove, Ternary, Jump, Branch, FuncAddr
 from .registers import GPR, ABCD, FPR
@@ -195,8 +195,8 @@ class TailRecipe:
 null = EncRecipe('null', Unary, size=0, ins=GPR, outs=0, emit='')
 
 # XX opcode, no ModR/M.
-noop = TailRecipe(
-        'noop', Nullary, size=0, ins=(), outs=(),
+trap = TailRecipe(
+        'trap', Trap, size=0, ins=(), outs=(),
         emit='PUT_OP(bits, BASE_REX, sink);')
 
 # XX /r

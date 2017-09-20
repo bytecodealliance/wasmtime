@@ -9,7 +9,7 @@ from __future__ import absolute_import
 from cdsl.formats import InstructionFormat
 from cdsl.operands import VALUE, VARIABLE_ARGS
 from .immediates import imm64, uimm8, uimm32, ieee32, ieee64, offset32
-from .immediates import boolean, intcc, floatcc, memflags, regunit
+from .immediates import boolean, intcc, floatcc, memflags, regunit, trapcode
 from . import entities
 from .entities import ebb, sig_ref, func_ref, stack_slot, heap
 
@@ -60,6 +60,9 @@ StackStore = InstructionFormat(VALUE, stack_slot, offset32)
 HeapAddr = InstructionFormat(heap, VALUE, uimm32)
 
 RegMove = InstructionFormat(VALUE, ('src', regunit), ('dst', regunit))
+
+Trap = InstructionFormat(trapcode)
+CondTrap = InstructionFormat(VALUE, trapcode)
 
 # Finally extract the names of global variables in this module.
 InstructionFormat.extract_names(globals())
