@@ -3,7 +3,7 @@
 use flowgraph::ControlFlowGraph;
 use dominator_tree::DominatorTree;
 use ir::{Cursor, CursorBase, InstructionData, Function, Inst, Opcode, Type};
-use std::collections::HashMap;
+use scoped_hash_map::ScopedHashMap;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
 fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
@@ -18,19 +18,40 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph, domtree: &
     debug_assert!(cfg.is_valid());
     debug_assert!(domtree.is_valid());
 
-    let mut visible_values: HashMap<(InstructionData, Type), Inst> = HashMap::new();
+    let mut visible_values: ScopedHashMap<(InstructionData, Type), Inst> = ScopedHashMap::new();
+    let mut scope_stack: Vec<Inst> = Vec::new();
 
     // Visit EBBs in a reverse post-order.
     let mut pos = Cursor::new(&mut func.layout);
 
     for &ebb in domtree.cfg_postorder().iter().rev() {
-        pos.goto_top(ebb);
+        // Pop any scopes that we just exited.
+        loop {
+            if let Some(current) = scope_stack.last() {
+                if domtree.dominates(*current, ebb, &pos.layout) {
+                    break;
+                }
+            } else {
+                break;
+            }
+            scope_stack.pop();
+            visible_values.decrement_depth();
+        }
 
+        // Push a scope for the current block.
+        scope_stack.push(pos.layout.first_inst(ebb).unwrap());
+        visible_values.increment_depth();
+
+        pos.goto_top(ebb);
         while let Some(inst) = pos.next_inst() {
             // Resolve aliases, particularly aliases we created earlier.
             func.dfg.resolve_aliases_in_arguments(inst);
 
             let opcode = func.dfg[inst].opcode();
+            if opcode.is_branch() && !opcode.is_terminator() {
+                scope_stack.push(pos.layout.next_inst(inst).unwrap());
+                visible_values.increment_depth();
+            }
             if trivially_unsafe_for_gvn(opcode) {
                 continue;
             }
@@ -38,19 +59,19 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph, domtree: &
             let ctrl_typevar = func.dfg.ctrl_typevar(inst);
             let key = (func.dfg[inst].clone(), ctrl_typevar);
             let entry = visible_values.entry(key);
-            use std::collections::hash_map::Entry::*;
+            use scoped_hash_map::Entry::*;
             match entry {
-                Occupied(mut entry) => {
-                    if domtree.dominates(*entry.get(), inst, pos.layout) {
-                        func.dfg.replace_with_aliases(inst, *entry.get());
-                        pos.remove_inst_and_step_back();
-                    } else {
-                        // The prior instruction doesn't dominate inst, so it
-                        // won't dominate any subsequent instructions we'll
-                        // visit, so just replace it.
-                        *entry.get_mut() = inst;
-                        continue;
+                Occupied(entry) => {
+                    debug_assert!(domtree.dominates(*entry.get(), inst, pos.layout));
+                    // If the redundant instruction is representing the current
+                    // scope, pick a new representative.
+                    let old = scope_stack.last_mut().unwrap();
+                    if *old == inst {
+                        *old = pos.layout.next_inst(inst).unwrap();
                     }
+                    // Replace the redundant instruction and remove it.
+                    func.dfg.replace_with_aliases(inst, *entry.get());
+                    pos.remove_inst_and_step_back();
                 }
                 Vacant(entry) => {
                     entry.insert(inst);
