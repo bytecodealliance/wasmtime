@@ -106,6 +106,7 @@ pub fn write_ebb_header(
     func: &Function,
     isa: Option<&TargetIsa>,
     ebb: Ebb,
+    indent: usize,
 ) -> Result {
     // Write out the basic block header, outdented:
     //
@@ -114,19 +115,17 @@ pub fn write_ebb_header(
     //    ebb10(v4: f64, v5: b1):
     //
 
-    // If we're writing encoding annotations, shift by 20.
-    if !func.encodings.is_empty() {
-        write!(w, "                    ")?;
-    }
+    // The `indent` is the instruction indentation. EBB headers are 4 spaces out from that.
+    write!(w, "{1:0$}{2}", indent - 4, "", ebb)?;
 
     let regs = isa.map(TargetIsa::register_info);
     let regs = regs.as_ref();
 
     let mut args = func.dfg.ebb_args(ebb).iter().cloned();
     match args.next() {
-        None => return writeln!(w, "{}:", ebb),
+        None => return writeln!(w, ":"),
         Some(arg) => {
-            write!(w, "{}(", ebb)?;
+            write!(w, "(")?;
             write_arg(w, func, regs, arg)?;
         }
     }
@@ -139,9 +138,16 @@ pub fn write_ebb_header(
 }
 
 pub fn write_ebb(w: &mut Write, func: &Function, isa: Option<&TargetIsa>, ebb: Ebb) -> Result {
-    write_ebb_header(w, func, isa, ebb)?;
+    // Indent all instructions if any encodings are present.
+    let indent = if func.encodings.is_empty() && func.srclocs.is_empty() {
+        4
+    } else {
+        36
+    };
+
+    write_ebb_header(w, func, isa, ebb, indent)?;
     for inst in func.layout.ebb_insts(ebb) {
-        write_instruction(w, func, isa, inst)?;
+        write_instruction(w, func, isa, inst, indent)?;
     }
     Ok(())
 }
@@ -203,16 +209,22 @@ fn write_instruction(
     func: &Function,
     isa: Option<&TargetIsa>,
     inst: Inst,
+    indent: usize,
 ) -> Result {
-    // Indent all instructions to col 24 if any encodings are present.
-    let indent = if func.encodings.is_empty() { 4 } else { 24 };
-
     // Value aliases come out on lines before the instruction using them.
     write_value_aliases(w, func, inst, indent)?;
 
+    // Prefix containing source location, encoding, and value locations.
+    let mut s = String::with_capacity(16);
+
+    // Source location goes first.
+    let srcloc = func.srclocs[inst];
+    if !srcloc.is_default() {
+        write!(s, "{} ", srcloc)?;
+    }
+
     // Write out encoding info.
     if let Some(enc) = func.encodings.get(inst).cloned() {
-        let mut s = String::with_capacity(16);
         if let Some(isa) = isa {
             write!(s, "[{}", isa.encoding_info().display(enc))?;
             // Write value locations, if we have them.
@@ -222,16 +234,14 @@ fn write_instruction(
                     write!(s, ",{}", func.locations[r].display(&regs))?
                 }
             }
-            write!(s, "]")?;
+            write!(s, "] ")?;
         } else {
-            write!(s, "[{}]", enc)?;
+            write!(s, "[{}] ", enc)?;
         }
-        // Align instruction following ISA annotation to col 24.
-        write!(w, "{:23} ", s)?;
-    } else {
-        // No annotations, simply indent.
-        write!(w, "{1:0$}", indent, "")?;
     }
+
+    // Write out prefix and indent the instruction.
+    write!(w, "{1:0$}", indent, s)?;
 
     // Write out the result values, if any.
     let mut has_results = false;

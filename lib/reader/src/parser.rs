@@ -13,6 +13,7 @@ use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, CallConv, S
                    JumpTable, JumpTableData, Signature, ArgumentType, ArgumentExtension,
                    ExtFuncData, SigRef, FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags,
                    GlobalVar, GlobalVarData, Heap, HeapData, HeapStyle, HeapBase};
+use cretonne::ir;
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Uimm32, Offset32, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
@@ -696,6 +697,23 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse an optional source location.
+    ///
+    /// Return an optional source location if no real location is present.
+    fn optional_srcloc(&mut self) -> Result<ir::SourceLoc> {
+        if let Some(Token::SourceLoc(text)) = self.token() {
+            match u32::from_str_radix(text, 16) {
+                Ok(num) => {
+                    self.consume();
+                    Ok(ir::SourceLoc::new(num))
+                }
+                Err(_) => return err!(self.loc, "invalid source location: {}", text),
+            }
+        } else {
+            Ok(Default::default())
+        }
+    }
+
     /// Parse a list of test commands.
     pub fn parse_test_commands(&mut self) -> Vec<TestCommand<'a>> {
         let mut list = Vec::new();
@@ -1360,9 +1378,11 @@ impl<'a> Parser<'a> {
             Some(Token::Value(_)) => true,
             Some(Token::Identifier(_)) => true,
             Some(Token::LBracket) => true,
+            Some(Token::SourceLoc(_)) => true,
             _ => false,
         }
         {
+            let srcloc = self.optional_srcloc()?;
             let (encoding, result_locations) = self.parse_instruction_encoding(ctx)?;
 
             // We need to parse instruction results here because they are shared
@@ -1380,6 +1400,7 @@ impl<'a> Parser<'a> {
                     self.consume();
                     self.parse_instruction(
                         results,
+                        srcloc,
                         encoding,
                         result_locations,
                         ctx,
@@ -1390,6 +1411,7 @@ impl<'a> Parser<'a> {
                 _ => {
                     self.parse_instruction(
                         results,
+                        srcloc,
                         encoding,
                         result_locations,
                         ctx,
@@ -1587,6 +1609,7 @@ impl<'a> Parser<'a> {
     fn parse_instruction(
         &mut self,
         results: Vec<Value>,
+        srcloc: ir::SourceLoc,
         encoding: Option<Encoding>,
         result_locations: Option<Vec<ValueLoc>>,
         ctx: &mut Context,
@@ -1635,6 +1658,10 @@ impl<'a> Parser<'a> {
         ctx.map.def_entity(inst.into(), &opcode_loc).expect(
             "duplicate inst references created",
         );
+
+        if !srcloc.is_default() {
+            ctx.function.srclocs[inst] = srcloc;
+        }
 
         if let Some(encoding) = encoding {
             ctx.function.encodings[inst] = encoding;

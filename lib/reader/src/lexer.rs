@@ -45,6 +45,7 @@ pub enum Token<'a> {
     Name(&'a str), // %9arbitrary_alphanum, %x3, %0, %function ...
     HexSequence(&'a str), // #89AF
     Identifier(&'a str), // Unrecognized identifier (opcode, enumerator, ...)
+    SourceLoc(&'a str), // @00c7
 }
 
 /// A `Token` with an associated location.
@@ -388,6 +389,22 @@ impl<'a> Lexer<'a> {
         token(Token::HexSequence(&self.source[begin..end]), loc)
     }
 
+    fn scan_srcloc(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
+        let loc = self.loc();
+        let begin = self.pos + 1;
+
+        assert_eq!(self.lookahead, Some('@'));
+
+        while let Some(c) = self.next_ch() {
+            if !char::is_digit(c, 16) {
+                break;
+            }
+        }
+
+        let end = self.pos;
+        token(Token::SourceLoc(&self.source[begin..end]), loc)
+    }
+
     /// Get the next token or a lexical error.
     ///
     /// Return None when the end of the source is encountered.
@@ -419,6 +436,7 @@ impl<'a> Lexer<'a> {
                 Some(ch) if ch.is_alphabetic() => Some(self.scan_word()),
                 Some('%') => Some(self.scan_name()),
                 Some('#') => Some(self.scan_hex_sequence()),
+                Some('@') => Some(self.scan_srcloc()),
                 Some(ch) if ch.is_whitespace() => {
                     self.next_ch();
                     continue;
