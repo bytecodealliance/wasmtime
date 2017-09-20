@@ -40,8 +40,7 @@ impl SubTest for TestLICM {
 
         comp_ctx.flowgraph();
         comp_ctx.compute_loop_analysis();
-        comp_ctx.licm();
-        comp_ctx.verify(context.flags_or_isa()).map_err(|e| {
+        comp_ctx.licm(context.flags_or_isa()).map_err(|e| {
             pretty_error(&comp_ctx.func, context.isa, Into::into(e))
         })?;
 

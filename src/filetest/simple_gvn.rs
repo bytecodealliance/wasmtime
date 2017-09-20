@@ -39,8 +39,7 @@ impl SubTest for TestSimpleGVN {
         comp_ctx.func = func.into_owned();
 
         comp_ctx.flowgraph();
-        comp_ctx.simple_gvn();
-        comp_ctx.verify(context.flags_or_isa()).map_err(|e| {
+        comp_ctx.simple_gvn(context.flags_or_isa()).map_err(|e| {
             pretty_error(&comp_ctx.func, context.isa, Into::into(e))
         })?;
 
