@@ -269,7 +269,6 @@ pub fn write_operands(
     let pool = &dfg.value_lists;
     use ir::instructions::InstructionData::*;
     match dfg[inst] {
-        Nullary { .. } => write!(w, ""),
         Unary { arg, .. } => write!(w, " {}", arg),
         UnaryImm { imm, .. } => write!(w, " {}", imm),
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),

@@ -13,8 +13,6 @@ from .immediates import boolean, intcc, floatcc, memflags, regunit, trapcode
 from . import entities
 from .entities import ebb, sig_ref, func_ref, stack_slot, heap
 
-Nullary = InstructionFormat()
-
 Unary = InstructionFormat(VALUE)
 UnaryImm = InstructionFormat(imm64)
 UnaryIeee32 = InstructionFormat(ieee32)

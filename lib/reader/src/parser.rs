@@ -1828,7 +1828,6 @@ impl<'a> Parser<'a> {
         opcode: Opcode,
     ) -> Result<InstructionData> {
         let idata = match opcode.format() {
-            InstructionFormat::Nullary => InstructionData::Nullary { opcode },
             InstructionFormat::Unary => {
                 InstructionData::Unary {
                     opcode,

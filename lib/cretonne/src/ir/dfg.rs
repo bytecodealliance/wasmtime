@@ -898,20 +898,26 @@ impl<'a> fmt::Display for DisplayInst<'a> {
 mod tests {
     use super::*;
     use ir::types;
-    use ir::{Function, Cursor, CursorBase, Opcode, InstructionData};
+    use ir::{Function, Cursor, CursorBase, Opcode, InstructionData, TrapCode};
 
     #[test]
     fn make_inst() {
         let mut dfg = DataFlowGraph::new();
 
-        let idata = InstructionData::Nullary { opcode: Opcode::Iconst };
+        let idata = InstructionData::UnaryImm {
+            opcode: Opcode::Iconst,
+            imm: 0.into(),
+        };
         let next = dfg.next_inst();
         let inst = dfg.make_inst(idata);
         assert_eq!(next, inst);
 
         dfg.make_inst_results(inst, types::I32);
         assert_eq!(inst.to_string(), "inst0");
-        assert_eq!(dfg.display_inst(inst, None).to_string(), "v0 = iconst.i32");
+        assert_eq!(
+            dfg.display_inst(inst, None).to_string(),
+            "v0 = iconst.i32 0"
+        );
 
         // Immutable reference resolution.
         {
@@ -941,9 +947,12 @@ mod tests {
     fn no_results() {
         let mut dfg = DataFlowGraph::new();
 
-        let idata = InstructionData::Nullary { opcode: Opcode::Trap };
+        let idata = InstructionData::Trap {
+            opcode: Opcode::Trap,
+            code: TrapCode::User(0),
+        };
         let inst = dfg.make_inst(idata);
-        assert_eq!(dfg.display_inst(inst, None).to_string(), "trap");
+        assert_eq!(dfg.display_inst(inst, None).to_string(), "trap user0");
 
         // Result slice should be empty.
         assert_eq!(dfg.inst_results(inst), &[]);
