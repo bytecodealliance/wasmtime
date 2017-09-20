@@ -137,8 +137,7 @@ fn expand_cond_trap(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFl
         func.dfg.replace(inst).brz(arg, new_ebb, &[]);
     }
 
-    let mut pos = FuncCursor::new(func).at_inst(inst);
-    pos.next_inst();
+    let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.ins().trap();
     pos.insert_ebb(new_ebb);
 

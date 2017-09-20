@@ -444,8 +444,7 @@ where
                 if !layout.is_ebb_inserted(dest_ebb) {
                     layout.append_ebb(dest_ebb)
                 };
-                let mut cur = Cursor::new(layout);
-                cur.goto_first_insertion_point(dest_ebb);
+                let mut cur = Cursor::new(layout).at_first_insertion_point(dest_ebb);
                 let ty = dfg.value_type(temp_arg_val);
                 let val = if ty.is_int() {
                     dfg.ins(&mut cur).iconst(ty, 0)
@@ -545,8 +544,7 @@ where
                         *old_dest = PackedOption::from(middle_ebb);
                     }
                 }
-                let mut cur = Cursor::new(layout);
-                cur.goto_bottom(middle_ebb);
+                let mut cur = Cursor::new(layout).at_bottom(middle_ebb);
                 let middle_jump_inst = dfg.ins(&mut cur).jump(dest_ebb, &[val]);
                 self.def_var(var, val, block);
                 Some((middle_ebb, block, middle_jump_inst))
@@ -627,14 +625,12 @@ mod tests {
         let x_ssa = {
             let cur = &mut Cursor::new(&mut func.layout);
             cur.insert_ebb(ebb0);
-            cur.goto_bottom(ebb0);
             func.dfg.ins(cur).iconst(I32, 1)
         };
         ssa.def_var(x_var, x_ssa, block);
         let y_var = Variable(1);
         let y_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).iconst(I32, 2)
         };
         ssa.def_var(y_var, y_ssa, block);
@@ -679,8 +675,7 @@ mod tests {
             block,
         ).0;
         let z1_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).iadd(x_use1, y_use1)
         };
         ssa.def_var(z_var, z1_ssa, block);
@@ -712,8 +707,7 @@ mod tests {
             block,
         ).0;
         let z2_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).iadd(x_use2, z_use1)
         };
         ssa.def_var(z_var, z2_ssa, block);
@@ -758,8 +752,7 @@ mod tests {
         ssa.def_var(x_var, x_ssa, block0);
         let y_var = Variable(1);
         let y_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).iconst(I32, 2)
         };
         ssa.def_var(y_var, y_ssa, block0);
@@ -803,8 +796,7 @@ mod tests {
             block0,
         ).0;
         let z1_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).iadd(x_use1, y_use1)
         };
         ssa.def_var(z_var, z1_ssa, block0);
@@ -828,8 +820,7 @@ mod tests {
             block0,
         ).0;
         let jump_inst: Inst = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).brnz(y_use2, ebb1, &[])
         };
         let block1 = ssa.declare_ebb_body_block(block0);
@@ -852,8 +843,7 @@ mod tests {
         ).0;
         assert_eq!(z_use1, z1_ssa);
         let z2_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).iadd(x_use2, z_use1)
         };
         ssa.def_var(z_var, z2_ssa, block1);
@@ -891,8 +881,7 @@ mod tests {
         ).0;
         assert_eq!(y_ssa, y_use3);
         let y2_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb1);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
             func.dfg.ins(cur).iadd(x_use3, y_use3)
         };
         ssa.def_var(y_var, y2_ssa, block2);
@@ -952,8 +941,7 @@ mod tests {
         );
         let y_var = Variable(1);
         let y1 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).iconst(I32, 2)
         };
         ssa.def_var(y_var, y1, block0);
@@ -988,14 +976,12 @@ mod tests {
         ).0;
         assert_eq!(y2, y1);
         let z1 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).iadd(x2, y2)
         };
         ssa.def_var(z_var, z1, block0);
         let jump_ebb0_ebb1 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).jump(ebb1, &[])
         };
         let block1 = ssa.declare_ebb_header_block(ebb1);
@@ -1017,8 +1003,7 @@ mod tests {
             block1,
         ).0;
         let z3 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb1);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
             func.dfg.ins(cur).iadd(z2, y3)
         };
         ssa.def_var(z_var, z3, block1);
@@ -1032,8 +1017,7 @@ mod tests {
         ).0;
         assert_eq!(y4, y3);
         let jump_ebb1_ebb2 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb1);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
             func.dfg.ins(cur).brnz(y4, ebb2, &[])
         };
         let block2 = ssa.declare_ebb_body_block(block1);
@@ -1055,8 +1039,7 @@ mod tests {
             block2,
         ).0;
         let z5 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb1);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
             func.dfg.ins(cur).isub(z4, x3)
         };
         ssa.def_var(z_var, z5, block2);
@@ -1070,8 +1053,7 @@ mod tests {
         ).0;
         assert_eq!(y5, y3);
         {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb1);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
             func.dfg.ins(cur).return_(&[y5])
         };
 
@@ -1097,14 +1079,12 @@ mod tests {
         ).0;
         assert_eq!(x4, x3);
         let y7 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb2);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb2);
             func.dfg.ins(cur).isub(y6, x4)
         };
         ssa.def_var(y_var, y7, block3);
         let jump_ebb2_ebb1 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb2);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb2);
             func.dfg.ins(cur).jump(ebb1, &[])
         };
 
@@ -1156,20 +1136,17 @@ mod tests {
             block0,
         ).0;
         let br_table = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).br_table(x1, jt)
         };
         let block1 = ssa.declare_ebb_body_block(block0);
         let x3 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).iconst(I32, 2)
         };
         ssa.def_var(x_var, x3, block1);
         let jump_inst = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).jump(ebb1, &[])
         };
         let block2 = ssa.declare_ebb_header_block(ebb1);
@@ -1185,13 +1162,11 @@ mod tests {
             block2,
         ).0;
         {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb1);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
             func.dfg.ins(cur).iadd_imm(x4, 1)
         };
         {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb1);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
             func.dfg.ins(cur).return_(&[])
         };
         let flags = settings::Flags::new(&settings::builder());
@@ -1232,20 +1207,17 @@ mod tests {
         };
         ssa.def_var(x_var, x1, block0);
         let y1 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).iconst(I32, 1)
         };
         ssa.def_var(y_var, y1, block0);
         let z1 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).iconst(I32, 2)
         };
         ssa.def_var(z_var, z1, block0);
         let jump_inst = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb0);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
             func.dfg.ins(cur).jump(ebb1, &[])
         };
         let block1 = ssa.declare_ebb_header_block(ebb1);
@@ -1269,8 +1241,7 @@ mod tests {
         ).0;
         assert_eq!(func.dfg.ebb_args(ebb1)[1], x2);
         let x3 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb1);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
             func.dfg.ins(cur).iadd(x2, z2)
         };
         ssa.def_var(x_var, x3, block1);
@@ -1292,14 +1263,12 @@ mod tests {
         ).0;
         assert_eq!(func.dfg.ebb_args(ebb1)[2], y3);
         let y4 = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb1);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
             func.dfg.ins(cur).isub(y3, x4)
         };
         ssa.def_var(y_var, y4, block1);
         let jump_inst = {
-            let cur = &mut Cursor::new(&mut func.layout);
-            cur.goto_bottom(ebb1);
+            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
             func.dfg.ins(cur).jump(ebb1, &[])
         };
         ssa.declare_ebb_predecessor(ebb1, block1, jump_inst);
