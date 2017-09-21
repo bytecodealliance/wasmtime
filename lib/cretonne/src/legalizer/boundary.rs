@@ -18,10 +18,10 @@
 //! intermediate state doesn't type check.
 
 use abi::{legalize_abi_value, ValueConversion};
+use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
-use ir::{Function, Cursor, CursorBase, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value,
-         Signature, SigRef, ArgumentType, ArgumentPurpose, ArgumentLoc, ValueLoc, ValueLocations,
-         StackSlots, StackSlotKind};
+use ir::{Function, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value, Signature, SigRef,
+         ArgumentType, ArgumentPurpose, ArgumentLoc, ValueLoc, StackSlotKind};
 use ir::instructions::CallInfo;
 use isa::TargetIsa;
 use legalizer::split::{isplit, vsplit};
@@ -62,25 +62,25 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
     // Insert position for argument conversion code.
     // We want to insert instructions before the first instruction in the entry block.
     // If the entry block is empty, append instructions to it instead.
-    let mut pos = Cursor::new(&mut func.layout, &mut func.srclocs).at_first_inst(entry);
+    let mut pos = FuncCursor::new(func).at_first_inst(entry);
 
     // Keep track of the argument types in the ABI-legalized signature.
-    let abi_types = &func.signature.argument_types;
     let mut abi_arg = 0;
 
     // Process the EBB arguments one at a time, possibly replacing one argument with multiple new
     // ones. We do this by detaching the entry EBB arguments first.
-    let ebb_args = func.dfg.detach_ebb_args(entry);
+    let ebb_args = pos.func.dfg.detach_ebb_args(entry);
     let mut old_arg = 0;
-    while let Some(arg) = ebb_args.get(old_arg, &func.dfg.value_lists) {
+    while let Some(arg) = ebb_args.get(old_arg, &pos.func.dfg.value_lists) {
         old_arg += 1;
 
-        let arg_type = func.dfg.value_type(arg);
-        if arg_type == abi_types[abi_arg].value_type {
+        let abi_type = pos.func.signature.argument_types[abi_arg];
+        let arg_type = pos.func.dfg.value_type(arg);
+        if arg_type == abi_type.value_type {
             // No value translation is necessary, this argument matches the ABI type.
             // Just use the original EBB argument value. This is the most common case.
-            func.dfg.attach_ebb_arg(entry, arg);
-            match abi_types[abi_arg].purpose {
+            pos.func.dfg.attach_ebb_arg(entry, arg);
+            match abi_type.purpose {
                 ArgumentPurpose::Normal => {}
                 ArgumentPurpose::StructReturn => {
                     assert!(!has_sret, "Multiple sret arguments found");
@@ -94,13 +94,13 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
                     assert!(!has_sigid, "Multiple sigid arguments found");
                     has_sigid = true;
                 }
-                _ => panic!("Unexpected special-purpose arg {}", abi_types[abi_arg]),
+                _ => panic!("Unexpected special-purpose arg {}", abi_type),
             }
             abi_arg += 1;
         } else {
             // Compute the value we want for `arg` from the legalized ABI arguments.
-            let mut get_arg = |dfg: &mut DataFlowGraph, ty| {
-                let abi_type = abi_types[abi_arg];
+            let mut get_arg = |func: &mut Function, ty| {
+                let abi_type = func.signature.argument_types[abi_arg];
                 assert_eq!(
                     abi_type.purpose,
                     ArgumentPurpose::Normal,
@@ -108,22 +108,21 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
                 );
                 if ty == abi_type.value_type {
                     abi_arg += 1;
-                    Ok(dfg.append_ebb_arg(entry, ty))
+                    Ok(func.dfg.append_ebb_arg(entry, ty))
                 } else {
                     Err(abi_type)
                 }
             };
-            let converted =
-                convert_from_abi(&mut func.dfg, &mut pos, arg_type, Some(arg), &mut get_arg);
+            let converted = convert_from_abi(&mut pos, arg_type, Some(arg), &mut get_arg);
             // The old `arg` is no longer an attached EBB argument, but there are probably still
             // uses of the value.
-            assert_eq!(func.dfg.resolve_aliases(arg), converted);
+            assert_eq!(pos.func.dfg.resolve_aliases(arg), converted);
         }
     }
 
     // The legalized signature may contain additional arguments representing special-purpose
     // registers.
-    for &arg in &abi_types[abi_arg..] {
+    for &arg in &pos.func.signature.argument_types[abi_arg..] {
         match arg.purpose {
             // Any normal arguments should have been processed above.
             ArgumentPurpose::Normal => {
@@ -156,7 +155,7 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
 
         // Just create entry block values to match here. We will use them in `handle_return_abi()`
         // below.
-        func.dfg.append_ebb_arg(entry, arg.value_type);
+        pos.func.dfg.append_ebb_arg(entry, arg.value_type);
     }
 }
 
@@ -168,13 +167,9 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
 /// This function is very similar to the `legalize_entry_arguments` function above.
 ///
 /// Returns the possibly new instruction representing the call.
-fn legalize_inst_results<ResType>(
-    dfg: &mut DataFlowGraph,
-    pos: &mut Cursor,
-    mut get_abi_type: ResType,
-) -> Inst
+fn legalize_inst_results<ResType>(pos: &mut FuncCursor, mut get_abi_type: ResType) -> Inst
 where
-    ResType: FnMut(&DataFlowGraph, usize) -> ArgumentType,
+    ResType: FnMut(&Function, usize) -> ArgumentType,
 {
     let call = pos.current_inst().expect(
         "Cursor must point to a call instruction",
@@ -182,37 +177,37 @@ where
 
     // We theoretically allow for call instructions that return a number of fixed results before
     // the call return values. In practice, it doesn't happen.
-    let fixed_results = dfg[call].opcode().constraints().fixed_results();
+    let fixed_results = pos.func.dfg[call].opcode().constraints().fixed_results();
     assert_eq!(fixed_results, 0, "Fixed results  on calls not supported");
 
-    let results = dfg.detach_results(call);
+    let results = pos.func.dfg.detach_results(call);
     let mut next_res = 0;
     let mut abi_res = 0;
 
     // Point immediately after the call.
     pos.next_inst();
 
-    while let Some(res) = results.get(next_res, &dfg.value_lists) {
+    while let Some(res) = results.get(next_res, &pos.func.dfg.value_lists) {
         next_res += 1;
 
-        let res_type = dfg.value_type(res);
-        if res_type == get_abi_type(dfg, abi_res).value_type {
+        let res_type = pos.func.dfg.value_type(res);
+        if res_type == get_abi_type(pos.func, abi_res).value_type {
             // No value translation is necessary, this result matches the ABI type.
-            dfg.attach_result(call, res);
+            pos.func.dfg.attach_result(call, res);
             abi_res += 1;
         } else {
-            let mut get_res = |dfg: &mut DataFlowGraph, ty| {
-                let abi_type = get_abi_type(dfg, abi_res);
+            let mut get_res = |func: &mut Function, ty| {
+                let abi_type = get_abi_type(func, abi_res);
                 if ty == abi_type.value_type {
-                    let last_res = dfg.append_result(call, ty);
+                    let last_res = func.dfg.append_result(call, ty);
                     abi_res += 1;
                     Ok(last_res)
                 } else {
                     Err(abi_type)
                 }
             };
-            let v = convert_from_abi(dfg, pos, res_type, Some(res), &mut get_res);
-            assert_eq!(dfg.resolve_aliases(res), v);
+            let v = convert_from_abi(pos, res_type, Some(res), &mut get_res);
+            assert_eq!(pos.func.dfg.resolve_aliases(res), v);
         }
     }
 
@@ -229,19 +224,18 @@ where
 ///
 /// If the `into_result` value is provided, the converted result will be written into that value.
 fn convert_from_abi<GetArg>(
-    dfg: &mut DataFlowGraph,
-    pos: &mut Cursor,
+    pos: &mut FuncCursor,
     ty: Type,
     into_result: Option<Value>,
     get_arg: &mut GetArg,
 ) -> Value
 where
-    GetArg: FnMut(&mut DataFlowGraph, Type) -> Result<Value, ArgumentType>,
+    GetArg: FnMut(&mut Function, Type) -> Result<Value, ArgumentType>,
 {
     // Terminate the recursion when we get the desired type.
-    let arg_type = match get_arg(dfg, ty) {
+    let arg_type = match get_arg(pos.func, ty) {
         Ok(v) => {
-            debug_assert_eq!(dfg.value_type(v), ty);
+            debug_assert_eq!(pos.func.dfg.value_type(v), ty);
             assert_eq!(into_result, None);
             return v;
         }
@@ -258,45 +252,45 @@ where
         // Construct a `ty` by concatenating two ABI integers.
         ValueConversion::IntSplit => {
             let abi_ty = ty.half_width().expect("Invalid type for conversion");
-            let lo = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
-            let hi = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
+            let lo = convert_from_abi(pos, abi_ty, None, get_arg);
+            let hi = convert_from_abi(pos, abi_ty, None, get_arg);
             dbg!(
                 "intsplit {}: {}, {}: {}",
                 lo,
-                dfg.value_type(lo),
+                pos.func.dfg.value_type(lo),
                 hi,
-                dfg.value_type(hi)
+                pos.func.dfg.value_type(hi)
             );
-            dfg.ins(pos).with_results([into_result]).iconcat(lo, hi)
+            pos.ins().with_results([into_result]).iconcat(lo, hi)
         }
         // Construct a `ty` by concatenating two halves of a vector.
         ValueConversion::VectorSplit => {
             let abi_ty = ty.half_vector().expect("Invalid type for conversion");
-            let lo = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
-            let hi = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
-            dfg.ins(pos).with_results([into_result]).vconcat(lo, hi)
+            let lo = convert_from_abi(pos, abi_ty, None, get_arg);
+            let hi = convert_from_abi(pos, abi_ty, None, get_arg);
+            pos.ins().with_results([into_result]).vconcat(lo, hi)
         }
         // Construct a `ty` by bit-casting from an integer type.
         ValueConversion::IntBits => {
             assert!(!ty.is_int());
             let abi_ty = Type::int(ty.bits()).expect("Invalid type for conversion");
-            let arg = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
-            dfg.ins(pos).with_results([into_result]).bitcast(ty, arg)
+            let arg = convert_from_abi(pos, abi_ty, None, get_arg);
+            pos.ins().with_results([into_result]).bitcast(ty, arg)
         }
         // ABI argument is a sign-extended version of the value we want.
         ValueConversion::Sext(abi_ty) => {
-            let arg = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
+            let arg = convert_from_abi(pos, abi_ty, None, get_arg);
             // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
             // We could insert an `assert_sreduce` which would fold with a following `sextend` of
             // this value.
-            dfg.ins(pos).with_results([into_result]).ireduce(ty, arg)
+            pos.ins().with_results([into_result]).ireduce(ty, arg)
         }
         ValueConversion::Uext(abi_ty) => {
-            let arg = convert_from_abi(dfg, pos, abi_ty, None, get_arg);
+            let arg = convert_from_abi(pos, abi_ty, None, get_arg);
             // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
             // We could insert an `assert_ureduce` which would fold with a following `uextend` of
             // this value.
-            dfg.ins(pos).with_results([into_result]).ireduce(ty, arg)
+            pos.ins().with_results([into_result]).ireduce(ty, arg)
         }
     }
 }
@@ -313,48 +307,47 @@ where
 ///    return the `Err(ArgumentType)` that is needed.
 ///
 fn convert_to_abi<PutArg>(
-    dfg: &mut DataFlowGraph,
+    pos: &mut FuncCursor,
     cfg: &ControlFlowGraph,
-    pos: &mut Cursor,
     value: Value,
     put_arg: &mut PutArg,
 ) where
-    PutArg: FnMut(&mut DataFlowGraph, Value) -> Result<(), ArgumentType>,
+    PutArg: FnMut(&mut Function, Value) -> Result<(), ArgumentType>,
 {
     // Start by invoking the closure to either terminate the recursion or get the argument type
     // we're trying to match.
-    let arg_type = match put_arg(dfg, value) {
+    let arg_type = match put_arg(pos.func, value) {
         Ok(_) => return,
         Err(t) => t,
     };
 
-    let ty = dfg.value_type(value);
+    let ty = pos.func.dfg.value_type(value);
     match legalize_abi_value(ty, &arg_type) {
         ValueConversion::IntSplit => {
             let curpos = pos.position();
-            let (lo, hi) = isplit(dfg, pos.layout, cfg, curpos, value);
-            convert_to_abi(dfg, cfg, pos, lo, put_arg);
-            convert_to_abi(dfg, cfg, pos, hi, put_arg);
+            let (lo, hi) = isplit(&mut pos.func.dfg, &mut pos.func.layout, cfg, curpos, value);
+            convert_to_abi(pos, cfg, lo, put_arg);
+            convert_to_abi(pos, cfg, hi, put_arg);
         }
         ValueConversion::VectorSplit => {
             let curpos = pos.position();
-            let (lo, hi) = vsplit(dfg, pos.layout, cfg, curpos, value);
-            convert_to_abi(dfg, cfg, pos, lo, put_arg);
-            convert_to_abi(dfg, cfg, pos, hi, put_arg);
+            let (lo, hi) = vsplit(&mut pos.func.dfg, &mut pos.func.layout, cfg, curpos, value);
+            convert_to_abi(pos, cfg, lo, put_arg);
+            convert_to_abi(pos, cfg, hi, put_arg);
         }
         ValueConversion::IntBits => {
             assert!(!ty.is_int());
             let abi_ty = Type::int(ty.bits()).expect("Invalid type for conversion");
-            let arg = dfg.ins(pos).bitcast(abi_ty, value);
-            convert_to_abi(dfg, cfg, pos, arg, put_arg);
+            let arg = pos.ins().bitcast(abi_ty, value);
+            convert_to_abi(pos, cfg, arg, put_arg);
         }
         ValueConversion::Sext(abi_ty) => {
-            let arg = dfg.ins(pos).sextend(abi_ty, value);
-            convert_to_abi(dfg, cfg, pos, arg, put_arg);
+            let arg = pos.ins().sextend(abi_ty, value);
+            convert_to_abi(pos, cfg, arg, put_arg);
         }
         ValueConversion::Uext(abi_ty) => {
-            let arg = dfg.ins(pos).uextend(abi_ty, value);
-            convert_to_abi(dfg, cfg, pos, arg, put_arg);
+            let arg = pos.ins().uextend(abi_ty, value);
+            convert_to_abi(pos, cfg, arg, put_arg);
         }
     }
 }
@@ -402,28 +395,30 @@ fn check_return_signature(dfg: &DataFlowGraph, inst: Inst, sig: &Signature) -> b
 ///   argument number in `0..abi_args`.
 ///
 fn legalize_inst_arguments<ArgType>(
-    dfg: &mut DataFlowGraph,
+    pos: &mut FuncCursor,
     cfg: &ControlFlowGraph,
-    pos: &mut Cursor,
     abi_args: usize,
     mut get_abi_type: ArgType,
 ) where
-    ArgType: FnMut(&DataFlowGraph, usize) -> ArgumentType,
+    ArgType: FnMut(&Function, usize) -> ArgumentType,
 {
     let inst = pos.current_inst().expect(
         "Cursor must point to a call instruction",
     );
 
     // Lift the value list out of the call instruction so we modify it.
-    let mut vlist = dfg[inst].take_value_list().expect(
+    let mut vlist = pos.func.dfg[inst].take_value_list().expect(
         "Call must have a value list",
     );
 
     // The value list contains all arguments to the instruction, including the callee on an
     // indirect call which isn't part of the call arguments that must match the ABI signature.
     // Figure out how many fixed values are at the front of the list. We won't touch those.
-    let fixed_values = dfg[inst].opcode().constraints().fixed_value_arguments();
-    let have_args = vlist.len(&dfg.value_lists) - fixed_values;
+    let fixed_values = pos.func.dfg[inst]
+        .opcode()
+        .constraints()
+        .fixed_value_arguments();
+    let have_args = vlist.len(&pos.func.dfg.value_lists) - fixed_values;
 
     // Grow the value list to the right size and shift all the existing arguments to the right.
     // This lets us write the new argument values into the list without overwriting the old
@@ -450,30 +445,34 @@ fn legalize_inst_arguments<ArgType>(
     //        <------------------> abi_args
     //   [FFFFNNNNNNNNNNNNNNNNNNNN]
     //
-    vlist.grow_at(fixed_values, abi_args - have_args, &mut dfg.value_lists);
+    vlist.grow_at(
+        fixed_values,
+        abi_args - have_args,
+        &mut pos.func.dfg.value_lists,
+    );
     let old_arg_offset = fixed_values + abi_args - have_args;
 
     let mut abi_arg = 0;
     for old_arg in 0..have_args {
         let old_value = vlist
-            .get(old_arg_offset + old_arg, &dfg.value_lists)
+            .get(old_arg_offset + old_arg, &pos.func.dfg.value_lists)
             .unwrap();
-        let mut put_arg = |dfg: &mut DataFlowGraph, arg| {
-            let abi_type = get_abi_type(dfg, abi_arg);
-            if dfg.value_type(arg) == abi_type.value_type {
+        let mut put_arg = |func: &mut Function, arg| {
+            let abi_type = get_abi_type(func, abi_arg);
+            if func.dfg.value_type(arg) == abi_type.value_type {
                 // This is the argument type we need.
-                vlist.as_mut_slice(&mut dfg.value_lists)[fixed_values + abi_arg] = arg;
+                vlist.as_mut_slice(&mut func.dfg.value_lists)[fixed_values + abi_arg] = arg;
                 abi_arg += 1;
                 Ok(())
             } else {
                 Err(abi_type)
             }
         };
-        convert_to_abi(dfg, cfg, pos, old_value, &mut put_arg);
+        convert_to_abi(pos, cfg, old_value, &mut put_arg);
     }
 
     // Put the modified value list back.
-    dfg[inst].put_value_list(vlist);
+    pos.func.dfg[inst].put_value_list(vlist);
 }
 
 /// Insert ABI conversion code before and after the call instruction at `pos`.
@@ -487,39 +486,38 @@ fn legalize_inst_arguments<ArgType>(
 ///
 /// Returns `true` if any instructions were inserted.
 pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGraph) -> bool {
-    let dfg = &mut func.dfg;
-    let pos = &mut Cursor::new(&mut func.layout, &mut func.srclocs).at_inst(inst);
+    let pos = &mut FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
     // Start by checking if the argument types already match the signature.
-    let sig_ref = match check_call_signature(dfg, inst) {
-        Ok(_) => return spill_call_arguments(dfg, &mut func.locations, &mut func.stack_slots, pos),
+    let sig_ref = match check_call_signature(&pos.func.dfg, inst) {
+        Ok(_) => return spill_call_arguments(pos),
         Err(s) => s,
     };
 
     // OK, we need to fix the call arguments to match the ABI signature.
-    let abi_args = dfg.signatures[sig_ref].argument_types.len();
-    legalize_inst_arguments(dfg, cfg, pos, abi_args, |dfg, abi_arg| {
-        dfg.signatures[sig_ref].argument_types[abi_arg]
+    let abi_args = pos.func.dfg.signatures[sig_ref].argument_types.len();
+    legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
+        func.dfg.signatures[sig_ref].argument_types[abi_arg]
     });
 
-    if !dfg.signatures[sig_ref].return_types.is_empty() {
-        inst = legalize_inst_results(dfg, pos, |dfg, abi_res| {
-            dfg.signatures[sig_ref].return_types[abi_res]
+    if !pos.func.dfg.signatures[sig_ref].return_types.is_empty() {
+        inst = legalize_inst_results(pos, |func, abi_res| {
+            func.dfg.signatures[sig_ref].return_types[abi_res]
         });
     }
 
     debug_assert!(
-        check_call_signature(dfg, inst).is_ok(),
+        check_call_signature(&pos.func.dfg, inst).is_ok(),
         "Signature still wrong: {}, {}{}",
-        dfg.display_inst(inst, None),
+        pos.func.dfg.display_inst(inst, None),
         sig_ref,
-        dfg.signatures[sig_ref]
+        pos.func.dfg.signatures[sig_ref]
     );
 
     // Go back and insert spills for any stack arguments.
     pos.goto_inst(inst);
-    spill_call_arguments(dfg, &mut func.locations, &mut func.stack_slots, pos);
+    spill_call_arguments(pos);
 
     // Yes, we changed stuff.
     true
@@ -529,19 +527,15 @@ pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGra
 ///
 /// Return `true` if any instructions were inserted.
 pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph) -> bool {
-    let dfg = &mut func.dfg;
-    let sig = &mut func.signature;
-    let pos = &mut Cursor::new(&mut func.layout, &mut func.srclocs).at_inst(inst);
-    pos.use_srcloc(inst);
-
     // Check if the returned types already match the signature.
-    if check_return_signature(dfg, inst, sig) {
+    if check_return_signature(&func.dfg, inst, &func.signature) {
         return false;
     }
 
     // Count the special-purpose return values (`link`, `sret`, and `vmctx`) that were appended to
     // the legalized signature.
-    let special_args = sig.return_types
+    let special_args = func.signature
+        .return_types
         .iter()
         .rev()
         .take_while(|&rt| {
@@ -549,16 +543,15 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
                 rt.purpose == ArgumentPurpose::VMContext
         })
         .count();
+    let abi_args = func.signature.return_types.len() - special_args;
 
-    let abi_args = sig.return_types.len() - special_args;
-    legalize_inst_arguments(
-        dfg,
-        cfg,
-        pos,
-        abi_args,
-        |_, abi_arg| sig.return_types[abi_arg],
-    );
-    assert_eq!(dfg.inst_variable_args(inst).len(), abi_args);
+    let pos = &mut FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
+        func.signature.return_types[abi_arg]
+    });
+    assert_eq!(pos.func.dfg.inst_variable_args(inst).len(), abi_args);
 
     // Append special return arguments for any `sret`, `link`, and `vmctx` return values added to
     // the legalized signature. These values should simply be propagated from the entry block
@@ -567,10 +560,10 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
         dbg!(
             "Adding {} special-purpose arguments to {}",
             special_args,
-            dfg.display_inst(inst, None)
+            pos.func.dfg.display_inst(inst, None)
         );
-        let mut vlist = dfg[inst].take_value_list().unwrap();
-        for arg in &sig.return_types[abi_args..] {
+        let mut vlist = pos.func.dfg[inst].take_value_list().unwrap();
+        for arg in &pos.func.signature.return_types[abi_args..] {
             match arg.purpose {
                 ArgumentPurpose::Link |
                 ArgumentPurpose::StructReturn |
@@ -581,24 +574,29 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
             // A `link`/`sret`/`vmctx` return value can only appear in a signature that has a
             // unique matching argument. They are appended at the end, so search the signature from
             // the end.
-            let idx = sig.argument_types
+            let idx = pos.func
+                .signature
+                .argument_types
                 .iter()
                 .rposition(|t| t.purpose == arg.purpose)
                 .expect("No matching special purpose argument.");
             // Get the corresponding entry block value and add it to the return instruction's
             // arguments.
-            let val = dfg.ebb_args(pos.layout.entry_block().unwrap())[idx];
-            debug_assert_eq!(dfg.value_type(val), arg.value_type);
-            vlist.push(val, &mut dfg.value_lists);
+            let val = pos.func.dfg.ebb_args(
+                pos.func.layout.entry_block().unwrap(),
+            )
+                [idx];
+            debug_assert_eq!(pos.func.dfg.value_type(val), arg.value_type);
+            vlist.push(val, &mut pos.func.dfg.value_lists);
         }
-        dfg[inst].put_value_list(vlist);
+        pos.func.dfg[inst].put_value_list(vlist);
     }
 
     debug_assert!(
-        check_return_signature(dfg, inst, sig),
+        check_return_signature(&pos.func.dfg, inst, &pos.func.signature),
         "Signature still wrong: {} / signature {}",
-        dfg.display_inst(inst, None),
-        sig
+        pos.func.dfg.display_inst(inst, None),
+        pos.func.signature
     );
 
     // Yes, we changed stuff.
@@ -629,49 +627,50 @@ fn spill_entry_arguments(func: &mut Function, entry: Ebb) {
 /// TODO: The outgoing stack slots can be written a bit earlier, as long as there are no branches
 /// or calls between writing the stack slots and the call instruction. Writing the slots earlier
 /// could help reduce register pressure before the call.
-fn spill_call_arguments(
-    dfg: &mut DataFlowGraph,
-    locations: &mut ValueLocations,
-    stack_slots: &mut StackSlots,
-    pos: &mut Cursor,
-) -> bool {
+fn spill_call_arguments(pos: &mut FuncCursor) -> bool {
     let inst = pos.current_inst().expect(
         "Cursor must point to a call instruction",
     );
-    let sig_ref = dfg.call_signature(inst).expect(
+    let sig_ref = pos.func.dfg.call_signature(inst).expect(
         "Call instruction expected.",
     );
 
     // Start by building a list of stack slots and arguments to be replaced.
-    // This requires borrowing `dfg`, so we can't change anything.
-    let arglist = dfg.inst_variable_args(inst)
-        .iter()
-        .zip(&dfg.signatures[sig_ref].argument_types)
-        .enumerate()
-        .filter_map(|(idx, (&arg, abi))| {
-            match abi.location {
-                ArgumentLoc::Stack(offset) => {
-                    // Is `arg` already in the right kind of stack slot?
-                    match locations.get(arg) {
-                        Some(&ValueLoc::Stack(ss)) => {
-                            // We won't reassign `arg` to a different stack slot. Assert out of
-                            // the stack slot is wrong.
-                            assert_eq!(stack_slots[ss].kind, StackSlotKind::OutgoingArg);
-                            assert_eq!(stack_slots[ss].offset, offset);
-                            assert_eq!(stack_slots[ss].size, abi.value_type.bytes());
-                            None
-                        }
-                        _ => {
-                            // Assign `arg` to a new stack slot.
-                            let ss = stack_slots.get_outgoing_arg(abi.value_type, offset);
-                            Some((idx, arg, ss))
+    // This requires borrowing `pos.func.dfg`, so we can't change anything.
+    let arglist = {
+        let locations = &pos.func.locations;
+        let stack_slots = &mut pos.func.stack_slots;
+        pos.func
+            .dfg
+            .inst_variable_args(inst)
+            .iter()
+            .zip(&pos.func.dfg.signatures[sig_ref].argument_types)
+            .enumerate()
+            .filter_map(|(idx, (&arg, abi))| {
+                match abi.location {
+                    ArgumentLoc::Stack(offset) => {
+                        // Is `arg` already in the right kind of stack slot?
+                        match locations.get(arg) {
+                            Some(&ValueLoc::Stack(ss)) => {
+                                // We won't reassign `arg` to a different stack slot. Assert out of
+                                // the stack slot is wrong.
+                                assert_eq!(stack_slots[ss].kind, StackSlotKind::OutgoingArg);
+                                assert_eq!(stack_slots[ss].offset, offset);
+                                assert_eq!(stack_slots[ss].size, abi.value_type.bytes());
+                                None
+                            }
+                            _ => {
+                                // Assign `arg` to a new stack slot.
+                                let ss = stack_slots.get_outgoing_arg(abi.value_type, offset);
+                                Some((idx, arg, ss))
+                            }
                         }
                     }
+                    _ => None,
                 }
-                _ => None,
-            }
-        })
-        .collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>()
+    };
 
     if arglist.is_empty() {
         return false;
@@ -679,9 +678,9 @@ fn spill_call_arguments(
 
     // Insert the spill instructions and rewrite call arguments.
     for (idx, arg, ss) in arglist {
-        let stack_val = dfg.ins(pos).spill(arg);
-        locations[stack_val] = ValueLoc::Stack(ss);
-        dfg.inst_variable_args_mut(inst)[idx] = stack_val;
+        let stack_val = pos.ins().spill(arg);
+        pos.func.locations[stack_val] = ValueLoc::Stack(ss);
+        pos.func.dfg.inst_variable_args_mut(inst)[idx] = stack_val;
     }
 
     // We changed stuff.
