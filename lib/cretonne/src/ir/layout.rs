@@ -709,6 +709,15 @@ pub trait CursorBase {
     /// Borrow a mutable reference to the function layout that this cursor is navigating.
     fn layout_mut(&mut self) -> &mut Layout;
 
+    /// Rebuild this cursor positioned at `pos`.
+    fn at_position(mut self, pos: CursorPosition) -> Self
+    where
+        Self: Sized,
+    {
+        self.set_position(pos);
+        self
+    }
+
     /// Rebuild this cursor positioned at `inst`.
     ///
     /// This is intended to be used as a builder method:
