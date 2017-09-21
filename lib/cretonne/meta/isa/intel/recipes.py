@@ -8,10 +8,10 @@ from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare
 from base.formats import RegMove, Ternary, Jump, Branch, FuncAddr
-from .registers import GPR, ABCD, FPR
+from .registers import GPR, ABCD, FPR, GPR8, FPR8
 
 try:
-    from typing import Tuple, Dict  # noqa
+    from typing import Tuple, Dict, Sequence  # noqa
     from cdsl.instructions import InstructionFormat  # noqa
     from cdsl.isa import ConstraintSeq, BranchRange, PredNode, OperandConstraint  # noqa
 except ImportError:
@@ -95,6 +95,15 @@ def replace_put_op(emit, prefix):
         return emit.replace('PUT_OP', 'put_' + prefix.lower())
 
 
+def map_regs(
+        regs,  # type: Sequence[OperandConstraint]
+        from_class,  # type: OperandConstraint
+        to_class  # type: OperandConstraint
+):
+    # type: (...) -> Sequence[OperandConstraint]
+    return tuple(to_class if (reg is from_class) else reg for reg in regs)
+
+
 class TailRecipe:
     """
     Generate encoding recipes on demand.
@@ -150,7 +159,7 @@ class TailRecipe:
         w = kwargs.get('w', 0)
         name, bits = decode_ops(ops, rrr, w)
         if name not in self.recipes:
-            self.recipes[name] = EncRecipe(
+            recipe = EncRecipe(
                 name + self.name,
                 self.format,
                 len(ops) + self.size,
@@ -160,6 +169,13 @@ class TailRecipe:
                 instp=self.instp,
                 isap=self.isap,
                 emit=replace_put_op(self.emit, name))
+
+            recipe.ins = map_regs(recipe.ins, GPR, GPR8)
+            recipe.ins = map_regs(recipe.ins, FPR, FPR8)
+            recipe.outs = map_regs(recipe.outs, GPR, GPR8)
+            recipe.outs = map_regs(recipe.outs, FPR, FPR8)
+
+            self.recipes[name] = recipe
         return (self.recipes[name], bits)
 
     def rex(self, *ops, **kwargs):

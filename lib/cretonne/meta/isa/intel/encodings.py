@@ -91,6 +91,12 @@ def enc_flt(inst, recipe, *args, **kwargs):
     I64.enc(inst, *recipe(*args, **kwargs))
 
 
+def enc_i64(inst, recipe, *args, **kwargs):
+    # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
+    I64.enc(inst, *recipe.rex(*args, **kwargs))
+    I64.enc(inst, *recipe(*args, **kwargs))
+
+
 for inst,           opc in [
         (base.iadd, 0x01),
         (base.isub, 0x29),
@@ -175,9 +181,9 @@ enc_i32_i64_ld_st(base.store, True, r.st, 0x89)
 enc_i32_i64_ld_st(base.store, True, r.stDisp8, 0x89)
 enc_i32_i64_ld_st(base.store, True, r.stDisp32, 0x89)
 
-I64.enc(base.istore32.i64.any, *r.st.rex(0x89))
-I64.enc(base.istore32.i64.any, *r.stDisp8.rex(0x89))
-I64.enc(base.istore32.i64.any, *r.stDisp32.rex(0x89))
+enc_i64(base.istore32.i64.any, r.st, 0x89)
+enc_i64(base.istore32.i64.any, r.stDisp8, 0x89)
+enc_i64(base.istore32.i64.any, r.stDisp32, 0x89)
 
 enc_i32_i64_ld_st(base.istore16, False, r.st, 0x66, 0x89)
 enc_i32_i64_ld_st(base.istore16, False, r.stDisp8, 0x66, 0x89)
@@ -187,21 +193,24 @@ enc_i32_i64_ld_st(base.istore16, False, r.stDisp32, 0x66, 0x89)
 # depends of the presence of a REX prefix
 I32.enc(base.istore8.i32.any, *r.st_abcd(0x88))
 I64.enc(base.istore8.i32.any, *r.st_abcd(0x88))
+I64.enc(base.istore8.i64.any, *r.st_abcd(0x88))
 I64.enc(base.istore8.i64.any, *r.st.rex(0x88))
 I32.enc(base.istore8.i32.any, *r.stDisp8_abcd(0x88))
 I64.enc(base.istore8.i32.any, *r.stDisp8_abcd(0x88))
+I64.enc(base.istore8.i64.any, *r.stDisp8_abcd(0x88))
 I64.enc(base.istore8.i64.any, *r.stDisp8.rex(0x88))
 I32.enc(base.istore8.i32.any, *r.stDisp32_abcd(0x88))
 I64.enc(base.istore8.i32.any, *r.stDisp32_abcd(0x88))
+I64.enc(base.istore8.i64.any, *r.stDisp32_abcd(0x88))
 I64.enc(base.istore8.i64.any, *r.stDisp32.rex(0x88))
 
 enc_i32_i64_ld_st(base.load, True, r.ld, 0x8b)
 enc_i32_i64_ld_st(base.load, True, r.ldDisp8, 0x8b)
 enc_i32_i64_ld_st(base.load, True, r.ldDisp32, 0x8b)
 
-I64.enc(base.uload32.i64, *r.ld.rex(0x8b))
-I64.enc(base.uload32.i64, *r.ldDisp8.rex(0x8b))
-I64.enc(base.uload32.i64, *r.ldDisp32.rex(0x8b))
+enc_i64(base.uload32.i64, r.ld, 0x8b)
+enc_i64(base.uload32.i64, r.ldDisp8, 0x8b)
+enc_i64(base.uload32.i64, r.ldDisp32, 0x8b)
 
 I64.enc(base.sload32.i64, *r.ld.rex(0x63, w=1))
 I64.enc(base.sload32.i64, *r.ldDisp8.rex(0x63, w=1))
@@ -301,7 +310,7 @@ enc_i32_i64(base.icmp, r.icscc, 0x39)
 # This assumes that b1 is represented as an 8-bit low register with the value 0
 # or 1.
 I32.enc(base.bint.i32.b1, *r.urm_abcd(0x0f, 0xb6))
-I64.enc(base.bint.i64.b1, *r.urm.rex(0x0f, 0xb6, w=1))
+I64.enc(base.bint.i64.b1, *r.urm.rex(0x0f, 0xb6))   # zext to i64 implicit.
 I64.enc(base.bint.i64.b1, *r.urm_abcd(0x0f, 0xb6))  # zext to i64 implicit.
 I64.enc(base.bint.i32.b1, *r.urm.rex(0x0f, 0xb6))
 I64.enc(base.bint.i32.b1, *r.urm_abcd(0x0f, 0xb6))
