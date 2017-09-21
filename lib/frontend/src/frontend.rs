@@ -271,12 +271,7 @@ where
     /// created. Forgetting to call this method on every block will cause inconsistences in the
     /// produced functions.
     pub fn seal_block(&mut self, ebb: Ebb) {
-        let side_effects = self.builder.ssa.seal_ebb_header_block(
-            ebb,
-            &mut self.func.dfg,
-            &mut self.func.layout,
-            &mut self.func.jump_tables,
-        );
+        let side_effects = self.builder.ssa.seal_ebb_header_block(ebb, self.func);
         self.handle_ssa_side_effects(side_effects);
     }
 
@@ -292,9 +287,7 @@ where
             "this variable is used but its type has not been declared",
         );
         let (val, side_effects) = self.builder.ssa.use_var(
-            &mut self.func.dfg,
-            &mut self.func.layout,
-            &mut self.func.jump_tables,
+            self.func,
             var,
             ty,
             self.position.basic_block,

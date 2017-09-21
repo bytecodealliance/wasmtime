@@ -223,7 +223,8 @@ impl LoopAnalysis {
 #[cfg(test)]
 mod test {
 
-    use ir::{Function, InstBuilder, Cursor, CursorBase, types};
+    use cursor::{Cursor, FuncCursor};
+    use ir::{Function, InstBuilder, types};
     use loop_analysis::{Loop, LoopAnalysis};
     use flowgraph::ControlFlowGraph;
     use dominator_tree::DominatorTree;
@@ -238,21 +239,20 @@ mod test {
         let cond = func.dfg.append_ebb_arg(ebb0, types::I32);
 
         {
-            let dfg = &mut func.dfg;
-            let cur = &mut Cursor::new(&mut func.layout);
+            let mut cur = FuncCursor::new(&mut func);
 
             cur.insert_ebb(ebb0);
-            dfg.ins(cur).jump(ebb1, &[]);
+            cur.ins().jump(ebb1, &[]);
 
             cur.insert_ebb(ebb1);
-            dfg.ins(cur).jump(ebb2, &[]);
+            cur.ins().jump(ebb2, &[]);
 
             cur.insert_ebb(ebb2);
-            dfg.ins(cur).brnz(cond, ebb1, &[]);
-            dfg.ins(cur).jump(ebb3, &[]);
+            cur.ins().brnz(cond, ebb1, &[]);
+            cur.ins().jump(ebb3, &[]);
 
             cur.insert_ebb(ebb3);
-            dfg.ins(cur).brnz(cond, ebb0, &[]);
+            cur.ins().brnz(cond, ebb0, &[]);
 
         }
 
@@ -291,29 +291,28 @@ mod test {
         let cond = func.dfg.append_ebb_arg(ebb0, types::I32);
 
         {
-            let dfg = &mut func.dfg;
-            let cur = &mut Cursor::new(&mut func.layout);
+            let mut cur = FuncCursor::new(&mut func);
 
             cur.insert_ebb(ebb0);
-            dfg.ins(cur).brnz(cond, ebb1, &[]);
-            dfg.ins(cur).jump(ebb3, &[]);
+            cur.ins().brnz(cond, ebb1, &[]);
+            cur.ins().jump(ebb3, &[]);
 
             cur.insert_ebb(ebb1);
-            dfg.ins(cur).jump(ebb2, &[]);
+            cur.ins().jump(ebb2, &[]);
 
             cur.insert_ebb(ebb2);
-            dfg.ins(cur).brnz(cond, ebb1, &[]);
-            dfg.ins(cur).jump(ebb5, &[]);
+            cur.ins().brnz(cond, ebb1, &[]);
+            cur.ins().jump(ebb5, &[]);
 
             cur.insert_ebb(ebb3);
-            dfg.ins(cur).jump(ebb4, &[]);
+            cur.ins().jump(ebb4, &[]);
 
             cur.insert_ebb(ebb4);
-            dfg.ins(cur).brnz(cond, ebb3, &[]);
-            dfg.ins(cur).jump(ebb5, &[]);
+            cur.ins().brnz(cond, ebb3, &[]);
+            cur.ins().jump(ebb5, &[]);
 
             cur.insert_ebb(ebb5);
-            dfg.ins(cur).brnz(cond, ebb0, &[]);
+            cur.ins().brnz(cond, ebb0, &[]);
 
         }
 

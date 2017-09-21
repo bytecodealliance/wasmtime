@@ -5,8 +5,8 @@
 //! In: Jhala R., De Bosschere K. (eds) Compiler Construction. CC 2013.
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
-use cretonne::ir::{Ebb, Value, Inst, Type, DataFlowGraph, JumpTables, Layout, Cursor, CursorBase,
-                   InstBuilder};
+use cretonne::cursor::{Cursor, FuncCursor};
+use cretonne::ir::{Ebb, Value, Inst, Type, Function, InstBuilder};
 use cretonne::ir::instructions::BranchInfo;
 use cretonne::entity::{EntityRef, PrimaryMap, EntityMap};
 use cretonne::packed_option::PackedOption;
@@ -217,9 +217,7 @@ where
     /// responsible for making sure that you initialize your variables.
     pub fn use_var(
         &mut self,
-        dfg: &mut DataFlowGraph,
-        layout: &mut Layout,
-        jts: &mut JumpTables,
+        func: &mut Function,
         var: Variable,
         ty: Type,
         block: Block,
@@ -232,16 +230,14 @@ where
         }
 
         // Otherwise, we have to do a non-local lookup.
-        self.use_var_nonlocal(dfg, layout, jts, var, ty, block)
+        self.use_var_nonlocal(func, var, ty, block)
     }
 
     // The non-local case of use_var. Query each predecessor for a value and add branch
     // arguments as needed to satisfy the use.
     fn use_var_nonlocal(
         &mut self,
-        dfg: &mut DataFlowGraph,
-        layout: &mut Layout,
-        jts: &mut JumpTables,
+        func: &mut Function,
         var: Variable,
         ty: Type,
         block: Block,
@@ -255,11 +251,11 @@ where
                         // Only one predecessor, straightforward case
                         UseVarCases::SealedOnePredecessor(data.predecessors[0].0)
                     } else {
-                        let val = dfg.append_ebb_arg(data.ebb, ty);
+                        let val = func.dfg.append_ebb_arg(data.ebb, ty);
                         UseVarCases::SealedMultiplePredecessors(val, data.ebb)
                     }
                 } else {
-                    let val = dfg.append_ebb_arg(data.ebb, ty);
+                    let val = func.dfg.append_ebb_arg(data.ebb, ty);
                     data.undef_variables.push((var, val));
                     UseVarCases::Unsealed(val)
                 }
@@ -271,7 +267,7 @@ where
             // The block has a single predecessor or multiple predecessor with
             // the same value, we look into it.
             UseVarCases::SealedOnePredecessor(pred) => {
-                let (val, mids) = self.use_var(dfg, layout, jts, var, ty, pred);
+                let (val, mids) = self.use_var(func, var, ty, pred);
                 self.def_var(var, val, block);
                 (val, mids)
             }
@@ -285,7 +281,7 @@ where
                 // If multiple predecessor we look up a use_var in each of them:
                 // if they all yield the same value no need for an Ebb argument
                 self.def_var(var, val, block);
-                self.predecessors_lookup(dfg, layout, jts, val, var, ebb)
+                self.predecessors_lookup(func, val, var, ebb)
             }
         }
     }
@@ -354,13 +350,7 @@ where
     /// take into account the Phi function placed by the SSA algorithm.
     ///
     /// Returns the list of newly created ebbs for critical edge splitting.
-    pub fn seal_ebb_header_block(
-        &mut self,
-        ebb: Ebb,
-        dfg: &mut DataFlowGraph,
-        layout: &mut Layout,
-        jts: &mut JumpTables,
-    ) -> SideEffects {
+    pub fn seal_ebb_header_block(&mut self, ebb: Ebb, func: &mut Function) -> SideEffects {
         let block = self.header_block(ebb);
 
         let (undef_vars, ebb): (Vec<(Variable, Value)>, Ebb) = match self.blocks[block] {
@@ -378,7 +368,7 @@ where
         // For each undef var we look up values in the predecessors and create an Ebb argument
         // only if necessary.
         for (var, val) in undef_vars {
-            let (_, local_side_effects) = self.predecessors_lookup(dfg, layout, jts, val, var, ebb);
+            let (_, local_side_effects) = self.predecessors_lookup(func, val, var, ebb);
             side_effects.append(local_side_effects);
         }
 
@@ -399,15 +389,13 @@ where
     /// list of Ebb that are the middle of newly created critical edges splits.
     fn predecessors_lookup(
         &mut self,
-        dfg: &mut DataFlowGraph,
-        layout: &mut Layout,
-        jts: &mut JumpTables,
+        func: &mut Function,
         temp_arg_val: Value,
         temp_arg_var: Variable,
         dest_ebb: Ebb,
     ) -> (Value, SideEffects) {
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
-        let ty = dfg.value_type(temp_arg_val);
+        let ty = func.dfg.value_type(temp_arg_val);
         let mut side_effects = SideEffects::new();
 
         // Iterate over the predecessors. To avoid borrowing `self` for the whole loop,
@@ -417,8 +405,7 @@ where
         for &(pred, _) in &preds {
             // For each predecessor, we query what is the local SSA value corresponding
             // to var and we put it as an argument of the branch instruction.
-            let (pred_val, local_side_effects) =
-                self.use_var(dfg, layout, jts, temp_arg_var, ty, pred);
+            let (pred_val, local_side_effects) = self.use_var(func, temp_arg_var, ty, pred);
             match pred_values {
                 ZeroOneOrMore::Zero() => {
                     if pred_val != temp_arg_val {
@@ -441,17 +428,17 @@ where
                 // The variable is used but never defined before. This is an irregularity in the
                 // code, but rather than throwing an error we silently initialize the variable to
                 // 0. This will have no effect since this situation happens in unreachable code.
-                if !layout.is_ebb_inserted(dest_ebb) {
-                    layout.append_ebb(dest_ebb)
+                if !func.layout.is_ebb_inserted(dest_ebb) {
+                    func.layout.append_ebb(dest_ebb)
                 };
-                let mut cur = Cursor::new(layout).at_first_insertion_point(dest_ebb);
-                let ty = dfg.value_type(temp_arg_val);
+                let ty = func.dfg.value_type(temp_arg_val);
+                let mut cur = FuncCursor::new(func).at_first_insertion_point(dest_ebb);
                 let val = if ty.is_int() {
-                    dfg.ins(&mut cur).iconst(ty, 0)
+                    cur.ins().iconst(ty, 0)
                 } else if ty == F32 {
-                    dfg.ins(&mut cur).f32const(Ieee32::with_bits(0))
+                    cur.ins().f32const(Ieee32::with_bits(0))
                 } else if ty == F64 {
-                    dfg.ins(&mut cur).f64const(Ieee64::with_bits(0))
+                    cur.ins().f64const(Ieee64::with_bits(0))
                 } else {
                     panic!("value used but never declared and initialization not supported")
                 };
@@ -463,8 +450,8 @@ where
                 // so we don't need to have it as an ebb argument.
                 // We need to replace all the occurences of val with pred_val but since
                 // we can't afford a re-writing pass right now we just declare an alias.
-                dfg.remove_ebb_arg(temp_arg_val);
-                dfg.change_to_alias(temp_arg_val, pred_val);
+                func.dfg.remove_ebb_arg(temp_arg_val);
+                func.dfg.change_to_alias(temp_arg_val, pred_val);
                 pred_val
             }
             ZeroOneOrMore::More() => {
@@ -480,14 +467,12 @@ where
                         .unwrap();
                     if let Some((middle_ebb, middle_block, middle_jump_inst)) =
                         self.append_jump_argument(
-                            dfg,
-                            layout,
+                            func,
                             *last_inst,
                             *pred_block,
                             dest_ebb,
                             pred_val,
                             temp_arg_var,
-                            jts,
                         )
                     {
                         *pred_block = middle_block;
@@ -511,41 +496,39 @@ where
     /// critical edge splitting.
     fn append_jump_argument(
         &mut self,
-        dfg: &mut DataFlowGraph,
-        layout: &mut Layout,
+        func: &mut Function,
         jump_inst: Inst,
         jump_inst_block: Block,
         dest_ebb: Ebb,
         val: Value,
         var: Variable,
-        jts: &mut JumpTables,
     ) -> Option<(Ebb, Block, Inst)> {
-        match dfg[jump_inst].analyze_branch(&dfg.value_lists) {
+        match func.dfg[jump_inst].analyze_branch(&func.dfg.value_lists) {
             BranchInfo::NotABranch => {
                 panic!("you have declared a non-branch instruction as a predecessor to an ebb");
             }
             // For a single destination appending a jump argument to the instruction
             // is sufficient.
             BranchInfo::SingleDest(_, _) => {
-                dfg.append_inst_arg(jump_inst, val);
+                func.dfg.append_inst_arg(jump_inst, val);
                 None
             }
             BranchInfo::Table(jt) => {
                 // In the case of a jump table, the situation is tricky because br_table doesn't
                 // support arguments.
                 // We have to split the critical edge
-                let middle_ebb = dfg.make_ebb();
-                layout.append_ebb(middle_ebb);
+                let middle_ebb = func.dfg.make_ebb();
+                func.layout.append_ebb(middle_ebb);
                 let block = self.declare_ebb_header_block(middle_ebb);
                 self.blocks[block].add_predecessor(jump_inst_block, jump_inst);
-                self.seal_ebb_header_block(middle_ebb, dfg, layout, jts);
-                for old_dest in jts[jt].as_mut_slice() {
+                self.seal_ebb_header_block(middle_ebb, func);
+                for old_dest in func.jump_tables[jt].as_mut_slice() {
                     if old_dest.unwrap() == dest_ebb {
                         *old_dest = PackedOption::from(middle_ebb);
                     }
                 }
-                let mut cur = Cursor::new(layout).at_bottom(middle_ebb);
-                let middle_jump_inst = dfg.ins(&mut cur).jump(dest_ebb, &[val]);
+                let mut cur = FuncCursor::new(func).at_bottom(middle_ebb);
+                let middle_jump_inst = cur.ins().jump(dest_ebb, &[val]);
                 self.def_var(var, val, block);
                 Some((middle_ebb, block, middle_jump_inst))
             }
@@ -581,8 +564,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use cretonne::cursor::{Cursor, FuncCursor};
     use cretonne::entity::EntityRef;
-    use cretonne::ir::{Function, InstBuilder, Cursor, CursorBase, Inst, JumpTableData};
+    use cretonne::ir::{Function, InstBuilder, Inst, JumpTableData};
     use cretonne::ir::types::*;
     use cretonne::verify_function;
     use cretonne::ir::instructions::BranchInfo;
@@ -623,105 +607,37 @@ mod tests {
         let block = ssa.declare_ebb_header_block(ebb0);
         let x_var = Variable(0);
         let x_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout);
+            let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
-            func.dfg.ins(cur).iconst(I32, 1)
+            cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x_ssa, block);
         let y_var = Variable(1);
         let y_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).iconst(I32, 2)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().iconst(I32, 2)
         };
         ssa.def_var(y_var, y_ssa, block);
 
-        assert_eq!(
-            ssa.use_var(
-                &mut func.dfg,
-                &mut func.layout,
-                &mut func.jump_tables,
-                x_var,
-                I32,
-                block,
-            ).0,
-            x_ssa
-        );
-        assert_eq!(
-            ssa.use_var(
-                &mut func.dfg,
-                &mut func.layout,
-                &mut func.jump_tables,
-                y_var,
-                I32,
-                block,
-            ).0,
-            y_ssa
-        );
+        assert_eq!(ssa.use_var(&mut func, x_var, I32, block).0, x_ssa);
+        assert_eq!(ssa.use_var(&mut func, y_var, I32, block).0, y_ssa);
         let z_var = Variable(2);
-        let x_use1 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            x_var,
-            I32,
-            block,
-        ).0;
-        let y_use1 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            y_var,
-            I32,
-            block,
-        ).0;
+        let x_use1 = ssa.use_var(&mut func, x_var, I32, block).0;
+        let y_use1 = ssa.use_var(&mut func, y_var, I32, block).0;
         let z1_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).iadd(x_use1, y_use1)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().iadd(x_use1, y_use1)
         };
         ssa.def_var(z_var, z1_ssa, block);
-        assert_eq!(
-            ssa.use_var(
-                &mut func.dfg,
-                &mut func.layout,
-                &mut func.jump_tables,
-                z_var,
-                I32,
-                block,
-            ).0,
-            z1_ssa
-        );
-        let x_use2 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            x_var,
-            I32,
-            block,
-        ).0;
-        let z_use1 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            z_var,
-            I32,
-            block,
-        ).0;
+        assert_eq!(ssa.use_var(&mut func, z_var, I32, block).0, z1_ssa);
+        let x_use2 = ssa.use_var(&mut func, x_var, I32, block).0;
+        let z_use1 = ssa.use_var(&mut func, z_var, I32, block).0;
         let z2_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).iadd(x_use2, z_use1)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().iadd(x_use2, z_use1)
         };
         ssa.def_var(z_var, z2_ssa, block);
-        assert_eq!(
-            ssa.use_var(
-                &mut func.dfg,
-                &mut func.layout,
-                &mut func.jump_tables,
-                z_var,
-                I32,
-                block,
-            ).0,
-            z2_ssa
-        );
+        assert_eq!(ssa.use_var(&mut func, z_var, I32, block).0, z2_ssa);
     }
 
     #[test]
@@ -743,146 +659,57 @@ mod tests {
         let block0 = ssa.declare_ebb_header_block(ebb0);
         let x_var = Variable(0);
         let x_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout);
+            let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
             cur.insert_ebb(ebb1);
             cur.goto_bottom(ebb0);
-            func.dfg.ins(cur).iconst(I32, 1)
+            cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x_ssa, block0);
         let y_var = Variable(1);
         let y_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).iconst(I32, 2)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().iconst(I32, 2)
         };
         ssa.def_var(y_var, y_ssa, block0);
-        assert_eq!(
-            ssa.use_var(
-                &mut func.dfg,
-                &mut func.layout,
-                &mut func.jump_tables,
-                x_var,
-                I32,
-                block0,
-            ).0,
-            x_ssa
-        );
-        assert_eq!(
-            ssa.use_var(
-                &mut func.dfg,
-                &mut func.layout,
-                &mut func.jump_tables,
-                y_var,
-                I32,
-                block0,
-            ).0,
-            y_ssa
-        );
+        assert_eq!(ssa.use_var(&mut func, x_var, I32, block0).0, x_ssa);
+        assert_eq!(ssa.use_var(&mut func, y_var, I32, block0).0, y_ssa);
         let z_var = Variable(2);
-        let x_use1 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            x_var,
-            I32,
-            block0,
-        ).0;
-        let y_use1 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            y_var,
-            I32,
-            block0,
-        ).0;
+        let x_use1 = ssa.use_var(&mut func, x_var, I32, block0).0;
+        let y_use1 = ssa.use_var(&mut func, y_var, I32, block0).0;
         let z1_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).iadd(x_use1, y_use1)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().iadd(x_use1, y_use1)
         };
         ssa.def_var(z_var, z1_ssa, block0);
-        assert_eq!(
-            ssa.use_var(
-                &mut func.dfg,
-                &mut func.layout,
-                &mut func.jump_tables,
-                z_var,
-                I32,
-                block0,
-            ).0,
-            z1_ssa
-        );
-        let y_use2 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            y_var,
-            I32,
-            block0,
-        ).0;
+        assert_eq!(ssa.use_var(&mut func, z_var, I32, block0).0, z1_ssa);
+        let y_use2 = ssa.use_var(&mut func, y_var, I32, block0).0;
         let jump_inst: Inst = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).brnz(y_use2, ebb1, &[])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().brnz(y_use2, ebb1, &[])
         };
         let block1 = ssa.declare_ebb_body_block(block0);
-        let x_use2 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            x_var,
-            I32,
-            block1,
-        ).0;
+        let x_use2 = ssa.use_var(&mut func, x_var, I32, block1).0;
         assert_eq!(x_use2, x_ssa);
-        let z_use1 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            z_var,
-            I32,
-            block1,
-        ).0;
+        let z_use1 = ssa.use_var(&mut func, z_var, I32, block1).0;
         assert_eq!(z_use1, z1_ssa);
         let z2_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).iadd(x_use2, z_use1)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().iadd(x_use2, z_use1)
         };
         ssa.def_var(z_var, z2_ssa, block1);
-        assert_eq!(
-            ssa.use_var(
-                &mut func.dfg,
-                &mut func.layout,
-                &mut func.jump_tables,
-                z_var,
-                I32,
-                block1,
-            ).0,
-            z2_ssa
-        );
-        ssa.seal_ebb_header_block(ebb0, &mut func.dfg, &mut func.layout, &mut func.jump_tables);
+        assert_eq!(ssa.use_var(&mut func, z_var, I32, block1).0, z2_ssa);
+        ssa.seal_ebb_header_block(ebb0, &mut func);
         let block2 = ssa.declare_ebb_header_block(ebb1);
         ssa.declare_ebb_predecessor(ebb1, block0, jump_inst);
-        ssa.seal_ebb_header_block(ebb1, &mut func.dfg, &mut func.layout, &mut func.jump_tables);
-        let x_use3 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            x_var,
-            I32,
-            block2,
-        ).0;
+        ssa.seal_ebb_header_block(ebb1, &mut func);
+        let x_use3 = ssa.use_var(&mut func, x_var, I32, block2).0;
         assert_eq!(x_ssa, x_use3);
-        let y_use3 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            y_var,
-            I32,
-            block2,
-        ).0;
+        let y_use3 = ssa.use_var(&mut func, y_var, I32, block2).0;
         assert_eq!(y_ssa, y_use3);
         let y2_ssa = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
-            func.dfg.ins(cur).iadd(x_use3, y_use3)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().iadd(x_use3, y_use3)
         };
         ssa.def_var(y_var, y2_ssa, block2);
         match func.dfg[jump_inst].analyze_branch(&func.dfg.value_lists) {
@@ -917,179 +744,89 @@ mod tests {
         //    jump ebb1
 
         let block0 = ssa.declare_ebb_header_block(ebb0);
-        ssa.seal_ebb_header_block(ebb0, &mut func.dfg, &mut func.layout, &mut func.jump_tables);
+        ssa.seal_ebb_header_block(ebb0, &mut func);
         let x_var = Variable(0);
         let x1 = {
-            let cur = &mut Cursor::new(&mut func.layout);
+            let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
             cur.insert_ebb(ebb1);
             cur.insert_ebb(ebb2);
             cur.goto_bottom(ebb0);
-            func.dfg.ins(cur).iconst(I32, 1)
+            cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x1, block0);
-        assert_eq!(
-            ssa.use_var(
-                &mut func.dfg,
-                &mut func.layout,
-                &mut func.jump_tables,
-                x_var,
-                I32,
-                block0,
-            ).0,
-            x1
-        );
+        assert_eq!(ssa.use_var(&mut func, x_var, I32, block0).0, x1);
         let y_var = Variable(1);
         let y1 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).iconst(I32, 2)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().iconst(I32, 2)
         };
         ssa.def_var(y_var, y1, block0);
-        assert_eq!(
-            ssa.use_var(
-                &mut func.dfg,
-                &mut func.layout,
-                &mut func.jump_tables,
-                y_var,
-                I32,
-                block0,
-            ).0,
-            y1
-        );
+        assert_eq!(ssa.use_var(&mut func, y_var, I32, block0).0, y1);
         let z_var = Variable(2);
-        let x2 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            x_var,
-            I32,
-            block0,
-        ).0;
+        let x2 = ssa.use_var(&mut func, x_var, I32, block0).0;
         assert_eq!(x2, x1);
-        let y2 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            y_var,
-            I32,
-            block0,
-        ).0;
+        let y2 = ssa.use_var(&mut func, y_var, I32, block0).0;
         assert_eq!(y2, y1);
         let z1 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).iadd(x2, y2)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().iadd(x2, y2)
         };
         ssa.def_var(z_var, z1, block0);
         let jump_ebb0_ebb1 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).jump(ebb1, &[])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().jump(ebb1, &[])
         };
         let block1 = ssa.declare_ebb_header_block(ebb1);
         ssa.declare_ebb_predecessor(ebb1, block0, jump_ebb0_ebb1);
-        let z2 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            z_var,
-            I32,
-            block1,
-        ).0;
-        let y3 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            y_var,
-            I32,
-            block1,
-        ).0;
+        let z2 = ssa.use_var(&mut func, z_var, I32, block1).0;
+        let y3 = ssa.use_var(&mut func, y_var, I32, block1).0;
         let z3 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
-            func.dfg.ins(cur).iadd(z2, y3)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            cur.ins().iadd(z2, y3)
         };
         ssa.def_var(z_var, z3, block1);
-        let y4 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            y_var,
-            I32,
-            block1,
-        ).0;
+        let y4 = ssa.use_var(&mut func, y_var, I32, block1).0;
         assert_eq!(y4, y3);
         let jump_ebb1_ebb2 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
-            func.dfg.ins(cur).brnz(y4, ebb2, &[])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            cur.ins().brnz(y4, ebb2, &[])
         };
         let block2 = ssa.declare_ebb_body_block(block1);
-        let z4 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            z_var,
-            I32,
-            block2,
-        ).0;
+        let z4 = ssa.use_var(&mut func, z_var, I32, block2).0;
         assert_eq!(z4, z3);
-        let x3 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            x_var,
-            I32,
-            block2,
-        ).0;
+        let x3 = ssa.use_var(&mut func, x_var, I32, block2).0;
         let z5 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
-            func.dfg.ins(cur).isub(z4, x3)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            cur.ins().isub(z4, x3)
         };
         ssa.def_var(z_var, z5, block2);
-        let y5 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            y_var,
-            I32,
-            block2,
-        ).0;
+        let y5 = ssa.use_var(&mut func, y_var, I32, block2).0;
         assert_eq!(y5, y3);
         {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
-            func.dfg.ins(cur).return_(&[y5])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            cur.ins().return_(&[y5])
         };
 
         let block3 = ssa.declare_ebb_header_block(ebb2);
         ssa.declare_ebb_predecessor(ebb2, block1, jump_ebb1_ebb2);
-        ssa.seal_ebb_header_block(ebb2, &mut func.dfg, &mut func.layout, &mut func.jump_tables);
-        let y6 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            y_var,
-            I32,
-            block3,
-        ).0;
+        ssa.seal_ebb_header_block(ebb2, &mut func);
+        let y6 = ssa.use_var(&mut func, y_var, I32, block3).0;
         assert_eq!(y6, y3);
-        let x4 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            x_var,
-            I32,
-            block3,
-        ).0;
+        let x4 = ssa.use_var(&mut func, x_var, I32, block3).0;
         assert_eq!(x4, x3);
         let y7 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb2);
-            func.dfg.ins(cur).isub(y6, x4)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb2);
+            cur.ins().isub(y6, x4)
         };
         ssa.def_var(y_var, y7, block3);
         let jump_ebb2_ebb1 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb2);
-            func.dfg.ins(cur).jump(ebb1, &[])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb2);
+            cur.ins().jump(ebb1, &[])
         };
 
         ssa.declare_ebb_predecessor(ebb1, block3, jump_ebb2_ebb1);
-        ssa.seal_ebb_header_block(ebb1, &mut func.dfg, &mut func.layout, &mut func.jump_tables);
+        ssa.seal_ebb_header_block(ebb1, &mut func);
         assert_eq!(func.dfg.ebb_args(ebb1)[0], z2);
         assert_eq!(func.dfg.ebb_args(ebb1)[1], y3);
         assert_eq!(func.dfg.resolve_aliases(x3), x1);
@@ -1114,60 +851,46 @@ mod tests {
         //    return
         //
         let block0 = ssa.declare_ebb_header_block(ebb0);
-        ssa.seal_ebb_header_block(ebb0, &mut func.dfg, &mut func.layout, &mut func.jump_tables);
+        ssa.seal_ebb_header_block(ebb0, &mut func);
         let x_var = Variable(0);
         let x1 = {
-            let cur = &mut Cursor::new(&mut func.layout);
+            let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
             cur.insert_ebb(ebb1);
             cur.goto_bottom(ebb0);
-            func.dfg.ins(cur).iconst(I32, 1)
+            cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x1, block0);
         let mut data = JumpTableData::new();
         data.push_entry(ebb1);
         let jt = func.create_jump_table(data);
-        ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            x_var,
-            I32,
-            block0,
-        ).0;
+        ssa.use_var(&mut func, x_var, I32, block0).0;
         let br_table = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).br_table(x1, jt)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().br_table(x1, jt)
         };
         let block1 = ssa.declare_ebb_body_block(block0);
         let x3 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).iconst(I32, 2)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().iconst(I32, 2)
         };
         ssa.def_var(x_var, x3, block1);
         let jump_inst = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).jump(ebb1, &[])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().jump(ebb1, &[])
         };
         let block2 = ssa.declare_ebb_header_block(ebb1);
         ssa.declare_ebb_predecessor(ebb1, block1, jump_inst);
         ssa.declare_ebb_predecessor(ebb1, block0, br_table);
-        ssa.seal_ebb_header_block(ebb1, &mut func.dfg, &mut func.layout, &mut func.jump_tables);
-        let x4 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            x_var,
-            I32,
-            block2,
-        ).0;
+        ssa.seal_ebb_header_block(ebb1, &mut func);
+        let x4 = ssa.use_var(&mut func, x_var, I32, block2).0;
         {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
-            func.dfg.ins(cur).iadd_imm(x4, 1)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            cur.ins().iadd_imm(x4, 1)
         };
         {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
-            func.dfg.ins(cur).return_(&[])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            cur.ins().return_(&[])
         };
         let flags = settings::Flags::new(&settings::builder());
         match verify_function(&func, &flags) {
@@ -1197,82 +920,54 @@ mod tests {
         let x_var = Variable(0);
         let y_var = Variable(1);
         let z_var = Variable(2);
-        ssa.seal_ebb_header_block(ebb0, &mut func.dfg, &mut func.layout, &mut func.jump_tables);
+        ssa.seal_ebb_header_block(ebb0, &mut func);
         let x1 = {
-            let cur = &mut Cursor::new(&mut func.layout);
+            let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
             cur.insert_ebb(ebb1);
             cur.goto_bottom(ebb0);
-            func.dfg.ins(cur).iconst(I32, 0)
+            cur.ins().iconst(I32, 0)
         };
         ssa.def_var(x_var, x1, block0);
         let y1 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).iconst(I32, 1)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().iconst(I32, 1)
         };
         ssa.def_var(y_var, y1, block0);
         let z1 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).iconst(I32, 2)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().iconst(I32, 2)
         };
         ssa.def_var(z_var, z1, block0);
         let jump_inst = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb0);
-            func.dfg.ins(cur).jump(ebb1, &[])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            cur.ins().jump(ebb1, &[])
         };
         let block1 = ssa.declare_ebb_header_block(ebb1);
         ssa.declare_ebb_predecessor(ebb1, block0, jump_inst);
-        let z2 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            z_var,
-            I32,
-            block1,
-        ).0;
+        let z2 = ssa.use_var(&mut func, z_var, I32, block1).0;
         assert_eq!(func.dfg.ebb_args(ebb1)[0], z2);
-        let x2 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            x_var,
-            I32,
-            block1,
-        ).0;
+        let x2 = ssa.use_var(&mut func, x_var, I32, block1).0;
         assert_eq!(func.dfg.ebb_args(ebb1)[1], x2);
         let x3 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
-            func.dfg.ins(cur).iadd(x2, z2)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            cur.ins().iadd(x2, z2)
         };
         ssa.def_var(x_var, x3, block1);
-        let x4 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            x_var,
-            I32,
-            block1,
-        ).0;
-        let y3 = ssa.use_var(
-            &mut func.dfg,
-            &mut func.layout,
-            &mut func.jump_tables,
-            y_var,
-            I32,
-            block1,
-        ).0;
+        let x4 = ssa.use_var(&mut func, x_var, I32, block1).0;
+        let y3 = ssa.use_var(&mut func, y_var, I32, block1).0;
         assert_eq!(func.dfg.ebb_args(ebb1)[2], y3);
         let y4 = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
-            func.dfg.ins(cur).isub(y3, x4)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            cur.ins().isub(y3, x4)
         };
         ssa.def_var(y_var, y4, block1);
         let jump_inst = {
-            let cur = &mut Cursor::new(&mut func.layout).at_bottom(ebb1);
-            func.dfg.ins(cur).jump(ebb1, &[])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            cur.ins().jump(ebb1, &[])
         };
         ssa.declare_ebb_predecessor(ebb1, block1, jump_inst);
-        ssa.seal_ebb_header_block(ebb1, &mut func.dfg, &mut func.layout, &mut func.jump_tables);
+        ssa.seal_ebb_header_block(ebb1, &mut func);
         // At sealing the "z" argument disappear but the remaining "x" and "y" args have to be
         // in the right order.
         assert_eq!(func.dfg.ebb_args(ebb1)[1], y3);
