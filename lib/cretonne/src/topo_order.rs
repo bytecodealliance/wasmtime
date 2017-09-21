@@ -80,9 +80,10 @@ impl TopoOrder {
 
 #[cfg(test)]
 mod test {
+    use cursor::{Cursor, FuncCursor};
     use flowgraph::ControlFlowGraph;
     use dominator_tree::DominatorTree;
-    use ir::{Function, InstBuilder, Cursor, CursorBase};
+    use ir::{Function, InstBuilder};
     use std::iter;
     use super::*;
 
@@ -105,13 +106,12 @@ mod test {
         let ebb1 = func.dfg.make_ebb();
 
         {
-            let dfg = &mut func.dfg;
-            let cur = &mut Cursor::new(&mut func.layout);
+            let mut cur = FuncCursor::new(&mut func);
 
             cur.insert_ebb(ebb0);
-            dfg.ins(cur).jump(ebb1, &[]);
+            cur.ins().jump(ebb1, &[]);
             cur.insert_ebb(ebb1);
-            dfg.ins(cur).jump(ebb1, &[]);
+            cur.ins().jump(ebb1, &[]);
         }
 
         let cfg = ControlFlowGraph::with_function(&func);
