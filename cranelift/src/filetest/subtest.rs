@@ -85,14 +85,14 @@ impl<'a> filecheck::VariableMap for Context<'a> {
 /// Run filecheck on `text`, using directives extracted from `context`.
 pub fn run_filecheck(text: &str, context: &Context) -> Result<()> {
     let checker = build_filechecker(context)?;
-    if checker.check(&text, context).map_err(
+    if checker.check(text, context).map_err(
         |e| format!("filecheck: {}", e),
     )?
     {
         Ok(())
     } else {
         // Filecheck mismatch. Emit an explanation as output.
-        let (_, explain) = checker.explain(&text, context).map_err(
+        let (_, explain) = checker.explain(text, context).map_err(
             |e| format!("explain: {}", e),
         )?;
         Err(format!("filecheck failed:\n{}{}", checker, explain))

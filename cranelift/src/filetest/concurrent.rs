@@ -136,7 +136,7 @@ fn worker_thread(
                     }
                 });
 
-                if let &Err(ref msg) = &result {
+                if let Err(ref msg) = result {
                     dbg!("FAIL: {}", msg);
                 }
 
