@@ -138,7 +138,6 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                 None => {
 // branch_destination() doesn't detect jump_tables
 // If jump table we declare all entries successor
-// TODO: not collect with vector?
                     if let InstructionData::BranchTable { table, .. } = data {
 // Unlike all other jumps/branches, jump tables are
 // capable of having the same successor appear
@@ -151,10 +150,13 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                                     .expect("you are referencing an undeclared jump table")
                                     .entries()
                                     .map(|(_, ebb)| ebb)
-                                    .filter(|dest_ebb| unique.insert(*dest_ebb))
-                                    .collect::<Vec<Ebb>>() {
-                                self.builder.declare_successor(dest_ebb, inst)
-                            }
+                                    .filter(|dest_ebb| unique.insert(*dest_ebb)) {
+                            self.builder.builder.ssa.declare_ebb_predecessor(
+                                dest_ebb,
+                                self.builder.position.basic_block,
+                                inst,
+                            )
+                        }
                     }
                 }
             }
