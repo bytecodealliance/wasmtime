@@ -280,7 +280,7 @@ where
                 // If multiple predecessor we look up a use_var in each of them:
                 // if they all yield the same value no need for an Ebb argument
                 self.def_var(var, val, block);
-                self.predecessors_lookup(func, val, var, ebb)
+                self.predecessors_lookup(func, val, var, ty, ebb)
             }
         }
     }
@@ -367,7 +367,8 @@ where
         // For each undef var we look up values in the predecessors and create an Ebb argument
         // only if necessary.
         for (var, val) in undef_vars {
-            let (_, local_side_effects) = self.predecessors_lookup(func, val, var, ebb);
+            let ty = func.dfg.value_type(val);
+            let (_, local_side_effects) = self.predecessors_lookup(func, val, var, ty, ebb);
             side_effects.append(local_side_effects);
         }
         self.mark_ebb_header_block_sealed(block);
@@ -395,10 +396,10 @@ where
         func: &mut Function,
         temp_arg_val: Value,
         temp_arg_var: Variable,
+        ty: Type,
         dest_ebb: Ebb,
     ) -> (Value, SideEffects) {
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
-        let ty = func.dfg.value_type(temp_arg_val);
         let mut side_effects = SideEffects::new();
 
         // Iterate over the predecessors. To avoid borrowing `self` for the whole loop,
