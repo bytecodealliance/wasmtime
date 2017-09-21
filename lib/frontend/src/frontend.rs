@@ -132,7 +132,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                             }
                             _ => panic!("should not happen"),
                         };
-                    self.builder.ebb_args_adjustement(dest_ebb, &args_types);
+                    self.builder.ebb_args_adjustment(dest_ebb, &args_types);
                     self.builder.declare_successor(dest_ebb, inst);
                 }
                 None => {
@@ -263,7 +263,7 @@ where
         let basic_block = self.builder.ssa.header_block(ebb);
         // Then we change the cursor position.
         self.position = Position { ebb, basic_block };
-        self.ebb_args_adjustement(ebb, jump_args);
+        self.ebb_args_adjustment(ebb, jump_args);
         self.func.dfg.ebb_args(ebb)
     }
 
@@ -542,7 +542,7 @@ where
     }
 
 
-    fn ebb_args_adjustement(&mut self, dest_ebb: Ebb, jump_args: &[Type]) {
+    fn ebb_args_adjustment(&mut self, dest_ebb: Ebb, jump_args: &[Type]) {
         if self.builder.ssa.predecessors(dest_ebb).is_empty() ||
             self.builder.ebbs[dest_ebb].pristine
         {
