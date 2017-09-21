@@ -43,6 +43,12 @@ where
     blocks: PrimaryMap<Block, BlockData<Variable>>,
     // Records the basic blocks at the beginning of the `Ebb`s.
     ebb_headers: EntityMap<Ebb, PackedOption<Block>>,
+
+    // Call and result stacks for use in the `use_var`/`predecessors_lookup` state machine.
+    calls: Vec<Call>,
+    results: Vec<Value>,
+    // Side effects accumulated in the `use_var`/`predecessors_lookup` state machine.
+    side_effects: SideEffects,
 }
 
 /// Side effects of a `use_var` or a `seal_ebb_header_block` method call.
@@ -65,11 +71,8 @@ impl SideEffects {
         }
     }
 
-    fn append(&mut self, mut more: SideEffects) {
-        self.split_ebbs_created.append(&mut more.split_ebbs_created);
-        self.instructions_added_to_ebbs.append(
-            &mut more.instructions_added_to_ebbs,
-        );
+    fn is_empty(&self) -> bool {
+        self.split_ebbs_created.is_empty() && self.instructions_added_to_ebbs.is_empty()
     }
 }
 
@@ -149,6 +152,9 @@ where
             variables: EntityMap::with_default(EntityMap::new()),
             blocks: PrimaryMap::new(),
             ebb_headers: EntityMap::new(),
+            calls: Vec::new(),
+            results: Vec::new(),
+            side_effects: SideEffects::new(),
         }
     }
 
@@ -158,6 +164,9 @@ where
         self.variables.clear();
         self.blocks.clear();
         self.ebb_headers.clear();
+        debug_assert!(self.calls.is_empty());
+        debug_assert!(self.results.is_empty());
+        debug_assert!(self.side_effects.is_empty());
     }
 }
 
@@ -174,6 +183,13 @@ enum UseVarCases {
     Unsealed(Value),
     SealedOnePredecessor(Block),
     SealedMultiplePredecessors(Value, Ebb),
+}
+
+// States for the `use_var`/`predecessors_lookup` state machine.
+enum Call {
+    UseVar(Block),
+    FinishSealedOnePredecessor(Block),
+    FinishPredecessorsLookup(Value, Ebb),
 }
 
 /// The following methods are the API of the SSA builder. Here is how it should be used when
@@ -230,18 +246,19 @@ where
         }
 
         // Otherwise, we have to do a non-local lookup.
-        self.use_var_nonlocal(func, var, ty, block)
+        debug_assert!(self.calls.is_empty());
+        debug_assert!(self.results.is_empty());
+        debug_assert!(self.side_effects.is_empty());
+        self.use_var_nonlocal(func, var, ty, block);
+        (
+            self.run_state_machine(func, var, ty),
+            mem::replace(&mut self.side_effects, SideEffects::new()),
+        )
     }
 
-    // The non-local case of use_var. Query each predecessor for a value and add branch
-    // arguments as needed to satisfy the use.
-    fn use_var_nonlocal(
-        &mut self,
-        func: &mut Function,
-        var: Variable,
-        ty: Type,
-        block: Block,
-    ) -> (Value, SideEffects) {
+    /// Resolve a use of `var` in `block` in the case where there's no prior def
+    /// in `block`.
+    fn use_var_nonlocal(&mut self, func: &mut Function, var: Variable, ty: Type, block: Block) {
         let case = match self.blocks[block] {
             BlockData::EbbHeader(ref mut data) => {
                 // The block has multiple predecessors so we append an Ebb argument that
@@ -262,27 +279,32 @@ where
             }
             BlockData::EbbBody { predecessor: pred } => UseVarCases::SealedOnePredecessor(pred),
         };
-        // TODO: avoid recursion for the calls to use_var and predecessors_lookup.
         match case {
             // The block has a single predecessor, we look into it.
             UseVarCases::SealedOnePredecessor(pred) => {
-                let (val, mids) = self.use_var(func, var, ty, pred);
-                self.def_var(var, val, block);
-                (val, mids)
+                self.calls.push(Call::FinishSealedOnePredecessor(block));
+                self.calls.push(Call::UseVar(pred));
             }
             // The block has multiple predecessors, we register the ebb argument as the current
             // definition for the variable.
             UseVarCases::Unsealed(val) => {
                 self.def_var(var, val, block);
-                (val, SideEffects::new())
+                self.results.push(val);
             }
             UseVarCases::SealedMultiplePredecessors(val, ebb) => {
                 // If multiple predecessor we look up a use_var in each of them:
                 // if they all yield the same value no need for an Ebb argument
                 self.def_var(var, val, block);
-                self.predecessors_lookup(func, val, var, ty, ebb)
+                self.begin_predecessors_lookup(val, ebb);
             }
         }
+    }
+
+    /// For blocks with a single predecessor, once we've determined the value,
+    /// record a local def for it for future queries to find.
+    fn finish_sealed_one_predecessor(&mut self, var: Variable, block: Block) {
+        let val = *self.results.last().unwrap();
+        self.def_var(var, val, block);
     }
 
     /// Declares a new basic block belonging to the body of a certain `Ebb` and having `pred`
@@ -363,16 +385,14 @@ where
             }
         };
 
-        let mut side_effects = SideEffects::new();
         // For each undef var we look up values in the predecessors and create an Ebb argument
         // only if necessary.
         for (var, val) in undef_vars {
             let ty = func.dfg.value_type(val);
-            let (_, local_side_effects) = self.predecessors_lookup(func, val, var, ty, ebb);
-            side_effects.append(local_side_effects);
+            self.predecessors_lookup(func, val, var, ty, ebb);
         }
         self.mark_ebb_header_block_sealed(block);
-        side_effects
+        mem::replace(&mut self.side_effects, SideEffects::new())
     }
 
     /// Set the `sealed` flag for `block`.
@@ -398,18 +418,46 @@ where
         temp_arg_var: Variable,
         ty: Type,
         dest_ebb: Ebb,
-    ) -> (Value, SideEffects) {
-        let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
-        let mut side_effects = SideEffects::new();
+    ) -> Value {
+        debug_assert!(self.calls.is_empty());
+        debug_assert!(self.results.is_empty());
+        // self.side_effects may be non-empty here so that callers can
+        // accumulate side effects over multiple calls.
+        self.begin_predecessors_lookup(temp_arg_val, dest_ebb);
+        self.run_state_machine(func, temp_arg_var, ty)
+    }
 
-        // Iterate over the predecessors. To avoid borrowing `self` for the whole loop,
-        // temporarily detach the predecessors list and replace it with an empty list.
-        // `use_var`'s traversal won't revisit these predecesors.
-        let mut preds = mem::replace(self.predecessors_mut(dest_ebb), Vec::new());
-        for &(pred, _) in &preds {
+    /// Initiate use lookups in all predecessors of `dest_ebb`, and arrange for a call
+    /// to `finish_predecessors_lookup` once they complete.
+    fn begin_predecessors_lookup(&mut self, temp_arg_val: Value, dest_ebb: Ebb) {
+        self.calls.push(Call::FinishPredecessorsLookup(
+            temp_arg_val,
+            dest_ebb,
+        ));
+        // Iterate over the predecessors.
+        let mut calls = mem::replace(&mut self.calls, Vec::new());
+        calls.extend(self.predecessors(dest_ebb).iter().rev().map(|&(pred, _)| {
+            Call::UseVar(pred)
+        }));
+        self.calls = calls;
+    }
+
+    /// Examine the values from the predecessors and compute a result value, creating
+    /// block arguments as needed.
+    fn finish_predecessors_lookup(
+        &mut self,
+        func: &mut Function,
+        temp_arg_val: Value,
+        temp_arg_var: Variable,
+        dest_ebb: Ebb,
+    ) {
+        let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
+
+        // Iterate over the predecessors.
+        for _ in 0..self.predecessors(dest_ebb).len() {
             // For each predecessor, we query what is the local SSA value corresponding
             // to var and we put it as an argument of the branch instruction.
-            let (pred_val, local_side_effects) = self.use_var(func, temp_arg_var, ty, pred);
+            let pred_val = self.results.pop().unwrap();
             match pred_values {
                 ZeroOneOrMore::Zero() => {
                     if pred_val != temp_arg_val {
@@ -423,10 +471,7 @@ where
                 }
                 ZeroOneOrMore::More() => {}
             };
-            side_effects.append(local_side_effects);
         }
-        debug_assert!(self.predecessors(dest_ebb).is_empty());
-
         let result_val = match pred_values {
             ZeroOneOrMore::Zero() => {
                 // The variable is used but never defined before. This is an irregularity in the
@@ -446,7 +491,7 @@ where
                 } else {
                     panic!("value used but never declared and initialization not supported")
                 };
-                side_effects.instructions_added_to_ebbs.push(dest_ebb);
+                self.side_effects.instructions_added_to_ebbs.push(dest_ebb);
                 val
             }
             ZeroOneOrMore::One(pred_val) => {
@@ -460,7 +505,9 @@ where
             }
             ZeroOneOrMore::More() => {
                 // There is disagreement in the predecessors on which value to use so we have
-                // to keep the ebb argument.
+                // to keep the ebb argument. To avoid borrowing `self` for the whole loop,
+                // temporarily detach the predecessors list and replace it with an empty list.
+                let mut preds = mem::replace(self.predecessors_mut(dest_ebb), Vec::new());
                 for &mut (ref mut pred_block, ref mut last_inst) in &mut preds {
                     // We already did a full `use_var` above, so we can do just the fast path.
                     let pred_val = self.variables
@@ -481,19 +528,18 @@ where
                     {
                         *pred_block = middle_block;
                         *last_inst = middle_jump_inst;
-                        side_effects.split_ebbs_created.push(middle_ebb);
+                        self.side_effects.split_ebbs_created.push(middle_ebb);
                     }
                 }
+                // Now that we're done, move the predecessors list back.
                 debug_assert!(self.predecessors(dest_ebb).is_empty());
+                *self.predecessors_mut(dest_ebb) = preds;
+
                 temp_arg_val
             }
         };
 
-        // Now that we're done, move the predecessors list back.
-        debug_assert!(self.predecessors(dest_ebb).is_empty());
-        *self.predecessors_mut(dest_ebb) = preds;
-
-        (result_val, side_effects)
+        self.results.push(result_val);
     }
 
     /// Appends a jump argument to a jump instruction, returns ebb created in case of
@@ -563,6 +609,37 @@ where
             BlockData::EbbBody { .. } => panic!("should not happen"),
             BlockData::EbbHeader(ref data) => data.sealed,
         }
+    }
+
+    /// The main algorithm is naturally recursive: when there's a `use_var` in a
+    /// block with no correspondin local defs, it recurses and performs a
+    /// `use_var` in each predecessor. To avoid risking running out of callstack
+    /// space, we keep an explicit stack and use a small state machine rather
+    /// than literal recursion.
+    fn run_state_machine(&mut self, func: &mut Function, var: Variable, ty: Type) -> Value {
+        // Process the calls scheduled in `self.calls` until it is empty.
+        while let Some(call) = self.calls.pop() {
+            match call {
+                Call::UseVar(block) => {
+                    // First we lookup for the current definition of the variable in this block
+                    if let Some(var_defs) = self.variables.get(var) {
+                        if let Some(val) = var_defs[block].expand() {
+                            self.results.push(val);
+                            continue;
+                        }
+                    }
+                    self.use_var_nonlocal(func, var, ty, block);
+                }
+                Call::FinishSealedOnePredecessor(block) => {
+                    self.finish_sealed_one_predecessor(var, block);
+                }
+                Call::FinishPredecessorsLookup(temp_arg_val, dest_ebb) => {
+                    self.finish_predecessors_lookup(func, temp_arg_val, var, dest_ebb);
+                }
+            }
+        }
+        debug_assert_eq!(self.results.len(), 1);
+        self.results.pop().unwrap()
     }
 }
 
