@@ -104,16 +104,32 @@ impl SubTest for TestBinEmit {
         // value locations. The current error reporting is just crashing...
         let mut func = func.into_owned();
 
+        let is_compressed = isa.flags().is_compressed();
+
         // Give an encoding to any instruction that doesn't already have one.
         for ebb in func.layout.ebbs() {
             for inst in func.layout.ebb_insts(ebb) {
                 if !func.encodings[inst].is_legal() {
-                    if let Ok(enc) = isa.encode(
+                    let mut legal_encodings = isa.legal_encodings(
                         &func.dfg,
                         &func.dfg[inst],
                         func.dfg.ctrl_typevar(inst),
-                    )
-                    {
+                    );
+
+                    let enc = if is_compressed {
+                        // Get the smallest legal encoding
+                        legal_encodings
+                            .filter(|e| {
+                                let recipe_constraints = &encinfo.constraints[e.recipe()];
+                                recipe_constraints.satisfied(inst, &func)
+                            })
+                            .min_by_key(|&e| encinfo.bytes(e))
+                    } else {
+                        // If not using compressed, just use the first encoding.
+                        legal_encodings.next()
+                    };
+
+                    if let Some(enc) = enc {
                         func.encodings[inst] = enc;
                     }
                 }

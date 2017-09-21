@@ -1,6 +1,7 @@
 ; binary emission of 64-bit code.
 test binemit
 set is_64bit
+set is_compressed
 isa intel haswell
 
 ; The binary encodings can be verified with the command:
