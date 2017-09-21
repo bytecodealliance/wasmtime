@@ -62,7 +62,7 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
     // Insert position for argument conversion code.
     // We want to insert instructions before the first instruction in the entry block.
     // If the entry block is empty, append instructions to it instead.
-    let mut pos = Cursor::new(&mut func.layout).at_first_inst(entry);
+    let mut pos = Cursor::new(&mut func.layout, &mut func.srclocs).at_first_inst(entry);
 
     // Keep track of the argument types in the ABI-legalized signature.
     let abi_types = &func.signature.argument_types;
@@ -488,7 +488,8 @@ fn legalize_inst_arguments<ArgType>(
 /// Returns `true` if any instructions were inserted.
 pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGraph) -> bool {
     let dfg = &mut func.dfg;
-    let pos = &mut Cursor::new(&mut func.layout).at_inst(inst);
+    let pos = &mut Cursor::new(&mut func.layout, &mut func.srclocs).at_inst(inst);
+    pos.use_srcloc(inst);
 
     // Start by checking if the argument types already match the signature.
     let sig_ref = match check_call_signature(dfg, inst) {
@@ -530,7 +531,8 @@ pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGra
 pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph) -> bool {
     let dfg = &mut func.dfg;
     let sig = &mut func.signature;
-    let pos = &mut Cursor::new(&mut func.layout).at_inst(inst);
+    let pos = &mut Cursor::new(&mut func.layout, &mut func.srclocs).at_inst(inst);
+    pos.use_srcloc(inst);
 
     // Check if the returned types already match the signature.
     if check_return_signature(dfg, inst, sig) {

@@ -48,6 +48,7 @@ fn dynamic_addr(
     let addr_ty = func.dfg.value_type(func.dfg.first_result(inst));
     let min_size = func.heaps[heap].min_size.into();
     let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
 
     // Start with the bounds check. Trap if `offset + size > bound`.
     let bound_addr = pos.ins().global_addr(addr_ty, bound_gv);
@@ -99,6 +100,7 @@ fn static_addr(
     let offset_ty = func.dfg.value_type(offset);
     let addr_ty = func.dfg.value_type(func.dfg.first_result(inst));
     let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
 
     // Start with the bounds check. Trap if `offset + size > bound`.
     if size > bound {
@@ -147,6 +149,7 @@ fn offset_addr(
     func: &mut ir::Function,
 ) {
     let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
 
     // Convert `offset` to `addr_ty`.
     if offset_ty != addr_ty {

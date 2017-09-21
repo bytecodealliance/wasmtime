@@ -358,6 +358,7 @@ def gen_xform_group(xgrp, fmt, type_sets):
             'cfg: &mut ::flowgraph::ControlFlowGraph) -> '
             'bool {{'.format(xgrp.name), '}'):
         fmt.line('use ir::{InstBuilder, CursorBase};')
+        fmt.line('let srcloc = func.srclocs[inst];')
 
         # Group the xforms by opcode so we can generate a big switch.
         # Preserve ordering.
@@ -372,8 +373,9 @@ def gen_xform_group(xgrp, fmt, type_sets):
                     with fmt.indented(
                             'ir::Opcode::{} => {{'.format(camel_name), '}'):
                         fmt.line(
-                                'let pos = &mut '
-                                'ir::Cursor::new(&mut func.layout)'
+                                'let pos = &mut ir::Cursor::new'
+                                '(&mut func.layout, &mut func.srclocs)'
+                                '.with_srcloc(srcloc)'
                                 '.at_inst(inst);')
                         fmt.line('let dfg = &mut func.dfg;')
                         for xform in xforms[camel_name]:

@@ -19,6 +19,7 @@ pub use ir::layout::Cursor as LayoutCursor;
 /// encoding.
 pub struct FuncCursor<'f> {
     pos: CursorPosition,
+    srcloc: ir::SourceLoc,
 
     /// The referenced function.
     pub func: &'f mut ir::Function,
@@ -29,8 +30,14 @@ impl<'f> FuncCursor<'f> {
     pub fn new(func: &'f mut ir::Function) -> FuncCursor<'f> {
         FuncCursor {
             pos: CursorPosition::Nowhere,
+            srcloc: Default::default(),
             func,
         }
+    }
+
+    /// Use the source location of `inst` for future instructions.
+    pub fn use_srcloc(&mut self, inst: ir::Inst) {
+        self.srcloc = self.func.srclocs[inst];
     }
 
     /// Create an instruction builder that inserts an instruction at the current position.
@@ -46,6 +53,14 @@ impl<'f> Cursor for FuncCursor<'f> {
 
     fn set_position(&mut self, pos: CursorPosition) {
         self.pos = pos
+    }
+
+    fn srcloc(&self) -> ir::SourceLoc {
+        self.srcloc
+    }
+
+    fn set_srcloc(&mut self, srcloc: ir::SourceLoc) {
+        self.srcloc = srcloc;
     }
 
     fn layout(&self) -> &ir::Layout {
@@ -68,6 +83,9 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
 
     fn insert_built_inst(self, inst: ir::Inst, _: ir::Type) -> &'c mut ir::DataFlowGraph {
         self.insert_inst(inst);
+        if !self.srcloc.is_default() {
+            self.func.srclocs[inst] = self.srcloc;
+        }
         &mut self.func.dfg
     }
 }
@@ -80,6 +98,7 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
 /// public `pos.func` member.
 pub struct EncCursor<'f> {
     pos: CursorPosition,
+    srcloc: ir::SourceLoc,
     built_inst: Option<ir::Inst>,
 
     /// The referenced function.
@@ -94,10 +113,16 @@ impl<'f> EncCursor<'f> {
     pub fn new(func: &'f mut ir::Function, isa: &'f TargetIsa) -> EncCursor<'f> {
         EncCursor {
             pos: CursorPosition::Nowhere,
+            srcloc: Default::default(),
             built_inst: None,
             func,
             isa,
         }
+    }
+
+    /// Use the source location of `inst` for future instructions.
+    pub fn use_srcloc(&mut self, inst: ir::Inst) {
+        self.srcloc = self.func.srclocs[inst];
     }
 
     /// Create an instruction builder that will insert an encoded instruction at the current
@@ -134,6 +159,14 @@ impl<'f> Cursor for EncCursor<'f> {
         self.pos = pos
     }
 
+    fn srcloc(&self) -> ir::SourceLoc {
+        self.srcloc
+    }
+
+    fn set_srcloc(&mut self, srcloc: ir::SourceLoc) {
+        self.srcloc = srcloc;
+    }
+
     fn layout(&self) -> &ir::Layout {
         &self.func.layout
     }
@@ -160,6 +193,10 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
         // Insert the instruction and remember the reference.
         self.insert_inst(inst);
         self.built_inst = Some(inst);
+
+        if !self.srcloc.is_default() {
+            self.func.srclocs[inst] = self.srcloc;
+        }
 
         // Assign an encoding.
         match self.isa.encode(
