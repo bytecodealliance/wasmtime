@@ -543,14 +543,14 @@ where
 
 
     fn ebb_args_adjustement(&mut self, dest_ebb: Ebb, jump_args: &[Type]) {
-        let ty_to_append: Option<Vec<Type>> =
-            if self.builder.ssa.predecessors(dest_ebb).is_empty() ||
-                self.builder.ebbs[dest_ebb].pristine
-            {
-                // This is the first jump instruction targeting this Ebb
-                // so the jump arguments supplied here are this Ebb' arguments
-                // However some of the arguments might already be there
-                // in the Ebb so we have to check they're consistent
+        if self.builder.ssa.predecessors(dest_ebb).is_empty() ||
+            self.builder.ebbs[dest_ebb].pristine
+        {
+            // This is the first jump instruction targeting this Ebb
+            // so the jump arguments supplied here are this Ebb' arguments
+            // However some of the arguments might already be there
+            // in the Ebb so we have to check they're consistent
+            let dest_ebb_args_len = {
                 let dest_ebb_args = self.func.dfg.ebb_args(dest_ebb);
                 debug_assert!(
                     dest_ebb_args
@@ -560,48 +560,40 @@ where
                             *jump_arg == self.func.dfg.value_type(*dest_arg)
                         }),
                     "the jump argument supplied has not the \
-                same type as the corresponding dest ebb argument"
-                );
-                self.builder.ebbs[dest_ebb].user_arg_count = jump_args.len();
-                Some(
-                    jump_args
-                        .iter()
-                        .skip(dest_ebb_args.len())
-                        .cloned()
-                        .collect(),
-                )
-            } else {
-                let dest_ebb_args = self.func.dfg.ebb_args(dest_ebb);
-                // The Ebb already has predecessors
-                // We check that the arguments supplied match those supplied
-                // previously.
-                debug_assert_eq!(
-                    jump_args.len(),
-                    self.builder.ebbs[dest_ebb].user_arg_count,
-                    "the jump instruction doesn't have the same \
-                      number of arguments as its destination Ebb \
-                      ({} vs {}).",
-                    jump_args.len(),
-                    dest_ebb_args.len()
-                );
-                debug_assert!(
-                    jump_args
-                        .iter()
-                        .zip(dest_ebb_args.iter().take(
-                            self.builder.ebbs[dest_ebb].user_arg_count,
-                        ))
-                        .all(|(jump_arg, dest_arg)| {
-                            *jump_arg == self.func.dfg.value_type(*dest_arg)
-                        }),
-                    "the jump argument supplied has not the \
                     same type as the corresponding dest ebb argument"
                 );
-                None
+                dest_ebb_args.len()
             };
-        if let Some(ty_args) = ty_to_append {
-            for ty in ty_args {
-                self.func.dfg.append_ebb_arg(dest_ebb, ty);
+            self.builder.ebbs[dest_ebb].user_arg_count = jump_args.len();
+            for ty in jump_args.iter().skip(dest_ebb_args_len) {
+                self.func.dfg.append_ebb_arg(dest_ebb, *ty);
             }
+        } else {
+            let dest_ebb_args = self.func.dfg.ebb_args(dest_ebb);
+            // The Ebb already has predecessors
+            // We check that the arguments supplied match those supplied
+            // previously.
+            debug_assert_eq!(
+                jump_args.len(),
+                self.builder.ebbs[dest_ebb].user_arg_count,
+                "the jump instruction doesn't have the same \
+                      number of arguments as its destination Ebb \
+                      ({} vs {}).",
+                jump_args.len(),
+                dest_ebb_args.len()
+            );
+            debug_assert!(
+                jump_args
+                    .iter()
+                    .zip(dest_ebb_args.iter().take(
+                        self.builder.ebbs[dest_ebb].user_arg_count,
+                    ))
+                    .all(|(jump_arg, dest_arg)| {
+                        *jump_arg == self.func.dfg.value_type(*dest_arg)
+                    }),
+                "the jump argument supplied has not the \
+                    same type as the corresponding dest ebb argument"
+            );
         }
     }
 
