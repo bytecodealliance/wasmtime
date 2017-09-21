@@ -152,7 +152,8 @@ impl ControlFlowGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ir::{Function, InstBuilder, Cursor, CursorBase, types};
+    use cursor::{Cursor, FuncCursor};
+    use ir::{Function, InstBuilder, types};
 
     #[test]
     fn empty() {
@@ -194,16 +195,15 @@ mod tests {
         let jmp_ebb1_ebb2;
 
         {
-            let dfg = &mut func.dfg;
-            let cur = &mut Cursor::new(&mut func.layout);
+            let cur = &mut FuncCursor::new(&mut func);
 
             cur.insert_ebb(ebb0);
-            br_ebb0_ebb2 = dfg.ins(cur).brnz(cond, ebb2, &[]);
-            jmp_ebb0_ebb1 = dfg.ins(cur).jump(ebb1, &[]);
+            br_ebb0_ebb2 = cur.ins().brnz(cond, ebb2, &[]);
+            jmp_ebb0_ebb1 = cur.ins().jump(ebb1, &[]);
 
             cur.insert_ebb(ebb1);
-            br_ebb1_ebb1 = dfg.ins(cur).brnz(cond, ebb1, &[]);
-            jmp_ebb1_ebb2 = dfg.ins(cur).jump(ebb2, &[]);
+            br_ebb1_ebb1 = cur.ins().brnz(cond, ebb1, &[]);
+            jmp_ebb1_ebb2 = cur.ins().jump(ebb2, &[]);
 
             cur.insert_ebb(ebb2);
         }

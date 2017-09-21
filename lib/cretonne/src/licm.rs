@@ -1,6 +1,7 @@
 //! A Loop Invariant Code Motion optimization pass
 
-use ir::{Function, Ebb, Inst, Value, Cursor, CursorBase, Type, InstBuilder, Layout};
+use cursor::{Cursor, FuncCursor};
+use ir::{Function, Ebb, Inst, Value, Type, InstBuilder, Layout};
 use flowgraph::ControlFlowGraph;
 use std::collections::HashSet;
 use dominator_tree::DominatorTree;
@@ -33,12 +34,12 @@ pub fn do_licm(
                 None => {
                     let pre_header =
                         create_pre_header(loop_analysis.loop_header(lp), func, cfg, domtree);
-                    pos = Cursor::new(&mut func.layout).at_last_inst(pre_header);
+                    pos = FuncCursor::new(func).at_last_inst(pre_header);
                 }
                 // If there is a natural pre-header we insert new instructions just before the
                 // related jumping instruction (which is not necessarily at the end).
                 Some((_, last_inst)) => {
-                    pos = Cursor::new(&mut func.layout).at_inst(last_inst);
+                    pos = FuncCursor::new(func).at_inst(last_inst);
                 }
             };
             // The last instruction of the pre-header is the termination instruction (usually
@@ -80,14 +81,11 @@ fn create_pre_header(
         }
     }
     {
-        let mut pos = Cursor::new(&mut func.layout).at_top(header);
+        let mut pos = FuncCursor::new(func).at_top(header);
         // Inserts the pre-header at the right place in the layout.
         pos.insert_ebb(pre_header);
         pos.next_inst();
-        func.dfg.ins(&mut pos).jump(
-            header,
-            pre_header_args_value.as_slice(pool),
-        );
+        pos.ins().jump(header, pre_header_args_value.as_slice(pool));
     }
     pre_header
 }
@@ -141,17 +139,17 @@ fn remove_loop_invariant_instructions(
 ) -> Vec<Inst> {
     let mut loop_values: HashSet<Value> = HashSet::new();
     let mut invariant_inst: Vec<Inst> = Vec::new();
-    let mut pos = Cursor::new(&mut func.layout);
+    let mut pos = FuncCursor::new(func);
     // We traverse the loop EBB in reverse post-order.
     for ebb in postorder_ebbs_loop(loop_analysis, cfg, lp).iter().rev() {
         // Arguments of the EBB are loop values
-        for val in func.dfg.ebb_args(*ebb) {
+        for val in pos.func.dfg.ebb_args(*ebb) {
             loop_values.insert(*val);
         }
         pos.goto_top(*ebb);
         while let Some(inst) = pos.next_inst() {
-            if func.dfg.has_results(inst) &&
-                func.dfg.inst_args(inst).into_iter().all(|arg| {
+            if pos.func.dfg.has_results(inst) &&
+                pos.func.dfg.inst_args(inst).into_iter().all(|arg| {
                     !loop_values.contains(arg)
                 })
             {
@@ -163,7 +161,7 @@ fn remove_loop_invariant_instructions(
             } else {
                 // If the instruction is not loop-invariant we push its results in the set of
                 // loop values
-                for out in func.dfg.inst_results(inst) {
+                for out in pos.func.dfg.inst_results(inst) {
                     loop_values.insert(*out);
                 }
             }
