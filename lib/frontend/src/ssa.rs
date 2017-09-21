@@ -371,7 +371,12 @@ where
             let (_, local_side_effects) = self.predecessors_lookup(func, val, var, ebb);
             side_effects.append(local_side_effects);
         }
+        self.mark_ebb_header_block_sealed(block);
+        side_effects
+    }
 
+    /// Set the `sealed` flag for `block`.
+    fn mark_ebb_header_block_sealed(&mut self, block: Block) {
         // Then we mark the block as sealed.
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("this should not happen"),
@@ -381,7 +386,6 @@ where
                 data.sealed = true;
             }
         };
-        side_effects
     }
 
     /// Look up in the predecessors of an Ebb the def for a value an decides wether or not
@@ -521,7 +525,7 @@ where
                 func.layout.append_ebb(middle_ebb);
                 let block = self.declare_ebb_header_block(middle_ebb);
                 self.blocks[block].add_predecessor(jump_inst_block, jump_inst);
-                self.seal_ebb_header_block(middle_ebb, func);
+                self.mark_ebb_header_block_sealed(block);
                 for old_dest in func.jump_tables[jt].as_mut_slice() {
                     if old_dest.unwrap() == dest_ebb {
                         *old_dest = PackedOption::from(middle_ebb);
