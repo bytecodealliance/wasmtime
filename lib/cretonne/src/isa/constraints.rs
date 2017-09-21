@@ -9,6 +9,7 @@
 
 use binemit::CodeOffset;
 use isa::{RegClass, RegUnit};
+use ir::{Function, ValueLoc, Inst};
 
 /// Register constraint for a single value operand or instruction result.
 pub struct OperandConstraint {
@@ -19,6 +20,34 @@ pub struct OperandConstraint {
     ///
     /// This applies to all kinds of constraints, but with slightly different meaning.
     pub regclass: RegClass,
+}
+
+impl OperandConstraint {
+    /// Check if this operand constraint is satisfied by the given value location.
+    /// For tied constraints, this only checks the register class, not that the
+    /// counterpart operand has the same value location.
+    pub fn satisfied(&self, loc: ValueLoc) -> bool {
+        match self.kind {
+            ConstraintKind::Reg |
+            ConstraintKind::Tied(_) => {
+                if let ValueLoc::Reg(reg) = loc {
+                    self.regclass.contains(reg)
+                } else {
+                    false
+                }
+            }
+            ConstraintKind::FixedReg(reg) => {
+                loc == ValueLoc::Reg(reg) && self.regclass.contains(reg)
+            }
+            ConstraintKind::Stack => {
+                if let ValueLoc::Stack(_) = loc {
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
 }
 
 /// The different kinds of operand constraints.
@@ -76,6 +105,36 @@ pub struct RecipeConstraints {
 
     /// Are there any tied operands?
     pub tied_ops: bool,
+}
+
+impl RecipeConstraints {
+    /// Check that these constraints are satisfied by the operands on `inst`.
+    pub fn satisfied(&self, inst: Inst, func: &Function) -> bool {
+        for (&arg, constraint) in func.dfg.inst_args(inst).iter().zip(self.ins) {
+            let loc = func.locations[arg];
+
+            if let ConstraintKind::Tied(out_index) = constraint.kind {
+                let out_val = func.dfg.inst_results(inst)[out_index as usize];
+                let out_loc = func.locations[out_val];
+                if loc != out_loc {
+                    return false;
+                }
+            }
+
+            if !constraint.satisfied(loc) {
+                return false;
+            }
+        }
+
+        for (&arg, constraint) in func.dfg.inst_results(inst).iter().zip(self.outs) {
+            let loc = func.locations[arg];
+            if !constraint.satisfied(loc) {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 /// Constraints on the range of a branch instruction.

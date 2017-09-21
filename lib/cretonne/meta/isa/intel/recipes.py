@@ -13,7 +13,7 @@ from .registers import GPR, ABCD, FPR
 try:
     from typing import Tuple, Dict  # noqa
     from cdsl.instructions import InstructionFormat  # noqa
-    from cdsl.isa import ConstraintSeq, BranchRange, PredNode  # noqa
+    from cdsl.isa import ConstraintSeq, BranchRange, PredNode, OperandConstraint  # noqa
 except ImportError:
     pass
 
