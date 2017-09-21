@@ -1,5 +1,6 @@
 //! A frontend for building Cretonne IL from other languages.
 use cretonne::cursor::{Cursor, FuncCursor};
+use cretonne::ir;
 use cretonne::ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData,
                    StackSlotData, DataFlowGraph, InstructionData, ExtFuncData, FuncRef, SigRef,
                    Signature, InstBuilderBase, GlobalVarData, GlobalVar, HeapData, Heap};
@@ -29,6 +30,9 @@ where
     /// The function currently being built.
     /// This field is public so the function can be re-borrowed.
     pub func: &'a mut Function,
+
+    /// Source location to assign to all new instructions.
+    srcloc: ir::SourceLoc,
 
     builder: &'a mut ILBuilder<Variable>,
     position: Position,
@@ -117,6 +121,8 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
         let inst = self.builder.func.dfg.make_inst(data.clone());
         self.builder.func.dfg.make_inst_results(inst, ctrl_typevar);
         self.builder.func.layout.append_inst(inst, self.ebb);
+        self.builder.func.srclocs[inst] = self.builder.srcloc;
+
         if data.opcode().is_branch() {
             match data.branch_destination() {
                 Some(dest_ebb) => {
@@ -179,13 +185,13 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 /// `create_ebb`) whose properties are:
 ///
 /// - branch and jump instructions can only point at the top of extended blocks;
-/// - the last instruction of each block is a terminator instruction which has no natural sucessor,
+/// - the last instruction of each block is a terminator instruction which has no natural successor,
 ///   and those instructions can only appear at the end of extended blocks.
 ///
 /// The parameters of Cretonne IL instructions are Cretonne IL values, which can only be created
 /// as results of other Cretonne IL instructions. To be able to create variables redefined multiple
 /// times in your program, use the `def_var` and `use_var` command, that will maintain the
-/// correspondance between your variables and Cretonne IL SSA values.
+/// correspondence between your variables and Cretonne IL SSA values.
 ///
 /// The first block for which you call `switch_to_block` will be assumed to be the beginning of
 /// the function.
@@ -215,6 +221,7 @@ where
         builder.clear();
         FunctionBuilder {
             func: func,
+            srcloc: Default::default(),
             builder: builder,
             position: Position {
                 ebb: Ebb::new(0),
@@ -222,6 +229,11 @@ where
             },
             pristine: true,
         }
+    }
+
+    /// Set the source location that should be assigned to all new instructions.
+    pub fn set_srcloc(&mut self, srcloc: ir::SourceLoc) {
+        self.srcloc = srcloc;
     }
 
     /// Creates a new `Ebb` for the function and returns its reference.
@@ -386,7 +398,9 @@ where
     /// need to know about `FunctionBuilder` at all.
     pub fn cursor<'f>(&'f mut self) -> FuncCursor<'f> {
         self.ensure_inserted_ebb();
-        FuncCursor::new(self.func).at_bottom(self.position.ebb)
+        FuncCursor::new(self.func)
+            .with_srcloc(self.srcloc)
+            .at_bottom(self.position.ebb)
     }
 }
 
@@ -399,7 +413,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 where
     Variable: EntityRef + Default,
 {
-    /// Retrieves all the arguments for an `Ebb` currently infered from the jump instructions
+    /// Retrieves all the arguments for an `Ebb` currently inferred from the jump instructions
     /// inserted that target it and the SSA construction.
     pub fn ebb_args(&self, ebb: Ebb) -> &[Value] {
         self.func.dfg.ebb_args(ebb)

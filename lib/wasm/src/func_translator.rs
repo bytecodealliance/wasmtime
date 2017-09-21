@@ -139,6 +139,7 @@ fn parse_local_decls(
 
     let mut locals_total = 0;
     for _ in 0..local_count {
+        builder.set_srcloc(cur_srcloc(reader));
         let (count, ty) = reader.read_local_decl(&mut locals_total).map_err(|_| {
             CtonError::InvalidInput
         })?;
@@ -199,6 +200,7 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
 
     // Keep going until the final `End` operator which pops the outermost block.
     while !state.control_stack.is_empty() {
+        builder.set_srcloc(cur_srcloc(&reader));
         let op = reader.read_operator().map_err(|_| CtonError::InvalidInput)?;
         translate_operator(&op, builder, state, environ);
     }
@@ -216,6 +218,15 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     debug_assert!(reader.eof());
 
     Ok(())
+}
+
+/// Get the current source location from a reader.
+fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
+    // We record source locations as byte code offsets relative to the beginning of the function.
+    // This will wrap around of a single function's byte code is larger than 4 GB, but a) the
+    // WebAssembly format doesn't allow for that, and b) that would hit other Cretonne
+    // implementation limits anyway.
+    ir::SourceLoc::new(reader.current_position() as u32)
 }
 
 #[cfg(test)]
