@@ -331,12 +331,14 @@ fn convert_to_abi<PutArg>(
     let ty = dfg.value_type(value);
     match legalize_abi_value(ty, &arg_type) {
         ValueConversion::IntSplit => {
-            let (lo, hi) = isplit(dfg, cfg, pos, value);
+            let curpos = pos.position();
+            let (lo, hi) = isplit(dfg, pos.layout, cfg, curpos, value);
             convert_to_abi(dfg, cfg, pos, lo, put_arg);
             convert_to_abi(dfg, cfg, pos, hi, put_arg);
         }
         ValueConversion::VectorSplit => {
-            let (lo, hi) = vsplit(dfg, cfg, pos, value);
+            let curpos = pos.position();
+            let (lo, hi) = vsplit(dfg, pos.layout, cfg, curpos, value);
             convert_to_abi(dfg, cfg, pos, lo, put_arg);
             convert_to_abi(dfg, cfg, pos, hi, put_arg);
         }

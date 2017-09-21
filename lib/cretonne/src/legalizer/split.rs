@@ -64,31 +64,33 @@
 //! It is possible to have circular dependencies of EBB arguments that are never used by any real
 //! instructions. These loops will remain in the program.
 
+use cursor::{Cursor, CursorPosition};
 use flowgraph::ControlFlowGraph;
-use ir::{DataFlowGraph, Ebb, Inst, Cursor, CursorBase, Value, Type, Opcode, ValueDef,
-         InstructionData, InstBuilder};
+use ir::{self, Ebb, Inst, Value, Type, Opcode, ValueDef, InstructionData, InstBuilder};
 use std::iter;
 
 /// Split `value` into two values using the `isplit` semantics. Do this by reusing existing values
 /// if possible.
 pub fn isplit(
-    dfg: &mut DataFlowGraph,
+    dfg: &mut ir::DataFlowGraph,
+    layout: &mut ir::Layout,
     cfg: &ControlFlowGraph,
-    pos: &mut Cursor,
+    pos: CursorPosition,
     value: Value,
 ) -> (Value, Value) {
-    split_any(dfg, cfg, pos, value, Opcode::Iconcat)
+    split_any(dfg, layout, cfg, pos, value, Opcode::Iconcat)
 }
 
 /// Split `value` into halves using the `vsplit` semantics. Do this by reusing existing values if
 /// possible.
 pub fn vsplit(
-    dfg: &mut DataFlowGraph,
+    dfg: &mut ir::DataFlowGraph,
+    layout: &mut ir::Layout,
     cfg: &ControlFlowGraph,
-    pos: &mut Cursor,
+    pos: CursorPosition,
     value: Value,
 ) -> (Value, Value) {
-    split_any(dfg, cfg, pos, value, Opcode::Vconcat)
+    split_any(dfg, layout, cfg, pos, value, Opcode::Vconcat)
 }
 
 /// After splitting an EBB argument, we need to go back and fix up all of the predecessor
@@ -110,15 +112,16 @@ struct Repair {
 
 /// Generic version of `isplit` and `vsplit` controlled by the `concat` opcode.
 fn split_any(
-    dfg: &mut DataFlowGraph,
+    dfg: &mut ir::DataFlowGraph,
+    layout: &mut ir::Layout,
     cfg: &ControlFlowGraph,
-    pos: &mut Cursor,
+    pos: CursorPosition,
     value: Value,
     concat: Opcode,
 ) -> (Value, Value) {
-    let saved_pos = pos.position();
     let mut repairs = Vec::new();
-    let result = split_value(dfg, pos, value, concat, &mut repairs);
+    let mut pos = ir::Cursor::new(layout).at_position(pos);
+    let result = split_value(dfg, &mut pos, value, concat, &mut repairs);
 
     // We have split the value requested, and now we may need to fix some EBB predecessors.
     while let Some(repair) = repairs.pop() {
@@ -147,7 +150,7 @@ fn split_any(
 
             // Split the old argument, possibly causing more repairs to be scheduled.
             pos.goto_inst(inst);
-            let (lo, hi) = split_value(dfg, pos, old_arg, repair.concat, &mut repairs);
+            let (lo, hi) = split_value(dfg, &mut pos, old_arg, repair.concat, &mut repairs);
 
             // The `lo` part replaces the original argument.
             *args.get_mut(fixed_args + repair.num, &mut dfg.value_lists)
@@ -173,7 +176,6 @@ fn split_any(
         }
     }
 
-    pos.set_position(saved_pos);
     result
 }
 
@@ -184,8 +186,8 @@ fn split_any(
 ///
 /// Return the two new values representing the parts of `value`.
 fn split_value(
-    dfg: &mut DataFlowGraph,
-    pos: &mut Cursor,
+    dfg: &mut ir::DataFlowGraph,
+    pos: &mut ir::Cursor,
     value: Value,
     concat: Opcode,
     repairs: &mut Vec<Repair>,
@@ -292,7 +294,7 @@ fn add_repair(
 /// ```
 ///
 /// This function resolves `v11` to `v1` and `v12` to `v2`.
-fn resolve_splits(dfg: &DataFlowGraph, value: Value) -> Value {
+fn resolve_splits(dfg: &ir::DataFlowGraph, value: Value) -> Value {
     let value = dfg.resolve_copies(value);
 
     // Deconstruct a split instruction.
@@ -330,7 +332,7 @@ fn resolve_splits(dfg: &DataFlowGraph, value: Value) -> Value {
 ///
 /// After legalizing the instructions computing the value that was split, it is likely that we can
 /// avoid depending on the split instruction. Its input probably comes from a concatenation.
-pub fn simplify_branch_arguments(dfg: &mut DataFlowGraph, branch: Inst) {
+pub fn simplify_branch_arguments(dfg: &mut ir::DataFlowGraph, branch: Inst) {
     let mut new_args = Vec::new();
 
     for &arg in dfg.inst_args(branch) {

@@ -264,12 +264,12 @@ def emit_dst_inst(node, fmt):
         # Split instructions are not emitted with the builder, but by calling
         # special functions in the `legalizer::split` module. These functions
         # will eliminate concat-split patterns.
-        fmt.line(
-                'let {} = split::{}(dfg, cfg, pos, {});'
-                .format(
-                    wrap_tup(node.defs),
-                    node.expr.inst.snake_name(),
-                    node.expr.args[0]))
+        fmt.line('let curpos = pos.position();')
+        fmt.format(
+                'let {} = split::{}(dfg, pos.layout, cfg, curpos, {});',
+                wrap_tup(node.defs),
+                node.expr.inst.snake_name(),
+                node.expr.args[0])
     else:
         if len(node.defs) == 0:
             # This node doesn't define any values, so just insert the new
