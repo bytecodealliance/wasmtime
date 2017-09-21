@@ -569,7 +569,6 @@ where
                 self.func.dfg.append_ebb_arg(dest_ebb, *ty);
             }
         } else {
-            let dest_ebb_args = self.func.dfg.ebb_args(dest_ebb);
             // The Ebb already has predecessors
             // We check that the arguments supplied match those supplied
             // previously.
@@ -577,15 +576,12 @@ where
                 jump_args.len(),
                 self.builder.ebbs[dest_ebb].user_arg_count,
                 "the jump instruction doesn't have the same \
-                      number of arguments as its destination Ebb \
-                      ({} vs {}).",
-                jump_args.len(),
-                dest_ebb_args.len()
+                      number of arguments as its destination Ebb.",
             );
             debug_assert!(
                 jump_args
                     .iter()
-                    .zip(dest_ebb_args.iter().take(
+                    .zip(self.func.dfg.ebb_args(dest_ebb).iter().take(
                         self.builder.ebbs[dest_ebb].user_arg_count,
                     ))
                     .all(|(jump_arg, dest_arg)| {
