@@ -64,8 +64,8 @@ pub struct SideEffects {
 }
 
 impl SideEffects {
-    fn new() -> SideEffects {
-        SideEffects {
+    fn new() -> Self {
+        Self {
             split_ebbs_created: Vec::new(),
             instructions_added_to_ebbs: Vec::new(),
         }
