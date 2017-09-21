@@ -220,9 +220,9 @@ ebb0:
     ; asm: movq -50(%r10), %rdx
     [-,%rdx]            v141 = load.i64 v3-50           ; bin: 49 8b 52 ce
     ; asm: movl 50(%rcx), %edi
-    [-,%rdi]            v142 = uload32.i64 v1+50        ; bin: 40 8b 79 32
+    [-,%rdi]            v142 = uload32.i64 v1+50        ; bin: 8b 79 32
     ; asm: movl -50(%rsi), %edx
-    [-,%rdx]            v143 = uload32.i64 v2-50        ; bin: 40 8b 56 ce
+    [-,%rdx]            v143 = uload32.i64 v2-50        ; bin: 8b 56 ce
     ; asm: movslq 50(%rcx), %rdi
     [-,%rdi]            v144 = sload32.i64 v1+50        ; bin: 48 63 79 32
     ; asm: movslq -50(%rsi), %rdx
@@ -251,15 +251,15 @@ ebb0:
     ; asm: movq %r10, -10000(%rcx)
     store v3, v1-10000                          ; bin: 4c 89 91 ffffd8f0
     ; asm: movl %ecx, 10000(%rsi)
-    istore32 v1, v2+10000                       ; bin: 40 89 8e 00002710
+    istore32 v1, v2+10000                       ; bin: 89 8e 00002710
     ; asm: movl %esi, -10000(%rcx)
-    istore32 v2, v1-10000                       ; bin: 40 89 b1 ffffd8f0
+    istore32 v2, v1-10000                       ; bin: 89 b1 ffffd8f0
     ; asm: movw %cx, 10000(%rsi)
-    istore16 v1, v2+10000                       ; bin: 66 40 89 8e 00002710
+    istore16 v1, v2+10000                       ; bin: 66 89 8e 00002710
     ; asm: movw %si, -10000(%rcx)
-    istore16 v2, v1-10000                       ; bin: 66 40 89 b1 ffffd8f0
+    istore16 v2, v1-10000                       ; bin: 66 89 b1 ffffd8f0
     ; asm: movb %cl, 10000(%rsi)
-    istore8 v1, v2+10000                        ; bin: 40 88 8e 00002710
+    istore8 v1, v2+10000                        ; bin: 88 8e 00002710
     ; asm: movb %sil, 10000(%rcx)
     istore8 v2, v1+10000                        ; bin: 40 88 b1 00002710
 
@@ -268,9 +268,9 @@ ebb0:
     ; asm: movq -50000(%r10), %rdx
     [-,%rdx]            v161 = load.i64 v3-50000           ; bin: 49 8b 92 ffff3cb0
     ; asm: movl 50000(%rcx), %edi
-    [-,%rdi]            v162 = uload32.i64 v1+50000        ; bin: 40 8b b9 0000c350
+    [-,%rdi]            v162 = uload32.i64 v1+50000        ; bin: 8b b9 0000c350
     ; asm: movl -50000(%rsi), %edx
-    [-,%rdx]            v163 = uload32.i64 v2-50000        ; bin: 40 8b 96 ffff3cb0
+    [-,%rdx]            v163 = uload32.i64 v2-50000        ; bin: 8b 96 ffff3cb0
     ; asm: movslq 50000(%rcx), %rdi
     [-,%rdi]            v164 = sload32.i64 v1+50000        ; bin: 48 63 b9 0000c350
     ; asm: movslq -50000(%rsi), %rdx
@@ -305,17 +305,17 @@ ebb0:
     [-,%rax]      v190 = iconst.i64 1
     [-,%rdx]      v191 = iconst.i64 2
     ; asm: idivq %rcx
-    [-,%rax,%rdx] v192, v193 = x86_sdivmodx v130, v131, v1  ; bin: 48 f7 f9
+    [-,%rax,%rdx] v192, v193 = x86_sdivmodx v190, v191, v1  ; bin: 48 f7 f9
     ; asm: idivq %rsi
-    [-,%rax,%rdx] v194, v195 = x86_sdivmodx v130, v131, v2  ; bin: 48 f7 fe
+    [-,%rax,%rdx] v194, v195 = x86_sdivmodx v190, v191, v2  ; bin: 48 f7 fe
     ; asm: idivq %r10
-    [-,%rax,%rdx] v196, v197 = x86_sdivmodx v130, v131, v3  ; bin: 49 f7 fa
+    [-,%rax,%rdx] v196, v197 = x86_sdivmodx v190, v191, v3  ; bin: 49 f7 fa
     ; asm: divq %rcx
-    [-,%rax,%rdx] v198, v199 = x86_udivmodx v130, v131, v1  ; bin: 48 f7 f1
+    [-,%rax,%rdx] v198, v199 = x86_udivmodx v190, v191, v1  ; bin: 48 f7 f1
     ; asm: divq %rsi
-    [-,%rax,%rdx] v200, v201 = x86_udivmodx v130, v131, v2  ; bin: 48 f7 f6
+    [-,%rax,%rdx] v200, v201 = x86_udivmodx v190, v191, v2  ; bin: 48 f7 f6
     ; asm: divq %r10
-    [-,%rax,%rdx] v202, v203 = x86_udivmodx v130, v131, v3  ; bin: 49 f7 f2
+    [-,%rax,%rdx] v202, v203 = x86_udivmodx v190, v191, v3  ; bin: 49 f7 f2
 
     ; Bit-counting instructions.
 
@@ -415,9 +415,9 @@ ebb0:
     ; Bool-to-int conversions.
 
     ; asm: movzbq %bl, %rcx
-    [-,%rcx]             v350 = bint.i64 v300   ; bin: 48 0f b6 cb
+    [-,%rcx]             v350 = bint.i64 v300   ; bin: 0f b6 cb
     ; asm: movzbq %dl, %rsi
-    [-,%rsi]             v351 = bint.i64 v301   ; bin: 48 0f b6 f2
+    [-,%rsi]             v351 = bint.i64 v301   ; bin: 0f b6 f2
 
     ; asm: call foo
     call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
@@ -430,9 +430,9 @@ ebb0:
     [-,%r10]            v402 = func_addr.i64 fn0        ; bin: 49 ba Abs8(fn0) ffffffffffffffff
 
     ; asm: call *%rcx
-    call_indirect sig0, v400()                  ; bin: 40 ff d1
+    call_indirect sig0, v400()                  ; bin: ff d1
     ; asm: call *%rsi
-    call_indirect sig0, v401()                  ; bin: 40 ff d6
+    call_indirect sig0, v401()                  ; bin: ff d6
     ; asm: call *%r10
     call_indirect sig0, v402()                  ; bin: 41 ff d2
 
@@ -482,9 +482,9 @@ ebb0:
     ; Integer Constants.
 
     ; asm: movl $0x01020304, %ecx
-    [-,%rcx]            v1 = iconst.i32 0x0102_0304           ; bin: 40 b9 01020304
+    [-,%rcx]            v1 = iconst.i32 0x0102_0304           ; bin: b9 01020304
     ; asm: movl $0x11020304, %esi
-    [-,%rsi]            v2 = iconst.i32 0x1102_0304           ; bin: 40 be 11020304
+    [-,%rsi]            v2 = iconst.i32 0x1102_0304           ; bin: be 11020304
     ; asm: movl $0x21020304, %r10d
     [-,%r10]            v3 = iconst.i32 0x2102_0304           ; bin: 41 ba 21020304
     ; asm: movl $0xff001122, %r8d
@@ -497,128 +497,128 @@ ebb0:
     ; Register indirect addressing with no displacement.
 
     ; asm: movl (%rcx), %edi
-    [-,%rdi]            v10 = load.i32 v1      ; bin: 40 8b 39
+    [-,%rdi]            v10 = load.i32 v1      ; bin: 8b 39
     ; asm: movl (%rsi), %edx
-    [-,%rdx]            v11 = load.i32 v2      ; bin: 40 8b 16
+    [-,%rdx]            v11 = load.i32 v2      ; bin: 8b 16
     ; asm: movzwl (%rcx), %edi
-    [-,%rdi]            v12 = uload16.i32 v1   ; bin: 40 0f b7 39
+    [-,%rdi]            v12 = uload16.i32 v1   ; bin: 0f b7 39
     ; asm: movzwl (%rsi), %edx
-    [-,%rdx]            v13 = uload16.i32 v2   ; bin: 40 0f b7 16
+    [-,%rdx]            v13 = uload16.i32 v2   ; bin: 0f b7 16
     ; asm: movswl (%rcx), %edi
-    [-,%rdi]            v14 = sload16.i32 v1   ; bin: 40 0f bf 39
+    [-,%rdi]            v14 = sload16.i32 v1   ; bin: 0f bf 39
     ; asm: movswl (%rsi), %edx
-    [-,%rdx]            v15 = sload16.i32 v2   ; bin: 40 0f bf 16
+    [-,%rdx]            v15 = sload16.i32 v2   ; bin: 0f bf 16
     ; asm: movzbl (%rcx), %edi
-    [-,%rdi]            v16 = uload8.i32 v1    ; bin: 40 0f b6 39
+    [-,%rdi]            v16 = uload8.i32 v1    ; bin: 0f b6 39
     ; asm: movzbl (%rsi), %edx
-    [-,%rdx]            v17 = uload8.i32 v2    ; bin: 40 0f b6 16
+    [-,%rdx]            v17 = uload8.i32 v2    ; bin: 0f b6 16
     ; asm: movsbl (%rcx), %edi
-    [-,%rdi]            v18 = sload8.i32 v1    ; bin: 40 0f be 39
+    [-,%rdi]            v18 = sload8.i32 v1    ; bin: 0f be 39
     ; asm: movsbl (%rsi), %edx
-    [-,%rdx]            v19 = sload8.i32 v2    ; bin: 40 0f be 16
+    [-,%rdx]            v19 = sload8.i32 v2    ; bin: 0f be 16
 
     ; Register-indirect with 8-bit signed displacement.
 
     ; asm: movl 50(%rcx), %edi
-    [-,%rdi]            v20 = load.i32 v1+50           ; bin: 40 8b 79 32
+    [-,%rdi]            v20 = load.i32 v1+50           ; bin: 8b 79 32
     ; asm: movl -50(%rsi), %edx
-    [-,%rdx]            v21 = load.i32 v2-50           ; bin: 40 8b 56 ce
+    [-,%rdx]            v21 = load.i32 v2-50           ; bin: 8b 56 ce
     ; asm: movzwl 50(%rcx), %edi
-    [-,%rdi]            v22 = uload16.i32 v1+50        ; bin: 40 0f b7 79 32
+    [-,%rdi]            v22 = uload16.i32 v1+50        ; bin: 0f b7 79 32
     ; asm: movzwl -50(%rsi), %edx
-    [-,%rdx]            v23 = uload16.i32 v2-50        ; bin: 40 0f b7 56 ce
+    [-,%rdx]            v23 = uload16.i32 v2-50        ; bin: 0f b7 56 ce
     ; asm: movswl 50(%rcx), %edi
-    [-,%rdi]            v24 = sload16.i32 v1+50        ; bin: 40 0f bf 79 32
+    [-,%rdi]            v24 = sload16.i32 v1+50        ; bin: 0f bf 79 32
     ; asm: movswl -50(%rsi), %edx
-    [-,%rdx]            v25 = sload16.i32 v2-50        ; bin: 40 0f bf 56 ce
+    [-,%rdx]            v25 = sload16.i32 v2-50        ; bin: 0f bf 56 ce
     ; asm: movzbl 50(%rcx), %edi
-    [-,%rdi]            v26 = uload8.i32 v1+50         ; bin: 40 0f b6 79 32
+    [-,%rdi]            v26 = uload8.i32 v1+50         ; bin: 0f b6 79 32
     ; asm: movzbl -50(%rsi), %edx
-    [-,%rdx]            v27 = uload8.i32 v2-50         ; bin: 40 0f b6 56 ce
+    [-,%rdx]            v27 = uload8.i32 v2-50         ; bin: 0f b6 56 ce
     ; asm: movsbl 50(%rcx), %edi
-    [-,%rdi]            v28 = sload8.i32 v1+50         ; bin: 40 0f be 79 32
+    [-,%rdi]            v28 = sload8.i32 v1+50         ; bin: 0f be 79 32
     ; asm: movsbl -50(%rsi), %edx
-    [-,%rdx]            v29 = sload8.i32 v2-50         ; bin: 40 0f be 56 ce
+    [-,%rdx]            v29 = sload8.i32 v2-50         ; bin: 0f be 56 ce
 
     ; Register-indirect with 32-bit signed displacement.
 
     ; asm: movl 50000(%rcx), %edi
-    [-,%rdi]            v30 = load.i32 v1+50000           ; bin: 40 8b b9 0000c350
+    [-,%rdi]            v30 = load.i32 v1+50000           ; bin: 8b b9 0000c350
     ; asm: movl -50000(%rsi), %edx
-    [-,%rdx]            v31 = load.i32 v2-50000           ; bin: 40 8b 96 ffff3cb0
+    [-,%rdx]            v31 = load.i32 v2-50000           ; bin: 8b 96 ffff3cb0
     ; asm: movzwl 50000(%rcx), %edi
-    [-,%rdi]            v32 = uload16.i32 v1+50000        ; bin: 40 0f b7 b9 0000c350
+    [-,%rdi]            v32 = uload16.i32 v1+50000        ; bin: 0f b7 b9 0000c350
     ; asm: movzwl -50000(%rsi), %edx
-    [-,%rdx]            v33 = uload16.i32 v2-50000        ; bin: 40 0f b7 96 ffff3cb0
+    [-,%rdx]            v33 = uload16.i32 v2-50000        ; bin: 0f b7 96 ffff3cb0
     ; asm: movswl 50000(%rcx), %edi
-    [-,%rdi]            v34 = sload16.i32 v1+50000        ; bin: 40 0f bf b9 0000c350
+    [-,%rdi]            v34 = sload16.i32 v1+50000        ; bin: 0f bf b9 0000c350
     ; asm: movswl -50000(%rsi), %edx
-    [-,%rdx]            v35 = sload16.i32 v2-50000        ; bin: 40 0f bf 96 ffff3cb0
+    [-,%rdx]            v35 = sload16.i32 v2-50000        ; bin: 0f bf 96 ffff3cb0
     ; asm: movzbl 50000(%rcx), %edi
-    [-,%rdi]            v36 = uload8.i32 v1+50000         ; bin: 40 0f b6 b9 0000c350
+    [-,%rdi]            v36 = uload8.i32 v1+50000         ; bin: 0f b6 b9 0000c350
     ; asm: movzbl -50000(%rsi), %edx
-    [-,%rdx]            v37 = uload8.i32 v2-50000         ; bin: 40 0f b6 96 ffff3cb0
+    [-,%rdx]            v37 = uload8.i32 v2-50000         ; bin: 0f b6 96 ffff3cb0
     ; asm: movsbl 50000(%rcx), %edi
-    [-,%rdi]            v38 = sload8.i32 v1+50000         ; bin: 40 0f be b9 0000c350
+    [-,%rdi]            v38 = sload8.i32 v1+50000         ; bin: 0f be b9 0000c350
     ; asm: movsbl -50000(%rsi), %edx
-    [-,%rdx]            v39 = sload8.i32 v2-50000         ; bin: 40 0f be 96 ffff3cb0
+    [-,%rdx]            v39 = sload8.i32 v2-50000         ; bin: 0f be 96 ffff3cb0
 
     ; Integer Register-Register Operations.
 
     ; asm: addl %esi, %ecx
-    [-,%rcx]             v40 = iadd v1, v2       ; bin: 40 01 f1
+    [-,%rcx]             v40 = iadd v1, v2       ; bin: 01 f1
     ; asm: addl %r10d, %esi
     [-,%rsi]             v41 = iadd v2, v3       ; bin: 44 01 d6
     ; asm: addl %ecx, %r10d
     [-,%r10]             v42 = iadd v3, v1       ; bin: 41 01 ca
 
     ; asm: subl %esi, %ecx
-    [-,%rcx]             v50 = isub v1, v2       ; bin: 40 29 f1
+    [-,%rcx]             v50 = isub v1, v2       ; bin: 29 f1
     ; asm: subl %r10d, %esi
     [-,%rsi]             v51 = isub v2, v3       ; bin: 44 29 d6
     ; asm: subl %ecx, %r10d
     [-,%r10]             v52 = isub v3, v1       ; bin: 41 29 ca
 
     ; asm: andl %esi, %ecx
-    [-,%rcx]             v60 = band v1, v2       ; bin: 40 21 f1
+    [-,%rcx]             v60 = band v1, v2       ; bin: 21 f1
     ; asm: andl %r10d, %esi
     [-,%rsi]             v61 = band v2, v3       ; bin: 44 21 d6
     ; asm: andl %ecx, %r10d
     [-,%r10]             v62 = band v3, v1       ; bin: 41 21 ca
 
     ; asm: orl %esi, %ecx
-    [-,%rcx]             v70 = bor v1, v2       ; bin: 40 09 f1
+    [-,%rcx]             v70 = bor v1, v2       ; bin: 09 f1
     ; asm: orl %r10d, %esi
     [-,%rsi]             v71 = bor v2, v3       ; bin: 44 09 d6
     ; asm: orl %ecx, %r10d
     [-,%r10]             v72 = bor v3, v1       ; bin: 41 09 ca
 
     ; asm: xorl %esi, %ecx
-    [-,%rcx]             v80 = bxor v1, v2       ; bin: 40 31 f1
+    [-,%rcx]             v80 = bxor v1, v2       ; bin: 31 f1
     ; asm: xorl %r10d, %esi
     [-,%rsi]             v81 = bxor v2, v3       ; bin: 44 31 d6
     ; asm: xorl %ecx, %r10d
     [-,%r10]             v82 = bxor v3, v1       ; bin: 41 31 ca
 
     ; asm: shll %cl, %esi
-    [-,%rsi]             v90 = ishl v2, v1       ; bin: 40 d3 e6
+    [-,%rsi]             v90 = ishl v2, v1       ; bin: d3 e6
     ; asm: shll %cl, %r10d
     [-,%r10]             v91 = ishl v3, v1       ; bin: 41 d3 e2
     ; asm: sarl %cl, %esi
-    [-,%rsi]             v92 = sshr v2, v1       ; bin: 40 d3 fe
+    [-,%rsi]             v92 = sshr v2, v1       ; bin: d3 fe
     ; asm: sarl %cl, %r10d
     [-,%r10]             v93 = sshr v3, v1       ; bin: 41 d3 fa
     ; asm: shrl %cl, %esi
-    [-,%rsi]             v94 = ushr v2, v1       ; bin: 40 d3 ee
+    [-,%rsi]             v94 = ushr v2, v1       ; bin: d3 ee
     ; asm: shrl %cl, %r10d
     [-,%r10]             v95 = ushr v3, v1       ; bin: 41 d3 ea
 
     ; asm: roll %cl, %esi
-    [-,%rsi]             v96 = rotl v2, v1       ; bin: 40 d3 c6
+    [-,%rsi]             v96 = rotl v2, v1       ; bin: d3 c6
     ; asm: roll %cl, %r10d
     [-,%r10]             v97 = rotl v3, v1       ; bin: 41 d3 c2
     ; asm: rorl %cl, %esi
-    [-,%rsi]             v98 = rotr v2, v1       ; bin: 40 d3 ce
+    [-,%rsi]             v98 = rotr v2, v1       ; bin: d3 ce
     ; asm: rorl %cl, %r10d
     [-,%r10]             v99 = rotr v3, v1       ; bin: 41 d3 ca
 
@@ -627,9 +627,9 @@ ebb0:
     ; Some take 8-bit immediates that are sign-extended to 64 bits.
 
     ; asm: addl $-100000, %ecx
-    [-,%rcx]     v100 = iadd_imm v1, -100000     ; bin: 40 81 c1 fffe7960
+    [-,%rcx]     v100 = iadd_imm v1, -100000     ; bin: 81 c1 fffe7960
     ; asm: addl $100000, %esi
-    [-,%rsi]     v101 = iadd_imm v2, 100000      ; bin: 40 81 c6 000186a0
+    [-,%rsi]     v101 = iadd_imm v2, 100000      ; bin: 81 c6 000186a0
     ; asm: addl $0x7fffffff, %r10d
     [-,%r10]     v102 = iadd_imm v3, 0x7fff_ffff ; bin: 41 81 c2 7fffffff
     ; asm: addl $100, %r8d
@@ -638,9 +638,9 @@ ebb0:
     [-,%r14]     v104 = iadd_imm v5, -100        ; bin: 41 83 c6 9c
 
     ; asm: andl $-100000, %ecx
-    [-,%rcx]     v110 = band_imm v1, -100000     ; bin: 40 81 e1 fffe7960
+    [-,%rcx]     v110 = band_imm v1, -100000     ; bin: 81 e1 fffe7960
     ; asm: andl $100000, %esi
-    [-,%rsi]     v111 = band_imm v2, 100000      ; bin: 40 81 e6 000186a0
+    [-,%rsi]     v111 = band_imm v2, 100000      ; bin: 81 e6 000186a0
     ; asm: andl $0x7fffffff, %r10d
     [-,%r10]     v112 = band_imm v3, 0x7fff_ffff ; bin: 41 81 e2 7fffffff
     ; asm: andl $100, %r8d
@@ -649,9 +649,9 @@ ebb0:
     [-,%r14]     v114 = band_imm v5, -100        ; bin: 41 83 e6 9c
 
     ; asm: orl $-100000, %ecx
-    [-,%rcx]     v120 = bor_imm v1, -100000      ; bin: 40 81 c9 fffe7960
+    [-,%rcx]     v120 = bor_imm v1, -100000      ; bin: 81 c9 fffe7960
     ; asm: orl $100000, %esi
-    [-,%rsi]     v121 = bor_imm v2, 100000       ; bin: 40 81 ce 000186a0
+    [-,%rsi]     v121 = bor_imm v2, 100000       ; bin: 81 ce 000186a0
     ; asm: orl $0x7fffffff, %r10d
     [-,%r10]     v122 = bor_imm v3, 0x7fff_ffff  ; bin: 41 81 ca 7fffffff
     ; asm: orl $100, %r8d
@@ -661,9 +661,9 @@ ebb0:
     ; asm: ret
 
     ; asm: xorl $-100000, %ecx
-    [-,%rcx]     v130 = bxor_imm v1, -100000     ; bin: 40 81 f1 fffe7960
+    [-,%rcx]     v130 = bxor_imm v1, -100000     ; bin: 81 f1 fffe7960
     ; asm: xorl $100000, %esi
-    [-,%rsi]     v131 = bxor_imm v2, 100000      ; bin: 40 81 f6 000186a0
+    [-,%rsi]     v131 = bxor_imm v2, 100000      ; bin: 81 f6 000186a0
     ; asm: xorl $0x7fffffff, %r10d
     [-,%r10]     v132 = bxor_imm v3, 0x7fff_ffff ; bin: 41 81 f2 7fffffff
     ; asm: xorl $100, %r8d
@@ -674,7 +674,7 @@ ebb0:
     ; Register copies.
 
     ; asm: movl %esi, %ecx
-    [-,%rcx]             v140 = copy v2          ; bin: 40 89 f1
+    [-,%rcx]             v140 = copy v2          ; bin: 89 f1
     ; asm: movl %r10d, %esi
     [-,%rsi]             v141 = copy v3          ; bin: 44 89 d6
     ; asm: movl %ecx, %r10d
@@ -683,7 +683,7 @@ ebb0:
     ; More arithmetic.
 
     ; asm: imull %esi, %ecx
-    [-,%rcx]             v150 = imul v1, v2       ; bin: 40 0f af ce
+    [-,%rcx]             v150 = imul v1, v2       ; bin: 0f af ce
     ; asm: imull %r10d, %esi
     [-,%rsi]             v151 = imul v2, v3       ; bin: 41 0f af f2
     ; asm: imull %ecx, %r10d
@@ -692,36 +692,36 @@ ebb0:
     [-,%rax]      v160 = iconst.i32 1
     [-,%rdx]      v161 = iconst.i32 2
     ; asm: idivl %ecx
-    [-,%rax,%rdx] v162, v163 = x86_sdivmodx v130, v131, v1  ; bin: 40 f7 f9
+    [-,%rax,%rdx] v162, v163 = x86_sdivmodx v160, v161, v1  ; bin: f7 f9
     ; asm: idivl %esi
-    [-,%rax,%rdx] v164, v165 = x86_sdivmodx v130, v131, v2  ; bin: 40 f7 fe
+    [-,%rax,%rdx] v164, v165 = x86_sdivmodx v160, v161, v2  ; bin: f7 fe
     ; asm: idivl %r10d
-    [-,%rax,%rdx] v166, v167 = x86_sdivmodx v130, v131, v3  ; bin: 41 f7 fa
+    [-,%rax,%rdx] v166, v167 = x86_sdivmodx v160, v161, v3  ; bin: 41 f7 fa
     ; asm: divl %ecx
-    [-,%rax,%rdx] v168, v169 = x86_udivmodx v130, v131, v1  ; bin: 40 f7 f1
+    [-,%rax,%rdx] v168, v169 = x86_udivmodx v160, v161, v1  ; bin: f7 f1
     ; asm: divl %esi
-    [-,%rax,%rdx] v170, v171 = x86_udivmodx v130, v131, v2  ; bin: 40 f7 f6
+    [-,%rax,%rdx] v170, v171 = x86_udivmodx v160, v161, v2  ; bin: f7 f6
     ; asm: divl %r10d
-    [-,%rax,%rdx] v172, v173 = x86_udivmodx v130, v131, v3  ; bin: 41 f7 f2
+    [-,%rax,%rdx] v172, v173 = x86_udivmodx v160, v161, v3  ; bin: 41 f7 f2
 
     ; Bit-counting instructions.
 
     ; asm: popcntl %esi, %ecx
-    [-,%rcx]            v200 = popcnt v2         ; bin: f3 40 0f b8 ce
+    [-,%rcx]            v200 = popcnt v2         ; bin: f3 0f b8 ce
     ; asm: popcntl %r10d, %esi
     [-,%rsi]            v201 = popcnt v3         ; bin: f3 41 0f b8 f2
     ; asm: popcntl %ecx, %r10d
     [-,%r10]            v202 = popcnt v1         ; bin: f3 44 0f b8 d1
 
     ; asm: lzcntl %esi, %ecx
-    [-,%rcx]            v203 = clz v2            ; bin: f3 40 0f bd ce
+    [-,%rcx]            v203 = clz v2            ; bin: f3 0f bd ce
     ; asm: lzcntl %r10d, %esi
     [-,%rsi]            v204 = clz v3            ; bin: f3 41 0f bd f2
     ; asm: lzcntl %ecx, %r10d
     [-,%r10]            v205 = clz v1            ; bin: f3 44 0f bd d1
 
     ; asm: tzcntl %esi, %ecx
-    [-,%rcx]            v206 = ctz v2            ; bin: f3 40 0f bc ce
+    [-,%rcx]            v206 = ctz v2            ; bin: f3 0f bc ce
     ; asm: tzcntl %r10d, %esi
     [-,%rsi]            v207 = ctz v3            ; bin: f3 41 0f bc f2
     ; asm: tzcntl %ecx, %r10d
@@ -731,70 +731,70 @@ ebb0:
 
     ; asm: cmpl %esi, %ecx
     ; asm: sete %bl
-    [-,%rbx]            v300 = icmp eq v1, v2   ; bin: 40 39 f1 0f 94 c3
+    [-,%rbx]            v300 = icmp eq v1, v2   ; bin: 39 f1 0f 94 c3
     ; asm: cmpl %r10d, %esi
     ; asm: sete %dl
     [-,%rdx]            v301 = icmp eq v2, v3   ; bin: 44 39 d6 0f 94 c2
 
     ; asm: cmpl %esi, %ecx
     ; asm: setne %bl
-    [-,%rbx]            v302 = icmp ne v1, v2   ; bin: 40 39 f1 0f 95 c3
+    [-,%rbx]            v302 = icmp ne v1, v2   ; bin: 39 f1 0f 95 c3
     ; asm: cmpl %r10d, %esi
     ; asm: setne %dl
     [-,%rdx]            v303 = icmp ne v2, v3   ; bin: 44 39 d6 0f 95 c2
 
     ; asm: cmpl %esi, %ecx
     ; asm: setl %bl
-    [-,%rbx]            v304 = icmp slt v1, v2  ; bin: 40 39 f1 0f 9c c3
+    [-,%rbx]            v304 = icmp slt v1, v2  ; bin: 39 f1 0f 9c c3
     ; asm: cmpl %r10d, %esi
     ; asm: setl %dl
     [-,%rdx]            v305 = icmp slt v2, v3  ; bin: 44 39 d6 0f 9c c2
 
     ; asm: cmpl %esi, %ecx
     ; asm: setge %bl
-    [-,%rbx]            v306 = icmp sge v1, v2  ; bin: 40 39 f1 0f 9d c3
+    [-,%rbx]            v306 = icmp sge v1, v2  ; bin: 39 f1 0f 9d c3
     ; asm: cmpl %r10d, %esi
     ; asm: setge %dl
     [-,%rdx]            v307 = icmp sge v2, v3  ; bin: 44 39 d6 0f 9d c2
 
     ; asm: cmpl %esi, %ecx
     ; asm: setg %bl
-    [-,%rbx]            v308 = icmp sgt v1, v2  ; bin: 40 39 f1 0f 9f c3
+    [-,%rbx]            v308 = icmp sgt v1, v2  ; bin: 39 f1 0f 9f c3
     ; asm: cmpl %r10d, %esi
     ; asm: setg %dl
     [-,%rdx]            v309 = icmp sgt v2, v3  ; bin: 44 39 d6 0f 9f c2
 
     ; asm: cmpl %esi, %ecx
     ; asm: setle %bl
-    [-,%rbx]            v310 = icmp sle v1, v2  ; bin: 40 39 f1 0f 9e c3
+    [-,%rbx]            v310 = icmp sle v1, v2  ; bin: 39 f1 0f 9e c3
     ; asm: cmpl %r10d, %esi
     ; asm: setle %dl
     [-,%rdx]            v311 = icmp sle v2, v3  ; bin: 44 39 d6 0f 9e c2
 
     ; asm: cmpl %esi, %ecx
     ; asm: setb %bl
-    [-,%rbx]            v312 = icmp ult v1, v2  ; bin: 40 39 f1 0f 92 c3
+    [-,%rbx]            v312 = icmp ult v1, v2  ; bin: 39 f1 0f 92 c3
     ; asm: cmpl %r10d, %esi
     ; asm: setb %dl
     [-,%rdx]            v313 = icmp ult v2, v3  ; bin: 44 39 d6 0f 92 c2
 
     ; asm: cmpl %esi, %ecx
     ; asm: setae %bl
-    [-,%rbx]            v314 = icmp uge v1, v2  ; bin: 40 39 f1 0f 93 c3
+    [-,%rbx]            v314 = icmp uge v1, v2  ; bin: 39 f1 0f 93 c3
     ; asm: cmpl %r10d, %esi
     ; asm: setae %dl
     [-,%rdx]            v315 = icmp uge v2, v3  ; bin: 44 39 d6 0f 93 c2
 
     ; asm: cmpl %esi, %ecx
     ; asm: seta %bl
-    [-,%rbx]            v316 = icmp ugt v1, v2  ; bin: 40 39 f1 0f 97 c3
+    [-,%rbx]            v316 = icmp ugt v1, v2  ; bin: 39 f1 0f 97 c3
     ; asm: cmpl %r10d, %esi
     ; asm: seta %dl
     [-,%rdx]            v317 = icmp ugt v2, v3  ; bin: 44 39 d6 0f 97 c2
 
     ; asm: cmpl %esi, %ecx
     ; asm: setbe %bl
-    [-,%rbx]            v318 = icmp ule v1, v2  ; bin: 40 39 f1 0f 96 c3
+    [-,%rbx]            v318 = icmp ule v1, v2  ; bin: 39 f1 0f 96 c3
     ; asm: cmpl %r10d, %esi
     ; asm: setbe %dl
     [-,%rdx]            v319 = icmp ule v2, v3  ; bin: 44 39 d6 0f 96 c2
@@ -802,25 +802,25 @@ ebb0:
     ; Bool-to-int conversions.
 
     ; asm: movzbl %bl, %ecx
-    [-,%rcx]             v350 = bint.i32 v300   ; bin: 40 0f b6 cb
+    [-,%rcx]             v350 = bint.i32 v300   ; bin: 0f b6 cb
     ; asm: movzbl %dl, %esi
-    [-,%rsi]             v351 = bint.i32 v301   ; bin: 40 0f b6 f2
+    [-,%rsi]             v351 = bint.i32 v301   ; bin: 0f b6 f2
 
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1x
-    brz v1, ebb1                                ; bin: 40 85 c9 74 1b
+    brz v1, ebb1                                ; bin: 85 c9 74 18
     ; asm: testl %esi, %esi
     ; asm: je ebb1x
-    brz v2, ebb1                                ; bin: 40 85 f6 74 16
+    brz v2, ebb1                                ; bin: 85 f6 74 14
     ; asm: testl %r10d, %r10d
     ; asm: je ebb1x
-    brz v3, ebb1                                ; bin: 45 85 d2 74 11
+    brz v3, ebb1                                ; bin: 45 85 d2 74 0f
     ; asm: testl %ecx, %ecx
     ; asm: jne ebb1x
-    brnz v1, ebb1                               ; bin: 40 85 c9 75 0c
+    brnz v1, ebb1                               ; bin: 85 c9 75 0b
     ; asm: testl %esi, %esi
     ; asm: jne ebb1x
-    brnz v2, ebb1                               ; bin: 40 85 f6 75 07
+    brnz v2, ebb1                               ; bin: 85 f6 75 07
     ; asm: testl %r10d, %r10d
     ; asm: jne ebb1x
     brnz v3, ebb1                               ; bin: 45 85 d2 75 02
@@ -856,7 +856,7 @@ ebb0:
     [-,%rcx]            v22 = sextend.i64 v13           ; bin: 49 63 ca
 
     ; asm: movl %ecx, %esi
-    [-,%rsi]            v30 = uextend.i64 v11           ; bin: 40 89 ce
+    [-,%rsi]            v30 = uextend.i64 v11           ; bin: 89 ce
     ; asm: movl %esi, %r10d
     [-,%r10]            v31 = uextend.i64 v12           ; bin: 41 89 f2
     ; asm: movl %r10d, %ecx

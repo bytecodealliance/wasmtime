@@ -15,7 +15,7 @@ runif() {
 runif flake8 .
 
 # Type checking.
-runif mypy --py2 build.py
+runif python3 -m mypy --py2 build.py
 
 # Python unit tests.
 runif python -m unittest discover

@@ -39,7 +39,9 @@ FloatRegs = RegBank(
         units=16, prefix='xmm')
 
 GPR = RegClass(IntRegs)
+GPR8 = GPR[0:8]
 ABCD = GPR[0:4]
 FPR = RegClass(FloatRegs)
+FPR8 = FPR[0:8]
 
 RegClass.extract_names(globals())
