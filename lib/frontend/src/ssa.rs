@@ -264,8 +264,7 @@ where
         };
         // TODO: avoid recursion for the calls to use_var and predecessors_lookup.
         match case {
-            // The block has a single predecessor or multiple predecessor with
-            // the same value, we look into it.
+            // The block has a single predecessor, we look into it.
             UseVarCases::SealedOnePredecessor(pred) => {
                 let (val, mids) = self.use_var(func, var, ty, pred);
                 self.def_var(var, val, block);
