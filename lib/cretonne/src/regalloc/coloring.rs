@@ -148,8 +148,9 @@ impl<'a> Context<'a> {
         self.divert.clear();
 
         // Now go through the instructions in `ebb` and color the values they define.
-        let mut pos = Cursor::new(&mut func.layout).at_top(ebb);
+        let mut pos = Cursor::new(&mut func.layout, &mut func.srclocs).at_top(ebb);
         while let Some(inst) = pos.next_inst() {
+            pos.use_srcloc(inst);
             if let Some(constraints) = self.encinfo.operand_constraints(func.encodings[inst]) {
                 self.visit_inst(
                     inst,

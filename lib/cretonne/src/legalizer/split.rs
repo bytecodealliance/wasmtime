@@ -120,7 +120,7 @@ fn split_any(
     concat: Opcode,
 ) -> (Value, Value) {
     let mut repairs = Vec::new();
-    let mut pos = ir::Cursor::new(layout).at_position(pos);
+    let mut pos = ir::Cursor::new(layout, None).at_position(pos);
     let result = split_value(dfg, &mut pos, value, concat, &mut repairs);
 
     // We have split the value requested, and now we may need to fix some EBB predecessors.

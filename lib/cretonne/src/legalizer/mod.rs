@@ -138,6 +138,7 @@ fn expand_cond_trap(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFl
     }
 
     let mut pos = FuncCursor::new(func).after_inst(inst);
+    pos.use_srcloc(inst);
     pos.ins().trap(code);
     pos.insert_ebb(new_ebb);
 
@@ -154,6 +155,7 @@ fn expand_fconst(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut ControlFlow
     // In the future, we may want to generate constant pool entries for these constants, but for
     // now use an `iconst` and a bit cast.
     let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
     let ival = match pos.func.dfg[inst] {
         ir::InstructionData::UnaryIeee32 {
             opcode: ir::Opcode::F32const,

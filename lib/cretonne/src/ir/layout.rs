@@ -7,7 +7,7 @@ use std::cmp;
 use std::iter::{Iterator, IntoIterator};
 use entity::EntityMap;
 use packed_option::PackedOption;
-use ir::{Ebb, Inst, Type, DataFlowGraph};
+use ir::{Ebb, Inst, Type, DataFlowGraph, SourceLoc, SourceLocs};
 use ir::builder::InstInserterBase;
 use ir::progpoint::{ProgramOrder, ExpandedProgramPoint};
 
@@ -676,7 +676,10 @@ impl<'f> DoubleEndedIterator for Insts<'f> {
 pub struct Cursor<'f> {
     /// Borrowed function layout. Public so it can be re-borrowed from this cursor.
     pub layout: &'f mut Layout,
+    /// Borrowed source locations.
+    pub srclocs: Option<&'f mut SourceLocs>,
     pos: CursorPosition,
+    srcloc: SourceLoc,
 }
 
 /// The possible positions of a cursor.
@@ -703,11 +706,38 @@ pub trait CursorBase {
     /// Set the current position.
     fn set_position(&mut self, pos: CursorPosition);
 
+    /// Get the source location that should be assigned to new instructions.
+    fn srcloc(&self) -> SourceLoc;
+
+    /// Set the source location that should be assigned to new instructions.
+    fn set_srcloc(&mut self, srcloc: SourceLoc);
+
     /// Borrow a reference to the function layout that this cursor is navigating.
     fn layout(&self) -> &Layout;
 
     /// Borrow a mutable reference to the function layout that this cursor is navigating.
     fn layout_mut(&mut self) -> &mut Layout;
+
+    /// Exchange this cursor for one with a set source location.
+    ///
+    /// This is intended to be used as a builder method:
+    ///
+    /// ```
+    /// # use cretonne::ir::{Function, Ebb, SourceLoc};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// fn edit_func(func: &mut Function, srcloc: SourceLoc) {
+    ///     let mut pos = FuncCursor::new(func).with_srcloc(srcloc);
+    ///
+    ///     // Use `pos`...
+    /// }
+    /// ```
+    fn with_srcloc(mut self, srcloc: SourceLoc) -> Self
+    where
+        Self: Sized,
+    {
+        self.set_srcloc(srcloc);
+        self
+    }
 
     /// Rebuild this cursor positioned at `pos`.
     fn at_position(mut self, pos: CursorPosition) -> Self
@@ -724,9 +754,9 @@ pub trait CursorBase {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, inst: Inst) {
-    ///     let mut pos = Cursor::new(&mut func.layout).at_inst(inst);
+    ///     let mut pos = FuncCursor::new(func).at_inst(inst);
     ///
     ///     // Use `pos`...
     /// }
@@ -747,9 +777,9 @@ pub trait CursorBase {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, ebb: Ebb) {
-    ///     let mut pos = Cursor::new(&mut func.layout).at_first_insertion_point(ebb);
+    ///     let mut pos = FuncCursor::new(func).at_first_insertion_point(ebb);
     ///
     ///     // Use `pos`...
     /// }
@@ -768,9 +798,9 @@ pub trait CursorBase {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, ebb: Ebb) {
-    ///     let mut pos = Cursor::new(&mut func.layout).at_first_inst(ebb);
+    ///     let mut pos = FuncCursor::new(func).at_first_inst(ebb);
     ///
     ///     // Use `pos`...
     /// }
@@ -789,9 +819,9 @@ pub trait CursorBase {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, ebb: Ebb) {
-    ///     let mut pos = Cursor::new(&mut func.layout).at_last_inst(ebb);
+    ///     let mut pos = FuncCursor::new(func).at_last_inst(ebb);
     ///
     ///     // Use `pos`...
     /// }
@@ -810,9 +840,9 @@ pub trait CursorBase {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, inst: Inst) {
-    ///     let mut pos = Cursor::new(&mut func.layout).after_inst(inst);
+    ///     let mut pos = FuncCursor::new(func).after_inst(inst);
     ///
     ///     // Use `pos`...
     /// }
@@ -831,9 +861,9 @@ pub trait CursorBase {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, ebb: Ebb) {
-    ///     let mut pos = Cursor::new(&mut func.layout).at_top(ebb);
+    ///     let mut pos = FuncCursor::new(func).at_top(ebb);
     ///
     ///     // Use `pos`...
     /// }
@@ -852,9 +882,9 @@ pub trait CursorBase {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, ebb: Ebb) {
-    ///     let mut pos = Cursor::new(&mut func.layout).at_bottom(ebb);
+    ///     let mut pos = FuncCursor::new(func).at_bottom(ebb);
     ///
     ///     // Use `pos`...
     /// }
@@ -957,9 +987,9 @@ pub trait CursorBase {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function) {
-    ///     let mut cursor = Cursor::new(&mut func.layout);
+    ///     let mut cursor = FuncCursor::new(func);
     ///     while let Some(ebb) = cursor.next_ebb() {
     ///         // Edit ebb.
     ///     }
@@ -990,9 +1020,9 @@ pub trait CursorBase {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function) {
-    ///     let mut cursor = Cursor::new(&mut func.layout);
+    ///     let mut cursor = FuncCursor::new(func);
     ///     while let Some(ebb) = cursor.prev_ebb() {
     ///         // Edit ebb.
     ///     }
@@ -1027,9 +1057,9 @@ pub trait CursorBase {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
     /// fn edit_ebb(func: &mut Function, ebb: Ebb) {
-    ///     let mut cursor = Cursor::new(&mut func.layout).at_top(ebb);
+    ///     let mut cursor = FuncCursor::new(func).at_top(ebb);
     ///     while let Some(inst) = cursor.next_inst() {
     ///         // Edit instructions...
     ///     }
@@ -1041,9 +1071,9 @@ pub trait CursorBase {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function) {
-    ///     let mut cursor = Cursor::new(&mut func.layout);
+    ///     let mut cursor = FuncCursor::new(func);
     ///     while let Some(ebb) = cursor.next_ebb() {
     ///         while let Some(inst) = cursor.next_inst() {
     ///             // Edit instructions...
@@ -1095,9 +1125,9 @@ pub trait CursorBase {
     ///
     /// ```
     /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::ir::layout::{Cursor, CursorBase};
+    /// # use cretonne::cursor::{Cursor, FuncCursor};
     /// fn edit_ebb(func: &mut Function, ebb: Ebb) {
-    ///     let mut cursor = Cursor::new(&mut func.layout).at_bottom(ebb);
+    ///     let mut cursor = FuncCursor::new(func).at_bottom(ebb);
     ///     while let Some(inst) = cursor.prev_inst() {
     ///         // Edit instructions...
     ///     }
@@ -1213,6 +1243,14 @@ impl<'f> CursorBase for Cursor<'f> {
         self.pos = pos;
     }
 
+    fn srcloc(&self) -> SourceLoc {
+        self.srcloc
+    }
+
+    fn set_srcloc(&mut self, srcloc: SourceLoc) {
+        self.srcloc = srcloc
+    }
+
     fn layout(&self) -> &Layout {
         self.layout
     }
@@ -1225,10 +1263,22 @@ impl<'f> CursorBase for Cursor<'f> {
 impl<'f> Cursor<'f> {
     /// Create a new `Cursor` for `layout`.
     /// The cursor holds a mutable reference to `layout` for its entire lifetime.
-    pub fn new(layout: &'f mut Layout) -> Cursor {
+    pub fn new<SL: Into<Option<&'f mut SourceLocs>>>(
+        layout: &'f mut Layout,
+        srclocs: SL,
+    ) -> Cursor<'f> {
         Cursor {
             layout,
+            srclocs: srclocs.into(),
             pos: CursorPosition::Nowhere,
+            srcloc: Default::default(),
+        }
+    }
+
+    /// Use the source location of `inst` for future instructions.
+    pub fn use_srcloc(&mut self, inst: Inst) {
+        if let Some(ref mut ss) = self.srclocs {
+            self.srcloc = ss[inst];
         }
     }
 }
@@ -1263,6 +1313,13 @@ impl<'c, 'fc: 'c, 'fd> InstInserterBase<'fd> for LayoutCursorInserter<'c, 'fc, '
 
     fn insert_built_inst(self, inst: Inst, _ctrl_typevar: Type) -> &'fd mut DataFlowGraph {
         self.pos.insert_inst(inst);
+        if !self.pos.srcloc.is_default() {
+            if let Some(ref mut ss) = self.pos.srclocs {
+                ss[inst] = self.pos.srcloc;
+            } else {
+                panic!("layout::Cursor missing a SourceLocs reference");
+            }
+        }
         self.dfg
     }
 }
@@ -1300,7 +1357,7 @@ mod tests {
         }
 
         // Check backwards linkage with a cursor.
-        let mut cur = Cursor::new(layout);
+        let mut cur = Cursor::new(layout, None);
         for &(ebb, insts) in ebbs.into_iter().rev() {
             assert_eq!(cur.prev_ebb(), Some(ebb));
             for &inst in insts.into_iter().rev() {
@@ -1356,7 +1413,7 @@ mod tests {
         }
 
         // Test cursor positioning.
-        let mut cur = Cursor::new(&mut layout);
+        let mut cur = Cursor::new(&mut layout, None);
         assert_eq!(cur.position(), CursorPosition::Nowhere);
         assert_eq!(cur.next_inst(), None);
         assert_eq!(cur.position(), CursorPosition::Nowhere);
@@ -1474,7 +1531,7 @@ mod tests {
         verify(&mut layout, &[(e1, &[i1, i2, i0])]);
 
         // Test cursor positioning.
-        let mut cur = Cursor::new(&mut layout).at_top(e1);
+        let mut cur = Cursor::new(&mut layout, None).at_top(e1);
         assert_eq!(cur.position(), CursorPosition::Before(e1));
         assert_eq!(cur.prev_inst(), None);
         assert_eq!(cur.position(), CursorPosition::Before(e1));
@@ -1594,7 +1651,7 @@ mod tests {
         assert_eq!(layout.inst_ebb(i0), Some(e1));
 
         {
-            let mut cur = Cursor::new(&mut layout);
+            let mut cur = Cursor::new(&mut layout, None);
             assert_eq!(cur.next_ebb(), Some(e0));
             assert_eq!(cur.next_inst(), None);
             assert_eq!(cur.next_ebb(), Some(e1));
@@ -1622,7 +1679,7 @@ mod tests {
         assert_eq!(layout.inst_ebb(i3), Some(e2));
 
         {
-            let mut cur = Cursor::new(&mut layout);
+            let mut cur = Cursor::new(&mut layout, None);
             assert_eq!(cur.next_ebb(), Some(e0));
             assert_eq!(cur.next_inst(), Some(i1));
             assert_eq!(cur.next_inst(), None);

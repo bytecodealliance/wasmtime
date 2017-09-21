@@ -51,6 +51,7 @@ fn deref_addr(inst: ir::Inst, func: &mut ir::Function, base: ir::GlobalVar, offs
     // detects any cycles in the `deref` globals.
     let ptr_ty = func.dfg.value_type(func.dfg.first_result(inst));
     let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
 
     let base_addr = pos.ins().global_addr(ptr_ty, base);
     // TODO: We could probably set both `notrap` and `aligned` on this load instruction.
