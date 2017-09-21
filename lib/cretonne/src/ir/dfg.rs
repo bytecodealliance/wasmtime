@@ -897,8 +897,9 @@ impl<'a> fmt::Display for DisplayInst<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cursor::{Cursor, FuncCursor};
     use ir::types;
-    use ir::{Function, Cursor, CursorBase, Opcode, InstructionData, TrapCode};
+    use ir::{Function, Opcode, InstructionData, TrapCode};
 
     #[test]
     fn make_inst() {
@@ -1056,41 +1057,40 @@ mod tests {
         use ir::condcodes::IntCC;
 
         let mut func = Function::new();
-        let dfg = &mut func.dfg;
-        let ebb0 = dfg.make_ebb();
-        let pos = &mut Cursor::new(&mut func.layout);
+        let ebb0 = func.dfg.make_ebb();
+        let mut pos = FuncCursor::new(&mut func);
         pos.insert_ebb(ebb0);
 
         // Build a little test program.
-        let v1 = dfg.ins(pos).iconst(types::I32, 42);
+        let v1 = pos.ins().iconst(types::I32, 42);
 
         // Make sure we can resolve value aliases even when values is empty.
-        assert_eq!(dfg.resolve_aliases(v1), v1);
+        assert_eq!(pos.func.dfg.resolve_aliases(v1), v1);
 
-        let arg0 = dfg.append_ebb_arg(ebb0, types::I32);
-        let (s, c) = dfg.ins(pos).iadd_cout(v1, arg0);
-        let iadd = match dfg.value_def(s) {
+        let arg0 = pos.func.dfg.append_ebb_arg(ebb0, types::I32);
+        let (s, c) = pos.ins().iadd_cout(v1, arg0);
+        let iadd = match pos.func.dfg.value_def(s) {
             ValueDef::Res(i, 0) => i,
             _ => panic!(),
         };
 
         // Remove `c` from the result list.
-        dfg.clear_results(iadd);
-        dfg.attach_result(iadd, s);
+        pos.func.dfg.clear_results(iadd);
+        pos.func.dfg.attach_result(iadd, s);
 
         // Replace `iadd_cout` with a normal `iadd` and an `icmp`.
-        dfg.replace(iadd).iadd(v1, arg0);
-        let c2 = dfg.ins(pos).icmp(IntCC::UnsignedLessThan, s, v1);
-        dfg.change_to_alias(c, c2);
+        pos.func.dfg.replace(iadd).iadd(v1, arg0);
+        let c2 = pos.ins().icmp(IntCC::UnsignedLessThan, s, v1);
+        pos.func.dfg.change_to_alias(c, c2);
 
-        assert_eq!(dfg.resolve_aliases(c2), c2);
-        assert_eq!(dfg.resolve_aliases(c), c2);
+        assert_eq!(pos.func.dfg.resolve_aliases(c2), c2);
+        assert_eq!(pos.func.dfg.resolve_aliases(c), c2);
 
         // Make a copy of the alias.
-        let c3 = dfg.ins(pos).copy(c);
+        let c3 = pos.ins().copy(c);
         // This does not see through copies.
-        assert_eq!(dfg.resolve_aliases(c3), c3);
+        assert_eq!(pos.func.dfg.resolve_aliases(c3), c3);
         // But this goes through both copies and aliases.
-        assert_eq!(dfg.resolve_copies(c3), c2);
+        assert_eq!(pos.func.dfg.resolve_copies(c3), c2);
     }
 }
