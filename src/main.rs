@@ -103,7 +103,9 @@ fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
 fn main() {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| {
-            d.help(true).version(Some(format!("0.0.0"))).deserialize()
+            d.help(true)
+                .version(Some(String::from("0.0.0")))
+                .deserialize()
         })
         .unwrap_or_else(|e| e.exit());
     let mut terminal = term::stdout().unwrap();
