@@ -189,7 +189,10 @@ fn relocate(
                 write_unaligned(reloc_address as *mut i32, reloc_delta_i32);
             }
         }
-        // TODO: deal with jumptable relocations
+        assert!(
+            relocs.jts.is_empty(),
+            "TODO: deal with jumptable relocations"
+        );
     }
 }
 
