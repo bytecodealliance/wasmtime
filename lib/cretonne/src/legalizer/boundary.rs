@@ -325,13 +325,15 @@ fn convert_to_abi<PutArg>(
     match legalize_abi_value(ty, &arg_type) {
         ValueConversion::IntSplit => {
             let curpos = pos.position();
-            let (lo, hi) = isplit(&mut pos.func.dfg, &mut pos.func.layout, cfg, curpos, value);
+            let srcloc = pos.srcloc();
+            let (lo, hi) = isplit(&mut pos.func, cfg, curpos, srcloc, value);
             convert_to_abi(pos, cfg, lo, put_arg);
             convert_to_abi(pos, cfg, hi, put_arg);
         }
         ValueConversion::VectorSplit => {
             let curpos = pos.position();
-            let (lo, hi) = vsplit(&mut pos.func.dfg, &mut pos.func.layout, cfg, curpos, value);
+            let srcloc = pos.srcloc();
+            let (lo, hi) = vsplit(&mut pos.func, cfg, curpos, srcloc, value);
             convert_to_abi(pos, cfg, lo, put_arg);
             convert_to_abi(pos, cfg, hi, put_arg);
         }
