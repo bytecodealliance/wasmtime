@@ -142,33 +142,8 @@ pub fn execute(exec: &ExecutableCode) -> Result<(), String> {
         // the Rust ABI for calling a function with no arguments and no return matches the one of
         // the generated code.Thanks to this, we can transmute the code region into a first-class
         // Rust function and call it.
-        // TODO: the Rust callee-saved registers will be overwritten by the executed code, inline
-        // assembly spilling these registers to the stack and restoring them after the call is
-        // needed.
         let start_func = transmute::<_, fn()>(code_buf.as_ptr());
-        // The code below saves the Intel callee-saved registers. It is not activate because
-        // inline ASM is not supported in the release version of the Rust compiler.
-        /*asm!("push rax
-              push rcx
-              push rdx
-              push rsi
-              push rdi
-              push r8
-              push r9
-              push r10
-              push r11
-        " :::: "intel", "volatile");*/
         start_func();
-        /*asm!("pop r11
-              pop r10
-              pop r9
-              pop r8
-              pop rdi
-              pop rsi
-              pop rdx
-              pop rcx
-              pop rax
-      " :::: "intel", "volatile");*/
         Ok(())
     }
 }
