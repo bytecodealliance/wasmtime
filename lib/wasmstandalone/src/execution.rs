@@ -124,28 +124,30 @@ pub fn compile_module(
 /// Jumps to the code region of memory and execute the start function of the module.
 pub fn execute(exec: &ExecutableCode) -> Result<(), String> {
     let code_buf = &exec.functions_code[exec.start_index];
-    unsafe {
-        match protect(
+    match unsafe {
+        protect(
             code_buf.as_ptr(),
             code_buf.len(),
             Protection::ReadWriteExecute,
-        ) {
-            Ok(()) => (),
-            Err(err) => {
-                return Err(format!(
-                    "failed to give executable permission to code: {}",
-                    err.description()
-                ))
-            }
-        };
-        // Rather than writing inline assembly to jump to the code region, we use the fact that
-        // the Rust ABI for calling a function with no arguments and no return matches the one of
-        // the generated code.Thanks to this, we can transmute the code region into a first-class
-        // Rust function and call it.
+        )
+    } {
+        Ok(()) => (),
+        Err(err) => {
+            return Err(format!(
+                "failed to give executable permission to code: {}",
+                err.description()
+            ))
+        }
+    }
+    // Rather than writing inline assembly to jump to the code region, we use the fact that
+    // the Rust ABI for calling a function with no arguments and no return matches the one of
+    // the generated code.Thanks to this, we can transmute the code region into a first-class
+    // Rust function and call it.
+    unsafe {
         let start_func = transmute::<_, fn()>(code_buf.as_ptr());
         start_func();
-        Ok(())
     }
+    Ok(())
 }
 
 /// Performs the relocations inside the function bytecode, provided the necessary metadata
