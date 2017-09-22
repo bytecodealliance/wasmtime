@@ -20,11 +20,23 @@ pub enum TrapCode {
     /// pages.
     HeapOutOfBounds,
 
+    /// Other bounds checking error.
+    OutOfBounds,
+
+    /// Indirect call to a null table entry.
+    IndirectCallToNull,
+
+    /// Signature mismatch on indirect call.
+    BadSignature,
+
     /// An integer arithmetic operation caused an overflow.
     IntegerOverflow,
 
     /// An integer division by zero.
     IntegerDivisionByZero,
+
+    /// Failed float-to-int conversion.
+    BadConversionToInteger,
 
     /// A user-defined trap code.
     User(u16),
@@ -36,8 +48,12 @@ impl Display for TrapCode {
         let identifier = match *self {
             StackOverflow => "stk_ovf",
             HeapOutOfBounds => "heap_oob",
+            OutOfBounds => "oob",
+            IndirectCallToNull => "icall_null",
+            BadSignature => "bad_sig",
             IntegerOverflow => "int_ovf",
             IntegerDivisionByZero => "int_divz",
+            BadConversionToInteger => "bad_toint",
             User(x) => return write!(f, "user{}", x),
         };
         f.write_str(identifier)
@@ -52,8 +68,12 @@ impl FromStr for TrapCode {
         match s {
             "stk_ovf" => Ok(StackOverflow),
             "heap_oob" => Ok(HeapOutOfBounds),
+            "oob" => Ok(OutOfBounds),
+            "icall_null" => Ok(IndirectCallToNull),
+            "bad_sig" => Ok(BadSignature),
             "int_ovf" => Ok(IntegerOverflow),
             "int_divz" => Ok(IntegerDivisionByZero),
+            "bad_toint" => Ok(BadConversionToInteger),
             _ if s.starts_with("user") => s[4..].parse().map(User).map_err(|_| ()),
             _ => Err(()),
         }
@@ -65,11 +85,15 @@ mod tests {
     use super::*;
 
     // Everything but user-defined codes.
-    const CODES: [TrapCode; 4] = [
+    const CODES: [TrapCode; 8] = [
         TrapCode::StackOverflow,
         TrapCode::HeapOutOfBounds,
+        TrapCode::OutOfBounds,
+        TrapCode::IndirectCallToNull,
+        TrapCode::BadSignature,
         TrapCode::IntegerOverflow,
         TrapCode::IntegerDivisionByZero,
+        TrapCode::BadConversionToInteger,
     ];
 
     #[test]
