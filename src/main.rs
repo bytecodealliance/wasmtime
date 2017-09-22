@@ -137,7 +137,7 @@ fn handle_module(args: &Args, path: PathBuf, name: &str, isa: &TargetIsa) -> Res
     terminal.reset().unwrap();
     let data = match path.extension() {
         None => {
-            return Err(String::from("the file extension is not wasm or wast"));
+            return Err(String::from("the file extension is not wasm or wat"));
         }
         Some(ext) => {
             match ext.to_str() {
@@ -149,17 +149,17 @@ fn handle_module(args: &Args, path: PathBuf, name: &str, isa: &TargetIsa) -> Res
                         }
                     }
                 }
-                Some("wast") => {
+                Some("wat") => {
                     let tmp_dir = TempDir::new("wasmstandalone").unwrap();
                     let file_path = tmp_dir.path().join("module.wasm");
                     File::create(file_path.clone()).unwrap();
-                    Command::new("wast2wasm")
+                    Command::new("wat2wasm")
                         .arg(path.clone())
                         .arg("-o")
                         .arg(file_path.to_str().unwrap())
                         .output()
                         .or_else(|e| if let io::ErrorKind::NotFound = e.kind() {
-                            return Err(String::from("wast2wasm not found"));
+                            return Err(String::from("wat2wasm not found"));
                         } else {
                             return Err(String::from(e.description()));
                         })
@@ -172,7 +172,7 @@ fn handle_module(args: &Args, path: PathBuf, name: &str, isa: &TargetIsa) -> Res
                     }
                 }
                 None | Some(&_) => {
-                    return Err(String::from("the file extension is not wasm or wast"));
+                    return Err(String::from("the file extension is not wasm or wat"));
                 }
             }
         }
@@ -336,13 +336,13 @@ fn pretty_print_translation(
     filename: &str,
     data: &[u8],
     translation: &TranslationResult,
-    writer_wast: &mut Write,
+    writer_wat: &mut Write,
     writer_cretonne: &mut Write,
     isa: &TargetIsa,
 ) -> Result<(), io::Error> {
     let mut terminal = term::stdout().unwrap();
     let mut parser = Parser::new(data);
-    let mut parser_writer = Writer::new(writer_wast);
+    let mut parser_writer = Writer::new(writer_wat);
     let imports_count = translation.function_imports_count;
     match parser.read() {
         s @ &ParserState::BeginWasm { .. } => parser_writer.write(s)?,
