@@ -66,11 +66,16 @@ def gen_recipe(recipe, fmt):
                     'let {} = divert.reg(args[{}], &func.locations);'
                     .format(v, i))
             elif isinstance(arg, Stack):
-                v = 'in_ss{}'.format(i)
+                v = 'in_stk{}'.format(i)
                 args += ', ' + v
-                fmt.line(
-                    'let {} = func.locations[args[{}]].unwrap_stack();'
-                    .format(v, i))
+                with fmt.indented(
+                        'let {} = StackRef::masked('.format(v),
+                        ').unwrap();'):
+                    fmt.format(
+                            'func.locations[args[{}]].unwrap_stack(),',
+                            i)
+                    fmt.format('{},', arg.stack_base_mask())
+                    fmt.line('&func.stack_slots,')
 
         # Pass arguments in this order: inputs, imm_fields, outputs.
         for f in iform.imm_fields:
@@ -86,15 +91,20 @@ def gen_recipe(recipe, fmt):
                 if isinstance(res, RegClass):
                     v = 'out_reg{}'.format(i)
                     args += ', ' + v
-                    fmt.line(
-                        'let {} = func.locations[results[{}]].unwrap_reg();'
-                        .format(v, i))
+                    fmt.format(
+                        'let {} = func.locations[results[{}]].unwrap_reg();',
+                        v, i)
                 elif isinstance(res, Stack):
-                    v = 'out_ss{}'.format(i)
+                    v = 'out_stk{}'.format(i)
                     args += ', ' + v
-                    fmt.line(
-                        'let {} = func.locations[results[{}]].unwrap_stack();'
-                        .format(v, i))
+                    with fmt.indented(
+                            'let {} = StackRef::masked('.format(v),
+                            ').unwrap();'):
+                        fmt.format(
+                                'func.locations[results[{}]].unwrap_stack(),',
+                                i)
+                        fmt.format('{},', res.stack_base_mask())
+                        fmt.line('&func.stack_slots,')
 
         # Special handling for regmove instructions. Update the register
         # diversion tracker.

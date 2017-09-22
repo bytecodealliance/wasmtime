@@ -104,6 +104,13 @@ impl SubTest for TestBinEmit {
         // value locations. The current error reporting is just crashing...
         let mut func = func.into_owned();
 
+        // Fix the stack frame layout so we can test spill/fill encodings.
+        let min_offset = func.stack_slots
+            .keys()
+            .map(|ss| func.stack_slots[ss].offset)
+            .min();
+        func.stack_slots.frame_size = min_offset.map(|off| (-off) as u32);
+
         let is_compressed = isa.flags().is_compressed();
 
         // Give an encoding to any instruction that doesn't already have one.
