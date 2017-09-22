@@ -207,14 +207,7 @@ fn handle_module(args: &Args, path: PathBuf, name: &str, isa: &TargetIsa) -> Res
     if args.flag_print {
         let mut writer1 = stdout();
         let mut writer2 = stdout();
-        match pretty_print_translation(
-            &name,
-            &data,
-            &translation,
-            &mut writer1,
-            &mut writer2,
-            isa,
-        ) {
+        match pretty_print_translation(name, &data, &translation, &mut writer1, &mut writer2, isa) {
             Err(error) => return Err(String::from(error.description())),
             Ok(()) => (),
         }
@@ -226,10 +219,10 @@ fn handle_module(args: &Args, path: PathBuf, name: &str, isa: &TargetIsa) -> Res
         for func in &translation.functions {
             let mut loop_analysis = LoopAnalysis::new();
             let mut cfg = ControlFlowGraph::new();
-            cfg.compute(&func);
+            cfg.compute(func);
             let mut domtree = DominatorTree::new();
-            domtree.compute(&func, &cfg);
-            loop_analysis.compute(&func, &cfg, &domtree);
+            domtree.compute(func, &cfg);
+            loop_analysis.compute(func, &cfg, &domtree);
             let mut context = Context::new();
             context.func = func.clone(); // TODO: Avoid this clone.
             context.cfg = cfg;

@@ -83,7 +83,7 @@ pub fn compile_module(
     let mut functions_code = Vec::new();
     for (function_index, function) in trans_result.functions.iter().enumerate() {
         let mut context = Context::new();
-        verify_function(&function, isa).unwrap();
+        verify_function(function, isa).unwrap();
         context.func = function.clone(); // TODO: Avoid this clone.
         let code_size = context.compile(isa).map_err(|e| {
             pretty_error(&context.func, Some(isa), e)
