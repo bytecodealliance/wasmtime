@@ -14,6 +14,13 @@ function %I64() {
     fn0 = function %foo()
     sig0 = ()
 
+    ; Use incoming_arg stack slots because they won't be relocated by the frame
+    ; layout.
+    ss0 = incoming_arg 8, offset 0
+    ss1 = incoming_arg 1024, offset -1024
+    ss2 = incoming_arg 1024, offset -2048
+    ss3 = incoming_arg 8, offset -2056
+
 ebb0:
 
     ; Integer Constants.
@@ -436,6 +443,22 @@ ebb0:
     ; asm: call *%r10
     call_indirect sig0, v402()                  ; bin: 41 ff d2
 
+    ; Spill / Fill.
+
+    ; asm: movq %rcx, 1032(%rsp)
+    [-,ss1]             v500 = spill v1         ; bin: 48 89 8c 24 00000408
+    ; asm: movq %rsi, 1032(%rsp)
+    [-,ss1]             v501 = spill v2         ; bin: 48 89 b4 24 00000408
+    ; asm: movq %r10, 1032(%rsp)
+    [-,ss1]             v502 = spill v3         ; bin: 4c 89 94 24 00000408
+
+    ; asm: movq 1032(%rsp), %rcx
+    [-,%rcx]            v510 = fill v500        ; bin: 48 8b 8c 24 00000408
+    ; asm: movq 1032(%rsp), %rsi
+    [-,%rsi]            v511 = fill v501        ; bin: 48 8b b4 24 00000408
+    ; asm: movq 1032(%rsp), %r10
+    [-,%r10]            v512 = fill v502        ; bin: 4c 8b 94 24 00000408
+
     ; asm: testq %rcx, %rcx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 48 85 c9 74 1b
@@ -476,6 +499,11 @@ ebb2:
 function %I32() {
     fn0 = function %foo()
     sig0 = ()
+
+    ss0 = incoming_arg 8, offset 0
+    ss1 = incoming_arg 1024, offset -1024
+    ss2 = incoming_arg 1024, offset -2048
+    ss3 = incoming_arg 8, offset -2056
 
 ebb0:
 
@@ -805,6 +833,22 @@ ebb0:
     [-,%rcx]             v350 = bint.i32 v300   ; bin: 0f b6 cb
     ; asm: movzbl %dl, %esi
     [-,%rsi]             v351 = bint.i32 v301   ; bin: 0f b6 f2
+
+    ; Spill / Fill.
+
+    ; asm: movl %ecx, 1032(%rsp)
+    [-,ss1]             v500 = spill v1         ; bin: 89 8c 24 00000408
+    ; asm: movl %esi, 1032(%rsp)
+    [-,ss1]             v501 = spill v2         ; bin: 89 b4 24 00000408
+    ; asm: movl %r10d, 1032(%rsp)
+    [-,ss1]             v502 = spill v3         ; bin: 44 89 94 24 00000408
+
+    ; asm: movl 1032(%rsp), %ecx
+    [-,%rcx]            v510 = fill v500        ; bin: 8b 8c 24 00000408
+    ; asm: movl 1032(%rsp), %esi
+    [-,%rsi]            v511 = fill v501        ; bin: 8b b4 24 00000408
+    ; asm: movl 1032(%rsp), %r10d
+    [-,%r10]            v512 = fill v502        ; bin: 44 8b 94 24 00000408
 
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1x

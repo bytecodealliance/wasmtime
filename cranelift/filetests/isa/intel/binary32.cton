@@ -11,6 +11,11 @@ function %I32() {
     fn0 = function %foo()
     sig0 = ()
 
+    ss0 = incoming_arg 8, offset 0
+    ss1 = incoming_arg 1024, offset -1024
+    ss2 = incoming_arg 1024, offset -2048
+    ss3 = incoming_arg 8, offset -2056
+
 ebb0:
     ; asm: movl $1, %ecx
     [-,%rcx]            v1 = iconst.i32 1        ; bin: b9 00000001
@@ -345,6 +350,18 @@ ebb0:
     call_indirect sig0, v400()                  ; bin: ff d1
     ; asm: call *%esi
     call_indirect sig0, v401()                  ; bin: ff d6
+
+    ; Spill / Fill.
+
+    ; asm: movl %ecx, 1032(%esp)
+    [-,ss1]             v500 = spill v1         ; bin: 89 8c 24 00000408
+    ; asm: movl %esi, 1032(%esp)
+    [-,ss1]             v501 = spill v2         ; bin: 89 b4 24 00000408
+
+    ; asm: movl 1032(%esp), %ecx
+    [-,%rcx]            v510 = fill v500        ; bin: 8b 8c 24 00000408
+    ; asm: movl 1032(%esp), %esi
+    [-,%rsi]            v511 = fill v501        ; bin: 8b b4 24 00000408
 
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1

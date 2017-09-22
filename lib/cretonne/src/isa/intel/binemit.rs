@@ -2,8 +2,9 @@
 
 use binemit::{CodeSink, Reloc, bad_encoding};
 use ir::{Function, Inst, Ebb, InstructionData};
-use isa::RegUnit;
+use isa::{RegUnit, StackRef, StackBase, StackBaseMask};
 use regalloc::RegDiversions;
+use super::registers::RU;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-intel.rs"));
 
@@ -27,6 +28,16 @@ impl Into<Reloc> for RelocKind {
     }
 }
 
+// Convert a stack base to the corresponding register.
+fn stk_base(base: StackBase) -> RegUnit {
+    let ru = match base {
+        StackBase::SP => RU::rsp,
+        StackBase::FP => RU::rbp,
+        StackBase::Zone => unimplemented!(),
+    };
+    ru as RegUnit
+}
+
 // Mandatory prefix bytes for Mp* opcodes.
 const PREFIX: [u8; 3] = [0x66, 0xf3, 0xf2];
 
@@ -43,7 +54,7 @@ fn rex1(reg_b: RegUnit) -> u8 {
 
 // Create a dual-register REX prefix, setting:
 //
-// REX.B = bit 3 of r/m register.
+// REX.B = bit 3 of r/m register, or SIB base register when a SIB byte is present.
 // REX.R = bit 3 of reg register.
 fn rex2(rm: RegUnit, reg: RegUnit) -> u8 {
     let b = ((rm >> 3) & 1) as u8;
@@ -182,6 +193,20 @@ fn modrm_disp32<CS: CodeSink + ?Sized>(rm: RegUnit, reg: RegUnit, sink: &mut CS)
     let mut b = 0b10000000;
     b |= reg << 3;
     b |= rm;
+    sink.put1(b);
+}
+
+/// Emit a mode 10 ModR/M byte indicating that a SIB byte is present.
+fn modrm_sib_disp32<CS: CodeSink + ?Sized>(reg: RegUnit, sink: &mut CS) {
+    modrm_disp32(0b100, reg, sink);
+}
+
+/// Emit a SIB byte with a base register and no scale+index.
+fn sib_noindex<CS: CodeSink + ?Sized>(base: RegUnit, sink: &mut CS) {
+    let base = base as u8 & 7;
+    // SIB        SS_III_BBB.
+    let mut b = 0b00_100_000;
+    b |= base;
     sink.put1(b);
 }
 
