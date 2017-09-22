@@ -1,6 +1,7 @@
 ; Binary emission of 64-bit floating point code.
 test binemit
 set is_64bit
+set is_compressed
 isa intel has_sse2
 
 ; The binary encodings can be verified with the command:
@@ -9,6 +10,11 @@ isa intel has_sse2
 ;
 
 function %F32() {
+    ss0 = incoming_arg 8, offset 0
+    ss1 = incoming_arg 1024, offset -1024
+    ss2 = incoming_arg 1024, offset -2048
+    ss3 = incoming_arg 8, offset -2056
+
 ebb0:
     [-,%r11]            v0 = iconst.i32 1
     [-,%rsi]            v1 = iconst.i32 2
@@ -36,7 +42,7 @@ ebb0:
     [-,%xmm10]          v17 = bitcast.f32 v1                    ; bin: 66 44 0f 6e d6
 
     ; asm: movd %xmm5, %ecx
-    [-,%rcx]            v18 = bitcast.i32 v10                   ; bin: 66 40 0f 7e e9
+    [-,%rcx]            v18 = bitcast.i32 v10                   ; bin: 66 0f 7e e9
     ; asm: movd %xmm10, %esi
     [-,%rsi]            v19 = bitcast.i32 v11                   ; bin: 66 44 0f 7e d6
 
@@ -113,10 +119,27 @@ ebb0:
     ; asm: movd %xmm10, -10000(%rax)
     [-]                 store.f32 v101, v2-10000                ; bin: 66 44 0f 7e 90 ffffd8f0
 
+    ; Spill / Fill.
+
+    ; asm: movd %xmm5, 1032(%rsp)
+    [-,ss1]             v200 = spill v100                       ; bin: 66 0f 7e ac 24 00000408
+    ; asm: movd %xmm10, 1032(%rsp)
+    [-,ss1]             v201 = spill v101                       ; bin: 66 44 0f 7e 94 24 00000408
+
+    ; asm: movd 1032(%rsp), %xmm5
+    [-,%xmm5]           v210 = fill v200                        ; bin: 66 0f 6e ac 24 00000408
+    ; asm: movd 1032(%rsp), %xmm10
+    [-,%xmm10]          v211 = fill v201                        ; bin: 66 44 0f 6e 94 24 00000408
+
     return
 }
 
 function %F64() {
+    ss0 = incoming_arg 8, offset 0
+    ss1 = incoming_arg 1024, offset -1024
+    ss2 = incoming_arg 1024, offset -2048
+    ss3 = incoming_arg 8, offset -2056
+
 ebb0:
     [-,%r11]            v0 = iconst.i32 1
     [-,%rsi]            v1 = iconst.i32 2
@@ -220,6 +243,18 @@ ebb0:
     [-]                 store.f64 v100, v3+10000                ; bin: 66 41 0f d6 ae 00002710
     ; asm: movq %xmm10, -10000(%rax)
     [-]                 store.f64 v101, v2-10000                ; bin: 66 44 0f d6 90 ffffd8f0
+
+    ; Spill / Fill.
+
+    ; asm: movq %xmm5, 1032(%rsp)
+    [-,ss1]             v200 = spill v100                       ; bin: 66 0f d6 ac 24 00000408
+    ; asm: movq %xmm10, 1032(%rsp)
+    [-,ss1]             v201 = spill v101                       ; bin: 66 44 0f d6 94 24 00000408
+
+    ; asm: movq 1032(%rsp), %xmm5
+    [-,%xmm5]           v210 = fill v200                        ; bin: f3 0f 7e ac 24 00000408
+    ; asm: movq 1032(%rsp), %xmm10
+    [-,%xmm10]          v211 = fill v201                        ; bin: f3 44 0f 7e 94 24 00000408
 
     return
 }

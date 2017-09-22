@@ -23,7 +23,7 @@ data types, and the H-registers even less so. Rather than trying to model the
 H-registers accurately, we'll avoid using them in both I32 and I64 modes.
 """
 from __future__ import absolute_import
-from cdsl.registers import RegBank, RegClass
+from cdsl.registers import RegBank, RegClass, Stack
 from .defs import ISA
 
 
@@ -43,5 +43,11 @@ GPR8 = GPR[0:8]
 ABCD = GPR[0:4]
 FPR = RegClass(FloatRegs)
 FPR8 = FPR[0:8]
+
+# Constraints for stack operands.
+
+# Stack operand with a 32-bit signed displacement from either RBP or RSP.
+StackGPR32 = Stack(GPR)
+StackFPR32 = Stack(FPR)
 
 RegClass.extract_names(globals())

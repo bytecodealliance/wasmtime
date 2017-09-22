@@ -8,7 +8,7 @@ from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare
 from base.formats import RegMove, Ternary, Jump, Branch, FuncAddr
-from .registers import GPR, ABCD, FPR, GPR8, FPR8
+from .registers import GPR, ABCD, FPR, GPR8, FPR8, StackGPR32, StackFPR32
 
 try:
     from typing import Tuple, Dict, Sequence  # noqa
@@ -474,6 +474,26 @@ fstDisp32 = TailRecipe(
         sink.put4(offset as u32);
         ''')
 
+# Unary spill with SIB and 32-bit displacement.
+spSib32 = TailRecipe(
+        'spSib32', Unary, size=6, ins=GPR, outs=StackGPR32,
+        emit='''
+        let base = stk_base(out_stk0.base);
+        PUT_OP(bits, rex2(base, in_reg0), sink);
+        modrm_sib_disp32(in_reg0, sink);
+        sib_noindex(base, sink);
+        sink.put4(out_stk0.offset as u32);
+        ''')
+fspSib32 = TailRecipe(
+        'fspSib32', Unary, size=6, ins=FPR, outs=StackFPR32,
+        emit='''
+        let base = stk_base(out_stk0.base);
+        PUT_OP(bits, rex2(base, in_reg0), sink);
+        modrm_sib_disp32(in_reg0, sink);
+        sib_noindex(base, sink);
+        sink.put4(out_stk0.offset as u32);
+        ''')
+
 #
 # Load recipes
 #
@@ -538,6 +558,26 @@ fldDisp32 = TailRecipe(
         modrm_disp32(in_reg0, out_reg0, sink);
         let offset: i32 = offset.into();
         sink.put4(offset as u32);
+        ''')
+
+# Unary fill with SIB and 32-bit displacement.
+fiSib32 = TailRecipe(
+        'fiSib32', Unary, size=6, ins=StackGPR32, outs=GPR,
+        emit='''
+        let base = stk_base(in_stk0.base);
+        PUT_OP(bits, rex2(base, out_reg0), sink);
+        modrm_sib_disp32(out_reg0, sink);
+        sib_noindex(base, sink);
+        sink.put4(in_stk0.offset as u32);
+        ''')
+ffiSib32 = TailRecipe(
+        'ffiSib32', Unary, size=6, ins=StackFPR32, outs=FPR,
+        emit='''
+        let base = stk_base(in_stk0.base);
+        PUT_OP(bits, rex2(base, out_reg0), sink);
+        modrm_sib_disp32(out_reg0, sink);
+        sib_noindex(base, sink);
+        sink.put4(in_stk0.offset as u32);
         ''')
 
 #

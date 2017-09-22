@@ -65,7 +65,7 @@ def enc_i32_i64_ld_st(inst, w_bit, recipe, *args, **kwargs):
     Add encodings for `inst.i32` to I32.
     Add encodings for `inst.i32` to I64 with and without REX.
     Add encodings for `inst.i64` to I64 with a REX prefix, using the `w_bit`
-    argument to determine wheter or not to set the REX.W bit.
+    argument to determine whether or not to set the REX.W bit.
     """
     I32.enc(inst.i32.any, *recipe(*args, **kwargs))
 
@@ -181,6 +181,8 @@ enc_i32_i64_ld_st(base.store, True, r.st, 0x89)
 enc_i32_i64_ld_st(base.store, True, r.stDisp8, 0x89)
 enc_i32_i64_ld_st(base.store, True, r.stDisp32, 0x89)
 
+enc_i32_i64(base.spill, r.spSib32, 0x89)
+
 enc_i64(base.istore32.i64.any, r.st, 0x89)
 enc_i64(base.istore32.i64.any, r.stDisp8, 0x89)
 enc_i64(base.istore32.i64.any, r.stDisp32, 0x89)
@@ -207,6 +209,8 @@ I64.enc(base.istore8.i64.any, *r.stDisp32.rex(0x88))
 enc_i32_i64_ld_st(base.load, True, r.ld, 0x8b)
 enc_i32_i64_ld_st(base.load, True, r.ldDisp8, 0x8b)
 enc_i32_i64_ld_st(base.load, True, r.ldDisp32, 0x8b)
+
+enc_i32_i64(base.fill, r.fiSib32, 0x8b)
 
 enc_i64(base.uload32.i64, r.ld, 0x8b)
 enc_i64(base.uload32.i64, r.ldDisp8, 0x8b)
@@ -251,6 +255,12 @@ enc_flt(base.store.f32.any, r.fstDisp32, 0x66, 0x0f, 0x7e)
 enc_flt(base.store.f64.any, r.fst, 0x66, 0x0f, 0xd6)
 enc_flt(base.store.f64.any, r.fstDisp8, 0x66, 0x0f, 0xd6)
 enc_flt(base.store.f64.any, r.fstDisp32, 0x66, 0x0f, 0xd6)
+
+enc_flt(base.fill.f32, r.ffiSib32, 0x66, 0x0f, 0x6e)
+enc_flt(base.fill.f64, r.ffiSib32, 0xf3, 0x0f, 0x7e)
+
+enc_flt(base.spill.f32, r.fspSib32, 0x66, 0x0f, 0x7e)
+enc_flt(base.spill.f64, r.fspSib32, 0x66, 0x0f, 0xd6)
 
 #
 # Function addresses.

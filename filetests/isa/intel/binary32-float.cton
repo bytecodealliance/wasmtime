@@ -8,6 +8,11 @@ isa intel has_sse2
 ;
 
 function %F32() {
+    ss0 = incoming_arg 8, offset 0
+    ss1 = incoming_arg 1024, offset -1024
+    ss2 = incoming_arg 1024, offset -2048
+    ss3 = incoming_arg 8, offset -2056
+
 ebb0:
     [-,%rcx]            v0 = iconst.i32 1
     [-,%rsi]            v1 = iconst.i32 2
@@ -105,10 +110,27 @@ ebb0:
     ; asm: movd %xmm2, -10000(%esi)
     [-]                 store.f32 v101, v1-10000                ; bin: 66 0f 7e 96 ffffd8f0
 
+    ; Spill / Fill.
+
+    ; asm: movd %xmm5, 1032(%esp)
+    [-,ss1]             v200 = spill v100                       ; bin: 66 0f 7e ac 24 00000408
+    ; asm: movd %xmm2, 1032(%esp)
+    [-,ss1]             v201 = spill v101                       ; bin: 66 0f 7e 94 24 00000408
+
+    ; asm: movd 1032(%esp), %xmm5
+    [-,%xmm5]           v210 = fill v200                        ; bin: 66 0f 6e ac 24 00000408
+    ; asm: movd 1032(%esp), %xmm2
+    [-,%xmm2]           v211 = fill v201                        ; bin: 66 0f 6e 94 24 00000408
+
     return
 }
 
 function %F64() {
+    ss0 = incoming_arg 8, offset 0
+    ss1 = incoming_arg 1024, offset -1024
+    ss2 = incoming_arg 1024, offset -2048
+    ss3 = incoming_arg 8, offset -2056
+
 ebb0:
     [-,%rcx]            v0 = iconst.i32 1
     [-,%rsi]            v1 = iconst.i32 2
@@ -197,6 +219,18 @@ ebb0:
     [-]                 store.f64 v100, v0+10000                ; bin: 66 0f d6 a9 00002710
     ; asm: movq %xmm2, -10000(%esi)
     [-]                 store.f64 v101, v1-10000                ; bin: 66 0f d6 96 ffffd8f0
+
+    ; Spill / Fill.
+
+    ; asm: movq %xmm5, 1032(%esp)
+    [-,ss1]             v200 = spill v100                       ; bin: 66 0f d6 ac 24 00000408
+    ; asm: movq %xmm2, 1032(%esp)
+    [-,ss1]             v201 = spill v101                       ; bin: 66 0f d6 94 24 00000408
+
+    ; asm: movq 1032(%esp), %xmm5
+    [-,%xmm5]           v210 = fill v200                        ; bin: f3 0f 7e ac 24 00000408
+    ; asm: movq 1032(%esp), %xmm2
+    [-,%xmm2]           v211 = fill v201                        ; bin: f3 0f 7e 94 24 00000408
 
     return
 }
