@@ -152,7 +152,7 @@ def unwrap_inst(iref, node, fmt):
     # type: (str, Def, Formatter) -> bool
     """
     Given a `Def` node, emit code that extracts all the instruction fields from
-    `dfg[iref]`.
+    `pos.func.dfg[iref]`.
 
     Create local variables named after the `Var` instances in `node`.
 
@@ -181,7 +181,8 @@ def unwrap_inst(iref, node, fmt):
         elif iform.has_value_list or nvops > 1:
             fmt.line('ref args,')
         fmt.line('..')
-        fmt.outdented_line('} = dfg[inst] {')
+        fmt.outdented_line('} = pos.func.dfg[inst] {')
+        fmt.line('let dfg = &pos.func.dfg;')
         if iform.has_value_list:
             fmt.line('let args = args.as_slice(&dfg.value_lists);')
         elif nvops == 1:
@@ -205,7 +206,7 @@ def unwrap_inst(iref, node, fmt):
     for opnum in expr.inst.value_opnums:
         v = expr.args[opnum]
         if isinstance(v, Var) and v.has_free_typevar():
-            fmt.line('let typeof_{0} = dfg.value_type({0});'.format(v))
+            fmt.format('let typeof_{0} = pos.func.dfg.value_type({0});', v)
 
     # If the node has results, detach the values.
     # Place the values in  locals.
@@ -223,13 +224,13 @@ def unwrap_inst(iref, node, fmt):
             for d in node.defs:
                 fmt.line('let {};'.format(d))
             with fmt.indented('{', '}'):
-                fmt.line('let r = dfg.inst_results(inst);')
+                fmt.line('let r = pos.func.dfg.inst_results(inst);')
                 for i in range(len(node.defs)):
                     fmt.line('{} = r[{}];'.format(node.defs[i], i))
             for d in node.defs:
                 if d.has_free_typevar():
                     fmt.line(
-                            'let typeof_{0} = dfg.value_type({0});'
+                            'let typeof_{0} = pos.func.dfg.value_type({0});'
                             .format(d))
 
     return replace_inst
@@ -265,8 +266,9 @@ def emit_dst_inst(node, fmt):
         # special functions in the `legalizer::split` module. These functions
         # will eliminate concat-split patterns.
         fmt.line('let curpos = pos.position();')
+        fmt.line('let srcloc = pos.srcloc();')
         fmt.format(
-                'let {} = split::{}(dfg, pos.layout, cfg, curpos, {});',
+                'let {} = split::{}(pos.func, cfg, curpos, srcloc, {});',
                 wrap_tup(node.defs),
                 node.expr.inst.snake_name(),
                 node.expr.args[0])
@@ -274,7 +276,7 @@ def emit_dst_inst(node, fmt):
         if len(node.defs) == 0:
             # This node doesn't define any values, so just insert the new
             # instruction.
-            builder = 'dfg.ins(pos)'
+            builder = 'pos.ins()'
         else:
             src_def0 = node.defs[0].src_def
             if src_def0 and node.defs == src_def0.defs:
@@ -282,12 +284,12 @@ def emit_dst_inst(node, fmt):
                 # the source pattern. Unwrapping would have left the results
                 # intact.
                 # Replace the whole instruction.
-                builder = 'let {} = dfg.replace(inst)'.format(
+                builder = 'let {} = pos.func.dfg.replace(inst)'.format(
                         wrap_tup(node.defs))
                 replaced_inst = 'inst'
             else:
                 # Insert a new instruction.
-                builder = 'let {} = dfg.ins(pos)'.format(wrap_tup(node.defs))
+                builder = 'let {} = pos.ins()'.format(wrap_tup(node.defs))
                 # We may want to reuse some of the detached output values.
                 if len(node.defs) == 1 and node.defs[0].is_output():
                     # Reuse the single source result value.
@@ -335,7 +337,7 @@ def gen_xform(xform, fmt, type_sets):
         # If we're going to delete `inst`, we need to detach its results first
         # so they can be reattached during pattern expansion.
         if not replace_inst:
-            fmt.line('dfg.clear_results(inst);')
+            fmt.line('pos.func.dfg.clear_results(inst);')
 
         # Emit the destination pattern.
         for dst in xform.dst.rtl:
@@ -357,8 +359,10 @@ def gen_xform_group(xgrp, fmt, type_sets):
             'func: &mut ir::Function, '
             'cfg: &mut ::flowgraph::ControlFlowGraph) -> '
             'bool {{'.format(xgrp.name), '}'):
-        fmt.line('use ir::{InstBuilder, CursorBase};')
-        fmt.line('let srcloc = func.srclocs[inst];')
+        fmt.line('use ir::{InstBuilder};')
+        fmt.line('use cursor::{Cursor, FuncCursor};')
+        fmt.line('let pos = &mut FuncCursor::new(func).at_inst(inst);')
+        fmt.line('pos.use_srcloc(inst);')
 
         # Group the xforms by opcode so we can generate a big switch.
         # Preserve ordering.
@@ -368,16 +372,10 @@ def gen_xform_group(xgrp, fmt, type_sets):
             xforms[inst.camel_name].append(xform)
 
         with fmt.indented('{', '}'):
-            with fmt.indented('match func.dfg[inst].opcode() {', '}'):
+            with fmt.indented('match pos.func.dfg[inst].opcode() {', '}'):
                 for camel_name in sorted(xforms.keys()):
                     with fmt.indented(
                             'ir::Opcode::{} => {{'.format(camel_name), '}'):
-                        fmt.line(
-                                'let pos = &mut ir::Cursor::new'
-                                '(&mut func.layout, &mut func.srclocs)'
-                                '.with_srcloc(srcloc)'
-                                '.at_inst(inst);')
-                        fmt.line('let dfg = &mut func.dfg;')
                         for xform in xforms[camel_name]:
                             gen_xform(xform, fmt, type_sets)
 
@@ -387,7 +385,7 @@ def gen_xform_group(xgrp, fmt, type_sets):
                     with fmt.indented(
                             'ir::Opcode::{} => {{'
                             .format(inst.camel_name), '}'):
-                        fmt.format('{}(inst, func, cfg);', funcname)
+                        fmt.format('{}(inst, pos.func, cfg);', funcname)
                         fmt.line('return true;')
 
                 # We'll assume there are uncovered opcodes.
@@ -395,7 +393,7 @@ def gen_xform_group(xgrp, fmt, type_sets):
 
         # If we fall through, nothing was expanded. Call the chain if any.
         if xgrp.chain:
-            fmt.format('{}(inst, func, cfg)', xgrp.chain.rust_name())
+            fmt.format('{}(inst, pos.func, cfg)', xgrp.chain.rust_name())
         else:
             fmt.line('false')
 
