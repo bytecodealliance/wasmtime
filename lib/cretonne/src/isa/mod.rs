@@ -43,6 +43,7 @@
 pub use isa::constraints::{RecipeConstraints, OperandConstraint, ConstraintKind, BranchRange};
 pub use isa::encoding::{Encoding, EncInfo};
 pub use isa::registers::{RegInfo, RegUnit, RegClass, RegClassIndex, regs_overlap};
+pub use isa::stack::{StackBase, StackBaseMask, StackRef};
 
 use binemit;
 use flowgraph;
@@ -68,6 +69,7 @@ pub mod registers;
 mod encoding;
 mod enc_tables;
 mod constraints;
+mod stack;
 
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::Unsupported)` if not enabled.

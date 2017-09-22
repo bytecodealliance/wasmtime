@@ -2,7 +2,7 @@
 
 use binemit::{CodeSink, Reloc, bad_encoding};
 use ir::{Function, Inst, InstructionData};
-use isa::RegUnit;
+use isa::{RegUnit, StackRef, StackBaseMask};
 use predicates::is_signed_int;
 use regalloc::RegDiversions;
 

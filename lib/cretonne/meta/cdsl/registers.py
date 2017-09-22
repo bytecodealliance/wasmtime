@@ -352,3 +352,13 @@ class Stack(object):
     def __init__(self, rc):
         # type: (RegClass) -> None
         self.regclass = rc
+
+    def stack_base_mask(self):
+        # type: () -> str
+        """
+        Get the StackBaseMask to use for this operand.
+
+        This is a mask of base registers that can be supported by this operand.
+        """
+        # TODO: Make this configurable instead of just using the SP.
+        return 'StackBaseMask(1)'
