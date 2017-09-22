@@ -6,6 +6,7 @@
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
 extern crate cton_wasm;
+extern crate cton_native;
 extern crate wasmstandalone;
 extern crate wasmparser;
 extern crate cretonne;
@@ -16,8 +17,7 @@ extern crate serde_derive;
 extern crate term;
 extern crate tempdir;
 
-use cton_wasm::{translate_module, TranslationResult, FunctionTranslation, DummyRuntime,
-                WasmRuntime};
+use cton_wasm::{translate_module, TranslationResult};
 use wasmstandalone::{StandaloneRuntime, compile_module, execute};
 use std::path::PathBuf;
 use wasmparser::{Parser, ParserState, WasmDecoder, SectionCode};
@@ -31,6 +31,7 @@ use cretonne::ir;
 use cretonne::ir::entities::AnyEntity;
 use cretonne::isa::TargetIsa;
 use cretonne::verifier;
+use cretonne::settings;
 use std::fs::File;
 use std::error::Error;
 use std::io;
@@ -106,10 +107,14 @@ fn main() {
         })
         .unwrap_or_else(|e| e.exit());
     let mut terminal = term::stdout().unwrap();
+    let (flag_builder, isa_builder) = cton_native::builders().unwrap_or_else(|_| {
+        panic!("host machine is not a supported target");
+    });
+    let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
     for filename in &args.arg_file {
         let path = Path::new(&filename);
         let name = path.as_os_str().to_string_lossy();
-        match handle_module(&args, path.to_path_buf(), &name) {
+        match handle_module(&args, path.to_path_buf(), &name, &*isa) {
             Ok(()) => {}
             Err(message) => {
                 terminal.fg(term::color::RED).unwrap();
@@ -121,7 +126,7 @@ fn main() {
     }
 }
 
-fn handle_module(args: &Args, path: PathBuf, name: &str) -> Result<(), String> {
+fn handle_module(args: &Args, path: PathBuf, name: &str, isa: &TargetIsa) -> Result<(), String> {
     let mut terminal = term::stdout().unwrap();
     terminal.fg(term::color::YELLOW).unwrap();
     vprint!(args.flag_verbose, "Handling: ");
@@ -172,15 +177,9 @@ fn handle_module(args: &Args, path: PathBuf, name: &str) -> Result<(), String> {
             }
         }
     };
-    let mut dummy_runtime = DummyRuntime::new();
-    let mut standalone_runtime = StandaloneRuntime::new();
+    let mut runtime = StandaloneRuntime::with_flags(isa.flags().clone());
     let translation = {
-        let runtime: &mut WasmRuntime = if args.flag_execute {
-            &mut standalone_runtime
-        } else {
-            &mut dummy_runtime
-        };
-        match translate_module(&data, runtime) {
+        match translate_module(&data, &mut runtime) {
             Ok(x) => x,
             Err(string) => {
                 return Err(string);
@@ -195,14 +194,9 @@ fn handle_module(args: &Args, path: PathBuf, name: &str) -> Result<(), String> {
         vprint!(args.flag_verbose, "Checking...   ");
         terminal.reset().unwrap();
         for func in &translation.functions {
-            let il = match *func {
-                FunctionTranslation::Import() => continue,
-                FunctionTranslation::Code { ref il, .. } => il.clone(),
-            };
-            match verifier::verify_function(&il, None) {
-                Ok(()) => (),
-                Err(ref err) => return Err(pretty_verifier_error(&il, None, err)),
-            }
+            verifier::verify_function(func, isa).map_err(|err| {
+                pretty_verifier_error(func, Some(isa), &err)
+            })?;
         }
         terminal.fg(term::color::GREEN).unwrap();
         vprintln!(args.flag_verbose, " ok");
@@ -211,7 +205,14 @@ fn handle_module(args: &Args, path: PathBuf, name: &str) -> Result<(), String> {
     if args.flag_print {
         let mut writer1 = stdout();
         let mut writer2 = stdout();
-        match pretty_print_translation(&name, &data, &translation, &mut writer1, &mut writer2) {
+        match pretty_print_translation(
+            &name,
+            &data,
+            &translation,
+            &mut writer1,
+            &mut writer2,
+            isa,
+        ) {
             Err(error) => return Err(String::from(error.description())),
             Ok(()) => (),
         }
@@ -221,33 +222,29 @@ fn handle_module(args: &Args, path: PathBuf, name: &str) -> Result<(), String> {
         vprint!(args.flag_verbose, "Optimizing... ");
         terminal.reset().unwrap();
         for func in &translation.functions {
-            let il = match *func {
-                FunctionTranslation::Import() => continue,
-                FunctionTranslation::Code { ref il, .. } => il.clone(),
-            };
             let mut loop_analysis = LoopAnalysis::new();
             let mut cfg = ControlFlowGraph::new();
-            cfg.compute(&il);
+            cfg.compute(&func);
             let mut domtree = DominatorTree::new();
-            domtree.compute(&il, &cfg);
-            loop_analysis.compute(&il, &cfg, &domtree);
+            domtree.compute(&func, &cfg);
+            loop_analysis.compute(&func, &cfg, &domtree);
             let mut context = Context::new();
-            context.func = il;
+            context.func = func.clone(); // TODO: Avoid this clone.
             context.cfg = cfg;
             context.domtree = domtree;
             context.loop_analysis = loop_analysis;
-            match verifier::verify_context(&context.func, &context.cfg, &context.domtree, None) {
+            match verifier::verify_context(&context.func, &context.cfg, &context.domtree, isa) {
                 Ok(()) => (),
                 Err(ref err) => {
-                    return Err(pretty_verifier_error(&context.func, None, err));
+                    return Err(pretty_verifier_error(&context.func, Some(isa), err));
                 }
             };
-            match context.licm() {
+            match context.licm(isa) {
                 Ok(())=> (),
                 Err(error) => {
                     match error {
                         CtonError::Verifier(ref err) => {
-                            return Err(pretty_verifier_error(&context.func, None, err));
+                            return Err(pretty_verifier_error(&context.func, Some(isa), err));
                         }
                         CtonError::InvalidInput |
                         CtonError::ImplLimitExceeded |
@@ -255,9 +252,9 @@ fn handle_module(args: &Args, path: PathBuf, name: &str) -> Result<(), String> {
                     }
                 }
             };
-            match verifier::verify_context(&context.func, &context.cfg, &context.domtree, None) {
+            match verifier::verify_context(&context.func, &context.cfg, &context.domtree, isa) {
                 Ok(()) => (),
-                Err(ref err) => return Err(pretty_verifier_error(&context.func, None, err)),
+                Err(ref err) => return Err(pretty_verifier_error(&context.func, Some(isa), err)),
             }
         }
         terminal.fg(term::color::GREEN).unwrap();
@@ -268,7 +265,7 @@ fn handle_module(args: &Args, path: PathBuf, name: &str) -> Result<(), String> {
         terminal.fg(term::color::MAGENTA).unwrap();
         vprint!(args.flag_verbose, "Compiling...   ");
         terminal.reset().unwrap();
-        match compile_module(&translation) {
+        match compile_module(&translation, isa, &runtime) {
             Ok(ref exec) => {
                 terminal.fg(term::color::GREEN).unwrap();
                 vprintln!(args.flag_verbose, "ok");
@@ -314,7 +311,7 @@ fn handle_module(args: &Args, path: PathBuf, name: &str) -> Result<(), String> {
                         if split.len() != 3 {
                             break;
                         }
-                        let memory = standalone_runtime.inspect_memory(
+                        let memory = runtime.inspect_memory(
                             str::parse(split[0]).unwrap(),
                             str::parse(split[1]).unwrap(),
                             str::parse(split[2]).unwrap(),
@@ -341,14 +338,12 @@ fn pretty_print_translation(
     translation: &TranslationResult,
     writer_wast: &mut Write,
     writer_cretonne: &mut Write,
+    isa: &TargetIsa,
 ) -> Result<(), io::Error> {
     let mut terminal = term::stdout().unwrap();
     let mut parser = Parser::new(data);
     let mut parser_writer = Writer::new(writer_wast);
-    let imports_count = translation.functions.iter().fold(0, |acc, f| match f {
-        &FunctionTranslation::Import() => acc + 1,
-        &FunctionTranslation::Code { .. } => acc,
-    });
+    let imports_count = translation.function_imports_count;
     match parser.read() {
         s @ &ParserState::BeginWasm { .. } => parser_writer.write(s)?,
         _ => panic!("modules should begin properly"),
@@ -401,10 +396,8 @@ fn pretty_print_translation(
         }
         let mut function_string = format!(
             "  {}",
-            match translation.functions[function_index + imports_count] {
-                FunctionTranslation::Code { ref il, .. } => il,
-                FunctionTranslation::Import() => panic!("should not happen"),
-            }.display(None)
+            translation.functions[function_index + imports_count]
+                .display(isa)
         );
         function_string.pop();
         let function_str = str::replace(function_string.as_str(), "\n", "\n  ");

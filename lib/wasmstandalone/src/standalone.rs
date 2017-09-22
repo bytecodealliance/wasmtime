@@ -1,11 +1,16 @@
-use cton_wasm::{Local, FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, RawByte,
-                MemoryAddress, Global, GlobalInit, Table, Memory, WasmRuntime};
+use cton_wasm::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, Global, GlobalInit, Table,
+                Memory, WasmRuntime, FuncEnvironment, GlobalValue, SignatureIndex};
 use cton_frontend::FunctionBuilder;
 use cretonne::ir::{MemFlags, Value, InstBuilder, SigRef, FuncRef, ExtFuncData, FunctionName,
                    Signature, ArgumentType, CallConv};
 use cretonne::ir::types::*;
 use cretonne::ir::condcodes::IntCC;
 use cretonne::ir::immediates::Offset32;
+use cretonne::cursor::FuncCursor;
+use cretonne::packed_option::PackedOption;
+use cretonne::ir;
+use cretonne::settings;
+use cretonne::entity::EntityMap;
 use std::mem::transmute;
 use std::ptr::copy_nonoverlapping;
 use std::ptr::write;
@@ -22,18 +27,18 @@ struct GlobalInfo {
 }
 
 struct GlobalsData {
-    data: Vec<RawByte>,
+    data: Vec<u8>,
     info: Vec<GlobalInfo>,
 }
 
 struct TableData {
-    data: Vec<MemoryAddress>,
+    data: Vec<usize>,
     elements: Vec<TableElement>,
     info: Table,
 }
 
 struct MemoryData {
-    data: Vec<RawByte>,
+    data: Vec<u8>,
     info: Memory,
 }
 
@@ -42,18 +47,43 @@ const PAGE_SIZE: usize = 65536;
 /// Object containing the standalone runtime information. To be passed after creation as argument
 /// to `cton_wasm::translatemodule`.
 pub struct StandaloneRuntime {
+    // Compilation setting flags.
+    flags: settings::Flags,
+
+    // Unprocessed signatures exactly as provided by `declare_signature()`.
+    signatures: Vec<ir::Signature>,
+    // Types of functions, imported and local.
+    func_types: Vec<SignatureIndex>,
+    // Names of imported functions.
+    imported_funcs: Vec<ir::FunctionName>,
+
     globals: GlobalsData,
     tables: Vec<TableData>,
     memories: Vec<MemoryData>,
     instantiated: bool,
+
     has_current_memory: Option<FuncRef>,
     has_grow_memory: Option<FuncRef>,
+
+    /// Mapping from cretonne FuncRef to wasm FunctionIndex.
+    pub func_indices: EntityMap<FuncRef, FunctionIndex>,
+
+    the_heap: PackedOption<ir::Heap>,
 }
 
 impl StandaloneRuntime {
-    /// Allocates the runtime data structures.
-    pub fn new() -> StandaloneRuntime {
-        StandaloneRuntime {
+    /// Allocates the runtime data structures with default flags.
+    pub fn default() -> Self {
+        Self::with_flags(settings::Flags::new(&settings::builder()))
+    }
+
+    /// Allocates the runtime data structures with the given flags.
+    pub fn with_flags(flags: settings::Flags) -> Self {
+        Self {
+            flags,
+            signatures: Vec::new(),
+            func_types: Vec::new(),
+            imported_funcs: Vec::new(),
             globals: GlobalsData {
                 data: Vec::new(),
                 info: Vec::new(),
@@ -63,7 +93,142 @@ impl StandaloneRuntime {
             instantiated: false,
             has_current_memory: None,
             has_grow_memory: None,
+            func_indices: EntityMap::new(),
+            the_heap: PackedOption::default(),
         }
+    }
+}
+
+impl FuncEnvironment for StandaloneRuntime {
+    fn flags(&self) -> &settings::Flags {
+        &self.flags
+    }
+
+    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
+        // Just create a dummy `vmctx` global.
+        let offset = ((index * 8) as i32 + 8).into();
+        let gv = func.create_global_var(ir::GlobalVarData::VmCtx { offset });
+        GlobalValue::Memory {
+            gv,
+            ty: self.globals.info[index].global.ty,
+        }
+    }
+
+    fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
+        debug_assert!(self.the_heap.is_none(), "multiple heaps not supported yet");
+
+        let heap = func.create_heap(ir::HeapData {
+            base: ir::HeapBase::ReservedReg,
+            min_size: 0.into(),
+            guard_size: 0x8000_0000.into(),
+            style: ir::HeapStyle::Static { bound: 0x1_0000_0000.into() },
+        });
+
+        self.the_heap = PackedOption::from(heap);
+
+        heap
+    }
+
+    fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
+        // A real implementation would probably change the calling convention and add `vmctx` and
+        // signature index arguments.
+        func.import_signature(self.signatures[index].clone())
+    }
+
+    fn make_direct_func(&mut self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef {
+        let sigidx = self.func_types[index];
+        // A real implementation would probably add a `vmctx` argument.
+        // And maybe attempt some signature de-duplication.
+        let signature = func.import_signature(self.signatures[sigidx].clone());
+
+        let name = match self.imported_funcs.get(index) {
+            Some(name) => name.clone(),
+            None => ir::FunctionName::new(format!("localfunc{}", index)),
+        };
+
+        let func_ref = func.import_function(ir::ExtFuncData { name, signature });
+
+        self.func_indices[func_ref] = index;
+
+        func_ref
+    }
+
+    fn translate_call_indirect(
+        &mut self,
+        mut pos: FuncCursor,
+        table_index: TableIndex,
+        _sig_index: SignatureIndex,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
+    ) -> ir::Inst {
+        debug_assert!(table_index == 0, "non-default tables not supported yet");
+        pos.ins().call_indirect(sig_ref, callee, call_args)
+    }
+
+    fn translate_grow_memory(
+        &mut self,
+        mut pos: FuncCursor,
+        index: MemoryIndex,
+        heap: ir::Heap,
+        val: ir::Value,
+    ) -> ir::Value {
+        debug_assert!(self.instantiated);
+        debug_assert!(index == 0, "non-default memories not supported yet");
+        debug_assert!(
+            heap == self.the_heap.unwrap(),
+            "multiple heaps not supported yet"
+        );
+        let grow_mem_func = match self.has_grow_memory {
+            Some(grow_mem_func) => grow_mem_func,
+            None => {
+                let sig_ref = pos.func.import_signature(Signature {
+                    call_conv: CallConv::Native,
+                    argument_bytes: None,
+                    argument_types: vec![ArgumentType::new(I32)],
+                    return_types: vec![ArgumentType::new(I32)],
+                });
+                pos.func.import_function(ExtFuncData {
+                    name: FunctionName::new("grow_memory"),
+                    signature: sig_ref,
+                })
+            }
+        };
+        self.has_grow_memory = Some(grow_mem_func);
+        let call_inst = pos.ins().call(grow_mem_func, &[val]);
+        *pos.func.dfg.inst_results(call_inst).first().unwrap()
+    }
+
+    fn translate_current_memory(
+        &mut self,
+        mut pos: FuncCursor,
+        index: MemoryIndex,
+        heap: ir::Heap,
+    ) -> ir::Value {
+        debug_assert!(self.instantiated);
+        debug_assert!(index == 0, "non-default memories not supported yet");
+        debug_assert!(
+            heap == self.the_heap.unwrap(),
+            "multiple heaps not supported yet"
+        );
+        let cur_mem_func = match self.has_current_memory {
+            Some(cur_mem_func) => cur_mem_func,
+            None => {
+                let sig_ref = pos.func.import_signature(Signature {
+                    call_conv: CallConv::Native,
+                    argument_bytes: None,
+                    argument_types: Vec::new(),
+                    return_types: vec![ArgumentType::new(I32)],
+                });
+                pos.func.import_function(ExtFuncData {
+                    name: FunctionName::new("current_memory"),
+                    signature: sig_ref,
+                })
+            }
+        };
+        self.has_current_memory = Some(cur_mem_func);
+        let call_inst = pos.ins().call(cur_mem_func, &[]);
+        *pos.func.dfg.inst_results(call_inst).first().unwrap()
     }
 }
 
@@ -72,136 +237,28 @@ impl StandaloneRuntime {
 /// tells how to translate runtime-dependent wasm instructions. These functions should not be
 /// called by the user.
 impl WasmRuntime for StandaloneRuntime {
-    fn translate_get_global(
-        &self,
-        builder: &mut FunctionBuilder<Local>,
-        global_index: GlobalIndex,
-    ) -> Value {
-        debug_assert!(self.instantiated);
-        let ty = self.globals.info[global_index].global.ty;
-        let offset = self.globals.info[global_index].offset;
-        let memflags = MemFlags::new();
-        let memoffset = Offset32::new(offset as i32);
-        let addr: i64 = unsafe { transmute(self.globals.data.as_ptr()) };
-        let addr_val = builder.ins().iconst(I64, addr);
-        builder.ins().load(ty, memflags, addr_val, memoffset)
+    fn declare_signature(&mut self, sig: &ir::Signature) {
+        self.signatures.push(sig.clone());
     }
-    fn translate_set_global(
-        &self,
-        builder: &mut FunctionBuilder<Local>,
-        global_index: GlobalIndex,
-        val: Value,
-    ) {
-        let offset = self.globals.info[global_index].offset;
-        let memflags = MemFlags::new();
-        let memoffset = Offset32::new(offset as i32);
-        let addr: i64 = unsafe { transmute(self.globals.data.as_ptr()) };
-        let addr_val = builder.ins().iconst(I64, addr);
-        builder.ins().store(memflags, val, addr_val, memoffset);
-    }
-    fn translate_memory_base_address(
-        &self,
-        builder: &mut FunctionBuilder<Local>,
-        memory_index: MemoryIndex,
-    ) -> Value {
-        let addr: i64 = unsafe { transmute(self.memories[memory_index].data.as_ptr()) };
-        builder.ins().iconst(I64, addr)
-    }
-    fn translate_grow_memory(
-        &mut self,
-        builder: &mut FunctionBuilder<Local>,
-        pages: Value,
-    ) -> Value {
-        debug_assert!(self.instantiated);
-        let grow_mem_func = match self.has_grow_memory {
-            Some(grow_mem_func) => grow_mem_func,
-            None => {
-                let sig_ref = builder.import_signature(Signature {
-                    call_conv: CallConv::Native,
-                    argument_bytes: None,
-                    argument_types: vec![ArgumentType::new(I32)],
-                    return_types: vec![ArgumentType::new(I32)],
-                });
-                builder.import_function(ExtFuncData {
-                    name: FunctionName::new("grow_memory"),
-                    signature: sig_ref,
-                })
-            }
-        };
-        self.has_grow_memory = Some(grow_mem_func);
-        let call_inst = builder.ins().call(grow_mem_func, &[pages]);
-        *builder.inst_results(call_inst).first().unwrap()
-    }
-    fn translate_current_memory(&mut self, builder: &mut FunctionBuilder<Local>) -> Value {
-        debug_assert!(self.instantiated);
-        let cur_mem_func = match self.has_current_memory {
-            Some(cur_mem_func) => cur_mem_func,
-            None => {
-                let sig_ref = builder.import_signature(Signature {
-                    call_conv: CallConv::Native,
-                    argument_bytes: None,
-                    argument_types: Vec::new(),
-                    return_types: vec![ArgumentType::new(I32)],
-                });
-                builder.import_function(ExtFuncData {
-                    name: FunctionName::new("current_memory"),
-                    signature: sig_ref,
-                })
-            }
-        };
-        self.has_current_memory = Some(cur_mem_func);
-        let call_inst = builder.ins().call(cur_mem_func, &[]);
-        *builder.inst_results(call_inst).first().unwrap()
-    }
-    fn translate_call_indirect<'a>(
-        &self,
-        builder: &'a mut FunctionBuilder<Local>,
-        sig_ref: SigRef,
-        index_val: Value,
-        call_args: &[Value],
-    ) -> &'a [Value] {
-        let trap_ebb = builder.create_ebb();
-        let continue_ebb = builder.create_ebb();
-        let size_val = builder.ins().iconst(I32, self.tables[0].info.size as i64);
-        let zero_val = builder.ins().iconst(I32, 0);
-        builder.ins().br_icmp(
-            IntCC::UnsignedLessThan,
-            index_val,
-            zero_val,
-            trap_ebb,
-            &[],
+
+    fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &[u8], field: &[u8]) {
+        debug_assert_eq!(
+            self.func_types.len(),
+            self.imported_funcs.len(),
+            "Imported functions must be declared first"
         );
-        builder.ins().br_icmp(
-            IntCC::UnsignedGreaterThanOrEqual,
-            index_val,
-            size_val,
-            trap_ebb,
-            &[],
-        );
-        builder.seal_block(trap_ebb);
-        let offset_val = builder.ins().imul_imm(index_val, 4);
-        let base_table_addr: i64 = unsafe { transmute(self.tables[0].data.as_ptr()) };
-        let table_addr_val = builder.ins().iconst(I32, base_table_addr);
-        let table_entry_addr_val = builder.ins().iadd(table_addr_val, offset_val);
-        let memflags = MemFlags::new();
-        let memoffset = Offset32::new(0);
-        let table_entry_val = builder.ins().load(
-            I32,
-            memflags,
-            table_entry_addr_val,
-            memoffset,
-        );
-        let call_inst = builder.ins().call_indirect(
-            sig_ref,
-            table_entry_val,
-            call_args,
-        );
-        builder.ins().jump(continue_ebb, &[]);
-        builder.seal_block(continue_ebb);
-        builder.switch_to_block(trap_ebb, &[]);
-        builder.ins().trap();
-        builder.switch_to_block(continue_ebb, &[]);
-        builder.inst_results(call_inst)
+        self.func_types.push(sig_index);
+
+        // TODO: name_fold and concatenation with '_' are lossy; figure out something better.
+        let mut name = Vec::new();
+        name.extend(module.iter().cloned().map(name_fold));
+        name.push(b'_');
+        name.extend(field.iter().cloned().map(name_fold));
+        self.imported_funcs.push(ir::FunctionName::new(name));
+    }
+
+    fn declare_func_type(&mut self, sig_index: SignatureIndex) {
+        self.func_types.push(sig_index);
     }
 
     fn begin_translation(&mut self) {
@@ -270,9 +327,14 @@ impl WasmRuntime for StandaloneRuntime {
     fn next_function(&mut self) {
         self.has_current_memory = None;
         self.has_grow_memory = None;
+        self.func_indices.clear();
     }
     fn declare_global(&mut self, global: Global) {
         debug_assert!(!self.instantiated);
+        debug_assert!(
+            self.globals.info.is_empty(),
+            "multiple globals not supported yet"
+        );
         self.globals.info.push(GlobalInfo {
             global: global,
             offset: 0,
@@ -341,5 +403,14 @@ impl StandaloneRuntime {
             self.globals.info[global_index].global.ty.bytes() as usize,
         );
         &self.globals.data[offset..offset + len]
+    }
+}
+
+// Generate characters suitable for printable `FuncName`s.
+fn name_fold(c: u8) -> u8 {
+    if (c as char).is_alphanumeric() {
+        c
+    } else {
+        b'_'
     }
 }

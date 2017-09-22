@@ -13,9 +13,10 @@ name = "wasmstandalone"
 path = "src/main.rs"
 
 [dependencies]
-cretonne = { git = "https://github.com/stoklund/cretonne.git" }
-cretonne-reader = { git = "https://github.com/stoklund/cretonne.git" }
-cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
+cretonne = { path = "/home/sunfish/rust/cretonne/lib/cretonne" }
+cretonne-reader = { path = "/home/sunfish/rust/cretonne/lib/reader" }
+cretonne-wasm = { path = "/home/sunfish/rust/cretonne/lib/wasm" }
+cretonne-native = { path = "/home/sunfish/rust/cretonne/lib/native" }
 wasmstandalone = { path = "lib/wasmstandalone" }
 wasmparser = "0.8.2"
 wasmtext = { git = "https://github.com/yurydelendik/wasmtext" }
