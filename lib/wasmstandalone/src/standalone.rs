@@ -162,7 +162,7 @@ impl FuncEnvironment for StandaloneRuntime {
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> ir::Inst {
-        debug_assert!(table_index == 0, "non-default tables not supported yet");
+        debug_assert_eq!(table_index, 0, "non-default tables not supported yet");
         pos.ins().call_indirect(sig_ref, callee, call_args)
     }
 
@@ -174,9 +174,10 @@ impl FuncEnvironment for StandaloneRuntime {
         val: ir::Value,
     ) -> ir::Value {
         debug_assert!(self.instantiated);
-        debug_assert!(index == 0, "non-default memories not supported yet");
-        debug_assert!(
-            heap == self.the_heap.unwrap(),
+        debug_assert_eq!(index, 0, "non-default memories not supported yet");
+        debug_assert_eq!(
+            heap,
+            self.the_heap.unwrap(),
             "multiple heaps not supported yet"
         );
         let grow_mem_func = match self.has_grow_memory {
@@ -206,9 +207,10 @@ impl FuncEnvironment for StandaloneRuntime {
         heap: ir::Heap,
     ) -> ir::Value {
         debug_assert!(self.instantiated);
-        debug_assert!(index == 0, "non-default memories not supported yet");
-        debug_assert!(
-            heap == self.the_heap.unwrap(),
+        debug_assert_eq!(index, 0, "non-default memories not supported yet");
+        debug_assert_eq!(
+            heap,
+            self.the_heap.unwrap(),
             "multiple heaps not supported yet"
         );
         let cur_mem_func = match self.has_current_memory {
