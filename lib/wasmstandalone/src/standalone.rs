@@ -1,11 +1,8 @@
 use cton_wasm::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, Global, GlobalInit, Table,
                 Memory, WasmRuntime, FuncEnvironment, GlobalValue, SignatureIndex};
-use cton_frontend::FunctionBuilder;
-use cretonne::ir::{MemFlags, Value, InstBuilder, SigRef, FuncRef, ExtFuncData, FunctionName,
-                   Signature, ArgumentType, CallConv};
+use cretonne::ir::{InstBuilder, FuncRef, ExtFuncData, FunctionName, Signature, ArgumentType,
+                   CallConv};
 use cretonne::ir::types::*;
-use cretonne::ir::condcodes::IntCC;
-use cretonne::ir::immediates::Offset32;
 use cretonne::cursor::FuncCursor;
 use cretonne::packed_option::PackedOption;
 use cretonne::ir;

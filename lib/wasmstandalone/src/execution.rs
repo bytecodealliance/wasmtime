@@ -1,6 +1,6 @@
 use cretonne::Context;
 use cretonne::settings;
-use cretonne::isa::{self, TargetIsa};
+use cretonne::isa::TargetIsa;
 use cretonne::verify_function;
 use cretonne::verifier;
 use cretonne::settings::Configurable;
@@ -8,7 +8,7 @@ use cretonne::result::CtonError;
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::{Ebb, FuncRef, JumpTable, Function};
 use cretonne::binemit::{RelocSink, Reloc, CodeOffset};
-use cton_wasm::{TranslationResult, FunctionIndex, WasmRuntime};
+use cton_wasm::{TranslationResult, FunctionIndex};
 use std::mem::transmute;
 use region::Protection;
 use region::protect;
@@ -81,7 +81,7 @@ pub fn compile_module(
     );
     let mut functions_metatada = Vec::new();
     let mut functions_code = Vec::new();
-    for (function_index, function) in trans_result.functions.iter().enumerate() {
+    for function in &trans_result.functions {
         let mut context = Context::new();
         verify_function(function, isa).unwrap();
         context.func = function.clone(); // TODO: Avoid this clone.
