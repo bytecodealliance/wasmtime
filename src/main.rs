@@ -1,5 +1,5 @@
-//! CLI tool to use the functions provided by crates [wasm2cretonne](../wasm2cretonne/index.html)
-//! and [wasmstandalone](../wasmstandalone/index.html).
+//! CLI tool to use the functions provided by the [wasmstandalone](../wasmstandalone/index.html)
+//! crate.
 //!
 //! Reads Wasm binary files (one Wasm module per file), translates the functions' code to Cretonne
 //! IL. Can also executes the `start` function of the module by laying out the memories, globals

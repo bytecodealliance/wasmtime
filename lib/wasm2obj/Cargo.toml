@@ -1,0 +1,11 @@
+[package]
+name = "wasm2obj"
+version = "0.0.0"
+authors = ["The Cretonne Project Developers"]
+publish = false
+
+[dependencies]
+cretonne = { path = "/home/sunfish/rust/cretonne/lib/cretonne" }
+cretonne-frontend = { path = "/home/sunfish/rust/cretonne/lib/frontend" }
+cretonne-wasm = { path = "/home/sunfish/rust/cretonne/lib/wasm" }
+faerie = { git = "https://github.com/m4b/faerie" }

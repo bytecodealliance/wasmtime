@@ -16,7 +16,7 @@ use std::ptr::copy_nonoverlapping;
 use std::ptr::write;
 
 #[derive(Clone, Debug)]
-enum TableElement {
+pub enum TableElement {
     Trap(),
     Function(FunctionIndex),
 }
@@ -31,15 +31,22 @@ struct GlobalsData {
     info: Vec<GlobalInfo>,
 }
 
-struct TableData {
-    data: Vec<usize>,
-    elements: Vec<TableElement>,
-    info: Table,
+/// A description of a WebAssembly table.
+pub struct TableData {
+    /// The data stored in the table.
+    pub data: Vec<u8>,
+    /// Function indices to be stored in the table.
+    pub elements: Vec<TableElement>,
+    /// The description of the table.
+    pub info: Table,
 }
 
-struct MemoryData {
-    data: Vec<u8>,
-    info: Memory,
+/// A description of a WebAssembly linear memory.
+pub struct MemoryData {
+    /// The data stored in the memory.
+    pub data: Vec<u8>,
+    /// The description of the memory.
+    pub info: Memory,
 }
 
 const PAGE_SIZE: usize = 65536;
@@ -58,8 +65,10 @@ pub struct StandaloneRuntime {
     imported_funcs: Vec<ir::FunctionName>,
 
     globals: GlobalsData,
-    tables: Vec<TableData>,
-    memories: Vec<MemoryData>,
+    /// WebAssembly tables.
+    pub tables: Vec<TableData>,
+    /// WebAssembly linear memories.
+    pub memories: Vec<MemoryData>,
     instantiated: bool,
 
     has_current_memory: Option<FuncRef>,

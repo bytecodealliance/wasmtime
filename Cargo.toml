@@ -12,12 +12,18 @@ publish = false
 name = "wasmstandalone"
 path = "src/main.rs"
 
+[[bin]]
+name = "wasm2obj"
+path = "src/wasm2obj.rs"
+
 [dependencies]
 cretonne = { path = "/home/sunfish/rust/cretonne/lib/cretonne" }
+cretonne-frontend = { path = "/home/sunfish/rust/cretonne/lib/frontend" }
 cretonne-reader = { path = "/home/sunfish/rust/cretonne/lib/reader" }
 cretonne-wasm = { path = "/home/sunfish/rust/cretonne/lib/wasm" }
 cretonne-native = { path = "/home/sunfish/rust/cretonne/lib/native" }
 wasmstandalone = { path = "lib/wasmstandalone" }
+wasm2obj = { path = "lib/wasm2obj" }
 wasmparser = "0.8.2"
 wasmtext = { git = "https://github.com/yurydelendik/wasmtext" }
 filecheck = "0.0.1"
@@ -26,6 +32,7 @@ serde = "1.0.8"
 serde_derive = "1.0.8"
 num_cpus = "1.5.1"
 term = "0.4.6"
-tempdir="*"
+tempdir = "*"
+faerie = { git = "https://github.com/m4b/faerie" }
 
 [workspace]
