@@ -5,7 +5,8 @@ authors = ["The Cretonne Project Developers"]
 publish = false
 
 [dependencies]
-cretonne = { path = "/home/sunfish/rust/cretonne/lib/cretonne" }
-cretonne-frontend = { path = "/home/sunfish/rust/cretonne/lib/frontend" }
-cretonne-wasm = { path = "/home/sunfish/rust/cretonne/lib/wasm" }
+cretonne = { git = "https://github.com/stoklund/cretonne.git" }
+cretonne-frontend = { git = "https://github.com/stoklund/cretonne.git" }
+cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
+wasmstandalone = { path = "../wasmstandalone" }
 faerie = { git = "https://github.com/m4b/faerie" }

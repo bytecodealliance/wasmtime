@@ -23,7 +23,7 @@ struct GlobalInfo {
     offset: usize,
 }
 
-struct GlobalsData {
+pub struct GlobalsData {
     data: Vec<u8>,
     info: Vec<GlobalInfo>,
 }
@@ -51,17 +51,18 @@ const PAGE_SIZE: usize = 65536;
 /// Object containing the standalone runtime information. To be passed after creation as argument
 /// to `cton_wasm::translatemodule`.
 pub struct StandaloneRuntime {
-    // Compilation setting flags.
+    /// Compilation setting flags.
     flags: settings::Flags,
 
-    // Unprocessed signatures exactly as provided by `declare_signature()`.
+    /// Unprocessed signatures exactly as provided by `declare_signature()`.
     signatures: Vec<ir::Signature>,
-    // Types of functions, imported and local.
+    /// Types of functions, imported and local.
     func_types: Vec<SignatureIndex>,
-    // Names of imported functions.
-    imported_funcs: Vec<ir::FunctionName>,
+    /// Names of imported functions.
+    pub imported_funcs: Vec<ir::FunctionName>,
 
-    globals: GlobalsData,
+    /// WebAssembly global variables.
+    pub globals: GlobalsData,
     /// WebAssembly tables.
     pub tables: Vec<TableData>,
     /// WebAssembly linear memories.

@@ -17,11 +17,11 @@ name = "wasm2obj"
 path = "src/wasm2obj.rs"
 
 [dependencies]
-cretonne = { path = "/home/sunfish/rust/cretonne/lib/cretonne" }
-cretonne-frontend = { path = "/home/sunfish/rust/cretonne/lib/frontend" }
-cretonne-reader = { path = "/home/sunfish/rust/cretonne/lib/reader" }
-cretonne-wasm = { path = "/home/sunfish/rust/cretonne/lib/wasm" }
-cretonne-native = { path = "/home/sunfish/rust/cretonne/lib/native" }
+cretonne = { git = "https://github.com/stoklund/cretonne.git" }
+cretonne-frontend = { git = "https://github.com/stoklund/cretonne.git" }
+cretonne-reader = { git = "https://github.com/stoklund/cretonne.git" }
+cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
+cretonne-native = { git = "https://github.com/stoklund/cretonne.git" }
 wasmstandalone = { path = "lib/wasmstandalone" }
 wasm2obj = { path = "lib/wasm2obj" }
 wasmparser = "0.8.2"

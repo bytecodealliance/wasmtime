@@ -106,7 +106,7 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     // FIXME: Make the output filename a parameter.
     let mut obj = Artifact::new(Target::X86_64, Some(String::from(output)));
 
-    emit_module(&translation, &mut obj, &*isa)?;
+    emit_module(&translation, &mut obj, &*isa, &runtime)?;
 
     if !runtime.tables.is_empty() {
         if runtime.tables.len() > 1 {

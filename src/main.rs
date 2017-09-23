@@ -207,7 +207,15 @@ fn handle_module(args: &Args, path: PathBuf, name: &str, isa: &TargetIsa) -> Res
     if args.flag_print {
         let mut writer1 = stdout();
         let mut writer2 = stdout();
-        match pretty_print_translation(name, &data, &translation, &mut writer1, &mut writer2, isa) {
+        match pretty_print_translation(
+            name,
+            &data,
+            &translation,
+            &mut writer1,
+            &mut writer2,
+            isa,
+            &runtime,
+        ) {
             Err(error) => return Err(String::from(error.description())),
             Ok(()) => (),
         }
@@ -334,11 +342,12 @@ fn pretty_print_translation(
     writer_wat: &mut Write,
     writer_cretonne: &mut Write,
     isa: &TargetIsa,
+    runtime: &StandaloneRuntime,
 ) -> Result<(), io::Error> {
     let mut terminal = term::stdout().unwrap();
     let mut parser = Parser::new(data);
     let mut parser_writer = Writer::new(writer_wat);
-    let imports_count = translation.function_imports_count;
+    let imports_count = runtime.imported_funcs.len();
     match parser.read() {
         s @ &ParserState::BeginWasm { .. } => parser_writer.write(s)?,
         _ => panic!("modules should begin properly"),

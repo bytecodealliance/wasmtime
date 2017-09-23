@@ -12,6 +12,7 @@ use cton_wasm::TranslationResult;
 use std::collections::HashMap;
 use std::fmt::Write;
 use faerie::Artifact;
+use wasmstandalone::StandaloneRuntime;
 
 type RelocRef = u16;
 
@@ -50,10 +51,11 @@ pub fn emit_module(
     trans_result: &TranslationResult,
     obj: &mut Artifact,
     isa: &TargetIsa,
+    runtime: &StandaloneRuntime,
 ) -> Result<(), String> {
     debug_assert!(
         trans_result.start_index.is_none() ||
-            trans_result.start_index.unwrap() >= trans_result.function_imports_count,
+            trans_result.start_index.unwrap() >= runtime.imported_funcs.len(),
         "imported start functions not supported yet"
     );
 

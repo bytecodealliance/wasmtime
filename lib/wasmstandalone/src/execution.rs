@@ -68,7 +68,7 @@ pub fn compile_module(
 ) -> Result<ExecutableCode, String> {
     debug_assert!(
         trans_result.start_index.is_none() ||
-            trans_result.start_index.unwrap() >= trans_result.function_imports_count,
+            trans_result.start_index.unwrap() >= runtime.imported_funcs.len(),
         "imported start functions not supported yet"
     );
 
@@ -101,12 +101,7 @@ pub fn compile_module(
         });
         functions_code.push(code_buf);
     }
-    relocate(
-        trans_result.function_imports_count,
-        &functions_metatada,
-        &mut functions_code,
-        runtime,
-    );
+    relocate(&functions_metatada, &mut functions_code, runtime);
     // After having emmitted the code to memory, we deal with relocations
     match trans_result.start_index {
         None => Err(String::from(
@@ -152,7 +147,6 @@ pub fn execute(exec: &ExecutableCode) -> Result<(), String> {
 
 /// Performs the relocations inside the function bytecode, provided the necessary metadata
 fn relocate(
-    function_imports_count: usize,
     functions_metatada: &[FunctionMetaData],
     functions_code: &mut Vec<Vec<u8>>,
     runtime: &StandaloneRuntime,
@@ -164,7 +158,7 @@ fn relocate(
             ref il_func,
         } = *function_in_memory;
         for &(func_ref, offset) in relocs.funcs.values() {
-            let target_func_index = runtime.func_indices[func_ref] - function_imports_count;
+            let target_func_index = runtime.func_indices[func_ref] - runtime.imported_funcs.len();
             let target_func_address: isize = functions_code[target_func_index].as_ptr() as isize;
             unsafe {
                 let reloc_address: isize = functions_code[func_index].as_mut_ptr().offset(
