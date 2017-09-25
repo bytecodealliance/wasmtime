@@ -48,3 +48,18 @@ function %undefined() {
 ebb0:
     trap user0
 }
+
+function %br_table(i32) {
+jt0 = jump_table ebb3, ebb1, 0, ebb2
+
+ebb0(v0: i32):
+    br_table v0, jt0
+    trap oob
+
+ebb1:
+    return
+ebb2:
+    return
+ebb3:
+    return
+}

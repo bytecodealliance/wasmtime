@@ -147,6 +147,38 @@ fn expand_cond_trap(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFl
     cfg.recompute_ebb(pos.func, new_ebb);
 }
 
+/// Jump tables.
+fn expand_br_table(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+    use ir::condcodes::IntCC;
+
+    let (arg, table) = match func.dfg[inst] {
+        ir::InstructionData::BranchTable {
+            opcode: ir::Opcode::BrTable,
+            arg,
+            table,
+        } => (arg, table),
+        _ => panic!("Expected br_table: {}", func.dfg.display_inst(inst, None)),
+    };
+
+    // This is a poor man's jump table using just a sequence of conditional branches.
+    // TODO: Lower into a jump table load and indirect branch.
+    let table_size = func.jump_tables[table].len();
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    for i in 0..table_size {
+        if let Some(dest) = pos.func.jump_tables[table].get_entry(i) {
+            let t = pos.ins().icmp_imm(IntCC::Equal, arg, i as i64);
+            pos.ins().brnz(t, dest, &[]);
+        }
+    }
+
+    // `br_table` falls through when nothing matches.
+    let ebb = pos.current_ebb().unwrap();
+    pos.remove_inst();
+    cfg.recompute_ebb(pos.func, ebb);
+}
+
 /// Expand illegal `f32const` and `f64const` instructions.
 fn expand_fconst(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut ControlFlowGraph) {
     let ty = func.dfg.value_type(func.dfg.first_result(inst));
