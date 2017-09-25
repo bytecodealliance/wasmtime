@@ -1,15 +1,16 @@
 ; Test basic code generation for f64 arithmetic WebAssembly instructions.
 test compile
 
-set is_64bit=0
-isa intel haswell
-
 set is_64bit=1
 isa intel haswell
 
 ; Constants.
 
-; function %f64_const() -> f64
+function %f64_const() -> f64 {
+ebb0:
+    v1 = f64const 0x3.0
+    return v1
+}
 
 ; Unary operations
 
