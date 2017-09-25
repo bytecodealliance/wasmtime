@@ -8,7 +8,7 @@ try:
     from typing import Union, Dict, TYPE_CHECKING, Iterable  # noqa
     OperandSpec = Union['OperandKind', ValueType, TypeVar]
     if TYPE_CHECKING:
-        from .ast import Enumerator, ConstantInt, Literal  # noqa
+        from .ast import Enumerator, ConstantInt, ConstantBits, Literal  # noqa
 except ImportError:
     pass
 
@@ -122,6 +122,15 @@ class ImmediateKind(OperandKind):
                     "{}({}): Can't make a constant numeric value for an enum"
                     .format(self.name, value))
         return ConstantInt(self, value)
+
+    def bits(self, bits):
+        # type: (int) -> ConstantBits
+        """
+        Create an AST literal node for the given bitwise representation of this
+        immediate operand kind.
+        """
+        from .ast import ConstantBits  # noqa
+        return ConstantBits(self, bits)
 
     def rust_enumerator(self, value):
         # type: (str) -> str

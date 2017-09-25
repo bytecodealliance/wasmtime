@@ -502,6 +502,27 @@ class ConstantInt(Literal):
         return str(self.value)
 
 
+class ConstantBits(Literal):
+    """
+    A bitwise value of an immediate operand.
+
+    This is used to create bitwise exact floating point constants using
+    `ieee32.bits(0x80000000)`.
+    """
+
+    def __init__(self, kind, bits):
+        # type: (ImmediateKind, int) -> None
+        v = '{}::with_bits({:#x})'.format(kind.rust_type, bits)
+        super(ConstantBits, self).__init__(kind, v)
+
+    def __str__(self):
+        # type: () -> str
+        """
+        Get the Rust expression form of this constant.
+        """
+        return str(self.value)
+
+
 class Enumerator(Literal):
     """
     A value of an enumerated immediate operand.
