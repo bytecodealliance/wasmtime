@@ -3,7 +3,7 @@
 //! The `TranslationState` struct defined in this module is used to keep track of the WebAssembly
 //! value and control stacks during the translation of a single function.
 
-use cretonne::ir::{self, Ebb, Inst, Type, Value};
+use cretonne::ir::{self, Ebb, Inst, Value};
 use runtime::{FuncEnvironment, GlobalValue};
 use std::collections::HashMap;
 use translation_utils::{GlobalIndex, MemoryIndex, SignatureIndex, FunctionIndex};
@@ -12,7 +12,7 @@ use translation_utils::{GlobalIndex, MemoryIndex, SignatureIndex, FunctionIndex}
 /// fields:
 ///
 /// - `destination`: reference to the `Ebb` that will hold the code after the control block;
-/// - `return_values`: types of the values returned by the control block;
+/// - `num_return_values`: number of values returned by the control block;
 /// - `original_stack_size`: size of the value stack at the beginning of the control block.
 ///
 /// Moreover, the `if` frame has the `branch_inst` field that points to the `brz` instruction
@@ -23,20 +23,20 @@ pub enum ControlStackFrame {
     If {
         destination: Ebb,
         branch_inst: Inst,
-        return_values: Vec<Type>,
+        num_return_values: usize,
         original_stack_size: usize,
         reachable: bool,
     },
     Block {
         destination: Ebb,
-        return_values: Vec<Type>,
+        num_return_values: usize,
         original_stack_size: usize,
         reachable: bool,
     },
     Loop {
         destination: Ebb,
         header: Ebb,
-        return_values: Vec<Type>,
+        num_return_values: usize,
         original_stack_size: usize,
         reachable: bool,
     },
@@ -44,11 +44,11 @@ pub enum ControlStackFrame {
 
 /// Helper methods for the control stack objects.
 impl ControlStackFrame {
-    pub fn return_values(&self) -> &[Type] {
+    pub fn num_return_values(&self) -> usize {
         match *self {
-            ControlStackFrame::If { ref return_values, .. } |
-            ControlStackFrame::Block { ref return_values, .. } |
-            ControlStackFrame::Loop { ref return_values, .. } => &return_values,
+            ControlStackFrame::If { num_return_values, .. } |
+            ControlStackFrame::Block { num_return_values, .. } |
+            ControlStackFrame::Loop { num_return_values, .. } => num_return_values,
         }
     }
     pub fn following_code(&self) -> Ebb {
@@ -161,8 +161,7 @@ impl TranslationState {
             sig.return_types
                 .iter()
                 .filter(|arg| arg.purpose == ir::ArgumentPurpose::Normal)
-                .map(|argty| argty.value_type)
-                .collect(),
+                .count(),
         );
     }
 
@@ -215,33 +214,33 @@ impl TranslationState {
     }
 
     // Push a block on the control stack.
-    pub fn push_block(&mut self, following_code: Ebb, result_types: Vec<Type>) {
+    pub fn push_block(&mut self, following_code: Ebb, num_result_types: usize) {
         self.control_stack.push(ControlStackFrame::Block {
             destination: following_code,
             original_stack_size: self.stack.len(),
-            return_values: result_types,
+            num_return_values: num_result_types,
             reachable: false,
         });
     }
 
     // Push a loop on the control stack.
-    pub fn push_loop(&mut self, header: Ebb, following_code: Ebb, result_types: Vec<Type>) {
+    pub fn push_loop(&mut self, header: Ebb, following_code: Ebb, num_result_types: usize) {
         self.control_stack.push(ControlStackFrame::Loop {
             header,
             destination: following_code,
             original_stack_size: self.stack.len(),
-            return_values: result_types,
+            num_return_values: num_result_types,
             reachable: false,
         });
     }
 
     // Push an if on the control stack.
-    pub fn push_if(&mut self, branch_inst: Inst, following_code: Ebb, result_types: Vec<Type>) {
+    pub fn push_if(&mut self, branch_inst: Inst, following_code: Ebb, num_result_types: usize) {
         self.control_stack.push(ControlStackFrame::If {
             branch_inst,
             destination: following_code,
             original_stack_size: self.stack.len(),
-            return_values: result_types,
+            num_return_values: num_result_types,
             reachable: false,
         });
     }

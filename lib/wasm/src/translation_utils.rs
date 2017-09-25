@@ -119,13 +119,13 @@ pub fn f64_translation(x: wasmparser::Ieee64) -> cretonne::ir::immediates::Ieee6
 }
 
 /// Translate a `wasmparser` type into its `Cretonne` equivalent, when possible
-pub fn translate_type(ty: wasmparser::Type) -> Vec<cretonne::ir::Type> {
+pub fn num_return_values(ty: wasmparser::Type) -> usize {
     match ty {
-        wasmparser::Type::EmptyBlockType => Vec::new(),
-        wasmparser::Type::I32 => vec![cretonne::ir::types::I32],
-        wasmparser::Type::F32 => vec![cretonne::ir::types::F32],
-        wasmparser::Type::I64 => vec![cretonne::ir::types::I64],
-        wasmparser::Type::F64 => vec![cretonne::ir::types::F64],
+        wasmparser::Type::EmptyBlockType => 0,
+        wasmparser::Type::I32 |
+        wasmparser::Type::F32 |
+        wasmparser::Type::I64 |
+        wasmparser::Type::F64 => 1,
         _ => panic!("unsupported return value type"),
     }
 }

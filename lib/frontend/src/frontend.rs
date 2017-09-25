@@ -129,12 +129,10 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 // If the user has supplied jump arguments we must adapt the arguments of
 // the destination ebb
 // TODO: find a way not to allocate a vector
-                    let args_types: Vec<Type> =
+                    let args_types: Vec<Value> =
                         match data.analyze_branch(&self.builder.func.dfg.value_lists) {
                             BranchInfo::SingleDest(_, args) => {
-                                args.iter()
-                                    .map(|arg| self.builder.func.dfg.value_type(*arg))
-                                    .collect()
+                                args.to_vec()
                             }
                             _ => panic!("should not happen"),
                         };
@@ -255,7 +253,7 @@ where
     /// When inserting the terminator instruction (which doesn't have a falltrough to its immediate
     /// successor), the block will be declared filled and it will not be possible to append
     /// instructions to it.
-    pub fn switch_to_block(&mut self, ebb: Ebb, jump_args: &[Type]) -> &[Value] {
+    pub fn switch_to_block(&mut self, ebb: Ebb, jump_args: &[Value]) -> &[Value] {
         if self.pristine {
             self.fill_function_args_values(ebb);
         }
@@ -556,7 +554,7 @@ where
     }
 
 
-    fn ebb_args_adjustment(&mut self, dest_ebb: Ebb, jump_args: &[Type]) {
+    fn ebb_args_adjustment(&mut self, dest_ebb: Ebb, jump_args: &[Value]) {
         if self.builder.ssa.predecessors(dest_ebb).is_empty() ||
             self.builder.ebbs[dest_ebb].pristine
         {
@@ -571,7 +569,8 @@ where
                         .iter()
                         .zip(jump_args.iter().take(dest_ebb_args.len()))
                         .all(|(dest_arg, jump_arg)| {
-                            *jump_arg == self.func.dfg.value_type(*dest_arg)
+                            self.func.dfg.value_type(*jump_arg) ==
+                                self.func.dfg.value_type(*dest_arg)
                         }),
                     "the jump argument supplied has not the \
                     same type as the corresponding dest ebb argument"
@@ -579,8 +578,9 @@ where
                 dest_ebb_args.len()
             };
             self.builder.ebbs[dest_ebb].user_arg_count = jump_args.len();
-            for ty in jump_args.iter().skip(dest_ebb_args_len) {
-                self.func.dfg.append_ebb_arg(dest_ebb, *ty);
+            for val in jump_args.iter().skip(dest_ebb_args_len) {
+                let ty = self.func.dfg.value_type(*val);
+                self.func.dfg.append_ebb_arg(dest_ebb, ty);
             }
         } else {
             // The Ebb already has predecessors
@@ -599,7 +599,7 @@ where
                         self.builder.ebbs[dest_ebb].user_arg_count,
                     ))
                     .all(|(jump_arg, dest_arg)| {
-                        *jump_arg == self.func.dfg.value_type(*dest_arg)
+                        self.func.dfg.value_type(*jump_arg) == self.func.dfg.value_type(*dest_arg)
                     }),
                 "the jump argument supplied has not the \
                     same type as the corresponding dest ebb argument"
