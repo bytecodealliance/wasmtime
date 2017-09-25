@@ -26,7 +26,12 @@ ebb0(v0: f64):
     return v1
 }
 
-; function %f64_sqrt(f64) -> f64
+function %f64_sqrt(f64) -> f64 {
+ebb0(v0: f64):
+    v1 = sqrt v0
+    return v1
+}
+
 ; function %f64_ceil(f64) -> f64
 ; function %f64_floor(f64) -> f64
 ; function %f64_trunc(f64) -> f64

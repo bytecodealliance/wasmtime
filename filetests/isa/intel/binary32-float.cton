@@ -82,6 +82,14 @@ ebb0:
     ; asm: xorps %xmm5, %xmm2
     [-,%xmm2]           v37 = bxor v11, v10                     ; bin: 0f 57 d5
 
+    ; Unary arithmetic.
+
+    ; asm: sqrtss %xmm5, %xmm2
+    [-,%xmm2]           v50 = sqrt v10                          ; bin: f3 0f 51 d5
+    ; asm: sqrtss %xmm2, %xmm5
+    [-,%xmm5]           v51 = sqrt v11                          ; bin: f3 0f 51 ea
+
+
     ; Load/Store
 
     ; asm: movd (%ecx), %xmm5
@@ -191,6 +199,14 @@ ebb0:
     [-,%xmm5]           v36 = bxor v10, v11                     ; bin: 0f 57 ea
     ; asm: xorps %xmm5, %xmm2
     [-,%xmm2]           v37 = bxor v11, v10                     ; bin: 0f 57 d5
+
+    ; Unary arithmetic.
+
+    ; asm: sqrtsd %xmm5, %xmm2
+    [-,%xmm2]           v50 = sqrt v10                          ; bin: f2 0f 51 d5
+    ; asm: sqrtsd %xmm2, %xmm5
+    [-,%xmm5]           v51 = sqrt v11                          ; bin: f2 0f 51 ea
+
 
     ; Load/Store
 

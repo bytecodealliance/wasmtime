@@ -359,6 +359,9 @@ enc_flt(base.fpromote.f64.f32, r.furm, 0xf3, 0x0f, 0x5a)
 # cvtsd2ss
 enc_flt(base.fdemote.f32.f64, r.furm, 0xf2, 0x0f, 0x5a)
 
+# Exact square roots.
+enc_flt(base.sqrt.f32, r.furm, 0xf3, 0x0f, 0x51)
+enc_flt(base.sqrt.f64, r.furm, 0xf2, 0x0f, 0x51)
 
 # Binary arithmetic ops.
 for inst,           opc in [
