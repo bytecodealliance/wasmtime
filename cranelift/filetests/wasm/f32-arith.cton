@@ -29,7 +29,12 @@ ebb0(v0: f32):
     return v1
 }
 
-; function %f32_sqrt(f32) -> f32
+function %f32_sqrt(f32) -> f32 {
+ebb0(v0: f32):
+    v1 = sqrt v0
+    return v1
+}
+
 ; function %f32_ceil(f32) -> f32
 ; function %f32_floor(f32) -> f32
 ; function %f32_trunc(f32) -> f32
