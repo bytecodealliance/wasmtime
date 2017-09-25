@@ -89,6 +89,33 @@ ebb0:
     ; asm: sqrtss %xmm2, %xmm5
     [-,%xmm5]           v51 = sqrt v11                          ; bin: f3 0f 51 ea
 
+    ; asm: roundss $0, %xmm5, %xmm4
+    [-,%xmm4]           v52 = nearest v10                       ; bin: 66 0f 3a 0a e5 00
+    ; asm: roundss $0, %xmm2, %xmm5
+    [-,%xmm5]           v53 = nearest v11                       ; bin: 66 0f 3a 0a ea 00
+    ; asm: roundss $0, %xmm5, %xmm2
+    [-,%xmm2]           v54 = nearest v10                       ; bin: 66 0f 3a 0a d5 00
+
+    ; asm: roundss $1, %xmm5, %xmm4
+    [-,%xmm4]           v55 = floor v10                         ; bin: 66 0f 3a 0a e5 01
+    ; asm: roundss $1, %xmm2, %xmm5
+    [-,%xmm5]           v56 = floor v11                         ; bin: 66 0f 3a 0a ea 01
+    ; asm: roundss $1, %xmm5, %xmm2
+    [-,%xmm2]           v57 = floor v10                         ; bin: 66 0f 3a 0a d5 01
+
+    ; asm: roundss $2, %xmm5, %xmm4
+    [-,%xmm4]           v58 = ceil v10                          ; bin: 66 0f 3a 0a e5 02
+    ; asm: roundss $2, %xmm2, %xmm5
+    [-,%xmm5]           v59 = ceil v11                          ; bin: 66 0f 3a 0a ea 02
+    ; asm: roundss $2, %xmm5, %xmm2
+    [-,%xmm2]           v60 = ceil v10                          ; bin: 66 0f 3a 0a d5 02
+
+    ; asm: roundss $3, %xmm5, %xmm4
+    [-,%xmm4]           v61 = trunc v10                         ; bin: 66 0f 3a 0a e5 03
+    ; asm: roundss $3, %xmm2, %xmm5
+    [-,%xmm5]           v62 = trunc v11                         ; bin: 66 0f 3a 0a ea 03
+    ; asm: roundss $3, %xmm5, %xmm2
+    [-,%xmm2]           v63 = trunc v10                         ; bin: 66 0f 3a 0a d5 03
 
     ; Load/Store
 
@@ -207,6 +234,33 @@ ebb0:
     ; asm: sqrtsd %xmm2, %xmm5
     [-,%xmm5]           v51 = sqrt v11                          ; bin: f2 0f 51 ea
 
+    ; asm: roundsd $0, %xmm5, %xmm4
+    [-,%xmm4]           v52 = nearest v10                       ; bin: 66 0f 3a 0b e5 00
+    ; asm: roundsd $0, %xmm2, %xmm5
+    [-,%xmm5]           v53 = nearest v11                       ; bin: 66 0f 3a 0b ea 00
+    ; asm: roundsd $0, %xmm5, %xmm2
+    [-,%xmm2]           v54 = nearest v10                       ; bin: 66 0f 3a 0b d5 00
+
+    ; asm: roundsd $1, %xmm5, %xmm4
+    [-,%xmm4]           v55 = floor v10                         ; bin: 66 0f 3a 0b e5 01
+    ; asm: roundsd $1, %xmm2, %xmm5
+    [-,%xmm5]           v56 = floor v11                         ; bin: 66 0f 3a 0b ea 01
+    ; asm: roundsd $1, %xmm5, %xmm2
+    [-,%xmm2]           v57 = floor v10                         ; bin: 66 0f 3a 0b d5 01
+
+    ; asm: roundsd $2, %xmm5, %xmm4
+    [-,%xmm4]           v58 = ceil v10                          ; bin: 66 0f 3a 0b e5 02
+    ; asm: roundsd $2, %xmm2, %xmm5
+    [-,%xmm5]           v59 = ceil v11                          ; bin: 66 0f 3a 0b ea 02
+    ; asm: roundsd $2, %xmm5, %xmm2
+    [-,%xmm2]           v60 = ceil v10                          ; bin: 66 0f 3a 0b d5 02
+
+    ; asm: roundsd $3, %xmm5, %xmm4
+    [-,%xmm4]           v61 = trunc v10                         ; bin: 66 0f 3a 0b e5 03
+    ; asm: roundsd $3, %xmm2, %xmm5
+    [-,%xmm5]           v62 = trunc v11                         ; bin: 66 0f 3a 0b ea 03
+    ; asm: roundsd $3, %xmm5, %xmm2
+    [-,%xmm2]           v63 = trunc v10                         ; bin: 66 0f 3a 0b d5 03
 
     ; Load/Store
 

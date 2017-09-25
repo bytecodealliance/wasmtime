@@ -1,7 +1,7 @@
 //! Emitting binary Intel machine code.
 
 use binemit::{CodeSink, Reloc, bad_encoding};
-use ir::{Function, Inst, Ebb, InstructionData};
+use ir::{Function, Inst, Ebb, InstructionData, Opcode};
 use isa::{RegUnit, StackRef, StackBase, StackBaseMask};
 use regalloc::RegDiversions;
 use super::registers::RU;
@@ -40,6 +40,9 @@ fn stk_base(base: StackBase) -> RegUnit {
 
 // Mandatory prefix bytes for Mp* opcodes.
 const PREFIX: [u8; 3] = [0x66, 0xf3, 0xf2];
+
+// Second byte for three-byte opcodes for mm=0b10 and mm=0b11.
+const OP3_BYTE2: [u8; 2] = [0x38, 0x3a];
 
 // A REX prefix with no bits set: 0b0100WRXB.
 const BASE_REX: u8 = 0b0100_0000;
@@ -111,6 +114,15 @@ fn put_mp1<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     sink.put1(bits as u8);
 }
 
+// Emit single-byte opcode with mandatory prefix and REX.
+fn put_rexmp1<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
+    debug_assert_eq!(bits & 0x0c00, 0, "Invalid encoding bits for Mp1*");
+    let pp = (bits >> 8) & 3;
+    sink.put1(PREFIX[(pp - 1) as usize]);
+    rex_prefix(bits, rex, sink);
+    sink.put1(bits as u8);
+}
+
 // Emit two-byte opcode (0F XX) with mandatory prefix.
 fn put_mp2<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     debug_assert_eq!(bits & 0x8c00, 0x0400, "Invalid encoding bits for Mp2*");
@@ -131,12 +143,27 @@ fn put_rexmp2<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     sink.put1(bits as u8);
 }
 
-// Emit single-byte opcode with mandatory prefix and REX.
-fn put_rexmp1<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
-    debug_assert_eq!(bits & 0x0c00, 0, "Invalid encoding bits for Mp1*");
+// Emit three-byte opcode (0F 3[8A] XX) with mandatory prefix.
+fn put_mp3<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
+    debug_assert_eq!(bits & 0x8800, 0x0800, "Invalid encoding bits for Mp3*");
+    let pp = (bits >> 8) & 3;
+    sink.put1(PREFIX[(pp - 1) as usize]);
+    debug_assert_eq!(rex, BASE_REX, "Invalid registers for REX-less Mp3 encoding");
+    let mm = (bits >> 10) & 3;
+    sink.put1(0x0f);
+    sink.put1(OP3_BYTE2[(mm - 2) as usize]);
+    sink.put1(bits as u8);
+}
+
+// Emit three-byte opcode (0F 3[8A] XX) with mandatory prefix and REX
+fn put_rexmp3<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
+    debug_assert_eq!(bits & 0x0800, 0x0800, "Invalid encoding bits for Mp3*");
     let pp = (bits >> 8) & 3;
     sink.put1(PREFIX[(pp - 1) as usize]);
     rex_prefix(bits, rex, sink);
+    let mm = (bits >> 10) & 3;
+    sink.put1(0x0f);
+    sink.put1(OP3_BYTE2[(mm - 2) as usize]);
     sink.put1(bits as u8);
 }
 
