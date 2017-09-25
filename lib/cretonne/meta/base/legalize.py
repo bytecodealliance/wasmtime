@@ -7,8 +7,9 @@ patterns that describe how base instructions can be transformed to other base
 instructions that are legal.
 """
 from __future__ import absolute_import
-from .immediates import intcc
+from .immediates import intcc, ieee32, ieee64
 from . import instructions as insts
+from . import types
 from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry, iadd_imm
 from .instructions import isub, isub_bin, isub_bout, isub_borrow
 from .instructions import imul, imul_imm
@@ -18,6 +19,7 @@ from .instructions import icmp, icmp_imm
 from .instructions import iconst, bint
 from .instructions import ishl, ishl_imm, sshr, sshr_imm, ushr, ushr_imm
 from .instructions import rotl, rotl_imm, rotr, rotr_imm
+from .instructions import f32const, f64const
 from cdsl.ast import Var
 from cdsl.xform import Rtl, XFormGroup
 
@@ -206,4 +208,21 @@ for inst_not,      inst in [
             Rtl(
                 a1 << bnot(y),
                 a << inst(x, a1)
+            ))
+
+# Floating-point sign manipulations.
+for ty,             minus_zero in [
+        (types.f32, f32const(ieee32.bits(0x80000000))),
+        (types.f64, f64const(ieee64.bits(0x8000000000000000)))]:
+    expand.legalize(
+            a << insts.fabs.bind(ty)(x),
+            Rtl(
+                b << minus_zero,
+                a << band_not(x, b),
+            ))
+    expand.legalize(
+            a << insts.fneg.bind(ty)(x),
+            Rtl(
+                b << minus_zero,
+                a << bxor(x, b),
             ))
