@@ -38,6 +38,7 @@ def gen_recipe(recipe, fmt):
     with fmt.indented(
             'if let InstructionData::{} {{'.format(iform.name),
             '}'):
+        fmt.line('opcode,')
         for f in iform.imm_fields:
             fmt.line('{},'.format(f.member))
         if want_args:

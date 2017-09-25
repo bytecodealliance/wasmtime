@@ -289,6 +289,21 @@ frurm = TailRecipe(
         modrm_rr(in_reg0, out_reg0, sink);
         ''')
 
+# XX /r, RMI form for one of the roundXX SSE 4.1 instructions.
+furmi_rnd = TailRecipe(
+        'furmi_rnd', Unary, size=2, ins=FPR, outs=FPR,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_rr(in_reg0, out_reg0, sink);
+        sink.put1(match opcode {
+            Opcode::Nearest => 0b00,
+            Opcode::Floor => 0b01,
+            Opcode::Ceil => 0b10,
+            Opcode::Trunc => 0b11,
+            x => panic!("{} unexpected for furmi_rnd", opcode),
+        });
+        ''')
+
 # XX /r, for regmove instructions.
 rmov = TailRecipe(
         'ur', RegMove, size=1, ins=GPR, outs=(),

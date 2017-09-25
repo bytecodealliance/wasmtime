@@ -11,9 +11,10 @@ from . import settings as cfg
 from . import instructions as x86
 from .legalize import intel_expand
 from base.legalize import narrow, expand
+from .settings import use_sse41
 
 try:
-    from typing import TYPE_CHECKING
+    from typing import TYPE_CHECKING, Any  # noqa
     if TYPE_CHECKING:
         from cdsl.instructions import MaybeBoundInst  # noqa
 except ImportError:
@@ -82,7 +83,7 @@ def enc_i32_i64_ld_st(inst, w_bit, recipe, *args, **kwargs):
 
 
 def enc_flt(inst, recipe, *args, **kwargs):
-    # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
+    # type: (MaybeBoundInst, r.TailRecipe, *int, **Any) -> None
     """
     Add encodings for floating point instruction `inst` to both I32 and I64.
     """
@@ -362,6 +363,16 @@ enc_flt(base.fdemote.f32.f64, r.furm, 0xf2, 0x0f, 0x5a)
 # Exact square roots.
 enc_flt(base.sqrt.f32, r.furm, 0xf3, 0x0f, 0x51)
 enc_flt(base.sqrt.f64, r.furm, 0xf2, 0x0f, 0x51)
+
+# Rounding. The recipe looks at the opcode to pick an immediate.
+for inst in [
+        base.nearest,
+        base.floor,
+        base.ceil,
+        base.trunc]:
+    enc_flt(inst.f32, r.furmi_rnd, 0x66, 0x0f, 0x3a, 0x0a, isap=use_sse41)
+    enc_flt(inst.f64, r.furmi_rnd, 0x66, 0x0f, 0x3a, 0x0b, isap=use_sse41)
+
 
 # Binary arithmetic ops.
 for inst,           opc in [
