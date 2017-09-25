@@ -39,9 +39,9 @@ pub fn translate_module(
         }
         ref s => panic!("modules should begin properly: {:?}", s),
     }
-    let mut functions: Option<Vec<SignatureIndex>> = None;
+    let mut functions: Vec<SignatureIndex> = Vec::new();
     let mut globals = Vec::new();
-    let mut exports: Option<HashMap<FunctionIndex, String>> = None;
+    let mut exports: HashMap<FunctionIndex, String> = HashMap::new();
     let mut next_input = ParserInput::Default;
     let mut function_index: FunctionIndex = 0;
     let mut start_index: Option<FunctionIndex> = None;
@@ -62,13 +62,7 @@ pub fn translate_module(
                         for import in imps {
                             match import {
                                 Import::Function { sig_index } => {
-                                    functions = match functions {
-                                        None => Some(vec![sig_index as SignatureIndex]),
-                                        Some(mut funcs) => {
-                                            funcs.push(sig_index as SignatureIndex);
-                                            Some(funcs)
-                                        }
-                                    };
+                                    functions.push(sig_index as SignatureIndex);
                                     function_index += 1;
                                 }
                                 Import::Memory(mem) => {
@@ -93,10 +87,7 @@ pub fn translate_module(
             ParserState::BeginSection { code: SectionCode::Function, .. } => {
                 match parse_function_section(&mut parser, runtime) {
                     Ok(funcs) => {
-                        match functions {
-                            None => functions = Some(funcs),
-                            Some(ref mut imps) => imps.extend(funcs),
-                        }
+                        functions.extend(funcs);
                     }
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the function section: {}", s))
@@ -136,7 +127,7 @@ pub fn translate_module(
             }
             ParserState::BeginSection { code: SectionCode::Export, .. } => {
                 match parse_export_section(&mut parser) {
-                    Ok(exps) => exports = Some(exps),
+                    Ok(exps) => exports = exps,
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the export section: {}", s))
                     }
@@ -190,11 +181,6 @@ pub fn translate_module(
         };
     }
     // At this point we've entered the code section
-    // First we check that we have all that is necessary to translate a function.
-    let functions = match functions {
-        None => return Err(String::from("missing a function section")),
-        Some(functions) => functions,
-    };
     let mut il_functions: Vec<Function> = Vec::new();
     let mut trans = FuncTranslator::new();
     runtime.begin_translation();
@@ -208,10 +194,8 @@ pub fn translate_module(
         // First we build the Function object with its name and signature
         let mut func = Function::new();
         func.signature = runtime.get_signature(functions[function_index]).clone();
-        if let Some(ref exports) = exports {
-            if let Some(name) = exports.get(&function_index) {
-                func.name = FunctionName::new(name.clone());
-            }
+        if let Some(name) = exports.get(&function_index) {
+            func.name = FunctionName::new(name.clone());
         }
         trans
             .translate_from_reader(parser.create_binary_reader(), &mut func, runtime)
