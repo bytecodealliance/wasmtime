@@ -122,7 +122,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             if let Ok(ty_cre) = type_to_type(&ty) {
                 builder.append_ebb_arg(next, ty_cre);
             }
-            state.push_block(next, translate_type(ty).unwrap());
+            state.push_block(next, translate_type(ty));
         }
         Operator::Loop { ty } => {
             let loop_body = builder.create_ebb();
@@ -131,7 +131,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder.append_ebb_arg(next, ty_cre);
             }
             builder.ins().jump(loop_body, &[]);
-            state.push_loop(loop_body, next, translate_type(ty).unwrap());
+            state.push_loop(loop_body, next, translate_type(ty));
             builder.switch_to_block(loop_body, &[]);
         }
         Operator::If { ty } => {
@@ -147,7 +147,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             if let Ok(ty_cre) = type_to_type(&ty) {
                 builder.append_ebb_arg(if_not, ty_cre);
             }
-            state.push_if(jump_inst, if_not, translate_type(ty).unwrap());
+            state.push_if(jump_inst, if_not, translate_type(ty));
         }
         Operator::Else => {
             // We take the control frame pushed by the if, use its ebb as the else body
