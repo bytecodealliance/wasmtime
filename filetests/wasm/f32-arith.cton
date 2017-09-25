@@ -87,4 +87,9 @@ ebb0(v0: f32, v1: f32):
 
 ; function %f32_min(f32, f32) -> f32
 ; function %f32_max(f32, f32) -> f32
-; function %f32_copysign(f32, f32) -> f32
+
+function %f32_copysign(f32, f32) -> f32 {
+ebb0(v0: f32, v1: f32):
+    v2 = fcopysign v0, v1
+    return v2
+}

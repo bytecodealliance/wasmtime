@@ -226,3 +226,11 @@ for ty,             minus_zero in [
                 b << minus_zero,
                 a << bxor(x, b),
             ))
+    expand.legalize(
+            a << insts.fcopysign.bind(ty)(x, y),
+            Rtl(
+                b << minus_zero,
+                a1 << band_not(x, b),
+                a2 << band(y, b),
+                a << bor(a1, a2)
+            ))
