@@ -26,7 +26,7 @@ use cretonne::ir::types::*;
 use cretonne::ir::condcodes::{IntCC, FloatCC};
 use cton_frontend::FunctionBuilder;
 use wasmparser::{Operator, MemoryImmediate};
-use translation_utils::{f32_translation, f64_translation, type_to_type, translate_type, Local};
+use translation_utils::{f32_translation, f64_translation, type_to_type, num_return_values, Local};
 use translation_utils::{TableIndex, SignatureIndex, FunctionIndex, MemoryIndex};
 use state::{TranslationState, ControlStackFrame};
 use std::collections::HashMap;
@@ -122,7 +122,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             if let Ok(ty_cre) = type_to_type(&ty) {
                 builder.append_ebb_arg(next, ty_cre);
             }
-            state.push_block(next, translate_type(ty));
+            state.push_block(next, num_return_values(ty));
         }
         Operator::Loop { ty } => {
             let loop_body = builder.create_ebb();
@@ -131,7 +131,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder.append_ebb_arg(next, ty_cre);
             }
             builder.ins().jump(loop_body, &[]);
-            state.push_loop(loop_body, next, translate_type(ty));
+            state.push_loop(loop_body, next, num_return_values(ty));
             builder.switch_to_block(loop_body, &[]);
         }
         Operator::If { ty } => {
@@ -147,7 +147,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             if let Ok(ty_cre) = type_to_type(&ty) {
                 builder.append_ebb_arg(if_not, ty_cre);
             }
-            state.push_if(jump_inst, if_not, translate_type(ty));
+            state.push_if(jump_inst, if_not, num_return_values(ty));
         }
         Operator::Else => {
             // We take the control frame pushed by the if, use its ebb as the else body
@@ -157,10 +157,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (destination, return_count, branch_inst) = match state.control_stack[i] {
                 ControlStackFrame::If {
                     destination,
-                    ref return_values,
+                    num_return_values,
                     branch_inst,
                     ..
-                } => (destination, return_values.len(), branch_inst),
+                } => (destination, num_return_values, branch_inst),
                 _ => panic!("should not happen"),
             };
             builder.ins().jump(destination, state.peekn(return_count));
@@ -173,15 +173,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::End => {
             let frame = state.control_stack.pop().unwrap();
+            let return_count = frame.num_return_values();
             if !builder.is_unreachable() || !builder.is_pristine() {
-                let return_count = frame.return_values().len();
                 builder.ins().jump(
                     frame.following_code(),
                     state.peekn(return_count),
                 );
-                state.popn(return_count);
             }
-            builder.switch_to_block(frame.following_code(), frame.return_values());
+            builder.switch_to_block(frame.following_code(), state.peekn(return_count));
             builder.seal_block(frame.following_code());
             // If it is a loop we also have to seal the body loop block
             match frame {
@@ -223,7 +222,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 let return_count = if frame.is_loop() {
                     0
                 } else {
-                    frame.return_values().len()
+                    frame.num_return_values()
                 };
                 (return_count, frame.br_destination())
             };
@@ -245,7 +244,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 let return_count = if frame.is_loop() {
                     0
                 } else {
-                    frame.return_values().len()
+                    frame.num_return_values()
                 };
                 (return_count, frame.br_destination())
             };
@@ -269,7 +268,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 if min_depth_frame.is_loop() {
                     0
                 } else {
-                    min_depth_frame.return_values().len()
+                    min_depth_frame.num_return_values()
                 }
             };
             if jump_args_count == 0 {
@@ -334,7 +333,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (return_count, br_destination) = {
                 let frame = &mut state.control_stack[0];
                 frame.set_reachable();
-                let return_count = frame.return_values().len();
+                let return_count = frame.num_return_values();
                 (return_count, frame.br_destination())
             };
             {
