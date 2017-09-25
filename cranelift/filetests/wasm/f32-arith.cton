@@ -9,7 +9,11 @@ isa intel haswell
 
 ; Constants.
 
-; function %f32_const() -> f32
+function %f32_const() -> f32 {
+ebb0:
+    v1 = f32const 0x3.0
+    return v1
+}
 
 ; Unary operations
 
