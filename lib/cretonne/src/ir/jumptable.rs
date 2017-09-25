@@ -39,6 +39,11 @@ impl JumpTableData {
         }
     }
 
+    /// Get the number of table entries.
+    pub fn len(&self) -> usize {
+        self.table.len()
+    }
+
     /// Set a table entry.
     ///
     /// The table will grow as needed to fit `idx`.
