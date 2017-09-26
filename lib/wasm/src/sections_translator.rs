@@ -88,7 +88,7 @@ pub fn parse_import_section(
             } => {
                 imports.push(Import::Global(Global {
                     ty: type_to_type(&ty.content_type).unwrap(),
-                    mutability: ty.mutability != 0,
+                    mutability: ty.mutable,
                     initializer: GlobalInit::Import(),
                 }));
             }
@@ -185,7 +185,7 @@ pub fn parse_global_section(
     let mut globals = Vec::new();
     loop {
         let (content_type, mutability) = match *parser.read() {
-            ParserState::BeginGlobalSectionEntry(ref ty) => (ty.content_type, ty.mutability),
+            ParserState::BeginGlobalSectionEntry(ref ty) => (ty.content_type, ty.mutable),
             ParserState::EndSection => break,
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
@@ -218,7 +218,7 @@ pub fn parse_global_section(
         }
         let global = Global {
             ty: type_to_type(&content_type).unwrap(),
-            mutability: mutability != 0,
+            mutability: mutability,
             initializer: initializer,
         };
         runtime.declare_global(global);
