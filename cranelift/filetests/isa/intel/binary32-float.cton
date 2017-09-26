@@ -87,6 +87,13 @@ ebb0:
     ; asm: xorps %xmm5, %xmm2
     [-,%xmm2]           v37 = bxor v11, v10                     ; bin: 0f 57 d5
 
+    ; Convert float to int. (No i64 dest on i386).
+
+    ; asm: cvttss2si %xmm5, %ecx
+    [-,%rcx]            v40 = x86_cvtt2si.i32 v10               ; bin: f3 0f 2c cd
+    ; asm: cvttss2si %xmm2, %esi
+    [-,%rsi]            v41 = x86_cvtt2si.i32 v11               ; bin: f3 0f 2c f2
+
     ; Unary arithmetic.
 
     ; asm: sqrtss %xmm5, %xmm2
@@ -266,6 +273,13 @@ ebb0:
     [-,%xmm5]           v36 = bxor v10, v11                     ; bin: 0f 57 ea
     ; asm: xorps %xmm5, %xmm2
     [-,%xmm2]           v37 = bxor v11, v10                     ; bin: 0f 57 d5
+
+    ; Convert float to int. (No i64 dest on i386).
+
+    ; asm: cvttsd2si %xmm5, %ecx
+    [-,%rcx]            v40 = x86_cvtt2si.i32 v10               ; bin: f2 0f 2c cd
+    ; asm: cvttsd2si %xmm2, %esi
+    [-,%rsi]            v41 = x86_cvtt2si.i32 v11               ; bin: f2 0f 2c f2
 
     ; Unary arithmetic.
 

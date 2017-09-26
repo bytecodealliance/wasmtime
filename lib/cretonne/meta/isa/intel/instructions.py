@@ -46,4 +46,27 @@ sdivmodx = Instruction(
         """,
         ins=(nlo, nhi, d), outs=(q, r), can_trap=True)
 
+
+Float = TypeVar(
+        'Float', 'A scalar or vector floating point number',
+        floats=True, simd=True)
+IntTo = TypeVar(
+        'IntTo', 'An integer type with the same number of lanes',
+        ints=(32, 64), simd=True)
+
+x = Operand('x', Float)
+a = Operand('a', IntTo)
+
+cvtt2si = Instruction(
+        'x86_cvtt2si', r"""
+        Convert with truncation floating point to signed integer.
+
+        The source floating point operand is converted to a signed integer by
+        rounding towards zero. If the result can't be represented in the output
+        type, returns the smallest signed value the output type can represent.
+
+        This instruction does not trap.
+        """,
+        ins=x, outs=a)
+
 GROUP.close()

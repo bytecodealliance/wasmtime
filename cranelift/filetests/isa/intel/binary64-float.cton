@@ -96,6 +96,18 @@ ebb0:
     ; asm: movaps %xmm5, %xmm10
     [-,%xmm10]          v39 = copy v10                          ; bin: 44 0f 28 d5
 
+    ; Convert float to int.
+
+    ; asm: cvttss2si %xmm5, %ecx
+    [-,%rcx]            v40 = x86_cvtt2si.i32 v10               ; bin: f3 0f 2c cd
+    ; asm: cvttss2si %xmm10, %esi
+    [-,%rsi]            v41 = x86_cvtt2si.i32 v11               ; bin: f3 41 0f 2c f2
+
+    ; asm: cvttss2si %xmm5, %rcx
+    [-,%rcx]            v42 = x86_cvtt2si.i64 v10               ; bin: f3 48 0f 2c cd
+    ; asm: cvttss2si %xmm10, %rsi
+    [-,%rsi]            v43 = x86_cvtt2si.i64 v11               ; bin: f3 49 0f 2c f2
+
     ; Unary arithmetic.
 
     ; asm: sqrtss %xmm5, %xmm10
@@ -290,6 +302,18 @@ ebb0:
     [-,%xmm5]           v38 = copy v11                          ; bin: 41 0f 28 ea
     ; asm: movaps %xmm5, %xmm10
     [-,%xmm10]          v39 = copy v10                          ; bin: 44 0f 28 d5
+
+    ; Convert float to int.
+
+    ; asm: cvttsd2si %xmm5, %ecx
+    [-,%rcx]            v40 = x86_cvtt2si.i32 v10               ; bin: f2 0f 2c cd
+    ; asm: cvttsd2si %xmm10, %esi
+    [-,%rsi]            v41 = x86_cvtt2si.i32 v11               ; bin: f2 41 0f 2c f2
+
+    ; asm: cvttsd2si %xmm5, %rcx
+    [-,%rcx]            v42 = x86_cvtt2si.i64 v10               ; bin: f2 48 0f 2c cd
+    ; asm: cvttsd2si %xmm10, %rsi
+    [-,%rsi]            v43 = x86_cvtt2si.i64 v11               ; bin: f2 49 0f 2c f2
 
     ; Unary arithmetic.
 

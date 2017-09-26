@@ -290,6 +290,14 @@ frurm = TailRecipe(
         modrm_rr(in_reg0, out_reg0, sink);
         ''')
 
+# XX /r, RM form, FPR -> GPR.
+rfurm = TailRecipe(
+        'rfurm', Unary, size=1, ins=FPR, outs=GPR,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_rr(in_reg0, out_reg0, sink);
+        ''')
+
 # XX /r, RMI form for one of the roundXX SSE 4.1 instructions.
 furmi_rnd = TailRecipe(
         'furmi_rnd', Unary, size=2, ins=FPR, outs=FPR,
