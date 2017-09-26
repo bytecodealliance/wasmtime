@@ -37,6 +37,11 @@ ebb0:
     ; asm: movd %xmm2, %esi
     [-,%rsi]            v17 = bitcast.i32 v11                   ; bin: 66 0f 7e d6
 
+    ; asm: movaps %xmm2, %xmm5
+    [-,%xmm5]           v18 = copy v11                          ; bin: 0f 28 ea
+    ; asm: movaps %xmm5, %xmm2
+    [-,%xmm2]           v19 = copy v10                          ; bin: 0f 28 d5
+
     ; Binary arithmetic.
 
     ; asm: addss %xmm2, %xmm5
@@ -211,6 +216,11 @@ ebb0:
     [-,%xmm2]           v13 = fdemote.f32 v10                   ; bin: f2 0f 5a d5
 
     ; No i64 <-> f64 bitcasts in 32-bit mode.
+
+    ; asm: movaps %xmm2, %xmm5
+    [-,%xmm5]           v18 = copy v11                          ; bin: 0f 28 ea
+    ; asm: movaps %xmm5, %xmm2
+    [-,%xmm2]           v19 = copy v10                          ; bin: 0f 28 d5
 
     ; Binary arithmetic.
 
