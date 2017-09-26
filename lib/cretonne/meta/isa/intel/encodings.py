@@ -371,6 +371,14 @@ enc_flt(base.fpromote.f64.f32, r.furm, 0xf3, 0x0f, 0x5a)
 # cvtsd2ss
 enc_flt(base.fdemote.f32.f64, r.furm, 0xf2, 0x0f, 0x5a)
 
+# cvttss2si
+enc_flt(x86.cvtt2si.i32.f32, r.rfurm, 0xf3, 0x0f, 0x2c)
+I64.enc(x86.cvtt2si.i64.f32, *r.rfurm.rex(0xf3, 0x0f, 0x2c, w=1))
+
+# cvttsd2si
+enc_flt(x86.cvtt2si.i32.f64, r.rfurm, 0xf2, 0x0f, 0x2c)
+I64.enc(x86.cvtt2si.i64.f64, *r.rfurm.rex(0xf2, 0x0f, 0x2c, w=1))
+
 # Exact square roots.
 enc_flt(base.sqrt.f32, r.furm, 0xf3, 0x0f, 0x51)
 enc_flt(base.sqrt.f64, r.furm, 0xf2, 0x0f, 0x51)
