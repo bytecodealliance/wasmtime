@@ -16,7 +16,7 @@ from .instructions import imul, imul_imm
 from .instructions import band, bor, bxor, isplit, iconcat
 from .instructions import bnot, band_not, bor_not, bxor_not
 from .instructions import icmp, icmp_imm
-from .instructions import iconst, bint
+from .instructions import iconst, bint, select
 from .instructions import ishl, ishl_imm, sshr, sshr_imm, ushr, ushr_imm
 from .instructions import rotl, rotl_imm, rotr, rotr_imm
 from .instructions import f32const, f64const
@@ -56,6 +56,7 @@ expand.custom_legalize(insts.heap_addr, 'expand_heap_addr')
 expand.custom_legalize(insts.trapz, 'expand_cond_trap')
 expand.custom_legalize(insts.trapnz, 'expand_cond_trap')
 expand.custom_legalize(insts.br_table, 'expand_br_table')
+expand.custom_legalize(insts.select, 'expand_select')
 
 # Custom expansions for floating point constants.
 # These expansions require bit-casting or creating constant pool entries.
@@ -115,6 +116,16 @@ for bitop in [band, bor, bxor]:
                 ah << bitop(xh, yh),
                 a << iconcat(al, ah)
             ))
+
+narrow.legalize(
+        a << select(c, x, y),
+        Rtl(
+            (xl, xh) << isplit(x),
+            (yl, yh) << isplit(y),
+            al << select(c, xl, yl),
+            ah << select(c, xh, yh),
+            a << iconcat(al, ah)
+        ))
 
 # Expand integer operations with carry for RISC architectures that don't have
 # the flags.

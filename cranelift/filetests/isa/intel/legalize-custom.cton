@@ -68,3 +68,13 @@ ebb0:
     ; check: $v1 = bitcast.f64 $tmp
     return v1
 }
+
+function %select_f64(f64, f64, i32) -> f64 {
+ebb0(v0: f64, v1: f64, v2: i32):
+    v3 = select v2, v0, v1
+    ; check:  brnz v2, $(new=$EBB)($v0)
+    ; nextln: jump $new($v1)
+    ; check: $new($v3: f64):
+    ; nextln: return $v3
+    return v3
+}
