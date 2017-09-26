@@ -179,6 +179,41 @@ fn expand_br_table(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlo
     cfg.recompute_ebb(pos.func, ebb);
 }
 
+/// Expand the select instruction.
+///
+/// Conditional moves are available in some ISAs for some register classes. The remaining selects
+/// are handled by a branch.
+fn expand_select(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+    let (ctrl, tval, fval) = match func.dfg[inst] {
+        ir::InstructionData::Ternary {
+            opcode: ir::Opcode::Select,
+            args,
+        } => (args[0], args[1], args[2]),
+        _ => panic!("Expected select: {}", func.dfg.display_inst(inst, None)),
+    };
+
+    // Replace `result = select ctrl, tval, fval` with:
+    //
+    //   brnz ctrl, new_ebb(tval)
+    //   jump new_ebb(fval)
+    // new_ebb(result):
+    let old_ebb = func.layout.pp_ebb(inst);
+    let result = func.dfg.first_result(inst);
+    func.dfg.clear_results(inst);
+    let new_ebb = func.dfg.make_ebb();
+    func.dfg.attach_ebb_arg(new_ebb, result);
+
+    func.dfg.replace(inst).brnz(ctrl, new_ebb, &[tval]);
+    let mut pos = FuncCursor::new(func).after_inst(inst);
+    pos.use_srcloc(inst);
+    pos.ins().jump(new_ebb, &[fval]);
+    pos.insert_ebb(new_ebb);
+
+    cfg.recompute_ebb(pos.func, new_ebb);
+    cfg.recompute_ebb(pos.func, old_ebb);
+}
+
+
 /// Expand illegal `f32const` and `f64const` instructions.
 fn expand_fconst(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut ControlFlowGraph) {
     let ty = func.dfg.value_type(func.dfg.first_result(inst));
