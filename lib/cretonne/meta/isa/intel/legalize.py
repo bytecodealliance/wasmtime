@@ -4,7 +4,7 @@ Custom legalization patterns for Intel.
 from __future__ import absolute_import
 from cdsl.ast import Var
 from cdsl.xform import Rtl, XFormGroup
-from base.immediates import imm64
+from base.immediates import imm64, floatcc
 from base.types import i32, i64
 from base import legalize as shared
 from base import instructions as insts
@@ -25,6 +25,8 @@ dead = Var('dead')
 x = Var('x')
 xhi = Var('xhi')
 y = Var('y')
+a1 = Var('a1')
+a2 = Var('a2')
 
 #
 # Division and remainder.
@@ -55,4 +57,38 @@ for ty in [i32, i64]:
             Rtl(
                 xhi << insts.sshr_imm(x, imm64(ty.lane_bits() - 1)),
                 (dead, a) << x86.sdivmodx(x, xhi, y)
+            ))
+
+# Floating point condition codes.
+#
+# The 8 condition codes in `supported_floatccs` are directly supported by a
+# `ucomiss` or `ucomisd` instruction. The remaining codes need legalization
+# patterns.
+
+# Equality needs an explicit `ord` test which checks the parity bit.
+intel_expand.legalize(
+        a << insts.fcmp(floatcc.eq, x, y),
+        Rtl(
+            a1 << insts.fcmp(floatcc.ord, x, y),
+            a2 << insts.fcmp(floatcc.ueq, x, y),
+            a << insts.band(a1, a2)
+        ))
+intel_expand.legalize(
+        a << insts.fcmp(floatcc.ne, x, y),
+        Rtl(
+            a1 << insts.fcmp(floatcc.uno, x, y),
+            a2 << insts.fcmp(floatcc.one, x, y),
+            a << insts.bor(a1, a2)
+        ))
+
+# Inequalities that need to be reversed.
+for cc,               rev_cc in [
+        (floatcc.lt,  floatcc.gt),
+        (floatcc.le,  floatcc.ge),
+        (floatcc.ugt, floatcc.ult),
+        (floatcc.uge, floatcc.ule)]:
+    intel_expand.legalize(
+            a << insts.fcmp(cc, x, y),
+            Rtl(
+                a << insts.fcmp(rev_cc, y, x)
             ))

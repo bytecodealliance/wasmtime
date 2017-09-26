@@ -3,12 +3,13 @@ Intel Encoding recipes.
 """
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
-from cdsl.predicates import IsSignedInt, IsEqual
+from cdsl.predicates import IsSignedInt, IsEqual, Or
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
-from base.formats import IntCompare
+from base.formats import IntCompare, FloatCompare
 from base.formats import RegMove, Ternary, Jump, Branch, FuncAddr
 from .registers import GPR, ABCD, FPR, GPR8, FPR8, StackGPR32, StackFPR32
+from .defs import supported_floatccs
 
 try:
     from typing import Tuple, Dict, Sequence  # noqa
@@ -696,7 +697,7 @@ t8jccb_abcd = TailRecipe(
 # This bandaid macro doesn't support a REX prefix for the final `setCC`
 # instruction, so it is limited to the `ABCD` register class for booleans.
 icscc = TailRecipe(
-        'cscc', IntCompare, size=1 + 3, ins=(GPR, GPR), outs=ABCD,
+        'icscc', IntCompare, size=1 + 3, ins=(GPR, GPR), outs=ABCD,
         emit='''
         // Comparison instruction.
         PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
@@ -714,6 +715,52 @@ icscc = TailRecipe(
             UnsignedGreaterThanOrEqual => 0x93,
             UnsignedGreaterThan => 0x97,
             UnsignedLessThanOrEqual => 0x96,
+        };
+        sink.put1(0x0f);
+        sink.put1(setcc);
+        modrm_rr(out_reg0, 0, sink);
+        ''')
+
+
+# Make a FloatCompare instruction predicate with the supported condition codes.
+
+# Same thing for floating point.
+#
+# The ucomiss/ucomisd instructions set the EFLAGS bits CF/PF/CF like this:
+#
+#    ZPC OSA
+# UN 111 000
+# GT 000 000
+# LT 001 000
+# EQ 100 000
+#
+# Not all floating point condition codes are supported.
+fcscc = TailRecipe(
+        'fcscc', FloatCompare, size=1 + 3, ins=(FPR, FPR), outs=ABCD,
+        instp=Or(*(IsEqual(FloatCompare.cond, cc)
+                   for cc in supported_floatccs)),
+        emit='''
+        // Comparison instruction.
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
+        modrm_rr(in_reg1, in_reg0, sink);
+        // `setCC` instruction, no REX.
+        use ir::condcodes::FloatCC::*;
+        let setcc = match cond {
+            Ordered                    => 0x9b, // EQ|LT|GT => setnp (P=0)
+            Unordered                  => 0x9a, // UN       => setp  (P=1)
+            OrderedNotEqual            => 0x95, // LT|GT    => setne (Z=0),
+            UnorderedOrEqual           => 0x94, // UN|EQ    => sete  (Z=1)
+            GreaterThan                => 0x97, // GT       => seta  (C=0&Z=0)
+            GreaterThanOrEqual         => 0x93, // GT|EQ    => setae (C=0)
+            UnorderedOrLessThan        => 0x92, // UN|LT    => setb  (C=1)
+            UnorderedOrLessThanOrEqual => 0x96, // UN|LT|EQ => setbe (Z=1|C=1)
+            Equal |                       // EQ
+            NotEqual |                    // UN|LT|GT
+            LessThan |                    // LT
+            LessThanOrEqual |             // LT|EQ
+            UnorderedOrGreaterThan |      // UN|GT
+            UnorderedOrGreaterThanOrEqual // UN|GT|EQ
+            => panic!("{} not supported by fcscc", cond),
         };
         sink.put1(0x0f);
         sink.put1(setcc);

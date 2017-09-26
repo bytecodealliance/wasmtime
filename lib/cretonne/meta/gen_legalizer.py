@@ -169,10 +169,12 @@ def unwrap_inst(iref, node, fmt):
     iform = expr.inst.format
     nvops = iform.num_value_operands
 
-    # The tuple of locals we're extracting is `expr.args`.
+    # The tuple of locals to extract is the `Var` instances in `expr.args`.
+    arg_names = tuple(
+            arg.name if isinstance(arg, Var) else '_' for arg in expr.args)
     with fmt.indented(
             'let ({}, predicate) = if let ir::InstructionData::{} {{'
-            .format(', '.join(map(str, expr.args)), iform.name), '};'):
+            .format(', '.join(map(str, arg_names)), iform.name), '};'):
         # Fields are encoded directly.
         for f in iform.imm_fields:
             fmt.line('{},'.format(f.member))

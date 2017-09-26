@@ -26,8 +26,8 @@ I32.legalize_type(
         default=narrow,
         b1=expand,
         i32=intel_expand,
-        f32=expand,
-        f64=expand)
+        f32=intel_expand,
+        f64=intel_expand)
 
 I64.legalize_monomorphic(expand)
 I64.legalize_type(
@@ -35,8 +35,8 @@ I64.legalize_type(
         b1=expand,
         i32=intel_expand,
         i64=intel_expand,
-        f32=expand,
-        f64=expand)
+        f32=intel_expand,
+        f64=intel_expand)
 
 
 #
@@ -105,6 +105,13 @@ for inst,           opc in [
         (base.bor,  0x09),
         (base.bxor, 0x31)]:
     enc_i32_i64(inst, r.rr, opc)
+
+# Also add a `b1` encodings for the logic instructions.
+# TODO: Should this be done with 8-bit instructions? It would improve
+# partial register dependencies.
+enc_flt(base.band.b1, r.rr, 0x21)
+enc_flt(base.bor.b1,  r.rr, 0x09)
+enc_flt(base.bxor.b1, r.rr, 0x31)
 
 enc_i32_i64(base.imul, r.rrx, 0x0f, 0xaf)
 enc_i32_i64(x86.sdivmodx, r.div, 0xf7, rrr=7)
@@ -391,3 +398,10 @@ for inst,               opc in [
         (base.bxor,     0x57)]:
     enc_flt(inst.f32, r.frm, 0x0f, opc)
     enc_flt(inst.f64, r.frm, 0x0f, opc)
+
+# Comparisons.
+#
+# This only covers the condition codes in `supported_floatccs`, the rest are
+# handled by legalization patterns.
+enc_flt(base.fcmp.f32, r.fcscc, 0x0f, 0x2e)
+enc_flt(base.fcmp.f64, r.fcscc, 0x66, 0x0f, 0x2e)
