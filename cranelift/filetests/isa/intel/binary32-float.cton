@@ -157,6 +157,36 @@ ebb0:
     ; asm: movd 1032(%esp), %xmm2
     [-,%xmm2]           v211 = fill v201                        ; bin: 66 0f 6e 94 24 00000408
 
+    ; Comparisons.
+    ;
+    ; Only `supported_floatccs` are tested here. Others are handled by
+    ; legalization paterns.
+
+    ; asm: ucomiss %xmm2, %xmm5
+    ; asm: setnp %bl
+    [-,%rbx]            v300 = fcmp ord v10, v11                ; bin: 0f 2e ea 0f 9b c3
+    ; asm: ucomiss %xmm5, %xmm2
+    ; asm: setp %bl
+    [-,%rbx]            v301 = fcmp uno v11, v10                ; bin: 0f 2e d5 0f 9a c3
+    ; asm: ucomiss %xmm2, %xmm5
+    ; asm: setne %dl
+    [-,%rdx]            v302 = fcmp one v10, v11                ; bin: 0f 2e ea 0f 95 c2
+    ; asm: ucomiss %xmm5, %xmm2
+    ; asm: sete %dl
+    [-,%rdx]            v303 = fcmp ueq v11, v10                ; bin: 0f 2e d5 0f 94 c2
+    ; asm: ucomiss %xmm2, %xmm5
+    ; asm: seta %bl
+    [-,%rbx]            v304 = fcmp gt v10, v11                 ; bin: 0f 2e ea 0f 97 c3
+    ; asm: ucomiss %xmm5, %xmm2
+    ; asm: setae %bl
+    [-,%rbx]            v305 = fcmp ge v11, v10                 ; bin: 0f 2e d5 0f 93 c3
+    ; asm: ucomiss %xmm2, %xmm5
+    ; asm: setb %dl
+    [-,%rdx]            v306 = fcmp ult v10, v11                ; bin: 0f 2e ea 0f 92 c2
+    ; asm: ucomiss %xmm5, %xmm2
+    ; asm: setbe %dl
+    [-,%rdx]            v307 = fcmp ule v11, v10                ; bin: 0f 2e d5 0f 96 c2
+
     return
 }
 
@@ -301,6 +331,36 @@ ebb0:
     [-,%xmm5]           v210 = fill v200                        ; bin: f3 0f 7e ac 24 00000408
     ; asm: movq 1032(%esp), %xmm2
     [-,%xmm2]           v211 = fill v201                        ; bin: f3 0f 7e 94 24 00000408
+
+    ; Comparisons.
+    ;
+    ; Only `supported_floatccs` are tested here. Others are handled by
+    ; legalization paterns.
+
+    ; asm: ucomisd %xmm2, %xmm5
+    ; asm: setnp %bl
+    [-,%rbx]            v300 = fcmp ord v10, v11                ; bin: 66 0f 2e ea 0f 9b c3
+    ; asm: ucomisd %xmm5, %xmm2
+    ; asm: setp %bl
+    [-,%rbx]            v301 = fcmp uno v11, v10                ; bin: 66 0f 2e d5 0f 9a c3
+    ; asm: ucomisd %xmm2, %xmm5
+    ; asm: setne %dl
+    [-,%rdx]            v302 = fcmp one v10, v11                ; bin: 66 0f 2e ea 0f 95 c2
+    ; asm: ucomisd %xmm5, %xmm2
+    ; asm: sete %dl
+    [-,%rdx]            v303 = fcmp ueq v11, v10                ; bin: 66 0f 2e d5 0f 94 c2
+    ; asm: ucomisd %xmm2, %xmm5
+    ; asm: seta %bl
+    [-,%rbx]            v304 = fcmp gt v10, v11                 ; bin: 66 0f 2e ea 0f 97 c3
+    ; asm: ucomisd %xmm5, %xmm2
+    ; asm: setae %bl
+    [-,%rbx]            v305 = fcmp ge v11, v10                 ; bin: 66 0f 2e d5 0f 93 c3
+    ; asm: ucomisd %xmm2, %xmm5
+    ; asm: setb %dl
+    [-,%rdx]            v306 = fcmp ult v10, v11                ; bin: 66 0f 2e ea 0f 92 c2
+    ; asm: ucomisd %xmm5, %xmm2
+    ; asm: setbe %dl
+    [-,%rdx]            v307 = fcmp ule v11, v10                ; bin: 66 0f 2e d5 0f 96 c2
 
     return
 }
