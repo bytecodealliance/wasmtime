@@ -69,4 +69,34 @@ cvtt2si = Instruction(
         """,
         ins=x, outs=a)
 
+x = Operand('x', Float)
+a = Operand('a', Float)
+y = Operand('y', Float)
+
+fmin = Instruction(
+        'x86_fmin', r"""
+        Floating point minimum with Intel semantics.
+
+        This is equivalent to the C ternary operator `x < y ? x : y` which
+        differs from :inst:`fmin` when either operand is NaN or when comparing
+        +0.0 to -0.0.
+
+        When the two operands don't compare as LT, `y` is returned unchanged,
+        even if it is a signalling NaN.
+        """,
+        ins=(x, y), outs=a)
+
+fmax = Instruction(
+        'x86_fmax', r"""
+        Floating point maximum with Intel semantics.
+
+        This is equivalent to the C ternary operator `x > y ? x : y` which
+        differs from :inst:`fmax` when either operand is NaN or when comparing
+        +0.0 to -0.0.
+
+        When the two operands don't compare as GT, `y` is returned unchanged,
+        even if it is a signalling NaN.
+        """,
+        ins=(x, y), outs=a)
+
 GROUP.close()

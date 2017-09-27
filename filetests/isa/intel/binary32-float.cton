@@ -94,6 +94,17 @@ ebb0:
     ; asm: cvttss2si %xmm2, %esi
     [-,%rsi]            v41 = x86_cvtt2si.i32 v11               ; bin: f3 0f 2c f2
 
+    ; Min/max.
+
+    ; asm: minss %xmm2, %xmm5
+    [-,%xmm5]           v42 = x86_fmin v10, v11                 ; bin: f3 0f 5d ea
+    ; asm: minss %xmm5, %xmm2
+    [-,%xmm2]           v43 = x86_fmin v11, v10                 ; bin: f3 0f 5d d5
+    ; asm: maxss %xmm2, %xmm5
+    [-,%xmm5]           v44 = x86_fmax v10, v11                 ; bin: f3 0f 5f ea
+    ; asm: maxss %xmm5, %xmm2
+    [-,%xmm2]           v45 = x86_fmax v11, v10                 ; bin: f3 0f 5f d5
+
     ; Unary arithmetic.
 
     ; asm: sqrtss %xmm5, %xmm2
@@ -280,6 +291,17 @@ ebb0:
     [-,%rcx]            v40 = x86_cvtt2si.i32 v10               ; bin: f2 0f 2c cd
     ; asm: cvttsd2si %xmm2, %esi
     [-,%rsi]            v41 = x86_cvtt2si.i32 v11               ; bin: f2 0f 2c f2
+
+    ; Min/max.
+
+    ; asm: minsd %xmm2, %xmm5
+    [-,%xmm5]           v42 = x86_fmin v10, v11                 ; bin: f2 0f 5d ea
+    ; asm: minsd %xmm5, %xmm2
+    [-,%xmm2]           v43 = x86_fmin v11, v10                 ; bin: f2 0f 5d d5
+    ; asm: maxsd %xmm2, %xmm5
+    [-,%xmm5]           v44 = x86_fmax v10, v11                 ; bin: f2 0f 5f ea
+    ; asm: maxsd %xmm5, %xmm2
+    [-,%xmm2]           v45 = x86_fmax v11, v10                 ; bin: f2 0f 5f d5
 
     ; Unary arithmetic.
 
