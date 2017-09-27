@@ -12,7 +12,7 @@ from .registers import GPR, ABCD, FPR, GPR8, FPR8, StackGPR32, StackFPR32
 from .defs import supported_floatccs
 
 try:
-    from typing import Tuple, Dict, Sequence  # noqa
+    from typing import Tuple, Dict, Sequence, Any  # noqa
     from cdsl.instructions import InstructionFormat  # noqa
     from cdsl.isa import ConstraintSeq, BranchRange, PredNode, OperandConstraint  # noqa
 except ImportError:
@@ -206,6 +206,13 @@ class TailRecipe:
                 emit=replace_put_op(self.emit, name))
         return (self.recipes[name], bits)
 
+    @staticmethod
+    def check_names(globs):
+        # type: (Dict[str, Any]) -> None
+        for name, obj in globs.items():
+            if isinstance(obj, TailRecipe):
+                assert name == obj.name, "Mismatched TailRecipe name: " + name
+
 
 # A null unary instruction that takes a GPR register. Can be used for identity
 # copies and no-op conversions.
@@ -234,7 +241,7 @@ rrx = TailRecipe(
 
 # XX /r with FPR ins and outs. RM form.
 frm = TailRecipe(
-        'frr', Binary, size=1, ins=(FPR, FPR), outs=0,
+        'frm', Binary, size=1, ins=(FPR, FPR), outs=0,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rr(in_reg1, in_reg0, sink);
@@ -315,7 +322,7 @@ furmi_rnd = TailRecipe(
 
 # XX /r, for regmove instructions.
 rmov = TailRecipe(
-        'ur', RegMove, size=1, ins=GPR, outs=(),
+        'rmov', RegMove, size=1, ins=GPR, outs=(),
         emit='''
         PUT_OP(bits, rex2(dst, src), sink);
         modrm_rr(dst, src, sink);
@@ -381,7 +388,7 @@ uid = TailRecipe(
 
 # XX+rd id unary with 32-bit immediate. Note no recipe predicate.
 puid = TailRecipe(
-        'uid', UnaryImm, size=4, ins=(), outs=GPR,
+        'puid', UnaryImm, size=4, ins=(), outs=GPR,
         emit='''
         // The destination register is encoded in the low bits of the opcode.
         // No ModR/M.
@@ -392,7 +399,7 @@ puid = TailRecipe(
 
 # XX+rd iq unary with 64-bit immediate.
 puiq = TailRecipe(
-        'uiq', UnaryImm, size=8, ins=(), outs=GPR,
+        'puiq', UnaryImm, size=8, ins=(), outs=GPR,
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         let imm: i64 = imm.into();
@@ -669,7 +676,7 @@ jmpd = TailRecipe(
 # Bits 0-7 are the Jcc opcode.
 # Bits 8-15 control the test instruction which always has opcode byte 0x85.
 tjccb = TailRecipe(
-        'tjcc', Branch, size=1 + 2, ins=GPR, outs=(),
+        'tjccb', Branch, size=1 + 2, ins=GPR, outs=(),
         branch_range=(2, 8),
         emit='''
         // test r, r.
@@ -782,3 +789,5 @@ fcscc = TailRecipe(
         sink.put1(setcc);
         modrm_rr(out_reg0, 0, sink);
         ''')
+
+TailRecipe.check_names(globals())
