@@ -321,6 +321,14 @@ rmov = TailRecipe(
         modrm_rr(dst, src, sink);
         ''')
 
+# XX /r, for regmove instructions (FPR version, RM encoded).
+frmov = TailRecipe(
+        'frmov', RegMove, size=1, ins=FPR, outs=(),
+        emit='''
+        PUT_OP(bits, rex2(src, dst), sink);
+        modrm_rr(src, dst, sink);
+        ''')
+
 # XX /n with one arg in %rcx, for shifts.
 rc = TailRecipe(
         'rc', Binary, size=1, ins=(GPR, GPR.rcx), outs=0,
