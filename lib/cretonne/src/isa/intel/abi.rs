@@ -106,9 +106,17 @@ impl ArgAssigner for Args {
 
 /// Legalize `sig`.
 pub fn legalize_signature(sig: &mut ir::Signature, flags: &shared_settings::Flags, _current: bool) {
-    let bits = if flags.is_64bit() { 64 } else { 32 };
+    let bits;
+    let mut args;
 
-    let mut args = Args::new(bits, &ARG_GPRS, 8);
+    if flags.is_64bit() {
+        bits = 64;
+        args = Args::new(bits, &ARG_GPRS, 8);
+    } else {
+        bits = 32;
+        args = Args::new(bits, &[], 0);
+    }
+
     legalize_args(&mut sig.argument_types, &mut args);
 
     let mut rets = Args::new(bits, &RET_GPRS, 2);
