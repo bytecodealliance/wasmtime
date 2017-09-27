@@ -358,6 +358,8 @@ I64.enc(base.bitcast.i64.f64, *r.rfumr.rex(0x66, 0x0f, 0x7e, w=1))
 # movaps
 enc_flt(base.copy.f32, r.furm, 0x0f, 0x28)
 enc_flt(base.copy.f64, r.furm, 0x0f, 0x28)
+enc_flt(base.regmove.f32, r.frmov, 0x0f, 0x28)
+enc_flt(base.regmove.f64, r.frmov, 0x0f, 0x28)
 
 # cvtsi2ss
 enc_i32_i64(base.fcvt_from_sint.f32, r.frurm, 0xf3, 0x0f, 0x2a)

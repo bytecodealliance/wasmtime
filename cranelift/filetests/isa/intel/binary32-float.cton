@@ -42,6 +42,11 @@ ebb0:
     ; asm: movaps %xmm5, %xmm2
     [-,%xmm2]           v19 = copy v10                          ; bin: 0f 28 d5
 
+    ; asm: movaps %xmm2, %xmm5
+    regmove v19, %xmm2 -> %xmm5                                 ; bin: 0f 28 ea
+    ; asm: movaps %xmm5, %xmm2
+    regmove v19, %xmm5 -> %xmm2                                 ; bin: 0f 28 d5
+
     ; Binary arithmetic.
 
     ; asm: addss %xmm2, %xmm5
@@ -239,6 +244,11 @@ ebb0:
     [-,%xmm5]           v18 = copy v11                          ; bin: 0f 28 ea
     ; asm: movaps %xmm5, %xmm2
     [-,%xmm2]           v19 = copy v10                          ; bin: 0f 28 d5
+
+    ; asm: movaps %xmm2, %xmm5
+    regmove v19, %xmm2 -> %xmm5                                 ; bin: 0f 28 ea
+    ; asm: movaps %xmm5, %xmm2
+    regmove v19, %xmm5 -> %xmm2                                 ; bin: 0f 28 d5
 
     ; Binary arithmetic.
 
