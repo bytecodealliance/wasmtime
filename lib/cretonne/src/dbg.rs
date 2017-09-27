@@ -9,7 +9,6 @@
 /// The output will appear in files named `cretonne.dbg.*`, where the suffix is named after the
 /// thread doing the logging.
 
-use std::ascii::AsciiExt;
 use std::cell::RefCell;
 use std::env;
 use std::ffi::OsStr;
@@ -72,18 +71,20 @@ pub fn writeln_with_format_args(args: fmt::Arguments) -> io::Result<()> {
 
 /// Open the tracing file for the current thread.
 fn open_file() -> io::BufWriter<File> {
-    let file = match thread::current().name() {
-        None => File::create("cretonne.dbg"),
-        Some(name) => {
-            let mut path = "cretonne.dbg.".to_owned();
-            for ch in name.chars() {
-                if ch.is_ascii() && ch.is_alphanumeric() {
-                    path.push(ch);
-                }
+    let curthread = thread::current();
+    let tmpstr;
+    let mut path = "cretonne.dbg.".to_owned();
+    path.extend(
+        match curthread.name() {
+            Some(name) => name.chars(),
+            // The thread is unnamed, so use the thread ID instead.
+            None => {
+                tmpstr = format!("{:?}", curthread.id());
+                tmpstr.chars()
             }
-            File::create(path)
-        }
-    }.expect("Can't open tracing file");
+        }.filter(|ch| ch.is_alphanumeric() || *ch == '-' || *ch == '_'),
+    );
+    let file = File::create(path).expect("Can't open tracing file");
     io::BufWriter::new(file)
 }
 
