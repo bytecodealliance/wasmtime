@@ -398,7 +398,9 @@ for inst,           opc in [
         (base.fadd, 0x58),
         (base.fsub, 0x5c),
         (base.fmul, 0x59),
-        (base.fdiv, 0x5e)]:
+        (base.fdiv, 0x5e),
+        (x86.fmin,  0x5d),
+        (x86.fmax,  0x5f)]:
     enc_flt(inst.f32, r.frm, 0xf3, 0x0f, opc)
     enc_flt(inst.f64, r.frm, 0xf2, 0x0f, opc)
 
