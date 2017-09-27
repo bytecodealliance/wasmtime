@@ -92,3 +92,7 @@ for cc,               rev_cc in [
             Rtl(
                 a << insts.fcmp(rev_cc, y, x)
             ))
+
+# We need to modify the CFG for min/max legalization.
+intel_expand.custom_legalize(insts.fmin, 'expand_minmax')
+intel_expand.custom_legalize(insts.fmax, 'expand_minmax')

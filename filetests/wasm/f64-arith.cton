@@ -82,8 +82,17 @@ ebb0(v0: f64, v1: f64):
     return v2
 }
 
-; function %f64_min(f64, f64) -> f64
-; function %f64_max(f64, f64) -> f64
+function %f64_min(f64, f64) -> f64 {
+ebb0(v0: f64, v1: f64):
+    v2 = fmin v0, v1
+    return v2
+}
+
+function %f64_max(f64, f64) -> f64 {
+ebb0(v0: f64, v1: f64):
+    v2 = fmax v0, v1
+    return v2
+}
 
 function %f64_copysign(f64, f64) -> f64 {
 ebb0(v0: f64, v1: f64):
