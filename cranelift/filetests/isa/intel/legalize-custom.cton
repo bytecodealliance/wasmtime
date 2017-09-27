@@ -78,3 +78,22 @@ ebb0(v0: f64, v1: f64, v2: i32):
     ; nextln: return $v3
     return v3
 }
+
+function %f32_min(f32, f32) -> f32 {
+ebb0(v0: f32, v1: f32):
+    v2 = fmin v0, v1
+    return v2
+    ; check: $(vnat=$V) = x86_fmin $v0, $v1
+    ; nextln: jump $(done=$EBB)($vnat)
+
+    ; check: $(uno=$EBB):
+    ; nextln: $(vuno=$V) = fadd.f32 $v0, $v1
+    ; nextln: jump $(done=$EBB)($vuno)
+
+    ; check: $(ueq=$EBB):
+    ; check: $(veq=$V) = bor.f32 $v0, $v1
+    ; nextln: jump $(done=$EBB)($veq)
+
+    ; check: $done($v2: f32):
+    ; nextln: return $v2
+}
