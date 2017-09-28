@@ -239,12 +239,20 @@ rrx = TailRecipe(
         modrm_rr(in_reg1, in_reg0, sink);
         ''')
 
-# XX /r with FPR ins and outs. RM form.
-frm = TailRecipe(
-        'frm', Binary, size=1, ins=(FPR, FPR), outs=0,
+# XX /r with FPR ins and outs. A form.
+fa = TailRecipe(
+        'fa', Binary, size=1, ins=(FPR, FPR), outs=0,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rr(in_reg1, in_reg0, sink);
+        ''')
+
+# XX /r with FPR ins and outs. A form with input operands swapped.
+fax = TailRecipe(
+        'fax', Binary, size=1, ins=(FPR, FPR), outs=1,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        modrm_rr(in_reg0, in_reg1, sink);
         ''')
 
 # XX /r, but for a unary operator with separate input/output register, like

@@ -77,9 +77,9 @@ ebb0:
     [-,%xmm10]          v31 = band v11, v10                     ; bin: 44 0f 54 d5
 
     ; asm: andnps %xmm10, %xmm5
-    [-,%xmm5]           v32 = band_not v10, v11                 ; bin: 41 0f 55 ea
+    [-,%xmm5]           v32 = band_not v11, v10                 ; bin: 41 0f 55 ea
     ; asm: andnps %xmm5, %xmm10
-    [-,%xmm10]          v33 = band_not v11, v10                 ; bin: 44 0f 55 d5
+    [-,%xmm10]          v33 = band_not v10, v11                 ; bin: 44 0f 55 d5
 
     ; asm: orps %xmm10, %xmm5
     [-,%xmm5]           v34 = bor v10, v11                      ; bin: 41 0f 56 ea
@@ -295,9 +295,9 @@ ebb0:
     [-,%xmm10]          v31 = band v11, v10                     ; bin: 44 0f 54 d5
 
     ; asm: andnps %xmm10, %xmm5
-    [-,%xmm5]           v32 = band_not v10, v11                 ; bin: 41 0f 55 ea
+    [-,%xmm5]           v32 = band_not v11, v10                 ; bin: 41 0f 55 ea
     ; asm: andnps %xmm5, %xmm10
-    [-,%xmm10]          v33 = band_not v11, v10                 ; bin: 44 0f 55 d5
+    [-,%xmm10]          v33 = band_not v10, v11                 ; bin: 44 0f 55 d5
 
     ; asm: orps %xmm10, %xmm5
     [-,%xmm5]           v34 = bor v10, v11                      ; bin: 41 0f 56 ea
