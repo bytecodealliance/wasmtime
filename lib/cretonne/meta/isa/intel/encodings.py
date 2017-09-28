@@ -403,17 +403,20 @@ for inst,           opc in [
         (base.fdiv, 0x5e),
         (x86.fmin,  0x5d),
         (x86.fmax,  0x5f)]:
-    enc_flt(inst.f32, r.frm, 0xf3, 0x0f, opc)
-    enc_flt(inst.f64, r.frm, 0xf2, 0x0f, opc)
+    enc_flt(inst.f32, r.fa, 0xf3, 0x0f, opc)
+    enc_flt(inst.f64, r.fa, 0xf2, 0x0f, opc)
 
 # Binary bitwise ops.
 for inst,               opc in [
         (base.band,     0x54),
-        (base.band_not, 0x55),
         (base.bor,      0x56),
         (base.bxor,     0x57)]:
-    enc_flt(inst.f32, r.frm, 0x0f, opc)
-    enc_flt(inst.f64, r.frm, 0x0f, opc)
+    enc_flt(inst.f32, r.fa, 0x0f, opc)
+    enc_flt(inst.f64, r.fa, 0x0f, opc)
+
+# The `andnps(x,y)` instruction computes `~x&y`, while band_not(x,y)` is `x&~y.
+enc_flt(base.band_not.f32, r.fax, 0x0f, 0x55)
+enc_flt(base.band_not.f64, r.fax, 0x0f, 0x55)
 
 # Comparisons.
 #
