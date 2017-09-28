@@ -486,33 +486,27 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         /******************************* Unary Operators *************************************/
         Operator::I32Clz => {
             let arg = state.pop1();
-            let val = builder.ins().clz(arg);
-            state.push1(builder.ins().sextend(I32, val));
+            state.push1(builder.ins().clz(arg));
         }
         Operator::I64Clz => {
             let arg = state.pop1();
-            let val = builder.ins().clz(arg);
-            state.push1(builder.ins().sextend(I64, val));
+            state.push1(builder.ins().clz(arg));
         }
         Operator::I32Ctz => {
-            let val = state.pop1();
-            let short_res = builder.ins().ctz(val);
-            state.push1(builder.ins().sextend(I32, short_res));
+            let arg = state.pop1();
+            state.push1(builder.ins().ctz(arg));
         }
         Operator::I64Ctz => {
-            let val = state.pop1();
-            let short_res = builder.ins().ctz(val);
-            state.push1(builder.ins().sextend(I64, short_res));
+            let arg = state.pop1();
+            state.push1(builder.ins().ctz(arg));
         }
         Operator::I32Popcnt => {
             let arg = state.pop1();
-            let val = builder.ins().popcnt(arg);
-            state.push1(builder.ins().sextend(I32, val));
+            state.push1(builder.ins().popcnt(arg));
         }
         Operator::I64Popcnt => {
             let arg = state.pop1();
-            let val = builder.ins().popcnt(arg);
-            state.push1(builder.ins().sextend(I64, val));
+            state.push1(builder.ins().popcnt(arg));
         }
         Operator::I64ExtendSI32 => {
             let val = state.pop1();

@@ -95,3 +95,17 @@ function %jump_args2() {
     ebb1(v10: i64, v11: i16):
         return
 }
+
+function %bad_extend() {
+ebb0:
+    v0 = iconst.i32 10
+    v1 = uextend.i16 v0 ; error: input i32 must be smaller than output i16
+    return
+}
+
+function %bad_reduce() {
+ebb0:
+    v0 = iconst.i32 10
+    v1 = ireduce.i64 v0 ; error: input i32 must be larger than output i64
+    return
+}
