@@ -172,3 +172,135 @@ fn expand_fcvt_from_uint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut Cont
     cfg.recompute_ebb(pos.func, neg_ebb);
     cfg.recompute_ebb(pos.func, done);
 }
+
+fn expand_fcvt_to_sint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+    use ir::condcodes::{IntCC, FloatCC};
+    use ir::immediates::{Ieee32, Ieee64};
+
+    let x;
+    match func.dfg[inst] {
+        ir::InstructionData::Unary {
+            opcode: ir::Opcode::FcvtToSint,
+            arg,
+        } => x = arg,
+        _ => panic!("Need fcvt_to_sint: {}", func.dfg.display_inst(inst, None)),
+    }
+    let old_ebb = func.layout.pp_ebb(inst);
+    let xty = func.dfg.value_type(x);
+    let result = func.dfg.first_result(inst);
+    let ty = func.dfg.value_type(result);
+
+    // Final EBB after the bad value checks.
+    let done = func.dfg.make_ebb();
+
+    // The `x86_cvtt2si` performs the desired conversion, but it doesn't trap on NaN or overflow.
+    // It produces an INT_MIN result instead.
+    func.dfg.replace(inst).x86_cvtt2si(ty, x);
+
+    let mut pos = FuncCursor::new(func).after_inst(inst);
+    pos.use_srcloc(inst);
+
+    let is_done = pos.ins().icmp_imm(
+        IntCC::NotEqual,
+        result,
+        1 << (ty.lane_bits() - 1),
+    );
+    pos.ins().brnz(is_done, done, &[]);
+
+    // We now have the following possibilities:
+    //
+    // 1. INT_MIN was actually the correct conversion result.
+    // 2. The input was NaN -> trap bad_toint
+    // 3. The input was out of range -> trap int_ovf
+    //
+
+    // Check for NaN.
+    let is_nan = pos.ins().fcmp(FloatCC::Unordered, x, x);
+    pos.ins().trapnz(
+        is_nan,
+        ir::TrapCode::BadConversionToInteger,
+    );
+
+    // Check for case 1: INT_MIN is the correct result.
+    // We use a `ueq` condition here because that can be translated into a single branch, and we
+    // already know that we don't have a NaN.
+    let fintmin = match xty {
+        ir::types::F32 => pos.ins().f32const(Ieee32::pow2(ty.lane_bits() - 1).neg()),
+        ir::types::F64 => pos.ins().f64const(Ieee64::pow2(ty.lane_bits() - 1).neg()),
+        _ => panic!("Can't convert {}", xty),
+    };
+    let in_range = pos.ins().fcmp(FloatCC::UnorderedOrEqual, x, fintmin);
+    pos.ins().trapz(in_range, ir::TrapCode::IntegerOverflow);
+
+    pos.ins().jump(done, &[]);
+    pos.insert_ebb(done);
+
+    cfg.recompute_ebb(pos.func, old_ebb);
+    cfg.recompute_ebb(pos.func, done);
+}
+
+fn expand_fcvt_to_uint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+    use ir::condcodes::{IntCC, FloatCC};
+    use ir::immediates::{Ieee32, Ieee64};
+
+    let x;
+    match func.dfg[inst] {
+        ir::InstructionData::Unary {
+            opcode: ir::Opcode::FcvtToUint,
+            arg,
+        } => x = arg,
+        _ => panic!("Need fcvt_to_uint: {}", func.dfg.display_inst(inst, None)),
+    }
+    let old_ebb = func.layout.pp_ebb(inst);
+    let xty = func.dfg.value_type(x);
+    let result = func.dfg.first_result(inst);
+    let ty = func.dfg.value_type(result);
+
+    // EBB handling numbers >= 2^(N-1).
+    let large = func.dfg.make_ebb();
+
+    // Final EBB after the bad value checks.
+    let done = func.dfg.make_ebb();
+
+    // Move the `inst` result value onto the `done` EBB.
+    func.dfg.clear_results(inst);
+    func.dfg.attach_ebb_arg(done, result);
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    // Start by materializing the floating point constant 2^(N-1) where N is the number of bits in
+    // the destination integer type.
+    let pow2nm1 = match xty {
+        ir::types::F32 => pos.ins().f32const(Ieee32::pow2(ty.lane_bits() - 1)),
+        ir::types::F64 => pos.ins().f64const(Ieee64::pow2(ty.lane_bits() - 1)),
+        _ => panic!("Can't convert {}", xty),
+    };
+    let is_large = pos.ins().fcmp(FloatCC::GreaterThanOrEqual, x, pow2nm1);
+    pos.ins().brnz(is_large, large, &[]);
+
+    // Now we know that x < 2^(N-1) or x is NaN.
+    let sres = pos.ins().x86_cvtt2si(ty, x);
+    let is_neg = pos.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+    pos.ins().brz(is_neg, done, &[sres]);
+    pos.ins().trap(ir::TrapCode::BadConversionToInteger);
+
+    // Handle the case where x >= 2^(N-1) and not NaN.
+    pos.insert_ebb(large);
+    let adjx = pos.ins().fsub(x, pow2nm1);
+    let lres = pos.ins().x86_cvtt2si(ty, adjx);
+    let is_neg = pos.ins().icmp_imm(IntCC::SignedLessThan, lres, 0);
+    pos.ins().trapnz(is_neg, ir::TrapCode::IntegerOverflow);
+    let lfinal = pos.ins().iadd_imm(lres, 1 << (ty.lane_bits() - 1));
+
+    // Recycle the original instruction as a jump.
+    pos.func.dfg.replace(inst).jump(done, &[lfinal]);
+
+    // Finally insert a label for the completion.
+    pos.next_inst();
+    pos.insert_ebb(done);
+
+    cfg.recompute_ebb(pos.func, old_ebb);
+    cfg.recompute_ebb(pos.func, large);
+    cfg.recompute_ebb(pos.func, done);
+}

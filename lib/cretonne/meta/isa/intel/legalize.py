@@ -99,3 +99,6 @@ intel_expand.custom_legalize(insts.fmax, 'expand_minmax')
 
 # Conversions from unsigned need special handling.
 intel_expand.custom_legalize(insts.fcvt_from_uint, 'expand_fcvt_from_uint')
+# Conversions from float to int can trap.
+intel_expand.custom_legalize(insts.fcvt_to_sint, 'expand_fcvt_to_sint')
+intel_expand.custom_legalize(insts.fcvt_to_uint, 'expand_fcvt_to_uint')
