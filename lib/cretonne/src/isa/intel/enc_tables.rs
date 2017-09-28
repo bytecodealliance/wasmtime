@@ -222,15 +222,25 @@ fn expand_fcvt_to_sint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut Contro
     );
 
     // Check for case 1: INT_MIN is the correct result.
-    // We use a `ueq` condition here because that can be translated into a single branch, and we
-    // already know that we don't have a NaN.
-    let fintmin = match xty {
-        ir::types::F32 => pos.ins().f32const(Ieee32::pow2(ty.lane_bits() - 1).neg()),
-        ir::types::F64 => pos.ins().f64const(Ieee64::pow2(ty.lane_bits() - 1).neg()),
+    // Determine the smallest floating point number that would convert to INT_MIN.
+    let mut overflow_cc = FloatCC::LessThan;
+    let output_bits = ty.lane_bits();
+    let flimit = match xty {
+        ir::types::F32 => pos.ins().f32const(Ieee32::pow2(output_bits - 1).neg()),
+        ir::types::F64 => {
+            // An f64 can represent `i32::min_value() - 1` exactly with precision to spare, so
+            // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+            pos.ins().f64const(if output_bits < 64 {
+                overflow_cc = FloatCC::LessThanOrEqual;
+                Ieee64::with_float(-((1u64 << (output_bits - 1)) as f64) - 1.0)
+            } else {
+                Ieee64::pow2(output_bits - 1).neg()
+            })
+        }
         _ => panic!("Can't convert {}", xty),
     };
-    let in_range = pos.ins().fcmp(FloatCC::UnorderedOrEqual, x, fintmin);
-    pos.ins().trapz(in_range, ir::TrapCode::IntegerOverflow);
+    let overflow = pos.ins().fcmp(overflow_cc, x, flimit);
+    pos.ins().trapnz(overflow, ir::TrapCode::IntegerOverflow);
 
     pos.ins().jump(done, &[]);
     pos.insert_ebb(done);
