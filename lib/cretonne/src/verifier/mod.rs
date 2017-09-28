@@ -49,8 +49,6 @@
 //!
 //!    - Stack slot loads and stores must be in-bounds.
 //!    - Immediate constraints for certain opcodes, like `udiv_imm v3, 0`.
-//!    - Extend / truncate instructions have more type constraints: Source type can't be
-//!      larger / smaller than result type.
 //!    - `Insertlane` and `extractlane` instructions have immediate lane numbers that must be in
 //!      range for their polymorphic type.
 //!    - Swizzle and shuffle instructions take a variable number of lane arguments. The number
@@ -574,6 +572,7 @@ impl<'a> Verifier<'a> {
         self.typecheck_fixed_args(inst, ctrl_type)?;
         self.typecheck_variable_args(inst)?;
         self.typecheck_return(inst)?;
+        self.typecheck_special(inst, ctrl_type)?;
 
         Ok(())
     }
@@ -814,6 +813,57 @@ impl<'a> Verifier<'a> {
                     );
                 }
             }
+        }
+        Ok(())
+    }
+
+    // Check special-purpose type constraints that can't be expressed in the normal opcode
+    // constraints.
+    fn typecheck_special(&self, inst: Inst, ctrl_type: Type) -> Result {
+        match self.func.dfg[inst] {
+            ir::InstructionData::Unary { opcode, arg } => {
+                let arg_type = self.func.dfg.value_type(arg);
+                match opcode {
+                    Opcode::Bextend | Opcode::Uextend | Opcode::Sextend | Opcode::Fpromote => {
+                        if arg_type.lane_count() != ctrl_type.lane_count() {
+                            return err!(
+                                inst,
+                                "input {} and output {} must have same number of lanes",
+                                arg_type,
+                                ctrl_type
+                            );
+                        }
+                        if arg_type.lane_bits() >= ctrl_type.lane_bits() {
+                            return err!(
+                                inst,
+                                "input {} must be smaller than output {}",
+                                arg_type,
+                                ctrl_type
+                            );
+                        }
+                    }
+                    Opcode::Breduce | Opcode::Ireduce | Opcode::Fdemote => {
+                        if arg_type.lane_count() != ctrl_type.lane_count() {
+                            return err!(
+                                inst,
+                                "input {} and output {} must have same number of lanes",
+                                arg_type,
+                                ctrl_type
+                            );
+                        }
+                        if arg_type.lane_bits() <= ctrl_type.lane_bits() {
+                            return err!(
+                                inst,
+                                "input {} must be larger than output {}",
+                                arg_type,
+                                ctrl_type
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
         }
         Ok(())
     }
