@@ -199,7 +199,7 @@ def unwrap_inst(iref, node, fmt):
                     n = expr.inst.value_opnums.index(opnum)
                     fmt.format('dfg.resolve_aliases(args[{}]),', n)
             # Evaluate the instruction predicate, if any.
-            instp = expr.inst_predicate()
+            instp = expr.inst_predicate_with_ctrl_typevar()
             fmt.line(instp.rust_predicate(0) if instp else 'true')
         fmt.outdented_line('} else {')
         fmt.line('unreachable!("bad instruction format")')
