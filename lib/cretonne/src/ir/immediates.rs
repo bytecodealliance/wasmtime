@@ -6,11 +6,9 @@
 //! module in the meta language.
 
 use std::fmt::{self, Display, Formatter};
-use std::{i32, u32};
-use std::str::FromStr;
-
-#[cfg(test)]
 use std::mem;
+use std::str::FromStr;
+use std::{i32, u32};
 
 /// 64-bit immediate integer operand.
 ///
@@ -547,7 +545,6 @@ impl Ieee32 {
     }
 
     /// Create a new `Ieee32` representing the number `x`.
-    #[cfg(test)]
     pub fn with_float(x: f32) -> Ieee32 {
         Ieee32(unsafe { mem::transmute(x) })
     }
@@ -600,7 +597,6 @@ impl Ieee64 {
     }
 
     /// Create a new `Ieee64` representing the number `x`.
-    #[cfg(test)]
     pub fn with_float(x: f64) -> Ieee64 {
         Ieee64(unsafe { mem::transmute(x) })
     }
