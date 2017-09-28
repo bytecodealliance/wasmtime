@@ -529,6 +529,23 @@ impl Ieee32 {
         Ieee32(x)
     }
 
+    /// Create an `Ieee32` number representing 2.0^n.
+    pub fn pow2<I: Into<i32>>(n: I) -> Ieee32 {
+        let n = n.into();
+        let w = 8;
+        let t = 23;
+        let bias = (1 << (w - 1)) - 1;
+        let exponent = (n + bias) as u32;
+        assert!(exponent > 0, "Underflow n={}", n);
+        assert!(exponent < (1 << w) + 1, "Overflow n={}", n);
+        Ieee32(exponent << t)
+    }
+
+    /// Return self negated.
+    pub fn neg(self) -> Ieee32 {
+        Ieee32(self.0 ^ (1 << 31))
+    }
+
     /// Create a new `Ieee32` representing the number `x`.
     #[cfg(test)]
     pub fn with_float(x: f32) -> Ieee32 {
@@ -563,6 +580,23 @@ impl Ieee64 {
     /// Create a new `Ieee64` containing the bits of `x`.
     pub fn with_bits(x: u64) -> Ieee64 {
         Ieee64(x)
+    }
+
+    /// Create an `Ieee64` number representing 2.0^n.
+    pub fn pow2<I: Into<i64>>(n: I) -> Ieee64 {
+        let n = n.into();
+        let w = 11;
+        let t = 52;
+        let bias = (1 << (w - 1)) - 1;
+        let exponent = (n + bias) as u64;
+        assert!(exponent > 0, "Underflow n={}", n);
+        assert!(exponent < (1 << w) + 1, "Overflow n={}", n);
+        Ieee64(exponent << t)
+    }
+
+    /// Return self negated.
+    pub fn neg(self) -> Ieee64 {
+        Ieee64(self.0 ^ (1 << 63))
     }
 
     /// Create a new `Ieee64` representing the number `x`.
@@ -818,6 +852,17 @@ mod tests {
     }
 
     #[test]
+    fn pow2_ieee32() {
+        assert_eq!(Ieee32::pow2(0).to_string(), "0x1.000000p0");
+        assert_eq!(Ieee32::pow2(1).to_string(), "0x1.000000p1");
+        assert_eq!(Ieee32::pow2(-1).to_string(), "0x1.000000p-1");
+        assert_eq!(Ieee32::pow2(127).to_string(), "0x1.000000p127");
+        assert_eq!(Ieee32::pow2(-126).to_string(), "0x1.000000p-126");
+
+        assert_eq!(Ieee32::pow2(1).neg().to_string(), "-0x1.000000p1");
+    }
+
+    #[test]
     fn format_ieee64() {
         assert_eq!(Ieee64::with_float(0.0).to_string(), "0.0");
         assert_eq!(Ieee64::with_float(-0.0).to_string(), "-0.0");
@@ -933,5 +978,16 @@ mod tests {
         parse_err::<Ieee64>("sNaN:0x0", "Invalid sNaN payload");
         parse_ok::<Ieee64>("sNaN:0x4000000000001", "+sNaN:0x4000000000001");
         parse_err::<Ieee64>("sNaN:0x8000000000001", "Invalid sNaN payload");
+    }
+
+    #[test]
+    fn pow2_ieee64() {
+        assert_eq!(Ieee64::pow2(0).to_string(), "0x1.0000000000000p0");
+        assert_eq!(Ieee64::pow2(1).to_string(), "0x1.0000000000000p1");
+        assert_eq!(Ieee64::pow2(-1).to_string(), "0x1.0000000000000p-1");
+        assert_eq!(Ieee64::pow2(1023).to_string(), "0x1.0000000000000p1023");
+        assert_eq!(Ieee64::pow2(-1022).to_string(), "0x1.0000000000000p-1022");
+
+        assert_eq!(Ieee64::pow2(1).neg().to_string(), "-0x1.0000000000000p1");
     }
 }
