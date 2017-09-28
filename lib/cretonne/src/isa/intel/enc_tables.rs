@@ -62,6 +62,7 @@ fn expand_minmax(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowG
 
     // Test for case 1) ordered and not equal.
     let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
     let cmp_ueq = pos.ins().fcmp(FloatCC::UnorderedOrEqual, x, y);
     pos.ins().brnz(cmp_ueq, ueq_ebb, &[]);
 
@@ -99,5 +100,75 @@ fn expand_minmax(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowG
     cfg.recompute_ebb(pos.func, old_ebb);
     cfg.recompute_ebb(pos.func, ueq_ebb);
     cfg.recompute_ebb(pos.func, uno_ebb);
+    cfg.recompute_ebb(pos.func, done);
+}
+
+/// Intel has no unsigned-to-float conversions. We handle the easy case of zero-extending i32 to
+/// i64 with a pattern, the rest needs more code.
+fn expand_fcvt_from_uint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+    use ir::condcodes::IntCC;
+
+    let x;
+    match func.dfg[inst] {
+        ir::InstructionData::Unary {
+            opcode: ir::Opcode::FcvtFromUint,
+            arg,
+        } => x = arg,
+        _ => panic!("Need fcvt_from_uint: {}", func.dfg.display_inst(inst, None)),
+    }
+    let xty = func.dfg.value_type(x);
+    let result = func.dfg.first_result(inst);
+    let ty = func.dfg.value_type(result);
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    // Conversion from unsigned 32-bit is easy on x86-64.
+    // TODO: This should be guarded by an ISA check.
+    if xty == ir::types::I32 {
+        let wide = pos.ins().uextend(ir::types::I64, x);
+        pos.func.dfg.replace(inst).fcvt_from_sint(ty, wide);
+        return;
+    }
+
+    let old_ebb = pos.func.layout.pp_ebb(inst);
+
+    // EBB handling the case where x < 0.
+    let neg_ebb = pos.func.dfg.make_ebb();
+
+    // Final EBB with one argument representing the final result value.
+    let done = pos.func.dfg.make_ebb();
+
+    // Move the `inst` result value onto the `done` EBB.
+    pos.func.dfg.clear_results(inst);
+    pos.func.dfg.attach_ebb_arg(done, result);
+
+    // If x as a signed int is not negative, we can use the existing `fcvt_from_sint` instruction.
+    let is_neg = pos.ins().icmp_imm(IntCC::SignedLessThan, x, 0);
+    pos.ins().brnz(is_neg, neg_ebb, &[]);
+
+    // Easy case: just use a signed conversion.
+    let posres = pos.ins().fcvt_from_sint(ty, x);
+    pos.ins().jump(done, &[posres]);
+
+    // Now handle the negative case.
+    pos.insert_ebb(neg_ebb);
+
+    // Divide x by two to get it in range for the signed conversion, keep the LSB, and scale it
+    // back up on the FP side.
+    let ihalf = pos.ins().ushr_imm(x, 1);
+    let lsb = pos.ins().band_imm(x, 1);
+    let ifinal = pos.ins().bor(ihalf, lsb);
+    let fhalf = pos.ins().fcvt_from_sint(ty, ifinal);
+    let negres = pos.ins().fadd(fhalf, fhalf);
+
+    // Recycle the original instruction as a jump.
+    pos.func.dfg.replace(inst).jump(done, &[negres]);
+
+    // Finally insert a label for the completion.
+    pos.next_inst();
+    pos.insert_ebb(done);
+
+    cfg.recompute_ebb(pos.func, old_ebb);
+    cfg.recompute_ebb(pos.func, neg_ebb);
     cfg.recompute_ebb(pos.func, done);
 }

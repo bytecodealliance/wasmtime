@@ -7,7 +7,7 @@ for patern matching an rewriting of cretonne instructions.
 from __future__ import absolute_import
 from . import instructions
 from .typevar import TypeVar
-from .predicates import IsEqual, And, TypePredicate
+from .predicates import IsEqual, And, TypePredicate, CtrlTypePredicate
 
 try:
     from typing import Union, Tuple, Sequence, TYPE_CHECKING, Dict, List  # noqa
@@ -383,12 +383,38 @@ class Apply(Expr):
 
             pred = And.combine(pred, IsEqual(ffield, arg))
 
-        # Add checks for any bound type variables.
-        for bound_ty, tv in zip(self.typevars, self.inst.all_typevars()):
-            if bound_ty is None:
-                continue
-            type_chk = TypePredicate.typevar_check(self.inst, tv, bound_ty)
-            pred = And.combine(pred, type_chk)
+        # Add checks for any bound secondary type variables.
+        # We can't check the controlling type variable this way since it may
+        # not appear as the type of an operand.
+        if len(self.typevars) > 1:
+            for bound_ty, tv in zip(self.typevars[1:],
+                                    self.inst.other_typevars):
+                if bound_ty is None:
+                    continue
+                type_chk = TypePredicate.typevar_check(self.inst, tv, bound_ty)
+                pred = And.combine(pred, type_chk)
+
+        return pred
+
+    def inst_predicate_with_ctrl_typevar(self):
+        # type: () -> PredNode
+        """
+        Same as `inst_predicate()`, but also check the controlling type
+        variable.
+        """
+        pred = self.inst_predicate()
+
+        if len(self.typevars) > 0:
+            bound_ty = self.typevars[0]
+            type_chk = None  # type: PredNode
+            if bound_ty is not None:
+                # Prefer to look at the types of input operands.
+                if self.inst.use_typevar_operand:
+                    type_chk = TypePredicate.typevar_check(
+                            self.inst, self.inst.ctrl_typevar, bound_ty)
+                else:
+                    type_chk = CtrlTypePredicate(bound_ty)
+                pred = And.combine(pred, type_chk)
 
         return pred
 

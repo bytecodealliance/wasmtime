@@ -35,7 +35,8 @@ try:
         from .typevar import TypeVar  # noqa
         PredContext = Union[SettingGroup, InstructionFormat,
                             InstructionContext]
-        PredLeaf = Union[BoolSetting, 'FieldPredicate', 'TypePredicate']
+        PredLeaf = Union[BoolSetting, 'FieldPredicate', 'TypePredicate',
+                         'CtrlTypePredicate']
         PredNode = Union[PredLeaf, 'Predicate']
         # A predicate key is a (recursive) tuple of primitive types that
         # uniquely describes a predicate. It is used for interning.
@@ -373,3 +374,42 @@ class TypePredicate(object):
         """
         return 'dfg.value_type(args[{}]) == {}'.format(
                 self.value_arg, self.value_type.rust_name())
+
+
+class CtrlTypePredicate(object):
+    """
+    An instruction predicate that checks the controlling type variable
+
+    :param value_type: The required value type.
+    """
+
+    def __init__(self, value_type):
+        # type: (ValueType) -> None
+        assert value_type is not None
+        self.value_type = value_type
+
+    def __str__(self):
+        # type: () -> str
+        return 'ctrl_typevar:{}'.format(self.value_type)
+
+    def predicate_context(self):
+        # type: () -> PredContext
+        return instruction_context
+
+    def predicate_key(self):
+        # type: () -> PredKey
+        return ('ctrltypecheck', self.value_type.name)
+
+    def predicate_leafs(self, leafs):
+        # type: (Set[PredLeaf]) -> None
+        leafs.add(self)
+
+    def rust_predicate(self, prec):
+        # type: (int) -> str
+        """
+        Return Rust code for evaluating this predicate.
+
+        It is assumed that the context has `dfg` and `inst` variables.
+        """
+        return 'dfg.ctrl_typevar(inst) == {}'.format(
+                self.value_type.rust_name())

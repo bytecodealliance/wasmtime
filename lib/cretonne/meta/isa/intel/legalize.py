@@ -96,3 +96,6 @@ for cc,               rev_cc in [
 # We need to modify the CFG for min/max legalization.
 intel_expand.custom_legalize(insts.fmin, 'expand_minmax')
 intel_expand.custom_legalize(insts.fmax, 'expand_minmax')
+
+# Conversions from unsigned need special handling.
+intel_expand.custom_legalize(insts.fcvt_from_uint, 'expand_fcvt_from_uint')
