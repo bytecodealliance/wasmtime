@@ -52,12 +52,10 @@ for ty in [i32, i64]:
                 xhi << insts.sshr_imm(x, imm64(ty.lane_bits() - 1)),
                 (a, dead) << x86.sdivmodx(x, xhi, y)
             ))
-    intel_expand.legalize(
-            a << insts.srem.bind(ty)(x, y),
-            Rtl(
-                xhi << insts.sshr_imm(x, imm64(ty.lane_bits() - 1)),
-                (dead, a) << x86.sdivmodx(x, xhi, y)
-            ))
+
+# The srem expansion requires custom code because srem INT_MIN, -1 is not
+# allowed to trap.
+intel_expand.custom_legalize(insts.srem, 'expand_srem')
 
 # Floating point condition codes.
 #
