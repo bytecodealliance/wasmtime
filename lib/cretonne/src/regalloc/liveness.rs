@@ -366,7 +366,7 @@ impl Liveness {
 
     /// Compute the live ranges of all SSA values used in `func`.
     /// This clears out any existing analysis stored in this data structure.
-    pub fn compute(&mut self, isa: &TargetIsa, func: &Function, cfg: &ControlFlowGraph) {
+    pub fn compute(&mut self, isa: &TargetIsa, func: &mut Function, cfg: &ControlFlowGraph) {
         self.ranges.clear();
 
         // Get ISA data structures used for computing live range affinities.
@@ -386,6 +386,9 @@ impl Liveness {
             }
 
             for inst in func.layout.ebb_insts(ebb) {
+                // Eliminate all value aliases, they would confuse the register allocator.
+                func.dfg.resolve_aliases_in_arguments(inst);
+
                 // Make sure we have created live ranges for dead defs.
                 // TODO: When we implement DCE, we can use the absence of a live range to indicate
                 // an unused value.
