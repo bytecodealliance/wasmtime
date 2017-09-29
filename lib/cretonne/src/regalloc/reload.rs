@@ -183,6 +183,8 @@ impl<'a> Context<'a> {
         encoding: Encoding,
         tracker: &mut LiveValueTracker,
     ) {
+        self.cur.use_srcloc(inst);
+
         // Get the operand constraints for `inst` that we are trying to satisfy.
         let constraints = self.encinfo.operand_constraints(encoding).expect(
             "Missing instruction encoding",
@@ -251,6 +253,27 @@ impl<'a> Context<'a> {
                 let reg = self.cur.func.dfg.replace_result(lv.value, value_type);
                 self.liveness.create_dead(reg, inst, Affinity::new(op));
                 self.insert_spill(ebb, lv.value, reg);
+            }
+        }
+
+        // Same thing for spilled call return values.
+        let retvals = &defs[constraints.outs.len()..];
+        if !retvals.is_empty() {
+            let sig = self.cur.func.dfg.call_signature(inst).expect(
+                "Extra results on non-call instruction",
+            );
+            for (i, lv) in retvals.iter().enumerate() {
+                let abi = self.cur.func.dfg.signatures[sig].return_types[i];
+                debug_assert!(abi.location.is_reg());
+                if lv.affinity.is_stack() {
+                    let reg = self.cur.func.dfg.replace_result(lv.value, abi.value_type);
+                    self.liveness.create_dead(
+                        reg,
+                        inst,
+                        Affinity::abi(&abi, self.cur.isa),
+                    );
+                    self.insert_spill(ebb, lv.value, reg);
+                }
             }
         }
     }
