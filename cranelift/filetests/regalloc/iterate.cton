@@ -104,4 +104,37 @@ ebb1(v31: i64):
     return v31
 }
 
+function #0000001a(i64 vmctx [%r14]) -> i64 [%rax] spiderwasm {
+    gv0 = vmctx+48
+    sig0 = (i32 [%rdi], i64 [%rsi], i64 vmctx [%r14], i64 sigid [%rbx]) -> i64 [%rax] spiderwasm
 
+ebb0(v0: i64):
+    v1 = iconst.i32 32
+    v2 = iconst.i64 64
+    v3 = iconst.i32 9
+    v4 = iconst.i64 1063
+    v5 = iadd_imm v0, 48
+    v6 = load.i32 v5
+    v7 = icmp uge v3, v6
+    ; If we're unlucky, there are no ABCD registers available for v7 at this branch.
+    brz v7, ebb2
+    trap oob
+
+ebb2:
+    v8 = load.i64 v5+8
+    v9 = uextend.i64 v3
+    v16 = iconst.i64 16
+    v10 = imul v9, v16
+    v11 = iadd v8, v10
+    v12 = load.i64 v11
+    brnz v12, ebb3
+    trap icall_null
+
+ebb3:
+    v13 = load.i64 v11+8
+    v14 = call_indirect.i64 sig0, v12(v1, v2, v13, v4)
+    jump ebb1(v14)
+
+ebb1(v15: i64):
+    return v15
+}
