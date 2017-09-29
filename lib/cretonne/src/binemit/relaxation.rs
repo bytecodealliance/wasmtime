@@ -80,7 +80,8 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> Result<CodeOffset
                             // This is an out-of-range branch.
                             // Relax it unless the destination offset has not been computed yet.
                             if dest_offset != 0 || Some(dest) == cur.func.layout.entry_block() {
-                                offset += relax_branch(&mut cur, offset, dest_offset, &encinfo);
+                                offset +=
+                                    relax_branch(&mut cur, offset, dest_offset, &encinfo, isa);
                                 continue;
                             }
                         }
@@ -134,14 +135,36 @@ fn relax_branch(
     offset: CodeOffset,
     dest_offset: CodeOffset,
     encinfo: &EncInfo,
+    isa: &TargetIsa,
 ) -> CodeOffset {
     let inst = cur.current_inst().unwrap();
     dbg!(
         "Relaxing [{}] {} for {:#x}-{:#x} range",
         encinfo.display(cur.func.encodings[inst]),
-        cur.func.dfg.display_inst(inst, None),
+        cur.func.dfg.display_inst(inst, isa),
         offset,
         dest_offset
     );
+
+    // Pick the first encoding that can handle the branch range.
+    let dfg = &cur.func.dfg;
+    let ctrl_type = dfg.ctrl_typevar(inst);
+    if let Some(enc) = isa.legal_encodings(dfg, &dfg[inst], ctrl_type).find(
+        |&enc| {
+            let range = encinfo.branch_range(enc).expect("Branch with no range");
+            let in_range = range.contains(offset, dest_offset);
+            dbg!(
+                "  trying [{}]: {}",
+                encinfo.display(enc),
+                if in_range { "OK" } else { "out of range" }
+            );
+            in_range
+        },
+    )
+    {
+        cur.func.encodings[inst] = enc;
+        return encinfo.bytes(enc);
+    }
+
     unimplemented!();
 }
