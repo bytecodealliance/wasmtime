@@ -213,6 +213,12 @@ fn get_or_create<'a>(
                     .operand_constraints(func.encodings[inst])
                     .and_then(|rc| rc.outs.get(rnum))
                     .map(Affinity::new)
+                    .or_else(|| {
+                        // If this is a call, get the return value affinity.
+                        func.dfg.call_signature(inst).map(|sig| {
+                            Affinity::abi(&func.dfg.signatures[sig].return_types[rnum], isa)
+                        })
+                    })
                     .unwrap_or_default();
             }
             ValueDef::Arg(ebb, num) => {
