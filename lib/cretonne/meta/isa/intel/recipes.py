@@ -4,6 +4,7 @@ Intel Encoding recipes.
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual, Or
+from cdsl.registers import RegClass
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare, FloatCompare
@@ -96,13 +97,26 @@ def replace_put_op(emit, prefix):
         return emit.replace('PUT_OP', 'put_' + prefix.lower())
 
 
+# Register class mapping for no-REX instructions.
+NOREX_MAP = {
+        GPR: GPR8,
+        FPR: FPR8
+    }
+
+# Register class mapping for REX instructions. The ABCD constraint no longer
+# applies.
+REX_MAP = {
+        ABCD: GPR
+    }
+
+
 def map_regs(
         regs,  # type: Sequence[OperandConstraint]
-        from_class,  # type: OperandConstraint
-        to_class  # type: OperandConstraint
+        mapping  # type: Dict[RegClass, RegClass]
 ):
     # type: (...) -> Sequence[OperandConstraint]
-    return tuple(to_class if (reg is from_class) else reg for reg in regs)
+    return tuple(mapping.get(rc, rc) if isinstance(rc, RegClass) else rc
+                 for rc in regs)
 
 
 class TailRecipe:
@@ -178,11 +192,8 @@ class TailRecipe:
                 isap=self.isap,
                 emit=replace_put_op(self.emit, name))
 
-            recipe.ins = map_regs(recipe.ins, GPR, GPR8)
-            recipe.ins = map_regs(recipe.ins, FPR, FPR8)
-            recipe.outs = map_regs(recipe.outs, GPR, GPR8)
-            recipe.outs = map_regs(recipe.outs, FPR, FPR8)
-
+            recipe.ins = map_regs(recipe.ins, NOREX_MAP)
+            recipe.outs = map_regs(recipe.outs, NOREX_MAP)
             self.recipes[name] = recipe
         return (self.recipes[name], bits)
 
@@ -208,7 +219,7 @@ class TailRecipe:
             branch_range = (size, self.branch_range)
 
         if name not in self.recipes:
-            self.recipes[name] = EncRecipe(
+            recipe = EncRecipe(
                 name + self.name,
                 self.format,
                 size,
@@ -218,6 +229,10 @@ class TailRecipe:
                 instp=self.instp,
                 isap=self.isap,
                 emit=replace_put_op(self.emit, name))
+            recipe.ins = map_regs(recipe.ins, REX_MAP)
+            recipe.outs = map_regs(recipe.outs, REX_MAP)
+            self.recipes[name] = recipe
+
         return (self.recipes[name], bits)
 
     @staticmethod
@@ -731,7 +746,7 @@ t8jccb_abcd = TailRecipe(
         branch_range=8,
         emit='''
         // test8 r, r.
-        PUT_OP(0x84, rex2(in_reg0, in_reg0), sink);
+        PUT_OP((bits & 0xff00) | 0x84, rex2(in_reg0, in_reg0), sink);
         modrm_rr(in_reg0, in_reg0, sink);
         // Jcc instruction.
         sink.put1(bits as u8);
@@ -743,7 +758,7 @@ t8jccd_abcd = TailRecipe(
         branch_range=32,
         emit='''
         // test8 r, r.
-        PUT_OP(0x84, rex2(in_reg0, in_reg0), sink);
+        PUT_OP((bits & 0xff00) | 0x84, rex2(in_reg0, in_reg0), sink);
         modrm_rr(in_reg0, in_reg0, sink);
         // Jcc instruction.
         sink.put1(0x0f);
