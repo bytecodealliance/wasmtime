@@ -14,6 +14,60 @@ use super::registers::*;
 include!(concat!(env!("OUT_DIR"), "/encoding-intel.rs"));
 include!(concat!(env!("OUT_DIR"), "/legalize-intel.rs"));
 
+/// Expand the `srem` instruction using `x86_sdivmodx`.
+fn expand_srem(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+    use ir::condcodes::IntCC;
+
+    let (x, y) = match func.dfg[inst] {
+        ir::InstructionData::Binary {
+            opcode: ir::Opcode::Srem,
+            args,
+        } => (args[0], args[1]),
+        _ => panic!("Need srem: {}", func.dfg.display_inst(inst, None)),
+    };
+    let old_ebb = func.layout.pp_ebb(inst);
+
+    // EBB handling the -1 divisor case.
+    let minus_one = func.dfg.make_ebb();
+
+    // Final EBB with one argument representing the final result value.
+    let done = func.dfg.make_ebb();
+
+    // Move the `inst` result value onto the `done` EBB.
+    let result = func.dfg.first_result(inst);
+    let ty = func.dfg.value_type(result);
+    func.dfg.clear_results(inst);
+    func.dfg.attach_ebb_arg(done, result);
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    // Start by checking for a -1 divisor which needs to be handled specially.
+    let is_m1 = pos.ins().icmp_imm(IntCC::Equal, y, -1);
+    pos.ins().brnz(is_m1, minus_one, &[]);
+
+    // Now it is safe to execute the `x86_sdivmodx` instruction which will still trap on division
+    // by zero.
+    let xhi = pos.ins().sshr_imm(x, ty.lane_bits() as i64 - 1);
+    let (_qout, rem) = pos.ins().x86_sdivmodx(x, xhi, y);
+    pos.ins().jump(done, &[rem]);
+
+    // Now deal with the -1 divisor which always yields a 0 remainder.
+    pos.insert_ebb(minus_one);
+    let zero = pos.ins().iconst(ty, 0);
+
+    // Recycle the original instruction as a jump.
+    pos.func.dfg.replace(inst).jump(done, &[zero]);
+
+    // Finally insert a label for the completion.
+    pos.next_inst();
+    pos.insert_ebb(done);
+
+    cfg.recompute_ebb(pos.func, old_ebb);
+    cfg.recompute_ebb(pos.func, minus_one);
+    cfg.recompute_ebb(pos.func, done);
+}
+
 /// Expand the `fmin` and `fmax` instructions using the Intel `x86_fmin` and `x86_fmax`
 /// instructions.
 fn expand_minmax(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
