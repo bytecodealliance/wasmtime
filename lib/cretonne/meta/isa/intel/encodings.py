@@ -119,6 +119,7 @@ enc_i32_i64(x86.udivmodx, r.div, 0xf7, rrr=6)
 
 enc_i32_i64(base.copy, r.umr, 0x89)
 enc_i32_i64(base.regmove, r.rmov, 0x89)
+enc_flt(base.regmove.b1, r.rmov, 0x89)
 
 # Immediate instructions with sign-extended 8-bit and 32-bit immediate.
 for inst,               rrr in [
