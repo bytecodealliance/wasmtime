@@ -167,7 +167,7 @@ impl RegClassData {
     }
 
     /// Returns true if `other` is a subclass of this register class.
-    /// A register class is considerd to be a subclass of itself.
+    /// A register class is considered to be a subclass of itself.
     pub fn has_subclass<RCI: Into<RegClassIndex>>(&self, other: RCI) -> bool {
         self.subclasses & (1 << other.into().0) != 0
     }
@@ -275,6 +275,11 @@ impl RegInfo {
     /// Get the register class corresponding to `idx`.
     pub fn rc(&self, idx: RegClassIndex) -> RegClass {
         &self.classes[idx.index()]
+    }
+
+    /// Get the top-level register class containing `rc`.
+    pub fn toprc(&self, rc: RegClass) -> RegClass {
+        &self.classes[rc.toprc as usize]
     }
 }
 

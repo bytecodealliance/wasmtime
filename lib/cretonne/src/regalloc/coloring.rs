@@ -367,9 +367,10 @@ impl<'a> Context<'a> {
 
         // Finally, we've fully programmed the constraint solver.
         // We expect a quick solution in most cases.
-        let mut output_regs = self.solver.quick_solve().unwrap_or_else(
-            |_| self.iterate_solution(),
-        );
+        let mut output_regs = self.solver.quick_solve().unwrap_or_else(|rc| {
+            dbg!("quick_solve needs more registers in {}", rc);
+            self.iterate_solution(throughs, locations)
+        });
 
 
         // The solution and/or fixed input constraints may require us to shuffle the set of live
@@ -731,8 +732,52 @@ impl<'a> Context<'a> {
     ///
     /// We may need to move more registers around before a solution is possible. Use an iterative
     /// algorithm that adds one more variable until a solution can be found.
-    fn iterate_solution(&self) -> AllocatableSet {
-        unimplemented!();
+    fn iterate_solution(
+        &mut self,
+        throughs: &[LiveValue],
+        locations: &mut ValueLocations,
+    ) -> AllocatableSet {
+        loop {
+            dbg!("real_solve for {} variables", self.solver.vars().len());
+            let rc = match self.solver.real_solve() {
+                Ok(regs) => return regs,
+                Err(rc) => rc,
+            };
+
+            // Do we have any live-through `rc` registers that are not already variables?
+            assert!(
+                self.try_add_var(rc, throughs, locations),
+                "Ran out of registers in {}",
+                rc
+            );
+        }
+    }
+
+    /// Try to add an `rc` variable to the solver from the `throughs` set.
+    fn try_add_var(
+        &mut self,
+        rc: RegClass,
+        throughs: &[LiveValue],
+        locations: &mut ValueLocations,
+    ) -> bool {
+        dbg!("Trying to add a {} reg from {} values", rc, throughs.len());
+
+        for lv in throughs {
+            if let Affinity::Reg(rci) = lv.affinity {
+                let rc2 = self.reginfo.rc(rci);
+                let reg2 = self.divert.reg(lv.value, locations);
+                if rc.contains(reg2) && self.solver.can_add_var(lv.value, rc2, reg2) {
+                    // The new variable gets to roam the whole top-level register class because
+                    // it is not actually constrained by the instruction. We just want it out
+                    // of the way.
+                    let toprc = self.reginfo.toprc(rc2);
+                    self.solver.add_var(lv.value, toprc, reg2, &self.reginfo);
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     /// Emit `regmove` instructions as needed to move the live registers into place before the

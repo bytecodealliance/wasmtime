@@ -590,6 +590,18 @@ impl Solver {
         self.find_solution()
     }
 
+    /// Try harder to find a solution.
+    ///
+    /// Call this method after `quick_solve()` fails.
+    ///
+    /// This may return an error with a register class that has run out of registers. If registers
+    /// can be freed up in the starving class, this method can be called again after adding
+    /// variables for the freed registers.
+    pub fn real_solve(&mut self) -> Result<AllocatableSet, RegClass> {
+        // TODO: Sort variables to assign smallest register classes first.
+        self.find_solution()
+    }
+
     /// Search for a solution with the current list of variables.
     ///
     /// If a solution was found, returns `Ok(regs)` with the set of available registers on the
@@ -622,6 +634,11 @@ impl Solver {
     /// Get all the variables.
     pub fn vars(&self) -> &[Variable] {
         &self.vars
+    }
+
+    /// Check if `value` can be added as a variable to help find a solution.
+    pub fn can_add_var(&mut self, _value: Value, constraint: RegClass, from: RegUnit) -> bool {
+        !self.regs_in.is_avail(constraint, from)
     }
 }
 
