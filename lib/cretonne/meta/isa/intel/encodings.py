@@ -298,18 +298,18 @@ I32.enc(base.jump, *r.jmpd(0xe9))
 I64.enc(base.jump, *r.jmpb(0xeb))
 I64.enc(base.jump, *r.jmpd(0xe9))
 
+# Note that the tjccd opcode will be prefixed with 0x0f.
 enc_i32_i64(base.brz, r.tjccb, 0x74)
+enc_i32_i64(base.brz, r.tjccd, 0x84)
 enc_i32_i64(base.brnz, r.tjccb, 0x75)
+enc_i32_i64(base.brnz, r.tjccd, 0x85)
 
 # Branch on a b1 value in a register only looks at the low 8 bits. See also
 # bint encodings below.
-I32.enc(base.brz.b1, *r.t8jccb_abcd(0x74))
-I64.enc(base.brz.b1, *r.t8jccb_abcd.rex(0x74))
-I64.enc(base.brz.b1, *r.t8jccb_abcd(0x74))
-I32.enc(base.brnz.b1, *r.t8jccb_abcd(0x75))
-I64.enc(base.brnz.b1, *r.t8jccb_abcd.rex(0x75))
-I64.enc(base.brnz.b1, *r.t8jccb_abcd(0x75))
-
+enc_flt(base.brz.b1, r.t8jccb_abcd, 0x74)
+enc_flt(base.brz.b1, r.t8jccd_abcd, 0x84)
+enc_flt(base.brnz.b1, r.t8jccb_abcd, 0x75)
+enc_flt(base.brnz.b1, r.t8jccd_abcd, 0x85)
 
 #
 # Trap as ud2

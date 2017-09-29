@@ -131,7 +131,7 @@ class TailRecipe:
             size,               # type: int
             ins,                # type: ConstraintSeq
             outs,               # type: ConstraintSeq
-            branch_range=None,  # type: BranchRange
+            branch_range=None,  # type: int
             instp=None,         # type: PredNode
             isap=None,          # type: PredNode
             emit=None           # type: str
@@ -159,14 +159,21 @@ class TailRecipe:
         rrr = kwargs.get('rrr', 0)
         w = kwargs.get('w', 0)
         name, bits = decode_ops(ops, rrr, w)
+        size = len(ops) + self.size
+
+        # All branch ranges are relative to the end of the instruction.
+        branch_range = None  # type BranchRange
+        if self.branch_range is not None:
+            branch_range = (size, self.branch_range)
+
         if name not in self.recipes:
             recipe = EncRecipe(
                 name + self.name,
                 self.format,
-                len(ops) + self.size,
+                size,
                 ins=self.ins,
                 outs=self.outs,
-                branch_range=self.branch_range,
+                branch_range=branch_range,
                 instp=self.instp,
                 isap=self.isap,
                 emit=replace_put_op(self.emit, name))
@@ -193,14 +200,21 @@ class TailRecipe:
         w = kwargs.get('w', 0)
         name, bits = decode_ops(ops, rrr, w)
         name = 'Rex' + name
+        size = 1 + len(ops) + self.size
+
+        # All branch ranges are relative to the end of the instruction.
+        branch_range = None  # type BranchRange
+        if self.branch_range is not None:
+            branch_range = (size, self.branch_range)
+
         if name not in self.recipes:
             self.recipes[name] = EncRecipe(
                 name + self.name,
                 self.format,
-                1 + len(ops) + self.size,
+                size,
                 ins=self.ins,
                 outs=self.outs,
-                branch_range=self.branch_range,
+                branch_range=branch_range,
                 instp=self.instp,
                 isap=self.isap,
                 emit=replace_put_op(self.emit, name))
@@ -656,7 +670,7 @@ ret = TailRecipe(
 #
 jmpb = TailRecipe(
         'jmpb', Jump, size=1, ins=(), outs=(),
-        branch_range=(2, 8),
+        branch_range=8,
         emit='''
         PUT_OP(bits, BASE_REX, sink);
         disp1(destination, func, sink);
@@ -664,7 +678,7 @@ jmpb = TailRecipe(
 
 jmpd = TailRecipe(
         'jmpd', Jump, size=4, ins=(), outs=(),
-        branch_range=(5, 32),
+        branch_range=32,
         emit='''
         PUT_OP(bits, BASE_REX, sink);
         disp4(destination, func, sink);
@@ -685,7 +699,7 @@ jmpd = TailRecipe(
 # Bits 8-15 control the test instruction which always has opcode byte 0x85.
 tjccb = TailRecipe(
         'tjccb', Branch, size=1 + 2, ins=GPR, outs=(),
-        branch_range=(2, 8),
+        branch_range=8,
         emit='''
         // test r, r.
         PUT_OP((bits & 0xff00) | 0x85, rex2(in_reg0, in_reg0), sink);
@@ -695,13 +709,26 @@ tjccb = TailRecipe(
         disp1(destination, func, sink);
         ''')
 
+tjccd = TailRecipe(
+        'tjccd', Branch, size=1 + 6, ins=GPR, outs=(),
+        branch_range=32,
+        emit='''
+        // test r, r.
+        PUT_OP((bits & 0xff00) | 0x85, rex2(in_reg0, in_reg0), sink);
+        modrm_rr(in_reg0, in_reg0, sink);
+        // Jcc instruction.
+        sink.put1(0x0f);
+        sink.put1(bits as u8);
+        disp4(destination, func, sink);
+        ''')
+
 # 8-bit test-and-branch.
 #
 # Same as tjccb, but only looks at the low 8 bits of the register, for b1
 # types.
 t8jccb_abcd = TailRecipe(
         't8jccb_abcd', Branch, size=1 + 2, ins=ABCD, outs=(),
-        branch_range=(2, 8),
+        branch_range=8,
         emit='''
         // test8 r, r.
         PUT_OP(0x84, rex2(in_reg0, in_reg0), sink);
@@ -709,6 +736,19 @@ t8jccb_abcd = TailRecipe(
         // Jcc instruction.
         sink.put1(bits as u8);
         disp1(destination, func, sink);
+        ''')
+
+t8jccd_abcd = TailRecipe(
+        't8jccd_abcd', Branch, size=1 + 6, ins=ABCD, outs=(),
+        branch_range=32,
+        emit='''
+        // test8 r, r.
+        PUT_OP(0x84, rex2(in_reg0, in_reg0), sink);
+        modrm_rr(in_reg0, in_reg0, sink);
+        // Jcc instruction.
+        sink.put1(0x0f);
+        sink.put1(bits as u8);
+        disp4(destination, func, sink);
         ''')
 
 # Comparison that produces a `b1` result in a GPR.
