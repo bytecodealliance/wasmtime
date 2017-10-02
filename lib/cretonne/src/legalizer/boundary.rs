@@ -21,7 +21,7 @@ use abi::{legalize_abi_value, ValueConversion};
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
 use ir::{Function, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value, Signature, SigRef,
-         ArgumentType, ArgumentPurpose, ArgumentLoc, ValueLoc, StackSlotKind};
+         ArgumentType, ArgumentPurpose, ArgumentLoc, ValueLoc};
 use ir::instructions::CallInfo;
 use isa::TargetIsa;
 use legalizer::split::{isplit, vsplit};
@@ -651,21 +651,14 @@ fn spill_call_arguments(pos: &mut FuncCursor) -> bool {
             .filter_map(|(idx, (&arg, abi))| {
                 match abi.location {
                     ArgumentLoc::Stack(offset) => {
-                        // Is `arg` already in the right kind of stack slot?
-                        match locations.get(arg) {
-                            Some(&ValueLoc::Stack(ss)) => {
-                                // We won't reassign `arg` to a different stack slot. Assert out of
-                                // the stack slot is wrong.
-                                assert_eq!(stack_slots[ss].kind, StackSlotKind::OutgoingArg);
-                                assert_eq!(stack_slots[ss].offset, offset);
-                                assert_eq!(stack_slots[ss].size, abi.value_type.bytes());
-                                None
-                            }
-                            _ => {
-                                // Assign `arg` to a new stack slot.
-                                let ss = stack_slots.get_outgoing_arg(abi.value_type, offset);
-                                Some((idx, arg, ss))
-                            }
+                        // Assign `arg` to a new stack slot, unless it's already in the correct
+                        // slot. The legalization needs to be idempotent, so we should see a
+                        // correct outgoing slot on the second pass.
+                        let ss = stack_slots.get_outgoing_arg(abi.value_type, offset);
+                        if locations[arg] != ValueLoc::Stack(ss) {
+                            Some((idx, arg, ss))
+                        } else {
+                            None
                         }
                     }
                     _ => None,
