@@ -18,7 +18,7 @@ use isa::TargetIsa;
 use legalize_function;
 use regalloc;
 use result::{CtonError, CtonResult};
-use settings::FlagsOrIsa;
+use settings::{FlagsOrIsa, OptLevel};
 use verifier;
 use simple_gvn::do_simple_gvn;
 use licm::do_licm;
@@ -68,6 +68,12 @@ impl Context {
 
         self.compute_cfg();
         self.legalize(isa)?;
+        if isa.flags().opt_level() == OptLevel::Best {
+            self.compute_domtree();
+            self.compute_loop_analysis();
+            self.licm(isa)?;
+            self.simple_gvn(isa)?;
+        }
         self.compute_domtree();
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
