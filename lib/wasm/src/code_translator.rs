@@ -95,7 +95,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::Select => {
             let (arg1, arg2, cond) = state.pop3();
-            state.push1(builder.ins().select(cond, arg2, arg1));
+            state.push1(builder.ins().select(cond, arg1, arg2));
         }
         Operator::Nop => {
             // We do nothing
