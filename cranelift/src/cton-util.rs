@@ -30,13 +30,16 @@ Usage:
     cton-util cat <file>...
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
-    cton-util wasm [-cvo] [--set <set>]... [--isa <isa>] <file>...
+    cton-util wasm [-ctvp] [--set <set>]... [--isa <isa>] <file>...
     cton-util --help | --version
 
 Options:
     -v, --verbose   be more verbose
-    -c, --check     checks the correctness of Cretonne IL translated from WebAssembly
-    -o, --optimize  runs otpimization passes on translated WebAssembly functions
+    -t, --just-decode
+                    just decode WebAssembly to Cretonne IL
+    -c, --check-translation
+                    just checks the correctness of Cretonne IL translated from WebAssembly
+    -p, --print     print the resulting Cretonne IL
     -h, --help      print this help message
     --set=<set>     configure Cretonne settings
     --isa=<isa>     specify the Cretonne ISA
@@ -52,8 +55,9 @@ struct Args {
     cmd_print_cfg: bool,
     cmd_wasm: bool,
     arg_file: Vec<String>,
-    flag_check: bool,
-    flag_optimize: bool,
+    flag_just_decode: bool,
+    flag_check_translation: bool,
+    flag_print: bool,
     flag_verbose: bool,
     flag_set: Vec<String>,
     flag_isa: String,
@@ -86,8 +90,9 @@ fn cton_util() -> CommandResult {
         wasm::run(
             args.arg_file,
             args.flag_verbose,
-            args.flag_optimize,
-            args.flag_check,
+            args.flag_just_decode,
+            args.flag_check_translation,
+            args.flag_print,
             args.flag_set,
             args.flag_isa,
         )
