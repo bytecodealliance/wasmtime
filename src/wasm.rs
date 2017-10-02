@@ -8,7 +8,6 @@ use cton_wasm::{translate_module, DummyRuntime, WasmRuntime};
 use cton_reader::{parse_options, Location};
 use std::path::PathBuf;
 use cretonne::Context;
-use cretonne::verifier;
 use cretonne::settings::{self, FlagsOrIsa};
 use cretonne::isa::{self, TargetIsa};
 use std::fs::File;
@@ -54,8 +53,9 @@ enum OwnedFlagsOrIsa {
 pub fn run(
     files: Vec<String>,
     flag_verbose: bool,
-    flag_optimize: bool,
-    flag_check: bool,
+    flag_just_decode: bool,
+    flag_check_translation: bool,
+    flag_print: bool,
     flag_set: Vec<String>,
     flag_isa: String,
 ) -> Result<(), String> {
@@ -87,8 +87,9 @@ pub fn run(
         let name = String::from(path.as_os_str().to_string_lossy());
         handle_module(
             flag_verbose,
-            flag_optimize,
-            flag_check,
+            flag_just_decode,
+            flag_check_translation,
+            flag_print,
             path.to_path_buf(),
             name,
             &fisa,
@@ -99,8 +100,9 @@ pub fn run(
 
 fn handle_module(
     flag_verbose: bool,
-    flag_optimize: bool,
-    flag_check: bool,
+    flag_just_decode: bool,
+    flag_check_translation: bool,
+    flag_print: bool,
     path: PathBuf,
     name: String,
     fisa: &FlagsOrIsa,
@@ -111,7 +113,7 @@ fn handle_module(
     terminal.reset().unwrap();
     vprintln!(flag_verbose, "\"{}\"", name);
     terminal.fg(term::color::MAGENTA).unwrap();
-    vprint!(flag_verbose, "Translating...");
+    vprint!(flag_verbose, "Translating... ");
     terminal.reset().unwrap();
     let data = match path.extension() {
         None => {
@@ -155,43 +157,42 @@ fn handle_module(
         translate_module(&data, runtime)?
     };
     terminal.fg(term::color::GREEN).unwrap();
-    vprintln!(flag_verbose, " ok");
+    vprintln!(flag_verbose, "ok");
     terminal.reset().unwrap();
-    if flag_check {
-        terminal.fg(term::color::MAGENTA).unwrap();
-        vprint!(flag_verbose, "Checking...   ");
-        terminal.reset().unwrap();
-        for func in &translation.functions {
-            verifier::verify_function(func, *fisa).map_err(|err| {
-                pretty_verifier_error(func, fisa.isa, err)
-            })?;
-        }
-        terminal.fg(term::color::GREEN).unwrap();
-        vprintln!(flag_verbose, " ok");
-        terminal.reset().unwrap();
+    if flag_just_decode {
+        return Ok(());
     }
-    if flag_optimize {
-        terminal.fg(term::color::MAGENTA).unwrap();
-        vprint!(flag_verbose, "Optimizing... ");
-        terminal.reset().unwrap();
-        for func in &translation.functions {
-            let mut context = Context::new();
-            context.func = func.clone();
+    terminal.fg(term::color::MAGENTA).unwrap();
+    if flag_check_translation {
+        vprint!(flag_verbose, "Checking... ");
+    } else {
+        vprint!(flag_verbose, "Compiling... ");
+    }
+    terminal.reset().unwrap();
+    for func in &translation.functions {
+        let mut context = Context::new();
+        context.func = func.clone();
+        if flag_check_translation {
             context.verify(*fisa).map_err(|err| {
                 pretty_verifier_error(&context.func, fisa.isa, err)
             })?;
-            context.flowgraph();
-            context.compute_loop_analysis();
-            context.licm(*fisa).map_err(|err| {
-                pretty_error(&context.func, fisa.isa, err)
-            })?;
-            context.simple_gvn(*fisa).map_err(|err| {
-                pretty_error(&context.func, fisa.isa, err)
-            })?;
+            continue;
         }
-        terminal.fg(term::color::GREEN).unwrap();
-        vprintln!(flag_verbose, " ok");
-        terminal.reset().unwrap();
+        if let Some(isa) = fisa.isa {
+            context.compile(isa).map_err(|err| {
+                pretty_error(&context.func, fisa.isa, err)
+            })?;
+        } else {
+            return Err(String::from("compilation requires a target isa"));
+        }
+        if flag_print {
+            vprintln!(flag_verbose, "");
+            println!("{}", context.func.display(fisa.isa));
+            vprintln!(flag_verbose, "");
+        }
     }
+    terminal.fg(term::color::GREEN).unwrap();
+    vprintln!(flag_verbose, "ok");
+    terminal.reset().unwrap();
     Ok(())
 }
