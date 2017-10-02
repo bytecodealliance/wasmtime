@@ -450,13 +450,21 @@ impl<'a> Context<'a> {
                     return Some(a);
                 }
 
-                // The local conflict could be avoided by splitting at this predecessor, so try
-                // that. This split is not necessarily required, but it allows us to make progress.
+                // The local conflict could likely be avoided by splitting at this predecessor, so
+                // try that. This split is not necessarily required, but it allows us to make
+                // progress.
                 let new_val = self.split_pred(pred_inst, pred_ebb, argnum, pred_val);
-                assert!(
-                    self.add_class(new_val).is_ok(),
-                    "Splitting didn't resolve conflict."
-                );
+
+                // If this tiny new live range can't be merged, there is something in the already
+                // merged values that is fundamentally incompatible with `pred_inst`, and we need
+                // to start over after removing that value.
+                // TODO: It is unfortunate that we discover this *after* splitting. It would have
+                // been better if we could detect and isolate `merged` before splitting.
+                if let Err((merged, _)) = self.add_class(new_val) {
+                    dbg!("Splitting didn't help: {} interferes", merged);
+                    // We need to start over, isolating the bad value.
+                    return Some(merged);
+                }
             }
         }
 

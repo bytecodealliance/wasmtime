@@ -110,3 +110,15 @@ ebb1(v10: i32):
     v11 = iadd_imm v10, 1
     return v11
 }
+
+function %gvn_unremovable_phi(i32) native {
+ebb0(v0: i32):
+    v2 = iconst.i32 0
+    jump ebb2(v2, v0)
+
+ebb2(v3: i32, v4: i32):
+    brnz v3, ebb2(v3, v4)
+    v5 = iconst.i32 1
+    brnz v3, ebb2(v2, v5)
+    return
+}
