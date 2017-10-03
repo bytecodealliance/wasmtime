@@ -16,7 +16,7 @@ use std::path::Path;
 use std::process::Command;
 use tempdir::TempDir;
 use term;
-use utils::{pretty_verifier_error, pretty_error, parse_sets_and_isa};
+use utils::{pretty_verifier_error, pretty_error, parse_sets_and_isa, read_to_end};
 
 macro_rules! vprintln {
     ($x: expr, $($tts:tt)*) => {
@@ -32,13 +32,6 @@ macro_rules! vprint {
             print!($($tts)*);
         }
     }
-}
-
-fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
-    let mut buf: Vec<u8> = Vec::new();
-    let mut file = File::open(path)?;
-    file.read_to_end(&mut buf)?;
-    Ok(buf)
 }
 
 pub fn run(
@@ -92,7 +85,7 @@ fn handle_module(
         Some(ext) => {
             match ext.to_str() {
                 Some("wasm") => {
-                    read_wasm_file(path.clone()).map_err(|err| {
+                    read_to_end(path.clone()).map_err(|err| {
                         String::from(err.description())
                     })?
                 }
@@ -110,9 +103,9 @@ fn handle_module(
                         } else {
                             return Err(String::from(e.description()));
                         })?;
-                    read_wasm_file(file_path).map_err(|err| {
-                        String::from(err.description())
-                    })?
+                    read_to_end(file_path).map_err(
+                        |err| String::from(err.description()),
+                    )?
                 }
                 None | Some(&_) => {
                     return Err(String::from("the file extension is not wasm or wat"));
