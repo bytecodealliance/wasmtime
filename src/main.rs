@@ -91,7 +91,7 @@ struct Args {
     flag_print: bool,
 }
 
-fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
+fn read_to_end(path: PathBuf) -> Result<Vec<u8>, io::Error> {
     let mut buf: Vec<u8> = Vec::new();
     let mut file = File::open(path)?;
     file.read_to_end(&mut buf)?;
@@ -136,47 +136,27 @@ fn handle_module(args: &Args, path: PathBuf, name: &str, isa: &TargetIsa) -> Res
     terminal.fg(term::color::MAGENTA).unwrap();
     vprint!(args.flag_verbose, "Translating...");
     terminal.reset().unwrap();
-    let data = match path.extension() {
-        None => {
-            return Err(String::from("the file extension is not wasm or wat"));
-        }
-        Some(ext) => {
-            match ext.to_str() {
-                Some("wasm") => {
-                    match read_wasm_file(path.clone()) {
-                        Ok(data) => data,
-                        Err(err) => {
-                            return Err(String::from(err.description()));
-                        }
-                    }
-                }
-                Some("wat") => {
-                    let tmp_dir = TempDir::new("wasmstandalone").unwrap();
-                    let file_path = tmp_dir.path().join("module.wasm");
-                    File::create(file_path.clone()).unwrap();
-                    Command::new("wat2wasm")
-                        .arg(path.clone())
-                        .arg("-o")
-                        .arg(file_path.to_str().unwrap())
-                        .output()
-                        .or_else(|e| if let io::ErrorKind::NotFound = e.kind() {
-                            return Err(String::from("wat2wasm not found"));
-                        } else {
-                            return Err(String::from(e.description()));
-                        })?;
-                    match read_wasm_file(file_path) {
-                        Ok(data) => data,
-                        Err(err) => {
-                            return Err(String::from(err.description()));
-                        }
-                    }
-                }
-                None | Some(&_) => {
-                    return Err(String::from("the file extension is not wasm or wat"));
-                }
-            }
-        }
-    };
+    let mut data = read_to_end(path.clone()).map_err(|err| {
+        String::from(err.description())
+    })?;
+    if !data.starts_with(&[b'\0', b'a', b's', b'm']) {
+        let tmp_dir = TempDir::new("cretonne-wasm").unwrap();
+        let file_path = tmp_dir.path().join("module.wasm");
+        File::create(file_path.clone()).unwrap();
+        Command::new("wat2wasm")
+            .arg(path.clone())
+            .arg("-o")
+            .arg(file_path.to_str().unwrap())
+            .output()
+            .or_else(|e| if let io::ErrorKind::NotFound = e.kind() {
+                return Err(String::from("wat2wasm not found"));
+            } else {
+                return Err(String::from(e.description()));
+            })?;
+        data = read_to_end(file_path).map_err(
+            |err| String::from(err.description()),
+        )?;
+    }
     let mut runtime = StandaloneRuntime::with_flags(isa.flags().clone());
     let translation = {
         match translate_module(&data, &mut runtime) {
