@@ -9,7 +9,6 @@ use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::{self, Ebb, FuncRef, JumpTable, Function};
 use cretonne::binemit::{RelocSink, Reloc, CodeOffset};
 use cton_wasm::TranslationResult;
-use std::collections::HashMap;
 use std::fmt::Write;
 use faerie::Artifact;
 use wasmstandalone;
@@ -18,29 +17,29 @@ type RelocRef = u16;
 
 // Implementation of a relocation sink that just saves all the information for later
 struct FaerieRelocSink {
-    ebbs: HashMap<RelocRef, (Ebb, CodeOffset)>,
-    funcs: HashMap<RelocRef, (FuncRef, CodeOffset)>,
-    jts: HashMap<RelocRef, (JumpTable, CodeOffset)>,
+    ebbs: Vec<(RelocRef, Ebb, CodeOffset)>,
+    funcs: Vec<(RelocRef, FuncRef, CodeOffset)>,
+    jts: Vec<(RelocRef, JumpTable, CodeOffset)>,
 }
 
 impl RelocSink for FaerieRelocSink {
     fn reloc_ebb(&mut self, offset: CodeOffset, reloc: Reloc, ebb: Ebb) {
-        self.ebbs.insert(reloc.0, (ebb, offset));
+        self.ebbs.push((reloc.0, ebb, offset));
     }
     fn reloc_func(&mut self, offset: CodeOffset, reloc: Reloc, func: FuncRef) {
-        self.funcs.insert(reloc.0, (func, offset));
+        self.funcs.push((reloc.0, func, offset));
     }
     fn reloc_jt(&mut self, offset: CodeOffset, reloc: Reloc, jt: JumpTable) {
-        self.jts.insert(reloc.0, (jt, offset));
+        self.jts.push((reloc.0, jt, offset));
     }
 }
 
 impl FaerieRelocSink {
     fn new() -> FaerieRelocSink {
         FaerieRelocSink {
-            ebbs: HashMap::new(),
-            funcs: HashMap::new(),
-            jts: HashMap::new(),
+            ebbs: Vec::new(),
+            funcs: Vec::new(),
+            jts: Vec::new(),
         }
     }
 }
