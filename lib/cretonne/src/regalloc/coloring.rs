@@ -42,10 +42,10 @@
 //!
 //! The exception is the entry block whose arguments are colored from the ABI requirements.
 
+use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
-use ir::{Ebb, Inst, Value, Function, Cursor, CursorBase, ValueLoc, DataFlowGraph, Layout};
-use ir::{InstEncodings, ValueLocations};
-use ir::{InstBuilder, Signature, ArgumentType, ArgumentLoc};
+use ir::{Ebb, Inst, Value, Function, ValueLoc, SigRef};
+use ir::{InstBuilder, ArgumentType, ArgumentLoc};
 use isa::{RegUnit, RegClass, RegInfo, regs_overlap};
 use isa::{TargetIsa, EncInfo, RecipeConstraints, OperandConstraint, ConstraintKind};
 use regalloc::RegDiversions;
@@ -74,7 +74,9 @@ pub struct Coloring {
 /// Immutable context information and mutable references that don't need to be borrowed across
 /// method calls should go in this struct.
 struct Context<'a> {
-    isa: &'a TargetIsa,
+    // Current instruction as well as reference to function and ISA.
+    cur: EncCursor<'a>,
+
     // Cached ISA information.
     // We save it here to avoid frequent virtual function calls on the `TargetIsa` trait object.
     reginfo: RegInfo,
@@ -115,57 +117,53 @@ impl Coloring {
     ) {
         dbg!("Coloring for:\n{}", func.display(isa));
         let mut ctx = Context {
-            isa,
+            usable_regs: isa.allocatable_registers(func),
+            cur: EncCursor::new(func, isa),
             reginfo: isa.register_info(),
             encinfo: isa.encoding_info(),
             domtree,
             liveness,
             divert: &mut self.divert,
             solver: &mut self.solver,
-            usable_regs: isa.allocatable_registers(func),
         };
-        ctx.run(func, tracker)
+        ctx.run(tracker)
     }
 }
 
 impl<'a> Context<'a> {
     /// Run the coloring algorithm.
-    fn run(&mut self, func: &mut Function, tracker: &mut LiveValueTracker) {
-        func.locations.resize(func.dfg.num_values());
+    fn run(&mut self, tracker: &mut LiveValueTracker) {
+        self.cur.func.locations.resize(
+            self.cur.func.dfg.num_values(),
+        );
 
         // Visit blocks in reverse post-order. We need to ensure that at least one predecessor has
         // been visited before each EBB. That guarantees that the EBB arguments have been colored.
         for &ebb in self.domtree.cfg_postorder().iter().rev() {
-            self.visit_ebb(ebb, func, tracker);
+            self.visit_ebb(ebb, tracker);
         }
     }
 
     /// Visit `ebb`, assuming that the immediate dominator has already been visited.
-    fn visit_ebb(&mut self, ebb: Ebb, func: &mut Function, tracker: &mut LiveValueTracker) {
+    fn visit_ebb(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
         dbg!("Coloring {}:", ebb);
-        let mut regs = self.visit_ebb_header(ebb, func, tracker);
+        let mut regs = self.visit_ebb_header(ebb, tracker);
         tracker.drop_dead_args();
         self.divert.clear();
 
         // Now go through the instructions in `ebb` and color the values they define.
-        let mut pos = Cursor::new(&mut func.layout, &mut func.srclocs).at_top(ebb);
-        while let Some(inst) = pos.next_inst() {
-            pos.use_srcloc(inst);
-            if let Some(constraints) = self.encinfo.operand_constraints(func.encodings[inst]) {
-                self.visit_inst(
-                    inst,
-                    constraints,
-                    &mut pos,
-                    &mut func.dfg,
-                    tracker,
-                    &mut regs,
-                    &mut func.locations,
-                    &mut func.encodings,
-                    &func.signature,
-                );
+        self.cur.goto_top(ebb);
+        while let Some(inst) = self.cur.next_inst() {
+            self.cur.use_srcloc(inst);
+            if let Some(constraints) =
+                self.encinfo.operand_constraints(
+                    self.cur.func.encodings[inst],
+                )
+            {
+                self.visit_inst(inst, constraints, tracker, &mut regs);
             } else {
                 let (_throughs, kills) = tracker.process_ghost(inst);
-                self.process_ghost_kills(kills, &mut regs, &func.locations);
+                self.process_ghost_kills(kills, &mut regs);
             }
             tracker.drop_dead(inst);
         }
@@ -174,22 +172,23 @@ impl<'a> Context<'a> {
     /// Visit the `ebb` header.
     ///
     /// Initialize the set of live registers and color the arguments to `ebb`.
-    fn visit_ebb_header(
-        &self,
-        ebb: Ebb,
-        func: &mut Function,
-        tracker: &mut LiveValueTracker,
-    ) -> AllocatableSet {
+    fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) -> AllocatableSet {
         // Reposition the live value tracker and deal with the EBB arguments.
-        tracker.ebb_top(ebb, &func.dfg, self.liveness, &func.layout, self.domtree);
+        tracker.ebb_top(
+            ebb,
+            &self.cur.func.dfg,
+            self.liveness,
+            &self.cur.func.layout,
+            self.domtree,
+        );
 
-        if func.layout.entry_block() == Some(ebb) {
+        if self.cur.func.layout.entry_block() == Some(ebb) {
             // Arguments to the entry block have ABI constraints.
-            self.color_entry_args(&func.signature, tracker.live(), &mut func.locations)
+            self.color_entry_args(tracker.live())
         } else {
             // The live-ins and arguments to a non-entry EBB have already been assigned a register.
             // Reconstruct the allocatable set.
-            self.livein_regs(tracker.live(), func)
+            self.livein_regs(tracker.live())
         }
     }
 
@@ -198,7 +197,7 @@ impl<'a> Context<'a> {
     ///
     /// Also process the EBB arguments which were colored when the first predecessor branch was
     /// encountered.
-    fn livein_regs(&self, live: &[LiveValue], func: &Function) -> AllocatableSet {
+    fn livein_regs(&self, live: &[LiveValue]) -> AllocatableSet {
         // Start from the registers that are actually usable. We don't want to include any reserved
         // registers in the set.
         let mut regs = self.usable_regs.clone();
@@ -213,11 +212,11 @@ impl<'a> Context<'a> {
                 "Live-in: {}:{} in {}",
                 value,
                 affinity.display(&self.reginfo),
-                func.locations[value].display(&self.reginfo)
+                self.cur.func.locations[value].display(&self.reginfo)
             );
             if let Affinity::Reg(rci) = affinity {
                 let rc = self.reginfo.rc(rci);
-                let loc = func.locations[value];
+                let loc = self.cur.func.locations[value];
                 match loc {
                     ValueLoc::Reg(reg) => regs.take(rc, reg),
                     ValueLoc::Unassigned => panic!("Live-in {} wasn't assigned", value),
@@ -237,12 +236,8 @@ impl<'a> Context<'a> {
     /// function signature.
     ///
     /// Return the set of remaining allocatable registers after filtering out the dead arguments.
-    fn color_entry_args(
-        &self,
-        sig: &Signature,
-        args: &[LiveValue],
-        locations: &mut ValueLocations,
-    ) -> AllocatableSet {
+    fn color_entry_args(&mut self, args: &[LiveValue]) -> AllocatableSet {
+        let sig = &self.cur.func.signature;
         assert_eq!(sig.argument_types.len(), args.len());
 
         let mut regs = self.usable_regs.clone();
@@ -255,7 +250,7 @@ impl<'a> Context<'a> {
                         if !lv.is_dead {
                             regs.take(rc, reg);
                         }
-                        locations[lv.value] = ValueLoc::Reg(reg);
+                        self.cur.func.locations[lv.value] = ValueLoc::Reg(reg);
                     } else {
                         // This should have been fixed by the reload pass.
                         panic!(
@@ -287,17 +282,12 @@ impl<'a> Context<'a> {
         &mut self,
         inst: Inst,
         constraints: &RecipeConstraints,
-        pos: &mut Cursor,
-        dfg: &mut DataFlowGraph,
         tracker: &mut LiveValueTracker,
         regs: &mut AllocatableSet,
-        locations: &mut ValueLocations,
-        encodings: &mut InstEncodings,
-        func_signature: &Signature,
     ) {
         dbg!(
             "Coloring {}\n          {}",
-            dfg.display_inst(inst, self.isa),
+            self.cur.display_inst(inst),
             regs.display(&self.reginfo)
         );
 
@@ -307,40 +297,56 @@ impl<'a> Context<'a> {
 
         // Program the solver with register constraints for the input side.
         self.solver.reset(regs);
-        self.program_input_constraints(inst, constraints.ins, dfg, locations);
-        let call_sig = dfg.call_signature(inst);
+        self.program_input_constraints(inst, constraints.ins);
+        let call_sig = self.cur.func.dfg.call_signature(inst);
         if let Some(sig) = call_sig {
-            self.program_input_abi(inst, &dfg.signatures[sig].argument_types, dfg, locations);
-        } else if dfg[inst].opcode().is_return() {
-            self.program_input_abi(inst, &func_signature.return_types, dfg, locations);
-        } else if dfg[inst].opcode().is_branch() {
+            program_input_abi(
+                &mut self.solver,
+                inst,
+                &self.cur.func.dfg.signatures[sig].argument_types,
+                &self.cur.func,
+                &self.liveness,
+                &self.reginfo,
+                &self.divert,
+            );
+        } else if self.cur.func.dfg[inst].opcode().is_return() {
+            program_input_abi(
+                &mut self.solver,
+                inst,
+                &self.cur.func.signature.return_types,
+                &self.cur.func,
+                &self.liveness,
+                &self.reginfo,
+                &self.divert,
+            );
+        } else if self.cur.func.dfg[inst].opcode().is_branch() {
             // This is a branch, so we need to make sure that globally live values are in their
             // global registers. For EBBs that take arguments, we also need to place the argument
             // values in the expected registers.
-            if let Some(dest) = dfg[inst].branch_destination() {
-                if self.program_ebb_arguments(inst, dest, dfg, pos.layout, locations) {
+            if let Some(dest) = self.cur.func.dfg[inst].branch_destination() {
+                if self.program_ebb_arguments(inst, dest) {
                     color_dest_args = Some(dest);
                 }
             } else {
                 // This is a multi-way branch like `br_table`. We only support arguments on
                 // single-destination branches.
                 assert_eq!(
-                    dfg.inst_variable_args(inst).len(),
+                    self.cur.func.dfg.inst_variable_args(inst).len(),
                     0,
                     "Can't handle EBB arguments: {}",
-                    dfg.display_inst(inst, self.isa)
+                    self.cur.display_inst(inst)
                 );
-                self.undivert_regs(|lr| !lr.is_local());
+                self.undivert_regs(|lr, _| !lr.is_local());
             }
         }
 
         if self.solver.has_fixed_input_conflicts() {
-            self.divert_fixed_input_conflicts(tracker.live(), locations);
+            self.divert_fixed_input_conflicts(tracker.live());
         }
         self.solver.inputs_done();
 
         // Update the live value tracker with this instruction.
-        let (throughs, kills, defs) = tracker.process_inst(inst, dfg, self.liveness);
+        let (throughs, kills, defs) = tracker.process_inst(inst, &self.cur.func.dfg, self.liveness);
 
         // Get rid of the killed values.
         for lv in kills {
@@ -348,7 +354,7 @@ impl<'a> Context<'a> {
                 self.solver.add_kill(
                     lv.value,
                     self.reginfo.rc(rci),
-                    self.divert.reg(lv.value, locations),
+                    self.divert.reg(lv.value, &self.cur.func.locations),
                 );
             }
         }
@@ -357,35 +363,34 @@ impl<'a> Context<'a> {
         // detect conflicts between fixed outputs and tied operands where the input value hasn't
         // been converted to a solver variable.
         if constraints.fixed_outs {
-            self.program_fixed_outputs(constraints.outs, defs, throughs, locations);
+            self.program_fixed_outputs(constraints.outs, defs, throughs);
         }
         if let Some(sig) = call_sig {
-            let abi = &dfg.signatures[sig].return_types;
-            self.program_output_abi(abi, defs, throughs, locations);
+            self.program_output_abi(sig, defs, throughs);
         }
-        self.program_output_constraints(inst, constraints.outs, defs, dfg, locations);
+        self.program_output_constraints(inst, constraints.outs, defs);
 
         // Finally, we've fully programmed the constraint solver.
         // We expect a quick solution in most cases.
         let mut output_regs = self.solver.quick_solve().unwrap_or_else(|rc| {
             dbg!("quick_solve needs more registers in {}", rc);
-            self.iterate_solution(throughs, locations)
+            self.iterate_solution(throughs)
         });
 
 
         // The solution and/or fixed input constraints may require us to shuffle the set of live
         // registers around.
-        self.shuffle_inputs(pos, dfg, regs, encodings);
+        self.shuffle_inputs(regs);
 
         // If this is the first time we branch to `dest`, color its arguments to match the current
         // register state.
         if let Some(dest) = color_dest_args {
-            self.color_ebb_arguments(inst, dest, dfg, locations);
+            self.color_ebb_arguments(inst, dest);
         }
 
         // Apply the solution to the defs.
         for v in self.solver.vars().iter().filter(|&v| v.is_define()) {
-            locations[v.value] = ValueLoc::Reg(v.solution);
+            self.cur.func.locations[v.value] = ValueLoc::Reg(v.solution);
         }
 
         // Tied defs are not part of the solution above.
@@ -393,9 +398,9 @@ impl<'a> Context<'a> {
         if constraints.tied_ops {
             for (op, lv) in constraints.outs.iter().zip(defs) {
                 if let ConstraintKind::Tied(num) = op.kind {
-                    let arg = dfg.inst_args(inst)[num as usize];
-                    let reg = self.divert.reg(arg, locations);
-                    locations[lv.value] = ValueLoc::Reg(reg);
+                    let arg = self.cur.func.dfg.inst_args(inst)[num as usize];
+                    let reg = self.divert.reg(arg, &self.cur.func.locations);
+                    self.cur.func.locations[lv.value] = ValueLoc::Reg(reg);
                 }
             }
         }
@@ -405,7 +410,7 @@ impl<'a> Context<'a> {
             if lv.endpoint == inst {
                 if let Affinity::Reg(rci) = lv.affinity {
                     let rc = self.reginfo.rc(rci);
-                    let reg = self.divert.reg(lv.value, locations);
+                    let reg = self.divert.reg(lv.value, &self.cur.func.locations);
                     output_regs.free(rc, reg);
                 }
             }
@@ -417,22 +422,15 @@ impl<'a> Context<'a> {
     }
 
     /// Program the input-side constraints for `inst` into the constraint solver.
-    fn program_input_constraints(
-        &mut self,
-        inst: Inst,
-        constraints: &[OperandConstraint],
-        dfg: &DataFlowGraph,
-        locations: &ValueLocations,
-    ) {
-        for (op, &value) in constraints.iter().zip(dfg.inst_args(inst)).filter(
-            |&(op, _)| {
-                op.kind != ConstraintKind::Stack
-            },
-        )
+    fn program_input_constraints(&mut self, inst: Inst, constraints: &[OperandConstraint]) {
+        for (op, &value) in constraints
+            .iter()
+            .zip(self.cur.func.dfg.inst_args(inst))
+            .filter(|&(op, _)| op.kind != ConstraintKind::Stack)
         {
             // Reload pass is supposed to ensure that all arguments to register operands are
             // already in a register.
-            let cur_reg = self.divert.reg(value, locations);
+            let cur_reg = self.divert.reg(value, &self.cur.func.locations);
             match op.kind {
                 ConstraintKind::FixedReg(regunit) => {
                     if regunit != cur_reg {
@@ -460,34 +458,6 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// Program the input-side ABI constraints for `inst` into the constraint solver.
-    ///
-    /// ABI constraints are the fixed register assignments used for calls and returns.
-    fn program_input_abi(
-        &mut self,
-        inst: Inst,
-        abi_types: &[ArgumentType],
-        dfg: &DataFlowGraph,
-        locations: &ValueLocations,
-    ) {
-        for (abi, &value) in abi_types.iter().zip(dfg.inst_variable_args(inst)) {
-            if let ArgumentLoc::Reg(reg) = abi.location {
-                if let Affinity::Reg(rci) =
-                    self.liveness
-                        .get(value)
-                        .expect("ABI register must have live range")
-                        .affinity
-                {
-                    let rc = self.reginfo.rc(rci);
-                    let cur_reg = self.divert.reg(value, locations);
-                    self.solver.reassign_in(value, rc, cur_reg, reg);
-                } else {
-                    panic!("ABI argument {} should be in a register", value);
-                }
-            }
-        }
-    }
-
     /// Prepare for a branch to `dest`.
     ///
     /// 1. Any values that are live-in to `dest` must be un-diverted so they live in their globally
@@ -497,29 +467,22 @@ impl<'a> Context<'a> {
     ///
     /// Returns true if this is the first time a branch to `dest` is seen, so the `dest` argument
     /// values should be colored after `shuffle_inputs`.
-    fn program_ebb_arguments(
-        &mut self,
-        inst: Inst,
-        dest: Ebb,
-        dfg: &DataFlowGraph,
-        layout: &Layout,
-        locations: &ValueLocations,
-    ) -> bool {
+    fn program_ebb_arguments(&mut self, inst: Inst, dest: Ebb) -> bool {
         // Find diverted registers that are live-in to `dest` and reassign them to their global
         // home.
         //
         // Values with a global live range that are not live in to `dest` could appear as branch
         // arguments, so they can't always be un-diverted.
-        self.undivert_regs(|lr| lr.livein_local_end(dest, layout).is_some());
+        self.undivert_regs(|lr, func| lr.livein_local_end(dest, &func.layout).is_some());
 
         // Now handle the EBB arguments.
-        let br_args = dfg.inst_variable_args(inst);
-        let dest_args = dfg.ebb_args(dest);
+        let br_args = self.cur.func.dfg.inst_variable_args(inst);
+        let dest_args = self.cur.func.dfg.ebb_args(dest);
         assert_eq!(br_args.len(), dest_args.len());
         for (&dest_arg, &br_arg) in dest_args.iter().zip(br_args) {
             // The first time we encounter a branch to `dest`, we get to pick the location. The
             // following times we see a branch to `dest`, we must follow suit.
-            match locations[dest_arg] {
+            match self.cur.func.locations[dest_arg] {
                 ValueLoc::Unassigned => {
                     // This is the first branch to `dest`, so we should color `dest_arg` instead of
                     // `br_arg`. However, we don't know where `br_arg` will end up until
@@ -536,7 +499,7 @@ impl<'a> Context<'a> {
                     // registers by reassigning `br_arg`.
                     if let Affinity::Reg(rci) = self.liveness[br_arg].affinity {
                         let rc = self.reginfo.rc(rci);
-                        let br_reg = self.divert.reg(br_arg, locations);
+                        let br_reg = self.divert.reg(br_arg, &self.cur.func.locations);
                         self.solver.reassign_in(br_arg, rc, br_reg, dest_reg);
                     } else {
                         panic!("Branch argument {} is not in a register", br_arg);
@@ -544,7 +507,7 @@ impl<'a> Context<'a> {
                 }
                 ValueLoc::Stack(ss) => {
                     // The spiller should already have given us identical stack slots.
-                    debug_assert_eq!(ValueLoc::Stack(ss), locations[br_arg]);
+                    debug_assert_eq!(ValueLoc::Stack(ss), self.cur.func.locations[br_arg]);
                 }
             }
         }
@@ -557,22 +520,16 @@ impl<'a> Context<'a> {
     /// register state.
     ///
     /// This function is only called when `program_ebb_arguments()` returned `true`.
-    fn color_ebb_arguments(
-        &mut self,
-        inst: Inst,
-        dest: Ebb,
-        dfg: &DataFlowGraph,
-        locations: &mut ValueLocations,
-    ) {
-        let br_args = dfg.inst_variable_args(inst);
-        let dest_args = dfg.ebb_args(dest);
+    fn color_ebb_arguments(&mut self, inst: Inst, dest: Ebb) {
+        let br_args = self.cur.func.dfg.inst_variable_args(inst);
+        let dest_args = self.cur.func.dfg.ebb_args(dest);
         assert_eq!(br_args.len(), dest_args.len());
         for (&dest_arg, &br_arg) in dest_args.iter().zip(br_args) {
-            match locations[dest_arg] {
+            match self.cur.func.locations[dest_arg] {
                 ValueLoc::Unassigned => {
                     if self.liveness[dest_arg].affinity.is_reg() {
-                        let br_reg = self.divert.reg(br_arg, locations);
-                        locations[dest_arg] = ValueLoc::Reg(br_reg);
+                        let br_reg = self.divert.reg(br_arg, &self.cur.func.locations);
+                        self.cur.func.locations[dest_arg] = ValueLoc::Reg(br_reg);
                     }
                 }
                 ValueLoc::Reg(_) => panic!("{} arg {} already colored", dest, dest_arg),
@@ -586,13 +543,13 @@ impl<'a> Context<'a> {
     /// are reallocated to their global register assignments.
     fn undivert_regs<Pred>(&mut self, mut pred: Pred)
     where
-        Pred: FnMut(&LiveRange) -> bool,
+        Pred: FnMut(&LiveRange, &Function) -> bool,
     {
         for rdiv in self.divert.all() {
             let lr = self.liveness.get(rdiv.value).expect(
                 "Missing live range for diverted register",
             );
-            if pred(lr) {
+            if pred(lr, &self.cur.func) {
                 if let Affinity::Reg(rci) = lr.affinity {
                     let rc = self.reginfo.rc(rci);
                     self.solver.reassign_in(rdiv.value, rc, rdiv.to, rdiv.from);
@@ -609,11 +566,11 @@ impl<'a> Context<'a> {
 
     // Find existing live values that conflict with the fixed input register constraints programmed
     // into the constraint solver. Convert them to solver variables so they can be diverted.
-    fn divert_fixed_input_conflicts(&mut self, live: &[LiveValue], locations: &mut ValueLocations) {
+    fn divert_fixed_input_conflicts(&mut self, live: &[LiveValue]) {
         for lv in live {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
-                let reg = self.divert.reg(lv.value, locations);
+                let reg = self.divert.reg(lv.value, &self.cur.func.locations);
                 if self.solver.is_fixed_input_conflict(rc, reg) {
                     self.solver.add_var(lv.value, rc, reg, &self.reginfo);
                 }
@@ -629,11 +586,10 @@ impl<'a> Context<'a> {
         constraints: &[OperandConstraint],
         defs: &[LiveValue],
         throughs: &[LiveValue],
-        locations: &mut ValueLocations,
     ) {
         for (op, lv) in constraints.iter().zip(defs) {
             if let ConstraintKind::FixedReg(reg) = op.kind {
-                self.add_fixed_output(lv.value, op.regclass, reg, throughs, locations);
+                self.add_fixed_output(lv.value, op.regclass, reg, throughs);
             }
         }
     }
@@ -641,22 +597,20 @@ impl<'a> Context<'a> {
     /// Program the output-side ABI constraints for `inst` into the constraint solver.
     ///
     /// That means return values for a call instruction.
-    fn program_output_abi(
-        &mut self,
-        abi_types: &[ArgumentType],
-        defs: &[LiveValue],
-        throughs: &[LiveValue],
-        locations: &mut ValueLocations,
-    ) {
+    fn program_output_abi(&mut self, sig: SigRef, defs: &[LiveValue], throughs: &[LiveValue]) {
         // It's technically possible for a call instruction to have fixed results before the
         // variable list of results, but we have no known instances of that.
         // Just assume all results are variable return values.
-        assert_eq!(defs.len(), abi_types.len());
-        for (abi, lv) in abi_types.iter().zip(defs) {
+        assert_eq!(
+            defs.len(),
+            self.cur.func.dfg.signatures[sig].return_types.len()
+        );
+        for (i, lv) in defs.iter().enumerate() {
+            let abi = self.cur.func.dfg.signatures[sig].return_types[i];
             if let ArgumentLoc::Reg(reg) = abi.location {
                 if let Affinity::Reg(rci) = lv.affinity {
                     let rc = self.reginfo.rc(rci);
-                    self.add_fixed_output(lv.value, rc, reg, throughs, locations);
+                    self.add_fixed_output(lv.value, rc, reg, throughs);
                 } else {
                     panic!("ABI argument {} should be in a register", lv.value);
                 }
@@ -671,14 +625,13 @@ impl<'a> Context<'a> {
         rc: RegClass,
         reg: RegUnit,
         throughs: &[LiveValue],
-        locations: &mut ValueLocations,
     ) {
         if !self.solver.add_fixed_output(rc, reg) {
             // The fixed output conflicts with some of the live-through registers.
             for lv in throughs {
                 if let Affinity::Reg(rci) = lv.affinity {
                     let rc2 = self.reginfo.rc(rci);
-                    let reg2 = self.divert.reg(lv.value, locations);
+                    let reg2 = self.divert.reg(lv.value, &self.cur.func.locations);
                     if regs_overlap(rc, reg, rc2, reg2) {
                         // This live-through value is interfering with the fixed output assignment.
                         // Convert it to a solver variable.
@@ -693,7 +646,7 @@ impl<'a> Context<'a> {
             let ok = self.solver.add_fixed_output(rc, reg);
             assert!(ok, "Couldn't clear fixed output interference for {}", value);
         }
-        locations[value] = ValueLoc::Reg(reg);
+        self.cur.func.locations[value] = ValueLoc::Reg(reg);
     }
 
     /// Program the output-side constraints for `inst` into the constraint solver.
@@ -704,8 +657,6 @@ impl<'a> Context<'a> {
         inst: Inst,
         constraints: &[OperandConstraint],
         defs: &[LiveValue],
-        dfg: &mut DataFlowGraph,
-        locations: &mut ValueLocations,
     ) {
         for (op, lv) in constraints.iter().zip(defs) {
             match op.kind {
@@ -717,11 +668,11 @@ impl<'a> Context<'a> {
                 ConstraintKind::Tied(num) => {
                     // Find the input operand we're tied to.
                     // The solver doesn't care about the output value.
-                    let arg = dfg.inst_args(inst)[num as usize];
+                    let arg = self.cur.func.dfg.inst_args(inst)[num as usize];
                     self.solver.add_tied_input(
                         arg,
                         op.regclass,
-                        self.divert.reg(arg, locations),
+                        self.divert.reg(arg, &self.cur.func.locations),
                     );
                 }
             }
@@ -732,11 +683,7 @@ impl<'a> Context<'a> {
     ///
     /// We may need to move more registers around before a solution is possible. Use an iterative
     /// algorithm that adds one more variable until a solution can be found.
-    fn iterate_solution(
-        &mut self,
-        throughs: &[LiveValue],
-        locations: &mut ValueLocations,
-    ) -> AllocatableSet {
+    fn iterate_solution(&mut self, throughs: &[LiveValue]) -> AllocatableSet {
         loop {
             dbg!("real_solve for {} variables", self.solver.vars().len());
             let rc = match self.solver.real_solve() {
@@ -746,7 +693,7 @@ impl<'a> Context<'a> {
 
             // Do we have any live-through `rc` registers that are not already variables?
             assert!(
-                self.try_add_var(rc, throughs, locations),
+                self.try_add_var(rc, throughs),
                 "Ran out of registers in {}",
                 rc
             );
@@ -754,18 +701,13 @@ impl<'a> Context<'a> {
     }
 
     /// Try to add an `rc` variable to the solver from the `throughs` set.
-    fn try_add_var(
-        &mut self,
-        rc: RegClass,
-        throughs: &[LiveValue],
-        locations: &mut ValueLocations,
-    ) -> bool {
+    fn try_add_var(&mut self, rc: RegClass, throughs: &[LiveValue]) -> bool {
         dbg!("Trying to add a {} reg from {} values", rc, throughs.len());
 
         for lv in throughs {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc2 = self.reginfo.rc(rci);
-                let reg2 = self.divert.reg(lv.value, locations);
+                let reg2 = self.divert.reg(lv.value, &self.cur.func.locations);
                 if rc.contains(reg2) && self.solver.can_add_var(lv.value, rc2, reg2) {
                     // The new variable gets to roam the whole top-level register class because
                     // it is not actually constrained by the instruction. We just want it out
@@ -783,27 +725,16 @@ impl<'a> Context<'a> {
     /// Emit `regmove` instructions as needed to move the live registers into place before the
     /// instruction. Also update `self.divert` accordingly.
     ///
-    /// The `pos` cursor is expected to point at the instruction. The register moves are inserted
-    /// before.
+    /// The `self.cur` cursor is expected to point at the instruction. The register moves are
+    /// inserted before.
     ///
     /// The solver needs to be reminded of the available registers before any moves are inserted.
-    fn shuffle_inputs(
-        &mut self,
-        pos: &mut Cursor,
-        dfg: &mut DataFlowGraph,
-        regs: &mut AllocatableSet,
-        encodings: &mut InstEncodings,
-    ) {
+    fn shuffle_inputs(&mut self, regs: &mut AllocatableSet) {
         self.solver.schedule_moves(regs);
 
         for m in self.solver.moves() {
-            let ty = dfg.value_type(m.value);
             self.divert.regmove(m.value, m.from, m.to);
-            let inst = dfg.ins(pos).regmove(m.value, m.from, m.to);
-            match self.isa.encode(dfg, &dfg[inst], ty) {
-                Ok(encoding) => encodings[inst] = encoding,
-                _ => panic!("Can't encode {} {}", m.rc, dfg.display_inst(inst, self.isa)),
-            }
+            self.cur.ins().regmove(m.value, m.from, m.to);
         }
     }
 
@@ -823,20 +754,45 @@ impl<'a> Context<'a> {
     /// Process kills on a ghost instruction.
     /// - Forget diversions.
     /// - Free killed registers.
-    fn process_ghost_kills(
-        &mut self,
-        kills: &[LiveValue],
-        regs: &mut AllocatableSet,
-        locations: &ValueLocations,
-    ) {
+    fn process_ghost_kills(&mut self, kills: &[LiveValue], regs: &mut AllocatableSet) {
         for lv in kills {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
                 let reg = match self.divert.remove(lv.value) {
                     Some(r) => r,
-                    None => locations[lv.value].unwrap_reg(),
+                    None => self.cur.func.locations[lv.value].unwrap_reg(),
                 };
                 regs.free(rc, reg);
+            }
+        }
+    }
+}
+
+/// Program the input-side ABI constraints for `inst` into the constraint solver.
+///
+/// ABI constraints are the fixed register assignments used for calls and returns.
+fn program_input_abi(
+    solver: &mut Solver,
+    inst: Inst,
+    abi_types: &[ArgumentType],
+    func: &Function,
+    liveness: &Liveness,
+    reginfo: &RegInfo,
+    divert: &RegDiversions,
+) {
+    for (abi, &value) in abi_types.iter().zip(func.dfg.inst_variable_args(inst)) {
+        if let ArgumentLoc::Reg(reg) = abi.location {
+            if let Affinity::Reg(rci) =
+                liveness
+                    .get(value)
+                    .expect("ABI register must have live range")
+                    .affinity
+            {
+                let rc = reginfo.rc(rci);
+                let cur_reg = divert.reg(value, &func.locations);
+                solver.reassign_in(value, rc, cur_reg, reg);
+            } else {
+                panic!("ABI argument {} should be in a register", value);
             }
         }
     }
