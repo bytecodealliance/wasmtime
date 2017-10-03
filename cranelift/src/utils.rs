@@ -20,6 +20,14 @@ pub fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
     Ok(buffer)
 }
 
+/// Read an entire file into a vector of bytes.
+pub fn read_to_end<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
+    let mut file = File::open(path)?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
+    Ok(buffer)
+}
+
 /// Look for a directive in a comment string.
 /// The directive is of the form "foo:" and should follow the leading `;` in the comment:
 ///
