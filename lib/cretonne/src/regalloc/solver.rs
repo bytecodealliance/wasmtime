@@ -679,7 +679,7 @@ impl Solver {
     /// a register.
     ///
     /// Returns the number of spills that had to be emitted.
-    pub fn schedule_moves(&mut self, regs: &AllocatableSet) -> usize {
+    pub fn schedule_moves(&mut self, regs: &AllocatableSet, reginfo: &RegInfo) -> usize {
         self.collect_moves();
 
         let mut avail = regs.clone();
@@ -724,9 +724,17 @@ impl Solver {
                 .0;
             self.moves.swap(i, i + j);
 
+            // Check the top-level register class for an available register. It is an axiom of the
+            // register allocator that we can move between all registers in the top-level RC.
             let m = self.moves[i].clone();
-            if let Some(reg) = avail.iter(m.rc).next() {
-                dbg!("breaking cycle at {} with available register %{}", m, reg);
+            let toprc = reginfo.toprc(m.rc);
+            if let Some(reg) = avail.iter(toprc).next() {
+                dbg!(
+                    "breaking cycle at {} with available {} register {}",
+                    m,
+                    toprc,
+                    reginfo.display_regunit(reg)
+                );
 
                 // Alter the move so it is guaranteed to be picked up when we loop. It is important
                 // that this move is scheduled immediately, otherwise we would have multiple moves
@@ -737,7 +745,7 @@ impl Solver {
                 // next iteration.
                 self.moves.push(Assignment {
                     value: m.value,
-                    rc: m.rc,
+                    rc: toprc,
                     from: reg,
                     to: m.to,
                 });
@@ -746,7 +754,7 @@ impl Solver {
             // may have to move two S-registers out of the way before we can resolve a cycle
             // involving a D-register.
             } else {
-                panic!("Not enough registers in {} to schedule moves", m.rc);
+                panic!("Not enough registers in {} to schedule moves", toprc);
             }
         }
 
@@ -779,9 +787,8 @@ impl fmt::Display for Solver {
 mod tests {
     use entity::EntityRef;
     use ir::Value;
-    use isa::{TargetIsa, RegClass, RegUnit};
+    use isa::{TargetIsa, RegClass, RegUnit, RegInfo};
     use regalloc::AllocatableSet;
-    use std::borrow::Borrow;
     use super::{Solver, Assignment};
 
     // Make an arm32 `TargetIsa`, if possible.
@@ -796,12 +803,10 @@ mod tests {
     }
 
     // Get a register class by name.
-    fn rc_by_name(isa: &TargetIsa, name: &str) -> RegClass {
-        isa.register_info()
-            .classes
-            .iter()
-            .find(|rc| rc.name == name)
-            .expect("Can't find named register class.")
+    fn rc_by_name(reginfo: &RegInfo, name: &str) -> RegClass {
+        reginfo.classes.iter().find(|rc| rc.name == name).expect(
+            "Can't find named register class.",
+        )
     }
 
     // Construct a move.
@@ -817,8 +822,8 @@ mod tests {
     #[test]
     fn simple_moves() {
         let isa = arm32().expect("This test requires arm32 support");
-        let isa = isa.borrow();
-        let gpr = rc_by_name(isa, "GPR");
+        let reginfo = isa.register_info();
+        let gpr = rc_by_name(&reginfo, "GPR");
         let r0 = gpr.unit(0);
         let r1 = gpr.unit(1);
         let r2 = gpr.unit(2);
@@ -833,7 +838,7 @@ mod tests {
         solver.reassign_in(v10, gpr, r1, r0);
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
-        assert_eq!(solver.schedule_moves(&regs), 0);
+        assert_eq!(solver.schedule_moves(&regs, &reginfo), 0);
         assert_eq!(solver.moves(), &[mov(v10, gpr, r1, r0)]);
 
         // A bit harder: r0, r1 need to go in r1, r2.
@@ -843,7 +848,7 @@ mod tests {
         solver.reassign_in(v11, gpr, r1, r2);
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
-        assert_eq!(solver.schedule_moves(&regs), 0);
+        assert_eq!(solver.schedule_moves(&regs, &reginfo), 0);
         assert_eq!(
             solver.moves(),
             &[mov(v11, gpr, r1, r2), mov(v10, gpr, r0, r1)]
@@ -855,7 +860,7 @@ mod tests {
         solver.reassign_in(v11, gpr, r1, r0);
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
-        assert_eq!(solver.schedule_moves(&regs), 0);
+        assert_eq!(solver.schedule_moves(&regs, &reginfo), 0);
         assert_eq!(
             solver.moves(),
             &[
@@ -869,9 +874,9 @@ mod tests {
     #[test]
     fn harder_move_cycles() {
         let isa = arm32().expect("This test requires arm32 support");
-        let isa = isa.borrow();
-        let s = rc_by_name(isa, "S");
-        let d = rc_by_name(isa, "D");
+        let reginfo = isa.register_info();
+        let s = rc_by_name(&reginfo, "S");
+        let d = rc_by_name(&reginfo, "D");
         let d0 = d.unit(0);
         let d1 = d.unit(1);
         let d2 = d.unit(2);
@@ -894,7 +899,7 @@ mod tests {
         solver.reassign_in(v12, s, s3, s1);
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
-        assert_eq!(solver.schedule_moves(&regs), 0);
+        assert_eq!(solver.schedule_moves(&regs, &reginfo), 0);
         assert_eq!(
             solver.moves(),
             &[
@@ -915,7 +920,7 @@ mod tests {
         solver.reassign_in(v10, d, d1, d0);
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
-        assert_eq!(solver.schedule_moves(&regs), 0);
+        assert_eq!(solver.schedule_moves(&regs, &reginfo), 0);
         assert_eq!(
             solver.moves(),
             &[
