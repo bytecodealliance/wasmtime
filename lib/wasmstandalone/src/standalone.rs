@@ -334,6 +334,7 @@ impl WasmRuntime for Runtime {
         self.has_current_memory = None;
         self.has_grow_memory = None;
         self.func_indices.clear();
+        self.the_heap = PackedOption::default();
     }
     fn declare_global(&mut self, global: Global) {
         debug_assert!(!self.instantiated);
