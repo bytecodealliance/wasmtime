@@ -163,8 +163,7 @@ fn handle_module(args: &Args, path: PathBuf, name: &str, isa: &TargetIsa) -> Res
                             return Err(String::from("wat2wasm not found"));
                         } else {
                             return Err(String::from(e.description()));
-                        })
-                        .unwrap();
+                        })?;
                     match read_wasm_file(file_path) {
                         Ok(data) => data,
                         Err(err) => {
