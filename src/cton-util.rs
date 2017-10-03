@@ -21,6 +21,7 @@ mod cat;
 mod print_cfg;
 mod rsfilecheck;
 mod wasm;
+mod compile;
 
 const USAGE: &str = "
 Cretonne code generator utility
@@ -30,6 +31,7 @@ Usage:
     cton-util cat <file>...
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
+    cton-util compile [-vp] [--set <set>]... [--isa <isa>] <file>...
     cton-util wasm [-ctvp] [--set <set>]... [--isa <isa>] <file>...
     cton-util --help | --version
 
@@ -53,6 +55,7 @@ struct Args {
     cmd_cat: bool,
     cmd_filecheck: bool,
     cmd_print_cfg: bool,
+    cmd_compile: bool,
     cmd_wasm: bool,
     arg_file: Vec<String>,
     flag_just_decode: bool,
@@ -86,6 +89,8 @@ fn cton_util() -> CommandResult {
         rsfilecheck::run(args.arg_file, args.flag_verbose)
     } else if args.cmd_print_cfg {
         print_cfg::run(args.arg_file)
+    } else if args.cmd_compile {
+        compile::run(args.arg_file, args.flag_print, args.flag_set, args.flag_isa)
     } else if args.cmd_wasm {
         wasm::run(
             args.arg_file,
