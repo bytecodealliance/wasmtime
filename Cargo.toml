@@ -24,7 +24,7 @@ cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
 cretonne-native = { git = "https://github.com/stoklund/cretonne.git" }
 wasmstandalone = { path = "lib/wasmstandalone" }
 wasm2obj = { path = "lib/wasm2obj" }
-wasmparser = "0.8.2"
+wasmparser = "0.11.2"
 wasmtext = { git = "https://github.com/yurydelendik/wasmtext" }
 filecheck = "0.0.1"
 docopt = "0.8.0"
