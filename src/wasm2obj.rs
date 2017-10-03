@@ -16,6 +16,7 @@ extern crate faerie;
 
 use cton_wasm::translate_module;
 use cretonne::settings;
+use cretonne::isa;
 use wasm2obj::emit_module;
 use std::path::PathBuf;
 use std::fs::File;
@@ -84,6 +85,7 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
         }
     };
 
+    // FIXME: Make the target a parameter.
     let (flag_builder, isa_builder) = cton_native::builders().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
     });
@@ -100,9 +102,7 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
         }
     };
 
-    // FIXME: Make the target a parameter.
-    // FIXME: Make the output filename a parameter.
-    let mut obj = Artifact::new(Target::X86_64, Some(String::from(output)));
+    let mut obj = Artifact::new(faerie_target(&*isa)?, Some(String::from(output)));
 
     emit_module(&translation, &mut obj, &*isa, &runtime)?;
 
@@ -129,4 +129,18 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     )?;
 
     Ok(())
+}
+
+fn faerie_target(isa: &isa::TargetIsa) -> Result<Target, String> {
+    let name = isa.name();
+    match name {
+        "intel" => Ok(if isa.flags().is_64bit() {
+            Target::X86_64
+        } else {
+            Target::X86
+        }),
+        "arm32" => Ok(Target::ARMv7),
+        "arm64" => Ok(Target::ARM64),
+        _ => Err(format!("unsupported isa: {}", name)),
+    }
 }
