@@ -76,6 +76,8 @@ pub struct Runtime {
     pub func_indices: EntityMap<FuncRef, FunctionIndex>,
 
     the_heap: PackedOption<ir::Heap>,
+
+    current_global_offset: usize,
 }
 
 impl Runtime {
@@ -102,6 +104,7 @@ impl Runtime {
             has_grow_memory: None,
             func_indices: EntityMap::new(),
             the_heap: PackedOption::default(),
+            current_global_offset: 0,
         }
     }
 }
@@ -334,14 +337,11 @@ impl WasmRuntime for Runtime {
     }
     fn declare_global(&mut self, global: Global) {
         debug_assert!(!self.instantiated);
-        debug_assert!(
-            self.globals.info.is_empty(),
-            "multiple globals not supported yet"
-        );
         self.globals.info.push(GlobalInfo {
             global: global,
-            offset: 0,
+            offset: self.current_global_offset,
         });
+        self.current_global_offset += global.ty.bytes() as usize;
     }
     fn declare_table(&mut self, table: Table) {
         debug_assert!(!self.instantiated);
