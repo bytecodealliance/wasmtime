@@ -43,6 +43,24 @@ I64.legalize_type(
 # Helper functions for generating encodings.
 #
 
+def enc_i64(inst, recipe, *args, **kwargs):
+    # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
+    """
+    Add encodings for `inst` to I64 with and without a REX prefix.
+    """
+    I64.enc(inst, *recipe.rex(*args, **kwargs))
+    I64.enc(inst, *recipe(*args, **kwargs))
+
+
+def enc_both(inst, recipe, *args, **kwargs):
+    # type: (MaybeBoundInst, r.TailRecipe, *int, **Any) -> None
+    """
+    Add encodings for `inst` to both I32 and I64.
+    """
+    I32.enc(inst, *recipe(*args, **kwargs))
+    enc_i64(inst, recipe, *args, **kwargs)
+
+
 def enc_i32_i64(inst, recipe, *args, **kwargs):
     # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
     """
@@ -82,22 +100,6 @@ def enc_i32_i64_ld_st(inst, w_bit, recipe, *args, **kwargs):
         I64.enc(inst.i64.any, *recipe(*args, **kwargs))
 
 
-def enc_flt(inst, recipe, *args, **kwargs):
-    # type: (MaybeBoundInst, r.TailRecipe, *int, **Any) -> None
-    """
-    Add encodings for floating point instruction `inst` to both I32 and I64.
-    """
-    I32.enc(inst, *recipe(*args, **kwargs))
-    I64.enc(inst, *recipe.rex(*args, **kwargs))
-    I64.enc(inst, *recipe(*args, **kwargs))
-
-
-def enc_i64(inst, recipe, *args, **kwargs):
-    # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
-    I64.enc(inst, *recipe.rex(*args, **kwargs))
-    I64.enc(inst, *recipe(*args, **kwargs))
-
-
 for inst,           opc in [
         (base.iadd, 0x01),
         (base.isub, 0x29),
@@ -109,9 +111,9 @@ for inst,           opc in [
 # Also add a `b1` encodings for the logic instructions.
 # TODO: Should this be done with 8-bit instructions? It would improve
 # partial register dependencies.
-enc_flt(base.band.b1, r.rr, 0x21)
-enc_flt(base.bor.b1,  r.rr, 0x09)
-enc_flt(base.bxor.b1, r.rr, 0x31)
+enc_both(base.band.b1, r.rr, 0x21)
+enc_both(base.bor.b1,  r.rr, 0x09)
+enc_both(base.bxor.b1, r.rr, 0x31)
 
 enc_i32_i64(base.imul, r.rrx, 0x0f, 0xaf)
 enc_i32_i64(x86.sdivmodx, r.div, 0xf7, rrr=7)
@@ -119,7 +121,7 @@ enc_i32_i64(x86.udivmodx, r.div, 0xf7, rrr=6)
 
 enc_i32_i64(base.copy, r.umr, 0x89)
 enc_i32_i64(base.regmove, r.rmov, 0x89)
-enc_flt(base.regmove.b1, r.rmov, 0x89)
+enc_both(base.regmove.b1, r.rmov, 0x89)
 
 # Immediate instructions with sign-extended 8-bit and 32-bit immediate.
 for inst,               rrr in [
@@ -249,27 +251,27 @@ enc_i32_i64_ld_st(base.sload8, True, r.ldDisp32, 0x0f, 0xbe)
 # Float loads and stores.
 #
 
-enc_flt(base.load.f32.any, r.fld, 0x66, 0x0f, 0x6e)
-enc_flt(base.load.f32.any, r.fldDisp8, 0x66, 0x0f, 0x6e)
-enc_flt(base.load.f32.any, r.fldDisp32, 0x66, 0x0f, 0x6e)
+enc_both(base.load.f32.any, r.fld, 0x66, 0x0f, 0x6e)
+enc_both(base.load.f32.any, r.fldDisp8, 0x66, 0x0f, 0x6e)
+enc_both(base.load.f32.any, r.fldDisp32, 0x66, 0x0f, 0x6e)
 
-enc_flt(base.load.f64.any, r.fld, 0xf3, 0x0f, 0x7e)
-enc_flt(base.load.f64.any, r.fldDisp8, 0xf3, 0x0f, 0x7e)
-enc_flt(base.load.f64.any, r.fldDisp32, 0xf3, 0x0f, 0x7e)
+enc_both(base.load.f64.any, r.fld, 0xf3, 0x0f, 0x7e)
+enc_both(base.load.f64.any, r.fldDisp8, 0xf3, 0x0f, 0x7e)
+enc_both(base.load.f64.any, r.fldDisp32, 0xf3, 0x0f, 0x7e)
 
-enc_flt(base.store.f32.any, r.fst, 0x66, 0x0f, 0x7e)
-enc_flt(base.store.f32.any, r.fstDisp8, 0x66, 0x0f, 0x7e)
-enc_flt(base.store.f32.any, r.fstDisp32, 0x66, 0x0f, 0x7e)
+enc_both(base.store.f32.any, r.fst, 0x66, 0x0f, 0x7e)
+enc_both(base.store.f32.any, r.fstDisp8, 0x66, 0x0f, 0x7e)
+enc_both(base.store.f32.any, r.fstDisp32, 0x66, 0x0f, 0x7e)
 
-enc_flt(base.store.f64.any, r.fst, 0x66, 0x0f, 0xd6)
-enc_flt(base.store.f64.any, r.fstDisp8, 0x66, 0x0f, 0xd6)
-enc_flt(base.store.f64.any, r.fstDisp32, 0x66, 0x0f, 0xd6)
+enc_both(base.store.f64.any, r.fst, 0x66, 0x0f, 0xd6)
+enc_both(base.store.f64.any, r.fstDisp8, 0x66, 0x0f, 0xd6)
+enc_both(base.store.f64.any, r.fstDisp32, 0x66, 0x0f, 0xd6)
 
-enc_flt(base.fill.f32, r.ffiSib32, 0x66, 0x0f, 0x6e)
-enc_flt(base.fill.f64, r.ffiSib32, 0xf3, 0x0f, 0x7e)
+enc_both(base.fill.f32, r.ffiSib32, 0x66, 0x0f, 0x6e)
+enc_both(base.fill.f64, r.ffiSib32, 0xf3, 0x0f, 0x7e)
 
-enc_flt(base.spill.f32, r.fspSib32, 0x66, 0x0f, 0x7e)
-enc_flt(base.spill.f64, r.fspSib32, 0x66, 0x0f, 0xd6)
+enc_both(base.spill.f32, r.fspSib32, 0x66, 0x0f, 0x7e)
+enc_both(base.spill.f64, r.fspSib32, 0x66, 0x0f, 0xd6)
 
 #
 # Function addresses.
@@ -307,10 +309,10 @@ enc_i32_i64(base.brnz, r.tjccd, 0x85)
 
 # Branch on a b1 value in a register only looks at the low 8 bits. See also
 # bint encodings below.
-enc_flt(base.brz.b1, r.t8jccb_abcd, 0x74)
-enc_flt(base.brz.b1, r.t8jccd_abcd, 0x84)
-enc_flt(base.brnz.b1, r.t8jccb_abcd, 0x75)
-enc_flt(base.brnz.b1, r.t8jccd_abcd, 0x85)
+enc_both(base.brz.b1, r.t8jccb_abcd, 0x74)
+enc_both(base.brz.b1, r.t8jccd_abcd, 0x84)
+enc_both(base.brnz.b1, r.t8jccb_abcd, 0x75)
+enc_both(base.brnz.b1, r.t8jccd_abcd, 0x85)
 
 #
 # Trap as ud2
@@ -349,18 +351,18 @@ I64.enc(base.uextend.i64.i32, *r.umr(0x89))
 #
 
 # movd
-enc_flt(base.bitcast.f32.i32, r.frurm, 0x66, 0x0f, 0x6e)
-enc_flt(base.bitcast.i32.f32, r.rfumr, 0x66, 0x0f, 0x7e)
+enc_both(base.bitcast.f32.i32, r.frurm, 0x66, 0x0f, 0x6e)
+enc_both(base.bitcast.i32.f32, r.rfumr, 0x66, 0x0f, 0x7e)
 
 # movq
 I64.enc(base.bitcast.f64.i64, *r.frurm.rex(0x66, 0x0f, 0x6e, w=1))
 I64.enc(base.bitcast.i64.f64, *r.rfumr.rex(0x66, 0x0f, 0x7e, w=1))
 
 # movaps
-enc_flt(base.copy.f32, r.furm, 0x0f, 0x28)
-enc_flt(base.copy.f64, r.furm, 0x0f, 0x28)
-enc_flt(base.regmove.f32, r.frmov, 0x0f, 0x28)
-enc_flt(base.regmove.f64, r.frmov, 0x0f, 0x28)
+enc_both(base.copy.f32, r.furm, 0x0f, 0x28)
+enc_both(base.copy.f64, r.furm, 0x0f, 0x28)
+enc_both(base.regmove.f32, r.frmov, 0x0f, 0x28)
+enc_both(base.regmove.f64, r.frmov, 0x0f, 0x28)
 
 # cvtsi2ss
 enc_i32_i64(base.fcvt_from_sint.f32, r.frurm, 0xf3, 0x0f, 0x2a)
@@ -369,22 +371,22 @@ enc_i32_i64(base.fcvt_from_sint.f32, r.frurm, 0xf3, 0x0f, 0x2a)
 enc_i32_i64(base.fcvt_from_sint.f64, r.frurm, 0xf2, 0x0f, 0x2a)
 
 # cvtss2sd
-enc_flt(base.fpromote.f64.f32, r.furm, 0xf3, 0x0f, 0x5a)
+enc_both(base.fpromote.f64.f32, r.furm, 0xf3, 0x0f, 0x5a)
 
 # cvtsd2ss
-enc_flt(base.fdemote.f32.f64, r.furm, 0xf2, 0x0f, 0x5a)
+enc_both(base.fdemote.f32.f64, r.furm, 0xf2, 0x0f, 0x5a)
 
 # cvttss2si
-enc_flt(x86.cvtt2si.i32.f32, r.rfurm, 0xf3, 0x0f, 0x2c)
+enc_both(x86.cvtt2si.i32.f32, r.rfurm, 0xf3, 0x0f, 0x2c)
 I64.enc(x86.cvtt2si.i64.f32, *r.rfurm.rex(0xf3, 0x0f, 0x2c, w=1))
 
 # cvttsd2si
-enc_flt(x86.cvtt2si.i32.f64, r.rfurm, 0xf2, 0x0f, 0x2c)
+enc_both(x86.cvtt2si.i32.f64, r.rfurm, 0xf2, 0x0f, 0x2c)
 I64.enc(x86.cvtt2si.i64.f64, *r.rfurm.rex(0xf2, 0x0f, 0x2c, w=1))
 
 # Exact square roots.
-enc_flt(base.sqrt.f32, r.furm, 0xf3, 0x0f, 0x51)
-enc_flt(base.sqrt.f64, r.furm, 0xf2, 0x0f, 0x51)
+enc_both(base.sqrt.f32, r.furm, 0xf3, 0x0f, 0x51)
+enc_both(base.sqrt.f64, r.furm, 0xf2, 0x0f, 0x51)
 
 # Rounding. The recipe looks at the opcode to pick an immediate.
 for inst in [
@@ -392,8 +394,8 @@ for inst in [
         base.floor,
         base.ceil,
         base.trunc]:
-    enc_flt(inst.f32, r.furmi_rnd, 0x66, 0x0f, 0x3a, 0x0a, isap=use_sse41)
-    enc_flt(inst.f64, r.furmi_rnd, 0x66, 0x0f, 0x3a, 0x0b, isap=use_sse41)
+    enc_both(inst.f32, r.furmi_rnd, 0x66, 0x0f, 0x3a, 0x0a, isap=use_sse41)
+    enc_both(inst.f64, r.furmi_rnd, 0x66, 0x0f, 0x3a, 0x0b, isap=use_sse41)
 
 
 # Binary arithmetic ops.
@@ -404,24 +406,24 @@ for inst,           opc in [
         (base.fdiv, 0x5e),
         (x86.fmin,  0x5d),
         (x86.fmax,  0x5f)]:
-    enc_flt(inst.f32, r.fa, 0xf3, 0x0f, opc)
-    enc_flt(inst.f64, r.fa, 0xf2, 0x0f, opc)
+    enc_both(inst.f32, r.fa, 0xf3, 0x0f, opc)
+    enc_both(inst.f64, r.fa, 0xf2, 0x0f, opc)
 
 # Binary bitwise ops.
 for inst,               opc in [
         (base.band,     0x54),
         (base.bor,      0x56),
         (base.bxor,     0x57)]:
-    enc_flt(inst.f32, r.fa, 0x0f, opc)
-    enc_flt(inst.f64, r.fa, 0x0f, opc)
+    enc_both(inst.f32, r.fa, 0x0f, opc)
+    enc_both(inst.f64, r.fa, 0x0f, opc)
 
 # The `andnps(x,y)` instruction computes `~x&y`, while band_not(x,y)` is `x&~y.
-enc_flt(base.band_not.f32, r.fax, 0x0f, 0x55)
-enc_flt(base.band_not.f64, r.fax, 0x0f, 0x55)
+enc_both(base.band_not.f32, r.fax, 0x0f, 0x55)
+enc_both(base.band_not.f64, r.fax, 0x0f, 0x55)
 
 # Comparisons.
 #
 # This only covers the condition codes in `supported_floatccs`, the rest are
 # handled by legalization patterns.
-enc_flt(base.fcmp.f32, r.fcscc, 0x0f, 0x2e)
-enc_flt(base.fcmp.f64, r.fcscc, 0x66, 0x0f, 0x2e)
+enc_both(base.fcmp.f32, r.fcscc, 0x0f, 0x2e)
+enc_both(base.fcmp.f64, r.fcscc, 0x66, 0x0f, 0x2e)
