@@ -7,7 +7,8 @@
 
 extern crate cton_wasm;
 extern crate cton_native;
-extern crate wasmstandalone;
+extern crate wasmstandalone_runtime;
+extern crate wasmstandalone_execute;
 extern crate wasmparser;
 extern crate cretonne;
 extern crate wasmtext;
@@ -18,7 +19,7 @@ extern crate term;
 extern crate tempdir;
 
 use cton_wasm::{translate_module, TranslationResult};
-use wasmstandalone::{compile_module, execute};
+use wasmstandalone_execute::{compile_module, execute};
 use std::path::PathBuf;
 use wasmparser::{Parser, ParserState, WasmDecoder, SectionCode};
 use wasmtext::Writer;
@@ -157,7 +158,7 @@ fn handle_module(args: &Args, path: PathBuf, name: &str, isa: &TargetIsa) -> Res
             |err| String::from(err.description()),
         )?;
     }
-    let mut runtime = wasmstandalone::Runtime::with_flags(isa.flags().clone());
+    let mut runtime = wasmstandalone_runtime::Runtime::with_flags(isa.flags().clone());
     let translation = {
         match translate_module(&data, &mut runtime) {
             Ok(x) => x,
@@ -320,7 +321,7 @@ fn pretty_print_translation(
     writer_wat: &mut Write,
     writer_cretonne: &mut Write,
     isa: &TargetIsa,
-    runtime: &wasmstandalone::Runtime,
+    runtime: &wasmstandalone_runtime::Runtime,
 ) -> Result<(), io::Error> {
     let mut terminal = term::stdout().unwrap();
     let mut parser = Parser::new(data);

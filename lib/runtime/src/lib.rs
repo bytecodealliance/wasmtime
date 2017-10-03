@@ -1,3 +1,13 @@
+//! Standalone runtime for WebAssembly using Cretonne. Provides functions to translate
+//! `get_global`, `set_global`, `current_memory`, `grow_memory`, `call_indirect` that hardcode in
+//! the translation the base addresses of regions of memory that will hold the globals, tables and
+//! linear memories.
+
+#![deny(missing_docs)]
+
+extern crate cretonne;
+extern crate cton_wasm;
+
 use cton_wasm::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, Global, GlobalInit, Table,
                 Memory, WasmRuntime, FuncEnvironment, GlobalValue, SignatureIndex};
 use cretonne::ir::{InstBuilder, FuncRef, ExtFuncData, FunctionName, Signature, ArgumentType,
@@ -12,17 +22,22 @@ use std::mem::transmute;
 use std::ptr::copy_nonoverlapping;
 use std::ptr::write;
 
+/// Runtime state of a WebAssembly table element.
 #[derive(Clone, Debug)]
 pub enum TableElement {
+    /// A element that, if called, produces a trap.
     Trap(),
+    /// A function.
     Function(FunctionIndex),
 }
 
-struct GlobalInfo {
+/// Information about a WebAssembly global variable.
+pub struct GlobalInfo {
     global: Global,
     offset: usize,
 }
 
+/// Runtime state of a WebAssembly global variable.
 pub struct GlobalsData {
     data: Vec<u8>,
     info: Vec<GlobalInfo>,

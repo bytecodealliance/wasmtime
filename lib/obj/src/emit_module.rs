@@ -11,7 +11,7 @@ use cretonne::binemit::{RelocSink, Reloc, CodeOffset};
 use cton_wasm::TranslationResult;
 use std::fmt::Write;
 use faerie::Artifact;
-use wasmstandalone;
+use wasmstandalone_runtime;
 
 type RelocRef = u16;
 
@@ -50,7 +50,7 @@ pub fn emit_module(
     trans_result: &TranslationResult,
     obj: &mut Artifact,
     isa: &TargetIsa,
-    runtime: &wasmstandalone::Runtime,
+    runtime: &wasmstandalone_runtime::Runtime,
 ) -> Result<(), String> {
     debug_assert!(
         trans_result.start_index.is_none() ||

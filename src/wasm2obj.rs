@@ -5,19 +5,19 @@
 //! object file with relocations.
 
 extern crate cton_wasm;
-extern crate wasm2obj;
+extern crate wasmstandalone_obj;
+extern crate wasmstandalone_runtime;
 extern crate cretonne;
 extern crate cton_native;
 extern crate docopt;
 #[macro_use]
 extern crate serde_derive;
-extern crate wasmstandalone;
 extern crate faerie;
 
 use cton_wasm::translate_module;
 use cretonne::settings;
 use cretonne::isa;
-use wasm2obj::emit_module;
+use wasmstandalone_obj::emit_module;
 use std::path::PathBuf;
 use std::fs::File;
 use std::error::Error;
@@ -91,7 +91,7 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     });
     let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
 
-    let mut runtime = wasmstandalone::Runtime::with_flags(isa.flags().clone());
+    let mut runtime = wasmstandalone_runtime::Runtime::with_flags(isa.flags().clone());
 
     let translation = {
         match translate_module(&data, &mut runtime) {

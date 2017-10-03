@@ -1,3 +1,12 @@
+//! JIT-style runtime for WebAssembly using Cretonne.
+
+#![deny(missing_docs)]
+
+extern crate cretonne;
+extern crate cton_wasm;
+extern crate region;
+extern crate wasmstandalone_runtime;
+
 use cretonne::Context;
 use cretonne::settings;
 use cretonne::isa::TargetIsa;
@@ -15,7 +24,6 @@ use region::protect;
 use std::collections::HashMap;
 use std::ptr::write_unaligned;
 use std::fmt::Write;
-use standalone;
 
 type RelocRef = u16;
 
@@ -64,7 +72,7 @@ pub struct ExecutableCode {
 pub fn compile_module(
     trans_result: &TranslationResult,
     isa: &TargetIsa,
-    runtime: &standalone::Runtime,
+    runtime: &wasmstandalone_runtime::Runtime,
 ) -> Result<ExecutableCode, String> {
     debug_assert!(
         trans_result.start_index.is_none() ||
@@ -149,7 +157,7 @@ pub fn execute(exec: &ExecutableCode) -> Result<(), String> {
 fn relocate(
     functions_metatada: &[FunctionMetaData],
     functions_code: &mut Vec<Vec<u8>>,
-    runtime: &standalone::Runtime,
+    runtime: &wasmstandalone_runtime::Runtime,
 ) {
     // The relocations are relative to the relocation's address plus four bytes
     for (func_index, function_in_memory) in functions_metatada.iter().enumerate() {

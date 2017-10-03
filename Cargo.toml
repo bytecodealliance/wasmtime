@@ -1,5 +1,5 @@
 [package]
-name = "wasmstandalone-tools"
+name = "wasmstandalone_tools"
 authors = ["The Cretonne Project Developers"]
 version = "0.0.0"
 description = "Command-line interface for the wasmstandalone crate"
@@ -22,8 +22,9 @@ cretonne-frontend = { git = "https://github.com/stoklund/cretonne.git" }
 cretonne-reader = { git = "https://github.com/stoklund/cretonne.git" }
 cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
 cretonne-native = { git = "https://github.com/stoklund/cretonne.git" }
-wasmstandalone = { path = "lib/wasmstandalone" }
-wasm2obj = { path = "lib/wasm2obj" }
+wasmstandalone_runtime = { path = "lib/runtime" }
+wasmstandalone_execute = { path = "lib/execute" }
+wasmstandalone_obj = { path = "lib/obj" }
 wasmparser = "0.11.2"
 wasmtext = { git = "https://github.com/yurydelendik/wasmtext" }
 filecheck = "0.0.1"

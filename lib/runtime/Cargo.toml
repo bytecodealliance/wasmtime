@@ -1,11 +1,12 @@
 [package]
-name = "wasm2obj"
+name = "wasmstandalone_runtime"
 version = "0.0.0"
 authors = ["The Cretonne Project Developers"]
 publish = false
+description = "Standalone runtime support for WebAsssembly code in Cretonne"
+repository = "https://github.com/sunfishcode/wasmstandalone"
+license = "Apache-2.0"
 
 [dependencies]
 cretonne = { git = "https://github.com/stoklund/cretonne.git" }
 cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
-wasmstandalone = { path = "../wasmstandalone" }
-faerie = { git = "https://github.com/m4b/faerie" }
