@@ -8,7 +8,6 @@ use std::fs::File;
 use std::error::Error;
 use std::io;
 use std::str;
-use std::io::BufReader;
 use std::io::prelude::*;
 use std::process::Command;
 use std::fs;
@@ -43,9 +42,8 @@ fn return_at_end() {
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
     let mut buf: Vec<u8> = Vec::new();
-    let file = File::open(path)?;
-    let mut buf_reader = BufReader::new(file);
-    buf_reader.read_to_end(&mut buf)?;
+    let mut file = File::open(path)?;
+    file.read_to_end(&mut buf)?;
     Ok(buf)
 }
 
