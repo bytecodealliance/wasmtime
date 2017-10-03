@@ -6,7 +6,6 @@ publish = false
 
 [dependencies]
 cretonne = { git = "https://github.com/stoklund/cretonne.git" }
-cretonne-frontend = { git = "https://github.com/stoklund/cretonne.git" }
 cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
 wasmstandalone = { path = "../wasmstandalone" }
 faerie = { git = "https://github.com/m4b/faerie" }
