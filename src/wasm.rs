@@ -11,7 +11,6 @@ use cretonne::settings::FlagsOrIsa;
 use std::fs::File;
 use std::error::Error;
 use std::io;
-use std::io::prelude::*;
 use std::path::Path;
 use std::process::Command;
 use tempdir::TempDir;
@@ -78,41 +77,27 @@ fn handle_module(
     terminal.fg(term::color::MAGENTA).unwrap();
     vprint!(flag_verbose, "Translating... ");
     terminal.reset().unwrap();
-    let data = match path.extension() {
-        None => {
-            return Err(String::from("the file extension is not wasm or wat"));
-        }
-        Some(ext) => {
-            match ext.to_str() {
-                Some("wasm") => {
-                    read_to_end(path.clone()).map_err(|err| {
-                        String::from(err.description())
-                    })?
-                }
-                Some("wat") => {
-                    let tmp_dir = TempDir::new("cretonne-wasm").unwrap();
-                    let file_path = tmp_dir.path().join("module.wasm");
-                    File::create(file_path.clone()).unwrap();
-                    Command::new("wat2wasm")
-                        .arg(path.clone())
-                        .arg("-o")
-                        .arg(file_path.to_str().unwrap())
-                        .output()
-                        .or_else(|e| if let io::ErrorKind::NotFound = e.kind() {
-                            return Err(String::from("wat2wasm not found"));
-                        } else {
-                            return Err(String::from(e.description()));
-                        })?;
-                    read_to_end(file_path).map_err(
-                        |err| String::from(err.description()),
-                    )?
-                }
-                None | Some(&_) => {
-                    return Err(String::from("the file extension is not wasm or wat"));
-                }
-            }
-        }
-    };
+    let mut data = read_to_end(path.clone()).map_err(|err| {
+        String::from(err.description())
+    })?;
+    if !data.starts_with(&[b'\0', b'a', b's', b'm']) {
+        let tmp_dir = TempDir::new("cretonne-wasm").unwrap();
+        let file_path = tmp_dir.path().join("module.wasm");
+        File::create(file_path.clone()).unwrap();
+        Command::new("wat2wasm")
+            .arg(path.clone())
+            .arg("-o")
+            .arg(file_path.to_str().unwrap())
+            .output()
+            .or_else(|e| if let io::ErrorKind::NotFound = e.kind() {
+                return Err(String::from("wat2wasm not found"));
+            } else {
+                return Err(String::from(e.description()));
+            })?;
+        data = read_to_end(file_path).map_err(
+            |err| String::from(err.description()),
+        )?;
+    }
     let mut dummy_runtime = DummyRuntime::with_flags(fisa.flags.clone());
     let translation = {
         let runtime: &mut WasmRuntime = &mut dummy_runtime;
