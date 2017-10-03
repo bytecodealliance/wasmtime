@@ -45,8 +45,8 @@ impl RelocSink for StandaloneRelocSink {
 }
 
 impl StandaloneRelocSink {
-    fn new() -> StandaloneRelocSink {
-        StandaloneRelocSink {
+    fn new() -> Self {
+        Self {
             ebbs: HashMap::new(),
             funcs: HashMap::new(),
             jts: HashMap::new(),
