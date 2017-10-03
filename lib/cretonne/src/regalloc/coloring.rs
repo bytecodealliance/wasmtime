@@ -730,7 +730,7 @@ impl<'a> Context<'a> {
     ///
     /// The solver needs to be reminded of the available registers before any moves are inserted.
     fn shuffle_inputs(&mut self, regs: &mut AllocatableSet) {
-        self.solver.schedule_moves(regs);
+        self.solver.schedule_moves(regs, &self.reginfo);
 
         for m in self.solver.moves() {
             self.divert.regmove(m.value, m.from, m.to);

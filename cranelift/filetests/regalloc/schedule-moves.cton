@@ -1,0 +1,19 @@
+test compile
+set is_64bit=1
+isa intel haswell
+
+function %pr165() native {
+ebb0:
+    v0 = iconst.i64 0x0102_0304_f1f2_f3f4
+    v1 = iconst.i64 0x1102_0304_f1f2_f3f4
+    v2 = iconst.i64 0x2102_0304_f1f2_f3f4
+    v20 = ishl v1, v0
+    v21 = ishl v2, v0
+    v22 = sshr v1, v0
+    v23 = sshr v2, v0
+    v24 = ushr v1, v0
+    v25 = ushr v2, v0
+    istore8 v0, v1+0x2710
+    istore8 v1, v0+0x2710
+    return
+}
