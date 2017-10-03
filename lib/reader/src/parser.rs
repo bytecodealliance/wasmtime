@@ -807,6 +807,11 @@ impl<'a> Parser<'a> {
         while self.token().is_some() {
             list.push(self.parse_function(unique_isa)?);
         }
+        if let Some(err) = self.lex_error {
+            return match err {
+                lexer::Error::InvalidChar => err!(self.loc, "invalid character"),
+            };
+        }
         Ok(list)
     }
 
