@@ -139,8 +139,7 @@ fn handle_module(
                             return Err(String::from("wat2wasm not found"));
                         } else {
                             return Err(String::from(e.description()));
-                        })
-                        .unwrap();
+                        })?;
                     read_wasm_file(file_path).map_err(|err| {
                         String::from(err.description())
                     })?
