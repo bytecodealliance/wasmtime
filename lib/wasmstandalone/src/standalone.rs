@@ -187,21 +187,18 @@ impl FuncEnvironment for StandaloneRuntime {
             self.the_heap.unwrap(),
             "multiple heaps not supported yet"
         );
-        let grow_mem_func = match self.has_grow_memory {
-            Some(grow_mem_func) => grow_mem_func,
-            None => {
-                let sig_ref = pos.func.import_signature(Signature {
-                    call_conv: CallConv::Native,
-                    argument_bytes: None,
-                    argument_types: vec![ArgumentType::new(I32)],
-                    return_types: vec![ArgumentType::new(I32)],
-                });
-                pos.func.import_function(ExtFuncData {
-                    name: FunctionName::new("grow_memory"),
-                    signature: sig_ref,
-                })
-            }
-        };
+        let grow_mem_func = self.has_grow_memory.unwrap_or_else(|| {
+            let sig_ref = pos.func.import_signature(Signature {
+                call_conv: CallConv::Native,
+                argument_bytes: None,
+                argument_types: vec![ArgumentType::new(I32)],
+                return_types: vec![ArgumentType::new(I32)],
+            });
+            pos.func.import_function(ExtFuncData {
+                name: FunctionName::new("grow_memory"),
+                signature: sig_ref,
+            })
+        });
         self.has_grow_memory = Some(grow_mem_func);
         let call_inst = pos.ins().call(grow_mem_func, &[val]);
         *pos.func.dfg.inst_results(call_inst).first().unwrap()
@@ -220,21 +217,18 @@ impl FuncEnvironment for StandaloneRuntime {
             self.the_heap.unwrap(),
             "multiple heaps not supported yet"
         );
-        let cur_mem_func = match self.has_current_memory {
-            Some(cur_mem_func) => cur_mem_func,
-            None => {
-                let sig_ref = pos.func.import_signature(Signature {
-                    call_conv: CallConv::Native,
-                    argument_bytes: None,
-                    argument_types: Vec::new(),
-                    return_types: vec![ArgumentType::new(I32)],
-                });
-                pos.func.import_function(ExtFuncData {
-                    name: FunctionName::new("current_memory"),
-                    signature: sig_ref,
-                })
-            }
-        };
+        let cur_mem_func = self.has_current_memory.unwrap_or_else(|| {
+            let sig_ref = pos.func.import_signature(Signature {
+                call_conv: CallConv::Native,
+                argument_bytes: None,
+                argument_types: Vec::new(),
+                return_types: vec![ArgumentType::new(I32)],
+            });
+            pos.func.import_function(ExtFuncData {
+                name: FunctionName::new("current_memory"),
+                signature: sig_ref,
+            })
+        });
         self.has_current_memory = Some(cur_mem_func);
         let call_inst = pos.ins().call(cur_mem_func, &[]);
         *pos.func.dfg.inst_results(call_inst).first().unwrap()
