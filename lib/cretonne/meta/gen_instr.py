@@ -572,7 +572,7 @@ def gen_inst_builder(inst, fmt):
         if inst.is_polymorphic and not inst.use_typevar_operand:
             # This was an explicit method argument.
             args.append(inst.ctrl_typevar.name)
-        elif len(inst.value_results) == 0 or not inst.is_polymorphic:
+        elif not inst.is_polymorphic:
             # No controlling type variable needed.
             args.append('types::VOID')
         else:
