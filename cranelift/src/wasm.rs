@@ -4,7 +4,7 @@
 //! IL. Can also executes the `start` function of the module by laying out the memories, globals
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
-use cton_wasm::{translate_module, DummyRuntime, WasmRuntime};
+use cton_wasm::{translate_module, DummyRuntime};
 use std::path::PathBuf;
 use cretonne::Context;
 use cretonne::settings::FlagsOrIsa;
@@ -99,10 +99,7 @@ fn handle_module(
         )?;
     }
     let mut dummy_runtime = DummyRuntime::with_flags(fisa.flags.clone());
-    let translation = {
-        let runtime: &mut WasmRuntime = &mut dummy_runtime;
-        translate_module(&data, runtime)?
-    };
+    let translation = translate_module(&data, &mut dummy_runtime)?;
     terminal.fg(term::color::GREEN).unwrap();
     vprintln!(flag_verbose, "ok");
     terminal.reset().unwrap();
