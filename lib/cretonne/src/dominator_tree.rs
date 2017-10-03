@@ -149,7 +149,10 @@ impl DominatorTree {
         // Run a finger up the dominator tree from b until we see a.
         // Do nothing if b is unreachable.
         while rpo_a < self.nodes[ebb_b].rpo_number {
-            let idom = self.idom(ebb_b).expect("Shouldn't meet unreachable here.");
+            let idom = match self.idom(ebb_b) {
+                Some(idom) => idom,
+                None => return None, // a is unreachable, so we climbed past the entry
+            };
             ebb_b = layout.inst_ebb(idom).expect("Dominator got removed.");
             inst_b = Some(idom);
         }
@@ -441,6 +444,35 @@ mod test {
         let dtree = DominatorTree::with_function(&func, &cfg);
         assert_eq!(0, dtree.nodes.keys().count());
         assert_eq!(dtree.cfg_postorder(), &[]);
+    }
+
+    #[test]
+    fn unreachable_node() {
+        let mut func = Function::new();
+        let ebb0 = func.dfg.make_ebb();
+        let v0 = func.dfg.append_ebb_arg(ebb0, types::I32);
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
+
+        let mut cur = FuncCursor::new(&mut func);
+
+        cur.insert_ebb(ebb0);
+        cur.ins().brnz(v0, ebb2, &[]);
+        cur.ins().trap(TrapCode::User(0));
+
+        cur.insert_ebb(ebb1);
+        let v1 = cur.ins().iconst(I32, 1);
+        let v2 = cur.ins().iadd(v0, v1);
+        cur.ins().jump(ebb0, &[v2]);
+
+        cur.insert_ebb(ebb2);
+        cur.ins().return_(&[v0]);
+
+        let cfg = ControlFlowGraph::with_function(cur.func);
+        let dt = DominatorTree::with_function(cur.func, &cfg);
+        let v2_def = cur.func.dfg.value_def(v2).unwrap_inst();
+        assert!(!dt.dominates(v2_def, ebb0, &cur.func.layout));
+        assert!(!dt.dominates(ebb0, v2_def, &cur.func.layout));
     }
 
     #[test]
