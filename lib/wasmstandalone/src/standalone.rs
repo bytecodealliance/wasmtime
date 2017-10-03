@@ -50,7 +50,7 @@ const PAGE_SIZE: usize = 65536;
 
 /// Object containing the standalone runtime information. To be passed after creation as argument
 /// to `cton_wasm::translatemodule`.
-pub struct StandaloneRuntime {
+pub struct Runtime {
     /// Compilation setting flags.
     flags: settings::Flags,
 
@@ -78,7 +78,7 @@ pub struct StandaloneRuntime {
     the_heap: PackedOption<ir::Heap>,
 }
 
-impl StandaloneRuntime {
+impl Runtime {
     /// Allocates the runtime data structures with default flags.
     pub fn default() -> Self {
         Self::with_flags(settings::Flags::new(&settings::builder()))
@@ -106,7 +106,7 @@ impl StandaloneRuntime {
     }
 }
 
-impl FuncEnvironment for StandaloneRuntime {
+impl FuncEnvironment for Runtime {
     fn flags(&self) -> &settings::Flags {
         &self.flags
     }
@@ -239,7 +239,7 @@ impl FuncEnvironment for StandaloneRuntime {
 /// `cton_wasm::translatemodule` because it
 /// tells how to translate runtime-dependent wasm instructions. These functions should not be
 /// called by the user.
-impl WasmRuntime for StandaloneRuntime {
+impl WasmRuntime for Runtime {
     fn declare_signature(&mut self, sig: &ir::Signature) {
         self.signatures.push(sig.clone());
     }
@@ -390,7 +390,7 @@ impl WasmRuntime for StandaloneRuntime {
 }
 
 /// Convenience functions for the user to be called after execution for debug purposes.
-impl StandaloneRuntime {
+impl Runtime {
     /// Returns a slice of the contents of allocated linear memory.
     pub fn inspect_memory(&self, memory_index: usize, address: usize, len: usize) -> &[u8] {
         &self.memories

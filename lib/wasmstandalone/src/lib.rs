@@ -13,4 +13,4 @@ mod execution;
 mod standalone;
 
 pub use execution::{compile_module, execute, ExecutableCode};
-pub use standalone::StandaloneRuntime;
+pub use standalone::Runtime;

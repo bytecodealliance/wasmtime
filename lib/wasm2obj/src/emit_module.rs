@@ -12,7 +12,7 @@ use cton_wasm::TranslationResult;
 use std::collections::HashMap;
 use std::fmt::Write;
 use faerie::Artifact;
-use wasmstandalone::StandaloneRuntime;
+use wasmstandalone;
 
 type RelocRef = u16;
 
@@ -51,7 +51,7 @@ pub fn emit_module(
     trans_result: &TranslationResult,
     obj: &mut Artifact,
     isa: &TargetIsa,
-    runtime: &StandaloneRuntime,
+    runtime: &wasmstandalone::Runtime,
 ) -> Result<(), String> {
     debug_assert!(
         trans_result.start_index.is_none() ||

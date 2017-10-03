@@ -15,7 +15,7 @@ use region::protect;
 use std::collections::HashMap;
 use std::ptr::write_unaligned;
 use std::fmt::Write;
-use standalone::StandaloneRuntime;
+use standalone;
 
 type RelocRef = u16;
 
@@ -60,11 +60,11 @@ pub struct ExecutableCode {
     start_index: FunctionIndex,
 }
 
-/// Executes a module that has been translated with the `StandaloneRuntime` runtime implementation.
+/// Executes a module that has been translated with the `standalone::Runtime` runtime implementation.
 pub fn compile_module(
     trans_result: &TranslationResult,
     isa: &TargetIsa,
-    runtime: &StandaloneRuntime,
+    runtime: &standalone::Runtime,
 ) -> Result<ExecutableCode, String> {
     debug_assert!(
         trans_result.start_index.is_none() ||
@@ -149,7 +149,7 @@ pub fn execute(exec: &ExecutableCode) -> Result<(), String> {
 fn relocate(
     functions_metatada: &[FunctionMetaData],
     functions_code: &mut Vec<Vec<u8>>,
-    runtime: &StandaloneRuntime,
+    runtime: &standalone::Runtime,
 ) {
     // The relocations are relative to the relocation's address plus four bytes
     for (func_index, function_in_memory) in functions_metatada.iter().enumerate() {

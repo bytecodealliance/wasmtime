@@ -91,7 +91,7 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     });
     let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
 
-    let mut runtime = wasmstandalone::StandaloneRuntime::with_flags(isa.flags().clone());
+    let mut runtime = wasmstandalone::Runtime::with_flags(isa.flags().clone());
 
     let translation = {
         match translate_module(&data, &mut runtime) {
