@@ -10,6 +10,7 @@
 use binemit::CodeOffset;
 use isa::{RegClass, RegUnit};
 use ir::{Function, ValueLoc, Inst};
+use regalloc::RegDiversions;
 
 /// Register constraint for a single value operand or instruction result.
 pub struct OperandConstraint {
@@ -109,9 +110,9 @@ pub struct RecipeConstraints {
 
 impl RecipeConstraints {
     /// Check that these constraints are satisfied by the operands on `inst`.
-    pub fn satisfied(&self, inst: Inst, func: &Function) -> bool {
+    pub fn satisfied(&self, inst: Inst, divert: &RegDiversions, func: &Function) -> bool {
         for (&arg, constraint) in func.dfg.inst_args(inst).iter().zip(self.ins) {
-            let loc = func.locations[arg];
+            let loc = divert.get(arg, &func.locations);
 
             if let ConstraintKind::Tied(out_index) = constraint.kind {
                 let out_val = func.dfg.inst_results(inst)[out_index as usize];
@@ -127,7 +128,7 @@ impl RecipeConstraints {
         }
 
         for (&arg, constraint) in func.dfg.inst_results(inst).iter().zip(self.outs) {
-            let loc = func.locations[arg];
+            let loc = divert.get(arg, &func.locations);
             if !constraint.satisfied(loc) {
                 return false;
             }

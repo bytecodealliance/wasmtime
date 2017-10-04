@@ -8,6 +8,7 @@
 //! EBB.
 
 use ir::{Value, ValueLoc, ValueLocations, StackSlot};
+use ir::{InstructionData, Opcode};
 use isa::{RegUnit, RegInfo};
 use std::fmt;
 
@@ -116,6 +117,34 @@ impl RegDiversions {
     /// Record a stack -> register move.
     pub fn regfill(&mut self, value: Value, from: StackSlot, to: RegUnit) {
         self.divert(value, ValueLoc::Stack(from), ValueLoc::Reg(to));
+    }
+
+    /// Apply the effect of `inst`.
+    ///
+    /// If `inst` is a `regmove`, `regfill`, or `regspill` instruction, update the diversions to
+    /// match.
+    pub fn apply(&mut self, inst: &InstructionData) {
+        match *inst {
+            InstructionData::RegMove {
+                opcode: Opcode::Regmove,
+                arg,
+                src,
+                dst,
+            } => self.regmove(arg, src, dst),
+            InstructionData::RegSpill {
+                opcode: Opcode::Regspill,
+                arg,
+                src,
+                dst,
+            } => self.regspill(arg, src, dst),
+            InstructionData::RegFill {
+                opcode: Opcode::Regfill,
+                arg,
+                src,
+                dst,
+            } => self.regfill(arg, src, dst),
+            _ => {}
+        }
     }
 
     /// Drop any recorded move for `value`.
