@@ -95,7 +95,7 @@ impl Affinity {
                 {
                     // If the register classes don't overlap, `intersect` returns `None`, and we
                     // just keep our previous affinity.
-                    if let Some(subclass) = constraint.regclass.intersect(reg_info.rc(rc)) {
+                    if let Some(subclass) = constraint.regclass.intersect_index(reg_info.rc(rc)) {
                         // This constraint shrinks our preferred register class.
                         *self = Affinity::Reg(subclass);
                     }

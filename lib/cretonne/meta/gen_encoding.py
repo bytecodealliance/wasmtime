@@ -790,22 +790,22 @@ def emit_operand_constraints(
                         fmt.format('kind: ConstraintKind::Tied({}),', tied[n])
                     else:
                         fmt.line('kind: ConstraintKind::Reg,')
-                    fmt.format('regclass: {},', cons)
+                    fmt.format('regclass: &{}_DATA,', cons)
                 elif isinstance(cons, Register):
                     assert n not in tied, "Can't tie fixed register operand"
                     fmt.format(
                             'kind: ConstraintKind::FixedReg({}),', cons.unit)
-                    fmt.format('regclass: {},', cons.regclass)
+                    fmt.format('regclass: &{}_DATA,', cons.regclass)
                 elif isinstance(cons, int):
                     # This is a tied output constraint. It should never happen
                     # for input constraints.
                     assert cons == tied[n], "Invalid tied constraint"
                     fmt.format('kind: ConstraintKind::Tied({}),', cons)
-                    fmt.format('regclass: {},', recipe.ins[cons])
+                    fmt.format('regclass: &{}_DATA,', recipe.ins[cons])
                 elif isinstance(cons, Stack):
                     assert n not in tied, "Can't tie stack operand"
                     fmt.line('kind: ConstraintKind::Stack,')
-                    fmt.format('regclass: {},', cons.regclass)
+                    fmt.format('regclass: &{}_DATA,', cons.regclass)
                 else:
                     raise AssertionError(
                             'Unsupported constraint {}'.format(cons))

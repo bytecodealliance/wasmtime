@@ -145,14 +145,17 @@ pub struct RegClassData {
     /// Mask of register units in the class. If `width > 1`, the mask only has a bit set for the
     /// first register unit in each allocatable register.
     pub mask: RegUnitMask,
+
+    /// The global `RegInfo` instance containing that this register class.
+    pub info: &'static RegInfo,
 }
 
 impl RegClassData {
-    /// Get the register class corresponding to the intersection of `self` and `other`.
+    /// Get the register class index corresponding to the intersection of `self` and `other`.
     ///
     /// This register class is guaranteed to exist if the register classes overlap. If the register
     /// classes don't overlap, returns `None`.
-    pub fn intersect(&self, other: RegClass) -> Option<RegClassIndex> {
+    pub fn intersect_index(&self, other: RegClass) -> Option<RegClassIndex> {
         // Compute the set of common subclasses.
         let mask = self.subclasses & other.subclasses;
 
@@ -166,10 +169,20 @@ impl RegClassData {
         }
     }
 
+    /// Get the intersection of `self` and `other`.
+    pub fn intersect(&self, other: RegClass) -> Option<RegClass> {
+        self.intersect_index(other).map(|rci| self.info.rc(rci))
+    }
+
     /// Returns true if `other` is a subclass of this register class.
     /// A register class is considered to be a subclass of itself.
     pub fn has_subclass<RCI: Into<RegClassIndex>>(&self, other: RCI) -> bool {
         self.subclasses & (1 << other.into().0) != 0
+    }
+
+    /// Get the top-level register class containing this class.
+    pub fn toprc(&self) -> RegClass {
+        self.info.rc(RegClassIndex(self.toprc))
     }
 
     /// Get a specific register unit in this class.
@@ -246,7 +259,7 @@ pub struct RegInfo {
     pub banks: &'static [RegBank],
 
     /// All register classes ordered topologically so a sub-class always follows its parent.
-    pub classes: &'static [RegClassData],
+    pub classes: &'static [RegClass],
 }
 
 impl RegInfo {
@@ -274,12 +287,7 @@ impl RegInfo {
 
     /// Get the register class corresponding to `idx`.
     pub fn rc(&self, idx: RegClassIndex) -> RegClass {
-        &self.classes[idx.index()]
-    }
-
-    /// Get the top-level register class containing `rc`.
-    pub fn toprc(&self, rc: RegClass) -> RegClass {
-        &self.classes[rc.toprc as usize]
+        self.classes[idx.index()]
     }
 }
 

@@ -198,7 +198,9 @@ mod tests {
         first: 28,
         subclasses: 0,
         mask: [0xf0000000, 0x0000000f, 0],
+        info: &INFO,
     };
+
     const DPR: RegClass = &RegClassData {
         name: "DPR",
         index: 0,
@@ -208,6 +210,12 @@ mod tests {
         first: 28,
         subclasses: 0,
         mask: [0x50000000, 0x0000000a, 0],
+        info: &INFO,
+    };
+
+    const INFO: RegInfo = RegInfo {
+        banks: &[],
+        classes: &[],
     };
 
     #[test]
