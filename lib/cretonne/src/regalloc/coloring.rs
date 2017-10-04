@@ -547,7 +547,14 @@ impl<'a> Context<'a> {
             if pred(lr, &self.cur.func) {
                 if let Affinity::Reg(rci) = lr.affinity {
                     let rc = self.reginfo.rc(rci);
-                    self.solver.reassign_in(rdiv.value, rc, rdiv.to, rdiv.from);
+                    // Stack diversions should not be possible here. The only live transiently
+                    // during `shuffle_inputs()`.
+                    self.solver.reassign_in(
+                        rdiv.value,
+                        rc,
+                        rdiv.to.unwrap_reg(),
+                        rdiv.from.unwrap_reg(),
+                    );
                 } else {
                     panic!(
                         "Diverted register {} with {} affinity",
@@ -758,11 +765,11 @@ impl<'a> Context<'a> {
         for lv in kills {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
-                let reg = match self.divert.remove(lv.value) {
-                    Some(r) => r,
-                    None => self.cur.func.locations[lv.value].unwrap_reg(),
+                let loc = match self.divert.remove(lv.value) {
+                    Some(loc) => loc,
+                    None => self.cur.func.locations[lv.value],
                 };
-                regs.free(rc, reg);
+                regs.free(rc, loc.unwrap_reg());
             }
         }
     }
