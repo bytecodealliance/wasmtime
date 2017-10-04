@@ -7,12 +7,11 @@
 //! These register diversions are local to an EBB. No values can be diverted when entering a new
 //! EBB.
 
-use entity::EntityMap;
-use ir::{Value, ValueLoc};
+use ir::{Value, ValueLoc, ValueLocations, StackSlot};
 use isa::{RegUnit, RegInfo};
 use std::fmt;
 
-/// A diversion of a value from its original register location to a new register.
+/// A diversion of a value from its original location to a new register or stack location.
 ///
 /// In IL, a diversion is represented by a `regmove` instruction, possibly a chain of them for the
 /// same value.
@@ -23,20 +22,21 @@ use std::fmt;
 pub struct Diversion {
     /// The value that is diverted.
     pub value: Value,
-    /// The original register value location.
-    pub from: RegUnit,
-    /// The current register value location.
-    pub to: RegUnit,
+    /// The original value location.
+    pub from: ValueLoc,
+    /// The current value location.
+    pub to: ValueLoc,
 }
 
 impl Diversion {
-    /// Make a new register diversion.
-    pub fn new(value: Value, from: RegUnit, to: RegUnit) -> Diversion {
+    /// Make a new diversion.
+    pub fn new(value: Value, from: ValueLoc, to: ValueLoc) -> Diversion {
+        debug_assert!(from.is_assigned() && to.is_assigned());
         Diversion { value, from, to }
     }
 }
 
-/// Keep track of register diversions in an EBB.
+/// Keep track of diversions in an EBB.
 pub struct RegDiversions {
     current: Vec<Diversion>,
 }
@@ -67,17 +67,30 @@ impl RegDiversions {
         self.current.as_slice()
     }
 
-    /// Get the current register location for `value`. Fall back to the assignment map for
-    /// non-diverted values.
-    pub fn reg(&self, value: Value, locations: &EntityMap<Value, ValueLoc>) -> RegUnit {
+    /// Get the current location for `value`. Fall back to the assignment map for non-diverted
+    /// values
+    pub fn get(&self, value: Value, locations: &ValueLocations) -> ValueLoc {
         match self.diversion(value) {
             Some(d) => d.to,
-            None => locations[value].unwrap_reg(),
+            None => locations[value],
         }
     }
 
-    /// Record a register move.
-    pub fn regmove(&mut self, value: Value, from: RegUnit, to: RegUnit) {
+    /// Get the current register location for `value`, or panic if `value` isn't in a register.
+    pub fn reg(&self, value: Value, locations: &ValueLocations) -> RegUnit {
+        self.get(value, locations).unwrap_reg()
+    }
+
+    /// Get the current stack location for `value`, or panic if `value` isn't in a stack slot.
+    pub fn stack(&self, value: Value, locations: &ValueLocations) -> StackSlot {
+        self.get(value, locations).unwrap_stack()
+    }
+
+    /// Record any kind of move.
+    ///
+    /// The `from` location must match an existing `to` location, if any.
+    pub fn divert(&mut self, value: Value, from: ValueLoc, to: ValueLoc) {
+        debug_assert!(from.is_assigned() && to.is_assigned());
         if let Some(i) = self.current.iter().position(|d| d.value == value) {
             debug_assert_eq!(self.current[i].to, from, "Bad regmove chain for {}", value);
             if self.current[i].from != to {
@@ -90,10 +103,25 @@ impl RegDiversions {
         }
     }
 
-    /// Drop any recorded register move for `value`.
+    /// Record a register -> register move.
+    pub fn regmove(&mut self, value: Value, from: RegUnit, to: RegUnit) {
+        self.divert(value, ValueLoc::Reg(from), ValueLoc::Reg(to));
+    }
+
+    /// Record a register -> stack move.
+    pub fn regspill(&mut self, value: Value, from: RegUnit, to: StackSlot) {
+        self.divert(value, ValueLoc::Reg(from), ValueLoc::Stack(to));
+    }
+
+    /// Record a stack -> register move.
+    pub fn regfill(&mut self, value: Value, from: StackSlot, to: RegUnit) {
+        self.divert(value, ValueLoc::Stack(from), ValueLoc::Reg(to));
+    }
+
+    /// Drop any recorded move for `value`.
     ///
-    /// Returns the `to` register of the removed diversion.
-    pub fn remove(&mut self, value: Value) -> Option<RegUnit> {
+    /// Returns the `to` location of the removed diversion.
+    pub fn remove(&mut self, value: Value) -> Option<ValueLoc> {
         self.current.iter().position(|d| d.value == value).map(
             |i| {
                 self.current.swap_remove(i).to
@@ -114,18 +142,13 @@ impl<'a> fmt::Display for DisplayDiversions<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{")?;
         for div in self.0.all() {
-            match self.1 {
-                Some(regs) => {
-                    write!(
-                        f,
-                        " {}: {} -> {}",
-                        div.value,
-                        regs.display_regunit(div.from),
-                        regs.display_regunit(div.to)
-                    )?
-                }
-                None => write!(f, " {}: %{} -> %{}", div.value, div.from, div.to)?,
-            }
+            write!(
+                f,
+                " {}: {} -> {}",
+                div.value,
+                div.from.display(self.1),
+                div.to.display(self.1)
+            )?
         }
         write!(f, " }}")
     }
@@ -148,14 +171,14 @@ mod tests {
             divs.diversion(v1),
             Some(&Diversion {
                 value: v1,
-                from: 10,
-                to: 12,
+                from: ValueLoc::Reg(10),
+                to: ValueLoc::Reg(12),
             })
         );
         assert_eq!(divs.diversion(v2), None);
 
         divs.regmove(v1, 12, 11);
-        assert_eq!(divs.diversion(v1).unwrap().to, 11);
+        assert_eq!(divs.diversion(v1).unwrap().to, ValueLoc::Reg(11));
         divs.regmove(v1, 11, 10);
         assert_eq!(divs.diversion(v1), None);
     }
