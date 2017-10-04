@@ -153,6 +153,9 @@ pub trait WasmRuntime: FuncEnvironment {
     /// Declares a function signature to the runtime.
     fn declare_signature(&mut self, sig: &ir::Signature);
 
+    /// Return the signature with the given index.
+    fn get_signature(&self, sig_index: SignatureIndex) -> &ir::Signature;
+
     /// Declares a function import to the runtime.
     fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &[u8], field: &[u8]);
 

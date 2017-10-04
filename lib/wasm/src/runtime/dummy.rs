@@ -123,6 +123,10 @@ impl WasmRuntime for DummyRuntime {
         self.signatures.push(sig.clone());
     }
 
+    fn get_signature(&self, sig_index: SignatureIndex) -> &ir::Signature {
+        &self.signatures[sig_index]
+    }
+
     fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &[u8], field: &[u8]) {
         assert_eq!(
             self.func_types.len(),

@@ -39,7 +39,6 @@ pub fn translate_module(
         }
         ref s => panic!("modules should begin properly: {:?}", s),
     }
-    let mut signatures = None;
     let mut functions: Option<Vec<SignatureIndex>> = None;
     let mut globals = Vec::new();
     let mut exports: Option<HashMap<FunctionIndex, String>> = None;
@@ -50,7 +49,7 @@ pub fn translate_module(
         match *parser.read_with_input(next_input) {
             ParserState::BeginSection { code: SectionCode::Type, .. } => {
                 match parse_function_signatures(&mut parser, runtime) {
-                    Ok(sigs) => signatures = Some(sigs),
+                    Ok(()) => (),
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the type section: {}", s))
                     }
@@ -192,7 +191,6 @@ pub fn translate_module(
     }
     // At this point we've entered the code section
     // First we check that we have all that is necessary to translate a function.
-    let signatures = signatures.unwrap_or_default();
     let functions = match functions {
         None => return Err(String::from("missing a function section")),
         Some(functions) => functions,
@@ -209,7 +207,7 @@ pub fn translate_module(
         runtime.next_function();
         // First we build the Function object with its name and signature
         let mut func = Function::new();
-        func.signature = signatures[functions[function_index]].clone();
+        func.signature = runtime.get_signature(functions[function_index]).clone();
         if let Some(ref exports) = exports {
             if let Some(name) = exports.get(&function_index) {
                 func.name = FunctionName::new(name.clone());
