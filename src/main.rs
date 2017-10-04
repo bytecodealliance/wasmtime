@@ -326,7 +326,6 @@ fn pretty_print_translation(
     let mut terminal = term::stdout().unwrap();
     let mut parser = Parser::new(data);
     let mut parser_writer = Writer::new(writer_wat);
-    let imports_count = runtime.imported_funcs.len();
     match parser.read() {
         s @ &ParserState::BeginWasm { .. } => parser_writer.write(s)?,
         _ => panic!("modules should begin properly"),
@@ -377,11 +376,8 @@ fn pretty_print_translation(
                 };
             }
         }
-        let mut function_string = format!(
-            "  {}",
-            translation.functions[function_index + imports_count]
-                .display(isa)
-        );
+        let mut function_string =
+            format!("  {}", translation.functions[function_index].display(isa));
         function_string.pop();
         let function_str = str::replace(function_string.as_str(), "\n", "\n  ");
         terminal.fg(term::color::CYAN).unwrap();
