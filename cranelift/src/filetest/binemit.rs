@@ -114,6 +114,7 @@ impl SubTest for TestBinEmit {
         let is_compressed = isa.flags().is_compressed();
 
         // Give an encoding to any instruction that doesn't already have one.
+        let mut divert = RegDiversions::new();
         for ebb in func.layout.ebbs() {
             for inst in func.layout.ebb_insts(ebb) {
                 if !func.encodings[inst].is_legal() {
@@ -128,7 +129,7 @@ impl SubTest for TestBinEmit {
                         legal_encodings
                             .filter(|e| {
                                 let recipe_constraints = &encinfo.constraints[e.recipe()];
-                                recipe_constraints.satisfied(inst, &func)
+                                recipe_constraints.satisfied(inst, &divert, &func)
                             })
                             .min_by_key(|&e| encinfo.bytes(e))
                     } else {
@@ -140,6 +141,7 @@ impl SubTest for TestBinEmit {
                         func.encodings[inst] = enc;
                     }
                 }
+                divert.apply(&func.dfg[inst]);
             }
         }
 
@@ -178,8 +180,8 @@ impl SubTest for TestBinEmit {
         }
 
         // Now emit all instructions.
+        divert.clear();
         let mut sink = TextSink::new(isa);
-        let mut divert = RegDiversions::new();
         for ebb in func.layout.ebbs() {
             divert.clear();
             // Correct header offsets should have been computed by `relax_branches()`.
