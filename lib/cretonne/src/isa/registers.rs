@@ -209,6 +209,13 @@ impl fmt::Debug for RegClassData {
     }
 }
 
+/// Within an ISA, register classes are uniquely identified by their index.
+impl PartialEq for RegClassData {
+    fn eq(&self, other: &RegClassData) -> bool {
+        self.index == other.index
+    }
+}
+
 /// A small reference to a register class.
 ///
 /// Use this when storing register classes in compact data structures. The `RegInfo::rc()` method

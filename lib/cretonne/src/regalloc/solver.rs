@@ -104,6 +104,7 @@ use ir::Value;
 use isa::{RegClass, RegUnit};
 use regalloc::allocatable_set::RegSetIter;
 use std::fmt;
+use std::mem;
 use super::AllocatableSet;
 
 /// A variable in the constraint problem.
@@ -196,6 +197,9 @@ impl Variable {
 impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}({}", self.value, self.constraint)?;
+        if let Some(reg) = self.from {
+            write!(f, ", from {}", self.constraint.info.display_regunit(reg))?;
+        }
         if self.is_input {
             write!(f, ", in")?;
         }
@@ -231,22 +235,182 @@ impl SparseMapValue<Value> for Assignment {
 
 impl fmt::Display for Assignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ri = self.rc.info;
         write!(
             f,
-            "{}:{}(%{} -> %{})",
+            "{}:{}({} -> {})",
             self.value,
             self.rc,
-            self.from,
-            self.to
+            ri.display_regunit(self.from),
+            ri.display_regunit(self.to)
         )
     }
 }
 
-#[cfg(test)]
-impl PartialEq for Assignment {
-    fn eq(&self, other: &Assignment) -> bool {
-        self.value == other.value && self.from == other.from && self.to == other.to &&
-            self.rc.index == other.rc.index
+/// A move operation between two registers or between a register and an emergency spill slot.
+#[derive(Clone, PartialEq)]
+pub enum Move {
+    Reg {
+        value: Value,
+        rc: RegClass,
+        from: RegUnit,
+        to: RegUnit,
+    },
+    Spill {
+        value: Value,
+        rc: RegClass,
+        from: RegUnit,
+        to_slot: usize,
+    },
+    Fill {
+        value: Value,
+        rc: RegClass,
+        from_slot: usize,
+        to: RegUnit,
+    },
+}
+
+impl Move {
+    /// Create a register move from an assignment, but not for identity assignments.
+    fn with_assignment(a: &Assignment) -> Option<Move> {
+        if a.from != a.to {
+            Some(Move::Reg {
+                value: a.value,
+                from: a.from,
+                to: a.to,
+                rc: a.rc,
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Get the "from" register and register class, if possible.
+    fn from_reg(&self) -> Option<(RegClass, RegUnit)> {
+        match *self {
+            Move::Reg { rc, from, .. } |
+            Move::Spill { rc, from, .. } => Some((rc, from)),
+            Move::Fill { .. } => None,
+        }
+    }
+
+    /// Get the "to" register and register class, if possible.
+    fn to_reg(&self) -> Option<(RegClass, RegUnit)> {
+        match *self {
+            Move::Reg { rc, to, .. } |
+            Move::Fill { rc, to, .. } => Some((rc, to)),
+            Move::Spill { .. } => None,
+        }
+    }
+
+    /// Replace the "to" register with `new` and return the old value.
+    fn replace_to_reg(&mut self, new: RegUnit) -> RegUnit {
+        mem::replace(
+            match self {
+                &mut Move::Reg { ref mut to, .. } |
+                &mut Move::Fill { ref mut to, .. } => to,
+                &mut Move::Spill { .. } => panic!("No to register in a spill {}", self),
+            },
+            new,
+        )
+    }
+
+    /// Convert this `Reg` move to a spill to `slot` and return the old "to" register.
+    fn change_to_spill(&mut self, slot: usize) -> RegUnit {
+        match self.clone() {
+            Move::Reg {
+                value,
+                rc,
+                from,
+                to,
+            } => {
+                *self = Move::Spill {
+                    value,
+                    rc,
+                    from,
+                    to_slot: slot,
+                };
+                to
+            }
+            _ => panic!("Expected reg move: {}", self),
+        }
+    }
+
+
+    /// Get the value being moved.
+    fn value(&self) -> Value {
+        match *self {
+            Move::Reg { value, .. } |
+            Move::Fill { value, .. } |
+            Move::Spill { value, .. } => value,
+        }
+    }
+
+    /// Get the associated register class.
+    fn rc(&self) -> RegClass {
+        match *self {
+            Move::Reg { rc, .. } |
+            Move::Fill { rc, .. } |
+            Move::Spill { rc, .. } => rc,
+        }
+    }
+}
+
+impl fmt::Display for Move {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Move::Reg {
+                value,
+                from,
+                to,
+                rc,
+            } => {
+                write!(
+                    f,
+                    "{}:{}({} -> {})",
+                    value,
+                    rc,
+                    rc.info.display_regunit(from),
+                    rc.info.display_regunit(to)
+                )
+            }
+            Move::Spill {
+                value,
+                from,
+                to_slot,
+                rc,
+            } => {
+                write!(
+                    f,
+                    "{}:{}({} -> slot {})",
+                    value,
+                    rc,
+                    rc.info.display_regunit(from),
+                    to_slot
+                )
+            }
+            Move::Fill {
+                value,
+                from_slot,
+                to,
+                rc,
+            } => {
+                write!(
+                    f,
+                    "{}:{}(slot {} -> {})",
+                    value,
+                    rc,
+                    from_slot,
+                    rc.info.display_regunit(to)
+                )
+            }
+        }
+    }
+}
+
+impl fmt::Debug for Move {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        (self as &fmt::Display).fmt(f)
     }
 }
 
@@ -317,7 +481,10 @@ pub struct Solver {
     /// List of register moves scheduled to avoid conflicts.
     ///
     /// This is used as working space by the `schedule_moves()` function.
-    moves: Vec<Assignment>,
+    moves: Vec<Move>,
+
+    /// List of pending fill moves. This is only used during `schedule_moves()`.
+    fills: Vec<Move>,
 }
 
 /// Interface for programming the constraints into the solver.
@@ -331,6 +498,7 @@ impl Solver {
             regs_in: AllocatableSet::new(),
             regs_out: AllocatableSet::new(),
             moves: Vec::new(),
+            fills: Vec::new(),
         }
     }
 
@@ -395,11 +563,10 @@ impl Solver {
         // Check for existing entries for this value.
         if self.regs_in.is_avail(constraint, from) {
             dbg!(
-                "add_var({}:{}, from={}/%{}) for existing entry",
+                "add_var({}:{}, from={}) for existing entry",
                 value,
                 constraint,
                 constraint.info.display_regunit(from),
-                from
             );
 
             // There could be an existing variable entry.
@@ -434,11 +601,10 @@ impl Solver {
 
         let new_var = Variable::new_live(value, constraint, from);
         dbg!(
-            "add_var({}:{}, from={}/%{}) new entry: {}",
+            "add_var({}:{}, from={}) new entry: {}",
             value,
             constraint,
             constraint.info.display_regunit(from),
-            from,
             new_var
         );
 
@@ -645,7 +811,7 @@ impl Solver {
         // Collect moves from the chosen solution for all non-define variables.
         for v in &self.vars {
             if let Some(from) = v.from {
-                self.moves.push(Assignment {
+                self.moves.push(Move::Reg {
                     value: v.value,
                     from,
                     to: v.solution,
@@ -656,8 +822,8 @@ impl Solver {
 
         // Convert all of the fixed register assignments into moves, but omit the ones that are
         // already in the right register.
-        self.moves.extend(self.assignments.values().cloned().filter(
-            |v| v.from != v.to,
+        self.moves.extend(self.assignments.values().filter_map(
+            Move::with_assignment,
         ));
 
         dbg!("collect_moves: {}", DisplayList(&self.moves));
@@ -675,33 +841,46 @@ impl Solver {
     /// Returns the number of spills that had to be emitted.
     pub fn schedule_moves(&mut self, regs: &AllocatableSet) -> usize {
         self.collect_moves();
+        assert!(self.fills.is_empty());
 
+        let mut num_spill_slots = 0;
         let mut avail = regs.clone();
         let mut i = 0;
-        while i < self.moves.len() {
+        while i < self.moves.len() + self.fills.len() {
+            // Don't even look at the fills until we've spent all the moves. Deferring these let's
+            // us potentially reuse the claimed registers to resolve multiple cycles.
+            if i >= self.moves.len() {
+                self.moves.append(&mut self.fills);
+            }
+
             // Find the first move that can be executed now.
-            if let Some(j) = self.moves[i..].iter().position(
-                |m| avail.is_avail(m.rc, m.to),
-            )
+            if let Some(j) = self.moves[i..].iter().position(|m| match m.to_reg() {
+                Some((rc, reg)) => avail.is_avail(rc, reg),
+                None => true,
+            })
             {
                 // This move can be executed now.
                 self.moves.swap(i, i + j);
                 let m = &self.moves[i];
-                avail.take(m.rc, m.to);
-                avail.free(m.rc, m.from);
+                if let Some((rc, reg)) = m.to_reg() {
+                    avail.take(rc, reg);
+                }
+                if let Some((rc, reg)) = m.from_reg() {
+                    avail.free(rc, reg);
+                }
                 dbg!("move #{}: {}", i, m);
                 i += 1;
                 continue;
             }
 
-            // When we get here, non of the `moves[i..]` can be executed. This means there are only
-            // cycles remaining. The cycles can be broken in a few ways:
+            // When we get here, none of the `moves[i..]` can be executed. This means there are
+            // only cycles remaining. The cycles can be broken in a few ways:
             //
             // 1. Grab an available register and use it to break a cycle.
             // 2. Move a value temporarily into a stack slot instead of a register.
             // 3. Use swap instructions.
             //
-            // TODO: So far we only implement 1.
+            // TODO: So far we only implement 1 and 2.
 
             // Pick an assignment with the largest possible width. This is more likely to break up
             // a cycle than an assignment with fewer register units. For example, it may be
@@ -713,7 +892,7 @@ impl Solver {
             let j = self.moves[i..]
                 .iter()
                 .enumerate()
-                .min_by_key(|&(_, m)| !m.rc.width)
+                .min_by_key(|&(_, m)| !m.rc().width)
                 .unwrap()
                 .0;
             self.moves.swap(i, i + j);
@@ -721,7 +900,7 @@ impl Solver {
             // Check the top-level register class for an available register. It is an axiom of the
             // register allocator that we can move between all registers in the top-level RC.
             let m = self.moves[i].clone();
-            let toprc = m.rc.toprc();
+            let toprc = m.rc().toprc();
             if let Some(reg) = avail.iter(toprc).next() {
                 dbg!(
                     "breaking cycle at {} with available {} register {}",
@@ -733,31 +912,42 @@ impl Solver {
                 // Alter the move so it is guaranteed to be picked up when we loop. It is important
                 // that this move is scheduled immediately, otherwise we would have multiple moves
                 // of the same value, and they would not be commutable.
-                self.moves[i].to = reg;
+                let old_to_reg = self.moves[i].replace_to_reg(reg);
                 // Append a fixup move so we end up in the right place. This move will be scheduled
                 // later. That's ok because it is the single remaining move of `m.value` after the
                 // next iteration.
-                self.moves.push(Assignment {
-                    value: m.value,
+                self.moves.push(Move::Reg {
+                    value: m.value(),
                     rc: toprc,
                     from: reg,
-                    to: m.to,
+                    to: old_to_reg,
                 });
-            // TODO: What if allocating an extra register is not enough to break a cycle? This
-            // can happen when there are registers of different widths in a cycle. For ARM, we
-            // may have to move two S-registers out of the way before we can resolve a cycle
-            // involving a D-register.
-            } else {
-                panic!("Not enough registers in {} to schedule moves", toprc);
+                // TODO: What if allocating an extra register is not enough to break a cycle? This
+                // can happen when there are registers of different widths in a cycle. For ARM, we
+                // may have to move two S-registers out of the way before we can resolve a cycle
+                // involving a D-register.
+                continue;
             }
+
+            // It was impossible to free up a register in toprc, so use an emergency spill slot as
+            // a last resort.
+            let slot = num_spill_slots;
+            num_spill_slots += 1;
+            dbg!("breaking cycle at {} with slot {}", m, slot);
+            let old_to_reg = self.moves[i].change_to_spill(slot);
+            self.fills.push(Move::Fill {
+                value: m.value(),
+                rc: toprc,
+                from_slot: slot,
+                to: old_to_reg,
+            });
         }
 
-        // Spilling not implemented yet.
-        0
+        num_spill_slots
     }
 
     /// Borrow the scheduled set of register moves that was computed by `schedule_moves()`.
-    pub fn moves(&self) -> &[Assignment] {
+    pub fn moves(&self) -> &[Move] {
         &self.moves
     }
 }
@@ -783,7 +973,7 @@ mod tests {
     use ir::Value;
     use isa::{TargetIsa, RegClass, RegUnit, RegInfo};
     use regalloc::AllocatableSet;
-    use super::{Solver, Assignment};
+    use super::{Solver, Move};
 
     // Make an arm32 `TargetIsa`, if possible.
     fn arm32() -> Option<Box<TargetIsa>> {
@@ -803,12 +993,30 @@ mod tests {
         )
     }
 
-    // Construct a move.
-    fn mov(value: Value, rc: RegClass, from: RegUnit, to: RegUnit) -> Assignment {
-        Assignment {
+    // Construct a register move.
+    fn mov(value: Value, rc: RegClass, from: RegUnit, to: RegUnit) -> Move {
+        Move::Reg {
             value,
             rc,
             from,
+            to,
+        }
+    }
+
+    fn spill(value: Value, rc: RegClass, from: RegUnit, to_slot: usize) -> Move {
+        Move::Spill {
+            value,
+            rc,
+            from,
+            to_slot,
+        }
+    }
+
+    fn fill(value: Value, rc: RegClass, from_slot: usize, to: RegUnit) -> Move {
+        Move::Fill {
+            value,
+            rc,
+            from_slot,
             to,
         }
     }
@@ -922,6 +1130,79 @@ mod tests {
                 mov(v12, s, s1, s3),
                 mov(v11, s, s0, s2),
                 mov(v10, d, d2, d0),
+            ]
+        );
+    }
+
+    #[test]
+    fn emergency_spill() {
+        let isa = arm32().expect("This test requires arm32 support");
+        let reginfo = isa.register_info();
+        let gpr = rc_by_name(&reginfo, "GPR");
+        let r0 = gpr.unit(0);
+        let r1 = gpr.unit(1);
+        let r2 = gpr.unit(2);
+        let r3 = gpr.unit(3);
+        let r4 = gpr.unit(4);
+        let r5 = gpr.unit(5);
+        let mut regs = AllocatableSet::new();
+        let mut solver = Solver::new();
+        let v10 = Value::new(10);
+        let v11 = Value::new(11);
+        let v12 = Value::new(12);
+        let v13 = Value::new(13);
+        let v14 = Value::new(14);
+        let v15 = Value::new(15);
+
+        // Claim r0--r2 and r3--r15 for other values.
+        for i in 0..16 {
+            regs.take(gpr, gpr.unit(i));
+        }
+
+        // Request a permutation cycle.
+        solver.reset(&regs);
+        solver.reassign_in(v10, gpr, r0, r1);
+        solver.reassign_in(v11, gpr, r1, r2);
+        solver.reassign_in(v12, gpr, r2, r0);
+        solver.inputs_done();
+        assert!(solver.quick_solve().is_ok());
+        assert_eq!(solver.schedule_moves(&regs), 1);
+        assert_eq!(
+            solver.moves(),
+            &[
+                spill(v10, gpr, r0, 0),
+                mov(v12, gpr, r2, r0),
+                mov(v11, gpr, r1, r2),
+                fill(v10, gpr, 0, r1),
+            ]
+        );
+
+        // Two cycles should only require a single spill.
+        solver.reset(&regs);
+        // Cycle 1.
+        solver.reassign_in(v10, gpr, r0, r1);
+        solver.reassign_in(v11, gpr, r1, r2);
+        solver.reassign_in(v12, gpr, r2, r0);
+        // Cycle 2.
+        solver.reassign_in(v13, gpr, r3, r4);
+        solver.reassign_in(v14, gpr, r4, r5);
+        solver.reassign_in(v15, gpr, r5, r3);
+
+        solver.inputs_done();
+        assert!(solver.quick_solve().is_ok());
+        // We resolve two cycles with one spill.
+        assert_eq!(solver.schedule_moves(&regs), 1);
+        assert_eq!(
+            solver.moves(),
+            &[
+                spill(v10, gpr, r0, 0),
+                mov(v12, gpr, r2, r0),
+                mov(v11, gpr, r1, r2),
+                mov(v13, gpr, r3, r1), // Use available r1 to break cycle 2.
+                mov(v15, gpr, r5, r3),
+                mov(v14, gpr, r4, r5),
+                mov(v13, gpr, r1, r4),
+                fill(v10, gpr, 0, r1), // Finally complete cycle 1.
             ]
         );
     }

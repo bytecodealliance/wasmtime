@@ -724,11 +724,17 @@ impl<'a> Context<'a> {
     ///
     /// The solver needs to be reminded of the available registers before any moves are inserted.
     fn shuffle_inputs(&mut self, regs: &mut AllocatableSet) {
-        self.solver.schedule_moves(regs);
+        use regalloc::solver::Move::*;
 
+        self.solver.schedule_moves(regs);
         for m in self.solver.moves() {
-            self.divert.regmove(m.value, m.from, m.to);
-            self.cur.ins().regmove(m.value, m.from, m.to);
+            match *m {
+                Reg { value, from, to, .. } => {
+                    self.divert.regmove(value, from, to);
+                    self.cur.ins().regmove(value, from, to);
+                }
+                Spill { .. } | Fill { .. } => unimplemented!(),
+            }
         }
     }
 
