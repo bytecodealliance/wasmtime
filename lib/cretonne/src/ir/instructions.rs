@@ -213,6 +213,18 @@ pub enum InstructionData {
         src: RegUnit,
         dst: RegUnit,
     },
+    RegSpill {
+        opcode: Opcode,
+        arg: Value,
+        src: RegUnit,
+        dst: StackSlot,
+    },
+    RegFill {
+        opcode: Opcode,
+        arg: Value,
+        src: StackSlot,
+        dst: RegUnit,
+    },
     Trap { opcode: Opcode, code: ir::TrapCode },
     CondTrap {
         opcode: Opcode,

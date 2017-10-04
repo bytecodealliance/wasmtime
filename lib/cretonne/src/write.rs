@@ -385,6 +385,22 @@ pub fn write_operands(
                 write!(w, " {}, %{} -> %{}", arg, src, dst)
             }
         }
+        RegSpill { arg, src, dst, .. } => {
+            if let Some(isa) = isa {
+                let regs = isa.register_info();
+                write!(w, " {}, {} -> {}", arg, regs.display_regunit(src), dst)
+            } else {
+                write!(w, " {}, %{} -> {}", arg, src, dst)
+            }
+        }
+        RegFill { arg, src, dst, .. } => {
+            if let Some(isa) = isa {
+                let regs = isa.register_info();
+                write!(w, " {}, {} -> {}", arg, src, regs.display_regunit(dst))
+            } else {
+                write!(w, " {}, {} -> %{}", arg, src, dst)
+            }
+        }
         Trap { code, .. } => write!(w, " {}", code),
         CondTrap { arg, code, .. } => write!(w, " {}, {}", arg, code),
     }

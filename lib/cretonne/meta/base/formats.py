@@ -58,6 +58,10 @@ StackStore = InstructionFormat(VALUE, stack_slot, offset32)
 HeapAddr = InstructionFormat(heap, VALUE, uimm32)
 
 RegMove = InstructionFormat(VALUE, ('src', regunit), ('dst', regunit))
+RegSpill = InstructionFormat(
+        VALUE, ('src', regunit), ('dst', entities.stack_slot))
+RegFill = InstructionFormat(
+        VALUE, ('src', entities.stack_slot), ('dst', regunit))
 
 Trap = InstructionFormat(trapcode)
 CondTrap = InstructionFormat(VALUE, trapcode)

@@ -2223,6 +2223,46 @@ impl<'a> Parser<'a> {
                     dst,
                 }
             }
+            InstructionFormat::RegSpill => {
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected ',' between operands",
+                )?;
+                let src = self.match_regunit(ctx.unique_isa)?;
+                self.match_token(
+                    Token::Arrow,
+                    "expected '->' before destination stack slot",
+                )?;
+                let dst = self.match_ss("expected stack slot number: ss«n»")
+                    .and_then(|num| ctx.get_ss(num, &self.loc))?;
+                InstructionData::RegSpill {
+                    opcode,
+                    arg,
+                    src,
+                    dst,
+                }
+            }
+            InstructionFormat::RegFill => {
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected ',' between operands",
+                )?;
+                let src = self.match_ss("expected stack slot number: ss«n»")
+                    .and_then(|num| ctx.get_ss(num, &self.loc))?;
+                self.match_token(
+                    Token::Arrow,
+                    "expected '->' before destination register units",
+                )?;
+                let dst = self.match_regunit(ctx.unique_isa)?;
+                InstructionData::RegFill {
+                    opcode,
+                    arg,
+                    src,
+                    dst,
+                }
+            }
             InstructionFormat::Trap => {
                 let code = self.match_enum("expected trap code")?;
                 InstructionData::Trap { opcode, code }
