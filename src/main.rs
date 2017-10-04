@@ -363,18 +363,16 @@ fn pretty_print_translation(
             }
             _ => panic!("wrong content in code section"),
         }
-        {
-            loop {
-                match parser.read() {
-                    s @ &ParserState::EndFunctionBody => {
-                        parser_writer.write(s)?;
-                        break;
-                    }
-                    s => {
-                        parser_writer.write(s)?;
-                    }
-                };
-            }
+        loop {
+            match parser.read() {
+                s @ &ParserState::EndFunctionBody => {
+                    parser_writer.write(s)?;
+                    break;
+                }
+                s => {
+                    parser_writer.write(s)?;
+                }
+            };
         }
         let mut function_string =
             format!("  {}", translation.functions[function_index].display(isa));
