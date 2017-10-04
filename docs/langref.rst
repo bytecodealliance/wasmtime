@@ -700,9 +700,12 @@ allocation pass and beyond.
 .. autoinst:: fill
 
 Register values can be temporarily diverted to other registers by the
-:inst:`regmove` instruction.
+:inst:`regmove` instruction, and to and from stack slots by :inst:`regspill`
+and :inst:`regfill`.
 
 .. autoinst:: regmove
+.. autoinst:: regspill
+.. autoinst:: regfill
 
 Vector operations
 -----------------

@@ -514,6 +514,34 @@ regmove = Instruction(
         ins=(x, src, dst),
         other_side_effects=True)
 
+regspill = Instruction(
+        'regspill', r"""
+        Temporarily divert ``x`` from ``src`` to ``SS``.
+
+        This instruction moves the location of a value from a register to a
+        stack slot without creating a new SSA value. It is used by the register
+        allocator to temporarily rearrange register assignments in order to
+        satisfy instruction constraints.
+
+        See also :inst:`regmove`.
+        """,
+        ins=(x, src, SS),
+        other_side_effects=True)
+
+
+regfill = Instruction(
+        'regfill', r"""
+        Temporarily divert ``x`` from ``SS`` to ``dst``.
+
+        This instruction moves the location of a value from a stack slot to a
+        register without creating a new SSA value. It is used by the register
+        allocator to temporarily rearrange register assignments in order to
+        satisfy instruction constraints.
+
+        See also :inst:`regmove`.
+        """,
+        ins=(x, SS, dst),
+        other_side_effects=True)
 #
 # Vector operations
 #

@@ -32,7 +32,7 @@ def gen_recipe(recipe, fmt):
                     for o in recipe.outs)
 
     # Regmove instructions get special treatment.
-    is_regmove = (recipe.format.name == 'RegMove')
+    is_regmove = (recipe.format.name in ('RegMove', 'RegSpill', 'RegFill'))
 
     # First unpack the instruction.
     with fmt.indented(
@@ -111,6 +111,10 @@ def gen_recipe(recipe, fmt):
         # diversion tracker.
         if recipe.format.name == 'RegMove':
             fmt.line('divert.regmove(arg, src, dst);')
+        elif recipe.format.name == 'RegSpill':
+            fmt.line('divert.regspill(arg, src, dst);')
+        elif recipe.format.name == 'RegFill':
+            fmt.line('divert.regfill(arg, src, dst);')
 
         # Call hand-written code. If the recipe contains a code snippet, use
         # that. Otherwise cal a recipe function in the target ISA's binemit

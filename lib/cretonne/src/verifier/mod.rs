@@ -317,6 +317,12 @@ impl<'a> Verifier<'a> {
             HeapAddr { heap, .. } => {
                 self.verify_heap(inst, heap)?;
             }
+            RegSpill { dst, .. } => {
+                self.verify_stack_slot(inst, dst)?;
+            }
+            RegFill { src, .. } => {
+                self.verify_stack_slot(inst, src)?;
+            }
 
             // Exhaustive list so we can't forget to add new formats
             Unary { .. } |
