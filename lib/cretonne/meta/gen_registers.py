@@ -48,7 +48,9 @@ def gen_regclass(rc, fmt):
     """
     Emit a static data definition for a register class.
     """
-    with fmt.indented('RegClassData {', '},'):
+    with fmt.indented(
+            'pub static {}_DATA: RegClassData = RegClassData {{'
+            .format(rc.name), '};'):
         fmt.format('name: "{}",', rc.name)
         fmt.format('index: {},', rc.index)
         fmt.format('width: {},', rc.width)
@@ -58,6 +60,10 @@ def gen_regclass(rc, fmt):
         fmt.format('subclasses: 0x{:x},', rc.subclass_mask())
         mask = ', '.join('0x{:08x}'.format(x) for x in rc.mask())
         fmt.format('mask: [{}],', mask)
+        fmt.line('info: &INFO,')
+    # Also emit a convenient reference for use by hand-written code.
+    fmt.line('#[allow(dead_code)]')
+    fmt.format('pub static {0}: RegClass = &{0}_DATA;', rc.name)
 
 
 def gen_isa(isa, fmt):
@@ -73,22 +79,13 @@ def gen_isa(isa, fmt):
         with fmt.indented('banks: &[', '],'):
             for regbank in isa.regbanks:
                 gen_regbank(regbank, fmt)
-        fmt.line('classes: &CLASSES,')
+        with fmt.indented('classes: &[', '],'):
+            for rc in isa.regclasses:
+                fmt.format('&{}_DATA,', rc.name)
 
     # Register class descriptors.
-    with fmt.indented(
-            'const CLASSES: [RegClassData; {}] = ['
-            .format(len(isa.regclasses)), '];'):
-        for idx, rc in enumerate(isa.regclasses):
-            assert idx == rc.index
-            gen_regclass(rc, fmt)
-
-    # Emit constants referencing the register classes.
     for rc in isa.regclasses:
-        fmt.line('#[allow(dead_code)]')
-        fmt.line(
-                'pub const {}: RegClass = &CLASSES[{}];'
-                .format(rc.name, rc.index))
+        gen_regclass(rc, fmt)
 
     # Emit constants for all the register units.
     fmt.line('#[allow(dead_code, non_camel_case_types)]')

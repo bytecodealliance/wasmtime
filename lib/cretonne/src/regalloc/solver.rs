@@ -101,7 +101,7 @@
 use dbg::DisplayList;
 use entity::{SparseMap, SparseMapValue};
 use ir::Value;
-use isa::{RegInfo, RegClass, RegUnit};
+use isa::{RegClass, RegUnit};
 use regalloc::allocatable_set::RegSetIter;
 use std::fmt;
 use super::AllocatableSet;
@@ -391,20 +391,14 @@ impl Solver {
     ///
     /// It is assumed initially that the value is also live on the output side of the instruction.
     /// This can be changed by calling to `add_kill()`.
-    pub fn add_var(
-        &mut self,
-        value: Value,
-        constraint: RegClass,
-        from: RegUnit,
-        reginfo: &RegInfo,
-    ) {
+    pub fn add_var(&mut self, value: Value, constraint: RegClass, from: RegUnit) {
         // Check for existing entries for this value.
         if self.regs_in.is_avail(constraint, from) {
             dbg!(
                 "add_var({}:{}, from={}/%{}) for existing entry",
                 value,
                 constraint,
-                reginfo.display_regunit(from),
+                constraint.info.display_regunit(from),
                 from
             );
 
@@ -413,8 +407,8 @@ impl Solver {
                 dbg!("-> combining constraint with {}", v);
 
                 // We have an existing variable entry for `value`. Combine the constraints.
-                if let Some(rci) = v.constraint.intersect(constraint) {
-                    v.constraint = reginfo.rc(rci);
+                if let Some(rc) = v.constraint.intersect(constraint) {
+                    v.constraint = rc;
                     return;
                 } else {
                     // The spiller should have made sure the same value is not used with disjoint
@@ -443,7 +437,7 @@ impl Solver {
             "add_var({}:{}, from={}/%{}) new entry: {}",
             value,
             constraint,
-            reginfo.display_regunit(from),
+            constraint.info.display_regunit(from),
             from,
             new_var
         );
@@ -679,7 +673,7 @@ impl Solver {
     /// a register.
     ///
     /// Returns the number of spills that had to be emitted.
-    pub fn schedule_moves(&mut self, regs: &AllocatableSet, reginfo: &RegInfo) -> usize {
+    pub fn schedule_moves(&mut self, regs: &AllocatableSet) -> usize {
         self.collect_moves();
 
         let mut avail = regs.clone();
@@ -727,13 +721,13 @@ impl Solver {
             // Check the top-level register class for an available register. It is an axiom of the
             // register allocator that we can move between all registers in the top-level RC.
             let m = self.moves[i].clone();
-            let toprc = reginfo.toprc(m.rc);
+            let toprc = m.rc.toprc();
             if let Some(reg) = avail.iter(toprc).next() {
                 dbg!(
                     "breaking cycle at {} with available {} register {}",
                     m,
                     toprc,
-                    reginfo.display_regunit(reg)
+                    toprc.info.display_regunit(reg)
                 );
 
                 // Alter the move so it is guaranteed to be picked up when we loop. It is important
@@ -838,7 +832,7 @@ mod tests {
         solver.reassign_in(v10, gpr, r1, r0);
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
-        assert_eq!(solver.schedule_moves(&regs, &reginfo), 0);
+        assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(solver.moves(), &[mov(v10, gpr, r1, r0)]);
 
         // A bit harder: r0, r1 need to go in r1, r2.
@@ -848,7 +842,7 @@ mod tests {
         solver.reassign_in(v11, gpr, r1, r2);
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
-        assert_eq!(solver.schedule_moves(&regs, &reginfo), 0);
+        assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(
             solver.moves(),
             &[mov(v11, gpr, r1, r2), mov(v10, gpr, r0, r1)]
@@ -860,7 +854,7 @@ mod tests {
         solver.reassign_in(v11, gpr, r1, r0);
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
-        assert_eq!(solver.schedule_moves(&regs, &reginfo), 0);
+        assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(
             solver.moves(),
             &[
@@ -899,7 +893,7 @@ mod tests {
         solver.reassign_in(v12, s, s3, s1);
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
-        assert_eq!(solver.schedule_moves(&regs, &reginfo), 0);
+        assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(
             solver.moves(),
             &[
@@ -920,7 +914,7 @@ mod tests {
         solver.reassign_in(v10, d, d1, d0);
         solver.inputs_done();
         assert!(solver.quick_solve().is_ok());
-        assert_eq!(solver.schedule_moves(&regs, &reginfo), 0);
+        assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(
             solver.moves(),
             &[

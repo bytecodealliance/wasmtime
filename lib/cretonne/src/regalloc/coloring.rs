@@ -445,12 +445,7 @@ impl<'a> Context<'a> {
                 ConstraintKind::Reg |
                 ConstraintKind::Tied(_) => {
                     if !op.regclass.contains(cur_reg) {
-                        self.solver.add_var(
-                            value,
-                            op.regclass,
-                            cur_reg,
-                            &self.reginfo,
-                        );
+                        self.solver.add_var(value, op.regclass, cur_reg);
                     }
                 }
                 ConstraintKind::Stack => unreachable!(),
@@ -572,7 +567,7 @@ impl<'a> Context<'a> {
                 let rc = self.reginfo.rc(rci);
                 let reg = self.divert.reg(lv.value, &self.cur.func.locations);
                 if self.solver.is_fixed_input_conflict(rc, reg) {
-                    self.solver.add_var(lv.value, rc, reg, &self.reginfo);
+                    self.solver.add_var(lv.value, rc, reg);
                 }
             }
         }
@@ -638,7 +633,7 @@ impl<'a> Context<'a> {
                         // TODO: Use a looser constraint than the affinity hint. Any allocatable
                         // register in the top-level register class would be OK. Maybe `add_var`
                         // should take both a preferred class and a required constraint class.
-                        self.solver.add_var(lv.value, rc2, reg2, &self.reginfo);
+                        self.solver.add_var(lv.value, rc2, reg2);
                     }
                 }
             }
@@ -712,8 +707,7 @@ impl<'a> Context<'a> {
                     // The new variable gets to roam the whole top-level register class because
                     // it is not actually constrained by the instruction. We just want it out
                     // of the way.
-                    let toprc = self.reginfo.toprc(rc2);
-                    self.solver.add_var(lv.value, toprc, reg2, &self.reginfo);
+                    self.solver.add_var(lv.value, rc2.toprc(), reg2);
                     return true;
                 }
             }
@@ -730,7 +724,7 @@ impl<'a> Context<'a> {
     ///
     /// The solver needs to be reminded of the available registers before any moves are inserted.
     fn shuffle_inputs(&mut self, regs: &mut AllocatableSet) {
-        self.solver.schedule_moves(regs, &self.reginfo);
+        self.solver.schedule_moves(regs);
 
         for m in self.solver.moves() {
             self.divert.regmove(m.value, m.from, m.to);

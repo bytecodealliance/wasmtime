@@ -49,14 +49,14 @@ mod tests {
 
     #[test]
     fn regclasses() {
-        assert_eq!(GPR.intersect(GPR), Some(GPR.into()));
-        assert_eq!(GPR.intersect(ABCD), Some(ABCD.into()));
-        assert_eq!(GPR.intersect(FPR), None);
-        assert_eq!(ABCD.intersect(GPR), Some(ABCD.into()));
-        assert_eq!(ABCD.intersect(ABCD), Some(ABCD.into()));
-        assert_eq!(ABCD.intersect(FPR), None);
-        assert_eq!(FPR.intersect(FPR), Some(FPR.into()));
-        assert_eq!(FPR.intersect(GPR), None);
-        assert_eq!(FPR.intersect(ABCD), None);
+        assert_eq!(GPR.intersect_index(GPR), Some(GPR.into()));
+        assert_eq!(GPR.intersect_index(ABCD), Some(ABCD.into()));
+        assert_eq!(GPR.intersect_index(FPR), None);
+        assert_eq!(ABCD.intersect_index(GPR), Some(ABCD.into()));
+        assert_eq!(ABCD.intersect_index(ABCD), Some(ABCD.into()));
+        assert_eq!(ABCD.intersect_index(FPR), None);
+        assert_eq!(FPR.intersect_index(FPR), Some(FPR.into()));
+        assert_eq!(FPR.intersect_index(GPR), None);
+        assert_eq!(FPR.intersect_index(ABCD), None);
     }
 }
