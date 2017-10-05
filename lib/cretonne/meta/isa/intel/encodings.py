@@ -193,6 +193,7 @@ enc_i32_i64_ld_st(base.store, True, r.stDisp8, 0x89)
 enc_i32_i64_ld_st(base.store, True, r.stDisp32, 0x89)
 
 enc_i32_i64(base.spill, r.spSib32, 0x89)
+enc_i32_i64(base.regspill, r.rsp32, 0x89)
 
 enc_i64(base.istore32.i64.any, r.st, 0x89)
 enc_i64(base.istore32.i64.any, r.stDisp8, 0x89)
@@ -222,6 +223,7 @@ enc_i32_i64_ld_st(base.load, True, r.ldDisp8, 0x8b)
 enc_i32_i64_ld_st(base.load, True, r.ldDisp32, 0x8b)
 
 enc_i32_i64(base.fill, r.fiSib32, 0x8b)
+enc_i32_i64(base.regfill, r.rfi32, 0x8b)
 
 enc_i64(base.uload32.i64, r.ld, 0x8b)
 enc_i64(base.uload32.i64, r.ldDisp8, 0x8b)
@@ -268,10 +270,14 @@ enc_both(base.store.f64.any, r.fstDisp8, 0x66, 0x0f, 0xd6)
 enc_both(base.store.f64.any, r.fstDisp32, 0x66, 0x0f, 0xd6)
 
 enc_both(base.fill.f32, r.ffiSib32, 0x66, 0x0f, 0x6e)
+enc_both(base.regfill.f32, r.frfi32, 0x66, 0x0f, 0x6e)
 enc_both(base.fill.f64, r.ffiSib32, 0xf3, 0x0f, 0x7e)
+enc_both(base.regfill.f64, r.frfi32, 0xf3, 0x0f, 0x7e)
 
 enc_both(base.spill.f32, r.fspSib32, 0x66, 0x0f, 0x7e)
+enc_both(base.regspill.f32, r.frsp32, 0x66, 0x0f, 0x7e)
 enc_both(base.spill.f64, r.fspSib32, 0x66, 0x0f, 0xd6)
+enc_both(base.regspill.f64, r.frsp32, 0x66, 0x0f, 0xd6)
 
 #
 # Function addresses.

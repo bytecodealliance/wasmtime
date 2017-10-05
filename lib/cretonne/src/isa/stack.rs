@@ -24,24 +24,27 @@ pub struct StackRef {
 impl StackRef {
     /// Get a reference to the stack slot `ss` using one of the base pointers in `mask`.
     pub fn masked(ss: StackSlot, mask: StackBaseMask, frame: &StackSlots) -> Option<StackRef> {
-        let size = frame.frame_size.expect(
-            "Stack layout must be computed before referencing stack slots",
-        );
-        // Offsets relative to the caller's stack pointer.
-        let offset = frame[ss].offset;
-
         // Try an SP-relative reference.
         if mask.contains(StackBase::SP) {
-            // Offset where SP is pointing. (All ISAs have stacks growing downwards.)
-            let sp_offset = -(size as StackOffset);
-            return Some(StackRef {
-                base: StackBase::SP,
-                offset: offset - sp_offset,
-            });
+            return Some(StackRef::sp(ss, frame));
         }
 
         // No reference possible with this mask.
         None
+    }
+
+    /// Get a reference to `ss` using the stack pointer as a base.
+    pub fn sp(ss: StackSlot, frame: &StackSlots) -> StackRef {
+        let size = frame.frame_size.expect(
+            "Stack layout must be computed before referencing stack slots",
+        );
+
+        // Offset where SP is pointing. (All ISAs have stacks growing downwards.)
+        let sp_offset = -(size as StackOffset);
+        return StackRef {
+            base: StackBase::SP,
+            offset: frame[ss].offset - sp_offset,
+        };
     }
 }
 
