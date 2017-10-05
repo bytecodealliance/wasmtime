@@ -11,8 +11,9 @@ extern crate cton_wasm;
 use cton_wasm::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, Global, GlobalInit, Table,
                 Memory, WasmRuntime, FuncEnvironment, GlobalValue, SignatureIndex};
 use cretonne::ir::{InstBuilder, FuncRef, ExtFuncData, FunctionName, Signature, ArgumentType,
-                   CallConv};
+                   CallConv, ArgumentPurpose, ArgumentLoc, ArgumentExtension, Function};
 use cretonne::ir::types::*;
+use cretonne::ir::immediates::Offset32;
 use cretonne::cursor::FuncCursor;
 use cretonne::packed_option::PackedOption;
 use cretonne::ir;
@@ -82,6 +83,7 @@ pub struct Runtime {
     pub tables: Vec<TableData>,
     /// WebAssembly linear memories.
     pub memories: Vec<MemoryData>,
+
     instantiated: bool,
 
     has_current_memory: Option<FuncRef>,
@@ -91,8 +93,6 @@ pub struct Runtime {
     pub func_indices: EntityMap<FuncRef, FunctionIndex>,
 
     the_heap: PackedOption<ir::Heap>,
-
-    current_global_offset: usize,
 }
 
 impl Runtime {
@@ -119,8 +119,27 @@ impl Runtime {
             has_grow_memory: None,
             func_indices: EntityMap::new(),
             the_heap: PackedOption::default(),
-            current_global_offset: 0,
         }
+    }
+
+    /// Return the offset from the VmCtx pointer where global `index` is allocated.
+    fn global_offset(index: GlobalIndex) -> usize {
+        // Add one for the hidden heap base global.
+        (index as usize + 1) * 8
+    }
+
+    /// Return the size of the VmCtx area needed to hold all currently declared globals.
+    fn globals_data_size(&self) -> usize {
+        // Add one for the hidden heap base global.
+        (self.globals.info.len() + 1) * 8
+    }
+
+    /// Transform the call argument list in preparation for making a call.
+    fn get_real_call_args(func: &Function, call_args: &[ir::Value]) -> Vec<ir::Value> {
+        let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
+        real_call_args.extend_from_slice(call_args);
+        real_call_args.push(func.special_arg(ArgumentPurpose::VMContext).unwrap());
+        real_call_args
     }
 }
 
@@ -130,9 +149,11 @@ impl FuncEnvironment for Runtime {
     }
 
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
-        // Just create a dummy `vmctx` global.
-        let offset = ((index * 8) as i32 + 8).into();
-        let gv = func.create_global_var(ir::GlobalVarData::VmCtx { offset });
+        let offset = Self::global_offset(index);
+        let offset32 = offset as i32;
+        debug_assert_eq!(offset32 as usize, offset);
+        let gv =
+            func.create_global_var(ir::GlobalVarData::VmCtx { offset: Offset32::new(offset32) });
         GlobalValue::Memory {
             gv,
             ty: self.globals.info[index].global.ty,
@@ -142,8 +163,11 @@ impl FuncEnvironment for Runtime {
     fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
         debug_assert!(self.the_heap.is_none(), "multiple heaps not supported yet");
 
+        let heap_base =
+            func.create_global_var(ir::GlobalVarData::VmCtx { offset: Offset32::new(0) });
+
         let heap = func.create_heap(ir::HeapData {
-            base: ir::HeapBase::ReservedReg,
+            base: ir::HeapBase::GlobalVar(heap_base),
             min_size: 0.into(),
             guard_size: 0x8000_0000.into(),
             style: ir::HeapStyle::Static { bound: 0x1_0000_0000.into() },
@@ -155,15 +179,11 @@ impl FuncEnvironment for Runtime {
     }
 
     fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
-        // A real implementation would probably change the calling convention and add `vmctx` and
-        // signature index arguments.
         func.import_signature(self.signatures[index].clone())
     }
 
     fn make_direct_func(&mut self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef {
         let sigidx = self.func_types[index];
-        // A real implementation would probably add a `vmctx` argument.
-        // And maybe attempt some signature de-duplication.
         let signature = func.import_signature(self.signatures[sigidx].clone());
 
         let name = match self.imported_funcs.get(index) {
@@ -188,7 +208,19 @@ impl FuncEnvironment for Runtime {
         call_args: &[ir::Value],
     ) -> ir::Inst {
         debug_assert_eq!(table_index, 0, "non-default tables not supported yet");
-        pos.ins().call_indirect(sig_ref, callee, call_args)
+        let real_call_args = Self::get_real_call_args(pos.func, call_args);
+        pos.ins().call_indirect(sig_ref, callee, &real_call_args)
+    }
+
+    fn translate_call(
+        &mut self,
+        mut pos: FuncCursor,
+        _callee_index: FunctionIndex,
+        callee: ir::FuncRef,
+        call_args: &[ir::Value],
+    ) -> ir::Inst {
+        let real_call_args = Self::get_real_call_args(pos.func, call_args);
+        pos.ins().call(callee, &real_call_args)
     }
 
     fn translate_grow_memory(
@@ -259,7 +291,19 @@ impl FuncEnvironment for Runtime {
 /// called by the user.
 impl WasmRuntime for Runtime {
     fn declare_signature(&mut self, sig: &ir::Signature) {
-        self.signatures.push(sig.clone());
+        let mut sig = sig.clone();
+        sig.argument_types.push(ArgumentType {
+            value_type: self.native_pointer(),
+            purpose: ArgumentPurpose::VMContext,
+            extension: ArgumentExtension::None,
+            location: ArgumentLoc::Unassigned,
+        });
+        // TODO: Deduplicate signatures.
+        self.signatures.push(sig);
+    }
+
+    fn get_signature(&self, sig_index: SignatureIndex) -> &ir::Signature {
+        &self.signatures[sig_index]
     }
 
     fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &[u8], field: &[u8]) {
@@ -287,11 +331,7 @@ impl WasmRuntime for Runtime {
         self.instantiated = true;
         // At instantiation, we allocate memory for the globals, the memories and the tables
         // First the globals
-        let mut globals_data_size = 0;
-        for globalinfo in &mut self.globals.info {
-            globalinfo.offset = globals_data_size;
-            globals_data_size += globalinfo.global.ty.bytes() as usize;
-        }
+        let globals_data_size = self.globals_data_size();
         self.globals.data.resize(globals_data_size, 0);
         for globalinfo in &self.globals.info {
             match globalinfo.global.initializer {
@@ -353,11 +393,11 @@ impl WasmRuntime for Runtime {
     }
     fn declare_global(&mut self, global: Global) {
         debug_assert!(!self.instantiated);
+        let index = self.globals.info.len() as GlobalIndex;
         self.globals.info.push(GlobalInfo {
             global: global,
-            offset: self.current_global_offset,
+            offset: Self::global_offset(index),
         });
-        self.current_global_offset += global.ty.bytes() as usize;
     }
     fn declare_table(&mut self, table: Table) {
         debug_assert!(!self.instantiated);
