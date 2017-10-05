@@ -166,5 +166,24 @@ fn relax_branch(
         return encinfo.bytes(enc);
     }
 
-    unimplemented!();
+    // Note: On some RISC ISAs, conditional branches have shorter range than unconditional
+    // branches, so one way of extending the range of a conditional branch is to invert its
+    // condition and make it branch over an unconditional jump which has the larger range.
+    //
+    // Splitting the EBB is problematic this late because there may be register diversions in
+    // effect across the conditional branch, and they can't survive the control flow edge to a new
+    // EBB. We have two options for handling that:
+    //
+    // 1. Set a flag on the new EBB that indicates it wants the preserve the register diversions of
+    //    its layout predecessor, or
+    // 2. Use an encoding macro for the branch-over-jump pattern so we don't need to split the EBB.
+    //
+    // It seems that 1. would allow us to share code among RISC ISAs that need this.
+    //
+    // We can't allow register diversions to survive from the layout predecessor because the layout
+    // predecessor could contain kill points for some values that are live in this EBB, and
+    // diversions are not automatically cancelled when the live range of a value ends.
+
+    // This assumes solution 2. above:
+    panic!("No branch in range for {:#x}-{:#x}", offset, dest_offset);
 }

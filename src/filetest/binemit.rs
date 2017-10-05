@@ -116,6 +116,7 @@ impl SubTest for TestBinEmit {
         // Give an encoding to any instruction that doesn't already have one.
         let mut divert = RegDiversions::new();
         for ebb in func.layout.ebbs() {
+            divert.clear();
             for inst in func.layout.ebb_insts(ebb) {
                 if !func.encodings[inst].is_legal() {
                     let mut legal_encodings = isa.legal_encodings(
@@ -180,7 +181,6 @@ impl SubTest for TestBinEmit {
         }
 
         // Now emit all instructions.
-        divert.clear();
         let mut sink = TextSink::new(isa);
         for ebb in func.layout.ebbs() {
             divert.clear();

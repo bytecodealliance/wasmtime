@@ -468,7 +468,7 @@ impl<'a> Context<'a> {
         //
         // Values with a global live range that are not live in to `dest` could appear as branch
         // arguments, so they can't always be un-diverted.
-        self.undivert_regs(|lr, func| lr.livein_local_end(dest, &func.layout).is_some());
+        self.undivert_regs(|lr, func| lr.is_livein(dest, &func.layout));
 
         // Now handle the EBB arguments.
         let br_args = self.cur.func.dfg.inst_variable_args(inst);

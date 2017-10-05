@@ -383,6 +383,13 @@ impl LiveRange {
         })
     }
 
+    /// Is this value live-in to `ebb`?
+    ///
+    /// An EBB argument is not considered to be live in.
+    pub fn is_livein<PO: ProgramOrder>(&self, ebb: Ebb, order: &PO) -> bool {
+        self.livein_local_end(ebb, order).is_some()
+    }
+
     /// Get all the live-in intervals.
     pub fn liveins(&self) -> &[Interval] {
         &self.liveins

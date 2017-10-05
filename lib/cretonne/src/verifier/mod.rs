@@ -72,8 +72,9 @@ use std::collections::BTreeSet;
 use std::cmp::Ordering;
 use iterators::IteratorExtras;
 
-pub use self::liveness::verify_liveness;
 pub use self::cssa::verify_cssa;
+pub use self::liveness::verify_liveness;
+pub use self::locations::verify_locations;
 
 // Create an `Err` variant of `Result<X>` from a location and `format!` arguments.
 macro_rules! err {
@@ -94,6 +95,7 @@ macro_rules! err {
 
 mod cssa;
 mod liveness;
+mod locations;
 
 /// A verifier error.
 #[derive(Debug, PartialEq, Eq)]
