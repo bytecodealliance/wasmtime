@@ -104,10 +104,14 @@ pub fn parse_sets_and_isa(
     let mut words = flag_isa.trim().split_whitespace();
     // Look for `isa foo`.
     if let Some(isa_name) = words.next() {
-        let isa_builder = isa::lookup(isa_name).map_err(|err| match err {
+        let mut isa_builder = isa::lookup(isa_name).map_err(|err| match err {
             isa::LookupError::Unknown => format!("unknown ISA '{}'", isa_name),
             isa::LookupError::Unsupported => format!("support for ISA '{}' not enabled", isa_name),
         })?;
+        // Apply the ISA-specific settings to `isa_builder`.
+        parse_options(words, &mut isa_builder, &Location { line_number: 0 })
+            .map_err(|err| err.to_string())?;
+
         Ok(OwnedFlagsOrIsa::Isa(
             isa_builder.finish(settings::Flags::new(&flag_builder)),
         ))
