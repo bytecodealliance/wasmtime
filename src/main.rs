@@ -40,7 +40,7 @@ use std::io::stdout;
 use std::io::prelude::*;
 use docopt::Docopt;
 use std::path::Path;
-use std::process::Command;
+use std::process::{exit, Command};
 use tempdir::TempDir;
 
 macro_rules! vprintln {
@@ -120,9 +120,10 @@ fn main() {
             Ok(()) => {}
             Err(message) => {
                 terminal.fg(term::color::RED).unwrap();
-                vprintln!(args.flag_verbose, "error");
+                println!("error");
                 terminal.reset().unwrap();
-                vprintln!(args.flag_verbose, "{}", message)
+                println!("{}", message);
+                exit(1);
             }
         }
     }
