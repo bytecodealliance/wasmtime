@@ -363,6 +363,11 @@ ebb0:
     ; asm: movl 1032(%esp), %esi
     [-,%rsi]            v511 = fill v501        ; bin: 8b b4 24 00000408
 
+    ; asm: movl %ecx, 1032(%esp)
+    regspill v1, %rcx -> ss1                    ; bin: 89 8c 24 00000408
+    ; asm: movl 1032(%esp), %ecx
+    regfill v1, ss1 -> %rcx                     ; bin: 8b 8c 24 00000408
+
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 85 c9 74 0e

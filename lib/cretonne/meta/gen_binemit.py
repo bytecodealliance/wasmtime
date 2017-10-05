@@ -8,7 +8,7 @@ import srcgen
 
 try:
     from typing import Sequence, List  # noqa
-    from cdsl.isa import TargetISA, EncRecipe  # noqa
+    from cdsl.isa import TargetISA, EncRecipe, OperandConstraint  # noqa
 except ImportError:
     pass
 
@@ -49,36 +49,17 @@ def gen_recipe(recipe, fmt):
         fmt.line('..')
         fmt.outdented_line('} = func.dfg[inst] {')
 
+        # Pass recipe arguments in this order: inputs, imm_fields, outputs.
+        args = ''
+
         # Normalize to an `args` array.
         if want_args and not is_regmove:
             if iform.has_value_list:
                 fmt.line('let args = args.as_slice(&func.dfg.value_lists);')
             elif nvops == 1:
                 fmt.line('let args = [arg];')
+            args += unwrap_values(recipe.ins, 'in', 'args', fmt)
 
-        # Unwrap interesting input arguments.
-        # Don't bother with fixed registers.
-        args = ''
-        for i, arg in enumerate(recipe.ins):
-            if isinstance(arg, RegClass) and not is_regmove:
-                v = 'in_reg{}'.format(i)
-                args += ', ' + v
-                fmt.line(
-                    'let {} = divert.reg(args[{}], &func.locations);'
-                    .format(v, i))
-            elif isinstance(arg, Stack):
-                v = 'in_stk{}'.format(i)
-                args += ', ' + v
-                with fmt.indented(
-                        'let {} = StackRef::masked('.format(v),
-                        ').unwrap();'):
-                    fmt.format(
-                            'func.locations[args[{}]].unwrap_stack(),',
-                            i)
-                    fmt.format('{},', arg.stack_base_mask())
-                    fmt.line('&func.stack_slots,')
-
-        # Pass arguments in this order: inputs, imm_fields, outputs.
         for f in iform.imm_fields:
             args += ', ' + f.member
 
@@ -88,24 +69,7 @@ def gen_recipe(recipe, fmt):
                 fmt.line('let results = [func.dfg.first_result(inst)];')
             else:
                 fmt.line('let results = func.dfg.inst_results(inst);')
-            for i, res in enumerate(recipe.outs):
-                if isinstance(res, RegClass):
-                    v = 'out_reg{}'.format(i)
-                    args += ', ' + v
-                    fmt.format(
-                        'let {} = func.locations[results[{}]].unwrap_reg();',
-                        v, i)
-                elif isinstance(res, Stack):
-                    v = 'out_stk{}'.format(i)
-                    args += ', ' + v
-                    with fmt.indented(
-                            'let {} = StackRef::masked('.format(v),
-                            ').unwrap();'):
-                        fmt.format(
-                                'func.locations[results[{}]].unwrap_stack(),',
-                                i)
-                        fmt.format('{},', res.stack_base_mask())
-                        fmt.line('&func.stack_slots,')
+            args += unwrap_values(recipe.outs, 'out', 'results', fmt)
 
         # Special handling for regmove instructions. Update the register
         # diversion tracker.
@@ -126,6 +90,36 @@ def gen_recipe(recipe, fmt):
         else:
             fmt.multi_line(recipe.emit)
             fmt.line('return;')
+
+
+def unwrap_values(args, prefix, values, fmt):
+    # type: (Sequence[OperandConstraint], str, str, srcgen.Formatter) -> str  # noqa
+    """
+    Emit code that unwraps values living in registers or stack slots.
+
+    :param args: Input or output constraints.
+    :param prefix: Prefix to be used for the generated local variables.
+    :param values: Name of slice containing the values to be unwrapped.
+    :returns: Comma separated list of the generated variables
+    """
+    varlist = ''
+    for i, cst in enumerate(args):
+        if isinstance(cst, RegClass):
+            v = '{}_reg{}'.format(prefix, i)
+            varlist += ', ' + v
+            fmt.format(
+                    'let {} = divert.reg({}[{}], &func.locations);',
+                    v, values, i)
+        elif isinstance(cst, Stack):
+            v = '{}_stk{}'.format(prefix, i)
+            varlist += ', ' + v
+            with fmt.indented(
+                    'let {} = StackRef::masked('.format(v),
+                    ').unwrap();'):
+                fmt.format('divert.stack({}[{}], &func.locations),', values, i)
+                fmt.format('{},', cst.stack_base_mask())
+                fmt.line('&func.stack_slots,')
+    return varlist
 
 
 def gen_isa(isa, fmt):

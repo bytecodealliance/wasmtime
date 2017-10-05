@@ -185,6 +185,11 @@ ebb0:
     ; asm: movd 1032(%esp), %xmm2
     [-,%xmm2]           v211 = fill v201                        ; bin: 66 0f 6e 94 24 00000408
 
+    ; asm: movd %xmm5, 1032(%rsp)
+    regspill v100, %xmm5 -> ss1                                 ; bin: 66 0f 7e ac 24 00000408
+    ; asm: movd 1032(%rsp), %xmm5
+    regfill v100, ss1 -> %xmm5                                  ; bin: 66 0f 6e ac 24 00000408
+
     ; Comparisons.
     ;
     ; Only `supported_floatccs` are tested here. Others are handled by
@@ -387,6 +392,11 @@ ebb0:
     [-,%xmm5]           v210 = fill v200                        ; bin: f3 0f 7e ac 24 00000408
     ; asm: movq 1032(%esp), %xmm2
     [-,%xmm2]           v211 = fill v201                        ; bin: f3 0f 7e 94 24 00000408
+
+    ; asm: movq %xmm5, 1032(%rsp)
+    regspill v100, %xmm5 -> ss1                                 ; bin: 66 0f d6 ac 24 00000408
+    ; asm: movq 1032(%rsp), %xmm5
+    regfill v100, ss1 -> %xmm5                                  ; bin: f3 0f 7e ac 24 00000408
 
     ; Comparisons.
     ;

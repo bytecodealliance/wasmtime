@@ -459,6 +459,11 @@ ebb0:
     ; asm: movq 1032(%rsp), %r10
     [-,%r10]            v512 = fill v502        ; bin: 4c 8b 94 24 00000408
 
+    ; asm: movq %rcx, 1032(%rsp)
+    regspill v1, %rcx -> ss1                    ; bin: 48 89 8c 24 00000408
+    ; asm: movq 1032(%rsp), %rcx
+    regfill v1, ss1 -> %rcx                     ; bin: 48 8b 8c 24 00000408
+
     ; asm: testq %rcx, %rcx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 48 85 c9 74 1b
@@ -849,6 +854,11 @@ ebb0:
     [-,%rsi]            v511 = fill v501        ; bin: 8b b4 24 00000408
     ; asm: movl 1032(%rsp), %r10d
     [-,%r10]            v512 = fill v502        ; bin: 44 8b 94 24 00000408
+
+    ; asm: movl %ecx, 1032(%rsp)
+    regspill v1, %rcx -> ss1                    ; bin: 89 8c 24 00000408
+    ; asm: movl 1032(%rsp), %ecx
+    regfill v1, ss1 -> %rcx                     ; bin: 8b 8c 24 00000408
 
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1x

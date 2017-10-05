@@ -8,7 +8,8 @@ from cdsl.registers import RegClass
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare, FloatCompare
-from base.formats import RegMove, Ternary, Jump, Branch, FuncAddr
+from base.formats import Ternary, Jump, Branch, FuncAddr
+from base.formats import RegMove, RegSpill, RegFill
 from .registers import GPR, ABCD, FPR, GPR8, FPR8, StackGPR32, StackFPR32
 from .defs import supported_floatccs
 
@@ -570,6 +571,28 @@ fspSib32 = TailRecipe(
         sink.put4(out_stk0.offset as u32);
         ''')
 
+# Regspill using RSP-relative addressing.
+rsp32 = TailRecipe(
+        'rsp32', RegSpill, size=6, ins=GPR, outs=(),
+        emit='''
+        let dst = StackRef::sp(dst, &func.stack_slots);
+        let base = stk_base(dst.base);
+        PUT_OP(bits, rex2(base, src), sink);
+        modrm_sib_disp32(src, sink);
+        sib_noindex(base, sink);
+        sink.put4(dst.offset as u32);
+        ''')
+frsp32 = TailRecipe(
+        'frsp32', RegSpill, size=6, ins=FPR, outs=(),
+        emit='''
+        let dst = StackRef::sp(dst, &func.stack_slots);
+        let base = stk_base(dst.base);
+        PUT_OP(bits, rex2(base, src), sink);
+        modrm_sib_disp32(src, sink);
+        sib_noindex(base, sink);
+        sink.put4(dst.offset as u32);
+        ''')
+
 #
 # Load recipes
 #
@@ -654,6 +677,28 @@ ffiSib32 = TailRecipe(
         modrm_sib_disp32(out_reg0, sink);
         sib_noindex(base, sink);
         sink.put4(in_stk0.offset as u32);
+        ''')
+
+# Regfill with RSP-relative 32-bit displacement.
+rfi32 = TailRecipe(
+        'rfi32', RegFill, size=6, ins=StackGPR32, outs=(),
+        emit='''
+        let src = StackRef::sp(src, &func.stack_slots);
+        let base = stk_base(src.base);
+        PUT_OP(bits, rex2(base, dst), sink);
+        modrm_sib_disp32(dst, sink);
+        sib_noindex(base, sink);
+        sink.put4(src.offset as u32);
+        ''')
+frfi32 = TailRecipe(
+        'frfi32', RegFill, size=6, ins=StackFPR32, outs=(),
+        emit='''
+        let src = StackRef::sp(src, &func.stack_slots);
+        let base = stk_base(src.base);
+        PUT_OP(bits, rex2(base, dst), sink);
+        modrm_sib_disp32(dst, sink);
+        sib_noindex(base, sink);
+        sink.put4(src.offset as u32);
         ''')
 
 #
