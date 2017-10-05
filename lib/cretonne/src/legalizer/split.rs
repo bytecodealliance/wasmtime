@@ -190,7 +190,7 @@ fn split_value(
     concat: Opcode,
     repairs: &mut Vec<Repair>,
 ) -> (Value, Value) {
-    let value = pos.func.dfg.resolve_copies(value);
+    let value = pos.func.dfg.resolve_aliases(value);
     let mut reuse = None;
 
     match pos.func.dfg.value_def(value) {
@@ -293,7 +293,7 @@ fn add_repair(
 ///
 /// This function resolves `v11` to `v1` and `v12` to `v2`.
 fn resolve_splits(dfg: &ir::DataFlowGraph, value: Value) -> Value {
-    let value = dfg.resolve_copies(value);
+    let value = dfg.resolve_aliases(value);
 
     // Deconstruct a split instruction.
     let split_res;

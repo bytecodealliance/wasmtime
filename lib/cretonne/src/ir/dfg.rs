@@ -4,7 +4,7 @@ use entity::{PrimaryMap, EntityMap};
 use isa::TargetIsa;
 use ir::builder::{InsertBuilder, ReplaceBuilder};
 use ir::extfunc::ExtFuncData;
-use ir::instructions::{Opcode, InstructionData, CallInfo};
+use ir::instructions::{InstructionData, CallInfo};
 use ir::layout::{Cursor, LayoutCursorInserter};
 use ir::types;
 use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
@@ -209,33 +209,6 @@ impl DataFlowGraph {
     /// Find the original SSA value that `value` aliases.
     pub fn resolve_aliases(&self, value: Value) -> Value {
         resolve_aliases(&self.values, value)
-    }
-
-    /// Resolve value copies.
-    ///
-    /// Find the original definition of a value, looking through value aliases as well as
-    /// copy/spill/fill instructions.
-    pub fn resolve_copies(&self, value: Value) -> Value {
-        let mut v = value;
-
-        for _ in 0..self.insts.len() {
-            v = self.resolve_aliases(v);
-            v = match self.value_def(v) {
-                ValueDef::Res(inst, 0) => {
-                    match self[inst] {
-                        InstructionData::Unary { opcode, arg, .. } => {
-                            match opcode {
-                                Opcode::Copy | Opcode::Spill | Opcode::Fill => arg,
-                                _ => return v,
-                            }
-                        }
-                        _ => return v,
-                    }
-                }
-                _ => return v,
-            };
-        }
-        panic!("Copy loop detected for {}", value);
     }
 
     /// Resolve all aliases among inst's arguments.
@@ -1090,7 +1063,5 @@ mod tests {
         let c3 = pos.ins().copy(c);
         // This does not see through copies.
         assert_eq!(pos.func.dfg.resolve_aliases(c3), c3);
-        // But this goes through both copies and aliases.
-        assert_eq!(pos.func.dfg.resolve_copies(c3), c2);
     }
 }
