@@ -711,7 +711,9 @@ impl<'a> Context<'a> {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc2 = self.reginfo.rc(rci);
                 let reg2 = self.divert.reg(lv.value, &self.cur.func.locations);
-                if rc.contains(reg2) && self.solver.can_add_var(lv.value, rc2, reg2) {
+                if rc.contains(reg2) && self.solver.can_add_var(lv.value, rc2, reg2) &&
+                    !self.is_live_on_outgoing_edge(lv.value)
+                {
                     // The new variable gets to roam the whole top-level register class because
                     // it is not actually constrained by the instruction. We just want it out
                     // of the way.
@@ -722,6 +724,31 @@ impl<'a> Context<'a> {
         }
 
         false
+    }
+
+    /// Determine if `value` is live on a CFG edge from the current instruction.
+    ///
+    /// This means that the current instruction is a branch and `value` is live in to one of the
+    /// branch destinations. Branch arguments and EBB parameters are not considered live on the
+    /// edge.
+    fn is_live_on_outgoing_edge(&self, value: Value) -> bool {
+        use ir::instructions::BranchInfo::*;
+
+        let inst = self.cur.current_inst().expect("Not on an instruction");
+        match self.cur.func.dfg[inst].analyze_branch(&self.cur.func.dfg.value_lists) {
+            NotABranch => false,
+            SingleDest(ebb, _) => {
+                let lr = &self.liveness[value];
+                lr.is_livein(ebb, &self.cur.func.layout)
+            }
+            Table(jt) => {
+                let lr = &self.liveness[value];
+                !lr.is_local() &&
+                    self.cur.func.jump_tables[jt].entries().any(|(_, ebb)| {
+                        lr.is_livein(ebb, &self.cur.func.layout)
+                    })
+            }
+        }
     }
 
     /// Emit `regmove` instructions as needed to move the live registers into place before the
