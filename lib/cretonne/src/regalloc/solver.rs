@@ -523,7 +523,13 @@ impl Solver {
     /// In either case, `to` will not be available for variables on the input side of the
     /// instruction.
     pub fn reassign_in(&mut self, value: Value, rc: RegClass, from: RegUnit, to: RegUnit) {
-        dbg!("reassign_in({}:{}, %{} -> %{})", value, rc, from, to);
+        dbg!(
+            "reassign_in({}:{}, {} -> {})",
+            value,
+            rc,
+            rc.info.display_regunit(from),
+            rc.info.display_regunit(to)
+        );
         debug_assert!(!self.inputs_done);
         if self.regs_in.is_avail(rc, from) {
             // It looks like `value` was already removed from the register set. It must have been
@@ -826,7 +832,9 @@ impl Solver {
             Move::with_assignment,
         ));
 
-        dbg!("collect_moves: {}", DisplayList(&self.moves));
+        if !(self.moves.is_empty()) {
+            dbg!("collect_moves: {}", DisplayList(&self.moves));
+        }
     }
 
     /// Try to schedule a sequence of `regmove` instructions that will shuffle registers into
