@@ -113,19 +113,17 @@ pub fn parse_import_section(
 pub fn parse_function_section(
     parser: &mut Parser,
     runtime: &mut WasmRuntime,
-) -> Result<Vec<SignatureIndex>, SectionParsingError> {
-    let mut funcs = Vec::new();
+) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
             ParserState::FunctionSectionEntry(sigindex) => {
                 runtime.declare_func_type(sigindex as SignatureIndex);
-                funcs.push(sigindex as SignatureIndex);
             }
             ParserState::EndSection => break,
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
     }
-    Ok(funcs)
+    Ok(())
 }
 
 /// Retrieves the names of the functions from the export section

@@ -162,6 +162,9 @@ pub trait WasmRuntime: FuncEnvironment {
     /// Declares the type (signature) of a local function in the module.
     fn declare_func_type(&mut self, sig_index: SignatureIndex);
 
+    /// Return the signature index for the given function index.
+    fn get_func_type(&self, func_index: FunctionIndex) -> SignatureIndex;
+
     /// Declares a global to the runtime.
     fn declare_global(&mut self, global: Global);
     /// Declares a table to the runtime.

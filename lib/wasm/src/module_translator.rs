@@ -5,7 +5,7 @@ use sections_translator::{SectionParsingError, parse_function_signatures, parse_
                           parse_function_section, parse_export_section, parse_memory_section,
                           parse_global_section, parse_table_section, parse_elements_section,
                           parse_data_section};
-use translation_utils::{Import, SignatureIndex, FunctionIndex};
+use translation_utils::{Import, FunctionIndex};
 use cretonne::ir::{Function, FunctionName};
 use func_translator::FuncTranslator;
 use std::collections::HashMap;
@@ -39,7 +39,6 @@ pub fn translate_module(
         }
         ref s => panic!("modules should begin properly: {:?}", s),
     }
-    let mut functions: Vec<SignatureIndex> = Vec::new();
     let mut globals = Vec::new();
     let mut exports: HashMap<FunctionIndex, String> = HashMap::new();
     let mut next_input = ParserInput::Default;
@@ -62,7 +61,6 @@ pub fn translate_module(
                         for import in imps {
                             match import {
                                 Import::Function { sig_index } => {
-                                    functions.push(sig_index as SignatureIndex);
                                     function_index += 1;
                                 }
                                 Import::Memory(mem) => {
@@ -86,9 +84,7 @@ pub fn translate_module(
             }
             ParserState::BeginSection { code: SectionCode::Function, .. } => {
                 match parse_function_section(&mut parser, runtime) {
-                    Ok(funcs) => {
-                        functions.extend(funcs);
-                    }
+                    Ok(()) => {}
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the function section: {}", s))
                     }
@@ -193,7 +189,9 @@ pub fn translate_module(
         runtime.next_function();
         // First we build the Function object with its name and signature
         let mut func = Function::new();
-        func.signature = runtime.get_signature(functions[function_index]).clone();
+        func.signature = runtime
+            .get_signature(runtime.get_func_type(function_index))
+            .clone();
         if let Some(name) = exports.get(&function_index) {
             func.name = FunctionName::new(name.clone());
         }
