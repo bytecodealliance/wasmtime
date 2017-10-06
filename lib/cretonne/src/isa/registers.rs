@@ -296,6 +296,11 @@ impl RegInfo {
     pub fn rc(&self, idx: RegClassIndex) -> RegClass {
         self.classes[idx.index()]
     }
+
+    /// Get the top-level register class containing the `idx` class.
+    pub fn toprc(&self, idx: RegClassIndex) -> RegClass {
+        self.classes[self.rc(idx).toprc as usize]
+    }
 }
 
 /// Temporary object that holds enough information to print a register unit.
