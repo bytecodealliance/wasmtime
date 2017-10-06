@@ -56,7 +56,9 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
                 )?;
                 outgoing_max = max(outgoing_max, offset);
             }
-            StackSlotKind::SpillSlot | StackSlotKind::Local => {
+            StackSlotKind::SpillSlot |
+            StackSlotKind::Local |
+            StackSlotKind::EmergencySlot => {
                 // Determine the smallest alignment of any local or spill slot.
                 min_align = slot.alignment(min_align);
             }

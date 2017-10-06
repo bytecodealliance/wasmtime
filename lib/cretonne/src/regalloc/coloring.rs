@@ -48,6 +48,7 @@ use ir::{Ebb, Inst, Value, Function, ValueLoc, SigRef};
 use ir::{InstBuilder, ArgumentType, ArgumentLoc};
 use isa::{RegUnit, RegClass, RegInfo, regs_overlap};
 use isa::{TargetIsa, EncInfo, RecipeConstraints, OperandConstraint, ConstraintKind};
+use packed_option::PackedOption;
 use regalloc::RegDiversions;
 use regalloc::affinity::Affinity;
 use regalloc::allocatable_set::AllocatableSet;
@@ -733,14 +734,47 @@ impl<'a> Context<'a> {
     fn shuffle_inputs(&mut self, regs: &mut AllocatableSet) {
         use regalloc::solver::Move::*;
 
-        self.solver.schedule_moves(regs);
+        let spills = self.solver.schedule_moves(regs);
+
+        // The move operations returned by `schedule_moves` refer to emergency spill slots by
+        // consecutive indexes starting from 0. Map these to real stack slots.
+        // It is very unlikely (impossible?) that we would need more than one spill per top-level
+        // register class, so avoid allocation by using a fixed array here.
+        let mut slot = [PackedOption::default(); 8];
+        assert!(spills <= slot.len(), "Too many spills ({})", spills);
+
         for m in self.solver.moves() {
             match *m {
                 Reg { value, from, to, .. } => {
                     self.divert.regmove(value, from, to);
                     self.cur.ins().regmove(value, from, to);
                 }
-                Spill { .. } | Fill { .. } => unimplemented!(),
+                Spill {
+                    value,
+                    from,
+                    to_slot,
+                    ..
+                } => {
+                    debug_assert_eq!(slot[to_slot].expand(), None, "Overwriting slot in use");
+                    let ss = self.cur.func.stack_slots.get_emergency_slot(
+                        self.cur.func.dfg.value_type(value),
+                        &slot[0..spills],
+                    );
+                    slot[to_slot] = ss.into();
+                    self.divert.regspill(value, from, ss);
+                    self.cur.ins().regspill(value, from, ss);
+                }
+                Fill {
+                    value,
+                    from_slot,
+                    to,
+                    ..
+                } => {
+                    // These slots are single use, so mark `ss` as available again.
+                    let ss = slot[from_slot].take().expect("Using unallocated slot");
+                    self.divert.regfill(value, ss, to);
+                    self.cur.ins().regfill(value, ss, to);
+                }
             }
         }
     }

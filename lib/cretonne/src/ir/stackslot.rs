@@ -5,6 +5,7 @@
 
 use entity::{PrimaryMap, Keys};
 use ir::{Type, StackSlot};
+use packed_option::PackedOption;
 use std::fmt;
 use std::ops::Index;
 use std::str::FromStr;
@@ -44,6 +45,12 @@ pub enum StackSlotKind {
     /// stack slots are used to represent individual arguments in the outgoing call frame. These
     /// stack slots are only valid while setting up a call.
     OutgoingArg,
+
+    /// An emergency spill slot.
+    ///
+    /// Emergency slots are allocated late when the register's constraint solver needs extra space
+    /// to shuffle registers around. The are only used briefly, and can be reused.
+    EmergencySlot,
 }
 
 impl FromStr for StackSlotKind {
@@ -56,6 +63,7 @@ impl FromStr for StackSlotKind {
             "spill_slot" => Ok(SpillSlot),
             "incoming_arg" => Ok(IncomingArg),
             "outgoing_arg" => Ok(OutgoingArg),
+            "emergency_slot" => Ok(EmergencySlot),
             _ => Err(()),
         }
     }
@@ -69,6 +77,7 @@ impl fmt::Display for StackSlotKind {
             SpillSlot => "spill_slot",
             IncomingArg => "incoming_arg",
             OutgoingArg => "outgoing_arg",
+            EmergencySlot => "emergency_slot",
         })
     }
 }
@@ -135,6 +144,9 @@ pub struct StackSlots {
     /// All the outgoing stack slots, ordered by offset.
     outgoing: Vec<StackSlot>,
 
+    /// All the emergency slots.
+    emergency: Vec<StackSlot>,
+
     /// The total size of the stack frame.
     ///
     /// This is the distance from the stack pointer in the current function to the stack pointer in
@@ -152,6 +164,7 @@ impl StackSlots {
         StackSlots {
             slots: PrimaryMap::new(),
             outgoing: Vec::new(),
+            emergency: Vec::new(),
             frame_size: None,
         }
     }
@@ -160,6 +173,7 @@ impl StackSlots {
     pub fn clear(&mut self) {
         self.slots.clear();
         self.outgoing.clear();
+        self.emergency.clear();
         self.frame_size = None;
     }
 
@@ -243,6 +257,43 @@ impl StackSlots {
         self.outgoing.insert(inspos, ss);
         ss
     }
+
+    /// Get an emergency spill slot that can be used to store a `ty` value.
+    ///
+    /// This may allocate a new slot, or it may reuse an existing emergency spill slot, excluding
+    /// any slots in the `in_use` list.
+    pub fn get_emergency_slot(
+        &mut self,
+        ty: Type,
+        in_use: &[PackedOption<StackSlot>],
+    ) -> StackSlot {
+        let size = ty.bytes();
+
+        // Find the smallest existing slot that can fit the type.
+        if let Some(&ss) = self.emergency
+            .iter()
+            .filter(|&&ss| self[ss].size >= size && !in_use.contains(&ss.into()))
+            .min_by_key(|&&ss| self[ss].size)
+        {
+            return ss;
+        }
+
+        // Alternatively, use the largest available slot and make it larger.
+        if let Some(&ss) = self.emergency
+            .iter()
+            .filter(|&&ss| !in_use.contains(&ss.into()))
+            .max_by_key(|&&ss| self[ss].size)
+        {
+            self.slots[ss].size = size;
+            return ss;
+        }
+
+        // No existing slot found. Make one and insert it into `emergency`.
+        let data = StackSlotData::new(StackSlotKind::EmergencySlot, size);
+        let ss = self.slots.push(data);
+        self.emergency.push(ss);
+        ss
+    }
 }
 
 #[cfg(test)]
@@ -303,5 +354,32 @@ mod tests {
         assert_eq!(slot2.alignment(8), 8);
         assert_eq!(slot2.alignment(16), 8);
         assert_eq!(slot2.alignment(32), 8);
+    }
+
+    #[test]
+    fn emergency() {
+        let mut sss = StackSlots::new();
+
+        let ss0 = sss.get_emergency_slot(types::I32, &[]);
+        assert_eq!(sss[ss0].size, 4);
+
+        // When a smaller size is requested, we should simply get the same slot back.
+        assert_eq!(sss.get_emergency_slot(types::I8, &[]), ss0);
+        assert_eq!(sss[ss0].size, 4);
+        assert_eq!(sss.get_emergency_slot(types::F32, &[]), ss0);
+        assert_eq!(sss[ss0].size, 4);
+
+        // Ask for a larger size and the slot should grow.
+        assert_eq!(sss.get_emergency_slot(types::F64, &[]), ss0);
+        assert_eq!(sss[ss0].size, 8);
+
+        // When one slot is in use, we should get a new one.
+        let ss1 = sss.get_emergency_slot(types::I32, &[None.into(), ss0.into()]);
+        assert_eq!(sss[ss0].size, 8);
+        assert_eq!(sss[ss1].size, 4);
+
+        // Now we should get the smallest fit of the two available slots.
+        assert_eq!(sss.get_emergency_slot(types::F32, &[]), ss1);
+        assert_eq!(sss.get_emergency_slot(types::F64, &[]), ss0);
     }
 }
