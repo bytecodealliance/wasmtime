@@ -356,9 +356,8 @@ impl<'a> Context<'a> {
     // Leave `self.reg_uses` empty.
     fn process_reg_uses(&mut self, inst: Inst, tracker: &LiveValueTracker) {
         // We're looking for multiple uses of the same value, so start by sorting by value. The
-        // secondary `opidx` key makes it possible to use an unstable sort once that is available
-        // outside nightly Rust.
-        self.reg_uses.sort_by_key(|u| (u.value, u.opidx));
+        // secondary `opidx` key makes it possible to use an unstable (non-allocating) sort.
+        self.reg_uses.sort_unstable_by_key(|u| (u.value, u.opidx));
 
         for i in 0..self.reg_uses.len() {
             let ru = self.reg_uses[i];
