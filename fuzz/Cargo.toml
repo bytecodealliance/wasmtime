@@ -1,0 +1,34 @@
+[package]
+name = "wasmstandalone_fuzz"
+version = "0.0.1"
+authors = ["The Cretonne Project Developers"]
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies.wasmstandalone_runtime]
+path = "../lib/runtime"
+
+[dependencies.wasmstandalone_execute]
+path = "../lib/execute"
+
+[dependencies.cretonne]
+git = "https://github.com/stoklund/cretonne.git"
+
+[dependencies.cretonne-wasm]
+git = "https://github.com/stoklund/cretonne.git"
+
+[dependencies.cretonne-native]
+git = "https://github.com/stoklund/cretonne.git"
+
+[dependencies.libfuzzer-sys]
+git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "compile"
+path = "fuzz_targets/compile.rs"
