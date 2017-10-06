@@ -42,6 +42,7 @@ use docopt::Docopt;
 use std::path::Path;
 use std::process::{exit, Command};
 use tempdir::TempDir;
+use cretonne::settings::Configurable;
 
 macro_rules! vprintln {
     ($x: expr, $($tts:tt)*) => {
@@ -112,6 +113,12 @@ fn main() {
     let (flag_builder, isa_builder) = cton_native::builders().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
     });
+
+    // Enable verifier passes in debug mode.
+    if cfg!(debug_assertions) {
+        flag_builder.enable("enable_verifier").unwrap();
+    }
+
     let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
     for filename in &args.arg_file {
         let path = Path::new(&filename);
