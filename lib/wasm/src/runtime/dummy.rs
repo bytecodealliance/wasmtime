@@ -146,6 +146,10 @@ impl WasmRuntime for DummyRuntime {
         self.func_types.push(sig_index);
     }
 
+    fn get_func_type(&self, func_index: FunctionIndex) -> SignatureIndex {
+        self.func_types[func_index]
+    }
+
     fn declare_global(&mut self, global: Global) {
         self.globals.push(global);
     }
