@@ -104,19 +104,10 @@ NOREX_MAP = {
         FPR: FPR8
     }
 
-# Register class mapping for REX instructions. The ABCD constraint no longer
-# applies.
-REX_MAP = {
-        ABCD: GPR
-    }
 
-
-def map_regs(
-        regs,  # type: Sequence[OperandConstraint]
-        mapping  # type: Dict[RegClass, RegClass]
-):
-    # type: (...) -> Sequence[OperandConstraint]
-    return tuple(mapping.get(rc, rc) if isinstance(rc, RegClass) else rc
+def map_regs_norex(regs):
+    # type: (Sequence[OperandConstraint]) -> Sequence[OperandConstraint]
+    return tuple(NOREX_MAP.get(rc, rc) if isinstance(rc, RegClass) else rc
                  for rc in regs)
 
 
@@ -134,6 +125,14 @@ class TailRecipe:
     The arguments are the same as for an `EncRecipe`, except for `size` which
     does not include the size of the opcode.
 
+    The `when_prefixed` parameter specifies a recipe that should be substituted
+    for this one when a REX (or VEX) prefix is present. This is relevant for
+    recipes that can only access the ABCD registers without a REX prefix, but
+    are able to access all registers with a prefix.
+
+    The `requires_prefix` parameter indicates that the recipe can't be used
+    without a REX prefix.
+
     The `emit` parameter contains Rust code to actually emit an encoding, like
     `EncRecipe` does it. Additionally, the text `PUT_OP` is substituted with
     the proper `put_*` function from the `intel/binemit.rs` module.
@@ -141,15 +140,17 @@ class TailRecipe:
 
     def __init__(
             self,
-            name,               # type: str
-            format,             # type: InstructionFormat
-            size,               # type: int
-            ins,                # type: ConstraintSeq
-            outs,               # type: ConstraintSeq
-            branch_range=None,  # type: int
-            instp=None,         # type: PredNode
-            isap=None,          # type: PredNode
-            emit=None           # type: str
+            name,                   # type: str
+            format,                 # type: InstructionFormat
+            size,                   # type: int
+            ins,                    # type: ConstraintSeq
+            outs,                   # type: ConstraintSeq
+            branch_range=None,      # type: int
+            instp=None,             # type: PredNode
+            isap=None,              # type: PredNode
+            when_prefixed=None,     # type: TailRecipe
+            requires_prefix=False,  # type: bool
+            emit=None               # type: str
             ):
         # type: (...) -> None
         self.name = name
@@ -160,6 +161,8 @@ class TailRecipe:
         self.branch_range = branch_range
         self.instp = instp
         self.isap = isap
+        self.when_prefixed = when_prefixed
+        self.requires_prefix = requires_prefix
         self.emit = emit
 
         # Cached recipes, keyed by name prefix.
@@ -171,6 +174,7 @@ class TailRecipe:
         Create an encoding recipe and encoding bits for the opcode bytes in
         `ops`.
         """
+        assert not self.requires_prefix, "Tail recipe requires REX prefix."
         rrr = kwargs.get('rrr', 0)
         w = kwargs.get('w', 0)
         name, bits = decode_ops(ops, rrr, w)
@@ -193,8 +197,8 @@ class TailRecipe:
                 isap=self.isap,
                 emit=replace_put_op(self.emit, name))
 
-            recipe.ins = map_regs(recipe.ins, NOREX_MAP)
-            recipe.outs = map_regs(recipe.outs, NOREX_MAP)
+            recipe.ins = map_regs_norex(recipe.ins)
+            recipe.outs = map_regs_norex(recipe.outs)
             self.recipes[name] = recipe
         return (self.recipes[name], bits)
 
@@ -208,6 +212,10 @@ class TailRecipe:
         not. For instructions that don't require a REX prefix, two encodings
         should be added: One with REX and one without.
         """
+        # Use the prefixed alternative recipe when applicable.
+        if self.when_prefixed:
+            return self.when_prefixed.rex(*ops, **kwargs)
+
         rrr = kwargs.get('rrr', 0)
         w = kwargs.get('w', 0)
         name, bits = decode_ops(ops, rrr, w)
@@ -230,8 +238,6 @@ class TailRecipe:
                 instp=self.instp,
                 isap=self.isap,
                 emit=replace_put_op(self.emit, name))
-            recipe.ins = map_regs(recipe.ins, REX_MAP)
-            recipe.outs = map_regs(recipe.outs, REX_MAP)
             self.recipes[name] = recipe
 
         return (self.recipes[name], bits)
@@ -314,6 +320,7 @@ urm = TailRecipe(
 # XX /r. Same as urm, but input limited to ABCD.
 urm_abcd = TailRecipe(
         'urm_abcd', Unary, size=1, ins=ABCD, outs=GPR,
+        when_prefixed=urm,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rr(in_reg0, out_reg0, sink);
@@ -478,10 +485,11 @@ st = TailRecipe(
         ''')
 
 # XX /r register-indirect store with no offset.
-# Only ABCD allowed for stored value. This is for byte stores.
+# Only ABCD allowed for stored value. This is for byte stores with no REX.
 st_abcd = TailRecipe(
         'st_abcd', Store, size=1, ins=(ABCD, GPR), outs=(),
         instp=IsEqual(Store.offset, 0),
+        when_prefixed=st,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rm(in_reg1, in_reg0, sink);
@@ -509,6 +517,7 @@ stDisp8 = TailRecipe(
 stDisp8_abcd = TailRecipe(
         'stDisp8_abcd', Store, size=2, ins=(ABCD, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 8),
+        when_prefixed=stDisp8,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp8(in_reg1, in_reg0, sink);
@@ -536,6 +545,7 @@ stDisp32 = TailRecipe(
         ''')
 stDisp32_abcd = TailRecipe(
         'stDisp32_abcd', Store, size=5, ins=(ABCD, GPR), outs=(),
+        when_prefixed=stDisp32,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp32(in_reg1, in_reg0, sink);
@@ -786,9 +796,22 @@ tjccd = TailRecipe(
 #
 # Same as tjccb, but only looks at the low 8 bits of the register, for b1
 # types.
+t8jccb = TailRecipe(
+        't8jccb', Branch, size=1 + 2, ins=GPR, outs=(),
+        branch_range=8,
+        requires_prefix=True,
+        emit='''
+        // test8 r, r.
+        PUT_OP((bits & 0xff00) | 0x84, rex2(in_reg0, in_reg0), sink);
+        modrm_rr(in_reg0, in_reg0, sink);
+        // Jcc instruction.
+        sink.put1(bits as u8);
+        disp1(destination, func, sink);
+        ''')
 t8jccb_abcd = TailRecipe(
         't8jccb_abcd', Branch, size=1 + 2, ins=ABCD, outs=(),
         branch_range=8,
+        when_prefixed=t8jccb,
         emit='''
         // test8 r, r.
         PUT_OP((bits & 0xff00) | 0x84, rex2(in_reg0, in_reg0), sink);
@@ -798,9 +821,23 @@ t8jccb_abcd = TailRecipe(
         disp1(destination, func, sink);
         ''')
 
+t8jccd = TailRecipe(
+        't8jccd', Branch, size=1 + 6, ins=GPR, outs=(),
+        branch_range=32,
+        requires_prefix=True,
+        emit='''
+        // test8 r, r.
+        PUT_OP((bits & 0xff00) | 0x84, rex2(in_reg0, in_reg0), sink);
+        modrm_rr(in_reg0, in_reg0, sink);
+        // Jcc instruction.
+        sink.put1(0x0f);
+        sink.put1(bits as u8);
+        disp4(destination, func, sink);
+        ''')
 t8jccd_abcd = TailRecipe(
         't8jccd_abcd', Branch, size=1 + 6, ins=ABCD, outs=(),
         branch_range=32,
+        when_prefixed=t8jccd,
         emit='''
         // test8 r, r.
         PUT_OP((bits & 0xff00) | 0x84, rex2(in_reg0, in_reg0), sink);
@@ -827,6 +864,7 @@ t8jccd_abcd = TailRecipe(
 #
 # This bandaid macro doesn't support a REX prefix for the final `setCC`
 # instruction, so it is limited to the `ABCD` register class for booleans.
+# The omission of a `when_prefixed` alternative is deliberate here.
 icscc = TailRecipe(
         'icscc', IntCompare, size=1 + 3, ins=(GPR, GPR), outs=ABCD,
         emit='''
@@ -866,6 +904,7 @@ icscc = TailRecipe(
 # EQ 100 000
 #
 # Not all floating point condition codes are supported.
+# The omission of a `when_prefixed` alternative is deliberate here.
 fcscc = TailRecipe(
         'fcscc', FloatCompare, size=1 + 3, ins=(FPR, FPR), outs=ABCD,
         instp=Or(*(IsEqual(FloatCompare.cond, cc)
