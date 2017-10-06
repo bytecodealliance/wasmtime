@@ -572,10 +572,10 @@ impl<'a> Context<'a> {
     fn divert_fixed_input_conflicts(&mut self, live: &[LiveValue]) {
         for lv in live {
             if let Affinity::Reg(rci) = lv.affinity {
-                let rc = self.reginfo.rc(rci);
+                let toprc = self.reginfo.toprc(rci);
                 let reg = self.divert.reg(lv.value, &self.cur.func.locations);
-                if self.solver.is_fixed_input_conflict(rc, reg) {
-                    self.solver.add_var(lv.value, rc, reg);
+                if self.solver.is_fixed_input_conflict(toprc, reg) {
+                    self.solver.add_var(lv.value, toprc, reg);
                 }
             }
         }
@@ -633,15 +633,12 @@ impl<'a> Context<'a> {
             // The fixed output conflicts with some of the live-through registers.
             for lv in throughs {
                 if let Affinity::Reg(rci) = lv.affinity {
-                    let rc2 = self.reginfo.rc(rci);
+                    let toprc2 = self.reginfo.toprc(rci);
                     let reg2 = self.divert.reg(lv.value, &self.cur.func.locations);
-                    if regs_overlap(rc, reg, rc2, reg2) {
+                    if regs_overlap(rc, reg, toprc2, reg2) {
                         // This live-through value is interfering with the fixed output assignment.
                         // Convert it to a solver variable.
-                        // TODO: Use a looser constraint than the affinity hint. Any allocatable
-                        // register in the top-level register class would be OK. Maybe `add_var`
-                        // should take both a preferred class and a required constraint class.
-                        self.solver.add_var(lv.value, rc2, reg2);
+                        self.solver.add_var(lv.value, toprc2, reg2);
                     }
                 }
             }
@@ -709,15 +706,14 @@ impl<'a> Context<'a> {
 
         for lv in throughs {
             if let Affinity::Reg(rci) = lv.affinity {
-                let rc2 = self.reginfo.rc(rci);
+                // The new variable gets to roam the whole top-level register class because it is
+                // not actually constrained by the instruction. We just want it out of the way.
+                let toprc2 = self.reginfo.rc(rci);
                 let reg2 = self.divert.reg(lv.value, &self.cur.func.locations);
-                if rc.contains(reg2) && self.solver.can_add_var(lv.value, rc2, reg2) &&
+                if rc.contains(reg2) && self.solver.can_add_var(lv.value, toprc2, reg2) &&
                     !self.is_live_on_outgoing_edge(lv.value)
                 {
-                    // The new variable gets to roam the whole top-level register class because
-                    // it is not actually constrained by the instruction. We just want it out
-                    // of the way.
-                    self.solver.add_var(lv.value, rc2.toprc(), reg2);
+                    self.solver.add_var(lv.value, toprc2, reg2);
                     return true;
                 }
             }
