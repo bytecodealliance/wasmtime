@@ -287,7 +287,7 @@ impl<'a> Context<'a> {
         regs: &mut AllocatableSet,
     ) {
         dbg!(
-            "Coloring {}\n          {}",
+            "Coloring {}\n    from {}",
             self.cur.display_inst(inst),
             regs.display(&self.reginfo)
         );
