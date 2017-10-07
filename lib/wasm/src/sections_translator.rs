@@ -7,9 +7,8 @@
 //! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
-use translation_utils::{type_to_type, Import, TableIndex, FunctionIndex, GlobalIndex,
-                        SignatureIndex, MemoryIndex, Global, GlobalInit, Table, TableElementType,
-                        Memory};
+use translation_utils::{type_to_type, TableIndex, FunctionIndex, GlobalIndex, SignatureIndex,
+                        MemoryIndex, Global, GlobalInit, Table, TableElementType, Memory};
 use cretonne::ir::{Signature, ArgumentType, CallConv};
 use cretonne;
 use wasmparser::{Parser, ParserState, FuncType, ImportSectionEntryType, ExternalKind, WasmDecoder,
@@ -61,8 +60,8 @@ pub fn parse_function_signatures(
 pub fn parse_import_section(
     parser: &mut Parser,
     runtime: &mut WasmRuntime,
-) -> Result<Vec<Import>, SectionParsingError> {
-    let mut imports = Vec::new();
+    function_index: &mut FunctionIndex,
+) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
             ParserState::ImportSectionEntry {
@@ -71,42 +70,42 @@ pub fn parse_import_section(
                 field,
             } => {
                 runtime.declare_func_import(sig as SignatureIndex, module, field);
-                imports.push(Import::Function { sig_index: sig });
+                *function_index += 1;
             }
             ParserState::ImportSectionEntry {
                 ty: ImportSectionEntryType::Memory(MemoryType { limits: ref memlimits }), ..
             } => {
-                imports.push(Import::Memory(Memory {
+                runtime.declare_memory(Memory {
                     pages_count: memlimits.initial as usize,
                     maximum: memlimits.maximum.map(|x| x as usize),
-                }))
+                });
             }
             ParserState::ImportSectionEntry {
                 ty: ImportSectionEntryType::Global(ref ty), ..
             } => {
-                imports.push(Import::Global(Global {
+                runtime.declare_global(Global {
                     ty: type_to_type(&ty.content_type).unwrap(),
                     mutability: ty.mutable,
                     initializer: GlobalInit::Import(),
-                }));
+                });
             }
             ParserState::ImportSectionEntry {
                 ty: ImportSectionEntryType::Table(ref tab), ..
             } => {
-                imports.push(Import::Table(Table {
+                runtime.declare_table(Table {
                     ty: match type_to_type(&tab.element_type) {
                         Ok(t) => TableElementType::Val(t),
                         Err(()) => TableElementType::Func(),
                     },
                     size: tab.limits.initial as usize,
                     maximum: tab.limits.maximum.map(|x| x as usize),
-                }));
+                });
             }
             ParserState::EndSection => break,
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
     }
-    Ok(imports)
+    Ok(())
 }
 
 /// Retrieves the correspondances between functions and signatures from the function section
@@ -156,29 +155,30 @@ pub fn parse_export_section(
 }
 
 /// Retrieves the size and maximum fields of memories from the memory section
-pub fn parse_memory_section(parser: &mut Parser) -> Result<Vec<Memory>, SectionParsingError> {
-    let mut memories: Vec<Memory> = Vec::new();
+pub fn parse_memory_section(
+    parser: &mut Parser,
+    runtime: &mut WasmRuntime,
+) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
             ParserState::MemorySectionEntry(ref ty) => {
-                memories.push(Memory {
+                runtime.declare_memory(Memory {
                     pages_count: ty.limits.initial as usize,
                     maximum: ty.limits.maximum.map(|x| x as usize),
-                })
+                });
             }
             ParserState::EndSection => break,
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
     }
-    Ok(memories)
+    Ok(())
 }
 
 /// Retrieves the size and maximum fields of memories from the memory section
 pub fn parse_global_section(
     parser: &mut Parser,
     runtime: &mut WasmRuntime,
-) -> Result<Vec<Global>, SectionParsingError> {
-    let mut globals = Vec::new();
+) -> Result<(), SectionParsingError> {
     loop {
         let (content_type, mutability) = match *parser.read() {
             ParserState::BeginGlobalSectionEntry(ref ty) => (ty.content_type, ty.mutable),
@@ -218,19 +218,17 @@ pub fn parse_global_section(
             initializer: initializer,
         };
         runtime.declare_global(global);
-        globals.push(global);
         match *parser.read() {
             ParserState::EndGlobalSectionEntry => (),
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         }
     }
-    Ok(globals)
+    Ok(())
 }
 
 pub fn parse_data_section(
     parser: &mut Parser,
     runtime: &mut WasmRuntime,
-    globals: &[Global],
 ) -> Result<(), SectionParsingError> {
     loop {
         let memory_index = match *parser.read() {
@@ -254,7 +252,7 @@ pub fn parse_data_section(
                 }
             }
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
-                match globals[global_index as usize].initializer {
+                match runtime.get_global(global_index as GlobalIndex).initializer {
                     GlobalInit::I32Const(value) => {
                         if value < 0 {
                             return Err(SectionParsingError::WrongSectionContent(String::from(
@@ -332,7 +330,6 @@ pub fn parse_table_section(
 pub fn parse_elements_section(
     parser: &mut Parser,
     runtime: &mut WasmRuntime,
-    globals: &[Global],
 ) -> Result<(), SectionParsingError> {
     loop {
         let table_index = match *parser.read() {
@@ -356,7 +353,7 @@ pub fn parse_elements_section(
                 }
             }
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
-                match globals[global_index as usize].initializer {
+                match runtime.get_global(global_index as GlobalIndex).initializer {
                     GlobalInit::I32Const(value) => {
                         if value < 0 {
                             return Err(SectionParsingError::WrongSectionContent(String::from(

@@ -14,15 +14,6 @@ pub type MemoryIndex = usize;
 /// Index of a signature (imported or defined) inside the WebAssembly module.
 pub type SignatureIndex = usize;
 
-/// WebAssembly import.
-#[derive(Debug, Clone, Copy)]
-pub enum Import {
-    Function { sig_index: u32 },
-    Memory(Memory),
-    Global(Global),
-    Table(Table),
-}
-
 /// WebAssembly global.
 #[derive(Debug, Clone, Copy)]
 pub struct Global {
