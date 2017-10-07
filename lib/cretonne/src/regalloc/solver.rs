@@ -148,13 +148,13 @@ pub struct Variable {
 }
 
 impl Variable {
-    fn new_live(value: Value, constraint: RegClass, from: RegUnit) -> Variable {
+    fn new_live(value: Value, constraint: RegClass, from: RegUnit, is_output: bool) -> Variable {
         Variable {
             value,
             constraint,
             from: Some(from),
             is_input: true,
-            is_output: true,
+            is_output,
             is_global: false,
             domain: 0,
             solution: !0,
@@ -430,7 +430,7 @@ impl fmt::Debug for Move {
 ///    calling `add_kill()`.
 /// 6. Program the output side constraints: Call `add_fixed_output()` for all fixed register
 ///    constraints and `add_def()` for free defines. Resolve fixed output conflicts by calling
-///    `add_var()`.
+///    `add_through_var()`.
 ///
 pub struct Solver {
     /// Register reassignments that are required or decided as part of a full solution.
@@ -565,28 +565,74 @@ impl Solver {
     ///
     /// It is assumed initially that the value is also live on the output side of the instruction.
     /// This can be changed by calling to `add_kill()`.
+    ///
+    /// This function can only be used before calling `inputs_done()`. Afterwards, more input-side
+    /// variables can be added by calling `add_killed_var()` and `add_through_var()`
     pub fn add_var(&mut self, value: Value, constraint: RegClass, from: RegUnit) {
+        dbg!(
+            "add_var({}:{}, from={})",
+            value,
+            constraint,
+            constraint.info.display_regunit(from)
+        );
+        debug_assert!(!self.inputs_done);
+        self.add_live_var(value, constraint, from, true);
+    }
+
+    /// Add an extra input-side variable representing a value that is killed by the current
+    /// instruction.
+    ///
+    /// This function should be called after `inputs_done()` only. Use `add_var()` before.
+    pub fn add_killed_var(&mut self, value: Value, constraint: RegClass, from: RegUnit) {
+        dbg!(
+            "add_killed_var({}:{}, from={})",
+            value,
+            constraint,
+            constraint.info.display_regunit(from)
+        );
+        debug_assert!(self.inputs_done);
+        self.add_live_var(value, constraint, from, false);
+    }
+
+    /// Add an extra input-side variable representing a value that is live through the current
+    /// instruction.
+    ///
+    /// This function should be called after `inputs_done()` only. Use `add_var()` before.
+    pub fn add_through_var(&mut self, value: Value, constraint: RegClass, from: RegUnit) {
+        dbg!(
+            "add_through_var({}:{}, from={})",
+            value,
+            constraint,
+            constraint.info.display_regunit(from)
+        );
+        debug_assert!(self.inputs_done);
+        self.add_live_var(value, constraint, from, true);
+    }
+
+    /// Shared code for `add_var`, `add_killed_var`, and `add_through_var`.
+    ///
+    /// Add a variable that is live before the instruction, and possibly live through. Merge
+    /// constraints if the value has already been added as a variable or fixed assignment.
+    fn add_live_var(
+        &mut self,
+        value: Value,
+        constraint: RegClass,
+        from: RegUnit,
+        live_through: bool,
+    ) {
         // Check for existing entries for this value.
         if self.regs_in.is_avail(constraint, from) {
-            dbg!(
-                "add_var({}:{}, from={}) for existing entry",
-                value,
-                constraint,
-                constraint.info.display_regunit(from),
-            );
-
             // There could be an existing variable entry.
             if let Some(v) = self.vars.iter_mut().find(|v| v.value == value) {
-                dbg!("-> combining constraint with {}", v);
-
                 // We have an existing variable entry for `value`. Combine the constraints.
                 if let Some(rc) = v.constraint.intersect(constraint) {
+                    dbg!("-> combining constraint with {} yields {}", v, rc);
                     v.constraint = rc;
                     return;
                 } else {
                     // The spiller should have made sure the same value is not used with disjoint
                     // constraints.
-                    panic!("Incompatible constraints: {} + {}", constraint, *v)
+                    panic!("Incompatible constraints: {} + {}", constraint, v)
                 }
             }
 
@@ -605,17 +651,11 @@ impl Solver {
             panic!("Wrong from register for {}", value);
         }
 
-        let new_var = Variable::new_live(value, constraint, from);
-        dbg!(
-            "add_var({}:{}, from={}) new entry: {}",
-            value,
-            constraint,
-            constraint.info.display_regunit(from),
-            new_var
-        );
+        let new_var = Variable::new_live(value, constraint, from, live_through);
+        dbg!("-> new var: {}", new_var);
 
         self.regs_in.free(constraint, from);
-        if self.inputs_done {
+        if self.inputs_done && live_through {
             self.regs_out.free(constraint, from);
         }
         self.vars.push(new_var);
@@ -817,12 +857,15 @@ impl Solver {
         // Collect moves from the chosen solution for all non-define variables.
         for v in &self.vars {
             if let Some(from) = v.from {
-                self.moves.push(Move::Reg {
-                    value: v.value,
-                    from,
-                    to: v.solution,
-                    rc: v.constraint,
-                });
+                // Omit variable solutions that don't require the value to be moved.
+                if from != v.solution {
+                    self.moves.push(Move::Reg {
+                        value: v.value,
+                        from,
+                        to: v.solution,
+                        rc: v.constraint,
+                    });
+                }
             }
         }
 
