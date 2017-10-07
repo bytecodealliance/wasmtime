@@ -374,7 +374,7 @@ impl<'a> Context<'a> {
         // Finally, we've fully programmed the constraint solver.
         // We expect a quick solution in most cases.
         let mut output_regs = self.solver.quick_solve().unwrap_or_else(|rc| {
-            dbg!("quick_solve needs more registers in {}", rc);
+            dbg!("quick_solve needs more {} regs for {}", rc, self.solver);
             self.iterate_solution(throughs)
         });
 
@@ -450,6 +450,44 @@ impl<'a> Context<'a> {
                     }
                 }
                 ConstraintKind::Stack => unreachable!(),
+            }
+        }
+    }
+
+    /// Program the complete set of input constraints into the solver.
+    ///
+    /// The `program_input_constraints()` function above will not tell the solver about any values
+    /// that are already assigned to appropriate registers. This is normally fine, but if we want
+    /// to add additional variables to help the solver, we need to make sure that they are
+    /// constrained properly.
+    ///
+    /// This function completes the work of `program_input_constraints()` by calling `add_var` for
+    /// all values used by the instruction.
+    fn program_complete_input_constraints(&mut self) {
+        let inst = self.cur.current_inst().expect("Not on an instruction");
+        let constraints = self.encinfo
+            .operand_constraints(self.cur.func.encodings[inst])
+            .expect("Current instruction not encoded")
+            .ins;
+
+        for (op, &value) in constraints.iter().zip(self.cur.func.dfg.inst_args(inst)) {
+            match op.kind {
+                ConstraintKind::Reg |
+                ConstraintKind::Tied(_) => {
+                    let cur_reg = self.divert.reg(value, &self.cur.func.locations);
+                    // This is the opposite condition of `program_input_constraints()`.
+                    if op.regclass.contains(cur_reg) {
+                        // This code runs after calling `solver.inputs_done()` so we must identify
+                        // the new variable as killed or live-through.
+                        let layout = &self.cur.func.layout;
+                        if self.liveness[value].killed_at(inst, layout.pp_ebb(inst), layout) {
+                            self.solver.add_killed_var(value, op.regclass, cur_reg);
+                        } else {
+                            self.solver.add_through_var(value, op.regclass, cur_reg);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -638,7 +676,7 @@ impl<'a> Context<'a> {
                     if regs_overlap(rc, reg, toprc2, reg2) {
                         // This live-through value is interfering with the fixed output assignment.
                         // Convert it to a solver variable.
-                        self.solver.add_var(lv.value, toprc2, reg2);
+                        self.solver.add_through_var(lv.value, toprc2, reg2);
                     }
                 }
             }
@@ -684,8 +722,11 @@ impl<'a> Context<'a> {
     /// We may need to move more registers around before a solution is possible. Use an iterative
     /// algorithm that adds one more variable until a solution can be found.
     fn iterate_solution(&mut self, throughs: &[LiveValue]) -> AllocatableSet {
+        // Make sure `try_add_var()` below doesn't create a variable with too loose constraints.
+        self.program_complete_input_constraints();
+
         loop {
-            dbg!("real_solve for {} variables", self.solver.vars().len());
+            dbg!("real_solve for {}", self.solver);
             let rc = match self.solver.real_solve() {
                 Ok(regs) => return regs,
                 Err(rc) => rc,
@@ -713,7 +754,7 @@ impl<'a> Context<'a> {
                 if rc.contains(reg2) && self.solver.can_add_var(lv.value, toprc2, reg2) &&
                     !self.is_live_on_outgoing_edge(lv.value)
                 {
-                    self.solver.add_var(lv.value, toprc2, reg2);
+                    self.solver.add_through_var(lv.value, toprc2, reg2);
                     return true;
                 }
             }
