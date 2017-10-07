@@ -153,6 +153,11 @@ impl WasmRuntime for DummyRuntime {
     fn declare_global(&mut self, global: Global) {
         self.globals.push(global);
     }
+
+    fn get_global(&self, global_index: GlobalIndex) -> &Global {
+        &self.globals[global_index]
+    }
+
     fn declare_table(&mut self, _: Table) {
         //We do nothing
     }

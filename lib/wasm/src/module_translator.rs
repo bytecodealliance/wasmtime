@@ -5,7 +5,7 @@ use sections_translator::{SectionParsingError, parse_function_signatures, parse_
                           parse_function_section, parse_export_section, parse_memory_section,
                           parse_global_section, parse_table_section, parse_elements_section,
                           parse_data_section};
-use translation_utils::{Import, FunctionIndex};
+use translation_utils::FunctionIndex;
 use cretonne::ir::{Function, FunctionName};
 use func_translator::FuncTranslator;
 use std::collections::HashMap;
@@ -39,7 +39,6 @@ pub fn translate_module(
         }
         ref s => panic!("modules should begin properly: {:?}", s),
     }
-    let mut globals = Vec::new();
     let mut exports: HashMap<FunctionIndex, String> = HashMap::new();
     let mut next_input = ParserInput::Default;
     let mut function_index: FunctionIndex = 0;
@@ -56,26 +55,8 @@ pub fn translate_module(
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Import, .. } => {
-                match parse_import_section(&mut parser, runtime) {
-                    Ok(imps) => {
-                        for import in imps {
-                            match import {
-                                Import::Function { sig_index } => {
-                                    function_index += 1;
-                                }
-                                Import::Memory(mem) => {
-                                    runtime.declare_memory(mem);
-                                }
-                                Import::Global(glob) => {
-                                    runtime.declare_global(glob);
-                                    globals.push(glob);
-                                }
-                                Import::Table(tab) => {
-                                    runtime.declare_table(tab);
-                                }
-                            }
-                        }
-                    }
+                match parse_import_section(&mut parser, runtime, &mut function_index) {
+                    Ok(()) => {}
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the import section: {}", s))
                     }
@@ -100,12 +81,8 @@ pub fn translate_module(
                 }
             }
             ParserState::BeginSection { code: SectionCode::Memory, .. } => {
-                match parse_memory_section(&mut parser) {
-                    Ok(mems) => {
-                        for mem in mems {
-                            runtime.declare_memory(mem);
-                        }
-                    }
+                match parse_memory_section(&mut parser, runtime) {
+                    Ok(()) => {}
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the memory section: {}", s))
                     }
@@ -114,7 +91,7 @@ pub fn translate_module(
             }
             ParserState::BeginSection { code: SectionCode::Global, .. } => {
                 match parse_global_section(&mut parser, runtime) {
-                    Ok(mut globs) => globals.append(&mut globs),
+                    Ok(()) => {}
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the global section: {}", s))
                     }
@@ -144,7 +121,7 @@ pub fn translate_module(
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Element, .. } => {
-                match parse_elements_section(&mut parser, runtime, &globals) {
+                match parse_elements_section(&mut parser, runtime) {
                     Ok(()) => (),
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the element section: {}", s))
@@ -166,7 +143,7 @@ pub fn translate_module(
                 })
             }
             ParserState::BeginSection { code: SectionCode::Data, .. } => {
-                match parse_data_section(&mut parser, runtime, &globals) {
+                match parse_data_section(&mut parser, runtime) {
                     Ok(()) => (),
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the data section: {}", s))
@@ -204,7 +181,7 @@ pub fn translate_module(
     loop {
         match *parser.read() {
             ParserState::BeginSection { code: SectionCode::Data, .. } => {
-                match parse_data_section(&mut parser, runtime, &globals) {
+                match parse_data_section(&mut parser, runtime) {
                     Ok(()) => (),
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the data section: {}", s))

@@ -167,6 +167,10 @@ pub trait WasmRuntime: FuncEnvironment {
 
     /// Declares a global to the runtime.
     fn declare_global(&mut self, global: Global);
+
+    /// Return the global for the given global index.
+    fn get_global(&self, global_index: GlobalIndex) -> &Global;
+
     /// Declares a table to the runtime.
     fn declare_table(&mut self, table: Table);
     /// Fills a declared table with references to functions in the module.
