@@ -962,7 +962,10 @@ impl Solver {
 
 impl fmt::Display for Solver {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let reginfo = self.vars.first().map(|v| v.constraint.info);
         writeln!(f, "Solver {{ inputs_done: {},", self.inputs_done)?;
+        writeln!(f, "  in:  {}", self.regs_in.display(reginfo))?;
+        writeln!(f, "  out: {}", self.regs_out.display(reginfo))?;
         writeln!(
             f,
             "  assignments: {}",

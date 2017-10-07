@@ -6,6 +6,7 @@
 //! share a register unit can't be in use at the same time.
 
 use isa::registers::{RegInfo, RegUnit, RegUnitMask, RegClass};
+use std::char;
 use std::fmt;
 use std::iter::ExactSizeIterator;
 use std::mem::size_of_val;
@@ -51,14 +52,26 @@ impl AllocatableSet {
     /// It is an error to take a register that doesn't have all of its register units available.
     pub fn take(&mut self, rc: RegClass, reg: RegUnit) {
         let (idx, bits) = bitmask(rc, reg);
-        debug_assert_eq!(self.avail[idx] & bits, bits, "Not available");
+        debug_assert!(
+            (self.avail[idx] & bits) == bits,
+            "{}:{} not available in {}",
+            rc,
+            rc.info.display_regunit(reg),
+            self.display(rc.info)
+        );
         self.avail[idx] &= !bits;
     }
 
     /// Make `reg` available for allocation again.
     pub fn free(&mut self, rc: RegClass, reg: RegUnit) {
         let (idx, bits) = bitmask(rc, reg);
-        debug_assert_eq!(self.avail[idx] & bits, 0, "Not allocated");
+        debug_assert!(
+            (self.avail[idx] & bits) == 0,
+            "{}:{} not allocated in {}",
+            rc,
+            rc.info.display_regunit(reg),
+            self.display(rc.info)
+        );
         self.avail[idx] |= bits;
     }
 
@@ -165,9 +178,28 @@ impl<'a> fmt::Display for DisplayAllocatableSet<'a> {
                     .expect("No register banks");
                 for rc in &reginfo.classes[0..toprcs] {
                     if rc.width == 1 {
-                        write!(f, " {}:", rc)?;
-                        for u in self.0.iter(rc) {
-                            write!(f, " {}", reginfo.display_regunit(u))?;
+                        let bank = &reginfo.banks[rc.bank as usize];
+                        write!(f, " {}: ", rc)?;
+                        for offset in 0..bank.units {
+                            let reg = bank.first_unit + offset;
+                            if !rc.contains(reg) {
+                                continue;
+                            }
+                            if !self.0.is_avail(rc, reg) {
+                                write!(f, "-")?;
+                                continue;
+                            }
+                            // Display individual registers as either the second letter of their
+                            // name or the last digit of their number.
+                            // This works for Intel (rax, rbx, ...) and for numbered regs.
+                            write!(
+                                f,
+                                "{}",
+                                bank.names
+                                    .get(offset as usize)
+                                    .and_then(|name| name.chars().skip(1).next())
+                                    .unwrap_or(char::from_digit((offset % 10) as u32, 10).unwrap())
+                            )?;
                         }
                     }
                 }
