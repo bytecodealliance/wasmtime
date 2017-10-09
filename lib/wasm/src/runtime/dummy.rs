@@ -6,25 +6,51 @@ use cretonne::ir::types::*;
 use cretonne::cursor::FuncCursor;
 use cretonne::settings;
 
+/// A collection of names under which a given entity is exported.
+pub struct Exportable<T> {
+    /// A wasm entity.
+    pub entity: T,
+
+    /// Names under which the entity is exported.
+    pub export_names: Vec<String>,
+}
+
+impl<T> Exportable<T> {
+    pub fn new(entity: T) -> Self {
+        Self {
+            entity,
+            export_names: Vec::new(),
+        }
+    }
+}
+
 /// This runtime implementation is a "naïve" one, doing essentially nothing and emitting
 /// placeholders when forced to. Don't try to execute code translated with this runtime, it is
 /// essentially here for translation debug purposes.
 pub struct DummyRuntime {
-    // Unprocessed signatures exactly as provided by `declare_signature()`.
-    signatures: Vec<ir::Signature>,
-    globals: Vec<Global>,
+    /// Compilation setting flags.
+    pub flags: settings::Flags,
 
-    // Types of functions, imported and local.
-    func_types: Vec<SignatureIndex>,
+    /// Signatures as provided by `declare_signature`.
+    pub signatures: Vec<ir::Signature>,
 
-    // Names of imported functions.
-    imported_funcs: Vec<ir::FunctionName>,
+    /// Module and field names of imported functions as provided by `declare_func_import`.
+    pub imported_funcs: Vec<(String, String)>,
 
-    // Compilation setting flags.
-    flags: settings::Flags,
+    /// Functions, imported and local.
+    pub functions: Vec<Exportable<SignatureIndex>>,
 
-    // The start function.
-    start_func: Option<FunctionIndex>,
+    /// Tables as provided by `declare_table`.
+    pub tables: Vec<Exportable<Table>>,
+
+    /// Memories as provided by `declare_memory`.
+    pub memories: Vec<Exportable<Memory>>,
+
+    /// Globals as provided by `declare_global`.
+    pub globals: Vec<Exportable<Global>>,
+
+    /// The start function.
+    pub start_func: Option<FunctionIndex>,
 }
 
 impl DummyRuntime {
@@ -36,11 +62,13 @@ impl DummyRuntime {
     /// Allocates the runtime data structures with the given flags.
     pub fn with_flags(flags: settings::Flags) -> Self {
         Self {
-            signatures: Vec::new(),
-            globals: Vec::new(),
-            func_types: Vec::new(),
-            imported_funcs: Vec::new(),
             flags,
+            signatures: Vec::new(),
+            imported_funcs: Vec::new(),
+            functions: Vec::new(),
+            tables: Vec::new(),
+            memories: Vec::new(),
+            globals: Vec::new(),
             start_func: None,
         }
     }
@@ -57,7 +85,7 @@ impl FuncEnvironment for DummyRuntime {
         let gv = func.create_global_var(ir::GlobalVarData::VmCtx { offset });
         GlobalValue::Memory {
             gv,
-            ty: self.globals[index].ty,
+            ty: self.globals[index].entity.ty,
         }
     }
 
@@ -77,16 +105,11 @@ impl FuncEnvironment for DummyRuntime {
     }
 
     fn make_direct_func(&mut self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef {
-        let sigidx = self.func_types[index];
+        let sigidx = self.functions[index].entity;
         // A real implementation would probably add a `vmctx` argument.
         // And maybe attempt some signature de-duplication.
         let signature = func.import_signature(self.signatures[sigidx].clone());
-
-        let name = match self.imported_funcs.get(index) {
-            Some(name) => name.clone(),
-            None => ir::FunctionName::new(format!("localfunc{}", index)),
-        };
-
+        let name = self.get_name(index);
         func.import_function(ir::ExtFuncData { name, signature })
     }
 
@@ -123,6 +146,10 @@ impl FuncEnvironment for DummyRuntime {
 }
 
 impl WasmRuntime for DummyRuntime {
+    fn get_name(&self, func_index: FunctionIndex) -> ir::FunctionName {
+        ir::FunctionName::new(format!("wasm_0x{:x}", func_index))
+    }
+
     fn declare_signature(&mut self, sig: &ir::Signature) {
         self.signatures.push(sig.clone());
     }
@@ -131,19 +158,17 @@ impl WasmRuntime for DummyRuntime {
         &self.signatures[sig_index]
     }
 
-    fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &[u8], field: &[u8]) {
+    fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &str, field: &str) {
         assert_eq!(
-            self.func_types.len(),
+            self.functions.len(),
             self.imported_funcs.len(),
             "Imported functions must be declared first"
         );
-        self.func_types.push(sig_index);
-
-        let mut name = Vec::new();
-        name.extend(module.iter().cloned().map(name_fold));
-        name.push(b'_');
-        name.extend(field.iter().cloned().map(name_fold));
-        self.imported_funcs.push(ir::FunctionName::new(name));
+        self.functions.push(Exportable::new(sig_index));
+        self.imported_funcs.push((
+            String::from(module),
+            String::from(field),
+        ));
     }
 
     fn get_num_func_imports(&self) -> usize {
@@ -151,38 +176,67 @@ impl WasmRuntime for DummyRuntime {
     }
 
     fn declare_func_type(&mut self, sig_index: SignatureIndex) {
-        self.func_types.push(sig_index);
+        self.functions.push(Exportable::new(sig_index));
     }
 
     fn get_func_type(&self, func_index: FunctionIndex) -> SignatureIndex {
-        self.func_types[func_index]
+        self.functions[func_index].entity
     }
 
     fn declare_global(&mut self, global: Global) {
-        self.globals.push(global);
+        self.globals.push(Exportable::new(global));
     }
 
     fn get_global(&self, global_index: GlobalIndex) -> &Global {
-        &self.globals[global_index]
+        &self.globals[global_index].entity
     }
 
-    fn declare_table(&mut self, _: Table) {
-        //We do nothing
+    fn declare_table(&mut self, table: Table) {
+        self.tables.push(Exportable::new(table));
     }
-    fn declare_table_elements(&mut self, _: TableIndex, _: usize, _: &[FunctionIndex]) {
-        //We do nothing
+    fn declare_table_elements(
+        &mut self,
+        _table_index: TableIndex,
+        _offset: usize,
+        _elements: &[FunctionIndex],
+    ) {
+        // We do nothing
     }
-    fn declare_memory(&mut self, _: Memory) {
-        //We do nothing
+    fn declare_memory(&mut self, memory: Memory) {
+        self.memories.push(Exportable::new(memory));
     }
     fn declare_data_initialization(
         &mut self,
-        _: MemoryIndex,
-        _: usize,
-        _: &[u8],
+        _memory_index: MemoryIndex,
+        _offset: usize,
+        _data: &[u8],
     ) -> Result<(), String> {
         // We do nothing
         Ok(())
+    }
+
+    fn declare_func_export(&mut self, func_index: FunctionIndex, name: &str) {
+        self.functions[func_index].export_names.push(
+            String::from(name),
+        );
+    }
+
+    fn declare_table_export(&mut self, table_index: TableIndex, name: &str) {
+        self.tables[table_index].export_names.push(
+            String::from(name),
+        );
+    }
+
+    fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &str) {
+        self.memories[memory_index].export_names.push(
+            String::from(name),
+        );
+    }
+
+    fn declare_global_export(&mut self, global_index: GlobalIndex, name: &str) {
+        self.globals[global_index].export_names.push(
+            String::from(name),
+        );
     }
 
     fn declare_start_func(&mut self, func_index: FunctionIndex) {
@@ -195,14 +249,5 @@ impl WasmRuntime for DummyRuntime {
     }
     fn next_function(&mut self) {
         // We do nothing
-    }
-}
-
-// Generate characters suitable for printable `FuncName`s.
-fn name_fold(c: u8) -> u8 {
-    if (c as char).is_alphanumeric() {
-        c
-    } else {
-        b'_'
     }
 }
