@@ -42,4 +42,5 @@ mod scoped_hash_map;
 mod simple_gvn;
 mod stack_layout;
 mod topo_order;
+mod unreachable_code;
 mod write;
