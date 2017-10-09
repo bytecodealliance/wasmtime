@@ -360,6 +360,32 @@ impl Layout {
         self.assign_ebb_seq(ebb);
     }
 
+    /// Remove `ebb` from the layout.
+    pub fn remove_ebb(&mut self, ebb: Ebb) {
+        assert!(self.is_ebb_inserted(ebb), "EBB not in the layout");
+        assert!(self.first_inst(ebb).is_none(), "EBB must be empty.");
+
+        // Clear the `ebb` node and extract links.
+        let prev;
+        let next;
+        {
+            let n = &mut self.ebbs[ebb];
+            prev = n.prev;
+            next = n.next;
+            n.prev = None.into();
+            n.next = None.into();
+        }
+        // Fix up links to `ebb`.
+        match prev.expand() {
+            None => self.first_ebb = next.expand(),
+            Some(p) => self.ebbs[p].next = next,
+        }
+        match next.expand() {
+            None => self.last_ebb = prev.expand(),
+            Some(n) => self.ebbs[n].prev = prev,
+        }
+    }
+
     /// Return an iterator over all EBBs in layout order.
     pub fn ebbs<'f>(&'f self) -> Ebbs<'f> {
         Ebbs {

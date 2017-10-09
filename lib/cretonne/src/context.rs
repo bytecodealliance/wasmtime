@@ -19,6 +19,7 @@ use legalize_function;
 use regalloc;
 use result::{CtonError, CtonResult};
 use settings::{FlagsOrIsa, OptLevel};
+use unreachable_code::eliminate_unreachable_code;
 use verifier;
 use simple_gvn::do_simple_gvn;
 use licm::do_licm;
@@ -75,6 +76,7 @@ impl Context {
             self.simple_gvn(isa)?;
         }
         self.compute_domtree();
+        self.eliminate_unreachable_code(isa)?;
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
         self.relax_branches(isa)
@@ -156,6 +158,15 @@ impl Context {
             &mut self.domtree,
             &mut self.loop_analysis,
         );
+        self.verify_if(fisa)
+    }
+
+    /// Perform unreachable code elimination.
+    pub fn eliminate_unreachable_code<'a, FOI>(&mut self, fisa: FOI) -> CtonResult
+    where
+        FOI: Into<FlagsOrIsa<'a>>,
+    {
+        eliminate_unreachable_code(&mut self.func, &mut self.cfg, &self.domtree);
         self.verify_if(fisa)
     }
 
