@@ -14,7 +14,6 @@ use cretonne;
 use wasmparser::{Parser, ParserState, FuncType, ImportSectionEntryType, ExternalKind, WasmDecoder,
                  MemoryType, Operator};
 use wasmparser;
-use std::collections::HashMap;
 use std::str::from_utf8;
 use runtime::WasmRuntime;
 
@@ -68,7 +67,12 @@ pub fn parse_import_section(
                 module,
                 field,
             } => {
-                runtime.declare_func_import(sig as SignatureIndex, module, field);
+                // The input has already been validated, so we should be able to
+                // assume valid UTF-8 and use `from_utf8_unchecked` if performance
+                // becomes a concern here.
+                let module_name = from_utf8(module).unwrap();
+                let field_name = from_utf8(field).unwrap();
+                runtime.declare_func_import(sig as SignatureIndex, module_name, field_name);
             }
             ParserState::ImportSectionEntry {
                 ty: ImportSectionEntryType::Memory(MemoryType { limits: ref memlimits }), ..
@@ -126,8 +130,8 @@ pub fn parse_function_section(
 /// Retrieves the names of the functions from the export section
 pub fn parse_export_section(
     parser: &mut Parser,
-) -> Result<HashMap<FunctionIndex, String>, SectionParsingError> {
-    let mut exports: HashMap<FunctionIndex, String> = HashMap::new();
+    runtime: &mut WasmRuntime,
+) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
             ParserState::ExportSectionEntry {
@@ -135,21 +139,23 @@ pub fn parse_export_section(
                 ref kind,
                 index,
             } => {
+                // The input has already been validated, so we should be able to
+                // assume valid UTF-8 and use `from_utf8_unchecked` if performance
+                // becomes a concern here.
+                let name = from_utf8(field).unwrap();
+                let func_index = index as FunctionIndex;
                 match *kind {
-                    ExternalKind::Function => {
-                        exports.insert(
-                            index as FunctionIndex,
-                            String::from(from_utf8(field).unwrap()),
-                        );
-                    }
-                    _ => (),//TODO: deal with other kind of exports
+                    ExternalKind::Function => runtime.declare_func_export(func_index, name),
+                    ExternalKind::Table => runtime.declare_table_export(func_index, name),
+                    ExternalKind::Memory => runtime.declare_memory_export(func_index, name),
+                    ExternalKind::Global => runtime.declare_global_export(func_index, name),
                 }
             }
             ParserState::EndSection => break,
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
     }
-    Ok(exports)
+    Ok(())
 }
 
 /// Retrieves the start function index from the start section

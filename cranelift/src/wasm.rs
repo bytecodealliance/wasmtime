@@ -4,7 +4,7 @@
 //! IL. Can also executes the `start` function of the module by laying out the memories, globals
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
-use cton_wasm::{translate_module, DummyRuntime};
+use cton_wasm::{translate_module, DummyRuntime, WasmRuntime};
 use std::path::PathBuf;
 use cretonne::Context;
 use cretonne::settings::FlagsOrIsa;
@@ -113,7 +113,9 @@ fn handle_module(
         vprint!(flag_verbose, "Compiling... ");
     }
     terminal.reset().unwrap();
-    for func in &translation.functions {
+    let num_func_imports = dummy_runtime.get_num_func_imports();
+    for (def_index, func) in translation.functions.iter().enumerate() {
+        let func_index = num_func_imports + def_index;
         let mut context = Context::new();
         context.func = func.clone();
         if flag_check_translation {
@@ -131,6 +133,14 @@ fn handle_module(
         }
         if flag_print {
             vprintln!(flag_verbose, "");
+            if let Some(start_func) = dummy_runtime.start_func {
+                if func_index == start_func {
+                    println!("; Selected as wasm start function");
+                }
+            }
+            for export_name in &dummy_runtime.functions[func_index].export_names {
+                println!("; Exported as \"{}\"", export_name);
+            }
             println!("{}", context.func.display(fisa.isa));
             vprintln!(flag_verbose, "");
         }

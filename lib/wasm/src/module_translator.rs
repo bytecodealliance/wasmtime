@@ -5,10 +5,8 @@ use sections_translator::{SectionParsingError, parse_function_signatures, parse_
                           parse_function_section, parse_export_section, parse_start_section,
                           parse_memory_section, parse_global_section, parse_table_section,
                           parse_elements_section, parse_data_section};
-use translation_utils::FunctionIndex;
-use cretonne::ir::{Function, FunctionName};
+use cretonne::ir::Function;
 use func_translator::FuncTranslator;
-use std::collections::HashMap;
 use std::error::Error;
 use runtime::WasmRuntime;
 
@@ -34,7 +32,6 @@ pub fn translate_module(
         }
         ref s => panic!("modules should begin properly: {:?}", s),
     }
-    let mut exports: HashMap<FunctionIndex, String> = HashMap::new();
     let mut next_input = ParserInput::Default;
     loop {
         match *parser.read_with_input(next_input) {
@@ -92,8 +89,8 @@ pub fn translate_module(
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Export, .. } => {
-                match parse_export_section(&mut parser) {
-                    Ok(exps) => exports = exps,
+                match parse_export_section(&mut parser, runtime) {
+                    Ok(()) => {}
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the export section: {}", s))
                     }
@@ -155,9 +152,7 @@ pub fn translate_module(
         func.signature = runtime
             .get_signature(runtime.get_func_type(function_index))
             .clone();
-        if let Some(name) = exports.get(&function_index) {
-            func.name = FunctionName::new(name.clone());
-        }
+        func.name = runtime.get_name(function_index);
         trans
             .translate_from_reader(parser.create_binary_reader(), &mut func, runtime)
             .map_err(|e| String::from(e.description()))?;
