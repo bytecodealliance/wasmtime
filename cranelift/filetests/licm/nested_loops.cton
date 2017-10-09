@@ -3,50 +3,53 @@ test licm
 function %nested_loops(i32) -> i32 {
 
 ebb0(v0: i32):
-    v1 = iconst.i32 1
-    v2 = iconst.i32 2
-    v3 = iadd v1, v2
-    v4 = isub v0, v1
-    jump ebb1(v4,v4)
+    jump ebb1(v0)
 
-ebb1(v10: i32,v11: i32):
-    brz v11, ebb2(v10)
+ebb1(v1: i32):
+    v2 = iconst.i32 1
+    v3 = iconst.i32 2
+    v4 = iadd v2, v3
+    v5 = isub v1, v2
+    jump ebb2(v5, v5)
+
+ebb2(v10: i32, v11: i32):
+    brz v11, ebb3(v10)
     v12 = iconst.i32 1
-    v15 = iadd v12, v4
+    v15 = iadd v12, v5
     v13 = isub v11, v12
-    jump ebb1(v10,v13)
+    jump ebb2(v10,v13)
 
-ebb2(v20: i32):
-    brz v20, ebb3(v20)
-    jump ebb0(v20)
+ebb3(v20: i32):
+    brz v20, ebb4(v20)
+    jump ebb1(v20)
 
-ebb3(v30: i32):
+ebb4(v30: i32):
     return v30
 
 }
 
 ; sameln:function %nested_loops(i32) -> i32 {
-; nextln: ebb4(v12: i32):
-; nextln:     v1 = iconst.i32 1
-; nextln:     v2 = iconst.i32 2
-; nextln:     v3 = iadd v1, v2
-; nextln:     v7 = iconst.i32 1
-; nextln:     jump ebb0(v12)
-; nextln: 
 ; nextln: ebb0(v0: i32):
-; nextln:     v4 = isub v0, v1
-; nextln:     v8 = iadd.i32 v7, v4
-; nextln:     jump ebb1(v4, v4)
+; nextln:     v2 = iconst.i32 1
+; nextln:     v3 = iconst.i32 2
+; nextln:     v4 = iadd v2, v3
+; nextln:     v8 = iconst.i32 1
+; nextln:     jump ebb1(v0)
 ; nextln: 
-; nextln: ebb1(v5: i32, v6: i32):
-; nextln:     brz v6, ebb2(v5)
-; nextln:     v9 = isub v6, v7
-; nextln:     jump ebb1(v5, v9)
+; nextln: ebb1(v1: i32):
+; nextln:     v5 = isub v1, v2
+; nextln:     v9 = iadd.i32 v8, v5
+; nextln:     jump ebb2(v5, v5)
 ; nextln: 
-; nextln: ebb2(v10: i32):
-; nextln:     brz v10, ebb3(v10)
-; nextln:     jump ebb0(v10)
+; nextln: ebb2(v6: i32, v7: i32):
+; nextln:     brz v7, ebb3(v6)
+; nextln:     v10 = isub v7, v8
+; nextln:     jump ebb2(v6, v10)
 ; nextln: 
 ; nextln: ebb3(v11: i32):
-; nextln:     return v11
+; nextln:     brz v11, ebb4(v11)
+; nextln:     jump ebb1(v11)
+; nextln: 
+; nextln: ebb4(v12: i32):
+; nextln:     return v12
 ; nextln: }
