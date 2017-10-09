@@ -189,6 +189,10 @@ pub trait WasmRuntime: FuncEnvironment {
         offset: usize,
         data: &[u8],
     ) -> Result<(), String>;
+
+    /// Declares a start function.
+    fn declare_start_func(&mut self, index: FunctionIndex);
+
     /// Call this function after having declared all the runtime elements but prior to the
     /// function body translation.
     fn begin_translation(&mut self);

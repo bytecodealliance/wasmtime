@@ -22,6 +22,9 @@ pub struct DummyRuntime {
 
     // Compilation setting flags.
     flags: settings::Flags,
+
+    // The start function.
+    start_func: Option<FunctionIndex>,
 }
 
 impl DummyRuntime {
@@ -38,6 +41,7 @@ impl DummyRuntime {
             func_types: Vec::new(),
             imported_funcs: Vec::new(),
             flags,
+            start_func: None,
         }
     }
 }
@@ -175,6 +179,11 @@ impl WasmRuntime for DummyRuntime {
     ) -> Result<(), String> {
         // We do nothing
         Ok(())
+    }
+
+    fn declare_start_func(&mut self, func_index: FunctionIndex) {
+        debug_assert!(self.start_func.is_none());
+        self.start_func = Some(func_index);
     }
 
     fn begin_translation(&mut self) {

@@ -154,6 +154,23 @@ pub fn parse_export_section(
     Ok(exports)
 }
 
+/// Retrieves the start function index from the start section
+pub fn parse_start_section(
+    parser: &mut Parser,
+    runtime: &mut WasmRuntime,
+) -> Result<(), SectionParsingError> {
+    loop {
+        match *parser.read() {
+            ParserState::StartSectionEntry(index) => {
+                runtime.declare_start_func(index as FunctionIndex);
+            }
+            ParserState::EndSection => break,
+            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+        };
+    }
+    Ok(())
+}
+
 /// Retrieves the size and maximum fields of memories from the memory section
 pub fn parse_memory_section(
     parser: &mut Parser,
