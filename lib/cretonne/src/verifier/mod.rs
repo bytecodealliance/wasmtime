@@ -14,6 +14,7 @@
 //!    - The instruction format must match the opcode.
 //!    - All result values must be created for multi-valued instructions.
 //!    - All referenced entities must exist. (Values, EBBs, stack slots, ...)
+//!    - Instructions must not reference (eg. branch to) the entry block.
 //!
 //!   SSA form
 //!
@@ -352,10 +353,14 @@ impl<'a> Verifier<'a> {
 
     fn verify_ebb(&self, inst: Inst, e: Ebb) -> Result {
         if !self.func.dfg.ebb_is_valid(e) || !self.func.layout.is_ebb_inserted(e) {
-            err!(inst, "invalid ebb reference {}", e)
-        } else {
-            Ok(())
+            return err!(inst, "invalid ebb reference {}", e);
         }
+        if let Some(entry_block) = self.func.layout.entry_block() {
+            if e == entry_block {
+                return err!(inst, "invalid reference to entry ebb {}", e);
+            }
+        }
+        Ok(())
     }
 
     fn verify_sig_ref(&self, inst: Inst, s: SigRef) -> Result {

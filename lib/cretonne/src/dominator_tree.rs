@@ -597,10 +597,14 @@ mod test {
     #[test]
     fn renumbering() {
         let mut func = Function::new();
+        let entry = func.dfg.make_ebb();
         let ebb0 = func.dfg.make_ebb();
         let ebb100 = func.dfg.make_ebb();
 
         let mut cur = FuncCursor::new(&mut func);
+
+        cur.insert_ebb(entry);
+        cur.ins().jump(ebb0, &[]);
 
         cur.insert_ebb(ebb0);
         let cond = cur.ins().iconst(I32, 0);
