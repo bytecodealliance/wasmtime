@@ -146,6 +146,10 @@ impl WasmRuntime for DummyRuntime {
         self.imported_funcs.push(ir::FunctionName::new(name));
     }
 
+    fn get_num_func_imports(&self) -> usize {
+        self.imported_funcs.len()
+    }
+
     fn declare_func_type(&mut self, sig_index: SignatureIndex) {
         self.func_types.push(sig_index);
     }
