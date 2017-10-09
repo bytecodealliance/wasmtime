@@ -8,8 +8,12 @@ use std::ascii::AsciiExt;
 
 /// The name of a function can be any sequence of bytes.
 ///
-/// Function names are mostly a testing and debugging tool.
-/// In particular, `.cton` files use function names to identify functions.
+/// Function names are primarily used as keys by code using Cretonne to map
+/// from a cretonne::ir::Function to additional associated data.
+///
+/// Function names can also serve as a primitive testing and debugging tool.
+/// In particular, many `.cton` test files use function names to identify
+/// functions.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FunctionName(NameRepr);
 
