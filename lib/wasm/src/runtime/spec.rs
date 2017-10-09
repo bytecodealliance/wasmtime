@@ -159,6 +159,9 @@ pub trait WasmRuntime: FuncEnvironment {
     /// Declares a function import to the runtime.
     fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &[u8], field: &[u8]);
 
+    /// Return the number of imported funcs.
+    fn get_num_func_imports(&self) -> usize;
+
     /// Declares the type (signature) of a local function in the module.
     fn declare_func_type(&mut self, sig_index: SignatureIndex);
 

@@ -60,7 +60,6 @@ pub fn parse_function_signatures(
 pub fn parse_import_section(
     parser: &mut Parser,
     runtime: &mut WasmRuntime,
-    function_index: &mut FunctionIndex,
 ) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
@@ -70,7 +69,6 @@ pub fn parse_import_section(
                 field,
             } => {
                 runtime.declare_func_import(sig as SignatureIndex, module, field);
-                *function_index += 1;
             }
             ParserState::ImportSectionEntry {
                 ty: ImportSectionEntryType::Memory(MemoryType { limits: ref memlimits }), ..

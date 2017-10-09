@@ -36,7 +36,6 @@ pub fn translate_module(
     }
     let mut exports: HashMap<FunctionIndex, String> = HashMap::new();
     let mut next_input = ParserInput::Default;
-    let mut function_index: FunctionIndex = 0;
     loop {
         match *parser.read_with_input(next_input) {
             ParserState::BeginSection { code: SectionCode::Type, .. } => {
@@ -49,7 +48,7 @@ pub fn translate_module(
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Import, .. } => {
-                match parse_import_section(&mut parser, runtime, &mut function_index) {
+                match parse_import_section(&mut parser, runtime) {
                     Ok(()) => {}
                     Err(SectionParsingError::WrongSectionContent(s)) => {
                         return Err(format!("wrong content in the import section: {}", s))
@@ -139,6 +138,7 @@ pub fn translate_module(
         };
     }
     // At this point we've entered the code section
+    let num_func_imports = runtime.get_num_func_imports();
     let mut il_functions: Vec<Function> = Vec::new();
     let mut trans = FuncTranslator::new();
     runtime.begin_translation();
@@ -151,6 +151,7 @@ pub fn translate_module(
         runtime.next_function();
         // First we build the Function object with its name and signature
         let mut func = Function::new();
+        let function_index = num_func_imports + il_functions.len();
         func.signature = runtime
             .get_signature(runtime.get_func_type(function_index))
             .clone();
@@ -161,7 +162,6 @@ pub fn translate_module(
             .translate_from_reader(parser.create_binary_reader(), &mut func, runtime)
             .map_err(|e| String::from(e.description()))?;
         il_functions.push(func);
-        function_index += 1;
     }
     loop {
         match *parser.read() {
