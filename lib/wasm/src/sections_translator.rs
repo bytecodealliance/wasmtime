@@ -15,7 +15,7 @@ use wasmparser::{Parser, ParserState, FuncType, ImportSectionEntryType, External
                  MemoryType, Operator};
 use wasmparser;
 use std::str::from_utf8;
-use runtime::WasmRuntime;
+use runtime::ModuleEnvironment;
 
 pub enum SectionParsingError {
     WrongSectionContent(String),
@@ -24,7 +24,7 @@ pub enum SectionParsingError {
 /// Reads the Type Section of the wasm module and returns the corresponding function signatures.
 pub fn parse_function_signatures(
     parser: &mut Parser,
-    runtime: &mut WasmRuntime,
+    environ: &mut ModuleEnvironment,
 ) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
@@ -47,7 +47,7 @@ pub fn parse_function_signatures(
                     );
                     ArgumentType::new(cret_arg)
                 }));
-                runtime.declare_signature(&sig);
+                environ.declare_signature(&sig);
             }
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         }
@@ -58,7 +58,7 @@ pub fn parse_function_signatures(
 /// Retrieves the imports from the imports section of the binary.
 pub fn parse_import_section(
     parser: &mut Parser,
-    runtime: &mut WasmRuntime,
+    environ: &mut ModuleEnvironment,
 ) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
@@ -72,12 +72,12 @@ pub fn parse_import_section(
                 // becomes a concern here.
                 let module_name = from_utf8(module).unwrap();
                 let field_name = from_utf8(field).unwrap();
-                runtime.declare_func_import(sig as SignatureIndex, module_name, field_name);
+                environ.declare_func_import(sig as SignatureIndex, module_name, field_name);
             }
             ParserState::ImportSectionEntry {
                 ty: ImportSectionEntryType::Memory(MemoryType { limits: ref memlimits }), ..
             } => {
-                runtime.declare_memory(Memory {
+                environ.declare_memory(Memory {
                     pages_count: memlimits.initial as usize,
                     maximum: memlimits.maximum.map(|x| x as usize),
                 });
@@ -85,7 +85,7 @@ pub fn parse_import_section(
             ParserState::ImportSectionEntry {
                 ty: ImportSectionEntryType::Global(ref ty), ..
             } => {
-                runtime.declare_global(Global {
+                environ.declare_global(Global {
                     ty: type_to_type(&ty.content_type).unwrap(),
                     mutability: ty.mutable,
                     initializer: GlobalInit::Import(),
@@ -94,7 +94,7 @@ pub fn parse_import_section(
             ParserState::ImportSectionEntry {
                 ty: ImportSectionEntryType::Table(ref tab), ..
             } => {
-                runtime.declare_table(Table {
+                environ.declare_table(Table {
                     ty: match type_to_type(&tab.element_type) {
                         Ok(t) => TableElementType::Val(t),
                         Err(()) => TableElementType::Func(),
@@ -113,12 +113,12 @@ pub fn parse_import_section(
 /// Retrieves the correspondances between functions and signatures from the function section
 pub fn parse_function_section(
     parser: &mut Parser,
-    runtime: &mut WasmRuntime,
+    environ: &mut ModuleEnvironment,
 ) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
             ParserState::FunctionSectionEntry(sigindex) => {
-                runtime.declare_func_type(sigindex as SignatureIndex);
+                environ.declare_func_type(sigindex as SignatureIndex);
             }
             ParserState::EndSection => break,
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
@@ -130,7 +130,7 @@ pub fn parse_function_section(
 /// Retrieves the names of the functions from the export section
 pub fn parse_export_section(
     parser: &mut Parser,
-    runtime: &mut WasmRuntime,
+    environ: &mut ModuleEnvironment,
 ) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
@@ -145,10 +145,10 @@ pub fn parse_export_section(
                 let name = from_utf8(field).unwrap();
                 let func_index = index as FunctionIndex;
                 match *kind {
-                    ExternalKind::Function => runtime.declare_func_export(func_index, name),
-                    ExternalKind::Table => runtime.declare_table_export(func_index, name),
-                    ExternalKind::Memory => runtime.declare_memory_export(func_index, name),
-                    ExternalKind::Global => runtime.declare_global_export(func_index, name),
+                    ExternalKind::Function => environ.declare_func_export(func_index, name),
+                    ExternalKind::Table => environ.declare_table_export(func_index, name),
+                    ExternalKind::Memory => environ.declare_memory_export(func_index, name),
+                    ExternalKind::Global => environ.declare_global_export(func_index, name),
                 }
             }
             ParserState::EndSection => break,
@@ -161,12 +161,12 @@ pub fn parse_export_section(
 /// Retrieves the start function index from the start section
 pub fn parse_start_section(
     parser: &mut Parser,
-    runtime: &mut WasmRuntime,
+    environ: &mut ModuleEnvironment,
 ) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
             ParserState::StartSectionEntry(index) => {
-                runtime.declare_start_func(index as FunctionIndex);
+                environ.declare_start_func(index as FunctionIndex);
             }
             ParserState::EndSection => break,
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
@@ -178,12 +178,12 @@ pub fn parse_start_section(
 /// Retrieves the size and maximum fields of memories from the memory section
 pub fn parse_memory_section(
     parser: &mut Parser,
-    runtime: &mut WasmRuntime,
+    environ: &mut ModuleEnvironment,
 ) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
             ParserState::MemorySectionEntry(ref ty) => {
-                runtime.declare_memory(Memory {
+                environ.declare_memory(Memory {
                     pages_count: ty.limits.initial as usize,
                     maximum: ty.limits.maximum.map(|x| x as usize),
                 });
@@ -198,7 +198,7 @@ pub fn parse_memory_section(
 /// Retrieves the size and maximum fields of memories from the memory section
 pub fn parse_global_section(
     parser: &mut Parser,
-    runtime: &mut WasmRuntime,
+    environ: &mut ModuleEnvironment,
 ) -> Result<(), SectionParsingError> {
     loop {
         let (content_type, mutability) = match *parser.read() {
@@ -237,7 +237,7 @@ pub fn parse_global_section(
             mutability: mutability,
             initializer: initializer,
         };
-        runtime.declare_global(global);
+        environ.declare_global(global);
         match *parser.read() {
             ParserState::EndGlobalSectionEntry => (),
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
@@ -248,7 +248,7 @@ pub fn parse_global_section(
 
 pub fn parse_data_section(
     parser: &mut Parser,
-    runtime: &mut WasmRuntime,
+    environ: &mut ModuleEnvironment,
 ) -> Result<(), SectionParsingError> {
     loop {
         let memory_index = match *parser.read() {
@@ -265,7 +265,7 @@ pub fn parse_data_section(
                 (None, value as u32 as usize)
             }
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
-                match runtime.get_global(global_index as GlobalIndex).initializer {
+                match environ.get_global(global_index as GlobalIndex).initializer {
                     GlobalInit::I32Const(value) => (None, value as u32 as usize),
                     GlobalInit::Import() => (Some(global_index as GlobalIndex), 0),
                     _ => panic!("should not happen"),
@@ -288,7 +288,7 @@ pub fn parse_data_section(
                 ParserState::EndDataSectionEntryBody => break,
                 ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
             };
-            runtime.declare_data_initialization(
+            environ.declare_data_initialization(
                 memory_index as MemoryIndex,
                 base,
                 running_offset,
@@ -307,12 +307,12 @@ pub fn parse_data_section(
 /// Retrieves the tables from the table section
 pub fn parse_table_section(
     parser: &mut Parser,
-    runtime: &mut WasmRuntime,
+    environ: &mut ModuleEnvironment,
 ) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
             ParserState::TableSectionEntry(ref table) => {
-                runtime.declare_table(Table {
+                environ.declare_table(Table {
                     ty: match type_to_type(&table.element_type) {
                         Ok(t) => TableElementType::Val(t),
                         Err(()) => TableElementType::Func(),
@@ -331,7 +331,7 @@ pub fn parse_table_section(
 /// Retrieves the tables from the table section
 pub fn parse_elements_section(
     parser: &mut Parser,
-    runtime: &mut WasmRuntime,
+    environ: &mut ModuleEnvironment,
 ) -> Result<(), SectionParsingError> {
     loop {
         let table_index = match *parser.read() {
@@ -348,7 +348,7 @@ pub fn parse_elements_section(
                 (None, value as u32 as usize)
             }
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
-                match runtime.get_global(global_index as GlobalIndex).initializer {
+                match environ.get_global(global_index as GlobalIndex).initializer {
                     GlobalInit::I32Const(value) => (None, value as u32 as usize),
                     GlobalInit::Import() => (Some(global_index as GlobalIndex), 0),
                     _ => panic!("should not happen"),
@@ -364,7 +364,7 @@ pub fn parse_elements_section(
             ParserState::ElementSectionEntryBody(ref elements) => {
                 let elems: Vec<FunctionIndex> =
                     elements.iter().map(|&x| x as FunctionIndex).collect();
-                runtime.declare_table_elements(table_index, base, offset, &elems)
+                environ.declare_table_elements(table_index, base, offset, &elems)
             }
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
