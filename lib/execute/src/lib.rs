@@ -21,7 +21,6 @@ use cton_wasm::{TranslationResult, FunctionIndex};
 use std::mem::transmute;
 use region::Protection;
 use region::protect;
-use std::collections::HashMap;
 use std::ptr::write_unaligned;
 use std::fmt::Write;
 
@@ -29,9 +28,9 @@ type RelocRef = u16;
 
 // Implementation of a relocation sink that just saves all the information for later
 struct StandaloneRelocSink {
-    ebbs: HashMap<RelocRef, (Ebb, CodeOffset)>,
-    funcs: HashMap<RelocRef, (FuncRef, CodeOffset)>,
-    jts: HashMap<RelocRef, (JumpTable, CodeOffset)>,
+    ebbs: Vec<(RelocRef, Ebb, CodeOffset)>,
+    funcs: Vec<(RelocRef, FuncRef, CodeOffset)>,
+    jts: Vec<(RelocRef, JumpTable, CodeOffset)>,
 }
 
 // Contains all the metadata necessary to perform relocations
@@ -42,22 +41,22 @@ struct FunctionMetaData {
 
 impl RelocSink for StandaloneRelocSink {
     fn reloc_ebb(&mut self, offset: CodeOffset, reloc: Reloc, ebb: Ebb) {
-        self.ebbs.insert(reloc.0, (ebb, offset));
+        self.ebbs.push((reloc.0, ebb, offset));
     }
     fn reloc_func(&mut self, offset: CodeOffset, reloc: Reloc, func: FuncRef) {
-        self.funcs.insert(reloc.0, (func, offset));
+        self.funcs.push((reloc.0, func, offset));
     }
     fn reloc_jt(&mut self, offset: CodeOffset, reloc: Reloc, jt: JumpTable) {
-        self.jts.insert(reloc.0, (jt, offset));
+        self.jts.push((reloc.0, jt, offset));
     }
 }
 
 impl StandaloneRelocSink {
     fn new() -> Self {
         Self {
-            ebbs: HashMap::new(),
-            funcs: HashMap::new(),
-            jts: HashMap::new(),
+            ebbs: Vec::new(),
+            funcs: Vec::new(),
+            jts: Vec::new(),
         }
     }
 }
@@ -165,7 +164,7 @@ fn relocate(
             ref relocs,
             ref il_func,
         } = *function_in_memory;
-        for &(func_ref, offset) in relocs.funcs.values() {
+        for &(_reloc, func_ref, offset) in &relocs.funcs {
             let target_func_index = runtime.func_indices[func_ref] - runtime.imported_funcs.len();
             let target_func_address: isize = functions_code[target_func_index].as_ptr() as isize;
             unsafe {
@@ -177,7 +176,7 @@ fn relocate(
                 write_unaligned(reloc_address as *mut i32, reloc_delta_i32);
             }
         }
-        for &(ebb, offset) in relocs.ebbs.values() {
+        for &(_reloc, ebb, offset) in &relocs.ebbs {
             unsafe {
                 let reloc_address: isize = functions_code[func_index].as_mut_ptr().offset(
                     offset as isize +
