@@ -103,6 +103,7 @@ use entity::{SparseMap, SparseMapValue};
 use ir::Value;
 use isa::{RegClass, RegUnit};
 use regalloc::allocatable_set::RegSetIter;
+use std::cmp;
 use std::fmt;
 use std::mem;
 use super::AllocatableSet;
@@ -161,14 +162,14 @@ impl Variable {
         }
     }
 
-    fn new_def(value: Value, constraint: RegClass) -> Variable {
+    fn new_def(value: Value, constraint: RegClass, is_global: bool) -> Variable {
         Variable {
             value,
             constraint,
             from: None,
             is_input: false,
             is_output: true,
-            is_global: false,
+            is_global,
             domain: 0,
             solution: !0,
         }
@@ -180,17 +181,27 @@ impl Variable {
     }
 
     /// Get an iterator over possible register choices, given the available registers on the input
-    /// and output sides respectively.
-    fn iter(&self, iregs: &AllocatableSet, oregs: &AllocatableSet) -> RegSetIter {
-        if self.is_input && self.is_output {
-            let mut r = iregs.clone();
-            r.intersect(oregs);
-            r.iter(self.constraint)
-        } else if self.is_input {
-            iregs.iter(self.constraint)
-        } else {
-            oregs.iter(self.constraint)
+    /// and output sides as well as the available global register set.
+    fn iter(
+        &self,
+        iregs: &AllocatableSet,
+        oregs: &AllocatableSet,
+        gregs: &AllocatableSet,
+    ) -> RegSetIter {
+        if !self.is_output {
+            debug_assert!(!self.is_global, "Global implies output");
+            debug_assert!(self.is_input, "Missing interference set");
+            return iregs.iter(self.constraint);
         }
+
+        let mut r = oregs.clone();
+        if self.is_input {
+            r.intersect(iregs);
+        }
+        if self.is_global {
+            r.intersect(gregs);
+        }
+        r.iter(self.constraint)
     }
 }
 
@@ -736,7 +747,7 @@ impl Solver {
     ///
     /// The output value that must have the same register as the input value is not recorded in the
     /// solver.
-    pub fn add_tied_input(&mut self, value: Value, rc: RegClass, reg: RegUnit) {
+    pub fn add_tied_input(&mut self, value: Value, rc: RegClass, reg: RegUnit, is_global: bool) {
         debug_assert!(self.inputs_done);
 
         // If a fixed assignment is tied, the `to` register is not available on the output side.
@@ -750,10 +761,22 @@ impl Solver {
         if let Some(v) = self.vars.iter_mut().find(|v| v.value == value) {
             assert!(v.is_input);
             v.is_output = true;
+            v.is_global = is_global;
             return;
         }
 
-        self.regs_out.take(rc, reg);
+        // No variable exists for `value` because its constraints are already satisfied.
+        // However, if the tied output value has a global live range, we must create a variable to
+        // avoid global interference too.
+        if is_global {
+            let mut new_var = Variable::new_live(value, rc, reg, true);
+            new_var.is_global = true;
+            dbg!("add_tied_input: new tied-global var: {}", new_var);
+            self.vars.push(new_var);
+            self.regs_in.free(rc, reg);
+        } else {
+            self.regs_out.take(rc, reg);
+        }
     }
 
     /// Add a fixed output assignment.
@@ -778,10 +801,39 @@ impl Solver {
     /// Add a defined output value.
     ///
     /// This is similar to `add_var`, except the value doesn't have a prior register assignment.
-    pub fn add_def(&mut self, value: Value, constraint: RegClass) {
+    pub fn add_def(&mut self, value: Value, constraint: RegClass, is_global: bool) {
         debug_assert!(self.inputs_done);
-        self.vars.push(Variable::new_def(value, constraint));
+        self.vars.push(
+            Variable::new_def(value, constraint, is_global),
+        );
     }
+
+    /// Clear the `is_global` flag on all solver variables.
+    ///
+    /// This is used when there are not enough global registers available, and global defines have
+    /// to be replaced with local defines followed by a copy.
+    pub fn clear_all_global_flags(&mut self) {
+        for v in &mut self.vars {
+            v.is_global = false;
+        }
+    }
+}
+
+/// Error reported when the solver fails to find a solution with the current constraints.
+///
+/// When no solution can be found, the error indicates how constraints could be loosened to help.
+pub enum SolverError {
+    /// There are not available registers in the given register class.
+    ///
+    /// This should be resolved by turning live-through values into variables so they can be moved
+    /// out of the way.
+    Divert(RegClass),
+
+    /// There are insufficient available registers in the global set to assign an `is_global`
+    /// variable with the given value.
+    ///
+    /// This should be resolved by converting the variable to a local one.
+    Global(Value),
 }
 
 /// Interface for searching for a solution.
@@ -792,8 +844,11 @@ impl Solver {
     /// always trivial.
     ///
     /// Returns `Ok(regs)` if a solution was found.
-    pub fn quick_solve(&mut self) -> Result<AllocatableSet, RegClass> {
-        self.find_solution()
+    pub fn quick_solve(
+        &mut self,
+        global_regs: &AllocatableSet,
+    ) -> Result<AllocatableSet, SolverError> {
+        self.find_solution(global_regs)
     }
 
     /// Try harder to find a solution.
@@ -803,9 +858,21 @@ impl Solver {
     /// This may return an error with a register class that has run out of registers. If registers
     /// can be freed up in the starving class, this method can be called again after adding
     /// variables for the freed registers.
-    pub fn real_solve(&mut self) -> Result<AllocatableSet, RegClass> {
-        // TODO: Sort variables to assign smallest register classes first.
-        self.find_solution()
+    pub fn real_solve(
+        &mut self,
+        global_regs: &AllocatableSet,
+    ) -> Result<AllocatableSet, SolverError> {
+        // Compute domain sizes for all the variables given the current register sets.
+        for v in &mut self.vars {
+            let d = v.iter(&self.regs_in, &self.regs_out, global_regs).len();
+            v.domain = cmp::min(d, u16::max_value() as usize) as u16;
+        }
+        // Solve for vars with small domains first to increase the chance of finding a solution.
+        // Use the value number as a tie breaker to get a stable sort.
+        self.vars.sort_unstable_by_key(|v| (v.domain, v.value));
+
+        dbg!("real_solve for {}", self);
+        self.find_solution(global_regs)
     }
 
     /// Search for a solution with the current list of variables.
@@ -813,16 +880,28 @@ impl Solver {
     /// If a solution was found, returns `Ok(regs)` with the set of available registers on the
     /// output side after the solution. If no solution could be found, returns `Err(rc)` with the
     /// constraint register class that needs more available registers.
-    fn find_solution(&mut self) -> Result<AllocatableSet, RegClass> {
+    fn find_solution(
+        &mut self,
+        global_regs: &AllocatableSet,
+    ) -> Result<AllocatableSet, SolverError> {
         // Available registers on the input and output sides respectively.
         let mut iregs = self.regs_in.clone();
         let mut oregs = self.regs_out.clone();
+        let mut gregs = global_regs.clone();
 
         for v in &mut self.vars {
             let rc = v.constraint;
-            let reg = match v.iter(&iregs, &oregs).next() {
-                None => return Err(rc),
+            let reg = match v.iter(&iregs, &oregs, &gregs).next() {
                 Some(reg) => reg,
+                None => {
+                    // If `v` must avoid global interference, there is not point in requesting
+                    // live registers be diverted. We need to make it a non-global variable.
+                    if v.is_global && gregs.iter(rc).next().is_none() {
+                        return Err(SolverError::Global(v.value));
+                    } else {
+                        return Err(SolverError::Divert(rc));
+                    }
+                }
             };
 
             v.solution = reg;
@@ -831,6 +910,9 @@ impl Solver {
             }
             if v.is_output {
                 oregs.take(rc, reg);
+            }
+            if v.is_global {
+                gregs.take(rc, reg);
             }
         }
 
@@ -1083,6 +1165,7 @@ mod tests {
         let r0 = gpr.unit(0);
         let r1 = gpr.unit(1);
         let r2 = gpr.unit(2);
+        let gregs = AllocatableSet::new();
         let mut regs = AllocatableSet::new();
         let mut solver = Solver::new();
         let v10 = Value::new(10);
@@ -1093,7 +1176,7 @@ mod tests {
         solver.reset(&regs);
         solver.reassign_in(v10, gpr, r1, r0);
         solver.inputs_done();
-        assert!(solver.quick_solve().is_ok());
+        assert!(solver.quick_solve(&gregs).is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(solver.moves(), &[mov(v10, gpr, r1, r0)]);
 
@@ -1103,7 +1186,7 @@ mod tests {
         solver.reassign_in(v10, gpr, r0, r1);
         solver.reassign_in(v11, gpr, r1, r2);
         solver.inputs_done();
-        assert!(solver.quick_solve().is_ok());
+        assert!(solver.quick_solve(&gregs).is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(
             solver.moves(),
@@ -1115,7 +1198,7 @@ mod tests {
         solver.reassign_in(v10, gpr, r0, r1);
         solver.reassign_in(v11, gpr, r1, r0);
         solver.inputs_done();
-        assert!(solver.quick_solve().is_ok());
+        assert!(solver.quick_solve(&gregs).is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(
             solver.moves(),
@@ -1140,6 +1223,7 @@ mod tests {
         let s1 = s.unit(1);
         let s2 = s.unit(2);
         let s3 = s.unit(3);
+        let gregs = AllocatableSet::new();
         let mut regs = AllocatableSet::new();
         let mut solver = Solver::new();
         let v10 = Value::new(10);
@@ -1154,7 +1238,7 @@ mod tests {
         solver.reassign_in(v11, s, s2, s0);
         solver.reassign_in(v12, s, s3, s1);
         solver.inputs_done();
-        assert!(solver.quick_solve().is_ok());
+        assert!(solver.quick_solve(&gregs).is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(
             solver.moves(),
@@ -1175,7 +1259,7 @@ mod tests {
         solver.reassign_in(v12, s, s1, s3);
         solver.reassign_in(v10, d, d1, d0);
         solver.inputs_done();
-        assert!(solver.quick_solve().is_ok());
+        assert!(solver.quick_solve(&gregs).is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(
             solver.moves(),
@@ -1199,6 +1283,7 @@ mod tests {
         let r3 = gpr.unit(3);
         let r4 = gpr.unit(4);
         let r5 = gpr.unit(5);
+        let gregs = AllocatableSet::new();
         let mut regs = AllocatableSet::new();
         let mut solver = Solver::new();
         let v10 = Value::new(10);
@@ -1219,7 +1304,7 @@ mod tests {
         solver.reassign_in(v11, gpr, r1, r2);
         solver.reassign_in(v12, gpr, r2, r0);
         solver.inputs_done();
-        assert!(solver.quick_solve().is_ok());
+        assert!(solver.quick_solve(&gregs).is_ok());
         assert_eq!(solver.schedule_moves(&regs), 1);
         assert_eq!(
             solver.moves(),
@@ -1243,7 +1328,7 @@ mod tests {
         solver.reassign_in(v15, gpr, r5, r3);
 
         solver.inputs_done();
-        assert!(solver.quick_solve().is_ok());
+        assert!(solver.quick_solve(&gregs).is_ok());
         // We resolve two cycles with one spill.
         assert_eq!(solver.schedule_moves(&regs), 1);
         assert_eq!(

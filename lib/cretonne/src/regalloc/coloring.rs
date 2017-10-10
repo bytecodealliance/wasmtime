@@ -45,7 +45,7 @@
 use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
 use ir::{Ebb, Inst, Value, Function, ValueLoc, SigRef};
-use ir::{InstBuilder, ArgumentType, ArgumentLoc};
+use ir::{InstBuilder, ArgumentType, ArgumentLoc, ValueDef};
 use isa::{RegUnit, RegClass, RegInfo, regs_overlap};
 use isa::{TargetIsa, EncInfo, RecipeConstraints, OperandConstraint, ConstraintKind};
 use packed_option::PackedOption;
@@ -55,7 +55,8 @@ use regalloc::allocatable_set::AllocatableSet;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
 use regalloc::liverange::LiveRange;
-use regalloc::solver::Solver;
+use regalloc::solver::{Solver, SolverError};
+use std::mem;
 
 
 /// Data structures for the coloring pass.
@@ -156,13 +157,16 @@ impl<'a> Context<'a> {
         self.cur.goto_top(ebb);
         while let Some(inst) = self.cur.next_inst() {
             self.cur.use_srcloc(inst);
-            if let Some(constraints) =
-                self.encinfo.operand_constraints(
-                    self.cur.func.encodings[inst],
-                )
-            {
-                self.visit_inst(inst, constraints, tracker, &mut regs);
+            let enc = self.cur.func.encodings[inst];
+            if let Some(constraints) = self.encinfo.operand_constraints(enc) {
+                if self.visit_inst(inst, constraints, tracker, &mut regs) {
+                    self.replace_global_defines(inst, tracker);
+                    // Restore cursor location after `replace_global_defines` moves it.
+                    // We want to revisit the copy instructions it inserted.
+                    self.cur.goto_inst(inst);
+                }
             } else {
+                // This is a ghost instruction with no encoding.
                 let (_throughs, kills) = tracker.process_ghost(inst);
                 self.process_ghost_kills(kills, &mut regs);
             }
@@ -173,7 +177,7 @@ impl<'a> Context<'a> {
     /// Visit the `ebb` header.
     ///
     /// Initialize the set of live registers and color the arguments to `ebb`.
-    fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) -> AllocatableSet {
+    fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) -> AvailableRegs {
         // Reposition the live value tracker and deal with the EBB arguments.
         tracker.ebb_top(
             ebb,
@@ -198,31 +202,26 @@ impl<'a> Context<'a> {
     ///
     /// Also process the EBB arguments which were colored when the first predecessor branch was
     /// encountered.
-    fn livein_regs(&self, live: &[LiveValue]) -> AllocatableSet {
+    fn livein_regs(&self, live: &[LiveValue]) -> AvailableRegs {
         // Start from the registers that are actually usable. We don't want to include any reserved
         // registers in the set.
-        let mut regs = self.usable_regs.clone();
+        let mut regs = AvailableRegs::new(&self.usable_regs);
 
         for lv in live.iter().filter(|lv| !lv.is_dead) {
-            let value = lv.value;
-            let affinity = self.liveness
-                .get(value)
-                .expect("No live range for live-in")
-                .affinity;
             dbg!(
                 "Live-in: {}:{} in {}",
-                value,
-                affinity.display(&self.reginfo),
-                self.cur.func.locations[value].display(&self.reginfo)
+                lv.value,
+                lv.affinity.display(&self.reginfo),
+                self.cur.func.locations[lv.value].display(&self.reginfo)
             );
-            if let Affinity::Reg(rci) = affinity {
+            if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
-                let loc = self.cur.func.locations[value];
+                let loc = self.cur.func.locations[lv.value];
                 match loc {
-                    ValueLoc::Reg(reg) => regs.take(rc, reg),
-                    ValueLoc::Unassigned => panic!("Live-in {} wasn't assigned", value),
+                    ValueLoc::Reg(reg) => regs.take(rc, reg, lv.is_local),
+                    ValueLoc::Unassigned => panic!("Live-in {} wasn't assigned", lv.value),
                     ValueLoc::Stack(ss) => {
-                        panic!("Live-in {} is in {}, should be register", value, ss)
+                        panic!("Live-in {} is in {}, should be register", lv.value, ss)
                     }
                 }
             }
@@ -237,11 +236,11 @@ impl<'a> Context<'a> {
     /// function signature.
     ///
     /// Return the set of remaining allocatable registers after filtering out the dead arguments.
-    fn color_entry_args(&mut self, args: &[LiveValue]) -> AllocatableSet {
+    fn color_entry_args(&mut self, args: &[LiveValue]) -> AvailableRegs {
         let sig = &self.cur.func.signature;
         assert_eq!(sig.argument_types.len(), args.len());
 
-        let mut regs = self.usable_regs.clone();
+        let mut regs = AvailableRegs::new(&self.usable_regs);
 
         for (lv, abi) in args.iter().zip(&sig.argument_types) {
             match lv.affinity {
@@ -249,7 +248,7 @@ impl<'a> Context<'a> {
                     let rc = self.reginfo.rc(rci);
                     if let ArgumentLoc::Reg(reg) = abi.location {
                         if !lv.is_dead {
-                            regs.take(rc, reg);
+                            regs.take(rc, reg, lv.is_local);
                         }
                         self.cur.func.locations[lv.value] = ValueLoc::Reg(reg);
                     } else {
@@ -279,17 +278,19 @@ impl<'a> Context<'a> {
     ///
     /// Update `regs` to reflect the allocated registers after `inst`, including removing any dead
     /// or killed values from the set.
+    ///
+    /// Returns true when the global values defined by `inst` must be replaced by local values.
     fn visit_inst(
         &mut self,
         inst: Inst,
         constraints: &RecipeConstraints,
         tracker: &mut LiveValueTracker,
-        regs: &mut AllocatableSet,
-    ) {
+        regs: &mut AvailableRegs,
+    ) -> bool {
         dbg!(
             "Coloring {}\n    from {}",
             self.cur.display_inst(inst),
-            regs.display(&self.reginfo)
+            regs.input.display(&self.reginfo),
         );
 
         // EBB whose arguments should be colored to match the current branch instruction's
@@ -297,7 +298,7 @@ impl<'a> Context<'a> {
         let mut color_dest_args = None;
 
         // Program the solver with register constraints for the input side.
-        self.solver.reset(regs);
+        self.solver.reset(&regs.input);
         self.program_input_constraints(inst, constraints.ins);
         let call_sig = self.cur.func.dfg.call_signature(inst);
         if let Some(sig) = call_sig {
@@ -352,13 +353,30 @@ impl<'a> Context<'a> {
         // Get rid of the killed values.
         for lv in kills {
             if let Affinity::Reg(rci) = lv.affinity {
-                self.solver.add_kill(
+                let rc = self.reginfo.rc(rci);
+                let reg = self.divert.reg(lv.value, &self.cur.func.locations);
+                dbg!(
+                    "    kill {} in {} ({} {})",
                     lv.value,
-                    self.reginfo.rc(rci),
-                    self.divert.reg(lv.value, &self.cur.func.locations),
+                    self.reginfo.display_regunit(reg),
+                    if lv.is_local { "local" } else { "global" },
+                    rc
                 );
+                self.solver.add_kill(lv.value, rc, reg);
+
+                // Update the global register set which has no diversions.
+                if !lv.is_local {
+                    regs.global.free(
+                        rc,
+                        self.cur.func.locations[lv.value].unwrap_reg(),
+                    );
+                }
             }
         }
+
+        // This aligns with the "    from" line at the top of the function.
+        dbg!("    glob {}", regs.global.display(&self.reginfo));
+
 
         // Program the fixed output constraints before the general defines. This allows us to
         // detect conflicts between fixed outputs and tied operands where the input value hasn't
@@ -371,17 +389,22 @@ impl<'a> Context<'a> {
         }
         self.program_output_constraints(inst, constraints.outs, defs);
 
+        // This flag is set when the solver failed to find a solution for the global defines that
+        // doesn't interfere with `regs.global`. We need to rewrite all of `inst`s global defines
+        // as local defines followed by copies.
+        let mut replace_global_defines = false;
+
         // Finally, we've fully programmed the constraint solver.
         // We expect a quick solution in most cases.
-        let mut output_regs = self.solver.quick_solve().unwrap_or_else(|rc| {
-            dbg!("quick_solve needs more {} regs for {}", rc, self.solver);
-            self.iterate_solution(throughs)
+        let output_regs = self.solver.quick_solve(&regs.global).unwrap_or_else(|_| {
+            dbg!("quick_solve failed for {}", self.solver);
+            self.iterate_solution(throughs, &regs.global, &mut replace_global_defines)
         });
 
 
         // The solution and/or fixed input constraints may require us to shuffle the set of live
         // registers around.
-        self.shuffle_inputs(regs);
+        self.shuffle_inputs(&mut regs.input);
 
         // If this is the first time we branch to `dest`, color its arguments to match the current
         // register state.
@@ -406,20 +429,42 @@ impl<'a> Context<'a> {
             }
         }
 
-        // Update `regs` for the next instruction, remove the dead defs.
+        // Update `regs` for the next instruction.
+        regs.input = output_regs;
         for lv in defs {
-            if lv.endpoint == inst {
-                if let Affinity::Reg(rci) = lv.affinity {
-                    let rc = self.reginfo.rc(rci);
-                    let reg = self.divert.reg(lv.value, &self.cur.func.locations);
-                    output_regs.free(rc, reg);
+            let loc = self.cur.func.locations[lv.value];
+            dbg!(
+                "    color {} -> {}{}",
+                lv.value,
+                loc.display(&self.reginfo),
+                if lv.is_local {
+                    ""
+                } else if replace_global_defines {
+                    " (global to be replaced)"
+                } else {
+                    " (global)"
+                }
+            );
+
+            if let Affinity::Reg(rci) = lv.affinity {
+                let rc = self.reginfo.rc(rci);
+
+                // Remove the dead defs.
+                if lv.endpoint == inst {
+                    regs.input.free(rc, loc.unwrap_reg());
+                    debug_assert!(lv.is_local);
+                }
+
+                // Track globals in their undiverted locations.
+                if !lv.is_local && !replace_global_defines {
+                    regs.global.take(rc, loc.unwrap_reg());
                 }
             }
         }
 
         self.forget_diverted(kills);
 
-        *regs = output_regs;
+        replace_global_defines
     }
 
     /// Program the input-side constraints for `inst` into the constraint solver.
@@ -701,7 +746,7 @@ impl<'a> Context<'a> {
                 ConstraintKind::FixedReg(_) |
                 ConstraintKind::Stack => continue,
                 ConstraintKind::Reg => {
-                    self.solver.add_def(lv.value, op.regclass);
+                    self.solver.add_def(lv.value, op.regclass, !lv.is_local);
                 }
                 ConstraintKind::Tied(num) => {
                     // Find the input operand we're tied to.
@@ -711,6 +756,7 @@ impl<'a> Context<'a> {
                         arg,
                         op.regclass,
                         self.divert.reg(arg, &self.cur.func.locations),
+                        !lv.is_local,
                     );
                 }
             }
@@ -721,23 +767,35 @@ impl<'a> Context<'a> {
     ///
     /// We may need to move more registers around before a solution is possible. Use an iterative
     /// algorithm that adds one more variable until a solution can be found.
-    fn iterate_solution(&mut self, throughs: &[LiveValue]) -> AllocatableSet {
+    fn iterate_solution(
+        &mut self,
+        throughs: &[LiveValue],
+        global_regs: &AllocatableSet,
+        replace_global_defines: &mut bool,
+    ) -> AllocatableSet {
         // Make sure `try_add_var()` below doesn't create a variable with too loose constraints.
         self.program_complete_input_constraints();
 
         loop {
-            dbg!("real_solve for {}", self.solver);
-            let rc = match self.solver.real_solve() {
+            match self.solver.real_solve(global_regs) {
                 Ok(regs) => return regs,
-                Err(rc) => rc,
+                Err(SolverError::Divert(rc)) => {
+                    // Do we have any live-through `rc` registers that are not already variables?
+                    assert!(
+                        self.try_add_var(rc, throughs),
+                        "Ran out of registers in {}",
+                        rc
+                    );
+                }
+                Err(SolverError::Global(value)) => {
+                    dbg!("Not enough global registers for {}, trying as local", value);
+                    // We'll clear the `is_global` flag on all solver variables and instead make a
+                    // note to replace all global defines with local defines followed by a copy.
+                    *replace_global_defines = true;
+                    self.solver.clear_all_global_flags();
+                }
             };
 
-            // Do we have any live-through `rc` registers that are not already variables?
-            assert!(
-                self.try_add_var(rc, throughs),
-                "Ran out of registers in {}",
-                rc
-            );
         }
     }
 
@@ -749,7 +807,7 @@ impl<'a> Context<'a> {
             if let Affinity::Reg(rci) = lv.affinity {
                 // The new variable gets to roam the whole top-level register class because it is
                 // not actually constrained by the instruction. We just want it out of the way.
-                let toprc2 = self.reginfo.rc(rci);
+                let toprc2 = self.reginfo.toprc(rci);
                 let reg2 = self.divert.reg(lv.value, &self.cur.func.locations);
                 if rc.contains(reg2) && self.solver.can_add_var(lv.value, toprc2, reg2) &&
                     !self.is_live_on_outgoing_edge(lv.value)
@@ -856,10 +914,82 @@ impl<'a> Context<'a> {
         }
     }
 
+    /// Replace all global values define by `inst` with local values that are then copied into the
+    /// global value:
+    ///
+    ///   v1 = foo
+    ///
+    /// becomes:
+    ///
+    ///   v20 = foo
+    ///   v1 = copy v20
+    ///
+    /// This is sometimes necessary when there are no global registers available that can satisfy
+    /// the constraints on the instruction operands.
+    ///
+    fn replace_global_defines(&mut self, inst: Inst, tracker: &mut LiveValueTracker) {
+        dbg!("Replacing global defs on {}", self.cur.display_inst(inst));
+
+        // We'll insert copies *after `inst`. Our caller will move the cursor back.
+        self.cur.next_inst();
+
+        // The tracker keeps the defs from `inst` at the end. Any dead defs have already been
+        // removed, so it's not obvious how many defs to process
+        for lv in tracker.live_mut().iter_mut().rev() {
+            // Keep going until we reach a value that is not defined by `inst`.
+            if match self.cur.func.dfg.value_def(lv.value) {
+                ValueDef::Res(i, _) => i != inst,
+                _ => true,
+            }
+            {
+                break;
+            }
+            if lv.is_local || !lv.affinity.is_reg() {
+                continue;
+            }
+
+            // Now `lv.value` is globally live and defined by `inst`. Replace it with a local live
+            // range that is copied after `inst`.
+            let ty = self.cur.func.dfg.value_type(lv.value);
+            let local = self.cur.func.dfg.replace_result(lv.value, ty);
+            self.cur.ins().with_result(lv.value).copy(local);
+            let copy = self.cur.built_inst();
+
+            // Create a live range for `local: inst -> copy`.
+            self.liveness.create_dead(local, inst, lv.affinity);
+            self.liveness.extend_locally(
+                local,
+                self.cur.func.layout.pp_ebb(inst),
+                copy,
+                &self.cur.func.layout,
+            );
+
+            // Move the definition of the global `lv.value`.
+            self.liveness.move_def_locally(lv.value, copy);
+
+            // Transfer the register coloring to `local`.
+            let loc = mem::replace(&mut self.cur.func.locations[lv.value], ValueLoc::default());
+            self.cur.func.locations[local] = loc;
+
+            // Update `lv` to reflect the new `local` live range.
+            lv.value = local;
+            lv.endpoint = copy;
+            lv.is_local = true;
+
+            dbg!(
+                "  + {} with {} in {}",
+                self.cur.display_inst(copy),
+                local,
+                loc.display(&self.reginfo)
+            );
+        }
+        dbg!("Done: {}", self.cur.display_inst(inst));
+    }
+
     /// Process kills on a ghost instruction.
     /// - Forget diversions.
     /// - Free killed registers.
-    fn process_ghost_kills(&mut self, kills: &[LiveValue], regs: &mut AllocatableSet) {
+    fn process_ghost_kills(&mut self, kills: &[LiveValue], regs: &mut AvailableRegs) {
         for lv in kills {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
@@ -867,7 +997,13 @@ impl<'a> Context<'a> {
                     Some(loc) => loc,
                     None => self.cur.func.locations[lv.value],
                 };
-                regs.free(rc, loc.unwrap_reg());
+                regs.input.free(rc, loc.unwrap_reg());
+                if !lv.is_local {
+                    regs.global.free(
+                        rc,
+                        self.cur.func.locations[lv.value].unwrap_reg(),
+                    );
+                }
             }
         }
     }
@@ -899,6 +1035,39 @@ fn program_input_abi(
             } else {
                 panic!("ABI argument {} should be in a register", value);
             }
+        }
+    }
+}
+
+/// Keep track of the set of available registers in two interference domains: all registers
+/// considering diversions and global registers not considering diversions.
+struct AvailableRegs {
+    /// The exact set of registers available on the input side of the current instruction. This
+    /// takes into account register diversions, and it includes both local and global live ranges.
+    input: AllocatableSet,
+
+    /// Registers available for allocating globally live values. This set ignores any local values,
+    /// and it does not account for register diversions.
+    ///
+    /// Global values must be allocated out of this set because conflicts with other global values
+    /// can't be resolved with local diversions.
+    global: AllocatableSet,
+}
+
+impl AvailableRegs {
+    /// Initialize both the input and global sets from `regs`.
+    pub fn new(regs: &AllocatableSet) -> AvailableRegs {
+        AvailableRegs {
+            input: regs.clone(),
+            global: regs.clone(),
+        }
+    }
+
+    /// Take an un-diverted register from one or both sets.
+    pub fn take(&mut self, rc: RegClass, reg: RegUnit, is_local: bool) {
+        self.input.take(rc, reg);
+        if !is_local {
+            self.global.take(rc, reg);
         }
     }
 }
