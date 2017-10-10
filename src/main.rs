@@ -110,7 +110,7 @@ fn main() {
         })
         .unwrap_or_else(|e| e.exit());
     let mut terminal = term::stdout().unwrap();
-    let (flag_builder, isa_builder) = cton_native::builders().unwrap_or_else(|_| {
+    let (mut flag_builder, isa_builder) = cton_native::builders().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
     });
 

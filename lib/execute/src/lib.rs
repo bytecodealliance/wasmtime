@@ -8,11 +8,9 @@ extern crate region;
 extern crate wasmstandalone_runtime;
 
 use cretonne::Context;
-use cretonne::settings;
 use cretonne::isa::TargetIsa;
 use cretonne::verify_function;
 use cretonne::verifier;
-use cretonne::settings::Configurable;
 use cretonne::result::CtonError;
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::{Ebb, FuncRef, JumpTable, Function};
@@ -79,13 +77,6 @@ pub fn compile_module(
         "imported start functions not supported yet"
     );
 
-    let mut shared_builder = settings::builder();
-    shared_builder.enable("enable_verifier").expect(
-        "Missing enable_verifier setting",
-    );
-    shared_builder.set("is_64bit", "1").expect(
-        "Missing 64bits setting",
-    );
     let mut functions_metatada = Vec::new();
     let mut functions_code = Vec::new();
     for function in &trans_result.functions {
