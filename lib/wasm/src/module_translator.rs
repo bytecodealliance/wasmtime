@@ -152,7 +152,7 @@ pub fn translate_module(
         func.signature = runtime
             .get_signature(runtime.get_func_type(function_index))
             .clone();
-        func.name = runtime.get_name(function_index);
+        func.name = runtime.get_func_name(function_index);
         trans
             .translate_from_reader(parser.create_binary_reader(), &mut func, runtime)
             .map_err(|e| String::from(e.description()))?;

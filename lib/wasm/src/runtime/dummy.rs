@@ -109,7 +109,7 @@ impl FuncEnvironment for DummyRuntime {
         // A real implementation would probably add a `vmctx` argument.
         // And maybe attempt some signature de-duplication.
         let signature = func.import_signature(self.signatures[sigidx].clone());
-        let name = self.get_name(index);
+        let name = self.get_func_name(index);
         func.import_function(ir::ExtFuncData { name, signature })
     }
 
@@ -146,7 +146,7 @@ impl FuncEnvironment for DummyRuntime {
 }
 
 impl WasmRuntime for DummyRuntime {
-    fn get_name(&self, func_index: FunctionIndex) -> ir::FunctionName {
+    fn get_func_name(&self, func_index: FunctionIndex) -> ir::FunctionName {
         ir::FunctionName::new(format!("wasm_0x{:x}", func_index))
     }
 

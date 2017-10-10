@@ -151,7 +151,7 @@ pub trait FuncEnvironment {
 /// by the user, they are only for `cretonne-wasm` internal use.
 pub trait WasmRuntime: FuncEnvironment {
     /// Return the name for the given function index.
-    fn get_name(&self, func_index: FunctionIndex) -> ir::FunctionName;
+    fn get_func_name(&self, func_index: FunctionIndex) -> ir::FunctionName;
 
     /// Declares a function signature to the runtime.
     fn declare_signature(&mut self, sig: &ir::Signature);
