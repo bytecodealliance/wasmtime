@@ -183,6 +183,7 @@ pub trait WasmRuntime: FuncEnvironment {
     fn declare_table_elements(
         &mut self,
         table_index: TableIndex,
+        base: Option<GlobalIndex>,
         offset: usize,
         elements: &[FunctionIndex],
     );
@@ -192,9 +193,10 @@ pub trait WasmRuntime: FuncEnvironment {
     fn declare_data_initialization(
         &mut self,
         memory_index: MemoryIndex,
+        base: Option<GlobalIndex>,
         offset: usize,
         data: &[u8],
-    ) -> Result<(), String>;
+    );
 
     /// Declares a function export to the runtime.
     fn declare_func_export(&mut self, func_index: FunctionIndex, name: &str);

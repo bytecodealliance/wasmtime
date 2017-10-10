@@ -101,7 +101,7 @@ pub fn parse_import_section(
                     },
                     size: tab.limits.initial as usize,
                     maximum: tab.limits.maximum.map(|x| x as usize),
-                });
+                })
             }
             ParserState::EndSection => break,
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
@@ -227,7 +227,6 @@ pub fn parse_global_section(
                 GlobalInit::GlobalRef(global_index as GlobalIndex)
             }
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
-
         };
         match *parser.read() {
             ParserState::EndInitExpressionBody => (),
@@ -261,35 +260,14 @@ pub fn parse_data_section(
             ParserState::BeginInitExpressionBody => (),
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
-        let mut offset = match *parser.read() {
+        let (base, offset) = match *parser.read() {
             ParserState::InitExpressionOperator(Operator::I32Const { value }) => {
-                if value < 0 {
-                    return Err(SectionParsingError::WrongSectionContent(String::from(
-                        "negative \
-                    offset value",
-                    )));
-                } else {
-                    value as usize
-                }
+                (None, value as u32 as usize)
             }
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
                 match runtime.get_global(global_index as GlobalIndex).initializer {
-                    GlobalInit::I32Const(value) => {
-                        if value < 0 {
-                            return Err(SectionParsingError::WrongSectionContent(String::from(
-                                "\
-                            negative offset value",
-                            )));
-                        } else {
-                            value as usize
-                        }
-                    }
-                    GlobalInit::Import() => {
-                        return Err(SectionParsingError::WrongSectionContent(String::from(
-                            "\
-                        imported globals not supported",
-                        )))
-                    } // TODO: add runtime support
+                    GlobalInit::I32Const(value) => (None, value as u32 as usize),
+                    GlobalInit::Import() => (Some(global_index as GlobalIndex), 0),
                     _ => panic!("should not happen"),
                 }
             }
@@ -303,17 +281,20 @@ pub fn parse_data_section(
             ParserState::BeginDataSectionEntryBody(_) => (),
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
+        let mut running_offset = offset;
         loop {
             let data = match *parser.read() {
                 ParserState::DataSectionEntryBodyChunk(data) => data,
                 ParserState::EndDataSectionEntryBody => break,
                 ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
             };
-            match runtime.declare_data_initialization(memory_index as MemoryIndex, offset, data) {
-                Ok(()) => (),
-                Err(s) => return Err(SectionParsingError::WrongSectionContent(s)),
-            };
-            offset += data.len();
+            runtime.declare_data_initialization(
+                memory_index as MemoryIndex,
+                base,
+                running_offset,
+                data,
+            );
+            running_offset += data.len();
         }
         match *parser.read() {
             ParserState::EndDataSectionEntry => (),
@@ -354,7 +335,7 @@ pub fn parse_elements_section(
 ) -> Result<(), SectionParsingError> {
     loop {
         let table_index = match *parser.read() {
-            ParserState::BeginElementSectionEntry(ref table_index) => *table_index as TableIndex,
+            ParserState::BeginElementSectionEntry(table_index) => table_index as TableIndex,
             ParserState::EndSection => break,
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
@@ -362,30 +343,14 @@ pub fn parse_elements_section(
             ParserState::BeginInitExpressionBody => (),
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
-        let offset = match *parser.read() {
+        let (base, offset) = match *parser.read() {
             ParserState::InitExpressionOperator(Operator::I32Const { value }) => {
-                if value < 0 {
-                    return Err(SectionParsingError::WrongSectionContent(String::from(
-                        "negative \
-                    offset value",
-                    )));
-                } else {
-                    value as usize
-                }
+                (None, value as u32 as usize)
             }
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
                 match runtime.get_global(global_index as GlobalIndex).initializer {
-                    GlobalInit::I32Const(value) => {
-                        if value < 0 {
-                            return Err(SectionParsingError::WrongSectionContent(String::from(
-                                "\
-                            negative offset value",
-                            )));
-                        } else {
-                            value as usize
-                        }
-                    }
-                    GlobalInit::Import() => 0, // TODO: add runtime support
+                    GlobalInit::I32Const(value) => (None, value as u32 as usize),
+                    GlobalInit::Import() => (Some(global_index as GlobalIndex), 0),
                     _ => panic!("should not happen"),
                 }
             }
@@ -399,7 +364,7 @@ pub fn parse_elements_section(
             ParserState::ElementSectionEntryBody(ref elements) => {
                 let elems: Vec<FunctionIndex> =
                     elements.iter().map(|&x| x as FunctionIndex).collect();
-                runtime.declare_table_elements(table_index, offset, &elems)
+                runtime.declare_table_elements(table_index, base, offset, &elems)
             }
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
