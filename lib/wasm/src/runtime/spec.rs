@@ -1,5 +1,5 @@
 //! All the runtime support necessary for the wasm to cretonne translation is formalized by the
-//! trait `WasmRuntime`.
+//! traits `FunctionEnvironment` and `ModuleEnvironment`.
 use cretonne::ir::{self, InstBuilder};
 use cretonne::cursor::FuncCursor;
 use cretonne::settings::Flags;
@@ -146,21 +146,26 @@ pub trait FuncEnvironment {
     ) -> ir::Value;
 }
 
-/// An object satisfyng the `WasmRuntime` trait can be passed as argument to the
+/// An object satisfyng the `ModuleEnvironment` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
 /// by the user, they are only for `cretonne-wasm` internal use.
-pub trait WasmRuntime: FuncEnvironment {
+pub trait ModuleEnvironment {
     /// Return the name for the given function index.
     fn get_func_name(&self, func_index: FunctionIndex) -> ir::FunctionName;
 
-    /// Declares a function signature to the runtime.
+    /// Declares a function signature to the environment.
     fn declare_signature(&mut self, sig: &ir::Signature);
 
     /// Return the signature with the given index.
     fn get_signature(&self, sig_index: SignatureIndex) -> &ir::Signature;
 
-    /// Declares a function import to the runtime.
-    fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &str, field: &str);
+    /// Declares a function import to the environment.
+    fn declare_func_import<'data>(
+        &mut self,
+        sig_index: SignatureIndex,
+        module: &'data str,
+        field: &'data str,
+    );
 
     /// Return the number of imported funcs.
     fn get_num_func_imports(&self) -> usize;
@@ -171,13 +176,13 @@ pub trait WasmRuntime: FuncEnvironment {
     /// Return the signature index for the given function index.
     fn get_func_type(&self, func_index: FunctionIndex) -> SignatureIndex;
 
-    /// Declares a global to the runtime.
+    /// Declares a global to the environment.
     fn declare_global(&mut self, global: Global);
 
     /// Return the global for the given global index.
     fn get_global(&self, global_index: GlobalIndex) -> &Global;
 
-    /// Declares a table to the runtime.
+    /// Declares a table to the environment.
     fn declare_table(&mut self, table: Table);
     /// Fills a declared table with references to functions in the module.
     fn declare_table_elements(
@@ -187,32 +192,29 @@ pub trait WasmRuntime: FuncEnvironment {
         offset: usize,
         elements: &[FunctionIndex],
     );
-    /// Declares a memory to the runtime
+    /// Declares a memory to the environment
     fn declare_memory(&mut self, memory: Memory);
     /// Fills a declared memory with bytes at module instantiation.
-    fn declare_data_initialization(
+    fn declare_data_initialization<'data>(
         &mut self,
         memory_index: MemoryIndex,
         base: Option<GlobalIndex>,
         offset: usize,
-        data: &[u8],
+        data: &'data [u8],
     );
 
-    /// Declares a function export to the runtime.
-    fn declare_func_export(&mut self, func_index: FunctionIndex, name: &str);
-    /// Declares a table export to the runtime.
-    fn declare_table_export(&mut self, table_index: TableIndex, name: &str);
-    /// Declares a memory export to the runtime.
-    fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &str);
-    /// Declares a global export to the runtime.
-    fn declare_global_export(&mut self, global_index: GlobalIndex, name: &str);
+    /// Declares a function export to the environment.
+    fn declare_func_export<'data>(&mut self, func_index: FunctionIndex, name: &'data str);
+    /// Declares a table export to the environment.
+    fn declare_table_export<'data>(&mut self, table_index: TableIndex, name: &'data str);
+    /// Declares a memory export to the environment.
+    fn declare_memory_export<'data>(&mut self, memory_index: MemoryIndex, name: &'data str);
+    /// Declares a global export to the environment.
+    fn declare_global_export<'data>(&mut self, global_index: GlobalIndex, name: &'data str);
 
     /// Declares a start function.
     fn declare_start_func(&mut self, index: FunctionIndex);
 
-    /// Call this function after having declared all the runtime elements but prior to the
-    /// function body translation.
-    fn begin_translation(&mut self);
-    /// Call this function between each function body translation.
-    fn next_function(&mut self);
+    /// Provides the contents of a function body.
+    fn define_function_body<'data>(&mut self, body_bytes: &'data [u8]) -> Result<(), String>;
 }

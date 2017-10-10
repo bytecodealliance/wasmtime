@@ -2,7 +2,7 @@ extern crate cton_wasm;
 extern crate cretonne;
 extern crate tempdir;
 
-use cton_wasm::{translate_module, DummyRuntime, WasmRuntime};
+use cton_wasm::{translate_module, DummyEnvironment};
 use std::path::PathBuf;
 use std::fs::File;
 use std::error::Error;
@@ -92,12 +92,9 @@ fn handle_module(path: PathBuf, flags: &Flags) {
             }
         }
     };
-    let mut dummy_runtime = DummyRuntime::with_flags(flags.clone());
-    let translation = {
-        let runtime: &mut WasmRuntime = &mut dummy_runtime;
-        translate_module(&data, runtime).unwrap()
-    };
-    for func in &translation.functions {
+    let mut dummy_environ = DummyEnvironment::with_flags(flags.clone());
+    translate_module(&data, &mut dummy_environ).unwrap();
+    for func in &dummy_environ.info.function_bodies {
         verifier::verify_function(func, flags)
             .map_err(|err| panic!(pretty_verifier_error(func, None, err)))
             .unwrap();

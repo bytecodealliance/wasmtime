@@ -1,12 +1,10 @@
 //! Performs the translation from a wasm module in binary format to the in-memory representation
 //! of the Cretonne IL. More particularly, it translates the code of all the functions bodies and
-//! interacts with a runtime implementing the [`WasmRuntime`](trait.WasmRuntime.html) trait to
-//! deal with tables, globals and linear memory.
+//! interacts with a runtime implementing the [`ModuleEnvironment`](trait.ModuleEnvironment.html)
+//! trait to deal with tables, globals and linear memory.
 //!
-//! The crate provides a `DummyRuntime` trait that will allow to translate the code of the
-//! functions but will fail at execution. You should use
-//! [`wasmstandalone::StandaloneRuntime`](../wasmstandalone/struct.StandaloneRuntime.html) to be
-//! able to execute the translated code.
+//! The crate provides a `DummyEnvironment` struct that will allow to translate the code of the
+//! functions but will fail at execution.
 //!
 //! The main function of this module is [`translate_module`](fn.translate_module.html).
 
@@ -26,7 +24,7 @@ mod state;
 mod translation_utils;
 
 pub use func_translator::FuncTranslator;
-pub use module_translator::{translate_module, TranslationResult};
-pub use runtime::{FuncEnvironment, WasmRuntime, DummyRuntime, GlobalValue};
+pub use module_translator::translate_module;
+pub use runtime::{FuncEnvironment, ModuleEnvironment, DummyEnvironment, GlobalValue};
 pub use translation_utils::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, SignatureIndex,
                             Global, GlobalInit, Table, Memory};

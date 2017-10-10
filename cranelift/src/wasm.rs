@@ -4,7 +4,7 @@
 //! IL. Can also executes the `start` function of the module by laying out the memories, globals
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
-use cton_wasm::{translate_module, DummyRuntime, WasmRuntime};
+use cton_wasm::{translate_module, DummyEnvironment, ModuleEnvironment};
 use std::path::PathBuf;
 use cretonne::Context;
 use cretonne::settings::FlagsOrIsa;
@@ -98,8 +98,8 @@ fn handle_module(
             |err| String::from(err.description()),
         )?;
     }
-    let mut dummy_runtime = DummyRuntime::with_flags(fisa.flags.clone());
-    let translation = translate_module(&data, &mut dummy_runtime)?;
+    let mut dummy_environ = DummyEnvironment::with_flags(fisa.flags.clone());
+    translate_module(&data, &mut dummy_environ)?;
     terminal.fg(term::color::GREEN).unwrap();
     vprintln!(flag_verbose, "ok");
     terminal.reset().unwrap();
@@ -113,8 +113,8 @@ fn handle_module(
         vprint!(flag_verbose, "Compiling... ");
     }
     terminal.reset().unwrap();
-    let num_func_imports = dummy_runtime.get_num_func_imports();
-    for (def_index, func) in translation.functions.iter().enumerate() {
+    let num_func_imports = dummy_environ.get_num_func_imports();
+    for (def_index, func) in dummy_environ.info.function_bodies.iter().enumerate() {
         let func_index = num_func_imports + def_index;
         let mut context = Context::new();
         context.func = func.clone();
@@ -133,12 +133,12 @@ fn handle_module(
         }
         if flag_print {
             vprintln!(flag_verbose, "");
-            if let Some(start_func) = dummy_runtime.start_func {
+            if let Some(start_func) = dummy_environ.info.start_func {
                 if func_index == start_func {
                     println!("; Selected as wasm start function");
                 }
             }
-            for export_name in &dummy_runtime.functions[func_index].export_names {
+            for export_name in &dummy_environ.info.functions[func_index].export_names {
                 println!("; Exported as \"{}\"", export_name);
             }
             println!("{}", context.func.display(fisa.isa));

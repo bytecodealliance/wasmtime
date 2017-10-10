@@ -233,7 +233,7 @@ fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
 mod tests {
     use cretonne::{ir, Context};
     use cretonne::ir::types::I32;
-    use runtime::{DummyRuntime, FuncEnvironment};
+    use runtime::{DummyEnvironment, FuncEnvironment};
     use super::FuncTranslator;
 
     #[test]
@@ -252,7 +252,7 @@ mod tests {
         ];
 
         let mut trans = FuncTranslator::new();
-        let mut runtime = DummyRuntime::default();
+        let runtime = DummyEnvironment::default();
         let mut ctx = Context::new();
 
         ctx.func.name = ir::FunctionName::new("small1");
@@ -263,9 +263,11 @@ mod tests {
             ir::ArgumentType::new(I32),
         );
 
-        trans.translate(&BODY, &mut ctx.func, &mut runtime).unwrap();
+        trans
+            .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
+            .unwrap();
         dbg!("{}", ctx.func.display(None));
-        ctx.verify(runtime.flags()).unwrap();
+        ctx.verify(runtime.func_env().flags()).unwrap();
     }
 
     #[test]
@@ -285,7 +287,7 @@ mod tests {
         ];
 
         let mut trans = FuncTranslator::new();
-        let mut runtime = DummyRuntime::default();
+        let runtime = DummyEnvironment::default();
         let mut ctx = Context::new();
 
         ctx.func.name = ir::FunctionName::new("small2");
@@ -296,9 +298,11 @@ mod tests {
             ir::ArgumentType::new(I32),
         );
 
-        trans.translate(&BODY, &mut ctx.func, &mut runtime).unwrap();
+        trans
+            .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
+            .unwrap();
         dbg!("{}", ctx.func.display(None));
-        ctx.verify(runtime.flags()).unwrap();
+        ctx.verify(runtime.func_env().flags()).unwrap();
     }
 
     #[test]
@@ -327,7 +331,7 @@ mod tests {
         ];
 
         let mut trans = FuncTranslator::new();
-        let mut runtime = DummyRuntime::default();
+        let runtime = DummyEnvironment::default();
         let mut ctx = Context::new();
 
         ctx.func.name = ir::FunctionName::new("infloop");
@@ -335,8 +339,10 @@ mod tests {
             ir::ArgumentType::new(I32),
         );
 
-        trans.translate(&BODY, &mut ctx.func, &mut runtime).unwrap();
+        trans
+            .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
+            .unwrap();
         dbg!("{}", ctx.func.display(None));
-        ctx.verify(runtime.flags()).unwrap();
+        ctx.verify(runtime.func_env().flags()).unwrap();
     }
 }
