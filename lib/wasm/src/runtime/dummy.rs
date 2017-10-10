@@ -197,6 +197,7 @@ impl WasmRuntime for DummyRuntime {
     fn declare_table_elements(
         &mut self,
         _table_index: TableIndex,
+        _base: Option<GlobalIndex>,
         _offset: usize,
         _elements: &[FunctionIndex],
     ) {
@@ -208,11 +209,11 @@ impl WasmRuntime for DummyRuntime {
     fn declare_data_initialization(
         &mut self,
         _memory_index: MemoryIndex,
+        _base: Option<GlobalIndex>,
         _offset: usize,
         _data: &[u8],
-    ) -> Result<(), String> {
+    ) {
         // We do nothing
-        Ok(())
     }
 
     fn declare_func_export(&mut self, func_index: FunctionIndex, name: &str) {
