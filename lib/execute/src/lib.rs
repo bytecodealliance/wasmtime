@@ -72,8 +72,7 @@ pub fn compile_module(
     runtime: &wasmstandalone_runtime::Runtime,
 ) -> Result<ExecutableCode, String> {
     debug_assert!(
-        trans_result.start_index.is_none() ||
-            trans_result.start_index.unwrap() >= runtime.imported_funcs.len(),
+        runtime.start_func.is_none() || runtime.start_func.unwrap() >= runtime.imported_funcs.len(),
         "imported start functions not supported yet"
     );
 
@@ -101,7 +100,7 @@ pub fn compile_module(
     }
     relocate(&functions_metatada, &mut functions_code, runtime);
     // After having emmitted the code to memory, we deal with relocations
-    match trans_result.start_index {
+    match runtime.start_func {
         None => Err(String::from(
             "No start function defined, aborting execution",
         )),

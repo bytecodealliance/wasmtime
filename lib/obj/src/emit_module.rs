@@ -53,8 +53,7 @@ pub fn emit_module(
     runtime: &wasmstandalone_runtime::Runtime,
 ) -> Result<(), String> {
     debug_assert!(
-        trans_result.start_index.is_none() ||
-            trans_result.start_index.unwrap() >= runtime.imported_funcs.len(),
+        runtime.start_func.is_none() || runtime.start_func.unwrap() >= runtime.imported_funcs.len(),
         "imported start functions not supported yet"
     );
 

@@ -22,6 +22,7 @@ use cretonne::entity::EntityMap;
 use std::mem::transmute;
 use std::ptr::copy_nonoverlapping;
 use std::ptr::write;
+use std::collections::HashMap;
 
 /// Runtime state of a WebAssembly table element.
 #[derive(Clone, Debug)]
@@ -64,6 +65,18 @@ pub struct MemoryData {
 
 const PAGE_SIZE: usize = 65536;
 
+/// An entity to export.
+pub enum Export {
+    /// Function export.
+    Function(FunctionIndex),
+    /// Table export.
+    Table(TableIndex),
+    /// Memory export.
+    Memory(MemoryIndex),
+    /// Global export.
+    Global(GlobalIndex),
+}
+
 /// Object containing the standalone runtime information. To be passed after creation as argument
 /// to `cton_wasm::translatemodule`.
 pub struct Runtime {
@@ -72,17 +85,24 @@ pub struct Runtime {
 
     /// Unprocessed signatures exactly as provided by `declare_signature()`.
     signatures: Vec<ir::Signature>,
-    /// Types of functions, imported and local.
-    func_types: Vec<SignatureIndex>,
+
     /// Names of imported functions.
-    pub imported_funcs: Vec<ir::FunctionName>,
+    pub imported_funcs: Vec<(String, String)>,
+
+    /// Types of functions, imported and local.
+    functions: Vec<SignatureIndex>,
+
+    /// WebAssembly tables.
+    pub tables: Vec<TableData>,
+
+    /// WebAssembly linear memories.
+    pub memories: Vec<MemoryData>,
 
     /// WebAssembly global variables.
     pub globals: GlobalsData,
-    /// WebAssembly tables.
-    pub tables: Vec<TableData>,
-    /// WebAssembly linear memories.
-    pub memories: Vec<MemoryData>,
+
+    /// Exported entities.
+    pub exports: HashMap<String, Export>,
 
     instantiated: bool,
 
@@ -93,6 +113,9 @@ pub struct Runtime {
     pub func_indices: EntityMap<FuncRef, FunctionIndex>,
 
     the_heap: PackedOption<ir::Heap>,
+
+    /// The module "start" function, if present.
+    pub start_func: Option<FunctionIndex>,
 }
 
 impl Runtime {
@@ -106,19 +129,21 @@ impl Runtime {
         Self {
             flags,
             signatures: Vec::new(),
-            func_types: Vec::new(),
             imported_funcs: Vec::new(),
+            functions: Vec::new(),
+            tables: Vec::new(),
+            memories: Vec::new(),
             globals: GlobalsData {
                 data: Vec::new(),
                 info: Vec::new(),
             },
-            tables: Vec::new(),
-            memories: Vec::new(),
+            exports: HashMap::new(),
             instantiated: false,
             has_current_memory: None,
             has_grow_memory: None,
             func_indices: EntityMap::new(),
             the_heap: PackedOption::default(),
+            start_func: None,
         }
     }
 
@@ -183,14 +208,9 @@ impl FuncEnvironment for Runtime {
     }
 
     fn make_direct_func(&mut self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef {
-        let sigidx = self.func_types[index];
+        let sigidx = self.functions[index];
         let signature = func.import_signature(self.signatures[sigidx].clone());
-
-        let name = match self.imported_funcs.get(index) {
-            Some(name) => name.clone(),
-            None => ir::FunctionName::new(format!("localfunc{}", index)),
-        };
-
+        let name = self.get_func_name(index);
         let func_ref = func.import_function(ir::ExtFuncData { name, signature });
 
         self.func_indices[func_ref] = index;
@@ -290,6 +310,10 @@ impl FuncEnvironment for Runtime {
 /// tells how to translate runtime-dependent wasm instructions. These functions should not be
 /// called by the user.
 impl WasmRuntime for Runtime {
+    fn get_func_name(&self, func_index: FunctionIndex) -> cretonne::ir::FunctionName {
+        ir::FunctionName::new(format!("wasm_0x{:x}", func_index))
+    }
+
     fn declare_signature(&mut self, sig: &ir::Signature) {
         let mut sig = sig.clone();
         sig.argument_types.push(ArgumentType {
@@ -306,24 +330,128 @@ impl WasmRuntime for Runtime {
         &self.signatures[sig_index]
     }
 
-    fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &[u8], field: &[u8]) {
+    fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &str, field: &str) {
         debug_assert_eq!(
-            self.func_types.len(),
+            self.functions.len(),
             self.imported_funcs.len(),
             "Imported functions must be declared first"
         );
-        self.func_types.push(sig_index);
+        self.functions.push(sig_index);
 
-        // TODO: name_fold and concatenation with '_' are lossy; figure out something better.
-        let mut name = Vec::new();
-        name.extend(module.iter().cloned().map(name_fold));
-        name.push(b'_');
-        name.extend(field.iter().cloned().map(name_fold));
-        self.imported_funcs.push(ir::FunctionName::new(name));
+        self.imported_funcs.push((
+            String::from(module),
+            String::from(field),
+        ));
+    }
+
+    fn get_num_func_imports(&self) -> usize {
+        self.imported_funcs.len()
     }
 
     fn declare_func_type(&mut self, sig_index: SignatureIndex) {
-        self.func_types.push(sig_index);
+        self.functions.push(sig_index);
+    }
+
+    fn get_func_type(&self, func_index: FunctionIndex) -> usize {
+        self.functions[func_index]
+    }
+
+    fn declare_global(&mut self, global: Global) {
+        debug_assert!(!self.instantiated);
+        let index = self.globals.info.len() as GlobalIndex;
+        self.globals.info.push(GlobalInfo {
+            global: global,
+            offset: Self::global_offset(index),
+        });
+    }
+
+    fn get_global(&self, global_index: GlobalIndex) -> &cton_wasm::Global {
+        &self.globals.info[global_index].global
+    }
+
+    fn declare_table(&mut self, table: Table) {
+        debug_assert!(!self.instantiated);
+        let mut elements_vec = Vec::with_capacity(table.size);
+        elements_vec.resize(table.size, TableElement::Trap());
+        let mut addresses_vec = Vec::with_capacity(table.size);
+        addresses_vec.resize(table.size, 0);
+        self.tables.push(TableData {
+            info: table,
+            data: addresses_vec,
+            elements: elements_vec,
+        });
+    }
+
+    fn declare_table_elements(
+        &mut self,
+        table_index: TableIndex,
+        base: Option<GlobalIndex>,
+        offset: usize,
+        elements: &[FunctionIndex],
+    ) {
+        debug_assert!(base.is_none(), "global-value offsets not supported yet");
+        debug_assert!(!self.instantiated);
+        for (i, elt) in elements.iter().enumerate() {
+            self.tables[table_index].elements[offset + i] = TableElement::Function(*elt);
+        }
+    }
+
+    fn declare_memory(&mut self, memory: Memory) {
+        debug_assert!(!self.instantiated);
+        let mut memory_vec = Vec::with_capacity(memory.pages_count * PAGE_SIZE);
+        memory_vec.resize(memory.pages_count * PAGE_SIZE, 0);
+        self.memories.push(MemoryData {
+            info: memory,
+            data: memory_vec,
+        });
+    }
+
+    fn declare_data_initialization(
+        &mut self,
+        memory_index: MemoryIndex,
+        base: Option<GlobalIndex>,
+        offset: usize,
+        data: &[u8],
+    ) {
+        debug_assert!(base.is_none(), "global-value offsets not supported yet");
+        debug_assert!(
+            offset + data.len() <= self.memories[memory_index].info.pages_count * PAGE_SIZE,
+            "initialization data out of bounds"
+        );
+        self.memories[memory_index].data[offset..offset + data.len()].copy_from_slice(data);
+    }
+
+    fn declare_func_export(&mut self, func_index: FunctionIndex, name: &str) {
+        self.exports.insert(
+            String::from(name),
+            Export::Function(func_index),
+        );
+    }
+
+    fn declare_table_export(&mut self, table_index: TableIndex, name: &str) {
+        self.exports.insert(
+            String::from(name),
+            Export::Table(table_index),
+        );
+    }
+
+    fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &str) {
+        self.exports.insert(
+            String::from(name),
+            Export::Memory(memory_index),
+        );
+    }
+
+    fn declare_global_export(&mut self, global_index: GlobalIndex, name: &str) {
+        self.exports.insert(
+            String::from(name),
+            Export::Global(global_index),
+        );
+    }
+
+    fn declare_start_func(&mut self, func_index: FunctionIndex) {
+        debug_assert!(self.start_func.is_none());
+        self.start_func = Some(func_index);
     }
 
     fn begin_translation(&mut self) {
@@ -385,63 +513,12 @@ impl WasmRuntime for Runtime {
             }
         }
     }
+
     fn next_function(&mut self) {
         self.has_current_memory = None;
         self.has_grow_memory = None;
         self.func_indices.clear();
         self.the_heap = PackedOption::default();
-    }
-    fn declare_global(&mut self, global: Global) {
-        debug_assert!(!self.instantiated);
-        let index = self.globals.info.len() as GlobalIndex;
-        self.globals.info.push(GlobalInfo {
-            global: global,
-            offset: Self::global_offset(index),
-        });
-    }
-    fn declare_table(&mut self, table: Table) {
-        debug_assert!(!self.instantiated);
-        let mut elements_vec = Vec::with_capacity(table.size);
-        elements_vec.resize(table.size, TableElement::Trap());
-        let mut addresses_vec = Vec::with_capacity(table.size);
-        addresses_vec.resize(table.size, 0);
-        self.tables.push(TableData {
-            info: table,
-            data: addresses_vec,
-            elements: elements_vec,
-        });
-    }
-    fn declare_table_elements(
-        &mut self,
-        table_index: TableIndex,
-        offset: usize,
-        elements: &[FunctionIndex],
-    ) {
-        debug_assert!(!self.instantiated);
-        for (i, elt) in elements.iter().enumerate() {
-            self.tables[table_index].elements[offset + i] = TableElement::Function(*elt);
-        }
-    }
-    fn declare_memory(&mut self, memory: Memory) {
-        debug_assert!(!self.instantiated);
-        let mut memory_vec = Vec::with_capacity(memory.pages_count * PAGE_SIZE);
-        memory_vec.resize(memory.pages_count * PAGE_SIZE, 0);
-        self.memories.push(MemoryData {
-            info: memory,
-            data: memory_vec,
-        });
-    }
-    fn declare_data_initialization(
-        &mut self,
-        memory_index: MemoryIndex,
-        offset: usize,
-        data: &[u8],
-    ) -> Result<(), String> {
-        if offset + data.len() > self.memories[memory_index].info.pages_count * PAGE_SIZE {
-            return Err(String::from("initialization data out of bounds"));
-        }
-        self.memories[memory_index].data[offset..offset + data.len()].copy_from_slice(data);
-        Ok(())
     }
 }
 
@@ -462,14 +539,5 @@ impl Runtime {
             self.globals.info[global_index].global.ty.bytes() as usize,
         );
         &self.globals.data[offset..offset + len]
-    }
-}
-
-// Generate characters suitable for printable `FuncName`s.
-fn name_fold(c: u8) -> u8 {
-    if (c as char).is_alphanumeric() {
-        c
-    } else {
-        b'_'
     }
 }
