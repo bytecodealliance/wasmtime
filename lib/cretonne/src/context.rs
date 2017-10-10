@@ -69,12 +69,14 @@ impl Context {
 
         self.compute_cfg();
         self.legalize(isa)?;
+        /* TODO: Enable additional optimization passes.
         if isa.flags().opt_level() == OptLevel::Best {
             self.compute_domtree();
             self.compute_loop_analysis();
             self.licm(isa)?;
             self.simple_gvn(isa)?;
         }
+        */
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
         self.regalloc(isa)?;
