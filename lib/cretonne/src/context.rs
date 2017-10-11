@@ -18,7 +18,7 @@ use isa::TargetIsa;
 use legalize_function;
 use regalloc;
 use result::{CtonError, CtonResult};
-use settings::{FlagsOrIsa, OptLevel};
+use settings::FlagsOrIsa;
 use unreachable_code::eliminate_unreachable_code;
 use verifier;
 use simple_gvn::do_simple_gvn;
