@@ -6,6 +6,7 @@
 use entity::{PrimaryMap, Keys};
 use ir::{Type, StackSlot};
 use packed_option::PackedOption;
+use std::cmp;
 use std::fmt;
 use std::ops::Index;
 use std::str::FromStr;
@@ -21,6 +22,17 @@ pub type StackSize = u32;
 ///
 /// The location of a stack offset relative to a stack pointer or frame pointer.
 pub type StackOffset = i32;
+
+/// The minimum size of a spill slot in bytes.
+///
+/// ISA implementations are allowed to assume that small types like `b1` and `i8` get a full 4-byte
+/// spill slot.
+const MIN_SPILL_SLOT_SIZE: StackSize = 4;
+
+/// Get the spill slot size to use for `ty`.
+fn spill_size(ty: Type) -> StackSize {
+    cmp::max(MIN_SPILL_SLOT_SIZE, ty.bytes())
+}
 
 /// The kind of a stack slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -220,7 +232,7 @@ impl Index<StackSlot> for StackSlots {
 impl StackSlots {
     /// Create a new spill slot for spilling values of type `ty`.
     pub fn make_spill_slot(&mut self, ty: Type) -> StackSlot {
-        self.push(StackSlotData::new(StackSlotKind::SpillSlot, ty.bytes()))
+        self.push(StackSlotData::new(StackSlotKind::SpillSlot, spill_size(ty)))
     }
 
     /// Create a stack slot representing an incoming function argument.
@@ -267,7 +279,7 @@ impl StackSlots {
         ty: Type,
         in_use: &[PackedOption<StackSlot>],
     ) -> StackSlot {
-        let size = ty.bytes();
+        let size = spill_size(ty);
 
         // Find the smallest existing slot that can fit the type.
         if let Some(&ss) = self.emergency
