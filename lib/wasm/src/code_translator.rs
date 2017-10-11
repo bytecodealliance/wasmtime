@@ -410,46 +410,46 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          * The memory base address is provided by the runtime.
          * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
-        Operator::I32Load8U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Load8U { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Uload8, I32, builder, state, environ);
         }
-        Operator::I32Load16U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Load16U { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Uload16, I32, builder, state, environ);
         }
-        Operator::I32Load8S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Load8S { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Sload8, I32, builder, state, environ);
         }
-        Operator::I32Load16S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Load16S { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Sload16, I32, builder, state, environ);
         }
-        Operator::I64Load8U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load8U { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Uload8, I64, builder, state, environ);
         }
-        Operator::I64Load16U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load16U { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Uload16, I64, builder, state, environ);
         }
-        Operator::I64Load8S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load8S { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Sload8, I64, builder, state, environ);
         }
-        Operator::I64Load16S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load16S { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Sload16, I64, builder, state, environ);
         }
-        Operator::I64Load32S { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load32S { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Sload32, I64, builder, state, environ);
         }
-        Operator::I64Load32U { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load32U { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Uload32, I64, builder, state, environ);
         }
-        Operator::I32Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Load { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Load, I32, builder, state, environ);
         }
-        Operator::F32Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::F32Load { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Load, F32, builder, state, environ);
         }
-        Operator::I64Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Load, I64, builder, state, environ);
         }
-        Operator::F64Load { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::F64Load { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_load(offset, ir::Opcode::Load, F64, builder, state, environ);
         }
         /****************************** Store instructions ***********************************
@@ -457,21 +457,21 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          * The memory base address is provided by the runtime.
          * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
-        Operator::I32Store { memory_immediate: MemoryImmediate { flags: _, offset } } |
-        Operator::I64Store { memory_immediate: MemoryImmediate { flags: _, offset } } |
-        Operator::F32Store { memory_immediate: MemoryImmediate { flags: _, offset } } |
-        Operator::F64Store { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Store { memarg: MemoryImmediate { flags: _, offset } } |
+        Operator::I64Store { memarg: MemoryImmediate { flags: _, offset } } |
+        Operator::F32Store { memarg: MemoryImmediate { flags: _, offset } } |
+        Operator::F64Store { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_store(offset, ir::Opcode::Store, builder, state, environ);
         }
-        Operator::I32Store8 { memory_immediate: MemoryImmediate { flags: _, offset } } |
-        Operator::I64Store8 { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Store8 { memarg: MemoryImmediate { flags: _, offset } } |
+        Operator::I64Store8 { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_store(offset, ir::Opcode::Istore8, builder, state, environ);
         }
-        Operator::I32Store16 { memory_immediate: MemoryImmediate { flags: _, offset } } |
-        Operator::I64Store16 { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Store16 { memarg: MemoryImmediate { flags: _, offset } } |
+        Operator::I64Store16 { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_store(offset, ir::Opcode::Istore16, builder, state, environ);
         }
-        Operator::I64Store32 { memory_immediate: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Store32 { memarg: MemoryImmediate { flags: _, offset } } => {
             translate_store(offset, ir::Opcode::Istore32, builder, state, environ);
         }
         /****************************** Nullary Operators ************************************/
@@ -600,6 +600,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I32TruncUF32 => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_uint(I32, val));
+        }
+        Operator::I64TruncSSatF64 |
+        Operator::I64TruncSSatF32 |
+        Operator::I32TruncSSatF64 |
+        Operator::I32TruncSSatF32 |
+        Operator::I64TruncUSatF64 |
+        Operator::I64TruncUSatF32 |
+        Operator::I32TruncUSatF64 |
+        Operator::I32TruncUSatF32 => {
+            panic!("proposed saturating conversion operators not yet supported");
         }
         Operator::F32ReinterpretI32 => {
             let val = state.pop1();
