@@ -292,6 +292,12 @@ enc_i32_i64(base.brnz, r.tjccd, 0x85)
 
 # Branch on a b1 value in a register only looks at the low 8 bits. See also
 # bint encodings below.
+#
+# Start with the worst-case encoding for I32 only. The register allocator can't
+# handle a branch with an ABCD-constrained operand.
+I32.enc(base.brz.b1, *r.t8jccd_long(0x84))
+I32.enc(base.brnz.b1, *r.t8jccd_long(0x85))
+
 enc_both(base.brz.b1, r.t8jccb_abcd, 0x74)
 enc_both(base.brz.b1, r.t8jccd_abcd, 0x84)
 enc_both(base.brnz.b1, r.t8jccb_abcd, 0x75)

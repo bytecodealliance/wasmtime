@@ -848,6 +848,25 @@ t8jccd_abcd = TailRecipe(
         disp4(destination, func, sink);
         ''')
 
+# Worst case test-and-branch recipe for brz.b1 and brnz.b1 in 32-bit mode.
+# The register allocator can't handle a branch instruction with constrained
+# operands like the t8jccd_abcd above. This variant can accept the b1 opernd in
+# any register, but is is larger because it uses a 32-bit test instruction with
+# a 0xff immediate.
+t8jccd_long = TailRecipe(
+        't8jccd_long', Branch, size=5 + 6, ins=GPR, outs=(),
+        branch_range=32,
+        emit='''
+        // test32 r, 0xff.
+        PUT_OP((bits & 0xff00) | 0xf7, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        sink.put4(0xff);
+        // Jcc instruction.
+        sink.put1(0x0f);
+        sink.put1(bits as u8);
+        disp4(destination, func, sink);
+        ''')
+
 # Comparison that produces a `b1` result in a GPR.
 #
 # This is a macro of a `cmp` instruction followed by a `setCC` instruction.
