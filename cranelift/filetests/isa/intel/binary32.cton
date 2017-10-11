@@ -1,5 +1,6 @@
 ; binary emission of 32-bit code.
 test binemit
+set is_compressed
 isa intel haswell
 
 ; The binary encodings can be verified with the command:
@@ -392,4 +393,31 @@ ebb1:
     ; asm: ebb2:
 ebb2:
     trap user0                                  ; bin: 0f 0b
+}
+
+; Special branch encodings only for I32 mode.
+function %special_branches() {
+ebb0:
+    [-,%rcx]            v1 = iconst.i32 1
+    [-,%rsi]            v2 = iconst.i32 2
+    [-,%rdi]            v3 = icmp eq v1, v2
+    [-,%rbx]            v4 = icmp ugt v1, v2
+
+    ; asm: testl $0xff, %edi
+    ; asm: je ebb1
+    brz v3, ebb1                                ; bin: f7 c7 000000ff 0f 84 00000015
+    ; asm: testb %bl, %bl
+    ; asm: je ebb1
+    brz v4, ebb1                                ; bin: 84 db 74 11
+    ; asm: testl $0xff, %edi
+    ; asm: jne ebb1
+    brnz v3, ebb1                               ; bin: f7 c7 000000ff 0f 85 00000005
+    ; asm: testb %bl, %bl
+    ; asm: jne ebb1
+    brnz v4, ebb1                               ; bin: 84 db 75 01
+
+    return
+
+ebb1:
+    return
 }
