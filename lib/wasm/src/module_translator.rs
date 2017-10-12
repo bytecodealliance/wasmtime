@@ -13,7 +13,7 @@ use runtime::ModuleEnvironment;
 /// indexes in the wasm module and the indexes inside each functions.
 pub fn translate_module<'data>(
     data: &'data [u8],
-    environ: &mut ModuleEnvironment,
+    environ: &mut ModuleEnvironment<'data>,
 ) -> Result<(), String> {
     let mut parser = Parser::new(data);
     match *parser.read() {

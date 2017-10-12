@@ -195,7 +195,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     }
 }
 
-impl ModuleEnvironment for DummyEnvironment {
+impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     fn get_func_name(&self, func_index: FunctionIndex) -> ir::FunctionName {
         get_func_name(func_index)
     }
@@ -208,7 +208,7 @@ impl ModuleEnvironment for DummyEnvironment {
         &self.info.signatures[sig_index]
     }
 
-    fn declare_func_import<'data>(
+    fn declare_func_import(
         &mut self,
         sig_index: SignatureIndex,
         module: &'data str,
@@ -261,7 +261,7 @@ impl ModuleEnvironment for DummyEnvironment {
     fn declare_memory(&mut self, memory: Memory) {
         self.info.memories.push(Exportable::new(memory));
     }
-    fn declare_data_initialization<'data>(
+    fn declare_data_initialization(
         &mut self,
         _memory_index: MemoryIndex,
         _base: Option<GlobalIndex>,
@@ -271,7 +271,7 @@ impl ModuleEnvironment for DummyEnvironment {
         // We do nothing
     }
 
-    fn declare_func_export<'data>(&mut self, func_index: FunctionIndex, name: &'data str) {
+    fn declare_func_export(&mut self, func_index: FunctionIndex, name: &'data str) {
         self.info.functions[func_index].export_names.push(
             String::from(
                 name,
@@ -279,13 +279,13 @@ impl ModuleEnvironment for DummyEnvironment {
         );
     }
 
-    fn declare_table_export<'data>(&mut self, table_index: TableIndex, name: &'data str) {
+    fn declare_table_export(&mut self, table_index: TableIndex, name: &'data str) {
         self.info.tables[table_index].export_names.push(
             String::from(name),
         );
     }
 
-    fn declare_memory_export<'data>(&mut self, memory_index: MemoryIndex, name: &'data str) {
+    fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &'data str) {
         self.info.memories[memory_index].export_names.push(
             String::from(
                 name,
@@ -293,7 +293,7 @@ impl ModuleEnvironment for DummyEnvironment {
         );
     }
 
-    fn declare_global_export<'data>(&mut self, global_index: GlobalIndex, name: &'data str) {
+    fn declare_global_export(&mut self, global_index: GlobalIndex, name: &'data str) {
         self.info.globals[global_index].export_names.push(
             String::from(
                 name,
@@ -307,7 +307,7 @@ impl ModuleEnvironment for DummyEnvironment {
     }
 
     /// Provides the contents of a function body.
-    fn define_function_body<'data>(&mut self, body_bytes: &'data [u8]) -> Result<(), String> {
+    fn define_function_body(&mut self, body_bytes: &'data [u8]) -> Result<(), String> {
         let function_index = self.get_num_func_imports() + self.info.function_bodies.len();
         let name = get_func_name(function_index);
         let sig = self.get_signature(self.get_func_type(function_index))
