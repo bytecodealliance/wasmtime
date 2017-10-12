@@ -9,6 +9,18 @@ except ImportError:
     pass
 
 
+# Numbering scheme for value types:
+#
+# 0: Void
+# 0x01-0x6f: Special types
+# 0x70-0x7f: Lane types
+# 0x80-0xff: Vector types
+#
+# Vector types are encoded with the lane type in the low 4 bits and log2(lanes)
+# in the high 4 bits, giving a range of 2-256 lanes.
+LANE_BASE = 0x70
+
+
 # ValueType instances (i8, i32, ...) are provided in the `base.types` module.
 class ValueType(object):
     """
@@ -23,6 +35,9 @@ class ValueType(object):
 
     # List of all the lane types.
     all_lane_types = list()  # type: List[LaneType]
+
+    # List of all the special types (neither lanes nor vectors).
+    all_special_types = list()  # type: List[SpecialType]
 
     def __init__(self, name, membytes, doc):
         # type: (str, int, str) -> None
@@ -87,10 +102,11 @@ class LaneType(ValueType):
         # type: (str, int, str) -> None
         super(LaneType, self).__init__(name, membytes, doc)
         self._vectors = dict()  # type: Dict[int, VectorType]
-        # Assign numbers starting from 1. (0 is VOID).
+        # Assign numbers starting from LANE_BASE.
+        n = len(ValueType.all_lane_types)
         ValueType.all_lane_types.append(self)
-        self.number = len(ValueType.all_lane_types)
-        assert self.number < 16, 'Too many lane types'
+        assert n < 16, 'Too many lane types'
+        self.number = LANE_BASE + n
 
     def __repr__(self):
         # type: () -> str
@@ -132,6 +148,7 @@ class VectorType(ValueType):
                 doc="""
                 A SIMD vector with {} lanes containing a `{}` each.
                 """.format(lanes, base.name))
+        assert lanes <= 256, "Too many lanes"
         self.base = base
         self.lanes = lanes
         self.number = 16*int(math.log(lanes, 2)) + base.number
@@ -150,6 +167,31 @@ class VectorType(ValueType):
         # type: () -> int
         """Return the number of bits in a lane."""
         return self.base.lane_bits()
+
+
+class SpecialType(ValueType):
+    """
+    A concrete scalar type that is neither a vector nor a lane type.
+
+    Special types cannot be used to form vectors.
+    """
+
+    def __init__(self, name, membytes, doc):
+        # type: (str, int, str) -> None
+        super(SpecialType, self).__init__(name, membytes, doc)
+        # Assign numbers starting from 1. (0 is VOID)
+        ValueType.all_special_types.append(self)
+        self.number = len(ValueType.all_special_types)
+        assert self.number < LANE_BASE, 'Too many special types'
+
+    def __repr__(self):
+        # type: () -> str
+        return 'SpecialType({})'.format(self.name)
+
+    def lane_count(self):
+        # type: () -> int
+        """Return the number of lanes."""
+        return 1
 
 
 class IntType(LaneType):
