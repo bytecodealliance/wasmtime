@@ -46,7 +46,7 @@ impl ArgAssigner for Args {
 
         // Check for a legal type.
         // We don't support SIMD yet, so break all vectors down.
-        if !ty.is_scalar() {
+        if ty.is_vector() {
             return ValueConversion::VectorSplit.into();
         }
 

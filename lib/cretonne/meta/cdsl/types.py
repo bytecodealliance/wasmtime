@@ -9,7 +9,7 @@ except ImportError:
     pass
 
 
-# ValueType instances (i8, i32, ...) are provided in the cretonne.types module.
+# ValueType instances (i8, i32, ...) are provided in the `base.types` module.
 class ValueType(object):
     """
     A concrete SSA value type.
@@ -21,8 +21,8 @@ class ValueType(object):
     # Map name -> ValueType.
     _registry = dict()  # type: Dict[str, ValueType]
 
-    # List of all the scalar types.
-    all_scalars = list()  # type: List[ScalarType]
+    # List of all the lane types.
+    all_lane_types = list()  # type: List[LaneType]
 
     def __init__(self, name, membytes, doc):
         # type: (str, int, str) -> None
@@ -75,9 +75,9 @@ class ValueType(object):
                 self.lane_bits() >= other.lane_bits())
 
 
-class ScalarType(ValueType):
+class LaneType(ValueType):
     """
-    A concrete scalar (not vector) type.
+    A concrete scalar type that can appear as a vector lane too.
 
     Also tracks a unique set of :py:class:`VectorType` instances with this type
     as the lane type.
@@ -85,16 +85,16 @@ class ScalarType(ValueType):
 
     def __init__(self, name, membytes, doc):
         # type: (str, int, str) -> None
-        super(ScalarType, self).__init__(name, membytes, doc)
+        super(LaneType, self).__init__(name, membytes, doc)
         self._vectors = dict()  # type: Dict[int, VectorType]
         # Assign numbers starting from 1. (0 is VOID).
-        ValueType.all_scalars.append(self)
-        self.number = len(ValueType.all_scalars)
-        assert self.number < 16, 'Too many scalar types'
+        ValueType.all_lane_types.append(self)
+        self.number = len(ValueType.all_lane_types)
+        assert self.number < 16, 'Too many lane types'
 
     def __repr__(self):
         # type: () -> str
-        return 'ScalarType({})'.format(self.name)
+        return 'LaneType({})'.format(self.name)
 
     def by(self, lanes):
         # type: (int) -> VectorType
@@ -120,13 +120,12 @@ class VectorType(ValueType):
     """
     A concrete SIMD vector type.
 
-    A vector type has a lane type which is an instance of :class:`ScalarType`,
+    A vector type has a lane type which is an instance of :class:`LaneType`,
     and a positive number of lanes.
     """
 
     def __init__(self, base, lanes):
-        # type: (ScalarType, int) -> None
-        assert isinstance(base, ScalarType), 'SIMD lanes must be scalar types'
+        # type: (LaneType, int) -> None
         super(VectorType, self).__init__(
                 name='{}x{}'.format(base.name, lanes),
                 membytes=lanes*base.membytes,
@@ -153,7 +152,7 @@ class VectorType(ValueType):
         return self.base.lane_bits()
 
 
-class IntType(ScalarType):
+class IntType(LaneType):
     """A concrete scalar integer type."""
 
     def __init__(self, bits):
@@ -184,7 +183,7 @@ class IntType(ScalarType):
         return self.bits
 
 
-class FloatType(ScalarType):
+class FloatType(LaneType):
     """A concrete scalar floating point type."""
 
     def __init__(self, bits, doc):
@@ -215,7 +214,7 @@ class FloatType(ScalarType):
         return self.bits
 
 
-class BoolType(ScalarType):
+class BoolType(LaneType):
     """A concrete scalar boolean type."""
 
     def __init__(self, bits):

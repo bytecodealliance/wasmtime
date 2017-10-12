@@ -36,7 +36,7 @@ def emit_vectors(bits, fmt):
     Emit definition for all vector types with `bits` total size.
     """
     size = bits // 8
-    for ty in ValueType.all_scalars:
+    for ty in ValueType.all_lane_types:
         mb = ty.membytes
         if mb == 0 or mb >= size:
             continue
@@ -45,7 +45,7 @@ def emit_vectors(bits, fmt):
 
 def emit_types(fmt):
     # type: (srcgen.Formatter) -> None
-    for ty in ValueType.all_scalars:
+    for ty in ValueType.all_lane_types:
         emit_type(ty, fmt)
     # Emit vector definitions for common SIMD sizes.
     emit_vectors(64, fmt)

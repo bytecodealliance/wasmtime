@@ -487,7 +487,7 @@ class TypeSet(object):
     def concrete_types(self):
         # type: () -> Iterable[types.ValueType]
         def by(scalar, lanes):
-            # type: (types.ScalarType, int) -> types.ValueType
+            # type: (types.LaneType, int) -> types.ValueType
             if (lanes == 1):
                 return scalar
             else:
@@ -577,7 +577,7 @@ class TypeVar(object):
         if isinstance(typ, types.VectorType):
             scalar = typ.base
             lanes = (typ.lanes, typ.lanes)
-        elif isinstance(typ, types.ScalarType):
+        elif isinstance(typ, types.LaneType):
             scalar = typ
             lanes = (1, 1)
         else:
