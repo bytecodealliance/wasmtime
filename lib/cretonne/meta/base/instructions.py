@@ -8,7 +8,7 @@ from __future__ import absolute_import
 from cdsl.operands import Operand, VARIABLE_ARGS
 from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
-from base.types import f32, f64, b1
+from base.types import f32, f64, b1, iflags, fflags
 from base.immediates import imm64, uimm8, uimm32, ieee32, ieee64, offset32
 from base.immediates import boolean, intcc, floatcc, memflags, regunit
 from base.immediates import trapcode
@@ -111,6 +111,23 @@ br_icmp = Instruction(
         be used to represent *macro-op fusion* on architectures like Intel's.
         """,
         ins=(Cond, x, y, EBB, args), is_branch=True)
+
+f = Operand('f', iflags)
+
+brif = Instruction(
+        'brif', r"""
+        Branch when condition is true in integer CPU flags.
+        """,
+        ins=(Cond, f, EBB, args), is_branch=True)
+
+Cond = Operand('Cond', floatcc)
+f = Operand('f', fflags)
+
+brff = Instruction(
+        'brff', r"""
+        Branch when condition is true in floating point CPU flags.
+        """,
+        ins=(Cond, f, EBB, args), is_branch=True)
 
 x = Operand('x', iB, doc='index into jump table')
 JT = Operand('JT', entities.jump_table)
@@ -677,6 +694,28 @@ icmp_imm = Instruction(
         """,
         ins=(Cond, x, Y), outs=a)
 
+f = Operand('f', iflags)
+x = Operand('x', iB)
+y = Operand('y', iB)
+
+ifcmp = Instruction(
+        'ifcmp', r"""
+        Compare scalar integers and return flags.
+
+        Compare two scalar integer values and return integer CPU flags
+        representing the result.
+        """,
+        ins=(x, y), outs=f)
+
+ifcmp_imm = Instruction(
+        'ifcmp_imm', r"""
+        Compare scalar integer to a constant and return flags.
+
+        Like :inst:`icmp_imm`, but returns integer CPU flags instead of testing
+        a specific condition code.
+        """,
+        ins=(x, Y), outs=f)
+
 a = Operand('a', Int)
 x = Operand('x', Int)
 y = Operand('y', Int)
@@ -1176,6 +1215,7 @@ popcnt = Instruction(
 Float = TypeVar(
         'Float', 'A scalar or vector floating point number',
         floats=True, simd=True)
+fB = TypeVar('fB', 'A scalar floating point number', floats=True)
 
 Cond = Operand('Cond', floatcc)
 x = Operand('x', Float)
@@ -1245,6 +1285,17 @@ fcmp = Instruction(
         boolean vector with the results of lane-wise comparisons.
         """,
         ins=(Cond, x, y), outs=a)
+
+f = Operand('f', fflags)
+
+ffcmp = Instruction(
+        'ffcmp', r"""
+        Floating point comparison returning flags.
+
+        Compares two numbers like :inst:`fcmp`, but returns floating point CPU
+        flags instead of testing a specific condition.
+        """,
+        ins=(x, y), outs=f)
 
 x = Operand('x', Float)
 y = Operand('y', Float)
@@ -1387,6 +1438,35 @@ nearest = Instruction(
         """,
         ins=x, outs=a)
 
+#
+# CPU flag operations
+#
+
+
+Cond = Operand('Cond', intcc)
+f = Operand('f', iflags)
+a = Operand('a', b1)
+
+trueif = Instruction(
+        'trueif', r"""
+        Test integer CPU flags for a specific condition.
+
+        Check the CPU flags in ``f`` against the ``Cond`` condition code and
+        return true when the condition code is satisfied.
+        """,
+        ins=(Cond, f), outs=a)
+
+Cond = Operand('Cond', floatcc)
+f = Operand('f', fflags)
+
+trueff = Instruction(
+        'trueff', r"""
+        Test floating point CPU flags for a specific condition.
+
+        Check the CPU flags in ``f`` against the ``Cond`` condition code and
+        return true when the condition code is satisfied.
+        """,
+        ins=(Cond, f), outs=a)
 
 #
 # Conversions

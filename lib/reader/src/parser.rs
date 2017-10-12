@@ -1975,6 +1975,38 @@ impl<'a> Parser<'a> {
                     args: args.into_value_list(&[ctrl_arg], &mut ctx.function.dfg.value_lists),
                 }
             }
+            InstructionFormat::BranchInt => {
+                let cond = self.match_enum("expected intcc condition code")?;
+                let arg = self.match_value("expected SSA value first operand")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected ',' between operands",
+                )?;
+                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let args = self.parse_opt_value_list()?;
+                InstructionData::BranchInt {
+                    opcode,
+                    cond,
+                    destination: ebb_num,
+                    args: args.into_value_list(&[arg], &mut ctx.function.dfg.value_lists),
+                }
+            }
+            InstructionFormat::BranchFloat => {
+                let cond = self.match_enum("expected floatcc condition code")?;
+                let arg = self.match_value("expected SSA value first operand")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected ',' between operands",
+                )?;
+                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let args = self.parse_opt_value_list()?;
+                InstructionData::BranchFloat {
+                    opcode,
+                    cond,
+                    destination: ebb_num,
+                    args: args.into_value_list(&[arg], &mut ctx.function.dfg.value_lists),
+                }
+            }
             InstructionFormat::BranchIcmp => {
                 let cond = self.match_enum("expected intcc condition code")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
@@ -1995,6 +2027,15 @@ impl<'a> Parser<'a> {
                     destination: ebb_num,
                     args: args.into_value_list(&[lhs, rhs], &mut ctx.function.dfg.value_lists),
                 }
+            }
+            InstructionFormat::BranchTable => {
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected ',' between operands",
+                )?;
+                let table = self.match_jt().and_then(|num| ctx.get_jt(num, &self.loc))?;
+                InstructionData::BranchTable { opcode, arg, table }
             }
             InstructionFormat::InsertLane => {
                 let lhs = self.match_value("expected SSA value first operand")?;
@@ -2052,6 +2093,11 @@ impl<'a> Parser<'a> {
                     imm: rhs,
                 }
             }
+            InstructionFormat::IntCond => {
+                let cond = self.match_enum("expected intcc condition code")?;
+                let arg = self.match_value("expected SSA value")?;
+                InstructionData::IntCond { opcode, cond, arg }
+            }
             InstructionFormat::FloatCompare => {
                 let cond = self.match_enum("expected floatcc condition code")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
@@ -2065,6 +2111,11 @@ impl<'a> Parser<'a> {
                     cond,
                     args: [lhs, rhs],
                 }
+            }
+            InstructionFormat::FloatCond => {
+                let cond = self.match_enum("expected floatcc condition code")?;
+                let arg = self.match_value("expected SSA value")?;
+                InstructionData::FloatCond { opcode, cond, arg }
             }
             InstructionFormat::Call => {
                 let func_ref = self.match_fn("expected function reference").and_then(
@@ -2120,15 +2171,6 @@ impl<'a> Parser<'a> {
                     },
                 )?;
                 InstructionData::FuncAddr { opcode, func_ref }
-            }
-            InstructionFormat::BranchTable => {
-                let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
-                let table = self.match_jt().and_then(|num| ctx.get_jt(num, &self.loc))?;
-                InstructionData::BranchTable { opcode, arg, table }
             }
             InstructionFormat::StackLoad => {
                 let ss = self.match_ss("expected stack slot number: ss«n»")

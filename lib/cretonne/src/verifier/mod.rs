@@ -288,6 +288,16 @@ impl<'a> Verifier<'a> {
                 ref args,
                 ..
             } |
+            BranchInt {
+                destination,
+                ref args,
+                ..
+            } |
+            BranchFloat {
+                destination,
+                ref args,
+                ..
+            } |
             BranchIcmp {
                 destination,
                 ref args,
@@ -340,7 +350,9 @@ impl<'a> Verifier<'a> {
             ExtractLane { .. } |
             IntCompare { .. } |
             IntCompareImm { .. } |
+            IntCond { .. } |
             FloatCompare { .. } |
+            FloatCond { .. } |
             Load { .. } |
             Store { .. } |
             RegMove { .. } |

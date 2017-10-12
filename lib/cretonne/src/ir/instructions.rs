@@ -141,10 +141,20 @@ pub enum InstructionData {
         arg: Value,
         imm: Imm64,
     },
+    IntCond {
+        opcode: Opcode,
+        cond: IntCC,
+        arg: Value,
+    },
     FloatCompare {
         opcode: Opcode,
         cond: FloatCC,
         args: [Value; 2],
+    },
+    FloatCond {
+        opcode: Opcode,
+        cond: FloatCC,
+        arg: Value,
     },
     Jump {
         opcode: Opcode,
@@ -159,6 +169,18 @@ pub enum InstructionData {
     BranchIcmp {
         opcode: Opcode,
         cond: IntCC,
+        destination: Ebb,
+        args: ValueList,
+    },
+    BranchInt {
+        opcode: Opcode,
+        cond: IntCC,
+        destination: Ebb,
+        args: ValueList,
+    },
+    BranchFloat {
+        opcode: Opcode,
+        cond: FloatCC,
         destination: Ebb,
         args: ValueList,
     },
