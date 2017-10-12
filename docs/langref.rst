@@ -329,6 +329,8 @@ instruction in the EBB.
 .. autoinst:: brz
 .. autoinst:: brnz
 .. autoinst:: br_icmp
+.. autoinst:: brif
+.. autoinst:: brff
 .. autoinst:: br_table
 
 .. inst:: JT = jump_table EBB0, EBB1, ..., EBBn
@@ -722,6 +724,8 @@ Integer operations
 
 .. autoinst:: icmp
 .. autoinst:: icmp_imm
+.. autoinst:: ifcmp
+.. autoinst:: ifcmp_imm
 .. autoinst:: iadd
 .. autoinst:: iadd_imm
 .. autoinst:: iadd_cin
@@ -814,6 +818,7 @@ Floating point operations
 These operations generally follow IEEE 754-2008 semantics.
 
 .. autoinst:: fcmp
+.. autoinst:: ffcmp
 .. autoinst:: fadd
 .. autoinst:: fsub
 .. autoinst:: fmul
@@ -856,6 +861,12 @@ represented as a floating point number.
 .. autoinst:: floor
 .. autoinst:: trunc
 .. autoinst:: nearest
+
+CPU flag operations
+-------------------
+
+.. autoinst:: trueif
+.. autoinst:: trueff
 
 Conversion operations
 ---------------------

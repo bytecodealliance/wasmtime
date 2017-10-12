@@ -37,10 +37,14 @@ ExtractLane = InstructionFormat(VALUE, ('lane', uimm8))
 
 IntCompare = InstructionFormat(intcc, VALUE, VALUE)
 IntCompareImm = InstructionFormat(intcc, VALUE, imm64)
+IntCond = InstructionFormat(intcc, VALUE)
 FloatCompare = InstructionFormat(floatcc, VALUE, VALUE)
+FloatCond = InstructionFormat(floatcc, VALUE)
 
 Jump = InstructionFormat(ebb, VARIABLE_ARGS)
 Branch = InstructionFormat(VALUE, ebb, VARIABLE_ARGS)
+BranchInt = InstructionFormat(intcc, VALUE, ebb, VARIABLE_ARGS)
+BranchFloat = InstructionFormat(floatcc, VALUE, ebb, VARIABLE_ARGS)
 BranchIcmp = InstructionFormat(intcc, VALUE, VALUE, ebb, VARIABLE_ARGS)
 BranchTable = InstructionFormat(VALUE, entities.jump_table)
 

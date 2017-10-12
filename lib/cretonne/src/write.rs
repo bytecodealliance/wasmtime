@@ -299,22 +299,16 @@ pub fn write_operands(
         ExtractLane { lane, arg, .. } => write!(w, " {}, {}", arg, lane),
         IntCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
         IntCompareImm { cond, arg, imm, .. } => write!(w, " {} {}, {}", cond, arg, imm),
+        IntCond { cond, arg, .. } => write!(w, " {} {}", cond, arg),
         FloatCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
+        FloatCond { cond, arg, .. } => write!(w, " {} {}", cond, arg),
         Jump {
             destination,
             ref args,
             ..
         } => {
-            if args.is_empty() {
-                write!(w, " {}", destination)
-            } else {
-                write!(
-                    w,
-                    " {}({})",
-                    destination,
-                    DisplayValues(args.as_slice(pool))
-                )
-            }
+            write!(w, " {}", destination)?;
+            write_ebb_args(w, args.as_slice(pool))
         }
         Branch {
             destination,
@@ -323,10 +317,27 @@ pub fn write_operands(
         } => {
             let args = args.as_slice(pool);
             write!(w, " {}, {}", args[0], destination)?;
-            if args.len() > 1 {
-                write!(w, "({})", DisplayValues(&args[1..]))?;
-            }
-            Ok(())
+            write_ebb_args(w, &args[1..])
+        }
+        BranchInt {
+            cond,
+            destination,
+            ref args,
+            ..
+        } => {
+            let args = args.as_slice(pool);
+            write!(w, " {} {}, {}", cond, args[0], destination)?;
+            write_ebb_args(w, &args[1..])
+        }
+        BranchFloat {
+            cond,
+            destination,
+            ref args,
+            ..
+        } => {
+            let args = args.as_slice(pool);
+            write!(w, " {} {}, {}", cond, args[0], destination)?;
+            write_ebb_args(w, &args[1..])
         }
         BranchIcmp {
             cond,
@@ -336,10 +347,7 @@ pub fn write_operands(
         } => {
             let args = args.as_slice(pool);
             write!(w, " {} {}, {}, {}", cond, args[0], args[1], destination)?;
-            if args.len() > 2 {
-                write!(w, "({})", DisplayValues(&args[2..]))?;
-            }
-            Ok(())
+            write_ebb_args(w, &args[2..])
         }
         BranchTable { arg, table, .. } => write!(w, " {}, {}", arg, table),
         Call { func_ref, ref args, .. } => {
@@ -403,6 +411,15 @@ pub fn write_operands(
         }
         Trap { code, .. } => write!(w, " {}", code),
         CondTrap { arg, code, .. } => write!(w, " {}, {}", arg, code),
+    }
+}
+
+/// Write EBB args using optional parantheses.
+fn write_ebb_args(w: &mut Write, args: &[Value]) -> Result {
+    if args.is_empty() {
+        Ok(())
+    } else {
+        write!(w, "({})", DisplayValues(args))
     }
 }
 
