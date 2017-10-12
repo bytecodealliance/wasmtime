@@ -217,7 +217,7 @@ fn expand_select(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowG
 /// Expand illegal `f32const` and `f64const` instructions.
 fn expand_fconst(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut ControlFlowGraph) {
     let ty = func.dfg.value_type(func.dfg.first_result(inst));
-    assert!(ty.is_scalar(), "Only scalar fconst supported: {}", ty);
+    assert!(!ty.is_vector(), "Only scalar fconst supported: {}", ty);
 
     // In the future, we may want to generate constant pool entries for these constants, but for
     // now use an `iconst` and a bit cast.

@@ -164,21 +164,19 @@ pub fn legalize_abi_value(have: Type, arg: &ArgumentType) -> ValueConversion {
         Ordering::Equal => {
             // This must be an integer vector that is split and then extended.
             assert!(arg.value_type.is_int());
-            assert!(!have.is_scalar());
+            assert!(have.is_vector());
             ValueConversion::VectorSplit
         }
         // We have more bits than the argument.
         Ordering::Greater => {
-            if have.is_scalar() {
-                if have.is_float() {
-                    // Convert a float to int so it can be split the next time.
-                    // ARM would do this to pass an `f64` in two registers.
-                    ValueConversion::IntBits
-                } else {
-                    ValueConversion::IntSplit
-                }
-            } else {
+            if have.is_vector() {
                 ValueConversion::VectorSplit
+            } else if have.is_float() {
+                // Convert a float to int so it can be split the next time.
+                // ARM would do this to pass an `f64` in two registers.
+                ValueConversion::IntBits
+            } else {
+                ValueConversion::IntSplit
             }
         }
     }

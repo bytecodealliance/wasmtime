@@ -166,9 +166,9 @@ Concrete value types are represented as instances of :class:`ValueType`. There
 are subclasses to represent scalar and vector types.
 
 .. autoclass:: ValueType
-.. inheritance-diagram:: ValueType ScalarType VectorType IntType FloatType BoolType
+.. inheritance-diagram:: ValueType LaneType VectorType IntType FloatType BoolType
     :parts: 1
-.. autoclass:: ScalarType
+.. autoclass:: LaneType
     :members:
 .. autoclass:: VectorType
     :members:
@@ -183,7 +183,7 @@ are subclasses to represent scalar and vector types.
     :members:
 
 There are no predefined vector types, but they can be created as needed with
-the :func:`ScalarType.by` function.
+the :func:`LaneType.by` function.
 
 
 .. module:: cdsl.operands

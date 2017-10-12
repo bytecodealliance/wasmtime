@@ -38,7 +38,7 @@ include!(concat!(env!("OUT_DIR"), "/types.rs"));
 impl Type {
     /// Get the lane type of this SIMD vector type.
     ///
-    /// A scalar type is the same as a SIMD vector type with one lane, so it returns itself.
+    /// A lane type is the same as a SIMD vector type with one lane, so it returns itself.
     pub fn lane_type(self) -> Type {
         Type(self.0 & 0x0f)
     }
@@ -100,7 +100,7 @@ impl Type {
     ///
     /// Scalar types are all converted to `b1` which is usually what you want.
     pub fn as_bool(self) -> Type {
-        if self.is_scalar() {
+        if !self.is_vector() {
             B1
         } else {
             self.as_bool_pedantic()
@@ -173,16 +173,16 @@ impl Type {
     /// All SIMD types have a lane count that is a power of two and no larger than 256, so this
     /// will be a number in the range 0-8.
     ///
-    /// A scalar type is the same as a SIMD vector type with one lane, so it return 0.
+    /// A scalar type is the same as a SIMD vector type with one lane, so it returns 0.
     pub fn log2_lane_count(self) -> u8 {
         self.0 >> 4
     }
 
-    /// Is this a scalar type? (That is, not a SIMD vector type).
+    /// Is this a SIMD vector type?
     ///
-    /// A scalar type is the same as a SIMD vector type with one lane.
-    pub fn is_scalar(self) -> bool {
-        self.log2_lane_count() == 0
+    /// A vector type has 2 or more lanes.
+    pub fn is_vector(self) -> bool {
+        self.log2_lane_count() > 0
     }
 
     /// Get the number of lanes in this SIMD vector type.
@@ -225,10 +225,10 @@ impl Type {
     ///
     /// There is no `double_vector()` method. Use `t.by(2)` instead.
     pub fn half_vector(self) -> Option<Type> {
-        if self.is_scalar() {
-            None
-        } else {
+        if self.is_vector() {
             Some(Type(self.0 - 0x10))
+        } else {
+            None
         }
     }
 
@@ -255,7 +255,7 @@ impl Display for Type {
             write!(f, "i{}", self.lane_bits())
         } else if self.is_float() {
             write!(f, "f{}", self.lane_bits())
-        } else if !self.is_scalar() {
+        } else if self.is_vector() {
             write!(f, "{}x{}", self.lane_type(), self.lane_count())
         } else {
             panic!("Invalid Type(0x{:x})", self.0)
@@ -273,7 +273,7 @@ impl Debug for Type {
             write!(f, "types::I{}", self.lane_bits())
         } else if self.is_float() {
             write!(f, "types::F{}", self.lane_bits())
-        } else if !self.is_scalar() {
+        } else if self.is_vector() {
             write!(f, "{:?}X{}", self.lane_type(), self.lane_count())
         } else {
             write!(f, "Type(0x{:x})", self.0)
