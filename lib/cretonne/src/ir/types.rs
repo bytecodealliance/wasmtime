@@ -272,9 +272,7 @@ impl Type {
 
 impl Display for Type {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if self.is_void() {
-            write!(f, "void")
-        } else if self.is_bool() {
+        if self.is_bool() {
             write!(f, "b{}", self.lane_bits())
         } else if self.is_int() {
             write!(f, "i{}", self.lane_bits())
@@ -283,16 +281,19 @@ impl Display for Type {
         } else if self.is_vector() {
             write!(f, "{}x{}", self.lane_type(), self.lane_count())
         } else {
-            panic!("Invalid Type(0x{:x})", self.0)
+            f.write_str(match *self {
+                VOID => "void",
+                IFLAGS => "iflags",
+                FFLAGS => "fflags",
+                _ => panic!("Invalid Type(0x{:x})", self.0),
+            })
         }
     }
 }
 
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if self.is_void() {
-            write!(f, "types::VOID")
-        } else if self.is_bool() {
+        if self.is_bool() {
             write!(f, "types::B{}", self.lane_bits())
         } else if self.is_int() {
             write!(f, "types::I{}", self.lane_bits())
@@ -301,7 +302,12 @@ impl Debug for Type {
         } else if self.is_vector() {
             write!(f, "{:?}X{}", self.lane_type(), self.lane_count())
         } else {
-            write!(f, "Type(0x{:x})", self.0)
+            match *self {
+                VOID => write!(f, "types::VOID"),
+                IFLAGS => write!(f, "types::IFLAGS"),
+                FFLAGS => write!(f, "types::FFLAGS"),
+                _ => write!(f, "Type(0x{:x})", self.0),
+            }
         }
     }
 }
@@ -320,6 +326,10 @@ mod tests {
     fn basic_scalars() {
         assert_eq!(VOID, VOID.lane_type());
         assert_eq!(0, VOID.bits());
+        assert_eq!(IFLAGS, IFLAGS.lane_type());
+        assert_eq!(0, IFLAGS.bits());
+        assert_eq!(FFLAGS, FFLAGS.lane_type());
+        assert_eq!(0, FFLAGS.bits());
         assert_eq!(B1, B1.lane_type());
         assert_eq!(B8, B8.lane_type());
         assert_eq!(B16, B16.lane_type());
@@ -333,6 +343,8 @@ mod tests {
         assert_eq!(F64, F64.lane_type());
 
         assert_eq!(VOID.lane_bits(), 0);
+        assert_eq!(IFLAGS.lane_bits(), 0);
+        assert_eq!(FFLAGS.lane_bits(), 0);
         assert_eq!(B1.lane_bits(), 1);
         assert_eq!(B8.lane_bits(), 8);
         assert_eq!(B16.lane_bits(), 16);
@@ -349,6 +361,8 @@ mod tests {
     #[test]
     fn typevar_functions() {
         assert_eq!(VOID.half_width(), None);
+        assert_eq!(IFLAGS.half_width(), None);
+        assert_eq!(FFLAGS.half_width(), None);
         assert_eq!(B1.half_width(), None);
         assert_eq!(B8.half_width(), None);
         assert_eq!(B16.half_width(), Some(B8));
@@ -363,6 +377,8 @@ mod tests {
         assert_eq!(F64.half_width(), Some(F32));
 
         assert_eq!(VOID.double_width(), None);
+        assert_eq!(IFLAGS.double_width(), None);
+        assert_eq!(FFLAGS.double_width(), None);
         assert_eq!(B1.double_width(), None);
         assert_eq!(B8.double_width(), Some(B16));
         assert_eq!(B16.double_width(), Some(B32));
@@ -397,6 +413,8 @@ mod tests {
     #[test]
     fn format_scalars() {
         assert_eq!(VOID.to_string(), "void");
+        assert_eq!(IFLAGS.to_string(), "iflags");
+        assert_eq!(FFLAGS.to_string(), "fflags");
         assert_eq!(B1.to_string(), "b1");
         assert_eq!(B8.to_string(), "b8");
         assert_eq!(B16.to_string(), "b16");

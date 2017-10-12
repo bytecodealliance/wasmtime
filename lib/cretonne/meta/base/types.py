@@ -2,7 +2,7 @@
 The base.types module predefines all the Cretonne scalar types.
 """
 from __future__ import absolute_import
-from cdsl.types import IntType, FloatType, BoolType
+from cdsl.types import IntType, FloatType, BoolType, FlagsType
 
 #: Boolean.
 b1 = BoolType(1)    #: 1-bit bool. Type is abstract (can't be stored in mem)
@@ -30,4 +30,17 @@ f64 = FloatType(
         A 64-bit floating point type represented in the IEEE 754-2008
         *binary64* interchange format. This corresponds to the :c:type:`double`
         type in most C implementations.
+        """)
+#: CPU flags from an integer comparison.
+iflags = FlagsType(
+        'iflags', """
+        CPU flags representing the result of an integer comparison. These flags
+        can be tested with an `intcc` condition code.
+        """)
+
+#: CPU flags from a floating point comparison.
+fflags = FlagsType(
+        'fflags', """
+        CPU flags representing the result of a floating point comparison. These
+        flags can be tested with a `floatcc` condition code.
         """)
