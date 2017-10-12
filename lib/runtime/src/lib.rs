@@ -7,63 +7,34 @@
 
 extern crate cretonne;
 extern crate cton_wasm;
+extern crate wasmparser;
 
-use cton_wasm::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, Global, GlobalInit, Table,
-                Memory, WasmRuntime, FuncEnvironment, GlobalValue, SignatureIndex};
+pub mod module;
+pub mod compilation;
+pub mod instance;
+
+pub use module::Module;
+pub use compilation::Compilation;
+pub use instance::Instance;
+
+use cton_wasm::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, Global, Table, Memory,
+                GlobalValue, SignatureIndex, FuncTranslator};
 use cretonne::ir::{InstBuilder, FuncRef, ExtFuncData, FunctionName, Signature, ArgumentType,
                    CallConv, ArgumentPurpose, ArgumentLoc, ArgumentExtension, Function};
 use cretonne::ir::types::*;
 use cretonne::ir::immediates::Offset32;
 use cretonne::cursor::FuncCursor;
-use cretonne::packed_option::PackedOption;
 use cretonne::ir;
+use cretonne::isa;
 use cretonne::settings;
-use cretonne::entity::EntityMap;
-use std::mem::transmute;
-use std::ptr::copy_nonoverlapping;
-use std::ptr::write;
-use std::collections::HashMap;
+use cretonne::binemit;
+use std::str::{FromStr, from_utf8};
+use std::error::Error;
 
-/// Runtime state of a WebAssembly table element.
-#[derive(Clone, Debug)]
-pub enum TableElement {
-    /// A element that, if called, produces a trap.
-    Trap(),
-    /// A function.
-    Function(FunctionIndex),
+/// Compute a `ir::FunctionName` for a given wasm function index.
+pub fn get_func_name(func_index: FunctionIndex) -> cretonne::ir::FunctionName {
+    ir::FunctionName::new(format!("wasm_0x{:x}", func_index))
 }
-
-/// Information about a WebAssembly global variable.
-pub struct GlobalInfo {
-    global: Global,
-    offset: usize,
-}
-
-/// Runtime state of a WebAssembly global variable.
-pub struct GlobalsData {
-    data: Vec<u8>,
-    info: Vec<GlobalInfo>,
-}
-
-/// A description of a WebAssembly table.
-pub struct TableData {
-    /// The data stored in the table.
-    pub data: Vec<u8>,
-    /// Function indices to be stored in the table.
-    pub elements: Vec<TableElement>,
-    /// The description of the table.
-    pub info: Table,
-}
-
-/// A description of a WebAssembly linear memory.
-pub struct MemoryData {
-    /// The data stored in the memory.
-    pub data: Vec<u8>,
-    /// The description of the memory.
-    pub info: Memory,
-}
-
-const PAGE_SIZE: usize = 65536;
 
 /// An entity to export.
 pub enum Export {
@@ -77,86 +48,144 @@ pub enum Export {
     Global(GlobalIndex),
 }
 
-/// Object containing the standalone runtime information. To be passed after creation as argument
-/// to `cton_wasm::translatemodule`.
-pub struct Runtime {
-    /// Compilation setting flags.
-    flags: settings::Flags,
+type RelocRef = u16;
 
-    /// Unprocessed signatures exactly as provided by `declare_signature()`.
-    signatures: Vec<ir::Signature>,
-
-    /// Names of imported functions.
-    pub imported_funcs: Vec<(String, String)>,
-
-    /// Types of functions, imported and local.
-    functions: Vec<SignatureIndex>,
-
-    /// WebAssembly tables.
-    pub tables: Vec<TableData>,
-
-    /// WebAssembly linear memories.
-    pub memories: Vec<MemoryData>,
-
-    /// WebAssembly global variables.
-    pub globals: GlobalsData,
-
-    /// Exported entities.
-    pub exports: HashMap<String, Export>,
-
-    instantiated: bool,
-
-    has_current_memory: Option<FuncRef>,
-    has_grow_memory: Option<FuncRef>,
-
-    /// Mapping from cretonne FuncRef to wasm FunctionIndex.
-    pub func_indices: EntityMap<FuncRef, FunctionIndex>,
-
-    the_heap: PackedOption<ir::Heap>,
-
-    /// The module "start" function, if present.
-    pub start_func: Option<FunctionIndex>,
+// Implementation of a relocation sink that just saves all the information for later
+struct RelocSink<'func> {
+    func: &'func ir::Function,
+    pub func_relocs: Vec<(RelocRef, FunctionIndex, binemit::CodeOffset)>,
 }
 
-impl Runtime {
-    /// Allocates the runtime data structures with default flags.
-    pub fn default() -> Self {
-        Self::with_flags(settings::Flags::new(&settings::builder()))
+impl<'func> binemit::RelocSink for RelocSink<'func> {
+    fn reloc_ebb(&mut self, _offset: binemit::CodeOffset, _reloc: binemit::Reloc, _ebb: ir::Ebb) {
+        // This should use the `offsets` field of `ir::Function`.
+        panic!("ebb headers not yet implemented");
     }
+    fn reloc_func(&mut self, offset: binemit::CodeOffset, reloc: binemit::Reloc, func: FuncRef) {
+        let name_bytes: &[u8] = self.func.dfg.ext_funcs[func].name.as_ref();
+        let name = from_utf8(name_bytes).unwrap();
+        // See `get_func_name`; names are encoded as `wasm_0x...`, so grab the
+        // `0x...` part and convert it back to an integer to get the index.
+        let func_index = FunctionIndex::from_str(&name[5..]).unwrap();
+        self.func_relocs.push((reloc.0, func_index, offset));
+    }
+    fn reloc_jt(
+        &mut self,
+        _offset: binemit::CodeOffset,
+        _reloc: binemit::Reloc,
+        _jt: ir::JumpTable,
+    ) {
+        panic!("jump tables not yet implemented");
+    }
+}
 
-    /// Allocates the runtime data structures with the given flags.
-    pub fn with_flags(flags: settings::Flags) -> Self {
+impl<'func> RelocSink<'func> {
+    fn new(func: &'func Function) -> RelocSink {
+        RelocSink {
+            func,
+            func_relocs: Vec::new(),
+        }
+    }
+}
+
+/// References to the input wasm data buffer to be decoded and processed later.
+/// separately from the main module translation.
+pub struct LazyContents<'data> {
+    /// References to the function bodies.
+    pub function_body_inputs: Vec<&'data [u8]>,
+
+    /// References to the data initializers.
+    pub data_initializers: Vec<(MemoryIndex, Option<GlobalIndex>, usize, &'data [u8])>,
+}
+
+impl<'data> LazyContents<'data> {
+    fn new() -> Self {
+        Self {
+            function_body_inputs: Vec::new(),
+            data_initializers: Vec::new(),
+        }
+    }
+}
+
+/// Object containing the standalone runtime information. To be passed after creation as argument
+/// to `cton_wasm::translatemodule`.
+pub struct ModuleEnvironment<'data, 'module> {
+    /// Compilation setting flags.
+    pub flags: &'module settings::Flags,
+
+    /// Module information.
+    pub module: &'module mut Module,
+
+    /// References to information to be decoded later.
+    pub lazy: LazyContents<'data>,
+}
+
+impl<'data, 'module> ModuleEnvironment<'data, 'module> {
+    /// Allocates the runtime data structures with the given isa.
+    pub fn new(flags: &'module settings::Flags, module: &'module mut Module) -> Self {
         Self {
             flags,
-            signatures: Vec::new(),
-            imported_funcs: Vec::new(),
-            functions: Vec::new(),
-            tables: Vec::new(),
-            memories: Vec::new(),
-            globals: GlobalsData {
-                data: Vec::new(),
-                info: Vec::new(),
-            },
-            exports: HashMap::new(),
-            instantiated: false,
-            has_current_memory: None,
-            has_grow_memory: None,
-            func_indices: EntityMap::new(),
-            the_heap: PackedOption::default(),
-            start_func: None,
+            module,
+            lazy: LazyContents::new(),
         }
     }
 
-    /// Return the offset from the VmCtx pointer where global `index` is allocated.
-    fn global_offset(index: GlobalIndex) -> usize {
-        // Add one for the hidden heap base global.
-        (index as usize + 1) * 8
+    fn func_env(&self) -> FuncEnvironment {
+        FuncEnvironment::new(&self.flags, &self.module)
     }
 
-    /// Return the size of the VmCtx area needed to hold all currently declared globals.
-    fn globals_data_size(&self) -> usize {
-        // Add one for the hidden heap base global.
-        (self.globals.info.len() + 1) * 8
+    fn native_pointer(&self) -> ir::Type {
+        use cton_wasm::FuncEnvironment;
+        self.func_env().native_pointer()
+    }
+
+    /// Declare that translation of the module is complete. This consumes the
+    /// `ModuleEnvironment` with its mutable reference to the `Module` and
+    /// produces a `ModuleTranslation` with an immutable reference to the
+    /// `Module`.
+    pub fn finish_translation(self) -> ModuleTranslation<'data, 'module> {
+        ModuleTranslation {
+            flags: self.flags,
+            module: self.module,
+            lazy: self.lazy,
+        }
+    }
+}
+
+/// The FuncEnvironment implementation for use by the `ModuleEnvironment`.
+pub struct FuncEnvironment<'module_environment> {
+    /// Compilation setting flags.
+    settings_flags: &'module_environment settings::Flags,
+
+    /// The module-level environment which this function-level environment belongs to.
+    pub module: &'module_environment Module,
+
+    /// The Cretonne global holding the base address of the memories vector.
+    pub memories_base: Option<ir::GlobalVar>,
+
+    /// The Cretonne global holding the base address of the globals vector.
+    pub globals_base: Option<ir::GlobalVar>,
+
+    /// The external function declaration for implementing wasm's `current_memory`.
+    pub current_memory_extfunc: Option<FuncRef>,
+
+    /// The external function declaration for implementing wasm's `grow_memory`.
+    pub grow_memory_extfunc: Option<FuncRef>,
+}
+
+impl<'module_environment> FuncEnvironment<'module_environment> {
+    fn new(
+        flags: &'module_environment settings::Flags,
+        module: &'module_environment Module,
+    ) -> Self {
+        Self {
+            settings_flags: flags,
+            module,
+            memories_base: None,
+            globals_base: None,
+            current_memory_extfunc: None,
+            grow_memory_extfunc: None,
+        }
     }
 
     /// Transform the call argument list in preparation for making a call.
@@ -166,56 +195,75 @@ impl Runtime {
         real_call_args.push(func.special_arg(ArgumentPurpose::VMContext).unwrap());
         real_call_args
     }
+
+    fn ptr_size(&self) -> usize {
+        if self.settings_flags.is_64bit() { 8 } else { 4 }
+    }
 }
 
-impl FuncEnvironment for Runtime {
+impl<'module_environment> cton_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {
     fn flags(&self) -> &settings::Flags {
-        &self.flags
+        &self.settings_flags
     }
 
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
-        let offset = Self::global_offset(index);
+        let ptr_size = self.ptr_size();
+        let globals_base = self.globals_base.unwrap_or_else(|| {
+            let offset = 0 * ptr_size;
+            let offset32 = offset as i32;
+            debug_assert_eq!(offset32 as usize, offset);
+            let new_base = func.create_global_var(
+                ir::GlobalVarData::VmCtx { offset: Offset32::new(offset32) },
+            );
+            self.globals_base = Some(new_base);
+            new_base
+        });
+        let offset = index as usize * 8;
         let offset32 = offset as i32;
         debug_assert_eq!(offset32 as usize, offset);
-        let gv =
-            func.create_global_var(ir::GlobalVarData::VmCtx { offset: Offset32::new(offset32) });
+        let gv = func.create_global_var(ir::GlobalVarData::Deref {
+            base: globals_base,
+            offset: Offset32::new(offset32),
+        });
         GlobalValue::Memory {
             gv,
-            ty: self.globals.info[index].global.ty,
+            ty: self.module.globals[index].ty,
         }
     }
 
-    fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
-        debug_assert!(self.the_heap.is_none(), "multiple heaps not supported yet");
-
-        let heap_base =
-            func.create_global_var(ir::GlobalVarData::VmCtx { offset: Offset32::new(0) });
-
-        let heap = func.create_heap(ir::HeapData {
+    fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> ir::Heap {
+        let ptr_size = self.ptr_size();
+        let memories_base = self.memories_base.unwrap_or_else(|| {
+            let new_base = func.create_global_var(ir::GlobalVarData::VmCtx {
+                offset: Offset32::new(ptr_size as i32),
+            });
+            self.globals_base = Some(new_base);
+            new_base
+        });
+        let offset = index as usize * ptr_size;
+        let offset32 = offset as i32;
+        debug_assert_eq!(offset32 as usize, offset);
+        let heap_base = func.create_global_var(ir::GlobalVarData::Deref {
+            base: memories_base,
+            offset: Offset32::new(offset32),
+        });
+        func.create_heap(ir::HeapData {
             base: ir::HeapBase::GlobalVar(heap_base),
             min_size: 0.into(),
             guard_size: 0x8000_0000.into(),
             style: ir::HeapStyle::Static { bound: 0x1_0000_0000.into() },
-        });
-
-        self.the_heap = PackedOption::from(heap);
-
-        heap
+        })
     }
 
     fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
-        func.import_signature(self.signatures[index].clone())
+        func.import_signature(self.module.signatures[index].clone())
     }
 
     fn make_direct_func(&mut self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef {
-        let sigidx = self.functions[index];
-        let signature = func.import_signature(self.signatures[sigidx].clone());
-        let name = self.get_func_name(index);
-        let func_ref = func.import_function(ir::ExtFuncData { name, signature });
-
-        self.func_indices[func_ref] = index;
-
-        func_ref
+        let sigidx = self.module.functions[index];
+        let signature = func.import_signature(self.module.signatures[sigidx].clone());
+        let name = get_func_name(index);
+        func.import_function(ir::ExtFuncData { name, signature })
     }
 
     fn translate_call_indirect(
@@ -228,7 +276,7 @@ impl FuncEnvironment for Runtime {
         call_args: &[ir::Value],
     ) -> ir::Inst {
         debug_assert_eq!(table_index, 0, "non-default tables not supported yet");
-        let real_call_args = Self::get_real_call_args(pos.func, call_args);
+        let real_call_args = FuncEnvironment::get_real_call_args(pos.func, call_args);
         pos.ins().call_indirect(sig_ref, callee, &real_call_args)
     }
 
@@ -239,7 +287,7 @@ impl FuncEnvironment for Runtime {
         callee: ir::FuncRef,
         call_args: &[ir::Value],
     ) -> ir::Inst {
-        let real_call_args = Self::get_real_call_args(pos.func, call_args);
+        let real_call_args = FuncEnvironment::get_real_call_args(pos.func, call_args);
         pos.ins().call(callee, &real_call_args)
     }
 
@@ -247,17 +295,11 @@ impl FuncEnvironment for Runtime {
         &mut self,
         mut pos: FuncCursor,
         index: MemoryIndex,
-        heap: ir::Heap,
+        _heap: ir::Heap,
         val: ir::Value,
     ) -> ir::Value {
-        debug_assert!(self.instantiated);
         debug_assert_eq!(index, 0, "non-default memories not supported yet");
-        debug_assert_eq!(
-            heap,
-            self.the_heap.unwrap(),
-            "multiple heaps not supported yet"
-        );
-        let grow_mem_func = self.has_grow_memory.unwrap_or_else(|| {
+        let grow_mem_func = self.grow_memory_extfunc.unwrap_or_else(|| {
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: CallConv::Native,
                 argument_bytes: None,
@@ -269,7 +311,7 @@ impl FuncEnvironment for Runtime {
                 signature: sig_ref,
             })
         });
-        self.has_grow_memory = Some(grow_mem_func);
+        self.grow_memory_extfunc = Some(grow_mem_func);
         let call_inst = pos.ins().call(grow_mem_func, &[val]);
         *pos.func.dfg.inst_results(call_inst).first().unwrap()
     }
@@ -278,16 +320,10 @@ impl FuncEnvironment for Runtime {
         &mut self,
         mut pos: FuncCursor,
         index: MemoryIndex,
-        heap: ir::Heap,
+        _heap: ir::Heap,
     ) -> ir::Value {
-        debug_assert!(self.instantiated);
         debug_assert_eq!(index, 0, "non-default memories not supported yet");
-        debug_assert_eq!(
-            heap,
-            self.the_heap.unwrap(),
-            "multiple heaps not supported yet"
-        );
-        let cur_mem_func = self.has_current_memory.unwrap_or_else(|| {
+        let cur_mem_func = self.current_memory_extfunc.unwrap_or_else(|| {
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: CallConv::Native,
                 argument_bytes: None,
@@ -299,7 +335,7 @@ impl FuncEnvironment for Runtime {
                 signature: sig_ref,
             })
         });
-        self.has_current_memory = Some(cur_mem_func);
+        self.current_memory_extfunc = Some(cur_mem_func);
         let call_inst = pos.ins().call(cur_mem_func, &[]);
         *pos.func.dfg.inst_results(call_inst).first().unwrap()
     }
@@ -309,9 +345,9 @@ impl FuncEnvironment for Runtime {
 /// `cton_wasm::translatemodule` because it
 /// tells how to translate runtime-dependent wasm instructions. These functions should not be
 /// called by the user.
-impl WasmRuntime for Runtime {
+impl<'data, 'module> cton_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data, 'module> {
     fn get_func_name(&self, func_index: FunctionIndex) -> cretonne::ir::FunctionName {
-        ir::FunctionName::new(format!("wasm_0x{:x}", func_index))
+        get_func_name(func_index)
     }
 
     fn declare_signature(&mut self, sig: &ir::Signature) {
@@ -323,63 +359,49 @@ impl WasmRuntime for Runtime {
             location: ArgumentLoc::Unassigned,
         });
         // TODO: Deduplicate signatures.
-        self.signatures.push(sig);
+        self.module.signatures.push(sig);
     }
 
     fn get_signature(&self, sig_index: SignatureIndex) -> &ir::Signature {
-        &self.signatures[sig_index]
+        &self.module.signatures[sig_index]
     }
 
     fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &str, field: &str) {
         debug_assert_eq!(
-            self.functions.len(),
-            self.imported_funcs.len(),
+            self.module.functions.len(),
+            self.module.imported_funcs.len(),
             "Imported functions must be declared first"
         );
-        self.functions.push(sig_index);
+        self.module.functions.push(sig_index);
 
-        self.imported_funcs.push((
+        self.module.imported_funcs.push((
             String::from(module),
             String::from(field),
         ));
     }
 
     fn get_num_func_imports(&self) -> usize {
-        self.imported_funcs.len()
+        self.module.imported_funcs.len()
     }
 
     fn declare_func_type(&mut self, sig_index: SignatureIndex) {
-        self.functions.push(sig_index);
+        self.module.functions.push(sig_index);
     }
 
     fn get_func_type(&self, func_index: FunctionIndex) -> usize {
-        self.functions[func_index]
+        self.module.functions[func_index]
     }
 
     fn declare_global(&mut self, global: Global) {
-        debug_assert!(!self.instantiated);
-        let index = self.globals.info.len() as GlobalIndex;
-        self.globals.info.push(GlobalInfo {
-            global: global,
-            offset: Self::global_offset(index),
-        });
+        self.module.globals.push(global);
     }
 
     fn get_global(&self, global_index: GlobalIndex) -> &cton_wasm::Global {
-        &self.globals.info[global_index].global
+        &self.module.globals[global_index]
     }
 
     fn declare_table(&mut self, table: Table) {
-        debug_assert!(!self.instantiated);
-        let mut elements_vec = Vec::with_capacity(table.size);
-        elements_vec.resize(table.size, TableElement::Trap());
-        let mut addresses_vec = Vec::with_capacity(table.size);
-        addresses_vec.resize(table.size, 0);
-        self.tables.push(TableData {
-            info: table,
-            data: addresses_vec,
-            elements: elements_vec,
-        });
+        self.module.tables.push(table);
     }
 
     fn declare_table_elements(
@@ -387,23 +409,19 @@ impl WasmRuntime for Runtime {
         table_index: TableIndex,
         base: Option<GlobalIndex>,
         offset: usize,
-        elements: &[FunctionIndex],
+        elements: Vec<FunctionIndex>,
     ) {
         debug_assert!(base.is_none(), "global-value offsets not supported yet");
-        debug_assert!(!self.instantiated);
-        for (i, elt) in elements.iter().enumerate() {
-            self.tables[table_index].elements[offset + i] = TableElement::Function(*elt);
-        }
+        self.module.table_elements.push(module::TableElements {
+            table_index,
+            base,
+            offset,
+            elements,
+        });
     }
 
     fn declare_memory(&mut self, memory: Memory) {
-        debug_assert!(!self.instantiated);
-        let mut memory_vec = Vec::with_capacity(memory.pages_count * PAGE_SIZE);
-        memory_vec.resize(memory.pages_count * PAGE_SIZE, 0);
-        self.memories.push(MemoryData {
-            info: memory,
-            data: memory_vec,
-        });
+        self.module.memories.push(memory);
     }
 
     fn declare_data_initialization(
@@ -411,133 +429,108 @@ impl WasmRuntime for Runtime {
         memory_index: MemoryIndex,
         base: Option<GlobalIndex>,
         offset: usize,
-        data: &[u8],
+        data: &'data [u8],
     ) {
         debug_assert!(base.is_none(), "global-value offsets not supported yet");
-        debug_assert!(
-            offset + data.len() <= self.memories[memory_index].info.pages_count * PAGE_SIZE,
-            "initialization data out of bounds"
-        );
-        self.memories[memory_index].data[offset..offset + data.len()].copy_from_slice(data);
+        self.lazy.data_initializers.push((
+            memory_index,
+            base,
+            offset,
+            data,
+        ));
     }
 
     fn declare_func_export(&mut self, func_index: FunctionIndex, name: &str) {
-        self.exports.insert(
+        self.module.exports.insert(
             String::from(name),
-            Export::Function(func_index),
+            module::Export::Function(func_index),
         );
     }
 
     fn declare_table_export(&mut self, table_index: TableIndex, name: &str) {
-        self.exports.insert(
+        self.module.exports.insert(
             String::from(name),
-            Export::Table(table_index),
+            module::Export::Table(table_index),
         );
     }
 
     fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &str) {
-        self.exports.insert(
+        self.module.exports.insert(
             String::from(name),
-            Export::Memory(memory_index),
+            module::Export::Memory(memory_index),
         );
     }
 
     fn declare_global_export(&mut self, global_index: GlobalIndex, name: &str) {
-        self.exports.insert(
+        self.module.exports.insert(
             String::from(name),
-            Export::Global(global_index),
+            module::Export::Global(global_index),
         );
     }
 
     fn declare_start_func(&mut self, func_index: FunctionIndex) {
-        debug_assert!(self.start_func.is_none());
-        self.start_func = Some(func_index);
+        debug_assert!(self.module.start_func.is_none());
+        self.module.start_func = Some(func_index);
     }
 
-    fn begin_translation(&mut self) {
-        debug_assert!(!self.instantiated);
-        self.instantiated = true;
-        // At instantiation, we allocate memory for the globals, the memories and the tables
-        // First the globals
-        let globals_data_size = self.globals_data_size();
-        self.globals.data.resize(globals_data_size, 0);
-        for globalinfo in &self.globals.info {
-            match globalinfo.global.initializer {
-                GlobalInit::I32Const(val) => unsafe {
-                    write(
-                        self.globals.data.as_mut_ptr().offset(
-                            globalinfo.offset as isize,
-                        ) as *mut i32,
-                        val,
-                    )
-                },
-                GlobalInit::I64Const(val) => unsafe {
-                    write(
-                        self.globals.data.as_mut_ptr().offset(
-                            globalinfo.offset as isize,
-                        ) as *mut i64,
-                        val,
-                    )
-                },
-                GlobalInit::F32Const(val) => unsafe {
-                    write(
-                        self.globals.data.as_mut_ptr().offset(
-                            globalinfo.offset as isize,
-                        ) as *mut f32,
-                        transmute(val),
-                    )
-                },
-                GlobalInit::F64Const(val) => unsafe {
-                    write(
-                        self.globals.data.as_mut_ptr().offset(
-                            globalinfo.offset as isize,
-                        ) as *mut f64,
-                        transmute(val),
-                    )
-                },
-                GlobalInit::Import() => {
-                    // We don't initialize, this is inter-module linking
-                    // TODO: support inter-module imports
-                }
-                GlobalInit::GlobalRef(index) => {
-                    let ref_offset = self.globals.info[index].offset;
-                    let size = globalinfo.global.ty.bytes();
-                    unsafe {
-                        let dst = self.globals.data.as_mut_ptr().offset(
-                            globalinfo.offset as isize,
-                        );
-                        let src = self.globals.data.as_ptr().offset(ref_offset as isize);
-                        copy_nonoverlapping(src, dst, size as usize)
-                    }
-                }
-            }
-        }
-    }
-
-    fn next_function(&mut self) {
-        self.has_current_memory = None;
-        self.has_grow_memory = None;
-        self.func_indices.clear();
-        self.the_heap = PackedOption::default();
+    fn define_function_body(&mut self, body_bytes: &'data [u8]) -> Result<(), String> {
+        self.lazy.function_body_inputs.push(body_bytes);
+        Ok(())
     }
 }
 
+/// Relocations to apply to function bodies.
+pub type Relocations = Vec<Vec<(RelocRef, FunctionIndex, binemit::CodeOffset)>>;
+
+/// The result of translating via `ModuleEnvironment`.
+pub struct ModuleTranslation<'data, 'module> {
+    /// Compilation setting flags.
+    pub flags: &'module settings::Flags,
+
+    /// Module information.
+    pub module: &'module Module,
+
+    /// Pointers into the raw data buffer.
+    pub lazy: LazyContents<'data>,
+}
+
 /// Convenience functions for the user to be called after execution for debug purposes.
-impl Runtime {
-    /// Returns a slice of the contents of allocated linear memory.
-    pub fn inspect_memory(&self, memory_index: usize, address: usize, len: usize) -> &[u8] {
-        &self.memories
-            .get(memory_index)
-            .expect(format!("no memory for index {}", memory_index).as_str())
-            .data
-            [address..address + len]
+impl<'data, 'module> ModuleTranslation<'data, 'module> {
+    fn func_env(&self) -> FuncEnvironment {
+        FuncEnvironment::new(&self.flags, &self.module)
     }
-    /// Shows the value of a global variable.
-    pub fn inspect_global(&self, global_index: usize) -> &[u8] {
-        let (offset, len) = (
-            self.globals.info[global_index].offset,
-            self.globals.info[global_index].global.ty.bytes() as usize,
-        );
-        &self.globals.data[offset..offset + len]
+
+    /// Compile the module, producing a compilation result with associated
+    /// relocations.
+    pub fn compile(
+        &self,
+        isa: &isa::TargetIsa,
+    ) -> Result<(Compilation<'module>, Relocations), String> {
+        let mut functions = Vec::new();
+        let mut relocations = Vec::new();
+        for input in &self.lazy.function_body_inputs {
+            let mut trans = FuncTranslator::new();
+            let mut context = cretonne::Context::new();
+            let reader = wasmparser::BinaryReader::new(input);
+
+            {
+                let mut func_environ = self.func_env();
+
+                trans
+                    .translate_from_reader(reader, &mut context.func, &mut func_environ)
+                    .map_err(|e| String::from(e.description()))?;
+            }
+
+            let code_size = context.compile(isa).map_err(
+                |e| String::from(e.description()),
+            )? as usize;
+            let mut code_buf: Vec<u8> = Vec::with_capacity(code_size as usize);
+            let mut reloc_sink = RelocSink::new(&context.func);
+            code_buf.resize(code_size, 0);
+            context.emit_to_memory(code_buf.as_mut_ptr(), &mut reloc_sink, isa);
+            functions.push(code_buf);
+            relocations.push(reloc_sink.func_relocs);
+        }
+        Ok((Compilation::new(self.module, functions), relocations))
     }
 }

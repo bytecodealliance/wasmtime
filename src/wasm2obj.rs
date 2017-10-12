@@ -91,33 +91,31 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     });
     let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
 
-    let mut runtime = wasmstandalone_runtime::Runtime::with_flags(isa.flags().clone());
-
-    let translation = {
-        match translate_module(&data, &mut runtime) {
-            Ok(x) => x,
-            Err(string) => {
-                return Err(string);
-            }
-        }
-    };
+    let mut module = wasmstandalone_runtime::Module::new();
+    let mut environ = wasmstandalone_runtime::ModuleEnvironment::new(isa.flags(), &mut module);
+    translate_module(&data, &mut environ)?;
 
     let mut obj = Artifact::new(faerie_target(&*isa)?, Some(String::from(output)));
 
-    emit_module(&translation, &mut obj, &*isa, &runtime)?;
+    let translation = environ.finish_translation();
 
-    if !runtime.tables.is_empty() {
-        if runtime.tables.len() > 1 {
+    let (compilation, relocations) = translation.compile(&*isa)?;
+
+    emit_module(&mut obj, &compilation, &relocations)?;
+
+    if !compilation.module.tables.is_empty() {
+        if compilation.module.tables.len() > 1 {
             return Err(String::from("multiple tables not supported yet"));
         }
-        obj.add_data("table", runtime.tables[0].data.clone());
+        return Err(String::from("FIXME: implement tables"));
     }
 
-    if !runtime.memories.is_empty() {
-        if runtime.memories.len() > 1 {
+    if !compilation.module.memories.is_empty() {
+        if compilation.module.memories.len() > 1 {
             return Err(String::from("multiple memories not supported yet"));
         }
-        obj.add_data("memory", runtime.memories[0].data.clone());
+        //obj.add_data("memory", initializer);
+        return Err(String::from("FIXME: implement tables"));
     }
 
     // FIXME: Make the format a parameter.
