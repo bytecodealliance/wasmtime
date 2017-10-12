@@ -166,18 +166,15 @@ Concrete value types are represented as instances of :class:`ValueType`. There
 are subclasses to represent scalar and vector types.
 
 .. autoclass:: ValueType
-.. inheritance-diagram:: ValueType LaneType VectorType IntType FloatType BoolType
+.. inheritance-diagram:: ValueType LaneType VectorType SpecialType IntType FloatType BoolType
     :parts: 1
 .. autoclass:: LaneType
     :members:
 .. autoclass:: VectorType
-    :members:
+.. autoclass:: SpecialType
 .. autoclass:: IntType
-    :members:
 .. autoclass:: FloatType
-    :members:
 .. autoclass:: BoolType
-    :members:
 
 .. automodule:: base.types
     :members:
