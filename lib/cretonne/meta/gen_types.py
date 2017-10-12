@@ -45,6 +45,8 @@ def emit_vectors(bits, fmt):
 
 def emit_types(fmt):
     # type: (srcgen.Formatter) -> None
+    for spec in ValueType.all_special_types:
+        emit_type(spec, fmt)
     for ty in ValueType.all_lane_types:
         emit_type(ty, fmt)
     # Emit vector definitions for common SIMD sizes.

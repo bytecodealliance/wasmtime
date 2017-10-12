@@ -287,6 +287,22 @@ class BoolType(LaneType):
         return self.bits
 
 
+class FlagsType(SpecialType):
+    """
+    A type representing CPU flags.
+
+    Flags can't be stored in memory.
+    """
+
+    def __init__(self, name, doc):
+        # type: (str, str) -> None
+        super(FlagsType, self).__init__(name, 0, doc)
+
+    def __repr__(self):
+        # type: () -> str
+        return 'FlagsType({})'.format(self.name)
+
+
 class BVType(ValueType):
     """A flat bitvector type. Used for semantics description only."""
 

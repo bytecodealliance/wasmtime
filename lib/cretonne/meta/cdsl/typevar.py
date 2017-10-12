@@ -163,6 +163,9 @@ class TypeSet(object):
     >>> TypeSet(lanes=True, ints=True)
     TypeSet(lanes={1, 2, 4, 8, 16, 32, 64, 128, 256}, ints={8, 16, 32, 64})
 
+    Finally, a type set can contain special types (derived from `SpecialType`)
+    which can't appear as lane types.
+
     :param lanes: `(min, max)` inclusive range of permitted vector lane counts.
     :param ints: `(min, max)` inclusive range of permitted scalar integer
                  widths.
@@ -172,11 +175,19 @@ class TypeSet(object):
                   widths.
     :param bitvecs : `(min, max)` inclusive range of permitted bitvector
                   widths.
+    :param specials: Sequence of speical types to appear in the set.
     """
 
-    def __init__(self, lanes=None, ints=None, floats=None, bools=None,
-                 bitvecs=None):
-        # type: (BoolInterval, BoolInterval, BoolInterval, BoolInterval, BoolInterval) -> None # noqa
+    def __init__(
+            self,
+            lanes=None,     # type: BoolInterval
+            ints=None,      # type: BoolInterval
+            floats=None,    # type: BoolInterval
+            bools=None,     # type: BoolInterval
+            bitvecs=None,   # type: BoolInterval
+            specials=None   # type: Iterable[types.SpecialType]
+            ):
+        # type: (...) -> None
         self.lanes = interval_to_set(decode_interval(lanes, (1, MAX_LANES), 1))
         self.ints = interval_to_set(decode_interval(ints, (8, MAX_BITS)))
         self.floats = interval_to_set(decode_interval(floats, (32, 64)))
@@ -184,6 +195,7 @@ class TypeSet(object):
         self.bools = set(filter(legal_bool, self.bools))
         self.bitvecs = interval_to_set(decode_interval(bitvecs,
                                                        (1, MAX_BITVEC)))
+        self.specials = set(specials) if specials else set()
 
     def copy(self):
         # type: (TypeSet) -> TypeSet
@@ -194,13 +206,14 @@ class TypeSet(object):
         return deepcopy(self)
 
     def typeset_key(self):
-        # type: () -> Tuple[Tuple, Tuple, Tuple, Tuple, Tuple]
+        # type: () -> Tuple[Tuple, Tuple, Tuple, Tuple, Tuple, Tuple]
         """Key tuple used for hashing and equality."""
         return (tuple(sorted(list(self.lanes))),
                 tuple(sorted(list(self.ints))),
                 tuple(sorted(list(self.floats))),
                 tuple(sorted(list(self.bools))),
-                tuple(sorted(list(self.bitvecs))))
+                tuple(sorted(list(self.bitvecs))),
+                tuple(sorted(list(self.specials))))
 
     def __hash__(self):
         # type: () -> int
@@ -231,6 +244,8 @@ class TypeSet(object):
             s += ', bools={}'.format(pp_set(self.bools))
         if len(self.bitvecs) > 0:
             s += ', bitvecs={}'.format(pp_set(self.bitvecs))
+        if len(self.specials) > 0:
+            s += ', specials=[{}]'.format(pp_set(self.specials))
         return s + ')'
 
     def emit_fields(self, fmt):
@@ -273,6 +288,7 @@ class TypeSet(object):
         self.floats.intersection_update(other.floats)
         self.bools.intersection_update(other.bools)
         self.bitvecs.intersection_update(other.bitvecs)
+        self.specials.intersection_update(other.specials)
 
         return self
 
@@ -481,8 +497,9 @@ class TypeSet(object):
         """
         Return the number of concrete types represented by this typeset
         """
-        return len(self.lanes) * (len(self.ints) + len(self.floats) +
-                                  len(self.bools) + len(self.bitvecs))
+        return (len(self.lanes) * (len(self.ints) + len(self.floats) +
+                                   len(self.bools) + len(self.bitvecs)) +
+                len(self.specials))
 
     def concrete_types(self):
         # type: () -> Iterable[types.ValueType]
@@ -503,6 +520,9 @@ class TypeSet(object):
             for bits in self.bitvecs:
                 assert nlanes == 1
                 yield types.BVType.with_bits(bits)
+
+        for spec in self.specials:
+            yield spec
 
     def get_singleton(self):
         # type: () -> types.ValueType
@@ -545,11 +565,20 @@ class TypeVar(object):
     """
 
     def __init__(
-            self, name, doc,
-            ints=False, floats=False, bools=False,
-            scalars=True, simd=False, bitvecs=False,
-            base=None, derived_func=None):
-        # type: (str, str, BoolInterval, BoolInterval, BoolInterval, bool, BoolInterval, BoolInterval, TypeVar, str) -> None # noqa
+            self,
+            name,                   # type: str
+            doc,                    # type: str
+            ints=False,             # type: BoolInterval
+            floats=False,           # type: BoolInterval
+            bools=False,            # type: BoolInterval
+            scalars=True,           # type: bool
+            simd=False,             # type: BoolInterval
+            bitvecs=False,          # type: BoolInterval
+            base=None,              # type: TypeVar
+            derived_func=None,      # type: str
+            specials=None           # type: Iterable[types.SpecialType]
+            ):
+        # type: (...) -> None
         self.name = name
         self.__doc__ = doc
         self.is_derived = isinstance(base, TypeVar)
@@ -567,7 +596,8 @@ class TypeVar(object):
                     ints=ints,
                     floats=floats,
                     bools=bools,
-                    bitvecs=bitvecs)
+                    bitvecs=bitvecs,
+                    specials=specials)
 
     @staticmethod
     def singleton(typ):
@@ -580,6 +610,8 @@ class TypeVar(object):
         elif isinstance(typ, types.LaneType):
             scalar = typ
             lanes = (1, 1)
+        elif isinstance(typ, types.SpecialType):
+            return TypeVar(typ.name, typ.__doc__, specials=[typ])
         else:
             assert isinstance(typ, types.BVType)
             scalar = typ
@@ -680,6 +712,8 @@ class TypeVar(object):
 
         # Safety checks to avoid over/underflows.
         ts = base.get_typeset()
+
+        assert len(ts.specials) == 0, "Can't derive from special types"
 
         if derived_func == TypeVar.HALFWIDTH:
             if len(ts.ints) > 0:

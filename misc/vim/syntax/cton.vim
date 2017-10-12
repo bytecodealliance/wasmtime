@@ -17,7 +17,7 @@ syn keyword ctonHeader test isa set
 syn keyword ctonDecl function jump_table incoming_arg outgoing_arg spill_slot local emergency_slot
 syn keyword ctonFilecheck check sameln nextln unordered not regex contained
 
-syn match ctonType  /\<[bif]\d\+\(x\d\+\)\?\>/
+syn match ctonType  /\<\([bif]\d\+\(x\d\+\)\?\)\|[if]flags\>/
 syn match ctonEntity /\<\(v\|ss\|jt\|fn\|sig\)\d\+\>/
 syn match ctonLabel /\<ebb\d+\>/
 syn match ctonName /%\w\+\>/
