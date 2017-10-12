@@ -149,7 +149,7 @@ pub trait FuncEnvironment {
 /// An object satisfyng the `ModuleEnvironment` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
 /// by the user, they are only for `cretonne-wasm` internal use.
-pub trait ModuleEnvironment {
+pub trait ModuleEnvironment<'data> {
     /// Return the name for the given function index.
     fn get_func_name(&self, func_index: FunctionIndex) -> ir::FunctionName;
 
@@ -160,7 +160,7 @@ pub trait ModuleEnvironment {
     fn get_signature(&self, sig_index: SignatureIndex) -> &ir::Signature;
 
     /// Declares a function import to the environment.
-    fn declare_func_import<'data>(
+    fn declare_func_import(
         &mut self,
         sig_index: SignatureIndex,
         module: &'data str,
@@ -195,7 +195,7 @@ pub trait ModuleEnvironment {
     /// Declares a memory to the environment
     fn declare_memory(&mut self, memory: Memory);
     /// Fills a declared memory with bytes at module instantiation.
-    fn declare_data_initialization<'data>(
+    fn declare_data_initialization(
         &mut self,
         memory_index: MemoryIndex,
         base: Option<GlobalIndex>,
@@ -204,17 +204,17 @@ pub trait ModuleEnvironment {
     );
 
     /// Declares a function export to the environment.
-    fn declare_func_export<'data>(&mut self, func_index: FunctionIndex, name: &'data str);
+    fn declare_func_export(&mut self, func_index: FunctionIndex, name: &'data str);
     /// Declares a table export to the environment.
-    fn declare_table_export<'data>(&mut self, table_index: TableIndex, name: &'data str);
+    fn declare_table_export(&mut self, table_index: TableIndex, name: &'data str);
     /// Declares a memory export to the environment.
-    fn declare_memory_export<'data>(&mut self, memory_index: MemoryIndex, name: &'data str);
+    fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &'data str);
     /// Declares a global export to the environment.
-    fn declare_global_export<'data>(&mut self, global_index: GlobalIndex, name: &'data str);
+    fn declare_global_export(&mut self, global_index: GlobalIndex, name: &'data str);
 
     /// Declares a start function.
     fn declare_start_func(&mut self, index: FunctionIndex);
 
     /// Provides the contents of a function body.
-    fn define_function_body<'data>(&mut self, body_bytes: &'data [u8]) -> Result<(), String>;
+    fn define_function_body(&mut self, body_bytes: &'data [u8]) -> Result<(), String>;
 }

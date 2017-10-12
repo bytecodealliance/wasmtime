@@ -56,9 +56,9 @@ pub fn parse_function_signatures(
 }
 
 /// Retrieves the imports from the imports section of the binary.
-pub fn parse_import_section(
-    parser: &mut Parser,
-    environ: &mut ModuleEnvironment,
+pub fn parse_import_section<'data>(
+    parser: &mut Parser<'data>,
+    environ: &mut ModuleEnvironment<'data>,
 ) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
@@ -128,9 +128,9 @@ pub fn parse_function_section(
 }
 
 /// Retrieves the names of the functions from the export section
-pub fn parse_export_section(
-    parser: &mut Parser,
-    environ: &mut ModuleEnvironment,
+pub fn parse_export_section<'data>(
+    parser: &mut Parser<'data>,
+    environ: &mut ModuleEnvironment<'data>,
 ) -> Result<(), SectionParsingError> {
     loop {
         match *parser.read() {
@@ -246,9 +246,9 @@ pub fn parse_global_section(
     Ok(())
 }
 
-pub fn parse_data_section(
-    parser: &mut Parser,
-    environ: &mut ModuleEnvironment,
+pub fn parse_data_section<'data>(
+    parser: &mut Parser<'data>,
+    environ: &mut ModuleEnvironment<'data>,
 ) -> Result<(), SectionParsingError> {
     loop {
         let memory_index = match *parser.read() {
