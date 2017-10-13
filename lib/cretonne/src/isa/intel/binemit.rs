@@ -2,6 +2,7 @@
 
 use binemit::{CodeSink, Reloc, bad_encoding};
 use ir::{Function, Inst, Ebb, InstructionData, Opcode};
+use ir::condcodes::{IntCC, FloatCC};
 use isa::{RegUnit, StackRef, StackBase, StackBaseMask};
 use regalloc::RegDiversions;
 use super::registers::RU;
@@ -235,6 +236,68 @@ fn sib_noindex<CS: CodeSink + ?Sized>(base: RegUnit, sink: &mut CS) {
     let mut b = 0b00_100_000;
     b |= base;
     sink.put1(b);
+}
+
+/// Get the low 4 bits of an opcode for an integer condition code.
+///
+/// Add this offset to a base opcode for:
+///
+/// ---- 0x70: Short conditional branch.
+/// 0x0f 0x80: Long conditional branch.
+/// 0x0f 0x90: SetCC.
+///
+fn icc2opc(cond: IntCC) -> u16 {
+    use ir::condcodes::IntCC::*;
+    match cond {
+        // 0x0 = Overflow.
+        // 0x1 = !Overflow.
+        UnsignedLessThan => 0x2,
+        UnsignedGreaterThanOrEqual => 0x3,
+        Equal => 0x4,
+        NotEqual => 0x5,
+        UnsignedLessThanOrEqual => 0x6,
+        UnsignedGreaterThan => 0x7,
+        // 0x8 = Sign.
+        // 0x9 = !Sign.
+        // 0xa = Parity even.
+        // 0xb = Parity odd.
+        SignedLessThan => 0xc,
+        SignedGreaterThanOrEqual => 0xd,
+        SignedLessThanOrEqual => 0xe,
+        SignedGreaterThan => 0xf,
+    }
+}
+
+/// Get the low 4 bits of an opcode for a floating point condition code.
+///
+/// The ucomiss/ucomisd instructions set the EFLAGS bits CF/PF/CF like this:
+///
+///    ZPC OSA
+/// UN 111 000
+/// GT 000 000
+/// LT 001 000
+/// EQ 100 000
+///
+/// Not all floating point condition codes are supported.
+fn fcc2opc(cond: FloatCC) -> u16 {
+    use ir::condcodes::FloatCC::*;
+    match cond {
+        Ordered                    => 0xb, // EQ|LT|GT => *np (P=0)
+        Unordered                  => 0xa, // UN       => *p  (P=1)
+        OrderedNotEqual            => 0x5, // LT|GT    => *ne (Z=0),
+        UnorderedOrEqual           => 0x4, // UN|EQ    => *e  (Z=1)
+        GreaterThan                => 0x7, // GT       => *a  (C=0&Z=0)
+        GreaterThanOrEqual         => 0x3, // GT|EQ    => *ae (C=0)
+        UnorderedOrLessThan        => 0x2, // UN|LT    => *b  (C=1)
+        UnorderedOrLessThanOrEqual => 0x6, // UN|LT|EQ => *be (Z=1|C=1)
+        Equal |                            // EQ
+        NotEqual |                         // UN|LT|GT
+        LessThan |                         // LT
+        LessThanOrEqual |                  // LT|EQ
+        UnorderedOrGreaterThan |           // UN|GT
+        UnorderedOrGreaterThanOrEqual      // UN|GT|EQ
+        => panic!("{} not supported", cond),
+    }
 }
 
 /// Emit a single-byte branch displacement to `destination`.

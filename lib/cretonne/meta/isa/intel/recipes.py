@@ -7,10 +7,11 @@ from cdsl.predicates import IsSignedInt, IsEqual, Or
 from cdsl.registers import RegClass
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
-from base.formats import IntCompare, FloatCompare
-from base.formats import Ternary, Jump, Branch, FuncAddr
+from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
+from base.formats import Jump, Branch, BranchInt, BranchFloat
+from base.formats import Ternary, FuncAddr
 from base.formats import RegMove, RegSpill, RegFill
-from .registers import GPR, ABCD, FPR, GPR8, FPR8, StackGPR32, StackFPR32
+from .registers import GPR, ABCD, FPR, GPR8, FPR8, FLAG, StackGPR32, StackFPR32
 from .defs import supported_floatccs
 
 try:
@@ -248,6 +249,15 @@ class TailRecipe:
         for name, obj in globs.items():
             if isinstance(obj, TailRecipe):
                 assert name == obj.name, "Mismatched TailRecipe name: " + name
+
+
+def floatccs(iform):
+    # type: (InstructionFormat) -> PredNode
+    """
+    Return an instruction predicate that checks in `iform.cond` is one of the
+    directly supported floating point condition codes.
+    """
+    return Or(*(IsEqual(iform.cond, cc) for cc in supported_floatccs))
 
 
 # A null unary instruction that takes a GPR register. Can be used for identity
@@ -754,6 +764,100 @@ jmpd = TailRecipe(
         disp4(destination, func, sink);
         ''')
 
+brib = TailRecipe(
+        'brib', BranchInt, size=1, ins=FLAG.eflags, outs=(),
+        branch_range=8,
+        emit='''
+        PUT_OP(bits | icc2opc(cond), BASE_REX, sink);
+        disp1(destination, func, sink);
+        ''')
+
+brid = TailRecipe(
+        'brid', BranchInt, size=4, ins=FLAG.eflags, outs=(),
+        branch_range=32,
+        emit='''
+        PUT_OP(bits | icc2opc(cond), BASE_REX, sink);
+        disp4(destination, func, sink);
+        ''')
+
+brfb = TailRecipe(
+        'brfb', BranchFloat, size=1, ins=FLAG.eflags, outs=(),
+        branch_range=8,
+        instp=floatccs(BranchFloat),
+        emit='''
+        PUT_OP(bits | fcc2opc(cond), BASE_REX, sink);
+        disp1(destination, func, sink);
+        ''')
+
+brfd = TailRecipe(
+        'brfd', BranchFloat, size=4, ins=FLAG.eflags, outs=(),
+        branch_range=32,
+        instp=floatccs(BranchFloat),
+        emit='''
+        PUT_OP(bits | fcc2opc(cond), BASE_REX, sink);
+        disp4(destination, func, sink);
+        ''')
+
+#
+# Test flags and set a register.
+#
+# These setCC instructions only set the low 8 bits, and they can only write
+# ABCD registers without a REX prefix.
+#
+# Other instruction encodings accepting `b1` inputs have the same constraints
+# and only look at the low 8 bits of the input register.
+#
+
+seti = TailRecipe(
+        'seti', IntCond, size=1, ins=FLAG.eflags, outs=GPR,
+        requires_prefix=True,
+        emit='''
+        PUT_OP(bits | icc2opc(cond), rex1(out_reg0), sink);
+        modrm_r_bits(out_reg0, bits, sink);
+        ''')
+seti_abcd = TailRecipe(
+        'seti_abcd', IntCond, size=1, ins=FLAG.eflags, outs=ABCD,
+        when_prefixed=seti,
+        emit='''
+        PUT_OP(bits | icc2opc(cond), rex1(out_reg0), sink);
+        modrm_r_bits(out_reg0, bits, sink);
+        ''')
+
+setf = TailRecipe(
+        'setf', FloatCond, size=1, ins=FLAG.eflags, outs=GPR,
+        requires_prefix=True,
+        emit='''
+        PUT_OP(bits | fcc2opc(cond), rex1(out_reg0), sink);
+        modrm_r_bits(out_reg0, bits, sink);
+        ''')
+setf_abcd = TailRecipe(
+        'setf_abcd', FloatCond, size=1, ins=FLAG.eflags, outs=ABCD,
+        when_prefixed=setf,
+        emit='''
+        PUT_OP(bits | fcc2opc(cond), rex1(out_reg0), sink);
+        modrm_r_bits(out_reg0, bits, sink);
+        ''')
+
+#
+# Compare and set flags.
+#
+
+# XX /r, MR form. Compare two GPR registers and set flags.
+rcmp = TailRecipe(
+        'rcmp', Binary, size=1, ins=(GPR, GPR), outs=FLAG.eflags,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
+        modrm_rr(in_reg0, in_reg1, sink);
+        ''')
+
+# XX /r, RM form. Compare two FPR registers and set flags.
+fcmp = TailRecipe(
+        'fcmp', Binary, size=1, ins=(FPR, FPR), outs=FLAG.eflags,
+        emit='''
+        PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
+        modrm_rr(in_reg1, in_reg0, sink);
+        ''')
+
 # Test-and-branch.
 #
 # This recipe represents the macro fusion of a test and a conditional branch.
@@ -926,8 +1030,7 @@ icscc = TailRecipe(
 # The omission of a `when_prefixed` alternative is deliberate here.
 fcscc = TailRecipe(
         'fcscc', FloatCompare, size=1 + 3, ins=(FPR, FPR), outs=ABCD,
-        instp=Or(*(IsEqual(FloatCompare.cond, cc)
-                   for cc in supported_floatccs)),
+        instp=floatccs(FloatCompare),
         emit='''
         // Comparison instruction.
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);

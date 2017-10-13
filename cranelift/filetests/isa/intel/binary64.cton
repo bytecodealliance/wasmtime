@@ -495,6 +495,64 @@ ebb2:
     jump ebb1                                   ; bin: eb fd
 }
 
+; CPU flag instructions.
+function %cpu_flags_I64() {
+ebb0:
+    [-,%rcx]            v1 = iconst.i64 1
+    [-,%r10]            v2 = iconst.i64 2
+    jump ebb1
+
+ebb1:
+    ; asm: cmpq %r10, %rcx
+    [-,%eflags]         v10 = ifcmp v1, v2      ; bin: 4c 39 d1
+    ; asm: cmpq %rcx, %r10
+    [-,%eflags]         v11 = ifcmp v2, v1      ; bin: 49 39 ca
+
+    ; asm: je ebb1
+    brif eq v11, ebb1                           ; bin: 74 f8
+    ; asm: jne ebb1
+    brif ne v11, ebb1                           ; bin: 75 f6
+    ; asm: jl ebb1
+    brif slt v11, ebb1                          ; bin: 7c f4
+    ; asm: jge ebb1
+    brif sge v11, ebb1                          ; bin: 7d f2
+    ; asm: jg ebb1
+    brif sgt v11, ebb1                          ; bin: 7f f0
+    ; asm: jle ebb1
+    brif sle v11, ebb1                          ; bin: 7e ee
+    ; asm: jb ebb1
+    brif ult v11, ebb1                          ; bin: 72 ec
+    ; asm: jae ebb1
+    brif uge v11, ebb1                          ; bin: 73 ea
+    ; asm: ja ebb1
+    brif ugt v11, ebb1                          ; bin: 77 e8
+    ; asm: jbe ebb1
+    brif ule v11, ebb1                          ; bin: 76 e6
+
+    ; asm: sete %bl
+    [-,%rbx]            v20 = trueif eq v11                           ; bin: 0f 94 c3
+    ; asm: setne %bl
+    [-,%rbx]            v21 = trueif ne v11                           ; bin: 0f 95 c3
+    ; asm: setl %dl
+    [-,%rdx]            v22 = trueif slt v11                          ; bin: 0f 9c c2
+    ; asm: setge %dl
+    [-,%rdx]            v23 = trueif sge v11                          ; bin: 0f 9d c2
+    ; asm: setg %r10b
+    [-,%r10]            v24 = trueif sgt v11                          ; bin: 41 0f 9f c2
+    ; asm: setle %r10b
+    [-,%r10]            v25 = trueif sle v11                          ; bin: 41 0f 9e c2
+    ; asm: setb %r14b
+    [-,%r14]            v26 = trueif ult v11                          ; bin: 41 0f 92 c6
+    ; asm: setae %r14b
+    [-,%r14]            v27 = trueif uge v11                          ; bin: 41 0f 93 c6
+    ; asm: seta %r11b
+    [-,%r11]            v28 = trueif ugt v11                          ; bin: 41 0f 97 c3
+    ; asm: setbe %r11b
+    [-,%r11]            v29 = trueif ule v11                          ; bin: 41 0f 96 c3
+
+    return
+}
+
 ; Tests for i32 instructions in 64-bit mode.
 ;
 ; Note that many i32 instructions can be encoded both with and without a REX
@@ -859,6 +917,11 @@ ebb0:
     regspill v1, %rcx -> ss1                    ; bin: 89 8c 24 00000408
     ; asm: movl 1032(%rsp), %ecx
     regfill v1, ss1 -> %rcx                     ; bin: 8b 8c 24 00000408
+
+    ; asm: cmpl %esi, %ecx
+    [-,%eflags]         v520 = ifcmp v1, v2      ; bin: 39 f1
+    ; asm: cmpl %r10d, %esi
+    [-,%eflags]         v521 = ifcmp v2, v3      ; bin: 44 39 d6
 
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1x

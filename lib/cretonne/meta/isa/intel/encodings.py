@@ -279,10 +279,15 @@ I64.enc(base.x_return, *r.ret(0xc3))
 #
 # Branches
 #
-I32.enc(base.jump, *r.jmpb(0xeb))
-I32.enc(base.jump, *r.jmpd(0xe9))
-I64.enc(base.jump, *r.jmpb(0xeb))
-I64.enc(base.jump, *r.jmpd(0xe9))
+enc_both(base.jump, r.jmpb, 0xeb)
+enc_both(base.jump, r.jmpd, 0xe9)
+
+enc_both(base.brif, r.brib, 0x70)
+enc_both(base.brif, r.brid, 0x0f, 0x80)
+
+# Not all float condition codes are legal, see `supported_floatccs`.
+enc_both(base.brff, r.brfb, 0x70)
+enc_both(base.brff, r.brfd, 0x0f, 0x80)
 
 # Note that the tjccd opcode will be prefixed with 0x0f.
 enc_i32_i64(base.brz, r.tjccb, 0x74)
@@ -313,6 +318,14 @@ I64.enc(base.trap, *r.trap(0x0f, 0x0b))
 # Comparisons
 #
 enc_i32_i64(base.icmp, r.icscc, 0x39)
+enc_i32_i64(base.ifcmp, r.rcmp, 0x39)
+
+#
+# Convert flags to bool.
+#
+# This encodes `b1` as an 8-bit low register with the value 0 or 1.
+enc_both(base.trueif, r.seti_abcd, 0x0f, 0x90)
+enc_both(base.trueff, r.setf_abcd, 0x0f, 0x90)
 
 #
 # Convert bool to int.
@@ -416,3 +429,6 @@ enc_both(base.band_not.f64, r.fax, 0x0f, 0x55)
 # handled by legalization patterns.
 enc_both(base.fcmp.f32, r.fcscc, 0x0f, 0x2e)
 enc_both(base.fcmp.f64, r.fcscc, 0x66, 0x0f, 0x2e)
+
+enc_both(base.ffcmp.f32, r.fcmp, 0x0f, 0x2e)
+enc_both(base.ffcmp.f64, r.fcmp, 0x66, 0x0f, 0x2e)
