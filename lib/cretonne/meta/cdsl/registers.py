@@ -61,17 +61,28 @@ class RegBank(object):
     :param name: Name of this register bank.
     :param doc: Documentation string.
     :param units: Number of register units.
+    :param pressure_tracking: Enable tracking of register pressure.
     :param prefix: Prefix for generated unit names.
     :param names: Special names for the first units. May be shorter than
                   `units`, the remaining units are named using `prefix`.
     """
 
-    def __init__(self, name, isa, doc, units, prefix='r', names=()):
-        # type: (str, TargetISA, str, int, str, Sequence[str]) -> None
+    def __init__(
+            self,
+            name,                       # type: str
+            isa,                        # type: TargetISA
+            doc,                        # type: str
+            units,                      # type: int
+            pressure_tracking=True,     # type: bool
+            prefix='r',                 # type: str
+            names=()                    # type: Sequence[str]
+            ):
+        # type: (...) -> None
         self.name = name
         self.isa = isa
         self.first_unit = 0
         self.units = units
+        self.pressure_tracking = pressure_tracking
         self.prefix = prefix
         self.names = names
         self.classes = list()  # type: List[RegClass]

@@ -136,12 +136,20 @@ class TargetISA(object):
         # Collect the top-level classes so they get numbered consecutively.
         for bank in self.regbanks:
             bank.finish_regclasses()
-            self.regclasses.extend(bank.toprcs)
+            # Always get the pressure tracking classes in first.
+            if bank.pressure_tracking:
+                self.regclasses.extend(bank.toprcs)
 
         # The limit on the number of top-level register classes can be raised.
-        # This should be coordinated with the `MAX_TOPRCS` constant in
+        # This should be coordinated with the `MAX_TRACKED_TOPRCS` constant in
         # `isa/registers.rs`.
         assert len(self.regclasses) <= 4, "Too many top-level register classes"
+
+        # Get the remaining top-level register classes which may exceed
+        # `MAX_TRACKED_TOPRCS`.
+        for bank in self.regbanks:
+            if not bank.pressure_tracking:
+                self.regclasses.extend(bank.toprcs)
 
         # Collect all of the non-top-level register classes.
         # They are numbered strictly after the top-level classes.
