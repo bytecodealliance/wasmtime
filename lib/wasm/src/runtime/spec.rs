@@ -190,7 +190,7 @@ pub trait ModuleEnvironment<'data> {
         table_index: TableIndex,
         base: Option<GlobalIndex>,
         offset: usize,
-        elements: &[FunctionIndex],
+        elements: Vec<FunctionIndex>,
     );
     /// Declares a memory to the environment
     fn declare_memory(&mut self, memory: Memory);

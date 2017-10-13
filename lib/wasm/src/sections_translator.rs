@@ -364,7 +364,7 @@ pub fn parse_elements_section(
             ParserState::ElementSectionEntryBody(ref elements) => {
                 let elems: Vec<FunctionIndex> =
                     elements.iter().map(|&x| x as FunctionIndex).collect();
-                environ.declare_table_elements(table_index, base, offset, &elems)
+                environ.declare_table_elements(table_index, base, offset, elems)
             }
             ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
         };
