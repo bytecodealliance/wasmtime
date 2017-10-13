@@ -421,3 +421,61 @@ ebb0:
 ebb1:
     return
 }
+
+; CPU flag instructions.
+function %cpu_flags() {
+ebb0:
+    [-,%rcx]            v1 = iconst.i32 1
+    [-,%rsi]            v2 = iconst.i32 2
+    jump ebb1
+
+ebb1:
+    ; asm: cmpl %esi, %ecx
+    [-,%eflags]         v10 = ifcmp v1, v2      ; bin: 39 f1
+    ; asm: cmpl %ecx, %esi
+    [-,%eflags]         v11 = ifcmp v2, v1      ; bin: 39 ce
+
+    ; asm: je ebb1
+    brif eq v11, ebb1                           ; bin: 74 fa
+    ; asm: jne ebb1
+    brif ne v11, ebb1                           ; bin: 75 f8
+    ; asm: jl ebb1
+    brif slt v11, ebb1                          ; bin: 7c f6
+    ; asm: jge ebb1
+    brif sge v11, ebb1                          ; bin: 7d f4
+    ; asm: jg ebb1
+    brif sgt v11, ebb1                          ; bin: 7f f2
+    ; asm: jle ebb1
+    brif sle v11, ebb1                          ; bin: 7e f0
+    ; asm: jb ebb1
+    brif ult v11, ebb1                          ; bin: 72 ee
+    ; asm: jae ebb1
+    brif uge v11, ebb1                          ; bin: 73 ec
+    ; asm: ja ebb1
+    brif ugt v11, ebb1                          ; bin: 77 ea
+    ; asm: jbe ebb1
+    brif ule v11, ebb1                          ; bin: 76 e8
+
+    ; asm: sete %bl
+    [-,%rbx]            v20 = trueif eq v11                           ; bin: 0f 94 c3
+    ; asm: setne %bl
+    [-,%rbx]            v21 = trueif ne v11                           ; bin: 0f 95 c3
+    ; asm: setl %dl
+    [-,%rdx]            v22 = trueif slt v11                          ; bin: 0f 9c c2
+    ; asm: setge %dl
+    [-,%rdx]            v23 = trueif sge v11                          ; bin: 0f 9d c2
+    ; asm: setg %bl
+    [-,%rbx]            v24 = trueif sgt v11                          ; bin: 0f 9f c3
+    ; asm: setle %bl
+    [-,%rbx]            v25 = trueif sle v11                          ; bin: 0f 9e c3
+    ; asm: setb %dl
+    [-,%rdx]            v26 = trueif ult v11                          ; bin: 0f 92 c2
+    ; asm: setae %dl
+    [-,%rdx]            v27 = trueif uge v11                          ; bin: 0f 93 c2
+    ; asm: seta %bl
+    [-,%rbx]            v28 = trueif ugt v11                          ; bin: 0f 97 c3
+    ; asm: setbe %bl
+    [-,%rbx]            v29 = trueif ule v11                          ; bin: 0f 96 c3
+
+    return
+}

@@ -220,6 +220,13 @@ ebb0:
     ; asm: setbe %dl
     [-,%rdx]            v307 = fcmp ule v11, v10                ; bin: 0f 2e d5 0f 96 c2
 
+    ; asm: ucomiss %xmm2, %xmm5
+    [-,%eflags]         v310 = ffcmp v10, v11                   ; bin: 0f 2e ea
+    ; asm: ucomiss %xmm2, %xmm5
+    [-,%eflags]         v311 = ffcmp v11, v10                   ; bin: 0f 2e d5
+    ; asm: ucomiss %xmm5, %xmm5
+    [-,%eflags]         v312 = ffcmp v10, v10                   ; bin: 0f 2e ed
+
     return
 }
 
@@ -427,6 +434,58 @@ ebb0:
     ; asm: ucomisd %xmm5, %xmm2
     ; asm: setbe %dl
     [-,%rdx]            v307 = fcmp ule v11, v10                ; bin: 66 0f 2e d5 0f 96 c2
+
+    ; asm: ucomisd %xmm2, %xmm5
+    [-,%eflags]         v310 = ffcmp v10, v11                   ; bin: 66 0f 2e ea
+    ; asm: ucomisd %xmm2, %xmm5
+    [-,%eflags]         v311 = ffcmp v11, v10                   ; bin: 66 0f 2e d5
+    ; asm: ucomisd %xmm5, %xmm5
+    [-,%eflags]         v312 = ffcmp v10, v10                   ; bin: 66 0f 2e ed
+
+    return
+}
+
+function %cpuflags_float(f32 [%xmm0]) {
+ebb0(v0: f32 [%xmm0]):
+    ; asm: ucomiss %xmm0, %xmm0
+    [-,%eflags]         v1 = ffcmp v0, v0                       ; bin: 0f 2e c0
+
+    jump ebb1
+
+ebb1:
+    ; asm: jnp ebb1
+    brff ord v1, ebb1                                           ; bin: 7b fe
+    ; asm: jp ebb1
+    brff uno v1, ebb1                                           ; bin: 7a fc
+    ; asm: jne ebb1
+    brff one v1, ebb1                                           ; bin: 75 fa
+    ; asm: je ebb1
+    brff ueq v1, ebb1                                           ; bin: 74 f8
+    ; asm: ja ebb1
+    brff gt v1, ebb1                                            ; bin: 77 f6
+    ; asm: jae ebb1
+    brff ge v1, ebb1                                            ; bin: 73 f4
+    ; asm: jb ebb1
+    brff ult v1, ebb1                                           ; bin: 72 f2
+    ; asm: jbe ebb1
+    brff ule v1, ebb1                                           ; bin: 76 f0
+
+    ; asm: setnp %bl
+    [-,%rbx]            v10 = trueff ord v1                     ; bin: 0f 9b c3
+    ; asm: setp %bl
+    [-,%rbx]            v11 = trueff uno v1                     ; bin: 0f 9a c3
+    ; asm: setne %dl
+    [-,%rdx]            v12 = trueff one v1                     ; bin: 0f 95 c2
+    ; asm: sete %dl
+    [-,%rdx]            v13 = trueff ueq v1                     ; bin: 0f 94 c2
+    ; asm: seta %al
+    [-,%rax]            v14 = trueff gt v1                      ; bin: 0f 97 c0
+    ; asm: setae %al
+    [-,%rax]            v15 = trueff ge v1                      ; bin: 0f 93 c0
+    ; asm: setb %cl
+    [-,%rcx]            v16 = trueff ult v1                     ; bin: 0f 92 c1
+    ; asm: setbe %cl
+    [-,%rcx]            v17 = trueff ule v1                     ; bin: 0f 96 c1
 
     return
 }
