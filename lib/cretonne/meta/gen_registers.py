@@ -28,6 +28,9 @@ def gen_regbank(regbank, fmt):
         fmt.format('prefix: "{}",', regbank.prefix)
         fmt.format('first_toprc: {},', regbank.toprcs[0].index)
         fmt.format('num_toprcs: {},', len(regbank.toprcs))
+        fmt.format(
+                'pressure_tracking: {},',
+                'true' if regbank.pressure_tracking else 'false')
 
 
 def gen_regbank_units(regbank, fmt):

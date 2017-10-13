@@ -27,10 +27,10 @@ pub type RegUnitMask = [u32; 3];
 /// This type should be coordinated with meta/cdsl/isa.py.
 pub type RegClassMask = u32;
 
-/// Guaranteed maximum number of top-level register classes in any ISA.
+/// Guaranteed maximum number of top-level register classes with pressure tracking in any ISA.
 ///
 /// This can be increased, but should be coordinated with meta/cdsl/isa.py.
-pub const MAX_TOPRCS: usize = 4;
+pub const MAX_TRACKED_TOPRCS: usize = 4;
 
 /// The register units in a target ISA are divided into disjoint register banks. Each bank covers a
 /// contiguous range of register units.
@@ -63,6 +63,9 @@ pub struct RegBank {
     /// The top-level register classes in a bank are guaranteed to be numbered sequentially from
     /// `first_toprc`, and all top-level register classes across banks come before any sub-classes.
     pub num_toprcs: usize,
+
+    /// Is register pressure tracking enabled for this bank?
+    pub pressure_tracking: bool,
 }
 
 impl RegBank {

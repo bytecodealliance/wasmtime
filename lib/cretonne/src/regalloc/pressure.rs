@@ -36,7 +36,7 @@
 // Remove once we're using the pressure tracker.
 #![allow(dead_code)]
 
-use isa::registers::{RegInfo, MAX_TOPRCS, RegClass, RegClassMask};
+use isa::registers::{RegInfo, MAX_TRACKED_TOPRCS, RegClass, RegClassMask};
 use regalloc::AllocatableSet;
 use std::cmp::min;
 use std::fmt;
@@ -76,7 +76,7 @@ pub struct Pressure {
     aliased: RegClassMask,
 
     // Current register counts per top-level register class.
-    toprc: [TopRC; MAX_TOPRCS],
+    toprc: [TopRC; MAX_TRACKED_TOPRCS],
 }
 
 impl Pressure {
@@ -88,17 +88,28 @@ impl Pressure {
         };
 
         // Get the layout of aliasing top-level register classes from the register banks.
-        for bank in reginfo.banks {
+        for bank in reginfo.banks.iter() {
             let first = bank.first_toprc;
             let num = bank.num_toprcs;
-            for rc in &mut p.toprc[first..first + num] {
-                rc.first_toprc = first as u8;
-                rc.num_toprcs = num as u8;
-            }
 
-            // Flag the top-level register classes with aliases.
-            if num > 1 {
-                p.aliased |= ((1 << num) - 1) << first;
+            if bank.pressure_tracking {
+                for rc in &mut p.toprc[first..first + num] {
+                    rc.first_toprc = first as u8;
+                    rc.num_toprcs = num as u8;
+                }
+
+                // Flag the top-level register classes with aliases.
+                if num > 1 {
+                    p.aliased |= ((1 << num) - 1) << first;
+                }
+            } else {
+                // This bank has no pressure tracking, so its top-level register classes may exceed
+                // `MAX_TRACKED_TOPRCS`. Fill in dummy entries.
+                for rc in &mut p.toprc[first..min(first + num, MAX_TRACKED_TOPRCS)] {
+                    // These aren't used if we don't set the `aliased` bit.
+                    rc.first_toprc = !0;
+                    rc.limit = !0;
+                }
             }
         }
 
@@ -123,9 +134,12 @@ impl Pressure {
     /// pressure should be eased in one of the returned top-level register classes before calling
     /// `can_take()` to check again.
     fn check_avail(&self, rc: RegClass) -> RegClassMask {
-        let entry = &self.toprc[rc.toprc as usize];
+        let entry = match self.toprc.get(rc.toprc as usize) {
+            None => return 0,  // Not a pressure tracked bank.
+            Some(e) => e,
+        };
         let mask = 1 << rc.toprc;
-        if self.aliased & mask == 0 {
+        if (self.aliased & mask) == 0 {
             // This is a simple unaliased top-level register class.
             if entry.total_count() < entry.limit {
                 0
@@ -189,12 +203,16 @@ impl Pressure {
     ///
     /// This does not check if there are enough registers available.
     pub fn take(&mut self, rc: RegClass) {
-        self.toprc[rc.toprc as usize].base_count += 1
+        self.toprc.get_mut(rc.toprc as usize).map(
+            |t| t.base_count += 1,
+        );
     }
 
     /// Free a register in `rc`.
     pub fn free(&mut self, rc: RegClass) {
-        self.toprc[rc.toprc as usize].base_count -= 1
+        self.toprc.get_mut(rc.toprc as usize).map(
+            |t| t.base_count -= 1,
+        );
     }
 
     /// Reset all counts to 0, both base and transient.
@@ -211,7 +229,9 @@ impl Pressure {
     pub fn take_transient(&mut self, rc: RegClass) -> Result<(), RegClassMask> {
         let mask = self.check_avail(rc);
         if mask == 0 {
-            self.toprc[rc.toprc as usize].transient_count += 1;
+            self.toprc.get_mut(rc.toprc as usize).map(|t| {
+                t.transient_count += 1
+            });
             Ok(())
         } else {
             Err(mask)
