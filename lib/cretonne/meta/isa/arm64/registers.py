@@ -18,7 +18,15 @@ FloatRegs = RegBank(
         'Floating point registers',
         units=32, prefix='v')
 
+FlagRegs = RegBank(
+        'FlagRegs', ISA,
+        'Flag registers',
+        units=1,
+        pressure_tracking=False,
+        names=['nzcv'])
+
 GPR = RegClass(IntRegs)
 FPR = RegClass(FloatRegs)
+FLAG = RegClass(FlagRegs)
 
 RegClass.extract_names(globals())

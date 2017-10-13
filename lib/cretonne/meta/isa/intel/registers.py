@@ -38,11 +38,19 @@ FloatRegs = RegBank(
         'SSE floating point registers',
         units=16, prefix='xmm')
 
+FlagRegs = RegBank(
+        'FlagRegs', ISA,
+        'Flag registers',
+        units=1,
+        pressure_tracking=False,
+        names=['eflags'])
+
 GPR = RegClass(IntRegs)
 GPR8 = GPR[0:8]
 ABCD = GPR[0:4]
 FPR = RegClass(FloatRegs)
 FPR8 = FPR[0:8]
+FLAG = RegClass(FlagRegs)
 
 # Constraints for stack operands.
 

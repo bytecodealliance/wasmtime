@@ -29,9 +29,17 @@ IntRegs = RegBank(
         'General purpose registers',
         units=16, prefix='r')
 
+FlagRegs = RegBank(
+        'FlagRegs', ISA,
+        'Flag registers',
+        units=1,
+        pressure_tracking=False,
+        names=['nzcv'])
+
 GPR = RegClass(IntRegs)
 S = RegClass(FloatRegs, count=32)
 D = RegClass(FloatRegs, width=2)
 Q = RegClass(FloatRegs, width=4)
+FLAG = RegClass(FlagRegs)
 
 RegClass.extract_names(globals())
