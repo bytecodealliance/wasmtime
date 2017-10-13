@@ -28,7 +28,7 @@ use cretonne::ir;
 use cretonne::isa;
 use cretonne::settings;
 use cretonne::binemit;
-use std::str::{FromStr, from_utf8};
+use std::str::from_utf8;
 use std::error::Error;
 
 /// Compute a `ir::FunctionName` for a given wasm function index.
@@ -65,8 +65,8 @@ impl<'func> binemit::RelocSink for RelocSink<'func> {
         let name_bytes: &[u8] = self.func.dfg.ext_funcs[func].name.as_ref();
         let name = from_utf8(name_bytes).unwrap();
         // See `get_func_name`; names are encoded as `wasm_0x...`, so grab the
-        // `0x...` part and convert it back to an integer to get the index.
-        let func_index = FunctionIndex::from_str(&name[5..]).unwrap();
+        // part after `0x...` and convert it back to an integer to get the index.
+        let func_index = FunctionIndex::from_str_radix(&name[7..], 16).unwrap();
         self.func_relocs.push((reloc.0, func_index, offset));
     }
     fn reloc_jt(
