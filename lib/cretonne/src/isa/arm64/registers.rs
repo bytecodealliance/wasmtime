@@ -32,6 +32,7 @@ mod tests {
         assert_eq!(uname(32), "%v0");
         assert_eq!(uname(33), "%v1");
         assert_eq!(uname(63), "%v31");
-        assert_eq!(uname(64), "%INVALID64");
+        assert_eq!(uname(64), "%nzcv");
+        assert_eq!(uname(65), "%INVALID65");
     }
 }
