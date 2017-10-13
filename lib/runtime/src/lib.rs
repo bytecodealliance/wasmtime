@@ -388,7 +388,7 @@ impl<'data, 'module> cton_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'
         self.module.functions.push(sig_index);
     }
 
-    fn get_func_type(&self, func_index: FunctionIndex) -> usize {
+    fn get_func_type(&self, func_index: FunctionIndex) -> SignatureIndex {
         self.module.functions[func_index]
     }
 
