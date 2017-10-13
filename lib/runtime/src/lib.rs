@@ -508,18 +508,17 @@ impl<'data, 'module> ModuleTranslation<'data, 'module> {
     ) -> Result<(Compilation<'module>, Relocations), String> {
         let mut functions = Vec::new();
         let mut relocations = Vec::new();
-        for input in &self.lazy.function_body_inputs {
-            let mut trans = FuncTranslator::new();
+        for (func_index, input) in self.lazy.function_body_inputs.iter().enumerate() {
             let mut context = cretonne::Context::new();
+            context.func.name = get_func_name(func_index);
+            context.func.signature = self.module.signatures[self.module.functions[func_index]]
+                .clone();
+
+            let mut trans = FuncTranslator::new();
             let reader = wasmparser::BinaryReader::new(input);
-
-            {
-                let mut func_environ = self.func_env();
-
-                trans
-                    .translate_from_reader(reader, &mut context.func, &mut func_environ)
-                    .map_err(|e| String::from(e.description()))?;
-            }
+            trans
+                .translate_from_reader(reader, &mut context.func, &mut self.func_env())
+                .map_err(|e| String::from(e.description()))?;
 
             let code_size = context.compile(isa).map_err(
                 |e| String::from(e.description()),
