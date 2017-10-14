@@ -5,7 +5,7 @@ use sections_translator::{SectionParsingError, parse_function_signatures, parse_
                           parse_function_section, parse_export_section, parse_start_section,
                           parse_memory_section, parse_global_section, parse_table_section,
                           parse_elements_section, parse_data_section};
-use runtime::ModuleEnvironment;
+use environ::ModuleEnvironment;
 
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cretonne IL
 /// [`Function`](../cretonne/ir/function/struct.Function.html).

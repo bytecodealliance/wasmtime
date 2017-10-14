@@ -9,7 +9,7 @@ use cretonne::entity::EntityRef;
 use cretonne::ir::{self, InstBuilder};
 use cretonne::result::{CtonResult, CtonError};
 use cton_frontend::{ILBuilder, FunctionBuilder};
-use runtime::FuncEnvironment;
+use environ::FuncEnvironment;
 use state::TranslationState;
 use translation_utils::Local;
 use wasmparser::{self, BinaryReader};
@@ -233,7 +233,7 @@ fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
 mod tests {
     use cretonne::{ir, Context};
     use cretonne::ir::types::I32;
-    use runtime::{DummyEnvironment, FuncEnvironment};
+    use environ::{DummyEnvironment, FuncEnvironment};
     use super::FuncTranslator;
 
     #[test]

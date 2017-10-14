@@ -11,7 +11,8 @@
 //! Another data structure, the translation state, records information concerning unreachable code
 //! status and about if inserting a return at the end of the function is necessary.
 //!
-//! Some of the WebAssembly instructions need information about the runtime to be translated:
+//! Some of the WebAssembly instructions need information about the environment for which they
+//! are being translated:
 //!
 //! - the loads and stores need the memory base address;
 //! - the `get_global` et `set_global` instructions depends on how the globals are implemented;
@@ -30,7 +31,7 @@ use translation_utils::{f32_translation, f64_translation, type_to_type, num_retu
 use translation_utils::{TableIndex, SignatureIndex, FunctionIndex, MemoryIndex};
 use state::{TranslationState, ControlStackFrame};
 use std::collections::HashMap;
-use runtime::{FuncEnvironment, GlobalValue};
+use environ::{FuncEnvironment, GlobalValue};
 use std::u32;
 
 /// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
@@ -61,7 +62,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.def_var(Local(local_index), val);
         }
         /********************************** Globals ****************************************
-         *  `get_global` and `set_global` are handled by the runtime.
+         *  `get_global` and `set_global` are handled by the environment.
          ***********************************************************************************/
         Operator::GetGlobal { global_index } => {
             let val = match state.get_global(builder.func, global_index, environ) {
@@ -349,7 +350,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         /************************************ Calls ****************************************
          * The call instructions pop off their arguments from the stack and append their
-         * return values to it. `call_indirect` needs runtime support because there is an
+         * return values to it. `call_indirect` needs environment support because there is an
          * argument referring to an index in the external functions table of the module.
          ************************************************************************************/
         Operator::Call { function_index } => {
@@ -380,7 +381,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.pushn(builder.func.dfg.inst_results(call));
         }
         /******************************* Memory management ***********************************
-         * Memory management is handled by runtime. It is usually translated into calls to
+         * Memory management is handled by environment. It is usually translated into calls to
          * special functions.
          ************************************************************************************/
         Operator::GrowMemory { reserved } => {
@@ -407,7 +408,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         /******************************* Load instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cretonne.
-         * The memory base address is provided by the runtime.
+         * The memory base address is provided by the environment.
          * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
         Operator::I32Load8U { memarg: MemoryImmediate { flags: _, offset } } => {
@@ -454,7 +455,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         /****************************** Store instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cretonne.
-         * The memory base address is provided by the runtime.
+         * The memory base address is provided by the environment.
          * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
         Operator::I32Store { memarg: MemoryImmediate { flags: _, offset } } |
