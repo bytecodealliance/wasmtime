@@ -1,4 +1,4 @@
-use runtime::{FuncEnvironment, GlobalValue, ModuleEnvironment};
+use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment};
 use translation_utils::{Global, Memory, Table, GlobalIndex, TableIndex, SignatureIndex,
                         FunctionIndex, MemoryIndex};
 use func_translator::FuncTranslator;
@@ -65,7 +65,7 @@ pub struct DummyModuleInfo {
 }
 
 impl DummyModuleInfo {
-    /// Allocates the runtime data structures with the given flags.
+    /// Allocates the data structures with the given flags.
     pub fn with_flags(flags: settings::Flags) -> Self {
         Self {
             flags,
@@ -81,9 +81,9 @@ impl DummyModuleInfo {
     }
 }
 
-/// This runtime implementation is a "naïve" one, doing essentially nothing and emitting
-/// placeholders when forced to. Don't try to execute code translated with this runtime, it is
-/// essentially here for translation debug purposes.
+/// This `ModuleEnvironment` implementation is a "naïve" one, doing essentially nothing and
+/// emitting placeholders when forced to. Don't try to execute code translated for this
+/// environment, essentially here for translation debug purposes.
 pub struct DummyEnvironment {
     /// Module information.
     pub info: DummyModuleInfo,
@@ -93,12 +93,12 @@ pub struct DummyEnvironment {
 }
 
 impl DummyEnvironment {
-    /// Allocates the runtime data structures with default flags.
+    /// Allocates the data structures with default flags.
     pub fn default() -> Self {
         Self::with_flags(settings::Flags::new(&settings::builder()))
     }
 
-    /// Allocates the runtime data structures with the given flags.
+    /// Allocates the data structures with the given flags.
     pub fn with_flags(flags: settings::Flags) -> Self {
         Self {
             info: DummyModuleInfo::with_flags(flags),

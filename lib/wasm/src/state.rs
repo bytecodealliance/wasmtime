@@ -4,7 +4,7 @@
 //! value and control stacks during the translation of a single function.
 
 use cretonne::ir::{self, Ebb, Inst, Value};
-use runtime::{FuncEnvironment, GlobalValue};
+use environ::{FuncEnvironment, GlobalValue};
 use std::collections::HashMap;
 use translation_utils::{GlobalIndex, MemoryIndex, SignatureIndex, FunctionIndex};
 

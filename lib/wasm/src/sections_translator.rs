@@ -15,7 +15,7 @@ use wasmparser::{Parser, ParserState, FuncType, ImportSectionEntryType, External
                  MemoryType, Operator};
 use wasmparser;
 use std::str::from_utf8;
-use runtime::ModuleEnvironment;
+use environ::ModuleEnvironment;
 
 pub enum SectionParsingError {
     WrongSectionContent(String),
