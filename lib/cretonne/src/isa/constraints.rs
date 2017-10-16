@@ -106,6 +106,11 @@ pub struct RecipeConstraints {
 
     /// Are there any tied operands?
     pub tied_ops: bool,
+
+    /// Does this instruction clobber the CPU flags?
+    ///
+    /// When true, SSA values of type `iflags` or `fflags` can not be live across the instruction.
+    pub clobbers_flags: bool,
 }
 
 impl RecipeConstraints {

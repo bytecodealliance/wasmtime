@@ -147,6 +147,7 @@ class TailRecipe:
             ins,                    # type: ConstraintSeq
             outs,                   # type: ConstraintSeq
             branch_range=None,      # type: int
+            clobbers_flags=True,    # type: bool
             instp=None,             # type: PredNode
             isap=None,              # type: PredNode
             when_prefixed=None,     # type: TailRecipe
@@ -160,6 +161,7 @@ class TailRecipe:
         self.ins = ins
         self.outs = outs
         self.branch_range = branch_range
+        self.clobbers_flags = clobbers_flags
         self.instp = instp
         self.isap = isap
         self.when_prefixed = when_prefixed
@@ -194,6 +196,7 @@ class TailRecipe:
                 ins=self.ins,
                 outs=self.outs,
                 branch_range=branch_range,
+                clobbers_flags=self.clobbers_flags,
                 instp=self.instp,
                 isap=self.isap,
                 emit=replace_put_op(self.emit, name))
@@ -236,6 +239,7 @@ class TailRecipe:
                 ins=self.ins,
                 outs=self.outs,
                 branch_range=branch_range,
+                clobbers_flags=self.clobbers_flags,
                 instp=self.instp,
                 isap=self.isap,
                 emit=replace_put_op(self.emit, name))
@@ -302,9 +306,10 @@ fax = TailRecipe(
         ''')
 
 # XX /r, but for a unary operator with separate input/output register, like
-# copies. MR form.
+# copies. MR form, preserving flags.
 umr = TailRecipe(
         'umr', Unary, size=1, ins=GPR, outs=GPR,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(out_reg0, in_reg0), sink);
         modrm_rr(out_reg0, in_reg0, sink);
@@ -313,6 +318,7 @@ umr = TailRecipe(
 # Same as umr, but with FPR -> GPR registers.
 rfumr = TailRecipe(
         'rfumr', Unary, size=1, ins=FPR, outs=GPR,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(out_reg0, in_reg0), sink);
         modrm_rr(out_reg0, in_reg0, sink);
@@ -339,6 +345,7 @@ urm_abcd = TailRecipe(
 # XX /r, RM form, FPR -> FPR.
 furm = TailRecipe(
         'furm', Unary, size=1, ins=FPR, outs=FPR,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rr(in_reg0, out_reg0, sink);
@@ -347,6 +354,7 @@ furm = TailRecipe(
 # XX /r, RM form, GPR -> FPR.
 frurm = TailRecipe(
         'frurm', Unary, size=1, ins=GPR, outs=FPR,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rr(in_reg0, out_reg0, sink);
@@ -355,6 +363,7 @@ frurm = TailRecipe(
 # XX /r, RM form, FPR -> GPR.
 rfurm = TailRecipe(
         'rfurm', Unary, size=1, ins=FPR, outs=GPR,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rr(in_reg0, out_reg0, sink);
@@ -378,6 +387,7 @@ furmi_rnd = TailRecipe(
 # XX /r, for regmove instructions.
 rmov = TailRecipe(
         'rmov', RegMove, size=1, ins=GPR, outs=(),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(dst, src), sink);
         modrm_rr(dst, src, sink);
@@ -386,6 +396,7 @@ rmov = TailRecipe(
 # XX /r, for regmove instructions (FPR version, RM encoded).
 frmov = TailRecipe(
         'frmov', RegMove, size=1, ins=FPR, outs=(),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(src, dst), sink);
         modrm_rr(src, dst, sink);
@@ -489,6 +500,7 @@ fnaddr8 = TailRecipe(
 st = TailRecipe(
         'st', Store, size=1, ins=(GPR, GPR), outs=(),
         instp=IsEqual(Store.offset, 0),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rm(in_reg1, in_reg0, sink);
@@ -500,6 +512,7 @@ st_abcd = TailRecipe(
         'st_abcd', Store, size=1, ins=(ABCD, GPR), outs=(),
         instp=IsEqual(Store.offset, 0),
         when_prefixed=st,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rm(in_reg1, in_reg0, sink);
@@ -509,6 +522,7 @@ st_abcd = TailRecipe(
 fst = TailRecipe(
         'fst', Store, size=1, ins=(FPR, GPR), outs=(),
         instp=IsEqual(Store.offset, 0),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rm(in_reg1, in_reg0, sink);
@@ -518,6 +532,7 @@ fst = TailRecipe(
 stDisp8 = TailRecipe(
         'stDisp8', Store, size=2, ins=(GPR, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 8),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp8(in_reg1, in_reg0, sink);
@@ -528,6 +543,7 @@ stDisp8_abcd = TailRecipe(
         'stDisp8_abcd', Store, size=2, ins=(ABCD, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 8),
         when_prefixed=stDisp8,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp8(in_reg1, in_reg0, sink);
@@ -537,6 +553,7 @@ stDisp8_abcd = TailRecipe(
 fstDisp8 = TailRecipe(
         'fstDisp8', Store, size=2, ins=(FPR, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 8),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp8(in_reg1, in_reg0, sink);
@@ -547,6 +564,7 @@ fstDisp8 = TailRecipe(
 # XX /r register-indirect store with 32-bit offset.
 stDisp32 = TailRecipe(
         'stDisp32', Store, size=5, ins=(GPR, GPR), outs=(),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp32(in_reg1, in_reg0, sink);
@@ -556,6 +574,7 @@ stDisp32 = TailRecipe(
 stDisp32_abcd = TailRecipe(
         'stDisp32_abcd', Store, size=5, ins=(ABCD, GPR), outs=(),
         when_prefixed=stDisp32,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp32(in_reg1, in_reg0, sink);
@@ -564,6 +583,7 @@ stDisp32_abcd = TailRecipe(
         ''')
 fstDisp32 = TailRecipe(
         'fstDisp32', Store, size=5, ins=(FPR, GPR), outs=(),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp32(in_reg1, in_reg0, sink);
@@ -574,6 +594,7 @@ fstDisp32 = TailRecipe(
 # Unary spill with SIB and 32-bit displacement.
 spSib32 = TailRecipe(
         'spSib32', Unary, size=6, ins=GPR, outs=StackGPR32,
+        clobbers_flags=False,
         emit='''
         let base = stk_base(out_stk0.base);
         PUT_OP(bits, rex2(base, in_reg0), sink);
@@ -583,6 +604,7 @@ spSib32 = TailRecipe(
         ''')
 fspSib32 = TailRecipe(
         'fspSib32', Unary, size=6, ins=FPR, outs=StackFPR32,
+        clobbers_flags=False,
         emit='''
         let base = stk_base(out_stk0.base);
         PUT_OP(bits, rex2(base, in_reg0), sink);
@@ -594,6 +616,7 @@ fspSib32 = TailRecipe(
 # Regspill using RSP-relative addressing.
 rsp32 = TailRecipe(
         'rsp32', RegSpill, size=6, ins=GPR, outs=(),
+        clobbers_flags=False,
         emit='''
         let dst = StackRef::sp(dst, &func.stack_slots);
         let base = stk_base(dst.base);
@@ -604,6 +627,7 @@ rsp32 = TailRecipe(
         ''')
 frsp32 = TailRecipe(
         'frsp32', RegSpill, size=6, ins=FPR, outs=(),
+        clobbers_flags=False,
         emit='''
         let dst = StackRef::sp(dst, &func.stack_slots);
         let base = stk_base(dst.base);
@@ -621,6 +645,7 @@ frsp32 = TailRecipe(
 ld = TailRecipe(
         'ld', Load, size=1, ins=(GPR), outs=(GPR),
         instp=IsEqual(Load.offset, 0),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rm(in_reg0, out_reg0, sink);
@@ -630,6 +655,7 @@ ld = TailRecipe(
 fld = TailRecipe(
         'fld', Load, size=1, ins=(GPR), outs=(FPR),
         instp=IsEqual(Load.offset, 0),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rm(in_reg0, out_reg0, sink);
@@ -639,6 +665,7 @@ fld = TailRecipe(
 ldDisp8 = TailRecipe(
         'ldDisp8', Load, size=2, ins=(GPR), outs=(GPR),
         instp=IsSignedInt(Load.offset, 8),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp8(in_reg0, out_reg0, sink);
@@ -650,6 +677,7 @@ ldDisp8 = TailRecipe(
 fldDisp8 = TailRecipe(
         'fldDisp8', Load, size=2, ins=(GPR), outs=(FPR),
         instp=IsSignedInt(Load.offset, 8),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp8(in_reg0, out_reg0, sink);
@@ -661,6 +689,7 @@ fldDisp8 = TailRecipe(
 ldDisp32 = TailRecipe(
         'ldDisp32', Load, size=5, ins=(GPR), outs=(GPR),
         instp=IsSignedInt(Load.offset, 32),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp32(in_reg0, out_reg0, sink);
@@ -672,6 +701,7 @@ ldDisp32 = TailRecipe(
 fldDisp32 = TailRecipe(
         'fldDisp32', Load, size=5, ins=(GPR), outs=(FPR),
         instp=IsSignedInt(Load.offset, 32),
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp32(in_reg0, out_reg0, sink);
@@ -682,6 +712,7 @@ fldDisp32 = TailRecipe(
 # Unary fill with SIB and 32-bit displacement.
 fiSib32 = TailRecipe(
         'fiSib32', Unary, size=6, ins=StackGPR32, outs=GPR,
+        clobbers_flags=False,
         emit='''
         let base = stk_base(in_stk0.base);
         PUT_OP(bits, rex2(base, out_reg0), sink);
@@ -691,6 +722,7 @@ fiSib32 = TailRecipe(
         ''')
 ffiSib32 = TailRecipe(
         'ffiSib32', Unary, size=6, ins=StackFPR32, outs=FPR,
+        clobbers_flags=False,
         emit='''
         let base = stk_base(in_stk0.base);
         PUT_OP(bits, rex2(base, out_reg0), sink);
@@ -702,6 +734,7 @@ ffiSib32 = TailRecipe(
 # Regfill with RSP-relative 32-bit displacement.
 rfi32 = TailRecipe(
         'rfi32', RegFill, size=6, ins=StackGPR32, outs=(),
+        clobbers_flags=False,
         emit='''
         let src = StackRef::sp(src, &func.stack_slots);
         let base = stk_base(src.base);
@@ -712,6 +745,7 @@ rfi32 = TailRecipe(
         ''')
 frfi32 = TailRecipe(
         'frfi32', RegFill, size=6, ins=StackFPR32, outs=(),
+        clobbers_flags=False,
         emit='''
         let src = StackRef::sp(src, &func.stack_slots);
         let base = stk_base(src.base);
@@ -751,6 +785,7 @@ ret = TailRecipe(
 jmpb = TailRecipe(
         'jmpb', Jump, size=1, ins=(), outs=(),
         branch_range=8,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, BASE_REX, sink);
         disp1(destination, func, sink);
@@ -759,6 +794,7 @@ jmpb = TailRecipe(
 jmpd = TailRecipe(
         'jmpd', Jump, size=4, ins=(), outs=(),
         branch_range=32,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, BASE_REX, sink);
         disp4(destination, func, sink);
@@ -767,6 +803,7 @@ jmpd = TailRecipe(
 brib = TailRecipe(
         'brib', BranchInt, size=1, ins=FLAG.eflags, outs=(),
         branch_range=8,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits | icc2opc(cond), BASE_REX, sink);
         disp1(destination, func, sink);
@@ -775,6 +812,7 @@ brib = TailRecipe(
 brid = TailRecipe(
         'brid', BranchInt, size=4, ins=FLAG.eflags, outs=(),
         branch_range=32,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits | icc2opc(cond), BASE_REX, sink);
         disp4(destination, func, sink);
@@ -783,6 +821,7 @@ brid = TailRecipe(
 brfb = TailRecipe(
         'brfb', BranchFloat, size=1, ins=FLAG.eflags, outs=(),
         branch_range=8,
+        clobbers_flags=False,
         instp=floatccs(BranchFloat),
         emit='''
         PUT_OP(bits | fcc2opc(cond), BASE_REX, sink);
@@ -792,6 +831,7 @@ brfb = TailRecipe(
 brfd = TailRecipe(
         'brfd', BranchFloat, size=4, ins=FLAG.eflags, outs=(),
         branch_range=32,
+        clobbers_flags=False,
         instp=floatccs(BranchFloat),
         emit='''
         PUT_OP(bits | fcc2opc(cond), BASE_REX, sink);
@@ -811,6 +851,7 @@ brfd = TailRecipe(
 seti = TailRecipe(
         'seti', IntCond, size=1, ins=FLAG.eflags, outs=GPR,
         requires_prefix=True,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits | icc2opc(cond), rex1(out_reg0), sink);
         modrm_r_bits(out_reg0, bits, sink);
@@ -818,6 +859,7 @@ seti = TailRecipe(
 seti_abcd = TailRecipe(
         'seti_abcd', IntCond, size=1, ins=FLAG.eflags, outs=ABCD,
         when_prefixed=seti,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits | icc2opc(cond), rex1(out_reg0), sink);
         modrm_r_bits(out_reg0, bits, sink);
@@ -826,6 +868,7 @@ seti_abcd = TailRecipe(
 setf = TailRecipe(
         'setf', FloatCond, size=1, ins=FLAG.eflags, outs=GPR,
         requires_prefix=True,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits | fcc2opc(cond), rex1(out_reg0), sink);
         modrm_r_bits(out_reg0, bits, sink);
@@ -833,6 +876,7 @@ setf = TailRecipe(
 setf_abcd = TailRecipe(
         'setf_abcd', FloatCond, size=1, ins=FLAG.eflags, outs=ABCD,
         when_prefixed=setf,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits | fcc2opc(cond), rex1(out_reg0), sink);
         modrm_r_bits(out_reg0, bits, sink);
