@@ -356,12 +356,12 @@ def gen_xform_group(xgrp, fmt, type_sets):
     # type: (XFormGroup, Formatter, UniqueTable) -> None
     fmt.doc_comment("Legalize the instruction pointed to by `pos`.")
     fmt.line('#[allow(unused_variables,unused_assignments)]')
-    with fmt.indented(
-            'pub fn {}(inst: ir::Inst, '
-            'func: &mut ir::Function, '
-            'cfg: &mut ::flowgraph::ControlFlowGraph) -> '
-            'bool {{'.format(xgrp.name), '}'):
-        fmt.line('use ir::{InstBuilder};')
+    with fmt.indented('pub fn {}('.format(xgrp.name)):
+        fmt.line('inst: ir::Inst,')
+        fmt.line('func: &mut ir::Function,')
+        fmt.line('cfg: &mut ::flowgraph::ControlFlowGraph,')
+    with fmt.indented(') -> bool {', '}'):
+        fmt.line('use ir::InstBuilder;')
         fmt.line('use cursor::{Cursor, FuncCursor};')
         fmt.line('let pos = &mut FuncCursor::new(func).at_inst(inst);')
         fmt.line('pos.use_srcloc(inst);')
