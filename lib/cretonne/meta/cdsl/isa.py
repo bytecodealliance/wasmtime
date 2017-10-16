@@ -310,29 +310,35 @@ class EncRecipe(object):
     branch instructions. It is an `(origin, bits)` tuple describing the exact
     range that can be encoded in a branch instruction.
 
+    For ISAs that use CPU flags in `iflags` and `fflags` value types, the
+    `clobbers_flags` is used to indicate instruction encodings that clobbers
+    the CPU flags, so they can't be used where a flag value is live.
+
     :param name: Short mnemonic name for this recipe.
     :param format: All encoded instructions must have this
             :py:class:`InstructionFormat`.
     :param size: Number of bytes in the binary encoded instruction.
-    :param: ins Tuple of register constraints for value operands.
-    :param: outs Tuple of register constraints for results.
-    :param: branch_range `(origin, bits)` range for branches.
-    :param: instp Instruction predicate.
-    :param: isap ISA predicate.
-    :param: emit Rust code for binary emission.
+    :param ins: Tuple of register constraints for value operands.
+    :param outs: Tuple of register constraints for results.
+    :param branch_range: `(origin, bits)` range for branches.
+    :param clobbers_flags: This instruction clobbers `iflags` and `fflags`.
+    :param instp: Instruction predicate.
+    :param isap: ISA predicate.
+    :param emit: Rust code for binary emission.
     """
 
     def __init__(
             self,
-            name,               # type: str
-            format,             # type: InstructionFormat
-            size,               # type: int
-            ins,                # type: ConstraintSeq
-            outs,               # type: ConstraintSeq
-            branch_range=None,  # type: BranchRange
-            instp=None,         # type: PredNode
-            isap=None,          # type: PredNode
-            emit=None           # type: str
+            name,                 # type: str
+            format,               # type: InstructionFormat
+            size,                 # type: int
+            ins,                  # type: ConstraintSeq
+            outs,                 # type: ConstraintSeq
+            branch_range=None,    # type: BranchRange
+            clobbers_flags=True,  # type: bool
+            instp=None,           # type: PredNode
+            isap=None,            # type: PredNode
+            emit=None             # type: str
             ):
         # type: (...) -> None
         self.name = name
@@ -340,6 +346,7 @@ class EncRecipe(object):
         assert size >= 0
         self.size = size
         self.branch_range = branch_range
+        self.clobbers_flags = clobbers_flags
         self.instp = instp
         self.isap = isap
         self.emit = emit

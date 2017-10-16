@@ -766,6 +766,9 @@ def emit_recipe_constraints(isa, fmt):
                         str(any(isinstance(c, Register)
                             for c in r.outs)).lower())
                 fmt.format('tied_ops: {},', str(bool(tied_i2o)).lower())
+                fmt.format(
+                        'clobbers_flags: {},',
+                        str(bool(r.clobbers_flags)).lower())
 
 
 def emit_operand_constraints(
