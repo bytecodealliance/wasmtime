@@ -80,7 +80,7 @@ impl FuncTranslator {
         assert_eq!(func.dfg.num_insts(), 0, "Function must be empty");
 
         // This clears the `ILBuilder`.
-        let builder = &mut FunctionBuilder::new(func, &mut self.il_builder);
+        let mut builder = FunctionBuilder::new(func, &mut self.il_builder);
         let entry_block = builder.create_ebb();
         builder.switch_to_block(entry_block, &[]); // This also creates values for the arguments.
         builder.seal_block(entry_block);
@@ -88,15 +88,15 @@ impl FuncTranslator {
         // `environ`. The callback functions may need to insert things in the entry block.
         builder.ensure_inserted_ebb();
 
-        let num_args = declare_wasm_arguments(builder);
+        let num_args = declare_wasm_arguments(&mut builder);
 
         // Set up the translation state with a single pushed control block representing the whole
         // function and its return values.
         let exit_block = builder.create_ebb();
         self.state.initialize(&builder.func.signature, exit_block);
 
-        parse_local_decls(&mut reader, builder, num_args)?;
-        parse_function_body(reader, builder, &mut self.state, environ)
+        parse_local_decls(&mut reader, &mut builder, num_args)?;
+        parse_function_body(reader, &mut builder, &mut self.state, environ)
     }
 }
 

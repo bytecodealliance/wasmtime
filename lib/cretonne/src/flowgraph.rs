@@ -195,7 +195,7 @@ mod tests {
         let jmp_ebb1_ebb2;
 
         {
-            let cur = &mut FuncCursor::new(&mut func);
+            let mut cur = FuncCursor::new(&mut func);
 
             cur.insert_ebb(ebb0);
             br_ebb0_ebb2 = cur.ins().brnz(cond, ebb2, &[]);

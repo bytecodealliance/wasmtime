@@ -363,7 +363,7 @@ def gen_xform_group(xgrp, fmt, type_sets):
     with fmt.indented(') -> bool {', '}'):
         fmt.line('use ir::InstBuilder;')
         fmt.line('use cursor::{Cursor, FuncCursor};')
-        fmt.line('let pos = &mut FuncCursor::new(func).at_inst(inst);')
+        fmt.line('let mut pos = FuncCursor::new(func).at_inst(inst);')
         fmt.line('pos.use_srcloc(inst);')
 
         # Group the xforms by opcode so we can generate a big switch.
