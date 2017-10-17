@@ -99,22 +99,7 @@ to represent, more bits are often used when holding a boolean value in a
 register or in memory. The :type:`b1` type represents an abstract boolean
 value. It can only exist as an SSA value, it can't be stored in memory or
 converted to another type. The larger boolean types can be stored in memory.
-
-.. todo:: Clarify the representation of larger boolean types.
-
-    The multi-bit boolean types can be interpreted in different ways. We could
-    declare that zero means false and non-zero means true. This may require
-    unwanted normalization code in some places.
-
-    We could specify a fixed encoding like all ones for true. This would then
-    lead to undefined behavior if untrusted code uses the multibit booleans
-    incorrectly.
-
-    Something like this:
-
-    - External code is not allowed to load/store multi-bit booleans or
-      otherwise expose the representation.
-    - Each target specifies the exact representation of a multi-bit boolean.
+They are represented as either all zero bits or all one bits.
 
 .. autoctontype:: b1
 .. autoctontype:: b8
@@ -143,6 +128,20 @@ double-double formats.
 
 .. autoctontype:: f32
 .. autoctontype:: f64
+
+CPU flags types
+---------------
+
+Some target ISAs use CPU flags to represent the result of a comparison. These
+CPU flags are represented as two value types depending on the type of values
+compared.
+
+Since some ISAs don't have CPU flags, these value types should not be used
+until the legalization phase of compilation where the code is adapted to fit
+the target ISA. Use instructions like :inst:`icmp` instead.
+
+.. autoctontype:: iflags
+.. autoctontype:: fflags
 
 SIMD vector types
 -----------------
@@ -194,7 +193,7 @@ Pseudo-types and type classes
 These are not concrete types, but convenient names uses to refer to real types
 in this reference.
 
-.. type:: iPtr
+.. type:: iAddr
 
     A Pointer-sized integer.
 
@@ -224,10 +223,6 @@ in this reference.
 .. type:: Mem
 
     Any type that can be stored in memory: :type:`Int` or :type:`Float`.
-
-.. type:: Logic
-
-    Either :type:`b1` or :type:`b1xN`.
 
 .. type:: Testable
 

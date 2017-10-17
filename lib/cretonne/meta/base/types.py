@@ -35,12 +35,12 @@ f64 = FloatType(
 iflags = FlagsType(
         'iflags', """
         CPU flags representing the result of an integer comparison. These flags
-        can be tested with an `intcc` condition code.
+        can be tested with an :type:`intcc` condition code.
         """)
 
 #: CPU flags from a floating point comparison.
 fflags = FlagsType(
         'fflags', """
         CPU flags representing the result of a floating point comparison. These
-        flags can be tested with a `floatcc` condition code.
+        flags can be tested with a :type:`floatcc` condition code.
         """)
