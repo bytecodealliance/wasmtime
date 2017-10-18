@@ -122,9 +122,27 @@ number, others don't care.
 Floating point types
 --------------------
 
-The floating point types have the IEEE semantics that are supported by most
-hardware. There is no support for higher-precision types like quads or
-double-double formats.
+The floating point types have the IEEE 754 semantics that are supported by most
+hardware, except that non-default rounding modes, unmasked exceptions, and
+exception flags are not currently supported.
+
+There is currently no support for higher-precision types like quad-precision,
+double-double, or extended-precision, nor for narrower-precision types like
+half-precision.
+
+NaNs are encoded following the IEEE 754-2008 recommendation, with quiet NaN
+being encoded with the MSB of the trailing significand set to 1, and signaling
+NaNs being indicated by the MSB of the trailing significand set to 0.
+
+Except for bitwise and memory instructions, NaNs returned from arithmetic
+instructions are encoded as follows:
+- If all NaN inputs to an instruction are quiet NaNs with all bits of the
+  trailing significand other than the MSB set to 0, the result is a quiet
+  NaN with a nondeterministic sign bit and all bits of the trailing
+  significand other than the MSB set to 0.
+- Otherwise the result is a quiet NaN with a nondeterministic sign bit
+  and all bits of the trailing significand other than the MSB set to
+  nondeterministic values.
 
 .. autoctontype:: f32
 .. autoctontype:: f64
