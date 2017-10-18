@@ -59,19 +59,20 @@ use dbg::DisplayList;
 use dominator_tree::DominatorTree;
 use entity::SparseSet;
 use flowgraph::ControlFlowGraph;
-use ir;
 use ir::entities::AnyEntity;
 use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallInfo};
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
          StackSlotKind, GlobalVar, Value, Type, Opcode, ValueLoc, ArgumentLoc};
+use ir;
 use isa::TargetIsa;
+use iterators::IteratorExtras;
+use self::flags::verify_flags;
 use settings::{Flags, FlagsOrIsa};
+use std::cmp::Ordering;
+use std::collections::BTreeSet;
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter, Write};
 use std::result;
-use std::collections::BTreeSet;
-use std::cmp::Ordering;
-use iterators::IteratorExtras;
 
 pub use self::cssa::verify_cssa;
 pub use self::liveness::verify_liveness;
@@ -95,6 +96,7 @@ macro_rules! err {
 }
 
 mod cssa;
+mod flags;
 mod liveness;
 mod locations;
 
@@ -980,6 +982,7 @@ impl<'a> Verifier<'a> {
 
             if !has_valid_encoding {
                 let mut possible_encodings = String::new();
+                let mut multiple_encodings = false;
 
                 for enc in isa.legal_encodings(
                     &self.func.dfg,
@@ -989,6 +992,7 @@ impl<'a> Verifier<'a> {
                 {
                     if possible_encodings.len() != 0 {
                         possible_encodings.push_str(", ");
+                        multiple_encodings = true;
                     }
                     possible_encodings
                         .write_fmt(format_args!("{}", isa.encoding_info().display(enc)))
@@ -997,8 +1001,9 @@ impl<'a> Verifier<'a> {
 
                 return err!(
                     inst,
-                    "Instruction encoding {} doesn't match any possibilities: [{}]",
+                    "encoding {} should be {}{}",
                     isa.encoding_info().display(encoding),
+                    if multiple_encodings { "one of: " } else { "" },
                     possible_encodings
                 );
             }
@@ -1084,6 +1089,8 @@ impl<'a> Verifier<'a> {
         if self.flags.return_at_end() {
             self.verify_return_at_end()?;
         }
+
+        verify_flags(self.func, &self.cfg, self.isa)?;
 
         Ok(())
     }
