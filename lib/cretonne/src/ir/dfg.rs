@@ -4,7 +4,7 @@ use entity::{PrimaryMap, EntityMap};
 use isa::TargetIsa;
 use ir::builder::{InsertBuilder, ReplaceBuilder};
 use ir::extfunc::ExtFuncData;
-use ir::instructions::{InstructionData, CallInfo};
+use ir::instructions::{InstructionData, CallInfo, BranchInfo};
 use ir::layout::{Cursor, LayoutCursorInserter};
 use ir::types;
 use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
@@ -611,6 +611,11 @@ impl DataFlowGraph {
             CallInfo::Direct(f, _) => Some(self.ext_funcs[f].signature),
             CallInfo::Indirect(s, _) => Some(s),
         }
+    }
+
+    /// Check if `inst` is a branch.
+    pub fn analyze_branch(&self, inst: Inst) -> BranchInfo {
+        self.insts[inst].analyze_branch(&self.value_lists)
     }
 
     /// Compute the type of an instruction result from opcode constraints and call signatures.

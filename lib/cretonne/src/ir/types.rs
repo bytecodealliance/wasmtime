@@ -200,6 +200,14 @@ impl Type {
         }
     }
 
+    /// Is this a CPU flags type?
+    pub fn is_flags(self) -> bool {
+        match self {
+            IFLAGS | FFLAGS => true,
+            _ => false,
+        }
+    }
+
     /// Get log_2 of the number of lanes in this SIMD vector type.
     ///
     /// All SIMD types have a lane count that is a power of two and no larger than 256, so this

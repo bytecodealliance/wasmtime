@@ -176,6 +176,11 @@ where
         None
     }
 
+    /// Remove the last value from the map.
+    pub fn pop(&mut self) -> Option<V> {
+        self.dense.pop()
+    }
+
     /// Get an iterator over the values in the map.
     ///
     /// The iteration order is entirely determined by the preceding sequence of `insert` and
