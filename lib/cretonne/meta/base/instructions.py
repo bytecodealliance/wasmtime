@@ -1383,15 +1383,6 @@ fmin = Instruction(
         """,
         ins=(x, y), outs=a)
 
-fminnum = Instruction(
-        'fminnum', r"""
-        Floating point minimum, suppressing quiet NaNs.
-
-        If either operand is a quiet NaN, the other operand is returned. If
-        either operand is a signaling NaN, NaN is returned.
-        """,
-        ins=(x, y), outs=a)
-
 a = Operand('a', Float, 'The larger of ``x`` and ``y``')
 
 fmax = Instruction(
@@ -1399,15 +1390,6 @@ fmax = Instruction(
         Floating point maximum, propagating NaNs.
 
         If either operand is NaN, this returns a NaN.
-        """,
-        ins=(x, y), outs=a)
-
-fmaxnum = Instruction(
-        'fmaxnum', r"""
-        Floating point maximum, suppressing quiet NaNs.
-
-        If either operand is a quiet NaN, the other operand is returned. If
-        either operand is a signaling NaN, NaN is returned.
         """,
         ins=(x, y), outs=a)
 

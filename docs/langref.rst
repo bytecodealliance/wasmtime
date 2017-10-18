@@ -853,16 +853,14 @@ significand bits are always preserved.
 Minimum and maximum
 ~~~~~~~~~~~~~~~~~~~
 
-These instructions return the larger or smaller of their operands. They differ
-in their handling of quiet NaN inputs. Note that signaling NaN operands always
-cause a NaN result.
+These instructions return the larger or smaller of their operands. Note that
+unlike the IEEE 754-2008 `minNum` and `maxNum` operations, these instructions
+return NaN when either input is NaN.
 
 When comparing zeroes, these instructions behave as if :math:`-0.0 < 0.0`.
 
 .. autoinst:: fmin
-.. autoinst:: fminnum
 .. autoinst:: fmax
-.. autoinst:: fmaxnum
 
 Rounding
 ~~~~~~~~
