@@ -1005,19 +1005,32 @@ Glossary
 
 .. glossary::
 
-    intermediate language
-    IL
-        The language used to describe functions to Cretonne. This reference
-        describes the syntax and semantics of the Cretonne IL. The IL has two
-        forms: Textual and an in-memory intermediate representation
-        (:term:`IR`).
+    basic block
+        A maximal sequence of instructions that can only be entered from the
+        top, and that contains no branch or terminator instructions except for
+        the last instruction.
 
-    intermediate representation
-    IR
-        The in-memory representation of :term:`IL`. The data structures
-        Cretonne uses to represent a program internally are called the
-        intermediate representation. Cretonne's IR can be converted to text
-        losslessly.
+    entry block
+        The :term:`EBB` that is executed first in a function. Currently, a
+        Cretonne function must have exactly one entry block which must be the
+        first block in the function. The types of the entry block arguments must
+        match the types of arguments in the function signature.
+
+    extended basic block
+    EBB
+        A maximal sequence of instructions that can only be entered from the
+        top, and that contains no :term:`terminator instruction`\s except for
+        the last one. An EBB can contain conditional branches that can fall
+        through to the following instructions in the block, but only the first
+        instruction in the EBB can be a branch target.
+
+        The last instruction in an EBB must be a :term:`terminator instruction`,
+        so execution cannot flow through to the next EBB in the function. (But
+        there may be a branch to the next EBB.)
+
+        Note that some textbooks define an EBB as a maximal *subtree* in the
+        control flow graph where only the root can be a join node. This
+        definition is not equivalent to Cretonne EBBs.
 
     function signature
         A function signature describes how to call a function. It consists of:
@@ -1046,26 +1059,23 @@ Glossary
         The extended basic blocks which contain all the executable code in a
         function. The function body follows the function preamble.
 
-    basic block
-        A maximal sequence of instructions that can only be entered from the
-        top, and that contains no branch or terminator instructions except for
-        the last instruction.
+    intermediate language
+    IL
+        The language used to describe functions to Cretonne. This reference
+        describes the syntax and semantics of the Cretonne IL. The IL has two
+        forms: Textual and an in-memory intermediate representation
+        (:term:`IR`).
 
-    extended basic block
-    EBB
-        A maximal sequence of instructions that can only be entered from the
-        top, and that contains no :term:`terminator instruction`\s except for
-        the last one. An EBB can contain conditional branches that can fall
-        through to the following instructions in the block, but only the first
-        instruction in the EBB can be a branch target.
+    intermediate representation
+    IR
+        The in-memory representation of :term:`IL`. The data structures
+        Cretonne uses to represent a program internally are called the
+        intermediate representation. Cretonne's IR can be converted to text
+        losslessly.
 
-        The last instruction in an EBB must be a :term:`terminator instruction`,
-        so execution cannot flow through to the next EBB in the function. (But
-        there may be a branch to the next EBB.)
-
-        Note that some textbooks define an EBB as a maximal *subtree* in the
-        control flow graph where only the root can be a join node. This
-        definition is not equivalent to Cretonne EBBs.
+    stack slot
+        A fixed size memory allocation in the current function's activation
+        frame. Also called a local variable.
 
     terminator instruction
         A control flow instruction that unconditionally directs the flow of
@@ -1075,13 +1085,3 @@ Glossary
         The basic terminator instructions are :inst:`br`, :inst:`return`, and
         :inst:`trap`. Conditional branches and instructions that trap
         conditionally are not terminator instructions.
-
-    entry block
-        The :term:`EBB` that is executed first in a function. Currently, a
-        Cretonne function must have exactly one entry block which must be the
-        first block in the function. The types of the entry block arguments must
-        match the types of arguments in the function signature.
-
-    stack slot
-        A fixed size memory allocation in the current function's activation
-        frame. Also called a local variable.
