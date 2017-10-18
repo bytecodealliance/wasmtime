@@ -38,6 +38,9 @@ Predictable performance
     the quirks of the target architecture. There are no advanced optimizations
     that sometimes work, sometimes fail.
 
+For more information, see
+`the documenation <https://cretonne.readthedocs.io/en/latest/?badge=latest>`_.
+
 Building Cretonne
 -----------------
 
