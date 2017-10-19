@@ -306,7 +306,6 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info.start_func = Some(func_index);
     }
 
-    /// Provides the contents of a function body.
     fn define_function_body(&mut self, body_bytes: &'data [u8]) -> Result<(), String> {
         let function_index = self.get_num_func_imports() + self.info.function_bodies.len();
         let name = get_func_name(function_index);
