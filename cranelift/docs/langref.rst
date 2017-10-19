@@ -74,13 +74,15 @@ SSA values: In the entry block, ``v4`` is the initial value. In the loop block
 variable during each iteration. Finally, ``v12`` is computed as the induction
 variable value for the next iteration.
 
-It can be difficult to generate correct SSA form if the program being converted
-into Cretonne :term:`IL` contains multiple assignments to the same variables.
-Such variables can be presented to Cretonne as :term:`stack slot`\s instead.
+The `cton_frontend` crate contains utilities for translating from programs
+containing multiple assignments to the same variables into SSA form for
+Cretonne :term:`IL`.
+
+Such variables can also be presented to Cretonne as :term:`stack slot`\s.
 Stack slots are accessed with the :inst:`stack_store` and :inst:`stack_load`
-instructions which behave more like variable accesses in a typical programming
-language. Cretonne can perform the necessary data-flow analysis to convert stack
-slots to SSA form.
+instructions, and can have their address taken with :inst:`stack_addr`, which
+supports C-like programming languages where local variables can have their
+address taken.
 
 .. _value-types:
 
