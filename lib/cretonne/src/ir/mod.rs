@@ -32,7 +32,7 @@ pub use ir::globalvar::GlobalVarData;
 pub use ir::heap::{HeapData, HeapStyle, HeapBase};
 pub use ir::instructions::{Opcode, InstructionData, VariableArgs, ValueList, ValueListPool};
 pub use ir::jumptable::JumpTableData;
-pub use ir::layout::{Layout, CursorBase, Cursor};
+pub use ir::layout::Layout;
 pub use ir::memflags::MemFlags;
 pub use ir::progpoint::{ProgramPoint, ProgramOrder, ExpandedProgramPoint};
 pub use ir::sourceloc::SourceLoc;

@@ -2,10 +2,9 @@
 
 use entity::{PrimaryMap, EntityMap};
 use isa::TargetIsa;
-use ir::builder::{InsertBuilder, ReplaceBuilder};
+use ir::builder::ReplaceBuilder;
 use ir::extfunc::ExtFuncData;
 use ir::instructions::{InstructionData, CallInfo, BranchInfo};
-use ir::layout::{Cursor, LayoutCursorInserter};
 use ir::types;
 use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
 use write::write_operands;
@@ -479,14 +478,6 @@ impl DataFlowGraph {
         total_results
     }
 
-    /// Create an `InsertBuilder` that will insert an instruction at the cursor's current position.
-    pub fn ins<'c, 'fc: 'c, 'fd>(
-        &'fd mut self,
-        at: &'c mut Cursor<'fc>,
-    ) -> InsertBuilder<'fd, LayoutCursorInserter<'c, 'fc, 'fd>> {
-        InsertBuilder::new(LayoutCursorInserter::new(at, self))
-    }
-
     /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
     pub fn replace(&mut self, inst: Inst) -> ReplaceBuilder {
         ReplaceBuilder::new(self, inst)
@@ -507,7 +498,6 @@ impl DataFlowGraph {
     pub fn clear_results(&mut self, inst: Inst) {
         self.results[inst].clear(&mut self.value_lists)
     }
-
 
     /// Attach an existing value to the result value list for `inst`.
     ///
