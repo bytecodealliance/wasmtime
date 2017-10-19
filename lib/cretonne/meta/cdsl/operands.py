@@ -242,3 +242,10 @@ class Operand(object):
         dependency.
         """
         return self.kind is not VALUE and self.kind is not VARIABLE_ARGS
+
+    def is_cpu_flags(self):
+        # type: () -> bool
+        """
+        Is this a CPU flags operand?
+        """
+        return self.kind is VALUE and self.typevar.name in ['iflags', 'fflags']
