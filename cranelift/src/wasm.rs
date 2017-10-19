@@ -1,8 +1,6 @@
 //! CLI tool to use the functions provided by the [cretonne-wasm](../cton_wasm/index.html) crate.
 //!
-//! Reads Wasm binary files (one Wasm module per file), translates the functions' code to Cretonne
-//! IL. Can also executes the `start` function of the module by laying out the memories, globals
-//! and tables, then emitting the translated code with hardcoded addresses to memory.
+//! Reads Wasm binary files, translates the functions' code to Cretonne IL.
 
 use cton_wasm::{translate_module, DummyEnvironment, ModuleEnvironment};
 use std::path::PathBuf;
