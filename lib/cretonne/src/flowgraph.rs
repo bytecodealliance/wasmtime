@@ -185,7 +185,7 @@ mod tests {
     fn branches_and_jumps() {
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();
-        let cond = func.dfg.append_ebb_arg(ebb0, types::I32);
+        let cond = func.dfg.append_ebb_param(ebb0, types::I32);
         let ebb1 = func.dfg.make_ebb();
         let ebb2 = func.dfg.make_ebb();
 

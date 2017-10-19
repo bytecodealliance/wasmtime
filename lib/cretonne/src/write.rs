@@ -121,7 +121,7 @@ pub fn write_ebb_header(
     let regs = isa.map(TargetIsa::register_info);
     let regs = regs.as_ref();
 
-    let mut args = func.dfg.ebb_args(ebb).iter().cloned();
+    let mut args = func.dfg.ebb_params(ebb).iter().cloned();
     match args.next() {
         None => return writeln!(w, ":"),
         Some(arg) => {
@@ -177,8 +177,8 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
     if constraints.use_typevar_operand() {
         let ctrl_var = inst_data.typevar_operand(&func.dfg.value_lists).unwrap();
         let def_ebb = match func.dfg.value_def(ctrl_var) {
-            ValueDef::Res(instr, _) => func.layout.inst_ebb(instr),
-            ValueDef::Arg(ebb, _) => Some(ebb),
+            ValueDef::Result(instr, _) => func.layout.inst_ebb(instr),
+            ValueDef::Param(ebb, _) => Some(ebb),
         };
         if def_ebb.is_some() && def_ebb == func.layout.inst_ebb(inst) {
             return None;
@@ -465,13 +465,13 @@ mod tests {
             "function %foo() native {\n    ss0 = local 4\n\nebb0:\n}\n"
         );
 
-        f.dfg.append_ebb_arg(ebb, types::I8);
+        f.dfg.append_ebb_param(ebb, types::I8);
         assert_eq!(
             f.to_string(),
             "function %foo() native {\n    ss0 = local 4\n\nebb0(v0: i8):\n}\n"
         );
 
-        f.dfg.append_ebb_arg(ebb, types::F32.by(4).unwrap());
+        f.dfg.append_ebb_param(ebb, types::F32.by(4).unwrap());
         assert_eq!(
             f.to_string(),
             "function %foo() native {\n    ss0 = local 4\n\nebb0(v0: i8, v1: f32x4):\n}\n"

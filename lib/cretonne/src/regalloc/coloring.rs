@@ -409,7 +409,7 @@ impl<'a> Context<'a> {
         // If this is the first time we branch to `dest`, color its arguments to match the current
         // register state.
         if let Some(dest) = color_dest_args {
-            self.color_ebb_arguments(inst, dest);
+            self.color_ebb_params(inst, dest);
         }
 
         // Apply the solution to the defs.
@@ -556,7 +556,7 @@ impl<'a> Context<'a> {
 
         // Now handle the EBB arguments.
         let br_args = self.cur.func.dfg.inst_variable_args(inst);
-        let dest_args = self.cur.func.dfg.ebb_args(dest);
+        let dest_args = self.cur.func.dfg.ebb_params(dest);
         assert_eq!(br_args.len(), dest_args.len());
         for (&dest_arg, &br_arg) in dest_args.iter().zip(br_args) {
             // The first time we encounter a branch to `dest`, we get to pick the location. The
@@ -565,7 +565,7 @@ impl<'a> Context<'a> {
                 ValueLoc::Unassigned => {
                     // This is the first branch to `dest`, so we should color `dest_arg` instead of
                     // `br_arg`. However, we don't know where `br_arg` will end up until
-                    // after `shuffle_inputs`. See `color_ebb_arguments` below.
+                    // after `shuffle_inputs`. See `color_ebb_params` below.
                     //
                     // It is possible for `dest_arg` to have no affinity, and then it should simply
                     // be ignored.
@@ -595,13 +595,13 @@ impl<'a> Context<'a> {
         false
     }
 
-    /// Knowing that we've never seen a branch to `dest` before, color its arguments to match our
+    /// Knowing that we've never seen a branch to `dest` before, color its parameters to match our
     /// register state.
     ///
     /// This function is only called when `program_ebb_arguments()` returned `true`.
-    fn color_ebb_arguments(&mut self, inst: Inst, dest: Ebb) {
+    fn color_ebb_params(&mut self, inst: Inst, dest: Ebb) {
         let br_args = self.cur.func.dfg.inst_variable_args(inst);
-        let dest_args = self.cur.func.dfg.ebb_args(dest);
+        let dest_args = self.cur.func.dfg.ebb_params(dest);
         assert_eq!(br_args.len(), dest_args.len());
         for (&dest_arg, &br_arg) in dest_args.iter().zip(br_args) {
             match self.cur.func.locations[dest_arg] {
@@ -914,7 +914,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// Replace all global values define by `inst` with local values that are then copied into the
+    /// Replace all global values defined by `inst` with local values that are then copied into the
     /// global value:
     ///
     ///   v1 = foo
@@ -938,7 +938,7 @@ impl<'a> Context<'a> {
         for lv in tracker.live_mut().iter_mut().rev() {
             // Keep going until we reach a value that is not defined by `inst`.
             if match self.cur.func.dfg.value_def(lv.value) {
-                ValueDef::Res(i, _) => i != inst,
+                ValueDef::Result(i, _) => i != inst,
                 _ => true,
             }
             {

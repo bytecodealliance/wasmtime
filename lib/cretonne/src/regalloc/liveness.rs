@@ -205,7 +205,7 @@ fn get_or_create<'a>(
         let def;
         let affinity;
         match func.dfg.value_def(value) {
-            ValueDef::Res(inst, rnum) => {
+            ValueDef::Result(inst, rnum) => {
                 def = inst.into();
                 // Initialize the affinity from the defining instruction's result constraints.
                 // Don't do this for call return values which are always tied to a single register.
@@ -221,14 +221,14 @@ fn get_or_create<'a>(
                     })
                     .unwrap_or_default();
             }
-            ValueDef::Arg(ebb, num) => {
+            ValueDef::Param(ebb, num) => {
                 def = ebb.into();
                 if func.layout.entry_block() == Some(ebb) {
-                    // The affinity for entry block arguments can be inferred from the function
+                    // The affinity for entry block parameters can be inferred from the function
                     // signature.
                     affinity = Affinity::abi(&func.signature.argument_types[num], isa);
                 } else {
-                    // Don't apply any affinity to normal EBB arguments.
+                    // Don't apply any affinity to normal EBB parameters.
                     // They could be in a register or on the stack.
                     affinity = Default::default();
                 }
@@ -290,8 +290,8 @@ pub struct Liveness {
     /// It lives here to avoid repeated allocation of scratch memory.
     worklist: Vec<Ebb>,
 
-    /// Working space for the `propagate_ebb_arguments` algorithm.
-    ebb_args: Vec<Value>,
+    /// Working space for the `propagate_ebb_params` algorithm.
+    ebb_params: Vec<Value>,
 }
 
 impl Liveness {
@@ -303,7 +303,7 @@ impl Liveness {
         Liveness {
             ranges: LiveRangeSet::new(),
             worklist: Vec::new(),
-            ebb_args: Vec::new(),
+            ebb_params: Vec::new(),
         }
     }
 
@@ -378,10 +378,10 @@ impl Liveness {
         // elimination pass if we visit a post-order of the dominator tree?
         // TODO: Resolve value aliases while we're visiting instructions?
         for ebb in func.layout.ebbs() {
-            // Make sure we have created live ranges for dead EBB arguments.
-            // TODO: If these arguments are really dead, we could remove them, except for the entry
-            // block which must match the function signature.
-            for &arg in func.dfg.ebb_args(ebb) {
+            // Make sure we have created live ranges for dead EBB parameters.
+            // TODO: If these parameters are really dead, we could remove them, except for the
+            // entry block which must match the function signature.
+            for &arg in func.dfg.ebb_params(ebb) {
                 get_or_create(&mut self.ranges, arg, isa, func, &enc_info);
             }
 
@@ -431,28 +431,28 @@ impl Liveness {
             }
         }
 
-        self.propagate_ebb_arguments(func, cfg);
+        self.propagate_ebb_params(func, cfg);
     }
 
-    /// Propagate affinities for EBB arguments.
+    /// Propagate affinities for EBB parameters.
     ///
     /// If an EBB argument value has an affinity, all predecessors must pass a value with an
     /// affinity.
-    pub fn propagate_ebb_arguments(&mut self, func: &Function, cfg: &ControlFlowGraph) {
-        assert!(self.ebb_args.is_empty());
+    pub fn propagate_ebb_params(&mut self, func: &Function, cfg: &ControlFlowGraph) {
+        assert!(self.ebb_params.is_empty());
 
         for ebb in func.layout.ebbs() {
-            for &arg in func.dfg.ebb_args(ebb) {
+            for &arg in func.dfg.ebb_params(ebb) {
                 let affinity = self.ranges.get(arg).unwrap().affinity;
                 if affinity.is_none() {
                     continue;
                 }
-                self.ebb_args.push(arg);
+                self.ebb_params.push(arg);
 
                 // Now apply the affinity to all predecessors recursively.
-                while let Some(succ_arg) = self.ebb_args.pop() {
+                while let Some(succ_arg) = self.ebb_params.pop() {
                     let (succ_ebb, num) = match func.dfg.value_def(succ_arg) {
-                        ValueDef::Arg(e, n) => (e, n),
+                        ValueDef::Param(e, n) => (e, n),
                         _ => continue,
                     };
 
@@ -461,7 +461,7 @@ impl Liveness {
                         let pred_affinity = &mut self.ranges.get_mut(pred_arg).unwrap().affinity;
                         if pred_affinity.is_none() {
                             *pred_affinity = affinity;
-                            self.ebb_args.push(pred_arg);
+                            self.ebb_params.push(pred_arg);
                         }
                     }
                 }

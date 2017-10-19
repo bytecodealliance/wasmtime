@@ -194,7 +194,7 @@ fn split_value(
     let mut reuse = None;
 
     match pos.func.dfg.value_def(value) {
-        ValueDef::Res(inst, num) => {
+        ValueDef::Result(inst, num) => {
             // This is an instruction result. See if the value was created by a `concat`
             // instruction.
             if let InstructionData::Binary { opcode, args, .. } = pos.func.dfg[inst] {
@@ -204,11 +204,11 @@ fn split_value(
                 }
             }
         }
-        ValueDef::Arg(ebb, num) => {
-            // This is an EBB argument. We can split the argument value unless this is the entry
+        ValueDef::Param(ebb, num) => {
+            // This is an EBB parameter. We can split the parameter value unless this is the entry
             // block.
             if pos.func.layout.entry_block() != Some(ebb) {
-                // We are going to replace the argument at `num` with two new arguments.
+                // We are going to replace the parameter at `num` with two new arguments.
                 // Determine the new value types.
                 let ty = pos.func.dfg.value_type(value);
                 let split_type = match concat {
@@ -217,20 +217,20 @@ fn split_value(
                     _ => panic!("Unhandled concat opcode: {}", concat),
                 };
 
-                // Since the `repairs` stack potentially contains other argument numbers for `ebb`,
-                // avoid shifting and renumbering EBB arguments. It could invalidate other
+                // Since the `repairs` stack potentially contains other parameter numbers for
+                // `ebb`, avoid shifting and renumbering EBB parameters. It could invalidate other
                 // `repairs` entries.
                 //
                 // Replace the original `value` with the low part, and append the high part at the
                 // end of the argument list.
-                let lo = pos.func.dfg.replace_ebb_arg(value, split_type);
-                let hi_num = pos.func.dfg.num_ebb_args(ebb);
-                let hi = pos.func.dfg.append_ebb_arg(ebb, split_type);
+                let lo = pos.func.dfg.replace_ebb_param(value, split_type);
+                let hi_num = pos.func.dfg.num_ebb_params(ebb);
+                let hi = pos.func.dfg.append_ebb_param(ebb, split_type);
                 reuse = Some((lo, hi));
 
 
                 // Now the original value is dangling. Insert a concatenation instruction that can
-                // compute it from the two new arguments. This also serves as a record of what we
+                // compute it from the two new parameters. This also serves as a record of what we
                 // did so a future call to this function doesn't have to redo the work.
                 //
                 // Note that it is safe to move `pos` here since `reuse` was set above, so we don't
@@ -243,7 +243,7 @@ fn split_value(
                     hi,
                 );
 
-                // Finally, splitting the EBB argument is not enough. We also have to repair all
+                // Finally, splitting the EBB parameter is not enough. We also have to repair all
                 // of the predecessor instructions that branch here.
                 add_repair(concat, split_type, ebb, num, hi_num, repairs);
             }
@@ -299,7 +299,7 @@ fn resolve_splits(dfg: &ir::DataFlowGraph, value: Value) -> Value {
     let split_res;
     let concat_opc;
     let split_arg;
-    if let ValueDef::Res(inst, num) = dfg.value_def(value) {
+    if let ValueDef::Result(inst, num) = dfg.value_def(value) {
         split_res = num;
         concat_opc = match dfg[inst].opcode() {
             Opcode::Isplit => Opcode::Iconcat,
@@ -312,7 +312,7 @@ fn resolve_splits(dfg: &ir::DataFlowGraph, value: Value) -> Value {
     }
 
     // See if split_arg is defined by a concatenation instruction.
-    if let ValueDef::Res(inst, _) = dfg.value_def(split_arg) {
+    if let ValueDef::Result(inst, _) = dfg.value_def(split_arg) {
         if dfg[inst].opcode() == concat_opc {
             return dfg.inst_args(inst)[split_res];
         }

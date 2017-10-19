@@ -1362,7 +1362,7 @@ impl<'a> Parser<'a> {
     // Parse an extended basic block, add contents to `ctx`.
     //
     // extended-basic-block ::= * ebb-header { instruction }
-    // ebb-header           ::= Ebb(ebb) [ebb-args] ":"
+    // ebb-header           ::= Ebb(ebb) [ebb-params] ":"
     //
     fn parse_extended_basic_block(&mut self, ctx: &mut Context) -> Result<()> {
         let ebb_num = self.match_ebb("expected EBB header")?;
@@ -1370,8 +1370,8 @@ impl<'a> Parser<'a> {
         self.gather_comments(ebb);
 
         if !self.optional(Token::Colon) {
-            // ebb-header ::= Ebb(ebb) [ * ebb-args ] ":"
-            self.parse_ebb_args(ctx, ebb)?;
+            // ebb-header ::= Ebb(ebb) [ * ebb-params ] ":"
+            self.parse_ebb_params(ctx, ebb)?;
             self.match_token(
                 Token::Colon,
                 "expected ':' after EBB arguments",
@@ -1429,27 +1429,27 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    // Parse parenthesized list of EBB arguments. Returns a vector of (u32, Type) pairs with the
+    // Parse parenthesized list of EBB parameters. Returns a vector of (u32, Type) pairs with the
     // source value numbers of the defined values and the defined types.
     //
-    // ebb-args ::= * "(" ebb-arg { "," ebb-arg } ")"
-    fn parse_ebb_args(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
-        // ebb-args ::= * "(" ebb-arg { "," ebb-arg } ")"
+    // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
+    fn parse_ebb_params(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
+        // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
         self.match_token(
             Token::LPar,
             "expected '(' before EBB arguments",
         )?;
 
-        // ebb-args ::= "(" * ebb-arg { "," ebb-arg } ")"
-        self.parse_ebb_arg(ctx, ebb)?;
+        // ebb-params ::= "(" * ebb-param { "," ebb-param } ")"
+        self.parse_ebb_param(ctx, ebb)?;
 
-        // ebb-args ::= "(" ebb-arg * { "," ebb-arg } ")"
+        // ebb-params ::= "(" ebb-param * { "," ebb-param } ")"
         while self.optional(Token::Comma) {
-            // ebb-args ::= "(" ebb-arg { "," * ebb-arg } ")"
-            self.parse_ebb_arg(ctx, ebb)?;
+            // ebb-params ::= "(" ebb-param { "," * ebb-param } ")"
+            self.parse_ebb_param(ctx, ebb)?;
         }
 
-        // ebb-args ::= "(" ebb-arg { "," ebb-arg } * ")"
+        // ebb-params ::= "(" ebb-param { "," ebb-param } * ")"
         self.match_token(
             Token::RPar,
             "expected ')' after EBB arguments",
@@ -1458,27 +1458,27 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    // Parse a single EBB argument declaration, and append it to `ebb`.
+    // Parse a single EBB parameter declaration, and append it to `ebb`.
     //
-    // ebb-arg ::= * Value(v) ":" Type(t) arg-loc?
+    // ebb-param ::= * Value(v) ":" Type(t) arg-loc?
     // arg-loc ::= "[" value-location "]"
     //
-    fn parse_ebb_arg(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
-        // ebb-arg ::= * Value(v) ":" Type(t) arg-loc?
+    fn parse_ebb_param(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
+        // ebb-param ::= * Value(v) ":" Type(t) arg-loc?
         let v = self.match_value("EBB argument must be a value")?;
         let v_location = self.loc;
-        // ebb-arg ::= Value(v) * ":" Type(t) arg-loc?
+        // ebb-param ::= Value(v) * ":" Type(t) arg-loc?
         self.match_token(
             Token::Colon,
             "expected ':' after EBB argument",
         )?;
-        // ebb-arg ::= Value(v) ":" * Type(t) arg-loc?
+        // ebb-param ::= Value(v) ":" * Type(t) arg-loc?
         let t = self.match_type("expected EBB argument type")?;
         // Allocate the EBB argument and add the mapping.
-        let value = ctx.function.dfg.append_ebb_arg(ebb, t);
+        let value = ctx.function.dfg.append_ebb_param(ebb, t);
         ctx.map.def_value(v, value, &v_location)?;
 
-        // ebb-arg ::= Value(v) ":" Type(t) * arg-loc?
+        // ebb-param ::= Value(v) ":" Type(t) * arg-loc?
         if self.optional(Token::LBracket) {
             let loc = self.parse_value_location(ctx)?;
             ctx.function.locations[value] = loc;
@@ -2473,10 +2473,10 @@ mod tests {
         let mut ebbs = func.layout.ebbs();
 
         let ebb0 = ebbs.next().unwrap();
-        assert_eq!(func.dfg.ebb_args(ebb0), &[]);
+        assert_eq!(func.dfg.ebb_params(ebb0), &[]);
 
         let ebb4 = ebbs.next().unwrap();
-        let ebb4_args = func.dfg.ebb_args(ebb4);
+        let ebb4_args = func.dfg.ebb_params(ebb4);
         assert_eq!(ebb4_args.len(), 1);
         assert_eq!(func.dfg.value_type(ebb4_args[0]), types::I32);
     }

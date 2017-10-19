@@ -1,12 +1,12 @@
 test verifier
 
 function %entry_block_signature_mismatch(i32) {
-    ebb0: ; error: entry block arguments must match function signature
+    ebb0: ; error: entry block parameters (0) must match function signature (1)
         return
 }
 
 function %entry_block_arg_type(i32) {
-    ebb0(v0: f32): ; error: entry block argument 0 expected to have type i32, got f32
+    ebb0(v0: f32): ; error: entry block parameter 0 expected to have type i32, got f32
         return
 }
 

@@ -201,7 +201,7 @@ fn expand_select(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowG
     let result = func.dfg.first_result(inst);
     func.dfg.clear_results(inst);
     let new_ebb = func.dfg.make_ebb();
-    func.dfg.attach_ebb_arg(new_ebb, result);
+    func.dfg.attach_ebb_param(new_ebb, result);
 
     func.dfg.replace(inst).brnz(ctrl, new_ebb, &[tval]);
     let mut pos = FuncCursor::new(func).after_inst(inst);

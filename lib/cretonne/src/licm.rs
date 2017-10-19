@@ -63,7 +63,7 @@ fn create_pre_header(
     domtree: &DominatorTree,
 ) -> Ebb {
     let pool = &mut ListPool::<Value>::new();
-    let header_args_values: Vec<Value> = func.dfg.ebb_args(header).into_iter().cloned().collect();
+    let header_args_values: Vec<Value> = func.dfg.ebb_params(header).into_iter().cloned().collect();
     let header_args_types: Vec<Type> = header_args_values
         .clone()
         .into_iter()
@@ -72,7 +72,7 @@ fn create_pre_header(
     let pre_header = func.dfg.make_ebb();
     let mut pre_header_args_value: EntityList<Value> = EntityList::new();
     for typ in header_args_types {
-        pre_header_args_value.push(func.dfg.append_ebb_arg(pre_header, typ), pool);
+        pre_header_args_value.push(func.dfg.append_ebb_param(pre_header, typ), pool);
     }
     for &(_, last_inst) in cfg.get_predecessors(header) {
         // We only follow normal edges (not the back edges)
@@ -143,7 +143,7 @@ fn remove_loop_invariant_instructions(
     // We traverse the loop EBB in reverse post-order.
     for ebb in postorder_ebbs_loop(loop_analysis, cfg, lp).iter().rev() {
         // Arguments of the EBB are loop values
-        for val in pos.func.dfg.ebb_args(*ebb) {
+        for val in pos.func.dfg.ebb_params(*ebb) {
             loop_values.insert(*val);
         }
         pos.goto_top(*ebb);

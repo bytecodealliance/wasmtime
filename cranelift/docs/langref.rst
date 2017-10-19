@@ -34,7 +34,7 @@ Here is the same function compiled into Cretonne IL:
     :lines: 2-
 
 The first line of a function definition provides the function *name* and
-the :term:`function signature` which declares the argument and return types.
+the :term:`function signature` which declares the parameter and return types.
 Then follows the :term:`function preamble` which declares a number of entities
 that can be referenced inside the function. In the example above, the preamble
 declares a single local variable, ``ss1``.
@@ -60,17 +60,18 @@ The instructions in the function body use and produce *values* in SSA form. This
 means that every value is defined exactly once, and every use of a value must be
 dominated by the definition.
 
-Cretonne does not have phi instructions but uses *EBB arguments* instead. An EBB
-can be defined with a list of typed arguments. Whenever control is transferred
-to the EBB, values for the arguments must be provided. When entering a function,
-the incoming function arguments are passed as arguments to the entry EBB.
+Cretonne does not have phi instructions but uses :term:`EBB parameter`\s
+instead. An EBB can be defined with a list of typed parameters. Whenever control
+is transferred to the EBB, argument values for the parameters must be provided.
+When entering a function, the incoming function parameters are passed as
+arguments to the entry EBB's parameters.
 
 Instructions define zero, one, or more result values. All SSA values are either
-EBB arguments or instruction results.
+EBB parameters or instruction results.
 
 In the example above, the loop induction variable ``i`` is represented as three
 SSA values: In the entry block, ``v4`` is the initial value. In the loop block
-``ebb2``, the EBB argument ``v5`` represents the value of the induction
+``ebb2``, the EBB parameter ``v5`` represents the value of the induction
 variable during each iteration. Finally, ``v12`` is computed as the induction
 variable value for the next iteration.
 
@@ -138,6 +139,7 @@ NaNs being indicated by the MSB of the trailing significand set to 0.
 
 Except for bitwise and memory instructions, NaNs returned from arithmetic
 instructions are encoded as follows:
+
 - If all NaN inputs to an instruction are quiet NaNs with all bits of the
   trailing significand other than the MSB set to 0, the result is a quiet
   NaN with a nondeterministic sign bit and all bits of the trailing
@@ -159,6 +161,11 @@ compared.
 Since some ISAs don't have CPU flags, these value types should not be used
 until the legalization phase of compilation where the code is adapted to fit
 the target ISA. Use instructions like :inst:`icmp` instead.
+
+The CPU flags types are also restricted such that two flags values can not be
+live at the same time. After legalization, some instruction encodings will
+clobber the flags, and flags values are not allowed to be live across such
+instructions either. The verifier enforces these rules.
 
 .. autoctontype:: iflags
 .. autoctontype:: fflags
@@ -210,12 +217,12 @@ called a *lane*. The number of lanes must be a power of two in the range 2-256.
 Pseudo-types and type classes
 -----------------------------
 
-These are not concrete types, but convenient names uses to refer to real types
+These are not concrete types, but convenient names used to refer to real types
 in this reference.
 
 .. type:: iAddr
 
-    A Pointer-sized integer.
+    A Pointer-sized integer representing an address.
 
     This is either :type:`i32`, or :type:`i64`, depending on whether the target
     platform has 32-bit or 64-bit pointers.
@@ -379,21 +386,21 @@ Function calls
 ==============
 
 A function call needs a target function and a :term:`function signature`. The
-target function may be determined dynamically at runtime, but the signature
-must be known when the function call is compiled. The function signature
-describes how to call the function, including arguments, return values, and the
-calling convention:
+target function may be determined dynamically at runtime, but the signature must
+be known when the function call is compiled. The function signature describes
+how to call the function, including parameters, return values, and the calling
+convention:
 
 .. productionlist::
-    signature : "(" [arglist] ")" ["->" retlist] [call_conv]
-    arglist   : arg { "," arg }
-    retlist   : arglist
-    arg       : type [argext] [argspecial]
-    argext    : "uext" | "sext"
-    argspecial: "sret" | "link" | "fp" | "csr" | "vmctx"
-    callconv  : `string`
+    signature    : "(" [paramlist] ")" ["->" retlist] [call_conv]
+    paramlist    : param { "," param }
+    retlist      : paramlist
+    param        : type [paramext] [paramspecial]
+    paramext     : "uext" | "sext"
+    paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx"
+    callconv     : "native" | "spiderwasm"
 
-Arguments and return values have flags whose meaning is mostly target
+Parameters and return values have flags whose meaning is mostly target
 dependent. They make it possible to call native functions on the target
 platform. When calling other Cretonne functions, the flags are not necessary.
 
@@ -411,19 +418,11 @@ preamble`:
 .. autoinst:: call
 .. autoinst:: x_return
 
-This simple example illustrates direct function calls and signatures::
+This simple example illustrates direct function calls and signatures:
 
-    function %gcd(i32 uext, i32 uext) -> i32 uext "C" {
-        fn1 = function %divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
-
-    ebb1(v1: i32, v2: i32):
-        brz v2, ebb2
-        v3, v4 = call fn1(v1, v2)
-        br ebb1(v2, v4)
-
-    ebb2:
-        return v1
-    }
+.. literalinclude:: callex.cton
+    :language: cton
+    :lines: 3-
 
 Indirect function calls use a signature declared in the preamble.
 
@@ -682,14 +681,14 @@ bounds checking is required for each access:
 Operations
 ==========
 
-A few instructions have variants that take immediate operands (e.g.,
-:inst:`band` / :inst:`band_imm`), but in general an instruction is required to
-load a constant into an SSA value.
-
 .. autoinst:: select
 
 Constant materialization
 ------------------------
+
+A few instructions have variants that take immediate operands (e.g.,
+:inst:`band` / :inst:`band_imm`), but in general an instruction is required to
+load a constant into an SSA value.
 
 .. autoinst:: iconst
 .. autoinst:: f32const
@@ -944,6 +943,9 @@ Instructions that can only be used by the Intel target ISA.
 
 .. autoinst:: isa.intel.instructions.sdivmodx
 .. autoinst:: isa.intel.instructions.udivmodx
+.. autoinst:: isa.intel.instructions.cvtt2si
+.. autoinst:: isa.intel.instructions.fmin
+.. autoinst:: isa.intel.instructions.fmax
 
 Instruction groups
 ==================
@@ -1033,6 +1035,18 @@ Glossary
         Note that some textbooks define an EBB as a maximal *subtree* in the
         control flow graph where only the root can be a join node. This
         definition is not equivalent to Cretonne EBBs.
+
+    EBB parameter
+        A formal parameter for an EBB is an SSA value that dominates everything
+        in the EBB. For each parameter declared by an EBB, a corresponding
+        argument value must be passed when branching to the EBB. The function's
+        entry EBB has parameters that correspond to the function's parameters.
+
+    EBB argument
+        Similar to function arguments, EBB arguments must be provided when
+        branching to an EBB that declares formal parameters. When execution
+        begins at the top of an EBB, the formal parameters have the values of
+        the arguments passed in the branch.
 
     function signature
         A function signature describes how to call a function. It consists of:

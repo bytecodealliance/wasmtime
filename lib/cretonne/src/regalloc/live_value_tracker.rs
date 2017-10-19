@@ -202,24 +202,22 @@ impl LiveValueTracker {
             }
         }
 
-        // Now add all the live arguments to `ebb`.
+        // Now add all the live parameters to `ebb`.
         let first_arg = self.live.values.len();
-        for &value in dfg.ebb_args(ebb) {
-            let lr = liveness.get(value).expect(
-                "EBB argument value has no live range",
-            );
+        for &value in dfg.ebb_params(ebb) {
+            let lr = &liveness[value];
             assert_eq!(lr.def(), ebb.into());
             match lr.def_local_end().into() {
                 ExpandedProgramPoint::Inst(endpoint) => {
                     self.live.push(value, endpoint, lr);
                 }
                 ExpandedProgramPoint::Ebb(local_ebb) => {
-                    // This is a dead EBB argument which is not even live into the first
+                    // This is a dead EBB parameter which is not even live into the first
                     // instruction in the EBB.
                     assert_eq!(
                         local_ebb,
                         ebb,
-                        "EBB argument live range ends at wrong EBB header"
+                        "EBB parameter live range ends at wrong EBB header"
                     );
                     // Give this value a fake endpoint that is the first instruction in the EBB.
                     // We expect it to be removed by calling `drop_dead_args()`.

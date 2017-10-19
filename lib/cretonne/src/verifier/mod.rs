@@ -7,7 +7,7 @@
 //!      the EBB as reported by `inst_ebb()`.
 //!    - Every EBB must end in a terminator instruction, and no other instruction
 //!      can be a terminator.
-//!    - Every value in the `ebb_args` iterator belongs to the EBB as reported by `value_ebb`.
+//!    - Every value in the `ebb_params` iterator belongs to the EBB as reported by `value_ebb`.
 //!
 //!   Instruction integrity
 //!
@@ -212,10 +212,10 @@ impl<'a> Verifier<'a> {
             return err!(inst, "should belong to {} not {:?}", ebb, inst_ebb);
         }
 
-        // Arguments belong to the correct ebb.
-        for &arg in self.func.dfg.ebb_args(ebb) {
+        // Parameters belong to the correct ebb.
+        for &arg in self.func.dfg.ebb_params(ebb) {
             match self.func.dfg.value_def(arg) {
-                ValueDef::Arg(arg_ebb, _) => {
+                ValueDef::Param(arg_ebb, _) => {
                     if ebb != arg_ebb {
                         return err!(arg, "does not belong to {}", ebb);
                     }
@@ -441,7 +441,7 @@ impl<'a> Verifier<'a> {
 
         // SSA form
         match dfg.value_def(v) {
-            ValueDef::Res(def_inst, _) => {
+            ValueDef::Result(def_inst, _) => {
                 // Value is defined by an instruction that exists.
                 if !dfg.inst_is_valid(def_inst) {
                     return err!(
@@ -471,7 +471,7 @@ impl<'a> Verifier<'a> {
                     return err!(loc_inst, "uses value from non-dominating {}", def_inst);
                 }
             }
-            ValueDef::Arg(ebb, _) => {
+            ValueDef::Param(ebb, _) => {
                 // Value is defined by an existing EBB.
                 if !dfg.ebb_is_valid(ebb) {
                     return err!(loc_inst, "{} is defined by invalid EBB {}", v, ebb);
@@ -554,18 +554,23 @@ impl<'a> Verifier<'a> {
     fn typecheck_entry_block_arguments(&self) -> Result {
         if let Some(ebb) = self.func.layout.entry_block() {
             let expected_types = &self.func.signature.argument_types;
-            let ebb_arg_count = self.func.dfg.num_ebb_args(ebb);
+            let ebb_param_count = self.func.dfg.num_ebb_params(ebb);
 
-            if ebb_arg_count != expected_types.len() {
-                return err!(ebb, "entry block arguments must match function signature");
+            if ebb_param_count != expected_types.len() {
+                return err!(
+                    ebb,
+                    "entry block parameters ({}) must match function signature ({})",
+                    ebb_param_count,
+                    expected_types.len()
+                );
             }
 
-            for (i, &arg) in self.func.dfg.ebb_args(ebb).iter().enumerate() {
+            for (i, &arg) in self.func.dfg.ebb_params(ebb).iter().enumerate() {
                 let arg_type = self.func.dfg.value_type(arg);
                 if arg_type != expected_types[i].value_type {
                     return err!(
                         ebb,
-                        "entry block argument {} expected to have type {}, got {}",
+                        "entry block parameter {} expected to have type {}, got {}",
                         i,
                         expected_types[i],
                         arg_type
@@ -671,14 +676,14 @@ impl<'a> Verifier<'a> {
     fn typecheck_variable_args(&self, inst: Inst) -> Result {
         match self.func.dfg[inst].analyze_branch(&self.func.dfg.value_lists) {
             BranchInfo::SingleDest(ebb, _) => {
-                let iter = self.func.dfg.ebb_args(ebb).iter().map(|&v| {
+                let iter = self.func.dfg.ebb_params(ebb).iter().map(|&v| {
                     self.func.dfg.value_type(v)
                 });
                 self.typecheck_variable_args_iterator(inst, iter)?;
             }
             BranchInfo::Table(table) => {
                 for (_, ebb) in self.func.jump_tables[table].entries() {
-                    let arg_count = self.func.dfg.num_ebb_args(ebb);
+                    let arg_count = self.func.dfg.num_ebb_params(ebb);
                     if arg_count != 0 {
                         return err!(
                             inst,

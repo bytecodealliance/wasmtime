@@ -223,7 +223,7 @@ mod tests {
     fn types() {
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();
-        let arg0 = func.dfg.append_ebb_arg(ebb0, I32);
+        let arg0 = func.dfg.append_ebb_param(ebb0, I32);
         let mut pos = FuncCursor::new(&mut func);
         pos.insert_ebb(ebb0);
 
@@ -244,14 +244,14 @@ mod tests {
     fn reuse_results() {
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();
-        let arg0 = func.dfg.append_ebb_arg(ebb0, I32);
+        let arg0 = func.dfg.append_ebb_param(ebb0, I32);
         let mut pos = FuncCursor::new(&mut func);
         pos.insert_ebb(ebb0);
 
         let v0 = pos.ins().iadd_imm(arg0, 17);
         assert_eq!(pos.func.dfg.value_type(v0), I32);
         let iadd = pos.prev_inst().unwrap();
-        assert_eq!(pos.func.dfg.value_def(v0), ValueDef::Res(iadd, 0));
+        assert_eq!(pos.func.dfg.value_def(v0), ValueDef::Result(iadd, 0));
 
         // Detach v0 and reuse it for a different instruction.
         pos.func.dfg.clear_results(iadd);
@@ -260,6 +260,6 @@ mod tests {
         assert_eq!(pos.current_inst(), Some(iadd));
         let iconst = pos.prev_inst().unwrap();
         assert!(iadd != iconst);
-        assert_eq!(pos.func.dfg.value_def(v0), ValueDef::Res(iconst, 0));
+        assert_eq!(pos.func.dfg.value_def(v0), ValueDef::Result(iconst, 0));
     }
 }

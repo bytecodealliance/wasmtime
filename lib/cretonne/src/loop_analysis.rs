@@ -236,7 +236,7 @@ mod test {
         let ebb1 = func.dfg.make_ebb();
         let ebb2 = func.dfg.make_ebb();
         let ebb3 = func.dfg.make_ebb();
-        let cond = func.dfg.append_ebb_arg(ebb0, types::I32);
+        let cond = func.dfg.append_ebb_param(ebb0, types::I32);
 
         {
             let mut cur = FuncCursor::new(&mut func);
@@ -288,7 +288,7 @@ mod test {
         let ebb3 = func.dfg.make_ebb();
         let ebb4 = func.dfg.make_ebb();
         let ebb5 = func.dfg.make_ebb();
-        let cond = func.dfg.append_ebb_arg(ebb0, types::I32);
+        let cond = func.dfg.append_ebb_param(ebb0, types::I32);
 
         {
             let mut cur = FuncCursor::new(&mut func);

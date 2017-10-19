@@ -26,19 +26,10 @@ pub fn expand_global_addr(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut Co
 
 /// Expand a `global_addr` instruction for a vmctx global.
 fn vmctx_addr(inst: ir::Inst, func: &mut ir::Function, offset: i64) {
-    // Find the incoming `vmctx` function argument. Start searching from the back since the special
-    // arguments are appended by signature legalization.
-    //
-    // This argument must exist; `vmctx` global variables can not be used in functions with calling
-    // conventions that don't add a `vmctx` argument.
-    let argidx = func.signature
-        .argument_types
-        .iter()
-        .rposition(|abi| abi.purpose == ir::ArgumentPurpose::VMContext)
-        .expect("Need vmctx argument for vmctx global");
-
     // Get the value representing the `vmctx` argument.
-    let vmctx = func.dfg.ebb_args(func.layout.entry_block().unwrap())[argidx];
+    let vmctx = func.special_arg(ir::ArgumentPurpose::VMContext).expect(
+        "Missing vmctx parameter",
+    );
 
     // Simply replace the `global_addr` instruction with an `iadd_imm`, reusing the result value.
     func.dfg.replace(inst).iadd_imm(vmctx, offset);

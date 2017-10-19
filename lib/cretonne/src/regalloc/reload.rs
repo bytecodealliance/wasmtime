@@ -139,7 +139,7 @@ impl<'a> Context<'a> {
             assert_eq!(liveins.len(), 0);
             self.visit_entry_args(ebb, args);
         } else {
-            self.visit_ebb_args(ebb, args);
+            self.visit_ebb_params(ebb, args);
         }
     }
 
@@ -156,7 +156,10 @@ impl<'a> Context<'a> {
                     if arg.affinity.is_stack() {
                         // An incoming register parameter was spilled. Replace the parameter value
                         // with a temporary register value that is immediately spilled.
-                        let reg = self.cur.func.dfg.replace_ebb_arg(arg.value, abi.value_type);
+                        let reg = self.cur.func.dfg.replace_ebb_param(
+                            arg.value,
+                            abi.value_type,
+                        );
                         let affinity = Affinity::abi(&abi, self.cur.isa);
                         self.liveness.create_dead(reg, ebb, affinity);
                         self.insert_spill(ebb, arg.value, reg);
@@ -170,7 +173,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn visit_ebb_args(&mut self, ebb: Ebb, _args: &[LiveValue]) {
+    fn visit_ebb_params(&mut self, ebb: Ebb, _args: &[LiveValue]) {
         self.cur.goto_first_inst(ebb);
     }
 

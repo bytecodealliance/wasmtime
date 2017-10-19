@@ -121,7 +121,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::Block { ty } => {
             let next = builder.create_ebb();
             if let Ok(ty_cre) = type_to_type(&ty) {
-                builder.append_ebb_arg(next, ty_cre);
+                builder.append_ebb_param(next, ty_cre);
             }
             state.push_block(next, num_return_values(ty));
         }
@@ -129,7 +129,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let loop_body = builder.create_ebb();
             let next = builder.create_ebb();
             if let Ok(ty_cre) = type_to_type(&ty) {
-                builder.append_ebb_arg(next, ty_cre);
+                builder.append_ebb_param(next, ty_cre);
             }
             builder.ins().jump(loop_body, &[]);
             state.push_loop(loop_body, next, num_return_values(ty));
@@ -146,7 +146,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // - either the If have an Else clause, in that case the destination of this jump
             //   instruction will be changed later when we translate the Else operator.
             if let Ok(ty_cre) = type_to_type(&ty) {
-                builder.append_ebb_arg(if_not, ty_cre);
+                builder.append_ebb_param(if_not, ty_cre);
             }
             state.push_if(jump_inst, if_not, num_return_values(ty));
         }
@@ -190,7 +190,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             }
             state.stack.truncate(frame.original_stack_size());
             state.stack.extend_from_slice(
-                builder.ebb_args(frame.following_code()),
+                builder.ebb_params(frame.following_code()),
             );
         }
         /**************************** Branch instructions *********************************
@@ -876,7 +876,7 @@ fn translate_unreachable_operator(
                 // And add the return values of the block but only if the next block is reachble
                 // (which corresponds to testing if the stack depth is 1)
                 if state.real_unreachable_stack_depth == 1 {
-                    stack.extend_from_slice(builder.ebb_args(frame.following_code()));
+                    stack.extend_from_slice(builder.ebb_params(frame.following_code()));
                 }
                 state.real_unreachable_stack_depth -= 1;
             }

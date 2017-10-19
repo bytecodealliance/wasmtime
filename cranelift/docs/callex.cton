@@ -1,0 +1,13 @@
+test verifier
+
+function %gcd(i32 uext, i32 uext) -> i32 uext native {
+    fn1 = function %divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
+
+ebb1(v1: i32, v2: i32):
+    brz v2, ebb2
+    v3, v4 = call fn1(v1, v2)
+    return v3
+
+ebb2:
+    return v1
+}

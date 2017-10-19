@@ -150,7 +150,7 @@ impl Function {
     pub fn special_arg(&self, purpose: ir::ArgumentPurpose) -> Option<ir::Value> {
         let entry = self.layout.entry_block().expect("Function is empty");
         self.signature.special_arg_index(purpose).map(|i| {
-            self.dfg.ebb_args(entry)[i]
+            self.dfg.ebb_params(entry)[i]
         })
     }
 }
