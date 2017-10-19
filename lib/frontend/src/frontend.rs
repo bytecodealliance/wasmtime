@@ -11,6 +11,10 @@ use ssa::{SSABuilder, SideEffects, Block};
 use cretonne::entity::{EntityRef, EntityMap, EntitySet};
 
 /// Permanent structure used for translating into Cretonne IL.
+///
+/// In order to reduce memory reallocations whem compiling multiple functions,
+/// `ILBuilder` holds various data structures which are cleared between
+/// functions, rather than dropped, preserving the underlying allocations.
 pub struct ILBuilder<Variable>
 where
     Variable: EntityRef + Default,
@@ -55,8 +59,8 @@ impl<Variable> ILBuilder<Variable>
 where
     Variable: EntityRef + Default,
 {
-    /// Creates a ILBuilder structure. The structure is automatically cleared each time it is
-    /// passed to a [`FunctionBuilder`](struct.FunctionBuilder.html) for creation.
+    /// Creates a ILBuilder structure. The structure is automatically cleared after each
+    /// [`FunctionBuilder`](struct.FunctionBuilder.html) completes translating a function.
     pub fn new() -> Self {
         Self {
             ssa: SSABuilder::new(),
@@ -71,6 +75,11 @@ where
         self.ebbs.clear();
         self.types.clear();
         self.function_args_values.clear();
+    }
+
+    fn is_empty(&self) -> bool {
+        self.ssa.is_empty() && self.ebbs.is_empty() && self.types.is_empty() &&
+            self.function_args_values.is_empty()
     }
 }
 
@@ -216,7 +225,7 @@ where
         func: &'a mut Function,
         builder: &'a mut ILBuilder<Variable>,
     ) -> FunctionBuilder<'a, Variable> {
-        builder.clear();
+        debug_assert!(builder.is_empty());
         FunctionBuilder {
             func: func,
             srcloc: Default::default(),
@@ -491,15 +500,19 @@ where
     Variable: EntityRef + Default,
 {
     /// When a `FunctionBuilder` goes out of scope, it means that the function is fully built.
-    /// We then proceed to check if all the `Ebb`s are filled and sealed
     fn drop(&mut self) {
+        // Check that all the `Ebb`s are filled and sealed.
         debug_assert!(
             self.builder.ebbs.keys().all(|ebb| {
                 self.builder.ebbs[ebb].pristine ||
                     (self.builder.ssa.is_sealed(ebb) && self.builder.ebbs[ebb].filled)
             }),
             "all blocks should be filled and sealed before dropping a FunctionBuilder"
-        )
+        );
+
+        // Clear the state (but preserve the allocated buffers) in preparation
+        // for translation another function.
+        self.builder.clear();
     }
 }
 
