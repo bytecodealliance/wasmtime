@@ -110,6 +110,7 @@ class Instruction(object):
             'can_trap': 'Can this instruction cause a trap?',
             'other_side_effects':
             'Does this instruction have other side effects besides can_*',
+            'writes_cpu_flags': 'Does this instruction write to CPU flags?',
             }
 
     def __init__(self, name, doc, ins=(), outs=(), constraints=(), **kwargs):
@@ -144,6 +145,10 @@ class Instruction(object):
                         "unknown instruction attribute '" + attr + "'")
         for attr in Instruction.ATTRIBS:
             setattr(self, attr, not not kwargs.get(attr, False))
+
+        # Infer the 'writes_cpu_flags' field value.
+        setattr(self, 'writes_cpu_flags', any(out.is_cpu_flags() for out in self.outs))
+
         InstructionGroup.append(self)
 
     def __str__(self):
