@@ -769,7 +769,7 @@ Integer operations
 .. autoinst:: srem
 .. autoinst:: srem_imm
 
-.. todo:: Minimum / maximum.
+.. todo:: Integer minimum / maximum.
 
     NEON has ``smin``, ``smax``, ``umin``, and ``umax`` instructions. We should
     replicate those for both scalar and vector integer types. Even if the
