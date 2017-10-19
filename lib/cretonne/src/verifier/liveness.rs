@@ -49,7 +49,7 @@ impl<'a> LivenessVerifier<'a> {
     /// Check all EBB arguments.
     fn check_ebbs(&self) -> Result {
         for ebb in self.func.layout.ebbs() {
-            for &val in self.func.dfg.ebb_args(ebb) {
+            for &val in self.func.dfg.ebb_params(ebb) {
                 let lr = match self.liveness.get(val) {
                     Some(lr) => lr,
                     None => return err!(ebb, "EBB arg {} has no live range", val),
@@ -164,7 +164,7 @@ impl<'a> LivenessVerifier<'a> {
         // branch argument.
         self.func
             .dfg
-            .ebb_args(dest)
+            .ebb_params(dest)
             .get(argnum - fixed_args)
             .and_then(|&v| self.liveness.get(v))
             .map(|lr| lr.affinity.is_none())

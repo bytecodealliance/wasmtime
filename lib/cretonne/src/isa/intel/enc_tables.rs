@@ -37,7 +37,7 @@ fn expand_srem(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGra
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
     func.dfg.clear_results(inst);
-    func.dfg.attach_ebb_arg(done, result);
+    func.dfg.attach_ebb_param(done, result);
 
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
@@ -112,7 +112,7 @@ fn expand_minmax(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowG
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
     func.dfg.clear_results(inst);
-    func.dfg.attach_ebb_arg(done, result);
+    func.dfg.attach_ebb_param(done, result);
 
     // Test for case 1) ordered and not equal.
     let mut pos = FuncCursor::new(func).at_inst(inst);
@@ -194,7 +194,7 @@ fn expand_fcvt_from_uint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut Cont
 
     // Move the `inst` result value onto the `done` EBB.
     pos.func.dfg.clear_results(inst);
-    pos.func.dfg.attach_ebb_arg(done, result);
+    pos.func.dfg.attach_ebb_param(done, result);
 
     // If x as a signed int is not negative, we can use the existing `fcvt_from_sint` instruction.
     let is_neg = pos.ins().icmp_imm(IntCC::SignedLessThan, x, 0);
@@ -328,7 +328,7 @@ fn expand_fcvt_to_uint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut Contro
 
     // Move the `inst` result value onto the `done` EBB.
     func.dfg.clear_results(inst);
-    func.dfg.attach_ebb_arg(done, result);
+    func.dfg.attach_ebb_param(done, result);
 
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);

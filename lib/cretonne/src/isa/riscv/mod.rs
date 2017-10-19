@@ -136,8 +136,8 @@ mod tests {
 
         let mut dfg = DataFlowGraph::new();
         let ebb = dfg.make_ebb();
-        let arg64 = dfg.append_ebb_arg(ebb, types::I64);
-        let arg32 = dfg.append_ebb_arg(ebb, types::I32);
+        let arg64 = dfg.append_ebb_param(ebb, types::I64);
+        let arg32 = dfg.append_ebb_param(ebb, types::I32);
 
         // Try to encode iadd_imm.i64 v1, -10.
         let inst64 = InstructionData::BinaryImm {
@@ -180,8 +180,8 @@ mod tests {
 
         let mut dfg = DataFlowGraph::new();
         let ebb = dfg.make_ebb();
-        let arg64 = dfg.append_ebb_arg(ebb, types::I64);
-        let arg32 = dfg.append_ebb_arg(ebb, types::I32);
+        let arg64 = dfg.append_ebb_param(ebb, types::I64);
+        let arg32 = dfg.append_ebb_param(ebb, types::I32);
 
         // Try to encode iadd_imm.i64 v1, -10.
         let inst64 = InstructionData::BinaryImm {
@@ -237,7 +237,7 @@ mod tests {
 
         let mut dfg = DataFlowGraph::new();
         let ebb = dfg.make_ebb();
-        let arg32 = dfg.append_ebb_arg(ebb, types::I32);
+        let arg32 = dfg.append_ebb_param(ebb, types::I32);
 
         // Create an imul.i32 which is encodable in RV32M.
         let mul32 = InstructionData::Binary {

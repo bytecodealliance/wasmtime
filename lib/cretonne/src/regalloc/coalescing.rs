@@ -2,8 +2,8 @@
 //!
 //! Conventional SSA form is a subset of SSA form where any (transitively) phi-related values do
 //! not interfere. We construct CSSA by building virtual registers that are as large as possible
-//! and inserting copies where necessary such that all values passed to an EBB argument will belong
-//! to the same virtual register as the EBB argument value itself.
+//! and inserting copies where necessary such that all argument values passed to an EBB parameter
+//! will belong to the same virtual register as the EBB parameter value itself.
 
 use cursor::{Cursor, EncCursor};
 use dbg::DisplayList;
@@ -289,8 +289,8 @@ impl Coalescing {
         for &ebb in domtree.cfg_postorder() {
             let preds = cfg.get_predecessors(ebb);
             if !preds.is_empty() {
-                for argnum in 0..context.func.dfg.num_ebb_args(ebb) {
-                    context.coalesce_ebb_arg(ebb, argnum, preds)
+                for argnum in 0..context.func.dfg.num_ebb_params(ebb) {
+                    context.coalesce_ebb_param(ebb, argnum, preds)
                 }
             }
         }
@@ -298,10 +298,10 @@ impl Coalescing {
 }
 
 impl<'a> Context<'a> {
-    /// Coalesce the `argnum`'th argument to `ebb`.
-    fn coalesce_ebb_arg(&mut self, ebb: Ebb, argnum: usize, preds: &[BasicBlock]) {
+    /// Coalesce the `argnum`'th parameter on `ebb`.
+    fn coalesce_ebb_param(&mut self, ebb: Ebb, argnum: usize, preds: &[BasicBlock]) {
         self.split_values.clear();
-        let mut succ_val = self.func.dfg.ebb_args(ebb)[argnum];
+        let mut succ_val = self.func.dfg.ebb_params(ebb)[argnum];
         dbg!("Processing {}/{}: {}", ebb, argnum, succ_val);
 
         // We want to merge the virtual register for `succ_val` with the virtual registers for
@@ -421,7 +421,7 @@ impl<'a> Context<'a> {
             // Never coalesce incoming function arguments on the stack. These arguments are
             // pre-spilled, and the rest of the virtual register would be forced to spill to the
             // `incoming_arg` stack slot too.
-            if let ValueDef::Arg(def_ebb, def_num) = self.func.dfg.value_def(pred_val) {
+            if let ValueDef::Param(def_ebb, def_num) = self.func.dfg.value_def(pred_val) {
                 if Some(def_ebb) == self.func.layout.entry_block() &&
                     self.func.signature.argument_types[def_num]
                         .location
@@ -530,7 +530,7 @@ impl<'a> Context<'a> {
     /// Split the congruence class for the successor EBB value itself.
     fn split_succ(&mut self, ebb: Ebb, succ_val: Value) -> Value {
         let ty = self.func.dfg.value_type(succ_val);
-        let new_val = self.func.dfg.replace_ebb_arg(succ_val, ty);
+        let new_val = self.func.dfg.replace_ebb_param(succ_val, ty);
 
         // Insert a copy instruction at the top of ebb.
         let mut pos = EncCursor::new(self.func, self.isa).at_first_inst(ebb);

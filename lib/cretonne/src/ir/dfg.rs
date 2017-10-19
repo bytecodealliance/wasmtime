@@ -16,7 +16,7 @@ use std::u16;
 
 /// A data flow graph defines all instructions and extended basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
-/// instruction results or EBB arguments.
+/// instruction results or EBB parameters.
 ///
 /// The layout of EBBs in the function and of instructions in each EBB is recorded by the
 /// `FunctionLayout` data structure which form the other half of the function representation.
@@ -34,7 +34,8 @@ pub struct DataFlowGraph {
     /// primary `insts` map.
     results: EntityMap<Inst, ValueList>,
 
-    /// Extended basic blocks in the function and their arguments.
+    /// Extended basic blocks in the function and their parameters.
+    ///
     /// This map is not in program order. That is handled by `Layout`, and so is the sequence of
     /// instructions contained in each EBB.
     ebbs: PrimaryMap<Ebb, EbbData>,
@@ -45,7 +46,7 @@ pub struct DataFlowGraph {
     ///
     /// - Instructions in `insts` that don't have room for their entire argument list inline.
     /// - Instruction result values in `results`.
-    /// - EBB arguments in `ebbs`.
+    /// - EBB parameters in `ebbs`.
     pub value_lists: ValueListPool,
 
     /// Primary value table with entries for all values.
@@ -135,7 +136,7 @@ fn resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) -> Value
 
 /// Handling values.
 ///
-/// Values are either EBB arguments or instruction results.
+/// Values are either EBB parameters or instruction results.
 impl DataFlowGraph {
     /// Allocate an extended value entry.
     fn make_value(&mut self, data: ValueData) -> Value {
@@ -151,7 +152,7 @@ impl DataFlowGraph {
     pub fn value_type(&self, v: Value) -> Type {
         match self.values[v] {
             ValueData::Inst { ty, .. } |
-            ValueData::Arg { ty, .. } |
+            ValueData::Param { ty, .. } |
             ValueData::Alias { ty, .. } => ty,
         }
     }
@@ -159,7 +160,7 @@ impl DataFlowGraph {
     /// Get the definition of a value.
     ///
     /// This is either the instruction that defined it or the Ebb that has the value as an
-    /// argument.
+    /// parameter.
     pub fn value_def(&self, v: Value) -> ValueDef {
         match self.values[v] {
             ValueData::Inst { inst, num, .. } => {
@@ -170,15 +171,15 @@ impl DataFlowGraph {
                     v,
                     self.display_inst(inst, None)
                 );
-                ValueDef::Res(inst, num as usize)
+                ValueDef::Result(inst, num as usize)
             }
-            ValueData::Arg { ebb, num, .. } => {
+            ValueData::Param { ebb, num, .. } => {
                 assert_eq!(
                     Some(v),
-                    self.ebbs[ebb].args.get(num as usize, &self.value_lists),
-                    "Dangling EBB argument value"
+                    self.ebbs[ebb].params.get(num as usize, &self.value_lists),
+                    "Dangling EBB parameter value"
                 );
-                ValueDef::Arg(ebb, num as usize)
+                ValueDef::Param(ebb, num as usize)
             }
             ValueData::Alias { original, .. } => {
                 // Make sure we only recurse one level. `resolve_aliases` has safeguards to
@@ -188,7 +189,7 @@ impl DataFlowGraph {
         }
     }
 
-    /// Determine if `v` is an attached instruction result / EBB argument.
+    /// Determine if `v` is an attached instruction result / EBB parameter.
     ///
     /// An attached value can't be attached to something else without first being detached.
     ///
@@ -198,7 +199,7 @@ impl DataFlowGraph {
         use self::ValueData::*;
         match self.values[v] {
             Inst { inst, num, .. } => Some(&v) == self.inst_results(inst).get(num as usize),
-            Arg { ebb, num, .. } => Some(&v) == self.ebb_args(ebb).get(num as usize),
+            Param { ebb, num, .. } => Some(&v) == self.ebb_params(ebb).get(num as usize),
             Alias { .. } => false,
         }
     }
@@ -317,16 +318,16 @@ impl DataFlowGraph {
 #[derive(Debug, PartialEq, Eq)]
 pub enum ValueDef {
     /// Value is the n'th result of an instruction.
-    Res(Inst, usize),
-    /// Value is the n'th argument to an EBB.
-    Arg(Ebb, usize),
+    Result(Inst, usize),
+    /// Value is the n'th parameter to an EBB.
+    Param(Ebb, usize),
 }
 
 impl ValueDef {
     /// Unwrap the instruction where the value was defined, or panic.
     pub fn unwrap_inst(&self) -> Inst {
         match *self {
-            ValueDef::Res(inst, _) => inst,
+            ValueDef::Result(inst, _) => inst,
             _ => panic!("Value is not an instruction result"),
         }
     }
@@ -338,11 +339,11 @@ enum ValueData {
     // Value is defined by an instruction.
     Inst { ty: Type, num: u16, inst: Inst },
 
-    // Value is an EBB argument.
-    Arg { ty: Type, num: u16, ebb: Ebb },
+    // Value is an EBB parameter.
+    Param { ty: Type, num: u16, ebb: Ebb },
 
     // Value is an alias of another value.
-    // An alias value can't be linked as an instruction result or EBB argument. It is used as a
+    // An alias value can't be linked as an instruction result or EBB parameter. It is used as a
     // placeholder when the original instruction or EBB has been rewritten or modified.
     Alias { ty: Type, original: Value },
 }
@@ -678,83 +679,82 @@ impl DataFlowGraph {
         self.ebbs.push(EbbData::new())
     }
 
-    /// Get the number of arguments on `ebb`.
-    pub fn num_ebb_args(&self, ebb: Ebb) -> usize {
-        self.ebbs[ebb].args.len(&self.value_lists)
+    /// Get the number of parameters on `ebb`.
+    pub fn num_ebb_params(&self, ebb: Ebb) -> usize {
+        self.ebbs[ebb].params.len(&self.value_lists)
     }
 
-    /// Get the arguments to an EBB.
-    pub fn ebb_args(&self, ebb: Ebb) -> &[Value] {
-        self.ebbs[ebb].args.as_slice(&self.value_lists)
+    /// Get the parameters on `ebb`.
+    pub fn ebb_params(&self, ebb: Ebb) -> &[Value] {
+        self.ebbs[ebb].params.as_slice(&self.value_lists)
     }
 
-    /// Append an argument with type `ty` to `ebb`.
-    pub fn append_ebb_arg(&mut self, ebb: Ebb, ty: Type) -> Value {
-        let arg = self.values.next_key();
-        let num = self.ebbs[ebb].args.push(arg, &mut self.value_lists);
-        assert!(num <= u16::MAX as usize, "Too many arguments to EBB");
-        self.make_value(ValueData::Arg {
+    /// Append a parameter with type `ty` to `ebb`.
+    pub fn append_ebb_param(&mut self, ebb: Ebb, ty: Type) -> Value {
+        let param = self.values.next_key();
+        let num = self.ebbs[ebb].params.push(param, &mut self.value_lists);
+        assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
+        self.make_value(ValueData::Param {
             ty,
             num: num as u16,
             ebb,
         })
     }
 
-    /// Removes `val` from `ebb`'s argument by swapping it with the last argument of `ebb`.
+    /// Removes `val` from `ebb`'s parameters by swapping it with the last parameter on `ebb`.
     /// Returns the position of `val` before removal.
     ///
-    /// *Important*: to ensure O(1) deletion, this method swaps the removed argument with the
-    /// last `Ebb` argument. This can disrupt all the branch instructions jumping to this
-    /// `Ebb` for which you have to change the jump argument order if necessary.
+    /// *Important*: to ensure O(1) deletion, this method swaps the removed parameter with the
+    /// last `ebb`` parameter. This can disrupt all the branch instructions jumping to this
+    /// `ebb` for which you have to change the branch argument order if necessary.
     ///
-    /// Panics if `val` is not an `Ebb` argument. Returns `true` if `Ebb` arguments have been
-    /// swapped.
-    pub fn swap_remove_ebb_arg(&mut self, val: Value) -> usize {
-        let (ebb, num) = if let ValueData::Arg { num, ebb, .. } = self.values[val] {
+    /// Panics if `val` is not an EBB parameter.
+    pub fn swap_remove_ebb_param(&mut self, val: Value) -> usize {
+        let (ebb, num) = if let ValueData::Param { num, ebb, .. } = self.values[val] {
             (ebb, num)
         } else {
-            panic!("{} must be an EBB argument", val);
+            panic!("{} must be an EBB parameter", val);
         };
-        self.ebbs[ebb].args.swap_remove(
+        self.ebbs[ebb].params.swap_remove(
             num as usize,
             &mut self.value_lists,
         );
-        if let Some(last_arg_val) = self.ebbs[ebb].args.get(num as usize, &self.value_lists) {
+        if let Some(last_arg_val) = self.ebbs[ebb].params.get(num as usize, &self.value_lists) {
             // We update the position of the old last arg.
-            if let ValueData::Arg { num: ref mut old_num, .. } = self.values[last_arg_val] {
+            if let ValueData::Param { num: ref mut old_num, .. } = self.values[last_arg_val] {
                 *old_num = num;
             } else {
-                panic!("{} should be an Ebb argument but is not", last_arg_val);
+                panic!("{} should be an Ebb parameter", last_arg_val);
             }
         }
         num as usize
     }
 
-    /// Removes `val` from `ebb`'s arguments by a standard linear time list removal which preserves
-    /// ordering. Also updates the values' data.
-    pub fn remove_ebb_arg(&mut self, val: Value) {
-        let (ebb, num) = if let ValueData::Arg { num, ebb, .. } = self.values[val] {
+    /// Removes `val` from `ebb`'s parameters by a standard linear time list removal which
+    /// preserves ordering. Also updates the values' data.
+    pub fn remove_ebb_param(&mut self, val: Value) {
+        let (ebb, num) = if let ValueData::Param { num, ebb, .. } = self.values[val] {
             (ebb, num)
         } else {
-            panic!("{} must be an EBB argument", val);
+            panic!("{} must be an EBB parameter", val);
         };
-        self.ebbs[ebb].args.remove(
+        self.ebbs[ebb].params.remove(
             num as usize,
             &mut self.value_lists,
         );
-        for index in num..(self.ebb_args(ebb).len() as u16) {
+        for index in num..(self.num_ebb_params(ebb) as u16) {
             match self.values[self.ebbs[ebb]
-                                    .args
+                                    .params
                                     .get(index as usize, &self.value_lists)
                                     .unwrap()] {
-                ValueData::Arg { ref mut num, .. } => {
+                ValueData::Param { ref mut num, .. } => {
                     *num -= 1;
                 }
                 _ => {
                     panic!(
-                        "{} must be an EBB argument",
+                        "{} must be an EBB parameter",
                         self.ebbs[ebb]
-                            .args
+                            .params
                             .get(index as usize, &self.value_lists)
                             .unwrap()
                     )
@@ -764,73 +764,73 @@ impl DataFlowGraph {
     }
 
 
-    /// Append an existing argument value to `ebb`.
+    /// Append an existing value to `ebb`'s parameters.
     ///
     /// The appended value can't already be attached to something else.
     ///
-    /// In almost all cases, you should be using `append_ebb_arg()` instead of this method.
-    pub fn attach_ebb_arg(&mut self, ebb: Ebb, arg: Value) {
-        assert!(!self.value_is_attached(arg));
-        let num = self.ebbs[ebb].args.push(arg, &mut self.value_lists);
-        assert!(num <= u16::MAX as usize, "Too many arguments to EBB");
-        let ty = self.value_type(arg);
-        self.values[arg] = ValueData::Arg {
+    /// In almost all cases, you should be using `append_ebb_param()` instead of this method.
+    pub fn attach_ebb_param(&mut self, ebb: Ebb, param: Value) {
+        assert!(!self.value_is_attached(param));
+        let num = self.ebbs[ebb].params.push(param, &mut self.value_lists);
+        assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
+        let ty = self.value_type(param);
+        self.values[param] = ValueData::Param {
             ty,
             num: num as u16,
             ebb,
         };
     }
 
-    /// Replace an EBB argument with a new value of type `ty`.
+    /// Replace an EBB parameter with a new value of type `ty`.
     ///
-    /// The `old_value` must be an attached EBB argument. It is removed from its place in the list
-    /// of arguments and replaced by a new value of type `new_type`. The new value gets the same
-    /// position in the list, and other arguments are not disturbed.
+    /// The `old_value` must be an attached EBB parameter. It is removed from its place in the list
+    /// of parameters and replaced by a new value of type `new_type`. The new value gets the same
+    /// position in the list, and other parameters are not disturbed.
     ///
     /// The old value is left detached, so it should probably be changed into something else.
     ///
     /// Returns the new value.
-    pub fn replace_ebb_arg(&mut self, old_arg: Value, new_type: Type) -> Value {
+    pub fn replace_ebb_param(&mut self, old_value: Value, new_type: Type) -> Value {
         // Create new value identical to the old one except for the type.
-        let (ebb, num) = if let ValueData::Arg { num, ebb, .. } = self.values[old_arg] {
+        let (ebb, num) = if let ValueData::Param { num, ebb, .. } = self.values[old_value] {
             (ebb, num)
         } else {
-            panic!("{} must be an EBB argument", old_arg);
+            panic!("{} must be an EBB parameter", old_value);
         };
-        let new_arg = self.make_value(ValueData::Arg {
+        let new_arg = self.make_value(ValueData::Param {
             ty: new_type,
             num,
             ebb,
         });
 
-        self.ebbs[ebb].args.as_mut_slice(&mut self.value_lists)[num as usize] = new_arg;
+        self.ebbs[ebb].params.as_mut_slice(&mut self.value_lists)[num as usize] = new_arg;
         new_arg
     }
 
-    /// Detach all the arguments from `ebb` and return them as a `ValueList`.
+    /// Detach all the parameters from `ebb` and return them as a `ValueList`.
     ///
-    /// This is a quite low-level operation. Sensible things to do with the detached EBB arguments
-    /// is to put them back on the same EBB with `attach_ebb_arg()` or change them into aliases
+    /// This is a quite low-level operation. Sensible things to do with the detached EBB parameters
+    /// is to put them back on the same EBB with `attach_ebb_param()` or change them into aliases
     /// with `change_to_alias()`.
-    pub fn detach_ebb_args(&mut self, ebb: Ebb) -> ValueList {
-        self.ebbs[ebb].args.take()
+    pub fn detach_ebb_params(&mut self, ebb: Ebb) -> ValueList {
+        self.ebbs[ebb].params.take()
     }
 }
 
 // Contents of an extended basic block.
 //
-// Arguments for an extended basic block are values that dominate everything in the EBB. All
+// Parameters on an extended basic block are values that dominate everything in the EBB. All
 // branches to this EBB must provide matching arguments, and the arguments to the entry EBB must
 // match the function arguments.
 #[derive(Clone)]
 struct EbbData {
-    // List of arguments to this EBB.
-    args: ValueList,
+    // List of parameters to this EBB.
+    params: ValueList,
 }
 
 impl EbbData {
     fn new() -> EbbData {
-        EbbData { args: ValueList::new() }
+        EbbData { params: ValueList::new() }
     }
 }
 
@@ -899,7 +899,7 @@ mod tests {
         let val = dfg.first_result(inst);
         assert_eq!(dfg.inst_results(inst), &[val]);
 
-        assert_eq!(dfg.value_def(val), ValueDef::Res(inst, 0));
+        assert_eq!(dfg.value_def(val), ValueDef::Result(inst, 0));
         assert_eq!(dfg.value_type(val), types::I32);
 
         // Replacing results.
@@ -908,7 +908,7 @@ mod tests {
         assert!(!dfg.value_is_attached(val));
         assert!(dfg.value_is_attached(v2));
         assert_eq!(dfg.inst_results(inst), &[v2]);
-        assert_eq!(dfg.value_def(v2), ValueDef::Res(inst, 0));
+        assert_eq!(dfg.value_def(v2), ValueDef::Result(inst, 0));
         assert_eq!(dfg.value_type(v2), types::F64);
     }
 
@@ -933,90 +933,90 @@ mod tests {
 
         let ebb = dfg.make_ebb();
         assert_eq!(ebb.to_string(), "ebb0");
-        assert_eq!(dfg.num_ebb_args(ebb), 0);
-        assert_eq!(dfg.ebb_args(ebb), &[]);
-        assert!(dfg.detach_ebb_args(ebb).is_empty());
-        assert_eq!(dfg.num_ebb_args(ebb), 0);
-        assert_eq!(dfg.ebb_args(ebb), &[]);
+        assert_eq!(dfg.num_ebb_params(ebb), 0);
+        assert_eq!(dfg.ebb_params(ebb), &[]);
+        assert!(dfg.detach_ebb_params(ebb).is_empty());
+        assert_eq!(dfg.num_ebb_params(ebb), 0);
+        assert_eq!(dfg.ebb_params(ebb), &[]);
 
-        let arg1 = dfg.append_ebb_arg(ebb, types::F32);
+        let arg1 = dfg.append_ebb_param(ebb, types::F32);
         assert_eq!(arg1.to_string(), "v0");
-        assert_eq!(dfg.num_ebb_args(ebb), 1);
-        assert_eq!(dfg.ebb_args(ebb), &[arg1]);
+        assert_eq!(dfg.num_ebb_params(ebb), 1);
+        assert_eq!(dfg.ebb_params(ebb), &[arg1]);
 
-        let arg2 = dfg.append_ebb_arg(ebb, types::I16);
+        let arg2 = dfg.append_ebb_param(ebb, types::I16);
         assert_eq!(arg2.to_string(), "v1");
-        assert_eq!(dfg.num_ebb_args(ebb), 2);
-        assert_eq!(dfg.ebb_args(ebb), &[arg1, arg2]);
+        assert_eq!(dfg.num_ebb_params(ebb), 2);
+        assert_eq!(dfg.ebb_params(ebb), &[arg1, arg2]);
 
-        assert_eq!(dfg.value_def(arg1), ValueDef::Arg(ebb, 0));
-        assert_eq!(dfg.value_def(arg2), ValueDef::Arg(ebb, 1));
+        assert_eq!(dfg.value_def(arg1), ValueDef::Param(ebb, 0));
+        assert_eq!(dfg.value_def(arg2), ValueDef::Param(ebb, 1));
         assert_eq!(dfg.value_type(arg1), types::F32);
         assert_eq!(dfg.value_type(arg2), types::I16);
 
-        // Swap the two EBB arguments.
-        let vlist = dfg.detach_ebb_args(ebb);
-        assert_eq!(dfg.num_ebb_args(ebb), 0);
-        assert_eq!(dfg.ebb_args(ebb), &[]);
+        // Swap the two EBB parameters.
+        let vlist = dfg.detach_ebb_params(ebb);
+        assert_eq!(dfg.num_ebb_params(ebb), 0);
+        assert_eq!(dfg.ebb_params(ebb), &[]);
         assert_eq!(vlist.as_slice(&dfg.value_lists), &[arg1, arg2]);
-        dfg.attach_ebb_arg(ebb, arg2);
-        let arg3 = dfg.append_ebb_arg(ebb, types::I32);
-        dfg.attach_ebb_arg(ebb, arg1);
-        assert_eq!(dfg.ebb_args(ebb), &[arg2, arg3, arg1]);
+        dfg.attach_ebb_param(ebb, arg2);
+        let arg3 = dfg.append_ebb_param(ebb, types::I32);
+        dfg.attach_ebb_param(ebb, arg1);
+        assert_eq!(dfg.ebb_params(ebb), &[arg2, arg3, arg1]);
     }
 
     #[test]
-    fn replace_ebb_arguments() {
+    fn replace_ebb_params() {
         let mut dfg = DataFlowGraph::new();
 
         let ebb = dfg.make_ebb();
-        let arg1 = dfg.append_ebb_arg(ebb, types::F32);
+        let arg1 = dfg.append_ebb_param(ebb, types::F32);
 
-        let new1 = dfg.replace_ebb_arg(arg1, types::I64);
+        let new1 = dfg.replace_ebb_param(arg1, types::I64);
         assert_eq!(dfg.value_type(arg1), types::F32);
         assert_eq!(dfg.value_type(new1), types::I64);
-        assert_eq!(dfg.ebb_args(ebb), &[new1]);
+        assert_eq!(dfg.ebb_params(ebb), &[new1]);
 
-        dfg.attach_ebb_arg(ebb, arg1);
-        assert_eq!(dfg.ebb_args(ebb), &[new1, arg1]);
+        dfg.attach_ebb_param(ebb, arg1);
+        assert_eq!(dfg.ebb_params(ebb), &[new1, arg1]);
 
-        let new2 = dfg.replace_ebb_arg(arg1, types::I8);
+        let new2 = dfg.replace_ebb_param(arg1, types::I8);
         assert_eq!(dfg.value_type(arg1), types::F32);
         assert_eq!(dfg.value_type(new2), types::I8);
-        assert_eq!(dfg.ebb_args(ebb), &[new1, new2]);
+        assert_eq!(dfg.ebb_params(ebb), &[new1, new2]);
 
-        dfg.attach_ebb_arg(ebb, arg1);
-        assert_eq!(dfg.ebb_args(ebb), &[new1, new2, arg1]);
+        dfg.attach_ebb_param(ebb, arg1);
+        assert_eq!(dfg.ebb_params(ebb), &[new1, new2, arg1]);
 
-        let new3 = dfg.replace_ebb_arg(new2, types::I16);
+        let new3 = dfg.replace_ebb_param(new2, types::I16);
         assert_eq!(dfg.value_type(new1), types::I64);
         assert_eq!(dfg.value_type(new2), types::I8);
         assert_eq!(dfg.value_type(new3), types::I16);
-        assert_eq!(dfg.ebb_args(ebb), &[new1, new3, arg1]);
+        assert_eq!(dfg.ebb_params(ebb), &[new1, new3, arg1]);
     }
 
     #[test]
-    fn swap_remove_ebb_arguments() {
+    fn swap_remove_ebb_params() {
         let mut dfg = DataFlowGraph::new();
 
         let ebb = dfg.make_ebb();
-        let arg1 = dfg.append_ebb_arg(ebb, types::F32);
-        let arg2 = dfg.append_ebb_arg(ebb, types::F32);
-        let arg3 = dfg.append_ebb_arg(ebb, types::F32);
-        assert_eq!(dfg.ebb_args(ebb), &[arg1, arg2, arg3]);
+        let arg1 = dfg.append_ebb_param(ebb, types::F32);
+        let arg2 = dfg.append_ebb_param(ebb, types::F32);
+        let arg3 = dfg.append_ebb_param(ebb, types::F32);
+        assert_eq!(dfg.ebb_params(ebb), &[arg1, arg2, arg3]);
 
-        dfg.swap_remove_ebb_arg(arg1);
+        dfg.swap_remove_ebb_param(arg1);
         assert_eq!(dfg.value_is_attached(arg1), false);
         assert_eq!(dfg.value_is_attached(arg2), true);
         assert_eq!(dfg.value_is_attached(arg3), true);
-        assert_eq!(dfg.ebb_args(ebb), &[arg3, arg2]);
-        dfg.swap_remove_ebb_arg(arg2);
+        assert_eq!(dfg.ebb_params(ebb), &[arg3, arg2]);
+        dfg.swap_remove_ebb_param(arg2);
         assert_eq!(dfg.value_is_attached(arg2), false);
         assert_eq!(dfg.value_is_attached(arg3), true);
-        assert_eq!(dfg.ebb_args(ebb), &[arg3]);
-        dfg.swap_remove_ebb_arg(arg3);
+        assert_eq!(dfg.ebb_params(ebb), &[arg3]);
+        dfg.swap_remove_ebb_param(arg3);
         assert_eq!(dfg.value_is_attached(arg3), false);
-        assert_eq!(dfg.ebb_args(ebb), &[]);
+        assert_eq!(dfg.ebb_params(ebb), &[]);
     }
 
     #[test]
@@ -1035,10 +1035,10 @@ mod tests {
         // Make sure we can resolve value aliases even when values is empty.
         assert_eq!(pos.func.dfg.resolve_aliases(v1), v1);
 
-        let arg0 = pos.func.dfg.append_ebb_arg(ebb0, types::I32);
+        let arg0 = pos.func.dfg.append_ebb_param(ebb0, types::I32);
         let (s, c) = pos.ins().iadd_cout(v1, arg0);
         let iadd = match pos.func.dfg.value_def(s) {
-            ValueDef::Res(i, 0) => i,
+            ValueDef::Result(i, 0) => i,
             _ => panic!(),
         };
 

@@ -136,7 +136,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                             }
                             _ => panic!("should not happen"),
                         };
-                    self.builder.ebb_args_adjustment(dest_ebb, &args_types);
+                    self.builder.ebb_params_adjustment(dest_ebb, &args_types);
                     self.builder.declare_successor(dest_ebb, inst);
                 }
                 None => {
@@ -273,8 +273,8 @@ where
         let basic_block = self.builder.ssa.header_block(ebb);
         // Then we change the cursor position.
         self.position = Position { ebb, basic_block };
-        self.ebb_args_adjustment(ebb, jump_args);
-        self.func.dfg.ebb_args(ebb)
+        self.ebb_params_adjustment(ebb, jump_args);
+        self.func.dfg.ebb_params(ebb)
     }
 
     /// Declares that all the predecessors of this block are known.
@@ -411,10 +411,10 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 where
     Variable: EntityRef + Default,
 {
-    /// Retrieves all the arguments for an `Ebb` currently inferred from the jump instructions
+    /// Retrieves all the parameters for an `Ebb` currently inferred from the jump instructions
     /// inserted that target it and the SSA construction.
-    pub fn ebb_args(&self, ebb: Ebb) -> &[Value] {
-        self.func.dfg.ebb_args(ebb)
+    pub fn ebb_params(&self, ebb: Ebb) -> &[Value] {
+        self.func.dfg.ebb_params(ebb)
     }
 
     /// Retrieves the signature with reference `sigref` previously added with `import_signature`.
@@ -422,14 +422,14 @@ where
         self.func.dfg.signatures.get(sigref)
     }
 
-    /// Creates an argument for a specific `Ebb` by appending it to the list of already existing
-    /// arguments.
+    /// Creates a parameter for a specific `Ebb` by appending it to the list of already existing
+    /// parameters.
     ///
     /// **Note:** this function has to be called at the creation of the `Ebb` before adding
     /// instructions to it, otherwise this could interfere with SSA construction.
-    pub fn append_ebb_arg(&mut self, ebb: Ebb, ty: Type) -> Value {
+    pub fn append_ebb_param(&mut self, ebb: Ebb, ty: Type) -> Value {
         debug_assert!(self.builder.ebbs[ebb].pristine);
-        self.func.dfg.append_ebb_arg(ebb, ty)
+        self.func.dfg.append_ebb_param(ebb, ty)
     }
 
     /// Returns the result values of an instruction.
@@ -547,14 +547,14 @@ where
         debug_assert!(self.pristine);
         for argtyp in &self.func.signature.argument_types {
             self.builder.function_args_values.push(
-                self.func.dfg.append_ebb_arg(ebb, argtyp.value_type),
+                self.func.dfg.append_ebb_param(ebb, argtyp.value_type),
             );
         }
         self.pristine = false;
     }
 
 
-    fn ebb_args_adjustment(&mut self, dest_ebb: Ebb, jump_args: &[Value]) {
+    fn ebb_params_adjustment(&mut self, dest_ebb: Ebb, jump_args: &[Value]) {
         if self.builder.ssa.predecessors(dest_ebb).is_empty() ||
             self.builder.ebbs[dest_ebb].pristine
         {
@@ -562,12 +562,12 @@ where
             // so the jump arguments supplied here are this Ebb' arguments
             // However some of the arguments might already be there
             // in the Ebb so we have to check they're consistent
-            let dest_ebb_args_len = {
-                let dest_ebb_args = self.func.dfg.ebb_args(dest_ebb);
+            let dest_ebb_params_len = {
+                let dest_ebb_params = self.func.dfg.ebb_params(dest_ebb);
                 debug_assert!(
-                    dest_ebb_args
+                    dest_ebb_params
                         .iter()
-                        .zip(jump_args.iter().take(dest_ebb_args.len()))
+                        .zip(jump_args.iter().take(dest_ebb_params.len()))
                         .all(|(dest_arg, jump_arg)| {
                             self.func.dfg.value_type(*jump_arg) ==
                                 self.func.dfg.value_type(*dest_arg)
@@ -575,12 +575,12 @@ where
                     "the jump argument supplied has not the \
                     same type as the corresponding dest ebb argument"
                 );
-                dest_ebb_args.len()
+                dest_ebb_params.len()
             };
             self.builder.ebbs[dest_ebb].user_arg_count = jump_args.len();
-            for val in jump_args.iter().skip(dest_ebb_args_len) {
+            for val in jump_args.iter().skip(dest_ebb_params_len) {
                 let ty = self.func.dfg.value_type(*val);
-                self.func.dfg.append_ebb_arg(dest_ebb, ty);
+                self.func.dfg.append_ebb_param(dest_ebb, ty);
             }
         } else {
             // The Ebb already has predecessors
@@ -595,7 +595,7 @@ where
             debug_assert!(
                 jump_args
                     .iter()
-                    .zip(self.func.dfg.ebb_args(dest_ebb).iter().take(
+                    .zip(self.func.dfg.ebb_params(dest_ebb).iter().take(
                         self.builder.ebbs[dest_ebb].user_arg_count,
                     ))
                     .all(|(jump_arg, dest_arg)| {

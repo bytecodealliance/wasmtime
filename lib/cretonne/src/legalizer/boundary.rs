@@ -67,11 +67,11 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
     // Keep track of the argument types in the ABI-legalized signature.
     let mut abi_arg = 0;
 
-    // Process the EBB arguments one at a time, possibly replacing one argument with multiple new
-    // ones. We do this by detaching the entry EBB arguments first.
-    let ebb_args = pos.func.dfg.detach_ebb_args(entry);
+    // Process the EBB parameters one at a time, possibly replacing one argument with multiple new
+    // ones. We do this by detaching the entry EBB parameters first.
+    let ebb_params = pos.func.dfg.detach_ebb_params(entry);
     let mut old_arg = 0;
-    while let Some(arg) = ebb_args.get(old_arg, &pos.func.dfg.value_lists) {
+    while let Some(arg) = ebb_params.get(old_arg, &pos.func.dfg.value_lists) {
         old_arg += 1;
 
         let abi_type = pos.func.signature.argument_types[abi_arg];
@@ -79,7 +79,7 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
         if arg_type == abi_type.value_type {
             // No value translation is necessary, this argument matches the ABI type.
             // Just use the original EBB argument value. This is the most common case.
-            pos.func.dfg.attach_ebb_arg(entry, arg);
+            pos.func.dfg.attach_ebb_param(entry, arg);
             match abi_type.purpose {
                 ArgumentPurpose::Normal => {}
                 ArgumentPurpose::StructReturn => {
@@ -108,7 +108,7 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
                 );
                 if ty == abi_type.value_type {
                     abi_arg += 1;
-                    Ok(func.dfg.append_ebb_arg(entry, ty))
+                    Ok(func.dfg.append_ebb_param(entry, ty))
                 } else {
                     Err(abi_type)
                 }
@@ -155,7 +155,7 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
 
         // Just create entry block values to match here. We will use them in `handle_return_abi()`
         // below.
-        pos.func.dfg.append_ebb_arg(entry, arg.value_type);
+        pos.func.dfg.append_ebb_param(entry, arg.value_type);
     }
 }
 
@@ -584,7 +584,7 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
                 .expect("No matching special purpose argument.");
             // Get the corresponding entry block value and add it to the return instruction's
             // arguments.
-            let val = pos.func.dfg.ebb_args(
+            let val = pos.func.dfg.ebb_params(
                 pos.func.layout.entry_block().unwrap(),
             )
                 [idx];
@@ -611,7 +611,9 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
 /// stack slot already during legalization.
 fn spill_entry_arguments(func: &mut Function, entry: Ebb) {
     for (abi, &arg) in func.signature.argument_types.iter().zip(
-        func.dfg.ebb_args(entry),
+        func.dfg.ebb_params(
+            entry,
+        ),
     )
     {
         if let ArgumentLoc::Stack(offset) = abi.location {

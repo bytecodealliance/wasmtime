@@ -210,7 +210,7 @@ enum Call {
 ///   call `seal_ebb_header_block` on it with the `Function` that you are building.
 ///
 /// This API will give you the correct SSA values to use as arguments of your instructions,
-/// as well as modify the jump instruction and `Ebb` headers arguments to account for the SSA
+/// as well as modify the jump instruction and `Ebb` headers parameters to account for the SSA
 /// Phi functions.
 ///
 impl<Variable> SSABuilder<Variable>
@@ -261,18 +261,18 @@ where
     fn use_var_nonlocal(&mut self, func: &mut Function, var: Variable, ty: Type, block: Block) {
         let case = match self.blocks[block] {
             BlockData::EbbHeader(ref mut data) => {
-                // The block has multiple predecessors so we append an Ebb argument that
+                // The block has multiple predecessors so we append an Ebb parameter that
                 // will serve as a value.
                 if data.sealed {
                     if data.predecessors.len() == 1 {
                         // Only one predecessor, straightforward case
                         UseVarCases::SealedOnePredecessor(data.predecessors[0].0)
                     } else {
-                        let val = func.dfg.append_ebb_arg(data.ebb, ty);
+                        let val = func.dfg.append_ebb_param(data.ebb, ty);
                         UseVarCases::SealedMultiplePredecessors(val, data.ebb)
                     }
                 } else {
-                    let val = func.dfg.append_ebb_arg(data.ebb, ty);
+                    let val = func.dfg.append_ebb_param(data.ebb, ty);
                     data.undef_variables.push((var, val));
                     UseVarCases::Unsealed(val)
                 }
@@ -285,7 +285,7 @@ where
                 self.calls.push(Call::FinishSealedOnePredecessor(block));
                 self.calls.push(Call::UseVar(pred));
             }
-            // The block has multiple predecessors, we register the ebb argument as the current
+            // The block has multiple predecessors, we register the EBB parameter as the current
             // definition for the variable.
             UseVarCases::Unsealed(val) => {
                 self.def_var(var, val, block);
@@ -293,7 +293,7 @@ where
             }
             UseVarCases::SealedMultiplePredecessors(val, ebb) => {
                 // If multiple predecessor we look up a use_var in each of them:
-                // if they all yield the same value no need for an Ebb argument
+                // if they all yield the same value no need for an EBB parameter
                 self.def_var(var, val, block);
                 self.begin_predecessors_lookup(val, ebb);
             }
@@ -385,7 +385,7 @@ where
             }
         };
 
-        // For each undef var we look up values in the predecessors and create an Ebb argument
+        // For each undef var we look up values in the predecessors and create an EBB parameter
         // only if necessary.
         for (var, val) in undef_vars {
             let ty = func.dfg.value_type(val);
@@ -443,7 +443,7 @@ where
     }
 
     /// Examine the values from the predecessors and compute a result value, creating
-    /// block arguments as needed.
+    /// block parameters as needed.
     fn finish_predecessors_lookup(
         &mut self,
         func: &mut Function,
@@ -499,7 +499,7 @@ where
                 // so we don't need to have it as an ebb argument.
                 // We need to replace all the occurences of val with pred_val but since
                 // we can't afford a re-writing pass right now we just declare an alias.
-                func.dfg.remove_ebb_arg(temp_arg_val);
+                func.dfg.remove_ebb_param(temp_arg_val);
                 func.dfg.change_to_alias(temp_arg_val, pred_val);
                 pred_val
             }
@@ -908,8 +908,8 @@ mod tests {
 
         ssa.declare_ebb_predecessor(ebb1, block3, jump_ebb2_ebb1);
         ssa.seal_ebb_header_block(ebb1, &mut func);
-        assert_eq!(func.dfg.ebb_args(ebb1)[0], z2);
-        assert_eq!(func.dfg.ebb_args(ebb1)[1], y3);
+        assert_eq!(func.dfg.ebb_params(ebb1)[0], z2);
+        assert_eq!(func.dfg.ebb_params(ebb1)[1], y3);
         assert_eq!(func.dfg.resolve_aliases(x3), x1);
 
     }
@@ -1027,9 +1027,9 @@ mod tests {
         let block1 = ssa.declare_ebb_header_block(ebb1);
         ssa.declare_ebb_predecessor(ebb1, block0, jump_inst);
         let z2 = ssa.use_var(&mut func, z_var, I32, block1).0;
-        assert_eq!(func.dfg.ebb_args(ebb1)[0], z2);
+        assert_eq!(func.dfg.ebb_params(ebb1)[0], z2);
         let x2 = ssa.use_var(&mut func, x_var, I32, block1).0;
-        assert_eq!(func.dfg.ebb_args(ebb1)[1], x2);
+        assert_eq!(func.dfg.ebb_params(ebb1)[1], x2);
         let x3 = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
             cur.ins().iadd(x2, z2)
@@ -1037,7 +1037,7 @@ mod tests {
         ssa.def_var(x_var, x3, block1);
         let x4 = ssa.use_var(&mut func, x_var, I32, block1).0;
         let y3 = ssa.use_var(&mut func, y_var, I32, block1).0;
-        assert_eq!(func.dfg.ebb_args(ebb1)[2], y3);
+        assert_eq!(func.dfg.ebb_params(ebb1)[2], y3);
         let y4 = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
             cur.ins().isub(y3, x4)
@@ -1051,7 +1051,7 @@ mod tests {
         ssa.seal_ebb_header_block(ebb1, &mut func);
         // At sealing the "z" argument disappear but the remaining "x" and "y" args have to be
         // in the right order.
-        assert_eq!(func.dfg.ebb_args(ebb1)[1], y3);
-        assert_eq!(func.dfg.ebb_args(ebb1)[0], x2);
+        assert_eq!(func.dfg.ebb_params(ebb1)[1], y3);
+        assert_eq!(func.dfg.ebb_params(ebb1)[0], x2);
     }
 }

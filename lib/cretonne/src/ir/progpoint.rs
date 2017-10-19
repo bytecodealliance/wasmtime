@@ -35,8 +35,8 @@ impl From<Ebb> for ProgramPoint {
 impl From<ValueDef> for ProgramPoint {
     fn from(def: ValueDef) -> ProgramPoint {
         match def {
-            ValueDef::Res(inst, _) => inst.into(),
-            ValueDef::Arg(ebb, _) => ebb.into(),
+            ValueDef::Result(inst, _) => inst.into(),
+            ValueDef::Param(ebb, _) => ebb.into(),
         }
     }
 }
@@ -66,8 +66,8 @@ impl From<Ebb> for ExpandedProgramPoint {
 impl From<ValueDef> for ExpandedProgramPoint {
     fn from(def: ValueDef) -> ExpandedProgramPoint {
         match def {
-            ValueDef::Res(inst, _) => inst.into(),
-            ValueDef::Arg(ebb, _) => ebb.into(),
+            ValueDef::Result(inst, _) => inst.into(),
+            ValueDef::Param(ebb, _) => ebb.into(),
         }
     }
 }

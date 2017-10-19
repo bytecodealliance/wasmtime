@@ -101,22 +101,22 @@ impl<'a> CssaVerifier<'a> {
 
     fn check_cssa(&self) -> Result {
         for ebb in self.func.layout.ebbs() {
-            let ebb_args = self.func.dfg.ebb_args(ebb);
+            let ebb_params = self.func.dfg.ebb_params(ebb);
             for &(_, pred) in self.cfg.get_predecessors(ebb) {
                 let pred_args = self.func.dfg.inst_variable_args(pred);
                 // This should have been caught by an earlier verifier pass.
                 assert_eq!(
-                    ebb_args.len(),
+                    ebb_params.len(),
                     pred_args.len(),
                     "Wrong arguments on branch."
                 );
 
-                for (&ebb_arg, &pred_arg) in ebb_args.iter().zip(pred_args) {
-                    if !self.virtregs.same_class(ebb_arg, pred_arg) {
+                for (&ebb_param, &pred_arg) in ebb_params.iter().zip(pred_args) {
+                    if !self.virtregs.same_class(ebb_param, pred_arg) {
                         return err!(
                             pred,
                             "{} and {} must be in the same virtual register",
-                            ebb_arg,
+                            ebb_param,
                             pred_arg
                         );
                     }
