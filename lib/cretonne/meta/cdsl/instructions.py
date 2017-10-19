@@ -147,7 +147,9 @@ class Instruction(object):
             setattr(self, attr, not not kwargs.get(attr, False))
 
         # Infer the 'writes_cpu_flags' field value.
-        setattr(self, 'writes_cpu_flags', any(out.is_cpu_flags() for out in self.outs))
+        if 'writes_cpu_flags' not in kwargs:
+            self.writes_cpu_flags = any(
+                out.is_cpu_flags() for out in self.outs)
 
         InstructionGroup.append(self)
 
