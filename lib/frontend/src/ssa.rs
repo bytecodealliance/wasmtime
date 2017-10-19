@@ -612,7 +612,7 @@ where
     }
 
     /// The main algorithm is naturally recursive: when there's a `use_var` in a
-    /// block with no correspondin local defs, it recurses and performs a
+    /// block with no corresponding local defs, it recurses and performs a
     /// `use_var` in each predecessor. To avoid risking running out of callstack
     /// space, we keep an explicit stack and use a small state machine rather
     /// than literal recursion.
