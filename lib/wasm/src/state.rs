@@ -140,10 +140,10 @@ impl TranslationState {
     }
 
     fn clear(&mut self) {
-        self.stack.clear();
-        self.control_stack.clear();
-        self.phantom_unreachable_stack_depth = 0;
-        self.real_unreachable_stack_depth = 0;
+        debug_assert!(self.stack.is_empty());
+        debug_assert!(self.control_stack.is_empty());
+        debug_assert_eq!(self.phantom_unreachable_stack_depth, 0);
+        debug_assert_eq!(self.real_unreachable_stack_depth, 0);
         self.globals.clear();
         self.heaps.clear();
         self.signatures.clear();
