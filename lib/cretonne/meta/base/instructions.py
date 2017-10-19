@@ -501,7 +501,7 @@ spill = Instruction(
         This instruction behaves exactly like :inst:`copy`, but the result
         value is assigned to a spill slot.
         """,
-        ins=x, outs=a)
+        ins=x, outs=a, can_store=True)
 
 fill = Instruction(
         'fill', r"""
@@ -510,7 +510,7 @@ fill = Instruction(
         This instruction behaves exactly like :inst:`copy`, but creates a new
         SSA value for the spilled input value.
         """,
-        ins=x, outs=a)
+        ins=x, outs=a, can_load=True)
 
 src = Operand('src', regunit)
 dst = Operand('dst', regunit)
