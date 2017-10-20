@@ -497,8 +497,8 @@ about because stack slots and offsets are fixed at compile time. For example,
 the alignment of these stack memory accesses can be inferred from the offsets
 and stack slot alignments.
 
-It can be necessary to escape from the :term:`safety` of the restricted
-instructions by taking the address of a stack slot.
+It's also possible to obtain the address of a stack slot, which can be used
+in :ref:`unrestricted loads and stores <memory>`.
 
 .. autoinst:: stack_addr
 
@@ -1112,15 +1112,6 @@ Glossary
         Cretonne uses to represent a program internally are called the
         intermediate representation. Cretonne's IR can be converted to text
         losslessly.
-
-    safe
-    safety
-        Execution of exclusively defined behavior. Safe programs cannot
-        read, write, or execute memory outside of heaps, globals, stack
-        regions, and functions that have been explicitly provided to them. In
-        some instances, defined behavior can be nondeterministic, where the
-        specific behavior may vary among a bounded set of possibilities.
-        Execution of undefined behavior is unsafe.
 
     stack slot
         A fixed size memory allocation in the current function's activation
