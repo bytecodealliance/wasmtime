@@ -45,7 +45,6 @@ pub struct CFGNode {
 /// extended basic blocks.
 #[derive(Debug)]
 pub struct ControlFlowGraph {
-    entry_block: Option<Ebb>,
     data: EntityMap<Ebb, CFGNode>,
     valid: bool,
 }
@@ -54,7 +53,6 @@ impl ControlFlowGraph {
     /// Allocate a new blank control flow graph.
     pub fn new() -> ControlFlowGraph {
         ControlFlowGraph {
-            entry_block: None,
             data: EntityMap::new(),
             valid: false,
         }
@@ -71,7 +69,6 @@ impl ControlFlowGraph {
     ///
     /// This will clear and overwrite any information already stored in this data structure.
     pub fn compute(&mut self, func: &Function) {
-        self.entry_block = func.layout.entry_block();
         self.data.clear();
         self.data.resize(func.dfg.num_ebbs());
 
