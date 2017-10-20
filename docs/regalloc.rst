@@ -3,7 +3,7 @@ Register Allocation in Cretonne
 *******************************
 
 .. default-domain:: cton
-.. highlight:: rust
+.. highlight:: cton
 
 Cretonne uses a *decoupled, SSA-based* register allocator. Decoupled means that
 register allocation is split into two primary phases: *spilling* and
@@ -29,6 +29,11 @@ The phases of the SSA-based register allocator are:
 Liveness analysis
     For each SSA value, determine exactly where it is live.
 
+Coalescing
+    Form *virtual registers* which are sets of SSA values that should be
+    assigned to the same location. Split live ranges such that values that
+    belong to the same virtual register don't have interfering live ranges.
+
 Spilling
     The process of deciding which SSA values go in a stack slot and which
     values go in a register. The spilling phase can also split live ranges by
@@ -38,20 +43,20 @@ Spilling
     After spilling, the number of live register values never exceeds the number
     of available registers.
 
+Reload
+    Insert :inst:`spill` and :inst:`fill` instructions as necessary such that
+    instructions that expect their operands in registers won't see values that
+    live on the stack and vice versa.
+
+    Reuse registers containing values loaded from the stack as much as possible
+    without exceeding the maximum allowed register pressure.
+
 Coloring
     The process of assigning specific registers to the live values. It's a
     property of SSA form that this can be done in a linear scan of the
     dominator tree without causing any additional spills.
 
-EBB argument fixup
-    The coloring phase does not guarantee that EBB arguments are placed in the
-    correct registers and/or stack slots before jumping to the EBB. It will
-    try its best, but not making this guarantee is essential to the speed of
-    the coloring phase. (EBB arguments correspond to PHI nodes in traditional
-    SSA form).
-
-    The argument fixup phase inserts 'shuffle code' before jumps and branches
-    to place the argument values in their expected locations.
+    Make sure that specific register operand constraints are satisfied.
 
 The contract between the spilling and coloring phases is that the number of
 values in registers never exceeds the number of available registers. This
@@ -119,8 +124,8 @@ Early clobbers
 Liveness Analysis
 =================
 
-Both spilling and coloring need to know exactly where SSA values are live. The
-liveness analysis computes this information.
+All the register allocator passes need to know exactly where SSA values are
+live. The liveness analysis computes this information.
 
 The data structure representing the live range of a value uses the linear
 layout of the function. All instructions and EBB headers are assigned a
@@ -128,7 +133,7 @@ layout of the function. All instructions and EBB headers are assigned a
 following:
 
 - The instruction where the value is defined.
-- The EBB header where the value is an EBB argument.
+- The EBB header where the value is an EBB parameter.
 - An EBB header where the value is live-in because it was defined in a
   dominating block.
 
@@ -185,14 +190,102 @@ with a few important differences:
 A consequence of Cretonne's more compact representation is that two program
 points can't be compared without the context of a function layout.
 
+Coalescing algorithm
+====================
+
+Unconstrained SSA form is not well suited to register allocation because of the problems
+that can arise around EBB parameters and arguments. Consider this simple example::
+
+    function %interference(i32, i32) -> i32 {
+    ebb0(v0: i32, v1: i32):
+        brz v0, ebb1(v1)
+        jump ebb1(v0)
+
+    ebb1(v2: i32):
+        v3 = iadd v1, v2
+        return v3
+    }
+
+Here, the value ``v1`` is both passed as an argument to ``ebb1`` *and* it is
+live in to the EBB because it is used by the  :inst:`iadd` instruction. Since
+EBB arguments on the :inst:`brz` instruction need to be in the same register as
+the corresponding EBB parameter ``v2``, there is going to be interference
+between ``v1`` and ``v2`` in the ``ebb1`` block.
+
+The interference can be resolved by isolating the SSA values passed as EBB arguments::
+
+    function %coalesced(i32, i32) -> i32 {
+    ebb0(v0: i32, v1: i32):
+        v5 = copy v1
+        brz v0, ebb1(v5)
+        v6 = copy v0
+        jump ebb1(v6)
+
+    ebb1(v2: i32):
+        v3 = iadd.i32 v1, v2
+        return v3
+    }
+
+Now the EBB argument is ``v5`` which is *not* isself live into ``ebb1``,
+resolving the interference.
+
+The coalescing pass groups the SSA values into sets called *virtual registers*
+and inserts copies such that:
+
+1. Whenever a value is passed as an EBB argument, the corresponding EBB
+   parameter value belongs to the same virtual register as the passed argument
+   value.
+2. The live ranges of values belonging to the same virtual register do not
+   interfere, i.e. they don't overlap anywhere.
+
+Most virtual registers contains only a single isolated SSA value because most
+SSA values are never passed as EBB arguments. The ``VirtRegs`` data structure
+doesn't store any information about these singleton virtual registers, it only
+tracks larger virtual registers and assumes that any value it doesn't know about
+is its own singleton virtual register
+
+Once the values have been partitioned into interference-free virtual registers,
+the code is said to be in `conventional SSA form (CSSA)
+<http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.107.7249>`_. A program
+in CSSA form can be register allocated correctly by assigning all the values in
+a virtual register to the same stack or register location.
+
+Conventional SSA form and the virtual registers are maintained through all the
+register allocator passes.
+
 
 Spilling algorithm
 ==================
 
-There is no one way of implementing spilling, and different tradeoffs between
-compilation time and code quality are possible. Any spilling algorithm will
-need a way of tracking the register pressure so the colorability condition can
-be satisfied.
+The spilling pass is responsible for lowering the register pressure enough that
+the coloring pass is guaranteed to be able to find a coloring solution. It does
+this by assigning whole virtual registers to stack slots.
+
+Besides just counting registers, the spiller also has to look at the
+instruction's operand constraints because sometimes the constraints can require
+extra registers to solve, raising the register pressure:
+
+- If a single value is used more than once by an instruction, and the operands
+  have conflicting constraints, two registers must be used. The most common case is
+  when a single value is passed as two separate arguments to a function call.
+- If an instruction has a *tied operand constraint* where one of the input operands
+  must use the same register as the output operand, the spiller makes sure that
+  the tied input value doesn't interfere with the output value by inserting a copy
+  if needed.
+
+The spilling heuristic used by Cretonne is very simple. Whenever the spiller
+determines that the register pressure is too high at some instruction, it picks
+the live SSA value whose definition is farthest away as the spill candidate.
+Then it spills all values in the corresponding virtual register to the same
+spill slot. It is important that all values in a virtual register get the same
+spill slot, otherwise we could need memory-to-memory copies when passing spilled
+arguments to a spilled EBB parameter.
+
+This simple heuristic tends to spill values with long live ranges, and it
+depends on the reload pass to do a good job of reusing registers reloaded from
+spill slots if the spilled value gets used a lot. The idea is to minimize stack
+*write* traffic with the spilling heuristic and to minimize stack *read* traffic
+with the reload pass.
 
 Coloring algorithm
 ==================
@@ -223,7 +316,7 @@ instruction. At the top of an EBB, this set can be computed as the union of:
   instruction. The topological iteration order guarantees that this set is
   available. Values whose live range indicate that they are not live-in to the
   current EBB should be filtered out.
-- The set of arguments to the EBB. These values should all be live-in, although
+- The set of parameters the EBB. These values should all be live-in, although
   it is possible that some are dead and never used anywhere.
 
 For each live value, we also track its kill point in the current EBB. This is
