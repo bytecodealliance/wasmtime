@@ -226,7 +226,7 @@ The interference can be resolved by isolating the SSA values passed as EBB argum
         return v3
     }
 
-Now the EBB argument is ``v5`` which is *not* isself live into ``ebb1``,
+Now the EBB argument is ``v5`` which is *not* itself live into ``ebb1``,
 resolving the interference.
 
 The coalescing pass groups the SSA values into sets called *virtual registers*
