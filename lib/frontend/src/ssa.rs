@@ -484,6 +484,7 @@ where
                 // The variable is used but never defined before. This is an irregularity in the
                 // code, but rather than throwing an error we silently initialize the variable to
                 // 0. This will have no effect since this situation happens in unreachable code.
+                func.dfg.remove_ebb_param(temp_arg_val);
                 if !func.layout.is_ebb_inserted(dest_ebb) {
                     func.layout.append_ebb(dest_ebb)
                 };
@@ -654,7 +655,7 @@ where
 mod tests {
     use cretonne::cursor::{Cursor, FuncCursor};
     use cretonne::entity::EntityRef;
-    use cretonne::ir::{Function, InstBuilder, Inst, JumpTableData};
+    use cretonne::ir::{Function, InstBuilder, Inst, JumpTableData, Opcode};
     use cretonne::ir::types::*;
     use cretonne::verify_function;
     use cretonne::ir::instructions::BranchInfo;
@@ -1060,5 +1061,45 @@ mod tests {
         // in the right order.
         assert_eq!(func.dfg.ebb_params(ebb1)[1], y3);
         assert_eq!(func.dfg.ebb_params(ebb1)[0], x2);
+    }
+
+    #[test]
+    fn undef_in_entry() {
+        // Use a var which has not been defined. The search should hit the
+        // top of the entry block, and then fall back to inserting an iconst.
+        let mut func = Function::new();
+        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let ebb0 = func.dfg.make_ebb();
+        let block = ssa.declare_ebb_header_block(ebb0);
+        ssa.seal_ebb_header_block(ebb0, &mut func);
+        let x_var = Variable(0);
+        assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
+        ssa.use_var(&mut func, x_var, I32, block);
+        assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
+        assert_eq!(
+            func.dfg[func.layout.first_inst(ebb0).unwrap()].opcode(),
+            Opcode::Iconst
+        );
+    }
+
+    #[test]
+    fn undef_in_entry_sealed_after() {
+        // Use a var which has not been defined, but the block is not sealed
+        // until afterward. Before sealing, the SSA builder should insert an
+        // ebb param; after sealing, it should be removed.
+        let mut func = Function::new();
+        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let ebb0 = func.dfg.make_ebb();
+        let block = ssa.declare_ebb_header_block(ebb0);
+        let x_var = Variable(0);
+        assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
+        ssa.use_var(&mut func, x_var, I32, block);
+        assert_eq!(func.dfg.num_ebb_params(ebb0), 1);
+        ssa.seal_ebb_header_block(ebb0, &mut func);
+        assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
+        assert_eq!(
+            func.dfg[func.layout.first_inst(ebb0).unwrap()].opcode(),
+            Opcode::Iconst
+        );
     }
 }
