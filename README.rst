@@ -18,9 +18,6 @@ target-independent intermediate language into executable machine code.
 Cretonne is designed to be a code generator for WebAssembly with these design
 goals:
 
-No undefined behavior
-    Cretonne does not have a `nasal demons clause <http://www.catb.org/jargon/html/N/nasal-demons.html>`_, and it won't generate code
-    with unexpected behavior if invariants are broken.
 Portable semantics
     As far as possible, Cretonne's input language has well-defined semantics
     that are the same on all target architectures. The semantics are usually
@@ -28,8 +25,8 @@ Portable semantics
 Fast sandbox verification
     Cretonne's input language has a safe subset for sandboxed code. No advanced
     analysis is required to verify memory safety as long as only the safe
-    instructions are used. The safe instruction set is expressive enough to
-    implement WebAssembly.
+    subset is used. The safe subset is expressive enough to implement
+    WebAssembly.
 Scalable performance
     Cretonne can be configured to generate code as quickly as possible, or it
     can generate very good code at the cost of slower compile times.
