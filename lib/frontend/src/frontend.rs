@@ -529,14 +529,14 @@ where
     fn check_return_args(&self, args: &[Value]) {
         debug_assert_eq!(
             args.len(),
-            self.func.signature.return_types.len(),
+            self.func.signature.returns.len(),
             "the number of returned values doesn't match the function signature "
         );
         for (i, arg) in args.iter().enumerate() {
             let valty = self.func.dfg.value_type(*arg);
             debug_assert_eq!(
                 valty,
-                self.func.signature.return_types[i].value_type,
+                self.func.signature.returns[i].value_type,
                 "the types of the values returned don't match the \
                              function signature"
             );
@@ -545,7 +545,7 @@ where
 
     fn fill_function_args_values(&mut self, ebb: Ebb) {
         debug_assert!(self.pristine);
-        for argtyp in &self.func.signature.argument_types {
+        for argtyp in &self.func.signature.params {
             self.builder.function_args_values.push(
                 self.func.dfg.append_ebb_param(ebb, argtyp.value_type),
             );
@@ -621,7 +621,7 @@ where
 mod tests {
 
     use cretonne::entity::EntityRef;
-    use cretonne::ir::{FunctionName, Function, CallConv, Signature, ArgumentType, InstBuilder};
+    use cretonne::ir::{FunctionName, Function, CallConv, Signature, AbiParam, InstBuilder};
     use cretonne::ir::types::*;
     use frontend::{ILBuilder, FunctionBuilder};
     use cretonne::verifier::verify_function;
@@ -651,8 +651,8 @@ mod tests {
     #[test]
     fn sample_function() {
         let mut sig = Signature::new(CallConv::Native);
-        sig.return_types.push(ArgumentType::new(I32));
-        sig.argument_types.push(ArgumentType::new(I32));
+        sig.returns.push(AbiParam::new(I32));
+        sig.params.push(AbiParam::new(I32));
 
         let mut il_builder = ILBuilder::<Variable>::new();
         let mut func = Function::with_name_signature(FunctionName::new("sample_function"), sig);

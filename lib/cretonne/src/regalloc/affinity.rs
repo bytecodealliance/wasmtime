@@ -9,7 +9,7 @@
 //! larger register class instead.
 
 use std::fmt;
-use ir::{ArgumentType, ArgumentLoc};
+use ir::{AbiParam, ArgumentLoc};
 use isa::{TargetIsa, RegInfo, RegClassIndex, OperandConstraint, ConstraintKind};
 
 /// Preferred register allocation for an SSA value.
@@ -48,7 +48,7 @@ impl Affinity {
     }
 
     /// Create an affinity that matches an ABI argument for `isa`.
-    pub fn abi(arg: &ArgumentType, isa: &TargetIsa) -> Affinity {
+    pub fn abi(arg: &AbiParam, isa: &TargetIsa) -> Affinity {
         match arg.location {
             ArgumentLoc::Unassigned => Affinity::None,
             ArgumentLoc::Reg(_) => Affinity::Reg(isa.regclass_for_abi_type(arg.value_type).into()),

@@ -3,7 +3,7 @@
 //! This module provides functions and data structures that are useful for implementing the
 //! `TargetIsa::legalize_signature()` method.
 
-use ir::{ArgumentLoc, ArgumentType, ArgumentExtension, Type};
+use ir::{ArgumentLoc, AbiParam, ArgumentExtension, Type};
 use std::cmp::Ordering;
 
 /// Legalization action to perform on a single argument or return value when converting a
@@ -81,13 +81,13 @@ impl ValueConversion {
 /// This will be implemented by individual ISAs.
 pub trait ArgAssigner {
     /// Pick an assignment action for function argument (or return value) `arg`.
-    fn assign(&mut self, arg: &ArgumentType) -> ArgAction;
+    fn assign(&mut self, arg: &AbiParam) -> ArgAction;
 }
 
 /// Legalize the arguments in `args` using the given argument assigner.
 ///
 /// This function can be used for both arguments and return values.
-pub fn legalize_args<AA: ArgAssigner>(args: &mut Vec<ArgumentType>, aa: &mut AA) {
+pub fn legalize_args<AA: ArgAssigner>(args: &mut Vec<AbiParam>, aa: &mut AA) {
     // Iterate over the arguments.
     // We may need to mutate the vector in place, so don't use a normal iterator, and clone the
     // argument to avoid holding a reference.
@@ -108,7 +108,7 @@ pub fn legalize_args<AA: ArgAssigner>(args: &mut Vec<ArgumentType>, aa: &mut AA)
             }
             // Split this argument into two smaller ones. Then revisit both.
             ArgAction::Convert(conv) => {
-                let new_arg = ArgumentType {
+                let new_arg = AbiParam {
                     value_type: conv.apply(arg.value_type),
                     ..arg
                 };
@@ -143,7 +143,7 @@ pub fn legalize_args<AA: ArgAssigner>(args: &mut Vec<ArgumentType>, aa: &mut AA)
 /// It may be necessary to call `legalize_abi_value` more than once for a given argument before the
 /// desired argument type appears. This will happen when a vector or integer type needs to be split
 /// more than once, for example.
-pub fn legalize_abi_value(have: Type, arg: &ArgumentType) -> ValueConversion {
+pub fn legalize_abi_value(have: Type, arg: &AbiParam) -> ValueConversion {
     let have_bits = have.bits();
     let arg_bits = arg.value_type.bits();
 
@@ -186,11 +186,11 @@ pub fn legalize_abi_value(have: Type, arg: &ArgumentType) -> ValueConversion {
 mod tests {
     use super::*;
     use ir::types;
-    use ir::ArgumentType;
+    use ir::AbiParam;
 
     #[test]
     fn legalize() {
-        let mut arg = ArgumentType::new(types::I32);
+        let mut arg = AbiParam::new(types::I32);
 
         assert_eq!(
             legalize_abi_value(types::I64X2, &arg),

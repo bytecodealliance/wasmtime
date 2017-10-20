@@ -241,7 +241,7 @@ impl<'a> Verifier<'a> {
         let fixed_results = inst_data.opcode().constraints().fixed_results();
         // var_results is 0 if we aren't a call instruction
         let var_results = dfg.call_signature(inst)
-            .map(|sig| dfg.signatures[sig].return_types.len())
+            .map(|sig| dfg.signatures[sig].returns.len())
             .unwrap_or(0);
         let total_results = fixed_results + var_results;
 
@@ -551,9 +551,9 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn typecheck_entry_block_arguments(&self) -> Result {
+    fn typecheck_entry_block_params(&self) -> Result {
         if let Some(ebb) = self.func.layout.entry_block() {
-            let expected_types = &self.func.signature.argument_types;
+            let expected_types = &self.func.signature.params;
             let ebb_param_count = self.func.dfg.num_ebb_params(ebb);
 
             if ebb_param_count != expected_types.len() {
@@ -700,18 +700,16 @@ impl<'a> Verifier<'a> {
         match self.func.dfg[inst].analyze_call(&self.func.dfg.value_lists) {
             CallInfo::Direct(func_ref, _) => {
                 let sig_ref = self.func.dfg.ext_funcs[func_ref].signature;
-                let arg_types = self.func.dfg.signatures[sig_ref]
-                    .argument_types
-                    .iter()
-                    .map(|a| a.value_type);
+                let arg_types = self.func.dfg.signatures[sig_ref].params.iter().map(|a| {
+                    a.value_type
+                });
                 self.typecheck_variable_args_iterator(inst, arg_types)?;
                 self.check_outgoing_args(inst, sig_ref)?;
             }
             CallInfo::Indirect(sig_ref, _) => {
-                let arg_types = self.func.dfg.signatures[sig_ref]
-                    .argument_types
-                    .iter()
-                    .map(|a| a.value_type);
+                let arg_types = self.func.dfg.signatures[sig_ref].params.iter().map(|a| {
+                    a.value_type
+                });
                 self.typecheck_variable_args_iterator(inst, arg_types)?;
                 self.check_outgoing_args(inst, sig_ref)?;
             }
@@ -772,7 +770,7 @@ impl<'a> Verifier<'a> {
         }
 
         let args = self.func.dfg.inst_variable_args(inst);
-        let expected_args = &sig.argument_types[..];
+        let expected_args = &sig.params[..];
 
         for (&arg, &abi) in args.iter().zip(expected_args) {
             // Value types have already been checked by `typecheck_variable_args_iterator()`.
@@ -828,7 +826,7 @@ impl<'a> Verifier<'a> {
     fn typecheck_return(&self, inst: Inst) -> Result {
         if self.func.dfg[inst].opcode().is_return() {
             let args = self.func.dfg.inst_variable_args(inst);
-            let expected_types = &self.func.signature.return_types;
+            let expected_types = &self.func.signature.returns;
             if args.len() != expected_types.len() {
                 return err!(inst, "arguments of return must match function signature");
             }
@@ -1081,7 +1079,7 @@ impl<'a> Verifier<'a> {
 
     pub fn run(&self) -> Result {
         self.verify_global_vars()?;
-        self.typecheck_entry_block_arguments()?;
+        self.typecheck_entry_block_params()?;
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
                 self.ebb_integrity(ebb, inst)?;

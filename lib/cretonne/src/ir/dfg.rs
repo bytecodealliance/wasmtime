@@ -463,10 +463,10 @@ impl DataFlowGraph {
         // Get the call signature if this is a function call.
         if let Some(sig) = self.call_signature(inst) {
             // Create result values corresponding to the call return types.
-            let var_results = self.signatures[sig].return_types.len();
+            let var_results = self.signatures[sig].returns.len();
             total_results += var_results;
             for res_idx in 0..var_results {
-                let ty = self.signatures[sig].return_types[res_idx].value_type;
+                let ty = self.signatures[sig].returns[res_idx].value_type;
                 if let Some(Some(v)) = reuse.next() {
                     debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
                     self.attach_result(inst, v);
@@ -632,7 +632,7 @@ impl DataFlowGraph {
         // Not a fixed result, try to extract a return type from the call signature.
         self.call_signature(inst).and_then(|sigref| {
             self.signatures[sigref]
-                .return_types
+                .returns
                 .get(result_idx - fixed_results)
                 .map(|&arg| arg.value_type)
         })

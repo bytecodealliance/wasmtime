@@ -13,17 +13,17 @@ use std::str::FromStr;
 
 /// Function signature.
 ///
-/// The function signature describes the types of arguments and return values along with other
-/// details that are needed to call a function correctly.
+/// The function signature describes the types of formal parameters and return values along with
+/// other details that are needed to call a function correctly.
 ///
 /// A signature can optionally include ISA-specific ABI information which specifies exactly how
 /// arguments and return values are passed.
 #[derive(Clone, Debug)]
 pub struct Signature {
-    /// Types of the arguments passed to the function.
-    pub argument_types: Vec<ArgumentType>,
-    /// Types returned from the function.
-    pub return_types: Vec<ArgumentType>,
+    /// The arguments passed to the function.
+    pub params: Vec<AbiParam>,
+    /// Values returned from the function.
+    pub returns: Vec<AbiParam>,
 
     /// Calling convention.
     pub call_conv: CallConv,
@@ -31,7 +31,7 @@ pub struct Signature {
     /// When the signature has been legalized to a specific ISA, this holds the size of the
     /// argument array on the stack. Before legalization, this is `None`.
     ///
-    /// This can be computed from the legalized `argument_types` array as the maximum (offset plus
+    /// This can be computed from the legalized `params` array as the maximum (offset plus
     /// byte size) of the `ArgumentLoc::Stack(offset)` argument.
     pub argument_bytes: Option<u32>,
 }
@@ -40,8 +40,8 @@ impl Signature {
     /// Create a new blank signature.
     pub fn new(call_conv: CallConv) -> Signature {
         Signature {
-            argument_types: Vec::new(),
-            return_types: Vec::new(),
+            params: Vec::new(),
+            returns: Vec::new(),
             call_conv,
             argument_bytes: None,
         }
@@ -49,18 +49,18 @@ impl Signature {
 
     /// Clear the signature so it is identical to a fresh one returned by `new()`.
     pub fn clear(&mut self, call_conv: CallConv) {
-        self.argument_types.clear();
-        self.return_types.clear();
+        self.params.clear();
+        self.returns.clear();
         self.call_conv = call_conv;
         self.argument_bytes = None;
     }
 
     /// Compute the size of the stack arguments and mark signature as legalized.
     ///
-    /// Even if there are no stack arguments, this will set `argument_types` to `Some(0)` instead
+    /// Even if there are no stack arguments, this will set `params` to `Some(0)` instead
     /// of `None`. This indicates that the signature has been legalized.
     pub fn compute_argument_bytes(&mut self) {
-        let bytes = self.argument_types
+        let bytes = self.params
             .iter()
             .filter_map(|arg| match arg.location {
                 ArgumentLoc::Stack(offset) if offset >= 0 => {
@@ -77,22 +77,16 @@ impl Signature {
         DisplaySignature(self, regs.into())
     }
 
-    /// Find the index of a presumed unique special-purpose argument.
-    pub fn special_arg_index(&self, purpose: ArgumentPurpose) -> Option<usize> {
-        self.argument_types.iter().rposition(
-            |arg| arg.purpose == purpose,
-        )
+    /// Find the index of a presumed unique special-purpose parameter.
+    pub fn special_param_index(&self, purpose: ArgumentPurpose) -> Option<usize> {
+        self.params.iter().rposition(|arg| arg.purpose == purpose)
     }
 }
 
 /// Wrapper type capable of displaying a `Signature` with correct register names.
 pub struct DisplaySignature<'a>(&'a Signature, Option<&'a RegInfo>);
 
-fn write_list(
-    f: &mut fmt::Formatter,
-    args: &[ArgumentType],
-    regs: Option<&RegInfo>,
-) -> fmt::Result {
+fn write_list(f: &mut fmt::Formatter, args: &[AbiParam], regs: Option<&RegInfo>) -> fmt::Result {
     match args.split_first() {
         None => {}
         Some((first, rest)) => {
@@ -108,11 +102,11 @@ fn write_list(
 impl<'a> fmt::Display for DisplaySignature<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "(")?;
-        write_list(f, &self.0.argument_types, self.1)?;
+        write_list(f, &self.0.params, self.1)?;
         write!(f, ")")?;
-        if !self.0.return_types.is_empty() {
+        if !self.0.returns.is_empty() {
             write!(f, " -> ")?;
-            write_list(f, &self.0.return_types, self.1)?;
+            write_list(f, &self.0.returns, self.1)?;
         }
         write!(f, " {}", self.0.call_conv)
     }
@@ -124,12 +118,12 @@ impl fmt::Display for Signature {
     }
 }
 
-/// Function argument or return value type.
+/// Function parameter or return value descriptor.
 ///
 /// This describes the value type being passed to or from a function along with flags that affect
 /// how the argument is passed.
 #[derive(Copy, Clone, Debug)]
-pub struct ArgumentType {
+pub struct AbiParam {
     /// Type of the argument value.
     pub value_type: Type,
     /// Special purpose of argument, or `Normal`.
@@ -142,10 +136,10 @@ pub struct ArgumentType {
     pub location: ArgumentLoc,
 }
 
-impl ArgumentType {
-    /// Create an argument type with default flags.
-    pub fn new(vt: Type) -> ArgumentType {
-        ArgumentType {
+impl AbiParam {
+    /// Create a parameter with default flags.
+    pub fn new(vt: Type) -> AbiParam {
+        AbiParam {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose: ArgumentPurpose::Normal,
@@ -153,9 +147,9 @@ impl ArgumentType {
         }
     }
 
-    /// Create a special-purpose argument type that is not (yet) bound to a specific register.
-    pub fn special(vt: Type, purpose: ArgumentPurpose) -> ArgumentType {
-        ArgumentType {
+    /// Create a special-purpose parameter that is not (yet) bound to a specific register.
+    pub fn special(vt: Type, purpose: ArgumentPurpose) -> AbiParam {
+        AbiParam {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose,
@@ -163,9 +157,9 @@ impl ArgumentType {
         }
     }
 
-    /// Create an argument type for a special-purpose register.
-    pub fn special_reg(vt: Type, purpose: ArgumentPurpose, regunit: RegUnit) -> ArgumentType {
-        ArgumentType {
+    /// Create a parameter for a special-purpose register.
+    pub fn special_reg(vt: Type, purpose: ArgumentPurpose, regunit: RegUnit) -> AbiParam {
+        AbiParam {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose,
@@ -173,34 +167,34 @@ impl ArgumentType {
         }
     }
 
-    /// Convert `self` to an argument type with the `uext` flag set.
-    pub fn uext(self) -> ArgumentType {
+    /// Convert `self` to a parameter with the `uext` flag set.
+    pub fn uext(self) -> AbiParam {
         debug_assert!(self.value_type.is_int(), "uext on {} arg", self.value_type);
-        ArgumentType {
+        AbiParam {
             extension: ArgumentExtension::Uext,
             ..self
         }
     }
 
-    /// Convert `self` to an argument type with the `sext` flag set.
-    pub fn sext(self) -> ArgumentType {
+    /// Convert `self` to a parameter type with the `sext` flag set.
+    pub fn sext(self) -> AbiParam {
         debug_assert!(self.value_type.is_int(), "sext on {} arg", self.value_type);
-        ArgumentType {
+        AbiParam {
             extension: ArgumentExtension::Sext,
             ..self
         }
     }
 
     /// Return an object that can display `self` with correct register names.
-    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&'a self, regs: R) -> DisplayArgumentType<'a> {
-        DisplayArgumentType(self, regs.into())
+    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&'a self, regs: R) -> DisplayAbiParam<'a> {
+        DisplayAbiParam(self, regs.into())
     }
 }
 
-/// Wrapper type capable of displaying an `ArgumentType` with correct register names.
-pub struct DisplayArgumentType<'a>(&'a ArgumentType, Option<&'a RegInfo>);
+/// Wrapper type capable of displaying a `AbiParam` with correct register names.
+pub struct DisplayAbiParam<'a>(&'a AbiParam, Option<&'a RegInfo>);
 
-impl<'a> fmt::Display for DisplayArgumentType<'a> {
+impl<'a> fmt::Display for DisplayAbiParam<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0.value_type)?;
         match self.0.extension {
@@ -220,7 +214,7 @@ impl<'a> fmt::Display for DisplayArgumentType<'a> {
     }
 }
 
-impl fmt::Display for ArgumentType {
+impl fmt::Display for AbiParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.display(None).fmt(f)
     }
@@ -387,7 +381,7 @@ mod tests {
 
     #[test]
     fn argument_type() {
-        let t = ArgumentType::new(I32);
+        let t = AbiParam::new(I32);
         assert_eq!(t.to_string(), "i32");
         let mut t = t.uext();
         assert_eq!(t.to_string(), "i32 uext");
@@ -423,25 +417,23 @@ mod tests {
     fn signatures() {
         let mut sig = Signature::new(CallConv::SpiderWASM);
         assert_eq!(sig.to_string(), "() spiderwasm");
-        sig.argument_types.push(ArgumentType::new(I32));
+        sig.params.push(AbiParam::new(I32));
         assert_eq!(sig.to_string(), "(i32) spiderwasm");
-        sig.return_types.push(ArgumentType::new(F32));
+        sig.returns.push(AbiParam::new(F32));
         assert_eq!(sig.to_string(), "(i32) -> f32 spiderwasm");
-        sig.argument_types.push(
-            ArgumentType::new(I32.by(4).unwrap()),
-        );
+        sig.params.push(AbiParam::new(I32.by(4).unwrap()));
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32 spiderwasm");
-        sig.return_types.push(ArgumentType::new(B8));
+        sig.returns.push(AbiParam::new(B8));
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8 spiderwasm");
 
         // Test the offset computation algorithm.
         assert_eq!(sig.argument_bytes, None);
-        sig.argument_types[1].location = ArgumentLoc::Stack(8);
+        sig.params[1].location = ArgumentLoc::Stack(8);
         sig.compute_argument_bytes();
         // An `i32x4` at offset 8 requires a 24-byte argument array.
         assert_eq!(sig.argument_bytes, Some(24));
         // Order does not matter.
-        sig.argument_types[0].location = ArgumentLoc::Stack(24);
+        sig.params[0].location = ArgumentLoc::Stack(24);
         sig.compute_argument_bytes();
         assert_eq!(sig.argument_bytes, Some(28));
 

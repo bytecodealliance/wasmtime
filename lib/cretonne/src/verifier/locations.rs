@@ -129,7 +129,7 @@ impl<'a> LocationVerifier<'a> {
         let varargs = self.func.dfg.inst_variable_args(inst);
         let results = self.func.dfg.inst_results(inst);
 
-        for (abi, &value) in sig.argument_types.iter().zip(varargs) {
+        for (abi, &value) in sig.params.iter().zip(varargs) {
             self.check_abi_location(
                 inst,
                 value,
@@ -139,7 +139,7 @@ impl<'a> LocationVerifier<'a> {
             )?;
         }
 
-        for (abi, &value) in sig.return_types.iter().zip(results) {
+        for (abi, &value) in sig.returns.iter().zip(results) {
             self.check_abi_location(
                 inst,
                 value,
@@ -157,7 +157,7 @@ impl<'a> LocationVerifier<'a> {
         let sig = &self.func.signature;
         let varargs = self.func.dfg.inst_variable_args(inst);
 
-        for (abi, &value) in sig.return_types.iter().zip(varargs) {
+        for (abi, &value) in sig.returns.iter().zip(varargs) {
             self.check_abi_location(
                 inst,
                 value,
@@ -175,7 +175,7 @@ impl<'a> LocationVerifier<'a> {
         &self,
         inst: ir::Inst,
         value: ir::Value,
-        abi: &ir::ArgumentType,
+        abi: &ir::AbiParam,
         loc: ir::ValueLoc,
         want_kind: ir::StackSlotKind,
     ) -> Result {

@@ -324,7 +324,7 @@ impl<'a> Context<'a> {
         let args = self.cur.func.dfg.inst_variable_args(inst);
         for (idx, (abi, &arg)) in
             self.cur.func.dfg.signatures[sig]
-                .argument_types
+                .params
                 .iter()
                 .zip(args)
                 .enumerate()

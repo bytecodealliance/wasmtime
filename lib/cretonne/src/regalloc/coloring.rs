@@ -45,7 +45,7 @@
 use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
 use ir::{Ebb, Inst, Value, Function, ValueLoc, SigRef};
-use ir::{InstBuilder, ArgumentType, ArgumentLoc, ValueDef};
+use ir::{InstBuilder, AbiParam, ArgumentLoc, ValueDef};
 use isa::{RegUnit, RegClass, RegInfo, regs_overlap};
 use isa::{TargetIsa, EncInfo, RecipeConstraints, OperandConstraint, ConstraintKind};
 use packed_option::PackedOption;
@@ -188,10 +188,10 @@ impl<'a> Context<'a> {
         );
 
         if self.cur.func.layout.entry_block() == Some(ebb) {
-            // Arguments to the entry block have ABI constraints.
-            self.color_entry_args(tracker.live())
+            // Parameters on the entry block have ABI constraints.
+            self.color_entry_params(tracker.live())
         } else {
-            // The live-ins and arguments to a non-entry EBB have already been assigned a register.
+            // The live-ins and parameters of a non-entry EBB have already been assigned a register.
             // Reconstruct the allocatable set.
             self.livein_regs(tracker.live())
         }
@@ -230,19 +230,19 @@ impl<'a> Context<'a> {
         regs
     }
 
-    /// Color the arguments to the entry block.
+    /// Color the parameters on the entry block.
     ///
-    /// These are function arguments that should already have assigned register units in the
+    /// These are function parameters that should already have assigned register units in the
     /// function signature.
     ///
     /// Return the set of remaining allocatable registers after filtering out the dead arguments.
-    fn color_entry_args(&mut self, args: &[LiveValue]) -> AvailableRegs {
+    fn color_entry_params(&mut self, args: &[LiveValue]) -> AvailableRegs {
         let sig = &self.cur.func.signature;
-        assert_eq!(sig.argument_types.len(), args.len());
+        assert_eq!(sig.params.len(), args.len());
 
         let mut regs = AvailableRegs::new(&self.usable_regs);
 
-        for (lv, abi) in args.iter().zip(&sig.argument_types) {
+        for (lv, abi) in args.iter().zip(&sig.params) {
             match lv.affinity {
                 Affinity::Reg(rci) => {
                     let rc = self.reginfo.rc(rci);
@@ -305,7 +305,7 @@ impl<'a> Context<'a> {
             program_input_abi(
                 &mut self.solver,
                 inst,
-                &self.cur.func.dfg.signatures[sig].argument_types,
+                &self.cur.func.dfg.signatures[sig].params,
                 &self.cur.func,
                 &self.liveness,
                 &self.reginfo,
@@ -315,7 +315,7 @@ impl<'a> Context<'a> {
             program_input_abi(
                 &mut self.solver,
                 inst,
-                &self.cur.func.signature.return_types,
+                &self.cur.func.signature.returns,
                 &self.cur.func,
                 &self.liveness,
                 &self.reginfo,
@@ -687,12 +687,9 @@ impl<'a> Context<'a> {
         // It's technically possible for a call instruction to have fixed results before the
         // variable list of results, but we have no known instances of that.
         // Just assume all results are variable return values.
-        assert_eq!(
-            defs.len(),
-            self.cur.func.dfg.signatures[sig].return_types.len()
-        );
+        assert_eq!(defs.len(), self.cur.func.dfg.signatures[sig].returns.len());
         for (i, lv) in defs.iter().enumerate() {
-            let abi = self.cur.func.dfg.signatures[sig].return_types[i];
+            let abi = self.cur.func.dfg.signatures[sig].returns[i];
             if let ArgumentLoc::Reg(reg) = abi.location {
                 if let Affinity::Reg(rci) = lv.affinity {
                     let rc = self.reginfo.rc(rci);
@@ -1015,7 +1012,7 @@ impl<'a> Context<'a> {
 fn program_input_abi(
     solver: &mut Solver,
     inst: Inst,
-    abi_types: &[ArgumentType],
+    abi_types: &[AbiParam],
     func: &Function,
     liveness: &Liveness,
     reginfo: &RegInfo,

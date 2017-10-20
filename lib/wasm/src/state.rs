@@ -158,7 +158,7 @@ impl TranslationState {
         self.clear();
         self.push_block(
             exit_block,
-            sig.return_types
+            sig.returns
                 .iter()
                 .filter(|arg| arg.purpose == ir::ArgumentPurpose::Normal)
                 .count(),
@@ -323,10 +323,10 @@ impl TranslationState {
     }
 }
 
-/// Count the number of normal arguments in a signature.
-/// Exclude special-purpose arguments that represent runtime stuff and not WebAssembly arguments.
+/// Count the number of normal parameters in a signature.
+/// Exclude special-purpose parameters that represent runtime stuff and not WebAssembly arguments.
 fn normal_args(sig: &ir::Signature) -> usize {
-    sig.argument_types
+    sig.params
         .iter()
         .filter(|arg| arg.purpose == ir::ArgumentPurpose::Normal)
         .count()
