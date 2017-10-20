@@ -39,7 +39,7 @@ Predictable performance
     that sometimes work, sometimes fail.
 
 For more information, see
-`the documenation <https://cretonne.readthedocs.io/en/latest/?badge=latest>`_.
+`the documentation <https://cretonne.readthedocs.io/en/latest/?badge=latest>`_.
 
 Building Cretonne
 -----------------
