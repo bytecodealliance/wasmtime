@@ -429,17 +429,24 @@ Indirect function calls use a signature declared in the preamble.
 .. autoinst:: call_indirect
 .. autoinst:: func_addr
 
+.. _memory:
 
 Memory
 ======
 
 Cretonne provides fully general :inst:`load` and :inst:`store` instructions for
 accessing memory, as well as :ref:`extending loads and truncating stores
-<extload-truncstore>`. There are also more restricted operations for accessing
-specific types of memory objects.
+<extload-truncstore>`.
+
+If the memory at the given addresss is not :term:`addressable`, the behavior of
+these instructions is undefined. If it is addressable but not
+:term:`accessible`, they :term:`trap`.
 
 .. autoinst:: load
 .. autoinst:: store
+
+There are also more restricted operations for accessing specific types of memory
+objects.
 
 Memory operation flags
 ----------------------
@@ -447,23 +454,20 @@ Memory operation flags
 Loads and stores can have flags that loosen their semantics in order to enable
 optimizations.
 
-======= =========================================
+======= ===========================================
 Flag    Description
-======= =========================================
-notrap  Trapping is not required.
+======= ===========================================
+notrap  Memory is assumed to be :term:`accessible`.
 aligned Trapping allowed for misaligned accesses.
-======= =========================================
+======= ===========================================
 
-Trapping is part of the semantics of memory accesses. The operating system may
-have configured parts of the address space to cause a trap when read and/or
-written, and Cretonne's memory instructions respect that. When the ``notrap``
-flat is set, the trapping behavior is optional. This allows the optimizer to
-delete loads whose results are not used.
+When the ``accessible`` flag is set, the behavior is undefined if the memory
+is not :term:`accessible`.
 
 Loads and stores are *misaligned* if the resultant address is not a multiple of
 the expected alignment. By default, misaligned loads and stores are allowed,
 but when the ``aligned`` flag is set, a misaligned memory access is allowed to
-trap.
+:term:`trap`.
 
 Local variables
 ---------------
@@ -471,7 +475,8 @@ Local variables
 One set of restricted memory operations access the current function's stack
 frame. The stack frame is divided into fixed-size stack slots that are
 allocated in the :term:`function preamble`. Stack slots are not typed, they
-simply represent a contiguous sequence of bytes in the stack frame.
+simply represent a contiguous sequence of :term:`accessible` bytes in the stack
+frame.
 
 .. inst:: SS = local Bytes, Flags...
 
@@ -492,8 +497,8 @@ about because stack slots and offsets are fixed at compile time. For example,
 the alignment of these stack memory accesses can be inferred from the offsets
 and stack slot alignments.
 
-It can be necessary to escape from the safety of the restricted instructions by
-taking the address of a stack slot.
+It can be necessary to escape from the :term:`safety` of the restricted
+instructions by taking the address of a stack slot.
 
 .. autoinst:: stack_addr
 
@@ -508,12 +513,12 @@ instructions before instruction selection::
 Global variables
 ----------------
 
-A *global variable* is an object in memory whose address is not known at
-compile time. The address is computed at runtime by :inst:`global_addr`,
-possibly using information provided by the linker via relocations. There are
-multiple kinds of global variables using different methods for determining
-their address. Cretonne does not track the type or even the size of global
-variables, they are just pointers to non-stack memory.
+A *global variable* is an :term:`accessible` object in memory whose address is
+not known at compile time. The address is computed at runtime by
+:inst:`global_addr`, possibly using information provided by the linker via
+relocations. There are multiple kinds of global variables using different
+methods for determining their address. Cretonne does not track the type or even
+the size of global variables, they are just pointers to non-stack memory.
 
 When Cretonne is generating code for a virtual machine environment, globals can
 be used to access data structures in the VM's runtime. This requires functions
@@ -570,9 +575,9 @@ in, and all accesses are bounds checked. Cretonne models this through the
 concept of *heaps*.
 
 A heap is declared in the function preamble and can be accessed with the
-:inst:`heap_addr` instruction that traps on out-of-bounds accesses or returns a
-pointer that is guaranteed to trap. Heap addresses can be smaller than the
-native pointer size, for example unsigned :type:`i32` offsets on a 64-bit
+:inst:`heap_addr` instruction that :term:`traps` on out-of-bounds accesses or
+returns a pointer that is guaranteed to trap. Heap addresses can be smaller than
+the native pointer size, for example unsigned :type:`i32` offsets on a 64-bit
 architecture.
 
 .. digraph:: static
@@ -588,18 +593,21 @@ architecture.
 
 A heap appears as three consecutive ranges of address space:
 
-1. The *mapped pages* are the usable memory range in the heap. Loads and stores
-   to this range won't trap. A heap may have a minimum guaranteed size which
-   means that some mapped pages are always present.
+1. The *mapped pages* are the :term:`accessible` memory range in the heap. A
+   heap may have a minimum guaranteed size which means that some mapped pages
+   are always present.
 2. The *unmapped pages* is a possibly empty range of address space that may be
-   mapped in the future when the heap is grown.
+   mapped in the future when the heap is grown. They are :term:`addressable` but
+   not :term:`accessible`.
 3. The *guard pages* is a range of address space that is guaranteed to cause a
    trap when accessed. It is used to optimize bounds checking for heap accesses
-   with a shared base pointer.
+   with a shared base pointer. They are :term:`addressable` but
+   not :term:`accessible`.
 
 The *heap bound* is the total size of the mapped and unmapped pages. This is
 the bound that :inst:`heap_addr` checks against. Memory accesses inside the
-heap bounds can trap if they hit an unmapped page.
+heap bounds can trap if they hit an unmapped page (which is not
+:term:`accessible`).
 
 .. autoinst:: heap_addr
 
@@ -920,6 +928,9 @@ In addition to the normal :inst:`load` and :inst:`store` instructions, Cretonne
 provides extending loads and truncation stores for 8, 16, and 32-bit memory
 accesses.
 
+These instructions succeed, trap, or have undefined behavior, under the same
+conditions as :ref:`normal loads and stores <memory>`.
+
 .. autoinst:: uload8
 .. autoinst:: sload8
 .. autoinst:: istore8
@@ -1009,6 +1020,19 @@ Glossary
 
 .. glossary::
 
+    addressable
+        Memory in which loads and stores have defined behavior. They either
+        succeed or :term:`trap`, depending on whether the memory is
+        :term:`accessible`.
+
+    accessible
+        :term:`Addressable` memory in which loads and stores always succeed
+        without :term:`trapping`, except where specified otherwise (eg. with the
+        `aligned` flag). Heaps, globals, and the stack may contain accessible,
+        merely addressable, and outright unaddressable regions. There may also
+        be additional regions of addressable and/or accessible memory not
+        explicitly declared.
+
     basic block
         A maximal sequence of instructions that can only be entered from the
         top, and that contains no branch or terminator instructions except for
@@ -1089,6 +1113,15 @@ Glossary
         intermediate representation. Cretonne's IR can be converted to text
         losslessly.
 
+    safe
+    safety
+        Execution of exclusively defined behavior. Safe programs cannot
+        read, write, or execute memory outside of heaps, globals, stack
+        regions, and functions that have been explicitly provided to them. In
+        some instances, defined behavior can be nondeterministic, where the
+        specific behavior may vary among a bounded set of possibilities.
+        Execution of undefined behavior is unsafe.
+
     stack slot
         A fixed size memory allocation in the current function's activation
         frame. Also called a local variable.
@@ -1101,3 +1134,11 @@ Glossary
         The basic terminator instructions are :inst:`br`, :inst:`return`, and
         :inst:`trap`. Conditional branches and instructions that trap
         conditionally are not terminator instructions.
+
+    trap
+    traps
+    trapping
+        Terminates execution of the current thread. The specific behavior after
+        a trap depends on the underlying OS. For example, a common behavior is
+        delivery of a signal, with the specific signal depending on the event
+        that triggered it.
