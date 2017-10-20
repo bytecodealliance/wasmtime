@@ -9,7 +9,7 @@
 //! interpreted on the fly.
 use translation_utils::{type_to_type, TableIndex, FunctionIndex, GlobalIndex, SignatureIndex,
                         MemoryIndex, Global, GlobalInit, Table, TableElementType, Memory};
-use cretonne::ir::{Signature, ArgumentType, CallConv};
+use cretonne::ir::{Signature, AbiParam, CallConv};
 use cretonne;
 use wasmparser::{Parser, ParserState, FuncType, ImportSectionEntryType, ExternalKind, WasmDecoder,
                  MemoryType, Operator};
@@ -35,17 +35,17 @@ pub fn parse_function_signatures(
                                               ref returns,
                                           }) => {
                 let mut sig = Signature::new(CallConv::Native);
-                sig.argument_types.extend(params.iter().map(|ty| {
+                sig.params.extend(params.iter().map(|ty| {
                     let cret_arg: cretonne::ir::Type = type_to_type(ty).expect(
                         "only numeric types are supported in function signatures",
                     );
-                    ArgumentType::new(cret_arg)
+                    AbiParam::new(cret_arg)
                 }));
-                sig.return_types.extend(returns.iter().map(|ty| {
+                sig.returns.extend(returns.iter().map(|ty| {
                     let cret_arg: cretonne::ir::Type = type_to_type(ty).expect(
                         "only numeric types are supported in function signatures",
                     );
-                    ArgumentType::new(cret_arg)
+                    AbiParam::new(cret_arg)
                 }));
                 environ.declare_signature(&sig);
             }

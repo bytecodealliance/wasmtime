@@ -216,7 +216,7 @@ fn get_or_create<'a>(
                     .or_else(|| {
                         // If this is a call, get the return value affinity.
                         func.dfg.call_signature(inst).map(|sig| {
-                            Affinity::abi(&func.dfg.signatures[sig].return_types[rnum], isa)
+                            Affinity::abi(&func.dfg.signatures[sig].returns[rnum], isa)
                         })
                     })
                     .unwrap_or_default();
@@ -226,7 +226,7 @@ fn get_or_create<'a>(
                 if func.layout.entry_block() == Some(ebb) {
                     // The affinity for entry block parameters can be inferred from the function
                     // signature.
-                    affinity = Affinity::abi(&func.signature.argument_types[num], isa);
+                    affinity = Affinity::abi(&func.signature.params[num], isa);
                 } else {
                     // Don't apply any affinity to normal EBB parameters.
                     // They could be in a register or on the stack.

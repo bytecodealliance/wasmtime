@@ -6,7 +6,7 @@ use regalloc::AllocatableSet;
 use settings as shared_settings;
 use super::registers::{GPR, FPR, RU};
 use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
-use ir::{ArgumentType, ArgumentPurpose, ArgumentLoc, ArgumentExtension};
+use ir::{AbiParam, ArgumentPurpose, ArgumentLoc, ArgumentExtension};
 
 /// Argument registers for x86-64
 static ARG_GPRS: [RU; 6] = [RU::rdi, RU::rsi, RU::rdx, RU::rcx, RU::r8, RU::r9];
@@ -41,7 +41,7 @@ impl Args {
 }
 
 impl ArgAssigner for Args {
-    fn assign(&mut self, arg: &ArgumentType) -> ArgAction {
+    fn assign(&mut self, arg: &AbiParam) -> ArgAction {
         let ty = arg.value_type;
 
         // Check for a legal type.
@@ -117,10 +117,10 @@ pub fn legalize_signature(sig: &mut ir::Signature, flags: &shared_settings::Flag
         args = Args::new(bits, &[], 0);
     }
 
-    legalize_args(&mut sig.argument_types, &mut args);
+    legalize_args(&mut sig.params, &mut args);
 
     let mut rets = Args::new(bits, &RET_GPRS, 2);
-    legalize_args(&mut sig.return_types, &mut rets);
+    legalize_args(&mut sig.returns, &mut rets);
 }
 
 /// Get register class for a type appearing in a legalized signature.

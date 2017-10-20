@@ -144,12 +144,12 @@ impl Function {
         DisplayFunction(self, isa.into())
     }
 
-    /// Find a presumed unique special-purpose function argument value.
+    /// Find a presumed unique special-purpose function parameter value.
     ///
-    /// Returns the value of the last `purpose` argument, or `None` if no such argument exists.
-    pub fn special_arg(&self, purpose: ir::ArgumentPurpose) -> Option<ir::Value> {
+    /// Returns the value of the last `purpose` parameter, or `None` if no such parameter exists.
+    pub fn special_param(&self, purpose: ir::ArgumentPurpose) -> Option<ir::Value> {
         let entry = self.layout.entry_block().expect("Function is empty");
-        self.signature.special_arg_index(purpose).map(|i| {
+        self.signature.special_param_index(purpose).map(|i| {
             self.dfg.ebb_params(entry)[i]
         })
     }

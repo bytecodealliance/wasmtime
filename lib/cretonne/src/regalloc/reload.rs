@@ -13,7 +13,7 @@ use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
 use entity::{SparseMap, SparseMapValue};
 use ir::{Ebb, Inst, Value, Function};
-use ir::{InstBuilder, ArgumentType, ArgumentLoc};
+use ir::{InstBuilder, AbiParam, ArgumentLoc};
 use isa::RegClass;
 use isa::{TargetIsa, Encoding, EncInfo, RecipeConstraints, ConstraintKind};
 use regalloc::affinity::Affinity;
@@ -137,20 +137,20 @@ impl<'a> Context<'a> {
 
         if self.cur.func.layout.entry_block() == Some(ebb) {
             assert_eq!(liveins.len(), 0);
-            self.visit_entry_args(ebb, args);
+            self.visit_entry_params(ebb, args);
         } else {
             self.visit_ebb_params(ebb, args);
         }
     }
 
-    /// Visit the arguments to the entry block.
+    /// Visit the parameters on the entry block.
     /// These values have ABI constraints from the function signature.
-    fn visit_entry_args(&mut self, ebb: Ebb, args: &[LiveValue]) {
-        assert_eq!(self.cur.func.signature.argument_types.len(), args.len());
+    fn visit_entry_params(&mut self, ebb: Ebb, args: &[LiveValue]) {
+        assert_eq!(self.cur.func.signature.params.len(), args.len());
         self.cur.goto_first_inst(ebb);
 
         for (arg_idx, arg) in args.iter().enumerate() {
-            let abi = self.cur.func.signature.argument_types[arg_idx];
+            let abi = self.cur.func.signature.params[arg_idx];
             match abi.location {
                 ArgumentLoc::Reg(_) => {
                     if arg.affinity.is_stack() {
@@ -266,7 +266,7 @@ impl<'a> Context<'a> {
                 "Extra results on non-call instruction",
             );
             for (i, lv) in retvals.iter().enumerate() {
-                let abi = self.cur.func.dfg.signatures[sig].return_types[i];
+                let abi = self.cur.func.dfg.signatures[sig].returns[i];
                 debug_assert!(abi.location.is_reg());
                 if lv.affinity.is_stack() {
                     let reg = self.cur.func.dfg.replace_result(lv.value, abi.value_type);
@@ -308,7 +308,7 @@ impl<'a> Context<'a> {
         if let Some(sig) = self.cur.func.dfg.call_signature(inst) {
             handle_abi_args(
                 self.candidates,
-                &self.cur.func.dfg.signatures[sig].argument_types,
+                &self.cur.func.dfg.signatures[sig].params,
                 var_args,
                 self.cur.isa,
                 self.liveness,
@@ -316,7 +316,7 @@ impl<'a> Context<'a> {
         } else if self.cur.func.dfg[inst].opcode().is_return() {
             handle_abi_args(
                 self.candidates,
-                &self.cur.func.signature.return_types,
+                &self.cur.func.signature.returns,
                 var_args,
                 self.cur.isa,
                 self.liveness,
@@ -348,7 +348,7 @@ impl<'a> Context<'a> {
 /// return values and call arguments.
 fn handle_abi_args(
     candidates: &mut Vec<ReloadCandidate>,
-    abi_types: &[ArgumentType],
+    abi_types: &[AbiParam],
     var_args: &[Value],
     isa: &TargetIsa,
     liveness: &Liveness,

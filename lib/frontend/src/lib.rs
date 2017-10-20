@@ -36,7 +36,7 @@
 //! extern crate cton_frontend;
 //!
 //! use cretonne::entity::EntityRef;
-//! use cretonne::ir::{FunctionName, CallConv, Function, Signature, ArgumentType, InstBuilder};
+//! use cretonne::ir::{FunctionName, CallConv, Function, Signature, AbiParam, InstBuilder};
 //! use cretonne::ir::types::*;
 //! use cretonne::settings;
 //! use cton_frontend::{ILBuilder, FunctionBuilder};
@@ -64,8 +64,8 @@
 //!
 //! fn main() {
 //!     let mut sig = Signature::new(CallConv::Native);
-//!     sig.return_types.push(ArgumentType::new(I32));
-//!     sig.argument_types.push(ArgumentType::new(I32));
+//!     sig.returns.push(AbiParam::new(I32));
+//!     sig.params.push(AbiParam::new(I32));
 //!     let mut il_builder = ILBuilder::<Variable>::new();
 //!     let mut func = Function::with_name_signature(FunctionName::new("sample_function"), sig);
 //!     {

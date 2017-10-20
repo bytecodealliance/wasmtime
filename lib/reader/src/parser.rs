@@ -10,9 +10,9 @@ use std::str::FromStr;
 use std::{u16, u32};
 use std::mem;
 use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, CallConv, StackSlotData,
-                   JumpTable, JumpTableData, Signature, ArgumentType, ArgumentExtension,
-                   ExtFuncData, SigRef, FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags,
-                   GlobalVar, GlobalVarData, Heap, HeapData, HeapStyle, HeapBase};
+                   JumpTable, JumpTableData, Signature, AbiParam, ArgumentExtension, ExtFuncData,
+                   SigRef, FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags, GlobalVar,
+                   GlobalVarData, Heap, HeapData, HeapStyle, HeapBase};
 use cretonne::ir;
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Uimm32, Offset32, Ieee32, Ieee64};
@@ -918,7 +918,7 @@ impl<'a> Parser<'a> {
 
     // Parse a function signature.
     //
-    // signature ::=  * "(" [arglist] ")" ["->" retlist] [callconv]
+    // signature ::=  * "(" [paramlist] ")" ["->" retlist] [callconv]
     //
     fn parse_signature(&mut self, unique_isa: Option<&TargetIsa>) -> Result<Signature> {
         // Calling convention defaults to `native`, but can be changed.
@@ -928,16 +928,16 @@ impl<'a> Parser<'a> {
             Token::LPar,
             "expected function signature: ( args... )",
         )?;
-        // signature ::=  "(" * [arglist] ")" ["->" retlist] [callconv]
+        // signature ::=  "(" * [abi-param-list] ")" ["->" retlist] [callconv]
         if self.token() != Some(Token::RPar) {
-            sig.argument_types = self.parse_argument_list(unique_isa)?;
+            sig.params = self.parse_abi_param_list(unique_isa)?;
         }
         self.match_token(
             Token::RPar,
             "expected ')' after function arguments",
         )?;
         if self.optional(Token::Arrow) {
-            sig.return_types = self.parse_argument_list(unique_isa)?;
+            sig.returns = self.parse_abi_param_list(unique_isa)?;
         }
 
         // The calling convention is optional.
@@ -951,38 +951,38 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if sig.argument_types.iter().all(|a| a.location.is_assigned()) {
+        if sig.params.iter().all(|a| a.location.is_assigned()) {
             sig.compute_argument_bytes();
         }
 
         Ok(sig)
     }
 
-    // Parse list of function argument / return value types.
+    // Parse list of function parameter / return value types.
     //
-    // arglist ::= * arg { "," arg }
+    // paramlist ::= * param { "," param }
     //
-    fn parse_argument_list(&mut self, unique_isa: Option<&TargetIsa>) -> Result<Vec<ArgumentType>> {
+    fn parse_abi_param_list(&mut self, unique_isa: Option<&TargetIsa>) -> Result<Vec<AbiParam>> {
         let mut list = Vec::new();
 
-        // arglist ::= * arg { "," arg }
-        list.push(self.parse_argument_type(unique_isa)?);
+        // abi-param-list ::= * abi-param { "," abi-param }
+        list.push(self.parse_abi_param(unique_isa)?);
 
-        // arglist ::= arg * { "," arg }
+        // abi-param-list ::= abi-param * { "," abi-param }
         while self.optional(Token::Comma) {
-            // arglist ::= arg { "," * arg }
-            list.push(self.parse_argument_type(unique_isa)?);
+            // abi-param-list ::= abi-param { "," * abi-param }
+            list.push(self.parse_abi_param(unique_isa)?);
         }
 
         Ok(list)
     }
 
     // Parse a single argument type with flags.
-    fn parse_argument_type(&mut self, unique_isa: Option<&TargetIsa>) -> Result<ArgumentType> {
-        // arg ::= * type { flag } [ argumentloc ]
-        let mut arg = ArgumentType::new(self.match_type("expected argument type")?);
+    fn parse_abi_param(&mut self, unique_isa: Option<&TargetIsa>) -> Result<AbiParam> {
+        // abi-param ::= * type { flag } [ argumentloc ]
+        let mut arg = AbiParam::new(self.match_type("expected parameter type")?);
 
-        // arg ::= type * { flag } [ argumentloc ]
+        // abi-param ::= type * { flag } [ argumentloc ]
         while let Some(Token::Identifier(s)) = self.token() {
             match s {
                 "uext" => arg.extension = ArgumentExtension::Uext,
@@ -998,7 +998,7 @@ impl<'a> Parser<'a> {
             self.consume();
         }
 
-        // arg ::= type { flag } * [ argumentloc ]
+        // abi-param ::= type { flag } * [ argumentloc ]
         arg.location = self.parse_argument_location(unique_isa)?;
 
         Ok(arg)
@@ -1374,7 +1374,7 @@ impl<'a> Parser<'a> {
             self.parse_ebb_params(ctx, ebb)?;
             self.match_token(
                 Token::Colon,
-                "expected ':' after EBB arguments",
+                "expected ':' after EBB parameters",
             )?;
         }
 
@@ -1437,7 +1437,7 @@ impl<'a> Parser<'a> {
         // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
         self.match_token(
             Token::LPar,
-            "expected '(' before EBB arguments",
+            "expected '(' before EBB parameters",
         )?;
 
         // ebb-params ::= "(" * ebb-param { "," ebb-param } ")"
@@ -1452,7 +1452,7 @@ impl<'a> Parser<'a> {
         // ebb-params ::= "(" ebb-param { "," ebb-param } * ")"
         self.match_token(
             Token::RPar,
-            "expected ')' after EBB arguments",
+            "expected ')' after EBB parameters",
         )?;
 
         Ok(())
@@ -2337,13 +2337,13 @@ mod tests {
     #[test]
     fn argument_type() {
         let mut p = Parser::new("i32 sext");
-        let arg = p.parse_argument_type(None).unwrap();
+        let arg = p.parse_abi_param(None).unwrap();
         assert_eq!(arg.value_type, types::I32);
         assert_eq!(arg.extension, ArgumentExtension::Sext);
         assert_eq!(arg.purpose, ArgumentPurpose::Normal);
-        let Error { location, message } = p.parse_argument_type(None).unwrap_err();
+        let Error { location, message } = p.parse_abi_param(None).unwrap_err();
         assert_eq!(location.line_number, 1);
-        assert_eq!(message, "expected argument type");
+        assert_eq!(message, "expected parameter type");
     }
 
     #[test]
@@ -2374,8 +2374,8 @@ mod tests {
     #[test]
     fn signature() {
         let sig = Parser::new("()native").parse_signature(None).unwrap();
-        assert_eq!(sig.argument_types.len(), 0);
-        assert_eq!(sig.return_types.len(), 0);
+        assert_eq!(sig.params.len(), 0);
+        assert_eq!(sig.returns.len(), 0);
         assert_eq!(sig.call_conv, CallConv::Native);
 
         let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 spiderwasm")
@@ -2406,7 +2406,7 @@ mod tests {
                 .parse_signature(None)
                 .unwrap_err()
                 .to_string(),
-            "1: expected argument type"
+            "1: expected parameter type"
         );
         assert_eq!(
             Parser::new("i8 -> i8")

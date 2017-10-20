@@ -100,14 +100,14 @@ impl FuncTranslator {
     }
 }
 
-/// Declare local variables for the signature arguments that correspond to WebAssembly locals.
+/// Declare local variables for the signature parameters that correspond to WebAssembly locals.
 ///
 /// Return the number of local variables declared.
 fn declare_wasm_arguments(builder: &mut FunctionBuilder<Local>) -> usize {
-    let sig_len = builder.func.signature.argument_types.len();
+    let sig_len = builder.func.signature.params.len();
     let mut next_local = 0;
     for i in 0..sig_len {
-        let arg_type = builder.func.signature.argument_types[i];
+        let arg_type = builder.func.signature.params[i];
         // There may be additional special-purpose arguments following the normal WebAssembly
         // signature arguments. For example, a `vmctx` pointer.
         if arg_type.purpose == ir::ArgumentPurpose::Normal {
@@ -256,12 +256,8 @@ mod tests {
         let mut ctx = Context::new();
 
         ctx.func.name = ir::FunctionName::new("small1");
-        ctx.func.signature.argument_types.push(
-            ir::ArgumentType::new(I32),
-        );
-        ctx.func.signature.return_types.push(
-            ir::ArgumentType::new(I32),
-        );
+        ctx.func.signature.params.push(ir::AbiParam::new(I32));
+        ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
         trans
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
@@ -291,12 +287,8 @@ mod tests {
         let mut ctx = Context::new();
 
         ctx.func.name = ir::FunctionName::new("small2");
-        ctx.func.signature.argument_types.push(
-            ir::ArgumentType::new(I32),
-        );
-        ctx.func.signature.return_types.push(
-            ir::ArgumentType::new(I32),
-        );
+        ctx.func.signature.params.push(ir::AbiParam::new(I32));
+        ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
         trans
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
@@ -335,9 +327,7 @@ mod tests {
         let mut ctx = Context::new();
 
         ctx.func.name = ir::FunctionName::new("infloop");
-        ctx.func.signature.return_types.push(
-            ir::ArgumentType::new(I32),
-        );
+        ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
         trans
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())

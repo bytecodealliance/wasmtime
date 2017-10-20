@@ -21,7 +21,7 @@ use abi::{legalize_abi_value, ValueConversion};
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
 use ir::{Function, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value, Signature, SigRef,
-         ArgumentType, ArgumentPurpose, ArgumentLoc, ValueLoc};
+         AbiParam, ArgumentPurpose, ArgumentLoc, ValueLoc};
 use ir::instructions::CallInfo;
 use isa::TargetIsa;
 use legalizer::split::{isplit, vsplit};
@@ -40,20 +40,20 @@ pub fn legalize_signatures(func: &mut Function, isa: &TargetIsa) {
     }
 
     if let Some(entry) = func.layout.entry_block() {
-        legalize_entry_arguments(func, entry);
-        spill_entry_arguments(func, entry);
+        legalize_entry_params(func, entry);
+        spill_entry_params(func, entry);
     }
 }
 
-/// Legalize the entry block arguments after `func`'s signature has been legalized.
+/// Legalize the entry block parameters after `func`'s signature has been legalized.
 ///
-/// The legalized signature may contain more arguments than the original signature, and the
-/// argument types have been changed. This function goes through the arguments to the entry EBB and
-/// replaces them with arguments of the right type for the ABI.
+/// The legalized signature may contain more parameters than the original signature, and the
+/// parameter types have been changed. This function goes through the parameters of the entry EBB
+/// and replaces them with parameters of the right type for the ABI.
 ///
-/// The original entry EBB arguments are computed from the new ABI arguments by code inserted at
+/// The original entry EBB parameters are computed from the new ABI parameters by code inserted at
 /// the top of the entry block.
-fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
+fn legalize_entry_params(func: &mut Function, entry: Ebb) {
     let mut has_sret = false;
     let mut has_link = false;
     let mut has_vmctx = false;
@@ -74,7 +74,7 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
     while let Some(arg) = ebb_params.get(old_arg, &pos.func.dfg.value_lists) {
         old_arg += 1;
 
-        let abi_type = pos.func.signature.argument_types[abi_arg];
+        let abi_type = pos.func.signature.params[abi_arg];
         let arg_type = pos.func.dfg.value_type(arg);
         if arg_type == abi_type.value_type {
             // No value translation is necessary, this argument matches the ABI type.
@@ -98,9 +98,9 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
             }
             abi_arg += 1;
         } else {
-            // Compute the value we want for `arg` from the legalized ABI arguments.
+            // Compute the value we want for `arg` from the legalized ABI parameters.
             let mut get_arg = |func: &mut Function, ty| {
-                let abi_type = func.signature.argument_types[abi_arg];
+                let abi_type = func.signature.params[abi_arg];
                 assert_eq!(
                     abi_type.purpose,
                     ArgumentPurpose::Normal,
@@ -120,15 +120,15 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
         }
     }
 
-    // The legalized signature may contain additional arguments representing special-purpose
+    // The legalized signature may contain additional parameters representing special-purpose
     // registers.
-    for &arg in &pos.func.signature.argument_types[abi_arg..] {
+    for &arg in &pos.func.signature.params[abi_arg..] {
         match arg.purpose {
-            // Any normal arguments should have been processed above.
+            // Any normal parameters should have been processed above.
             ArgumentPurpose::Normal => {
                 panic!("Leftover arg: {}", arg);
             }
-            // The callee-save arguments should not appear until after register allocation is
+            // The callee-save parameters should not appear until after register allocation is
             // done.
             ArgumentPurpose::FramePointer |
             ArgumentPurpose::CalleeSaved => {
@@ -136,19 +136,19 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
             }
             // These can be meaningfully added by `legalize_signature()`.
             ArgumentPurpose::Link => {
-                assert!(!has_link, "Multiple link arguments found");
+                assert!(!has_link, "Multiple link parameters found");
                 has_link = true;
             }
             ArgumentPurpose::StructReturn => {
-                assert!(!has_sret, "Multiple sret arguments found");
+                assert!(!has_sret, "Multiple sret parameters found");
                 has_sret = true;
             }
             ArgumentPurpose::VMContext => {
-                assert!(!has_vmctx, "Multiple vmctx arguments found");
+                assert!(!has_vmctx, "Multiple vmctx parameters found");
                 has_vmctx = true;
             }
             ArgumentPurpose::SignatureId => {
-                assert!(!has_sigid, "Multiple sigid arguments found");
+                assert!(!has_sigid, "Multiple sigid parameters found");
                 has_sigid = true;
             }
         }
@@ -164,12 +164,12 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
 /// The cursor `pos` points to a call instruction with at least one return value. The cursor will
 /// be left pointing after the instructions inserted to convert the return values.
 ///
-/// This function is very similar to the `legalize_entry_arguments` function above.
+/// This function is very similar to the `legalize_entry_params` function above.
 ///
 /// Returns the possibly new instruction representing the call.
 fn legalize_inst_results<ResType>(pos: &mut FuncCursor, mut get_abi_type: ResType) -> Inst
 where
-    ResType: FnMut(&Function, usize) -> ArgumentType,
+    ResType: FnMut(&Function, usize) -> AbiParam,
 {
     let call = pos.current_inst().expect(
         "Cursor must point to a call instruction",
@@ -230,7 +230,7 @@ fn convert_from_abi<GetArg>(
     get_arg: &mut GetArg,
 ) -> Value
 where
-    GetArg: FnMut(&mut Function, Type) -> Result<Value, ArgumentType>,
+    GetArg: FnMut(&mut Function, Type) -> Result<Value, AbiParam>,
 {
     // Terminate the recursion when we get the desired type.
     let arg_type = match get_arg(pos.func, ty) {
@@ -304,7 +304,7 @@ where
 /// 1. If the suggested argument has an acceptable value type, consume it by adding it to the list
 ///    of arguments and return `Ok(())`.
 /// 2. If the suggested argument doesn't have the right value type, don't change anything, but
-///    return the `Err(ArgumentType)` that is needed.
+///    return the `Err(AbiParam)` that is needed.
 ///
 fn convert_to_abi<PutArg>(
     pos: &mut FuncCursor,
@@ -312,7 +312,7 @@ fn convert_to_abi<PutArg>(
     value: Value,
     put_arg: &mut PutArg,
 ) where
-    PutArg: FnMut(&mut Function, Value) -> Result<(), ArgumentType>,
+    PutArg: FnMut(&mut Function, Value) -> Result<(), AbiParam>,
 {
     // Start by invoking the closure to either terminate the recursion or get the argument type
     // we're trying to match.
@@ -355,7 +355,7 @@ fn convert_to_abi<PutArg>(
 }
 
 /// Check if a sequence of arguments match a desired sequence of argument types.
-fn check_arg_types(dfg: &DataFlowGraph, args: &[Value], types: &[ArgumentType]) -> bool {
+fn check_arg_types(dfg: &DataFlowGraph, args: &[Value], types: &[AbiParam]) -> bool {
     let arg_types = args.iter().map(|&v| dfg.value_type(v));
     let sig_types = types.iter().map(|&at| at.value_type);
     arg_types.eq(sig_types)
@@ -374,8 +374,8 @@ fn check_call_signature(dfg: &DataFlowGraph, inst: Inst) -> Result<(), SigRef> {
     };
     let sig = &dfg.signatures[sig_ref];
 
-    if check_arg_types(dfg, args, &sig.argument_types[..]) &&
-        check_arg_types(dfg, dfg.inst_results(inst), &sig.return_types[..])
+    if check_arg_types(dfg, args, &sig.params[..]) &&
+        check_arg_types(dfg, dfg.inst_results(inst), &sig.returns[..])
     {
         // All types check out.
         Ok(())
@@ -387,13 +387,13 @@ fn check_call_signature(dfg: &DataFlowGraph, inst: Inst) -> Result<(), SigRef> {
 
 /// Check if the arguments of the return `inst` match the signature.
 fn check_return_signature(dfg: &DataFlowGraph, inst: Inst, sig: &Signature) -> bool {
-    check_arg_types(dfg, dfg.inst_variable_args(inst), &sig.return_types)
+    check_arg_types(dfg, dfg.inst_variable_args(inst), &sig.returns)
 }
 
 /// Insert ABI conversion code for the arguments to the call or return instruction at `pos`.
 ///
 /// - `abi_args` is the number of arguments that the ABI signature requires.
-/// - `get_abi_type` is a closure that can provide the desired `ArgumentType` for a given ABI
+/// - `get_abi_type` is a closure that can provide the desired `AbiParam` for a given ABI
 ///   argument number in `0..abi_args`.
 ///
 fn legalize_inst_arguments<ArgType>(
@@ -402,7 +402,7 @@ fn legalize_inst_arguments<ArgType>(
     abi_args: usize,
     mut get_abi_type: ArgType,
 ) where
-    ArgType: FnMut(&Function, usize) -> ArgumentType,
+    ArgType: FnMut(&Function, usize) -> AbiParam,
 {
     let inst = pos.current_inst().expect(
         "Cursor must point to a call instruction",
@@ -498,14 +498,14 @@ pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGra
     };
 
     // OK, we need to fix the call arguments to match the ABI signature.
-    let abi_args = pos.func.dfg.signatures[sig_ref].argument_types.len();
+    let abi_args = pos.func.dfg.signatures[sig_ref].params.len();
     legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
-        func.dfg.signatures[sig_ref].argument_types[abi_arg]
+        func.dfg.signatures[sig_ref].params[abi_arg]
     });
 
-    if !pos.func.dfg.signatures[sig_ref].return_types.is_empty() {
+    if !pos.func.dfg.signatures[sig_ref].returns.is_empty() {
         inst = legalize_inst_results(pos, |func, abi_res| {
-            func.dfg.signatures[sig_ref].return_types[abi_res]
+            func.dfg.signatures[sig_ref].returns[abi_res]
         });
     }
 
@@ -537,7 +537,7 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
     // Count the special-purpose return values (`link`, `sret`, and `vmctx`) that were appended to
     // the legalized signature.
     let special_args = func.signature
-        .return_types
+        .returns
         .iter()
         .rev()
         .take_while(|&rt| {
@@ -545,13 +545,13 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
                 rt.purpose == ArgumentPurpose::VMContext
         })
         .count();
-    let abi_args = func.signature.return_types.len() - special_args;
+    let abi_args = func.signature.returns.len() - special_args;
 
     let pos = &mut FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
     legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
-        func.signature.return_types[abi_arg]
+        func.signature.returns[abi_arg]
     });
     assert_eq!(pos.func.dfg.inst_variable_args(inst).len(), abi_args);
 
@@ -565,7 +565,7 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
             pos.func.dfg.display_inst(inst, None)
         );
         let mut vlist = pos.func.dfg[inst].take_value_list().unwrap();
-        for arg in &pos.func.signature.return_types[abi_args..] {
+        for arg in &pos.func.signature.returns[abi_args..] {
             match arg.purpose {
                 ArgumentPurpose::Link |
                 ArgumentPurpose::StructReturn |
@@ -578,7 +578,7 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
             // the end.
             let idx = pos.func
                 .signature
-                .argument_types
+                .params
                 .iter()
                 .rposition(|t| t.purpose == arg.purpose)
                 .expect("No matching special purpose argument.");
@@ -605,17 +605,12 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
     true
 }
 
-/// Assign stack slots to incoming function arguments on the stack.
+/// Assign stack slots to incoming function parameters on the stack.
 ///
 /// Values that are passed into the function on the stack must be assigned to an `IncomingArg`
 /// stack slot already during legalization.
-fn spill_entry_arguments(func: &mut Function, entry: Ebb) {
-    for (abi, &arg) in func.signature.argument_types.iter().zip(
-        func.dfg.ebb_params(
-            entry,
-        ),
-    )
-    {
+fn spill_entry_params(func: &mut Function, entry: Ebb) {
+    for (abi, &arg) in func.signature.params.iter().zip(func.dfg.ebb_params(entry)) {
         if let ArgumentLoc::Stack(offset) = abi.location {
             let ss = func.stack_slots.make_incoming_arg(abi.value_type, offset);
             func.locations[arg] = ValueLoc::Stack(ss);
@@ -648,7 +643,7 @@ fn spill_call_arguments(pos: &mut FuncCursor) -> bool {
             .dfg
             .inst_variable_args(inst)
             .iter()
-            .zip(&pos.func.dfg.signatures[sig_ref].argument_types)
+            .zip(&pos.func.dfg.signatures[sig_ref].params)
             .enumerate()
             .filter_map(|(idx, (&arg, abi))| {
                 match abi.location {

@@ -6,7 +6,7 @@
 //! This doesn't support the soft-float ABI at the moment.
 
 use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
-use ir::{self, Type, ArgumentType, ArgumentLoc, ArgumentExtension, ArgumentPurpose};
+use ir::{self, Type, AbiParam, ArgumentLoc, ArgumentExtension, ArgumentPurpose};
 use isa::RegClass;
 use regalloc::AllocatableSet;
 use settings as shared_settings;
@@ -36,7 +36,7 @@ impl Args {
 }
 
 impl ArgAssigner for Args {
-    fn assign(&mut self, arg: &ArgumentType) -> ArgAction {
+    fn assign(&mut self, arg: &AbiParam) -> ArgAction {
         fn align(value: u32, to: u32) -> u32 {
             (value + to - 1) & !(to - 1)
         }
@@ -95,10 +95,10 @@ pub fn legalize_signature(
     let bits = if flags.is_64bit() { 64 } else { 32 };
 
     let mut args = Args::new(bits, isa_flags.enable_e());
-    legalize_args(&mut sig.argument_types, &mut args);
+    legalize_args(&mut sig.params, &mut args);
 
     let mut rets = Args::new(bits, isa_flags.enable_e());
-    legalize_args(&mut sig.return_types, &mut rets);
+    legalize_args(&mut sig.returns, &mut rets);
 
     if current {
         let ptr = Type::int(bits).unwrap();
@@ -108,9 +108,9 @@ pub fn legalize_signature(
         // The `jalr` instruction implementing a return can technically accept the return address
         // in any register, but a micro-architecture with a return address predictor will only
         // recognize it as a return if the address is in `x1`.
-        let link = ArgumentType::special_reg(ptr, ArgumentPurpose::Link, GPR.unit(1));
-        sig.argument_types.push(link);
-        sig.return_types.push(link);
+        let link = AbiParam::special_reg(ptr, ArgumentPurpose::Link, GPR.unit(1));
+        sig.params.push(link);
+        sig.returns.push(link);
     }
 }
 
