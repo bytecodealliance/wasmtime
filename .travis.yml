@@ -9,7 +9,7 @@ addons:
         packages:
             - python3-pip
 install:
-    - pip3 install --user --upgrade mypy==0.521 flake8
+    - pip3 install --user --upgrade mypy flake8
     - travis_wait ./check-rustfmt.sh --install
 script: ./test-all.sh
 cache:
