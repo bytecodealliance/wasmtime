@@ -488,19 +488,26 @@ where
                 if !func.layout.is_ebb_inserted(dest_ebb) {
                     func.layout.append_ebb(dest_ebb)
                 };
-                let ty = func.dfg.value_type(temp_arg_val);
-                let mut cur = FuncCursor::new(func).at_first_insertion_point(dest_ebb);
-                let val = if ty.is_int() {
-                    cur.ins().iconst(ty, 0)
-                } else if ty == F32 {
-                    cur.ins().f32const(Ieee32::with_bits(0))
-                } else if ty == F64 {
-                    cur.ins().f64const(Ieee64::with_bits(0))
-                } else {
-                    panic!("value used but never declared and initialization not supported")
-                };
                 self.side_effects.instructions_added_to_ebbs.push(dest_ebb);
-                val
+                fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
+                    if ty.is_int() {
+                        cur.ins().iconst(ty, 0)
+                    } else if ty.is_bool() {
+                        cur.ins().bconst(ty, false)
+                    } else if ty == F32 {
+                        cur.ins().f32const(Ieee32::with_bits(0))
+                    } else if ty == F64 {
+                        cur.ins().f64const(Ieee64::with_bits(0))
+                    } else if ty.is_vector() {
+                        emit_zero(ty.lane_type(), cur)
+                    } else {
+                        panic!("use of undefined value unsupported for type {}", ty)
+                    }
+                }
+                emit_zero(
+                    func.dfg.value_type(temp_arg_val),
+                    FuncCursor::new(func).at_first_insertion_point(dest_ebb),
+                )
             }
             ZeroOneOrMore::One(pred_val) => {
                 // Here all the predecessors use a single value to represent our variable
@@ -1061,6 +1068,27 @@ mod tests {
         // in the right order.
         assert_eq!(func.dfg.ebb_params(ebb1)[1], y3);
         assert_eq!(func.dfg.ebb_params(ebb1)[0], x2);
+    }
+
+    #[test]
+    fn undef() {
+        // Use vars of varous types which have not been defined.
+        let mut func = Function::new();
+        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let ebb0 = func.dfg.make_ebb();
+        let block = ssa.declare_ebb_header_block(ebb0);
+        ssa.seal_ebb_header_block(ebb0, &mut func);
+        let i32_var = Variable(0);
+        let f32_var = Variable(1);
+        let f64_var = Variable(2);
+        let b1_var = Variable(3);
+        let f32x4_var = Variable(4);
+        ssa.use_var(&mut func, i32_var, I32, block);
+        ssa.use_var(&mut func, f32_var, F32, block);
+        ssa.use_var(&mut func, f64_var, F64, block);
+        ssa.use_var(&mut func, b1_var, B1, block);
+        ssa.use_var(&mut func, f32x4_var, F32X4, block);
+        assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
     }
 
     #[test]
