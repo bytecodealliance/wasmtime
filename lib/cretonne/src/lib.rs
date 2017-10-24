@@ -15,6 +15,7 @@ pub mod dbg;
 #[macro_use]
 pub mod entity;
 
+pub mod bforest;
 pub mod binemit;
 pub mod bitset;
 pub mod cursor;
