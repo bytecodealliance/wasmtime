@@ -54,8 +54,9 @@ impl MemFlags {
     /// would cause a trap when accessing the effective address, the Cretonne memory operation is
     /// also required to trap.
     ///
-    /// The `notrap` flag gives a Cretonne operation permission to not trap. This makes it possible
-    /// to delete an unused load or a dead store instruction.
+    /// The `notrap` flag tells Cretonne that the memory is *accessible*, which means that
+    /// accesses will not trap. This makes it possible to delete an unused load or a dead store
+    /// instruction.
     pub fn notrap(self) -> bool {
         self.read(FlagBit::Notrap)
     }
