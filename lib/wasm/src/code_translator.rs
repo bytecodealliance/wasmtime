@@ -362,7 +362,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 state.peekn(num_args),
             );
             state.popn(num_args);
-            state.pushn(builder.func.dfg.inst_results(call));
+            state.pushn(builder.inst_results(call));
         }
         Operator::CallIndirect { index, table_index } => {
             // `index` is the index of the function's signature and `table_index` is the index of
@@ -378,7 +378,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 state.peekn(num_args),
             );
             state.popn(num_args);
-            state.pushn(builder.func.dfg.inst_results(call));
+            state.pushn(builder.inst_results(call));
         }
         /******************************* Memory management ***********************************
          * Memory management is handled by environment. It is usually translated into calls to
