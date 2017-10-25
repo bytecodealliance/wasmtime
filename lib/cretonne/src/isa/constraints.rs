@@ -37,7 +37,8 @@ impl OperandConstraint {
                     false
                 }
             }
-            ConstraintKind::FixedReg(reg) => {
+            ConstraintKind::FixedReg(reg) |
+            ConstraintKind::FixedTied(reg) => {
                 loc == ValueLoc::Reg(reg) && self.regclass.contains(reg)
             }
             ConstraintKind::Stack => {
@@ -72,6 +73,13 @@ pub enum ConstraintKind {
     /// the `outs` arrays. The constraint for the in operand is `Tied(out)`, and the constraint for
     /// the out operand is `Tied(in)`.
     Tied(u8),
+
+    /// This operand must be a fixed register, and it has a tied counterpart.
+    ///
+    /// This works just like `FixedReg`, but additionally indicates that there are identical
+    /// input/output operands for this fixed register. For an input operand, this means that the
+    /// value will be clobbered by the instruction
+    FixedTied(RegUnit),
 
     /// This operand must be a value in a stack slot.
     ///

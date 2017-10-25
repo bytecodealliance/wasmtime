@@ -301,6 +301,10 @@ impl<'a> Context<'a> {
                     // A tied operand must kill the used value.
                     reguse.tied = !lr.killed_at(inst, ebb, &self.cur.func.layout);
                 }
+                ConstraintKind::FixedTied(_) => {
+                    reguse.fixed = true;
+                    reguse.tied = !lr.killed_at(inst, ebb, &self.cur.func.layout);
+                }
                 ConstraintKind::Reg => {}
             }
             if lr.affinity.is_stack() {

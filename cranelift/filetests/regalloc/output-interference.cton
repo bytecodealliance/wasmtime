@@ -1,0 +1,15 @@
+test compile
+set is_64bit=1
+isa intel haswell
+
+function %test(i64) -> i64 native {
+ebb0(v0: i64):
+    v2 = iconst.i64 12
+    ; This division clobbers two of its fixed input registers on Intel.
+    ; These are FixedTied constraints that the spiller needs to resolve.
+    v5 = udiv v0, v2
+    v6 = iconst.i64 13
+    v9 = udiv v0, v6
+    v10 = iadd v5, v9
+    return v10
+}

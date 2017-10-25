@@ -478,7 +478,8 @@ impl<'a> Context<'a> {
             // already in a register.
             let cur_reg = self.divert.reg(value, &self.cur.func.locations);
             match op.kind {
-                ConstraintKind::FixedReg(regunit) => {
+                ConstraintKind::FixedReg(regunit) |
+                ConstraintKind::FixedTied(regunit) => {
                     if regunit != cur_reg {
                         self.solver.reassign_in(
                             value,
@@ -532,7 +533,9 @@ impl<'a> Context<'a> {
                         }
                     }
                 }
-                _ => {}
+                ConstraintKind::FixedReg(_) |
+                ConstraintKind::FixedTied(_) |
+                ConstraintKind::Stack => {}
             }
         }
     }
@@ -674,8 +677,15 @@ impl<'a> Context<'a> {
         throughs: &[LiveValue],
     ) {
         for (op, lv) in constraints.iter().zip(defs) {
-            if let ConstraintKind::FixedReg(reg) = op.kind {
-                self.add_fixed_output(lv.value, op.regclass, reg, throughs);
+            match op.kind {
+                ConstraintKind::FixedReg(reg) |
+                ConstraintKind::FixedTied(reg) => {
+                    self.add_fixed_output(lv.value, op.regclass, reg, throughs);
+                }
+                ConstraintKind::Reg |
+                ConstraintKind::Tied(_) |
+                ConstraintKind::Stack => {}
+
             }
         }
     }
@@ -741,6 +751,7 @@ impl<'a> Context<'a> {
         for (op, lv) in constraints.iter().zip(defs) {
             match op.kind {
                 ConstraintKind::FixedReg(_) |
+                ConstraintKind::FixedTied(_) |
                 ConstraintKind::Stack => continue,
                 ConstraintKind::Reg => {
                     self.solver.add_def(lv.value, op.regclass, !lv.is_local);

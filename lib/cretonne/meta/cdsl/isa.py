@@ -394,6 +394,16 @@ class EncRecipe(object):
                 o2i[o] = i
         return (i2o, o2i)
 
+    def fixed_ops(self):
+        # type: () -> Tuple[Set[Register], Set[Register]]
+        """
+        Return two sets of registers representing the fixed input and output
+        operands.
+        """
+        i = set(r for r in self.ins if isinstance(r, Register))
+        o = set(r for r in self.outs if isinstance(r, Register))
+        return (i, o)
+
     def recipe_pred(self):
         # type: () -> RecipePred
         """
