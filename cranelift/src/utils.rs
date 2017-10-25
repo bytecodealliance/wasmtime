@@ -73,7 +73,7 @@ pub fn pretty_error(func: &ir::Function, isa: Option<&TargetIsa>, err: CtonError
     }
 }
 
-/// Like FlagsOrIsa, but holds ownership.
+/// Like `FlagsOrIsa`, but holds ownership.
 pub enum OwnedFlagsOrIsa {
     Flags(settings::Flags),
     Isa(Box<TargetIsa>),
