@@ -377,22 +377,33 @@ impl<'a> Context<'a> {
         // This aligns with the "    from" line at the top of the function.
         dbg!("    glob {}", regs.global.display(&self.reginfo));
 
+        // This flag is set when the solver failed to find a solution for the global defines that
+        // doesn't interfere with `regs.global`. We need to rewrite all of `inst`s global defines
+        // as local defines followed by copies.
+        let mut replace_global_defines = false;
 
         // Program the fixed output constraints before the general defines. This allows us to
         // detect conflicts between fixed outputs and tied operands where the input value hasn't
         // been converted to a solver variable.
         if constraints.fixed_outs {
-            self.program_fixed_outputs(constraints.outs, defs, throughs);
+            self.program_fixed_outputs(
+                constraints.outs,
+                defs,
+                throughs,
+                &mut replace_global_defines,
+                &regs.global,
+            );
         }
         if let Some(sig) = call_sig {
-            self.program_output_abi(sig, defs, throughs);
+            self.program_output_abi(
+                sig,
+                defs,
+                throughs,
+                &mut replace_global_defines,
+                &regs.global,
+            );
         }
         self.program_output_constraints(inst, constraints.outs, defs);
-
-        // This flag is set when the solver failed to find a solution for the global defines that
-        // doesn't interfere with `regs.global`. We need to rewrite all of `inst`s global defines
-        // as local defines followed by copies.
-        let mut replace_global_defines = false;
 
         // Finally, we've fully programmed the constraint solver.
         // We expect a quick solution in most cases.
@@ -675,12 +686,23 @@ impl<'a> Context<'a> {
         constraints: &[OperandConstraint],
         defs: &[LiveValue],
         throughs: &[LiveValue],
+        replace_global_defines: &mut bool,
+        global_regs: &AllocatableSet,
     ) {
         for (op, lv) in constraints.iter().zip(defs) {
             match op.kind {
                 ConstraintKind::FixedReg(reg) |
                 ConstraintKind::FixedTied(reg) => {
                     self.add_fixed_output(lv.value, op.regclass, reg, throughs);
+                    if !lv.is_local && !global_regs.is_avail(op.regclass, reg) {
+                        dbg!(
+                            "Fixed output {} in {}:{} is not available in global regs",
+                            lv.value,
+                            op.regclass,
+                            self.reginfo.display_regunit(reg)
+                        );
+                        *replace_global_defines = true;
+                    }
                 }
                 ConstraintKind::Reg |
                 ConstraintKind::Tied(_) |
@@ -693,7 +715,14 @@ impl<'a> Context<'a> {
     /// Program the output-side ABI constraints for `inst` into the constraint solver.
     ///
     /// That means return values for a call instruction.
-    fn program_output_abi(&mut self, sig: SigRef, defs: &[LiveValue], throughs: &[LiveValue]) {
+    fn program_output_abi(
+        &mut self,
+        sig: SigRef,
+        defs: &[LiveValue],
+        throughs: &[LiveValue],
+        replace_global_defines: &mut bool,
+        global_regs: &AllocatableSet,
+    ) {
         // It's technically possible for a call instruction to have fixed results before the
         // variable list of results, but we have no known instances of that.
         // Just assume all results are variable return values.
@@ -704,6 +733,15 @@ impl<'a> Context<'a> {
                 if let Affinity::Reg(rci) = lv.affinity {
                     let rc = self.reginfo.rc(rci);
                     self.add_fixed_output(lv.value, rc, reg, throughs);
+                    if !lv.is_local && !global_regs.is_avail(rc, reg) {
+                        dbg!(
+                            "ABI output {} in {}:{} is not available in global regs",
+                            lv.value,
+                            rc,
+                            self.reginfo.display_regunit(reg)
+                        );
+                        *replace_global_defines = true;
+                    }
                 } else {
                     panic!("ABI argument {} should be in a register", lv.value);
                 }
