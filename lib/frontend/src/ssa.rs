@@ -199,6 +199,35 @@ enum Call {
     FinishPredecessorsLookup(Value, Ebb),
 }
 
+/// Emit instructions to produce a zero value in the given type.
+fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
+    if ty.is_int() {
+        cur.ins().iconst(ty, 0)
+    } else if ty.is_bool() {
+        cur.ins().bconst(ty, false)
+    } else if ty == F32 {
+        cur.ins().f32const(Ieee32::with_bits(0))
+    } else if ty == F64 {
+        cur.ins().f64const(Ieee64::with_bits(0))
+    } else if ty.is_vector() {
+        let scalar_ty = ty.lane_type();
+        if scalar_ty.is_int() {
+            cur.ins().iconst(ty, 0)
+        } else if scalar_ty.is_bool() {
+            cur.ins().bconst(ty, false)
+        } else if scalar_ty == F32 {
+            let scalar = cur.ins().f32const(Ieee32::with_bits(0));
+            cur.ins().splat(ty, scalar)
+        } else if scalar_ty == F64 {
+            let scalar = cur.ins().f64const(Ieee64::with_bits(0));
+            cur.ins().splat(ty, scalar)
+        } else {
+            panic!("unimplemented scalar type: {:?}", ty)
+        }
+    } else {
+        panic!("unimplemented type: {:?}", ty)
+    }
+}
 /// The following methods are the API of the SSA builder. Here is how it should be used when
 /// translating to Cretonne IL:
 ///
@@ -484,30 +513,17 @@ where
                 // The variable is used but never defined before. This is an irregularity in the
                 // code, but rather than throwing an error we silently initialize the variable to
                 // 0. This will have no effect since this situation happens in unreachable code.
-                func.dfg.remove_ebb_param(temp_arg_val);
                 if !func.layout.is_ebb_inserted(dest_ebb) {
                     func.layout.append_ebb(dest_ebb)
                 };
                 self.side_effects.instructions_added_to_ebbs.push(dest_ebb);
-                fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
-                    if ty.is_int() {
-                        cur.ins().iconst(ty, 0)
-                    } else if ty.is_bool() {
-                        cur.ins().bconst(ty, false)
-                    } else if ty == F32 {
-                        cur.ins().f32const(Ieee32::with_bits(0))
-                    } else if ty == F64 {
-                        cur.ins().f64const(Ieee64::with_bits(0))
-                    } else if ty.is_vector() {
-                        emit_zero(ty.lane_type(), cur)
-                    } else {
-                        panic!("use of undefined value unsupported for type {}", ty)
-                    }
-                }
-                emit_zero(
+                let zero = emit_zero(
                     func.dfg.value_type(temp_arg_val),
                     FuncCursor::new(func).at_first_insertion_point(dest_ebb),
-                )
+                );
+                func.dfg.remove_ebb_param(temp_arg_val);
+                func.dfg.change_to_alias(temp_arg_val, zero);
+                zero
             }
             ZeroOneOrMore::One(pred_val) => {
                 // Here all the predecessors use a single value to represent our variable
@@ -1129,5 +1145,38 @@ mod tests {
             func.dfg[func.layout.first_inst(ebb0).unwrap()].opcode(),
             Opcode::Iconst
         );
+    }
+
+    #[test]
+    fn unreachable_use() {
+        let mut func = Function::new();
+        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        // Here is the pseudo-program we want to translate:
+        // ebb0:
+        //    return
+        // ebb1:
+        //    brz v1, ebb1
+        //    jump ebb1
+        let _block0 = ssa.declare_ebb_header_block(ebb0);
+        ssa.seal_ebb_header_block(ebb0, &mut func);
+        let block1 = ssa.declare_ebb_header_block(ebb1);
+        let block2 = ssa.declare_ebb_body_block(block1);
+        {
+            let mut cur = FuncCursor::new(&mut func);
+            cur.insert_ebb(ebb0);
+            cur.insert_ebb(ebb1);
+            cur.goto_bottom(ebb0);
+            cur.ins().return_(&[]);
+            let x_var = Variable(0);
+            cur.goto_bottom(ebb1);
+            let val = ssa.use_var(&mut cur.func, x_var, I32, block1).0;
+            let brz = cur.ins().brz(val, ebb1, &[]);
+            ssa.declare_ebb_predecessor(ebb1, block1, brz);
+            let j = cur.ins().jump(ebb1, &[]);
+            ssa.declare_ebb_predecessor(ebb1, block2, j);
+        }
+        ssa.seal_ebb_header_block(ebb1, &mut func);
     }
 }
