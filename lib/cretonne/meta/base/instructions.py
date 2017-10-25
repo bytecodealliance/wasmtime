@@ -429,24 +429,22 @@ iconst = Instruction(
         ins=N, outs=a)
 
 N = Operand('N', ieee32)
-a = Operand('a', f32, doc='A constant integer scalar or vector value')
+a = Operand('a', f32, doc='A constant f32 scalar value')
 f32const = Instruction(
         'f32const', r"""
         Floating point constant.
 
-        Create a :type:`f32` SSA value with an immediate constant value, or a
-        floating point vector where all the lanes have the same value.
+        Create a :type:`f32` SSA value with an immediate constant value.
         """,
         ins=N, outs=a)
 
 N = Operand('N', ieee64)
-a = Operand('a', f64, doc='A constant integer scalar or vector value')
+a = Operand('a', f64, doc='A constant f64 scalar value')
 f64const = Instruction(
         'f64const', r"""
         Floating point constant.
 
-        Create a :type:`f64` SSA value with an immediate constant value, or a
-        floating point vector where all the lanes have the same value.
+        Create a :type:`f64` SSA value with an immediate constant value.
         """,
         ins=N, outs=a)
 
