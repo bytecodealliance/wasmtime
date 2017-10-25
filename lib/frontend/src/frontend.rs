@@ -132,7 +132,9 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
         let inst = self.builder.func.dfg.make_inst(data.clone());
         self.builder.func.dfg.make_inst_results(inst, ctrl_typevar);
         self.builder.func.layout.append_inst(inst, self.ebb);
-        self.builder.func.srclocs[inst] = self.builder.srcloc;
+        if !self.builder.srcloc.is_default() {
+            self.builder.func.srclocs[inst] = self.builder.srcloc;
+        }
 
         if data.opcode().is_branch() {
             match data.branch_destination() {
