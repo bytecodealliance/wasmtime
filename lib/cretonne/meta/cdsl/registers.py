@@ -286,7 +286,10 @@ class RegClass(object):
 
         For example: `GPR.r5`.
         """
-        return Register(self, self.bank.unit_by_name(attr))
+        reg = Register(self, self.bank.unit_by_name(attr))
+        # Save this register so we won't have to create it again.
+        setattr(self, attr, reg)
+        return reg
 
     def mask(self):
         # type: () -> List[int]

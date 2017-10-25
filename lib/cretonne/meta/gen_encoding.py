@@ -754,17 +754,14 @@ def emit_recipe_constraints(isa, fmt):
         for r in isa.all_recipes:
             fmt.comment(r.name)
             tied_i2o, tied_o2i = r.ties()
+            fixed_ins, fixed_outs = r.fixed_ops()
             with fmt.indented('RecipeConstraints {', '},'):
-                emit_operand_constraints(r, r.ins, 'ins', tied_i2o, fmt)
-                emit_operand_constraints(r, r.outs, 'outs', tied_o2i, fmt)
-                fmt.format(
-                        'fixed_ins: {},',
-                        str(any(isinstance(c, Register)
-                            for c in r.ins)).lower())
-                fmt.format(
-                        'fixed_outs: {},',
-                        str(any(isinstance(c, Register)
-                            for c in r.outs)).lower())
+                emit_operand_constraints(
+                    r, r.ins, 'ins', tied_i2o, fixed_outs, fmt)
+                emit_operand_constraints(
+                    r, r.outs, 'outs', tied_o2i, fixed_ins, fmt)
+                fmt.format('fixed_ins: {},', str(bool(fixed_ins)).lower())
+                fmt.format('fixed_outs: {},', str(bool(fixed_outs)).lower())
                 fmt.format('tied_ops: {},', str(bool(tied_i2o)).lower())
                 fmt.format(
                         'clobbers_flags: {},',
@@ -776,11 +773,16 @@ def emit_operand_constraints(
         seq,     # type: Sequence[OperandConstraint]
         field,   # type: str
         tied,    # type: Dict[int, int]
+        fixops,  # type: Set[Register]
         fmt      # type: srcgen.Formatter
         ):
     # type: (...) -> None
     """
     Emit a struct field initializer for an array of operand constraints.
+
+    :param field: The name of the struct field to emit.
+    :param tied: Map of tied opnums to counterparts.
+    :param fix_ops: Set of fixed operands on the other side of the inst.
     """
     if len(seq) == 0:
         fmt.line('{}: &[],'.format(field))
@@ -796,8 +798,9 @@ def emit_operand_constraints(
                     fmt.format('regclass: &{}_DATA,', cons)
                 elif isinstance(cons, Register):
                     assert n not in tied, "Can't tie fixed register operand"
-                    fmt.format(
-                            'kind: ConstraintKind::FixedReg({}),', cons.unit)
+                    # See if this fixed register is also on the other side.
+                    t = 'FixedTied' if cons in fixops else 'FixedReg'
+                    fmt.format('kind: ConstraintKind::{}({}),', t, cons.unit)
                     fmt.format('regclass: &{}_DATA,', cons.regclass)
                 elif isinstance(cons, int):
                     # This is a tied output constraint. It should never happen
