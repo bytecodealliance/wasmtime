@@ -22,7 +22,7 @@ where
     ssa: SSABuilder<Variable>,
     ebbs: EntityMap<Ebb, EbbData>,
     types: EntityMap<Variable, Type>,
-    function_args_values: Vec<Value>,
+    function_params_values: Vec<Value>,
 }
 
 
@@ -40,7 +40,9 @@ where
 
     builder: &'a mut ILBuilder<Variable>,
     position: Position,
-    pristine: bool,
+
+    /// Has builder.function_params_values been populated yet?
+    params_values_initialized: bool,
 }
 
 #[derive(Clone, Default)]
@@ -66,7 +68,7 @@ where
             ssa: SSABuilder::new(),
             ebbs: EntityMap::new(),
             types: EntityMap::new(),
-            function_args_values: Vec::new(),
+            function_params_values: Vec::new(),
         }
     }
 
@@ -74,12 +76,12 @@ where
         self.ssa.clear();
         self.ebbs.clear();
         self.types.clear();
-        self.function_args_values.clear();
+        self.function_params_values.clear();
     }
 
     fn is_empty(&self) -> bool {
         self.ssa.is_empty() && self.ebbs.is_empty() && self.types.is_empty() &&
-            self.function_args_values.is_empty()
+            self.function_params_values.is_empty()
     }
 }
 
@@ -234,7 +236,7 @@ where
                 ebb: Ebb::new(0),
                 basic_block: Block::new(0),
             },
-            pristine: true,
+            params_values_initialized: false,
         }
     }
 
@@ -263,8 +265,8 @@ where
     /// successor), the block will be declared filled and it will not be possible to append
     /// instructions to it.
     pub fn switch_to_block(&mut self, ebb: Ebb, jump_args: &[Value]) -> &[Value] {
-        if self.pristine {
-            self.fill_function_args_values(ebb);
+        if !self.params_values_initialized {
+            self.fill_function_params_values(ebb);
         }
         if !self.builder.ebbs[self.position.ebb].pristine {
             // First we check that the previous block has been filled.
@@ -332,12 +334,21 @@ where
         );
     }
 
-    /// Returns the value corresponding to the `i`-th argument of the function as defined by
+    /// Returns the value corresponding to the `i`-th parameter of the function as defined by
     /// the function signature. Panics if `i` is out of bounds or if called before the first call
     /// to `switch_to_block`.
+    pub fn param_value(&self, i: usize) -> Value {
+        debug_assert!(
+            self.params_values_initialized,
+            "you have to call switch_to_block first."
+        );
+        self.builder.function_params_values[i]
+    }
+
+    /// Use param_value instead.
+    #[deprecated(since = "forever", note = "arg_value is renamed to param_value")]
     pub fn arg_value(&self, i: usize) -> Value {
-        debug_assert!(!self.pristine, "you have to call switch_to_block first.");
-        self.builder.function_args_values[i]
+        self.param_value(i)
     }
 
     /// Creates a jump table in the function, to be used by `br_table` instructions.
@@ -475,6 +486,12 @@ where
              self.builder.ssa.predecessors(self.position.ebb).is_empty())
     }
 
+    /// Returns `true` if and only if the entry block has been started and `param_value`
+    /// may be called.
+    pub fn entry_block_started(&self) -> bool {
+        self.params_values_initialized
+    }
+
     /// Returns `true` if and only if no instructions have been added since the last call to
     /// `switch_to_block`.
     pub fn is_pristine(&self) -> bool {
@@ -556,14 +573,14 @@ where
         }
     }
 
-    fn fill_function_args_values(&mut self, ebb: Ebb) {
-        debug_assert!(self.pristine);
+    fn fill_function_params_values(&mut self, ebb: Ebb) {
+        debug_assert!(!self.params_values_initialized);
         for argtyp in &self.func.signature.params {
-            self.builder.function_args_values.push(
+            self.builder.function_params_values.push(
                 self.func.dfg.append_ebb_param(ebb, argtyp.value_type),
             );
         }
-        self.pristine = false;
+        self.params_values_initialized = true;
     }
 
 
@@ -685,7 +702,7 @@ mod tests {
             builder.switch_to_block(block0, &[]);
             builder.seal_block(block0);
             {
-                let tmp = builder.arg_value(0);
+                let tmp = builder.param_value(0);
                 builder.def_var(x, tmp);
             }
             {

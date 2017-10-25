@@ -88,14 +88,14 @@ impl FuncTranslator {
         // `environ`. The callback functions may need to insert things in the entry block.
         builder.ensure_inserted_ebb();
 
-        let num_args = declare_wasm_arguments(&mut builder);
+        let num_params = declare_wasm_parameters(&mut builder);
 
         // Set up the translation state with a single pushed control block representing the whole
         // function and its return values.
         let exit_block = builder.create_ebb();
         self.state.initialize(&builder.func.signature, exit_block);
 
-        parse_local_decls(&mut reader, &mut builder, num_args)?;
+        parse_local_decls(&mut reader, &mut builder, num_params)?;
         parse_function_body(reader, &mut builder, &mut self.state, environ)
     }
 }
@@ -103,21 +103,21 @@ impl FuncTranslator {
 /// Declare local variables for the signature parameters that correspond to WebAssembly locals.
 ///
 /// Return the number of local variables declared.
-fn declare_wasm_arguments(builder: &mut FunctionBuilder<Local>) -> usize {
+fn declare_wasm_parameters(builder: &mut FunctionBuilder<Local>) -> usize {
     let sig_len = builder.func.signature.params.len();
     let mut next_local = 0;
     for i in 0..sig_len {
-        let arg_type = builder.func.signature.params[i];
-        // There may be additional special-purpose arguments following the normal WebAssembly
-        // signature arguments. For example, a `vmctx` pointer.
-        if arg_type.purpose == ir::ArgumentPurpose::Normal {
-            // This is a normal WebAssembly signature argument, so create a local for it.
+        let param_type = builder.func.signature.params[i];
+        // There may be additional special-purpose parameters following the normal WebAssembly
+        // signature parameters. For example, a `vmctx` pointer.
+        if param_type.purpose == ir::ArgumentPurpose::Normal {
+            // This is a normal WebAssembly signature parameter, so create a local for it.
             let local = Local::new(next_local);
-            builder.declare_var(local, arg_type.value_type);
+            builder.declare_var(local, param_type.value_type);
             next_local += 1;
 
-            let arg_value = builder.arg_value(i);
-            builder.def_var(local, arg_value);
+            let param_value = builder.param_value(i);
+            builder.def_var(local, param_value);
         }
     }
 
@@ -126,13 +126,13 @@ fn declare_wasm_arguments(builder: &mut FunctionBuilder<Local>) -> usize {
 
 /// Parse the local variable declarations that precede the function body.
 ///
-/// Declare local variables, starting from `num_args`.
+/// Declare local variables, starting from `num_params`.
 fn parse_local_decls(
     reader: &mut BinaryReader,
     builder: &mut FunctionBuilder<Local>,
-    num_args: usize,
+    num_params: usize,
 ) -> CtonResult {
-    let mut next_local = num_args;
+    let mut next_local = num_params;
     let local_count = reader.read_local_count().map_err(
         |_| CtonError::InvalidInput,
     )?;

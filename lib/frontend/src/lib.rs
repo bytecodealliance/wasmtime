@@ -84,7 +84,7 @@
 //!         builder.switch_to_block(block0, &[]);
 //!         builder.seal_block(block0);
 //!         {
-//!             let tmp = builder.arg_value(0);
+//!             let tmp = builder.param_value(0);
 //!             builder.def_var(x, tmp);
 //!         }
 //!         {
