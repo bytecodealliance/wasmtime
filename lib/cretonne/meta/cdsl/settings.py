@@ -389,7 +389,7 @@ class Preset(object):
         The list will have an entry for each setting byte in the settings
         group.
         """
-        l = [(0, 0)] * self.group.settings_size
+        lst = [(0, 0)] * self.group.settings_size
 
         # Apply setting values in order.
         for s, v in self.values:
@@ -397,11 +397,11 @@ class Preset(object):
             s_mask = s.byte_mask()
             s_val = s.byte_for_value(v)
             assert (s_val & ~s_mask) == 0
-            l_mask, l_val = l[ofs]
+            l_mask, l_val = lst[ofs]
             # Accumulated mask of modified bits.
             l_mask |= s_mask
             # Overwrite the relevant bits with the new value.
             l_val = (l_val & ~s_mask) | s_val
-            l[ofs] = (l_mask, l_val)
+            lst[ofs] = (l_mask, l_val)
 
-        return l
+        return lst

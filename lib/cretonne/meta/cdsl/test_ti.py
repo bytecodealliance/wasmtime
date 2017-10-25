@@ -356,9 +356,9 @@ class TestRTL(TypeCheckingBaseTest):
             typing = ti_rtl(r, ti).extract()
 
             # The number of possible typings is 9 * (3+ 2*2 + 3) = 90
-            l = [(t[self.v0], t[self.v1]) for t in typing.concrete_typings()]
-            assert (len(l) == len(set(l)) and len(l) == 90)
-            for (tv0, tv1) in l:
+            lst = [(t[self.v0], t[self.v1]) for t in typing.concrete_typings()]
+            assert (len(lst) == len(set(lst)) and len(lst) == 90)
+            for (tv0, tv1) in lst:
                 typ0, typ1 = (tv0.singleton_type(), tv1.singleton_type())
                 if (op == ireduce):
                     assert typ0.wider_or_equal(typ1)
@@ -396,9 +396,9 @@ class TestRTL(TypeCheckingBaseTest):
             typing = ti_rtl(r, ti).extract()
 
             # The number of possible typings is 9*(2 + 1) = 27
-            l = [(t[self.v0], t[self.v1]) for t in typing.concrete_typings()]
-            assert (len(l) == len(set(l)) and len(l) == 27)
-            for (tv0, tv1) in l:
+            lst = [(t[self.v0], t[self.v1]) for t in typing.concrete_typings()]
+            assert (len(lst) == len(set(lst)) and len(lst) == 27)
+            for (tv0, tv1) in lst:
                 (typ0, typ1) = (tv0.singleton_type(), tv1.singleton_type())
                 if (op == fdemote):
                     assert typ0.wider_or_equal(typ1)
