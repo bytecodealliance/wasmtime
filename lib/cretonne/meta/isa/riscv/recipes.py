@@ -106,8 +106,8 @@ Ricmp = EncRecipe(
         'Ricmp', IntCompare, size=4, ins=(GPR, GPR), outs=GPR,
         emit='put_r(bits, in_reg0, in_reg1, out_reg0, sink);')
 
-I = EncRecipe(
-        'I', BinaryImm, size=4, ins=GPR, outs=GPR,
+Ii = EncRecipe(
+        'Ii', BinaryImm, size=4, ins=GPR, outs=GPR,
         instp=IsSignedInt(BinaryImm.imm, 12),
         emit='put_i(bits, in_reg0, imm.into(), out_reg0, sink);')
 

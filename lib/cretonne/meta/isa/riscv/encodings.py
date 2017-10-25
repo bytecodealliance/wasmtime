@@ -7,7 +7,7 @@ from base.immediates import intcc
 from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH, JALR, JAL
 from .recipes import LOAD, STORE
-from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
+from .recipes import R, Rshamt, Ricmp, Ii, Iz, Iicmp, Iret, Icall, Icopy
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov
 from .settings import use_m
 from cdsl.ast import Var
@@ -47,14 +47,14 @@ for inst,           inst_imm,      f3,    f7 in [
 
     # Immediate versions for add/xor/or/and.
     if inst_imm:
-        RV32.enc(inst_imm.i32, I, OPIMM(f3))
-        RV64.enc(inst_imm.i64, I, OPIMM(f3))
+        RV32.enc(inst_imm.i32, Ii, OPIMM(f3))
+        RV64.enc(inst_imm.i64, Ii, OPIMM(f3))
 
 # 32-bit ops in RV64.
 RV64.enc(base.iadd.i32, R, OP32(0b000, 0b0000000))
 RV64.enc(base.isub.i32, R, OP32(0b000, 0b0100000))
 # There are no andiw/oriw/xoriw variations.
-RV64.enc(base.iadd_imm.i32, I, OPIMM32(0b000))
+RV64.enc(base.iadd_imm.i32, Ii, OPIMM32(0b000))
 
 # Use iadd_imm with %x0 to materialize constants.
 RV32.enc(base.iconst.i32, Iz, OPIMM(0b000))
