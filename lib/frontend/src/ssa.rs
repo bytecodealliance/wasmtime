@@ -531,8 +531,13 @@ where
                 // We need to replace all the occurences of val with pred_val but since
                 // we can't afford a re-writing pass right now we just declare an alias.
                 func.dfg.remove_ebb_param(temp_arg_val);
-                func.dfg.change_to_alias(temp_arg_val, pred_val);
-                pred_val
+                // Resolve aliases eagerly so that we can check for cyclic aliasing,
+                // which can occur in unreachable code.
+                let resolved = func.dfg.resolve_aliases(pred_val);
+                if temp_arg_val != resolved {
+                    func.dfg.change_to_alias(temp_arg_val, resolved);
+                }
+                resolved
             }
             ZeroOneOrMore::More() => {
                 // There is disagreement in the predecessors on which value to use so we have
@@ -1178,5 +1183,46 @@ mod tests {
             ssa.declare_ebb_predecessor(ebb1, block2, j);
         }
         ssa.seal_ebb_header_block(ebb1, &mut func);
+    }
+
+    #[test]
+    fn unreachable_use_with_multiple_preds() {
+        let mut func = Function::new();
+        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
+        // Here is the pseudo-program we want to translate:
+        // ebb0:
+        //    return
+        // ebb1:
+        //    brz v1, ebb2
+        //    jump ebb1
+        // ebb2:
+        //    jump ebb1
+        let _block0 = ssa.declare_ebb_header_block(ebb0);
+        ssa.seal_ebb_header_block(ebb0, &mut func);
+        let block1 = ssa.declare_ebb_header_block(ebb1);
+        let block2 = ssa.declare_ebb_header_block(ebb2);
+        {
+            let mut cur = FuncCursor::new(&mut func);
+            let x_var = Variable(0);
+            cur.insert_ebb(ebb0);
+            cur.insert_ebb(ebb1);
+            cur.insert_ebb(ebb2);
+            cur.goto_bottom(ebb0);
+            cur.ins().return_(&[]);
+            cur.goto_bottom(ebb1);
+            let v = ssa.use_var(&mut cur.func, x_var, I32, block1).0;
+            let brz = cur.ins().brz(v, ebb2, &[]);
+            let j0 = cur.ins().jump(ebb1, &[]);
+            cur.goto_bottom(ebb2);
+            let j1 = cur.ins().jump(ebb1, &[]);
+            ssa.declare_ebb_predecessor(ebb1, block2, brz);
+            ssa.declare_ebb_predecessor(ebb1, block1, j0);
+            ssa.declare_ebb_predecessor(ebb2, block1, j1);
+        }
+        ssa.seal_ebb_header_block(ebb1, &mut func);
+        ssa.seal_ebb_header_block(ebb2, &mut func);
     }
 }
