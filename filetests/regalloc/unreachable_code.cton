@@ -1,4 +1,6 @@
+; Use "test compile" here otherwise the dead blocks won't be eliminated.
 test compile
+
 set is_64bit
 isa intel haswell
 

@@ -1,4 +1,4 @@
-test compile
+test regalloc
 set is_64bit
 isa intel haswell
 

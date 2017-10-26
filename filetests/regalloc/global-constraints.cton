@@ -1,4 +1,4 @@
-test compile
+test regalloc
 isa intel
 
 ; This test covers the troubles when values with global live ranges are defined

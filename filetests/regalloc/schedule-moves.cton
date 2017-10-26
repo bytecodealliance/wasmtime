@@ -1,4 +1,4 @@
-test compile
+test regalloc
 isa intel haswell
 
 function %pr165() native {
