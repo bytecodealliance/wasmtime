@@ -113,10 +113,5 @@ pub fn build_filechecker(context: &Context) -> Result<Checker> {
             format!("filecheck: {}", e)
         })?;
     }
-    let checker = builder.finish();
-    if checker.is_empty() {
-        Err("no filecheck directives in function".to_string())
-    } else {
-        Ok(checker)
-    }
+    Ok(builder.finish())
 }
