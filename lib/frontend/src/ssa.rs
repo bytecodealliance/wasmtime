@@ -530,13 +530,18 @@ where
                 // so we don't need to have it as an ebb argument.
                 // We need to replace all the occurences of val with pred_val but since
                 // we can't afford a re-writing pass right now we just declare an alias.
-                func.dfg.remove_ebb_param(temp_arg_val);
                 // Resolve aliases eagerly so that we can check for cyclic aliasing,
                 // which can occur in unreachable code.
-                let resolved = func.dfg.resolve_aliases(pred_val);
-                if temp_arg_val != resolved {
-                    func.dfg.change_to_alias(temp_arg_val, resolved);
+                let mut resolved = func.dfg.resolve_aliases(pred_val);
+                if temp_arg_val == resolved {
+                    // Cycle detected. Break it by creating a zero value.
+                    resolved = emit_zero(
+                        func.dfg.value_type(temp_arg_val),
+                        FuncCursor::new(func).at_first_insertion_point(dest_ebb),
+                    );
                 }
+                func.dfg.remove_ebb_param(temp_arg_val);
+                func.dfg.change_to_alias(temp_arg_val, resolved);
                 resolved
             }
             ZeroOneOrMore::More() => {
@@ -1183,6 +1188,11 @@ mod tests {
             ssa.declare_ebb_predecessor(ebb1, block2, j);
         }
         ssa.seal_ebb_header_block(ebb1, &mut func);
+        let flags = settings::Flags::new(&settings::builder());
+        match verify_function(&func, &flags) {
+            Ok(()) => {}
+            Err(err) => panic!(err.message),
+        }
     }
 
     #[test]
@@ -1224,5 +1234,10 @@ mod tests {
         }
         ssa.seal_ebb_header_block(ebb1, &mut func);
         ssa.seal_ebb_header_block(ebb2, &mut func);
+        let flags = settings::Flags::new(&settings::builder());
+        match verify_function(&func, &flags) {
+            Ok(()) => {}
+            Err(err) => panic!(err.message),
+        }
     }
 }
