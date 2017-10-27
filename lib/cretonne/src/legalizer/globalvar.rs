@@ -21,6 +21,7 @@ pub fn expand_global_addr(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut Co
     match func.global_vars[gv] {
         ir::GlobalVarData::VmCtx { offset } => vmctx_addr(inst, func, offset.into()),
         ir::GlobalVarData::Deref { base, offset } => deref_addr(inst, func, base, offset.into()),
+        ir::GlobalVarData::Sym { .. } => (),
     }
 }
 

@@ -877,7 +877,7 @@ impl<'a> Parser<'a> {
         let location = self.loc;
 
         // function-spec ::= "function" * name signature
-        let name = self.parse_function_name()?;
+        let name = self.parse_external_name()?;
 
         // function-spec ::= "function" name * signature
         let sig = self.parse_signature(unique_isa)?;
@@ -885,11 +885,13 @@ impl<'a> Parser<'a> {
         Ok((location, name, sig))
     }
 
-    // Parse a function name.
+    // Parse an external name.
+    //
+    // For example, in a function spec, the parser would be in this state:
     //
     // function ::= "function" * name signature { ... }
     //
-    fn parse_function_name(&mut self) -> Result<ExternalName> {
+    fn parse_external_name(&mut self) -> Result<ExternalName> {
         match self.token() {
             Some(Token::Name(s)) => {
                 self.consume();
@@ -899,7 +901,7 @@ impl<'a> Parser<'a> {
                 if s.len() % 2 != 0 {
                     return err!(
                         self.loc,
-                        "expected binary function name to have length multiple of two"
+                        "expected binary external name to have length multiple of two"
                     );
                 }
                 let mut bin_name = Vec::with_capacity(s.len() / 2);
@@ -912,7 +914,7 @@ impl<'a> Parser<'a> {
                 self.consume();
                 Ok(ExternalName::new(bin_name))
             }
-            _ => err!(self.loc, "expected function name"),
+            _ => err!(self.loc, "expected external name"),
         }
     }
 
@@ -1142,6 +1144,7 @@ impl<'a> Parser<'a> {
     // global-var-decl ::= * GlobalVar(gv) "=" global-var-desc
     // global-var-desc ::= "vmctx" offset32
     //                   | "deref" "(" GlobalVar(base) ")" offset32
+    //                   | "globalsym" name
     //
     fn parse_global_var_decl(&mut self) -> Result<(u32, GlobalVarData)> {
         let number = self.match_gv("expected global variable number: gv«n»")?;
@@ -1167,6 +1170,10 @@ impl<'a> Parser<'a> {
                 )?;
                 let offset = self.optional_offset32()?;
                 GlobalVarData::Deref { base, offset }
+            }
+            "globalsym" => {
+                let name = self.parse_external_name()?;
+                GlobalVarData::Sym { name }
             }
             other => return err!(self.loc, "Unknown global variable kind '{}'", other),
         };
@@ -1292,7 +1299,7 @@ impl<'a> Parser<'a> {
             Some(Token::SigRef(sig_src)) => {
                 let sig = ctx.get_sig(sig_src, &self.loc)?;
                 self.consume();
-                let name = self.parse_function_name()?;
+                let name = self.parse_external_name()?;
                 ExtFuncData {
                     name,
                     signature: sig,
