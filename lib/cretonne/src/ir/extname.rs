@@ -1,39 +1,40 @@
-//! Function names.
+//! External names.
 //!
-//! The name of a function doesn't have any meaning to Cretonne which compiles functions
-//! independently.
+//! These are identifiers for declaring entities defined outside the current
+//! function. The name of an external declaration doesn't have any meaning to
+//! Cretonne, which compiles functions independently.
 
 use std::fmt::{self, Write};
 use std::ascii::AsciiExt;
 
-/// The name of a function can be any sequence of bytes.
+/// The name of an external can be any sequence of bytes.
 ///
-/// Function names are primarily used as keys by code using Cretonne to map
-/// from a cretonne::ir::Function to additional associated data.
+/// External names are primarily used as keys by code using Cretonne to map
+/// from a cretonne::ir::FuncRef or similar to additional associated data.
 ///
-/// Function names can also serve as a primitive testing and debugging tool.
+/// External names can also serve as a primitive testing and debugging tool.
 /// In particular, many `.cton` test files use function names to identify
 /// functions.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct FunctionName(NameRepr);
+pub struct ExternalName(NameRepr);
 
-impl FunctionName {
-    /// Creates a new function name from a sequence of bytes.
+impl ExternalName {
+    /// Creates a new external name from a sequence of bytes.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// # use cretonne::ir::FunctionName;
-    /// // Create `FunctionName` from a string.
-    /// let name = FunctionName::new("hello");
+    /// # use cretonne::ir::ExternalName;
+    /// // Create `ExternalName` from a string.
+    /// let name = ExternalName::new("hello");
     /// assert_eq!(name.to_string(), "%hello");
     ///
-    /// // Create `FunctionName` from a sequence of bytes.
+    /// // Create `ExternalName` from a sequence of bytes.
     /// let bytes: &[u8] = &[10, 9, 8];
-    /// let name = FunctionName::new(bytes);
+    /// let name = ExternalName::new(bytes);
     /// assert_eq!(name.to_string(), "#0a0908");
     /// ```
-    pub fn new<T>(v: T) -> FunctionName
+    pub fn new<T>(v: T) -> ExternalName
     where
         T: Into<Vec<u8>>,
     {
@@ -43,12 +44,12 @@ impl FunctionName {
             for (i, &byte) in vec.iter().enumerate() {
                 bytes[i] = byte;
             }
-            FunctionName(NameRepr::Short {
+            ExternalName(NameRepr::Short {
                 length: vec.len() as u8,
                 bytes: bytes,
             })
         } else {
-            FunctionName(NameRepr::Long(vec))
+            ExternalName(NameRepr::Long(vec))
         }
     }
 }
@@ -86,7 +87,7 @@ impl AsRef<[u8]> for NameRepr {
     }
 }
 
-impl AsRef<[u8]> for FunctionName {
+impl AsRef<[u8]> for ExternalName {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
@@ -101,7 +102,7 @@ impl Default for NameRepr {
     }
 }
 
-impl fmt::Display for FunctionName {
+impl fmt::Display for ExternalName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(name) = try_as_name(self.0.as_ref()) {
             write!(f, "%{}", name)
@@ -117,24 +118,24 @@ impl fmt::Display for FunctionName {
 
 #[cfg(test)]
 mod tests {
-    use super::FunctionName;
+    use super::ExternalName;
 
     #[test]
     fn displaying() {
-        assert_eq!(FunctionName::new("").to_string(), "%");
-        assert_eq!(FunctionName::new("x").to_string(), "%x");
-        assert_eq!(FunctionName::new("x_1").to_string(), "%x_1");
-        assert_eq!(FunctionName::new(" ").to_string(), "#20");
+        assert_eq!(ExternalName::new("").to_string(), "%");
+        assert_eq!(ExternalName::new("x").to_string(), "%x");
+        assert_eq!(ExternalName::new("x_1").to_string(), "%x_1");
+        assert_eq!(ExternalName::new(" ").to_string(), "#20");
         assert_eq!(
-            FunctionName::new("кретон").to_string(),
+            ExternalName::new("кретон").to_string(),
             "#d0bad180d0b5d182d0bed0bd"
         );
         assert_eq!(
-            FunctionName::new("印花棉布").to_string(),
+            ExternalName::new("印花棉布").to_string(),
             "#e58db0e88ab1e6a389e5b883"
         );
         assert_eq!(
-            FunctionName::new(vec![0, 1, 2, 3, 4, 5]).to_string(),
+            ExternalName::new(vec![0, 1, 2, 3, 4, 5]).to_string(),
             "#000102030405"
         );
     }

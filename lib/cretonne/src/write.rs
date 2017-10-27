@@ -441,7 +441,7 @@ impl<'a> fmt::Display for DisplayValues<'a> {
 
 #[cfg(test)]
 mod tests {
-    use ir::{Function, FunctionName, StackSlotData, StackSlotKind};
+    use ir::{Function, ExternalName, StackSlotData, StackSlotKind};
     use ir::types;
 
     #[test]
@@ -449,7 +449,7 @@ mod tests {
         let mut f = Function::new();
         assert_eq!(f.to_string(), "function %() native {\n}\n");
 
-        f.name = FunctionName::new("foo");
+        f.name = ExternalName::new("foo");
         assert_eq!(f.to_string(), "function %foo() native {\n}\n");
 
         f.create_stack_slot(StackSlotData::new(StackSlotKind::Local, 4));

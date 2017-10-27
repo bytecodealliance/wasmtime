@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::{u16, u32};
 use std::mem;
-use cretonne::ir::{Function, Ebb, Opcode, Value, Type, FunctionName, CallConv, StackSlotData,
+use cretonne::ir::{Function, Ebb, Opcode, Value, Type, ExternalName, CallConv, StackSlotData,
                    JumpTable, JumpTableData, Signature, AbiParam, ArgumentExtension, ExtFuncData,
                    SigRef, FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags, GlobalVar,
                    GlobalVarData, Heap, HeapData, HeapStyle, HeapBase};
@@ -872,7 +872,7 @@ impl<'a> Parser<'a> {
     fn parse_function_spec(
         &mut self,
         unique_isa: Option<&TargetIsa>,
-    ) -> Result<(Location, FunctionName, Signature)> {
+    ) -> Result<(Location, ExternalName, Signature)> {
         self.match_identifier("function", "expected 'function'")?;
         let location = self.loc;
 
@@ -889,11 +889,11 @@ impl<'a> Parser<'a> {
     //
     // function ::= "function" * name signature { ... }
     //
-    fn parse_function_name(&mut self) -> Result<FunctionName> {
+    fn parse_function_name(&mut self) -> Result<ExternalName> {
         match self.token() {
             Some(Token::Name(s)) => {
                 self.consume();
-                Ok(FunctionName::new(s))
+                Ok(ExternalName::new(s))
             }
             Some(Token::HexSequence(s)) => {
                 if s.len() % 2 != 0 {
@@ -910,7 +910,7 @@ impl<'a> Parser<'a> {
                     i += 2;
                 }
                 self.consume();
-                Ok(FunctionName::new(bin_name))
+                Ok(ExternalName::new(bin_name))
             }
             _ => err!(self.loc, "expected function name"),
         }

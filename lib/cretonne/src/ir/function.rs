@@ -5,7 +5,7 @@
 
 use entity::{PrimaryMap, EntityMap};
 use ir;
-use ir::{FunctionName, CallConv, Signature, DataFlowGraph, Layout};
+use ir::{ExternalName, CallConv, Signature, DataFlowGraph, Layout};
 use ir::{InstEncodings, ValueLocations, JumpTables, StackSlots, EbbOffsets, SourceLocs};
 use ir::{Ebb, JumpTableData, JumpTable, StackSlotData, StackSlot, SigRef, ExtFuncData, FuncRef,
          GlobalVarData, GlobalVar, HeapData, Heap};
@@ -20,7 +20,7 @@ use write::write_function;
 #[derive(Clone)]
 pub struct Function {
     /// Name of this function. Mostly used by `.cton` files.
-    pub name: FunctionName,
+    pub name: ExternalName,
 
     /// Signature of this function.
     pub signature: Signature,
@@ -66,7 +66,7 @@ pub struct Function {
 
 impl Function {
     /// Create a function with the given name and signature.
-    pub fn with_name_signature(name: FunctionName, sig: Signature) -> Function {
+    pub fn with_name_signature(name: ExternalName, sig: Signature) -> Function {
         Function {
             name,
             signature: sig,
@@ -100,7 +100,7 @@ impl Function {
 
     /// Create a new empty, anonymous function with a native calling convention.
     pub fn new() -> Function {
-        Self::with_name_signature(FunctionName::default(), Signature::new(CallConv::Native))
+        Self::with_name_signature(ExternalName::default(), Signature::new(CallConv::Native))
     }
 
     /// Creates a jump table in the function, to be used by `br_table` instructions.
