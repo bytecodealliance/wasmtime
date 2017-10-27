@@ -66,6 +66,7 @@ impl<'func> binemit::RelocSink for RelocSink<'func> {
         let name = from_utf8(name_bytes).unwrap();
         // See `get_func_name`; names are encoded as `wasm_0x...`, so grab the
         // part after `0x...` and convert it back to an integer to get the index.
+        // FIXME: Handle grow_memory/current_memory.
         let func_index = FunctionIndex::from_str_radix(&name[7..], 16).unwrap();
         self.func_relocs.push((reloc.0, func_index, offset));
     }
