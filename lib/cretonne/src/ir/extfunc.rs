@@ -5,7 +5,7 @@
 //!
 //! This module declares the data types used to represent external functions and call signatures.
 
-use ir::{Type, FunctionName, SigRef, ArgumentLoc};
+use ir::{Type, ExternalName, SigRef, ArgumentLoc};
 use isa::{RegInfo, RegUnit};
 use std::cmp;
 use std::fmt;
@@ -323,7 +323,7 @@ impl FromStr for ArgumentPurpose {
 #[derive(Clone, Debug)]
 pub struct ExtFuncData {
     /// Name of the external function.
-    pub name: FunctionName,
+    pub name: ExternalName,
     /// Call signature of function.
     pub signature: SigRef,
 }

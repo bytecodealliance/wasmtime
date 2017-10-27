@@ -9,9 +9,9 @@ use cretonne::settings;
 use wasmparser;
 use std::error::Error;
 
-/// Compute a `ir::FunctionName` for a given wasm function index.
-fn get_func_name(func_index: FunctionIndex) -> ir::FunctionName {
-    ir::FunctionName::new(format!("wasm_0x{:x}", func_index))
+/// Compute a `ir::ExternalName` for a given wasm function index.
+fn get_func_name(func_index: FunctionIndex) -> ir::ExternalName {
+    ir::ExternalName::new(format!("wasm_0x{:x}", func_index))
 }
 
 /// A collection of names under which a given entity is exported.
@@ -196,7 +196,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 }
 
 impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
-    fn get_func_name(&self, func_index: FunctionIndex) -> ir::FunctionName {
+    fn get_func_name(&self, func_index: FunctionIndex) -> ir::ExternalName {
         get_func_name(func_index)
     }
 

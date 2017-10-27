@@ -12,7 +12,7 @@ pub mod layout;
 pub mod function;
 mod builder;
 mod extfunc;
-mod funcname;
+mod extname;
 mod globalvar;
 mod heap;
 mod memflags;
@@ -26,7 +26,7 @@ pub use ir::dfg::{DataFlowGraph, ValueDef};
 pub use ir::entities::{Ebb, Inst, Value, StackSlot, GlobalVar, JumpTable, FuncRef, SigRef, Heap};
 pub use ir::extfunc::{Signature, CallConv, AbiParam, ArgumentExtension, ArgumentPurpose,
                       ExtFuncData};
-pub use ir::funcname::FunctionName;
+pub use ir::extname::ExternalName;
 pub use ir::function::Function;
 pub use ir::globalvar::GlobalVarData;
 pub use ir::heap::{HeapData, HeapStyle, HeapBase};
