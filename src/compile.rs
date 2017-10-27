@@ -12,9 +12,13 @@ use utils::{pretty_error, read_to_string, parse_sets_and_isa};
 pub fn run(
     files: Vec<String>,
     flag_print: bool,
-    flag_set: Vec<String>,
+    mut flag_set: Vec<String>,
     flag_isa: String,
 ) -> Result<(), String> {
+    // Enable the verifier by default, since we're reading IL in from a
+    // text file.
+    flag_set.insert(0, "enable_verifier=1".to_string());
+
     let parsed = parse_sets_and_isa(flag_set, flag_isa)?;
 
     for filename in files {
