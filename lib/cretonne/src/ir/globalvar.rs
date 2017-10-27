@@ -1,6 +1,6 @@
 //! Global variables.
 
-use ir::GlobalVar;
+use ir::{ExternalName, GlobalVar};
 use ir::immediates::Offset32;
 use std::fmt;
 
@@ -25,6 +25,14 @@ pub enum GlobalVarData {
         /// Byte offset to be added to the pointer loaded from `base`.
         offset: Offset32,
     },
+
+    /// Variable is at an address identified by a symbolic name. Cretonne itself
+    /// does not interpret this name; it's used by embedders to link with other
+    /// data structures.
+    Sym {
+        /// The symbolic name.
+        name: ExternalName,
+    },
 }
 
 impl fmt::Display for GlobalVarData {
@@ -32,6 +40,7 @@ impl fmt::Display for GlobalVarData {
         match *self {
             GlobalVarData::VmCtx { offset } => write!(f, "vmctx{}", offset),
             GlobalVarData::Deref { base, offset } => write!(f, "deref({}){}", base, offset),
+            GlobalVarData::Sym { ref name } => write!(f, "globalsym {}", name),
         }
     }
 }

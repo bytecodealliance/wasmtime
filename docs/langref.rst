@@ -563,6 +563,16 @@ runtime data structures.
                  variable.
     :result GV: Global variable.
 
+.. inst:: GV = globalsym name
+
+    Declare a global variable at a symbolic address.
+
+    The address of GV is symbolic and will be assigned a relocation, so that
+    it can be resolved by a later linking phase.
+
+    :arg name: External name.
+    :result GV: Global variable.
+
 .. autoinst:: global_addr
 
 
