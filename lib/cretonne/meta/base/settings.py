@@ -69,5 +69,13 @@ spiderwasm_prologue_words = NumSetting(
         pushed return address on Intel ISAs.
         """)
 
+#
+# BaldrMonkey requires that not-yet-relocated function addresses be encoded
+# as all-ones bitpatterns.
+#
+allones_funcaddrs = BoolSetting(
+        """
+        Emit not-yet-relocated function addresses as all-ones bit patterns.
+        """)
 
 group.close(globals())
