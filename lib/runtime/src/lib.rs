@@ -19,8 +19,8 @@ pub use instance::Instance;
 
 use cton_wasm::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, Global, Table, Memory,
                 GlobalValue, SignatureIndex, FuncTranslator};
-use cretonne::ir::{InstBuilder, FuncRef, ExtFuncData, FunctionName, Signature, ArgumentType,
-                   CallConv, ArgumentPurpose, ArgumentLoc, ArgumentExtension, Function};
+use cretonne::ir::{InstBuilder, FuncRef, ExtFuncData, FunctionName, Signature, AbiParam, CallConv,
+                   ArgumentPurpose, ArgumentLoc, ArgumentExtension, Function};
 use cretonne::ir::types::*;
 use cretonne::ir::immediates::Offset32;
 use cretonne::cursor::FuncCursor;
@@ -193,7 +193,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn get_real_call_args(func: &Function, call_args: &[ir::Value]) -> Vec<ir::Value> {
         let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
         real_call_args.extend_from_slice(call_args);
-        real_call_args.push(func.special_arg(ArgumentPurpose::VMContext).unwrap());
+        real_call_args.push(func.special_param(ArgumentPurpose::VMContext).unwrap());
         real_call_args
     }
 
@@ -304,8 +304,8 @@ impl<'module_environment> cton_wasm::FuncEnvironment for FuncEnvironment<'module
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: CallConv::Native,
                 argument_bytes: None,
-                argument_types: vec![ArgumentType::new(I32)],
-                return_types: vec![ArgumentType::new(I32)],
+                params: vec![AbiParam::new(I32)],
+                returns: vec![AbiParam::new(I32)],
             });
             pos.func.import_function(ExtFuncData {
                 name: FunctionName::new("grow_memory"),
@@ -328,8 +328,8 @@ impl<'module_environment> cton_wasm::FuncEnvironment for FuncEnvironment<'module
             let sig_ref = pos.func.import_signature(Signature {
                 call_conv: CallConv::Native,
                 argument_bytes: None,
-                argument_types: Vec::new(),
-                return_types: vec![ArgumentType::new(I32)],
+                params: Vec::new(),
+                returns: vec![AbiParam::new(I32)],
             });
             pos.func.import_function(ExtFuncData {
                 name: FunctionName::new("current_memory"),
@@ -353,7 +353,7 @@ impl<'data, 'module> cton_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'
 
     fn declare_signature(&mut self, sig: &ir::Signature) {
         let mut sig = sig.clone();
-        sig.argument_types.push(ArgumentType {
+        sig.params.push(AbiParam {
             value_type: self.native_pointer(),
             purpose: ArgumentPurpose::VMContext,
             extension: ArgumentExtension::None,
