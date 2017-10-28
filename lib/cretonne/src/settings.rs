@@ -352,7 +352,8 @@ mod tests {
                     enable_float = true\n\
                     enable_simd = true\n\
                     enable_atomics = true\n\
-                    spiderwasm_prologue_words = 0\n"
+                    spiderwasm_prologue_words = 0\n\
+                    allones_funcaddrs = false\n"
         );
         assert_eq!(f.opt_level(), super::OptLevel::Default);
         assert_eq!(f.enable_simd(), true);

@@ -1,0 +1,28 @@
+; binary emission of 64-bit code.
+test binemit
+set is_64bit
+set is_compressed
+set allones_funcaddrs
+isa intel haswell
+
+; The binary encodings can be verified with the command:
+;
+;   sed -ne 's/^ *; asm: *//p' filetests/isa/intel/allones_funcaddrs64.cton | llvm-mc -show-encoding -triple=x86_64
+;
+
+; Tests from binary64.cton affected by allones_funcaddrs.
+function %I64() {
+    fn0 = function %foo()
+    sig0 = ()
+
+ebb0:
+
+    ; asm: movabsq $-1, %rcx
+    [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(fn0) ffffffffffffffff
+    ; asm: movabsq $-1, %rsi
+    [-,%rsi]            v401 = func_addr.i64 fn0        ; bin: 48 be Abs8(fn0) ffffffffffffffff
+    ; asm: movabsq $-1, %r10
+    [-,%r10]            v402 = func_addr.i64 fn0        ; bin: 49 ba Abs8(fn0) ffffffffffffffff
+
+    return                                              ; bin: c3
+}

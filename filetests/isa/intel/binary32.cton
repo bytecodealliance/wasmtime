@@ -343,9 +343,9 @@ ebb0:
     call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
 
     ; asm: movl $-1, %ecx
-    [-,%rcx]            v400 = func_addr.i32 fn0        ; bin: b9 Abs4(fn0) ffffffff
+    [-,%rcx]            v400 = func_addr.i32 fn0        ; bin: b9 Abs4(fn0) 00000000
     ; asm: movl $-1, %esi
-    [-,%rsi]            v401 = func_addr.i32 fn0        ; bin: be Abs4(fn0) ffffffff
+    [-,%rsi]            v401 = func_addr.i32 fn0        ; bin: be Abs4(fn0) 00000000
 
     ; asm: call *%ecx
     call_indirect sig0, v400()                  ; bin: ff d1

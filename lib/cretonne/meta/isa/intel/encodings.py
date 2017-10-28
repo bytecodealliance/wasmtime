@@ -2,7 +2,7 @@
 Intel Encodings.
 """
 from __future__ import absolute_import
-from cdsl.predicates import IsUnsignedInt
+from cdsl.predicates import IsUnsignedInt, Not
 from base import instructions as base
 from base.formats import UnaryImm
 from .defs import I32, I64
@@ -11,6 +11,7 @@ from . import settings as cfg
 from . import instructions as x86
 from .legalize import intel_expand
 from base.legalize import narrow, expand
+from base.settings import allones_funcaddrs
 from .settings import use_sse41
 
 try:
@@ -260,8 +261,15 @@ enc_both(base.regspill.f64, r.frsp32, 0x66, 0x0f, 0xd6)
 # Function addresses.
 #
 
-I32.enc(base.func_addr.i32, *r.fnaddr4(0xb8))
-I64.enc(base.func_addr.i64, *r.fnaddr8.rex(0xb8, w=1))
+I32.enc(base.func_addr.i32, *r.fnaddr4(0xb8),
+        isap=Not(allones_funcaddrs))
+I64.enc(base.func_addr.i64, *r.fnaddr8.rex(0xb8, w=1),
+        isap=Not(allones_funcaddrs))
+
+I32.enc(base.func_addr.i32, *r.allones_fnaddr4(0xb8),
+        isap=allones_funcaddrs)
+I64.enc(base.func_addr.i64, *r.allones_fnaddr8.rex(0xb8, w=1),
+        isap=allones_funcaddrs)
 
 #
 # Call/return

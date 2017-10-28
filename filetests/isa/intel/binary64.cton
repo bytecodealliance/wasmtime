@@ -430,11 +430,11 @@ ebb0:
     call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
 
     ; asm: movabsq $-1, %rcx
-    [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(fn0) ffffffffffffffff
+    [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(fn0) 0000000000000000
     ; asm: movabsq $-1, %rsi
-    [-,%rsi]            v401 = func_addr.i64 fn0        ; bin: 48 be Abs8(fn0) ffffffffffffffff
+    [-,%rsi]            v401 = func_addr.i64 fn0        ; bin: 48 be Abs8(fn0) 0000000000000000
     ; asm: movabsq $-1, %r10
-    [-,%r10]            v402 = func_addr.i64 fn0        ; bin: 49 ba Abs8(fn0) ffffffffffffffff
+    [-,%r10]            v402 = func_addr.i64 fn0        ; bin: 49 ba Abs8(fn0) 0000000000000000
 
     ; asm: call *%rcx
     call_indirect sig0, v400()                  ; bin: ff d1
