@@ -9,7 +9,7 @@ mod memorysink;
 pub use self::relaxation::relax_branches;
 pub use self::memorysink::{MemoryCodeSink, RelocSink};
 
-use ir::{Ebb, FuncRef, JumpTable, Function, Inst};
+use ir::{Ebb, FuncRef, GlobalVar, JumpTable, Function, Inst};
 use regalloc::RegDiversions;
 
 /// Offset in bytes from the beginning of the function.
@@ -46,6 +46,10 @@ pub trait CodeSink {
 
     /// Add a relocation referencing an external function at the current offset.
     fn reloc_func(&mut self, Reloc, FuncRef);
+
+    /// Add a relocation referencing an external global variable symbol at the
+    /// current offset. This is only used for `GlobalVarData::Sym` globals.
+    fn reloc_globalsym(&mut self, Reloc, GlobalVar);
 
     /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, Reloc, JumpTable);

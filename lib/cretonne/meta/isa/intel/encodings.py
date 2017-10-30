@@ -272,6 +272,13 @@ I64.enc(base.func_addr.i64, *r.allones_fnaddr8.rex(0xb8, w=1),
         isap=allones_funcaddrs)
 
 #
+# Global addresses.
+#
+
+I32.enc(base.globalsym_addr.i32, *r.gvaddr4(0xb8))
+I64.enc(base.globalsym_addr.i64, *r.gvaddr8.rex(0xb8, w=1))
+
+#
 # Call/return
 #
 I32.enc(base.call, *r.call_id(0xe8))

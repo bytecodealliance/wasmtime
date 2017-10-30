@@ -389,6 +389,14 @@ global_addr = Instruction(
         """,
         ins=GV, outs=addr)
 
+# A specialized form of global_addr instructions that only handles
+# symbolic names.
+globalsym_addr = Instruction(
+        'globalsym_addr', r"""
+        Compute the address of global variable GV, which is a symbolic name.
+        """,
+        ins=GV, outs=addr)
+
 #
 # WebAssembly bounds-checked heap accesses.
 #
