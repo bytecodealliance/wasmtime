@@ -133,17 +133,21 @@ def gen_isa(isa, fmt):
             '''.format(isa.name))
     if len(isa.all_recipes) == 0:
         # No encoding recipes: Emit a stub.
-        with fmt.indented(
-                'pub fn emit_inst<CS: CodeSink + ?Sized>'
-                '(func: &Function, inst: Inst, '
-                '_divert: &mut RegDiversions, _sink: &mut CS) {', '}'):
+        with fmt.indented('pub fn emit_inst<CS: CodeSink + ?Sized>('):
+            fmt.line('func: &Function,')
+            fmt.line('inst: Inst,')
+            fmt.line('_divert: &mut RegDiversions,')
+            fmt.line('_sink: &mut CS,')
+        with fmt.indented(') {', '}'):
             fmt.line('bad_encoding(func, inst)')
     else:
         fmt.line('#[allow(unused_variables, unreachable_code)]')
-        with fmt.indented(
-                'pub fn emit_inst<CS: CodeSink + ?Sized>'
-                '(func: &Function, inst: Inst, '
-                'divert: &mut RegDiversions, sink: &mut CS) {', '}'):
+        with fmt.indented('pub fn emit_inst<CS: CodeSink + ?Sized>('):
+            fmt.line('func: &Function,')
+            fmt.line('inst: Inst,')
+            fmt.line('divert: &mut RegDiversions,')
+            fmt.line('sink: &mut CS,')
+        with fmt.indented(') {', '}'):
             fmt.line('let encoding = func.encodings[inst];')
             fmt.line('let bits = encoding.bits();')
             with fmt.indented('match func.encodings[inst].recipe() {', '}'):
@@ -151,7 +155,7 @@ def gen_isa(isa, fmt):
                     fmt.comment(recipe.name)
                     with fmt.indented('{} => {{'.format(i), '}'):
                         gen_recipe(recipe, fmt)
-                fmt.line('_ => {}')
+                fmt.line('_ => {},')
             # Allow for un-encoded ghost instructions.
             # Verifier checks the details.
             with fmt.indented('if encoding.is_legal() {', '}'):

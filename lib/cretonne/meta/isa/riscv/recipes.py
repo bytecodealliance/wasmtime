@@ -131,11 +131,13 @@ Iret = EncRecipe(
         emit='''
         // Return instructions are always a jalr to %x1.
         // The return address is provided as a special-purpose link argument.
-        put_i(bits,
-              1, // rs1 = %x1
-              0, // no offset.
-              0, // rd = %x0: no address written.
-              sink);
+        put_i(
+            bits,
+            1, // rs1 = %x1
+            0, // no offset.
+            0, // rd = %x0: no address written.
+            sink,
+        );
         ''')
 
 # I-type encoding for `jalr` as an indirect call.
@@ -143,11 +145,13 @@ Icall = EncRecipe(
         'Icall', IndirectCall, size=4, ins=GPR, outs=(),
         emit='''
         // Indirect instructions are jalr with rd=%x1.
-        put_i(bits,
-              in_reg0,
-              0, // no offset.
-              1, // rd = %x1: link register.
-              sink);
+        put_i(
+            bits,
+            in_reg0,
+            0, // no offset.
+            1, // rd = %x1: link register.
+            sink,
+        );
         ''')
 
 
