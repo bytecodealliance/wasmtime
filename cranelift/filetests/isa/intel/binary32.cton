@@ -12,6 +12,8 @@ function %I32() {
     fn0 = function %foo()
     sig0 = ()
 
+    gv0 = globalsym %some_gv
+
     ss0 = incoming_arg 8, offset 0
     ss1 = incoming_arg 1024, offset -1024
     ss2 = incoming_arg 1024, offset -2048
@@ -342,15 +344,20 @@ ebb0:
     ; asm: call foo
     call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
 
-    ; asm: movl $-1, %ecx
+    ; asm: movl $0, %ecx
     [-,%rcx]            v400 = func_addr.i32 fn0        ; bin: b9 Abs4(fn0) 00000000
-    ; asm: movl $-1, %esi
+    ; asm: movl $0, %esi
     [-,%rsi]            v401 = func_addr.i32 fn0        ; bin: be Abs4(fn0) 00000000
 
     ; asm: call *%ecx
     call_indirect sig0, v400()                  ; bin: ff d1
     ; asm: call *%esi
     call_indirect sig0, v401()                  ; bin: ff d6
+
+    ; asm: movl $0, %ecx
+    [-,%rcx]            v450 = globalsym_addr.i32 gv0    ; bin: b9 Abs4(gv0) 00000000
+    ; asm: movl $0, %esi
+    [-,%rsi]            v451 = globalsym_addr.i32 gv0    ; bin: be Abs4(gv0) 00000000
 
     ; Spill / Fill.
 

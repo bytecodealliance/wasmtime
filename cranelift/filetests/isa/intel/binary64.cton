@@ -14,6 +14,8 @@ function %I64() {
     fn0 = function %foo()
     sig0 = ()
 
+    gv0 = globalsym %some_gv
+
     ; Use incoming_arg stack slots because they won't be relocated by the frame
     ; layout.
     ss0 = incoming_arg 8, offset 0
@@ -429,11 +431,11 @@ ebb0:
     ; asm: call foo
     call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
 
-    ; asm: movabsq $-1, %rcx
+    ; asm: movabsq $0, %rcx
     [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(fn0) 0000000000000000
-    ; asm: movabsq $-1, %rsi
+    ; asm: movabsq $0, %rsi
     [-,%rsi]            v401 = func_addr.i64 fn0        ; bin: 48 be Abs8(fn0) 0000000000000000
-    ; asm: movabsq $-1, %r10
+    ; asm: movabsq $0, %r10
     [-,%r10]            v402 = func_addr.i64 fn0        ; bin: 49 ba Abs8(fn0) 0000000000000000
 
     ; asm: call *%rcx
@@ -442,6 +444,13 @@ ebb0:
     call_indirect sig0, v401()                  ; bin: ff d6
     ; asm: call *%r10
     call_indirect sig0, v402()                  ; bin: 41 ff d2
+
+    ; asm: movabsq $-1, %rcx
+    [-,%rcx]            v450 = globalsym_addr.i64 gv0    ; bin: 48 b9 Abs8(gv0) 0000000000000000
+    ; asm: movabsq $-1, %rsi
+    [-,%rsi]            v451 = globalsym_addr.i64 gv0    ; bin: 48 be Abs8(gv0) 0000000000000000
+    ; asm: movabsq $-1, %r10
+    [-,%r10]            v452 = globalsym_addr.i64 gv0    ; bin: 49 ba Abs8(gv0) 0000000000000000
 
     ; Spill / Fill.
 

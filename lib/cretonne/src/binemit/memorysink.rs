@@ -14,7 +14,7 @@
 //! relocations to a `RelocSink` trait object. Relocations are less frequent than the
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
 
-use ir::{Ebb, FuncRef, JumpTable};
+use ir::{Ebb, FuncRef, GlobalVar, JumpTable};
 use super::{CodeSink, CodeOffset, Reloc};
 use std::ptr::write_unaligned;
 
@@ -54,6 +54,11 @@ pub trait RelocSink {
     /// Add a relocation referencing an external function at the current offset.
     fn reloc_func(&mut self, CodeOffset, Reloc, FuncRef);
 
+    /// Add a relocation referencing an external global variable symbol at the
+    /// current offset.
+    fn reloc_globalsym(&mut self, CodeOffset, Reloc, GlobalVar);
+
+    /// Add a relocation referencing a jump table.
     /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, CodeOffset, Reloc, JumpTable);
 }
@@ -99,6 +104,11 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
     fn reloc_func(&mut self, rel: Reloc, func: FuncRef) {
         let ofs = self.offset();
         self.relocs.reloc_func(ofs, rel, func);
+    }
+
+    fn reloc_globalsym(&mut self, rel: Reloc, global: GlobalVar) {
+        let ofs = self.offset();
+        self.relocs.reloc_globalsym(ofs, rel, global);
     }
 
     fn reloc_jt(&mut self, rel: Reloc, jt: JumpTable) {

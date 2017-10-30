@@ -21,7 +21,7 @@ pub fn expand_global_addr(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut Co
     match func.global_vars[gv] {
         ir::GlobalVarData::VmCtx { offset } => vmctx_addr(inst, func, offset.into()),
         ir::GlobalVarData::Deref { base, offset } => deref_addr(inst, func, base, offset.into()),
-        ir::GlobalVarData::Sym { .. } => (),
+        ir::GlobalVarData::Sym { .. } => globalsym(inst, func, gv),
     }
 }
 
@@ -49,4 +49,10 @@ fn deref_addr(inst: ir::Inst, func: &mut ir::Function, base: ir::GlobalVar, offs
     // TODO: We could probably set both `notrap` and `aligned` on this load instruction.
     let base_ptr = pos.ins().load(ptr_ty, ir::MemFlags::new(), base_addr, 0);
     pos.func.dfg.replace(inst).iadd_imm(base_ptr, offset);
+}
+
+/// Expand a `global_addr` instruction for a symbolic name global.
+fn globalsym(inst: ir::Inst, func: &mut ir::Function, gv: ir::GlobalVar) {
+    let ptr_ty = func.dfg.value_type(func.dfg.first_result(inst));
+    func.dfg.replace(inst).globalsym_addr(ptr_ty, gv);
 }

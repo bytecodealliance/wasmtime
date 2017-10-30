@@ -99,5 +99,6 @@ impl binemit::CodeSink for SizeSink {
 
     fn reloc_ebb(&mut self, _reloc: binemit::Reloc, _ebb: ir::Ebb) {}
     fn reloc_func(&mut self, _reloc: binemit::Reloc, _fref: ir::FuncRef) {}
+    fn reloc_globalsym(&mut self, _reloc: binemit::Reloc, _global: ir::GlobalVar) {}
     fn reloc_jt(&mut self, _reloc: binemit::Reloc, _jt: ir::JumpTable) {}
 }

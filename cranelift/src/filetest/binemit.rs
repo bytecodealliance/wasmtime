@@ -79,6 +79,10 @@ impl binemit::CodeSink for TextSink {
         write!(self.text, "{}({}) ", self.rnames[reloc.0 as usize], fref).unwrap();
     }
 
+    fn reloc_globalsym(&mut self, reloc: binemit::Reloc, global: ir::GlobalVar) {
+        write!(self.text, "{}({}) ", self.rnames[reloc.0 as usize], global).unwrap();
+    }
+
     fn reloc_jt(&mut self, reloc: binemit::Reloc, jt: ir::JumpTable) {
         write!(self.text, "{}({}) ", self.rnames[reloc.0 as usize], jt).unwrap();
     }
