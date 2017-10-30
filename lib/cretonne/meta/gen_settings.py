@@ -62,7 +62,7 @@ def gen_getter(setting, sgrp, fmt):
                     .format(setting.byte_offset), '}'):
                 for i, v in enumerate(setting.values):
                     fmt.line('{} => {}::{},'.format(i, ty, camel_case(v)))
-                fmt.line('_ => panic!("Invalid enum value")')
+                fmt.line('_ => panic!("Invalid enum value"),')
     else:
         raise AssertionError("Unknown setting kind")
 
@@ -197,7 +197,7 @@ def gen_template(sgrp, fmt):
         fmt.line('enumerators: &ENUMERATORS,')
         fmt.line('hash_table: &HASH_TABLE,')
         vs = ', '.join('{:#04x}'.format(x) for x in v)
-        fmt.line('defaults: &[ {} ],'.format(vs))
+        fmt.line('defaults: &[{}],'.format(vs))
         fmt.line('presets: &PRESETS,')
 
     fmt.doc_comment(

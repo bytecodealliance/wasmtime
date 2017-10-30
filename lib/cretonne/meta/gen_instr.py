@@ -97,7 +97,7 @@ def gen_arguments_method(fmt, is_mut):
                     capture = 'ref {}args, '.format(mut)
                     arg = 'args'
                 fmt.line(
-                        '{} {{ {} .. }} => {},'
+                        '{} {{ {}.. }} => {},'
                         .format(n, capture, arg))
 
 
@@ -271,7 +271,7 @@ def gen_opcodes(groups, fmt):
                                     'Opcode::{} => true,',
                                     i.camel_name, i.name)
 
-                    fmt.line('_ => false')
+                    fmt.line('_ => false,')
 
     # Generate a private opcode_format table.
     with fmt.indented(
@@ -352,7 +352,7 @@ def gen_typesets_table(fmt, type_sets):
     fmt.comment('Table of value type sets.')
     assert len(type_sets.table) <= typeset_limit, "Too many type sets"
     with fmt.indented(
-            'const TYPE_SETS : [ir::instructions::ValueTypeSet; {}] = ['
+            'const TYPE_SETS: [ir::instructions::ValueTypeSet; {}] = ['
             .format(len(type_sets.table)), '];'):
         for ts in type_sets.table:
             with fmt.indented('ir::instructions::ValueTypeSet {', '},'):
@@ -385,7 +385,7 @@ def gen_type_constraints(fmt, instrs):
 
     fmt.comment('Table of opcode constraints.')
     with fmt.indented(
-            'const OPCODE_CONSTRAINTS : [OpcodeConstraints; {}] = ['
+            'const OPCODE_CONSTRAINTS: [OpcodeConstraints; {}] = ['
             .format(len(instrs)), '];'):
         for i in instrs:
             # Collect constraints for the value results, not including
@@ -442,7 +442,7 @@ def gen_type_constraints(fmt, instrs):
 
     fmt.comment('Table of operand constraint sequences.')
     with fmt.indented(
-            'const OPERAND_CONSTRAINTS : [OperandConstraint; {}] = ['
+            'const OPERAND_CONSTRAINTS: [OperandConstraint; {}] = ['
             .format(len(operand_seqs.table)), '];'):
         for c in operand_seqs.table:
             fmt.line('OperandConstraint::{},'.format(c))
