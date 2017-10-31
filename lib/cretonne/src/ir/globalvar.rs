@@ -35,6 +35,16 @@ pub enum GlobalVarData {
     },
 }
 
+impl GlobalVarData {
+    /// Assume that `self` is an `GlobalVarData::Sym` and return its name.
+    pub fn symbol_name(&self) -> &ExternalName {
+        match *self {
+            GlobalVarData::Sym { ref name } => name,
+            _ => panic!("only symbols have names"),
+        }
+    }
+}
+
 impl fmt::Display for GlobalVarData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {

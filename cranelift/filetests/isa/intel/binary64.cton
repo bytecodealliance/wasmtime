@@ -429,14 +429,14 @@ ebb0:
     [-,%rsi]             v351 = bint.i64 v301   ; bin: 0f b6 f2
 
     ; asm: call foo
-    call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
+    call fn0()                                  ; bin: e8 PCRel4(%foo) 00000000
 
     ; asm: movabsq $0, %rcx
-    [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(fn0) 0000000000000000
+    [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(%foo) 0000000000000000
     ; asm: movabsq $0, %rsi
-    [-,%rsi]            v401 = func_addr.i64 fn0        ; bin: 48 be Abs8(fn0) 0000000000000000
+    [-,%rsi]            v401 = func_addr.i64 fn0        ; bin: 48 be Abs8(%foo) 0000000000000000
     ; asm: movabsq $0, %r10
-    [-,%r10]            v402 = func_addr.i64 fn0        ; bin: 49 ba Abs8(fn0) 0000000000000000
+    [-,%r10]            v402 = func_addr.i64 fn0        ; bin: 49 ba Abs8(%foo) 0000000000000000
 
     ; asm: call *%rcx
     call_indirect sig0, v400()                  ; bin: ff d1
@@ -446,11 +446,11 @@ ebb0:
     call_indirect sig0, v402()                  ; bin: 41 ff d2
 
     ; asm: movabsq $-1, %rcx
-    [-,%rcx]            v450 = globalsym_addr.i64 gv0    ; bin: 48 b9 Abs8(gv0) 0000000000000000
+    [-,%rcx]            v450 = globalsym_addr.i64 gv0    ; bin: 48 b9 Abs8(%some_gv) 0000000000000000
     ; asm: movabsq $-1, %rsi
-    [-,%rsi]            v451 = globalsym_addr.i64 gv0    ; bin: 48 be Abs8(gv0) 0000000000000000
+    [-,%rsi]            v451 = globalsym_addr.i64 gv0    ; bin: 48 be Abs8(%some_gv) 0000000000000000
     ; asm: movabsq $-1, %r10
-    [-,%r10]            v452 = globalsym_addr.i64 gv0    ; bin: 49 ba Abs8(gv0) 0000000000000000
+    [-,%r10]            v452 = globalsym_addr.i64 gv0    ; bin: 49 ba Abs8(%some_gv) 0000000000000000
 
     ; Spill / Fill.
 

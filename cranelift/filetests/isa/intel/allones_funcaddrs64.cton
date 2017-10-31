@@ -18,11 +18,11 @@ function %I64() {
 ebb0:
 
     ; asm: movabsq $-1, %rcx
-    [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(fn0) ffffffffffffffff
+    [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(%foo) ffffffffffffffff
     ; asm: movabsq $-1, %rsi
-    [-,%rsi]            v401 = func_addr.i64 fn0        ; bin: 48 be Abs8(fn0) ffffffffffffffff
+    [-,%rsi]            v401 = func_addr.i64 fn0        ; bin: 48 be Abs8(%foo) ffffffffffffffff
     ; asm: movabsq $-1, %r10
-    [-,%r10]            v402 = func_addr.i64 fn0        ; bin: 49 ba Abs8(fn0) ffffffffffffffff
+    [-,%r10]            v402 = func_addr.i64 fn0        ; bin: 49 ba Abs8(%foo) ffffffffffffffff
 
     return                                              ; bin: c3
 }

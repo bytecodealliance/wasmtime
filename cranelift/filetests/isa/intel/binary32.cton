@@ -342,12 +342,12 @@ ebb0:
     [-,%rsi]             v351 = bint.i32 v301   ; bin: 0f b6 f2
 
     ; asm: call foo
-    call fn0()                                  ; bin: e8 PCRel4(fn0) 00000000
+    call fn0()                                  ; bin: e8 PCRel4(%foo) 00000000
 
     ; asm: movl $0, %ecx
-    [-,%rcx]            v400 = func_addr.i32 fn0        ; bin: b9 Abs4(fn0) 00000000
+    [-,%rcx]            v400 = func_addr.i32 fn0        ; bin: b9 Abs4(%foo) 00000000
     ; asm: movl $0, %esi
-    [-,%rsi]            v401 = func_addr.i32 fn0        ; bin: be Abs4(fn0) 00000000
+    [-,%rsi]            v401 = func_addr.i32 fn0        ; bin: be Abs4(%foo) 00000000
 
     ; asm: call *%ecx
     call_indirect sig0, v400()                  ; bin: ff d1
@@ -355,9 +355,9 @@ ebb0:
     call_indirect sig0, v401()                  ; bin: ff d6
 
     ; asm: movl $0, %ecx
-    [-,%rcx]            v450 = globalsym_addr.i32 gv0    ; bin: b9 Abs4(gv0) 00000000
+    [-,%rcx]            v450 = globalsym_addr.i32 gv0    ; bin: b9 Abs4(%some_gv) 00000000
     ; asm: movl $0, %esi
-    [-,%rsi]            v451 = globalsym_addr.i32 gv0    ; bin: be Abs4(gv0) 00000000
+    [-,%rsi]            v451 = globalsym_addr.i32 gv0    ; bin: be Abs4(%some_gv) 00000000
 
     ; Spill / Fill.
 
