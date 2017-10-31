@@ -2,7 +2,7 @@
 //!
 //! Reads IR files into Cretonne IL and compiles it.
 
-use cton_reader::parse_functions;
+use cton_reader::parse_test;
 use std::path::PathBuf;
 use cretonne::Context;
 use cretonne::settings::FlagsOrIsa;
@@ -38,22 +38,28 @@ fn handle_module(
     let buffer = read_to_string(&path).map_err(
         |e| format!("{}: {}", name, e),
     )?;
-    let items = parse_functions(&buffer).map_err(
-        |e| format!("{}: {}", name, e),
-    )?;
-    for func in items.into_iter() {
+    let test_file = parse_test(&buffer).map_err(|e| format!("{}: {}", name, e))?;
+
+    // If we have an isa from the command-line, use that. Otherwise if the
+    // file contins a unique isa, use that.
+    let isa = if let Some(isa) = fisa.isa {
+        isa
+    } else if let Some(isa) = test_file.isa_spec.unique_isa() {
+        isa
+    } else {
+        return Err(String::from("compilation requires a target isa"));
+    };
+
+    for (func, _) in test_file.functions.into_iter() {
         let mut context = Context::new();
         context.func = func;
-        if let Some(isa) = fisa.isa {
-            context.compile(isa).map_err(|err| {
-                pretty_error(&context.func, fisa.isa, err)
-            })?;
-        } else {
-            return Err(String::from("compilation requires a target isa"));
-        }
+        context.compile(isa).map_err(|err| {
+            pretty_error(&context.func, Some(isa), err)
+        })?;
         if flag_print {
-            println!("{}", context.func.display(fisa.isa));
+            println!("{}", context.func.display(isa));
         }
     }
+
     Ok(())
 }
