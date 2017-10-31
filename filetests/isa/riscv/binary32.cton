@@ -88,7 +88,7 @@ ebb0(v9999: i32):
     ; Control Transfer Instructions
 
     ; jal %x1, fn0
-    call fn0()                                  ; bin: Call(fn0) 000000ef
+    call fn0()                                  ; bin: Call(%foo) 000000ef
 
     ; jalr %x1, %x10
     call_indirect sig0, v1()                    ; bin: 000500e7

@@ -75,12 +75,13 @@ impl binemit::CodeSink for TextSink {
         write!(self.text, "{}({}) ", self.rnames[reloc.0 as usize], ebb).unwrap();
     }
 
-    fn reloc_func(&mut self, reloc: binemit::Reloc, fref: ir::FuncRef) {
-        write!(self.text, "{}({}) ", self.rnames[reloc.0 as usize], fref).unwrap();
-    }
-
-    fn reloc_globalsym(&mut self, reloc: binemit::Reloc, global: ir::GlobalVar) {
-        write!(self.text, "{}({}) ", self.rnames[reloc.0 as usize], global).unwrap();
+    fn reloc_external(&mut self, reloc: binemit::Reloc, name: &ir::ExternalName) {
+        write!(
+            self.text,
+            "{}({}) ",
+            self.rnames[reloc.0 as usize],
+            name,
+        ).unwrap();
     }
 
     fn reloc_jt(&mut self, reloc: binemit::Reloc, jt: ir::JumpTable) {
