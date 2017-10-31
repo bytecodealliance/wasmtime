@@ -183,7 +183,8 @@ UJ = EncRecipe(
 UJcall = EncRecipe(
         'UJcall', Call, size=4, ins=(), outs=(),
         emit='''
-        sink.reloc_external(RelocKind::Call.into(), &func.dfg.ext_funcs[func_ref].name);
+        sink.reloc_external(RelocKind::Call.into(),
+                            &func.dfg.ext_funcs[func_ref].name);
         // rd=%x1 is the standard link register.
         put_uj(bits, 0, 1, sink);
         ''')
