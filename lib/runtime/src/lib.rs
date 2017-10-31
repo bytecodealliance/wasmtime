@@ -19,7 +19,7 @@ pub use instance::Instance;
 
 use cton_wasm::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, Global, Table, Memory,
                 GlobalValue, SignatureIndex, FuncTranslator};
-use cretonne::ir::{InstBuilder, FuncRef, ExtFuncData, FunctionName, Signature, AbiParam, CallConv,
+use cretonne::ir::{InstBuilder, FuncRef, ExtFuncData, ExternalName, Signature, AbiParam, CallConv,
                    ArgumentPurpose, ArgumentLoc, ArgumentExtension, Function};
 use cretonne::ir::types::*;
 use cretonne::ir::immediates::Offset32;
@@ -31,9 +31,9 @@ use cretonne::binemit;
 use std::str::from_utf8;
 use std::error::Error;
 
-/// Compute a `ir::FunctionName` for a given wasm function index.
-pub fn get_func_name(func_index: FunctionIndex) -> cretonne::ir::FunctionName {
-    ir::FunctionName::new(format!("wasm_0x{:x}", func_index))
+/// Compute a `ir::ExternalName` for a given wasm function index.
+pub fn get_func_name(func_index: FunctionIndex) -> cretonne::ir::ExternalName {
+    ir::ExternalName::new(format!("wasm_0x{:x}", func_index))
 }
 
 /// An entity to export.
@@ -57,12 +57,22 @@ struct RelocSink<'func> {
 }
 
 impl<'func> binemit::RelocSink for RelocSink<'func> {
-    fn reloc_ebb(&mut self, _offset: binemit::CodeOffset, _reloc: binemit::Reloc, _ebb: ir::Ebb) {
+    fn reloc_ebb(
+        &mut self,
+        _offset: binemit::CodeOffset,
+        _reloc: binemit::Reloc,
+        _ebb_offset: binemit::CodeOffset,
+    ) {
         // This should use the `offsets` field of `ir::Function`.
         panic!("ebb headers not yet implemented");
     }
-    fn reloc_func(&mut self, offset: binemit::CodeOffset, reloc: binemit::Reloc, func: FuncRef) {
-        let name_bytes: &[u8] = self.func.dfg.ext_funcs[func].name.as_ref();
+    fn reloc_external(
+        &mut self,
+        offset: binemit::CodeOffset,
+        reloc: binemit::Reloc,
+        name: &ExternalName,
+    ) {
+        let name_bytes: &[u8] = name.as_ref();
         let name = from_utf8(name_bytes).unwrap();
         // See `get_func_name`; names are encoded as `wasm_0x...`, so grab the
         // part after `0x...` and convert it back to an integer to get the index.
@@ -74,8 +84,9 @@ impl<'func> binemit::RelocSink for RelocSink<'func> {
         &mut self,
         _offset: binemit::CodeOffset,
         _reloc: binemit::Reloc,
-        _jt: ir::JumpTable,
+        jt: ir::JumpTable,
     ) {
+        let _jump_table = &self.func.jump_tables[jt];
         panic!("jump tables not yet implemented");
     }
 }
@@ -308,7 +319,7 @@ impl<'module_environment> cton_wasm::FuncEnvironment for FuncEnvironment<'module
                 returns: vec![AbiParam::new(I32)],
             });
             pos.func.import_function(ExtFuncData {
-                name: FunctionName::new("grow_memory"),
+                name: ExternalName::new("grow_memory"),
                 signature: sig_ref,
             })
         });
@@ -332,7 +343,7 @@ impl<'module_environment> cton_wasm::FuncEnvironment for FuncEnvironment<'module
                 returns: vec![AbiParam::new(I32)],
             });
             pos.func.import_function(ExtFuncData {
-                name: FunctionName::new("current_memory"),
+                name: ExternalName::new("current_memory"),
                 signature: sig_ref,
             })
         });
@@ -347,7 +358,7 @@ impl<'module_environment> cton_wasm::FuncEnvironment for FuncEnvironment<'module
 /// tells how to translate runtime-dependent wasm instructions. These functions should not be
 /// called by the user.
 impl<'data, 'module> cton_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data, 'module> {
-    fn get_func_name(&self, func_index: FunctionIndex) -> cretonne::ir::FunctionName {
+    fn get_func_name(&self, func_index: FunctionIndex) -> cretonne::ir::ExternalName {
         get_func_name(func_index)
     }
 
