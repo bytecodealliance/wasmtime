@@ -14,7 +14,7 @@
 //! relocations to a `RelocSink` trait object. Relocations are less frequent than the
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
 
-use ir::{ExternalName, Ebb, JumpTable};
+use ir::{ExternalName, JumpTable};
 use super::{CodeSink, CodeOffset, Reloc};
 use std::ptr::write_unaligned;
 
@@ -49,7 +49,7 @@ impl<'a> MemoryCodeSink<'a> {
 /// A trait for receiving relocations for code that is emitted directly into memory.
 pub trait RelocSink {
     /// Add a relocation referencing an EBB at the current offset.
-    fn reloc_ebb(&mut self, CodeOffset, Reloc, Ebb);
+    fn reloc_ebb(&mut self, CodeOffset, Reloc, CodeOffset);
 
     /// Add a relocation referencing an external symbol at the current offset.
     fn reloc_external(&mut self, CodeOffset, Reloc, &ExternalName);
@@ -91,9 +91,9 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         self.offset += 8;
     }
 
-    fn reloc_ebb(&mut self, rel: Reloc, ebb: Ebb) {
+    fn reloc_ebb(&mut self, rel: Reloc, ebb_offset: CodeOffset) {
         let ofs = self.offset();
-        self.relocs.reloc_ebb(ofs, rel, ebb);
+        self.relocs.reloc_ebb(ofs, rel, ebb_offset);
     }
 
     fn reloc_external(&mut self, rel: Reloc, name: &ExternalName) {
