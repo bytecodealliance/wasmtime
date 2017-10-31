@@ -585,7 +585,6 @@ where
         self.params_values_initialized = true;
     }
 
-
     fn ebb_params_adjustment(&mut self, dest_ebb: Ebb, jump_args: &[Value]) {
         if self.builder.ssa.predecessors(dest_ebb).is_empty() ||
             self.builder.ebbs[dest_ebb].pristine
