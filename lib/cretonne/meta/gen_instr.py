@@ -28,11 +28,13 @@ def gen_formats(fmt):
     # type: (srcgen.Formatter) -> None
     """Generate an instruction format enumeration"""
 
-    fmt.doc_comment('An instruction format')
-    fmt.doc_comment('')
-    fmt.doc_comment('Every opcode has a corresponding instruction format')
-    fmt.doc_comment('which is represented by both the `InstructionFormat`')
-    fmt.doc_comment('and the `InstructionData` enums.')
+    fmt.doc_comment('''
+                    An instruction format
+
+                    Every opcode has a corresponding instruction format
+                    which is represented by both the `InstructionFormat`
+                    and the `InstructionData` enums.
+                    ''')
     fmt.line('#[derive(Copy, Clone, PartialEq, Eq, Debug)]')
     with fmt.indented('pub enum InstructionFormat {', '}'):
         for f in InstructionFormat.all_formats:
@@ -126,6 +128,7 @@ def gen_instruction_data_impl(fmt):
                     fmt.line(
                             'InstructionData::{} {{ opcode, .. }} => opcode,'
                             .format(f.name))
+        fmt.line()
 
         fmt.doc_comment('Get the controlling type variable operand.')
         with fmt.indented(
@@ -153,18 +156,22 @@ def gen_instruction_data_impl(fmt):
                                 n +
                                 ' {{ ref args, .. }} => Some(args[{}]),'
                                 .format(i))
+        fmt.line()
 
         fmt.doc_comment(
                 """
                 Get the value arguments to this instruction.
                 """)
         gen_arguments_method(fmt, False)
+        fmt.line()
+
         fmt.doc_comment(
                 """
                 Get mutable references to the value arguments to this
                 instruction.
                 """)
         gen_arguments_method(fmt, True)
+        fmt.line()
 
         fmt.doc_comment(
                 """
@@ -184,6 +191,7 @@ def gen_instruction_data_impl(fmt):
                         fmt.line(
                             n + ' { ref mut args, .. } => Some(args.take()),')
                 fmt.line('_ => None,')
+        fmt.line()
 
         fmt.doc_comment(
                 """
@@ -227,9 +235,11 @@ def gen_opcodes(groups, fmt):
     Return a list of all instructions.
     """
 
-    fmt.doc_comment('An instruction opcode.')
-    fmt.doc_comment('')
-    fmt.doc_comment('All instructions from all supported ISAs are present.')
+    fmt.doc_comment('''
+                    An instruction opcode.
+
+                    All instructions from all supported ISAs are present.
+                    ''')
     fmt.line('#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]')
     instrs = []
 
@@ -272,6 +282,8 @@ def gen_opcodes(groups, fmt):
                                     i.camel_name, i.name)
 
                     fmt.line('_ => false,')
+            fmt.line()
+    fmt.line()
 
     # Generate a private opcode_format table.
     with fmt.indented(
@@ -437,8 +449,10 @@ def gen_type_constraints(fmt, instrs):
                 fmt.line('flags: {:#04x},'.format(flags))
                 fmt.line('typeset_offset: {},'.format(ctrl_typeset))
                 fmt.line('constraint_offset: {},'.format(offset))
+    fmt.line()
 
     gen_typesets_table(fmt, type_sets)
+    fmt.line()
 
     fmt.comment('Table of operand constraint sequences.')
     with fmt.indented(
@@ -668,6 +682,7 @@ def generate(isas, out_dir):
     fmt = srcgen.Formatter()
     gen_formats(fmt)
     gen_instruction_data_impl(fmt)
+    fmt.line()
     instrs = gen_opcodes(groups, fmt)
     gen_type_constraints(fmt, instrs)
     fmt.update_file('opcodes.rs', out_dir)

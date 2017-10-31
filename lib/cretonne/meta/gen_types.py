@@ -28,6 +28,7 @@ def emit_type(ty, fmt):
     fmt.line(
             'pub const {}: Type = Type({:#x});'
             .format(name, ty.number))
+    fmt.line()
 
 
 def emit_vectors(bits, fmt):
