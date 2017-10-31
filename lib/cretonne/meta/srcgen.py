@@ -168,12 +168,30 @@ def parse_multiline(s):
     # type: (str) -> List[str]
     """
     Given a multi-line string, split it into a sequence of lines after
-    stripping a common indentation. This is useful for strings defined with doc
-    strings:
+    stripping a common indentation, as described in the "trim" function
+    from PEP 257. This is useful for strings defined with doc strings:
         >>> parse_multiline('\\n    hello\\n    world\\n')
-        [None, 'hello', 'world']
+        ['hello', 'world']
     """
-    lines = s.splitlines()
-    indents = list(i for i in (_indent(l) for l in lines) if i)
-    indent = min(indents) if indents else 0
-    return list(l[indent:] if len(l) > indent else None for l in lines)
+    if not s:
+        return []
+    # Convert tabs to spaces (following the normal Python rules)
+    # and split into a list of lines:
+    lines = s.expandtabs().splitlines()
+    # Determine minimum indentation (first line doesn't count):
+    indent = sys.maxsize
+    for line in lines[1:]:
+        stripped = line.lstrip()
+        if stripped:
+            indent = min(indent, len(line) - len(stripped))
+    # Remove indentation (first line is special):
+    trimmed = [lines[0].strip()]
+    if indent < sys.maxsize:
+        for line in lines[1:]:
+            trimmed.append(line[indent:].rstrip())
+    # Strip off trailing and leading blank lines:
+    while trimmed and not trimmed[-1]:
+        trimmed.pop()
+    while trimmed and not trimmed[0]:
+        trimmed.pop(0)
+    return trimmed
