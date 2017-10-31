@@ -9,7 +9,7 @@ mod memorysink;
 pub use self::relaxation::relax_branches;
 pub use self::memorysink::{MemoryCodeSink, RelocSink};
 
-use ir::{ExternalName, Ebb, JumpTable, Function, Inst};
+use ir::{ExternalName, JumpTable, Function, Inst};
 use regalloc::RegDiversions;
 
 /// Offset in bytes from the beginning of the function.
@@ -42,7 +42,7 @@ pub trait CodeSink {
     fn put8(&mut self, u64);
 
     /// Add a relocation referencing an EBB at the current offset.
-    fn reloc_ebb(&mut self, Reloc, Ebb);
+    fn reloc_ebb(&mut self, Reloc, CodeOffset);
 
     /// Add a relocation referencing an external symbol at the current offset.
     fn reloc_external(&mut self, Reloc, &ExternalName);
