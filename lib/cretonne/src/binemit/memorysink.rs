@@ -59,7 +59,6 @@ pub trait RelocSink {
     fn reloc_globalsym(&mut self, CodeOffset, Reloc, GlobalVar);
 
     /// Add a relocation referencing a jump table.
-    /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, CodeOffset, Reloc, JumpTable);
 }
 
