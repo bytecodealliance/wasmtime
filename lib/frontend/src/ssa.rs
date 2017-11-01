@@ -409,6 +409,29 @@ where
     ///
     /// Returns the list of newly created ebbs for critical edge splitting.
     pub fn seal_ebb_header_block(&mut self, ebb: Ebb, func: &mut Function) -> SideEffects {
+        self.seal_one_ebb_header_block(ebb, func);
+        mem::replace(&mut self.side_effects, SideEffects::new())
+    }
+
+    /// Completes the global value numbering for all `Ebb`s in `func`.
+    ///
+    /// It's more efficient to seal `Ebb`s as soon as possible, during
+    /// translation, but for frontends where this is impractical to do, this
+    /// function can be used at the end of translating all blocks to ensure
+    /// that everything is sealed.
+    pub fn seal_all_ebb_header_blocks(&mut self, func: &mut Function) -> SideEffects {
+        // Seal all `Ebb`s currently in the function. This can entail splitting
+        // and creation of new blocks, however such new blocks are sealed on
+        // the fly, so we don't need to accout for them here.
+        for ebb in self.ebb_headers.keys() {
+            self.seal_one_ebb_header_block(ebb, func);
+        }
+        mem::replace(&mut self.side_effects, SideEffects::new())
+    }
+
+    /// Helper function for `seal_ebb_header_block` and
+    /// `seal_all_ebb_header_blocks`.
+    fn seal_one_ebb_header_block(&mut self, ebb: Ebb, func: &mut Function) {
         let block = self.header_block(ebb);
 
         let (undef_vars, ebb): (Vec<(Variable, Value)>, Ebb) = match self.blocks[block] {
@@ -429,7 +452,6 @@ where
             self.predecessors_lookup(func, val, var, ty, ebb);
         }
         self.mark_ebb_header_block_sealed(block);
-        mem::replace(&mut self.side_effects, SideEffects::new())
     }
 
     /// Set the `sealed` flag for `block`.
