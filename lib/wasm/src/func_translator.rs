@@ -215,6 +215,10 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
         builder.ins().return_(&state.stack);
     }
 
+    // Discard any remaining values on the stack. Either we just returned them,
+    // or the end of the function is unreachable.
+    state.stack.clear();
+
     debug_assert!(reader.eof());
 
     Ok(())
