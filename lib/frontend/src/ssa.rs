@@ -442,7 +442,7 @@ where
                 debug_assert!(data.undef_variables.is_empty());
                 data.sealed = true;
             }
-        };
+        }
     }
 
     /// Look up in the predecessors of an Ebb the def for a value an decides wether or not
@@ -507,7 +507,7 @@ where
                     }
                 }
                 ZeroOneOrMore::More() => {}
-            };
+            }
         }
         let result_val = match pred_values {
             ZeroOneOrMore::Zero() => {
@@ -515,8 +515,8 @@ where
                 // code, but rather than throwing an error we silently initialize the variable to
                 // 0. This will have no effect since this situation happens in unreachable code.
                 if !func.layout.is_ebb_inserted(dest_ebb) {
-                    func.layout.append_ebb(dest_ebb)
-                };
+                    func.layout.append_ebb(dest_ebb);
+                }
                 self.side_effects.instructions_added_to_ebbs.push(dest_ebb);
                 let zero = emit_zero(
                     func.dfg.value_type(temp_arg_val),
