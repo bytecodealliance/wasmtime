@@ -441,6 +441,9 @@ where
                 debug_assert!(!data.sealed);
                 debug_assert!(data.undef_variables.is_empty());
                 data.sealed = true;
+                // We could call data.predecessors.shrink_to_fit() here, if
+                // important, because no further predecessors will be added
+                // to this block.
             }
         }
     }
