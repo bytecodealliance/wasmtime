@@ -484,8 +484,8 @@ where
             None => false,
             Some(entry) => self.position.ebb == entry,
         };
-        (!is_entry && self.builder.ssa.is_sealed(self.position.ebb) &&
-             self.builder.ssa.predecessors(self.position.ebb).is_empty())
+        !is_entry && self.builder.ssa.is_sealed(self.position.ebb) &&
+            self.builder.ssa.predecessors(self.position.ebb).is_empty()
     }
 
     /// Returns `true` if and only if the entry block has been started and `param_value`
