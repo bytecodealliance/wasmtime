@@ -300,6 +300,17 @@ where
         self.handle_ssa_side_effects(side_effects);
     }
 
+    /// Effectively calls seal_block on all blocks in the function.
+    ///
+    /// It's more efficient to seal `Ebb`s as soon as possible, during
+    /// translation, but for frontends where this is impractical to do, this
+    /// function can be used at the end of translating all blocks to ensure
+    /// that everything is sealed.
+    pub fn seal_all_blocks(&mut self) {
+        let side_effects = self.builder.ssa.seal_all_ebb_header_blocks(self.func);
+        self.handle_ssa_side_effects(side_effects);
+    }
+
     /// In order to use a variable in a `use_var`, you need to declare its type with this method.
     pub fn declare_var(&mut self, var: Variable, ty: Type) {
         self.builder.types[var] = ty;
@@ -679,8 +690,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn sample_function() {
+    fn sample_function(lazy_seal: bool) {
         let mut sig = Signature::new(CallConv::Native);
         sig.returns.push(AbiParam::new(I32));
         sig.params.push(AbiParam::new(I32));
@@ -701,7 +711,9 @@ mod tests {
             builder.declare_var(z, I32);
 
             builder.switch_to_block(block0, &[]);
-            builder.seal_block(block0);
+            if !lazy_seal {
+                builder.seal_block(block0);
+            }
             {
                 let tmp = builder.param_value(0);
                 builder.def_var(x, tmp);
@@ -741,7 +753,9 @@ mod tests {
             }
 
             builder.switch_to_block(block2, &[]);
-            builder.seal_block(block2);
+            if !lazy_seal {
+                builder.seal_block(block2);
+            }
 
             {
                 let arg1 = builder.use_var(y);
@@ -750,7 +764,13 @@ mod tests {
                 builder.def_var(y, tmp);
             }
             builder.ins().jump(block1, &[]);
-            builder.seal_block(block1);
+            if !lazy_seal {
+                builder.seal_block(block1);
+            }
+
+            if lazy_seal {
+                builder.seal_all_blocks();
+            }
         }
 
         let flags = settings::Flags::new(&settings::builder());
@@ -760,5 +780,15 @@ mod tests {
             Ok(_) => {}
             Err(err) => panic!("{}{}", func.display(None), err),
         }
+    }
+
+    #[test]
+    fn sample() {
+        sample_function(false)
+    }
+
+    #[test]
+    fn sample_with_lazy_seal() {
+        sample_function(true)
     }
 }
