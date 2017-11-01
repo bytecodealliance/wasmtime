@@ -90,6 +90,7 @@ impl<Variable> BlockData<Variable> {
         match *self {
             BlockData::EbbBody { .. } => panic!("you can't add a predecessor to a body block"),
             BlockData::EbbHeader(ref mut data) => {
+                debug_assert!(!data.sealed, "sealed blocks cannot accept new predecessors");
                 data.predecessors.push((pred, inst));
             }
         }
