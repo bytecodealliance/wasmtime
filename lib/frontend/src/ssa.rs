@@ -611,9 +611,9 @@ where
                 // We have to split the critical edge
                 let middle_ebb = func.dfg.make_ebb();
                 func.layout.append_ebb(middle_ebb);
-                let block = self.declare_ebb_header_block(middle_ebb);
-                self.blocks[block].add_predecessor(jump_inst_block, jump_inst);
-                self.mark_ebb_header_block_sealed(block);
+                let middle_block = self.declare_ebb_header_block(middle_ebb);
+                self.blocks[middle_block].add_predecessor(jump_inst_block, jump_inst);
+                self.mark_ebb_header_block_sealed(middle_block);
                 for old_dest in func.jump_tables[jt].as_mut_slice() {
                     if old_dest.unwrap() == dest_ebb {
                         *old_dest = PackedOption::from(middle_ebb);
@@ -621,8 +621,8 @@ where
                 }
                 let mut cur = FuncCursor::new(func).at_bottom(middle_ebb);
                 let middle_jump_inst = cur.ins().jump(dest_ebb, &[val]);
-                self.def_var(var, val, block);
-                Some((middle_ebb, block, middle_jump_inst))
+                self.def_var(var, val, middle_block);
+                Some((middle_ebb, middle_block, middle_jump_inst))
             }
         }
     }
