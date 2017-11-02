@@ -115,7 +115,7 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
             return Err(String::from("multiple memories not supported yet"));
         }
         //obj.add_data("memory", initializer);
-        return Err(String::from("FIXME: implement tables"));
+        return Err(String::from("FIXME: implement data initializers"));
     }
 
     // FIXME: Make the format a parameter.
