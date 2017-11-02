@@ -122,7 +122,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
     // instruction being inserted to add related info to the DFG and the SSA building system,
     // and perform debug sanity checks.
     fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'short mut DataFlowGraph) {
-        if data.opcode().is_return() {
+        if cfg!(debug_assertions) && data.opcode().is_return() {
             self.builder
                 .check_return_args(data.arguments(&self.builder.func.dfg.value_lists));
         }
@@ -569,6 +569,7 @@ where
         );
     }
 
+    #[cfg(debug_assertions)]
     fn check_return_args(&self, args: &[Value]) {
         debug_assert_eq!(
             args.len(),
