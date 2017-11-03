@@ -45,7 +45,7 @@ impl Part {
     /// Get the variabled referenced by this part, if any.
     pub fn ref_var(&self) -> Option<&str> {
         match *self {
-            Part::Var(ref var) => Some(var),
+            Part::Var(ref var) |
             Part::DefVar { ref var, .. } => Some(var),
             _ => None,
         }

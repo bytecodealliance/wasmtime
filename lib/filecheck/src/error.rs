@@ -39,9 +39,9 @@ impl StdError for Error {
     fn description(&self) -> &str {
         use Error::*;
         match *self {
-            Syntax(ref s) => s,
-            UndefVariable(ref s) => s,
-            Backref(ref s) => s,
+            Syntax(ref s) |
+            UndefVariable(ref s) |
+            Backref(ref s) |
             DuplicateDef(ref s) => s,
             Regex(ref err) => err.description(),
         }

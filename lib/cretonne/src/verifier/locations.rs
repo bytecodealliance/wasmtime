@@ -233,7 +233,7 @@ impl<'a> LocationVerifier<'a> {
     /// Update diversions to reflect the current instruction and check their consistency.
     fn update_diversions(&self, inst: ir::Inst, divert: &mut RegDiversions) -> Result {
         let (arg, src) = match self.func.dfg[inst] {
-            ir::InstructionData::RegMove { arg, src, .. } => (arg, ir::ValueLoc::Reg(src)),
+            ir::InstructionData::RegMove { arg, src, .. } |
             ir::InstructionData::RegSpill { arg, src, .. } => (arg, ir::ValueLoc::Reg(src)),
             ir::InstructionData::RegFill { arg, src, .. } => (arg, ir::ValueLoc::Stack(src)),
             _ => return Ok(()),
