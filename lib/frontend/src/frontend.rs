@@ -10,7 +10,7 @@ use cretonne::isa::TargetIsa;
 use ssa::{SSABuilder, SideEffects, Block};
 use cretonne::entity::{EntityRef, EntityMap, EntitySet};
 
-/// Permanent structure used for translating into Cretonne IL.
+/// Structure used for translating a series of functions into Cretonne IL.
 ///
 /// In order to reduce memory reallocations whem compiling multiple functions,
 /// `ILBuilder` holds various data structures which are cleared between
@@ -26,7 +26,7 @@ where
 }
 
 
-/// Temporary object used to build a Cretonne IL `Function`.
+/// Temporary object used to build a single Cretonne IL `Function`.
 pub struct FunctionBuilder<'a, Variable: 'a>
 where
     Variable: EntityRef + Default,
