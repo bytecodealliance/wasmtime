@@ -1387,9 +1387,9 @@ impl<'a> Parser<'a> {
 
         // extended-basic-block ::= ebb-header * { instruction }
         while match self.token() {
-            Some(Token::Value(_)) => true,
-            Some(Token::Identifier(_)) => true,
-            Some(Token::LBracket) => true,
+            Some(Token::Value(_)) |
+            Some(Token::Identifier(_)) |
+            Some(Token::LBracket) |
             Some(Token::SourceLoc(_)) => true,
             _ => false,
         }

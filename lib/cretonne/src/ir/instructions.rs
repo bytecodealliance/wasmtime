@@ -356,8 +356,8 @@ impl InstructionData {
     /// Multi-destination branches like `br_table` return `None`.
     pub fn branch_destination(&self) -> Option<Ebb> {
         match *self {
-            InstructionData::Jump { destination, .. } => Some(destination),
-            InstructionData::Branch { destination, .. } => Some(destination),
+            InstructionData::Jump { destination, .. } |
+            InstructionData::Branch { destination, .. } |
             InstructionData::BranchIcmp { destination, .. } => Some(destination),
             _ => None,
         }
@@ -369,8 +369,8 @@ impl InstructionData {
     /// Multi-destination branches like `br_table` return `None`.
     pub fn branch_destination_mut(&mut self) -> Option<&mut Ebb> {
         match *self {
-            InstructionData::Jump { ref mut destination, .. } => Some(destination),
-            InstructionData::Branch { ref mut destination, .. } => Some(destination),
+            InstructionData::Jump { ref mut destination, .. } |
+            InstructionData::Branch { ref mut destination, .. } |
             InstructionData::BranchIcmp { ref mut destination, .. } => Some(destination),
             _ => None,
         }
