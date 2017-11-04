@@ -97,6 +97,12 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
 
     let mut obj = Artifact::new(faerie_target(&*isa)?, Some(String::from(output)));
 
+    // FIXME: We need to initialize memory in a way that supports alternate
+    // memory spaces, imported base addresses, and offsets.
+    for &(_mem_index, _base, _offset, data) in &environ.lazy.data_initializers {
+        obj.add_data("memory", Vec::from(data));
+    }
+
     let translation = environ.finish_translation();
 
     let (compilation, relocations) = translation.compile(&*isa)?;
@@ -108,14 +114,6 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
             return Err(String::from("multiple tables not supported yet"));
         }
         return Err(String::from("FIXME: implement tables"));
-    }
-
-    if !compilation.module.memories.is_empty() {
-        if compilation.module.memories.len() > 1 {
-            return Err(String::from("multiple memories not supported yet"));
-        }
-        //obj.add_data("memory", initializer);
-        return Err(String::from("FIXME: implement data initializers"));
     }
 
     // FIXME: Make the format a parameter.
