@@ -28,7 +28,7 @@ pub fn emit_module<'module>(
         let body = &compilation.functions[i];
         let external_name =
             wasmstandalone_runtime::get_func_name(compilation.module.imported_funcs.len() + i);
-        let string_name = str::from_utf8(x.as_ref()).map_err(|err| {
+        let string_name = str::from_utf8(external_name.as_ref()).map_err(|err| {
             err.description().to_string()
         })?;
 
