@@ -431,7 +431,7 @@ mod test {
     use cursor::{Cursor, FuncCursor};
     use flowgraph::ControlFlowGraph;
     use ir::types::*;
-    use ir::{Function, InstBuilder, types, TrapCode};
+    use ir::{Function, InstBuilder, TrapCode};
     use settings;
     use super::*;
     use verifier::verify_context;
@@ -450,7 +450,7 @@ mod test {
     fn unreachable_node() {
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();
-        let v0 = func.dfg.append_ebb_param(ebb0, types::I32);
+        let v0 = func.dfg.append_ebb_param(ebb0, I32);
         let ebb1 = func.dfg.make_ebb();
         let ebb2 = func.dfg.make_ebb();
 
@@ -479,7 +479,7 @@ mod test {
     fn non_zero_entry_block() {
         let mut func = Function::new();
         let ebb3 = func.dfg.make_ebb();
-        let cond = func.dfg.append_ebb_param(ebb3, types::I32);
+        let cond = func.dfg.append_ebb_param(ebb3, I32);
         let ebb1 = func.dfg.make_ebb();
         let ebb2 = func.dfg.make_ebb();
         let ebb0 = func.dfg.make_ebb();
