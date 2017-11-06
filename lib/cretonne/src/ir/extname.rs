@@ -15,7 +15,7 @@ use std::ascii::AsciiExt;
 /// External names can also serve as a primitive testing and debugging tool.
 /// In particular, many `.cton` test files use function names to identify
 /// functions.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
 pub struct ExternalName(NameRepr);
 
 impl ExternalName {
@@ -69,7 +69,7 @@ fn try_as_name(bytes: &[u8]) -> Option<String> {
 
 const NAME_LENGTH_THRESHOLD: usize = 22;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum NameRepr {
     Short {
         length: u8,
