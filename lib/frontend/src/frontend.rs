@@ -17,7 +17,7 @@ use cretonne::entity::{EntityRef, EntityMap, EntitySet};
 /// functions, rather than dropped, preserving the underlying allocations.
 pub struct ILBuilder<Variable>
 where
-    Variable: EntityRef + Default,
+    Variable: EntityRef,
 {
     ssa: SSABuilder<Variable>,
     ebbs: EntityMap<Ebb, EbbData>,
@@ -29,7 +29,7 @@ where
 /// Temporary object used to build a single Cretonne IL `Function`.
 pub struct FunctionBuilder<'a, Variable: 'a>
 where
-    Variable: EntityRef + Default,
+    Variable: EntityRef,
 {
     /// The function currently being built.
     /// This field is public so the function can be re-borrowed.
@@ -59,7 +59,7 @@ struct Position {
 
 impl<Variable> ILBuilder<Variable>
 where
-    Variable: EntityRef + Default,
+    Variable: EntityRef,
 {
     /// Creates a ILBuilder structure. The structure is automatically cleared after each
     /// [`FunctionBuilder`](struct.FunctionBuilder.html) completes translating a function.
@@ -89,7 +89,7 @@ where
 /// one convenience method per Cretonne IL instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short, Variable: 'long>
 where
-    Variable: EntityRef + Default,
+    Variable: EntityRef,
 {
     builder: &'short mut FunctionBuilder<'long, Variable>,
     ebb: Ebb,
@@ -97,7 +97,7 @@ where
 
 impl<'short, 'long, Variable> FuncInstBuilder<'short, 'long, Variable>
 where
-    Variable: EntityRef + Default,
+    Variable: EntityRef,
 {
     fn new<'s, 'l>(
         builder: &'s mut FunctionBuilder<'l, Variable>,
@@ -108,7 +108,7 @@ where
 }
 
 impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long, Variable>
-    where Variable: EntityRef + Default
+    where Variable: EntityRef
 {
     fn data_flow_graph(&self) -> &DataFlowGraph {
         &self.builder.func.dfg
@@ -221,7 +221,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 /// return instruction with arguments that don't match the function's signature.
 impl<'a, Variable> FunctionBuilder<'a, Variable>
 where
-    Variable: EntityRef + Default,
+    Variable: EntityRef,
 {
     /// Creates a new FunctionBuilder structure that will operate on a `Function` using a
     /// `IlBuilder`.
@@ -442,7 +442,7 @@ where
 /// in ways that can be unsafe if used incorrectly.
 impl<'a, Variable> FunctionBuilder<'a, Variable>
 where
-    Variable: EntityRef + Default,
+    Variable: EntityRef,
 {
     /// Retrieves all the parameters for an `Ebb` currently inferred from the jump instructions
     /// inserted that target it and the SSA construction.
@@ -527,7 +527,7 @@ where
 
 impl<'a, Variable> Drop for FunctionBuilder<'a, Variable>
 where
-    Variable: EntityRef + Default,
+    Variable: EntityRef,
 {
     /// When a `FunctionBuilder` goes out of scope, it means that the function is fully built.
     fn drop(&mut self) {
@@ -549,7 +549,7 @@ where
 // Helper functions
 impl<'a, Variable> FunctionBuilder<'a, Variable>
 where
-    Variable: EntityRef + Default,
+    Variable: EntityRef,
 {
     fn move_to_next_basic_block(&mut self) {
         self.position.basic_block = self.builder.ssa.declare_ebb_body_block(
@@ -683,11 +683,6 @@ mod tests {
 
         fn index(self) -> usize {
             self.0 as usize
-        }
-    }
-    impl Default for Variable {
-        fn default() -> Variable {
-            Variable(u32::MAX)
         }
     }
 
