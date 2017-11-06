@@ -660,14 +660,14 @@ impl DataFlowGraph {
 impl Index<Inst> for DataFlowGraph {
     type Output = InstructionData;
 
-    fn index<'a>(&'a self, inst: Inst) -> &'a InstructionData {
+    fn index(&self, inst: Inst) -> &InstructionData {
         &self.insts[inst]
     }
 }
 
 /// Allow mutable access to instructions via indexing.
 impl IndexMut<Inst> for DataFlowGraph {
-    fn index_mut<'a>(&'a mut self, inst: Inst) -> &'a mut InstructionData {
+    fn index_mut(&mut self, inst: Inst) -> &mut InstructionData {
         &mut self.insts[inst]
     }
 }

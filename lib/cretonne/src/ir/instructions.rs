@@ -289,13 +289,13 @@ impl VariableArgs {
 impl Deref for VariableArgs {
     type Target = [Value];
 
-    fn deref<'a>(&'a self) -> &'a [Value] {
+    fn deref(&self) -> &[Value] {
         &self.0
     }
 }
 
 impl DerefMut for VariableArgs {
-    fn deref_mut<'a>(&'a mut self) -> &'a mut [Value] {
+    fn deref_mut(&mut self) -> &mut [Value] {
         &mut self.0
     }
 }
