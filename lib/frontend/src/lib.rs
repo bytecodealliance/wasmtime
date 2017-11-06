@@ -56,11 +56,6 @@
 //!         self.0 as usize
 //!     }
 //! }
-//! impl Default for Variable {
-//!     fn default() -> Variable {
-//!         Variable(u32::MAX)
-//!     }
-//! }
 //!
 //! fn main() {
 //!     let mut sig = Signature::new(CallConv::Native);

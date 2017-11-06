@@ -33,7 +33,7 @@ use std::mem;
 /// can be declared.
 pub struct SSABuilder<Variable>
 where
-    Variable: EntityRef + Default,
+    Variable: EntityRef,
 {
     // Records for every variable and for every revelant block, the last definition of
     // the variable in the block.
@@ -145,7 +145,7 @@ impl ReservedValue for Block {
 
 impl<Variable> SSABuilder<Variable>
 where
-    Variable: EntityRef + Default,
+    Variable: EntityRef,
 {
     /// Allocate a new blank SSA builder struct. Use the API function to interact with the struct.
     pub fn new() -> Self {
@@ -252,7 +252,7 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
 ///
 impl<Variable> SSABuilder<Variable>
 where
-    Variable: EntityRef + Default,
+    Variable: EntityRef,
 {
     /// Declares a new definition of a variable in a given basic block.
     /// The SSA value is passed as an argument because it should be created with
@@ -733,11 +733,6 @@ mod tests {
 
         fn index(self) -> usize {
             self.0 as usize
-        }
-    }
-    impl Default for Variable {
-        fn default() -> Variable {
-            Variable(u32::MAX)
         }
     }
 
