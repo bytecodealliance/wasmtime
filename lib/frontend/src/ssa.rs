@@ -124,7 +124,7 @@ struct EbbHeaderBlockData<Variable> {
 }
 
 /// A opaque reference to a basic block.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Block(u32);
 impl EntityRef for Block {
     fn new(index: usize) -> Self {
