@@ -44,7 +44,7 @@ where
 struct EbbData {
     filled: bool,
     pristine: bool,
-    user_arg_count: usize,
+    user_param_count: usize,
 }
 
 struct Position {
@@ -232,7 +232,7 @@ where
         self.builder.ebbs[ebb] = EbbData {
             filled: false,
             pristine: true,
-            user_arg_count: 0,
+            user_param_count: 0,
         };
         ebb
     }
@@ -389,9 +389,9 @@ where
     /// parameters. This can be used to set up the ebb parameters for the
     /// entry block.
     pub fn append_ebb_params_for_function_params(&mut self, ebb: Ebb) {
-        let user_arg_count = &mut self.builder.ebbs[ebb].user_arg_count;
+        let user_param_count = &mut self.builder.ebbs[ebb].user_param_count;
         for argtyp in &self.func.signature.params {
-            *user_arg_count += 1;
+            *user_param_count += 1;
             self.func.dfg.append_ebb_param(ebb, argtyp.value_type);
         }
     }
@@ -400,9 +400,9 @@ where
     /// return values. This can be used to set up the ebb parameters for a
     /// function exit block.
     pub fn append_ebb_params_for_function_returns(&mut self, ebb: Ebb) {
-        let user_arg_count = &mut self.builder.ebbs[ebb].user_arg_count;
+        let user_param_count = &mut self.builder.ebbs[ebb].user_param_count;
         for argtyp in &self.func.signature.returns {
-            *user_arg_count += 1;
+            *user_param_count += 1;
             self.func.dfg.append_ebb_param(ebb, argtyp.value_type);
         }
     }
@@ -436,10 +436,10 @@ where
     pub fn append_ebb_param(&mut self, ebb: Ebb, ty: Type) -> Value {
         debug_assert!(self.builder.ebbs[ebb].pristine);
         debug_assert_eq!(
-            self.builder.ebbs[ebb].user_arg_count,
+            self.builder.ebbs[ebb].user_param_count,
             self.func.dfg.num_ebb_params(ebb)
         );
-        self.builder.ebbs[ebb].user_arg_count += 1;
+        self.builder.ebbs[ebb].user_param_count += 1;
         self.func.dfg.append_ebb_param(ebb, ty)
     }
 
