@@ -120,14 +120,14 @@ fn handle_module(
             context.verify(fisa).map_err(|err| {
                 pretty_verifier_error(&context.func, fisa.isa, err)
             })?;
-            continue;
-        }
-        if let Some(isa) = fisa.isa {
-            context.compile(isa).map_err(|err| {
-                pretty_error(&context.func, fisa.isa, err)
-            })?;
         } else {
-            return Err(String::from("compilation requires a target isa"));
+            if let Some(isa) = fisa.isa {
+                context.compile(isa).map_err(|err| {
+                    pretty_error(&context.func, fisa.isa, err)
+                })?;
+            } else {
+                return Err(String::from("compilation requires a target isa"));
+            }
         }
         if flag_print {
             vprintln!(flag_verbose, "");
