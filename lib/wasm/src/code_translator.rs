@@ -133,7 +133,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             }
             builder.ins().jump(loop_body, &[]);
             state.push_loop(loop_body, next, num_return_values(ty));
-            builder.switch_to_block(loop_body, &[]);
+            builder.switch_to_block(loop_body);
         }
         Operator::If { ty } => {
             let val = state.pop1();
@@ -170,7 +170,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let else_ebb = builder.create_ebb();
             builder.change_jump_destination(branch_inst, else_ebb);
             builder.seal_block(else_ebb);
-            builder.switch_to_block(else_ebb, &[]);
+            builder.switch_to_block(else_ebb);
         }
         Operator::End => {
             let frame = state.control_stack.pop().unwrap();
@@ -181,7 +181,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     state.peekn(return_count),
                 );
             }
-            builder.switch_to_block(frame.following_code(), state.peekn(return_count));
+            builder.switch_to_block(frame.following_code());
             builder.seal_block(frame.following_code());
             // If it is a loop we also have to seal the body loop block
             match frame {
@@ -316,7 +316,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     .br_destination();
                 builder.ins().jump(default_ebb, state.peekn(return_count));
                 for (depth, dest_ebb) in dest_ebbs {
-                    builder.switch_to_block(dest_ebb, &[]);
+                    builder.switch_to_block(dest_ebb);
                     builder.seal_block(dest_ebb);
                     let i = state.control_stack.len() - 1 - depth;
                     let real_dest_ebb = {
@@ -856,7 +856,7 @@ fn translate_unreachable_operator(
                 // a jump instruction since the code is still unreachable
                 let frame = control_stack.pop().unwrap();
 
-                builder.switch_to_block(frame.following_code(), &[]);
+                builder.switch_to_block(frame.following_code());
                 builder.seal_block(frame.following_code());
                 match frame {
                     // If it is a loop we also have to seal the body loop block
@@ -900,7 +900,7 @@ fn translate_unreachable_operator(
                 let else_ebb = builder.create_ebb();
                 builder.change_jump_destination(branch_inst, else_ebb);
                 builder.seal_block(else_ebb);
-                builder.switch_to_block(else_ebb, &[]);
+                builder.switch_to_block(else_ebb);
                 // Now we have to split off the stack the values not used
                 // by unreachable code that hasn't been translated
                 stack.truncate(original_stack_size);
