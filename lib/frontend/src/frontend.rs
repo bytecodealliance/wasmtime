@@ -389,6 +389,8 @@ where
     /// parameters. This can be used to set up the ebb parameters for the
     /// entry block.
     pub fn append_ebb_params_for_function_params(&mut self, ebb: Ebb) {
+        // These parameters count as "user" parameters here because they aren't
+        // inserted by the SSABuilder.
         let user_param_count = &mut self.builder.ebbs[ebb].user_param_count;
         for argtyp in &self.func.signature.params {
             *user_param_count += 1;
@@ -400,6 +402,8 @@ where
     /// return values. This can be used to set up the ebb parameters for a
     /// function exit block.
     pub fn append_ebb_params_for_function_returns(&mut self, ebb: Ebb) {
+        // These parameters count as "user" parameters here because they aren't
+        // inserted by the SSABuilder.
         let user_param_count = &mut self.builder.ebbs[ebb].user_param_count;
         for argtyp in &self.func.signature.returns {
             *user_param_count += 1;
