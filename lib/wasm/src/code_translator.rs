@@ -22,7 +22,7 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
-use cretonne::ir::{self, InstBuilder, Ebb, MemFlags, JumpTableData};
+use cretonne::ir::{self, InstBuilder, MemFlags, JumpTableData};
 use cretonne::ir::types::*;
 use cretonne::ir::condcodes::{IntCC, FloatCC};
 use cton_frontend::FunctionBuilder;
@@ -30,7 +30,7 @@ use wasmparser::{Operator, MemoryImmediate};
 use translation_utils::{f32_translation, f64_translation, type_to_type, num_return_values, Local};
 use translation_utils::{TableIndex, SignatureIndex, FunctionIndex, MemoryIndex};
 use state::{TranslationState, ControlStackFrame};
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map};
 use environ::{FuncEnvironment, GlobalValue};
 use std::u32;
 
@@ -297,25 +297,26 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 let val = state.pop1();
                 let return_count = jump_args_count;
                 let mut data = JumpTableData::with_capacity(depths.len());
-                let dest_ebbs: HashMap<usize, Ebb> = depths.iter().fold(HashMap::new(), |mut acc,
-                 &depth| {
-                    if acc.get(&(depth as usize)).is_none() {
-                        let branch_ebb = builder.create_ebb();
-                        data.push_entry(branch_ebb);
-                        acc.insert(depth as usize, branch_ebb);
-                        return acc;
+                let mut dest_ebb_sequence = Vec::new();
+                let mut dest_ebb_map = HashMap::new();
+                for depth in depths {
+                    let branch_ebb = match dest_ebb_map.entry(depth as usize) {
+                        hash_map::Entry::Occupied(entry) => *entry.get(),
+                        hash_map::Entry::Vacant(entry) => {
+                            let ebb = builder.create_ebb();
+                            dest_ebb_sequence.push((depth as usize, ebb));
+                            *entry.insert(ebb)
+                        }
                     };
-                    let branch_ebb = acc[&(depth as usize)];
                     data.push_entry(branch_ebb);
-                    acc
-                });
+                }
                 let jt = builder.create_jump_table(data);
                 builder.ins().br_table(val, jt);
                 let default_ebb = state.control_stack[state.control_stack.len() - 1 -
                                                           (default as usize)]
                     .br_destination();
                 builder.ins().jump(default_ebb, state.peekn(return_count));
-                for (depth, dest_ebb) in dest_ebbs {
+                for (depth, dest_ebb) in dest_ebb_sequence {
                     builder.switch_to_block(dest_ebb);
                     builder.seal_block(dest_ebb);
                     let i = state.control_stack.len() - 1 - depth;
