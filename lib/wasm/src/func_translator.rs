@@ -6,7 +6,7 @@
 
 use code_translator::translate_operator;
 use cretonne::entity::EntityRef;
-use cretonne::ir::{self, InstBuilder};
+use cretonne::ir::{self, InstBuilder, Ebb};
 use cretonne::result::{CtonResult, CtonError};
 use cton_frontend::{ILBuilder, FunctionBuilder};
 use environ::FuncEnvironment;
@@ -82,17 +82,19 @@ impl FuncTranslator {
         // This clears the `ILBuilder`.
         let mut builder = FunctionBuilder::new(func, &mut self.il_builder);
         let entry_block = builder.create_ebb();
+        builder.append_ebb_params_for_function_params(entry_block);
         builder.switch_to_block(entry_block); // This also creates values for the arguments.
         builder.seal_block(entry_block);
         // Make sure the entry block is inserted in the layout before we make any callbacks to
         // `environ`. The callback functions may need to insert things in the entry block.
         builder.ensure_inserted_ebb();
 
-        let num_params = declare_wasm_parameters(&mut builder);
+        let num_params = declare_wasm_parameters(&mut builder, entry_block);
 
         // Set up the translation state with a single pushed control block representing the whole
         // function and its return values.
         let exit_block = builder.create_ebb();
+        builder.append_ebb_params_for_function_returns(exit_block);
         self.state.initialize(&builder.func.signature, exit_block);
 
         parse_local_decls(&mut reader, &mut builder, num_params)?;
@@ -103,7 +105,7 @@ impl FuncTranslator {
 /// Declare local variables for the signature parameters that correspond to WebAssembly locals.
 ///
 /// Return the number of local variables declared.
-fn declare_wasm_parameters(builder: &mut FunctionBuilder<Local>) -> usize {
+fn declare_wasm_parameters(builder: &mut FunctionBuilder<Local>, entry_block: Ebb) -> usize {
     let sig_len = builder.func.signature.params.len();
     let mut next_local = 0;
     for i in 0..sig_len {
@@ -116,7 +118,7 @@ fn declare_wasm_parameters(builder: &mut FunctionBuilder<Local>) -> usize {
             builder.declare_var(local, param_type.value_type);
             next_local += 1;
 
-            let param_value = builder.param_value(i);
+            let param_value = builder.ebb_params(entry_block)[i];
             builder.def_var(local, param_value);
         }
     }

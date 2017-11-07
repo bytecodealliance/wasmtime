@@ -4,7 +4,6 @@ use cretonne::ir;
 use cretonne::ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData,
                    StackSlotData, DataFlowGraph, InstructionData, ExtFuncData, FuncRef, SigRef,
                    Signature, InstBuilderBase, GlobalVarData, GlobalVar, HeapData, Heap};
-use cretonne::ir::instructions::BranchInfo;
 use cretonne::ir::function::DisplayFunction;
 use cretonne::isa::TargetIsa;
 use ssa::{SSABuilder, SideEffects, Block};
@@ -22,7 +21,6 @@ where
     ssa: SSABuilder<Variable>,
     ebbs: EntityMap<Ebb, EbbData>,
     types: EntityMap<Variable, Type>,
-    function_params_values: Vec<Value>,
 }
 
 
@@ -40,9 +38,6 @@ where
 
     builder: &'a mut ILBuilder<Variable>,
     position: Position,
-
-    /// Has builder.function_params_values been populated yet?
-    params_values_initialized: bool,
 }
 
 #[derive(Clone, Default)]
@@ -68,7 +63,6 @@ where
             ssa: SSABuilder::new(),
             ebbs: EntityMap::new(),
             types: EntityMap::new(),
-            function_params_values: Vec::new(),
         }
     }
 
@@ -76,12 +70,10 @@ where
         self.ssa.clear();
         self.ebbs.clear();
         self.types.clear();
-        self.function_params_values.clear();
     }
 
     fn is_empty(&self) -> bool {
-        self.ssa.is_empty() && self.ebbs.is_empty() && self.types.is_empty() &&
-            self.function_params_values.is_empty()
+        self.ssa.is_empty() && self.ebbs.is_empty() && self.types.is_empty()
     }
 }
 
@@ -122,10 +114,6 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
     // instruction being inserted to add related info to the DFG and the SSA building system,
     // and perform debug sanity checks.
     fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'short mut DataFlowGraph) {
-        if cfg!(debug_assertions) && data.opcode().is_return() {
-            self.builder
-                .check_return_args(data.arguments(&self.builder.func.dfg.value_lists));
-        }
 // We only insert the Ebb in the layout when an instruction is added to it
         self.builder.ensure_inserted_ebb();
 
@@ -141,15 +129,6 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                 Some(dest_ebb) => {
 // If the user has supplied jump arguments we must adapt the arguments of
 // the destination ebb
-// TODO: find a way not to allocate a vector
-                    let args_types: Vec<Value> =
-                        match data.analyze_branch(&self.builder.func.dfg.value_lists) {
-                            BranchInfo::SingleDest(_, args) => {
-                                args.to_vec()
-                            }
-                            _ => panic!("should not happen"),
-                        };
-                    self.builder.ebb_params_adjustment(dest_ebb, &args_types);
                     self.builder.declare_successor(dest_ebb, inst);
                 }
                 None => {
@@ -238,7 +217,6 @@ where
                 ebb: Ebb::new(0),
                 basic_block: Block::new(0),
             },
-            params_values_initialized: false,
         }
     }
 
@@ -247,7 +225,7 @@ where
         self.srcloc = srcloc;
     }
 
-    /// Creates a new `Ebb` for the function and returns its reference.
+    /// Creates a new `Ebb` and returns its reference.
     pub fn create_ebb(&mut self) -> Ebb {
         let ebb = self.func.dfg.make_ebb();
         self.builder.ssa.declare_ebb_header_block(ebb);
@@ -267,9 +245,6 @@ where
     /// successor), the block will be declared filled and it will not be possible to append
     /// instructions to it.
     pub fn switch_to_block(&mut self, ebb: Ebb) {
-        if !self.params_values_initialized {
-            self.fill_function_params_values(ebb);
-        }
         if !self.builder.ebbs[self.position.ebb].pristine {
             // First we check that the previous block has been filled.
             debug_assert!(
@@ -333,33 +308,11 @@ where
     /// Register a new definition of a user variable. Panics if the type of the value is not the
     /// same as the type registered for the variable.
     pub fn def_var(&mut self, var: Variable, val: Value) {
-        debug_assert_eq!(
-            self.func.dfg.value_type(val),
-            self.builder.types[var],
-            "the type of the value is not the type registered for the variable"
-        );
         self.builder.ssa.def_var(
             var,
             val,
             self.position.basic_block,
         );
-    }
-
-    /// Returns the value corresponding to the `i`-th parameter of the function as defined by
-    /// the function signature. Panics if `i` is out of bounds or if called before the first call
-    /// to `switch_to_block`.
-    pub fn param_value(&self, i: usize) -> Value {
-        debug_assert!(
-            self.params_values_initialized,
-            "you have to call switch_to_block first."
-        );
-        self.builder.function_params_values[i]
-    }
-
-    /// Use param_value instead.
-    #[deprecated(since = "forever", note = "arg_value is renamed to param_value")]
-    pub fn arg_value(&self, i: usize) -> Value {
-        self.param_value(i)
     }
 
     /// Creates a jump table in the function, to be used by `br_table` instructions.
@@ -431,6 +384,28 @@ where
             .with_srcloc(self.srcloc)
             .at_bottom(self.position.ebb)
     }
+
+    /// Append parameters to the given `Ebb` corresponding to the function
+    /// parameters. This can be used to set up the ebb parameters for the
+    /// entry block.
+    pub fn append_ebb_params_for_function_params(&mut self, ebb: Ebb) {
+        let user_arg_count = &mut self.builder.ebbs[ebb].user_arg_count;
+        for argtyp in &self.func.signature.params {
+            *user_arg_count += 1;
+            self.func.dfg.append_ebb_param(ebb, argtyp.value_type);
+        }
+    }
+
+    /// Append parameters to the given `Ebb` corresponding to the function
+    /// return values. This can be used to set up the ebb parameters for a
+    /// function exit block.
+    pub fn append_ebb_params_for_function_returns(&mut self, ebb: Ebb) {
+        let user_arg_count = &mut self.builder.ebbs[ebb].user_arg_count;
+        for argtyp in &self.func.signature.returns {
+            *user_arg_count += 1;
+            self.func.dfg.append_ebb_param(ebb, argtyp.value_type);
+        }
+    }
 }
 
 /// All the functions documented in the previous block are write-only and help you build a valid
@@ -460,6 +435,11 @@ where
     /// instructions to it, otherwise this could interfere with SSA construction.
     pub fn append_ebb_param(&mut self, ebb: Ebb, ty: Type) -> Value {
         debug_assert!(self.builder.ebbs[ebb].pristine);
+        debug_assert_eq!(
+            self.builder.ebbs[ebb].user_arg_count,
+            self.func.dfg.num_ebb_params(ebb)
+        );
+        self.builder.ebbs[ebb].user_arg_count += 1;
         self.func.dfg.append_ebb_param(ebb, ty)
     }
 
@@ -497,12 +477,6 @@ where
             self.builder.ssa.predecessors(self.position.ebb).is_empty()
     }
 
-    /// Returns `true` if and only if the entry block has been started and `param_value`
-    /// may be called.
-    pub fn entry_block_started(&self) -> bool {
-        self.params_values_initialized
-    }
-
     /// Returns `true` if and only if no instructions have been added since the last call to
     /// `switch_to_block`.
     pub fn is_pristine(&self) -> bool {
@@ -532,10 +506,15 @@ where
         // Check that all the `Ebb`s are filled and sealed.
         debug_assert!(
             self.builder.ebbs.keys().all(|ebb| {
-                self.builder.ebbs[ebb].pristine ||
-                    (self.builder.ssa.is_sealed(ebb) && self.builder.ebbs[ebb].filled)
+                self.builder.ebbs[ebb].pristine || self.builder.ssa.is_sealed(ebb)
             }),
-            "all blocks should be filled and sealed before dropping a FunctionBuilder"
+            "all blocks should be sealed before dropping a FunctionBuilder"
+        );
+        debug_assert!(
+            self.builder.ebbs.keys().all(|ebb| {
+                self.builder.ebbs[ebb].pristine || self.builder.ebbs[ebb].filled
+            }),
+            "all blocks should be filled before dropping a FunctionBuilder"
         );
 
         // Clear the state (but preserve the allocated buffers) in preparation
@@ -565,87 +544,6 @@ where
             self.position.basic_block,
             jump_inst,
         );
-    }
-
-    #[cfg(debug_assertions)]
-    fn check_return_args(&self, args: &[Value]) {
-        debug_assert_eq!(
-            args.len(),
-            self.func.signature.returns.len(),
-            "the number of returned values doesn't match the function signature "
-        );
-        for (i, arg) in args.iter().enumerate() {
-            let valty = self.func.dfg.value_type(*arg);
-            debug_assert_eq!(
-                valty,
-                self.func.signature.returns[i].value_type,
-                "the types of the values returned don't match the \
-                             function signature"
-            );
-        }
-    }
-
-    fn fill_function_params_values(&mut self, ebb: Ebb) {
-        debug_assert!(!self.params_values_initialized);
-        for argtyp in &self.func.signature.params {
-            self.builder.function_params_values.push(
-                self.func.dfg.append_ebb_param(ebb, argtyp.value_type),
-            );
-        }
-        self.params_values_initialized = true;
-    }
-
-    fn ebb_params_adjustment(&mut self, dest_ebb: Ebb, jump_args: &[Value]) {
-        if self.builder.ssa.predecessors(dest_ebb).is_empty() ||
-            self.builder.ebbs[dest_ebb].pristine
-        {
-            // This is the first jump instruction targeting this Ebb
-            // so the jump arguments supplied here are this Ebb' arguments
-            // However some of the arguments might already be there
-            // in the Ebb so we have to check they're consistent
-            let dest_ebb_params_len = {
-                let dest_ebb_params = self.func.dfg.ebb_params(dest_ebb);
-                debug_assert!(
-                    dest_ebb_params
-                        .iter()
-                        .zip(jump_args.iter().take(dest_ebb_params.len()))
-                        .all(|(dest_arg, jump_arg)| {
-                            self.func.dfg.value_type(*jump_arg) ==
-                                self.func.dfg.value_type(*dest_arg)
-                        }),
-                    "the jump argument supplied has not the \
-                    same type as the corresponding dest ebb argument"
-                );
-                dest_ebb_params.len()
-            };
-            self.builder.ebbs[dest_ebb].user_arg_count = jump_args.len();
-            for val in jump_args.iter().skip(dest_ebb_params_len) {
-                let ty = self.func.dfg.value_type(*val);
-                self.func.dfg.append_ebb_param(dest_ebb, ty);
-            }
-        } else {
-            // The Ebb already has predecessors
-            // We check that the arguments supplied match those supplied
-            // previously.
-            debug_assert_eq!(
-                jump_args.len(),
-                self.builder.ebbs[dest_ebb].user_arg_count,
-                "the jump instruction doesn't have the same \
-                      number of arguments as its destination Ebb.",
-            );
-            debug_assert!(
-                jump_args
-                    .iter()
-                    .zip(self.func.dfg.ebb_params(dest_ebb).iter().take(
-                        self.builder.ebbs[dest_ebb].user_arg_count,
-                    ))
-                    .all(|(jump_arg, dest_arg)| {
-                        self.func.dfg.value_type(*jump_arg) == self.func.dfg.value_type(*dest_arg)
-                    }),
-                "the jump argument supplied has not the \
-                    same type as the corresponding dest ebb argument"
-            );
-        }
     }
 
     fn handle_ssa_side_effects(&mut self, side_effects: SideEffects) {
@@ -703,13 +601,14 @@ mod tests {
             builder.declare_var(x, I32);
             builder.declare_var(y, I32);
             builder.declare_var(z, I32);
+            builder.append_ebb_params_for_function_params(block0);
 
             builder.switch_to_block(block0);
             if !lazy_seal {
                 builder.seal_block(block0);
             }
             {
-                let tmp = builder.param_value(0);
+                let tmp = builder.ebb_params(block0)[0]; // the first function parameter
                 builder.def_var(x, tmp);
             }
             {

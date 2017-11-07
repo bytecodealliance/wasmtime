@@ -75,11 +75,12 @@
 //!         builder.declare_var(x, I32);
 //!         builder.declare_var(y, I32);
 //!         builder.declare_var(z, I32);
+//!         builder.append_ebb_params_for_function_params(block0);
 //!
 //!         builder.switch_to_block(block0);
 //!         builder.seal_block(block0);
 //!         {
-//!             let tmp = builder.param_value(0);
+//!             let tmp = builder.ebb_params(block0)[0]; // the first function parameter
 //!             builder.def_var(x, tmp);
 //!         }
 //!         {
