@@ -266,7 +266,7 @@ where
     /// When inserting the terminator instruction (which doesn't have a falltrough to its immediate
     /// successor), the block will be declared filled and it will not be possible to append
     /// instructions to it.
-    pub fn switch_to_block(&mut self, ebb: Ebb, jump_args: &[Value]) -> &[Value] {
+    pub fn switch_to_block(&mut self, ebb: Ebb) {
         if !self.params_values_initialized {
             self.fill_function_params_values(ebb);
         }
@@ -286,8 +286,6 @@ where
         let basic_block = self.builder.ssa.header_block(ebb);
         // Then we change the cursor position.
         self.position = Position { ebb, basic_block };
-        self.ebb_params_adjustment(ebb, jump_args);
-        self.func.dfg.ebb_params(ebb)
     }
 
     /// Declares that all the predecessors of this block are known.
@@ -706,7 +704,7 @@ mod tests {
             builder.declare_var(y, I32);
             builder.declare_var(z, I32);
 
-            builder.switch_to_block(block0, &[]);
+            builder.switch_to_block(block0);
             if !lazy_seal {
                 builder.seal_block(block0);
             }
@@ -726,7 +724,7 @@ mod tests {
             }
             builder.ins().jump(block1, &[]);
 
-            builder.switch_to_block(block1, &[]);
+            builder.switch_to_block(block1);
             {
                 let arg1 = builder.use_var(y);
                 let arg2 = builder.use_var(z);
@@ -748,7 +746,7 @@ mod tests {
                 builder.ins().return_(&[arg]);
             }
 
-            builder.switch_to_block(block2, &[]);
+            builder.switch_to_block(block2);
             if !lazy_seal {
                 builder.seal_block(block2);
             }

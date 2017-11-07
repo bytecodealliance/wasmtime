@@ -82,7 +82,7 @@ impl FuncTranslator {
         // This clears the `ILBuilder`.
         let mut builder = FunctionBuilder::new(func, &mut self.il_builder);
         let entry_block = builder.create_ebb();
-        builder.switch_to_block(entry_block, &[]); // This also creates values for the arguments.
+        builder.switch_to_block(entry_block); // This also creates values for the arguments.
         builder.seal_block(entry_block);
         // Make sure the entry block is inserted in the layout before we make any callbacks to
         // `environ`. The callback functions may need to insert things in the entry block.

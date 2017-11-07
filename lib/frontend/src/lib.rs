@@ -76,7 +76,7 @@
 //!         builder.declare_var(y, I32);
 //!         builder.declare_var(z, I32);
 //!
-//!         builder.switch_to_block(block0, &[]);
+//!         builder.switch_to_block(block0);
 //!         builder.seal_block(block0);
 //!         {
 //!             let tmp = builder.param_value(0);
@@ -94,7 +94,7 @@
 //!         }
 //!         builder.ins().jump(block1, &[]);
 //!
-//!         builder.switch_to_block(block1, &[]);
+//!         builder.switch_to_block(block1);
 //!         {
 //!             let arg1 = builder.use_var(y);
 //!             let arg2 = builder.use_var(z);
@@ -116,7 +116,7 @@
 //!             builder.ins().return_(&[arg]);
 //!         }
 //!
-//!         builder.switch_to_block(block2, &[]);
+//!         builder.switch_to_block(block2);
 //!         builder.seal_block(block2);
 //!
 //!         {
