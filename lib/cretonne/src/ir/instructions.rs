@@ -335,6 +335,16 @@ impl InstructionData {
                 ref args,
                 ..
             } => BranchInfo::SingleDest(destination, args.as_slice(pool)),
+            InstructionData::BranchInt {
+                destination,
+                ref args,
+                ..
+            } |
+            InstructionData::BranchFloat {
+                destination,
+                ref args,
+                ..
+            } |
             InstructionData::Branch {
                 destination,
                 ref args,
@@ -346,7 +356,10 @@ impl InstructionData {
                 ..
             } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[2..]),
             InstructionData::BranchTable { table, .. } => BranchInfo::Table(table),
-            _ => BranchInfo::NotABranch,
+            _ => {
+                debug_assert!(!self.opcode().is_branch());
+                BranchInfo::NotABranch
+            }
         }
     }
 
@@ -358,8 +371,14 @@ impl InstructionData {
         match *self {
             InstructionData::Jump { destination, .. } |
             InstructionData::Branch { destination, .. } |
+            InstructionData::BranchInt { destination, .. } |
+            InstructionData::BranchFloat { destination, .. } |
             InstructionData::BranchIcmp { destination, .. } => Some(destination),
-            _ => None,
+            InstructionData::BranchTable { .. } => None,
+            _ => {
+                debug_assert!(!self.opcode().is_branch());
+                None
+            }
         }
     }
 
@@ -371,8 +390,14 @@ impl InstructionData {
         match *self {
             InstructionData::Jump { ref mut destination, .. } |
             InstructionData::Branch { ref mut destination, .. } |
+            InstructionData::BranchInt { ref mut destination, .. } |
+            InstructionData::BranchFloat { ref mut destination, .. } |
             InstructionData::BranchIcmp { ref mut destination, .. } => Some(destination),
-            _ => None,
+            InstructionData::BranchTable { .. } => None,
+            _ => {
+                debug_assert!(!self.opcode().is_branch());
+                None
+            }
         }
     }
 
@@ -387,7 +412,10 @@ impl InstructionData {
             InstructionData::IndirectCall { sig_ref, ref args, .. } => {
                 CallInfo::Indirect(sig_ref, &args.as_slice(pool)[1..])
             }
-            _ => CallInfo::NotACall,
+            _ => {
+                debug_assert!(!self.opcode().is_call());
+                CallInfo::NotACall
+            }
         }
     }
 }
