@@ -5,6 +5,7 @@ use ir::{Function, Inst, InstructionData};
 use isa::{RegUnit, StackRef, StackBaseMask};
 use predicates::is_signed_int;
 use regalloc::RegDiversions;
+use std::u32;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-riscv.rs"));
 
@@ -30,13 +31,13 @@ impl Into<Reloc> for RelocKind {
 ///
 /// Encoding bits: `opcode[6:2] | (funct3 << 5) | (funct7 << 8)`.
 fn put_r<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, rs2: RegUnit, rd: RegUnit, sink: &mut CS) {
-    let bits = bits as u32;
+    let bits = u32::from(bits);
     let opcode5 = bits & 0x1f;
     let funct3 = (bits >> 5) & 0x7;
     let funct7 = (bits >> 8) & 0x7f;
-    let rs1 = rs1 as u32 & 0x1f;
-    let rs2 = rs2 as u32 & 0x1f;
-    let rd = rd as u32 & 0x1f;
+    let rs1 = u32::from(rs1) & 0x1f;
+    let rs2 = u32::from(rs2) & 0x1f;
+    let rd = u32::from(rd) & 0x1f;
 
     // 0-6: opcode
     let mut i = 0x3;
@@ -66,13 +67,13 @@ fn put_rshamt<CS: CodeSink + ?Sized>(
     rd: RegUnit,
     sink: &mut CS,
 ) {
-    let bits = bits as u32;
+    let bits = u32::from(bits);
     let opcode5 = bits & 0x1f;
     let funct3 = (bits >> 5) & 0x7;
     let funct7 = (bits >> 8) & 0x7f;
-    let rs1 = rs1 as u32 & 0x1f;
+    let rs1 = u32::from(rs1) & 0x1f;
     let shamt = shamt as u32 & 0x3f;
-    let rd = rd as u32 & 0x1f;
+    let rd = u32::from(rd) & 0x1f;
 
     // 0-6: opcode
     let mut i = 0x3;
@@ -94,11 +95,11 @@ fn put_rshamt<CS: CodeSink + ?Sized>(
 ///
 /// Encoding bits: `opcode[6:2] | (funct3 << 5)`
 fn put_i<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, imm: i64, rd: RegUnit, sink: &mut CS) {
-    let bits = bits as u32;
+    let bits = u32::from(bits);
     let opcode5 = bits & 0x1f;
     let funct3 = (bits >> 5) & 0x7;
-    let rs1 = rs1 as u32 & 0x1f;
-    let rd = rd as u32 & 0x1f;
+    let rs1 = u32::from(rs1) & 0x1f;
+    let rd = u32::from(rd) & 0x1f;
 
     // 0-6: opcode
     let mut i = 0x3;
@@ -121,7 +122,7 @@ fn put_i<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, imm: i64, rd: RegUnit, 
 fn put_u<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rd: RegUnit, sink: &mut CS) {
     let bits = bits as u32;
     let opcode5 = bits & 0x1f;
-    let rd = rd as u32 & 0x1f;
+    let rd = u32::from(rd) & 0x1f;
 
     // 0-6: opcode
     let mut i = 0x3;
@@ -140,11 +141,11 @@ fn put_u<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rd: RegUnit, sink: &mut CS)
 ///
 /// Encoding bits: `opcode[6:2] | (funct3 << 5)`
 fn put_sb<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rs1: RegUnit, rs2: RegUnit, sink: &mut CS) {
-    let bits = bits as u32;
+    let bits = u32::from(bits);
     let opcode5 = bits & 0x1f;
     let funct3 = (bits >> 5) & 0x7;
-    let rs1 = rs1 as u32 & 0x1f;
-    let rs2 = rs2 as u32 & 0x1f;
+    let rs1 = u32::from(rs1) & 0x1f;
+    let rs2 = u32::from(rs2) & 0x1f;
 
     assert!(is_signed_int(imm, 13, 1), "SB out of range {:#x}", imm);
     let imm = imm as u32;
@@ -173,9 +174,9 @@ fn put_sb<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rs1: RegUnit, rs2: RegUnit
 ///
 /// Encoding bits: `opcode[6:2]`
 fn put_uj<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rd: RegUnit, sink: &mut CS) {
-    let bits = bits as u32;
+    let bits = u32::from(bits);
     let opcode5 = bits & 0x1f;
-    let rd = rd as u32 & 0x1f;
+    let rd = u32::from(rd) & 0x1f;
 
     assert!(is_signed_int(imm, 21, 1), "UJ out of range {:#x}", imm);
     let imm = imm as u32;

@@ -158,13 +158,13 @@ impl Pressure {
     fn check_avail_aliased(&self, entry: &TopRC) -> RegClassMask {
         let first = usize::from(entry.first_toprc);
         let num = usize::from(entry.num_toprcs);
-        let width = entry.width as u32;
+        let width = u32::from(entry.width);
         let ulimit = entry.limit * width;
 
         // Count up the number of available register units.
         let mut units = 0;
         for (rc, rci) in self.toprc[first..first + num].iter().zip(first..) {
-            let rcw = rc.width as u32;
+            let rcw = u32::from(rc.width);
             // If `rc.width` is smaller than `width`, each register in `rc` could potentially block
             // one of ours. This is assuming that none of the smaller registers are straddling the
             // bigger ones.

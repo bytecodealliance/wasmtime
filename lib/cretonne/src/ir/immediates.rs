@@ -163,7 +163,7 @@ impl Into<u32> for Uimm32 {
 
 impl Into<i64> for Uimm32 {
     fn into(self) -> i64 {
-        self.0 as i64
+        i64::from(self.0)
     }
 }
 
@@ -178,7 +178,7 @@ impl Display for Uimm32 {
         if self.0 < 10_000 {
             write!(f, "{}", self.0)
         } else {
-            write_hex(self.0 as i64, f)
+            write_hex(i64::from(self.0), f)
         }
 
     }
@@ -189,7 +189,7 @@ impl FromStr for Uimm32 {
 
     // Parse a decimal or hexadecimal `Uimm32`, formatted as above.
     fn from_str(s: &str) -> Result<Uimm32, &'static str> {
-        parse_i64(s).and_then(|x| if 0 <= x && x <= u32::MAX as i64 {
+        parse_i64(s).and_then(|x| if 0 <= x && x <= i64::from(u32::MAX) {
             Ok(Uimm32(x as u32))
         } else {
             Err("Uimm32 out of range")
@@ -439,7 +439,7 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
                 let exp_str = &s3[1 + idx..];
                 match exp_str.parse::<i16>() {
                     Ok(e) => {
-                        exponent = e as i32;
+                        exponent = i32::from(e);
                         break;
                     }
                     Err(_) => return Err("Bad exponent"),
@@ -473,7 +473,7 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
     // Number of bits appearing after the radix point.
     match digits_before_period {
         None => {} // No radix point present.
-        Some(d) => exponent -= 4 * (digits - d) as i32,
+        Some(d) => exponent -= 4 * i32::from(digits - d),
     };
 
     // Normalize the significand and exponent.
@@ -485,11 +485,11 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
         }
         // Adjust significand down.
         significand >>= adjust;
-        exponent += adjust as i32;
+        exponent += i32::from(adjust);
     } else {
         let adjust = t + 1 - significant_bits;
         significand <<= adjust;
-        exponent -= adjust as i32;
+        exponent -= i32::from(adjust);
     }
     assert_eq!(significand >> t, 1);
 
@@ -498,7 +498,7 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
 
     let max_exp = (1i32 << w) - 2;
     let bias: i32 = (1 << (w - 1)) - 1;
-    exponent += bias + t as i32;
+    exponent += bias + i32::from(t);
 
     if exponent > max_exp {
         Err("Magnitude too large")
@@ -506,7 +506,7 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
         // This is a normal number.
         let e_bits = (exponent as u64) << t;
         Ok(sign_bit | e_bits | t_bits)
-    } else if 1 - exponent <= t as i32 {
+    } else if 1 - exponent <= i32::from(t) {
         // This is a subnormal number: e = 0, t = significand bits.
         // Renormalize significand for exponent = 1.
         let adjust = 1 - exponent;

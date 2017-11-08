@@ -227,7 +227,7 @@ fn expand_fconst(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut ControlFlow
         ir::InstructionData::UnaryIeee32 {
             opcode: ir::Opcode::F32const,
             imm,
-        } => pos.ins().iconst(ir::types::I32, imm.bits() as i64),
+        } => pos.ins().iconst(ir::types::I32, i64::from(imm.bits())),
         ir::InstructionData::UnaryIeee64 {
             opcode: ir::Opcode::F64const,
             imm,

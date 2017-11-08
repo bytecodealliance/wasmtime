@@ -7,6 +7,7 @@ use settings as shared_settings;
 use super::registers::{GPR, FPR, RU};
 use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
 use ir::{AbiParam, ArgumentPurpose, ArgumentLoc, ArgumentExtension};
+use std::i32;
 
 /// Argument registers for x86-64
 static ARG_GPRS: [RU; 6] = [RU::rdi, RU::rsi, RU::rdx, RU::rcx, RU::r8, RU::r9];
@@ -99,7 +100,7 @@ impl ArgAssigner for Args {
         // Assign a stack location.
         let loc = ArgumentLoc::Stack(self.offset as i32);
         self.offset += self.pointer_bytes;
-        assert!(self.offset <= i32::max_value() as u32);
+        assert!(self.offset <= i32::MAX as u32);
         loc.into()
     }
 }

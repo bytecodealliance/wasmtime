@@ -48,7 +48,7 @@ fn expand_srem(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGra
 
     // Now it is safe to execute the `x86_sdivmodx` instruction which will still trap on division
     // by zero.
-    let xhi = pos.ins().sshr_imm(x, ty.lane_bits() as i64 - 1);
+    let xhi = pos.ins().sshr_imm(x, i64::from(ty.lane_bits()) - 1);
     let (_qout, rem) = pos.ins().x86_sdivmodx(x, xhi, y);
     pos.ins().jump(done, &[rem]);
 

@@ -352,7 +352,7 @@ impl<'a> Lexer<'a> {
             _ => return None,
         };
         if is_vector {
-            if number <= u16::MAX as u32 {
+            if number <= u32::from(u16::MAX) {
                 base_type.by(number as u16).map(Token::Type)
             } else {
                 None

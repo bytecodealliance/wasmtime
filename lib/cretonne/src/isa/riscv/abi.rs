@@ -12,6 +12,7 @@ use regalloc::AllocatableSet;
 use settings as shared_settings;
 use super::registers::{GPR, FPR};
 use super::settings;
+use std::i32;
 
 struct Args {
     pointer_bits: u16,
@@ -79,7 +80,7 @@ impl ArgAssigner for Args {
             // Assign a stack location.
             let loc = ArgumentLoc::Stack(self.offset as i32);
             self.offset += self.pointer_bytes;
-            assert!(self.offset <= i32::max_value() as u32);
+            assert!(self.offset <= i32::MAX as u32);
             loc.into()
         }
     }

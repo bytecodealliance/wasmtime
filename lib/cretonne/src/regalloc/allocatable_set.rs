@@ -198,7 +198,9 @@ impl<'a> fmt::Display for DisplayAllocatableSet<'a> {
                                 bank.names
                                     .get(offset as usize)
                                     .and_then(|name| name.chars().skip(1).next())
-                                    .unwrap_or(char::from_digit((offset % 10) as u32, 10).unwrap())
+                                    .unwrap_or(
+                                        char::from_digit(u32::from(offset % 10), 10).unwrap(),
+                                    )
                             )?;
                         }
                     }

@@ -32,7 +32,7 @@ use translation_utils::{TableIndex, SignatureIndex, FunctionIndex, MemoryIndex};
 use state::{TranslationState, ControlStackFrame};
 use std::collections::{HashMap, hash_map};
 use environ::{FuncEnvironment, GlobalValue};
-use std::u32;
+use std::{i32, u32};
 
 /// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
 /// a return.
@@ -477,7 +477,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             translate_store(offset, ir::Opcode::Istore32, builder, state, environ);
         }
         /****************************** Nullary Operators ************************************/
-        Operator::I32Const { value } => state.push1(builder.ins().iconst(I32, value as i64)),
+        Operator::I32Const { value } => state.push1(builder.ins().iconst(I32, i64::from(value))),
         Operator::I64Const { value } => state.push1(builder.ins().iconst(I64, value)),
         Operator::F32Const { value } => {
             state.push1(builder.ins().f32const(f32_translation(value)));
@@ -924,17 +924,17 @@ fn get_heap_addr(
     // even if the access goes beyond the guard pages. This is because the first byte pointed to is
     // inside the guard pages.
     let check_size = min(
-        u32::max_value() as i64,
-        1 + (offset as i64 / guard_size) * guard_size,
+        i64::from(u32::MAX),
+        1 + (i64::from(offset) / guard_size) * guard_size,
     ) as u32;
     let base = builder.ins().heap_addr(addr_ty, heap, addr32, check_size);
 
     // Native load/store instructions take a signed `Offset32` immediate, so adjust the base
     // pointer if necessary.
-    if offset > i32::max_value() as u32 {
+    if offset > i32::MAX as u32 {
         // Offset doesn't fit in the load/store instruction.
-        let adj = builder.ins().iadd_imm(base, i32::max_value() as i64 + 1);
-        (adj, (offset - (i32::max_value() as u32 + 1)) as i32)
+        let adj = builder.ins().iadd_imm(base, i64::from(i32::MAX) + 1);
+        (adj, (offset - (i32::MAX as u32 + 1)) as i32)
     } else {
         (base, offset as i32)
     }

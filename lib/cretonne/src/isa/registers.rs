@@ -253,8 +253,8 @@ impl fmt::Display for RegClassIndex {
 /// A register is identified as a `(RegClass, RegUnit)` pair. The register class is needed to
 /// determine the width (in regunits) of the register.
 pub fn regs_overlap(rc1: RegClass, reg1: RegUnit, rc2: RegClass, reg2: RegUnit) -> bool {
-    let end1 = reg1 + rc1.width as RegUnit;
-    let end2 = reg2 + rc2.width as RegUnit;
+    let end1 = reg1 + RegUnit::from(rc1.width);
+    let end2 = reg2 + RegUnit::from(rc2.width);
     !(end1 <= reg2 || end2 <= reg1)
 }
 
