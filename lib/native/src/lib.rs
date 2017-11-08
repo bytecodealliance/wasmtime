@@ -38,7 +38,7 @@ pub fn builders() -> Result<(settings::Builder, isa::Builder), ()> {
 
     let mut isa_builder = isa::lookup(name).map_err(|err| match err {
         isa::LookupError::Unknown => panic!(),
-        isa::LookupError::Unsupported => (()),
+        isa::LookupError::Unsupported => (),
     })?;
 
     if cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
