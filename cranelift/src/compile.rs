@@ -50,7 +50,7 @@ fn handle_module(
         return Err(String::from("compilation requires a target isa"));
     };
 
-    for (func, _) in test_file.functions.into_iter() {
+    for (func, _) in test_file.functions {
         let mut context = Context::new();
         context.func = func;
         context.compile(isa).map_err(|err| {
