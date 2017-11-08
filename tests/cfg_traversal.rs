@@ -51,7 +51,7 @@ fn simple_traversal() {
                 trap user0
         }
     ",
-        vec![0, 1, 3, 2, 4, 5],
+        vec![0, 2, 5, 4, 1, 3],
     );
 }
 
@@ -71,7 +71,7 @@ fn loops_one() {
                 return
         }
     ",
-        vec![0, 1, 3, 2],
+        vec![0, 1, 2, 3],
     );
 }
 
@@ -98,7 +98,7 @@ fn loops_two() {
                 return
         }
     ",
-        vec![0, 1, 2, 4, 3, 5],
+        vec![0, 2, 1, 3, 4, 5],
     );
 }
 
@@ -130,7 +130,7 @@ fn loops_three() {
                 return
         }
     ",
-        vec![0, 1, 2, 4, 3, 6, 7, 5],
+        vec![0, 2, 1, 3, 4, 6, 7, 5],
     );
 }
 

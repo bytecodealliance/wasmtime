@@ -326,16 +326,16 @@ mod test {
         let loops = loop_analysis.loops().collect::<Vec<Loop>>();
         assert_eq!(loops.len(), 3);
         assert_eq!(loop_analysis.loop_header(loops[0]), ebb0);
-        assert_eq!(loop_analysis.loop_header(loops[1]), ebb1);
-        assert_eq!(loop_analysis.loop_header(loops[2]), ebb3);
+        assert_eq!(loop_analysis.loop_header(loops[1]), ebb3);
+        assert_eq!(loop_analysis.loop_header(loops[2]), ebb1);
         assert_eq!(loop_analysis.loop_parent(loops[1]), Some(loops[0]));
         assert_eq!(loop_analysis.loop_parent(loops[2]), Some(loops[0]));
         assert_eq!(loop_analysis.loop_parent(loops[0]), None);
         assert_eq!(loop_analysis.is_in_loop(ebb0, loops[0]), true);
-        assert_eq!(loop_analysis.is_in_loop(ebb1, loops[1]), true);
-        assert_eq!(loop_analysis.is_in_loop(ebb2, loops[1]), true);
-        assert_eq!(loop_analysis.is_in_loop(ebb3, loops[2]), true);
-        assert_eq!(loop_analysis.is_in_loop(ebb4, loops[2]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb3, loops[1]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb4, loops[1]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb1, loops[2]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb2, loops[2]), true);
         assert_eq!(loop_analysis.is_in_loop(ebb5, loops[0]), true);
     }
 }
