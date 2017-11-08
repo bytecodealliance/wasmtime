@@ -7,6 +7,7 @@
 
 use std::str::CharIndices;
 use std::u16;
+#[allow(unused_imports)]
 use std::ascii::AsciiExt;
 use cretonne::ir::types;
 use cretonne::ir::{Value, Ebb};
