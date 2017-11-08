@@ -3,12 +3,6 @@
 use std::default::Default;
 use std::fmt::{self, Display, Debug, Formatter};
 
-// ====--------------------------------------------------------------------------------------====//
-//
-// Value types
-//
-// ====--------------------------------------------------------------------------------------====//
-
 /// The type of an SSA value.
 ///
 /// The `VOID` type is only used for instructions that produce no value. It can't be part of a SIMD

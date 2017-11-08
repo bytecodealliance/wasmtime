@@ -1,4 +1,3 @@
-
 //! Immediate operands for Cretonne instructions
 //!
 //! This module defines the types of immediate operands that can appear on Cretonne instructions.
