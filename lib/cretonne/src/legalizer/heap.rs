@@ -43,7 +43,7 @@ fn dynamic_addr(
     bound_gv: ir::GlobalVar,
     func: &mut ir::Function,
 ) {
-    let size = size as i64;
+    let size = i64::from(size);
     let offset_ty = func.dfg.value_type(offset);
     let addr_ty = func.dfg.value_type(func.dfg.first_result(inst));
     let min_size = func.heaps[heap].min_size.into();
@@ -96,7 +96,7 @@ fn static_addr(
     bound: i64,
     func: &mut ir::Function,
 ) {
-    let size = size as i64;
+    let size = i64::from(size);
     let offset_ty = func.dfg.value_type(offset);
     let addr_ty = func.dfg.value_type(func.dfg.first_result(inst));
     let mut pos = FuncCursor::new(func).at_inst(inst);

@@ -107,6 +107,7 @@ use std::cmp;
 use std::fmt;
 use std::mem;
 use super::AllocatableSet;
+use std::u16;
 
 /// A variable in the constraint problem.
 ///
@@ -866,7 +867,7 @@ impl Solver {
         // Compute domain sizes for all the variables given the current register sets.
         for v in &mut self.vars {
             let d = v.iter(&self.regs_in, &self.regs_out, global_regs).len();
-            v.domain = cmp::min(d, u16::max_value() as usize) as u16;
+            v.domain = cmp::min(d, u16::MAX as usize) as u16;
         }
         // Solve for vars with small domains first to increase the chance of finding a solution.
         // Use the value number as a tie breaker to get a stable sort.

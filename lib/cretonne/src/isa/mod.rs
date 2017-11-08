@@ -244,7 +244,7 @@ pub trait TargetIsa {
 
         // Account for the SpiderMonkey standard prologue pushes.
         if func.signature.call_conv == ir::CallConv::SpiderWASM {
-            let bytes = self.flags().spiderwasm_prologue_words() as StackSize * word_size;
+            let bytes = StackSize::from(self.flags().spiderwasm_prologue_words()) * word_size;
             let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
             ss.offset = -(bytes as StackOffset);
             func.stack_slots.push(ss);

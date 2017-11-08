@@ -78,6 +78,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::u32;
 
     // `EntityRef` impl for testing.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -133,7 +134,7 @@ mod tests {
         assert!(!m.contains(E(16)));
         assert!(!m.contains(E(19)));
         assert!(!m.contains(E(20)));
-        assert!(!m.contains(E(u32::max_value())));
+        assert!(!m.contains(E(u32::MAX)));
 
         m.clear();
         assert!(m.is_empty());
