@@ -991,7 +991,7 @@ impl<'a> Verifier<'a> {
                     self.func.dfg.ctrl_typevar(inst),
                 )
                 {
-                    if possible_encodings.len() != 0 {
+                    if !possible_encodings.is_empty() {
                         possible_encodings.push_str(", ");
                         multiple_encodings = true;
                     }
