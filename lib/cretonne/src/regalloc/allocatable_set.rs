@@ -37,8 +37,8 @@ impl AllocatableSet {
     ///
     /// Note that this includes *all* registers. Query the `TargetIsa` object to get a set of
     /// allocatable registers where reserved registers have been filtered out.
-    pub fn new() -> AllocatableSet {
-        AllocatableSet { avail: [!0; 3] }
+    pub fn new() -> Self {
+        Self { avail: [!0; 3] }
     }
 
     /// Returns `true` if the specified register is available.

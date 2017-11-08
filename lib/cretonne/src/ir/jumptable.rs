@@ -24,16 +24,16 @@ pub struct JumpTableData {
 
 impl JumpTableData {
     /// Create a new empty jump table.
-    pub fn new() -> JumpTableData {
-        JumpTableData {
+    pub fn new() -> Self {
+        Self {
             table: Vec::new(),
             holes: 0,
         }
     }
 
     /// Create a new empty jump table with the specified capacity.
-    pub fn with_capacity(capacity: usize) -> JumpTableData {
-        JumpTableData {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
             table: Vec::with_capacity(capacity),
             holes: 0,
         }

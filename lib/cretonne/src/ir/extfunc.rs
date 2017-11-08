@@ -38,8 +38,8 @@ pub struct Signature {
 
 impl Signature {
     /// Create a new blank signature.
-    pub fn new(call_conv: CallConv) -> Signature {
-        Signature {
+    pub fn new(call_conv: CallConv) -> Self {
+        Self {
             params: Vec::new(),
             returns: Vec::new(),
             call_conv,
@@ -138,8 +138,8 @@ pub struct AbiParam {
 
 impl AbiParam {
     /// Create a parameter with default flags.
-    pub fn new(vt: Type) -> AbiParam {
-        AbiParam {
+    pub fn new(vt: Type) -> Self {
+        Self {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose: ArgumentPurpose::Normal,
@@ -148,8 +148,8 @@ impl AbiParam {
     }
 
     /// Create a special-purpose parameter that is not (yet) bound to a specific register.
-    pub fn special(vt: Type, purpose: ArgumentPurpose) -> AbiParam {
-        AbiParam {
+    pub fn special(vt: Type, purpose: ArgumentPurpose) -> Self {
+        Self {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose,
@@ -158,8 +158,8 @@ impl AbiParam {
     }
 
     /// Create a parameter for a special-purpose register.
-    pub fn special_reg(vt: Type, purpose: ArgumentPurpose, regunit: RegUnit) -> AbiParam {
-        AbiParam {
+    pub fn special_reg(vt: Type, purpose: ArgumentPurpose, regunit: RegUnit) -> Self {
+        Self {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose,
@@ -168,18 +168,18 @@ impl AbiParam {
     }
 
     /// Convert `self` to a parameter with the `uext` flag set.
-    pub fn uext(self) -> AbiParam {
+    pub fn uext(self) -> Self {
         debug_assert!(self.value_type.is_int(), "uext on {} arg", self.value_type);
-        AbiParam {
+        Self {
             extension: ArgumentExtension::Uext,
             ..self
         }
     }
 
     /// Convert `self` to a parameter type with the `sext` flag set.
-    pub fn sext(self) -> AbiParam {
+    pub fn sext(self) -> Self {
         debug_assert!(self.value_type.is_int(), "sext on {} arg", self.value_type);
-        AbiParam {
+        Self {
             extension: ArgumentExtension::Sext,
             ..self
         }

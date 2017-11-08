@@ -35,8 +35,8 @@ struct TextSink {
 
 impl TextSink {
     /// Create a new empty TextSink.
-    pub fn new(isa: &TargetIsa) -> TextSink {
-        TextSink {
+    pub fn new(isa: &TargetIsa) -> Self {
+        Self {
             rnames: isa.reloc_names(),
             offset: 0,
             text: String::new(),

@@ -38,7 +38,7 @@ pub struct ConcurrentRunner {
 
 impl ConcurrentRunner {
     /// Create a new `ConcurrentRunner` with threads spun up.
-    pub fn new() -> ConcurrentRunner {
+    pub fn new() -> Self {
         let (request_tx, request_rx) = channel();
         let request_mutex = Arc::new(Mutex::new(request_rx));
         let (reply_tx, reply_rx) = channel();
@@ -51,7 +51,7 @@ impl ConcurrentRunner {
             })
             .collect();
 
-        ConcurrentRunner {
+        Self {
             request_tx: Some(request_tx),
             reply_rx,
             handles,

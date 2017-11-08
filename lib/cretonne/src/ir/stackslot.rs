@@ -172,8 +172,8 @@ pub struct StackSlots {
 /// Stack slot manager functions that behave mostly like an entity map.
 impl StackSlots {
     /// Create an empty stack slot manager.
-    pub fn new() -> StackSlots {
-        StackSlots {
+    pub fn new() -> Self {
+        Self {
             slots: PrimaryMap::new(),
             outgoing: Vec::new(),
             emergency: Vec::new(),

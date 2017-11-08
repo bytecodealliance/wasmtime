@@ -42,8 +42,8 @@ impl LoopData {
 impl LoopAnalysis {
     /// Allocate a new blank loop analysis struct. Use `compute` to compute the loop analysis for
     /// a function.
-    pub fn new() -> LoopAnalysis {
-        LoopAnalysis {
+    pub fn new() -> Self {
+        Self {
             valid: false,
             loops: PrimaryMap::new(),
             ebb_loop_map: EntityMap::new(),

@@ -30,8 +30,8 @@ pub struct FuncTranslator {
 
 impl FuncTranslator {
     /// Create a new translator.
-    pub fn new() -> FuncTranslator {
-        FuncTranslator {
+    pub fn new() -> Self {
+        Self {
             il_builder: ILBuilder::new(),
             state: TranslationState::new(),
         }

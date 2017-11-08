@@ -95,8 +95,8 @@ pub struct CheckerBuilder {
 
 impl CheckerBuilder {
     /// Create a new, blank `CheckerBuilder`.
-    pub fn new() -> CheckerBuilder {
-        CheckerBuilder {
+    pub fn new() -> Self {
+        Self {
             directives: Vec::new(),
             linerx: Regex::new(DIRECTIVE_RX).unwrap(),
         }
@@ -146,8 +146,8 @@ pub struct Checker {
 }
 
 impl Checker {
-    fn new(directives: Vec<Directive>) -> Checker {
-        Checker { directives: directives }
+    fn new(directives: Vec<Directive>) -> Self {
+        Self { directives: directives }
     }
 
     /// An empty checker contains no directives, and will match any input string.

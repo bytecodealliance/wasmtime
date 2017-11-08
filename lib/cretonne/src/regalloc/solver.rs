@@ -502,8 +502,8 @@ pub struct Solver {
 /// Interface for programming the constraints into the solver.
 impl Solver {
     /// Create a new empty solver.
-    pub fn new() -> Solver {
-        Solver {
+    pub fn new() -> Self {
+        Self {
             assignments: SparseMap::new(),
             vars: Vec::new(),
             inputs_done: false,

@@ -61,7 +61,7 @@ where
     }
 
     /// Construct a BitSet with the half-open range [lo,hi) filled in
-    pub fn from_range(lo: u8, hi: u8) -> BitSet<T> {
+    pub fn from_range(lo: u8, hi: u8) -> Self {
         assert!(lo <= hi);
         assert!((hi as usize) <= Self::bits());
         let one: T = T::from(1);

@@ -47,8 +47,8 @@ impl Context {
     ///
     /// The returned instance should be reused for compiling multiple functions in order to avoid
     /// needless allocator thrashing.
-    pub fn new() -> Context {
-        Context {
+    pub fn new() -> Self {
+        Self {
             func: Function::new(),
             cfg: ControlFlowGraph::new(),
             domtree: DominatorTree::new(),

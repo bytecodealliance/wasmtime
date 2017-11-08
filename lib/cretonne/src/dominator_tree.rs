@@ -204,8 +204,8 @@ impl DominatorTree {
 impl DominatorTree {
     /// Allocate a new blank dominator tree. Use `compute` to compute the dominator tree for a
     /// function.
-    pub fn new() -> DominatorTree {
-        DominatorTree {
+    pub fn new() -> Self {
+        Self {
             nodes: EntityMap::new(),
             postorder: Vec::new(),
             stack: Vec::new(),
@@ -214,8 +214,8 @@ impl DominatorTree {
     }
 
     /// Allocate and compute a dominator tree.
-    pub fn with_function(func: &Function, cfg: &ControlFlowGraph) -> DominatorTree {
-        let mut domtree = DominatorTree::new();
+    pub fn with_function(func: &Function, cfg: &ControlFlowGraph) -> Self {
+        let mut domtree = Self::new();
         domtree.compute(func, cfg);
         domtree
     }

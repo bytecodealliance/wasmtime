@@ -27,7 +27,7 @@ where
 {
     /// Create a new empty map.
     pub fn new() -> Self {
-        PrimaryMap {
+        Self {
             elems: Vec::new(),
             unused: PhantomData,
         }

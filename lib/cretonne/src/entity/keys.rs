@@ -12,8 +12,8 @@ pub struct Keys<K: EntityRef> {
 
 impl<K: EntityRef> Keys<K> {
     /// Create a `Keys` iterator that visits `count` entities starting from 0.
-    pub fn new(count: usize) -> Keys<K> {
-        Keys {
+    pub fn new(count: usize) -> Self {
+        Self {
             pos: 0,
             rev_pos: count,
             unused: PhantomData,

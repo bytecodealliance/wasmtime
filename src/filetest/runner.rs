@@ -81,8 +81,8 @@ pub struct TestRunner {
 
 impl TestRunner {
     /// Create a new blank TrstRunner.
-    pub fn new(verbose: bool) -> TestRunner {
-        TestRunner {
+    pub fn new(verbose: bool) -> Self {
+        Self {
             verbose,
             dir_stack: Vec::new(),
             tests: Vec::new(),

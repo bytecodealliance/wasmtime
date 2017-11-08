@@ -65,8 +65,8 @@ struct LiveValueVec {
 }
 
 impl LiveValueVec {
-    fn new() -> LiveValueVec {
-        LiveValueVec {
+    fn new() -> Self {
+        Self {
             values: Vec::new(),
             live_prefix: None,
         }
@@ -124,8 +124,8 @@ impl LiveValueVec {
 
 impl LiveValueTracker {
     /// Create a new blank tracker.
-    pub fn new() -> LiveValueTracker {
-        LiveValueTracker {
+    pub fn new() -> Self {
+        Self {
             live: LiveValueVec::new(),
             idom_sets: HashMap::new(),
             idom_pool: ListPool::new(),

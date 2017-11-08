@@ -44,8 +44,8 @@ pub struct RegDiversions {
 
 impl RegDiversions {
     /// Create a new empty diversion tracker.
-    pub fn new() -> RegDiversions {
-        RegDiversions { current: Vec::new() }
+    pub fn new() -> Self {
+        Self { current: Vec::new() }
     }
 
     /// Clear the tracker, preparing for a new EBB.

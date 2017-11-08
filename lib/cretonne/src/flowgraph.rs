@@ -51,16 +51,16 @@ pub struct ControlFlowGraph {
 
 impl ControlFlowGraph {
     /// Allocate a new blank control flow graph.
-    pub fn new() -> ControlFlowGraph {
-        ControlFlowGraph {
+    pub fn new() -> Self {
+        Self {
             data: EntityMap::new(),
             valid: false,
         }
     }
 
     /// Allocate and compute the control flow graph for `func`.
-    pub fn with_function(func: &Function) -> ControlFlowGraph {
-        let mut cfg = ControlFlowGraph::new();
+    pub fn with_function(func: &Function) -> Self {
+        let mut cfg = Self::new();
         cfg.compute(func);
         cfg
     }

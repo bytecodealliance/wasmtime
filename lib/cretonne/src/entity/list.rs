@@ -68,7 +68,7 @@ pub struct EntityList<T: EntityRef> {
 /// Create an empty list.
 impl<T: EntityRef> Default for EntityList<T> {
     fn default() -> Self {
-        EntityList {
+        Self {
             index: 0,
             unused: PhantomData,
         }
@@ -82,7 +82,7 @@ impl<T: EntityRef> Hash for EntityList<T> {
 }
 
 impl<T: EntityRef> PartialEq for EntityList<T> {
-    fn eq(&self, _: &EntityList<T>) -> bool {
+    fn eq(&self, _: &Self) -> bool {
         panic!("eq called on EntityList");
     }
 }
@@ -121,8 +121,8 @@ fn is_sclass_min_length(len: usize) -> bool {
 
 impl<T: EntityRef> ListPool<T> {
     /// Create a new list pool.
-    pub fn new() -> ListPool<T> {
-        ListPool {
+    pub fn new() -> Self {
+        Self {
             data: Vec::new(),
             free: Vec::new(),
         }
@@ -311,7 +311,7 @@ impl<T: EntityRef> EntityList<T> {
     /// Take all elements from this list and return them as a new list. Leave this list empty.
     ///
     /// This is the equivalent of `Option::take()`.
-    pub fn take(&mut self) -> EntityList<T> {
+    pub fn take(&mut self) -> Self {
         mem::replace(self, Default::default())
     }
 

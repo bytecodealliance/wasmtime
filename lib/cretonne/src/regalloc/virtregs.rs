@@ -45,8 +45,8 @@ pub struct VirtRegs {
 #[allow(dead_code)]
 impl VirtRegs {
     /// Create a new virtual register collection.
-    pub fn new() -> VirtRegs {
-        VirtRegs {
+    pub fn new() -> Self {
+        Self {
             pool: ListPool::new(),
             vregs: PrimaryMap::new(),
             value_vregs: EntityMap::new(),

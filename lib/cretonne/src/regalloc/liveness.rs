@@ -299,8 +299,8 @@ impl Liveness {
     ///
     /// The memory allocated for this analysis can be reused for multiple functions. Use the
     /// `compute` method to actually runs the analysis for a function.
-    pub fn new() -> Liveness {
-        Liveness {
+    pub fn new() -> Self {
+        Self {
             ranges: LiveRangeSet::new(),
             worklist: Vec::new(),
             ebb_params: Vec::new(),

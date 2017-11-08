@@ -262,7 +262,7 @@ pub struct VariableArgs(Vec<Value>);
 
 impl VariableArgs {
     /// Create an empty argument list.
-    pub fn new() -> VariableArgs {
+    pub fn new() -> Self {
         VariableArgs(Vec::new())
     }
 
@@ -314,8 +314,8 @@ impl Display for VariableArgs {
 }
 
 impl Default for VariableArgs {
-    fn default() -> VariableArgs {
-        VariableArgs::new()
+    fn default() -> Self {
+        Self::new()
     }
 }
 

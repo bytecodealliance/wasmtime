@@ -62,8 +62,8 @@ pub struct DataFlowGraph {
 
 impl DataFlowGraph {
     /// Create a new empty `DataFlowGraph`.
-    pub fn new() -> DataFlowGraph {
-        DataFlowGraph {
+    pub fn new() -> Self {
+        Self {
             insts: PrimaryMap::new(),
             results: EntityMap::new(),
             ebbs: PrimaryMap::new(),
@@ -829,8 +829,8 @@ struct EbbData {
 }
 
 impl EbbData {
-    fn new() -> EbbData {
-        EbbData { params: ValueList::new() }
+    fn new() -> Self {
+        Self { params: ValueList::new() }
     }
 }
 

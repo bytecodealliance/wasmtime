@@ -33,7 +33,7 @@ impl SourceLoc {
 }
 
 impl Default for SourceLoc {
-    fn default() -> SourceLoc {
+    fn default() -> Self {
         SourceLoc(!0)
     }
 }

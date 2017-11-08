@@ -66,8 +66,8 @@ pub struct Function {
 
 impl Function {
     /// Create a function with the given name and signature.
-    pub fn with_name_signature(name: ExternalName, sig: Signature) -> Function {
-        Function {
+    pub fn with_name_signature(name: ExternalName, sig: Signature) -> Self {
+        Self {
             name,
             signature: sig,
             stack_slots: StackSlots::new(),
@@ -99,7 +99,7 @@ impl Function {
     }
 
     /// Create a new empty, anonymous function with a native calling convention.
-    pub fn new() -> Function {
+    pub fn new() -> Self {
         Self::with_name_signature(ExternalName::default(), Signature::new(CallConv::Native))
     }
 
