@@ -421,7 +421,8 @@ impl fmt::Display for Move {
 
 impl fmt::Debug for Move {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        (self as &fmt::Display).fmt(f)
+        let as_display: &fmt::Display = self;
+        as_display.fmt(f)
     }
 }
 
