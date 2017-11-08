@@ -1,3 +1,5 @@
+//! Support for configurable wasm translation.
+
 mod spec;
 mod dummy;
 

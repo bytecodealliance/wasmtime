@@ -1,4 +1,4 @@
-///! Helper functions and structures for the translation.
+//! Helper functions and structures for the translation.
 use wasmparser;
 use cretonne;
 use std::u32;

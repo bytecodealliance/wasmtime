@@ -1,4 +1,3 @@
-
 //! Test command for verifying dominator trees.
 //!
 //! The `test domtree` test command looks for annotations on instructions like this:

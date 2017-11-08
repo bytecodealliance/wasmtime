@@ -1,3 +1,5 @@
+//! "Dummy" environment for testing wasm translation.
+
 use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment};
 use translation_utils::{Global, Memory, Table, GlobalIndex, TableIndex, SignatureIndex,
                         FunctionIndex, MemoryIndex};
