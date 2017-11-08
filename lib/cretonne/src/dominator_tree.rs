@@ -36,7 +36,7 @@ pub struct DominatorTree {
     postorder: Vec<Ebb>,
 
     // Scratch memory used by `compute_postorder()`.
-    stack: Vec<Ebb>,
+    stack: Vec<(Ebb, usize)>,
 
     valid: bool,
 }
@@ -255,39 +255,27 @@ impl DominatorTree {
 
         // During this algorithm only, use `rpo_number` to hold the following state:
         //
-        // 0: EBB never reached.
-        // 2: EBB has been pushed once, so it shouldn't be pushed again.
-        // 1: EBB has already been popped once, and should be added to the post-order next time.
-        const SEEN: u32 = 2;
-        const DONE: u32 = 1;
+        // 0: EBB is not yet on the stack.
+        // 1: EBB is on the stack or in postorder.
+        const SEEN: u32 = 1;
 
         match func.layout.entry_block() {
             Some(ebb) => {
+                self.stack.push((ebb, 0));
                 self.nodes[ebb].rpo_number = SEEN;
-                self.stack.push(ebb)
             }
             None => return,
         }
 
-        while let Some(ebb) = self.stack.pop() {
-            match self.nodes[ebb].rpo_number {
-                // This is the first time we visit `ebb`, forming a pre-order.
-                SEEN => {
-                    // Mark it as done and re-queue it to be visited after its children.
-                    self.nodes[ebb].rpo_number = DONE;
-                    self.stack.push(ebb);
-                    for &succ in cfg.get_successors(ebb) {
-                        // Only push children that haven't been seen before.
-                        if self.nodes[succ].rpo_number == 0 {
-                            self.nodes[succ].rpo_number = SEEN;
-                            self.stack.push(succ);
-                        }
-                    }
+        while let Some((ebb, succ_index)) = self.stack.pop() {
+            if let Some(&succ) = cfg.get_successors(ebb).get(succ_index) {
+                self.stack.push((ebb, succ_index + 1));
+                if self.nodes[succ].rpo_number == 0 {
+                    self.stack.push((succ, 0));
+                    self.nodes[succ].rpo_number = SEEN;
                 }
-                // This is the second time we popped `ebb`, so all its children have been visited.
-                // This is the post-order.
-                DONE => self.postorder.push(ebb),
-                _ => panic!("Inconsistent stack rpo_number"),
+            } else {
+                self.postorder.push(ebb);
             }
         }
     }
@@ -522,7 +510,7 @@ mod test {
             Ordering::Less
         );
 
-        assert_eq!(dt.cfg_postorder(), &[ebb2, ebb0, ebb1, ebb3]);
+        assert_eq!(dt.cfg_postorder(), &[ebb0, ebb2, ebb1, ebb3]);
     }
 
     #[test]
