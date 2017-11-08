@@ -41,10 +41,10 @@ impl StackRef {
 
         // Offset where SP is pointing. (All ISAs have stacks growing downwards.)
         let sp_offset = -(size as StackOffset);
-        return StackRef {
+        StackRef {
             base: StackBase::SP,
             offset: frame[ss].offset - sp_offset,
-        };
+        }
     }
 }
 
