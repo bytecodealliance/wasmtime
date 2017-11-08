@@ -486,26 +486,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(builder.ins().f64const(f64_translation(value)));
         }
         /******************************* Unary Operators *************************************/
-        Operator::I32Clz => {
+        Operator::I32Clz | Operator::I64Clz => {
             let arg = state.pop1();
             state.push1(builder.ins().clz(arg));
         }
-        Operator::I64Clz => {
-            let arg = state.pop1();
-            state.push1(builder.ins().clz(arg));
-        }
-        Operator::I32Ctz => {
+        Operator::I32Ctz | Operator::I64Ctz => {
             let arg = state.pop1();
             state.push1(builder.ins().ctz(arg));
         }
-        Operator::I64Ctz => {
-            let arg = state.pop1();
-            state.push1(builder.ins().ctz(arg));
-        }
-        Operator::I32Popcnt => {
-            let arg = state.pop1();
-            state.push1(builder.ins().popcnt(arg));
-        }
+        Operator::I32Popcnt |
         Operator::I64Popcnt => {
             let arg = state.pop1();
             state.push1(builder.ins().popcnt(arg));
