@@ -979,9 +979,7 @@ impl<'a> Verifier<'a> {
                 );
             }
 
-            let has_valid_encoding = encodings
-                .position(|possible_enc| encoding == possible_enc)
-                .is_some();
+            let has_valid_encoding = encodings.any(|possible_enc| encoding == possible_enc);
 
             if !has_valid_encoding {
                 let mut possible_encodings = String::new();
