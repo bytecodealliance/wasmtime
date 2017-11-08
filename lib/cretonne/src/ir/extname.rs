@@ -5,6 +5,7 @@
 //! Cretonne, which compiles functions independently.
 
 use std::fmt::{self, Write};
+#[allow(unused_imports)]
 use std::ascii::AsciiExt;
 
 /// The name of an external can be any sequence of bytes.
