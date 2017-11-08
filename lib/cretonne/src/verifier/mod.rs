@@ -1102,6 +1102,7 @@ mod tests {
     use super::{Verifier, Error};
     use ir::Function;
     use ir::instructions::{InstructionData, Opcode};
+    use entity::EntityList;
     use settings;
 
     macro_rules! assert_err_with_msg {
@@ -1131,10 +1132,18 @@ mod tests {
         let ebb0 = func.dfg.make_ebb();
         func.layout.append_ebb(ebb0);
         let nullary_with_bad_opcode = func.dfg.make_inst(InstructionData::UnaryImm {
-            opcode: Opcode::Jump,
+            opcode: Opcode::F32const,
             imm: 0.into(),
         });
         func.layout.append_inst(nullary_with_bad_opcode, ebb0);
+        func.layout.append_inst(
+            func.dfg.make_inst(InstructionData::Jump {
+                opcode: Opcode::Jump,
+                destination: ebb0,
+                args: EntityList::default(),
+            }),
+            ebb0,
+        );
         let flags = &settings::Flags::new(&settings::builder());
         let verifier = Verifier::new(&func, flags.into());
         assert_err_with_msg!(verifier.run(), "instruction format");
