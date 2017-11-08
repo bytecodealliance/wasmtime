@@ -317,10 +317,10 @@ impl Move {
     /// Replace the "to" register with `new` and return the old value.
     fn replace_to_reg(&mut self, new: RegUnit) -> RegUnit {
         mem::replace(
-            match self {
-                &mut Move::Reg { ref mut to, .. } |
-                &mut Move::Fill { ref mut to, .. } => to,
-                &mut Move::Spill { .. } => panic!("No to register in a spill {}", self),
+            match *self {
+                Move::Reg { ref mut to, .. } |
+                Move::Fill { ref mut to, .. } => to,
+                Move::Spill { .. } => panic!("No to register in a spill {}", self),
             },
             new,
         )
