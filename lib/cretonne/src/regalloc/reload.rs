@@ -46,8 +46,8 @@ struct Context<'a> {
 
 impl Reload {
     /// Create a new blank reload pass.
-    pub fn new() -> Reload {
-        Reload {
+    pub fn new() -> Self {
+        Self {
             candidates: Vec::new(),
             reloads: SparseMap::new(),
         }

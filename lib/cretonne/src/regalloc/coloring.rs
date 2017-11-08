@@ -101,8 +101,8 @@ struct Context<'a> {
 
 impl Coloring {
     /// Allocate scratch space data structures for the coloring pass.
-    pub fn new() -> Coloring {
-        Coloring {
+    pub fn new() -> Self {
+        Self {
             divert: RegDiversions::new(),
             solver: Solver::new(),
         }

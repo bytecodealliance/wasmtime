@@ -26,8 +26,8 @@ pub struct TopoOrder {
 
 impl TopoOrder {
     /// Create a new empty topological order.
-    pub fn new() -> TopoOrder {
-        TopoOrder {
+    pub fn new() -> Self {
+        Self {
             preferred: Vec::new(),
             next: 0,
             visited: SparseSet::new(),

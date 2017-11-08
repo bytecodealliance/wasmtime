@@ -21,8 +21,8 @@ pub struct MemFlags {
 
 impl MemFlags {
     /// Create a new empty set of flags.
-    pub fn new() -> MemFlags {
-        MemFlags { bits: 0 }
+    pub fn new() -> Self {
+        Self { bits: 0 }
     }
 
     /// Read a flag bit.

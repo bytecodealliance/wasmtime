@@ -34,7 +34,7 @@ where
     where
         V: Default,
     {
-        EntityMap {
+        Self {
             elems: Vec::new(),
             default: Default::default(),
             unused: PhantomData,
@@ -45,7 +45,7 @@ where
     ///
     /// This constructor does not require V to implement Default.
     pub fn with_default(default: V) -> Self {
-        EntityMap {
+        Self {
             elems: Vec::new(),
             default: default,
             unused: PhantomData,

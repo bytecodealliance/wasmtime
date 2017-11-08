@@ -74,8 +74,8 @@ impl Node {
 
 impl DomForest {
     /// Create a new empty dominator forest.
-    pub fn new() -> DomForest {
-        DomForest {
+    pub fn new() -> Self {
+        Self {
             values: Vec::new(),
             stack: Vec::new(),
         }
@@ -252,8 +252,8 @@ struct Context<'a> {
 
 impl Coalescing {
     /// Create a new coalescing pass.
-    pub fn new() -> Coalescing {
-        Coalescing {
+    pub fn new() -> Self {
+        Self {
             forest: DomForest::new(),
             values: Vec::new(),
             split_values: Vec::new(),

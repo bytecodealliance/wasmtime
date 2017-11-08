@@ -54,8 +54,8 @@ impl Part {
 
 impl Pattern {
     /// Create a new blank pattern. Use the `FromStr` trait to generate Patterns with content.
-    fn new() -> Pattern {
-        Pattern {
+    fn new() -> Self {
+        Self {
             parts: Vec::new(),
             defs: Vec::new(),
         }

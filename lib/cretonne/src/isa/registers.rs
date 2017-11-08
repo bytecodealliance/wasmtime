@@ -214,7 +214,7 @@ impl fmt::Debug for RegClassData {
 
 /// Within an ISA, register classes are uniquely identified by their index.
 impl PartialEq for RegClassData {
-    fn eq(&self, other: &RegClassData) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         self.index == other.index
     }
 }

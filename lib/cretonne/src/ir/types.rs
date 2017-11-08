@@ -321,7 +321,7 @@ impl Debug for Type {
 }
 
 impl Default for Type {
-    fn default() -> Type {
+    fn default() -> Self {
         VOID
     }
 }

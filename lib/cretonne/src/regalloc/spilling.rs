@@ -63,8 +63,8 @@ struct Context<'a> {
 
 impl Spilling {
     /// Create a new spilling data structure.
-    pub fn new() -> Spilling {
-        Spilling {
+    pub fn new() -> Self {
+        Self {
             spills: Vec::new(),
             reg_uses: Vec::new(),
         }

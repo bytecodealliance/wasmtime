@@ -66,7 +66,7 @@ where
 {
     /// Create a new empty mapping.
     pub fn new() -> Self {
-        SparseMap {
+        Self {
             sparse: EntityMap::new(),
             dense: Vec::new(),
         }
@@ -215,7 +215,7 @@ impl<T> SparseMapValue<T> for T
 where
     T: EntityRef,
 {
-    fn key(&self) -> T {
+    fn key(&self) -> Self {
         *self
     }
 }

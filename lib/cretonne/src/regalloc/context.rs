@@ -36,8 +36,8 @@ impl Context {
     ///
     /// This context should be reused for multiple functions in order to avoid repeated memory
     /// allocations.
-    pub fn new() -> Context {
-        Context {
+    pub fn new() -> Self {
+        Self {
             liveness: Liveness::new(),
             virtregs: VirtRegs::new(),
             coalescing: Coalescing::new(),

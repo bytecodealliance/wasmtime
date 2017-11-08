@@ -42,8 +42,8 @@ pub struct Layout {
 
 impl Layout {
     /// Create a new empty `Layout`.
-    pub fn new() -> Layout {
-        Layout {
+    pub fn new() -> Self {
+        Self {
             ebbs: EntityMap::new(),
             insts: EntityMap::new(),
             first_ebb: None,

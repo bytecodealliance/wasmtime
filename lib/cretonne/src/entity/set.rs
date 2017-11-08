@@ -24,7 +24,7 @@ where
 {
     /// Create a new empty set.
     pub fn new() -> Self {
-        EntitySet {
+        Self {
             elems: Vec::new(),
             len: 0,
             unused: PhantomData,

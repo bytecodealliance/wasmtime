@@ -126,8 +126,8 @@ pub struct TranslationState {
 }
 
 impl TranslationState {
-    pub fn new() -> TranslationState {
-        TranslationState {
+    pub fn new() -> Self {
+        Self {
             stack: Vec::new(),
             control_stack: Vec::new(),
             phantom_unreachable_stack_depth: 0,
