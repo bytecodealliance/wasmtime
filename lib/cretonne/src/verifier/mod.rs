@@ -149,20 +149,20 @@ pub fn verify_context<'a, FOI: Into<FlagsOrIsa<'a>>>(
 
 struct Verifier<'a> {
     func: &'a Function,
-    cfg: ControlFlowGraph,
-    domtree: DominatorTree,
+    expected_cfg: ControlFlowGraph,
+    expected_domtree: DominatorTree,
     flags: &'a Flags,
     isa: Option<&'a TargetIsa>,
 }
 
 impl<'a> Verifier<'a> {
     pub fn new(func: &'a Function, fisa: FlagsOrIsa<'a>) -> Verifier<'a> {
-        let cfg = ControlFlowGraph::with_function(func);
-        let domtree = DominatorTree::with_function(func, &cfg);
+        let expected_cfg = ControlFlowGraph::with_function(func);
+        let expected_domtree = DominatorTree::with_function(func, &expected_cfg);
         Verifier {
             func,
-            cfg,
-            domtree,
+            expected_cfg,
+            expected_domtree,
             flags: fisa.flags,
             isa: fisa.isa,
         }
@@ -461,8 +461,10 @@ impl<'a> Verifier<'a> {
                     );
                 }
                 // Defining instruction dominates the instruction that uses the value.
-                if self.domtree.is_reachable(self.func.layout.pp_ebb(loc_inst)) &&
-                    !self.domtree.dominates(
+                if self.expected_domtree.is_reachable(
+                    self.func.layout.pp_ebb(loc_inst),
+                ) &&
+                    !self.expected_domtree.dominates(
                         def_inst,
                         loc_inst,
                         &self.func.layout,
@@ -486,8 +488,12 @@ impl<'a> Verifier<'a> {
                     );
                 }
                 // The defining EBB dominates the instruction using this value.
-                if self.domtree.is_reachable(ebb) &&
-                    !self.domtree.dominates(ebb, loc_inst, &self.func.layout)
+                if self.expected_domtree.is_reachable(ebb) &&
+                    !self.expected_domtree.dominates(
+                        ebb,
+                        loc_inst,
+                        &self.func.layout,
+                    )
                 {
                     return err!(loc_inst, "uses value arg from non-dominating {}", ebb);
                 }
@@ -501,8 +507,8 @@ impl<'a> Verifier<'a> {
         // dominator for each EBB. Therefore the current domtree is valid if it matches the freshly
         // computed one.
         for ebb in self.func.layout.ebbs() {
-            let expected = domtree.idom(ebb);
-            let got = self.domtree.idom(ebb);
+            let expected = self.expected_domtree.idom(ebb);
+            let got = domtree.idom(ebb);
             if got != expected {
                 return err!(
                     ebb,
@@ -514,20 +520,20 @@ impl<'a> Verifier<'a> {
             }
         }
         // We also verify if the postorder defined by `DominatorTree` is sane
-        if self.domtree.cfg_postorder().len() != domtree.cfg_postorder().len() {
+        if domtree.cfg_postorder().len() != self.expected_domtree.cfg_postorder().len() {
             return err!(
                 AnyEntity::Function,
                 "incorrect number of Ebbs in postorder traversal"
             );
         }
-        for (index, (&true_ebb, &test_ebb)) in
-            self.domtree
+        for (index, (&test_ebb, &true_ebb)) in
+            domtree
                 .cfg_postorder()
                 .iter()
-                .zip(domtree.cfg_postorder().iter())
+                .zip(self.expected_domtree.cfg_postorder().iter())
                 .enumerate()
         {
-            if true_ebb != test_ebb {
+            if test_ebb != true_ebb {
                 return err!(
                     test_ebb,
                     "invalid domtree, postorder ebb number {} should be {}, got {}",
@@ -538,8 +544,13 @@ impl<'a> Verifier<'a> {
             }
         }
         // We verify rpo_cmp on pairs of adjacent ebbs in the postorder
-        for (&prev_ebb, &next_ebb) in self.domtree.cfg_postorder().iter().adjacent_pairs() {
-            if domtree.rpo_cmp(prev_ebb, next_ebb, &self.func.layout) != Ordering::Greater {
+        for (&prev_ebb, &next_ebb) in domtree.cfg_postorder().iter().adjacent_pairs() {
+            if self.expected_domtree.rpo_cmp(
+                prev_ebb,
+                next_ebb,
+                &self.func.layout,
+            ) != Ordering::Greater
+            {
                 return err!(
                     next_ebb,
                     "invalid domtree, rpo_cmp does not says {} is greater than {}",
@@ -905,7 +916,7 @@ impl<'a> Verifier<'a> {
         let mut got_preds = BTreeSet::<Inst>::new();
 
         for ebb in self.func.layout.ebbs() {
-            expected_succs.extend(self.cfg.get_successors(ebb));
+            expected_succs.extend(self.expected_cfg.get_successors(ebb));
             got_succs.extend(cfg.get_successors(ebb));
 
             let missing_succs: Vec<Ebb> = expected_succs.difference(&got_succs).cloned().collect();
@@ -922,7 +933,8 @@ impl<'a> Verifier<'a> {
                 return err!(ebb, "cfg had unexpected successor(s) {:?}", excess_succs);
             }
 
-            expected_preds.extend(self.cfg.get_predecessors(ebb).iter().map(|&(_, inst)| inst));
+            expected_preds.extend(self.expected_cfg.get_predecessors(ebb).iter().map(|&(_,
+               inst)| inst));
             got_preds.extend(cfg.get_predecessors(ebb).iter().map(|&(_, inst)| inst));
 
             let missing_preds: Vec<Inst> = expected_preds.difference(&got_preds).cloned().collect();
@@ -1091,7 +1103,7 @@ impl<'a> Verifier<'a> {
             self.verify_return_at_end()?;
         }
 
-        verify_flags(self.func, &self.cfg, self.isa)?;
+        verify_flags(self.func, &self.expected_cfg, self.isa)?;
 
         Ok(())
     }
