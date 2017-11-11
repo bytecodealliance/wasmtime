@@ -769,6 +769,12 @@ Integer operations
 .. autoinst:: isub_bout
 .. autoinst:: isub_borrow
 
+.. todo:: Add and subtract with signed overflow.
+
+    For example, see
+    `llvm.sadd.with.overflow.*` and `llvm.ssub.with.overflow.*` in
+    LLVM <http://llvm.org/docs/LangRef.html#arithmetic-with-overflow-intrinsics>`_.
+
 .. autoinst:: imul
 .. autoinst:: imul_imm
 
@@ -915,6 +921,12 @@ Conversion operations
 .. autoinst:: fcvt_to_sint
 .. autoinst:: fcvt_from_uint
 .. autoinst:: fcvt_from_sint
+
+.. todo:: Saturating fcvt_to_sint and fcvt_to_uint.
+
+    For example, these appear in
+    `Rust <https://github.com/rust-lang/rust/pull/45205>`_ and
+    `WebAssembly https://github.com/WebAssembly/nontrapping-float-to-int-conversions>`_.
 
 Legalization operations
 -----------------------
