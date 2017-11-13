@@ -14,10 +14,6 @@ use state::TranslationState;
 use translation_utils::Local;
 use wasmparser::{self, BinaryReader};
 
-/// Maximum number of local variables permitted in a function. The translation fails with a
-/// `CtonError::ImplLimitExceeded` error if the limit is exceeded.
-const MAX_LOCALS: usize = 50_000;
-
 /// WebAssembly to Cretonne IL function translator.
 ///
 /// A `FuncTranslator` is used to translate a binary WebAssembly function into Cretonne IL guided
@@ -145,7 +141,7 @@ fn parse_local_decls(
         let (count, ty) = reader.read_local_decl(&mut locals_total).map_err(|_| {
             CtonError::InvalidInput
         })?;
-        declare_locals(builder, count, ty, &mut next_local)?;
+        declare_locals(builder, count, ty, &mut next_local);
     }
 
     Ok(())
@@ -159,7 +155,7 @@ fn declare_locals(
     count: u32,
     wasm_type: wasmparser::Type,
     next_local: &mut usize,
-) -> CtonResult {
+) {
     // All locals are initialized to 0.
     use wasmparser::Type::*;
     let zeroval = match wasm_type {
@@ -167,24 +163,16 @@ fn declare_locals(
         I64 => builder.ins().iconst(ir::types::I64, 0),
         F32 => builder.ins().f32const(ir::immediates::Ieee32::with_bits(0)),
         F64 => builder.ins().f64const(ir::immediates::Ieee64::with_bits(0)),
-        _ => return Err(CtonError::InvalidInput),
+        _ => panic!("invalid local type"),
     };
 
     let ty = builder.func.dfg.value_type(zeroval);
     for _ in 0..count {
-        // This implementation limit is arbitrary, but it ensures that a small function can't blow
-        // up the compiler by declaring millions of locals.
-        if *next_local >= MAX_LOCALS {
-            return Err(CtonError::ImplLimitExceeded);
-        }
-
         let local = Local::new(*next_local);
         builder.declare_var(local, ty);
         builder.def_var(local, zeroval);
         *next_local += 1;
     }
-
-    Ok(())
 }
 
 /// Parse the function body in `reader`.
