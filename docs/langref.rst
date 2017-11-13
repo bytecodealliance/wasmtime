@@ -926,7 +926,7 @@ Conversion operations
 
     For example, these appear in
     `Rust <https://github.com/rust-lang/rust/pull/45205>`_ and
-    `WebAssembly https://github.com/WebAssembly/nontrapping-float-to-int-conversions>`_.
+    `WebAssembly <https://github.com/WebAssembly/nontrapping-float-to-int-conversions>`_.
 
 Legalization operations
 -----------------------
