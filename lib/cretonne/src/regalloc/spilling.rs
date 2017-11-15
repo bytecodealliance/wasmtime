@@ -70,6 +70,12 @@ impl Spilling {
         }
     }
 
+    /// Clear all data structures in this spilling pass.
+    pub fn clear(&mut self) {
+        self.spills.clear();
+        self.reg_uses.clear();
+    }
+
     /// Run the spilling algorithm over `func`.
     pub fn run(
         &mut self,

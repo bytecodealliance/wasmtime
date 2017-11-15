@@ -53,6 +53,12 @@ impl Reload {
         }
     }
 
+    /// Clear all data structures in this reload pass.
+    pub fn clear(&mut self) {
+        self.candidates.clear();
+        self.reloads.clear();
+    }
+
     /// Run the reload algorithm over `func`.
     pub fn run(
         &mut self,

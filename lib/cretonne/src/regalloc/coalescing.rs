@@ -81,6 +81,12 @@ impl DomForest {
         }
     }
 
+    /// Clear all data structures in this dominator forest.
+    pub fn clear(&mut self) {
+        self.values.clear();
+        self.stack.clear();
+    }
+
     /// Swap the merged list with `buffer`, leaving the dominator forest empty.
     ///
     /// This is typically called after a successful merge to extract the merged value list.
@@ -141,8 +147,7 @@ impl DomForest {
         domtree: &DominatorTree,
         liveness: &Liveness,
     ) -> Result<(), (Value, Value)> {
-        self.stack.clear();
-        self.values.clear();
+        self.clear();
         self.values.reserve(va.len() + vb.len());
 
         // Convert the two value lists into a merged sequence of nodes.
@@ -259,6 +264,13 @@ impl Coalescing {
             split_values: Vec::new(),
         }
 
+    }
+
+    /// Clear all data structures in this coalescing pass.
+    pub fn clear(&mut self) {
+        self.forest.clear();
+        self.values.clear();
+        self.split_values.clear();
     }
 
     /// Convert `func` to conventional SSA form and build virtual registers in the process.

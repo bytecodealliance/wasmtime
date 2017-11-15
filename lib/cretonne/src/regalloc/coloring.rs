@@ -108,6 +108,12 @@ impl Coloring {
         }
     }
 
+    /// Clear all data structures in this coloring pass.
+    pub fn clear(&mut self) {
+        self.divert.clear();
+        self.solver.clear();
+    }
+
     /// Run the coloring algorithm over `func`.
     pub fn run(
         &mut self,

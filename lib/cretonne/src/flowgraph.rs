@@ -58,6 +58,12 @@ impl ControlFlowGraph {
         }
     }
 
+    /// Clear all data structures in this control flow graph.
+    pub fn clear(&mut self) {
+        self.data.clear();
+        self.valid = false;
+    }
+
     /// Allocate and compute the control flow graph for `func`.
     pub fn with_function(func: &Function) -> Self {
         let mut cfg = Self::new();

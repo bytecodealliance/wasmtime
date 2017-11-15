@@ -49,6 +49,18 @@ impl Context {
         }
     }
 
+    /// Clear all data structures in this context.
+    pub fn clear(&mut self) {
+        self.liveness.clear();
+        self.virtregs.clear();
+        self.coalescing.clear();
+        self.topo.clear();
+        self.tracker.clear();
+        self.spilling.clear();
+        self.reload.clear();
+        self.coloring.clear();
+    }
+
     /// Allocate registers in `func`.
     ///
     /// After register allocation, all values in `func` have been assigned to a register or stack
