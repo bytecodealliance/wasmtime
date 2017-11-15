@@ -515,6 +515,17 @@ impl Solver {
         }
     }
 
+    /// Clear all data structures in this coloring pass.
+    pub fn clear(&mut self) {
+        self.assignments.clear();
+        self.vars.clear();
+        self.inputs_done = false;
+        self.regs_in = AllocatableSet::new();
+        self.regs_out = AllocatableSet::new();
+        self.moves.clear();
+        self.fills.clear();
+    }
+
     /// Reset the solver state and prepare solving for a new instruction with an initial set of
     /// allocatable registers.
     ///

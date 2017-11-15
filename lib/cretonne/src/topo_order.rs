@@ -35,6 +35,14 @@ impl TopoOrder {
         }
     }
 
+    /// Clear all data structures in this topological order.
+    pub fn clear(&mut self) {
+        self.preferred.clear();
+        self.next = 0;
+        self.visited.clear();
+        self.stack.clear();
+    }
+
     /// Reset and initialize with a preferred sequence of EBBs. The resulting topological order is
     /// guaranteed to contain all of the EBBs in `preferred` as well as any dominators.
     pub fn reset<Ebbs>(&mut self, preferred: Ebbs)

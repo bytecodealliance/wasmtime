@@ -307,6 +307,13 @@ impl Liveness {
         }
     }
 
+    /// Clear all data structures in this liveness analysis.
+    pub fn clear(&mut self) {
+        self.ranges.clear();
+        self.worklist.clear();
+        self.ebb_params.clear();
+    }
+
     /// Get the live range for `value`, if it exists.
     pub fn get(&self, value: Value) -> Option<&LiveRange> {
         self.ranges.get(value)

@@ -57,6 +57,15 @@ impl Context {
         }
     }
 
+    /// Clear all data structures in this context.
+    pub fn clear(&mut self) {
+        self.func.clear();
+        self.cfg.clear();
+        self.domtree.clear();
+        self.regalloc.clear();
+        self.loop_analysis.clear();
+    }
+
     /// Compile the function.
     ///
     /// Run the function through all the passes necessary to generate code for the target ISA
