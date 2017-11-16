@@ -148,7 +148,7 @@ impl DomForest {
         liveness: &Liveness,
     ) -> Result<(), (Value, Value)> {
         self.clear();
-        self.values.reserve(va.len() + vb.len());
+        self.values.reserve_exact(va.len() + vb.len());
 
         // Convert the two value lists into a merged sequence of nodes.
         let merged = MergedNodes {
