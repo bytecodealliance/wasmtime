@@ -38,7 +38,7 @@ impl Instance {
     /// without any initializers applied yet.
     fn instantiate_tables(&mut self, module: &Module) {
         debug_assert!(self.tables.is_empty());
-        self.tables.reserve(module.tables.len());
+        self.tables.reserve_exact(module.tables.len());
         for table in &module.tables {
             let len = table.size;
             let mut v = Vec::with_capacity(len);
@@ -52,7 +52,7 @@ impl Instance {
     fn instantiate_memories(&mut self, module: &Module) {
         debug_assert!(self.memories.is_empty());
         // Allocate the underlying memory and initialize it to all zeros.
-        self.memories.reserve(module.memories.len());
+        self.memories.reserve_exact(module.memories.len());
         for memory in &module.memories {
             let len = memory.pages_count * PAGE_SIZE;
             let mut v = Vec::with_capacity(len);
