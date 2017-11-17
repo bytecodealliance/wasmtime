@@ -287,6 +287,8 @@ impl<'module_environment> cton_wasm::FuncEnvironment for FuncEnvironment<'module
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> ir::Inst {
+        // TODO: Cretonne's call_indirect doesn't implement bounds checking
+        // or signature checking, so we need to implement it ourselves.
         debug_assert_eq!(table_index, 0, "non-default tables not supported yet");
         let real_call_args = FuncEnvironment::get_real_call_args(pos.func, call_args);
         pos.ins().call_indirect(sig_ref, callee, &real_call_args)
