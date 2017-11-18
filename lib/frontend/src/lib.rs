@@ -128,6 +128,8 @@
 //!         }
 //!         builder.ins().jump(block1, &[]);
 //!         builder.seal_block(block1);
+//!
+//!         builder.finalize();
 //!     }
 //!
 //!     let flags = settings::Flags::new(&settings::builder());
