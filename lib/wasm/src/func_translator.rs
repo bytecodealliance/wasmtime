@@ -94,7 +94,10 @@ impl FuncTranslator {
         self.state.initialize(&builder.func.signature, exit_block);
 
         parse_local_decls(&mut reader, &mut builder, num_params)?;
-        parse_function_body(reader, &mut builder, &mut self.state, environ)
+        parse_function_body(reader, &mut builder, &mut self.state, environ)?;
+
+        builder.finalize();
+        Ok(())
     }
 }
 
