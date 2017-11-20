@@ -52,6 +52,20 @@ impl<F: Forest> NodePool<F> {
         self.nodes[node] = NodeData::Free { next: self.freelist };
         self.freelist = Some(node);
     }
+
+    /// Free the entire tree rooted at `node`.
+    pub fn free_tree(&mut self, node: Node) {
+        if let NodeData::Inner { size, tree, .. } = self[node] {
+            // Note that we have to capture `tree` by value to avoid borrow checker trouble.
+            for i in 0..usize::from(size + 1) {
+                // Recursively free sub-trees. This recursion can never be deeper than `MAX_PATH`,
+                // and since most trees have less than a handful of nodes, it is worthwhile to
+                // avoid the heap allocation for an iterative tree traversal.
+                self.free_tree(tree[i]);
+            }
+        }
+        self.free_node(node);
+    }
 }
 
 #[cfg(test)]
