@@ -131,6 +131,15 @@ where
     ) -> SetCursor<'a, K, C> {
         SetCursor::new(self, forest, comp)
     }
+
+    /// Create an iterator traversing this set. The iterator type is `K`.
+    pub fn iter<'a>(&'a self, forest: &'a SetForest<K, C>) -> SetIter<'a, K, C> {
+        SetIter {
+            root: self.root,
+            pool: &forest.nodes,
+            path: Path::default(),
+        }
+    }
 }
 
 /// A position in a `Set` used to navigate and modify the ordered set.
@@ -275,6 +284,35 @@ where
     }
 }
 
+/// An iterator visiting the elements of a `Set`.
+pub struct SetIter<'a, K, C>
+where
+    K: 'a + Copy,
+    C: 'a + Comparator<K>,
+{
+    root: PackedOption<Node>,
+    pool: &'a NodePool<SetTypes<K, C>>,
+    path: Path<SetTypes<K, C>>,
+}
+
+impl<'a, K, C> Iterator for SetIter<'a, K, C>
+where
+    K: 'a + Copy,
+    C: 'a + Comparator<K>,
+{
+    type Item = K;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // We use `self.root` to indicate if we need to go to the first element. Reset to `None`
+        // once we've returned the first element. This also works for an empty tree since the
+        // `path.next()` call returns `None` when the path is empty. This also fuses the iterator.
+        match self.root.take() {
+            Some(root) => Some(self.path.first(root, self.pool).0),
+            None => self.path.next(self.pool).map(|(k, _)| k),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::mem;
@@ -297,6 +335,9 @@ mod test {
         assert!(s.is_empty());
         s.clear(&mut f);
         assert!(!s.contains(7, &f, &()));
+
+        // Iterator for an empty set.
+        assert_eq!(s.iter(&f).next(), None);
 
         let mut c = SetCursor::new(&mut s, &mut f, &());
         c.verify();
@@ -465,6 +506,12 @@ mod test {
     fn four_level() {
         let mut f = SetForest::<i32, ()>::new();
         let mut s = dense4l(&mut f);
+
+        assert_eq!(
+            s.iter(&f).collect::<Vec<_>>()[0..10],
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        );
+
         let mut c = s.cursor(&mut f, &());
 
         c.verify();

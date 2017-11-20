@@ -134,6 +134,15 @@ where
     ) -> MapCursor<'a, K, V, C> {
         MapCursor::new(self, forest, comp)
     }
+
+    /// Create an iterator traversing this map. The iterator type is `(K, V)`.
+    pub fn iter<'a>(&'a self, forest: &'a MapForest<K, V, C>) -> MapIter<'a, K, V, C> {
+        MapIter {
+            root: self.root,
+            pool: &forest.nodes,
+            path: Path::default(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -296,6 +305,37 @@ where
     }
 }
 
+/// An iterator visiting the key-value pairs of a `Map`.
+pub struct MapIter<'a, K, V, C>
+where
+    K: 'a + Copy,
+    V: 'a + Copy,
+    C: 'a + Comparator<K>,
+{
+    root: PackedOption<Node>,
+    pool: &'a NodePool<MapTypes<K, V, C>>,
+    path: Path<MapTypes<K, V, C>>,
+}
+
+impl<'a, K, V, C> Iterator for MapIter<'a, K, V, C>
+where
+    K: 'a + Copy,
+    V: 'a + Copy,
+    C: 'a + Comparator<K>,
+{
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // We use `self.root` to indicate if we need to go to the first element. Reset to `None`
+        // once we've returned the first element. This also works for an empty tree since the
+        // `path.next()` call returns `None` when the path is empty. This also fuses the iterator.
+        match self.root.take() {
+            Some(root) => Some(self.path.first(root, self.pool)),
+            None => self.path.next(self.pool),
+        }
+    }
+}
+
 #[cfg(test)]
 impl<'a, K, V, C> MapCursor<'a, K, V, C>
 where
@@ -337,6 +377,7 @@ mod test {
         m.clear(&mut f);
 
         assert_eq!(m.get(7, &f, &()), None);
+        assert_eq!(m.iter(&f).next(), None);
 
         let mut c = m.cursor(&mut f, &());
         assert!(c.is_empty());
@@ -367,7 +408,18 @@ mod test {
 
         m.verify(f, &());
 
-        // [ 20 40 50 60 80 90 200 ]
+        assert_eq!(
+            m.iter(f).collect::<Vec<_>>(),
+            [
+                (20, 2.0),
+                (40, 4.0),
+                (50, 5.5),
+                (60, 6.0),
+                (80, 8.0),
+                (90, 9.0),
+                (200, 20.0),
+            ]
+        );
 
         assert_eq!(m.get(0, f, &()), None);
         assert_eq!(m.get(20, f, &()), Some(2.0));
