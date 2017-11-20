@@ -2,7 +2,7 @@
 
 use packed_option::PackedOption;
 use std::marker::PhantomData;
-use super::{INNER_SIZE, BPlusComparator, Forest, NodePool, Node, NodeData, Path};
+use super::{INNER_SIZE, Comparator, Forest, NodePool, Node, NodeData, Path};
 
 /// Tag type defining forest types for a map.
 struct MapTypes<K, V, C>(PhantomData<(K, V, C)>);
@@ -11,7 +11,7 @@ impl<K, V, C> Forest for MapTypes<K, V, C>
 where
     K: Copy,
     V: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     type Key = K;
     type Value = V;
@@ -28,12 +28,12 @@ where
     }
 }
 
-/// Memory pool for a forest of `BPlusMap` instances.
+/// Memory pool for a forest of `Map` instances.
 pub struct MapForest<K, V, C>
 where
     K: Copy,
     V: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     nodes: NodePool<MapTypes<K, V, C>>,
 }
@@ -42,7 +42,7 @@ impl<K, V, C> MapForest<K, V, C>
 where
     K: Copy,
     V: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     /// Create a new empty forest.
     pub fn new() -> MapForest<K, V, C> {
@@ -51,7 +51,7 @@ where
 
     /// Clear all maps in the forest.
     ///
-    /// All `BPlusMap` instances belong to this forest are invalidated and should no longer be used.
+    /// All `Map` instances belong to this forest are invalidated and should no longer be used.
     pub fn clear(&mut self) {
         self.nodes.clear();
     }
@@ -61,25 +61,25 @@ where
 ///
 /// This is not a general-purpose replacement for `BTreeMap`. See the [module
 /// documentation](index.html) for more information about design tradeoffs.
-pub struct BPlusMap<K, V, C>
+pub struct Map<K, V, C>
 where
     K: Copy,
     V: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     root: PackedOption<Node>,
     unused: PhantomData<(K, V, C)>,
 }
 
-impl<K, V, C> BPlusMap<K, V, C>
+impl<K, V, C> Map<K, V, C>
 where
     K: Copy,
     V: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     /// Make an empty map.
-    pub fn new() -> BPlusMap<K, V, C> {
-        BPlusMap {
+    pub fn new() -> Map<K, V, C> {
+        Map {
             root: None.into(),
             unused: PhantomData,
         }
@@ -130,11 +130,11 @@ where
 }
 
 #[cfg(test)]
-impl<K, V, C> BPlusMap<K, V, C>
+impl<K, V, C> Map<K, V, C>
 where
     K: Copy + ::std::fmt::Display,
     V: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     /// Verify consistency.
     fn verify(&self, forest: &MapForest<K, V, C>, comp: &C)
@@ -159,7 +159,7 @@ where
     }
 }
 
-/// A position in a `BPlusMap` used to navigate and modify the ordered map.
+/// A position in a `Map` used to navigate and modify the ordered map.
 ///
 /// A cursor always points at a key-value pair in the map, or "off the end" which is a position
 /// after the last entry in the map.
@@ -167,7 +167,7 @@ pub struct MapCursor<'a, K, V, C>
 where
     K: 'a + Copy,
     V: 'a + Copy,
-    C: 'a + BPlusComparator<K>,
+    C: 'a + Comparator<K>,
 {
     root: &'a mut PackedOption<Node>,
     pool: &'a mut NodePool<MapTypes<K, V, C>>,
@@ -179,11 +179,11 @@ impl<'a, K, V, C> MapCursor<'a, K, V, C>
 where
     K: Copy,
     V: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     /// Create a cursor with a default (off-the-end) location.
     fn new(
-        container: &'a mut BPlusMap<K, V, C>,
+        container: &'a mut Map<K, V, C>,
         forest: &'a mut MapForest<K, V, C>,
         comp: &'a C,
     ) -> MapCursor<'a, K, V, C> {
@@ -289,7 +289,7 @@ impl<'a, K, V, C> MapCursor<'a, K, V, C>
 where
     K: Copy + ::std::fmt::Display,
     V: Copy + ::std::fmt::Display,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     fn verify(&self) {
         self.path.verify(self.pool);
@@ -320,7 +320,7 @@ mod test {
         let mut f = MapForest::<u32, f32, ()>::new();
         f.clear();
 
-        let mut m = BPlusMap::<u32, f32, ()>::new();
+        let mut m = Map::<u32, f32, ()>::new();
         assert!(m.is_empty());
 
         assert_eq!(m.get(7, &f, &()), None);
@@ -338,7 +338,7 @@ mod test {
     #[test]
     fn inserting() {
         let f = &mut MapForest::<u32, f32, ()>::new();
-        let mut m = BPlusMap::<u32, f32, ()>::new();
+        let mut m = Map::<u32, f32, ()>::new();
 
         // The first seven values stay in a single leaf node.
         assert_eq!(m.insert(50, 5.0, f, &()), None);
@@ -428,8 +428,8 @@ mod test {
         // Various ways of splitting a full leaf node at level 0.
         let f = &mut MapForest::<u32, f32, ()>::new();
 
-        fn full_leaf(f: &mut MapForest<u32, f32, ()>) -> BPlusMap<u32, f32, ()> {
-            let mut m = BPlusMap::new();
+        fn full_leaf(f: &mut MapForest<u32, f32, ()>) -> Map<u32, f32, ()> {
+            let mut m = Map::new();
             for n in 1..8 {
                 m.insert(n * 10, n as f32 * 1.1, f, &());
             }
@@ -473,8 +473,8 @@ mod test {
         // 210, 220, ..., 270
         // ...
         // 810, 820, ..., 870
-        fn full(f: &mut MapForest<u32, f32, ()>) -> BPlusMap<u32, f32, ()> {
-            let mut m = BPlusMap::new();
+        fn full(f: &mut MapForest<u32, f32, ()>) -> Map<u32, f32, ()> {
+            let mut m = Map::new();
 
             // Start by inserting elements in order.
             // This should leave 8 leaf nodes with 4 elements in each.
@@ -583,9 +583,9 @@ mod test {
 
     // Make a tree with two barely healthy leaf nodes:
     // [ 10 20 30 40 ] [ 50 60 70 80 ]
-    fn two_leaf(f: &mut MapForest<u32, f32, ()>) -> BPlusMap<u32, f32, ()> {
+    fn two_leaf(f: &mut MapForest<u32, f32, ()>) -> Map<u32, f32, ()> {
         f.clear();
-        let mut m = BPlusMap::new();
+        let mut m = Map::new();
         for n in 1..9 {
             m.insert(n * 10, n as f32, f, &());
         }
@@ -679,9 +679,9 @@ mod test {
 
     // Make a 3-level tree with barely healthy nodes.
     // 1 root, 8 inner nodes, 7*4+5=33 leaf nodes, 4 entries each.
-    fn level3_sparse(f: &mut MapForest<u32, f32, ()>) -> BPlusMap<u32, f32, ()> {
+    fn level3_sparse(f: &mut MapForest<u32, f32, ()>) -> Map<u32, f32, ()> {
         f.clear();
-        let mut m = BPlusMap::new();
+        let mut m = Map::new();
         for n in 1..133 {
             m.insert(n * 10, n as f32, f, &());
         }
@@ -722,7 +722,7 @@ mod test {
     #[test]
     fn insert_many() {
         let f = &mut MapForest::<u32, f32, ()>::new();
-        let mut m = BPlusMap::<u32, f32, ()>::new();
+        let mut m = Map::<u32, f32, ()>::new();
 
         let mm = 4096;
         let mut x = 0;

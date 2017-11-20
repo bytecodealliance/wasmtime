@@ -64,7 +64,7 @@ impl<F: Forest> NodePool<F> {
     {
         use std::borrow::Borrow;
         use std::cmp::Ordering;
-        use super::BPlusComparator;
+        use super::Comparator;
         use entity::SparseSet;
 
         // The root node can't be an inner node with just a single sub-tree. It should have been

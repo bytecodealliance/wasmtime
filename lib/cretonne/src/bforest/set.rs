@@ -2,7 +2,7 @@
 
 use packed_option::PackedOption;
 use std::marker::PhantomData;
-use super::{INNER_SIZE, BPlusComparator, Forest, NodePool, Node, NodeData, Path, SetValue};
+use super::{INNER_SIZE, Comparator, Forest, NodePool, Node, NodeData, Path, SetValue};
 
 /// Tag type defining forest types for a set.
 struct SetTypes<K, C>(PhantomData<(K, C)>);
@@ -10,7 +10,7 @@ struct SetTypes<K, C>(PhantomData<(K, C)>);
 impl<K, C> Forest for SetTypes<K, C>
 where
     K: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     type Key = K;
     type Value = SetValue;
@@ -27,11 +27,11 @@ where
     }
 }
 
-/// Memory pool for a forest of `BPlusSet` instances.
+/// Memory pool for a forest of `Set` instances.
 pub struct SetForest<K, C>
 where
     K: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     nodes: NodePool<SetTypes<K, C>>,
 }
@@ -39,7 +39,7 @@ where
 impl<K, C> SetForest<K, C>
 where
     K: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     /// Create a new empty forest.
     pub fn new() -> SetForest<K, C> {
@@ -48,7 +48,7 @@ where
 
     /// Clear all sets in the forest.
     ///
-    /// All `BPlusSet` instances belong to this forest are invalidated and should no longer be used.
+    /// All `Set` instances belong to this forest are invalidated and should no longer be used.
     pub fn clear(&mut self) {
         self.nodes.clear();
     }
@@ -58,23 +58,23 @@ where
 ///
 /// This is not a general-purpose replacement for `BTreeSet`. See the [module
 /// documentation](index.html) for more information about design tradeoffs.
-pub struct BPlusSet<K, C>
+pub struct Set<K, C>
 where
     K: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     root: PackedOption<Node>,
     unused: PhantomData<(K, C)>,
 }
 
-impl<K, C> BPlusSet<K, C>
+impl<K, C> Set<K, C>
 where
     K: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     /// Make an empty set.
-    pub fn new() -> BPlusSet<K, C> {
-        BPlusSet {
+    pub fn new() -> Set<K, C> {
+        Set {
             root: None.into(),
             unused: PhantomData,
         }
@@ -126,14 +126,14 @@ where
     }
 }
 
-/// A position in a `BPlusSet` used to navigate and modify the ordered set.
+/// A position in a `Set` used to navigate and modify the ordered set.
 ///
 /// A cursor always points at an element in the set, or "off the end" which is a position after the
 /// last element in the set.
 pub struct SetCursor<'a, K, C>
 where
     K: 'a + Copy,
-    C: 'a + BPlusComparator<K>,
+    C: 'a + Comparator<K>,
 {
     root: &'a mut PackedOption<Node>,
     pool: &'a mut NodePool<SetTypes<K, C>>,
@@ -144,11 +144,11 @@ where
 impl<'a, K, C> SetCursor<'a, K, C>
 where
     K: Copy,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     /// Create a cursor with a default (invalid) location.
     fn new(
-        container: &'a mut BPlusSet<K, C>,
+        container: &'a mut Set<K, C>,
         forest: &'a mut SetForest<K, C>,
         comp: &'a C,
     ) -> SetCursor<'a, K, C> {
@@ -250,7 +250,7 @@ where
 impl<'a, K, C> SetCursor<'a, K, C>
 where
     K: Copy + ::std::fmt::Display,
-    C: BPlusComparator<K>,
+    C: Comparator<K>,
 {
     fn verify(&self) {
         self.path.verify(self.pool);
@@ -281,7 +281,7 @@ mod test {
         let mut f = SetForest::<u32, ()>::new();
         f.clear();
 
-        let mut s = BPlusSet::<u32, ()>::new();
+        let mut s = Set::<u32, ()>::new();
         assert!(s.is_empty());
         assert!(!s.contains(7, &f, &()));
 
@@ -293,7 +293,7 @@ mod test {
     #[test]
     fn simple_cursor() {
         let mut f = SetForest::<u32, ()>::new();
-        let mut s = BPlusSet::<u32, ()>::new();
+        let mut s = Set::<u32, ()>::new();
         let mut c = SetCursor::new(&mut s, &mut f, &());
 
         assert!(c.insert(50));
@@ -335,7 +335,7 @@ mod test {
     #[test]
     fn two_level_sparse_tree() {
         let mut f = SetForest::<u32, ()>::new();
-        let mut s = BPlusSet::<u32, ()>::new();
+        let mut s = Set::<u32, ()>::new();
         let mut c = SetCursor::new(&mut s, &mut f, &());
 
         // Insert enough elements that we get a two-level tree.
@@ -381,7 +381,7 @@ mod test {
     #[test]
     fn three_level_sparse_tree() {
         let mut f = SetForest::<u32, ()>::new();
-        let mut s = BPlusSet::<u32, ()>::new();
+        let mut s = Set::<u32, ()>::new();
         let mut c = SetCursor::new(&mut s, &mut f, &());
 
         // Insert enough elements that we get a 3-level tree.
@@ -433,9 +433,9 @@ mod test {
     // Level 4: 512 leafs, up to 7680 elements
     //
     // A 3-level tree can hold at most 960 elements.
-    fn dense4l(f: &mut SetForest<i32, ()>) -> BPlusSet<i32, ()> {
+    fn dense4l(f: &mut SetForest<i32, ()>) -> Set<i32, ()> {
         f.clear();
-        let mut s = BPlusSet::new();
+        let mut s = Set::new();
 
         // Insert 400 elements in 7 passes over the range to avoid the half-full leaf node pattern
         // that comes from sequential insertion. This will generate a normal leaf layer.
