@@ -254,6 +254,11 @@ where
         })
     }
 
+    /// Move this cursor to the first element.
+    pub fn goto_first(&mut self) -> Option<V> {
+        self.root.map(|root| self.path.first(root, self.pool).1)
+    }
+
     /// Insert `(key, value))` into the map and leave the cursor at the inserted pair.
     ///
     /// If the map did not contain `key`, return `None`.
@@ -341,6 +346,8 @@ mod test {
         assert_eq!(c.prev(), None);
         c.verify();
         assert_eq!(c.tpath(), "<empty path>");
+        assert_eq!(c.goto_first(), None);
+        assert_eq!(c.tpath(), "<empty path>");
     }
 
     #[test]
@@ -407,7 +414,7 @@ mod test {
 
         {
             let mut c = m.cursor(f, &());
-            assert_eq!(c.goto(0), None);
+            assert_eq!(c.goto_first(), Some(4.0));
             assert_eq!(c.key(), Some(40));
             assert_eq!(c.value(), Some(4.0));
             assert_eq!(c.next(), Some((50, 5.5)));
@@ -515,6 +522,12 @@ mod test {
         assert_eq!(m.tpath(310, f, &()), "node2[2]--node3[0]");
         assert_eq!(m.tpath(810, f, &()), "node2[7]--node8[0]");
         assert_eq!(m.tpath(870, f, &()), "node2[7]--node8[6]");
+
+        {
+            let mut c = m.cursor(f, &());
+            assert_eq!(c.goto_first(), Some(1.1));
+            assert_eq!(c.key(), Some(110));
+        }
 
         // Front of first leaf.
         m.insert(0, 4.2, f, &());

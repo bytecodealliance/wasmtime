@@ -216,6 +216,11 @@ where
         }
     }
 
+    /// Move this cursor to the first element.
+    pub fn goto_first(&mut self) -> Option<K> {
+        self.root.map(|root| self.path.first(root, self.pool).0)
+    }
+
     /// Try to insert `elem` into the set and leave the cursor at the inserted element.
     ///
     /// If the set did not contain `elem`, insert it and return true.
@@ -293,9 +298,12 @@ mod test {
         s.clear(&mut f);
         assert!(!s.contains(7, &f, &()));
 
-        let c = SetCursor::new(&mut s, &mut f, &());
+        let mut c = SetCursor::new(&mut s, &mut f, &());
         c.verify();
         assert_eq!(c.elem(), None);
+
+        assert_eq!(c.goto_first(), None);
+        assert_eq!(c.tpath(), "<empty path>");
     }
 
     #[test]
@@ -355,7 +363,7 @@ mod test {
         }
         assert!(!c.is_empty());
 
-        assert!(c.goto(0));
+        assert_eq!(c.goto_first(), Some(0));
         assert_eq!(c.tpath(), "node2[0]--node0[0]");
 
         assert_eq!(c.prev(), None);

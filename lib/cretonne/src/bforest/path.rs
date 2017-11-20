@@ -87,6 +87,22 @@ impl<F: Forest> Path<F> {
         unreachable!();
     }
 
+    /// Move path to the first entry of the tree starting at `root` and return it.
+    pub fn first(&mut self, root: Node, pool: &NodePool<F>) -> (F::Key, F::Value) {
+        let mut node = root;
+        for level in 0.. {
+            self.size = level + 1;
+            self.node[level] = node;
+            self.entry[level] = 0;
+            match &pool[node] {
+                &NodeData::Inner { tree, .. } => node = tree[0],
+                &NodeData::Leaf { keys, vals, .. } => return (keys.borrow()[0], vals.borrow()[0]),
+                &NodeData::Free { .. } => panic!("Free {} reached from {}", node, root),
+            }
+        }
+        unreachable!();
+    }
+
     /// Move this path to the next key-value pair and return it.
     pub fn next(&mut self, pool: &NodePool<F>) -> Option<(F::Key, F::Value)> {
         match self.leaf_pos() {
