@@ -23,6 +23,7 @@
 //! Here `Ebb1` and `Ebb2` would each have a single predecessor denoted as `(Ebb0, brz)`
 //! and `(Ebb0, jmp Ebb2)` respectively.
 
+use bforest;
 use ir::{Function, Inst, Ebb};
 use ir::instructions::BranchInfo;
 use entity::EntityMap;
@@ -32,10 +33,12 @@ use std::mem;
 pub type BasicBlock = (Ebb, Inst);
 
 /// A container for the successors and predecessors of some Ebb.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct CFGNode {
-    /// EBBs that are the targets of branches and jumps in this EBB.
-    pub successors: Vec<Ebb>,
+    /// Set of EBBs that are the targets of branches and jumps in this EBB.
+    /// The set is ordered by EBB number, indicated by the `()` comparator type.
+    pub successors: bforest::Set<Ebb, ()>,
+
     /// Basic blocks that can branch or jump to this EBB.
     pub predecessors: Vec<BasicBlock>,
 }
@@ -43,9 +46,9 @@ pub struct CFGNode {
 /// The Control Flow Graph maintains a mapping of ebbs to their predecessors
 /// and successors where predecessors are basic blocks and successors are
 /// extended basic blocks.
-#[derive(Debug)]
 pub struct ControlFlowGraph {
     data: EntityMap<Ebb, CFGNode>,
+    succ_forest: bforest::SetForest<Ebb, ()>,
     valid: bool,
 }
 
@@ -55,12 +58,14 @@ impl ControlFlowGraph {
         Self {
             data: EntityMap::new(),
             valid: false,
+            succ_forest: bforest::SetForest::new(),
         }
     }
 
     /// Clear all data structures in this control flow graph.
     pub fn clear(&mut self) {
         self.data.clear();
+        self.succ_forest.clear();
         self.valid = false;
     }
 
@@ -75,7 +80,7 @@ impl ControlFlowGraph {
     ///
     /// This will clear and overwrite any information already stored in this data structure.
     pub fn compute(&mut self, func: &Function) {
-        self.data.clear();
+        self.clear();
         self.data.resize(func.dfg.num_ebbs());
 
         for ebb in &func.layout {
@@ -105,12 +110,11 @@ impl ControlFlowGraph {
         // Temporarily take ownership because we need mutable access to self.data inside the loop.
         // Unfortunately borrowck cannot see that our mut accesses to predecessors don't alias
         // our iteration over successors.
-        let mut successors = mem::replace(&mut self.data[ebb].successors, Vec::new());
-        for suc in successors.iter().cloned() {
-            self.data[suc].predecessors.retain(|&(e, _)| e != ebb);
+        let mut successors = mem::replace(&mut self.data[ebb].successors, Default::default());
+        for succ in successors.iter(&self.succ_forest) {
+            self.data[succ].predecessors.retain(|&(e, _)| e != ebb);
         }
-        successors.clear();
-        self.data[ebb].successors = successors;
+        successors.clear(&mut self.succ_forest);
     }
 
     /// Recompute the control flow graph of `ebb`.
@@ -126,7 +130,11 @@ impl ControlFlowGraph {
     }
 
     fn add_edge(&mut self, from: BasicBlock, to: Ebb) {
-        self.data[from.0].successors.push(to);
+        self.data[from.0].successors.insert(
+            to,
+            &mut self.succ_forest,
+            &(),
+        );
         self.data[to].predecessors.push(from);
     }
 
@@ -136,10 +144,10 @@ impl ControlFlowGraph {
         &self.data[ebb].predecessors
     }
 
-    /// Get the CFG successors to `ebb`.
-    pub fn get_successors(&self, ebb: Ebb) -> &[Ebb] {
+    /// Get an iterator over the CFG successors to `ebb`.
+    pub fn succ_iter(&self, ebb: Ebb) -> bforest::SetIter<Ebb, ()> {
         debug_assert!(self.is_valid());
-        &self.data[ebb].successors
+        self.data[ebb].successors.iter(&self.succ_forest)
     }
 
     /// Check if the CFG is in a valid state.
@@ -180,7 +188,7 @@ mod tests {
         for ebb in func.layout.ebbs() {
             assert_eq!(ebb, fun_ebbs.next().unwrap());
             assert_eq!(cfg.get_predecessors(ebb).len(), 0);
-            assert_eq!(cfg.get_successors(ebb).len(), 0);
+            assert_eq!(cfg.succ_iter(ebb).count(), 0);
         }
     }
 
@@ -218,9 +226,9 @@ mod tests {
             let ebb1_predecessors = cfg.get_predecessors(ebb1);
             let ebb2_predecessors = cfg.get_predecessors(ebb2);
 
-            let ebb0_successors = cfg.get_successors(ebb0);
-            let ebb1_successors = cfg.get_successors(ebb1);
-            let ebb2_successors = cfg.get_successors(ebb2);
+            let ebb0_successors = cfg.succ_iter(ebb0);
+            let ebb1_successors = cfg.succ_iter(ebb1);
+            let ebb2_successors = cfg.succ_iter(ebb2);
 
             assert_eq!(ebb0_predecessors.len(), 0);
             assert_eq!(ebb1_predecessors.len(), 2);
@@ -231,14 +239,9 @@ mod tests {
             assert_eq!(ebb2_predecessors.contains(&(ebb0, br_ebb0_ebb2)), true);
             assert_eq!(ebb2_predecessors.contains(&(ebb1, jmp_ebb1_ebb2)), true);
 
-            assert_eq!(ebb0_successors.len(), 2);
-            assert_eq!(ebb1_successors.len(), 2);
-            assert_eq!(ebb2_successors.len(), 0);
-
-            assert_eq!(ebb0_successors.contains(&ebb1), true);
-            assert_eq!(ebb0_successors.contains(&ebb2), true);
-            assert_eq!(ebb1_successors.contains(&ebb1), true);
-            assert_eq!(ebb1_successors.contains(&ebb2), true);
+            assert_eq!(ebb0_successors.collect::<Vec<_>>(), [ebb1, ebb2]);
+            assert_eq!(ebb1_successors.collect::<Vec<_>>(), [ebb1, ebb2]);
+            assert_eq!(ebb2_successors.collect::<Vec<_>>(), []);
         }
 
         // Change some instructions and recompute ebb0
@@ -252,9 +255,9 @@ mod tests {
             let ebb1_predecessors = cfg.get_predecessors(ebb1);
             let ebb2_predecessors = cfg.get_predecessors(ebb2);
 
-            let ebb0_successors = cfg.get_successors(ebb0);
-            let ebb1_successors = cfg.get_successors(ebb1);
-            let ebb2_successors = cfg.get_successors(ebb2);
+            let ebb0_successors = cfg.succ_iter(ebb0);
+            let ebb1_successors = cfg.succ_iter(ebb1);
+            let ebb2_successors = cfg.succ_iter(ebb2);
 
             assert_eq!(ebb0_predecessors.len(), 0);
             assert_eq!(ebb1_predecessors.len(), 2);
@@ -265,14 +268,9 @@ mod tests {
             assert_eq!(ebb2_predecessors.contains(&(ebb0, br_ebb0_ebb2)), false);
             assert_eq!(ebb2_predecessors.contains(&(ebb1, jmp_ebb1_ebb2)), true);
 
-            assert_eq!(ebb0_successors.len(), 1);
-            assert_eq!(ebb1_successors.len(), 2);
-            assert_eq!(ebb2_successors.len(), 0);
-
-            assert_eq!(ebb0_successors.contains(&ebb1), true);
-            assert_eq!(ebb0_successors.contains(&ebb2), false);
-            assert_eq!(ebb1_successors.contains(&ebb1), true);
-            assert_eq!(ebb1_successors.contains(&ebb2), true);
+            assert_eq!(ebb0_successors.collect::<Vec<_>>(), [ebb1]);
+            assert_eq!(ebb1_successors.collect::<Vec<_>>(), [ebb1, ebb2]);
+            assert_eq!(ebb2_successors.collect::<Vec<_>>(), []);
         }
     }
 }

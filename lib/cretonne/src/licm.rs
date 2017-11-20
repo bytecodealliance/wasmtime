@@ -184,9 +184,9 @@ fn postorder_ebbs_loop(loop_analysis: &LoopAnalysis, cfg: &ControlFlowGraph, lp:
             grey.insert(node);
             stack.push(node);
             // Get any children we've never seen before.
-            for child in cfg.get_successors(node) {
-                if loop_analysis.is_in_loop(*child, lp) && !grey.contains(child) {
-                    stack.push(*child);
+            for child in cfg.succ_iter(node) {
+                if loop_analysis.is_in_loop(child, lp) && !grey.contains(&child) {
+                    stack.push(child);
                 }
             }
         } else if !black.contains(&node) {
