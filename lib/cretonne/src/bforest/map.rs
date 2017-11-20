@@ -118,6 +118,13 @@ where
         }
     }
 
+    /// Remove all entries.
+    pub fn clear(&mut self, forest: &mut MapForest<K, V, C>) {
+        if let Some(root) = self.root.take() {
+            forest.nodes.free_tree(root);
+        }
+    }
+
     /// Create a cursor for navigating this map. The cursor is initially positioned off the end of
     /// the map.
     pub fn cursor<'a>(
@@ -322,6 +329,7 @@ mod test {
 
         let mut m = Map::<u32, f32, ()>::new();
         assert!(m.is_empty());
+        m.clear(&mut f);
 
         assert_eq!(m.get(7, &f, &()), None);
 
@@ -459,6 +467,9 @@ mod test {
         m.insert(45, 4.2, f, &());
         m.verify(f, &());
         assert_eq!(m.get(45, f, &()), Some(4.2));
+
+        m.clear(f);
+        assert!(m.is_empty());
     }
 
     #[test]
@@ -579,6 +590,9 @@ mod test {
         m.insert(805, 4.2, f, &());
         m.verify(f, &());
         assert_eq!(m.get(805, f, &()), Some(4.2));
+
+        m.clear(f);
+        m.verify(f, &());
     }
 
     // Make a tree with two barely healthy leaf nodes:

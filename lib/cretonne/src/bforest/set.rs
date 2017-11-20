@@ -115,6 +115,13 @@ where
         }
     }
 
+    /// Remove all entries.
+    pub fn clear(&mut self, forest: &mut SetForest<K, C>) {
+        if let Some(root) = self.root.take() {
+            forest.nodes.free_tree(root);
+        }
+    }
+
     /// Create a cursor for navigating this set. The cursor is initially positioned off the end of
     /// the set.
     pub fn cursor<'a>(
@@ -283,6 +290,7 @@ mod test {
 
         let mut s = Set::<u32, ()>::new();
         assert!(s.is_empty());
+        s.clear(&mut f);
         assert!(!s.contains(7, &f, &()));
 
         let c = SetCursor::new(&mut s, &mut f, &());
@@ -483,4 +491,10 @@ mod test {
         assert!(c.is_empty());
     }
 
+    #[test]
+    fn four_level_clear() {
+        let mut f = SetForest::<i32, ()>::new();
+        let mut s = dense4l(&mut f);
+        s.clear(&mut f);
+    }
 }
