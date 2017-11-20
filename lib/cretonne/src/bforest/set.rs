@@ -58,6 +58,11 @@ where
 ///
 /// This is not a general-purpose replacement for `BTreeSet`. See the [module
 /// documentation](index.html) for more information about design tradeoffs.
+///
+/// Sets can be cloned, but that operation should only be used as part of cloning the whole forest
+/// they belong to. *Cloning a set does not allocate new memory for the clone*. It creates an alias
+/// of the same memory.
+#[derive(Clone)]
 pub struct Set<K, C>
 where
     K: Copy,
@@ -139,6 +144,16 @@ where
             pool: &forest.nodes,
             path: Path::default(),
         }
+    }
+}
+
+impl<K, C> Default for Set<K, C>
+where
+    K: Copy,
+    C: Comparator<K>,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 
