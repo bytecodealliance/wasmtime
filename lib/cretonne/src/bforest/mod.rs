@@ -22,8 +22,8 @@ mod path;
 mod pool;
 mod set;
 
-pub use self::map::{MapForest, Map, MapCursor};
-pub use self::set::{SetForest, Set, SetCursor};
+pub use self::map::{MapForest, Map, MapCursor, MapIter};
+pub use self::set::{SetForest, Set, SetCursor, SetIter};
 
 use self::node::NodeData;
 use self::path::Path;
