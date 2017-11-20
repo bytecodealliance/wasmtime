@@ -916,8 +916,8 @@ impl<'a> Verifier<'a> {
         let mut got_preds = BTreeSet::<Inst>::new();
 
         for ebb in self.func.layout.ebbs() {
-            expected_succs.extend(self.expected_cfg.get_successors(ebb));
-            got_succs.extend(cfg.get_successors(ebb));
+            expected_succs.extend(self.expected_cfg.succ_iter(ebb));
+            got_succs.extend(cfg.succ_iter(ebb));
 
             let missing_succs: Vec<Ebb> = expected_succs.difference(&got_succs).cloned().collect();
             if !missing_succs.is_empty() {
