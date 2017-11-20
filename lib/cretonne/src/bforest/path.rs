@@ -2,7 +2,7 @@
 
 use std::borrow::Borrow;
 use std::marker::PhantomData;
-use super::{Forest, Node, NodeData, NodePool, MAX_PATH, BPlusComparator, slice_insert, slice_shift};
+use super::{Forest, Node, NodeData, NodePool, MAX_PATH, Comparator, slice_insert, slice_shift};
 use super::node::Removed;
 
 #[cfg(test)]
@@ -690,7 +690,7 @@ mod test {
 
     struct TC();
 
-    impl BPlusComparator<i32> for TC {
+    impl Comparator<i32> for TC {
         fn cmp(&self, a: i32, b: i32) -> Ordering {
             a.cmp(&b)
         }

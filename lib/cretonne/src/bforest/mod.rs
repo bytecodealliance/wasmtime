@@ -22,8 +22,8 @@ mod path;
 mod pool;
 mod set;
 
-pub use self::map::{MapForest, BPlusMap, MapCursor};
-pub use self::set::{SetForest, BPlusSet, SetCursor};
+pub use self::map::{MapForest, Map, MapCursor};
+pub use self::set::{SetForest, Set, SetCursor};
 
 use self::node::NodeData;
 use self::path::Path;
@@ -42,7 +42,7 @@ const MAX_PATH: usize = 16;
 ///
 /// Keys don't need to implement `Ord`. They are compared using a comparator object which
 /// provides a context for comparison.
-pub trait BPlusComparator<K>
+pub trait Comparator<K>
 where
     K: Copy,
 {
@@ -63,7 +63,7 @@ where
 }
 
 /// Trivial comparator that doesn't actually provide any context.
-impl<K> BPlusComparator<K> for ()
+impl<K> Comparator<K> for ()
 where
     K: Copy + Ord,
 {
@@ -87,7 +87,7 @@ trait Forest {
     type LeafValues: Copy + BorrowMut<[Self::Value]>;
 
     /// Type used for key comparisons.
-    type Comparator: BPlusComparator<Self::Key>;
+    type Comparator: Comparator<Self::Key>;
 
     /// Splat a single key into a whole array.
     fn splat_key(key: Self::Key) -> Self::LeafKeys;
