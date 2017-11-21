@@ -18,7 +18,7 @@ use packed_option::PackedOption;
 use ref_slice::ref_slice;
 
 /// A virtual register reference.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct VirtReg(u32);
 entity_impl!(VirtReg, "vreg");
 

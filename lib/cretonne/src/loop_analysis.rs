@@ -9,7 +9,7 @@ use ir::{Function, Ebb, Layout};
 use packed_option::PackedOption;
 
 /// A opaque reference to a code loop.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Loop(u32);
 entity_impl!(Loop, "loop");
 

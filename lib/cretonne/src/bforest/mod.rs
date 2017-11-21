@@ -97,7 +97,7 @@ trait Forest {
 }
 
 /// A reference to a B+-tree node.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 struct Node(u32);
 entity_impl!(Node, "node");
 
