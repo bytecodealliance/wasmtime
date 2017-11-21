@@ -87,5 +87,11 @@ macro_rules! entity_impl {
                 write!(f, "{}{}", $display_prefix, self.0)
             }
         }
+
+        impl ::std::fmt::Debug for $entity {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+            	(self as &::std::fmt::Display).fmt(f)
+			}
+		}
     }
 }

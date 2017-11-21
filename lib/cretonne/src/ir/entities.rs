@@ -23,7 +23,7 @@ use std::fmt;
 use std::u32;
 
 /// An opaque reference to an extended basic block in a function.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Ebb(u32);
 entity_impl!(Ebb, "ebb");
 
@@ -37,7 +37,7 @@ impl Ebb {
 }
 
 /// An opaque reference to an SSA value.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Value(u32);
 entity_impl!(Value, "v");
 
@@ -56,17 +56,17 @@ impl Value {
 }
 
 /// An opaque reference to an instruction in a function.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Inst(u32);
 entity_impl!(Inst, "inst");
 
 /// An opaque reference to a stack slot.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct StackSlot(u32);
 entity_impl!(StackSlot, "ss");
 
 /// An opaque reference to a global variable.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct GlobalVar(u32);
 entity_impl!(GlobalVar, "gv");
 
@@ -84,27 +84,27 @@ impl GlobalVar {
 }
 
 /// An opaque reference to a jump table.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct JumpTable(u32);
 entity_impl!(JumpTable, "jt");
 
 /// A reference to an external function.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct FuncRef(u32);
 entity_impl!(FuncRef, "fn");
 
 /// A reference to a function signature.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct SigRef(u32);
 entity_impl!(SigRef, "sig");
 
 /// A reference to a heap.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Heap(u32);
 entity_impl!(Heap, "heap");
 
 /// A reference to any of the entities defined in this module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum AnyEntity {
     /// The whole function.
     Function,
@@ -142,6 +142,12 @@ impl fmt::Display for AnyEntity {
             AnyEntity::SigRef(r) => r.fmt(f),
             AnyEntity::Heap(r) => r.fmt(f),
         }
+    }
+}
+
+impl fmt::Debug for AnyEntity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        (self as &fmt::Display).fmt(f)
     }
 }
 
