@@ -3,6 +3,7 @@
 use entity::EntityMap;
 use flowgraph::{ControlFlowGraph, BasicBlock};
 use ir::{Ebb, Inst, Function, Layout, ProgramOrder, ExpandedProgramPoint};
+use ir::instructions::BranchInfo;
 use packed_option::PackedOption;
 
 use std::cmp::Ordering;
@@ -10,6 +11,10 @@ use std::cmp::Ordering;
 // RPO numbers are not first assigned in a contiguous way but as multiples of STRIDE, to leave
 // room for modifications of the dominator tree.
 const STRIDE: u32 = 4;
+
+// Special RPO numbers used during `compute_postorder`.
+const DONE: u32 = 1;
+const SEEN: u32 = 2;
 
 // Dominator tree node. We keep one of these per EBB.
 #[derive(Clone, Default)]
@@ -36,7 +41,7 @@ pub struct DominatorTree {
     postorder: Vec<Ebb>,
 
     // Scratch memory used by `compute_postorder()`.
-    stack: Vec<(Ebb, usize)>,
+    stack: Vec<Ebb>,
 
     valid: bool,
 }
@@ -223,7 +228,7 @@ impl DominatorTree {
     /// Reset and compute a CFG post-order and dominator tree.
     pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph) {
         debug_assert!(cfg.is_valid());
-        self.compute_postorder(func, cfg);
+        self.compute_postorder(func);
         self.compute_domtree(func, cfg);
         self.valid = true;
     }
@@ -246,36 +251,108 @@ impl DominatorTree {
         self.valid
     }
 
-    /// Reset all internal data structures and compute a post-order for `cfg`.
+    /// Reset all internal data structures and compute a post-order of the control flow graph.
     ///
     /// This leaves `rpo_number == 1` for all reachable EBBs, 0 for unreachable ones.
-    fn compute_postorder(&mut self, func: &Function, cfg: &ControlFlowGraph) {
+    fn compute_postorder(&mut self, func: &Function) {
         self.clear();
         self.nodes.resize(func.dfg.num_ebbs());
 
+        // This algorithm is a depth first traversal (DFT) of the control flow graph, computing a
+        // post-order of the EBBs that are reachable form the entry block. A DFT post-order is not
+        // unique. The specific order we get is controlled by two factors:
+        //
+        // 1. The order each node's children are visited, and
+        // 2. The method used for pruning graph edges to get a tree.
+        //
+        // There are two ways of viewing the CFG as a graph:
+        //
+        // 1. Each EBB is a node, with outgoing edges for all the branches in the EBB>
+        // 2. Each basic block is a node, with outgoing edges for the single branch at the end of
+        //    the BB. (An EBB is a linear sequence of basic blocks).
+        //
+        // The first graph is a contraction of the second one. We want to compute an EBB post-order
+        // that is compatible both graph interpretations. That is, if you compute a BB post-order
+        // and then remove those BBs that do not correspond to EBB headers, you get a post-order of
+        // the EBB graph.
+        //
+        // Node child order:
+        //
+        //     In the BB graph, we always go down the fall-through path first and follow the branch
+        //     destination second.
+        //
+        //     In the EBB graph, this is equivalent to visiting EBB successors in a bottom-up
+        //     order, starting from the destination of the EBB's terminating jump, ending at the
+        //     destination of the first branch in the EBB.
+        //
+        // Edge pruning:
+        //
+        //     In the BB graph, we keep an edge to an EBB the first time we visit the *source* side
+        //     of the edge. Any subsequent edges to the same EBB are pruned.
+        //
+        //     The equivalent tree is reached in the EBB graph by keeping the first edge to an EBB
+        //     in a top-down traversal of the successors. (And then visiting edges in a bottom-up
+        //     order).
+        //
+        // This pruning method makes it possible to compute the DFT without storing lots of
+        // information about the progress through an EBB.
+
         // During this algorithm only, use `rpo_number` to hold the following state:
         //
-        // 0: EBB is not yet on the stack.
-        // 1: EBB is on the stack or in postorder.
-        const SEEN: u32 = 1;
+        //   0:    EBB has not yet been reached in the pre-order.
+        //   SEEN: EBB has been pushed on the stack but successors not yet pushed.
+        //   DONE: Successors pushed.
 
         match func.layout.entry_block() {
             Some(ebb) => {
-                self.stack.push((ebb, 0));
+                self.stack.push(ebb);
                 self.nodes[ebb].rpo_number = SEEN;
             }
             None => return,
         }
 
-        while let Some((ebb, succ_index)) = self.stack.pop() {
-            if let Some(&succ) = cfg.get_successors(ebb).get(succ_index) {
-                self.stack.push((ebb, succ_index + 1));
-                if self.nodes[succ].rpo_number == 0 {
-                    self.stack.push((succ, 0));
-                    self.nodes[succ].rpo_number = SEEN;
+        while let Some(ebb) = self.stack.pop() {
+            match self.nodes[ebb].rpo_number {
+                SEEN => {
+                    // This is the first time we pop the EBB, so we need to scan its successors and
+                    // then revisit it.
+                    self.nodes[ebb].rpo_number = DONE;
+                    self.stack.push(ebb);
+                    self.push_successors(func, ebb);
                 }
-            } else {
-                self.postorder.push(ebb);
+                DONE => {
+                    // This is the second time we pop the EBB, so all successors have been
+                    // processed.
+                    self.postorder.push(ebb);
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    /// Push `ebb` successors onto `self.stack`, filtering out those that have already been seen.
+    ///
+    /// The successors are pushed in program order which is important to get a split-invariant
+    /// post-order. Split-invariant means that if an EBB is split in two, we get the same
+    /// post-order except for the insertion of the new EBB header at the split point.
+    fn push_successors(&mut self, func: &Function, ebb: Ebb) {
+        for inst in func.layout.ebb_insts(ebb) {
+            match func.dfg[inst].analyze_branch(&func.dfg.value_lists) {
+                BranchInfo::SingleDest(succ, _) => {
+                    if self.nodes[succ].rpo_number == 0 {
+                        self.nodes[succ].rpo_number = SEEN;
+                        self.stack.push(succ);
+                    }
+                }
+                BranchInfo::Table(jt) => {
+                    for (_, succ) in func.jump_tables[jt].entries() {
+                        if self.nodes[succ].rpo_number == 0 {
+                            self.nodes[succ].rpo_number = SEEN;
+                            self.stack.push(succ);
+                        }
+                    }
+                }
+                BranchInfo::NotABranch => {}
             }
         }
     }
@@ -458,6 +535,18 @@ mod test {
 
         let cfg = ControlFlowGraph::with_function(cur.func);
         let dt = DominatorTree::with_function(cur.func, &cfg);
+
+        // Fall-through-first, prune-at-source DFT:
+        //
+        // ebb0 {
+        //   brnz ebb2 {
+        //     trap
+        //     ebb2 {
+        //       return
+        //     } ebb2
+        // } ebb0
+        assert_eq!(dt.cfg_postorder(), &[ebb2, ebb0]);
+
         let v2_def = cur.func.dfg.value_def(v2).unwrap_inst();
         assert!(!dt.dominates(v2_def, ebb0, &cur.func.layout));
         assert!(!dt.dominates(ebb0, v2_def, &cur.func.layout));
@@ -466,11 +555,11 @@ mod test {
     #[test]
     fn non_zero_entry_block() {
         let mut func = Function::new();
-        let ebb3 = func.dfg.make_ebb();
-        let cond = func.dfg.append_ebb_param(ebb3, I32);
+        let ebb0 = func.dfg.make_ebb();
         let ebb1 = func.dfg.make_ebb();
         let ebb2 = func.dfg.make_ebb();
-        let ebb0 = func.dfg.make_ebb();
+        let ebb3 = func.dfg.make_ebb();
+        let cond = func.dfg.append_ebb_param(ebb3, I32);
 
         let mut cur = FuncCursor::new(&mut func);
 
@@ -488,6 +577,26 @@ mod test {
 
         let cfg = ControlFlowGraph::with_function(cur.func);
         let dt = DominatorTree::with_function(cur.func, &cfg);
+
+        // Fall-through-first, prune-at-source DFT:
+        //
+        // ebb3 {
+        //   ebb3:jump ebb1 {
+        //     ebb1 {
+        //       ebb1:brnz ebb0 {
+        //         ebb1:jump ebb2 {
+        //           ebb2 {
+        //             ebb2:jump ebb0 (seen)
+        //           } ebb2
+        //         } ebb1:jump ebb2
+        //         ebb0 {
+        //         } ebb0
+        //       } ebb1:brnz ebb0
+        //     } ebb1
+        //   } ebb3:jump ebb1
+        // } ebb3
+
+        assert_eq!(dt.cfg_postorder(), &[ebb2, ebb0, ebb1, ebb3]);
 
         assert_eq!(cur.func.layout.entry_block().unwrap(), ebb3);
         assert_eq!(dt.idom(ebb3), None);
@@ -509,8 +618,6 @@ mod test {
             dt.rpo_cmp(jmp_ebb3_ebb1, jmp_ebb1_ebb2, &cur.func.layout),
             Ordering::Less
         );
-
-        assert_eq!(dt.cfg_postorder(), &[ebb0, ebb2, ebb1, ebb3]);
     }
 
     #[test]

@@ -26,6 +26,30 @@ fn test_reverse_postorder_traversal(function_source: &str, ebb_order: Vec<u32>) 
 
 #[test]
 fn simple_traversal() {
+    // Fall-through-first, prune-at-source DFT:
+    //
+    //  ebb0 {
+    //      ebb0:brz v0, ebb1 {
+    //          ebb0:jump ebb2 {
+    //              ebb2 {
+    //                  ebb2:brz v2, ebb2 -
+    //                  ebb2:brz v3, ebb1 -
+    //                  ebb2:brz v4, ebb4 {
+    //                      ebb2: jump ebb5 {
+    //                          ebb5 {}
+    //                      }
+    //                      ebb4 {}
+    //                  }
+    //              } ebb2
+    //          }
+    //          ebb1 {
+    //              ebb1:jump ebb3 {
+    //                  ebb3 {}
+    //              }
+    //          } ebb1
+    //      }
+    //  } ebb0
+
     test_reverse_postorder_traversal(
         "
         function %test(i32) native {
@@ -51,12 +75,28 @@ fn simple_traversal() {
                 trap user0
         }
     ",
-        vec![0, 2, 5, 4, 1, 3],
+        vec![0, 1, 3, 2, 4, 5],
     );
 }
 
 #[test]
 fn loops_one() {
+    // Fall-through-first, prune-at-source DFT:
+    // ebb0 {
+    //     ebb0:jump ebb1 {
+    //         ebb1 {
+    //             ebb1:brnz v0, ebb3 {
+    //                 ebb1:jump ebb2 {
+    //                     ebb2 {
+    //                         ebb2:jump ebb3 -
+    //                     } ebb2
+    //                 }
+    //                 ebb3 {}
+    //             }
+    //         } ebb1
+    //     }
+    // } ebb0
+
     test_reverse_postorder_traversal(
         "
         function %test(i32) native {
@@ -71,12 +111,40 @@ fn loops_one() {
                 return
         }
     ",
-        vec![0, 1, 2, 3],
+        vec![0, 1, 3, 2],
     );
 }
 
 #[test]
 fn loops_two() {
+    // Fall-through-first, prune-at-source DFT:
+    // ebb0 {
+    //     ebb0:brz v0, ebb1 {
+    //         ebb0:jump ebb2 {
+    //             ebb2 {
+    //                 ebb2:brz v0, ebb4 {
+    //                     ebb2:jump ebb5 {
+    //                         ebb5 {
+    //                             brz v0, ebb4 -
+    //                         } ebb5
+    //                     }
+    //                     ebb4 {
+    //                         ebb4:brz v0, ebb3 {
+    //                             ebb4:jump ebb5 -
+    //                             ebb3 {
+    //                                 ebb3:jump ebb4 -
+    //                             } ebb3
+    //                         }
+    //                     } ebb4
+    //                 }
+    //             } ebb2
+    //         }
+    //		   ebb1 {
+    //             ebb1:jump ebb3 -
+    //		   } ebb1
+    //     }
+    // } ebb0
+
     test_reverse_postorder_traversal(
         "
         function %test(i32) native {
@@ -98,7 +166,7 @@ fn loops_two() {
                 return
         }
     ",
-        vec![0, 2, 1, 3, 4, 5],
+        vec![0, 1, 2, 4, 3, 5],
     );
 }
 
@@ -130,7 +198,7 @@ fn loops_three() {
                 return
         }
     ",
-        vec![0, 2, 1, 3, 4, 6, 7, 5],
+        vec![0, 1, 2, 4, 3, 6, 7, 5],
     );
 }
 
