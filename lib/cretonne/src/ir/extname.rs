@@ -5,10 +5,12 @@
 //! Cretonne, which compiles functions independently.
 
 use std::fmt::{self, Write};
-#[allow(unused_imports)]
-use std::ascii::AsciiExt;
 
-/// The name of an external can be any sequence of bytes.
+const TESTCASE_NAME_LENGTH: usize = 10;
+
+/// The name of an external is either a reference to a user-defined symbol
+/// table, or a short sequence of ascii bytes so that test cases do not have
+/// to keep track of a sy mbol table.
 ///
 /// External names are primarily used as keys by code using Cretonne to map
 /// from a cretonne::ir::FuncRef or similar to additional associated data.
@@ -16,103 +18,92 @@ use std::ascii::AsciiExt;
 /// External names can also serve as a primitive testing and debugging tool.
 /// In particular, many `.cton` test files use function names to identify
 /// functions.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
-pub struct ExternalName(NameRepr);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExternalName {
+    /// A name in a user-defined symbol table. Cretonne does not interpret
+    /// these numbers in any way.
+    User {
+        /// Arbitrary
+        namespace: u32,
+        /// Arbitrary
+        index: u32,
+    },
+    /// A test case function name of up to 10 ascii characters. This is
+    /// not intended to be used outside test cases.
+    TestCase {
+        /// How many of the bytes in `ascii` are valid
+        length: u8,
+        /// Ascii bytes of the name
+        ascii: [u8; TESTCASE_NAME_LENGTH],
+    },
+}
 
 impl ExternalName {
-    /// Creates a new external name from a sequence of bytes.
+    /// Creates a new external name from a sequence of bytes. Caller is expected
+    /// to guarantee bytes are only ascii alphanumeric or `_`.
     ///
     /// # Examples
     ///
     /// ```rust
     /// # use cretonne::ir::ExternalName;
     /// // Create `ExternalName` from a string.
-    /// let name = ExternalName::new("hello");
+    /// let name = ExternalName::testcase("hello");
     /// assert_eq!(name.to_string(), "%hello");
-    ///
-    /// // Create `ExternalName` from a sequence of bytes.
-    /// let bytes: &[u8] = &[10, 9, 8];
-    /// let name = ExternalName::new(bytes);
-    /// assert_eq!(name.to_string(), "#0a0908");
     /// ```
-    pub fn new<T>(v: T) -> ExternalName
+    pub fn testcase<T>(v: T) -> ExternalName
     where
         T: Into<Vec<u8>>,
     {
         let vec = v.into();
-        if vec.len() <= NAME_LENGTH_THRESHOLD {
-            let mut bytes = [0u8; NAME_LENGTH_THRESHOLD];
-            for (i, &byte) in vec.iter().enumerate() {
-                bytes[i] = byte;
-            }
-            ExternalName(NameRepr::Short {
-                length: vec.len() as u8,
-                bytes: bytes,
-            })
+        let len = if vec.len() > TESTCASE_NAME_LENGTH {
+            TESTCASE_NAME_LENGTH
         } else {
-            ExternalName(NameRepr::Long(vec))
+            vec.len()
+        };
+        let mut bytes = [0u8; TESTCASE_NAME_LENGTH];
+        for (i, &byte) in vec.iter().take(len).enumerate() {
+            bytes[i] = byte;
+        }
+        ExternalName::TestCase {
+            length: len as u8,
+            ascii: bytes,
+        }
+    }
+
+    /// Create a new external name from user-provided integer indicies.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use cretonne::ir::ExternalName;
+    /// // Create `ExternalName` from integer indicies
+    /// let name = ExternalName::user(123, 456);
+    /// assert_eq!(name.to_string(), "u123:456");
+    /// ```
+    pub fn user(namespace: u32, index: u32) -> ExternalName {
+        ExternalName::User {
+            namespace: namespace,
+            index: index,
         }
     }
 }
 
-/// Tries to interpret bytes as ASCII alphanumerical characters and `_`.
-fn try_as_name(bytes: &[u8]) -> Option<String> {
-    let mut name = String::with_capacity(bytes.len());
-    for c in bytes.iter().map(|&b| b as char) {
-        if c.is_ascii() && c.is_alphanumeric() || c == '_' {
-            name.push(c);
-        } else {
-            return None;
-        }
-    }
-    Some(name)
-}
-
-const NAME_LENGTH_THRESHOLD: usize = 22;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum NameRepr {
-    Short {
-        length: u8,
-        bytes: [u8; NAME_LENGTH_THRESHOLD],
-    },
-    Long(Vec<u8>),
-}
-
-impl AsRef<[u8]> for NameRepr {
-    fn as_ref(&self) -> &[u8] {
-        match *self {
-            NameRepr::Short { length, ref bytes } => &bytes[0..length as usize],
-            NameRepr::Long(ref vec) => vec.as_ref(),
-        }
-    }
-}
-
-impl AsRef<[u8]> for ExternalName {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl Default for NameRepr {
-    fn default() -> Self {
-        NameRepr::Short {
-            length: 0,
-            bytes: [0; NAME_LENGTH_THRESHOLD],
-        }
+impl Default for ExternalName {
+    fn default() -> ExternalName {
+        ExternalName::user(0, 0)
     }
 }
 
 impl fmt::Display for ExternalName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(name) = try_as_name(self.0.as_ref()) {
-            write!(f, "%{}", name)
-        } else {
-            f.write_char('#')?;
-            for byte in self.0.as_ref() {
-                write!(f, "{:02x}", byte)?;
+        match *self {
+            ExternalName::User { namespace, index } => write!(f, "u{}:{}", namespace, index),
+            ExternalName::TestCase { length, ascii } => {
+                f.write_char('%')?;
+                for byte in ascii.iter().take(length as usize) {
+                    f.write_char(*byte as char)?;
+                }
+                Ok(())
             }
-            Ok(())
         }
     }
 }
@@ -122,22 +113,28 @@ mod tests {
     use super::ExternalName;
 
     #[test]
-    fn displaying() {
-        assert_eq!(ExternalName::new("").to_string(), "%");
-        assert_eq!(ExternalName::new("x").to_string(), "%x");
-        assert_eq!(ExternalName::new("x_1").to_string(), "%x_1");
-        assert_eq!(ExternalName::new(" ").to_string(), "#20");
+    fn display_testcase() {
+        assert_eq!(ExternalName::testcase("").to_string(), "%");
+        assert_eq!(ExternalName::testcase("x").to_string(), "%x");
+        assert_eq!(ExternalName::testcase("x_1").to_string(), "%x_1");
         assert_eq!(
-            ExternalName::new("кретон").to_string(),
-            "#d0bad180d0b5d182d0bed0bd"
+            ExternalName::testcase("long123456").to_string(),
+            "%long123456"
         );
+        // Constructor will silently drop bytes beyond the 10th
         assert_eq!(
-            ExternalName::new("印花棉布").to_string(),
-            "#e58db0e88ab1e6a389e5b883"
+            ExternalName::testcase("long1234567").to_string(),
+            "%long123456"
         );
+    }
+
+    #[test]
+    fn display_user() {
+        assert_eq!(ExternalName::user(0, 0).to_string(), "u0:0");
+        assert_eq!(ExternalName::user(1, 1).to_string(), "u1:1");
         assert_eq!(
-            ExternalName::new(vec![0, 1, 2, 3, 4, 5]).to_string(),
-            "#000102030405"
+            ExternalName::user(::std::u32::MAX, ::std::u32::MAX).to_string(),
+            "u4294967295:4294967295"
         );
     }
 }
