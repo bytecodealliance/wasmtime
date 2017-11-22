@@ -302,9 +302,12 @@ impl TestRunner {
         // Inter-quartile range.
         let iqr = q3 - q1;
 
-        // Cut-off for what we consider a 'slow' test: 1.5 IQR from the 75% quartile.
-        // These are the data points that would be plotted as outliers outside a box plot.
-        let cut = q3 + iqr * 2 / 3;
+
+        // Cut-off for what we consider a 'slow' test: 3 IQR from the 75% quartile.
+        //
+        // Q3 + 1.5 IQR are the data points that would be plotted as outliers outside a box plot,
+        // but we have a wider distribution of test times, so double it to 3 IQR.
+        let cut = q3 + iqr * 3;
         if cut > *times.last().unwrap() {
             return;
         }
