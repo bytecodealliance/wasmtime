@@ -60,7 +60,7 @@ impl<'a> FlagsVerifier<'a> {
                     // Revisit any predecessor blocks the first time we see a live-in for `ebb`.
                     None => {
                         self.livein[ebb] = value.into();
-                        for &(pred, _) in self.cfg.get_predecessors(ebb) {
+                        for (pred, _) in self.cfg.pred_iter(ebb) {
                             worklist.insert(pred);
                         }
                     }

@@ -125,7 +125,7 @@ fn split_any(
 
     // We have split the value requested, and now we may need to fix some EBB predecessors.
     while let Some(repair) = repairs.pop() {
-        for &(_, inst) in cfg.get_predecessors(repair.ebb) {
+        for (_, inst) in cfg.pred_iter(repair.ebb) {
             let branch_opc = pos.func.dfg[inst].opcode();
             assert!(
                 branch_opc.is_branch(),

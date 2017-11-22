@@ -226,7 +226,7 @@ impl<'a> LivenessVerifier<'a> {
             // Check all the EBBs in the interval independently.
             loop {
                 // If `val` is live-in at `ebb`, it must be live at all the predecessors.
-                for &(_, pred) in self.cfg.get_predecessors(ebb) {
+                for (_, pred) in self.cfg.pred_iter(ebb) {
                     if !self.live_at_use(lr, pred) {
                         return err!(
                             pred,
