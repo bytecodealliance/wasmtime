@@ -74,7 +74,7 @@ fn create_pre_header(
     for typ in header_args_types {
         pre_header_args_value.push(func.dfg.append_ebb_param(pre_header, typ), pool);
     }
-    for &(_, last_inst) in cfg.get_predecessors(header) {
+    for (_, last_inst) in cfg.pred_iter(header) {
         // We only follow normal edges (not the back edges)
         if !domtree.dominates(header, last_inst, &func.layout) {
             change_branch_jump_destination(last_inst, pre_header, func);
@@ -103,7 +103,7 @@ fn has_pre_header(
 ) -> Option<(Ebb, Inst)> {
     let mut result = None;
     let mut found = false;
-    for &(pred_ebb, last_inst) in cfg.get_predecessors(header) {
+    for (pred_ebb, last_inst) in cfg.pred_iter(header) {
         // We only count normal edges (not the back edges)
         if !domtree.dominates(header, last_inst, layout) {
             if found {

@@ -269,7 +269,7 @@ fn extend_to_use(
     while let Some(livein) = worklist.pop() {
         // We've learned that the value needs to be live-in to the `livein` EBB.
         // Make sure it is also live at all predecessor branches to `livein`.
-        for &(pred, branch) in cfg.get_predecessors(livein) {
+        for (pred, branch) in cfg.pred_iter(livein) {
             if lr.extend_in_ebb(pred, branch, &func.layout) {
                 // This predecessor EBB also became live-in. We need to process it later.
                 worklist.push(pred);
@@ -463,7 +463,7 @@ impl Liveness {
                         _ => continue,
                     };
 
-                    for &(_, pred_branch) in cfg.get_predecessors(succ_ebb) {
+                    for (_, pred_branch) in cfg.pred_iter(succ_ebb) {
                         let pred_arg = func.dfg.inst_variable_args(pred_branch)[num];
                         let pred_affinity = &mut self.ranges.get_mut(pred_arg).unwrap().affinity;
                         if pred_affinity.is_none() {

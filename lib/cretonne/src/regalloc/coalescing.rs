@@ -8,7 +8,7 @@
 use cursor::{Cursor, EncCursor};
 use dbg::DisplayList;
 use dominator_tree::DominatorTree;
-use flowgraph::{ControlFlowGraph, BasicBlock};
+use flowgraph::ControlFlowGraph;
 use ir::{DataFlowGraph, Layout, InstBuilder, ValueDef};
 use ir::{Function, Ebb, Inst, Value, ExpandedProgramPoint};
 use regalloc::affinity::Affinity;
@@ -246,6 +246,7 @@ struct Context<'a> {
     encinfo: EncInfo,
 
     func: &'a mut Function,
+    cfg: &'a ControlFlowGraph,
     domtree: &'a DominatorTree,
     liveness: &'a mut Liveness,
     virtregs: &'a mut VirtRegs,
@@ -288,6 +289,7 @@ impl Coalescing {
             isa,
             encinfo: isa.encoding_info(),
             func,
+            cfg,
             domtree,
             liveness,
             virtregs,
@@ -299,11 +301,8 @@ impl Coalescing {
         // TODO: The iteration order matters here. We should coalesce in the most important blocks
         // first, so they get first pick at forming virtual registers.
         for &ebb in domtree.cfg_postorder() {
-            let preds = cfg.get_predecessors(ebb);
-            if !preds.is_empty() {
-                for argnum in 0..context.func.dfg.num_ebb_params(ebb) {
-                    context.coalesce_ebb_param(ebb, argnum, preds)
-                }
+            for argnum in 0..context.func.dfg.num_ebb_params(ebb) {
+                context.coalesce_ebb_param(ebb, argnum)
             }
         }
     }
@@ -311,7 +310,7 @@ impl Coalescing {
 
 impl<'a> Context<'a> {
     /// Coalesce the `argnum`'th parameter on `ebb`.
-    fn coalesce_ebb_param(&mut self, ebb: Ebb, argnum: usize, preds: &[BasicBlock]) {
+    fn coalesce_ebb_param(&mut self, ebb: Ebb, argnum: usize) {
         self.split_values.clear();
         let mut succ_val = self.func.dfg.ebb_params(ebb)[argnum];
         dbg!("Processing {}/{}: {}", ebb, argnum, succ_val);
@@ -342,7 +341,7 @@ impl<'a> Context<'a> {
         // A successor copy is always required if the `succ_val` virtual register is live at
         // any predecessor branch.
 
-        while let Some(bad_value) = self.try_coalesce(argnum, succ_val, preds) {
+        while let Some(bad_value) = self.try_coalesce(argnum, succ_val, ebb) {
             dbg!("Isolating interfering value {}", bad_value);
             // The bad value has some conflict that can only be reconciled by excluding its
             // congruence class from the new virtual register.
@@ -363,7 +362,7 @@ impl<'a> Context<'a> {
             }
 
             // Check the predecessors.
-            for &(pred_ebb, pred_inst) in preds {
+            for (pred_ebb, pred_inst) in self.cfg.pred_iter(ebb) {
                 let pred_val = self.func.dfg.inst_variable_args(pred_inst)[argnum];
                 if self.virtregs.same_class(bad_value, pred_val) {
                     self.split_pred(pred_inst, pred_ebb, argnum, pred_val);
@@ -404,12 +403,7 @@ impl<'a> Context<'a> {
     ///
     /// Returns a value from a congruence class that needs to be split before starting over, or
     /// `None` if everything was successfully coalesced into `self.values`.
-    fn try_coalesce(
-        &mut self,
-        argnum: usize,
-        succ_val: Value,
-        preds: &[BasicBlock],
-    ) -> Option<Value> {
+    fn try_coalesce(&mut self, argnum: usize, succ_val: Value, succ_ebb: Ebb) -> Option<Value> {
         // Initialize the value list with the split values. These are guaranteed to be
         // interference free, and anything that interferes with them must be split away.
         self.reset_values();
@@ -421,7 +415,7 @@ impl<'a> Context<'a> {
             return Some(succ_val);
         }
 
-        for &(pred_ebb, pred_inst) in preds {
+        for (pred_ebb, pred_inst) in self.cfg.pred_iter(succ_ebb) {
             let pred_val = self.func.dfg.inst_variable_args(pred_inst)[argnum];
             dbg!(
                 "Checking {}: {}: {}",

@@ -76,7 +76,7 @@ impl<'a> CFGPrinter<'a> {
 
     fn cfg_connections(&self, w: &mut Write) -> Result {
         for ebb in &self.func.layout {
-            for &(parent, inst) in self.cfg.get_predecessors(ebb) {
+            for (parent, inst) in self.cfg.pred_iter(ebb) {
                 writeln!(w, "    {}:{} -> {}", parent, inst, ebb)?;
             }
         }

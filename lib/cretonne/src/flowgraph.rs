@@ -28,6 +28,7 @@ use ir::{Function, Inst, Ebb};
 use ir::instructions::BranchInfo;
 use entity::EntityMap;
 use std::mem;
+use std::slice;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 pub type BasicBlock = (Ebb, Inst);
@@ -138,14 +139,13 @@ impl ControlFlowGraph {
         self.data[to].predecessors.push(from);
     }
 
-    /// Get the CFG predecessor basic blocks to `ebb`.
-    pub fn get_predecessors(&self, ebb: Ebb) -> &[BasicBlock] {
-        debug_assert!(self.is_valid());
-        &self.data[ebb].predecessors
+    /// Get an iterator over the CFG predecessors to `ebb`.
+    pub fn pred_iter(&self, ebb: Ebb) -> PredIter {
+        PredIter(self.data[ebb].predecessors.iter())
     }
 
     /// Get an iterator over the CFG successors to `ebb`.
-    pub fn succ_iter(&self, ebb: Ebb) -> bforest::SetIter<Ebb, ()> {
+    pub fn succ_iter(&self, ebb: Ebb) -> SuccIter {
         debug_assert!(self.is_valid());
         self.data[ebb].successors.iter(&self.succ_forest)
     }
@@ -159,6 +159,22 @@ impl ControlFlowGraph {
         self.valid
     }
 }
+
+/// An iterator over EBB predecessors. The iterator type is `BasicBlock`.
+///
+/// Each predecessor is an instruction that branches to the EBB.
+pub struct PredIter<'a>(slice::Iter<'a, BasicBlock>);
+
+impl<'a> Iterator for PredIter<'a> {
+    type Item = BasicBlock;
+
+    fn next(&mut self) -> Option<BasicBlock> {
+        self.0.next().cloned()
+    }
+}
+
+/// An iterator over EBB successors. The iterator type is `Ebb`.
+pub type SuccIter<'a> = bforest::SetIter<'a, Ebb, ()>;
 
 #[cfg(test)]
 mod tests {
@@ -187,7 +203,7 @@ mod tests {
         let mut fun_ebbs = func.layout.ebbs();
         for ebb in func.layout.ebbs() {
             assert_eq!(ebb, fun_ebbs.next().unwrap());
-            assert_eq!(cfg.get_predecessors(ebb).len(), 0);
+            assert_eq!(cfg.pred_iter(ebb).count(), 0);
             assert_eq!(cfg.succ_iter(ebb).count(), 0);
         }
     }
@@ -222,13 +238,13 @@ mod tests {
         let mut cfg = ControlFlowGraph::with_function(&func);
 
         {
-            let ebb0_predecessors = cfg.get_predecessors(ebb0);
-            let ebb1_predecessors = cfg.get_predecessors(ebb1);
-            let ebb2_predecessors = cfg.get_predecessors(ebb2);
+            let ebb0_predecessors = cfg.pred_iter(ebb0).collect::<Vec<_>>();
+            let ebb1_predecessors = cfg.pred_iter(ebb1).collect::<Vec<_>>();
+            let ebb2_predecessors = cfg.pred_iter(ebb2).collect::<Vec<_>>();
 
-            let ebb0_successors = cfg.succ_iter(ebb0);
-            let ebb1_successors = cfg.succ_iter(ebb1);
-            let ebb2_successors = cfg.succ_iter(ebb2);
+            let ebb0_successors = cfg.succ_iter(ebb0).collect::<Vec<_>>();
+            let ebb1_successors = cfg.succ_iter(ebb1).collect::<Vec<_>>();
+            let ebb2_successors = cfg.succ_iter(ebb2).collect::<Vec<_>>();
 
             assert_eq!(ebb0_predecessors.len(), 0);
             assert_eq!(ebb1_predecessors.len(), 2);
@@ -239,9 +255,9 @@ mod tests {
             assert_eq!(ebb2_predecessors.contains(&(ebb0, br_ebb0_ebb2)), true);
             assert_eq!(ebb2_predecessors.contains(&(ebb1, jmp_ebb1_ebb2)), true);
 
-            assert_eq!(ebb0_successors.collect::<Vec<_>>(), [ebb1, ebb2]);
-            assert_eq!(ebb1_successors.collect::<Vec<_>>(), [ebb1, ebb2]);
-            assert_eq!(ebb2_successors.collect::<Vec<_>>(), []);
+            assert_eq!(ebb0_successors, [ebb1, ebb2]);
+            assert_eq!(ebb1_successors, [ebb1, ebb2]);
+            assert_eq!(ebb2_successors, []);
         }
 
         // Change some instructions and recompute ebb0
@@ -251,9 +267,9 @@ mod tests {
         let br_ebb0_ebb1 = br_ebb0_ebb2;
 
         {
-            let ebb0_predecessors = cfg.get_predecessors(ebb0);
-            let ebb1_predecessors = cfg.get_predecessors(ebb1);
-            let ebb2_predecessors = cfg.get_predecessors(ebb2);
+            let ebb0_predecessors = cfg.pred_iter(ebb0).collect::<Vec<_>>();
+            let ebb1_predecessors = cfg.pred_iter(ebb1).collect::<Vec<_>>();
+            let ebb2_predecessors = cfg.pred_iter(ebb2).collect::<Vec<_>>();
 
             let ebb0_successors = cfg.succ_iter(ebb0);
             let ebb1_successors = cfg.succ_iter(ebb1);

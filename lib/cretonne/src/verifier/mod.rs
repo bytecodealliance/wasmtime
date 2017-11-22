@@ -933,9 +933,8 @@ impl<'a> Verifier<'a> {
                 return err!(ebb, "cfg had unexpected successor(s) {:?}", excess_succs);
             }
 
-            expected_preds.extend(self.expected_cfg.get_predecessors(ebb).iter().map(|&(_,
-               inst)| inst));
-            got_preds.extend(cfg.get_predecessors(ebb).iter().map(|&(_, inst)| inst));
+            expected_preds.extend(self.expected_cfg.pred_iter(ebb).map(|(_, inst)| inst));
+            got_preds.extend(cfg.pred_iter(ebb).map(|(_, inst)| inst));
 
             let missing_preds: Vec<Inst> = expected_preds.difference(&got_preds).cloned().collect();
             if !missing_preds.is_empty() {

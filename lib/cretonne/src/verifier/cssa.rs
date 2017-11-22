@@ -102,7 +102,7 @@ impl<'a> CssaVerifier<'a> {
     fn check_cssa(&self) -> Result {
         for ebb in self.func.layout.ebbs() {
             let ebb_params = self.func.dfg.ebb_params(ebb);
-            for &(_, pred) in self.cfg.get_predecessors(ebb) {
+            for (_, pred) in self.cfg.pred_iter(ebb) {
                 let pred_args = self.func.dfg.inst_variable_args(pred);
                 // This should have been caught by an earlier verifier pass.
                 assert_eq!(
