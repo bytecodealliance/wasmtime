@@ -28,7 +28,6 @@ use ir::{Function, Inst, Ebb};
 use ir::instructions::BranchInfo;
 use entity::EntityMap;
 use std::mem;
-use std::slice;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 pub type BasicBlock = (Ebb, Inst);
@@ -36,12 +35,23 @@ pub type BasicBlock = (Ebb, Inst);
 /// A container for the successors and predecessors of some Ebb.
 #[derive(Clone, Default)]
 pub struct CFGNode {
+    /// Instructions that can branch or jump to this EBB.
+    ///
+    /// This maps branch instruction -> predecessor EBB which is redundant since the EBB containing
+    /// the branch instruction is available from the `layout.inst_ebb()` method. We store the
+    /// redundant information because:
+    ///
+    /// 1. Many `pred_iter()` consumers want the EBB anyway, so it is handily available.
+    /// 2. The `invalidate_ebb_successors()` may be called *after* branches have been removed from
+    ///    their EBB, but we still need to remove them form the old EBB predecessor map.
+    ///
+    /// The redundant EBB stored here is always consistent with the CFG successor lists, even after
+    /// the IR has been edited.
+    pub predecessors: bforest::Map<Inst, Ebb, ()>,
+
     /// Set of EBBs that are the targets of branches and jumps in this EBB.
     /// The set is ordered by EBB number, indicated by the `()` comparator type.
     pub successors: bforest::Set<Ebb, ()>,
-
-    /// Basic blocks that can branch or jump to this EBB.
-    pub predecessors: Vec<BasicBlock>,
 }
 
 /// The Control Flow Graph maintains a mapping of ebbs to their predecessors
@@ -49,6 +59,7 @@ pub struct CFGNode {
 /// extended basic blocks.
 pub struct ControlFlowGraph {
     data: EntityMap<Ebb, CFGNode>,
+    pred_forest: bforest::MapForest<Inst, Ebb, ()>,
     succ_forest: bforest::SetForest<Ebb, ()>,
     valid: bool,
 }
@@ -59,6 +70,7 @@ impl ControlFlowGraph {
         Self {
             data: EntityMap::new(),
             valid: false,
+            pred_forest: bforest::MapForest::new(),
             succ_forest: bforest::SetForest::new(),
         }
     }
@@ -66,6 +78,7 @@ impl ControlFlowGraph {
     /// Clear all data structures in this control flow graph.
     pub fn clear(&mut self) {
         self.data.clear();
+        self.pred_forest.clear();
         self.succ_forest.clear();
         self.valid = false;
     }
@@ -113,7 +126,10 @@ impl ControlFlowGraph {
         // our iteration over successors.
         let mut successors = mem::replace(&mut self.data[ebb].successors, Default::default());
         for succ in successors.iter(&self.succ_forest) {
-            self.data[succ].predecessors.retain(|&(e, _)| e != ebb);
+            self.data[succ].predecessors.retain(
+                &mut self.pred_forest,
+                |_, &mut e| e != ebb,
+            );
         }
         successors.clear(&mut self.succ_forest);
     }
@@ -136,12 +152,17 @@ impl ControlFlowGraph {
             &mut self.succ_forest,
             &(),
         );
-        self.data[to].predecessors.push(from);
+        self.data[to].predecessors.insert(
+            from.1,
+            from.0,
+            &mut self.pred_forest,
+            &(),
+        );
     }
 
     /// Get an iterator over the CFG predecessors to `ebb`.
     pub fn pred_iter(&self, ebb: Ebb) -> PredIter {
-        PredIter(self.data[ebb].predecessors.iter())
+        PredIter(self.data[ebb].predecessors.iter(&self.pred_forest))
     }
 
     /// Get an iterator over the CFG successors to `ebb`.
@@ -163,13 +184,13 @@ impl ControlFlowGraph {
 /// An iterator over EBB predecessors. The iterator type is `BasicBlock`.
 ///
 /// Each predecessor is an instruction that branches to the EBB.
-pub struct PredIter<'a>(slice::Iter<'a, BasicBlock>);
+pub struct PredIter<'a>(bforest::MapIter<'a, Inst, Ebb, ()>);
 
 impl<'a> Iterator for PredIter<'a> {
     type Item = BasicBlock;
 
     fn next(&mut self) -> Option<BasicBlock> {
-        self.0.next().cloned()
+        self.0.next().map(|(i, e)| (e, i))
     }
 }
 
