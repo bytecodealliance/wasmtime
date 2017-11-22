@@ -127,6 +127,26 @@ where
         }
     }
 
+    /// Retains only the elements specified by the predicate.
+    ///
+    /// Remove all elements where the predicate returns false.
+    pub fn retain<F>(&mut self, forest: &mut SetForest<K, C>, mut predicate: F)
+    where
+        F: FnMut(K) -> bool,
+    {
+        let mut path = Path::default();
+        if let Some(root) = self.root.expand() {
+            path.first(root, &forest.nodes);
+        }
+        while let Some((node, entry)) = path.leaf_pos() {
+            if predicate(forest.nodes[node].unwrap_leaf().0[entry]) {
+                path.next(&forest.nodes);
+            } else {
+                self.root = path.remove(&mut forest.nodes).into();
+            }
+        }
+    }
+
     /// Create a cursor for navigating this set. The cursor is initially positioned off the end of
     /// the set.
     pub fn cursor<'a>(
@@ -353,6 +373,8 @@ mod test {
 
         // Iterator for an empty set.
         assert_eq!(s.iter(&f).next(), None);
+
+        s.retain(&mut f, |_| unreachable!());
 
         let mut c = SetCursor::new(&mut s, &mut f, &());
         c.verify();

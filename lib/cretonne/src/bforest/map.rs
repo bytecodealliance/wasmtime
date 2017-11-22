@@ -130,6 +130,32 @@ where
         }
     }
 
+    /// Retains only the elements specified by the predicate.
+    ///
+    /// Remove all key-value pairs where the predicate returns false.
+    ///
+    /// The predicate is allowed to update the values stored in the map.
+    pub fn retain<F>(&mut self, forest: &mut MapForest<K, V, C>, mut predicate: F)
+    where
+        F: FnMut(K, &mut V) -> bool,
+    {
+        let mut path = Path::default();
+        if let Some(root) = self.root.expand() {
+            path.first(root, &forest.nodes);
+        }
+        while let Some((node, entry)) = path.leaf_pos() {
+            let keep = {
+                let (ks, vs) = forest.nodes[node].unwrap_leaf_mut();
+                predicate(ks[entry], &mut vs[entry])
+            };
+            if keep {
+                path.next(&forest.nodes);
+            } else {
+                self.root = path.remove(&mut forest.nodes).into();
+            }
+        }
+    }
+
     /// Create a cursor for navigating this map. The cursor is initially positioned off the end of
     /// the map.
     pub fn cursor<'a>(
@@ -394,6 +420,7 @@ mod test {
 
         assert_eq!(m.get(7, &f, &()), None);
         assert_eq!(m.iter(&f).next(), None);
+        m.retain(&mut f, |_, _| unreachable!());
 
         let mut c = m.cursor(&mut f, &());
         assert!(c.is_empty());
@@ -524,6 +551,16 @@ mod test {
         m.insert(5, 4.2, f, &());
         m.verify(f, &());
         assert_eq!(m.get(5, f, &()), Some(4.2));
+
+        // Retain even entries, with altered values.
+        m.retain(f, |k, v| {
+            *v = (k / 10) as f32;
+            (k % 20) == 0
+        });
+        assert_eq!(
+            m.iter(f).collect::<Vec<_>>(),
+            [(20, 2.0), (40, 4.0), (60, 6.0)]
+        );
 
         // Insert at back of leaf.
         let mut m = full_leaf(f);
