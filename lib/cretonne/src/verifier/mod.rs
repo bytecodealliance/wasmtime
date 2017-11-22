@@ -359,7 +359,8 @@ impl<'a> Verifier<'a> {
             Store { .. } |
             RegMove { .. } |
             Trap { .. } |
-            CondTrap { .. } => {}
+            CondTrap { .. } |
+            NullAry { .. } => {}
         }
 
         Ok(())

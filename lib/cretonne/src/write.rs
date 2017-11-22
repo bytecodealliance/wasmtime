@@ -295,6 +295,7 @@ pub fn write_operands(
                 write!(w, " {}", DisplayValues(args.as_slice(pool)))
             }
         }
+        NullAry { .. } => write!(w, " "),
         InsertLane { lane, args, .. } => write!(w, " {}, {}, {}", args[0], lane, args[1]),
         ExtractLane { lane, arg, .. } => write!(w, " {}, {}", arg, lane),
         IntCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
