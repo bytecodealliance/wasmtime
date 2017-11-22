@@ -1955,6 +1955,7 @@ impl<'a> Parser<'a> {
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
             }
+            InstructionFormat::NullAry => InstructionData::NullAry { opcode },
             InstructionFormat::Jump => {
                 // Parse the destination EBB number. Don't translate source to local numbers yet.
                 let ebb_num = self.match_ebb("expected jump destination EBB")?;

@@ -32,6 +32,8 @@ Ternary = InstructionFormat(VALUE, VALUE, VALUE, typevar_operand=1)
 # operands.
 MultiAry = InstructionFormat(VARIABLE_ARGS)
 
+NullAry = InstructionFormat()
+
 InsertLane = InstructionFormat(VALUE, ('lane', uimm8), VALUE)
 ExtractLane = InstructionFormat(VALUE, ('lane', uimm8))
 

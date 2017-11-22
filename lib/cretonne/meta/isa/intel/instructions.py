@@ -99,4 +99,17 @@ fmax = Instruction(
         """,
         ins=(x, y), outs=a)
 
+WideInt = TypeVar(
+        'WideInt', 'An integer type with 16 to 64 bits',
+        ints=(16, 64))
+x = Operand('x', WideInt)
+
+push = Instruction(
+    'x86_push', "Pushes onto the stack.",
+    ins=x, can_store=True, other_side_effects=True)
+
+pop = Instruction(
+    'x86_pop', "Pops from the stack.",
+    outs=x, can_load=True, other_side_effects=True)
+
 GROUP.close()

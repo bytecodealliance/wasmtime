@@ -120,6 +120,7 @@ pub enum InstructionData {
     },
     Ternary { opcode: Opcode, args: [Value; 3] },
     MultiAry { opcode: Opcode, args: ValueList },
+    NullAry { opcode: Opcode },
     InsertLane {
         opcode: Opcode,
         lane: Uimm8,
