@@ -537,6 +537,13 @@ regmove = Instruction(
         ins=(x, src, dst),
         other_side_effects=True)
 
+copy_special = Instruction(
+        'copy_special', r"""
+        Copies a value from one special register to another. e.g. rbp -> rsp.
+        """,
+        ins=(src, dst),
+        other_side_effects=True)
+
 regspill = Instruction(
         'regspill', r"""
         Temporarily divert ``x`` from ``src`` to ``SS``.

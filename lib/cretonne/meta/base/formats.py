@@ -64,6 +64,7 @@ StackStore = InstructionFormat(VALUE, stack_slot, offset32)
 HeapAddr = InstructionFormat(heap, VALUE, uimm32)
 
 RegMove = InstructionFormat(VALUE, ('src', regunit), ('dst', regunit))
+CopySpecial = InstructionFormat(('src', regunit), ('dst', regunit))
 RegSpill = InstructionFormat(
         VALUE, ('src', regunit), ('dst', entities.stack_slot))
 RegFill = InstructionFormat(

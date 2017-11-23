@@ -358,6 +358,7 @@ impl<'a> Verifier<'a> {
             Load { .. } |
             Store { .. } |
             RegMove { .. } |
+            CopySpecial { .. } |
             Trap { .. } |
             CondTrap { .. } |
             NullAry { .. } => {}

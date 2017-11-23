@@ -394,6 +394,19 @@ pub fn write_operands(
                 write!(w, " {}, %{} -> %{}", arg, src, dst)
             }
         }
+        CopySpecial { src, dst, .. } => {
+            if let Some(isa) = isa {
+                let regs = isa.register_info();
+                write!(
+                    w,
+                    " {} -> {}",
+                    regs.display_regunit(src),
+                    regs.display_regunit(dst)
+                )
+            } else {
+                write!(w, " %{} -> %{}", src, dst)
+            }
+        }
         RegSpill { arg, src, dst, .. } => {
             if let Some(isa) = isa {
                 let regs = isa.register_info();
