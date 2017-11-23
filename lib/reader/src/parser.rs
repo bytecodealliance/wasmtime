@@ -2270,6 +2270,15 @@ impl<'a> Parser<'a> {
                     dst,
                 }
             }
+            InstructionFormat::CopySpecial => {
+                let src = self.match_regunit(ctx.unique_isa)?;
+                self.match_token(
+                    Token::Arrow,
+                    "expected '->' between register units",
+                )?;
+                let dst = self.match_regunit(ctx.unique_isa)?;
+                InstructionData::CopySpecial { opcode, src, dst }
+            }
             InstructionFormat::RegSpill => {
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(

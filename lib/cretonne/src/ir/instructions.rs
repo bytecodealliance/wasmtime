@@ -236,6 +236,11 @@ pub enum InstructionData {
         src: RegUnit,
         dst: RegUnit,
     },
+    CopySpecial {
+        opcode: Opcode,
+        src: RegUnit,
+        dst: RegUnit,
+    },
     RegSpill {
         opcode: Opcode,
         arg: Value,
