@@ -31,7 +31,7 @@ ebb1(v1: i64):
 
 function %sym() -> i64 {
     gv0 = globalsym %something
-    gv1 = globalsym #d0bad180d0b5d182d0bed0bd
+    gv1 = globalsym u123:456
 
 ebb1:
     v0 = global_addr.i64 gv0

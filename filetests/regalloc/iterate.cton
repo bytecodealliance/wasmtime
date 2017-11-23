@@ -2,7 +2,7 @@ test regalloc
 set is_64bit
 isa intel haswell
 
-function #00000009(i64 [%rdi], f32 [%xmm0], f64 [%xmm1], i32 [%rsi], i32 [%rdx], i64 vmctx [%r14]) -> i64 [%rax] spiderwasm {
+function u0:9(i64 [%rdi], f32 [%xmm0], f64 [%xmm1], i32 [%rsi], i32 [%rdx], i64 vmctx [%r14]) -> i64 [%rax] spiderwasm {
 ebb0(v0: i64, v1: f32, v2: f64, v3: i32, v4: i32, v5: i64):
     v32 = iconst.i32 0
     v6 = bitcast.f32 v32
@@ -104,7 +104,7 @@ ebb1(v31: i64):
     return v31
 }
 
-function #0000001a(i64 vmctx [%r14]) -> i64 [%rax] spiderwasm {
+function u0:26(i64 vmctx [%r14]) -> i64 [%rax] spiderwasm {
     gv0 = vmctx+48
     sig0 = (i32 [%rdi], i64 [%rsi], i64 vmctx [%r14], i64 sigid [%rbx]) -> i64 [%rax] spiderwasm
 
