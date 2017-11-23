@@ -2584,45 +2584,50 @@ mod tests {
     }
 
     #[test]
-    fn binary_function_name() {
-        // Valid characters in the name.
+    fn user_function_name() {
+        // Valid characters in the name:
         let func = Parser::new(
-            "function #1234567890AbCdEf() native {
+            "function u1:2() native {
                                            ebb0:
                                              trap int_divz
                                            }",
         ).parse_function(None)
             .unwrap()
             .0;
-        assert_eq!(func.name.to_string(), "#1234567890abcdef");
+        assert_eq!(func.name.to_string(), "u1:2");
 
-        // Invalid characters in the name.
+        // Invalid characters in the name:
         let mut parser = Parser::new(
-            "function #12ww() native {
+            "function u123:abc() native {
                                            ebb0:
                                              trap stk_ovf
                                            }",
         );
         assert!(parser.parse_function(None).is_err());
 
-        // The length of binary function name should be multiple of two.
+        // Incomplete function names should not be valid:
         let mut parser = Parser::new(
-            "function #1() native {
+            "function u() native {
                                            ebb0:
-                                             trap user0
+                                             trap int_ovf
                                            }",
         );
         assert!(parser.parse_function(None).is_err());
 
-        // Empty binary function name should be valid.
-        let func = Parser::new(
-            "function #() native {
+        let mut parser = Parser::new(
+            "function u0() native {
                                            ebb0:
                                              trap int_ovf
                                            }",
-        ).parse_function(None)
-            .unwrap()
-            .0;
-        assert_eq!(func.name.to_string(), "%");
+        );
+        assert!(parser.parse_function(None).is_err());
+
+        let mut parser = Parser::new(
+            "function u0:() native {
+                                           ebb0:
+                                             trap int_ovf
+                                           }",
+        );
+        assert!(parser.parse_function(None).is_err());
     }
 }
