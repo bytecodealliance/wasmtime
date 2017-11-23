@@ -38,6 +38,7 @@ pub enum Token<'a> {
     JumpTable(u32), // jt2
     FuncRef(u32), // fn2
     SigRef(u32), // sig2
+    UserRef(u32), // u345
     Name(&'a str), // %9arbitrary_alphanum, %x3, %0, %function ...
     HexSequence(&'a str), // #89AF
     Identifier(&'a str), // Unrecognized identifier (opcode, enumerator, ...)
@@ -320,6 +321,7 @@ impl<'a> Lexer<'a> {
             "jt" => Some(Token::JumpTable(number)),
             "fn" => Some(Token::FuncRef(number)),
             "sig" => Some(Token::SigRef(number)),
+            "u" => Some(Token::UserRef(number)),
             _ => None,
         }
     }
@@ -603,5 +605,18 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Name("v3"), 1));
         assert_eq!(lex.next(), token(Token::Name("ebb11"), 1));
         assert_eq!(lex.next(), token(Token::Name("_"), 1));
+    }
+
+    #[test]
+    fn lex_userrefs() {
+        let mut lex = Lexer::new("u0 u1 u234567890 u9:8765");
+
+        assert_eq!(lex.next(), token(Token::UserRef(0), 1));
+        assert_eq!(lex.next(), token(Token::UserRef(1), 1));
+        assert_eq!(lex.next(), token(Token::UserRef(234567890), 1));
+        assert_eq!(lex.next(), token(Token::UserRef(9), 1));
+        assert_eq!(lex.next(), token(Token::Colon, 1));
+        assert_eq!(lex.next(), token(Token::Integer("8765"), 1));
+        assert_eq!(lex.next(), None);
     }
 }
