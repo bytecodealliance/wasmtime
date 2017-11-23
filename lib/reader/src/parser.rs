@@ -890,24 +890,26 @@ impl<'a> Parser<'a> {
         match self.token() {
             Some(Token::Name(s)) => {
                 self.consume();
-                Ok(ExternalName::new(s))
+                Ok(ExternalName::testcase(s))
             }
-            Some(Token::HexSequence(s)) => {
-                if s.len() % 2 != 0 {
-                    return err!(
-                        self.loc,
-                        "expected binary external name to have length multiple of two"
-                    );
-                }
-                let mut bin_name = Vec::with_capacity(s.len() / 2);
-                let mut i = 0;
-                while i + 2 <= s.len() {
-                    let byte = u8::from_str_radix(&s[i..i + 2], 16).unwrap();
-                    bin_name.push(byte);
-                    i += 2;
-                }
+            Some(Token::UserRef(namespace)) => {
                 self.consume();
-                Ok(ExternalName::new(bin_name))
+                match self.token() {
+                    Some(Token::Colon) => {
+                        self.consume();
+                        match self.token() {
+                            Some(Token::Integer(index_str)) => {
+                                let index: u32 = u32::from_str_radix(index_str, 10).map_err(|_| {
+                                    self.error("the integer given overflows the u32 type")
+                                })?;
+                                self.consume();
+                                Ok(ExternalName::user(namespace, index))
+                            }
+                            _ => err!(self.loc, "expected integer"),
+                        }
+                    }
+                    _ => err!(self.loc, "expected colon"),
+                }
             }
             _ => err!(self.loc, "expected external name"),
         }
