@@ -6,7 +6,7 @@
 
 use std::fmt::{self, Write};
 
-const TESTCASE_NAME_LENGTH: usize = 10;
+const TESTCASE_NAME_LENGTH: usize = 16;
 
 /// The name of an external is either a reference to a user-defined symbol
 /// table, or a short sequence of ascii bytes so that test cases do not have
@@ -118,13 +118,13 @@ mod tests {
         assert_eq!(ExternalName::testcase("x").to_string(), "%x");
         assert_eq!(ExternalName::testcase("x_1").to_string(), "%x_1");
         assert_eq!(
-            ExternalName::testcase("long123456").to_string(),
-            "%long123456"
+            ExternalName::testcase("longname12345678").to_string(),
+            "%longname12345678"
         );
-        // Constructor will silently drop bytes beyond the 10th
+        // Constructor will silently drop bytes beyond the 16th
         assert_eq!(
-            ExternalName::testcase("long1234567").to_string(),
-            "%long123456"
+            ExternalName::testcase("longname123456789").to_string(),
+            "%longname12345678"
         );
     }
 
