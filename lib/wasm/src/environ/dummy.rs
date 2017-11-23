@@ -13,7 +13,7 @@ use std::error::Error;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 fn get_func_name(func_index: FunctionIndex) -> ir::ExternalName {
-    ir::ExternalName::new(format!("wasm_0x{:x}", func_index))
+    ir::ExternalName::user(0, func_index as u32)
 }
 
 /// A collection of names under which a given entity is exported.
