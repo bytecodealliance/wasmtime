@@ -227,6 +227,10 @@ enc_i32_i64(base.regfill, r.rfi32, 0x8b)
 enc_both(base.fill.b1, r.fiSib32, 0x8b)
 enc_both(base.regfill.b1, r.rfi32, 0x8b)
 
+# Push and Pop
+I64.enc(x86.push.i64, *r.pushq(0x50))
+I64.enc(x86.pop.i64, *r.popq(0x58))
+
 #
 # Float loads and stores.
 #

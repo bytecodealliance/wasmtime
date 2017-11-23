@@ -82,6 +82,8 @@ fn legalize_entry_params(func: &mut Function, entry: Ebb) {
             pos.func.dfg.attach_ebb_param(entry, arg);
             match abi_type.purpose {
                 ArgumentPurpose::Normal => {}
+                ArgumentPurpose::FramePointer => {}
+                ArgumentPurpose::CalleeSaved => {}
                 ArgumentPurpose::StructReturn => {
                     assert!(!has_sret, "Multiple sret arguments found");
                     has_sret = true;

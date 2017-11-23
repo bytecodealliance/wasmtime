@@ -5,7 +5,7 @@ from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual, Or
 from cdsl.registers import RegClass
-from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
+from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry, NullAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
 from base.formats import Jump, Branch, BranchInt, BranchFloat
@@ -471,6 +471,18 @@ puiq = TailRecipe(
         let imm: i64 = imm.into();
         sink.put8(imm as u64);
         ''')
+
+pushq = TailRecipe(
+    'pushq', Unary, size=0, ins=GPR, outs=(),
+    emit='''
+    PUT_OP(bits | (in_reg0 & 7), rex1(in_reg0), sink);
+    ''')
+
+popq = TailRecipe(
+    'popq', NullAry, size=0, ins=(), outs=GPR,
+    emit='''
+    PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+    ''')
 
 # XX+rd id with Abs4 function relocation.
 fnaddr4 = TailRecipe(

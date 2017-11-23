@@ -99,10 +99,9 @@ fmax = Instruction(
         """,
         ins=(x, y), outs=a)
 
-WideInt = TypeVar(
-        'WideInt', 'An integer type with 16 to 64 bits',
-        ints=(16, 64))
-x = Operand('x', WideInt)
+
+Int = TypeVar('Int', 'A scalar integer type', ints=True)
+x = Operand('x', Int)
 
 push = Instruction(
     'x86_push', "Pushes onto the stack.",
