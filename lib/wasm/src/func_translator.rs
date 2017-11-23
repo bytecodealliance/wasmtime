@@ -252,7 +252,7 @@ mod tests {
         let runtime = DummyEnvironment::default();
         let mut ctx = Context::new();
 
-        ctx.func.name = ir::ExternalName::new("small1");
+        ctx.func.name = ir::ExternalName::testcase("small1");
         ctx.func.signature.params.push(ir::AbiParam::new(I32));
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
@@ -283,7 +283,7 @@ mod tests {
         let runtime = DummyEnvironment::default();
         let mut ctx = Context::new();
 
-        ctx.func.name = ir::ExternalName::new("small2");
+        ctx.func.name = ir::ExternalName::testcase("small2");
         ctx.func.signature.params.push(ir::AbiParam::new(I32));
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
@@ -323,7 +323,7 @@ mod tests {
         let runtime = DummyEnvironment::default();
         let mut ctx = Context::new();
 
-        ctx.func.name = ir::ExternalName::new("infloop");
+        ctx.func.name = ir::ExternalName::testcase("infloop");
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
         trans
