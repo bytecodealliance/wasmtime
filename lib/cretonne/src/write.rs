@@ -447,9 +447,9 @@ mod tests {
     #[test]
     fn basic() {
         let mut f = Function::new();
-        assert_eq!(f.to_string(), "function %() native {\n}\n");
+        assert_eq!(f.to_string(), "function u0:0() native {\n}\n");
 
-        f.name = ExternalName::new("foo");
+        f.name = ExternalName::testcase("foo");
         assert_eq!(f.to_string(), "function %foo() native {\n}\n");
 
         f.create_stack_slot(StackSlotData::new(StackSlotKind::Local, 4));

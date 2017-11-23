@@ -613,7 +613,7 @@ mod tests {
         sig.params.push(AbiParam::new(I32));
 
         let mut il_builder = ILBuilder::<Variable>::new();
-        let mut func = Function::with_name_signature(ExternalName::new("sample_function"), sig);
+        let mut func = Function::with_name_signature(ExternalName::testcase("sample"), sig);
         {
             let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut il_builder);
 
