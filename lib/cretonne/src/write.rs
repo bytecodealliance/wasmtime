@@ -407,6 +407,7 @@ pub fn write_operands(
                 write!(w, " %{} -> %{}", src, dst)
             }
         }
+        AdjustSpImm { offset, .. } => write!(w, " {}", offset),
         RegSpill { arg, src, dst, .. } => {
             if let Some(isa) = isa {
                 let regs = isa.register_info();
