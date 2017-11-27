@@ -10,7 +10,7 @@ from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
 from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalVar
-from base.formats import RegMove, RegSpill, RegFill, CopySpecial
+from base.formats import RegMove, RegSpill, RegFill, CopySpecial, AdjustSpImm
 from .registers import GPR, ABCD, FPR, GPR8, FPR8, FLAG, StackGPR32, StackFPR32
 from .defs import supported_floatccs
 
@@ -492,6 +492,15 @@ copysp = TailRecipe(
         PUT_OP(bits, rex2(dst, src), sink);
         modrm_rr(dst, src, sink);
         ''')
+
+adjustsp = TailRecipe(
+    'adjustsp', AdjustSpImm, size=5, ins=(), outs=(),
+    emit='''
+    PUT_OP(bits, rex1(4), sink);
+    modrm_r_bits(4, bits, sink);
+    let offset: i32 = offset.into();
+    sink.put4(offset as u32);
+    ''')
 
 
 # XX+rd id with Abs4 function relocation.

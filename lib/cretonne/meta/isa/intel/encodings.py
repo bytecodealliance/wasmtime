@@ -234,7 +234,10 @@ I64.enc(x86.pop.i64, *r.popq.rex(0x58))
 I64.enc(x86.pop.i64, *r.popq(0x58))
 
 # Copy Special
-I64.enc(base.copy_special, *r.copysp.rex(0x89))
+I64.enc(base.copy_special, *r.copysp.rex(0x89, w=1))
+
+# Adjust SP Imm
+I64.enc(base.adjust_sp_imm, *r.adjustsp.rex(0x81, w=1))
 
 #
 # Float loads and stores.

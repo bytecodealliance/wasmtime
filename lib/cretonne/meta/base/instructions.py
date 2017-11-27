@@ -544,6 +544,14 @@ copy_special = Instruction(
         ins=(src, dst),
         other_side_effects=True)
 
+Offset = Operand('Offset', offset32, 'Offset from current stack pointer')
+adjust_sp_imm = Instruction(
+    'adjust_sp_imm', r"""
+    Adds an immediate offset value to the stack pointer register.
+    """,
+    ins=(Offset,),
+    other_side_effects=True)
+
 regspill = Instruction(
         'regspill', r"""
         Temporarily divert ``x`` from ``src`` to ``SS``.

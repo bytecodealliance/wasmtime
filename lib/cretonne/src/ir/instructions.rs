@@ -241,6 +241,7 @@ pub enum InstructionData {
         src: RegUnit,
         dst: RegUnit,
     },
+    AdjustSpImm { opcode: Opcode, offset: Offset32 },
     RegSpill {
         opcode: Opcode,
         arg: Value,

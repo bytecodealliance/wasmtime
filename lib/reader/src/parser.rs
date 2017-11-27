@@ -2279,6 +2279,10 @@ impl<'a> Parser<'a> {
                 let dst = self.match_regunit(ctx.unique_isa)?;
                 InstructionData::CopySpecial { opcode, src, dst }
             }
+            InstructionFormat::AdjustSpImm => {
+                let offset = self.optional_offset32()?;
+                InstructionData::AdjustSpImm { opcode, offset }
+            }
             InstructionFormat::RegSpill => {
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(
