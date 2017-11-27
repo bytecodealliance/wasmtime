@@ -10,7 +10,7 @@ from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
 from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalVar
-from base.formats import RegMove, RegSpill, RegFill
+from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from .registers import GPR, ABCD, FPR, GPR8, FPR8, FLAG, StackGPR32, StackFPR32
 from .defs import supported_floatccs
 
@@ -483,6 +483,16 @@ popq = TailRecipe(
     emit='''
     PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
     ''')
+
+# XX /r, for regmove instructions.
+copysp = TailRecipe(
+        'copysp', CopySpecial, size=1, ins=(), outs=(),
+        clobbers_flags=False,
+        emit='''
+        PUT_OP(bits, rex2(dst, src), sink);
+        modrm_rr(dst, src, sink);
+        ''')
+
 
 # XX+rd id with Abs4 function relocation.
 fnaddr4 = TailRecipe(
