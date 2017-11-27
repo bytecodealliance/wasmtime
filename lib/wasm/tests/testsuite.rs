@@ -23,6 +23,15 @@ fn testsuite() {
     let mut paths: Vec<_> = fs::read_dir("../../wasmtests")
         .unwrap()
         .map(|r| r.unwrap())
+        .filter(|p| {
+            // Ignore files starting with `.`, which could be editor temporary files
+            if let Some(stem) = p.path().file_stem() {
+                if let Some(stemstr) = stem.to_str() {
+                    return !stemstr.starts_with(".");
+                }
+            }
+            false
+        })
         .collect();
     paths.sort_by_key(|dir| dir.path());
     let flags = Flags::new(&settings::builder());
@@ -88,7 +97,7 @@ fn handle_module(path: PathBuf, flags: &Flags) {
                     }
                     read_wasm_file(file_path).expect("error reading converted wasm file")
                 }
-                None | Some(&_) => panic!("the file extension is not wasm or wat"),
+                None | Some(&_) => panic!("the file extension for {:?} is not wasm or wat", path),
             }
         }
     };
