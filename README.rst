@@ -59,6 +59,11 @@ You can then run tests with::
 
     ./test-all.sh
 
+You may need to install the *wat2wasm* tool from the `wabt
+<https://github.com/WebAssembly/wabt>`_ project in order to run all of the
+WebAssembly tests. Tests requiring wat2wasm are ignored if the tool is not
+installed.
+
 Building the documentation
 --------------------------
 
