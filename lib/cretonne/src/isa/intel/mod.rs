@@ -180,6 +180,7 @@ impl TargetIsa for Isa {
 
         for inst in return_insts {
             let fp_ret = self.insert_epilogue(inst, local_stack_size as i32, func);
+            func.locations[fp_ret] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
             func.dfg.append_inst_arg(inst, fp_ret);
         }
 
