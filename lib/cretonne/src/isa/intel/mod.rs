@@ -122,8 +122,17 @@ impl TargetIsa for Isa {
         let word_size = if self.flags().is_64bit() { 8 } else { 4 };
 
         // TODO: Insert stack slot for FP and CSRs we will push
+        let meta_stack_size = word_size; // TODO: this needs to change depending on CSRs
+        let stack_offset = -(meta_stack_size as i32);
+        let slot = ir::StackSlotData {
+            kind: ir::StackSlotKind::IncomingArg,
+            size: meta_stack_size,
+            offset: stack_offset,
+        };
+        func.create_stack_slot(slot);
 
-        let stack_size = layout_stack(&mut func.stack_slots, word_size)?;
+        let total_stack_size = layout_stack(&mut func.stack_slots, word_size)?;
+        let local_stack_size = total_stack_size - meta_stack_size;
 
         // Append frame pointer to function signature
         let rbp_arg = ir::AbiParam::special_reg(
@@ -153,7 +162,7 @@ impl TargetIsa for Isa {
                 RU::rbp as RegUnit,
                 RU::rsp as RegUnit,
             );
-            pos.ins().adjust_sp_imm(-(stack_size as i32));
+            pos.ins().adjust_sp_imm(-(local_stack_size as i32));
         }
 
         let mut return_insts = Vec::new();
@@ -170,7 +179,7 @@ impl TargetIsa for Isa {
         }
 
         for inst in return_insts {
-            let fp_ret = self.insert_epilogue(inst, stack_size as i32, func);
+            let fp_ret = self.insert_epilogue(inst, local_stack_size as i32, func);
             func.dfg.append_inst_arg(inst, fp_ret);
         }
 
