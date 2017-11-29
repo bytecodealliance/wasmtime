@@ -159,8 +159,8 @@ impl TargetIsa for Isa {
             let mut pos = EncCursor::new(func, self).at_first_insertion_point(entry_ebb);
             pos.ins().x86_push(fp);
             pos.ins().copy_special(
-                RU::rbp as RegUnit,
                 RU::rsp as RegUnit,
+                RU::rbp as RegUnit,
             );
             if local_stack_size > 0 {
                 pos.ins().adjust_sp_imm(-(local_stack_size as i32));
