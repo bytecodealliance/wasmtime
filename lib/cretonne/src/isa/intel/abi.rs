@@ -140,8 +140,8 @@ pub fn allocatable_registers(
     flags: &shared_settings::Flags,
 ) -> AllocatableSet {
     let mut regs = AllocatableSet::new();
-    //regs.take(GPR, RU::rsp as RegUnit);
-    //regs.take(GPR, RU::rbp as RegUnit);
+    regs.take(GPR, RU::rsp as RegUnit);
+    regs.take(GPR, RU::rbp as RegUnit);
 
     // 32-bit arch only has 8 registers.
     if !flags.is_64bit() {
