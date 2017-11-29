@@ -15,8 +15,9 @@ use self::registers::RU;
 use ir;
 use regalloc;
 use result;
-use ir::InstBuilder;
-use legalizer;
+use ir::{InstBuilder, InstructionData, Opcode};
+use stack_layout::layout_stack;
+use cursor::{Cursor, EncCursor};
 
 
 #[allow(dead_code)]
@@ -118,10 +119,10 @@ impl TargetIsa for Isa {
     }
 
     fn prologue_epilogue(&self, func: &mut ir::Function) -> result::CtonResult {
-        use stack_layout::layout_stack;
-        use cursor::{Cursor, EncCursor};
-
         let word_size = if self.flags().is_64bit() { 8 } else { 4 };
+
+        // TODO: Insert stack slot for FP and CSRs we will push
+
         let stack_size = layout_stack(&mut func.stack_slots, word_size)?;
 
         // Append frame pointer to function signature
@@ -131,6 +132,7 @@ impl TargetIsa for Isa {
             RU::rbp as RegUnit,
         );
         func.signature.params.push(rbp_arg);
+        func.signature.returns.push(rbp_arg);
 
         // Append param to entry EBB
         let entry_ebb = func.layout.entry_block().expect("missing entry block");
@@ -144,16 +146,47 @@ impl TargetIsa for Isa {
         func.locations[fp] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
 
         // Insert prologue
-        let mut pos = EncCursor::new(func, self).at_first_insertion_point(entry_ebb);
-        pos.ins().x86_push(fp);
-        pos.ins().copy_special(
-            RU::rbp as RegUnit,
-            RU::rsp as RegUnit,
-        );
-        pos.ins().adjust_sp_imm(-(stack_size as i32));
+        {
+            let mut pos = EncCursor::new(func, self).at_first_insertion_point(entry_ebb);
+            pos.ins().x86_push(fp);
+            pos.ins().copy_special(
+                RU::rbp as RegUnit,
+                RU::rsp as RegUnit,
+            );
+            pos.ins().adjust_sp_imm(-(stack_size as i32));
+        }
 
-        //legalizer::legalize_function(func, &mut func.cfg, self);
+        let mut return_insts = Vec::new();
+
+        for ebb in func.layout.ebbs() {
+            for inst in func.layout.ebb_insts(ebb) {
+                if let InstructionData::MultiAry { opcode, .. } = func.dfg[inst] {
+                    if opcode == Opcode::Return {
+                        return_insts.push(inst);
+                    }
+                }
+
+            }
+        }
+
+        for inst in return_insts {
+            let fp_ret = self.insert_epilogue(inst, stack_size as i32, func);
+            func.dfg.append_inst_arg(inst, fp_ret);
+        }
 
         Ok(())
+    }
+}
+
+impl Isa {
+    fn insert_epilogue(
+        &self,
+        inst: ir::Inst,
+        stack_size: i32,
+        func: &mut ir::Function,
+    ) -> ir::Value {
+        let mut pos = EncCursor::new(func, self).at_inst(inst);
+        pos.ins().adjust_sp_imm(stack_size);
+        pos.ins().x86_pop(ir::types::I64)
     }
 }
