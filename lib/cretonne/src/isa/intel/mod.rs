@@ -162,11 +162,13 @@ impl TargetIsa for Isa {
                 RU::rbp as RegUnit,
                 RU::rsp as RegUnit,
             );
-            pos.ins().adjust_sp_imm(-(local_stack_size as i32));
+            if local_stack_size > 0 {
+                pos.ins().adjust_sp_imm(-(local_stack_size as i32));
+            }
         }
 
+        // Find all 'return' instructions
         let mut return_insts = Vec::new();
-
         for ebb in func.layout.ebbs() {
             for inst in func.layout.ebb_insts(ebb) {
                 if let InstructionData::MultiAry { opcode, .. } = func.dfg[inst] {
@@ -178,6 +180,7 @@ impl TargetIsa for Isa {
             }
         }
 
+        // Insert an epilogue directly before every 'return'
         for inst in return_insts {
             let fp_ret = self.insert_epilogue(inst, local_stack_size as i32, func);
             func.locations[fp_ret] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
@@ -196,7 +199,9 @@ impl Isa {
         func: &mut ir::Function,
     ) -> ir::Value {
         let mut pos = EncCursor::new(func, self).at_inst(inst);
-        pos.ins().adjust_sp_imm(stack_size);
+        if stack_size > 0 {
+            pos.ins().adjust_sp_imm(stack_size);
+        }
         pos.ins().x86_pop(ir::types::I64)
     }
 }
