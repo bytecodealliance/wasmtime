@@ -121,18 +121,21 @@ impl TargetIsa for Isa {
     fn prologue_epilogue(&self, func: &mut ir::Function) -> result::CtonResult {
         let word_size = if self.flags().is_64bit() { 8 } else { 4 };
 
-        // TODO: Insert stack slot for FP and CSRs we will push
-        let meta_stack_size = word_size; // TODO: this needs to change depending on CSRs
-        let stack_offset = -(meta_stack_size as i32);
+        let mut csr_stack_size = word_size; // Size of RBP to start with
+        for _reg in abi::CSR_GPRS.iter() {
+            csr_stack_size += word_size;
+        }
+
+        let stack_offset = -(csr_stack_size as i32);
         let slot = ir::StackSlotData {
             kind: ir::StackSlotKind::IncomingArg,
-            size: meta_stack_size,
+            size: csr_stack_size,
             offset: stack_offset,
         };
         func.create_stack_slot(slot);
 
         let total_stack_size = layout_stack(&mut func.stack_slots, word_size)?;
-        let local_stack_size = total_stack_size - meta_stack_size;
+        let local_stack_size = total_stack_size - csr_stack_size;
 
         // Append frame pointer to function signature
         let rbp_arg = ir::AbiParam::special_reg(
@@ -142,6 +145,16 @@ impl TargetIsa for Isa {
         );
         func.signature.params.push(rbp_arg);
         func.signature.returns.push(rbp_arg);
+
+        for reg in abi::CSR_GPRS.iter() {
+            let csr_arg = ir::AbiParam::special_reg(
+                ir::types::I64,
+                ir::ArgumentPurpose::CalleeSaved,
+                *reg as RegUnit,
+            );
+            func.signature.params.push(csr_arg);
+            func.signature.returns.push(csr_arg);
+        }
 
         // Append param to entry EBB
         let entry_ebb = func.layout.entry_block().expect("missing entry block");
@@ -154,6 +167,23 @@ impl TargetIsa for Isa {
         // Assign it a location
         func.locations[fp] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
 
+        let mut csr_vals = Vec::new();
+        for reg in abi::CSR_GPRS.iter() {
+            // Append param to entry EBB
+            func.dfg.append_ebb_param(entry_ebb, ir::types::I64);
+
+            let csr_arg = func.dfg.ebb_params(entry_ebb).last().expect(
+                "no last argument",
+            );
+
+            // Assign it a location
+            func.locations[*csr_arg] = ir::ValueLoc::Reg(*reg as RegUnit);
+
+            // Remember it so we can push it momentarily
+            csr_vals.push(*csr_arg);
+        }
+
+
         // Insert prologue
         {
             let mut pos = EncCursor::new(func, self).at_first_insertion_point(entry_ebb);
@@ -164,6 +194,10 @@ impl TargetIsa for Isa {
             );
             if local_stack_size > 0 {
                 pos.ins().adjust_sp_imm(-(local_stack_size as i32));
+            }
+
+            for csr_arg in csr_vals {
+                pos.ins().x86_push(csr_arg);
             }
         }
 
@@ -186,6 +220,7 @@ impl TargetIsa for Isa {
             func.locations[fp_ret] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
             func.dfg.append_inst_arg(inst, fp_ret);
         }
+
 
         Ok(())
     }
