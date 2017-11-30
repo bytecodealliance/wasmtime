@@ -216,9 +216,7 @@ impl TargetIsa for Isa {
 
         // Insert an epilogue directly before every 'return'
         for inst in return_insts {
-            let fp_ret = self.insert_epilogue(inst, local_stack_size as i32, func);
-            func.locations[fp_ret] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
-            func.dfg.append_inst_arg(inst, fp_ret);
+            self.insert_epilogue(inst, local_stack_size as i32, func);
         }
 
 
@@ -227,16 +225,24 @@ impl TargetIsa for Isa {
 }
 
 impl Isa {
-    fn insert_epilogue(
-        &self,
-        inst: ir::Inst,
-        stack_size: i32,
-        func: &mut ir::Function,
-    ) -> ir::Value {
+    fn insert_epilogue(&self, inst: ir::Inst, stack_size: i32, func: &mut ir::Function) {
+        let mut return_values = Vec::new();
+
         let mut pos = EncCursor::new(func, self).at_inst(inst);
         if stack_size > 0 {
             pos.ins().adjust_sp_imm(stack_size);
         }
-        pos.ins().x86_pop(ir::types::I64)
+        for reg in abi::CSR_GPRS.iter().rev() {
+            let csr_ret = pos.ins().x86_pop(ir::types::I64);
+            return_values.push((csr_ret, *reg));
+        }
+        let fp_ret = pos.ins().x86_pop(ir::types::I64);
+        return_values.push((fp_ret, RU::rbp));
+
+        let func = pos.func;
+        for (val, reg) in return_values {
+            func.locations[val] = ir::ValueLoc::Reg(reg as RegUnit);
+            func.dfg.append_inst_arg(inst, val);
+        }
     }
 }
