@@ -120,9 +120,15 @@ impl TargetIsa for Isa {
 
     fn prologue_epilogue(&self, func: &mut ir::Function) -> result::CtonResult {
         let word_size = if self.flags().is_64bit() { 8 } else { 4 };
+        let csr_type = if self.flags().is_64bit() {
+            ir::types::I64
+        } else {
+            ir::types::I32
+        };
+        let csrs = abi::callee_saved_registers(&self.shared_flags);
 
         let mut csr_stack_size = word_size; // Size of RBP to start with
-        for _reg in abi::CSR_GPRS.iter() {
+        for _reg in &csrs {
             csr_stack_size += word_size;
         }
 
@@ -139,16 +145,16 @@ impl TargetIsa for Isa {
 
         // Append frame pointer to function signature
         let rbp_arg = ir::AbiParam::special_reg(
-            ir::types::I64,
+            csr_type,
             ir::ArgumentPurpose::FramePointer,
             RU::rbp as RegUnit,
         );
         func.signature.params.push(rbp_arg);
         func.signature.returns.push(rbp_arg);
 
-        for reg in abi::CSR_GPRS.iter() {
+        for reg in &csrs {
             let csr_arg = ir::AbiParam::special_reg(
-                ir::types::I64,
+                csr_type,
                 ir::ArgumentPurpose::CalleeSaved,
                 *reg as RegUnit,
             );
@@ -158,7 +164,7 @@ impl TargetIsa for Isa {
 
         // Append param to entry EBB
         let entry_ebb = func.layout.entry_block().expect("missing entry block");
-        func.dfg.append_ebb_param(entry_ebb, ir::types::I64);
+        func.dfg.append_ebb_param(entry_ebb, csr_type);
 
         // Find our frame pointer parameter Value
         let fp = func.special_param(ir::ArgumentPurpose::FramePointer)
@@ -168,9 +174,9 @@ impl TargetIsa for Isa {
         func.locations[fp] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
 
         let mut csr_vals = Vec::new();
-        for reg in abi::CSR_GPRS.iter() {
+        for reg in &csrs {
             // Append param to entry EBB
-            func.dfg.append_ebb_param(entry_ebb, ir::types::I64);
+            func.dfg.append_ebb_param(entry_ebb, csr_type);
 
             let csr_arg = func.dfg.ebb_params(entry_ebb).last().expect(
                 "no last argument",
@@ -216,7 +222,7 @@ impl TargetIsa for Isa {
 
         // Insert an epilogue directly before every 'return'
         for inst in return_insts {
-            self.insert_epilogue(inst, local_stack_size as i32, func);
+            self.insert_epilogue(inst, local_stack_size as i32, func, &csrs, csr_type);
         }
 
 
@@ -225,18 +231,25 @@ impl TargetIsa for Isa {
 }
 
 impl Isa {
-    fn insert_epilogue(&self, inst: ir::Inst, stack_size: i32, func: &mut ir::Function) {
+    fn insert_epilogue(
+        &self,
+        inst: ir::Inst,
+        stack_size: i32,
+        func: &mut ir::Function,
+        csrs: &Vec<RU>,
+        csr_type: ir::types::Type,
+    ) {
         let mut return_values = Vec::new();
 
         let mut pos = EncCursor::new(func, self).at_inst(inst);
         if stack_size > 0 {
             pos.ins().adjust_sp_imm(stack_size);
         }
-        for reg in abi::CSR_GPRS.iter().rev() {
-            let csr_ret = pos.ins().x86_pop(ir::types::I64);
+        for reg in csrs.iter().rev() {
+            let csr_ret = pos.ins().x86_pop(csr_type);
             return_values.push((csr_ret, *reg));
         }
-        let fp_ret = pos.ins().x86_pop(ir::types::I64);
+        let fp_ret = pos.ins().x86_pop(csr_type);
         return_values.push((fp_ret, RU::rbp));
 
         let func = pos.func;
