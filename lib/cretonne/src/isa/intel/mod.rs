@@ -143,23 +143,27 @@ impl TargetIsa for Isa {
         let total_stack_size = layout_stack(&mut func.stack_slots, word_size)?;
         let local_stack_size = total_stack_size - csr_stack_size;
 
-        // Append frame pointer to function signature
-        let rbp_arg = ir::AbiParam::special_reg(
+        // Build up list of args, which we'll append forwards to the params and
+        // backwards to the returns.
+        let mut csr_args = Vec::new();
+        csr_args.push(ir::AbiParam::special_reg(
             csr_type,
             ir::ArgumentPurpose::FramePointer,
             RU::rbp as RegUnit,
-        );
-        func.signature.params.push(rbp_arg);
-        func.signature.returns.push(rbp_arg);
-
+        ));
         for reg in &csrs {
-            let csr_arg = ir::AbiParam::special_reg(
+            csr_args.push(ir::AbiParam::special_reg(
                 csr_type,
                 ir::ArgumentPurpose::CalleeSaved,
                 *reg as RegUnit,
-            );
-            func.signature.params.push(csr_arg);
-            func.signature.returns.push(csr_arg);
+            ));
+        }
+
+        for csr_arg in &csr_args {
+            func.signature.params.push(*csr_arg);
+        }
+        for csr_arg in csr_args.iter().rev() {
+            func.signature.returns.push(*csr_arg);
         }
 
         // Append param to entry EBB
