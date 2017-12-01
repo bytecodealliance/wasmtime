@@ -232,7 +232,7 @@ enc_i32_i64(x86.push, r.pushq, 0x50)
 enc_i32_i64(x86.pop, r.popq, 0x58)
 
 # Copy Special
-enc_i64(base.copy_special, r.copysp, 0x89)
+enc_i64(base.copy_special, r.copysp, 0x89, w=1)
 I32.enc(base.copy_special, *r.copysp(0x89))
 
 # Adjust SP Imm
