@@ -15,9 +15,6 @@ static ARG_GPRS: [RU; 6] = [RU::rdi, RU::rsi, RU::rdx, RU::rcx, RU::r8, RU::r9];
 /// Return value registers.
 static RET_GPRS: [RU; 3] = [RU::rax, RU::rdx, RU::rcx];
 
-/// Callee-saved registers
-pub static CSR_GPRS: [RU; 5] = [RU::rbx, RU::r12, RU::r13, RU::r14, RU::r15];
-
 struct Args {
     pointer_bytes: u32,
     pointer_bits: u16,
@@ -155,4 +152,12 @@ pub fn allocatable_registers(
     }
 
     regs
+}
+
+pub fn callee_saved_registers(flags: &shared_settings::Flags) -> Vec<RU> {
+    if flags.is_64bit() {
+        return vec![RU::rbx, RU::r12, RU::r13, RU::r14, RU::r15];
+    } else {
+        return vec![RU::rbx, RU::rsi, RU::rdi];
+    }
 }
