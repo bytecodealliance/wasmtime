@@ -228,13 +228,15 @@ enc_both(base.fill.b1, r.fiSib32, 0x8b)
 enc_both(base.regfill.b1, r.rfi32, 0x8b)
 
 # Push and Pop
-enc_i64(x86.push.i64, r.pushq, 0x50)
-enc_i64(x86.pop.i64, r.popq, 0x58)
+enc_i32_i64(x86.push, r.pushq, 0x50)
+enc_i32_i64(x86.pop, r.popq, 0x58)
 
 # Copy Special
-I64.enc(base.copy_special, *r.copysp.rex(0x89, w=1))
+enc_i64(base.copy_special, r.copysp, 0x89)
+I32.enc(base.copy_special, *r.copysp(0x89))
 
 # Adjust SP Imm
+I32.enc(base.adjust_sp_imm, *r.adjustsp(0x81))
 I64.enc(base.adjust_sp_imm, *r.adjustsp.rex(0x81, w=1))
 
 #
