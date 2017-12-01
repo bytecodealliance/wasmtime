@@ -3,23 +3,23 @@ test binemit
 set is_64bit=1
 isa intel haswell
 
-function %foo(f64 [%xmm0], i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12]) -> i64 csr [%r12] {
+function %foo(f64 [%xmm0], i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12]) -> i64 csr [%r12], i64 csr [%rbx], i64 fp [%rbp] {
     ss0 = local 168, offset 0
     ss1 = incoming_arg 32, offset -32
     
 ebb0(v0: f64 [%xmm0], v1: i64 [%rbp], v2: i64 [%rbx], v3: i64 [%r12]):
-    x86_push v1 ; bin: 40 55
+    x86_push v1 ; bin: 48 55
     copy_special %rsp -> %rbp ; bin: 48 89 e5
-    x86_push v2 ; bin: 40 53
-    x86_push v3 ; bin: 41 54
+    x86_push v2 ; bin: 48 53
+    x86_push v3 ; bin: 49 54
     adjust_sp_imm -168 ; bin: 48 81 c4 ffffff58
 
     ; ... function body ...
 
 
     adjust_sp_imm +168 ; bin: 48 81 c4 000000a8
-    [-,%r12] v100 = x86_pop.i64 ; bin: 41 5c
-    [-,%rbx] v101 = x86_pop.i64 ; bin: 40 5b
-    [-,%rbp] v102 = x86_pop.i64 ; bin: 40 5d
-    return v102
+    [-,%r12] v100 = x86_pop.i64 ; bin: 49 5c
+    [-,%rbx] v101 = x86_pop.i64 ; bin: 48 5b
+    [-,%rbp] v102 = x86_pop.i64 ; bin: 48 5d
+    return v100, v101, v102
 }
