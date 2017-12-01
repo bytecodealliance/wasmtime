@@ -20,9 +20,9 @@ def simple_hash(s):
     Compute a primitive hash of a string.
 
     Example:
-        >>> hex(simple_hash("Hello"))
+        >>> "0x%x" % simple_hash("Hello")
         '0x2fa70c01'
-        >>> hex(simple_hash("world"))
+        >>> "0x%x" % simple_hash("world")
         '0x5b0c31d5'
     """
     h = 5381
