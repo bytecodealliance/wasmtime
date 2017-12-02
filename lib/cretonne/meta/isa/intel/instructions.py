@@ -103,11 +103,26 @@ fmax = Instruction(
 x = Operand('x', iWord)
 
 push = Instruction(
-    'x86_push', "Pushes onto the stack.",
+    'x86_push', r"""
+    Pushes a value onto the stack.
+
+    Decrements the stack pointer and stores the specified value on to the top.
+
+    This is polymorphic in i32 and i64. However, it is only implemented for i64
+    in 64-bit mode, and only for i32 in 32-bit mode.
+    """,
     ins=x, can_store=True, other_side_effects=True)
 
 pop = Instruction(
-    'x86_pop', "Pops from the stack.",
+    'x86_pop', r"""
+    Pops a value from the stack.
+
+    Loads a value from the top of the stack and then increments the stack
+    pointer.
+
+    This is polymorphic in i32 and i64. However, it is only implemented for i64
+    in 64-bit mode, and only for i32 in 32-bit mode.
+    """,
     outs=x, can_load=True, other_side_effects=True)
 
 GROUP.close()
