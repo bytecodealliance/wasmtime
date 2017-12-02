@@ -208,12 +208,9 @@ impl TargetIsa for Isa {
         let mut return_insts = Vec::new();
         for ebb in func.layout.ebbs() {
             for inst in func.layout.ebb_insts(ebb) {
-                if let InstructionData::MultiAry { opcode, .. } = func.dfg[inst] {
-                    if opcode == Opcode::Return {
-                        return_insts.push(inst);
-                    }
+                if func.dfg[inst].opcode().is_return() {
+                    return_insts.push(inst);
                 }
-
             }
         }
 
