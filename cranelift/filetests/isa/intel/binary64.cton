@@ -165,7 +165,6 @@ ebb0:
     ; asm: movq %r10, %rsp
     copy_special %r10 -> %rsp                   ; bin: 4c 89 d4
 
-
     ; Load/Store instructions.
 
     ; Register indirect addressing with no displacement.
@@ -483,6 +482,16 @@ ebb0:
     regspill v1, %rcx -> ss1                    ; bin: 48 89 8c 24 00000408
     ; asm: movq 1032(%rsp), %rcx
     regfill v1, ss1 -> %rcx                     ; bin: 48 8b 8c 24 00000408
+
+    ; Push and Pop
+    ; asm: pushq %rcx
+    x86_push v1                                 ; bin: 51
+    ; asm: pushq %r10
+    x86_push v3                                 ; bin: 41 52
+    ; asm: popq %rcx
+    [-,%rcx]            v513 = x86_pop.i64      ; bin: 59
+    ; asm: popq %r10
+    [-,%r10]            v514 = x86_pop.i64      ; bin: 41 5a
 
     ; asm: testq %rcx, %rcx
     ; asm: je ebb1
