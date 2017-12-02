@@ -186,3 +186,17 @@ ebb0(v1: i32):
 ; nextln:     regfill $v1, $ss0 -> %10
 ; nextln:     return
 ; nextln: }
+
+; Register copies.
+function %copy_special() {
+ebb0:
+    copy_special %10 -> %20
+    copy_special %20 -> %10
+    return
+}
+; sameln: function %copy_special() native {
+; nextln: ebb0:
+; nextln:     copy_special %10 -> %20
+; nextln:     copy_special %20 -> %10
+; nextln:     return
+; nextln: }
