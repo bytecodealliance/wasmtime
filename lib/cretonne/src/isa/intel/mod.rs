@@ -169,11 +169,7 @@ impl TargetIsa for Isa {
 
         // Append param to entry EBB
         let entry_ebb = func.layout.entry_block().expect("missing entry block");
-        func.dfg.append_ebb_param(entry_ebb, csr_type);
-
-        // Find our frame pointer parameter Value
-        let fp = func.special_param(ir::ArgumentPurpose::FramePointer)
-            .expect("missing frame pointer");
+        let fp = func.dfg.append_ebb_param(entry_ebb, csr_type);
 
         // Assign it a location
         func.locations[fp] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
@@ -181,17 +177,13 @@ impl TargetIsa for Isa {
         let mut csr_vals = Vec::new();
         for reg in &csrs {
             // Append param to entry EBB
-            func.dfg.append_ebb_param(entry_ebb, csr_type);
-
-            let csr_arg = func.dfg.ebb_params(entry_ebb).last().expect(
-                "no last argument",
-            );
+            let csr_arg = func.dfg.append_ebb_param(entry_ebb, csr_type);
 
             // Assign it a location
-            func.locations[*csr_arg] = ir::ValueLoc::Reg(*reg as RegUnit);
+            func.locations[csr_arg] = ir::ValueLoc::Reg(*reg as RegUnit);
 
             // Remember it so we can push it momentarily
-            csr_vals.push(*csr_arg);
+            csr_vals.push(csr_arg);
         }
 
 
