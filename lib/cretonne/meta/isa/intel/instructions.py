@@ -100,8 +100,7 @@ fmax = Instruction(
         ins=(x, y), outs=a)
 
 
-Int = TypeVar('Int', 'A scalar integer type', ints=True)
-x = Operand('x', Int)
+x = Operand('x', iWord)
 
 push = Instruction(
     'x86_push', "Pushes onto the stack.",
