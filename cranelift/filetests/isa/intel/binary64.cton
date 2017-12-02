@@ -155,6 +155,17 @@ ebb0:
     ; asm: movq %rcx, %r10
     [-,%r10]             v112 = copy v1          ; bin: 49 89 ca
 
+    ; Copy Special
+    ; asm: movq %rsp, %rbp
+    copy_special %rsp -> %rbp                   ; bin: 48 89 e5
+    ; asm: movq %r10, %r11
+    copy_special %r10 -> %r11                   ; bin: 4d 89 d3
+    ; asm: movq %rsp, %r11
+    copy_special %rsp -> %r11                   ; bin: 49 89 e3
+    ; asm: movq %r10, %rsp
+    copy_special %r10 -> %rsp                   ; bin: 4c 89 d4
+
+
     ; Load/Store instructions.
 
     ; Register indirect addressing with no displacement.

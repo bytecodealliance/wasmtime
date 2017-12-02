@@ -539,7 +539,12 @@ regmove = Instruction(
 
 copy_special = Instruction(
         'copy_special', r"""
-        Copies a value from one special register to another. e.g. rbp -> rsp.
+        Copies the contents of ''src'' register to ''dst'' register.
+
+        This instructions copies the contents of one register to another
+        register without involving any SSA values. This is used for copying
+        special registers, e.g. copying the stack register to the frame
+        register in a function prologue.
         """,
         ins=(src, dst),
         other_side_effects=True)

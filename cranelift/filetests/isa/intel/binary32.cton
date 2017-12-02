@@ -140,6 +140,13 @@ ebb0:
     ; asm: movl %ecx, %esi
     [-,%rsi]             v81 = copy v1           ; bin: 89 ce
 
+    ; Copy Special
+    ; asm: movl %esp, %ebp
+    copy_special %rsp -> %rbp                   ; bin: 89 e5
+    ; asm: movl %ebp, %esp
+    copy_special %rbp -> %rsp                   ; bin: 89 ec
+
+
     ; Load/Store instructions.
 
     ; Register indirect addressing with no displacement.
