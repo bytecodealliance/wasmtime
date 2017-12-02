@@ -549,12 +549,16 @@ copy_special = Instruction(
         ins=(src, dst),
         other_side_effects=True)
 
-Offset = Operand('Offset', offset32, 'Offset from current stack pointer')
+StackOffset = Operand('Offset', imm64, 'Offset from current stack pointer')
 adjust_sp_imm = Instruction(
     'adjust_sp_imm', r"""
-    Adds an immediate offset value to the stack pointer register.
+    Adds ``Offset`` immediate offset value to the stack pointer register.
+
+    This instruction is used to adjust the stack pointer, primarily in function
+    prologues and epilogues. ``Offset`` is constrained to the size of a signed
+    32-bit integer.
     """,
-    ins=(Offset,),
+    ins=(StackOffset,),
     other_side_effects=True)
 
 regspill = Instruction(

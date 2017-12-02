@@ -69,7 +69,6 @@ RegSpill = InstructionFormat(
         VALUE, ('src', regunit), ('dst', entities.stack_slot))
 RegFill = InstructionFormat(
         VALUE, ('src', entities.stack_slot), ('dst', regunit))
-AdjustSpImm = InstructionFormat(offset32)
 
 Trap = InstructionFormat(trapcode)
 CondTrap = InstructionFormat(VALUE, trapcode)
