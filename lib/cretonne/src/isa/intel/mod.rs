@@ -16,6 +16,7 @@ use ir;
 use regalloc;
 use result;
 use ir::{InstBuilder, InstructionData, Opcode};
+use ir::immediates::Imm64;
 use stack_layout::layout_stack;
 use cursor::{Cursor, EncCursor};
 
@@ -141,7 +142,7 @@ impl TargetIsa for Isa {
         func.create_stack_slot(slot);
 
         let total_stack_size = layout_stack(&mut func.stack_slots, word_size)?;
-        let local_stack_size = total_stack_size - csr_stack_size;
+        let local_stack_size = (total_stack_size - csr_stack_size) as i64;
 
         // Build up list of args, which we'll append forwards to the params and
         // backwards to the returns.
@@ -203,7 +204,7 @@ impl TargetIsa for Isa {
                 RU::rbp as RegUnit,
             );
             if local_stack_size > 0 {
-                pos.ins().adjust_sp_imm(-(local_stack_size as i32));
+                pos.ins().adjust_sp_imm(Imm64::new(-local_stack_size));
             }
 
             for csr_arg in csr_vals {
@@ -226,7 +227,7 @@ impl TargetIsa for Isa {
 
         // Insert an epilogue directly before every 'return'
         for inst in return_insts {
-            self.insert_epilogue(inst, local_stack_size as i32, func, &csrs, csr_type);
+            self.insert_epilogue(inst, local_stack_size, func, &csrs, csr_type);
         }
 
 
@@ -238,7 +239,7 @@ impl Isa {
     fn insert_epilogue(
         &self,
         inst: ir::Inst,
-        stack_size: i32,
+        stack_size: i64,
         func: &mut ir::Function,
         csrs: &Vec<RU>,
         csr_type: ir::types::Type,
@@ -247,7 +248,7 @@ impl Isa {
 
         let mut pos = EncCursor::new(func, self).at_inst(inst);
         if stack_size > 0 {
-            pos.ins().adjust_sp_imm(stack_size);
+            pos.ins().adjust_sp_imm(Imm64::new(stack_size));
         }
         for reg in csrs.iter().rev() {
             let csr_ret = pos.ins().x86_pop(csr_type);

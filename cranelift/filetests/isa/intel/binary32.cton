@@ -389,6 +389,17 @@ ebb0:
     ; asm: popl %ecx
     [-,%rcx]            v512 = x86_pop.i32      ; bin: 59
 
+    ; Adjust Stack Pointer
+    ; asm: addq $1024, %rsp
+    adjust_sp_imm 1024                          ; bin: 81 c4 00000400
+    ; asm: addq $-1024, %rsp
+    adjust_sp_imm -1024                         ; bin: 81 c4 fffffc00
+    ; asm: addq $2147483647, %rsp
+    adjust_sp_imm 2147483647                    ; bin: 81 c4 7fffffff
+    ; asm: addq $-2147483648, %rsp
+    adjust_sp_imm -2147483648                   ; bin: 81 c4 80000000
+
+
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 85 c9 74 0e

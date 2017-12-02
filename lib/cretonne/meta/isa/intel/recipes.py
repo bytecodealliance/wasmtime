@@ -10,7 +10,7 @@ from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
 from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalVar
-from base.formats import RegMove, RegSpill, RegFill, CopySpecial, AdjustSpImm
+from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from .registers import GPR, ABCD, FPR, GPR8, FPR8, FLAG, StackGPR32, StackFPR32
 from .defs import supported_floatccs
 
@@ -494,12 +494,13 @@ copysp = TailRecipe(
         ''')
 
 adjustsp = TailRecipe(
-    'adjustsp', AdjustSpImm, size=5, ins=(), outs=(),
+    'adjustsp', UnaryImm, size=5, ins=(), outs=(),
+    instp=IsSignedInt(UnaryImm.imm, 32),
     emit='''
     PUT_OP(bits, rex1(4), sink);
     modrm_r_bits(4, bits, sink);
-    let offset: i32 = offset.into();
-    sink.put4(offset as u32);
+    let imm: i64 = imm.into();
+    sink.put4(imm as u32);
     ''')
 
 

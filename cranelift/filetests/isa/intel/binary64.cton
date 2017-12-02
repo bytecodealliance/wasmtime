@@ -493,6 +493,16 @@ ebb0:
     ; asm: popq %r10
     [-,%r10]            v514 = x86_pop.i64      ; bin: 41 5a
 
+    ; Adjust Stack Pointer
+    ; asm: addq $1024, %rsp
+    adjust_sp_imm 1024                          ; bin: 48 81 c4 00000400
+    ; asm: addq $-1024, %rsp
+    adjust_sp_imm -1024                         ; bin: 48 81 c4 fffffc00
+    ; asm: addq $2147483647, %rsp
+    adjust_sp_imm 2147483647                    ; bin: 48 81 c4 7fffffff
+    ; asm: addq $-2147483648, %rsp
+    adjust_sp_imm -2147483648                   ; bin: 48 81 c4 80000000
+
     ; asm: testq %rcx, %rcx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 48 85 c9 74 1b
