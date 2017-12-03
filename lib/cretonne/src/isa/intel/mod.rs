@@ -15,7 +15,7 @@ use self::registers::RU;
 use ir;
 use regalloc;
 use result;
-use ir::{InstBuilder, InstructionData, Opcode};
+use ir::InstBuilder;
 use ir::immediates::Imm64;
 use stack_layout::layout_stack;
 use cursor::{Cursor, EncCursor};
@@ -207,7 +207,7 @@ impl TargetIsa for Isa {
         // Find all 'return' instructions
         let mut return_insts = Vec::new();
         for ebb in func.layout.ebbs() {
-            for inst in func.layout.ebb_insts(ebb) {
+            if let Some(inst) = func.layout.last_inst(ebb) {
                 if func.dfg[inst].opcode().is_return() {
                     return_insts.push(inst);
                 }
