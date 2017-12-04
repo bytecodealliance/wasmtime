@@ -6,8 +6,9 @@ use cretonne::binemit;
 use cretonne::ir;
 use cretonne;
 use cton_reader::TestCommand;
-use filetest::subtest::{SubTest, Context, Result};
+use filetest::subtest::{SubTest, Context, Result, run_filecheck};
 use std::borrow::Cow;
+use std::fmt::Write;
 use utils::pretty_error;
 
 struct TestCompile;
@@ -51,7 +52,7 @@ impl SubTest for TestCompile {
             comp_ctx.func.display(isa)
         );
 
-        // Finally verify that the returned code size matches the emitted bytes.
+        // Verify that the returned code size matches the emitted bytes.
         let mut sink = SizeSink { offset: 0 };
         binemit::emit_function(
             &comp_ctx.func,
@@ -67,7 +68,11 @@ impl SubTest for TestCompile {
             ));
         }
 
-        Ok(())
+        // Run final code through filecheck.
+        let mut text = String::new();
+        write!(&mut text, "{}", &comp_ctx.func.display(Some(isa)))
+            .map_err(|e| e.to_string())?;
+        run_filecheck(&text, context)
     }
 }
 
