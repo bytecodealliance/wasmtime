@@ -102,6 +102,23 @@ where
         })
     }
 
+    /// Look up the value stored for `key`.
+    ///
+    /// If it exists, return the stored key-value pair.
+    ///
+    /// Otherwise, return the last key-value pair with a key that is less than or equal to `key`.
+    ///
+    /// If no stored keys are less than or equal to `key`, return `None`.
+    pub fn get_or_less(&self, key: K, forest: &MapForest<K, V, C>, comp: &C) -> Option<(K, V)> {
+        self.root.expand().and_then(|root| {
+            let mut path = Path::default();
+            match path.find(key, root, &forest.nodes, comp) {
+                Some(v) => Some((key, v)),
+                None => path.prev(root, &forest.nodes),
+            }
+        })
+    }
+
     /// Insert `key, value` into the map and return the old value stored for `key`, if any.
     pub fn insert(
         &mut self,
@@ -420,6 +437,7 @@ mod test {
 
         assert_eq!(m.get(7, &f, &()), None);
         assert_eq!(m.iter(&f).next(), None);
+        assert_eq!(m.get_or_less(7, &f, &()), None);
         m.retain(&mut f, |_, _| unreachable!());
 
         let mut c = m.cursor(&mut f, &());
@@ -473,6 +491,13 @@ mod test {
         assert_eq!(m.get(70, f, &()), None);
         assert_eq!(m.get(80, f, &()), Some(8.0));
         assert_eq!(m.get(100, f, &()), None);
+
+        assert_eq!(m.get_or_less(0, f, &()), None);
+        assert_eq!(m.get_or_less(20, f, &()), Some((20, 2.0)));
+        assert_eq!(m.get_or_less(30, f, &()), Some((20, 2.0)));
+        assert_eq!(m.get_or_less(40, f, &()), Some((40, 4.0)));
+        assert_eq!(m.get_or_less(200, f, &()), Some((200, 20.0)));
+        assert_eq!(m.get_or_less(201, f, &()), Some((200, 20.0)));
 
         {
             let mut c = m.cursor(f, &());
