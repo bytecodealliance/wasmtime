@@ -352,3 +352,14 @@ Test the simple GVN pass.
 
 The simple GVN pass is run on each function, and then results are run
 through filecheck.
+
+`test compile`
+--------------
+
+Test the whole code generation pipeline.
+
+Each function is passed through the full ``Context::compile()`` function
+which is normally used to compile code. This type of test often depends
+on assertions or verifier errors, but it is also possible to use
+filecheck directives which will be matched against the final form of the
+Cretonne IL right before binary machine code emission.
