@@ -10,7 +10,7 @@ use ir::{AbiParam, ArgumentPurpose, ArgumentLoc, ArgumentExtension, CallConv, In
 use ir::immediates::Imm64;
 use stack_layout::layout_stack;
 use std::i32;
-use cursor::{Cursor, EncCursor};
+use cursor::{Cursor, EncCursor, CursorPosition};
 use result;
 
 
@@ -204,11 +204,13 @@ pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::Ct
         func.signature.returns.push(csr_arg);
     }
 
-    // Finally, insert the prologue and epilogues
+    // Set up the cursor and insert the prologue
     let entry_ebb = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
-
     insert_prologue(&mut pos, local_stack_size, csr_type, csrs);
+
+    // Reset the cursor and insert the epilogue
+    let mut pos = pos.at_position(CursorPosition::Nowhere);
     insert_epilogues(&mut pos, local_stack_size, csr_type, csrs);
 
     Ok(())
@@ -263,7 +265,6 @@ fn insert_epilogues(
             }
         }
     }
-
 }
 
 /// Insert an epilogue given a specific `return` instruction.
