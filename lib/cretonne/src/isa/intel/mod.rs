@@ -10,15 +10,10 @@ use binemit::{CodeSink, MemoryCodeSink, emit_function};
 use super::super::settings as shared_settings;
 use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encodings};
 use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, RegInfo, RegClass, EncInfo, RegUnit};
-use self::registers::RU;
+use isa::{TargetIsa, RegInfo, RegClass, EncInfo};
 use ir;
 use regalloc;
 use result;
-use ir::InstBuilder;
-use ir::immediates::Imm64;
-use stack_layout::layout_stack;
-use cursor::{Cursor, EncCursor};
 
 
 #[allow(dead_code)]
@@ -120,120 +115,6 @@ impl TargetIsa for Isa {
     }
 
     fn prologue_epilogue(&self, func: &mut ir::Function) -> result::CtonResult {
-        let word_size = if self.flags().is_64bit() { 8 } else { 4 };
-        let csr_type = if self.flags().is_64bit() {
-            ir::types::I64
-        } else {
-            ir::types::I32
-        };
-        let csrs = abi::callee_saved_registers(&self.shared_flags);
-        let csr_stack_size = ((csrs.len() + 1) * word_size as usize) as i32;
-
-        func.create_stack_slot(ir::StackSlotData {
-            kind: ir::StackSlotKind::IncomingArg,
-            size: csr_stack_size as u32,
-            offset: -csr_stack_size,
-        });
-
-        let total_stack_size = layout_stack(&mut func.stack_slots, word_size)? as i32;
-        let local_stack_size = (total_stack_size - csr_stack_size) as i64;
-
-        // Add CSRs to function signature
-        let fp_arg = ir::AbiParam::special_reg(
-            csr_type,
-            ir::ArgumentPurpose::FramePointer,
-            RU::rbp as RegUnit,
-        );
-        func.signature.params.push(fp_arg);
-        func.signature.returns.push(fp_arg);
-
-        for csr in csrs.iter() {
-            let csr_arg = ir::AbiParam::special_reg(
-                csr_type,
-                ir::ArgumentPurpose::CalleeSaved,
-                *csr as RegUnit,
-            );
-            func.signature.params.push(csr_arg);
-            func.signature.returns.push(csr_arg);
-        }
-
-
-        let entry_ebb = func.layout.entry_block().expect("missing entry block");
-        let mut pos = EncCursor::new(func, self).at_first_insertion_point(entry_ebb);
-
-        self.insert_prologue(&mut pos, local_stack_size, csr_type);
-        self.insert_epilogues(&mut pos, local_stack_size, csr_type);
-
-        Ok(())
-    }
-}
-
-impl Isa {
-    fn insert_prologue(&self, pos: &mut EncCursor, stack_size: i64, csr_type: ir::types::Type) {
-        // Append param to entry EBB
-        let ebb = pos.current_ebb().expect("missing ebb under cursor");
-        let fp = pos.func.dfg.append_ebb_param(ebb, csr_type);
-        pos.func.locations[fp] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
-
-        pos.ins().x86_push(fp);
-        pos.ins().copy_special(
-            RU::rsp as RegUnit,
-            RU::rbp as RegUnit,
-        );
-
-        if stack_size > 0 {
-            pos.ins().adjust_sp_imm(Imm64::new(-stack_size));
-        }
-
-        let csrs = abi::callee_saved_registers(&self.shared_flags);
-        for reg in csrs.iter() {
-            // Append param to entry EBB
-            let csr_arg = pos.func.dfg.append_ebb_param(ebb, csr_type);
-
-            // Assign it a location
-            pos.func.locations[csr_arg] = ir::ValueLoc::Reg(*reg as RegUnit);
-
-            // Remember it so we can push it momentarily
-            pos.ins().x86_push(csr_arg);
-        }
-    }
-
-    fn insert_epilogues(&self, pos: &mut EncCursor, stack_size: i64, csr_type: ir::types::Type) {
-        while let Some(ebb) = pos.next_ebb() {
-            pos.goto_last_inst(ebb);
-            if let Some(inst) = pos.current_inst() {
-                if pos.func.dfg[inst].opcode().is_return() {
-                    self.insert_epilogue(inst, stack_size, pos, csr_type);
-                }
-            }
-        }
-
-    }
-
-    fn insert_epilogue(
-        &self,
-        inst: ir::Inst,
-        stack_size: i64,
-        pos: &mut EncCursor,
-        csr_type: ir::types::Type,
-    ) {
-        if stack_size > 0 {
-            pos.ins().adjust_sp_imm(Imm64::new(stack_size));
-        }
-
-        let fp_ret = pos.ins().x86_pop(csr_type);
-        pos.prev_inst();
-
-        pos.func.locations[fp_ret] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
-        pos.func.dfg.append_inst_arg(inst, fp_ret);
-
-        let csrs = abi::callee_saved_registers(&self.shared_flags);
-        for reg in csrs.iter() {
-            let csr_ret = pos.ins().x86_pop(csr_type);
-            pos.prev_inst();
-
-            pos.func.locations[csr_ret] = ir::ValueLoc::Reg(*reg as RegUnit);
-            pos.func.dfg.append_inst_arg(inst, csr_ret);
-        }
+        abi::prologue_epilogue(func, self)
     }
 }
