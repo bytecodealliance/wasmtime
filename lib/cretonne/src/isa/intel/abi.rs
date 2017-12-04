@@ -1,13 +1,18 @@
 //! Intel ABI implementation.
 
 use ir;
-use isa::{RegClass, RegUnit};
+use isa::{RegClass, RegUnit, TargetIsa};
 use regalloc::AllocatableSet;
 use settings as shared_settings;
 use super::registers::{GPR, FPR, RU};
 use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
-use ir::{AbiParam, ArgumentPurpose, ArgumentLoc, ArgumentExtension, CallConv};
+use ir::{AbiParam, ArgumentPurpose, ArgumentLoc, ArgumentExtension, CallConv, InstBuilder};
+use ir::immediates::Imm64;
+use stack_layout::layout_stack;
 use std::i32;
+use cursor::{Cursor, EncCursor};
+use result;
+
 
 /// Argument registers for x86-64
 static ARG_GPRS: [RU; 6] = [RU::rdi, RU::rsi, RU::rdx, RU::rcx, RU::r8, RU::r9];
@@ -154,10 +159,138 @@ pub fn allocatable_registers(
     regs
 }
 
+/// Get the set of callee-saved registers.
 pub fn callee_saved_registers(flags: &shared_settings::Flags) -> &'static [RU] {
     if flags.is_64bit() {
         &[RU::rbx, RU::r12, RU::r13, RU::r14, RU::r15]
     } else {
         &[RU::rbx, RU::rsi, RU::rdi]
+    }
+}
+
+/// Insert a System V-compatible prologue and epilogue.
+pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
+    let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
+    let csr_type = if isa.flags().is_64bit() {
+        ir::types::I64
+    } else {
+        ir::types::I32
+    };
+    let csrs = callee_saved_registers(isa.flags());
+    let csr_stack_size = ((csrs.len() + 1) * word_size as usize) as i32;
+
+    func.create_stack_slot(ir::StackSlotData {
+        kind: ir::StackSlotKind::IncomingArg,
+        size: csr_stack_size as u32,
+        offset: -csr_stack_size,
+    });
+
+    let total_stack_size = layout_stack(&mut func.stack_slots, word_size)? as i32;
+    let local_stack_size = (total_stack_size - csr_stack_size) as i64;
+
+    // Add CSRs to function signature
+    let fp_arg = ir::AbiParam::special_reg(
+        csr_type,
+        ir::ArgumentPurpose::FramePointer,
+        RU::rbp as RegUnit,
+    );
+    func.signature.params.push(fp_arg);
+    func.signature.returns.push(fp_arg);
+
+    for csr in csrs.iter() {
+        let csr_arg =
+            ir::AbiParam::special_reg(csr_type, ir::ArgumentPurpose::CalleeSaved, *csr as RegUnit);
+        func.signature.params.push(csr_arg);
+        func.signature.returns.push(csr_arg);
+    }
+
+    // Finally, insert the prologue and epilogues
+    let entry_ebb = func.layout.entry_block().expect("missing entry block");
+    let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
+
+    insert_prologue(&mut pos, local_stack_size, csr_type, csrs);
+    insert_epilogues(&mut pos, local_stack_size, csr_type, csrs);
+
+    Ok(())
+}
+
+/// Insert the prologue for a given function.
+fn insert_prologue(
+    pos: &mut EncCursor,
+    stack_size: i64,
+    csr_type: ir::types::Type,
+    csrs: &'static [RU],
+) {
+    // Append param to entry EBB
+    let ebb = pos.current_ebb().expect("missing ebb under cursor");
+    let fp = pos.func.dfg.append_ebb_param(ebb, csr_type);
+    pos.func.locations[fp] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
+
+    pos.ins().x86_push(fp);
+    pos.ins().copy_special(
+        RU::rsp as RegUnit,
+        RU::rbp as RegUnit,
+    );
+
+    if stack_size > 0 {
+        pos.ins().adjust_sp_imm(Imm64::new(-stack_size));
+    }
+
+    for reg in csrs.iter() {
+        // Append param to entry EBB
+        let csr_arg = pos.func.dfg.append_ebb_param(ebb, csr_type);
+
+        // Assign it a location
+        pos.func.locations[csr_arg] = ir::ValueLoc::Reg(*reg as RegUnit);
+
+        // Remember it so we can push it momentarily
+        pos.ins().x86_push(csr_arg);
+    }
+}
+
+/// Find all `return` instructions and insert epilogues before them.
+fn insert_epilogues(
+    pos: &mut EncCursor,
+    stack_size: i64,
+    csr_type: ir::types::Type,
+    csrs: &'static [RU],
+) {
+    while let Some(ebb) = pos.next_ebb() {
+        pos.goto_last_inst(ebb);
+        if let Some(inst) = pos.current_inst() {
+            if pos.func.dfg[inst].opcode().is_return() {
+                insert_epilogue(inst, stack_size, pos, csr_type, csrs);
+            }
+        }
+    }
+
+}
+
+/// Insert an epilogue given a specific `return` instruction.
+fn insert_epilogue(
+    inst: ir::Inst,
+    stack_size: i64,
+    pos: &mut EncCursor,
+    csr_type: ir::types::Type,
+    csrs: &'static [RU],
+) {
+    if stack_size > 0 {
+        pos.ins().adjust_sp_imm(Imm64::new(stack_size));
+    }
+
+    // Pop all the callee-saved registers, stepping backward each time to
+    // preserve the correct order.
+    let fp_ret = pos.ins().x86_pop(csr_type);
+    pos.prev_inst();
+
+    pos.func.locations[fp_ret] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
+    pos.func.dfg.append_inst_arg(inst, fp_ret);
+
+    for reg in csrs.iter() {
+        let csr_ret = pos.ins().x86_pop(csr_type);
+        pos.prev_inst();
+
+        pos.func.locations[csr_ret] = ir::ValueLoc::Reg(*reg as RegUnit);
+        pos.func.dfg.append_inst_arg(inst, csr_ret);
     }
 }
