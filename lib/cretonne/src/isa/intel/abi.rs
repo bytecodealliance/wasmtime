@@ -154,10 +154,10 @@ pub fn allocatable_registers(
     regs
 }
 
-pub fn callee_saved_registers(flags: &shared_settings::Flags) -> Vec<RU> {
+pub fn callee_saved_registers(flags: &shared_settings::Flags) -> &'static [RU] {
     if flags.is_64bit() {
-        return vec![RU::rbx, RU::r12, RU::r13, RU::r14, RU::r15];
+        &[RU::rbx, RU::r12, RU::r13, RU::r14, RU::r15]
     } else {
-        return vec![RU::rbx, RU::rsi, RU::rdi];
+        &[RU::rbx, RU::rsi, RU::rdi]
     }
 }
