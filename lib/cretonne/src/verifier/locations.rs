@@ -282,7 +282,7 @@ impl<'a> LocationVerifier<'a> {
             SingleDest(ebb, _) => {
                 for d in divert.all() {
                     let lr = &liveness[d.value];
-                    if lr.is_livein(ebb, &self.func.layout) {
+                    if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
                         return err!(
                             inst,
                             "{} is diverted to {} and live in to {}",
@@ -297,7 +297,7 @@ impl<'a> LocationVerifier<'a> {
                 for d in divert.all() {
                     let lr = &liveness[d.value];
                     for (_, ebb) in self.func.jump_tables[jt].entries() {
-                        if lr.is_livein(ebb, &self.func.layout) {
+                        if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
                             return err!(
                                 inst,
                                 "{} is diverted to {} and live in to {}",

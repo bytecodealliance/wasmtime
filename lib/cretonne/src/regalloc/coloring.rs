@@ -44,7 +44,7 @@
 
 use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
-use ir::{Ebb, Inst, Value, Function, ValueLoc, SigRef};
+use ir::{Ebb, Inst, Value, Function, Layout, ValueLoc, SigRef};
 use ir::{InstBuilder, AbiParam, ArgumentLoc, ValueDef};
 use isa::{RegUnit, RegClass, RegInfo, regs_overlap};
 use isa::{TargetIsa, EncInfo, RecipeConstraints, OperandConstraint, ConstraintKind};
@@ -54,7 +54,7 @@ use regalloc::affinity::Affinity;
 use regalloc::allocatable_set::AllocatableSet;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
-use regalloc::liverange::LiveRange;
+use regalloc::liverange::{LiveRange, LiveRangeContext};
 use regalloc::solver::{Solver, SolverError};
 use std::mem;
 
@@ -542,8 +542,8 @@ impl<'a> Context<'a> {
                     if op.regclass.contains(cur_reg) {
                         // This code runs after calling `solver.inputs_done()` so we must identify
                         // the new variable as killed or live-through.
-                        let layout = &self.cur.func.layout;
-                        if self.liveness[value].killed_at(inst, layout.pp_ebb(inst), layout) {
+                        let ctx = self.liveness.context(&self.cur.func.layout);
+                        if self.liveness[value].killed_at(inst, ctx.order.pp_ebb(inst), ctx) {
                             self.solver.add_killed_var(value, op.regclass, cur_reg);
                         } else {
                             self.solver.add_through_var(value, op.regclass, cur_reg);
@@ -572,7 +572,7 @@ impl<'a> Context<'a> {
         //
         // Values with a global live range that are not live in to `dest` could appear as branch
         // arguments, so they can't always be un-diverted.
-        self.undivert_regs(|lr, func| lr.is_livein(dest, &func.layout));
+        self.undivert_regs(|lr, ctx| lr.is_livein(dest, ctx));
 
         // Now handle the EBB arguments.
         let br_args = self.cur.func.dfg.inst_variable_args(inst);
@@ -642,13 +642,13 @@ impl<'a> Context<'a> {
     /// are reallocated to their global register assignments.
     fn undivert_regs<Pred>(&mut self, mut pred: Pred)
     where
-        Pred: FnMut(&LiveRange, &Function) -> bool,
+        Pred: FnMut(&LiveRange, LiveRangeContext<Layout>) -> bool,
     {
         for rdiv in self.divert.all() {
             let lr = self.liveness.get(rdiv.value).expect(
                 "Missing live range for diverted register",
             );
-            if pred(lr, &self.cur.func) {
+            if pred(lr, self.liveness.context(&self.cur.func.layout)) {
                 if let Affinity::Reg(rci) = lr.affinity {
                     let rc = self.reginfo.rc(rci);
                     // Stack diversions should not be possible here. The only live transiently
@@ -882,17 +882,18 @@ impl<'a> Context<'a> {
         use ir::instructions::BranchInfo::*;
 
         let inst = self.cur.current_inst().expect("Not on an instruction");
+        let ctx = self.liveness.context(&self.cur.func.layout);
         match self.cur.func.dfg[inst].analyze_branch(&self.cur.func.dfg.value_lists) {
             NotABranch => false,
             SingleDest(ebb, _) => {
                 let lr = &self.liveness[value];
-                lr.is_livein(ebb, &self.cur.func.layout)
+                lr.is_livein(ebb, ctx)
             }
             Table(jt) => {
                 let lr = &self.liveness[value];
                 !lr.is_local() &&
                     self.cur.func.jump_tables[jt].entries().any(|(_, ebb)| {
-                        lr.is_livein(ebb, &self.cur.func.layout)
+                        lr.is_livein(ebb, ctx)
                     })
             }
         }

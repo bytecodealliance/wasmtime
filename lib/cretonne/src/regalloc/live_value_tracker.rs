@@ -189,6 +189,7 @@ impl LiveValueTracker {
             let idom_live_list = self.idom_sets.get(&idom).expect(
                 "No stored live set for dominator",
             );
+            let ctx = liveness.context(layout);
             // Get just the values that are live-in to `ebb`.
             for &value in idom_live_list.as_slice(&self.idom_pool) {
                 let lr = liveness.get(value).expect(
@@ -196,7 +197,7 @@ impl LiveValueTracker {
                 );
 
                 // Check if this value is live-in here.
-                if let Some(endpoint) = lr.livein_local_end(ebb, layout) {
+                if let Some(endpoint) = lr.livein_local_end(ebb, ctx) {
                     self.live.push(value, endpoint, lr);
                 }
             }

@@ -107,11 +107,11 @@
 //! of coalescing, so we would need to roll our own.
 //!
 
+use bforest;
 use entity::SparseMapValue;
 use ir::{Inst, Ebb, Value, Layout, ProgramPoint, ExpandedProgramPoint, ProgramOrder};
 use regalloc::affinity::Affinity;
 use std::cmp::Ordering;
-use std::marker::PhantomData;
 
 /// Global live range of a single SSA value.
 ///
@@ -165,49 +165,51 @@ pub struct GenLiveRange<PO: ProgramOrder> {
 
     /// Additional live-in intervals sorted in program order.
     ///
-    /// This vector is empty for most values which are only used in one EBB.
+    /// This map is empty for most values which are only used in one EBB.
     ///
-    /// Invariants:
+    /// A map entry `ebb -> inst` means that the live range is live-in to `ebb`, continuing up to
+    /// `inst` which may belong to a later EBB in the program order.
     ///
-    /// - Sorted, disjoint: For all `i < j`: `liveins[i].end < liveins[j].begin`.
-    /// - Not overlapping defining EBB: For all `i`:
-    ///     `liveins[i].end < def_begin` or `liveins[i].begin > def_end`.
-    liveins: Vec<Interval>,
-
-    unused: PhantomData<PO>,
+    /// The entries are non-overlapping, and none of them overlap the EBB where the value is
+    /// defined.
+    liveins: bforest::Map<Ebb, Inst, PO>,
 }
 
-/// An additional contiguous interval of a global live range.
-///
-/// This represents a live-in interval for a single EBB, or a coalesced set of live-in intervals
-/// for contiguous EBBs where all but the last live-in interval covers the whole EBB.
-///
-#[derive(Copy, Clone)]
-pub struct Interval {
-    /// Interval starting point.
-    ///
-    /// Since this interval does not represent the def of the value, it must begin at an EBB header
-    /// where the value is live-in.
-    pub begin: Ebb,
-
-    /// Interval end point.
-    ///
-    /// The only interval end point that can be an EBB header is `def_end` above in a dead def
-    /// live range for an unused EBB argument. All other intervals must end at an instruction --
-    /// either the last use in the EBB or the last branch/jump that can reach a use.
-    ///
-    /// When this represents multiple contiguous live-in intervals, this is the end point of the
-    /// last interval. The other intervals end at the terminator instructions of their respective
-    /// EBB.
-    pub end: Inst,
+/// Context information needed to query a `LiveRange`.
+pub struct LiveRangeContext<'a, PO: 'a + ProgramOrder> {
+    /// Ordering of EBBs.
+    pub order: &'a PO,
+    /// Memory pool.
+    pub forest: &'a bforest::MapForest<Ebb, Inst, PO>,
 }
 
-impl Interval {
-    /// Extend the interval end point to reach `to`, but only if it would make the interval longer.
-    fn extend_to<PO: ProgramOrder>(&mut self, to: Inst, order: &PO) {
-        if order.cmp(to, self.end) == Ordering::Greater {
-            self.end = to;
+impl<'a, PO: ProgramOrder> LiveRangeContext<'a, PO> {
+    /// Make a new context.
+    pub fn new(
+        order: &'a PO,
+        forest: &'a bforest::MapForest<Ebb, Inst, PO>,
+    ) -> LiveRangeContext<'a, PO> {
+        LiveRangeContext { order, forest }
+    }
+}
+
+impl<'a, PO: ProgramOrder> Clone for LiveRangeContext<'a, PO> {
+    fn clone(&self) -> Self {
+        LiveRangeContext {
+            order: self.order,
+            forest: self.forest,
         }
+    }
+}
+
+impl<'a, PO: ProgramOrder> Copy for LiveRangeContext<'a, PO> {}
+
+/// Forest of B-trees used for storing live ranges.
+pub type LiveRangeForest = bforest::MapForest<Ebb, Inst, Layout>;
+
+impl<PO: ProgramOrder> bforest::Comparator<Ebb> for PO {
+    fn cmp(&self, a: Ebb, b: Ebb) -> Ordering {
+        self.cmp(a, b)
     }
 }
 
@@ -221,26 +223,8 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
             affinity,
             def_begin: def,
             def_end: def,
-            liveins: Vec::new(),
-            unused: PhantomData,
+            liveins: bforest::Map::new(),
         }
-    }
-
-    /// Find the live-in interval containing `ebb`, if any.
-    ///
-    /// Return `Ok(n)` if `liveins[n]` already contains `ebb`.
-    /// Otherwise, return `Err(n)` with the index where such an interval should be inserted.
-    fn find_ebb_interval(&self, ebb: Ebb, order: &PO) -> Result<usize, usize> {
-        self.liveins
-            .binary_search_by(|intv| order.cmp(intv.begin, ebb))
-            .or_else(|n| {
-                // The interval at `n-1` may cover `ebb`.
-                if n > 0 && order.cmp(self.liveins[n - 1].end, ebb) == Ordering::Greater {
-                    Ok(n - 1)
-                } else {
-                    Err(n)
-                }
-            })
     }
 
     /// Extend the local interval for `ebb` so it reaches `to` which must belong to `ebb`.
@@ -254,7 +238,13 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
     ///
     /// The return value can be used to detect if we just learned that the value is live-in to
     /// `ebb`. This can trigger recursive extensions in `ebb`'s CFG predecessor blocks.
-    pub fn extend_in_ebb(&mut self, ebb: Ebb, to: Inst, order: &PO) -> bool {
+    pub fn extend_in_ebb(
+        &mut self,
+        ebb: Ebb,
+        to: Inst,
+        order: &PO,
+        forest: &mut bforest::MapForest<Ebb, Inst, PO>,
+    ) -> bool {
         // First check if we're extending the def interval.
         //
         // We're assuming here that `to` never precedes `def_begin` in the same EBB, but we can't
@@ -275,68 +265,60 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
         }
 
         // Now check if we're extending any of the existing live-in intervals.
-        match self.find_ebb_interval(ebb, order) {
-            Ok(n) => {
-                // We have an interval that contains `ebb`, so we can simply extend it.
-                self.liveins[n].extend_to(to, order);
+        let mut c = self.liveins.cursor(forest, order);
+        let first_time_livein;
 
-                // If `to` is the terminator and the value lives in the successor EBB,
-                // coalesce the two intervals.
-                if let Some(next) = self.liveins.get(n + 1).cloned() {
-                    if order.is_ebb_gap(to, next.begin) {
-                        self.liveins[n].extend_to(next.end, order);
-                        self.liveins.remove(n + 1);
-                    }
-                }
-
-                false
+        if let Some(end) = c.goto(ebb) {
+            // There's an interval beginning at `ebb`. See if it extends.
+            first_time_livein = false;
+            if order.cmp(end, to) == Ordering::Less {
+                *c.value_mut().unwrap() = to;
+            } else {
+                return first_time_livein;
             }
-            Err(n) => {
-                // Insert a new live-in interval at `n`, or coalesce to predecessor or successor
-                // if possible.
-
-                // Determine if the new live-in range touches the predecessor or successor range
-                // and can therefore be coalesced to them.
-                let (coalesce_prev, coalesce_next) = {
-                    let prev = n.checked_sub(1).and_then(|i| self.liveins.get(i));
-                    let next = self.liveins.get(n);
-
-                    (
-                        prev.map_or(false, |prev| order.is_ebb_gap(prev.end, ebb)),
-                        next.map_or(false, |next| order.is_ebb_gap(to, next.begin)),
-                    )
-                };
-
-                match (coalesce_prev, coalesce_next) {
-                    // Extend predecessor interval to cover new and successor intervals
-                    (true, true) => {
-                        let end = self.liveins[n].end;
-                        self.liveins[n - 1].extend_to(end, order);
-                        self.liveins.remove(n);
+        } else {
+            // There's no interval beginning at `ebb`, but we could still be live-in at `ebb` with
+            // a coalesced interval that begins before and ends after.
+            if let Some((_, end)) = c.prev() {
+                if order.cmp(end, ebb) == Ordering::Greater {
+                    // Yep, the previous interval overlaps `ebb`.
+                    first_time_livein = false;
+                    if order.cmp(end, to) == Ordering::Less {
+                        *c.value_mut().unwrap() = to;
+                    } else {
+                        return first_time_livein;
                     }
-                    // Extend predecessor interval to cover new interval
-                    (true, false) => {
-                        self.liveins[n - 1].extend_to(to, order);
-                    }
-                    // Extend successor interval to cover new interval
-                    (false, true) => {
-                        self.liveins[n].begin = ebb;
-                    }
-                    // Cannot coalesce; insert new interval
-                    (false, false) => {
-                        self.liveins.insert(
-                            n,
-                            Interval {
-                                begin: ebb,
-                                end: to,
-                            },
-                        );
+                } else {
+                    first_time_livein = true;
+                    // The current interval does not overlap `ebb`, but it may still be possible to
+                    // coalesce with it.
+                    if order.is_ebb_gap(end, ebb) {
+                        *c.value_mut().unwrap() = to;
+                    } else {
+                        c.insert(ebb, to);
                     }
                 }
-
-                true
+            } else {
+                // There is no existing interval before `ebb`.
+                first_time_livein = true;
+                c.insert(ebb, to);
             }
         }
+
+        // Now `c` to left pointing at an interval that ends in `to`.
+        debug_assert_eq!(c.value(), Some(to));
+
+        // See if it can be coalesced with the following interval.
+        if let Some((next_ebb, next_end)) = c.next() {
+            if order.is_ebb_gap(to, next_ebb) {
+                // Remove this interval and extend the previous end point to `next_end`.
+                c.remove();
+                c.prev();
+                *c.value_mut().unwrap() = next_end;
+            }
+        }
+
+        first_time_livein
     }
 
     /// Is this the live range of a dead value?
@@ -387,59 +369,77 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
     /// If the live range is live through all of `ebb`, the terminator of `ebb` is a correct
     /// answer, but it is also possible that an even later program point is returned. So don't
     /// depend on the returned `Inst` to belong to `ebb`.
-    pub fn livein_local_end(&self, ebb: Ebb, order: &PO) -> Option<Inst> {
-        self.find_ebb_interval(ebb, order).ok().map(|n| {
-            self.liveins[n].end
-        })
+    pub fn livein_local_end(&self, ebb: Ebb, ctx: LiveRangeContext<PO>) -> Option<Inst> {
+        self.liveins
+            .get_or_less(ebb, ctx.forest, ctx.order)
+            .and_then(|(_, inst)| {
+                // We have an entry that ends at `inst`.
+                if ctx.order.cmp(inst, ebb) == Ordering::Greater {
+                    Some(inst)
+                } else {
+                    None
+                }
+            })
     }
 
     /// Is this value live-in to `ebb`?
     ///
     /// An EBB argument is not considered to be live in.
-    pub fn is_livein(&self, ebb: Ebb, order: &PO) -> bool {
-        self.livein_local_end(ebb, order).is_some()
+    pub fn is_livein(&self, ebb: Ebb, ctx: LiveRangeContext<PO>) -> bool {
+        self.livein_local_end(ebb, ctx).is_some()
     }
 
     /// Get all the live-in intervals.
-    pub fn liveins(&self) -> &[Interval] {
-        &self.liveins
+    ///
+    /// Note that the intervals are stored in a compressed form so each entry may span multiple
+    /// EBBs where the value is live in.
+    pub fn liveins<'a>(
+        &'a self,
+        ctx: LiveRangeContext<'a, PO>,
+    ) -> bforest::MapIter<'a, Ebb, Inst, PO> {
+        self.liveins.iter(ctx.forest)
     }
 
     /// Check if this live range overlaps a definition in `ebb`.
-    pub fn overlaps_def(&self, def: ExpandedProgramPoint, ebb: Ebb, order: &PO) -> bool {
+    pub fn overlaps_def(
+        &self,
+        def: ExpandedProgramPoint,
+        ebb: Ebb,
+        ctx: LiveRangeContext<PO>,
+    ) -> bool {
         // Check for an overlap with the local range.
-        if order.cmp(def, self.def_begin) != Ordering::Less &&
-            order.cmp(def, self.def_end) == Ordering::Less
+        if ctx.order.cmp(def, self.def_begin) != Ordering::Less &&
+            ctx.order.cmp(def, self.def_end) == Ordering::Less
         {
             return true;
         }
 
         // Check for an overlap with a live-in range.
-        match self.livein_local_end(ebb, order) {
-            Some(inst) => order.cmp(def, inst) == Ordering::Less,
+        match self.livein_local_end(ebb, ctx) {
+            Some(inst) => ctx.order.cmp(def, inst) == Ordering::Less,
             None => false,
         }
     }
 
     /// Check if this live range reaches a use at `user` in `ebb`.
-    pub fn reaches_use(&self, user: Inst, ebb: Ebb, order: &PO) -> bool {
+    pub fn reaches_use(&self, user: Inst, ebb: Ebb, ctx: LiveRangeContext<PO>) -> bool {
         // Check for an overlap with the local range.
-        if order.cmp(user, self.def_begin) == Ordering::Greater &&
-            order.cmp(user, self.def_end) != Ordering::Greater
+        if ctx.order.cmp(user, self.def_begin) == Ordering::Greater &&
+            ctx.order.cmp(user, self.def_end) != Ordering::Greater
         {
             return true;
         }
 
         // Check for an overlap with a live-in range.
-        match self.livein_local_end(ebb, order) {
-            Some(inst) => order.cmp(user, inst) != Ordering::Greater,
+        match self.livein_local_end(ebb, ctx) {
+            Some(inst) => ctx.order.cmp(user, inst) != Ordering::Greater,
             None => false,
         }
     }
 
     /// Check if this live range is killed at `user` in `ebb`.
-    pub fn killed_at(&self, user: Inst, ebb: Ebb, order: &PO) -> bool {
-        self.def_local_end() == user.into() || self.livein_local_end(ebb, order) == Some(user)
+    pub fn killed_at(&self, user: Inst, ebb: Ebb, ctx: LiveRangeContext<PO>) -> bool {
+        self.def_local_end() == user.into() || self.livein_local_end(ebb, ctx) == Some(user)
     }
 }
 
@@ -452,7 +452,8 @@ impl<PO: ProgramOrder> SparseMapValue<Value> for GenLiveRange<PO> {
 
 #[cfg(test)]
 mod tests {
-    use super::GenLiveRange;
+    use super::{GenLiveRange, LiveRangeContext};
+    use bforest;
     use ir::{Inst, Ebb, Value};
     use entity::EntityRef;
     use ir::{ProgramOrder, ExpandedProgramPoint};
@@ -503,7 +504,11 @@ mod tests {
         }
 
         // Validate the live range invariants.
-        fn validate(&self, lr: &GenLiveRange<ProgOrder>) {
+        fn validate(
+            &self,
+            lr: &GenLiveRange<ProgOrder>,
+            forest: &bforest::MapForest<Ebb, Inst, ProgOrder>,
+        ) {
             // The def interval must cover a single EBB.
             let def_ebb = self.pp_ebb(lr.def_begin);
             assert_eq!(def_ebb, self.pp_ebb(lr.def_end));
@@ -519,20 +524,20 @@ mod tests {
 
             // Check the live-in intervals.
             let mut prev_end = None;
-            for li in &lr.liveins {
-                assert_eq!(self.cmp(li.begin, li.end), Ordering::Less);
+            for (begin, end) in lr.liveins.iter(forest) {
+                assert_eq!(self.cmp(begin, end), Ordering::Less);
                 if let Some(e) = prev_end {
-                    assert_eq!(self.cmp(e, li.begin), Ordering::Less);
+                    assert_eq!(self.cmp(e, begin), Ordering::Less);
                 }
 
                 assert!(
-                    self.cmp(lr.def_end, li.begin) == Ordering::Less ||
-                        self.cmp(lr.def_begin, li.end) == Ordering::Greater,
+                    self.cmp(lr.def_end, begin) == Ordering::Less ||
+                        self.cmp(lr.def_begin, end) == Ordering::Greater,
                     "Interval can't overlap the def EBB"
                 );
 
                 // Save for next round.
-                prev_end = Some(li.end);
+                prev_end = Some(end);
             }
 
         }
@@ -547,12 +552,14 @@ mod tests {
         let i1 = Inst::new(1);
         let e2 = Ebb::new(2);
         let lr = GenLiveRange::new(v0, i1.into(), Default::default());
+        let forest = &bforest::MapForest::new();
+        let ctx = LiveRangeContext::new(PO, forest);
         assert!(lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), i1.into());
         assert_eq!(lr.def_local_end(), i1.into());
-        assert_eq!(lr.livein_local_end(e2, PO), None);
-        PO.validate(&lr);
+        assert_eq!(lr.livein_local_end(e2, ctx), None);
+        PO.validate(&lr, ctx.forest);
     }
 
     #[test]
@@ -560,13 +567,15 @@ mod tests {
         let v0 = Value::new(0);
         let e2 = Ebb::new(2);
         let lr = GenLiveRange::new(v0, e2.into(), Default::default());
+        let forest = &bforest::MapForest::new();
+        let ctx = LiveRangeContext::new(PO, forest);
         assert!(lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), e2.into());
         assert_eq!(lr.def_local_end(), e2.into());
         // The def interval of an EBB argument does not count as live-in.
-        assert_eq!(lr.livein_local_end(e2, PO), None);
-        PO.validate(&lr);
+        assert_eq!(lr.livein_local_end(e2, ctx), None);
+        PO.validate(&lr, ctx.forest);
     }
 
     #[test]
@@ -577,17 +586,18 @@ mod tests {
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
         let mut lr = GenLiveRange::new(v0, i11.into(), Default::default());
+        let forest = &mut bforest::MapForest::new();
 
-        assert_eq!(lr.extend_in_ebb(e10, i13, PO), false);
-        PO.validate(&lr);
+        assert_eq!(lr.extend_in_ebb(e10, i13, PO, forest), false);
+        PO.validate(&lr, forest);
         assert!(!lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), i11.into());
         assert_eq!(lr.def_local_end(), i13.into());
 
         // Extending to an already covered inst should not change anything.
-        assert_eq!(lr.extend_in_ebb(e10, i12, PO), false);
-        PO.validate(&lr);
+        assert_eq!(lr.extend_in_ebb(e10, i12, PO, forest), false);
+        PO.validate(&lr, forest);
         assert_eq!(lr.def(), i11.into());
         assert_eq!(lr.def_local_end(), i13.into());
     }
@@ -600,25 +610,26 @@ mod tests {
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
         let mut lr = GenLiveRange::new(v0, e10.into(), Default::default());
+        let forest = &mut bforest::MapForest::new();
 
         // Extending a dead EBB argument in its own block should not indicate that a live-in
         // interval was created.
-        assert_eq!(lr.extend_in_ebb(e10, i12, PO), false);
-        PO.validate(&lr);
+        assert_eq!(lr.extend_in_ebb(e10, i12, PO, forest), false);
+        PO.validate(&lr, forest);
         assert!(!lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), e10.into());
         assert_eq!(lr.def_local_end(), i12.into());
 
         // Extending to an already covered inst should not change anything.
-        assert_eq!(lr.extend_in_ebb(e10, i11, PO), false);
-        PO.validate(&lr);
+        assert_eq!(lr.extend_in_ebb(e10, i11, PO, forest), false);
+        PO.validate(&lr, forest);
         assert_eq!(lr.def(), e10.into());
         assert_eq!(lr.def_local_end(), i12.into());
 
         // Extending further.
-        assert_eq!(lr.extend_in_ebb(e10, i13, PO), false);
-        PO.validate(&lr);
+        assert_eq!(lr.extend_in_ebb(e10, i13, PO, forest), false);
+        PO.validate(&lr, forest);
         assert_eq!(lr.def(), e10.into());
         assert_eq!(lr.def_local_end(), i13.into());
     }
@@ -634,22 +645,32 @@ mod tests {
         let i22 = Inst::new(22);
         let i23 = Inst::new(23);
         let mut lr = GenLiveRange::new(v0, i11.into(), Default::default());
+        let forest = &mut bforest::MapForest::new();
 
-        assert_eq!(lr.extend_in_ebb(e10, i12, PO), false);
+        assert_eq!(lr.extend_in_ebb(e10, i12, PO, forest), false);
 
         // Adding a live-in interval.
-        assert_eq!(lr.extend_in_ebb(e20, i22, PO), true);
-        PO.validate(&lr);
-        assert_eq!(lr.livein_local_end(e20, PO), Some(i22));
+        assert_eq!(lr.extend_in_ebb(e20, i22, PO, forest), true);
+        PO.validate(&lr, forest);
+        assert_eq!(
+            lr.livein_local_end(e20, LiveRangeContext::new(PO, forest)),
+            Some(i22)
+        );
 
         // Non-extending the live-in.
-        assert_eq!(lr.extend_in_ebb(e20, i21, PO), false);
-        assert_eq!(lr.livein_local_end(e20, PO), Some(i22));
+        assert_eq!(lr.extend_in_ebb(e20, i21, PO, forest), false);
+        assert_eq!(
+            lr.livein_local_end(e20, LiveRangeContext::new(PO, forest)),
+            Some(i22)
+        );
 
         // Extending the existing live-in.
-        assert_eq!(lr.extend_in_ebb(e20, i23, PO), false);
-        PO.validate(&lr);
-        assert_eq!(lr.livein_local_end(e20, PO), Some(i23));
+        assert_eq!(lr.extend_in_ebb(e20, i23, PO, forest), false);
+        PO.validate(&lr, forest);
+        assert_eq!(
+            lr.livein_local_end(e20, LiveRangeContext::new(PO, forest)),
+            Some(i23)
+        );
     }
 
     #[test]
@@ -663,35 +684,54 @@ mod tests {
         let e40 = Ebb::new(40);
         let i41 = Inst::new(41);
         let mut lr = GenLiveRange::new(v0, i11.into(), Default::default());
+        let forest = &mut bforest::MapForest::new();
 
-        assert_eq!(lr.extend_in_ebb(e30, i31, PO), true);
-        assert_eq!(lr.liveins.len(), 1);
+        assert_eq!(lr.extend_in_ebb(e30, i31, PO, forest), true);
+        assert_eq!(
+            lr.liveins(LiveRangeContext::new(PO, forest))
+                .collect::<Vec<_>>(),
+            [(e30, i31)]
+        );
 
         // Coalesce to previous
-        assert_eq!(lr.extend_in_ebb(e40, i41, PO), true);
-        assert_eq!(lr.liveins.len(), 1);
-        assert_eq!(lr.liveins[0].begin, e30);
-        assert_eq!(lr.liveins[0].end, i41);
+        assert_eq!(lr.extend_in_ebb(e40, i41, PO, forest), true);
+        assert_eq!(
+            lr.liveins(LiveRangeContext::new(PO, forest))
+                .collect::<Vec<_>>(),
+            [(e30, i41)]
+        );
 
         // Coalesce to next
-        assert_eq!(lr.extend_in_ebb(e20, i21, PO), true);
-        assert_eq!(lr.liveins.len(), 1);
-        assert_eq!(lr.liveins[0].begin, e20);
-        assert_eq!(lr.liveins[0].end, i41);
+        assert_eq!(lr.extend_in_ebb(e20, i21, PO, forest), true);
+        assert_eq!(
+            lr.liveins(LiveRangeContext::new(PO, forest))
+                .collect::<Vec<_>>(),
+            [(e20, i41)]
+        );
 
         let mut lr = GenLiveRange::new(v0, i11.into(), Default::default());
 
-        assert_eq!(lr.extend_in_ebb(e40, i41, PO), true);
-        assert_eq!(lr.liveins.len(), 1);
+        assert_eq!(lr.extend_in_ebb(e40, i41, PO, forest), true);
+        assert_eq!(
+            lr.liveins(LiveRangeContext::new(PO, forest))
+                .collect::<Vec<_>>(),
+            [(e40, i41)]
+        );
 
-        assert_eq!(lr.extend_in_ebb(e20, i21, PO), true);
-        assert_eq!(lr.liveins.len(), 2);
+        assert_eq!(lr.extend_in_ebb(e20, i21, PO, forest), true);
+        assert_eq!(
+            lr.liveins(LiveRangeContext::new(PO, forest))
+                .collect::<Vec<_>>(),
+            [(e20, i21), (e40, i41)]
+        );
 
         // Coalesce to previous and next
-        assert_eq!(lr.extend_in_ebb(e30, i31, PO), true);
-        assert_eq!(lr.liveins.len(), 1);
-        assert_eq!(lr.liveins[0].begin, e20);
-        assert_eq!(lr.liveins[0].end, i41);
+        assert_eq!(lr.extend_in_ebb(e30, i31, PO, forest), true);
+        assert_eq!(
+            lr.liveins(LiveRangeContext::new(PO, forest))
+                .collect::<Vec<_>>(),
+            [(e20, i41)]
+        );
     }
 
     // TODO: Add more tests that exercise the binary search algorithm.

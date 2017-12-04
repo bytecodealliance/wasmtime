@@ -181,7 +181,7 @@ use ir::dfg::ValueDef;
 use ir::{Function, Value, Inst, Ebb, Layout, ProgramPoint};
 use isa::{TargetIsa, EncInfo};
 use regalloc::affinity::Affinity;
-use regalloc::liverange::LiveRange;
+use regalloc::liverange::{LiveRange, LiveRangeForest, LiveRangeContext};
 use std::mem;
 use std::ops::Index;
 
@@ -247,13 +247,14 @@ fn extend_to_use(
     worklist: &mut Vec<Ebb>,
     func: &Function,
     cfg: &ControlFlowGraph,
+    forest: &mut LiveRangeForest,
 ) {
     // This is our scratch working space, and we'll leave it empty when we return.
     assert!(worklist.is_empty());
 
     // Extend the range locally in `ebb`.
     // If there already was a live interval in that block, we're done.
-    if lr.extend_in_ebb(ebb, to, &func.layout) {
+    if lr.extend_in_ebb(ebb, to, &func.layout, forest) {
         worklist.push(ebb);
     }
 
@@ -270,7 +271,7 @@ fn extend_to_use(
         // We've learned that the value needs to be live-in to the `livein` EBB.
         // Make sure it is also live at all predecessor branches to `livein`.
         for (pred, branch) in cfg.pred_iter(livein) {
-            if lr.extend_in_ebb(pred, branch, &func.layout) {
+            if lr.extend_in_ebb(pred, branch, &func.layout, forest) {
                 // This predecessor EBB also became live-in. We need to process it later.
                 worklist.push(pred);
             }
@@ -284,6 +285,9 @@ fn extend_to_use(
 pub struct Liveness {
     /// The live ranges that have been computed so far.
     ranges: LiveRangeSet,
+
+    /// Memory pool for the live ranges.
+    forest: LiveRangeForest,
 
     /// Working space for the `extend_to_use` algorithm.
     /// This vector is always empty, except for inside that function.
@@ -302,14 +306,21 @@ impl Liveness {
     pub fn new() -> Self {
         Self {
             ranges: LiveRangeSet::new(),
+            forest: LiveRangeForest::new(),
             worklist: Vec::new(),
             ebb_params: Vec::new(),
         }
     }
 
+    /// Get a context needed for working with a `LiveRange`.
+    pub fn context<'a>(&'a self, layout: &'a Layout) -> LiveRangeContext<'a, Layout> {
+        LiveRangeContext::new(layout, &self.forest)
+    }
+
     /// Clear all data structures in this liveness analysis.
     pub fn clear(&mut self) {
         self.ranges.clear();
+        self.forest.clear();
         self.worklist.clear();
         self.ebb_params.clear();
     }
@@ -359,7 +370,7 @@ impl Liveness {
     ) -> &mut Affinity {
         debug_assert_eq!(Some(ebb), layout.inst_ebb(user));
         let lr = self.ranges.get_mut(value).expect("Value has no live range");
-        let livein = lr.extend_in_ebb(ebb, user, layout);
+        let livein = lr.extend_in_ebb(ebb, user, layout, &mut self.forest);
         assert!(!livein, "{} should already be live in {}", value, ebb);
         &mut lr.affinity
     }
@@ -416,7 +427,15 @@ impl Liveness {
                     let lr = get_or_create(&mut self.ranges, arg, isa, func, &enc_info);
 
                     // Extend the live range to reach this use.
-                    extend_to_use(lr, ebb, inst, &mut self.worklist, func, cfg);
+                    extend_to_use(
+                        lr,
+                        ebb,
+                        inst,
+                        &mut self.worklist,
+                        func,
+                        cfg,
+                        &mut self.forest,
+                    );
 
                     // Apply operand constraint, ignoring any variable arguments after the fixed
                     // operands described by `operand_constraints`. Variable arguments are either
