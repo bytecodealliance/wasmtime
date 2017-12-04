@@ -221,16 +221,19 @@ impl Isa {
             pos.ins().adjust_sp_imm(Imm64::new(stack_size));
         }
 
-        let csrs = abi::callee_saved_registers(&self.shared_flags);
-        for reg in csrs.iter().rev() {
-            let csr_ret = pos.ins().x86_pop(csr_type);
-            pos.func.locations[csr_ret] = ir::ValueLoc::Reg(*reg as RegUnit);
-            pos.func.dfg.append_inst_arg(inst, csr_ret);
-        }
-
         let fp_ret = pos.ins().x86_pop(csr_type);
+        pos.prev_inst();
+
         pos.func.locations[fp_ret] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
         pos.func.dfg.append_inst_arg(inst, fp_ret);
 
+        let csrs = abi::callee_saved_registers(&self.shared_flags);
+        for reg in csrs.iter() {
+            let csr_ret = pos.ins().x86_pop(csr_type);
+            pos.prev_inst();
+
+            pos.func.locations[csr_ret] = ir::ValueLoc::Reg(*reg as RegUnit);
+            pos.func.dfg.append_inst_arg(inst, csr_ret);
+        }
     }
 }
