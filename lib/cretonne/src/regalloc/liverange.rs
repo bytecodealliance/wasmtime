@@ -108,9 +108,10 @@
 //!
 
 use entity::SparseMapValue;
-use ir::{Inst, Ebb, Value, ProgramPoint, ExpandedProgramPoint, ProgramOrder};
+use ir::{Inst, Ebb, Value, Layout, ProgramPoint, ExpandedProgramPoint, ProgramOrder};
 use regalloc::affinity::Affinity;
 use std::cmp::Ordering;
+use std::marker::PhantomData;
 
 /// Global live range of a single SSA value.
 ///
@@ -139,7 +140,13 @@ use std::cmp::Ordering;
 /// Inserting new instructions in the layout is safe, but removing instructions is not. Besides the
 /// instructions using or defining their value, `LiveRange` structs can contain references to
 /// branch and jump instructions.
-pub struct LiveRange {
+pub type LiveRange = GenLiveRange<Layout>;
+
+/// Generic live range implementation.
+///
+/// The intended generic parameter is `PO=Layout`, but tests are simpler with a mock order.
+/// Use `LiveRange` instead of using this generic directly.
+pub struct GenLiveRange<PO: ProgramOrder> {
     /// The value described by this live range.
     /// This member can't be modified in case the live range is stored in a `SparseMap`.
     value: Value,
@@ -166,6 +173,8 @@ pub struct LiveRange {
     /// - Not overlapping defining EBB: For all `i`:
     ///     `liveins[i].end < def_begin` or `liveins[i].begin > def_end`.
     liveins: Vec<Interval>,
+
+    unused: PhantomData<PO>,
 }
 
 /// An additional contiguous interval of a global live range.
@@ -202,17 +211,18 @@ impl Interval {
     }
 }
 
-impl LiveRange {
+impl<PO: ProgramOrder> GenLiveRange<PO> {
     /// Create a new live range for `value` defined at `def`.
     ///
     /// The live range will be created as dead, but it can be extended with `extend_in_ebb()`.
-    pub fn new(value: Value, def: ProgramPoint, affinity: Affinity) -> LiveRange {
-        LiveRange {
+    pub fn new(value: Value, def: ProgramPoint, affinity: Affinity) -> GenLiveRange<PO> {
+        GenLiveRange {
             value,
             affinity,
             def_begin: def,
             def_end: def,
             liveins: Vec::new(),
+            unused: PhantomData,
         }
     }
 
@@ -220,7 +230,7 @@ impl LiveRange {
     ///
     /// Return `Ok(n)` if `liveins[n]` already contains `ebb`.
     /// Otherwise, return `Err(n)` with the index where such an interval should be inserted.
-    fn find_ebb_interval<PO: ProgramOrder>(&self, ebb: Ebb, order: &PO) -> Result<usize, usize> {
+    fn find_ebb_interval(&self, ebb: Ebb, order: &PO) -> Result<usize, usize> {
         self.liveins
             .binary_search_by(|intv| order.cmp(intv.begin, ebb))
             .or_else(|n| {
@@ -244,7 +254,7 @@ impl LiveRange {
     ///
     /// The return value can be used to detect if we just learned that the value is live-in to
     /// `ebb`. This can trigger recursive extensions in `ebb`'s CFG predecessor blocks.
-    pub fn extend_in_ebb<PO: ProgramOrder>(&mut self, ebb: Ebb, to: Inst, order: &PO) -> bool {
+    pub fn extend_in_ebb(&mut self, ebb: Ebb, to: Inst, order: &PO) -> bool {
         // First check if we're extending the def interval.
         //
         // We're assuming here that `to` never precedes `def_begin` in the same EBB, but we can't
@@ -377,7 +387,7 @@ impl LiveRange {
     /// If the live range is live through all of `ebb`, the terminator of `ebb` is a correct
     /// answer, but it is also possible that an even later program point is returned. So don't
     /// depend on the returned `Inst` to belong to `ebb`.
-    pub fn livein_local_end<PO: ProgramOrder>(&self, ebb: Ebb, order: &PO) -> Option<Inst> {
+    pub fn livein_local_end(&self, ebb: Ebb, order: &PO) -> Option<Inst> {
         self.find_ebb_interval(ebb, order).ok().map(|n| {
             self.liveins[n].end
         })
@@ -386,7 +396,7 @@ impl LiveRange {
     /// Is this value live-in to `ebb`?
     ///
     /// An EBB argument is not considered to be live in.
-    pub fn is_livein<PO: ProgramOrder>(&self, ebb: Ebb, order: &PO) -> bool {
+    pub fn is_livein(&self, ebb: Ebb, order: &PO) -> bool {
         self.livein_local_end(ebb, order).is_some()
     }
 
@@ -396,10 +406,7 @@ impl LiveRange {
     }
 
     /// Check if this live range overlaps a definition in `ebb`.
-    pub fn overlaps_def<PO>(&self, def: ExpandedProgramPoint, ebb: Ebb, order: &PO) -> bool
-    where
-        PO: ProgramOrder,
-    {
+    pub fn overlaps_def(&self, def: ExpandedProgramPoint, ebb: Ebb, order: &PO) -> bool {
         // Check for an overlap with the local range.
         if order.cmp(def, self.def_begin) != Ordering::Less &&
             order.cmp(def, self.def_end) == Ordering::Less
@@ -415,10 +422,7 @@ impl LiveRange {
     }
 
     /// Check if this live range reaches a use at `user` in `ebb`.
-    pub fn reaches_use<PO>(&self, user: Inst, ebb: Ebb, order: &PO) -> bool
-    where
-        PO: ProgramOrder,
-    {
+    pub fn reaches_use(&self, user: Inst, ebb: Ebb, order: &PO) -> bool {
         // Check for an overlap with the local range.
         if order.cmp(user, self.def_begin) == Ordering::Greater &&
             order.cmp(user, self.def_end) != Ordering::Greater
@@ -434,16 +438,13 @@ impl LiveRange {
     }
 
     /// Check if this live range is killed at `user` in `ebb`.
-    pub fn killed_at<PO>(&self, user: Inst, ebb: Ebb, order: &PO) -> bool
-    where
-        PO: ProgramOrder,
-    {
+    pub fn killed_at(&self, user: Inst, ebb: Ebb, order: &PO) -> bool {
         self.def_local_end() == user.into() || self.livein_local_end(ebb, order) == Some(user)
     }
 }
 
 /// Allow a `LiveRange` to be stored in a `SparseMap` indexed by values.
-impl SparseMapValue<Value> for LiveRange {
+impl<PO: ProgramOrder> SparseMapValue<Value> for GenLiveRange<PO> {
     fn key(&self) -> Value {
         self.value
     }
@@ -451,7 +452,7 @@ impl SparseMapValue<Value> for LiveRange {
 
 #[cfg(test)]
 mod tests {
-    use super::LiveRange;
+    use super::GenLiveRange;
     use ir::{Inst, Ebb, Value};
     use entity::EntityRef;
     use ir::{ProgramOrder, ExpandedProgramPoint};
@@ -502,7 +503,7 @@ mod tests {
         }
 
         // Validate the live range invariants.
-        fn validate(&self, lr: &LiveRange) {
+        fn validate(&self, lr: &GenLiveRange<ProgOrder>) {
             // The def interval must cover a single EBB.
             let def_ebb = self.pp_ebb(lr.def_begin);
             assert_eq!(def_ebb, self.pp_ebb(lr.def_end));
@@ -545,7 +546,7 @@ mod tests {
         let v0 = Value::new(0);
         let i1 = Inst::new(1);
         let e2 = Ebb::new(2);
-        let lr = LiveRange::new(v0, i1.into(), Default::default());
+        let lr = GenLiveRange::new(v0, i1.into(), Default::default());
         assert!(lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), i1.into());
@@ -558,7 +559,7 @@ mod tests {
     fn dead_arg_range() {
         let v0 = Value::new(0);
         let e2 = Ebb::new(2);
-        let lr = LiveRange::new(v0, e2.into(), Default::default());
+        let lr = GenLiveRange::new(v0, e2.into(), Default::default());
         assert!(lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), e2.into());
@@ -575,7 +576,7 @@ mod tests {
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
-        let mut lr = LiveRange::new(v0, i11.into(), Default::default());
+        let mut lr = GenLiveRange::new(v0, i11.into(), Default::default());
 
         assert_eq!(lr.extend_in_ebb(e10, i13, PO), false);
         PO.validate(&lr);
@@ -598,7 +599,7 @@ mod tests {
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
-        let mut lr = LiveRange::new(v0, e10.into(), Default::default());
+        let mut lr = GenLiveRange::new(v0, e10.into(), Default::default());
 
         // Extending a dead EBB argument in its own block should not indicate that a live-in
         // interval was created.
@@ -632,7 +633,7 @@ mod tests {
         let i21 = Inst::new(21);
         let i22 = Inst::new(22);
         let i23 = Inst::new(23);
-        let mut lr = LiveRange::new(v0, i11.into(), Default::default());
+        let mut lr = GenLiveRange::new(v0, i11.into(), Default::default());
 
         assert_eq!(lr.extend_in_ebb(e10, i12, PO), false);
 
@@ -661,7 +662,7 @@ mod tests {
         let i31 = Inst::new(31);
         let e40 = Ebb::new(40);
         let i41 = Inst::new(41);
-        let mut lr = LiveRange::new(v0, i11.into(), Default::default());
+        let mut lr = GenLiveRange::new(v0, i11.into(), Default::default());
 
         assert_eq!(lr.extend_in_ebb(e30, i31, PO), true);
         assert_eq!(lr.liveins.len(), 1);
@@ -678,7 +679,7 @@ mod tests {
         assert_eq!(lr.liveins[0].begin, e20);
         assert_eq!(lr.liveins[0].end, i41);
 
-        let mut lr = LiveRange::new(v0, i11.into(), Default::default());
+        let mut lr = GenLiveRange::new(v0, i11.into(), Default::default());
 
         assert_eq!(lr.extend_in_ebb(e40, i41, PO), true);
         assert_eq!(lr.liveins.len(), 1);
