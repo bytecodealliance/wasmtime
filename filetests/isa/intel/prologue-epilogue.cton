@@ -1,25 +1,28 @@
-test binemit
+test compile
 set is_64bit
 set is_compressed
 isa intel haswell
 
-function %foo(f64 [%xmm0], i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12]) -> i64 csr [%r12], i64 csr [%rbx], i64 fp [%rbp] {
-    ss0 = local 168, offset 0
-    ss1 = incoming_arg 32, offset -32
-    
-ebb0(v0: f64 [%xmm0], v1: i64 [%rbp], v2: i64 [%rbx], v3: i64 [%r12]):
-    x86_push v1 ; bin: 55
-    copy_special %rsp -> %rbp ; bin: 48 89 e5
-    x86_push v2 ; bin: 53
-    x86_push v3 ; bin: 41 54
-    adjust_sp_imm -168 ; bin: 48 81 c4 ffffff58
-
-    ; ... function body ...
-
-
-    adjust_sp_imm 168 ; bin: 48 81 c4 000000a8
-    [-,%r12] v100 = x86_pop.i64 ; bin: 41 5c
-    [-,%rbx] v101 = x86_pop.i64 ; bin: 5b
-    [-,%rbp] v102 = x86_pop.i64 ; bin: 5d
-    return v100, v101, v102
+function %foo() {
+ebb0:
+    return
 }
+
+; check: function %foo(i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15]) -> i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15] native {
+; nextln:     ss0 = incoming_arg 48, offset -48
+; check: ebb0(v0: i64 [%rbp], v1: i64 [%rbx], v2: i64 [%r12], v3: i64 [%r13], v4: i64 [%r14], v5: i64 [%r15]):
+; nextln:     x86_push v0
+; nextln:     copy_special %rsp -> %rbp
+; nextln:     x86_push v1
+; nextln:     x86_push v2
+; nextln:     x86_push v3
+; nextln:     x86_push v4
+; nextln:     x86_push v5
+; nextln:     v11 = x86_pop.i64
+; nextln:     v10 = x86_pop.i64
+; nextln:     v9 = x86_pop.i64
+; nextln:     v8 = x86_pop.i64
+; nextln:     v7 = x86_pop.i64
+; nextln:     v6 = x86_pop.i64
+; nextln:     return v6, v7, v8, v9, v10, v11
+; nextln: }
