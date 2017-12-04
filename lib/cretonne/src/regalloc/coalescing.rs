@@ -157,13 +157,11 @@ impl DomForest {
             layout,
             domtree,
         };
+        let ctx = liveness.context(layout);
         for node in merged {
             if let Some(parent) = self.push_node(node, layout, domtree) {
                 // Check if `parent` live range contains `node.def`.
-                let lr = liveness.get(parent).expect(
-                    "No live range for parent value",
-                );
-                if lr.overlaps_def(node.def, layout.pp_ebb(node.def), layout) {
+                if liveness[parent].overlaps_def(node.def, layout.pp_ebb(node.def), ctx) {
                     // Interference detected. Get the `(a, b)` order right in the error.
                     return Err(if node.set == 0 {
                         (node.value, parent)
@@ -447,7 +445,11 @@ impl<'a> Context<'a> {
                 if self.liveness
                     .get(a)
                     .expect("No live range for interfering value")
-                    .reaches_use(pred_inst, pred_ebb, &self.func.layout)
+                    .reaches_use(
+                        pred_inst,
+                        pred_ebb,
+                        self.liveness.context(&self.func.layout),
+                    )
                 {
                     // Splitting at `pred_inst` wouldn't resolve the interference, so we need to
                     // start over.

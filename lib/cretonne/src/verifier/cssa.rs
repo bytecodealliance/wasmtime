@@ -89,7 +89,8 @@ impl<'a> CssaVerifier<'a> {
 
                     // Knowing that values are in RPO order, we can check for interference this
                     // way.
-                    if self.liveness[prev_val].overlaps_def(def, def_ebb, &self.func.layout) {
+                    let ctx = self.liveness.context(&self.func.layout);
+                    if self.liveness[prev_val].overlaps_def(def, def_ebb, ctx) {
                         return err!(val, "Value def in {} interferes with {}", vreg, prev_val);
                     }
                 }

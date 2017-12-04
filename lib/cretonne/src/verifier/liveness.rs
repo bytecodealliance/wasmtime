@@ -129,18 +129,18 @@ impl<'a> LivenessVerifier<'a> {
 
     /// Is `lr` live at the use `inst`?
     fn live_at_use(&self, lr: &LiveRange, inst: Inst) -> bool {
-        let l = &self.func.layout;
+        let ctx = self.liveness.context(&self.func.layout);
 
         // Check if `inst` is in the def range, not including the def itself.
-        if l.cmp(lr.def(), inst) == Ordering::Less &&
-            l.cmp(inst, lr.def_local_end()) != Ordering::Greater
+        if ctx.order.cmp(lr.def(), inst) == Ordering::Less &&
+            ctx.order.cmp(inst, lr.def_local_end()) != Ordering::Greater
         {
             return true;
         }
 
         // Otherwise see if `inst` is in one of the live-in ranges.
-        match lr.livein_local_end(l.inst_ebb(inst).unwrap(), l) {
-            Some(end) => l.cmp(inst, end) != Ordering::Greater,
+        match lr.livein_local_end(ctx.order.inst_ebb(inst).unwrap(), ctx) {
+            Some(end) => ctx.order.cmp(inst, end) != Ordering::Greater,
             None => false,
         }
     }
@@ -205,12 +205,11 @@ impl<'a> LivenessVerifier<'a> {
         }
 
         // Now check the live-in intervals against the CFG.
-        for &livein in lr.liveins() {
-            let mut ebb = livein.begin;
+        for (mut ebb, end) in lr.liveins(self.liveness.context(l)) {
             if !l.is_ebb_inserted(ebb) {
                 return err!(loc, "{} livein at {} which is not in the layout", val, ebb);
             }
-            let end_ebb = match l.inst_ebb(livein.end) {
+            let end_ebb = match l.inst_ebb(end) {
                 Some(e) => e,
                 None => {
                     return err!(
@@ -218,7 +217,7 @@ impl<'a> LivenessVerifier<'a> {
                         "{} livein for {} ends at {} which is not in the layout",
                         val,
                         ebb,
-                        livein.end
+                        end
                     )
                 }
             };
