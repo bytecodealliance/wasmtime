@@ -493,8 +493,18 @@ copysp = TailRecipe(
         modrm_rr(dst, src, sink);
         ''')
 
-adjustsp = TailRecipe(
-    'adjustsp', UnaryImm, size=5, ins=(), outs=(),
+adjustsp8 = TailRecipe(
+    'adjustsp8', UnaryImm, size=2, ins=(), outs=(),
+    instp=IsSignedInt(UnaryImm.imm, 8),
+    emit='''
+    PUT_OP(bits, rex1(4), sink);
+    modrm_r_bits(4, bits, sink);
+    let imm: i64 = imm.into();
+    sink.put1(imm as u8);
+    ''')
+
+adjustsp32 = TailRecipe(
+    'adjustsp32', UnaryImm, size=5, ins=(), outs=(),
     instp=IsSignedInt(UnaryImm.imm, 32),
     emit='''
     PUT_OP(bits, rex1(4), sink);

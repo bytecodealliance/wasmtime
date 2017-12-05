@@ -390,13 +390,17 @@ ebb0:
     [-,%rcx]            v512 = x86_pop.i32      ; bin: 59
 
     ; Adjust Stack Pointer
-    ; asm: addq $1024, %rsp
+    ; asm: addl $64, %esp
+    adjust_sp_imm 64                            ; bin: 83 c4 40
+    ; asm: addl $-64, %esp
+    adjust_sp_imm -64                           ; bin: 83 c4 c0
+    ; asm: addl $1024, %esp
     adjust_sp_imm 1024                          ; bin: 81 c4 00000400
-    ; asm: addq $-1024, %rsp
+    ; asm: addl $-1024, %esp
     adjust_sp_imm -1024                         ; bin: 81 c4 fffffc00
-    ; asm: addq $2147483647, %rsp
+    ; asm: addl $2147483647, %esp
     adjust_sp_imm 2147483647                    ; bin: 81 c4 7fffffff
-    ; asm: addq $-2147483648, %rsp
+    ; asm: addl $-2147483648, %esp
     adjust_sp_imm -2147483648                   ; bin: 81 c4 80000000
 
 
