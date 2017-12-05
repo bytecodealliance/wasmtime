@@ -177,8 +177,15 @@ pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::Ct
         ir::types::I32
     };
     let csrs = callee_saved_registers(isa.flags());
-    let csr_stack_size = ((csrs.len() + 1) * word_size as usize) as i32;
 
+    // The reserved stack area is composed of:
+    //   return address + frame pointer + all callee-saved registers
+    //
+    // Pushing the return address is an implicit function of the `call`
+    // instruction. Each of the others we will then push explicitly. Then we
+    // will adjust the stack pointer to make room for the rest of the required
+    // space for this frame.
+    let csr_stack_size = ((csrs.len() + 2) * word_size as usize) as i32;
     func.create_stack_slot(ir::StackSlotData {
         kind: ir::StackSlotKind::IncomingArg,
         size: csr_stack_size as u32,
