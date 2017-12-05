@@ -234,10 +234,6 @@ fn insert_prologue(
         RU::rbp as RegUnit,
     );
 
-    if stack_size > 0 {
-        pos.ins().adjust_sp_imm(Imm64::new(-stack_size));
-    }
-
     for reg in csrs.iter() {
         // Append param to entry EBB
         let csr_arg = pos.func.dfg.append_ebb_param(ebb, csr_type);
@@ -247,6 +243,10 @@ fn insert_prologue(
 
         // Remember it so we can push it momentarily
         pos.ins().x86_push(csr_arg);
+    }
+
+    if stack_size > 0 {
+        pos.ins().adjust_sp_imm(Imm64::new(-stack_size));
     }
 }
 

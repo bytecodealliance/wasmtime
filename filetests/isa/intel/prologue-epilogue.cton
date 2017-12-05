@@ -4,12 +4,14 @@ set is_compressed
 isa intel haswell
 
 function %foo() {
+    ss0 = local 168
 ebb0:
     return
 }
 
 ; check: function %foo(i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15]) -> i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15] native {
-; nextln:     ss0 = incoming_arg 48, offset -48
+; nextln:     ss0 = local 168, offset -216
+; nextln:     ss1 = incoming_arg 48, offset -48
 ; check: ebb0(v0: i64 [%rbp], v1: i64 [%rbx], v2: i64 [%r12], v3: i64 [%r13], v4: i64 [%r14], v5: i64 [%r15]):
 ; nextln:     x86_push v0
 ; nextln:     copy_special %rsp -> %rbp
@@ -18,6 +20,8 @@ ebb0:
 ; nextln:     x86_push v3
 ; nextln:     x86_push v4
 ; nextln:     x86_push v5
+; nextln:     adjust_sp_imm -168
+; nextln:     adjust_sp_imm 168
 ; nextln:     v11 = x86_pop.i64
 ; nextln:     v10 = x86_pop.i64
 ; nextln:     v9 = x86_pop.i64
