@@ -494,6 +494,10 @@ ebb0:
     [-,%r10]            v514 = x86_pop.i64      ; bin: 41 5a
 
     ; Adjust Stack Pointer
+    ; asm: addq $64, %rsp
+    adjust_sp_imm 64                            ; bin: 48 83 c4 40
+    ; asm: addq $-64, %rsp
+    adjust_sp_imm -64                           ; bin: 48 83 c4 c0
     ; asm: addq $1024, %rsp
     adjust_sp_imm 1024                          ; bin: 48 81 c4 00000400
     ; asm: addq $-1024, %rsp

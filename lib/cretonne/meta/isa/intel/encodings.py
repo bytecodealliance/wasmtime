@@ -239,8 +239,10 @@ I64.enc(base.copy_special, *r.copysp.rex(0x89, w=1))
 I32.enc(base.copy_special, *r.copysp(0x89))
 
 # Adjust SP Imm
-I32.enc(base.adjust_sp_imm, *r.adjustsp(0x81))
-I64.enc(base.adjust_sp_imm, *r.adjustsp.rex(0x81, w=1))
+I32.enc(base.adjust_sp_imm, *r.adjustsp8(0x83))
+I32.enc(base.adjust_sp_imm, *r.adjustsp32(0x81))
+I64.enc(base.adjust_sp_imm, *r.adjustsp8.rex(0x83, w=1))
+I64.enc(base.adjust_sp_imm, *r.adjustsp32.rex(0x81, w=1))
 
 #
 # Float loads and stores.
