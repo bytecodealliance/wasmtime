@@ -7,6 +7,7 @@ use settings as shared_settings;
 use super::registers::{GPR, FPR, RU};
 use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
 use ir::{AbiParam, ArgumentPurpose, ArgumentLoc, ArgumentExtension, CallConv, InstBuilder};
+use ir::stackslot::{StackSize, StackOffset};
 use ir::immediates::Imm64;
 use stack_layout::layout_stack;
 use std::i32;
@@ -168,8 +169,30 @@ pub fn callee_saved_registers(flags: &shared_settings::Flags) -> &'static [RU] {
     }
 }
 
-/// Insert a System V-compatible prologue and epilogue.
 pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
+    match func.signature.call_conv {
+        ir::CallConv::Native => native_prologue_epilogue(func, isa),
+        ir::CallConv::SpiderWASM => spiderwasm_prologue_epilogue(func, isa),
+    }
+}
+
+pub fn spiderwasm_prologue_epilogue(
+    func: &mut ir::Function,
+    isa: &TargetIsa,
+) -> result::CtonResult {
+    let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
+    let bytes = StackSize::from(isa.flags().spiderwasm_prologue_words()) * word_size;
+
+    let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
+    ss.offset = -(bytes as StackOffset);
+    func.stack_slots.push(ss);
+
+    layout_stack(&mut func.stack_slots, word_size)?;
+    Ok(())
+}
+
+/// Insert a System V-compatible prologue and epilogue.
+pub fn native_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
     let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
     let csr_type = if isa.flags().is_64bit() {
         ir::types::I64
@@ -214,17 +237,17 @@ pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::Ct
     // Set up the cursor and insert the prologue
     let entry_ebb = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
-    insert_prologue(&mut pos, local_stack_size, csr_type, csrs);
+    insert_native_prologue(&mut pos, local_stack_size, csr_type, csrs);
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_epilogues(&mut pos, local_stack_size, csr_type, csrs);
+    insert_native_epilogues(&mut pos, local_stack_size, csr_type, csrs);
 
     Ok(())
 }
 
 /// Insert the prologue for a given function.
-fn insert_prologue(
+fn insert_native_prologue(
     pos: &mut EncCursor,
     stack_size: i64,
     csr_type: ir::types::Type,
@@ -258,7 +281,7 @@ fn insert_prologue(
 }
 
 /// Find all `return` instructions and insert epilogues before them.
-fn insert_epilogues(
+fn insert_native_epilogues(
     pos: &mut EncCursor,
     stack_size: i64,
     csr_type: ir::types::Type,
@@ -268,14 +291,14 @@ fn insert_epilogues(
         pos.goto_last_inst(ebb);
         if let Some(inst) = pos.current_inst() {
             if pos.func.dfg[inst].opcode().is_return() {
-                insert_epilogue(inst, stack_size, pos, csr_type, csrs);
+                insert_native_epilogue(inst, stack_size, pos, csr_type, csrs);
             }
         }
     }
 }
 
 /// Insert an epilogue given a specific `return` instruction.
-fn insert_epilogue(
+fn insert_native_epilogue(
     inst: ir::Inst,
     stack_size: i64,
     pos: &mut EncCursor,
