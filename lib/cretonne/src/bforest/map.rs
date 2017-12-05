@@ -306,6 +306,13 @@ where
         })
     }
 
+    /// Get a mutable reference to the current value, or `None` if the cursor is at the end.
+    pub fn value_mut(&mut self) -> Option<&mut V> {
+        self.path.leaf_pos().and_then(move |(node, entry)| {
+            self.pool[node].unwrap_leaf_mut().1.get_mut(entry)
+        })
+    }
+
     /// Move this cursor to `key`.
     ///
     /// If `key` is in the map, place the cursor at `key` and return the corresponding value.
