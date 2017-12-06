@@ -124,6 +124,17 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
     pub fn new(mod_info: &'dummy_environment DummyModuleInfo) -> Self {
         Self { mod_info }
     }
+
+    // Create a signature for `sigidx` amended with a `vmctx` argument after the standard wasm
+    // arguments.
+    fn vmctx_sig(&self, sigidx: SignatureIndex) -> ir::Signature {
+        let mut sig = self.mod_info.signatures[sigidx].clone();
+        sig.params.push(ir::AbiParam::special(
+            self.native_pointer(),
+            ir::ArgumentPurpose::VMContext,
+        ));
+        sig
+    }
 }
 
 impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environment> {
@@ -142,8 +153,11 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     }
 
     fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
+        // Create a static heap whose base address is stored at `vmctx+0`.
+        let gv = func.create_global_var(ir::GlobalVarData::VmCtx { offset: 0.into() });
+
         func.create_heap(ir::HeapData {
-            base: ir::HeapBase::ReservedReg,
+            base: ir::HeapBase::GlobalVar(gv),
             min_size: 0.into(),
             guard_size: 0x8000_0000.into(),
             style: ir::HeapStyle::Static { bound: 0x1_0000_0000.into() },
@@ -153,14 +167,14 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
         // A real implementation would probably change the calling convention and add `vmctx` and
         // signature index arguments.
-        func.import_signature(self.mod_info.signatures[index].clone())
+        func.import_signature(self.vmctx_sig(index))
     }
 
     fn make_direct_func(&mut self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef {
         let sigidx = self.mod_info.functions[index].entity;
         // A real implementation would probably add a `vmctx` argument.
         // And maybe attempt some signature de-duplication.
-        let signature = func.import_signature(self.mod_info.signatures[sigidx].clone());
+        let signature = func.import_signature(self.vmctx_sig(sigidx));
         let name = get_func_name(index);
         func.import_function(ir::ExtFuncData { name, signature })
     }
@@ -174,7 +188,56 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> ir::Inst {
-        pos.ins().call_indirect(sig_ref, callee, call_args)
+        // Pass the current function's vmctx parameter on to the callee.
+        let vmctx = pos.func
+            .special_param(ir::ArgumentPurpose::VMContext)
+            .expect("Missing vmctx parameter");
+
+        // The `callee` value is an index into a table of function pointers.
+        // Apparently, that table is stored at absolute address 0 in this dummy environment.
+        // TODO: Generate bounds checking code.
+        let ptr = self.native_pointer();
+        let callee_offset = if ptr == I32 {
+            pos.ins().imul_imm(callee, 4)
+        } else {
+            let ext = pos.ins().uextend(I64, callee);
+            pos.ins().imul_imm(ext, 4)
+        };
+        let func_ptr = pos.ins().load(ptr, ir::MemFlags::new(), callee_offset, 0);
+
+        // Build a value list for the indirect call instruction containing the callee, call_args,
+        // and the vmctx parameter.
+        let mut args = ir::ValueList::default();
+        args.push(func_ptr, &mut pos.func.dfg.value_lists);
+        args.extend(call_args.iter().cloned(), &mut pos.func.dfg.value_lists);
+        args.push(vmctx, &mut pos.func.dfg.value_lists);
+
+        pos.ins()
+            .IndirectCall(ir::Opcode::CallIndirect, ir::types::VOID, sig_ref, args)
+            .0
+    }
+
+    fn translate_call(
+        &mut self,
+        mut pos: FuncCursor,
+        _callee_index: FunctionIndex,
+        callee: ir::FuncRef,
+        call_args: &[ir::Value],
+    ) -> ir::Inst {
+        // Pass the current function's vmctx parameter on to the callee.
+        let vmctx = pos.func
+            .special_param(ir::ArgumentPurpose::VMContext)
+            .expect("Missing vmctx parameter");
+
+        // Build a value list for the call instruction containing the call_args and the vmctx
+        // parameter.
+        let mut args = ir::ValueList::default();
+        args.extend(call_args.iter().cloned(), &mut pos.func.dfg.value_lists);
+        args.push(vmctx, &mut pos.func.dfg.value_lists);
+
+        pos.ins()
+            .Call(ir::Opcode::Call, ir::types::VOID, callee, args)
+            .0
     }
 
     fn translate_grow_memory(
@@ -309,18 +372,18 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     }
 
     fn define_function_body(&mut self, body_bytes: &'data [u8]) -> Result<(), String> {
-        let function_index = self.get_num_func_imports() + self.info.function_bodies.len();
-        let name = get_func_name(function_index);
-        let sig = self.get_signature(self.get_func_type(function_index))
-            .clone();
-        let mut func = ir::Function::with_name_signature(name, sig);
-        {
+        let func = {
             let mut func_environ = DummyFuncEnvironment::new(&self.info);
+            let function_index = self.get_num_func_imports() + self.info.function_bodies.len();
+            let name = get_func_name(function_index);
+            let sig = func_environ.vmctx_sig(self.get_func_type(function_index));
+            let mut func = ir::Function::with_name_signature(name, sig);
             let reader = wasmparser::BinaryReader::new(body_bytes);
             self.trans
                 .translate_from_reader(reader, &mut func, &mut func_environ)
                 .map_err(|e| String::from(e.description()))?;
-        }
+            func
+        };
         self.info.function_bodies.push(func);
         Ok(())
     }
