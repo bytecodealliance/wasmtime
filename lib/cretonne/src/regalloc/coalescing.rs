@@ -18,6 +18,7 @@ use std::cmp::Ordering;
 use std::iter::Peekable;
 use std::mem;
 use isa::{TargetIsa, EncInfo};
+use timing;
 
 /// Dominator forest.
 ///
@@ -282,6 +283,7 @@ impl Coalescing {
         liveness: &mut Liveness,
         virtregs: &mut VirtRegs,
     ) {
+        let _tt = timing::ra_cssa();
         dbg!("Coalescing for:\n{}", func.display(isa));
         let mut context = Context {
             isa,

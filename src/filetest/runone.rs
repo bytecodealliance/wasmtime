@@ -6,6 +6,7 @@ use std::time;
 use cretonne::ir::Function;
 use cretonne::isa::TargetIsa;
 use cretonne::settings::Flags;
+use cretonne::timing;
 use cretonne::verify_function;
 use cton_reader::parse_test;
 use cton_reader::IsaSpec;
@@ -17,6 +18,7 @@ use filetest::subtest::{SubTest, Context, Result};
 ///
 /// If running this test causes a panic, it will propagate as normal.
 pub fn run(path: &Path) -> TestResult {
+    let _tt = timing::process_file();
     dbg!("---\nFile: {}", path.to_string_lossy());
     let started = time::Instant::now();
     let buffer = read_to_string(path).map_err(|e| e.to_string())?;
@@ -71,7 +73,6 @@ pub fn run(path: &Path) -> TestResult {
     }
 
 
-    // TODO: Actually run the tests.
     Ok(started.elapsed())
 }
 

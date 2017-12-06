@@ -4,6 +4,7 @@ use cursor::{Cursor, FuncCursor};
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir;
+use timing;
 
 /// Eliminate unreachable code.
 ///
@@ -16,6 +17,7 @@ pub fn eliminate_unreachable_code(
     cfg: &mut ControlFlowGraph,
     domtree: &DominatorTree,
 ) {
+    let _tt = timing::unreachable_code();
     let mut pos = FuncCursor::new(func);
     while let Some(ebb) = pos.next_ebb() {
         if domtree.is_reachable(ebb) {

@@ -19,6 +19,7 @@ use isa::{TargetIsa, Encoding, EncInfo, RecipeConstraints, ConstraintKind};
 use regalloc::affinity::Affinity;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
+use timing;
 use topo_order::TopoOrder;
 
 /// Reusable data structures for the reload pass.
@@ -69,6 +70,7 @@ impl Reload {
         topo: &mut TopoOrder,
         tracker: &mut LiveValueTracker,
     ) {
+        let _tt = timing::ra_reload();
         dbg!("Reload for:\n{}", func.display(isa));
         let mut ctx = Context {
             cur: EncCursor::new(func, isa),

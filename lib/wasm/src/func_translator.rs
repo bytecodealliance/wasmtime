@@ -8,6 +8,7 @@ use code_translator::translate_operator;
 use cretonne::entity::EntityRef;
 use cretonne::ir::{self, InstBuilder, Ebb};
 use cretonne::result::{CtonResult, CtonError};
+use cretonne::timing;
 use cton_frontend::{ILBuilder, FunctionBuilder};
 use environ::FuncEnvironment;
 use state::TranslationState;
@@ -66,6 +67,7 @@ impl FuncTranslator {
         func: &mut ir::Function,
         environ: &mut FE,
     ) -> CtonResult {
+        let _tt = timing::wasm_translate_function();
         dbg!(
             "translate({} bytes, {}{})",
             reader.bytes_remaining(),

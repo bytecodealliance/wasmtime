@@ -8,6 +8,7 @@ use regalloc::liveness::Liveness;
 use regalloc::liverange::LiveRange;
 use std::cmp::Ordering;
 use verifier::Result;
+use timing;
 
 /// Verify liveness information for `func`.
 ///
@@ -27,6 +28,7 @@ pub fn verify_liveness(
     cfg: &ControlFlowGraph,
     liveness: &Liveness,
 ) -> Result {
+    let _tt = timing::verify_liveness();
     let verifier = LivenessVerifier {
         isa,
         func,

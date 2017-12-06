@@ -16,6 +16,7 @@ use regalloc::reload::Reload;
 use regalloc::spilling::Spilling;
 use regalloc::virtregs::VirtRegs;
 use result::CtonResult;
+use timing;
 use topo_order::TopoOrder;
 use verifier::{verify_context, verify_liveness, verify_cssa, verify_locations};
 
@@ -72,6 +73,7 @@ impl Context {
         cfg: &ControlFlowGraph,
         domtree: &mut DominatorTree,
     ) -> CtonResult {
+        let _tt = timing::regalloc();
         debug_assert!(domtree.is_valid());
 
         // `Liveness` and `Coloring` are self-clearing.

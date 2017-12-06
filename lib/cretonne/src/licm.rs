@@ -7,6 +7,7 @@ use std::collections::HashSet;
 use dominator_tree::DominatorTree;
 use entity::{EntityList, ListPool};
 use loop_analysis::{Loop, LoopAnalysis};
+use timing;
 
 /// Performs the LICM pass by detecting loops within the CFG and moving
 /// loop-invariant instructions out of them.
@@ -17,6 +18,7 @@ pub fn do_licm(
     domtree: &mut DominatorTree,
     loop_analysis: &mut LoopAnalysis,
 ) {
+    let _tt = timing::licm();
     debug_assert!(cfg.is_valid());
     debug_assert!(domtree.is_valid());
     debug_assert!(loop_analysis.is_valid());

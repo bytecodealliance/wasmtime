@@ -18,6 +18,7 @@ use flowgraph::ControlFlowGraph;
 use ir::{self, InstBuilder};
 use isa::TargetIsa;
 use bitset::BitSet;
+use timing;
 
 mod boundary;
 mod globalvar;
@@ -33,6 +34,7 @@ use self::heap::expand_heap_addr;
 /// - Fill out `func.encodings`.
 ///
 pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa: &TargetIsa) {
+    let _tt = timing::legalize();
     debug_assert!(cfg.is_valid());
 
     boundary::legalize_signatures(func, isa);

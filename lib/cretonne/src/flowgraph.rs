@@ -28,13 +28,14 @@ use ir::{Function, Inst, Ebb};
 use ir::instructions::BranchInfo;
 use entity::EntityMap;
 use std::mem;
+use timing;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 pub type BasicBlock = (Ebb, Inst);
 
 /// A container for the successors and predecessors of some Ebb.
 #[derive(Clone, Default)]
-pub struct CFGNode {
+struct CFGNode {
     /// Instructions that can branch or jump to this EBB.
     ///
     /// This maps branch instruction -> predecessor EBB which is redundant since the EBB containing
@@ -94,6 +95,7 @@ impl ControlFlowGraph {
     ///
     /// This will clear and overwrite any information already stored in this data structure.
     pub fn compute(&mut self, func: &Function) {
+        let _tt = timing::flowgraph();
         self.clear();
         self.data.resize(func.dfg.num_ebbs());
 

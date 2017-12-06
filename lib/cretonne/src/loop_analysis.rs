@@ -7,6 +7,7 @@ use entity::EntityMap;
 use flowgraph::ControlFlowGraph;
 use ir::{Function, Ebb, Layout};
 use packed_option::PackedOption;
+use timing;
 
 /// A opaque reference to a code loop.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -98,6 +99,7 @@ impl LoopAnalysis {
 impl LoopAnalysis {
     /// Detects the loops in a function. Needs the control flow graph and the dominator tree.
     pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph, domtree: &DominatorTree) {
+        let _tt = timing::loop_analysis();
         self.loops.clear();
         self.ebb_loop_map.clear();
         self.ebb_loop_map.resize(func.dfg.num_ebbs());

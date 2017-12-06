@@ -26,6 +26,7 @@ use regalloc::liveness::Liveness;
 use regalloc::pressure::Pressure;
 use regalloc::virtregs::VirtRegs;
 use std::fmt;
+use timing;
 use topo_order::TopoOrder;
 
 /// Persistent data structures for the spilling pass.
@@ -87,6 +88,7 @@ impl Spilling {
         topo: &mut TopoOrder,
         tracker: &mut LiveValueTracker,
     ) {
+        let _tt = timing::ra_spilling();
         dbg!("Spilling for:\n{}", func.display(isa));
         let reginfo = isa.register_info();
         let usable_regs = isa.allocatable_registers(func);

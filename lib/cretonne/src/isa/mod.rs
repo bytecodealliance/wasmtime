@@ -51,6 +51,7 @@ use settings;
 use ir;
 use regalloc;
 use result;
+use timing;
 use isa::enc_tables::Encodings;
 
 #[cfg(build_riscv)]
@@ -236,6 +237,7 @@ pub trait TargetIsa {
     ///
     /// Return an error if the stack frame is too large.
     fn prologue_epilogue(&self, func: &mut ir::Function) -> result::CtonResult {
+        let _tt = timing::prologue_epilogue();
         // This default implementation is unlikely to be good enough.
         use stack_layout::layout_stack;
         use ir::stackslot::{StackSize, StackOffset};

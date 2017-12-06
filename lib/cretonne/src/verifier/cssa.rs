@@ -6,6 +6,7 @@ use ir::Function;
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::VirtRegs;
 use std::cmp::Ordering;
+use timing;
 use verifier::Result;
 
 /// Verify conventional SSA form for `func`.
@@ -29,6 +30,7 @@ pub fn verify_cssa(
     liveness: &Liveness,
     virtregs: &VirtRegs,
 ) -> Result {
+    let _tt = timing::verify_cssa();
     let verifier = CssaVerifier {
         func,
         cfg,
