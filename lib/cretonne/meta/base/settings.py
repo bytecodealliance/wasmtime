@@ -24,7 +24,8 @@ enable_verifier = BoolSetting(
 
         This makes compilation slower but catches many bugs. The verifier is
         disabled by default, except when reading Cretonne IL from a text file.
-        """)
+        """,
+        default=True)
 
 is_64bit = BoolSetting("Enable 64-bit code generation")
 

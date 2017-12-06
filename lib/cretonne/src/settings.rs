@@ -345,7 +345,7 @@ mod tests {
             f.to_string(),
             "[shared]\n\
                     opt_level = \"default\"\n\
-                    enable_verifier = false\n\
+                    enable_verifier = true\n\
                     is_64bit = false\n\
                     return_at_end = false\n\
                     is_compressed = false\n\
