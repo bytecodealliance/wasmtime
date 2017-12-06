@@ -8,6 +8,7 @@ use isa;
 use packed_option::PackedOption;
 use std::result;
 use verifier::{Result, Error};
+use timing;
 
 /// Verify that CPU flags are used correctly.
 ///
@@ -26,6 +27,7 @@ pub fn verify_flags(
     cfg: &ControlFlowGraph,
     isa: Option<&isa::TargetIsa>,
 ) -> Result {
+    let _tt = timing::verify_flags();
     let mut verifier = FlagsVerifier {
         func,
         cfg,

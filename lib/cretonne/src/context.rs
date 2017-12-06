@@ -23,6 +23,7 @@ use unreachable_code::eliminate_unreachable_code;
 use verifier;
 use simple_gvn::do_simple_gvn;
 use licm::do_licm;
+use timing;
 
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
@@ -74,6 +75,7 @@ impl Context {
     ///
     /// Returns the size of the function's code.
     pub fn compile(&mut self, isa: &TargetIsa) -> Result<CodeOffset, CtonError> {
+        let _tt = timing::compile();
         self.verify_if(isa)?;
 
         self.compute_cfg();
@@ -100,6 +102,7 @@ impl Context {
     ///
     /// The machine code is not relocated. Instead, any relocations are emitted into `relocs`.
     pub fn emit_to_memory(&self, mem: *mut u8, relocs: &mut RelocSink, isa: &TargetIsa) {
+        let _tt = timing::binemit();
         isa.emit_function(&self.func, &mut MemoryCodeSink::new(mem, relocs));
     }
 

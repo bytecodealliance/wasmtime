@@ -5,6 +5,7 @@ use flowgraph::ControlFlowGraph;
 use dominator_tree::DominatorTree;
 use ir::{InstructionData, Function, Inst, Opcode, Type};
 use scoped_hash_map::ScopedHashMap;
+use timing;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
 fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
@@ -16,6 +17,7 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
 /// Perform simple GVN on `func`.
 ///
 pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph, domtree: &mut DominatorTree) {
+    let _tt = timing::gvn();
     debug_assert!(cfg.is_valid());
     debug_assert!(domtree.is_valid());
 

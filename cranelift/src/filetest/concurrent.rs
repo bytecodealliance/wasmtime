@@ -3,6 +3,7 @@
 //! This module provides the `ConcurrentRunner` struct which uses a pool of threads to run tests
 //! concurrently.
 
+use cretonne::timing;
 use std::panic::catch_unwind;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender, Receiver};
@@ -33,7 +34,7 @@ pub struct ConcurrentRunner {
     // Workers have their own `Sender`.
     reply_rx: Receiver<Reply>,
 
-    handles: Vec<thread::JoinHandle<()>>,
+    handles: Vec<thread::JoinHandle<timing::PassTimes>>,
 }
 
 impl ConcurrentRunner {
@@ -64,11 +65,13 @@ impl ConcurrentRunner {
     }
 
     /// Join all the worker threads.
+    /// Transfer pass timings from the worker threads to the current thread.
     pub fn join(&mut self) {
         assert!(self.request_tx.is_none(), "must shutdown before join");
         for h in self.handles.drain(..) {
-            if let Err(e) = h.join() {
-                println!("worker panicked: {:?}", e);
+            match h.join() {
+                Ok(t) => timing::add_to_current(t),
+                Err(e) => println!("worker panicked: {:?}", e),
             }
         }
     }
@@ -109,7 +112,7 @@ fn worker_thread(
     thread_num: usize,
     requests: Arc<Mutex<Receiver<Request>>>,
     replies: Sender<Reply>,
-) -> thread::JoinHandle<()> {
+) -> thread::JoinHandle<timing::PassTimes> {
     thread::Builder::new()
         .name(format!("worker #{}", thread_num))
         .spawn(move || {
@@ -142,6 +145,10 @@ fn worker_thread(
 
                 replies.send(Reply::Done { jobid, result }).unwrap();
             }
+
+            // Timing is accumulated independently per thread.
+            // Timings from this worker thread will be aggregated by `ConcurrentRunner::join()`.
+            timing::take_current()
         })
         .unwrap()
 }

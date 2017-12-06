@@ -10,7 +10,7 @@ extern crate num_cpus;
 extern crate tempdir;
 extern crate term;
 
-use cretonne::VERSION;
+use cretonne::{VERSION, timing};
 use docopt::Docopt;
 use std::io::{self, Write};
 use std::process;
@@ -27,16 +27,18 @@ const USAGE: &str = "
 Cretonne code generator utility
 
 Usage:
-    cton-util test [-v] <file>...
+    cton-util test [-vT] <file>...
     cton-util cat <file>...
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
-    cton-util compile [-vp] [--set <set>]... [--isa <isa>] <file>...
-    cton-util wasm [-ctvp] [--set <set>]... [--isa <isa>] <file>...
+    cton-util compile [-vpT] [--set <set>]... [--isa <isa>] <file>...
+    cton-util wasm [-ctvpT] [--set <set>]... [--isa <isa>] <file>...
     cton-util --help | --version
 
 Options:
     -v, --verbose   be more verbose
+    -T, --time-passes
+                    print pass timing report
     -t, --just-decode
                     just decode WebAssembly to Cretonne IL
     -c, --check-translation
@@ -64,6 +66,7 @@ struct Args {
     flag_verbose: bool,
     flag_set: Vec<String>,
     flag_isa: String,
+    flag_time_passes: bool,
 }
 
 /// A command either succeeds or fails with an error message.
@@ -81,7 +84,7 @@ fn cton_util() -> CommandResult {
         .unwrap_or_else(|e| e.exit());
 
     // Find the sub-command to execute.
-    if args.cmd_test {
+    let result = if args.cmd_test {
         filetest::run(args.flag_verbose, args.arg_file)
     } else if args.cmd_cat {
         cat::run(args.arg_file)
@@ -104,7 +107,13 @@ fn cton_util() -> CommandResult {
     } else {
         // Debugging / shouldn't happen with proper command line handling above.
         Err(format!("Unhandled args: {:?}", args))
+    };
+
+    if args.flag_time_passes {
+        print!("{}", timing::take_current());
     }
+
+    result
 }
 
 fn main() {

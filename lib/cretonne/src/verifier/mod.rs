@@ -73,6 +73,7 @@ use std::collections::BTreeSet;
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter, Write};
 use std::result;
+use timing;
 
 pub use self::cssa::verify_cssa;
 pub use self::liveness::verify_liveness;
@@ -126,6 +127,7 @@ pub type Result = result::Result<(), Error>;
 
 /// Verify `func`.
 pub fn verify_function<'a, FOI: Into<FlagsOrIsa<'a>>>(func: &Function, fisa: FOI) -> Result {
+    let _tt = timing::verifier();
     Verifier::new(func, fisa.into()).run()
 }
 
@@ -137,6 +139,7 @@ pub fn verify_context<'a, FOI: Into<FlagsOrIsa<'a>>>(
     domtree: &DominatorTree,
     fisa: FOI,
 ) -> Result {
+    let _tt = timing::verifier();
     let verifier = Verifier::new(func, fisa.into());
     if cfg.is_valid() {
         verifier.cfg_integrity(cfg)?;

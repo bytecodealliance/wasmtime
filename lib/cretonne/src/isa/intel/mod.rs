@@ -14,6 +14,7 @@ use isa::{TargetIsa, RegInfo, RegClass, EncInfo};
 use ir;
 use regalloc;
 use result;
+use timing;
 
 
 #[allow(dead_code)]
@@ -115,6 +116,7 @@ impl TargetIsa for Isa {
     }
 
     fn prologue_epilogue(&self, func: &mut ir::Function) -> result::CtonResult {
+        let _tt = timing::prologue_epilogue();
         abi::prologue_epilogue(func, self)
     }
 }

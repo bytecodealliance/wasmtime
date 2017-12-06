@@ -57,6 +57,7 @@ use regalloc::liveness::Liveness;
 use regalloc::liverange::{LiveRange, LiveRangeContext};
 use regalloc::solver::{Solver, SolverError};
 use std::mem;
+use timing;
 
 
 /// Data structures for the coloring pass.
@@ -123,6 +124,7 @@ impl Coloring {
         liveness: &mut Liveness,
         tracker: &mut LiveValueTracker,
     ) {
+        let _tt = timing::ra_coloring();
         dbg!("Coloring for:\n{}", func.display(isa));
         let mut ctx = Context {
             usable_regs: isa.allocatable_registers(func),

@@ -5,6 +5,7 @@ use flowgraph::{ControlFlowGraph, BasicBlock};
 use ir::{Ebb, Inst, Function, Layout, ProgramOrder, ExpandedProgramPoint};
 use ir::instructions::BranchInfo;
 use packed_option::PackedOption;
+use timing;
 
 use std::cmp::Ordering;
 
@@ -227,6 +228,7 @@ impl DominatorTree {
 
     /// Reset and compute a CFG post-order and dominator tree.
     pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph) {
+        let _tt = timing::domtree();
         debug_assert!(cfg.is_valid());
         self.compute_postorder(func);
         self.compute_domtree(func, cfg);

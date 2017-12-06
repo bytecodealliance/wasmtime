@@ -5,6 +5,7 @@ use isa;
 use regalloc::RegDiversions;
 use regalloc::liveness::Liveness;
 use verifier::Result;
+use timing;
 
 /// Verify value locations for `func`.
 ///
@@ -22,6 +23,7 @@ pub fn verify_locations(
     func: &ir::Function,
     liveness: Option<&Liveness>,
 ) -> Result {
+    let _tt = timing::verify_locations();
     let verifier = LocationVerifier {
         isa,
         func,

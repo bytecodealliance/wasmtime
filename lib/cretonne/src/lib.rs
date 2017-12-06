@@ -28,6 +28,7 @@ pub mod packed_option;
 pub mod regalloc;
 pub mod result;
 pub mod settings;
+pub mod timing;
 pub mod verifier;
 
 mod abi;

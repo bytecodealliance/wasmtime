@@ -1,5 +1,6 @@
 //! Translation skeletton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
+use cretonne::timing;
 use wasmparser::{ParserState, SectionCode, ParserInput, Parser, WasmDecoder, BinaryReaderError};
 use sections_translator::{SectionParsingError, parse_function_signatures, parse_import_section,
                           parse_function_section, parse_export_section, parse_start_section,
@@ -15,6 +16,7 @@ pub fn translate_module<'data>(
     data: &'data [u8],
     environ: &mut ModuleEnvironment<'data>,
 ) -> Result<(), String> {
+    let _tt = timing::wasm_translate_module();
     let mut parser = Parser::new(data);
     match *parser.read() {
         ParserState::BeginWasm { .. } => {}

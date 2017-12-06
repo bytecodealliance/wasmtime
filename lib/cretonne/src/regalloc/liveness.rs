@@ -184,6 +184,7 @@ use regalloc::affinity::Affinity;
 use regalloc::liverange::{LiveRange, LiveRangeForest, LiveRangeContext};
 use std::mem;
 use std::ops::Index;
+use timing;
 
 /// A set of live ranges, indexed by value number.
 type LiveRangeSet = SparseMap<Value, LiveRange>;
@@ -385,6 +386,7 @@ impl Liveness {
     /// Compute the live ranges of all SSA values used in `func`.
     /// This clears out any existing analysis stored in this data structure.
     pub fn compute(&mut self, isa: &TargetIsa, func: &mut Function, cfg: &ControlFlowGraph) {
+        let _tt = timing::ra_liveness();
         self.ranges.clear();
 
         // Get ISA data structures used for computing live range affinities.

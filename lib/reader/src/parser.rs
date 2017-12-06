@@ -14,7 +14,7 @@ use cretonne::ir::immediates::{Imm64, Uimm32, Offset32, Ieee32, Ieee64};
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs};
 use cretonne::isa::{self, TargetIsa, Encoding, RegUnit};
-use cretonne::settings;
+use cretonne::{settings, timing};
 use testfile::{TestFile, Details, Comment};
 use error::{Location, Error, Result};
 use lexer::{self, Lexer, Token};
@@ -26,6 +26,7 @@ use sourcemap::{SourceMap, MutableSourceMap};
 ///
 /// Any test commands or ISA declarations are ignored.
 pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
+    let _tt = timing::parse_text();
     parse_test(text).map(|file| {
         file.functions.into_iter().map(|(func, _)| func).collect()
     })
@@ -35,6 +36,7 @@ pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
 ///
 /// The returned `TestFile` contains direct references to substrings of `text`.
 pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
+    let _tt = timing::parse_text();
     let mut parser = Parser::new(text);
     // Gather the preamble comments as 'Function'.
     parser.gather_comments(AnyEntity::Function);
