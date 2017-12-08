@@ -885,7 +885,9 @@ impl<'a> Parser<'a> {
         match self.token() {
             Some(Token::Name(s)) => {
                 self.consume();
-                Ok(ExternalName::testcase(s))
+                s.parse().map_err(
+                    |_| self.error("invalid test case or libcall name"),
+                )
             }
             Some(Token::UserRef(namespace)) => {
                 self.consume();
