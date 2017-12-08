@@ -169,15 +169,19 @@ def emit_recipe_predicates(isa, fmt):
         # Generate the predicate function.
         with fmt.indented(
                 'fn {}({}: ::settings::PredicateView, '
-                'inst: &ir::InstructionData) -> bool {{'
+                '{}: &ir::InstructionData) -> bool {{'
                 .format(
                     name,
-                    'isap' if isap else '_'), '}'):
+                    'isap' if isap else '_',
+                    'inst' if instp else '_'), '}'):
             if isap:
                 n = isa.settings.predicate_number[isap]
-                with fmt.indented('if isap.test({})'.format(n), '}'):
+                with fmt.indented('if !isap.test({}) {{'.format(n), '}'):
                     fmt.line('return false;')
-            emit_instp(instp, fmt)
+            if instp:
+                emit_instp(instp, fmt)
+            else:
+                fmt.line('true')
 
     # Generate the static table.
     with fmt.indented(
