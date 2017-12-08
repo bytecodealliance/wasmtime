@@ -10,7 +10,7 @@
 //! We verify that the dominator tree annotations are complete and correct.
 //!
 
-use cretonne::dominator_tree::DominatorTree;
+use cretonne::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use cretonne::flowgraph::ControlFlowGraph;
 use cretonne::ir::Function;
 use cretonne::ir::entities::AnyEntity;
@@ -110,13 +110,13 @@ impl SubTest for TestDomtree {
             }
         }
 
-        let text = filecheck_text(&domtree).expect("formatting error");
+        let text = filecheck_text(func, &domtree).expect("formatting error");
         run_filecheck(&text, context)
     }
 }
 
 // Generate some output for filecheck testing
-fn filecheck_text(domtree: &DominatorTree) -> result::Result<String, fmt::Error> {
+fn filecheck_text(func: &Function, domtree: &DominatorTree) -> result::Result<String, fmt::Error> {
     let mut s = String::new();
 
     write!(s, "cfg_postorder:")?;
@@ -124,6 +124,25 @@ fn filecheck_text(domtree: &DominatorTree) -> result::Result<String, fmt::Error>
         write!(s, " {}", ebb)?;
     }
     writeln!(s, "")?;
+
+    // Compute and print out a pre-order of the dominator tree.
+    writeln!(s, "domtree_preorder {{")?;
+    let mut dtpo = DominatorTreePreorder::new();
+    dtpo.compute(domtree, &func.layout);
+    let mut stack = Vec::new();
+    stack.extend(func.layout.entry_block());
+    while let Some(ebb) = stack.pop() {
+        write!(s, "    {}:", ebb)?;
+        let i = stack.len();
+        for ch in dtpo.children(ebb) {
+            write!(s, " {}", ch)?;
+            stack.push(ch);
+        }
+        writeln!(s, "")?;
+        // Reverse the children we just pushed so we'll pop them in order.
+        stack[i..].reverse();
+    }
+    writeln!(s, "}}")?;
 
     Ok(s)
 }

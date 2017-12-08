@@ -5,6 +5,8 @@ use flowgraph::{ControlFlowGraph, BasicBlock};
 use ir::{Ebb, Inst, Function, Layout, ProgramOrder, ExpandedProgramPoint};
 use ir::instructions::BranchInfo;
 use packed_option::PackedOption;
+use std::cmp;
+use std::mem;
 use timing;
 
 use std::cmp::Ordering;
@@ -83,7 +85,6 @@ impl DominatorTree {
 
     /// Compare two EBBs relative to the reverse post-order.
     fn rpo_cmp_ebb(&self, a: Ebb, b: Ebb) -> Ordering {
-
         self.nodes[a].rpo_number.cmp(&self.nodes[b].rpo_number)
     }
 
@@ -491,6 +492,165 @@ impl DominatorTree {
     }
 }
 
+/// Optional pre-order information that can be computed for a dominator tree.
+///
+/// This data structure is computed from a `DominatorTree` and provides:
+///
+/// - A forward traversable dominator tree through the `children()` iterator.
+/// - An ordering of EBBs according to a dominator tree pre-order.
+/// - Constant time dominance checks at the EBB granularity.
+///
+/// The information in this auxillary data structure is not easy to update when the control flow
+/// graph changes, which is why it is kept separate.
+pub struct DominatorTreePreorder {
+    nodes: EntityMap<Ebb, ExtraNode>,
+
+    // Scratch memory used by `compute_postorder()`.
+    stack: Vec<Ebb>,
+}
+
+#[derive(Default, Clone)]
+struct ExtraNode {
+    /// First child node in the domtree.
+    child: PackedOption<Ebb>,
+
+    /// Next sibling node in the domtree. This linked list is ordered according to the CFG RPO.
+    sibling: PackedOption<Ebb>,
+
+    /// Sequence number for this node in a pre-order traversal of the dominator tree.
+    /// Unreachable blocks have number 0, the entry block is 1.
+    pre_number: u32,
+
+    /// Maximum `pre_number` for the sub-tree of the dominator tree that is rooted at this node.
+    /// This is always >= `pre_number`.
+    pre_max: u32,
+}
+
+/// Creating and computing the dominator tree pre-order.
+impl DominatorTreePreorder {
+    /// Create a new blank `DominatorTreePreorder`.
+    pub fn new() -> DominatorTreePreorder {
+        DominatorTreePreorder {
+            nodes: EntityMap::new(),
+            stack: Vec::new(),
+        }
+    }
+
+    /// Recompute this data structure to match `domtree`.
+    pub fn compute(&mut self, domtree: &DominatorTree, layout: &Layout) {
+        self.nodes.clear();
+        assert_eq!(self.stack.len(), 0);
+
+        // Step 1: Populate the child and sibling links.
+        //
+        // By following the CFG post-order and pushing to the front of the lists, we make sure that
+        // sibling lists are ordered according to the CFG reverse post-order.
+        for &ebb in domtree.cfg_postorder() {
+            if let Some(idom_inst) = domtree.idom(ebb) {
+                let idom = layout.pp_ebb(idom_inst);
+                let sib = mem::replace(&mut self.nodes[idom].child, ebb.into());
+                self.nodes[ebb].sibling = sib;
+            } else {
+                // The only EBB without an immediate dominator is the entry.
+                self.stack.push(ebb);
+            }
+        }
+
+        // Step 2. Assign pre-order numbers from a DFS of the dominator tree.
+        assert!(self.stack.len() <= 1);
+        let mut n = 0;
+        while let Some(ebb) = self.stack.pop() {
+            n += 1;
+            let node = &mut self.nodes[ebb];
+            node.pre_number = n;
+            node.pre_max = n;
+            if let Some(n) = node.sibling.expand() {
+                self.stack.push(n);
+            }
+            if let Some(n) = node.child.expand() {
+                self.stack.push(n);
+            }
+        }
+
+        // Step 3. Propagate the `pre_max` numbers up the tree.
+        // The CFG post-order is topologically ordered w.r.t. dominance so a node comes after all
+        // its dominator tree children.
+        for &ebb in domtree.cfg_postorder() {
+            if let Some(idom_inst) = domtree.idom(ebb) {
+                let idom = layout.pp_ebb(idom_inst);
+                let pre_max = cmp::max(self.nodes[ebb].pre_max, self.nodes[idom].pre_max);
+                self.nodes[idom].pre_max = pre_max;
+            }
+        }
+    }
+}
+
+/// An iterator that enumerates the direct children of an EBB in the dominator tree.
+pub struct ChildIter<'a> {
+    dtpo: &'a DominatorTreePreorder,
+    next: PackedOption<Ebb>,
+}
+
+impl<'a> Iterator for ChildIter<'a> {
+    type Item = Ebb;
+
+    fn next(&mut self) -> Option<Ebb> {
+        let n = self.next.expand();
+        if let Some(ebb) = n {
+            self.next = self.dtpo.nodes[ebb].sibling;
+        }
+        n
+    }
+}
+
+/// Query interface for the dominator tree pre-order.
+impl DominatorTreePreorder {
+    /// Get an iterator over the direct children of `ebb` in the dominator tree.
+    ///
+    /// These are the EBB's whose immediate dominator is an instruction in `ebb`, ordered according
+    /// to the CFG reverse post-order.
+    pub fn children(&self, ebb: Ebb) -> ChildIter {
+        ChildIter {
+            dtpo: self,
+            next: self.nodes[ebb].child,
+        }
+    }
+
+    /// Fast, constant time dominance check with EBB granularity.
+    ///
+    /// This computes the same result as `domtree.dominates(a, b)`, but in guaranteed fast constant
+    /// time. This is less general than the `DominatorTree` method because it only works with EBB
+    /// program points.
+    ///
+    /// An EBB is considered to dominate itself.
+    pub fn dominates(&self, a: Ebb, b: Ebb) -> bool {
+        let na = &self.nodes[a];
+        let nb = &self.nodes[b];
+        na.pre_number <= nb.pre_number && na.pre_max >= nb.pre_max
+    }
+
+    /// Compare two EBBs according to the dominator pre-order.
+    pub fn pre_cmp_ebb(&self, a: Ebb, b: Ebb) -> Ordering {
+        self.nodes[a].pre_number.cmp(&self.nodes[b].pre_number)
+    }
+
+    /// Compare two program points according to the dominator tree pre-order.
+    ///
+    /// This ordering of program points have the property that given a program point, pp, all the
+    /// program points dominated by pp follow immediately and contiguously after pp in the order.
+    pub fn pre_cmp<A, B>(&self, a: A, b: B, layout: &Layout) -> Ordering
+    where
+        A: Into<ExpandedProgramPoint>,
+        B: Into<ExpandedProgramPoint>,
+    {
+        let a = a.into();
+        let b = b.into();
+        self.pre_cmp_ebb(layout.pp_ebb(a), layout.pp_ebb(b)).then(
+            layout.cmp(a, b),
+        )
+    }
+}
+
 #[cfg(test)]
 mod test {
     use cursor::{Cursor, FuncCursor};
@@ -509,6 +669,9 @@ mod test {
         let dtree = DominatorTree::with_function(&func, &cfg);
         assert_eq!(0, dtree.nodes.keys().count());
         assert_eq!(dtree.cfg_postorder(), &[]);
+
+        let mut dtpo = DominatorTreePreorder::new();
+        dtpo.compute(&dtree, &func.layout);
     }
 
     #[test]
@@ -550,6 +713,18 @@ mod test {
         let v2_def = cur.func.dfg.value_def(v2).unwrap_inst();
         assert!(!dt.dominates(v2_def, ebb0, &cur.func.layout));
         assert!(!dt.dominates(ebb0, v2_def, &cur.func.layout));
+
+        let mut dtpo = DominatorTreePreorder::new();
+        dtpo.compute(&dt, &cur.func.layout);
+        assert!(dtpo.dominates(ebb0, ebb0));
+        assert!(!dtpo.dominates(ebb0, ebb1));
+        assert!(dtpo.dominates(ebb0, ebb2));
+        assert!(!dtpo.dominates(ebb1, ebb0));
+        assert!(dtpo.dominates(ebb1, ebb1));
+        assert!(!dtpo.dominates(ebb1, ebb2));
+        assert!(!dtpo.dominates(ebb2, ebb0));
+        assert!(!dtpo.dominates(ebb2, ebb1));
+        assert!(dtpo.dominates(ebb2, ebb2));
     }
 
     #[test]
