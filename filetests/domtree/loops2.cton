@@ -1,6 +1,6 @@
 test domtree
 
-function %test(i32) {
+function %loop1(i32) {
     ebb0(v0: i32):
         brz v0, ebb1    ; dominates: ebb1 ebb6
         brnz v0, ebb2   ; dominates: ebb2 ebb9
@@ -30,7 +30,20 @@ function %test(i32) {
         return
 }
 
-function %test(i32) native {
+; check: domtree_preorder {
+; nextln: ebb0: ebb1 ebb2 ebb6 ebb3 ebb9
+; nextln: ebb1:
+; nextln: ebb2: ebb4 ebb5 ebb7 ebb8
+; nextln: ebb4:
+; nextln: ebb5:
+; nextln: ebb7:
+; nextln: ebb8:
+; nextln: ebb6:
+; nextln: ebb3:
+; nextln: ebb9:
+; nextln: }
+
+function %loop2(i32) native {
     ebb0(v0: i32):
         brz v0, ebb1    ; dominates: ebb1 ebb3 ebb4 ebb5
         jump ebb2       ; dominates: ebb2
@@ -55,3 +68,12 @@ function %test(i32) native {
 ; sameln: ebb2
 ; sameln: ebb1
 ; sameln: ebb0
+
+; check: domtree_preorder {
+; nextln: ebb0: ebb1 ebb2 ebb4 ebb3 ebb5
+; nextln: ebb1:
+; nextln: ebb2:
+; nextln: ebb4:
+; nextln: ebb3:
+; nextln: ebb5:
+; nextln: }

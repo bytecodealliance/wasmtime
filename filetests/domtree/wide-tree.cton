@@ -39,3 +39,20 @@ function %test(i32) {
     ebb13:
         return
 }
+
+; check: domtree_preorder {
+; nextln: ebb0: ebb13 ebb1
+; nextln: ebb13:
+; nextln: ebb1: ebb2 ebb3 ebb4 ebb5 ebb6 ebb7
+; nextln: ebb2:
+; nextln: ebb3:
+; nextln: ebb4:
+; nextln: ebb5:
+; nextln: ebb6:
+; nextln: ebb7: ebb8 ebb9 ebb10 ebb12 ebb11
+; nextln: ebb8:
+; nextln: ebb9:
+; nextln: ebb10:
+; nextln: ebb12:
+; nextln: ebb11:
+; nextln: }
