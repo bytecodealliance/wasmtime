@@ -1,6 +1,6 @@
 ; Binary emission of 32-bit floating point code.
 test binemit
-isa intel has_sse2
+isa intel haswell
 
 ; The binary encodings can be verified with the command:
 ;
@@ -52,7 +52,7 @@ ebb0:
     ; asm: addss %xmm2, %xmm5
     [-,%xmm5]           v20 = fadd v10, v11                     ; bin: f3 0f 58 ea
     ; asm: addss %xmm5, %xmm2
-    [-,%xmm2]           v21 = fadd v11, v10                     ; bin: f3 0f 58 d5 
+    [-,%xmm2]           v21 = fadd v11, v10                     ; bin: f3 0f 58 d5
 
     ; asm: subss %xmm2, %xmm5
     [-,%xmm5]           v22 = fsub v10, v11                     ; bin: f3 0f 5c ea
@@ -267,7 +267,7 @@ ebb0:
     ; asm: addsd %xmm2, %xmm5
     [-,%xmm5]           v20 = fadd v10, v11                     ; bin: f2 0f 58 ea
     ; asm: addsd %xmm5, %xmm2
-    [-,%xmm2]           v21 = fadd v11, v10                     ; bin: f2 0f 58 d5 
+    [-,%xmm2]           v21 = fadd v11, v10                     ; bin: f2 0f 58 d5
 
     ; asm: subsd %xmm2, %xmm5
     [-,%xmm5]           v22 = fsub v10, v11                     ; bin: f2 0f 5c ea

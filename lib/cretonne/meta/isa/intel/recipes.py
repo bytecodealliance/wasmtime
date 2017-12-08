@@ -13,6 +13,7 @@ from base.formats import Ternary, FuncAddr, UnaryGlobalVar
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from .registers import GPR, ABCD, FPR, GPR8, FPR8, FLAG, StackGPR32, StackFPR32
 from .defs import supported_floatccs
+from .settings import use_sse41
 
 try:
     from typing import Tuple, Dict, Sequence, Any  # noqa
@@ -372,6 +373,7 @@ rfurm = TailRecipe(
 # XX /r, RMI form for one of the roundXX SSE 4.1 instructions.
 furmi_rnd = TailRecipe(
         'furmi_rnd', Unary, size=2, ins=FPR, outs=FPR,
+        isap=use_sse41,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rr(in_reg0, out_reg0, sink);

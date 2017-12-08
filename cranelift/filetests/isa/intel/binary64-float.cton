@@ -2,7 +2,7 @@
 test binemit
 set is_64bit
 set is_compressed
-isa intel has_sse2
+isa intel haswell
 
 ; The binary encodings can be verified with the command:
 ;
