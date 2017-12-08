@@ -23,10 +23,12 @@ use timing;
 mod boundary;
 mod globalvar;
 mod heap;
+mod libcall;
 mod split;
 
 use self::globalvar::expand_global_addr;
 use self::heap::expand_heap_addr;
+use self::libcall::expand_as_libcall;
 
 /// Legalize `func` for `isa`.
 ///
@@ -85,6 +87,13 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
                     // There's a risk of infinite looping here if the legalization patterns are
                     // unsound. Should we attempt to detect that?
                     if changed {
+                        pos.set_position(prev_pos);
+                        continue;
+                    }
+
+                    // We don't have any pattern expansion for this instruction either.
+                    // Try converting it to a library call as a last resort.
+                    if expand_as_libcall(inst, pos.func) {
                         pos.set_position(prev_pos);
                         continue;
                     }
