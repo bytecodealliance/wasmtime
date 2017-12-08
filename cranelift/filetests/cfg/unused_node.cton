@@ -2,7 +2,7 @@
 test print-cfg
 
 function %not_reached(i32) -> i32 {
-; check: digraph %not_reached {
+; check: digraph "%not_reached" {
 ; check:     ebb0 [shape=record, label="{ebb0 | <inst0>brnz ebb2}"]
 ; check:     ebb1 [shape=record, label="{ebb1 | <inst4>jump ebb0}"]
 ; check:     ebb2 [shape=record, label="{ebb2}"]

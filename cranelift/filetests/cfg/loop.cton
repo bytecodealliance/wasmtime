@@ -3,7 +3,7 @@ test print-cfg
 test verifier
 
 function %nonsense(i32, i32) -> f32 {
-; check: digraph %nonsense {
+; check: digraph "%nonsense" {
 ; regex: I=\binst\d+\b
 ; check: label="{ebb0 | <$(BRZ=$I)>brz ebb2 | <$(JUMP=$I)>jump ebb1}"]
 

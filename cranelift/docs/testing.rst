@@ -225,7 +225,7 @@ instruction that produces the verifier error*. Both the error message and
 reported location of the error is verified::
 
     test verifier
-    
+
     function %test(i32) {
         ebb0(v0: i32):
             jump ebb1       ; error: terminator
@@ -249,20 +249,20 @@ command::
     ; For testing cfg generation. This code is nonsense.
     test print-cfg
     test verifier
-    
+
     function %nonsense(i32, i32) -> f32 {
     ; check: digraph %nonsense {
     ; regex: I=\binst\d+\b
     ; check: label="{ebb0 | <$(BRZ=$I)>brz ebb2 | <$(JUMP=$I)>jump ebb1}"]
-    
+
     ebb0(v1: i32, v2: i32):
         brz v2, ebb2            ; unordered: ebb0:$BRZ -> ebb2
         v4 = iconst.i32 0
         jump ebb1(v4)           ; unordered: ebb0:$JUMP -> ebb1
-    
+
     ebb1(v5: i32):
         return v1
-    
+
     ebb2:
         v100 = f32const 0.0
         return v100
@@ -275,7 +275,7 @@ Compute the dominator tree of each function and validate it against the
 ``dominates:`` annotations::
 
     test domtree
-    
+
     function %test(i32) {
         ebb0(v0: i32):
             jump ebb1     ; dominates: ebb1
@@ -292,6 +292,8 @@ Every reachable extended basic block except for the entry block has an
 *immediate dominator* which is a jump or branch instruction. This test passes
 if the ``dominates:`` annotations on the immediate dominator instructions are
 both correct and complete.
+
+This test also sends the computed CFG post-order through filecheck.
 
 `test legalizer`
 ----------------
