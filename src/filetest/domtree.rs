@@ -15,9 +15,11 @@ use cretonne::flowgraph::ControlFlowGraph;
 use cretonne::ir::Function;
 use cretonne::ir::entities::AnyEntity;
 use cton_reader::TestCommand;
-use filetest::subtest::{SubTest, Context, Result};
+use filetest::subtest::{SubTest, Context, Result, run_filecheck};
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
+use std::fmt::{self, Write};
+use std::result;
 use utils::match_directive;
 
 struct TestDomtree;
@@ -108,6 +110,20 @@ impl SubTest for TestDomtree {
             }
         }
 
-        Ok(())
+        let text = filecheck_text(&domtree).expect("formatting error");
+        run_filecheck(&text, context)
     }
+}
+
+// Generate some output for filecheck testing
+fn filecheck_text(domtree: &DominatorTree) -> result::Result<String, fmt::Error> {
+    let mut s = String::new();
+
+    write!(s, "cfg_postorder:")?;
+    for &ebb in domtree.cfg_postorder() {
+        write!(s, " {}", ebb)?;
+    }
+    writeln!(s, "")?;
+
+    Ok(s)
 }

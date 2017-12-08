@@ -11,3 +11,8 @@ function %test(i32) {
     ebb3:
         return
 }
+; check: cfg_postorder:
+; sameln: ebb2
+; sameln: ebb3
+; sameln: ebb1
+; sameln: ebb0

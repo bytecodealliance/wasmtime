@@ -46,7 +46,7 @@ impl<'a> CFGPrinter<'a> {
     }
 
     fn header(&self, w: &mut Write) -> Result {
-        writeln!(w, "digraph {} {{", self.func.name)?;
+        writeln!(w, "digraph \"{}\" {{", self.func.name)?;
         if let Some(entry) = self.func.layout.entry_block() {
             writeln!(w, "    {{rank=min; {}}}", entry)?;
         }
