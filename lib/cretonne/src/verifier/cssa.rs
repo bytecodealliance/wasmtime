@@ -1,11 +1,11 @@
 //! Verify conventional SSA form.
 
+use dbg::DisplayList;
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir::Function;
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::VirtRegs;
-use std::cmp::Ordering;
 use timing;
 use verifier::Result;
 
@@ -20,7 +20,7 @@ use verifier::Result;
 ///
 /// Additionally, we verify this property of virtual registers:
 ///
-/// - The values in a virtual register are ordered according to the dominator tree's `rpo_cmp()`.
+/// - The values in a virtual register are topologically ordered w.r.t. dominance.
 ///
 /// We don't verify that virtual registers are minimal. Minimal CSSA is not required.
 pub fn verify_cssa(
@@ -67,33 +67,34 @@ impl<'a> CssaVerifier<'a> {
                     return err!(val, "Value in {} has no live range", vreg);
                 };
 
-                // Check RPO ordering with the previous values in the virtual register.
+                // Check topological ordering with the previous values in the virtual register.
                 let def = self.func.dfg.value_def(val).into();
                 let def_ebb = self.func.layout.pp_ebb(def);
                 for &prev_val in &values[0..idx] {
                     let prev_def = self.func.dfg.value_def(prev_val);
 
-                    // Enforce RPO of defs in the virtual register.
-                    match self.domtree.rpo_cmp(prev_def, def, &self.func.layout) {
-                        Ordering::Less => {}
-                        Ordering::Equal => {
-                            return err!(val, "Value in {} has same def as {}", vreg, prev_val);
-                        }
-                        Ordering::Greater => {
-                            return err!(
-                                val,
-                                "Value in {} in wrong order relative to {}",
-                                vreg,
-                                prev_val
-                            );
-                        }
+                    // Enforce topological ordering of defs in the virtual register.
+                    if self.domtree.dominates(def, prev_def, &self.func.layout) {
+                        return err!(
+                            val,
+                            "Value in {} = {} def dominates previous {}",
+                            vreg,
+                            DisplayList(values),
+                            prev_val
+                        );
                     }
 
-                    // Knowing that values are in RPO order, we can check for interference this
+                    // Knowing that values are in topo order, we can check for interference this
                     // way.
                     let ctx = self.liveness.context(&self.func.layout);
                     if self.liveness[prev_val].overlaps_def(def, def_ebb, ctx) {
-                        return err!(val, "Value def in {} interferes with {}", vreg, prev_val);
+                        return err!(
+                            val,
+                            "Value def in {} = {} interferes with {}",
+                            vreg,
+                            DisplayList(values),
+                            prev_val
+                        );
                     }
                 }
             }
