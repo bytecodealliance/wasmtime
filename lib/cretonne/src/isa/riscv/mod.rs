@@ -107,10 +107,6 @@ impl TargetIsa for Isa {
     fn emit_function(&self, func: &ir::Function, sink: &mut MemoryCodeSink) {
         emit_function(func, binemit::emit_inst, sink)
     }
-
-    fn reloc_names(&self) -> &'static [&'static str] {
-        &binemit::RELOC_NAMES
-    }
 }
 
 #[cfg(test)]

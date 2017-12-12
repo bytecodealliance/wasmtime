@@ -111,10 +111,6 @@ impl TargetIsa for Isa {
         emit_function(func, binemit::emit_inst, sink)
     }
 
-    fn reloc_names(&self) -> &'static [&'static str] {
-        &binemit::RELOC_NAMES
-    }
-
     fn prologue_epilogue(&self, func: &mut ir::Function) -> result::CtonResult {
         let _tt = timing::prologue_epilogue();
         abi::prologue_epilogue(func, self)
