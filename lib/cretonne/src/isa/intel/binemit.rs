@@ -180,6 +180,13 @@ fn modrm_rm<CS: CodeSink + ?Sized>(rm: RegUnit, reg: RegUnit, sink: &mut CS) {
     sink.put1(b);
 }
 
+/// Emit a mode 00 Mod/RM byte, with a rip-relative displacement in 64-bit mode. Effective address
+/// is calculated by adding displacement to 64-bit rip of next instruction. See intel Sw dev manual
+/// section 2.2.1.6.
+fn modrm_riprel<CS: CodeSink + ?Sized>(reg: RegUnit, sink: &mut CS) {
+    modrm_rm(0b101, reg, sink)
+}
+
 /// Emit a mode 01 ModR/M byte. This is a register-indirect addressing mode with 8-bit
 /// displacement.
 /// Register %rsp is invalid for `rm`. It indicates the presence of a SIB byte.

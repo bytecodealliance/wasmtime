@@ -560,11 +560,11 @@ allones_fnaddr8 = TailRecipe(
 
 got_fnaddr8 = TailRecipe(
         'got_fnaddr8', FuncAddr, size=5, ins=(), outs=GPR,
-        # rex2 is a hack at the moment to get one that sets the `r` bit in rex
-        # rm for modrm_rm is 5 to get RIP-relative addressing
+        # rex2 gets passed 0 for r/m register because the upper bit of
+        # r/m doesnt get decoded when in rip-relative addressing mode.
         emit='''
         PUT_OP(bits, rex2(0, out_reg0), sink);
-        modrm_rm(5, out_reg0, sink);
+        modrm_riprel(out_reg0, sink);
         sink.reloc_external(Reloc::IntelGotPCRel4,
                             &func.dfg.ext_funcs[func_ref].name);
         sink.put4(0);
