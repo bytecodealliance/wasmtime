@@ -33,9 +33,6 @@ pub struct VirtRegs {
     pool: ListPool<Value>,
 
     /// The primary table of virtual registers.
-    ///
-    /// The list of values ion a virtual register is kept sorted according to the dominator tree's
-    /// RPO of the value defs.
     vregs: PrimaryMap<VirtReg, ValueList>,
 
     /// Each value belongs to at most one virtual register.
@@ -65,8 +62,8 @@ impl VirtRegs {
         self.value_vregs[value].into()
     }
 
-    /// Get the list of values in `vreg`. The values are ordered according to `DomTree::rpo_cmp` of
-    /// their definition points.
+    /// Get the list of values in `vreg`.
+    /// The values are topologically ordered according dominance of their definition points.
     pub fn values(&self, vreg: VirtReg) -> &[Value] {
         self.vregs[vreg].as_slice(&self.pool)
     }
@@ -103,7 +100,7 @@ impl VirtRegs {
     /// If a value belongs to a virtual register, all of the values in that register must be
     /// present.
     ///
-    /// The values are assumed to already be in RPO order.
+    /// The values are assumed to already be in topological order.
     pub fn unify(&mut self, values: &[Value]) -> VirtReg {
         // Start by clearing all virtual registers involved.
         // Pick a virtual register to reuse (the smallest number) or allocate a new one.
