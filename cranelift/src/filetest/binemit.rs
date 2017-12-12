@@ -9,7 +9,6 @@ use std::fmt::Write;
 use cretonne::binemit;
 use cretonne::ir;
 use cretonne::ir::entities::AnyEntity;
-use cretonne::isa::TargetIsa;
 use cretonne::regalloc::RegDiversions;
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result};
@@ -28,16 +27,14 @@ pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
 
 // Code sink that generates text.
 struct TextSink {
-    rnames: &'static [&'static str],
     offset: binemit::CodeOffset,
     text: String,
 }
 
 impl TextSink {
     /// Create a new empty TextSink.
-    pub fn new(isa: &TargetIsa) -> Self {
+    pub fn new() -> Self {
         Self {
-            rnames: isa.reloc_names(),
             offset: 0,
             text: String::new(),
         }
@@ -72,25 +69,20 @@ impl binemit::CodeSink for TextSink {
     }
 
     fn reloc_ebb(&mut self, reloc: binemit::Reloc, ebb_offset: binemit::CodeOffset) {
-        write!(
-            self.text,
-            "{}({}) ",
-            self.rnames[reloc.0 as usize],
-            ebb_offset
-        ).unwrap();
+        write!(self.text, "{}({}) ", reloc, ebb_offset).unwrap();
     }
 
     fn reloc_external(&mut self, reloc: binemit::Reloc, name: &ir::ExternalName) {
         write!(
             self.text,
             "{}({}) ",
-            self.rnames[reloc.0 as usize],
+            reloc,
             name,
         ).unwrap();
     }
 
     fn reloc_jt(&mut self, reloc: binemit::Reloc, jt: ir::JumpTable) {
-        write!(self.text, "{}({}) ", self.rnames[reloc.0 as usize], jt).unwrap();
+        write!(self.text, "{}({}) ", reloc, jt).unwrap();
     }
 }
 
@@ -191,7 +183,7 @@ impl SubTest for TestBinEmit {
         }
 
         // Now emit all instructions.
-        let mut sink = TextSink::new(isa);
+        let mut sink = TextSink::new();
         for ebb in func.layout.ebbs() {
             divert.clear();
             // Correct header offsets should have been computed by `relax_branches()`.

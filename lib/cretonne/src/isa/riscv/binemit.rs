@@ -9,20 +9,6 @@ use std::u32;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-riscv.rs"));
 
-/// RISC-V relocation kinds.
-pub enum RelocKind {
-    /// A jal call to a function.
-    Call,
-}
-
-pub static RELOC_NAMES: [&'static str; 1] = ["Call"];
-
-impl Into<Reloc> for RelocKind {
-    fn into(self) -> Reloc {
-        Reloc(self as u16)
-    }
-}
-
 /// R-type instructions.
 ///
 ///   31     24  19  14     11 6

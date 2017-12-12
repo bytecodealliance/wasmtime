@@ -11,6 +11,7 @@ pub use self::memorysink::{MemoryCodeSink, RelocSink};
 
 use ir::{ExternalName, JumpTable, Function, Inst};
 use regalloc::RegDiversions;
+use std::fmt;
 
 /// Offset in bytes from the beginning of the function.
 ///
@@ -18,8 +19,35 @@ use regalloc::RegDiversions;
 /// depends on the *host* platform, not the *target* platform.
 pub type CodeOffset = u32;
 
-/// Relocation kinds depend on the current ISA.
-pub struct Reloc(pub u16);
+/// Relocation kinds for every ISA
+#[derive(Debug)]
+pub enum Reloc {
+    /// Intel PC-relative 4-byte
+    IntelPCRel4,
+    /// Intel absolute 4-byte
+    IntelAbs4,
+    /// Intel absolute 8-byte
+    IntelAbs8,
+    /// Arm32 call target
+    Arm32Call,
+    /// Arm64 call target
+    Arm64Call,
+    /// RISC-V call target
+    RiscvCall,
+}
+
+impl fmt::Display for Reloc {
+    /// Display trait implementation drops the arch, since its used in contexts where the arch is
+    /// already unambigious, e.g. cton syntax with isa specified. In other contexts, use Debug.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Reloc::IntelPCRel4 => write!(f, "{}", "PCRel4"),
+            Reloc::IntelAbs4 => write!(f, "{}", "Abs4"),
+            Reloc::IntelAbs8 => write!(f, "{}", "Abs8"),
+            Reloc::Arm32Call | Reloc::Arm64Call | Reloc::RiscvCall => write!(f, "{}", "Call"),
+        }
+    }
+}
 
 /// Abstract interface for adding bytes to the code segment.
 ///

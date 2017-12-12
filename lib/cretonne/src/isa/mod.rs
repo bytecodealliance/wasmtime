@@ -272,10 +272,4 @@ pub trait TargetIsa {
     ///
     /// This is more performant than calling `emit_inst` for each instruction.
     fn emit_function(&self, func: &ir::Function, sink: &mut binemit::MemoryCodeSink);
-
-    /// Get a static array of names associated with relocations in this ISA.
-    ///
-    /// This array can be indexed by the contents of `binemit::Reloc` objects passed to a
-    /// `CodeSink`.
-    fn reloc_names(&self) -> &'static [&'static str];
 }
