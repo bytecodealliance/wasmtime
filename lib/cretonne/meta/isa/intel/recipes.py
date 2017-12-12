@@ -558,6 +558,19 @@ allones_fnaddr8 = TailRecipe(
         sink.put8(!0);
         ''')
 
+got_fnaddr8 = TailRecipe(
+        'got_fnaddr8', FuncAddr, size=5, ins=(), outs=GPR,
+        # rex2 is a hack at the moment to get one that sets the `r` bit in rex
+        # rm for modrm_rm is 5 to get RIP-relative addressing
+        emit='''
+        PUT_OP(bits, rex2(0, out_reg0), sink);
+        modrm_rm(5, out_reg0, sink);
+        sink.reloc_external(Reloc::IntelGotPCRel4,
+                            &func.dfg.ext_funcs[func_ref].name);
+        sink.put4(0);
+        ''')
+
+
 # XX+rd id with Abs4 globalsym relocation.
 gvaddr4 = TailRecipe(
         'gvaddr4', UnaryGlobalVar, size=4, ins=(), outs=GPR,
@@ -577,6 +590,18 @@ gvaddr8 = TailRecipe(
                             &func.global_vars[global_var].symbol_name());
         sink.put8(0);
         ''')
+
+# XX+rd iq with Abs8 globalsym relocation.
+got_gvaddr8 = TailRecipe(
+        'got_gvaddr8', UnaryGlobalVar, size=5, ins=(), outs=GPR,
+        emit='''
+        PUT_OP(bits, rex2(0, out_reg0), sink);
+        modrm_rm(5, out_reg0, sink);
+        sink.reloc_external(Reloc::IntelGotPCRel4,
+                            &func.global_vars[global_var].symbol_name());
+        sink.put4(0);
+        ''')
+
 
 #
 # Store recipes.
@@ -849,6 +874,15 @@ call_id = TailRecipe(
         emit='''
         PUT_OP(bits, BASE_REX, sink);
         sink.reloc_external(Reloc::IntelPCRel4,
+                            &func.dfg.ext_funcs[func_ref].name);
+        sink.put4(0);
+        ''')
+
+call_plt_id = TailRecipe(
+        'call_plt_id', Call, size=4, ins=(), outs=(),
+        emit='''
+        PUT_OP(bits, BASE_REX, sink);
+        sink.reloc_external(Reloc::IntelPLTRel4,
                             &func.dfg.ext_funcs[func_ref].name);
         sink.put4(0);
         ''')

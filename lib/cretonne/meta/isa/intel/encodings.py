@@ -2,7 +2,7 @@
 Intel Encodings.
 """
 from __future__ import absolute_import
-from cdsl.predicates import IsUnsignedInt, Not
+from cdsl.predicates import IsUnsignedInt, Not, And
 from base import instructions as base
 from base.formats import UnaryImm
 from .defs import I32, I64
@@ -11,7 +11,7 @@ from . import settings as cfg
 from . import instructions as x86
 from .legalize import intel_expand
 from base.legalize import narrow, expand
-from base.settings import allones_funcaddrs
+from base.settings import allones_funcaddrs, is_pic
 from .settings import use_sse41
 
 try:
@@ -281,25 +281,33 @@ enc_both(base.regspill.f64, r.frsp32, 0x66, 0x0f, 0xd6)
 I32.enc(base.func_addr.i32, *r.fnaddr4(0xb8),
         isap=Not(allones_funcaddrs))
 I64.enc(base.func_addr.i64, *r.fnaddr8.rex(0xb8, w=1),
-        isap=Not(allones_funcaddrs))
+        isap=And(Not(allones_funcaddrs), Not(is_pic)))
 
 I32.enc(base.func_addr.i32, *r.allones_fnaddr4(0xb8),
         isap=allones_funcaddrs)
 I64.enc(base.func_addr.i64, *r.allones_fnaddr8.rex(0xb8, w=1),
-        isap=allones_funcaddrs)
+        isap=And(allones_funcaddrs, Not(is_pic)))
+
+I64.enc(base.func_addr.i64, *r.got_fnaddr8.rex(0x8b, w=1),
+        isap=is_pic)
 
 #
 # Global addresses.
 #
 
 I32.enc(base.globalsym_addr.i32, *r.gvaddr4(0xb8))
-I64.enc(base.globalsym_addr.i64, *r.gvaddr8.rex(0xb8, w=1))
+I64.enc(base.globalsym_addr.i64, *r.gvaddr8.rex(0xb8, w=1),
+        isap=Not(is_pic))
+
+I64.enc(base.globalsym_addr.i64, *r.got_gvaddr8.rex(0x8b, w=1),
+        isap=is_pic)
 
 #
 # Call/return
 #
 I32.enc(base.call, *r.call_id(0xe8))
-I64.enc(base.call, *r.call_id(0xe8))
+I64.enc(base.call, *r.call_id(0xe8), isap=Not(is_pic))
+I64.enc(base.call, *r.call_plt_id(0xe8), isap=is_pic)
 
 I32.enc(base.call_indirect.i32, *r.call_r(0xff, rrr=2))
 I64.enc(base.call_indirect.i64, *r.call_r.rex(0xff, rrr=2))
