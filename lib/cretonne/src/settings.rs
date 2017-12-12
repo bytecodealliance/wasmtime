@@ -347,6 +347,7 @@ mod tests {
                     opt_level = \"default\"\n\
                     enable_verifier = true\n\
                     is_64bit = false\n\
+                    is_pic = false\n\
                     return_at_end = false\n\
                     is_compressed = false\n\
                     enable_float = true\n\

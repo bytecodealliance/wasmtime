@@ -29,6 +29,8 @@ enable_verifier = BoolSetting(
 
 is_64bit = BoolSetting("Enable 64-bit code generation")
 
+is_pic = BoolSetting("Enable Position-Independent Code generation")
+
 return_at_end = BoolSetting(
         """
         Generate functions with at most a single return instruction at the
