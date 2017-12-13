@@ -7,14 +7,15 @@
 
 use cursor::{Cursor, EncCursor};
 use dbg::DisplayList;
-use dominator_tree::DominatorTree;
+use dominator_tree::{DominatorTree, DominatorTreePreorder};
 use flowgraph::ControlFlowGraph;
-use ir::{DataFlowGraph, Layout, InstBuilder, ValueDef};
+use ir::{Layout, InstBuilder, ValueDef};
 use ir::{Function, Ebb, Inst, Value, ExpandedProgramPoint};
 use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::VirtRegs;
 use std::cmp::Ordering;
+use std::fmt;
 use std::iter::Peekable;
 use std::mem;
 use isa::{TargetIsa, EncInfo};
@@ -23,10 +24,10 @@ use timing;
 /// Dominator forest.
 ///
 /// This is a utility type used for merging virtual registers, where each virtual register is a
-/// list of values ordered according to `DomTree::rpo_cmp`.
+/// list of values ordered according to the dominator tree pre-order.
 ///
 /// A `DomForest` object is used as a buffer for building virtual registers. It lets you merge two
-/// sorted lists of values while checking for interference only whee necessary.
+/// sorted lists of values while checking for interference only where necessary.
 ///
 /// The idea of a dominator forest was introduced here:
 ///
@@ -37,14 +38,20 @@ use timing;
 /// The linear stack representation here:
 ///
 /// Boissinot, B., Darte, A., & Rastello, F. (2009). Revisiting out-of-SSA translation for
-/// correctness, code quality and efficiency. Presented at the Proceedings of the 7th  ….
+/// correctness, code quality and efficiency.
+///
+/// Our version of the linear stack is slightly modified because we have a pre-order of the
+/// dominator tree at the EBB granularity, not basic block granularity.
 struct DomForest {
-    // The sequence of values that have been merged so far. In RPO order of their defs.
+    // The sequence of values that have been merged so far.
+    // In domtree pre-order order of their definitions.
     values: Vec<Value>,
 
     // Stack representing the rightmost edge of the dominator forest so far, ending in the last
-    // element of `values`. At all times, each element in the stack dominates the next one, and all
-    // elements dominating the end of `values` are on the stack.
+    // element of `values`.
+    //
+    // At all times, the EBB of each element in the stack dominates the EBB of the next one, and
+    // all elements dominating the end of `values` are on the stack.
     stack: Vec<Node>,
 }
 
@@ -56,22 +63,29 @@ struct Node {
     set: u8,
     /// The program point where `value` is defined.
     def: ExpandedProgramPoint,
+    /// EBB containing `def`.
+    ebb: Ebb,
 }
 
 impl Node {
     /// Create a node for `value`.
-    pub fn new(value: Value, set: u8, dfg: &DataFlowGraph) -> Node {
+    pub fn new(value: Value, set: u8, func: &Function) -> Node {
+        let def = func.dfg.value_def(value).into();
+        let ebb = func.layout.pp_ebb(def);
         Node {
             value,
             set,
-            def: dfg.value_def(value).into(),
+            def,
+            ebb,
         }
     }
 }
 
-/// Push a node to `stack` and update `stack` so it contains all dominator forest ancestors of
-/// the pushed value.
-///
+impl fmt::Display for Node {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}@{}:{}", self.value, self.ebb, self.set)
+    }
+}
 
 impl DomForest {
     /// Create a new empty dominator forest.
@@ -103,23 +117,51 @@ impl DomForest {
     ///
     /// If the pushed node's parent in the dominator forest belongs to a different set, returns
     /// `Some(parent)`.
-    fn push_node(&mut self, node: Node, layout: &Layout, domtree: &DominatorTree) -> Option<Value> {
+    fn push_node(
+        &mut self,
+        node: Node,
+        layout: &Layout,
+        domtree: &DominatorTree,
+        preorder: &DominatorTreePreorder,
+    ) -> Option<Value> {
         self.values.push(node.value);
 
         // The stack contains the current sequence of dominating defs. Pop elements until we
-        // find one that dominates `node`.
+        // find one whose EBB dominates `node.ebb`.
         while let Some(top) = self.stack.pop() {
-            if domtree.dominates(top.def, node.def, layout) {
+            if preorder.dominates(top.ebb, node.ebb) {
                 // This is the right insertion spot for `node`.
                 self.stack.push(top);
                 self.stack.push(node);
+
+                // We know here that `top.ebb` dominates `node.ebb`, and thus `node.def`. This does
+                // not necessarily mean that `top.def` dominates `node.def`, though. The `top.def`
+                // program point may be below the last branch in `top.ebb` that dominates
+                // `node.def`.
+                debug_assert!(domtree.dominates(top.ebb, node.def, layout));
+
+                // We do know, though, that if there is a nearest value dominating `node.def`, it
+                // will be on the stack. We just need to find the last stack entry that actually
+                // dominates.
+                //
+                // TODO: This search could be more efficient if we had access to
+                // `domtree.last_dominator()`. Each call to `dominates()` here ends up walking up
+                // the dominator tree starting from `node.ebb`.
+                let dom = self.stack[0..self.stack.len() - 1].iter().rposition(|n| {
+                    domtree.dominates(n.def, node.def, layout)
+                });
+
                 // If the parent value comes from a different set, return it for interference
                 // checking. If the sets are equal, assume that interference is already handled.
-                if top.set != node.set {
-                    return Some(top.value);
-                } else {
-                    return None;
+                if let Some(pos) = dom {
+                    let parent = &self.stack[pos];
+                    if parent.set != node.set {
+                        return Some(parent.value);
+                    }
                 }
+
+                // There was no opposite-set value dominating `node.def`.
+                return None;
             }
         }
 
@@ -143,9 +185,9 @@ impl DomForest {
         &mut self,
         va: &[Value],
         vb: &[Value],
-        dfg: &DataFlowGraph,
-        layout: &Layout,
+        func: &Function,
         domtree: &DominatorTree,
+        preorder: &DominatorTreePreorder,
         liveness: &Liveness,
     ) -> Result<(), (Value, Value)> {
         self.clear();
@@ -153,16 +195,16 @@ impl DomForest {
 
         // Convert the two value lists into a merged sequence of nodes.
         let merged = MergedNodes {
-            a: va.iter().map(|&value| Node::new(value, 0, dfg)).peekable(),
-            b: vb.iter().map(|&value| Node::new(value, 1, dfg)).peekable(),
-            layout,
-            domtree,
+            a: va.iter().map(|&value| Node::new(value, 0, func)).peekable(),
+            b: vb.iter().map(|&value| Node::new(value, 1, func)).peekable(),
+            layout: &func.layout,
+            preorder,
         };
-        let ctx = liveness.context(layout);
+        let ctx = liveness.context(&func.layout);
         for node in merged {
-            if let Some(parent) = self.push_node(node, layout, domtree) {
+            if let Some(parent) = self.push_node(node, &func.layout, domtree, preorder) {
                 // Check if `parent` live range contains `node.def`.
-                if liveness[parent].overlaps_def(node.def, layout.pp_ebb(node.def), ctx) {
+                if liveness[parent].overlaps_def(node.def, func.layout.pp_ebb(node.def), ctx) {
                     // Interference detected. Get the `(a, b)` order right in the error.
                     return Err(if node.set == 0 {
                         (node.value, parent)
@@ -189,7 +231,7 @@ where
     a: Peekable<IA>,
     b: Peekable<IB>,
     layout: &'a Layout,
-    domtree: &'a DominatorTree,
+    preorder: &'a DominatorTreePreorder,
 }
 
 impl<'a, IA, IB> Iterator for MergedNodes<'a, IA, IB>
@@ -205,7 +247,7 @@ where
                 // If the two values are defined at the same point, compare value numbers instead
                 // this is going to cause an interference conflict unless its actually the same
                 // value appearing in both streams.
-                self.domtree.rpo_cmp(a.def, b.def, self.layout).then(
+                self.preorder.pre_cmp(a.def, b.def, self.layout).then(
                     Ord::cmp(
                         &a.value,
                         &b.value,
@@ -231,6 +273,7 @@ where
 /// Data structures to be used by the coalescing pass.
 pub struct Coalescing {
     forest: DomForest,
+    preorder: DominatorTreePreorder,
 
     // Current set of coalesced values. Kept sorted and interference free.
     values: Vec<Value>,
@@ -247,6 +290,7 @@ struct Context<'a> {
     func: &'a mut Function,
     cfg: &'a ControlFlowGraph,
     domtree: &'a DominatorTree,
+    preorder: &'a DominatorTreePreorder,
     liveness: &'a mut Liveness,
     virtregs: &'a mut VirtRegs,
 
@@ -260,6 +304,7 @@ impl Coalescing {
     pub fn new() -> Self {
         Self {
             forest: DomForest::new(),
+            preorder: DominatorTreePreorder::new(),
             values: Vec::new(),
             split_values: Vec::new(),
         }
@@ -285,12 +330,14 @@ impl Coalescing {
     ) {
         let _tt = timing::ra_cssa();
         dbg!("Coalescing for:\n{}", func.display(isa));
+        self.preorder.compute(domtree, &func.layout);
         let mut context = Context {
             isa,
             encinfo: isa.encoding_info(),
             func,
             cfg,
             domtree,
+            preorder: &self.preorder,
             liveness,
             virtregs,
             forest: &mut self.forest,
@@ -486,9 +533,9 @@ impl<'a> Context<'a> {
         self.forest.try_merge(
             self.values,
             self.virtregs.congruence_class(&value),
-            &self.func.dfg,
-            &self.func.layout,
+            self.func,
             self.domtree,
+            self.preorder,
             self.liveness,
         )?;
         self.forest.swap(&mut self.values);
