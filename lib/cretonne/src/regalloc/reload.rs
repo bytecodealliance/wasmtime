@@ -90,6 +90,7 @@ impl Reload {
 /// This represents a stack value that is used by the current instruction where a register is
 /// needed.
 struct ReloadCandidate {
+    argidx: usize,
     value: Value,
     regclass: RegClass,
 }
@@ -205,9 +206,10 @@ impl<'a> Context<'a> {
         assert!(self.candidates.is_empty());
         self.find_candidates(inst, constraints);
 
-        // Insert fill instructions before `inst`.
-        while let Some(cand) = self.candidates.pop() {
-            if let Some(_reload) = self.reloads.get_mut(cand.value) {
+        // Insert fill instructions before `inst` and replace `cand.value` with the filled value.
+        for cand in self.candidates.iter_mut() {
+            if let Some(reload) = self.reloads.get(cand.value) {
+                cand.value = reload.reg;
                 continue;
             }
 
@@ -218,6 +220,7 @@ impl<'a> Context<'a> {
                 stack: cand.value,
                 reg: reg,
             });
+            cand.value = reg;
 
             // Create a live range for the new reload.
             let affinity = Affinity::Reg(cand.regclass.into());
@@ -230,10 +233,16 @@ impl<'a> Context<'a> {
             );
         }
 
-        // Rewrite arguments.
-        for arg in self.cur.func.dfg.inst_args_mut(inst) {
-            if let Some(reload) = self.reloads.get(*arg) {
-                *arg = reload.reg;
+        // Rewrite instruction arguments.
+        //
+        // Only rewrite those arguments that were identified as candidates. This leaves EBB
+        // arguments on branches as-is without rewriting them. A spilled EBB argument needs to stay
+        // spilled because the matching EBB parameter is going to be in the same virtual register
+        // and therefore the same stack slot as the EBB argument value.
+        if !self.candidates.is_empty() {
+            let args = self.cur.func.dfg.inst_args_mut(inst);
+            while let Some(cand) = self.candidates.pop() {
+                args[cand.argidx] = cand.value;
             }
         }
 
@@ -295,10 +304,11 @@ impl<'a> Context<'a> {
     fn find_candidates(&mut self, inst: Inst, constraints: &RecipeConstraints) {
         let args = self.cur.func.dfg.inst_args(inst);
 
-        for (op, &arg) in constraints.ins.iter().zip(args) {
+        for (argidx, (op, &arg)) in constraints.ins.iter().zip(args).enumerate() {
             if op.kind != ConstraintKind::Stack {
                 if self.liveness[arg].affinity.is_stack() {
                     self.candidates.push(ReloadCandidate {
+                        argidx,
                         value: arg,
                         regclass: op.regclass,
                     })
@@ -307,10 +317,11 @@ impl<'a> Context<'a> {
         }
 
         // If we only have the fixed arguments, we're done now.
-        if args.len() == constraints.ins.len() {
+        let offset = constraints.ins.len();
+        if args.len() == offset {
             return;
         }
-        let var_args = &args[constraints.ins.len()..];
+        let var_args = &args[offset..];
 
         // Handle ABI arguments.
         if let Some(sig) = self.cur.func.dfg.call_signature(inst) {
@@ -318,6 +329,7 @@ impl<'a> Context<'a> {
                 self.candidates,
                 &self.cur.func.dfg.signatures[sig].params,
                 var_args,
+                offset,
                 self.cur.isa,
                 self.liveness,
             );
@@ -326,6 +338,7 @@ impl<'a> Context<'a> {
                 self.candidates,
                 &self.cur.func.signature.returns,
                 var_args,
+                offset,
                 self.cur.isa,
                 self.liveness,
             );
@@ -358,15 +371,17 @@ fn handle_abi_args(
     candidates: &mut Vec<ReloadCandidate>,
     abi_types: &[AbiParam],
     var_args: &[Value],
+    offset: usize,
     isa: &TargetIsa,
     liveness: &Liveness,
 ) {
     assert_eq!(abi_types.len(), var_args.len());
-    for (abi, &arg) in abi_types.iter().zip(var_args) {
+    for ((abi, &arg), argidx) in abi_types.iter().zip(var_args).zip(offset..) {
         if abi.location.is_reg() {
             let lv = liveness.get(arg).expect("Missing live range for ABI arg");
             if lv.affinity.is_stack() {
                 candidates.push(ReloadCandidate {
+                    argidx,
                     value: arg,
                     regclass: isa.regclass_for_abi_type(abi.value_type),
                 });
