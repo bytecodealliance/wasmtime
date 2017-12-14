@@ -19,6 +19,9 @@ use std::fmt;
 /// depends on the *host* platform, not the *target* platform.
 pub type CodeOffset = u32;
 
+/// Addend to add to the symbol value.
+pub type Addend = i64;
+
 /// Relocation kinds for every ISA
 #[derive(Debug)]
 pub enum Reloc {
@@ -78,8 +81,8 @@ pub trait CodeSink {
     /// Add a relocation referencing an EBB at the current offset.
     fn reloc_ebb(&mut self, Reloc, CodeOffset);
 
-    /// Add a relocation referencing an external symbol at the current offset.
-    fn reloc_external(&mut self, Reloc, &ExternalName);
+    /// Add a relocation referencing an external symbol plus the addend at the current offset.
+    fn reloc_external(&mut self, Reloc, &ExternalName, Addend);
 
     /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, Reloc, JumpTable);

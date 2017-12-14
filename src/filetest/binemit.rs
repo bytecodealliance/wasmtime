@@ -72,12 +72,28 @@ impl binemit::CodeSink for TextSink {
         write!(self.text, "{}({}) ", reloc, ebb_offset).unwrap();
     }
 
-    fn reloc_external(&mut self, reloc: binemit::Reloc, name: &ir::ExternalName) {
+    fn reloc_external(
+        &mut self,
+        reloc: binemit::Reloc,
+        name: &ir::ExternalName,
+        addend: binemit::Addend,
+    ) {
         write!(
             self.text,
-            "{}({}) ",
+            "{}({}",
             reloc,
             name,
+        ).unwrap();
+        if addend != 0 {
+            write!(
+                self.text,
+                "{:+}",
+                addend,
+            ).unwrap();
+        }
+        write!(
+            self.text,
+            ") ",
         ).unwrap();
     }
 

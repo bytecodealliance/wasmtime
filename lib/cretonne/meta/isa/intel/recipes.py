@@ -522,7 +522,8 @@ fnaddr4 = TailRecipe(
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         sink.reloc_external(Reloc::IntelAbs4,
-                            &func.dfg.ext_funcs[func_ref].name);
+                            &func.dfg.ext_funcs[func_ref].name,
+                            0);
         sink.put4(0);
         ''')
 
@@ -532,7 +533,8 @@ fnaddr8 = TailRecipe(
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         sink.reloc_external(Reloc::IntelAbs8,
-                            &func.dfg.ext_funcs[func_ref].name);
+                            &func.dfg.ext_funcs[func_ref].name,
+                            0);
         sink.put8(0);
         ''')
 
@@ -542,7 +544,8 @@ allones_fnaddr4 = TailRecipe(
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         sink.reloc_external(Reloc::IntelAbs4,
-                            &func.dfg.ext_funcs[func_ref].name);
+                            &func.dfg.ext_funcs[func_ref].name,
+                            0);
         // Write the immediate as `!0` for the benefit of BaldrMonkey.
         sink.put4(!0);
         ''')
@@ -553,7 +556,8 @@ allones_fnaddr8 = TailRecipe(
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         sink.reloc_external(Reloc::IntelAbs8,
-                            &func.dfg.ext_funcs[func_ref].name);
+                            &func.dfg.ext_funcs[func_ref].name,
+                            0);
         // Write the immediate as `!0` for the benefit of BaldrMonkey.
         sink.put8(!0);
         ''')
@@ -565,8 +569,11 @@ got_fnaddr8 = TailRecipe(
         emit='''
         PUT_OP(bits, rex2(0, out_reg0), sink);
         modrm_riprel(out_reg0, sink);
+        // The addend adjusts for the difference between the end of the
+        // instruction and the beginning of the immediate field.
         sink.reloc_external(Reloc::IntelGOTPCRel4,
-                            &func.dfg.ext_funcs[func_ref].name);
+                            &func.dfg.ext_funcs[func_ref].name,
+                            -4);
         sink.put4(0);
         ''')
 
@@ -577,7 +584,8 @@ gvaddr4 = TailRecipe(
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         sink.reloc_external(Reloc::IntelAbs4,
-                            &func.global_vars[global_var].symbol_name());
+                            &func.global_vars[global_var].symbol_name(),
+                            0);
         sink.put4(0);
         ''')
 
@@ -587,7 +595,8 @@ gvaddr8 = TailRecipe(
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         sink.reloc_external(Reloc::IntelAbs8,
-                            &func.global_vars[global_var].symbol_name());
+                            &func.global_vars[global_var].symbol_name(),
+                            0);
         sink.put8(0);
         ''')
 
@@ -597,8 +606,11 @@ got_gvaddr8 = TailRecipe(
         emit='''
         PUT_OP(bits, rex2(0, out_reg0), sink);
         modrm_rm(5, out_reg0, sink);
+        // The addend adjusts for the difference between the end of the
+        // instruction and the beginning of the immediate field.
         sink.reloc_external(Reloc::IntelGOTPCRel4,
-                            &func.global_vars[global_var].symbol_name());
+                            &func.global_vars[global_var].symbol_name(),
+                            -4);
         sink.put4(0);
         ''')
 
@@ -874,7 +886,8 @@ call_id = TailRecipe(
         emit='''
         PUT_OP(bits, BASE_REX, sink);
         sink.reloc_external(Reloc::IntelPCRel4,
-                            &func.dfg.ext_funcs[func_ref].name);
+                            &func.dfg.ext_funcs[func_ref].name,
+                            0);
         sink.put4(0);
         ''')
 
@@ -883,7 +896,8 @@ call_plt_id = TailRecipe(
         emit='''
         PUT_OP(bits, BASE_REX, sink);
         sink.reloc_external(Reloc::IntelPLTRel4,
-                            &func.dfg.ext_funcs[func_ref].name);
+                            &func.dfg.ext_funcs[func_ref].name,
+                            0);
         sink.put4(0);
         ''')
 
