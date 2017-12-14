@@ -3,7 +3,7 @@
 use dbg::DisplayList;
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
-use ir::Function;
+use ir::{Function, ExpandedProgramPoint};
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::VirtRegs;
 use timing;
@@ -68,10 +68,21 @@ impl<'a> CssaVerifier<'a> {
                 };
 
                 // Check topological ordering with the previous values in the virtual register.
-                let def = self.func.dfg.value_def(val).into();
+                let def: ExpandedProgramPoint = self.func.dfg.value_def(val).into();
                 let def_ebb = self.func.layout.pp_ebb(def);
                 for &prev_val in &values[0..idx] {
-                    let prev_def = self.func.dfg.value_def(prev_val);
+                    let prev_def: ExpandedProgramPoint = self.func.dfg.value_def(prev_val).into();
+
+                    if prev_def == def {
+                        return err!(
+                            val,
+                            "Values {} and {} in {} = {} defined at the same program point",
+                            prev_val,
+                            val,
+                            vreg,
+                            DisplayList(values)
+                        );
+                    }
 
                     // Enforce topological ordering of defs in the virtual register.
                     if self.domtree.dominates(def, prev_def, &self.func.layout) {
