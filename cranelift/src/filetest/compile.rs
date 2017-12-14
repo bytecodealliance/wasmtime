@@ -103,6 +103,12 @@ impl binemit::CodeSink for SizeSink {
     }
 
     fn reloc_ebb(&mut self, _reloc: binemit::Reloc, _ebb_offset: binemit::CodeOffset) {}
-    fn reloc_external(&mut self, _reloc: binemit::Reloc, _name: &ir::ExternalName) {}
+    fn reloc_external(
+        &mut self,
+        _reloc: binemit::Reloc,
+        _name: &ir::ExternalName,
+        _addend: binemit::Addend,
+    ) {
+    }
     fn reloc_jt(&mut self, _reloc: binemit::Reloc, _jt: ir::JumpTable) {}
 }

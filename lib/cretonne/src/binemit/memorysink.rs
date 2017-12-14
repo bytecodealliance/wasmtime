@@ -15,7 +15,7 @@
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
 
 use ir::{ExternalName, JumpTable};
-use super::{CodeSink, CodeOffset, Reloc};
+use super::{CodeSink, CodeOffset, Reloc, Addend};
 use std::ptr::write_unaligned;
 
 /// A `CodeSink` that writes binary machine code directly into memory.
@@ -52,7 +52,7 @@ pub trait RelocSink {
     fn reloc_ebb(&mut self, CodeOffset, Reloc, CodeOffset);
 
     /// Add a relocation referencing an external symbol at the current offset.
-    fn reloc_external(&mut self, CodeOffset, Reloc, &ExternalName);
+    fn reloc_external(&mut self, CodeOffset, Reloc, &ExternalName, Addend);
 
     /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, CodeOffset, Reloc, JumpTable);
@@ -96,9 +96,9 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         self.relocs.reloc_ebb(ofs, rel, ebb_offset);
     }
 
-    fn reloc_external(&mut self, rel: Reloc, name: &ExternalName) {
+    fn reloc_external(&mut self, rel: Reloc, name: &ExternalName, addend: Addend) {
         let ofs = self.offset();
-        self.relocs.reloc_external(ofs, rel, name);
+        self.relocs.reloc_external(ofs, rel, name, addend);
     }
 
     fn reloc_jt(&mut self, rel: Reloc, jt: JumpTable) {
