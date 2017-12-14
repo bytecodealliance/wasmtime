@@ -565,7 +565,7 @@ got_fnaddr8 = TailRecipe(
         emit='''
         PUT_OP(bits, rex2(0, out_reg0), sink);
         modrm_riprel(out_reg0, sink);
-        sink.reloc_external(Reloc::IntelGotPCRel4,
+        sink.reloc_external(Reloc::IntelGOTPCRel4,
                             &func.dfg.ext_funcs[func_ref].name);
         sink.put4(0);
         ''')
@@ -597,7 +597,7 @@ got_gvaddr8 = TailRecipe(
         emit='''
         PUT_OP(bits, rex2(0, out_reg0), sink);
         modrm_rm(5, out_reg0, sink);
-        sink.reloc_external(Reloc::IntelGotPCRel4,
+        sink.reloc_external(Reloc::IntelGOTPCRel4,
                             &func.global_vars[global_var].symbol_name());
         sink.put4(0);
         ''')
