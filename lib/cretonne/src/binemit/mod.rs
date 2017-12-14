@@ -29,7 +29,7 @@ pub enum Reloc {
     /// Intel absolute 8-byte
     IntelAbs8,
     /// Intel GOT PC-relative 4-byte
-    IntelGotPCRel4,
+    IntelGOTPCRel4,
     /// Intel PLT-relative 4-byte
     IntelPLTRel4,
     /// Arm32 call target
@@ -48,7 +48,7 @@ impl fmt::Display for Reloc {
             Reloc::IntelPCRel4 => write!(f, "{}", "PCRel4"),
             Reloc::IntelAbs4 => write!(f, "{}", "Abs4"),
             Reloc::IntelAbs8 => write!(f, "{}", "Abs8"),
-            Reloc::IntelGotPCRel4 => write!(f, "{}", "GotPCRel4"),
+            Reloc::IntelGOTPCRel4 => write!(f, "{}", "GOTPCRel4"),
             Reloc::IntelPLTRel4 => write!(f, "{}", "PLTRel4"),
             Reloc::Arm32Call | Reloc::Arm64Call | Reloc::RiscvCall => write!(f, "{}", "Call"),
         }
