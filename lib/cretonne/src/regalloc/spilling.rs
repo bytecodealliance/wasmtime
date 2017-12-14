@@ -155,8 +155,10 @@ impl<'a> Context<'a> {
     fn free_regs(&mut self, kills: &[LiveValue]) {
         for lv in kills {
             if let Affinity::Reg(rci) = lv.affinity {
-                let rc = self.reginfo.rc(rci);
-                self.pressure.free(rc);
+                if !self.spills.contains(&lv.value) {
+                    let rc = self.reginfo.rc(rci);
+                    self.pressure.free(rc);
+                }
             }
         }
     }
@@ -402,8 +404,17 @@ impl<'a> Context<'a> {
                     dbg!("Copy of {} reg causes spill", rc);
                     // Spill a live register that is *not* used by the current instruction.
                     // Spilling a use wouldn't help.
+                    //
+                    // Do allow spilling of EBB arguments on branches. This is safe since we spill
+                    // the whole virtual register which includes the matching EBB parameter value
+                    // at the branch destination. It is also necessary since there can be
+                    // arbitrarily many EBB arguments.
                     match {
-                        let args = self.cur.func.dfg.inst_args(inst);
+                        let args = if self.cur.func.dfg[inst].opcode().is_branch() {
+                            self.cur.func.dfg.inst_fixed_args(inst)
+                        } else {
+                            self.cur.func.dfg.inst_args(inst)
+                        };
                         self.spill_candidate(
                             mask,
                             tracker.live().iter().filter(|lv| !args.contains(&lv.value)),

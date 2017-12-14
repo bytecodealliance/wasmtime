@@ -145,6 +145,30 @@ ebb1(v10: i32, v11: i32, v12: i32, v13: i32, v14: i32, v15: i32, v16: i32, v17: 
     return v33
 }
 
+; Spilling an EBB argument to make room for a branch operand.
+function %brargs(i32) -> i32 {
+ebb0(v1: i32):
+    ; check: $v1 = spill
+    v2 = iconst.i32 1
+    brnz v1, ebb1(v2, v2, v2, v2, v2, v2, v2, v2, v2, v2, v2, v2)
+    return v1
+
+ebb1(v10: i32, v11: i32, v12: i32, v13: i32, v14: i32, v15: i32, v16: i32, v17: i32, v18: i32, v19: i32, v20: i32, v21: i32):
+    v22 = iadd v10, v11
+    v23 = iadd v22, v12
+    v24 = iadd v23, v13
+    v25 = iadd v24, v14
+    v26 = iadd v25, v15
+    v27 = iadd v26, v16
+    v28 = iadd v27, v17
+    v29 = iadd v28, v18
+    v30 = iadd v29, v19
+    v31 = iadd v30, v20
+    v32 = iadd v31, v21
+    v33 = iadd v32, v1
+    return v33
+}
+
 ; In straight-line code, the first value defined is spilled.
 ; That is in order:
 ; 1. The argument v1.
