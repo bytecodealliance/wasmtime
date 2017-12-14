@@ -407,6 +407,11 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
         ebb: Ebb,
         ctx: LiveRangeContext<PO>,
     ) -> bool {
+        // Two defs at the same program point always overlap, even if one is dead.
+        if def == self.def_begin.into() {
+            return true;
+        }
+
         // Check for an overlap with the local range.
         if ctx.order.cmp(def, self.def_begin) != Ordering::Less &&
             ctx.order.cmp(def, self.def_end) == Ordering::Less
@@ -549,7 +554,9 @@ mod tests {
     #[test]
     fn dead_def_range() {
         let v0 = Value::new(0);
+        let e0 = Ebb::new(0);
         let i1 = Inst::new(1);
+        let i2 = Inst::new(2);
         let e2 = Ebb::new(2);
         let lr = GenLiveRange::new(v0, i1.into(), Default::default());
         let forest = &bforest::MapForest::new();
@@ -560,6 +567,11 @@ mod tests {
         assert_eq!(lr.def_local_end(), i1.into());
         assert_eq!(lr.livein_local_end(e2, ctx), None);
         PO.validate(&lr, ctx.forest);
+
+        // A dead live range overlaps its own def program point.
+        assert!(lr.overlaps_def(i1.into(), e0, ctx));
+        assert!(!lr.overlaps_def(i2.into(), e0, ctx));
+        assert!(!lr.overlaps_def(e0.into(), e0, ctx));
     }
 
     #[test]
