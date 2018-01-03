@@ -290,12 +290,12 @@ class Instruction(object):
         # Allow a single Operand instance instead of the awkward singleton
         # tuple syntax.
         if isinstance(x, Operand):
-            x = (x,)
+            y = (x,)  # type: Tuple[Operand, ...]
         else:
-            x = tuple(x)
-        for op in x:
+            y = tuple(x)
+        for op in y:
             assert isinstance(op, Operand)
-        return x
+        return y
 
     @staticmethod
     def _to_constraint_tuple(x):
@@ -307,12 +307,12 @@ class Instruction(object):
         # import placed here to avoid circular dependency
         from .ti import TypeConstraint  # noqa
         if isinstance(x, TypeConstraint):
-            x = (x,)
+            y = (x,)  # type: Tuple[TypeConstraint, ...]
         else:
-            x = tuple(x)
-        for op in x:
+            y = tuple(x)
+        for op in y:
             assert isinstance(op, TypeConstraint)
-        return x
+        return y
 
     def bind(self, *args):
         # type: (*ValueType) -> BoundInstruction
