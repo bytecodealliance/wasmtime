@@ -62,16 +62,19 @@ class UniqueSeqTable:
         """
         if len(seq) == 0:
             return 0
-        seq = tuple(seq)
-        if seq in self.index:
-            return self.index[seq]
+        tseq = tuple(seq)
+        if tseq in self.index:
+            return self.index[tseq]
 
         idx = len(self.table)
-        self.table.extend(seq)
+        self.table.extend(tseq)
 
         # Add seq and all sub-sequences to `index`.
-        for length in range(1, len(seq) + 1):
-            for offset in range(len(seq) - length + 1):
-                self.index[seq[offset:offset+length]] = idx + offset
+        index = self.index  # type: Dict[Tuple[Any, ...], int]
+        assert index is not None
+        for length in range(1, len(tseq) + 1):
+            for offset in range(len(tseq) - length + 1):
+                key = tseq[offset:offset+length]
+                index[key] = idx + offset
 
         return idx
