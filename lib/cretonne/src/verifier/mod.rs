@@ -443,6 +443,8 @@ impl<'a> Verifier<'a> {
         if !dfg.value_is_valid(v) {
             return err!(loc_inst, "invalid value reference {}", v);
         }
+        let loc_ebb = self.func.layout.pp_ebb(loc_inst);
+        let is_reachable = self.expected_domtree.is_reachable(loc_ebb);
 
         // SSA form
         match dfg.value_def(v) {
@@ -466,9 +468,7 @@ impl<'a> Verifier<'a> {
                     );
                 }
                 // Defining instruction dominates the instruction that uses the value.
-                if self.expected_domtree.is_reachable(
-                    self.func.layout.pp_ebb(loc_inst),
-                ) &&
+                if is_reachable &&
                     !self.expected_domtree.dominates(
                         def_inst,
                         loc_inst,
@@ -493,7 +493,7 @@ impl<'a> Verifier<'a> {
                     );
                 }
                 // The defining EBB dominates the instruction using this value.
-                if self.expected_domtree.is_reachable(ebb) &&
+                if is_reachable &&
                     !self.expected_domtree.dominates(
                         ebb,
                         loc_inst,
