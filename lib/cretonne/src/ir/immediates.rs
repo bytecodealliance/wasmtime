@@ -526,7 +526,7 @@ impl Ieee32 {
         Ieee32(x)
     }
 
-    /// Create an `Ieee32` number representing 2.0^n.
+    /// Create an `Ieee32` number representing `2.0^n`.
     pub fn pow2<I: Into<i32>>(n: I) -> Ieee32 {
         let n = n.into();
         let w = 8;
@@ -578,7 +578,7 @@ impl Ieee64 {
         Ieee64(x)
     }
 
-    /// Create an `Ieee64` number representing 2.0^n.
+    /// Create an `Ieee64` number representing `2.0^n`.
     pub fn pow2<I: Into<i64>>(n: I) -> Ieee64 {
         let n = n.into();
         let w = 11;

@@ -1,59 +1,59 @@
 //! A verifier for ensuring that functions are well formed.
 //! It verifies:
 //!
-//!   EBB integrity
+//! EBB integrity
 //!
-//!    - All instructions reached from the `ebb_insts` iterator must belong to
-//!      the EBB as reported by `inst_ebb()`.
-//!    - Every EBB must end in a terminator instruction, and no other instruction
-//!      can be a terminator.
-//!    - Every value in the `ebb_params` iterator belongs to the EBB as reported by `value_ebb`.
+//! - All instructions reached from the `ebb_insts` iterator must belong to
+//!   the EBB as reported by `inst_ebb()`.
+//! - Every EBB must end in a terminator instruction, and no other instruction
+//!   can be a terminator.
+//! - Every value in the `ebb_params` iterator belongs to the EBB as reported by `value_ebb`.
 //!
-//!   Instruction integrity
+//! Instruction integrity
 //!
-//!    - The instruction format must match the opcode.
-//!    - All result values must be created for multi-valued instructions.
-//!    - All referenced entities must exist. (Values, EBBs, stack slots, ...)
-//!    - Instructions must not reference (eg. branch to) the entry block.
+//! - The instruction format must match the opcode.
+//! - All result values must be created for multi-valued instructions.
+//! - All referenced entities must exist. (Values, EBBs, stack slots, ...)
+//! - Instructions must not reference (eg. branch to) the entry block.
 //!
-//!   SSA form
+//! SSA form
 //!
-//!    - Values must be defined by an instruction that exists and that is inserted in
-//!      an EBB, or be an argument of an existing EBB.
-//!    - Values used by an instruction must dominate the instruction.
+//! - Values must be defined by an instruction that exists and that is inserted in
+//!   an EBB, or be an argument of an existing EBB.
+//! - Values used by an instruction must dominate the instruction.
 //!
-//!   Control flow graph and dominator tree integrity:
+//! Control flow graph and dominator tree integrity:
 //!
-//!    - All predecessors in the CFG must be branches to the EBB.
-//!    - All branches to an EBB must be present in the CFG.
-//!    - A recomputed dominator tree is identical to the existing one.
+//! - All predecessors in the CFG must be branches to the EBB.
+//! - All branches to an EBB must be present in the CFG.
+//! - A recomputed dominator tree is identical to the existing one.
 //!
-//!   Type checking
+//! Type checking
 //!
-//!    - Compare input and output values against the opcode's type constraints.
-//!      For polymorphic opcodes, determine the controlling type variable first.
-//!    - Branches and jumps must pass arguments to destination EBBs that match the
-//!      expected types exactly. The number of arguments must match.
-//!    - All EBBs in a jump_table must take no arguments.
-//!    - Function calls are type checked against their signature.
-//!    - The entry block must take arguments that match the signature of the current
-//!      function.
-//!    - All return instructions must have return value operands matching the current
-//!      function signature.
+//! - Compare input and output values against the opcode's type constraints.
+//!   For polymorphic opcodes, determine the controlling type variable first.
+//! - Branches and jumps must pass arguments to destination EBBs that match the
+//!   expected types exactly. The number of arguments must match.
+//! - All EBBs in a jump_table must take no arguments.
+//! - Function calls are type checked against their signature.
+//! - The entry block must take arguments that match the signature of the current
+//!   function.
+//! - All return instructions must have return value operands matching the current
+//!   function signature.
 //!
-//!   Global variables
+//! Global variables
 //!
-//!   - Detect cycles in deref(base) declarations.
+//! - Detect cycles in deref(base) declarations.
 //!
 //! TODO:
-//!   Ad hoc checking
+//! Ad hoc checking
 //!
-//!    - Stack slot loads and stores must be in-bounds.
-//!    - Immediate constraints for certain opcodes, like `udiv_imm v3, 0`.
-//!    - `Insertlane` and `extractlane` instructions have immediate lane numbers that must be in
-//!      range for their polymorphic type.
-//!    - Swizzle and shuffle instructions take a variable number of lane arguments. The number
-//!      of arguments must match the destination type, and the lane indexes must be in range.
+//! - Stack slot loads and stores must be in-bounds.
+//! - Immediate constraints for certain opcodes, like `udiv_imm v3, 0`.
+//! - `Insertlane` and `extractlane` instructions have immediate lane numbers that must be in
+//!   range for their polymorphic type.
+//! - Swizzle and shuffle instructions take a variable number of lane arguments. The number
+//!   of arguments must match the destination type, and the lane indexes must be in range.
 
 use dbg::DisplayList;
 use dominator_tree::DominatorTree;
