@@ -40,9 +40,8 @@ ebb1(v10: i32):
 function %dualuse(i32) -> i32 {
 ebb0(v0: i32):
     ; check: $(cp1=$V) = copy $v0
-    ; nextln: brnz $v0, $ebb1($v0, $cp1)
+    ; nextln: brnz $v0, $ebb1($cp1, $v0)
     brnz v0, ebb1(v0, v0)
-    ; not: copy
     v1 = iadd_imm v0, 7
     v2 = iadd_imm v1, 56
     jump ebb1(v1, v2)
@@ -56,14 +55,15 @@ ebb1(v10: i32, v11: i32):
 ; The interference can be broken with a copy at either branch.
 function %interference(i32) -> i32 {
 ebb0(v0: i32):
+    ; check: $(cp0=$V) = copy $v0
     ; not: copy
+    ; check: brnz $v0, ebb1($cp0)
     brnz v0, ebb1(v0)
     v1 = iadd_imm v0, 7
     ; v1 and v0 interfere here:
     v2 = iadd_imm v0, 8
-    ; check: $(cp1=$V) = copy $v1
     ; not: copy
-    ; check: jump $ebb1($cp1)
+    ; check: jump $ebb1($v1)
     jump ebb1(v1)
 
 ebb1(v10: i32):
@@ -75,7 +75,6 @@ ebb1(v10: i32):
 ; A loop where one induction variable is used as a backedge argument.
 function %fibonacci(i32) -> i32 {
 ebb0(v0: i32):
-    ; not: copy
     v1 = iconst.i32 1
     v2 = iconst.i32 2
     jump ebb1(v1, v2)
@@ -103,8 +102,7 @@ function %stackarg(i32, i32, i32, i32, i32, i32, i32, i32, i32) -> i32 {
 ebb0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32, v8: i32):
     ; check: fill v8
     ; not: v8
-    brnz v0, ebb1(v8)
-    jump ebb1(v7)
+    jump ebb1(v8)
 
 ebb1(v10: i32):
     v11 = iadd_imm v10, 1
