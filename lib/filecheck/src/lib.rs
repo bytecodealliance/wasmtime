@@ -10,6 +10,7 @@
 //! # Directives
 //!
 //! These are the directives recognized by *filecheck*:
+//!
 //! <pre class="rust">
 //! <a href="#the-check-directive">check: <i>&lt;pattern&gt;</i></a>
 //! <a href="#the-sameln-directive">sameln: <i>&lt;pattern&gt;</i></a>
@@ -18,6 +19,7 @@
 //! <a href="#the-not-directive">not: <i>&lt;pattern&gt;</i></a>
 //! <a href="#the-regex-directive">regex: <i>&lt;variable&gt;</i>=<i>&lt;regex&gt;</i></a>
 //! </pre>
+//!
 //! Each directive is described in more detail below.
 //!
 //! ## Example

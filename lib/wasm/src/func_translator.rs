@@ -43,8 +43,9 @@ impl FuncTranslator {
     /// - The declaration of *locals*, and
     /// - The function *body* as an expression.
     ///
-    /// See [the WebAssembly specification]
-    /// (http://webassembly.github.io/spec/binary/modules.html#code-section).
+    /// See [the WebAssembly specification][wasm].
+    ///
+    /// [wasm]: http://webassembly.github.io/spec/binary/modules.html#code-section
     ///
     /// The Cretonne IR function `func` should be completely empty except for the `func.signature`
     /// and `func.name` fields. The signature may contain special-purpose arguments which are not

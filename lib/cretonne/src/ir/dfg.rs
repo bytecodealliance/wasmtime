@@ -705,7 +705,7 @@ impl DataFlowGraph {
     /// Returns the position of `val` before removal.
     ///
     /// *Important*: to ensure O(1) deletion, this method swaps the removed parameter with the
-    /// last `ebb`` parameter. This can disrupt all the branch instructions jumping to this
+    /// last `ebb` parameter. This can disrupt all the branch instructions jumping to this
     /// `ebb` for which you have to change the branch argument order if necessary.
     ///
     /// Panics if `val` is not an EBB parameter.
