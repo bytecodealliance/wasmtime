@@ -2,6 +2,7 @@
 
 use entity::{PrimaryMap, EntityMap};
 use isa::TargetIsa;
+use ir;
 use ir::builder::ReplaceBuilder;
 use ir::extfunc::ExtFuncData;
 use ir::instructions::{InstructionData, CallInfo, BranchInfo};
@@ -315,7 +316,7 @@ impl DataFlowGraph {
 }
 
 /// Where did a value come from?
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueDef {
     /// Value is the n'th result of an instruction.
     Result(Inst, usize),
@@ -329,6 +330,22 @@ impl ValueDef {
         match *self {
             ValueDef::Result(inst, _) => inst,
             _ => panic!("Value is not an instruction result"),
+        }
+    }
+
+    /// Get the program point where the value was defined.
+    pub fn pp(self) -> ir::ExpandedProgramPoint {
+        self.into()
+    }
+
+    /// Get the number component of this definition.
+    ///
+    /// When multiple values are defined at the same program point, this indicates the index of
+    /// this value.
+    pub fn num(self) -> usize {
+        match self {
+            ValueDef::Result(_, n) |
+            ValueDef::Param(_, n) => n,
         }
     }
 }
