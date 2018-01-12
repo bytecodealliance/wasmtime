@@ -100,7 +100,7 @@ impl<'a> LivenessVerifier<'a> {
                 }
 
                 // Check the uses.
-                for (idx, &val) in self.func.dfg.inst_args(inst).iter().enumerate() {
+                for &val in self.func.dfg.inst_args(inst) {
                     let lr = match self.liveness.get(val) {
                         Some(lr) => lr,
                         None => return err!(inst, "{} has no live range", val),
@@ -111,10 +111,7 @@ impl<'a> LivenessVerifier<'a> {
 
                     if encoding.is_legal() {
                         // A legal instruction is not allowed to depend on ghost values.
-                        //
-                        // A branch argument can be a ghost value if the corresponding destination
-                        // EBB argument is a ghost value.
-                        if lr.affinity.is_none() && !self.is_ghost_branch_argument(inst, idx) {
+                        if lr.affinity.is_none() {
                             return err!(
                                 inst,
                                 "{} is a ghost value used by a real [{}] instruction",
@@ -145,32 +142,6 @@ impl<'a> LivenessVerifier<'a> {
             Some(end) => ctx.order.cmp(inst, end) != Ordering::Greater,
             None => false,
         }
-    }
-
-    /// Is argument `argnum` on `inst` a branch argument that leads to a ghost EBB argument?
-    fn is_ghost_branch_argument(&self, inst: Inst, argnum: usize) -> bool {
-        let dest = match self.func.dfg[inst].branch_destination() {
-            Some(d) => d,
-            None => return false,
-        };
-
-        let fixed_args = self.func.dfg[inst]
-            .opcode()
-            .constraints()
-            .fixed_value_arguments();
-        if argnum < fixed_args {
-            return false;
-        }
-
-        // If the EBB argument value in the destination is a ghost value, we'll allow a ghost
-        // branch argument.
-        self.func
-            .dfg
-            .ebb_params(dest)
-            .get(argnum - fixed_args)
-            .and_then(|&v| self.liveness.get(v))
-            .map(|lr| lr.affinity.is_none())
-            .unwrap_or(false)
     }
 
     /// Check the integrity of the live range `lr`.

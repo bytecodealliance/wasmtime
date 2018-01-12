@@ -229,9 +229,9 @@ fn get_or_create<'a>(
                     // signature.
                     affinity = Affinity::abi(&func.signature.params[num], isa);
                 } else {
-                    // Don't apply any affinity to normal EBB parameters.
-                    // They could be in a register or on the stack.
-                    affinity = Default::default();
+                    // Give normal EBB parameters a register affinity matching their type.
+                    let rc = isa.regclass_for_abi_type(func.dfg.value_type(value));
+                    affinity = Affinity::Reg(rc.into());
                 }
             }
         };
@@ -294,9 +294,6 @@ pub struct Liveness {
     /// This vector is always empty, except for inside that function.
     /// It lives here to avoid repeated allocation of scratch memory.
     worklist: Vec<Ebb>,
-
-    /// Working space for the `propagate_ebb_params` algorithm.
-    ebb_params: Vec<Value>,
 }
 
 impl Liveness {
@@ -309,7 +306,6 @@ impl Liveness {
             ranges: LiveRangeSet::new(),
             forest: LiveRangeForest::new(),
             worklist: Vec::new(),
-            ebb_params: Vec::new(),
         }
     }
 
@@ -323,7 +319,6 @@ impl Liveness {
         self.ranges.clear();
         self.forest.clear();
         self.worklist.clear();
-        self.ebb_params.clear();
     }
 
     /// Get the live range for `value`, if it exists.
@@ -444,53 +439,6 @@ impl Liveness {
                     // EBB arguments or call/return ABI arguments.
                     if let Some(constraint) = operand_constraints.next() {
                         lr.affinity.merge(constraint, &reg_info);
-                    } else if lr.affinity.is_none() && encoding.is_legal() &&
-                               !func.dfg[inst].opcode().is_branch()
-                    {
-                        // This is a real encoded instruction using a value that doesn't yet have a
-                        // concrete affinity. Most likely a call argument or a return value. Give
-                        // the value a register affinity matching the ABI type.
-                        //
-                        // EBB arguments on a branch are not required to have an affinity.
-                        let rc = isa.regclass_for_abi_type(func.dfg.value_type(arg));
-                        lr.affinity = Affinity::Reg(rc.into());
-                    }
-                }
-            }
-        }
-
-        self.propagate_ebb_params(func, cfg);
-    }
-
-    /// Propagate affinities for EBB parameters.
-    ///
-    /// If an EBB argument value has an affinity, all predecessors must pass a value with an
-    /// affinity.
-    pub fn propagate_ebb_params(&mut self, func: &Function, cfg: &ControlFlowGraph) {
-        assert!(self.ebb_params.is_empty());
-
-        for ebb in func.layout.ebbs() {
-            for &arg in func.dfg.ebb_params(ebb) {
-                let affinity = self.ranges.get(arg).unwrap().affinity;
-                if affinity.is_none() {
-                    continue;
-                }
-                self.ebb_params.push(arg);
-
-                // Now apply the affinity to all predecessors recursively.
-                while let Some(succ_arg) = self.ebb_params.pop() {
-                    let (succ_ebb, num) = match func.dfg.value_def(succ_arg) {
-                        ValueDef::Param(e, n) => (e, n),
-                        _ => continue,
-                    };
-
-                    for (_, pred_branch) in cfg.pred_iter(succ_ebb) {
-                        let pred_arg = func.dfg.inst_variable_args(pred_branch)[num];
-                        let pred_affinity = &mut self.ranges.get_mut(pred_arg).unwrap().affinity;
-                        if pred_affinity.is_none() {
-                            *pred_affinity = affinity;
-                            self.ebb_params.push(pred_arg);
-                        }
                     }
                 }
             }
