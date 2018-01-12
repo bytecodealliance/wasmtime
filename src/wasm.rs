@@ -102,6 +102,26 @@ fn handle_module(
     vprintln!(flag_verbose, "ok");
     terminal.reset().unwrap();
     if flag_just_decode {
+        if flag_print {
+            let num_func_imports = dummy_environ.get_num_func_imports();
+            for (def_index, func) in dummy_environ.info.function_bodies.iter().enumerate() {
+                let func_index = num_func_imports + def_index;
+                let mut context = Context::new();
+                context.func = func.clone();
+                if let Some(start_func) = dummy_environ.info.start_func {
+                    if func_index == start_func {
+                        println!("; Selected as wasm start function");
+                    }
+                }
+                vprintln!(flag_verbose, "");
+                for export_name in &dummy_environ.info.functions[func_index].export_names {
+                    println!("; Exported as \"{}\"", export_name);
+                }
+                println!("{}", context.func.display(None));
+                vprintln!(flag_verbose, "");
+            }
+            terminal.reset().unwrap();
+        }
         return Ok(());
     }
     terminal.fg(term::color::MAGENTA).unwrap();
