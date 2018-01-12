@@ -1,0 +1,43 @@
+test regalloc
+set is_64bit
+isa intel haswell
+
+; This test case would create an EBB parameter that was a ghost value.
+; The coalescer would insert a copy of the ghost value, leading to verifier errors.
+;
+; We don't allow EBB parameters to be ghost values any longer.
+;
+; Test case by binaryen fuzzer!
+
+function %pr215(i64 vmctx [%rdi]) native {
+ebb0(v0: i64):
+    v10 = iconst.i64 0
+    v1 = bitcast.f64 v10
+    jump ebb5(v1)
+
+ebb5(v9: f64):
+    v11 = iconst.i64 0xffff_ffff_ff9a_421a
+    v4 = bitcast.f64 v11
+    v6 = iconst.i32 0
+    v7 = iconst.i32 1
+    brnz v7, ebb4(v6)
+    v8 = iconst.i32 0
+    jump ebb7(v8)
+
+ebb7(v5: i32):
+    brnz v5, ebb3(v4)
+    jump ebb5(v4)
+
+ebb4(v3: i32):
+    brnz v3, ebb2
+    jump ebb3(v9)
+
+ebb3(v2: f64):
+    jump ebb2
+
+ebb2:
+    jump ebb1
+
+ebb1:
+    return
+}
