@@ -155,3 +155,8 @@ RV64.enc(base.copy.i32, Icopy, OPIMM32(0b000))
 RV32.enc(base.regmove.i32, Irmov, OPIMM(0b000))
 RV64.enc(base.regmove.i64, Irmov, OPIMM(0b000))
 RV64.enc(base.regmove.i32, Irmov, OPIMM32(0b000))
+
+RV32.enc(base.copy.b1, Icopy, OPIMM(0b000))
+RV64.enc(base.copy.b1, Icopy, OPIMM(0b000))
+RV32.enc(base.regmove.b1, Irmov, OPIMM(0b000))
+RV64.enc(base.regmove.b1, Irmov, OPIMM(0b000))
