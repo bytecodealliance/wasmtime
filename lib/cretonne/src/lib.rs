@@ -9,6 +9,8 @@
 #[cfg(feature = "no_std")]
 extern crate hashmap_core;
 #[cfg(feature = "no_std")]
+extern crate error_core;
+#[cfg(feature = "no_std")]
 #[macro_use]
 extern crate alloc;
 
@@ -72,9 +74,6 @@ mod std {
         pub use alloc::BTreeSet;
     }
     pub mod error {
-        pub trait Error {
-            fn description(&self) -> &str;
-            fn cause(&self) -> Option<&Error> { None }
-        }
+        pub use error_core::Error;
     }
 }
