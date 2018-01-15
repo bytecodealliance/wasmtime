@@ -8,7 +8,6 @@ use environ::{FuncEnvironment, GlobalValue};
 use std::collections::HashMap;
 use translation_utils::{GlobalIndex, MemoryIndex, SignatureIndex, FunctionIndex};
 
-// this is for no_std builds, but has no affect on regular builds
 use std::vec::Vec;
 
 /// A control stack frame can be an `if`, a `block` or a `loop`, each one having the following

@@ -34,7 +34,6 @@ use std::collections::{HashMap, hash_map};
 use environ::{FuncEnvironment, GlobalValue};
 use std::{i32, u32};
 
-// this is for no_std builds, but has no affect on regular builds
 use std::vec::Vec;
 
 /// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted

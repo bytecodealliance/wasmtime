@@ -8,7 +8,6 @@
 ///
 /// The output will appear in files named `cretonne.dbg.*`, where the suffix is named after the
 /// thread doing the logging.
-
 #[cfg(not(feature = "no_std"))]
 use std::cell::RefCell;
 #[cfg(not(feature = "no_std"))]
