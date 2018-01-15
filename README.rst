@@ -57,6 +57,37 @@ You may need to install the *wat2wasm* tool from the `wabt
 WebAssembly tests. Tests requiring wat2wasm are ignored if the tool is not
 installed.
 
+Building with `no_std`
+----------------------
+
+To build cretonne without libstd, enable the `no_std` feature on `lib/cretonne`,
+`lib/frontend`, `lib/native`, and `lib/wasm`.
+
+For example, to build `cretonne`:
+
+    cd lib/cretonne
+    cargo build --features no_std
+
+Or, when using `cretonne` as a dependency (in Cargo.toml):
+
+    [dependency.cretonne]
+    path = "..."
+    features = ["no_std"]
+
+Currently, tests don't test the `no_std` feature.
+
+It's important to note that cretonne still needs liballoc to compile.
+Thus, whatever environment is used must implement an allocator.
+
+Also, to allow the use of HashMaps in `no_std` mode, an external crate
+called `hashmap_core` is pulled in (only in `no_std` builds). This
+is mostly the same as `std::collections::HashMap`, except that it doesn't
+have DOS protection. Just something to think about.
+
+Lastly, to support `std::error`, which isn't is `std` or `alloc` for
+an inexplicable reason, the `error_core` crate is also used in `no_std` builds.
+You might need it, as well, when interfacing with `CtonError`.
+
 Building the documentation
 --------------------------
 
