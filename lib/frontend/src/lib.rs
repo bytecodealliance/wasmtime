@@ -142,11 +142,23 @@
 //! }
 //! ```
 
+#![cfg_attr(feature = "no_std", no_std)]
 #![deny(missing_docs)]
 
+#![cfg_attr(feature = "no_std", feature(alloc))]
+
 extern crate cretonne;
+
+#[cfg(feature = "no_std")]
+extern crate alloc;
 
 pub use frontend::{ILBuilder, FunctionBuilder};
 
 mod frontend;
 mod ssa;
+
+#[cfg(feature = "no_std")]
+mod std {
+    pub use alloc::vec;
+    pub use core::*;
+}

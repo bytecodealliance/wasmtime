@@ -15,6 +15,7 @@ use std::u32;
 use cretonne::ir::types::{F32, F64};
 use cretonne::ir::immediates::{Ieee32, Ieee64};
 use std::mem;
+use std::vec::Vec;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///

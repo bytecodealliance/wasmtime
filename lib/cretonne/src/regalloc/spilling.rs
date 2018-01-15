@@ -26,6 +26,7 @@ use regalloc::liveness::Liveness;
 use regalloc::pressure::Pressure;
 use regalloc::virtregs::VirtRegs;
 use std::fmt;
+use std::vec::Vec;
 use timing;
 use topo_order::TopoOrder;
 

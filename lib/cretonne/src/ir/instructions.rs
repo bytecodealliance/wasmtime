@@ -9,6 +9,7 @@
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use std::ops::{Deref, DerefMut};
+use std::vec::Vec;
 
 use ir;
 use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef, StackSlot, MemFlags};

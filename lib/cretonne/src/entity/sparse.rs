@@ -11,6 +11,7 @@ use entity::{EntityRef, EntityMap};
 use std::mem;
 use std::slice;
 use std::u32;
+use std::vec::Vec;
 
 /// Trait for extracting keys from values stored in a `SparseMap`.
 ///

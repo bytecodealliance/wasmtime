@@ -4,6 +4,9 @@ use entity::SparseSet;
 use dominator_tree::DominatorTree;
 use ir::{Ebb, Layout};
 
+#[cfg(feature = "no_std")]
+use alloc::Vec;
+
 /// Present EBBs in a topological order such that all dominating EBBs are guaranteed to be visited
 /// before the current EBB.
 ///
