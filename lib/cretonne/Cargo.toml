@@ -17,3 +17,11 @@ name = "cretonne"
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
 # accomodated in `tests`.
+[dependencies.hashmap_core]
+version = "0.1.1"
+optional = true
+
+[features]
+# Currently, the only feature is the `no_std` feature.
+# Enabling this disables use of `stdlib`.
+no_std = ["hashmap_core"]

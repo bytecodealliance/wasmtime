@@ -15,7 +15,7 @@ pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function) -> bool {
     let funcref = find_funcref(libcall, func).unwrap_or_else(|| make_funcref(libcall, inst, func));
 
     // Now we convert `inst` to a call. First save the arguments.
-    let mut args = Vec::new();
+    let mut args = vec![];
     args.extend_from_slice(func.dfg.inst_args(inst));
     // The replace builder will preserve the instruction result values.
     func.dfg.replace(inst).call(funcref, &args);

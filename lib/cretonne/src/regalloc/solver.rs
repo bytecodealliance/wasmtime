@@ -108,6 +108,7 @@ use std::fmt;
 use std::mem;
 use super::AllocatableSet;
 use std::u16;
+use std::vec::Vec;
 
 /// A variable in the constraint problem.
 ///

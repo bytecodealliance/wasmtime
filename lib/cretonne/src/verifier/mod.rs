@@ -73,6 +73,8 @@ use std::collections::BTreeSet;
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter, Write};
 use std::result;
+use std::vec::Vec;
+use std::string::String;
 use timing;
 
 pub use self::cssa::verify_cssa;

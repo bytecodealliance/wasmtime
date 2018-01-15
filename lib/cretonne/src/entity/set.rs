@@ -2,6 +2,7 @@
 
 use entity::{EntityRef, Keys};
 use std::marker::PhantomData;
+use std::vec::Vec;
 
 /// A set of `K` for densely indexed entity references.
 ///

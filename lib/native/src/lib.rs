@@ -1,6 +1,6 @@
 //! Performs autodetection of the host for the purposes of running
 //! Cretonne to generate code to run on the same machine.
-
+#![cfg_attr(feature = "no_std", no_std)]
 #![deny(missing_docs)]
 
 extern crate cretonne;

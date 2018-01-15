@@ -3,6 +3,7 @@
 use entity::{EntityRef, Keys};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
+use std::vec::Vec;
 
 /// A mapping `K -> V` for densely indexed entity references.
 ///

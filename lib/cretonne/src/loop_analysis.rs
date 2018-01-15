@@ -8,6 +8,7 @@ use flowgraph::ControlFlowGraph;
 use ir::{Function, Ebb, Layout};
 use packed_option::PackedOption;
 use timing;
+use std::vec::Vec;
 
 /// A opaque reference to a code loop.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]

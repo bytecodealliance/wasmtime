@@ -10,6 +10,7 @@ use isa::{RegInfo, RegUnit};
 use std::cmp;
 use std::fmt;
 use std::str::FromStr;
+use std::vec::Vec;
 
 /// Function signature.
 ///

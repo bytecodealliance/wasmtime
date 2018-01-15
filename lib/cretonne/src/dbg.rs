@@ -10,12 +10,17 @@
 /// thread doing the logging.
 
 use std::cell::RefCell;
+#[cfg(not(feature = "no_std"))]
 use std::env;
+#[cfg(not(feature = "no_std"))]
 use std::ffi::OsStr;
 use std::fmt;
+#[cfg(not(feature = "no_std"))]
 use std::fs::File;
+#[cfg(not(feature = "no_std"))]
 use std::io::{self, Write};
 use std::sync::atomic;
+#[cfg(not(feature = "no_std"))]
 use std::thread;
 
 static STATE: atomic::AtomicIsize = atomic::ATOMIC_ISIZE_INIT;
@@ -26,6 +31,7 @@ static STATE: atomic::AtomicIsize = atomic::ATOMIC_ISIZE_INIT;
 /// other than `0`.
 ///
 /// This inline function turns into a constant `false` when debug assertions are disabled.
+#[cfg(not(feature = "no_std"))]
 #[inline]
 pub fn enabled() -> bool {
     if cfg!(debug_assertions) {
@@ -38,7 +44,15 @@ pub fn enabled() -> bool {
     }
 }
 
+/// Does nothing
+#[cfg(feature = "no_std")]
+#[inline]
+pub fn enabled() -> bool {
+    false
+}
+
 /// Initialize `STATE` from the environment variable.
+#[cfg(not(feature = "no_std"))]
 fn initialize() -> bool {
     let enable = match env::var_os("CRETONNE_DBG") {
         Some(s) => s != OsStr::new("0"),
@@ -54,6 +68,7 @@ fn initialize() -> bool {
     enable
 }
 
+#[cfg(not(feature = "no_std"))]
 thread_local! {
     static WRITER : RefCell<io::BufWriter<File>> = RefCell::new(open_file());
 }
@@ -61,6 +76,7 @@ thread_local! {
 /// Write a line with the given format arguments.
 ///
 /// This is for use by the `dbg!` macro.
+#[cfg(not(feature = "no_std"))]
 pub fn writeln_with_format_args(args: fmt::Arguments) -> io::Result<()> {
     WRITER.with(|rc| {
         let mut w = rc.borrow_mut();
@@ -70,6 +86,7 @@ pub fn writeln_with_format_args(args: fmt::Arguments) -> io::Result<()> {
 }
 
 /// Open the tracing file for the current thread.
+#[cfg(not(feature = "no_std"))]
 fn open_file() -> io::BufWriter<File> {
     let curthread = thread::current();
     let tmpstr;
@@ -97,6 +114,7 @@ macro_rules! dbg {
         if $crate::dbg::enabled() {
             // Drop the error result so we don't get compiler errors for ignoring it.
             // What are you going to do, log the error?
+            #[cfg(not(feature = "no_std"))]
             $crate::dbg::writeln_with_format_args(format_args!($($arg)+)).ok();
         }
     }

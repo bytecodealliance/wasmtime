@@ -18,6 +18,9 @@ use std::cmp;
 use std::iter;
 use std::fmt;
 use std::slice;
+use std::iter::Peekable;
+use std::mem;
+use std::vec::Vec;
 use isa::{TargetIsa, EncInfo};
 use timing;
 
