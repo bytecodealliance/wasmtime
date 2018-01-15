@@ -8,6 +8,9 @@ use sections_translator::{SectionParsingError, parse_function_signatures, parse_
                           parse_elements_section, parse_data_section};
 use environ::ModuleEnvironment;
 
+// this is for no_std builds, but has no affect on regular builds
+use std::string::String;
+
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cretonne IL
 /// [`Function`](../cretonne/ir/function/struct.Function.html).
 /// Returns the functions and also the mappings for imported functions and signature between the
