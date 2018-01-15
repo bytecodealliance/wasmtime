@@ -7,8 +7,7 @@ use ir::{InstructionData, Function, Inst, Opcode, Type};
 use scoped_hash_map::ScopedHashMap;
 use timing;
 
-#[cfg(feature = "no_std")]
-use alloc::Vec;
+use std::vec::Vec;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
 fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {

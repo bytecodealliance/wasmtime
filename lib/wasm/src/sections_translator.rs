@@ -17,7 +17,6 @@ use wasmparser;
 use std::str::from_utf8;
 use environ::ModuleEnvironment;
 
-// this is for no_std builds, but has no affect on regular builds
 use std::vec::Vec;
 use std::string::String;
 
