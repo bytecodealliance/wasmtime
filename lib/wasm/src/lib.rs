@@ -9,7 +9,19 @@
 //!
 //! The main function of this module is [`translate_module`](fn.translate_module.html).
 
+#![cfg_attr(feature = "no_std", no_std)]
 #![deny(missing_docs)]
+
+#![cfg_attr(feature = "no_std", feature(alloc))]
+
+#[cfg(feature = "no_std")]
+#[macro_use]
+extern crate alloc;
+
+#[cfg(feature = "no_std")]
+extern crate hashmap_core;
+#[cfg(feature = "no_std")]
+extern crate error_core;
 
 extern crate wasmparser;
 extern crate cton_frontend;
@@ -29,3 +41,16 @@ pub use module_translator::translate_module;
 pub use environ::{FuncEnvironment, ModuleEnvironment, DummyEnvironment, GlobalValue};
 pub use translation_utils::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, SignatureIndex,
                             Global, GlobalInit, Table, Memory};
+
+#[cfg(feature = "no_std")]
+mod std {
+    pub use alloc::vec;
+    pub use alloc::string;
+    pub use core::{u32, i32, str, cmp};
+    pub mod collections {
+        pub use hashmap_core::{HashMap, map as hash_map};
+    }
+    pub mod error {
+        pub use error_core::Error;
+    }
+}

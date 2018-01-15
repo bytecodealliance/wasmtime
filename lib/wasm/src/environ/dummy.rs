@@ -11,6 +11,10 @@ use cretonne::settings;
 use wasmparser;
 use std::error::Error;
 
+// this is for no_std builds, but has no affect on regular builds
+use std::vec::Vec;
+use std::string::String;
+
 /// Compute a `ir::ExternalName` for a given wasm function index.
 fn get_func_name(func_index: FunctionIndex) -> ir::ExternalName {
     ir::ExternalName::user(0, func_index as u32)

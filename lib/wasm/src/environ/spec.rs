@@ -6,6 +6,10 @@ use cretonne::settings::Flags;
 use translation_utils::{SignatureIndex, FunctionIndex, TableIndex, GlobalIndex, MemoryIndex,
                         Global, Table, Memory};
 
+// this is for no_std builds, but has no affect on regular builds
+use std::vec::Vec;
+use std::string::String;
+
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
 pub enum GlobalValue {
