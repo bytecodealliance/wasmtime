@@ -78,7 +78,7 @@ Currently, tests don't test the `no_std` feature:
 
 1. `cargo test --features no_std` won't compile.
 
-1. `./test_all.sh` doesn't test the `no_std` feature.
+1. `./test-all.sh` doesn't test the `no_std` feature.
 
 It's important to note that cretonne still needs liballoc to compile.
 Thus, whatever environment is used must implement an allocator.
