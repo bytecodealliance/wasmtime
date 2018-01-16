@@ -65,9 +65,6 @@ mod std {
     pub use core::*;
     #[macro_use]
     pub use alloc::{boxed, vec, string};
-    pub mod prelude {
-        pub use core::prelude as v1;
-    }
     pub mod collections {
         pub use hashmap_core::{HashMap, HashSet};
         pub use hashmap_core::map as hash_map;
