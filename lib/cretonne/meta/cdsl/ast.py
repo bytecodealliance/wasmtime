@@ -247,7 +247,8 @@ class Var(Atom):
                     'typeof_{}'.format(self),
                     'Type of the pattern variable `{}`'.format(self),
                     ints=True, floats=True, bools=True,
-                    scalars=True, simd=True, bitvecs=True)
+                    scalars=True, simd=True, bitvecs=True,
+                    specials=True)
             self.original_typevar = tv
             self.typevar = tv
         return self.typevar
