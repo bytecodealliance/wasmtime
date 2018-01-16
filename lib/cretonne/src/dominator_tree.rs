@@ -8,7 +8,6 @@ use packed_option::PackedOption;
 use std::cmp;
 use std::mem;
 use timing;
-
 use std::cmp::Ordering;
 use std::vec::Vec;
 

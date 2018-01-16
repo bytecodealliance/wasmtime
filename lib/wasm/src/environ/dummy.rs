@@ -10,7 +10,6 @@ use cretonne::cursor::FuncCursor;
 use cretonne::settings;
 use wasmparser;
 use std::error::Error;
-
 use std::vec::Vec;
 use std::string::String;
 

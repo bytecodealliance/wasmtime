@@ -14,7 +14,6 @@ use isa::{TargetIsa, RegInfo, RegClass, EncInfo};
 use ir;
 use regalloc;
 use std::fmt;
-
 use std::boxed::Box;
 
 #[allow(dead_code)]
