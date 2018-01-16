@@ -6,7 +6,6 @@ use dominator_tree::DominatorTree;
 use ir::{InstructionData, Function, Inst, Opcode, Type};
 use scoped_hash_map::ScopedHashMap;
 use timing;
-
 use std::vec::Vec;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.

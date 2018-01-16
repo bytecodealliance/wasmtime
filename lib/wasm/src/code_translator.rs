@@ -33,7 +33,6 @@ use state::{TranslationState, ControlStackFrame};
 use std::collections::{HashMap, hash_map};
 use environ::{FuncEnvironment, GlobalValue};
 use std::{i32, u32};
-
 use std::vec::Vec;
 
 /// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
