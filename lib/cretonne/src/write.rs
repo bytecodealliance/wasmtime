@@ -303,6 +303,9 @@ pub fn write_operands(
         IntCond { cond, arg, .. } => write!(w, " {} {}", cond, arg),
         FloatCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
         FloatCond { cond, arg, .. } => write!(w, " {} {}", cond, arg),
+        IntSelect { cond, args, .. } => {
+            write!(w, " {} {}, {}, {}", cond, args[0], args[1], args[2])
+        }
         Jump {
             destination,
             ref args,

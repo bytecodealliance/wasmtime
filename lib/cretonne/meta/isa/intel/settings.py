@@ -40,6 +40,7 @@ use_lzcnt = And(has_lzcnt)
 
 # Presets corresponding to Intel CPUs.
 
+baseline = Preset(has_sse2)
 nehalem = Preset(
         has_sse2, has_sse3, has_ssse3, has_sse41, has_sse42, has_popcnt)
 haswell = Preset(nehalem, has_bmi1, has_lzcnt)

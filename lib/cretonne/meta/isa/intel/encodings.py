@@ -368,6 +368,17 @@ enc_both(base.trueif, r.seti_abcd, 0x0f, 0x90)
 enc_both(base.trueff, r.setf_abcd, 0x0f, 0x90)
 
 #
+# Conditional move (a.k.a integer select)
+#
+enc_i32_i64(base.selectif, r.cmov, 0x0F, 0x40)
+
+#
+# Bit scan forwards and reverse
+#
+enc_i32_i64(x86.bsf, r.bsf_and_bsr, 0x0F, 0xBC)
+enc_i32_i64(x86.bsr, r.bsf_and_bsr, 0x0F, 0xBD)
+
+#
 # Convert bool to int.
 #
 # This assumes that b1 is represented as an 8-bit low register with the value 0

@@ -5,6 +5,7 @@ This module defines additional instructions that are useful only to the Intel
 target ISA.
 """
 
+from base.types import iflags
 from cdsl.operands import Operand
 from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
@@ -124,5 +125,27 @@ pop = Instruction(
     in 64-bit mode, and only for i32 in 32-bit mode.
     """,
     outs=x, can_load=True, other_side_effects=True)
+
+y = Operand('y', iWord)
+rflags = Operand('rflags', iflags)
+
+bsr = Instruction(
+    'x86_bsr', r"""
+    Bit Scan Reverse -- returns the bit-index of the most significant 1
+    in the word.  Result is undefined if the argument is zero.  However, it
+    sets the Z flag depending on the argument, so it is at least easy to
+    detect and handle that case.
+
+    This is polymorphic in i32 and i64. It is implemented for both i64 and
+    i32 in 64-bit mode, and only for i32 in 32-bit mode.
+    """,
+    ins=x, outs=(y, rflags))
+
+bsf = Instruction(
+    'x86_bsf', r"""
+    Bit Scan Forwards -- returns the bit-index of the least significant 1
+    in the word.  Is otherwise identical to 'bsr', just above.
+    """,
+    ins=x, outs=(y, rflags))
 
 GROUP.close()

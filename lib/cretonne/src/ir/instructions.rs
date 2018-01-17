@@ -157,6 +157,11 @@ pub enum InstructionData {
         cond: FloatCC,
         arg: Value,
     },
+    IntSelect {
+        opcode: Opcode,
+        cond: IntCC,
+        args: [Value; 3],
+    },
     Jump {
         opcode: Opcode,
         destination: Ebb,

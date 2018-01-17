@@ -355,7 +355,7 @@ def gen_xform(xform, fmt, type_sets):
 def gen_xform_group(xgrp, fmt, type_sets):
     # type: (XFormGroup, Formatter, UniqueTable) -> None
     fmt.doc_comment("Legalize the instruction pointed to by `pos`.")
-    fmt.line('#[allow(unused_variables,unused_assignments)]')
+    fmt.line('#[allow(unused_variables,unused_assignments,non_snake_case)]')
     with fmt.indented('pub fn {}('.format(xgrp.name)):
         fmt.line('inst: ir::Inst,')
         fmt.line('func: &mut ir::Function,')

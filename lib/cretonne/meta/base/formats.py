@@ -43,6 +43,8 @@ IntCond = InstructionFormat(intcc, VALUE)
 FloatCompare = InstructionFormat(floatcc, VALUE, VALUE)
 FloatCond = InstructionFormat(floatcc, VALUE)
 
+IntSelect = InstructionFormat(intcc, VALUE, VALUE, VALUE)
+
 Jump = InstructionFormat(ebb, VARIABLE_ARGS)
 Branch = InstructionFormat(VALUE, ebb, VARIABLE_ARGS)
 BranchInt = InstructionFormat(intcc, VALUE, ebb, VARIABLE_ARGS)

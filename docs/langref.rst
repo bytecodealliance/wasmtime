@@ -700,6 +700,7 @@ Operations
 ==========
 
 .. autoinst:: select
+.. autoinst:: selectif
 
 Constant materialization
 ------------------------
@@ -979,6 +980,10 @@ Instructions that can only be used by the Intel target ISA.
 .. autoinst:: isa.intel.instructions.cvtt2si
 .. autoinst:: isa.intel.instructions.fmin
 .. autoinst:: isa.intel.instructions.fmax
+.. autoinst:: isa.intel.instructions.bsf
+.. autoinst:: isa.intel.instructions.bsr
+.. autoinst:: isa.intel.instructions.push
+.. autoinst:: isa.intel.instructions.pop
 
 Instruction groups
 ==================
