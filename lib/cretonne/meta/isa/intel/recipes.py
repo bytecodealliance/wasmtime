@@ -11,7 +11,8 @@ from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
 from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalVar
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
-from .registers import GPR, ABCD, FPR, GPR8, FPR8, FLAG, StackGPR32, StackFPR32
+from .registers import GPR, ABCD, FPR, GPR_NORIP, GPR8, FPR8, GPR8_NORIP
+from .registers import FLAG, StackGPR32, StackFPR32
 from .defs import supported_floatccs
 from .settings import use_sse41
 
@@ -103,6 +104,7 @@ def replace_put_op(emit, prefix):
 # Register class mapping for no-REX instructions.
 NOREX_MAP = {
         GPR: GPR8,
+        GPR_NORIP: GPR8_NORIP,
         FPR: FPR8
     }
 
@@ -766,7 +768,7 @@ frsp32 = TailRecipe(
 
 # XX /r load with no offset.
 ld = TailRecipe(
-        'ld', Load, size=1, ins=(GPR), outs=(GPR),
+        'ld', Load, size=1, ins=(GPR_NORIP), outs=(GPR),
         instp=IsEqual(Load.offset, 0),
         clobbers_flags=False,
         emit='''
