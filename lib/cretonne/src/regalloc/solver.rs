@@ -760,14 +760,22 @@ impl Solver {
     ///
     /// The output value that must have the same register as the input value is not recorded in the
     /// solver.
-    pub fn add_tied_input(&mut self, value: Value, rc: RegClass, reg: RegUnit, is_global: bool) {
+    ///
+    /// If the value has already been assigned to a fixed register, return that.
+    pub fn add_tied_input(
+        &mut self,
+        value: Value,
+        rc: RegClass,
+        reg: RegUnit,
+        is_global: bool,
+    ) -> Option<RegUnit> {
         debug_assert!(self.inputs_done);
 
         // If a fixed assignment is tied, the `to` register is not available on the output side.
         if let Some(a) = self.assignments.get(value) {
             debug_assert_eq!(a.from, reg);
             self.regs_out.take(a.rc, a.to);
-            return;
+            return Some(a.to);
         }
 
         // Check if a variable was created.
@@ -775,7 +783,7 @@ impl Solver {
             assert!(v.is_input);
             v.is_output = true;
             v.is_global = is_global;
-            return;
+            return None;
         }
 
         // No variable exists for `value` because its constraints are already satisfied.
@@ -790,6 +798,8 @@ impl Solver {
         } else {
             self.regs_out.take(rc, reg);
         }
+
+        None
     }
 
     /// Add a fixed output assignment.
