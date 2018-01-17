@@ -120,7 +120,7 @@ impl<'a> Context<'a> {
     fn visit_ebb(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
         dbg!("Reloading {}:", ebb);
         self.visit_ebb_header(ebb, tracker);
-        tracker.drop_dead_args();
+        tracker.drop_dead_params();
 
         // visit_ebb_header() places us at the first interesting instruction in the EBB.
         while let Some(inst) = self.cur.current_inst() {

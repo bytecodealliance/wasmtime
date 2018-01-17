@@ -160,9 +160,9 @@ impl LiveValueTracker {
     /// been visited first.
     ///
     /// Returns `(liveins, args)` as a pair of slices. The first slice is the set of live-in values
-    /// from the immediate dominator. The second slice is the set of `ebb` arguments that are live.
+    /// from the immediate dominator. The second slice is the set of `ebb` parameters.
     ///
-    /// Dead arguments with no uses are included in `args`. Call `drop_dead_args()` to remove them.
+    /// Dead parameters with no uses are included in `args`. Call `drop_dead_args()` to remove them.
     pub fn ebb_top(
         &mut self,
         ebb: Ebb,
@@ -314,8 +314,8 @@ impl LiveValueTracker {
 
     /// Drop any values that are marked as `is_dead`.
     ///
-    /// Use this after calling `ebb_top` to clean out dead EBB arguments.
-    pub fn drop_dead_args(&mut self) {
+    /// Use this after calling `ebb_top` to clean out dead EBB parameters.
+    pub fn drop_dead_params(&mut self) {
         self.live.remove_dead_values();
     }
 

@@ -120,7 +120,8 @@ impl<'a> Context<'a> {
         dbg!("Spilling {}:", ebb);
         self.cur.goto_top(ebb);
         self.visit_ebb_header(ebb, tracker);
-        tracker.drop_dead_args();
+        tracker.drop_dead_params();
+        self.process_spills(tracker);
 
         while let Some(inst) = self.cur.next_inst() {
             if let Some(constraints) =
@@ -163,8 +164,22 @@ impl<'a> Context<'a> {
         }
     }
 
+    // Free all dead registers in `regs` from the pressure set.
+    fn free_dead_regs(&mut self, regs: &[LiveValue]) {
+        for lv in regs {
+            if lv.is_dead {
+                if let Affinity::Reg(rci) = lv.affinity {
+                    if !self.spills.contains(&lv.value) {
+                        let rc = self.reginfo.rc(rci);
+                        self.pressure.free(rc);
+                    }
+                }
+            }
+        }
+    }
+
     fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
-        let (liveins, args) = tracker.ebb_top(
+        let (liveins, params) = tracker.ebb_top(
             ebb,
             &self.cur.func.dfg,
             self.liveness,
@@ -177,22 +192,17 @@ impl<'a> Context<'a> {
         self.pressure.reset();
         self.take_live_regs(liveins);
 
-        // An EBB can have an arbitrary (up to 2^16...) number of EBB arguments, so they are not
+        // An EBB can have an arbitrary (up to 2^16...) number of parameters, so they are not
         // guaranteed to fit in registers.
-        for lv in args {
+        for lv in params {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
                 'try_take: while let Err(mask) = self.pressure.take_transient(rc) {
-                    dbg!(
-                        "Need {} reg for EBB argument {} from {} live-ins",
-                        rc,
-                        lv.value,
-                        liveins.len()
-                    );
+                    dbg!("Need {} reg for EBB param {}", rc, lv.value);
                     match self.spill_candidate(mask, liveins) {
                         Some(cand) => {
                             dbg!(
-                                "Spilling live-in {} to make room for {} EBB argument {}",
+                                "Spilling live-in {} to make room for {} EBB param {}",
                                 cand,
                                 rc,
                                 lv.value
@@ -217,6 +227,7 @@ impl<'a> Context<'a> {
 
         // The transient pressure counts for the EBB arguments are accurate. Just preserve them.
         self.pressure.preserve_transient();
+        self.free_dead_regs(params);
     }
 
     fn visit_inst(
