@@ -499,14 +499,15 @@ impl<'a> Context<'a> {
             match op.kind {
                 ConstraintKind::FixedReg(regunit) |
                 ConstraintKind::FixedTied(regunit) => {
-                    if regunit != cur_reg {
-                        self.solver.reassign_in(
-                            value,
-                            op.regclass,
-                            cur_reg,
-                            regunit,
-                        );
-                    }
+                    // Add the fixed constraint even if `cur_reg == regunit`.
+                    // It is possible that we will want to convert the value to a variable later,
+                    // and this identity assignment prevents that from happening.
+                    self.solver.reassign_in(
+                        value,
+                        op.regclass,
+                        cur_reg,
+                        regunit,
+                    );
                 }
                 ConstraintKind::Reg |
                 ConstraintKind::Tied(_) => {
