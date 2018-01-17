@@ -1,0 +1,29 @@
+test regalloc
+set is_64bit
+isa intel haswell
+
+; Test combinations of constraints.
+;
+; The Intel ushr instruction requires its second operand to be passed in %rcx and its output is
+; tied to the first input operand.
+;
+; If we pass the same value to both operands, both constraints must be satisfied.
+
+; Found by the Binaryen fuzzer in PR221.
+;
+; Conditions triggering the problem:
+;
+; - The same value used for a tied operand and a fixed operand.
+; - The common value is already in %rcx.
+; - The tied output value is live outside the EBB.
+;
+; Under these conditions, Solver::add_tied_input() would create a variable for the tied input
+; without considering the fixed constraint.
+function %pr221(i64 [%rdi], i64 [%rsi], i64 [%rdx], i64 [%rcx]) -> i64 [%rax] {
+ebb0(v0: i64, v1: i64, v2: i64, v3: i64):
+    v4 = ushr v3, v3
+    jump ebb1
+
+ebb1:
+    return v4
+}
