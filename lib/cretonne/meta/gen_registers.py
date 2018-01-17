@@ -59,7 +59,7 @@ def gen_regclass(rc, fmt):
         fmt.format('width: {},', rc.width)
         fmt.format('bank: {},', rc.bank.index)
         fmt.format('toprc: {},', rc.toprc.index)
-        fmt.format('first: {},', rc.bank.first_unit + rc.start)
+        fmt.format('first: {},', rc.bank.first_unit + rc.start())
         fmt.format('subclasses: 0x{:x},', rc.subclass_mask())
         mask = ', '.join('0x{:08x}'.format(x) for x in rc.mask())
         fmt.format('mask: [{}],', mask)
