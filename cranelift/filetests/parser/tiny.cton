@@ -42,7 +42,7 @@ ebb0:
 ; nextln:     $v3 = bxor v0, v2
 ; nextln: }
 
-; Polymorphic istruction controlled by second operand.
+; Polymorphic instruction controlled by second operand.
 function %select() {
 ebb0(v90: i32, v91: i32, v92: b1):
     v0 = select v92, v90, v91
@@ -50,6 +50,16 @@ ebb0(v90: i32, v91: i32, v92: b1):
 ; sameln: function %select() native {
 ; nextln: ebb0($v90: i32, $v91: i32, $v92: b1):
 ; nextln:     $v0 = select $v92, $v90, $v91
+; nextln: }
+
+; Polymorphic instruction controlled by third operand.
+function %selectif() native {
+ebb0(v95: i32, v96: i32, v97: b1):
+    v98 = selectif.i32 eq v97, v95, v96
+}
+; sameln: function %selectif() native {
+; nextln: ebb0(v0: i32, v1: i32, v2: b1):
+; nextln: v3 = selectif.i32 eq v2, v0, v1
 ; nextln: }
 
 ; Lane indexes.

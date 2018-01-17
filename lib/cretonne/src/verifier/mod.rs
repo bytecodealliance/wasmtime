@@ -358,6 +358,7 @@ impl<'a> Verifier<'a> {
             IntCond { .. } |
             FloatCompare { .. } |
             FloatCond { .. } |
+            IntSelect { .. } |
             Load { .. } |
             Store { .. } |
             RegMove { .. } |

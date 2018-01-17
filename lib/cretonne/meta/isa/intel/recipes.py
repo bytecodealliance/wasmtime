@@ -8,6 +8,7 @@ from cdsl.registers import RegClass
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry, NullAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
+from base.formats import IntSelect
 from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalVar
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
@@ -1019,6 +1020,32 @@ setf_abcd = TailRecipe(
         emit='''
         PUT_OP(bits | fcc2opc(cond), rex1(out_reg0), sink);
         modrm_r_bits(out_reg0, bits, sink);
+        ''')
+
+#
+# Conditional move (a.k.a integer select)
+# (maybe-REX.W) 0F 4x modrm(r,r)
+# 1 byte, modrm(r,r), is after the opcode
+#
+cmov = TailRecipe(
+        'cmov', IntSelect, size=1, ins=(FLAG.eflags, GPR, GPR), outs=2,
+        requires_prefix=False,
+        clobbers_flags=False,
+        emit='''
+        PUT_OP(bits | icc2opc(cond), rex2(in_reg1, in_reg2), sink);
+        modrm_rr(in_reg1, in_reg2, sink);
+        ''')
+
+#
+# Bit scan forwards and reverse
+#
+bsf_and_bsr = TailRecipe(
+        'bsf_and_bsr', Unary, size=1, ins=GPR, outs=(GPR, FLAG.eflags),
+        requires_prefix=False,
+        clobbers_flags=True,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_rr(in_reg0, out_reg0, sink);
         ''')
 
 #

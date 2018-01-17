@@ -485,6 +485,15 @@ select = Instruction(
         """,
         ins=(c, x, y), outs=a)
 
+cc = Operand('cc', intcc, doc='Controlling condition code')
+flags = Operand('flags', iflags, doc='The machine\'s flag register')
+
+selectif = Instruction(
+        'selectif', r"""
+        Conditional select, dependent on integer condition codes.
+        """,
+        ins=(cc, flags, x, y), outs=a)
+
 x = Operand('x', Any)
 
 copy = Instruction(
