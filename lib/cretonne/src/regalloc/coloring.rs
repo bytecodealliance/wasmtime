@@ -411,7 +411,13 @@ impl<'a> Context<'a> {
                 &regs.global,
             );
         }
-        self.program_output_constraints(inst, constraints.outs, defs);
+        self.program_output_constraints(
+            inst,
+            constraints.outs,
+            defs,
+            &mut replace_global_defines,
+            &regs.global,
+        );
 
         // Finally, we've fully programmed the constraint solver.
         // We expect a quick solution in most cases.
@@ -794,6 +800,8 @@ impl<'a> Context<'a> {
         inst: Inst,
         constraints: &[OperandConstraint],
         defs: &[LiveValue],
+        replace_global_defines: &mut bool,
+        global_regs: &AllocatableSet,
     ) {
         for (op, lv) in constraints.iter().zip(defs) {
             match op.kind {
@@ -807,12 +815,26 @@ impl<'a> Context<'a> {
                     // Find the input operand we're tied to.
                     // The solver doesn't care about the output value.
                     let arg = self.cur.func.dfg.inst_args(inst)[num as usize];
-                    self.solver.add_tied_input(
+                    if let Some(reg) = self.solver.add_tied_input(
                         arg,
                         op.regclass,
                         self.divert.reg(arg, &self.cur.func.locations),
                         !lv.is_local,
-                    );
+                    )
+                    {
+                        // The value we're tied to has been assigned to a fixed register.
+                        // We need to make sure that fixed output register is compatible with the
+                        // global register set.
+                        if !lv.is_local && !global_regs.is_avail(op.regclass, reg) {
+                            dbg!(
+                                "Tied output {} in {}:{} is not available in global regs",
+                                lv.value,
+                                op.regclass,
+                                self.reginfo.display_regunit(reg)
+                            );
+                            *replace_global_defines = true;
+                        }
+                    }
                 }
             }
         }
