@@ -14,7 +14,11 @@
 #
 # With the --install option, also tries to install the right version.
 
-# This version should always be bumped to the newest version available.
+# This version should always be bumped to the newest version available that
+# works with stable Rust.
+# ... but not 0.10.0, since it's the same as 0.9.0 except for a deprecation
+# error (and it requires --force to disable the error and enable normal
+# operation, however that doesn't appear to be possible through "cargo fmt").
 VERS="0.9.0"
 
 if cargo install --list | grep -q "^rustfmt v$VERS"; then
