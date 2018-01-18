@@ -27,7 +27,7 @@ function %I64() {
 ebb0:
 
     ; asm: call foo@PLT
-    call fn0()                                  ; bin: e8 PLTRel4(%foo) 00000000
+    call fn0()                                  ; bin: e8 PLTRel4(%foo-4) 00000000
 
     ; asm: mov 0x0(%rip), %rax
     [-,%rax]            v0 = func_addr.i64 fn0        ; bin: 48 8b 05 GOTPCRel4(%foo-4) 00000000
