@@ -65,6 +65,27 @@ ebb0(v0: i32, v999: i64):
     return v4
 }
 
+function %staticheap_static_oob_sm64(i32, i64 vmctx) -> f32 spiderwasm {
+    gv0 = vmctx+64
+    heap0 = static gv0, min 0x1000, bound 0x1000_0000, guard 0x8000_0000
+
+ebb0(v0: i32, v999: i64):
+    ; Everything after the obviously OOB access should be eliminated, leaving
+    ; the `trap heap_oob` instruction as the terminator of the Ebb and moving
+    ; the remainder of the instructions into an inaccessible Ebb.
+    ; check: $ebb0(
+    ; nextln:     trap heap_oob
+    ; check: ebb1:
+    ; nextln:     v2 = iconst.i64 0
+    ; nextln:     v3 = load.f32 v2+16
+    ; nextln:     return v3
+    ; nextln: }
+    v1 = heap_addr.i64 heap0, v0, 0x1000_0001
+    v2 = load.f32 v1+16
+    return v2
+}
+
+
 ; SpiderMonkey VM-style static 4+2 GB heap.
 ; Offsets >= 2 GB do require a boundscheck.
 function %staticheap_sm64(i32, i64 vmctx) -> f32 spiderwasm {
