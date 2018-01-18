@@ -899,7 +899,7 @@ call_plt_id = TailRecipe(
         PUT_OP(bits, BASE_REX, sink);
         sink.reloc_external(Reloc::IntelPLTRel4,
                             &func.dfg.ext_funcs[func_ref].name,
-                            0);
+                            -4);
         sink.put4(0);
         ''')
 
