@@ -9,7 +9,7 @@ use ir::{self, InstBuilder, MemFlags};
 use ir::condcodes::IntCC;
 
 /// Expand a `heap_addr` instruction according to the definition of the heap.
-pub fn expand_heap_addr(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut ControlFlowGraph) {
+pub fn expand_heap_addr(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
     // Unpack the instruction.
     let (heap, offset, size) = match func.dfg[inst] {
         ir::InstructionData::HeapAddr {
@@ -29,7 +29,7 @@ pub fn expand_heap_addr(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut Cont
             dynamic_addr(inst, heap, offset, size, bound_gv, func)
         }
         ir::HeapStyle::Static { bound } => {
-            static_addr(inst, heap, offset, size, bound.into(), func)
+            static_addr(inst, heap, offset, size, bound.into(), func, cfg)
         }
     }
 }
@@ -95,6 +95,7 @@ fn static_addr(
     size: u32,
     bound: i64,
     func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
 ) {
     let size = i64::from(size);
     let offset_ty = func.dfg.value_type(offset);
@@ -107,6 +108,13 @@ fn static_addr(
         // This will simply always trap since `offset >= 0`.
         pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
         pos.func.dfg.replace(inst).iconst(addr_ty, 0);
+
+        // Split Ebb, as the trap is a terminator instruction.
+        let curr_ebb = pos.current_ebb().expect("Cursor is not in an ebb");
+        let new_ebb = pos.func.dfg.make_ebb();
+        pos.insert_ebb(new_ebb);
+        cfg.recompute_ebb(pos.func, curr_ebb);
+        cfg.recompute_ebb(pos.func, new_ebb);
         return;
     }
 
