@@ -580,6 +580,7 @@ where
 #[cfg(test)]
 mod test {
     use std::mem;
+    use std::string::ToString;
     use super::*;
 
     // Forest impl for a set implementation.

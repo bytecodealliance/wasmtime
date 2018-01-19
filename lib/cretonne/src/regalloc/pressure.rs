@@ -273,6 +273,7 @@ mod tests {
     use regalloc::AllocatableSet;
     use std::borrow::Borrow;
     use super::Pressure;
+    use std::boxed::Box;
 
     // Make an arm32 `TargetIsa`, if possible.
     fn arm32() -> Option<Box<TargetIsa>> {

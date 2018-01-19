@@ -63,7 +63,6 @@ mod write;
 #[cfg(feature = "no_std")]
 mod std {
     pub use core::*;
-    #[macro_use]
     pub use alloc::{boxed, vec, string};
     pub mod collections {
         pub use hashmap_core::{HashMap, HashSet};

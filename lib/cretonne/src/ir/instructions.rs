@@ -724,6 +724,7 @@ pub enum ResolvedConstraint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::string::ToString;
 
     #[test]
     fn opcodes() {

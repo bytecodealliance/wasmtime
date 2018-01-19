@@ -74,11 +74,13 @@ Or, when using `cretonne` as a dependency (in Cargo.toml):
     path = "..."
     features = ["no_std"]
 
-Currently, tests don't test the `no_std` feature:
+`no_std` is currently "best effort". We won't try to break it, and we'll
+accept patches fixing problems, however we don't expect all developers to
+build and test with `no_std` when submitting patches. Accordingly, the
+`./test-all.sh` script does not test `no_std`.
 
-1. `cargo test --features no_std` won't compile.
-
-2. `./test-all.sh` doesn't test the `no_std` feature.
+There is a separate `./test-no_std.sh` script that tests the `no_std`
+feature in packages which support it.
 
 It's important to note that cretonne still needs liballoc to compile.
 Thus, whatever environment is used must implement an allocator.

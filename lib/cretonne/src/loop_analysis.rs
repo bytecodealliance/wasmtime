@@ -231,6 +231,7 @@ mod test {
     use loop_analysis::{Loop, LoopAnalysis};
     use flowgraph::ControlFlowGraph;
     use dominator_tree::DominatorTree;
+    use std::vec::Vec;
 
     #[test]
     fn nested_loops_detection() {

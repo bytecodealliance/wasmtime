@@ -19,10 +19,12 @@ use std::fmt;
 use std::fs::File;
 #[cfg(not(feature = "no_std"))]
 use std::io::{self, Write};
+#[cfg(not(feature = "no_std"))]
 use std::sync::atomic;
 #[cfg(not(feature = "no_std"))]
 use std::thread;
 
+#[cfg(not(feature = "no_std"))]
 static STATE: atomic::AtomicIsize = atomic::ATOMIC_ISIZE_INIT;
 
 /// Is debug tracing enabled?

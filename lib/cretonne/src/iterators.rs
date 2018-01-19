@@ -48,6 +48,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::vec::Vec;
+
     #[test]
     fn adjpairs() {
         use super::IteratorExtras;

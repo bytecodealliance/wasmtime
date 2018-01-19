@@ -117,6 +117,7 @@ mod tests {
     use isa;
     use ir::{DataFlowGraph, InstructionData, Opcode};
     use ir::{types, immediates};
+    use std::string::{String, ToString};
 
     fn encstr(isa: &isa::TargetIsa, enc: Result<isa::Encoding, isa::Legalize>) -> String {
         match enc {

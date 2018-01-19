@@ -266,6 +266,7 @@ impl FromStr for FloatCC {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::string::ToString;
 
     static INT_ALL: [IntCC; 10] = [
         IntCC::Equal,

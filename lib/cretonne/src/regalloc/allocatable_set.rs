@@ -221,6 +221,7 @@ impl fmt::Display for AllocatableSet {
 mod tests {
     use super::*;
     use isa::registers::{RegClass, RegClassData};
+    use std::vec::Vec;
 
     // Register classes for testing.
     const GPR: RegClass = &RegClassData {

@@ -467,6 +467,7 @@ impl<'a> fmt::Display for DisplayValues<'a> {
 mod tests {
     use ir::{Function, ExternalName, StackSlotData, StackSlotKind};
     use ir::types;
+    use std::string::ToString;
 
     #[test]
     fn basic() {
