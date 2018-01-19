@@ -1163,6 +1163,7 @@ mod tests {
     use isa::{TargetIsa, RegClass, RegUnit, RegInfo};
     use regalloc::AllocatableSet;
     use super::{Solver, Move};
+    use std::boxed::Box;
 
     // Make an arm32 `TargetIsa`, if possible.
     fn arm32() -> Option<Box<TargetIsa>> {

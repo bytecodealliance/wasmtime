@@ -320,6 +320,7 @@ mod tests {
     use ir::Function;
     use ir::types;
     use super::*;
+    use std::string::ToString;
 
     #[test]
     fn stack_slot() {

@@ -83,6 +83,7 @@ impl FromStr for TrapCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::string::ToString;
 
     // Everything but user-defined codes.
     const CODES: [TrapCode; 8] = [

@@ -222,7 +222,8 @@ where
     }
 
     /// Get a text version of the path to `key`.
-    fn tpath(&self, key: K, forest: &MapForest<K, V, C>, comp: &C) -> String {
+    fn tpath(&self, key: K, forest: &MapForest<K, V, C>, comp: &C) -> ::std::string::String {
+        use std::string::ToString;
         match self.root.expand() {
             None => "map(empty)".to_string(),
             Some(root) => {
@@ -415,7 +416,8 @@ where
     }
 
     /// Get a text version of the path to the current position.
-    fn tpath(&self) -> String {
+    fn tpath(&self) -> ::std::string::String {
+        use std::string::ToString;
         self.path.to_string()
     }
 }
@@ -423,6 +425,7 @@ where
 #[cfg(test)]
 mod test {
     use std::mem;
+    use std::vec::Vec;
     use super::*;
     use super::super::NodeData;
 

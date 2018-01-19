@@ -78,6 +78,7 @@ impl<F: Forest> NodePool<F> {
     {
         use std::borrow::Borrow;
         use std::cmp::Ordering;
+        use std::vec::Vec;
         use super::Comparator;
         use entity::SparseSet;
 

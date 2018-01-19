@@ -314,7 +314,8 @@ where
     }
 
     /// Get a text version of the path to the current position.
-    fn tpath(&self) -> String {
+    fn tpath(&self) -> ::std::string::String {
+        use std::string::ToString;
         self.path.to_string()
     }
 }
@@ -351,6 +352,7 @@ where
 #[cfg(test)]
 mod test {
     use std::mem;
+    use std::vec::Vec;
     use super::*;
     use super::super::NodeData;
 

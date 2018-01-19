@@ -142,6 +142,8 @@ mod tests {
     use super::JumpTableData;
     use ir::Ebb;
     use entity::EntityRef;
+    use std::vec::Vec;
+    use std::string::ToString;
 
     #[test]
     fn empty() {

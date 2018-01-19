@@ -8,6 +8,7 @@ include!(concat!(env!("OUT_DIR"), "/registers-arm32.rs"));
 mod tests {
     use super::{INFO, GPR, S, D};
     use isa::RegUnit;
+    use std::string::{String, ToString};
 
     #[test]
     fn unit_encodings() {

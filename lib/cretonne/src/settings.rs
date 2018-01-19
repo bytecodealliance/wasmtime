@@ -348,6 +348,7 @@ mod tests {
     use super::{builder, Flags};
     use super::Error::*;
     use super::Configurable;
+    use std::string::ToString;
 
     #[test]
     fn display_default() {

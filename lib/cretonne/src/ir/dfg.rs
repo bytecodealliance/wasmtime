@@ -944,6 +944,7 @@ mod tests {
     use cursor::{Cursor, FuncCursor};
     use ir::types;
     use ir::{Function, Opcode, InstructionData, TrapCode};
+    use std::string::ToString;
 
     #[test]
     fn make_inst() {

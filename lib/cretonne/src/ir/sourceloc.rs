@@ -51,6 +51,7 @@ impl fmt::Display for SourceLoc {
 #[cfg(test)]
 mod tests {
     use ir::SourceLoc;
+    use std::string::ToString;
 
     #[test]
     fn display() {
