@@ -537,6 +537,8 @@ impl Solver {
         self.regs_in = regs.clone();
         // Used for tracking fixed input assignments while `!inputs_done`:
         self.regs_out = AllocatableSet::new();
+        self.moves.clear();
+        self.fills.clear();
     }
 
     /// Add a fixed input reassignment of `value`.
@@ -891,8 +893,35 @@ impl Solver {
             v.domain = cmp::min(d, u16::MAX as usize) as u16;
         }
         // Solve for vars with small domains first to increase the chance of finding a solution.
-        // Use the value number as a tie breaker to get a stable sort.
-        self.vars.sort_unstable_by_key(|v| (v.domain, v.value));
+        //
+        // Also consider this case:
+        //
+        // v0: out, global
+        // v1: in
+        // v2: in+out
+        //
+        // If only %r0 and %r1 are available, the global constraint may cause us to assign:
+        //
+        // v0 -> %r1
+        // v1 -> %r0
+        // v2 -> !
+        //
+        // Usually in+out variables will have a smaller domain, but in the above case the domain
+        // size is the same, so we also prioritize in+out variables.
+        //
+        // Include the reversed previous solution for this variable partly as a stable tie breaker,
+        // partly to shake things up on a second attempt.
+        //
+        // Use the `from` register and value number as a tie breaker to get a stable sort.
+        self.vars.sort_unstable_by_key(|v| {
+            (
+                v.domain,
+                !(v.is_input && v.is_output),
+                !v.solution,
+                v.from.unwrap_or(0),
+                v.value,
+            )
+        });
 
         dbg!("real_solve for {}", self);
         self.find_solution(global_regs)
