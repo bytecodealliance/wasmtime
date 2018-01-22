@@ -9,12 +9,15 @@ use cursor::{Cursor, EncCursor};
 use dbg::DisplayList;
 use dominator_tree::{DominatorTree, DominatorTreePreorder};
 use flowgraph::ControlFlowGraph;
-use ir::{self, InstBuilder};
+use ir::{self, InstBuilder, ProgramOrder};
 use ir::{Function, Ebb, Inst, Value, ExpandedProgramPoint};
 use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::{VirtReg, VirtRegs};
+use std::cmp;
+use std::iter;
 use std::fmt;
+use std::slice;
 use isa::{TargetIsa, EncInfo};
 use timing;
 
@@ -50,14 +53,12 @@ use timing;
 
 /// Data structures to be used by the coalescing pass.
 pub struct Coalescing {
-    forest: DomForest,
     preorder: DominatorTreePreorder,
-
-    /// EBB parameter values present in the current virtual register.
-    params: Vec<Value>,
-
-    /// Worklist of virtual registers that need to be processed.
-    worklist: Vec<VirtReg>,
+    forest: DomForest,
+    vcopies: VirtualCopies,
+    values: Vec<Value>,
+    predecessors: Vec<Inst>,
+    backedges: Vec<Inst>,
 }
 
 /// One-shot context created once per invocation.
@@ -73,8 +74,10 @@ struct Context<'a> {
     virtregs: &'a mut VirtRegs,
 
     forest: &'a mut DomForest,
-    params: &'a mut Vec<Value>,
-    worklist: &'a mut Vec<VirtReg>,
+    vcopies: &'a mut VirtualCopies,
+    values: &'a mut Vec<Value>,
+    predecessors: &'a mut Vec<Inst>,
+    backedges: &'a mut Vec<Inst>,
 }
 
 impl Coalescing {
@@ -83,8 +86,10 @@ impl Coalescing {
         Self {
             forest: DomForest::new(),
             preorder: DominatorTreePreorder::new(),
-            params: Vec::new(),
-            worklist: Vec::new(),
+            vcopies: VirtualCopies::new(),
+            values: Vec::new(),
+            predecessors: Vec::new(),
+            backedges: Vec::new(),
         }
 
     }
@@ -92,8 +97,10 @@ impl Coalescing {
     /// Clear all data structures in this coalescing pass.
     pub fn clear(&mut self) {
         self.forest.clear();
-        self.params.clear();
-        self.worklist.clear();
+        self.vcopies.clear();
+        self.values.clear();
+        self.predecessors.clear();
+        self.backedges.clear();
     }
 
     /// Convert `func` to conventional SSA form and build virtual registers in the process.
@@ -119,8 +126,10 @@ impl Coalescing {
             liveness,
             virtregs,
             forest: &mut self.forest,
-            params: &mut self.params,
-            worklist: &mut self.worklist,
+            vcopies: &mut self.vcopies,
+            values: &mut self.values,
+            predecessors: &mut self.predecessors,
+            backedges: &mut self.backedges,
         };
 
         // Run phase 1 (union-find) of the coalescing algorithm on the current function.
@@ -383,151 +392,275 @@ impl<'a> Context<'a> {
     pub fn process_vregs(&mut self) {
         for vreg in self.virtregs.all_virtregs() {
             self.process_vreg(vreg);
-            while let Some(vr) = self.worklist.pop() {
-                self.process_vreg(vr);
-            }
         }
     }
 
     // Check `vreg` for interferences and fix conflicts.
     fn process_vreg(&mut self, vreg: VirtReg) {
-        if self.analyze_vreg(vreg) {
+        if !self.check_vreg(vreg) {
             self.synthesize_vreg(vreg);
         }
     }
 
-    // Check `vreg` for interferences and choose values to isolate.
+    // Check `vreg` for interferences.
     //
     // We use a Budimlic dominator forest to check for interferences between the values in `vreg`
     // and identify values that should be isolated.
     //
-    // Returns true if `vreg` has conflicts that need to be fixed. Additionally leaves state in
-    // member variables:
-    //
-    // - `self.params` contains all the EBB parameter values that were present in the virtual
-    //    register.
-    // - `self.forest` contains the set of values that should be isolated from the virtual register.
-    fn analyze_vreg(&mut self, vreg: VirtReg) -> bool {
+    // Returns true if `vreg` is free of interference.
+    fn check_vreg(&mut self, vreg: VirtReg) -> bool {
         // Order the values according to the dominator pre-order of their definition.
-        let dfg = &self.func.dfg;
-        let layout = &self.func.layout;
-        let preorder = self.preorder;
-        let values = self.virtregs.sort_values(vreg, |a, b| {
-            let da = dfg.value_def(a);
-            let db = dfg.value_def(b);
-            preorder.pre_cmp(da, db, layout).then(
-                da.num().cmp(&db.num()),
-            )
-        });
-        dbg!("Analyzing {} = {}", vreg, DisplayList(values));
+        let values = self.virtregs.sort_values(vreg, self.func, self.preorder);
+        dbg!("Checking {} = {}", vreg, DisplayList(values));
 
-        // Now push the values in order to the dominator forest. This gives us the closest
-        // dominating value def for each of the values.
-        self.params.clear();
+        // Now push the values in order to the dominator forest.
+        // This gives us the closest dominating value def for each of the values.
         self.forest.clear();
         for &value in values {
-            let node = Node::new(value, self.func);
-
-            // Remember the parameter values in case we need to re-synthesize virtual registers.
-            if let ExpandedProgramPoint::Ebb(_) = node.def {
-                self.params.push(value);
-            }
+            let node = Node::value(value, 0, self.func);
 
             // Push this value and get the nearest dominating def back.
-            let parent = match self.forest.push_value(
+            let parent = match self.forest.push_node(
                 node,
                 self.func,
                 self.domtree,
                 self.preorder,
             ) {
                 None => continue,
-                Some(p) => p,
+                Some(n) => n,
             };
 
             // Check for interference between `parent` and `value`. Since `parent` dominates
             // `value`, we only have to check if it overlaps the definition.
             let ctx = self.liveness.context(&self.func.layout);
-            if !self.liveness[parent].overlaps_def(node.def, node.ebb, ctx) {
-                // No interference, both values can stay in the virtual register.
+            if self.liveness[parent.value].overlaps_def(node.def, node.ebb, ctx) {
+                // The two values are interfering, so they can't be in the same virtual register.
+                dbg!("-> interference: {} overlaps def of {}", parent, value);
+                return false;
+            }
+        }
+
+        // No interference found.
+        true
+    }
+
+    /// Destroy and rebuild `vreg` by iterative coalescing.
+    ///
+    /// When detecting that a virtual register formed in phase 1 contains interference, we have to
+    /// start over in a more careful way. We'll split the vreg into individual values and then
+    /// reassemble virtual registers using an iterative algorithm of pairwise merging.
+    ///
+    /// It is possible to recover multiple large virtual registers this way while still avoiding
+    /// a lot of copies.
+    fn synthesize_vreg(&mut self, vreg: VirtReg) {
+        self.vcopies.initialize(
+            self.virtregs.values(vreg),
+            self.func,
+            self.cfg,
+            self.preorder,
+        );
+        dbg!(
+            "Synthesizing {} from {} branches and params {}",
+            vreg,
+            self.vcopies.branches.len(),
+            DisplayList(&self.vcopies.params)
+        );
+        self.virtregs.remove(vreg);
+
+        while let Some(param) = self.vcopies.next_param() {
+            self.merge_param(param);
+            self.vcopies.merged_param(param, self.func);
+        }
+    }
+
+    /// Merge EBB parameter value `param` with virtual registers at its predecessors.
+    fn merge_param(&mut self, param: Value) {
+        let (ebb, argnum) = match self.func.dfg.value_def(param) {
+            ir::ValueDef::Param(e, n) => (e, n),
+            ir::ValueDef::Result(_, _) => panic!("Expected parameter"),
+        };
+
+        // Collect all the predecessors and rearrange them.
+        //
+        // The order we process the predecessors matters because once one predecessor's virtual
+        // register is merged, it can cause interference with following merges. This means that the
+        // first predecessors processed are more likely to be copy-free. We want an ordering that
+        // is a) good for performance and b) as stable as possible. The pred_iter() iterator uses
+        // instruction numbers which is not great for reproducible test cases.
+        //
+        // First merge loop back-edges in layout order, on the theory that shorter back-edges are
+        // more sensitive to inserted copies.
+        //
+        // Second everything else in reverse layout order. Again, short forward branches get merged
+        // first. There can also be backwards branches mixed in here, though, as long as they are
+        // not loop backedges.
+        assert!(self.predecessors.is_empty());
+        assert!(self.backedges.is_empty());
+        for (pred_ebb, pred_inst) in self.cfg.pred_iter(ebb) {
+            if self.preorder.dominates(ebb, pred_ebb) {
+                self.backedges.push(pred_inst);
+            } else {
+                self.predecessors.push(pred_inst);
+            }
+        }
+        // Order instructions in reverse order so we can pop them off the back.
+        {
+            let l = &self.func.layout;
+            self.backedges.sort_unstable_by(|&a, &b| l.cmp(b, a));
+            self.predecessors.sort_unstable_by(|&a, &b| l.cmp(a, b));
+            self.predecessors.extend_from_slice(&self.backedges);
+            self.backedges.clear();
+        }
+
+        while let Some(pred_inst) = self.predecessors.pop() {
+            let arg = self.func.dfg.inst_variable_args(pred_inst)[argnum];
+
+            // We want to merge the vreg containing `param` with the vreg containing `arg`.
+            if self.try_merge_vregs(param, arg) {
                 continue;
             }
 
-            // The two values are interfering, so they can't both be in the same virtual register.
-            // We need to pick one to isolate. It's hard to pick a heuristic that only looks at two
-            // values since an optimal solution is a global problem involving all the values in the
-            // virtual register.
-            //
-            // We choose to always isolate the dominating parent value for two reasons:
-            //
-            // 1. We avoid the case of a parent value with a very long live range pushing many
-            //    following values out of the virtual register.
-            //
-            // 2. In the case of a value that is live across a branch to the definition of a
-            //    parameter in the virtual register, our splitting method in `synthesize_vreg`
-            //    doesn't actually resolve the interference unless we're trying to isolate the
-            //    first value. This heuristic will at least pick the first value on a second
-            //    attempt. This is actually a correctness issue - we could loop infinitely
-            //    otherwise. See the `infinite-interference.cton` test case.
-            dbg!("-> isolating {} which overlaps def of {}", parent, value);
-            self.forest.drop_value(parent);
+            // Can't merge because of interference. Insert a copy instead.
+            let pred_ebb = self.func.layout.pp_ebb(pred_inst);
+            let new_arg = self.isolate_arg(pred_ebb, pred_inst, argnum, arg);
+            self.virtregs.insert_single(
+                param,
+                new_arg,
+                self.func,
+                self.preorder,
+            );
         }
-
-        let dropped = self.forest.prepare_dropped();
-        assert!(dropped < values.len());
-        dropped != 0
     }
 
-    /// Destroy and rebuild `vreg`.
+    /// Merge the virtual registers containing `param` and `arg` if possible.
     ///
-    /// Use `self.params` to rebuild the virtual register, but this time making sure that dropped
-    /// values in `self.forest` are isolated from non-dropped values. This may cause multiple new
-    /// virtual registers to be formed.
+    /// Use self.vcopies to check for virtual copy interference too.
     ///
-    /// All new virtual registers are appended to `self.worklist`.
-    fn synthesize_vreg(&mut self, vreg: VirtReg) {
-        dbg!("Synthesizing {} from {}", vreg, DisplayList(self.params));
-        self.virtregs.remove(vreg);
+    /// Returns true if the virtual registers are successfully merged.
+    fn try_merge_vregs(&mut self, param: Value, arg: Value) -> bool {
+        if self.virtregs.same_class(param, arg) {
+            return true;
+        }
 
-        while let Some(param) = self.params.pop() {
-            let param_dropped = self.forest.is_dropped(param);
-            let (ebb, argnum) = match self.func.dfg.value_def(param) {
-                ir::ValueDef::Param(e, n) => (e, n),
-                ir::ValueDef::Result(_, _) => panic!("{} expected to be EBB parameter"),
+        if !self.can_merge_vregs(param, arg) {
+            return false;
+        }
+
+        let vreg = self.virtregs.unify(self.values);
+        dbg!("-> merged into {} = {}", vreg, DisplayList(self.values));
+        true
+    }
+
+    /// Check if it is possible to merge two virtual registers.
+    ///
+    /// Also leave `self.values` with the ordered list of values in the merged vreg.
+    fn can_merge_vregs(&mut self, param: Value, arg: Value) -> bool {
+        // We only need an immutable function reference.
+        let func = &*self.func;
+        let domtree = self.domtree;
+        let preorder = self.preorder;
+
+        // Restrict the virtual copy nodes we look at and key the `set_id` and `value` properties
+        // of the nodes. Set_id 0 will be `param` and set_id 1 will be `arg`.
+        self.vcopies.set_filter(
+            [param, arg],
+            func,
+            self.virtregs,
+            preorder,
+        );
+
+        // Now create an ordered sequence of dom-forest nodes from three sources: The two virtual
+        // registers and the filtered virtual copies.
+        let v0 = self.virtregs.congruence_class(&param);
+        let v1 = self.virtregs.congruence_class(&arg);
+        dbg!(
+            " - set 0: {}\n - set 1: {}",
+            DisplayList(v0),
+            DisplayList(v1)
+        );
+        let nodes = MergeNodes::new(
+            func,
+            preorder,
+            MergeNodes::new(
+                func,
+                preorder,
+                v0.iter().map(|&value| Node::value(value, 0, func)),
+                v1.iter().map(|&value| Node::value(value, 1, func)),
+            ),
+            self.vcopies.iter(func),
+        );
+
+        // Now push the values in order to the dominator forest.
+        // This gives us the closest dominating value def for each of the values.
+        self.forest.clear();
+        self.values.clear();
+        let ctx = self.liveness.context(&self.func.layout);
+        for node in nodes {
+            // Accumulate ordered values for the new vreg.
+            if node.is_value() {
+                self.values.push(node.value);
+            }
+
+            // Push this value and get the nearest dominating def back.
+            let parent = match self.forest.push_node(node, func, domtree, preorder) {
+                None => {
+                    if node.is_vcopy {
+                        self.forest.pop_last();
+                    }
+                    continue;
+                }
+                Some(n) => n,
             };
 
-            // Union the EBB parameter with corresponding arguments on the predecessor branches,
-            // but make sure to isolate dropped values.
-            //
-            // Compare `union_pred_args()` which runs during phase 1. We don't need to check for
-            // special cases here since they have already been eliminated during phase 1. We
-            // already know that:
-            //
-            // 1. `arg` is not live-in to `ebb`.
-            // 2. `arg` is not a function argument on the stack.
-            for (pred_ebb, pred_inst) in self.cfg.pred_iter(ebb) {
-                let arg = self.func.dfg.inst_variable_args(pred_inst)[argnum];
-                let arg_dropped = self.forest.is_dropped(arg);
-
-                // We don't want to union dropped values with each other because we can't ensure
-                // that we are actually making progress -- the new virtual register of dropped
-                // values may have its own interferences and so on.
-                //
-                // TODO: Maintain a secondary dominator forest to keep track of dropped values that
-                // would be allowed to be unioned together.
-                if param_dropped || arg_dropped {
-                    dbg!(" - {}#{}: {} isolated from {}", ebb, argnum, param, arg);
-                    let new_arg = self.isolate_arg(pred_ebb, pred_inst, argnum, arg);
-                    self.virtregs.union(param, new_arg);
-                } else {
-                    self.virtregs.union(param, arg);
+            if node.is_vcopy {
+                // Vcopy nodes don't represent interference if they are copies of the parent value.
+                // In that case, the node must be removed because the parent value can still be
+                // live belong the vcopy.
+                if parent.is_vcopy || node.value == parent.value {
+                    self.forest.pop_last();
+                    continue;
                 }
+
+                // Check if the parent value interferes with the virtual copy.
+                let inst = node.def.unwrap_inst();
+                if node.set_id != parent.set_id &&
+                    self.liveness[parent.value].reaches_use(inst, node.ebb, ctx)
+                {
+                    dbg!(
+                        " - interference: {} overlaps vcopy at {}:{}",
+                        parent,
+                        node.ebb,
+                        self.func.dfg.display_inst(inst, self.isa)
+                    );
+                    return false;
+                }
+
+                // Keep this vcopy on the stack. It will save us a few interference checks.
+                continue;
+            }
+
+            // Parent vcopies never represent any interference. We only keep them on the stack to
+            // avoid an interference check against a value higher up.
+            if parent.is_vcopy {
+                continue;
+            }
+
+            // Both node and parent are values, so check for interference.
+            debug_assert!(node.is_value() && parent.is_value());
+            if node.set_id != parent.set_id &&
+                self.liveness[parent.value].overlaps_def(node.def, node.ebb, ctx)
+            {
+                // The two values are interfering.
+                dbg!(" - interference: {} overlaps def of {}", parent, node.value);
+                return false;
             }
         }
 
-        // TODO: Get back the new vregs so they can be re-checked.
-        let old_len = self.worklist.len();
-        self.virtregs.finish_union_find(Some(self.worklist));
-        dbg!("-> new vregs {}", DisplayList(&self.worklist[old_len..]));
+        // The values vector should receive all values.
+        debug_assert_eq!(v0.len() + v1.len(), self.values.len());
+
+        // No interference found.
+        true
     }
 }
 
@@ -542,81 +675,98 @@ impl<'a> Context<'a> {
 /// granularity.
 ///
 /// Values are pushed in dominator tree pre-order of their definitions, and for each value pushed,
-/// `push_value` will return the nearest previously pushed value that dominates the definition.
+/// `push_node` will return the nearest previously pushed value that dominates the definition.
 #[allow(dead_code)]
 struct DomForest {
     // Stack representing the rightmost edge of the dominator forest so far, ending in the last
     // element of `values`.
     //
-    // At all times, the EBB of each element in the stack dominates the EBB of the next one, and
-    // all elements dominating the end of `values` are on the stack.
+    // At all times, the EBB of each element in the stack dominates the EBB of the next one.
     stack: Vec<Node>,
-
-    // The index into `stack` of the last dominating node returned by `push_value`.
-    last_dom: Option<usize>,
-
-    // List of values that have been dropped from the forest because they were interfering with
-    // another member.
-    //
-    // This list is initially just appended to, then it sorted for quick member checks with
-    // `is_dropped()`.
-    dropped: Vec<Value>,
 }
 
 /// A node in the dominator forest.
 #[derive(Clone, Copy, Debug)]
 #[allow(dead_code)]
 struct Node {
-    value: Value,
-    /// The program point where `value` is defined.
+    /// The program point where the live range is defined.
     def: ExpandedProgramPoint,
     /// EBB containing `def`.
     ebb: Ebb,
+    /// Is this a virtual copy or a value?
+    is_vcopy: bool,
+    /// Set identifier.
+    set_id: u8,
+    /// For a value node: The value defined at `def`.
+    /// For a vcopy node: The relevant branch argument at `def`.
+    value: Value,
 }
 
 impl Node {
-    /// Create a node for `value`.
-    pub fn new(value: Value, func: &Function) -> Node {
+    /// Create a node representing `value`.
+    pub fn value(value: Value, set_id: u8, func: &Function) -> Node {
         let def = func.dfg.value_def(value).pp();
         let ebb = func.layout.pp_ebb(def);
-        Node { value, def, ebb }
+        Node {
+            def,
+            ebb,
+            is_vcopy: false,
+            set_id,
+            value,
+        }
+    }
+
+    /// Create a node representing a virtual copy.
+    pub fn vcopy(branch: Inst, value: Value, set_id: u8, func: &Function) -> Node {
+        let def = branch.into();
+        let ebb = func.layout.pp_ebb(def);
+        Node {
+            def,
+            ebb,
+            is_vcopy: true,
+            set_id,
+            value,
+        }
+    }
+
+    /// IF this a value node?
+    pub fn is_value(&self) -> bool {
+        !self.is_vcopy
     }
 }
 
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}@{}", self.value, self.ebb)
+        if self.is_vcopy {
+            write!(f, "{}:vcopy({})@{}", self.set_id, self.value, self.ebb)
+        } else {
+            write!(f, "{}:{}@{}", self.set_id, self.value, self.ebb)
+        }
     }
 }
 
 impl DomForest {
     /// Create a new empty dominator forest.
     pub fn new() -> Self {
-        Self {
-            stack: Vec::new(),
-            last_dom: None,
-            dropped: Vec::new(),
-        }
+        Self { stack: Vec::new() }
     }
 
     /// Clear all data structures in this dominator forest.
     pub fn clear(&mut self) {
         self.stack.clear();
-        self.last_dom = None;
-        self.dropped.clear();
     }
 
-    /// Add a single value to the forest.
+    /// Add a single node to the forest.
     ///
     /// Update the stack so its dominance invariants are preserved. Detect a parent node on the
     /// stack which is the closest one dominating the new node and return it.
-    fn push_value(
+    fn push_node(
         &mut self,
         node: Node,
         func: &Function,
         domtree: &DominatorTree,
         preorder: &DominatorTreePreorder,
-    ) -> Option<Value> {
+    ) -> Option<Node> {
         // The stack contains the current sequence of dominating defs. Pop elements until we
         // find one whose EBB dominates `node.ebb`.
         while let Some(top) = self.stack.pop() {
@@ -638,12 +788,12 @@ impl DomForest {
                 // TODO: This search could be more efficient if we had access to
                 // `domtree.last_dominator()`. Each call to `dominates()` here ends up walking up
                 // the dominator tree starting from `node.ebb`.
-                self.last_dom = self.stack[0..self.stack.len() - 1].iter().rposition(|n| {
+                let last_dom = self.stack[0..self.stack.len() - 1].iter().rposition(|n| {
                     domtree.dominates(n.def, node.def, &func.layout)
                 });
 
                 // If there is a dominating parent value, return it for interference checking.
-                return self.last_dom.map(|pos| self.stack[pos].value);
+                return last_dom.map(|pos| self.stack[pos]);
             }
         }
 
@@ -652,39 +802,309 @@ impl DomForest {
         None
     }
 
-    /// Drop `value` from the forest and add it to the `dropped` list.
-    ///
-    /// The value must be either the last value passed to `push_value` or the dominating value
-    /// returned from the call.
-    pub fn drop_value(&mut self, value: Value) {
-        self.dropped.push(value);
+    pub fn pop_last(&mut self) {
+        self.stack.pop().expect("Stack is empty");
+    }
+}
 
-        // Are they dropping the last value pushed?
-        if self.stack.last().expect("Nothing pushed").value == value {
-            self.stack.pop();
+/// Virtual copies.
+///
+/// When building a full virtual register at once, like phase 1 does with union-find, it is good
+/// enough to check for interference between the values in the full virtual register like
+/// `check_vreg()` does. However, in phase 2 we are doing pairwise merges of partial virtual
+/// registers that don't represent the full transitive closure of the EBB argument-parameter
+/// relation. This means that just checking for interference between values is inadequate.
+///
+/// Example:
+///
+///   v1 = iconst.i32 1
+///   brnz v10, ebb1(v1)
+///   v2 = iconst.i32 2
+///   brnz v11, ebb1(v2)
+///   return v1
+///
+/// ebb1(v3: i32):
+///   v4 = iadd v3, v1
+///
+/// With just value interference checking, we could build the virtual register [v3, v1] since those
+/// two values don't interfere. We can't merge v2 into this virtual register because v1 and v2
+/// interfere. However, we can't resolve that interference either by inserting a copy:
+///
+///   v1 = iconst.i32 1
+///   brnz v10, ebb1(v1)
+///   v2 = iconst.i32 2
+///   v20 = copy v2          <-- new value
+///   brnz v11, ebb1(v20)
+///   return v1
+///
+/// ebb1(v3: i32):
+///   v4 = iadd v3, v1
+///
+/// The new value v20 still interferes with v1 because v1 is live across the "brnz v11" branch. We
+/// shouldn't have placed v1 and v3 in the same virtual register to begin with.
+///
+/// LLVM detects this form of interference by inserting copies in the predecessors of all phi
+/// instructions, then attempting to delete the copies. This is quite expensive because it involves
+/// creating a large number of copies and value.
+///
+/// We'll detect this form of interference with *virtual copies*: Each EBB parameter value that
+/// hasn't yet been fully merged with its EBB argument values is given a set of virtual copies at
+/// the predecessors. Any candidate value to be merged is checked for interference against both the
+/// virtual register and the virtual copies.
+///
+/// In the general case, we're checking if two virtual registers can be merged, and both can
+/// contain incomplete EBB parameter values with associated virtual copies.
+///
+/// The `VirtualCopies` struct represents a set of incomplete parameters and their associated
+/// virtual copies. Given two virtual registers, it can produce an ordered sequence of nodes
+/// representing the virtual copies in both vregs.
+struct VirtualCopies {
+    // Incomplete EBB parameters. These don't need to belong to the same virtual register.
+    params: Vec<Value>,
+
+    // Set of `(branch, destination)` pairs. These are all the predecessor branches for the EBBs
+    // whose parameters can be found in `params`.
+    //
+    // Ordered by dominator tree pre-order of the branch instructions.
+    branches: Vec<(Inst, Ebb)>,
+
+    // Filter for the currently active node iterator.
+    //
+    // An (ebb, set_id, num) entry means that branches to `ebb` are active in `set_id` with branch
+    // argument number `num`.
+    //
+    // This is ordered by EBB number for fast binary search.
+    filter: Vec<(Ebb, u8, usize)>,
+}
+
+impl VirtualCopies {
+    /// Create an empty VirtualCopies struct.
+    pub fn new() -> VirtualCopies {
+        VirtualCopies {
+            params: Vec::new(),
+            branches: Vec::new(),
+            filter: Vec::new(),
+        }
+    }
+
+    /// Clear all state.
+    pub fn clear(&mut self) {
+        self.params.clear();
+        self.branches.clear();
+        self.filter.clear();
+    }
+
+    /// Initialise virtual copies from the (interfering) values in a union-find virtual register
+    /// that is going to be broken up and reassembled iteratively.
+    ///
+    /// The values are assumed to be in domtree pre-order.
+    ///
+    /// This will extract the EBB parameter values and associate virtual copies all of them.
+    pub fn initialize(
+        &mut self,
+        values: &[Value],
+        func: &Function,
+        cfg: &ControlFlowGraph,
+        preorder: &DominatorTreePreorder,
+    ) {
+        self.clear();
+
+        let mut last_ebb = None;
+        for &val in values {
+            if let ir::ValueDef::Param(ebb, _) = func.dfg.value_def(val) {
+                self.params.push(val);
+
+                // We may have multiple parameters from the same EBB, but we only need to collect
+                // predecessors once. Also verify the ordering of values.
+                if let Some(last) = last_ebb {
+                    match preorder.pre_cmp_ebb(last, ebb) {
+                        cmp::Ordering::Less => {}
+                        cmp::Ordering::Equal => continue,
+                        cmp::Ordering::Greater => panic!("values in wrong order"),
+                    }
+                }
+
+                // This EBB hasn't been seen before.
+                for (_, pred_inst) in cfg.pred_iter(ebb) {
+                    self.branches.push((pred_inst, ebb));
+                }
+                last_ebb = Some(ebb);
+            }
+        }
+
+        // Reorder the predecessor branches as required by the dominator forest.
+        self.branches.sort_unstable_by(|&(a, _), &(b, _)| {
+            preorder.pre_cmp(a, b, &func.layout)
+        });
+    }
+
+    /// Get the next unmerged parameter value.
+    pub fn next_param(&self) -> Option<Value> {
+        self.params.last().cloned()
+    }
+
+    /// Indicate that `param` is now fully merged.
+    pub fn merged_param(&mut self, param: Value, func: &Function) {
+        assert_eq!(self.params.pop(), Some(param));
+
+        // The domtree pre-order in `self.params` guarantees that all parameters defined at the
+        // same EBB will be adjacent. This means we can see when all parameters at an EBB have been
+        // merged.
+        //
+        // We don't care about the last parameter - when that is merged we are done.
+        let last = match self.params.last() {
+            None => return,
+            Some(x) => *x,
+        };
+        let ebb = func.dfg.value_def(param).unwrap_ebb();
+        if func.dfg.value_def(last).unwrap_ebb() == ebb {
+            // We're not done with `ebb` parameters yet.
+            return;
+        }
+
+        // Alright, we know there are no remaining `ebb` parameters in `self.params`. This means we
+        // can get rid of the `ebb` predecessors in `self.branches`. We don't have to, the
+        // `VCopyIter` will just skip them, but this reduces its workload.
+        self.branches.retain(|&(_, dest)| dest != ebb);
+    }
+
+    /// Set a filter for the virtual copy nodes we're generating.
+    ///
+    /// Only generate nodes for parameter values that are in the same congruence class as `reprs`.
+    /// Assign a set_id to each node corresponding to the index into `reprs` of the parameter's
+    /// congruence class.
+    pub fn set_filter(
+        &mut self,
+        reprs: [Value; 2],
+        func: &Function,
+        virtregs: &VirtRegs,
+        preorder: &DominatorTreePreorder,
+    ) {
+        self.filter.clear();
+
+        // Parameters in `self.params` are ordered according to the domtree per-order, and they are
+        // removed from the back once they are fully merged. This means we can stop looking for
+        // parameters once we're beyond the last one.
+        let last_param = *self.params.last().expect("No more parameters");
+        let limit = func.dfg.value_def(last_param).unwrap_ebb();
+
+        for (set_id, repr) in reprs.iter().enumerate() {
+            let set_id = set_id as u8;
+            for &value in virtregs.congruence_class(repr) {
+                if let ir::ValueDef::Param(ebb, num) = func.dfg.value_def(value) {
+                    if preorder.pre_cmp_ebb(ebb, limit) == cmp::Ordering::Greater {
+                        // Stop once we're outside the bounds of `self.params`.
+                        break;
+                    }
+                    self.filter.push((ebb, set_id, num));
+                }
+            }
+        }
+        // We'll be using `binary_search_by` with the numerical EBB ordering.
+        self.filter.sort_unstable();
+    }
+
+    /// Look up the set_id and argument number for `ebb` in the current filter.
+    ///
+    /// Returns `None` if none of the currently active parameters are defined at `ebb`. Otherwise
+    /// returns `(set_id, argnum)` for an active parameter defined at `ebb`.
+    fn lookup(&self, ebb: Ebb) -> Option<(u8, usize)> {
+        self.filter
+            .binary_search_by(|&(e, _, _)| e.cmp(&ebb))
+            .ok()
+            .map(|i| {
+                let t = self.filter[i];
+                (t.1, t.2)
+            })
+    }
+
+    /// Get an iterator of dom-forest nodes corresponding to the current filter.
+    pub fn iter<'a>(&'a self, func: &'a Function) -> VCopyIter {
+        VCopyIter {
+            func,
+            vcopies: self,
+            branches: self.branches.iter(),
+        }
+    }
+}
+
+/// Virtual copy iterator.
+///
+/// This iterator produces dom-forest nodes corresponding to the current filter in the virtual
+/// copies container.
+struct VCopyIter<'a> {
+    func: &'a Function,
+    vcopies: &'a VirtualCopies,
+    branches: slice::Iter<'a, (Inst, Ebb)>,
+}
+
+impl<'a> Iterator for VCopyIter<'a> {
+    type Item = Node;
+
+    fn next(&mut self) -> Option<Node> {
+        while let Some(&(branch, dest)) = self.branches.next() {
+            if let Some((set_id, argnum)) = self.vcopies.lookup(dest) {
+                let arg = self.func.dfg.inst_variable_args(branch)[argnum];
+                return Some(Node::vcopy(branch, arg, set_id, self.func));
+            }
+        }
+        None
+    }
+}
+
+/// Node-merging iterator.
+///
+/// Given two ordered sequences of nodes, yield an ordered sequence containing all of them.
+struct MergeNodes<'a, IA, IB>
+where
+    IA: Iterator<Item = Node>,
+    IB: Iterator<Item = Node>,
+{
+    a: iter::Peekable<IA>,
+    b: iter::Peekable<IB>,
+    layout: &'a ir::Layout,
+    preorder: &'a DominatorTreePreorder,
+}
+
+impl<'a, IA, IB> MergeNodes<'a, IA, IB>
+where
+    IA: Iterator<Item = Node>,
+    IB: Iterator<Item = Node>,
+{
+    pub fn new(func: &'a Function, preorder: &'a DominatorTreePreorder, a: IA, b: IB) -> Self {
+        MergeNodes {
+            a: a.peekable(),
+            b: b.peekable(),
+            layout: &func.layout,
+            preorder,
+        }
+    }
+}
+
+impl<'a, IA, IB> Iterator for MergeNodes<'a, IA, IB>
+where
+    IA: Iterator<Item = Node>,
+    IB: Iterator<Item = Node>,
+{
+    type Item = Node;
+
+    fn next(&mut self) -> Option<Node> {
+        let ord = match (self.a.peek(), self.b.peek()) {
+            (Some(a), Some(b)) => {
+                let layout = self.layout;
+                self.preorder.pre_cmp_ebb(a.ebb, b.ebb).then_with(|| {
+                    layout.cmp(a.def, b.def)
+                })
+            }
+            (Some(_), None) => cmp::Ordering::Less,
+            (None, Some(_)) => cmp::Ordering::Greater,
+            (None, None) => return None,
+        };
+        // When the nodes compare equal, prefer the `a` side.
+        if ord != cmp::Ordering::Greater {
+            self.a.next()
         } else {
-            // Otherwise, they must be dropping the last dominator.
-            let pos = self.last_dom.take().expect("No last dominator");
-            let node = self.stack.remove(pos);
-            assert_eq!(node.value, value, "Inconsistent value to drop_value");
+            self.b.next()
         }
-    }
-
-    /// Prepare the set of dropped values to be queried with `is_dropped()`.
-    ///
-    /// Returns the number of dropped values.
-    pub fn prepare_dropped(&mut self) -> usize {
-        self.stack.clear();
-        if !self.dropped.is_empty() {
-            self.dropped.sort_unstable();
-            dbg!("-> dropped {}", DisplayList(&self.dropped));
-        }
-        self.dropped.len()
-    }
-
-    /// Check if `value` was dropped.
-    pub fn is_dropped(&self, value: Value) -> bool {
-        debug_assert!(self.stack.is_empty(), "Call prepare_dropped first");
-        self.dropped.binary_search(&value).is_ok()
     }
 }
