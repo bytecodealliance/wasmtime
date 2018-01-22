@@ -164,24 +164,8 @@ impl DataFlowGraph {
     /// parameter.
     pub fn value_def(&self, v: Value) -> ValueDef {
         match self.values[v] {
-            ValueData::Inst { inst, num, .. } => {
-                assert_eq!(
-                    Some(v),
-                    self.results[inst].get(num as usize, &self.value_lists),
-                    "Dangling result value {}: {}",
-                    v,
-                    self.display_inst(inst, None)
-                );
-                ValueDef::Result(inst, num as usize)
-            }
-            ValueData::Param { ebb, num, .. } => {
-                assert_eq!(
-                    Some(v),
-                    self.ebbs[ebb].params.get(num as usize, &self.value_lists),
-                    "Dangling EBB parameter value"
-                );
-                ValueDef::Param(ebb, num as usize)
-            }
+            ValueData::Inst { inst, num, .. } => ValueDef::Result(inst, num as usize),
+            ValueData::Param { ebb, num, .. } => ValueDef::Param(ebb, num as usize),
             ValueData::Alias { original, .. } => {
                 // Make sure we only recurse one level. `resolve_aliases` has safeguards to
                 // detect alias loops without overrunning the stack.
