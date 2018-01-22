@@ -51,6 +51,16 @@ pub enum ExpandedProgramPoint {
     Ebb(Ebb),
 }
 
+impl ExpandedProgramPoint {
+    /// Get the instruction we know is inside.
+    pub fn unwrap_inst(self) -> Inst {
+        match self {
+            ExpandedProgramPoint::Inst(x) => x,
+            ExpandedProgramPoint::Ebb(x) => panic!("expected inst: {}", x),
+        }
+    }
+}
+
 impl From<Inst> for ExpandedProgramPoint {
     fn from(inst: Inst) -> ExpandedProgramPoint {
         ExpandedProgramPoint::Inst(inst)

@@ -317,6 +317,14 @@ impl ValueDef {
         }
     }
 
+    /// Unwrap the EBB there the parameter is defined, or panic.
+    pub fn unwrap_ebb(&self) -> Ebb {
+        match *self {
+            ValueDef::Param(ebb, _) => ebb,
+            _ => panic!("Value is not an EBB parameter"),
+        }
+    }
+
     /// Get the program point where the value was defined.
     pub fn pp(self) -> ir::ExpandedProgramPoint {
         self.into()

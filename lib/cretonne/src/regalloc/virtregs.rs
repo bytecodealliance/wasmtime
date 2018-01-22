@@ -12,10 +12,11 @@
 //! memory-to-memory copies when a spilled value is passed as an EBB argument.
 
 use dbg::DisplayList;
+use dominator_tree::DominatorTreePreorder;
 use entity::{EntityList, ListPool};
 use entity::{PrimaryMap, EntityMap, Keys};
 use entity::EntityRef;
-use ir::Value;
+use ir::{Value, Function};
 use packed_option::PackedOption;
 use ref_slice::ref_slice;
 use std::cmp::Ordering;
@@ -112,20 +113,53 @@ impl VirtRegs {
         }
     }
 
-    /// Sort the values in `vreg` according to `compare`.
-    ///
-    /// If the ordering defined by `compare` is not total, value numbers are used as a last resort
-    /// tie-breaker. This makes it possible to use an unstable sorting algorithm which can be
-    /// faster because it doesn't allocate memory.
+    /// Sort the values in `vreg` according to the dominator tree pre-order.
     ///
     /// Returns the slice of sorted values which `values(vreg)` will also return from now on.
-    pub fn sort_values<F>(&mut self, vreg: VirtReg, mut compare: F) -> &[Value]
-    where
-        F: FnMut(Value, Value) -> Ordering,
-    {
+    pub fn sort_values(
+        &mut self,
+        vreg: VirtReg,
+        func: &Function,
+        preorder: &DominatorTreePreorder,
+    ) -> &[Value] {
         let s = self.vregs[vreg].as_mut_slice(&mut self.pool);
-        s.sort_unstable_by(|&a, &b| compare(a, b).then(a.cmp(&b)));
+        s.sort_unstable_by(|&a, &b| preorder.pre_cmp_def(a, b, func));
         s
+    }
+
+    /// Insert a single value into a sorted virtual register.
+    ///
+    /// It is assumed that the virtual register containing `big` is already sorted by
+    /// `sort_values()`, and that `single` does not already belong to a virtual register.
+    ///
+    /// If `big` is not part of a virtual register, one will be created.
+    pub fn insert_single(
+        &mut self,
+        big: Value,
+        single: Value,
+        func: &Function,
+        preorder: &DominatorTreePreorder,
+    ) -> VirtReg {
+        assert_eq!(self.get(single), None, "Expected singleton {}", single);
+
+        // Make sure `big` has a vreg.
+        let vreg = self.get(big).unwrap_or_else(|| {
+            let vr = self.alloc();
+            self.vregs[vr].push(big, &mut self.pool);
+            self.value_vregs[big] = vr.into();
+            vr
+        });
+
+        // Determine the insertion position for `single`.
+        let index = match self.values(vreg).binary_search_by(
+            |&v| preorder.pre_cmp_def(v, single, func),
+        ) {
+            Ok(_) => panic!("{} already in {}", single, vreg),
+            Err(i) => i,
+        };
+        self.vregs[vreg].insert(index, single, &mut self.pool);
+        self.value_vregs[single] = vreg.into();
+        vreg
     }
 
     /// Remove a virtual register.
