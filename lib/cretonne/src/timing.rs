@@ -69,6 +69,7 @@ define_passes!{
 
     prologue_epilogue: "Prologue/epilogue insertion",
     binemit: "Binary machine code emission",
+    layout_renumber: "Layout full renumbering",
 }
 
 impl Pass {

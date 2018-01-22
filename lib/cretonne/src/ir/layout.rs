@@ -9,6 +9,7 @@ use ir::progpoint::{ProgramOrder, ExpandedProgramPoint};
 use packed_option::PackedOption;
 use std::cmp;
 use std::iter::{Iterator, IntoIterator};
+use timing;
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
 /// contain definitions of instructions or EBBs, but depends on `Inst` and `Ebb` entity references
@@ -79,6 +80,10 @@ const MAJOR_STRIDE: SequenceNumber = 10;
 
 // Secondary stride used when renumbering locally.
 const MINOR_STRIDE: SequenceNumber = 2;
+
+// Limit on the sequence number range we'll renumber locally. If this limit is exceeded, we'll
+// switch to a full function renumbering.
+const LOCAL_LIMIT: SequenceNumber = 100 * MINOR_STRIDE;
 
 // Compute the midpoint between `a` and `b`.
 // Return `None` if the midpoint would be equal to either.
@@ -167,7 +172,7 @@ impl Layout {
             self.ebbs[ebb].seq = seq;
         } else {
             // No available integers between `prev_seq` and `next_seq`. We have to renumber.
-            self.renumber_from_ebb(ebb, prev_seq + MINOR_STRIDE);
+            self.renumber_from_ebb(ebb, prev_seq + MINOR_STRIDE, prev_seq + LOCAL_LIMIT);
         }
     }
 
@@ -200,7 +205,7 @@ impl Layout {
             self.insts[inst].seq = seq;
         } else {
             // No available integers between `prev_seq` and `next_seq`. We have to renumber.
-            self.renumber_from_inst(inst, prev_seq + MINOR_STRIDE);
+            self.renumber_from_inst(inst, prev_seq + MINOR_STRIDE, prev_seq + LOCAL_LIMIT);
         }
     }
 
@@ -209,7 +214,14 @@ impl Layout {
     ///
     /// Return `None` if renumbering has caught up and the sequence is monotonic again. Otherwise
     /// return the last used sequence number.
-    fn renumber_insts(&mut self, inst: Inst, seq: SequenceNumber) -> Option<SequenceNumber> {
+    ///
+    /// If sequence numbers exceed `limit`, switch to a full function renumbering and return `None`.
+    fn renumber_insts(
+        &mut self,
+        inst: Inst,
+        seq: SequenceNumber,
+        limit: SequenceNumber,
+    ) -> Option<SequenceNumber> {
         let mut inst = inst;
         let mut seq = seq;
 
@@ -227,13 +239,20 @@ impl Layout {
                 return None;
             }
 
+            if seq > limit {
+                // We're pushing too many instructions in front of us.
+                // Switch to a full function renumbering to make some space.
+                self.full_renumber();
+                return None;
+            }
+
             seq += MINOR_STRIDE;
         }
     }
 
     /// Renumber starting from `ebb` to `seq` and continuing until the sequence numbers are
     /// monotonic again.
-    fn renumber_from_ebb(&mut self, ebb: Ebb, first_seq: SequenceNumber) {
+    fn renumber_from_ebb(&mut self, ebb: Ebb, first_seq: SequenceNumber, limit: SequenceNumber) {
         let mut ebb = ebb;
         let mut seq = first_seq;
 
@@ -242,7 +261,7 @@ impl Layout {
 
             // Renumber instructions in `ebb`. Stop when the numbers catch up.
             if let Some(inst) = self.ebbs[ebb].first_inst.expand() {
-                seq = match self.renumber_insts(inst, seq + MINOR_STRIDE) {
+                seq = match self.renumber_insts(inst, seq + MINOR_STRIDE, limit) {
                     Some(s) => s,
                     None => return,
                 }
@@ -265,13 +284,36 @@ impl Layout {
 
     /// Renumber starting from `inst` to `seq` and continuing until the sequence numbers are
     /// monotonic again.
-    fn renumber_from_inst(&mut self, inst: Inst, first_seq: SequenceNumber) {
-        if let Some(seq) = self.renumber_insts(inst, first_seq) {
+    fn renumber_from_inst(&mut self, inst: Inst, first_seq: SequenceNumber, limit: SequenceNumber) {
+        if let Some(seq) = self.renumber_insts(inst, first_seq, limit) {
             // Renumbering spills over into next EBB.
             if let Some(next_ebb) = self.ebbs[self.inst_ebb(inst).unwrap()].next.expand() {
-                self.renumber_from_ebb(next_ebb, seq + MINOR_STRIDE);
+                self.renumber_from_ebb(next_ebb, seq + MINOR_STRIDE, limit);
             }
         }
+    }
+
+    /// Renumber all EBBs and instructions in the layout.
+    ///
+    /// This doesn't affect the position of anything, but it gives more room in the internal
+    /// sequence numbers for inserting instructions later.
+    fn full_renumber(&mut self) {
+        let _tt = timing::layout_renumber();
+        let mut seq = 0;
+        let mut next_ebb = self.first_ebb;
+        while let Some(ebb) = next_ebb {
+            self.ebbs[ebb].seq = seq;
+            seq += MAJOR_STRIDE;
+            next_ebb = self.ebbs[ebb].next.expand();
+
+            let mut next_inst = self.ebbs[ebb].first_inst.expand();
+            while let Some(inst) = next_inst {
+                self.insts[inst].seq = seq;
+                seq += MAJOR_STRIDE;
+                next_inst = self.insts[inst].next.expand();
+            }
+        }
+        dbg!("Renumbered {} program points", seq / MAJOR_STRIDE);
     }
 }
 
