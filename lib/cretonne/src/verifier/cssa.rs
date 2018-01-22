@@ -1,7 +1,7 @@
 //! Verify conventional SSA form.
 
 use dbg::DisplayList;
-use dominator_tree::DominatorTree;
+use dominator_tree::{DominatorTree, DominatorTreePreorder};
 use flowgraph::ControlFlowGraph;
 use ir::{Function, ExpandedProgramPoint};
 use regalloc::liveness::Liveness;
@@ -31,12 +31,17 @@ pub fn verify_cssa(
     virtregs: &VirtRegs,
 ) -> Result {
     let _tt = timing::verify_cssa();
+
+    let mut preorder = DominatorTreePreorder::new();
+    preorder.compute(domtree, &func.layout);
+
     let verifier = CssaVerifier {
         func,
         cfg,
         domtree,
         virtregs,
         liveness,
+        preorder,
     };
     verifier.check_virtregs()?;
     verifier.check_cssa()?;
@@ -49,6 +54,7 @@ struct CssaVerifier<'a> {
     domtree: &'a DominatorTree,
     virtregs: &'a VirtRegs,
     liveness: &'a Liveness,
+    preorder: DominatorTreePreorder,
 }
 
 impl<'a> CssaVerifier<'a> {
@@ -72,6 +78,7 @@ impl<'a> CssaVerifier<'a> {
                 let def_ebb = self.func.layout.pp_ebb(def);
                 for &prev_val in &values[0..idx] {
                     let prev_def: ExpandedProgramPoint = self.func.dfg.value_def(prev_val).into();
+                    let prev_ebb = self.func.layout.pp_ebb(prev_def);
 
                     if prev_def == def {
                         return err!(
@@ -85,7 +92,9 @@ impl<'a> CssaVerifier<'a> {
                     }
 
                     // Enforce topological ordering of defs in the virtual register.
-                    if self.domtree.dominates(def, prev_def, &self.func.layout) {
+                    if self.preorder.dominates(def_ebb, prev_ebb) &&
+                        self.domtree.dominates(def, prev_def, &self.func.layout)
+                    {
                         return err!(
                             val,
                             "Value in {} = {} def dominates previous {}",
@@ -94,18 +103,30 @@ impl<'a> CssaVerifier<'a> {
                             prev_val
                         );
                     }
+                }
 
-                    // Knowing that values are in topo order, we can check for interference this
-                    // way.
-                    let ctx = self.liveness.context(&self.func.layout);
-                    if self.liveness[prev_val].overlaps_def(def, def_ebb, ctx) {
-                        return err!(
-                            val,
-                            "Value def in {} = {} interferes with {}",
-                            vreg,
-                            DisplayList(values),
-                            prev_val
-                        );
+                // Knowing that values are in topo order, we can check for interference this
+                // way.
+                // We only have to check against the nearest dominating value.
+                for &prev_val in values[0..idx].iter().rev() {
+                    let prev_def: ExpandedProgramPoint = self.func.dfg.value_def(prev_val).into();
+                    let prev_ebb = self.func.layout.pp_ebb(prev_def);
+
+                    if self.preorder.dominates(prev_ebb, def_ebb) &&
+                        self.domtree.dominates(prev_def, def, &self.func.layout)
+                    {
+                        let ctx = self.liveness.context(&self.func.layout);
+                        if self.liveness[prev_val].overlaps_def(def, def_ebb, ctx) {
+                            return err!(
+                                val,
+                                "Value def in {} = {} interferes with {}",
+                                vreg,
+                                DisplayList(values),
+                                prev_val
+                            );
+                        } else {
+                            break;
+                        }
                     }
                 }
             }
