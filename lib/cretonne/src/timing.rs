@@ -133,9 +133,9 @@ mod details {
 
     impl fmt::Display for PassTimes {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            writeln!(f, "======= =======  ==================================")?;
-            writeln!(f, "  Total    Self  Pass")?;
-            writeln!(f, "------- -------  ----------------------------------")?;
+            writeln!(f, "======== ========  ==================================")?;
+            writeln!(f, "   Total     Self  Pass")?;
+            writeln!(f, "-------- --------  ----------------------------------")?;
             for (time, desc) in self.pass.iter().zip(&DESCRIPTIONS) {
                 // Omit passes that haven't run.
                 if time.total == Duration::default() {
@@ -147,7 +147,7 @@ mod details {
                     // Round to nearest ms by adding 500us.
                     dur += Duration::new(0, 500_000);
                     let ms = dur.subsec_nanos() / 1_000_000;
-                    write!(f, "{:3}.{:03} ", dur.as_secs(), ms)
+                    write!(f, "{:4}.{:03} ", dur.as_secs(), ms)
                 }
 
                 fmtdur(time.total, f)?;
@@ -156,7 +156,7 @@ mod details {
                 }
                 writeln!(f, " {}", desc)?;
             }
-            writeln!(f, "======= =======  ==================================")
+            writeln!(f, "======== ========  ==================================")
         }
     }
 
