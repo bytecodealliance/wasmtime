@@ -149,6 +149,45 @@ impl VirtRegs {
             self.vregs.push(Default::default())
         })
     }
+
+    /// Unify `values` into a single virtual register.
+    ///
+    /// The values in the slice can be singletons or they can belong to a virtual register already.
+    /// If a value belongs to a virtual register, all of the values in that register must be
+    /// present.
+    ///
+    /// The values are assumed to already be in topological order.
+    pub fn unify(&mut self, values: &[Value]) -> VirtReg {
+        // Start by clearing all virtual registers involved.
+        let mut singletons = 0;
+        let mut cleared = 0;
+        for &val in values {
+            match self.get(val) {
+                None => singletons += 1,
+                Some(vreg) => {
+                    if !self.vregs[vreg].is_empty() {
+                        cleared += self.vregs[vreg].len(&self.pool);
+                        self.vregs[vreg].clear(&mut self.pool);
+                        self.unused_vregs.push(vreg);
+                    }
+                }
+            }
+        }
+
+        assert_eq!(
+            values.len(),
+            singletons + cleared,
+            "Can't unify partial virtual registers"
+        );
+
+        let vreg = self.alloc();
+        self.vregs[vreg].extend(values.iter().cloned(), &mut self.pool);
+        for &v in values {
+            self.value_vregs[v] = vreg.into();
+        }
+
+        vreg
+    }
 }
 
 impl fmt::Display for VirtRegs {
