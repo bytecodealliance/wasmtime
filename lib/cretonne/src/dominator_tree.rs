@@ -2,7 +2,7 @@
 
 use entity::EntityMap;
 use flowgraph::{ControlFlowGraph, BasicBlock};
-use ir::{Ebb, Inst, Function, Layout, ProgramOrder, ExpandedProgramPoint};
+use ir::{Ebb, Inst, Value, Function, Layout, ProgramOrder, ExpandedProgramPoint};
 use ir::instructions::BranchInfo;
 use packed_option::PackedOption;
 use std::cmp;
@@ -647,6 +647,20 @@ impl DominatorTreePreorder {
         let b = b.into();
         self.pre_cmp_ebb(layout.pp_ebb(a), layout.pp_ebb(b)).then(
             layout.cmp(a, b),
+        )
+    }
+
+    /// Compare two value defs according to the dominator tree pre-order.
+    ///
+    /// Two values defined at the same program point are compared according to their parameter or
+    /// result order.
+    ///
+    /// This is a total ordering of the values in the function.
+    pub fn pre_cmp_def(&self, a: Value, b: Value, func: &Function) -> Ordering {
+        let da = func.dfg.value_def(a);
+        let db = func.dfg.value_def(b);
+        self.pre_cmp(da, db, &func.layout).then_with(
+            || da.num().cmp(&db.num()),
         )
     }
 }
