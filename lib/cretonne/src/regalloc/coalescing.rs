@@ -779,21 +779,33 @@ impl DomForest {
                 // not necessarily mean that `top.def` dominates `node.def`, though. The `top.def`
                 // program point may be below the last branch in `top.ebb` that dominates
                 // `node.def`.
-                debug_assert!(domtree.dominates(top.ebb, node.def, &func.layout));
-
+                //
                 // We do know, though, that if there is a nearest value dominating `node.def`, it
                 // will be on the stack. We just need to find the last stack entry that actually
                 // dominates.
-                //
-                // TODO: This search could be more efficient if we had access to
-                // `domtree.last_dominator()`. Each call to `dominates()` here ends up walking up
-                // the dominator tree starting from `node.ebb`.
-                let last_dom = self.stack[0..self.stack.len() - 1].iter().rposition(|n| {
-                    domtree.dominates(n.def, node.def, &func.layout)
-                });
+                let mut last_dom = node.def;
+                for &n in self.stack.iter().rev().skip(1) {
+                    // If the node is defined at the EBB header, it does in fact dominate
+                    // everything else pushed on the stack.
+                    let def_inst = match n.def {
+                        ExpandedProgramPoint::Ebb(_) => return Some(n),
+                        ExpandedProgramPoint::Inst(i) => i,
+                    };
 
-                // If there is a dominating parent value, return it for interference checking.
-                return last_dom.map(|pos| self.stack[pos]);
+                    // We need to find the last program point in `n.ebb` to dominate `node.def`.
+                    last_dom = match domtree.last_dominator(n.ebb, last_dom, &func.layout) {
+                        None => n.ebb.into(),
+                        Some(inst) => {
+                            if func.layout.cmp(def_inst, inst) != cmp::Ordering::Greater {
+                                return Some(n);
+                            }
+                            inst.into()
+                        }
+                    };
+                }
+
+                // No real dominator found on the stack.
+                return None;
             }
         }
 

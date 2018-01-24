@@ -138,7 +138,7 @@ impl DominatorTree {
 
     /// Find the last instruction in `a` that dominates `b`.
     /// If no instructions in `a` dominate `b`, return `None`.
-    fn last_dominator<B>(&self, a: Ebb, b: B, layout: &Layout) -> Option<Inst>
+    pub fn last_dominator<B>(&self, a: Ebb, b: B, layout: &Layout) -> Option<Inst>
     where
         B: Into<ExpandedProgramPoint>,
     {
