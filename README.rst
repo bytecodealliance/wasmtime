@@ -2,8 +2,9 @@
 Cretonne Code Generator
 =======================
 
-Cretonne is a low-level retargetable code generator. It translates a
-target-independent intermediate language into executable machine code.
+Cretonne is a low-level retargetable code generator. It translates a `target-independent
+intermediate language <http://cretonne.readthedocs.io/en/latest/langref.html>`_ into executable
+machine code.
 
 *This is a work in progress that is not yet functional.*
 
@@ -15,28 +16,20 @@ target-independent intermediate language into executable machine code.
     :target: https://travis-ci.org/stoklund/cretonne
     :alt: Build Status
 
-Cretonne is designed to be a code generator for WebAssembly with these design
-goals:
+For more information, see `the documentation
+<https://cretonne.readthedocs.io/en/latest/?badge=latest>`_.
 
-Portable semantics
-    As far as possible, Cretonne's input language has well-defined semantics
-    that are the same on all target architectures. The semantics are usually
-    the same as WebAssembly's.
-Fast sandbox verification
-    Cretonne's input language has a safe subset for sandboxed code. No advanced
-    analysis is required to verify memory safety as long as only the safe
-    subset is used. The safe subset is expressive enough to implement
-    WebAssembly.
-Scalable performance
-    Cretonne can be configured to generate code as quickly as possible, or it
-    can generate very good code at the cost of slower compile times.
-Predictable performance
-    When optimizing, Cretonne focuses on adapting the target-independent IL to
-    the quirks of the target architecture. There are no advanced optimizations
-    that sometimes work, sometimes fail.
+Planned uses
+------------
 
-For more information, see
-`the documentation <https://cretonne.readthedocs.io/en/latest/?badge=latest>`_.
+Cretonne is designed to be a code generator for WebAssembly, but it is general enough to be useful
+elsewhere too. The initial planned uses that affected its design are:
+
+1. `WebAssembly compiler for the SpiderMonkey engine in Firefox
+   <spidermonkey.rst#phase-1-webassembly>`_.
+2. `Backend for the IonMonkey JavaScript JIT compiler in Firefox
+   <spidermonkey.rst#phase-2-ionmonkey>`_.
+3. `Debug build backend for the Rust compiler <rustc.rst>`_.
 
 Building Cretonne
 -----------------
