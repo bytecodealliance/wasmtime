@@ -49,8 +49,16 @@ impl Context {
     /// The returned instance should be reused for compiling multiple functions in order to avoid
     /// needless allocator thrashing.
     pub fn new() -> Self {
+        Context::for_function(Function::new())
+    }
+
+    /// Allocate a new compilation context with an existing Function.
+    ///
+    /// The returned instance should be reused for compiling multiple functions in order to avoid
+    /// needless allocator thrashing.
+    pub fn for_function(func: Function) -> Self {
         Self {
-            func: Function::new(),
+            func: func,
             cfg: ControlFlowGraph::new(),
             domtree: DominatorTree::new(),
             regalloc: regalloc::Context::new(),
