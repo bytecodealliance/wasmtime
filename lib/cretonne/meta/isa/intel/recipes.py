@@ -12,8 +12,8 @@ from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalVar
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from .registers import GPR, ABCD, FPR, GPR_DEREF_SAFE, GPR_ZERO_DEREF_SAFE
-from .registers import GPR8, FPR8, GPR8_ZERO_DEREF_SAFE, FLAG, StackGPR32
-from .registers import StackFPR32
+from .registers import GPR8, FPR8, GPR8_DEREF_SAFE, GPR8_ZERO_DEREF_SAFE, FLAG
+from .registers import StackGPR32, StackFPR32
 from .defs import supported_floatccs
 from .settings import use_sse41
 
@@ -105,7 +105,7 @@ def replace_put_op(emit, prefix):
 # Register class mapping for no-REX instructions.
 NOREX_MAP = {
         GPR: GPR8,
-        GPR_DEREF_SAFE: GPR8,
+        GPR_DEREF_SAFE: GPR8_DEREF_SAFE,
         GPR_ZERO_DEREF_SAFE: GPR8_ZERO_DEREF_SAFE,
         FPR: FPR8
     }
