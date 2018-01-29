@@ -13,6 +13,7 @@ use isa::Builder as IsaBuilder;
 use isa::{TargetIsa, RegInfo, RegClass, EncInfo};
 use ir;
 use regalloc;
+use std::fmt;
 
 #[allow(dead_code)]
 struct Isa {
@@ -250,5 +251,11 @@ mod tests {
             args: [arg32, arg32],
         };
         assert_eq!(encstr(&*isa, isa.encode(&dfg, &mul32, types::I32)), "R#10c");
+    }
+}
+
+impl fmt::Display for Isa {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}\n{}", self.shared_flags, self.isa_flags)
     }
 }

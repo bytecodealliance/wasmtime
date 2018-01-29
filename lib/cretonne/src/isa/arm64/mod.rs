@@ -13,6 +13,7 @@ use isa::Builder as IsaBuilder;
 use isa::{TargetIsa, RegInfo, RegClass, EncInfo};
 use ir;
 use regalloc;
+use std::fmt;
 
 #[allow(dead_code)]
 struct Isa {
@@ -99,5 +100,11 @@ impl TargetIsa for Isa {
 
     fn emit_function(&self, func: &ir::Function, sink: &mut MemoryCodeSink) {
         emit_function(func, binemit::emit_inst, sink)
+    }
+}
+
+impl fmt::Display for Isa {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}\n{}", self.shared_flags, self.isa_flags)
     }
 }

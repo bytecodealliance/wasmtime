@@ -53,6 +53,7 @@ use regalloc;
 use result;
 use timing;
 use isa::enc_tables::Encodings;
+use std::fmt;
 
 #[cfg(build_riscv)]
 pub mod riscv;
@@ -146,8 +147,9 @@ pub type Legalize = fn(ir::Inst,
                        &mut flowgraph::ControlFlowGraph)
                        -> bool;
 
-/// Methods that are specialized to a target ISA.
-pub trait TargetIsa {
+/// Methods that are specialized to a target ISA. Implies a Display trait that shows the
+/// shared flags, as well as any isa-specific flags.
+pub trait TargetIsa: fmt::Display {
     /// Get the name of this ISA.
     fn name(&self) -> &'static str;
 
