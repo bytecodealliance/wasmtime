@@ -11,8 +11,9 @@ from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
 from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalVar
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
-from .registers import GPR, ABCD, FPR, GPR_NORIP, GPR8, FPR8, GPR8_NORIP
-from .registers import FLAG, StackGPR32, StackFPR32
+from .registers import GPR, ABCD, FPR, GPR_DEREF_SAFE, GPR_ZERO_DEREF_SAFE
+from .registers import GPR8, FPR8, GPR8_ZERO_DEREF_SAFE, FLAG, StackGPR32
+from .registers import StackFPR32
 from .defs import supported_floatccs
 from .settings import use_sse41
 
@@ -104,7 +105,8 @@ def replace_put_op(emit, prefix):
 # Register class mapping for no-REX instructions.
 NOREX_MAP = {
         GPR: GPR8,
-        GPR_NORIP: GPR8_NORIP,
+        GPR_DEREF_SAFE: GPR8,
+        GPR_ZERO_DEREF_SAFE: GPR8_ZERO_DEREF_SAFE,
         FPR: FPR8
     }
 
@@ -623,7 +625,7 @@ got_gvaddr8 = TailRecipe(
 
 # XX /r register-indirect store with no offset.
 st = TailRecipe(
-        'st', Store, size=1, ins=(GPR, GPR), outs=(),
+        'st', Store, size=1, ins=(GPR, GPR_ZERO_DEREF_SAFE), outs=(),
         instp=IsEqual(Store.offset, 0),
         clobbers_flags=False,
         emit='''
@@ -655,7 +657,7 @@ fst = TailRecipe(
 
 # XX /r register-indirect store with 8-bit offset.
 stDisp8 = TailRecipe(
-        'stDisp8', Store, size=2, ins=(GPR, GPR), outs=(),
+        'stDisp8', Store, size=2, ins=(GPR, GPR_DEREF_SAFE), outs=(),
         instp=IsSignedInt(Store.offset, 8),
         clobbers_flags=False,
         emit='''
@@ -676,7 +678,7 @@ stDisp8_abcd = TailRecipe(
         sink.put1(offset as u8);
         ''')
 fstDisp8 = TailRecipe(
-        'fstDisp8', Store, size=2, ins=(FPR, GPR), outs=(),
+        'fstDisp8', Store, size=2, ins=(FPR, GPR_DEREF_SAFE), outs=(),
         instp=IsSignedInt(Store.offset, 8),
         clobbers_flags=False,
         emit='''
@@ -688,7 +690,7 @@ fstDisp8 = TailRecipe(
 
 # XX /r register-indirect store with 32-bit offset.
 stDisp32 = TailRecipe(
-        'stDisp32', Store, size=5, ins=(GPR, GPR), outs=(),
+        'stDisp32', Store, size=5, ins=(GPR, GPR_DEREF_SAFE), outs=(),
         clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
@@ -707,7 +709,7 @@ stDisp32_abcd = TailRecipe(
         sink.put4(offset as u32);
         ''')
 fstDisp32 = TailRecipe(
-        'fstDisp32', Store, size=5, ins=(FPR, GPR), outs=(),
+        'fstDisp32', Store, size=5, ins=(FPR, GPR_DEREF_SAFE), outs=(),
         clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
@@ -768,7 +770,7 @@ frsp32 = TailRecipe(
 
 # XX /r load with no offset.
 ld = TailRecipe(
-        'ld', Load, size=1, ins=(GPR_NORIP), outs=(GPR),
+        'ld', Load, size=1, ins=(GPR_ZERO_DEREF_SAFE), outs=(GPR),
         instp=IsEqual(Load.offset, 0),
         clobbers_flags=False,
         emit='''
@@ -778,7 +780,7 @@ ld = TailRecipe(
 
 # XX /r float load with no offset.
 fld = TailRecipe(
-        'fld', Load, size=1, ins=(GPR), outs=(FPR),
+        'fld', Load, size=1, ins=(GPR_ZERO_DEREF_SAFE), outs=(FPR),
         instp=IsEqual(Load.offset, 0),
         clobbers_flags=False,
         emit='''
@@ -788,7 +790,7 @@ fld = TailRecipe(
 
 # XX /r load with 8-bit offset.
 ldDisp8 = TailRecipe(
-        'ldDisp8', Load, size=2, ins=(GPR), outs=(GPR),
+        'ldDisp8', Load, size=2, ins=(GPR_DEREF_SAFE), outs=(GPR),
         instp=IsSignedInt(Load.offset, 8),
         clobbers_flags=False,
         emit='''
@@ -800,7 +802,7 @@ ldDisp8 = TailRecipe(
 
 # XX /r float load with 8-bit offset.
 fldDisp8 = TailRecipe(
-        'fldDisp8', Load, size=2, ins=(GPR), outs=(FPR),
+        'fldDisp8', Load, size=2, ins=(GPR_DEREF_SAFE), outs=(FPR),
         instp=IsSignedInt(Load.offset, 8),
         clobbers_flags=False,
         emit='''
@@ -812,7 +814,7 @@ fldDisp8 = TailRecipe(
 
 # XX /r load with 32-bit offset.
 ldDisp32 = TailRecipe(
-        'ldDisp32', Load, size=5, ins=(GPR), outs=(GPR),
+        'ldDisp32', Load, size=5, ins=(GPR_DEREF_SAFE), outs=(GPR),
         instp=IsSignedInt(Load.offset, 32),
         clobbers_flags=False,
         emit='''
@@ -824,7 +826,7 @@ ldDisp32 = TailRecipe(
 
 # XX /r float load with 32-bit offset.
 fldDisp32 = TailRecipe(
-        'fldDisp32', Load, size=5, ins=(GPR), outs=(FPR),
+        'fldDisp32', Load, size=5, ins=(GPR_DEREF_SAFE), outs=(FPR),
         instp=IsSignedInt(Load.offset, 32),
         clobbers_flags=False,
         emit='''
