@@ -7,6 +7,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Write;
 use cretonne::binemit;
+use cretonne::dbg::DisplayList;
 use cretonne::ir;
 use cretonne::ir::entities::AnyEntity;
 use cretonne::regalloc::RegDiversions;
@@ -137,26 +138,27 @@ impl SubTest for TestBinEmit {
             divert.clear();
             for inst in func.layout.ebb_insts(ebb) {
                 if !func.encodings[inst].is_legal() {
-                    let mut legal_encodings = isa.legal_encodings(
-                        &func.dfg,
-                        &func.dfg[inst],
-                        func.dfg.ctrl_typevar(inst),
-                    );
-
-                    let enc = if is_compressed {
-                        // Get the smallest legal encoding
-                        legal_encodings
-                            .filter(|e| {
+                    // Find an encoding that satisfies both immediate field and register
+                    // constraints.
+                    if let Some(enc) = {
+                        let mut legal_encodings = isa.legal_encodings(
+                            &func.dfg,
+                            &func.dfg[inst],
+                            func.dfg.ctrl_typevar(inst),
+                        ).filter(|e| {
                                 let recipe_constraints = &encinfo.constraints[e.recipe()];
                                 recipe_constraints.satisfied(inst, &divert, &func)
-                            })
-                            .min_by_key(|&e| encinfo.bytes(e))
-                    } else {
-                        // If not using compressed, just use the first encoding.
-                        legal_encodings.next()
-                    };
+                            });
 
-                    if let Some(enc) = enc {
+                        if is_compressed {
+                            // Get the smallest legal encoding
+                            legal_encodings.min_by_key(|&e| encinfo.bytes(e))
+                        } else {
+                            // If not using compressed, just use the first encoding.
+                            legal_encodings.next()
+                        }
+                    }
+                    {
                         func.encodings[inst] = enc;
                     }
                 }
@@ -215,6 +217,17 @@ impl SubTest for TestBinEmit {
 
                 // Send legal encodings into the emitter.
                 if enc.is_legal() {
+                    // Generate a better error message if output locations are not specified.
+                    if let Some(&v) = func.dfg.inst_results(inst).iter().find(|&&v| {
+                        !func.locations[v].is_assigned()
+                    })
+                    {
+                        return Err(format!(
+                            "Missing register/stack slot for {} in {}",
+                            v,
+                            func.dfg.display_inst(inst, isa)
+                        ));
+                    }
                     let before = sink.offset;
                     isa.emit_inst(&func, inst, &mut divert, &mut sink);
                     let emitted = sink.offset - before;
@@ -231,11 +244,39 @@ impl SubTest for TestBinEmit {
                 // Check against bin: directives.
                 if let Some(want) = bins.remove(&inst) {
                     if !enc.is_legal() {
-                        return Err(format!(
-                            "{} can't be encoded: {}",
-                            inst,
-                            func.dfg.display_inst(inst, isa)
-                        ));
+                        // A possible cause of an unencoded instruction is a missing location for
+                        // one of the input operands.
+                        if let Some(&v) = func.dfg.inst_args(inst).iter().find(|&&v| {
+                            !func.locations[v].is_assigned()
+                        })
+                        {
+                            return Err(format!(
+                                "Missing register/stack slot for {} in {}",
+                                v,
+                                func.dfg.display_inst(inst, isa)
+                            ));
+                        }
+
+                        // Do any encodings exist?
+                        let encodings = isa.legal_encodings(
+                            &func.dfg,
+                            &func.dfg[inst],
+                            func.dfg.ctrl_typevar(inst),
+                        ).map(|e| encinfo.display(e))
+                            .collect::<Vec<_>>();
+
+                        if encodings.is_empty() {
+                            return Err(format!(
+                                "No encodings found for: {}",
+                                func.dfg.display_inst(inst, isa)
+                            ));
+                        } else {
+                            return Err(format!(
+                                "No matching encodings for {} in {}",
+                                func.dfg.display_inst(inst, isa),
+                                DisplayList(&encodings),
+                            ));
+                        }
                     }
                     let have = sink.text.trim();
                     if have != want {
