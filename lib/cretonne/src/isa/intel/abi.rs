@@ -180,20 +180,28 @@ pub fn spiderwasm_prologue_epilogue(
     func: &mut ir::Function,
     isa: &TargetIsa,
 ) -> result::CtonResult {
-    let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
+    let (word_size, stack_align) = if isa.flags().is_64bit() {
+        (8, 16)
+    } else {
+        (4, 4)
+    };
     let bytes = StackSize::from(isa.flags().spiderwasm_prologue_words()) * word_size;
 
     let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
     ss.offset = -(bytes as StackOffset);
     func.stack_slots.push(ss);
 
-    layout_stack(&mut func.stack_slots, word_size)?;
+    layout_stack(&mut func.stack_slots, stack_align)?;
     Ok(())
 }
 
 /// Insert a System V-compatible prologue and epilogue.
 pub fn native_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
-    let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
+    let (word_size, stack_align) = if isa.flags().is_64bit() {
+        (8, 16)
+    } else {
+        (4, 4)
+    };
     let csr_type = if isa.flags().is_64bit() {
         ir::types::I64
     } else {
@@ -215,7 +223,7 @@ pub fn native_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> res
         offset: -csr_stack_size,
     });
 
-    let total_stack_size = layout_stack(&mut func.stack_slots, word_size)? as i32;
+    let total_stack_size = layout_stack(&mut func.stack_slots, stack_align)? as i32;
     let local_stack_size = (total_stack_size - csr_stack_size) as i64;
 
     // Add CSRs to function signature
