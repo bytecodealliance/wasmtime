@@ -211,7 +211,8 @@ impl SubTest for TestBinEmit {
                 "Inconsistent {} header offset",
                 ebb
             );
-            for inst in func.layout.ebb_insts(ebb) {
+            for (offset, inst, enc_bytes) in func.inst_offsets(ebb, &encinfo) {
+                assert_eq!(sink.offset, offset);
                 sink.text.clear();
                 let enc = func.encodings[inst];
 
@@ -234,7 +235,7 @@ impl SubTest for TestBinEmit {
                     // Verify the encoding recipe sizes against the ISAs emit_inst implementation.
                     assert_eq!(
                         emitted,
-                        encinfo.bytes(enc),
+                        enc_bytes,
                         "Inconsistent size for [{}] {}",
                         encinfo.display(enc),
                         func.dfg.display_inst(inst, isa)

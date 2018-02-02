@@ -3,13 +3,14 @@
 //! The `Function` struct defined in this module owns all of its extended basic blocks and
 //! instructions.
 
+use binemit::CodeOffset;
 use entity::{PrimaryMap, EntityMap};
 use ir;
 use ir::{ExternalName, CallConv, Signature, DataFlowGraph, Layout};
 use ir::{InstEncodings, ValueLocations, JumpTables, StackSlots, EbbOffsets, SourceLocs};
 use ir::{Ebb, JumpTableData, JumpTable, StackSlotData, StackSlot, SigRef, ExtFuncData, FuncRef,
          GlobalVarData, GlobalVar, HeapData, Heap};
-use isa::TargetIsa;
+use isa::{TargetIsa, EncInfo};
 use std::fmt;
 use write::write_function;
 
@@ -153,6 +154,28 @@ impl Function {
             self.dfg.ebb_params(entry)[i]
         })
     }
+
+    /// Get an iterator over the instructions in `ebb`, including offsets and encoded instruction
+    /// sizes.
+    ///
+    /// The iterator returns `(offset, inst, size)` tuples, where `offset` if the offset in bytes
+    /// from the beginning of the function to the instruction, and `size` is the size of the
+    /// instruction in bytes, or 0 for unencoded instructions.
+    ///
+    /// This function can only be used after the code layout has been computed by the
+    /// `binemit::relax_branches()` function.
+    pub fn inst_offsets<'a>(&'a self, ebb: Ebb, encinfo: &EncInfo) -> InstOffsetIter<'a> {
+        assert!(
+            !self.offsets.is_empty(),
+            "Code layout must be computed first"
+        );
+        InstOffsetIter {
+            encinfo: encinfo.clone(),
+            encodings: &self.encodings,
+            offset: self.offsets[ebb],
+            iter: self.layout.ebb_insts(ebb),
+        }
+    }
 }
 
 /// Wrapper type capable of displaying a `Function` with correct ISA annotations.
@@ -173,5 +196,26 @@ impl fmt::Display for Function {
 impl fmt::Debug for Function {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write_function(fmt, self, None)
+    }
+}
+
+/// Iterator returning instruction offsets and sizes: `(offset, inst, size)`.
+pub struct InstOffsetIter<'a> {
+    encinfo: EncInfo,
+    encodings: &'a InstEncodings,
+    offset: CodeOffset,
+    iter: ir::layout::Insts<'a>,
+}
+
+impl<'a> Iterator for InstOffsetIter<'a> {
+    type Item = (CodeOffset, ir::Inst, CodeOffset);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|inst| {
+            let size = self.encinfo.bytes(self.encodings[inst]);
+            let offset = self.offset;
+            self.offset += size;
+            (offset, inst, size)
+        })
     }
 }
