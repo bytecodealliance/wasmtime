@@ -574,6 +574,7 @@ runtime data structures.
     :result GV: Global variable.
 
 .. autoinst:: global_addr
+.. autoinst:: globalsym_addr
 
 
 Heaps
@@ -937,6 +938,15 @@ the target ISA.
 
 .. autoinst:: isplit
 .. autoinst:: iconcat
+
+Special register operations
+---------------------------
+
+The prologue and epilogue of a function needs to manipulate special registers like the stack
+pointer and the frame pointer. These instructions should not be used in regular code.
+
+.. autoinst:: adjust_sp_imm
+.. autoinst:: copy_special
 
 .. _extload-truncstore:
 
