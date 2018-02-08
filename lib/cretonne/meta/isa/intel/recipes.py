@@ -8,7 +8,7 @@ from cdsl.registers import RegClass
 from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry, NullAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
-from base.formats import IntSelect
+from base.formats import IntSelect, IntCondTrap
 from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalVar
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
@@ -278,6 +278,19 @@ null = EncRecipe('null', Unary, size=0, ins=GPR, outs=0, emit='')
 trap = TailRecipe(
         'trap', Trap, size=0, ins=(), outs=(),
         emit='PUT_OP(bits, BASE_REX, sink);')
+
+# Macro: conditional jump over a ud2.
+trapif = EncRecipe(
+        'trapif', IntCondTrap, size=4, ins=FLAG.eflags, outs=(),
+        clobbers_flags=False,
+        emit='''
+        // Jump over a 2-byte ud2.
+        sink.put1(0x70 | (icc2opc(cond.inverse()) as u8));
+        sink.put1(2);
+        // ud2.
+        sink.put1(0x0f);
+        sink.put1(0x0b);
+        ''')
 
 # XX /r
 rr = TailRecipe(

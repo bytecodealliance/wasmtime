@@ -354,6 +354,10 @@ enc_both(base.brnz.b1, r.t8jccd_abcd, 0x85)
 I32.enc(base.trap, *r.trap(0x0f, 0x0b))
 I64.enc(base.trap, *r.trap(0x0f, 0x0b))
 
+# Using a standard EncRecipe, not the TailRecipe.
+I32.enc(base.trapif, r.trapif, 0)
+I64.enc(base.trapif, r.trapif, 0)
+
 #
 # Comparisons
 #
