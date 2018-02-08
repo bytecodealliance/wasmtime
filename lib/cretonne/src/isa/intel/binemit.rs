@@ -2,7 +2,7 @@
 
 use binemit::{CodeSink, Reloc, bad_encoding};
 use ir::{Function, Inst, Ebb, InstructionData, Opcode};
-use ir::condcodes::{IntCC, FloatCC};
+use ir::condcodes::{CondCode, IntCC, FloatCC};
 use isa::{RegUnit, StackRef, StackBase, StackBaseMask};
 use regalloc::RegDiversions;
 use super::registers::RU;

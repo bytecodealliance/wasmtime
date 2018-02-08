@@ -512,5 +512,27 @@ ebb1:
     ; asm: setbe %bl
     [-,%rbx]            v29 = trueif ule v11                          ; bin: 0f 96 c3
 
+    ; The trapif instructions are encoded as macros: a conditional jump over a ud2.
+    ; asm: jne .+4; ud2
+    trapif eq v11, user0                           ; bin: 75 02 0f 0b
+    ; asm: je .+4; ud2
+    trapif ne v11, user0                           ; bin: 74 02 0f 0b
+    ; asm: jnl .+4; ud2
+    trapif slt v11, user0                          ; bin: 7d 02 0f 0b
+    ; asm: jnge .+4; ud2
+    trapif sge v11, user0                          ; bin: 7c 02 0f 0b
+    ; asm: jng .+4; ud2
+    trapif sgt v11, user0                          ; bin: 7e 02 0f 0b
+    ; asm: jnle .+4; ud2
+    trapif sle v11, user0                          ; bin: 7f 02 0f 0b
+    ; asm: jnb .+4; ud2
+    trapif ult v11, user0                          ; bin: 73 02 0f 0b
+    ; asm: jnae .+4; ud2
+    trapif uge v11, user0                          ; bin: 72 02 0f 0b
+    ; asm: jna .+4; ud2
+    trapif ugt v11, user0                          ; bin: 76 02 0f 0b
+    ; asm: jnbe .+4; ud2
+    trapif ule v11, user0                          ; bin: 77 02 0f 0b
+
     return
 }
