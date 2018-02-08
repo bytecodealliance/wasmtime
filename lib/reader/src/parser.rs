@@ -2348,6 +2348,21 @@ impl<'a> Parser<'a> {
                 let code = self.match_enum("expected trap code")?;
                 InstructionData::CondTrap { opcode, arg, code }
             }
+            InstructionFormat::IntCondTrap => {
+                let cond = self.match_enum("expected intcc condition code")?;
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected ',' between operands",
+                )?;
+                let code = self.match_enum("expected trap code")?;
+                InstructionData::IntCondTrap {
+                    opcode,
+                    cond,
+                    arg,
+                    code,
+                }
+            }
         };
         Ok(idata)
     }

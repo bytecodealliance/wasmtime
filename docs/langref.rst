@@ -380,6 +380,7 @@ is zero.
 .. autoinst:: trap
 .. autoinst:: trapz
 .. autoinst:: trapnz
+.. autoinst:: trapif
 
 
 Function calls

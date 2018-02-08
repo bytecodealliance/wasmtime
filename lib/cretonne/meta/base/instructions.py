@@ -167,6 +167,15 @@ trapnz = Instruction(
         """,
         ins=(c, code), can_trap=True)
 
+Cond = Operand('Cond', intcc)
+f = Operand('f', iflags)
+
+trapif = Instruction(
+        'trapif', r"""
+        Trap when condition is true in integer CPU flags.
+        """,
+        ins=(Cond, f, code), can_trap=True)
+
 rvals = Operand('rvals', VARIABLE_ARGS, doc='return values')
 
 x_return = Instruction(

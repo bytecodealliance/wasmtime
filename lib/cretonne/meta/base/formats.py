@@ -74,6 +74,7 @@ RegFill = InstructionFormat(
 
 Trap = InstructionFormat(trapcode)
 CondTrap = InstructionFormat(VALUE, trapcode)
+IntCondTrap = InstructionFormat(intcc, VALUE, trapcode)
 
 # Finally extract the names of global variables in this module.
 InstructionFormat.extract_names(globals())
