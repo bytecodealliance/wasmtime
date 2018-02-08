@@ -365,6 +365,7 @@ impl<'a> Verifier<'a> {
             CopySpecial { .. } |
             Trap { .. } |
             CondTrap { .. } |
+            IntCondTrap { .. } |
             NullAry { .. } => {}
         }
 

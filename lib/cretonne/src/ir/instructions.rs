@@ -264,6 +264,12 @@ pub enum InstructionData {
         arg: Value,
         code: ir::TrapCode,
     },
+    IntCondTrap {
+        opcode: Opcode,
+        cond: IntCC,
+        arg: Value,
+        code: ir::TrapCode,
+    },
 }
 
 /// A variable list of `Value` operands used for function call arguments and passing arguments to

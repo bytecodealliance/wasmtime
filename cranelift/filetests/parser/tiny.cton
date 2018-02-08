@@ -210,3 +210,18 @@ ebb0:
 ; nextln:     copy_special %20 -> %10
 ; nextln:     return
 ; nextln: }
+
+function %cond_traps(i32) {
+ebb0(v0: i32):
+    trapz v0, stk_ovf
+    v1 = ifcmp_imm v0, 5
+    trapif ugt v1, oob
+    return
+}
+; sameln: function %cond_traps(i32)
+; nextln: ebb0($v0: i32):
+; nextln:     trapz $v0, stk_ovf
+; nextln:     $v1 = ifcmp_imm v0, 5
+; nextln:     trapif ugt $v1, oob
+; nextln:     return
+; nextln: }
