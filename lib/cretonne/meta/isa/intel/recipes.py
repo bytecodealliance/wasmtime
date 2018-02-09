@@ -517,8 +517,8 @@ adjustsp8 = TailRecipe(
     'adjustsp8', UnaryImm, size=2, ins=(), outs=(),
     instp=IsSignedInt(UnaryImm.imm, 8),
     emit='''
-    PUT_OP(bits, rex1(4), sink);
-    modrm_r_bits(4, bits, sink);
+    PUT_OP(bits, rex1(RU::rsp.into()), sink);
+    modrm_r_bits(RU::rsp.into(), bits, sink);
     let imm: i64 = imm.into();
     sink.put1(imm as u8);
     ''')
@@ -527,8 +527,8 @@ adjustsp32 = TailRecipe(
     'adjustsp32', UnaryImm, size=5, ins=(), outs=(),
     instp=IsSignedInt(UnaryImm.imm, 32),
     emit='''
-    PUT_OP(bits, rex1(4), sink);
-    modrm_r_bits(4, bits, sink);
+    PUT_OP(bits, rex1(RU::rsp.into()), sink);
+    modrm_r_bits(RU::rsp.into(), bits, sink);
     let imm: i64 = imm.into();
     sink.put4(imm as u32);
     ''')
@@ -1079,6 +1079,14 @@ fcmp = TailRecipe(
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rr(in_reg1, in_reg0, sink);
+        ''')
+
+# Same as rcmp, but second operand is the stack pointer.
+rcmp_sp = TailRecipe(
+        'rcmp_sp', Unary, size=1, ins=GPR, outs=FLAG.eflags,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, RU::rsp.into()), sink);
+        modrm_rr(in_reg0, RU::rsp.into(), sink);
         ''')
 
 # Test-and-branch.

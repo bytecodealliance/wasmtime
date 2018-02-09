@@ -1,6 +1,6 @@
 //! Intel register descriptions.
 
-use isa::registers::{RegBank, RegClass, RegClassData, RegInfo};
+use isa::registers::{RegBank, RegClass, RegClassData, RegInfo, RegUnit};
 
 include!(concat!(env!("OUT_DIR"), "/registers-intel.rs"));
 
