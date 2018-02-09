@@ -96,6 +96,9 @@ def gen_isa(isa, fmt):
     with fmt.indented('pub enum RU {', '}'):
         for regbank in isa.regbanks:
             gen_regbank_units(regbank, fmt)
+    with fmt.indented('impl Into<RegUnit> for RU {', '}'):
+        with fmt.indented('fn into(self) -> RegUnit {', '}'):
+            fmt.line('self as RegUnit')
 
 
 def generate(isas, out_dir):

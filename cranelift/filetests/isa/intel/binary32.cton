@@ -534,5 +534,11 @@ ebb1:
     ; asm: jnbe .+4; ud2
     trapif ule v11, user0                          ; bin: 77 02 0f 0b
 
+    ; Stack check.
+    ; asm: cmpl %esp, %ecx
+    [-,%eflags]         v40 = ifcmp_sp v1       ; bin: 39 e1
+    ; asm: cmpl %esp, %esi
+    [-,%eflags]         v41 = ifcmp_sp v2       ; bin: 39 e6
+
     return
 }

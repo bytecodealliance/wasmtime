@@ -364,6 +364,9 @@ I64.enc(base.trapif, r.trapif, 0)
 enc_i32_i64(base.icmp, r.icscc, 0x39)
 enc_i32_i64(base.ifcmp, r.rcmp, 0x39)
 
+I32.enc(base.ifcmp_sp.i32, *r.rcmp_sp(0x39))
+I64.enc(base.ifcmp_sp.i64, *r.rcmp_sp.rex(0x39, w=1))
+
 #
 # Convert flags to bool.
 #
