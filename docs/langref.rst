@@ -947,6 +947,7 @@ The prologue and epilogue of a function needs to manipulate special registers li
 pointer and the frame pointer. These instructions should not be used in regular code.
 
 .. autoinst:: adjust_sp_imm
+.. autoinst:: ifcmp_sp
 .. autoinst:: copy_special
 
 .. _extload-truncstore:
