@@ -579,6 +579,17 @@ adjust_sp_imm = Instruction(
     ins=(StackOffset,),
     other_side_effects=True)
 
+f = Operand('f', iflags)
+
+ifcmp_sp = Instruction(
+    'ifcmp_sp', r"""
+    Compare ``addr`` with the stack pointer and set the CPU flags.
+
+    This is like :inst:`ifcmp` where ``addr`` is the LHS operand and the stack
+    pointer is the RHS.
+    """,
+    ins=addr, outs=f)
+
 regspill = Instruction(
         'regspill', r"""
         Temporarily divert ``x`` from ``src`` to ``SS``.
