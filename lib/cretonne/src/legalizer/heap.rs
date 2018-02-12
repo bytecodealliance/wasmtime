@@ -7,9 +7,15 @@ use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
 use ir::{self, InstBuilder, MemFlags};
 use ir::condcodes::IntCC;
+use isa::TargetIsa;
 
 /// Expand a `heap_addr` instruction according to the definition of the heap.
-pub fn expand_heap_addr(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+pub fn expand_heap_addr(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    _isa: &TargetIsa,
+) {
     // Unpack the instruction.
     let (heap, offset, size) = match func.dfg[inst] {
         ir::InstructionData::HeapAddr {

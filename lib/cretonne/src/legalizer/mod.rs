@@ -80,7 +80,7 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
                 Ok(encoding) => pos.func.encodings[inst] = encoding,
                 Err(action) => {
                     // We should transform the instruction into legal equivalents.
-                    let changed = action(inst, pos.func, cfg);
+                    let changed = action(inst, pos.func, cfg, isa);
                     // If the current instruction was replaced, we need to double back and revisit
                     // the expanded sequence. This is both to assign encodings and possible to
                     // expand further.
@@ -114,7 +114,12 @@ include!(concat!(env!("OUT_DIR"), "/legalizer.rs"));
 
 /// Custom expansion for conditional trap instructions.
 /// TODO: Add CFG support to the Python patterns so we won't have to do this.
-fn expand_cond_trap(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+fn expand_cond_trap(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    _isa: &TargetIsa,
+) {
     // Parse the instruction.
     let trapz;
     let (arg, code) = match func.dfg[inst] {
@@ -159,7 +164,12 @@ fn expand_cond_trap(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFl
 }
 
 /// Jump tables.
-fn expand_br_table(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+fn expand_br_table(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    _isa: &TargetIsa,
+) {
     use ir::condcodes::IntCC;
 
     let (arg, table) = match func.dfg[inst] {
@@ -194,7 +204,12 @@ fn expand_br_table(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlo
 ///
 /// Conditional moves are available in some ISAs for some register classes. The remaining selects
 /// are handled by a branch.
-fn expand_select(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+fn expand_select(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    _isa: &TargetIsa,
+) {
     let (ctrl, tval, fval) = match func.dfg[inst] {
         ir::InstructionData::Ternary {
             opcode: ir::Opcode::Select,
@@ -226,7 +241,12 @@ fn expand_select(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowG
 
 
 /// Expand illegal `f32const` and `f64const` instructions.
-fn expand_fconst(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut ControlFlowGraph) {
+fn expand_fconst(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &TargetIsa,
+) {
     let ty = func.dfg.value_type(func.dfg.first_result(inst));
     assert!(!ty.is_vector(), "Only scalar fconst supported: {}", ty);
 
