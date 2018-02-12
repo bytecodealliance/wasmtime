@@ -144,7 +144,8 @@ impl settings::Configurable for Builder {
 /// The `Encodings` iterator returns a legalization function to call.
 pub type Legalize = fn(ir::Inst,
                        &mut ir::Function,
-                       &mut flowgraph::ControlFlowGraph)
+                       &mut flowgraph::ControlFlowGraph,
+                       &TargetIsa)
                        -> bool;
 
 /// Methods that are specialized to a target ISA. Implies a Display trait that shows the

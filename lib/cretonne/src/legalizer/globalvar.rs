@@ -6,9 +6,15 @@
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
 use ir::{self, InstBuilder};
+use isa::TargetIsa;
 
 /// Expand a `global_addr` instruction according to the definition of the global variable.
-pub fn expand_global_addr(inst: ir::Inst, func: &mut ir::Function, _cfg: &mut ControlFlowGraph) {
+pub fn expand_global_addr(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &TargetIsa,
+) {
     // Unpack the instruction.
     let gv = match func.dfg[inst] {
         ir::InstructionData::UnaryGlobalVar { opcode, global_var } => {

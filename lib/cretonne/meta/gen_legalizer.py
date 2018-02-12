@@ -360,6 +360,7 @@ def gen_xform_group(xgrp, fmt, type_sets):
         fmt.line('inst: ir::Inst,')
         fmt.line('func: &mut ir::Function,')
         fmt.line('cfg: &mut ::flowgraph::ControlFlowGraph,')
+        fmt.line('isa: &::isa::TargetIsa,')
     with fmt.indented(') -> bool {', '}'):
         fmt.line('use ir::InstBuilder;')
         fmt.line('use cursor::{Cursor, FuncCursor};')
@@ -387,7 +388,7 @@ def gen_xform_group(xgrp, fmt, type_sets):
                     with fmt.indented(
                             'ir::Opcode::{} => {{'
                             .format(inst.camel_name), '}'):
-                        fmt.format('{}(inst, pos.func, cfg);', funcname)
+                        fmt.format('{}(inst, pos.func, cfg, isa);', funcname)
                         fmt.line('return true;')
 
                 # We'll assume there are uncovered opcodes.
@@ -395,7 +396,7 @@ def gen_xform_group(xgrp, fmt, type_sets):
 
         # If we fall through, nothing was expanded. Call the chain if any.
         if xgrp.chain:
-            fmt.format('{}(inst, pos.func, cfg)', xgrp.chain.rust_name())
+            fmt.format('{}(inst, pos.func, cfg, isa)', xgrp.chain.rust_name())
         else:
             fmt.line('false')
 

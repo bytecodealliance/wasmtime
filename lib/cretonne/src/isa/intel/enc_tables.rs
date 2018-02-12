@@ -15,7 +15,12 @@ include!(concat!(env!("OUT_DIR"), "/encoding-intel.rs"));
 include!(concat!(env!("OUT_DIR"), "/legalize-intel.rs"));
 
 /// Expand the `srem` instruction using `x86_sdivmodx`.
-fn expand_srem(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+fn expand_srem(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    _isa: &isa::TargetIsa,
+) {
     use ir::condcodes::IntCC;
 
     let (x, y) = match func.dfg[inst] {
@@ -70,7 +75,12 @@ fn expand_srem(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGra
 
 /// Expand the `fmin` and `fmax` instructions using the Intel `x86_fmin` and `x86_fmax`
 /// instructions.
-fn expand_minmax(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+fn expand_minmax(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    _isa: &isa::TargetIsa,
+) {
     use ir::condcodes::FloatCC;
 
     let (x, y, x86_opc, bitwise_opc) = match func.dfg[inst] {
@@ -159,7 +169,12 @@ fn expand_minmax(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowG
 
 /// Intel has no unsigned-to-float conversions. We handle the easy case of zero-extending i32 to
 /// i64 with a pattern, the rest needs more code.
-fn expand_fcvt_from_uint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+fn expand_fcvt_from_uint(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    _isa: &isa::TargetIsa,
+) {
     use ir::condcodes::IntCC;
 
     let x;
@@ -227,7 +242,12 @@ fn expand_fcvt_from_uint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut Cont
     cfg.recompute_ebb(pos.func, done);
 }
 
-fn expand_fcvt_to_sint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+fn expand_fcvt_to_sint(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    _isa: &isa::TargetIsa,
+) {
     use ir::condcodes::{IntCC, FloatCC};
     use ir::immediates::{Ieee32, Ieee64};
 
@@ -303,7 +323,12 @@ fn expand_fcvt_to_sint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut Contro
     cfg.recompute_ebb(pos.func, done);
 }
 
-fn expand_fcvt_to_uint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut ControlFlowGraph) {
+fn expand_fcvt_to_uint(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    _isa: &isa::TargetIsa,
+) {
     use ir::condcodes::{IntCC, FloatCC};
     use ir::immediates::{Ieee32, Ieee64};
 
