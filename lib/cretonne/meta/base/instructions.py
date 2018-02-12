@@ -567,6 +567,21 @@ copy_special = Instruction(
         ins=(src, dst),
         other_side_effects=True)
 
+GV = Operand(
+    'GV', entities.global_var, doc=r"""
+    Global variable containing the stack limit.
+    """)
+
+stack_check = Instruction(
+    'stack_check', r"""
+    Check for stack overflow.
+
+    Read the stack limit from ``GV`` and compare it to the stack pointer. If
+    the stack pointer has reached or exceeded the limit, generate a trap with a
+    ``stk_ovf`` code.
+    """,
+    ins=GV, can_trap=True)
+
 StackOffset = Operand('Offset', imm64, 'Offset from current stack pointer')
 adjust_sp_imm = Instruction(
     'adjust_sp_imm', r"""

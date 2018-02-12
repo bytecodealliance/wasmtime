@@ -109,3 +109,17 @@ ebb0(v0: i32, v999: i64):
     ; nextln: $v2 = load.f32 $v1+0x7fff_ffff
     return v2
 }
+
+; Stack overflow check.
+; The stack limit is stored in a pointer-sized global variable.
+function %stkchk(i64 vmctx) spiderwasm {
+    gv0 = vmctx+64
+
+ebb0(v0: i64):
+    ; check: $ebb0(
+    stack_check gv0
+    ; check: $(limit=$V) = load.i64 notrap aligned
+    ; check: $(flags=$V) = ifcmp_sp $limit
+    ; check: trapif uge $flags, stk_ovf
+    return
+}

@@ -267,3 +267,39 @@ fn expand_fconst(
     };
     pos.func.dfg.replace(inst).bitcast(ty, ival);
 }
+
+/// Expand the stack check instruction.
+pub fn expand_stack_check(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &TargetIsa,
+) {
+    use ir::condcodes::IntCC;
+
+    let gv = match func.dfg[inst] {
+        ir::InstructionData::UnaryGlobalVar { global_var, .. } => global_var,
+        _ => panic!("Want stack_check: {}", func.dfg.display_inst(inst, isa)),
+    };
+    let ptr_ty = if isa.flags().is_64bit() {
+        ir::types::I64
+    } else {
+        ir::types::I32
+    };
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    let limit_addr = pos.ins().global_addr(ptr_ty, gv);
+
+    let mut mflags = ir::MemFlags::new();
+    mflags.set_aligned();
+    mflags.set_notrap();
+    let limit = pos.ins().load(ptr_ty, mflags, limit_addr, 0);
+    let cflags = pos.ins().ifcmp_sp(limit);
+    pos.func.dfg.replace(inst).trapif(
+        IntCC::UnsignedGreaterThanOrEqual,
+        cflags,
+        ir::TrapCode::StackOverflow,
+    );
+}

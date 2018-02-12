@@ -511,6 +511,11 @@ instructions before instruction selection::
     v9 = stack_addr ss3, 16
     v1 = load.f64 v9
 
+When Cretonne code is running in a sandbox, it can also be necessary to include
+stack overflow checks in the prologue.
+
+.. autoinst:: stack_check
+
 Global variables
 ----------------
 

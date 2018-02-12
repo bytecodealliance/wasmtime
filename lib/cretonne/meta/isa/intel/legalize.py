@@ -18,7 +18,7 @@ intel_expand = XFormGroup(
 
         Use Intel-specific instructions if needed.
         """,
-        isa=ISA, chain=shared.expand)
+        isa=ISA, chain=shared.expand_flags)
 
 a = Var('a')
 dead = Var('dead')
