@@ -7,7 +7,7 @@ patterns that describe how base instructions can be transformed to other base
 instructions that are legal.
 """
 from __future__ import absolute_import
-from .immediates import intcc, ieee32, ieee64
+from .immediates import intcc, imm64, ieee32, ieee64
 from . import instructions as insts
 from . import types
 from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry, iadd_imm
@@ -46,6 +46,15 @@ expand = XFormGroup('expand', """
         Rewrite instructions in terms of other instructions, generally
         operating on the same types as the original instructions.
         """)
+
+expand_flags = XFormGroup('expand_flags', """
+        Instruction expansions for architectures with flags.
+
+        Expand some instructions using CPU flags, then fall back to the normal
+        expansions. Not all architectures support CPU flags, so these patterns
+        are kept separate.
+        """, chain=expand)
+
 
 # Custom expansions for memory objects.
 expand.custom_legalize(insts.global_addr, 'expand_global_addr')
@@ -245,3 +254,20 @@ for ty,             minus_zero in [
                 a2 << band(y, b),
                 a << bor(a1, a2)
             ))
+
+
+# Expansions using CPU flags.
+expand_flags.custom_legalize(insts.stack_check, 'expand_stack_check')
+
+expand_flags.legalize(
+    insts.trapnz(x, c),
+    Rtl(
+        a << insts.ifcmp_imm(x, imm64(0)),
+        insts.trapif(intcc.ne, a, c)
+    ))
+expand_flags.legalize(
+    insts.trapz(x, c),
+    Rtl(
+        a << insts.ifcmp_imm(x, imm64(0)),
+        insts.trapif(intcc.eq, a, c)
+    ))

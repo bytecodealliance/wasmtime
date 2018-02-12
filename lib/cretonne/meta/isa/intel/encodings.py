@@ -10,7 +10,7 @@ from . import recipes as r
 from . import settings as cfg
 from . import instructions as x86
 from .legalize import intel_expand
-from base.legalize import narrow, expand
+from base.legalize import narrow, expand_flags
 from base.settings import allones_funcaddrs, is_pic
 from .settings import use_sse41
 
@@ -22,18 +22,18 @@ except ImportError:
     pass
 
 
-I32.legalize_monomorphic(expand)
+I32.legalize_monomorphic(expand_flags)
 I32.legalize_type(
         default=narrow,
-        b1=expand,
+        b1=expand_flags,
         i32=intel_expand,
         f32=intel_expand,
         f64=intel_expand)
 
-I64.legalize_monomorphic(expand)
+I64.legalize_monomorphic(expand_flags)
 I64.legalize_type(
         default=narrow,
-        b1=expand,
+        b1=expand_flags,
         i32=intel_expand,
         i64=intel_expand,
         f32=intel_expand,

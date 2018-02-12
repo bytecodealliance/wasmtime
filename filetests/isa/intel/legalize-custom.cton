@@ -12,9 +12,8 @@ ebb0(v1: i32):
     trapz v1, user67
     return
     ; check: $ebb0($v1: i32
-    ; nextln: brnz $v1, $(new=$EBB)
-    ; nextln: trap user67
-    ; check: $new:
+    ; nextln: $(f=$V) = ifcmp_imm $v1, 0
+    ; nextln: trapif eq $f, user67
     ; nextln: return
 }
 
@@ -23,9 +22,8 @@ ebb0(v1: i32):
     trapnz v1, int_ovf
     return
     ; check: $ebb0($v1: i32
-    ; nextln: brz $v1, $(new=$EBB)
-    ; nextln: trap int_ovf
-    ; check: $new:
+    ; nextln: $(f=$V) = ifcmp_imm $v1, 0
+    ; nextln: trapif ne $f, int_ovf
     ; nextln: return
 }
 
