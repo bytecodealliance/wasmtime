@@ -621,6 +621,16 @@ ebb1:
     ; asm: cmpq %rsp, %r10
     [-,%eflags]         v41 = ifcmp_sp v2       ; bin: 49 39 e2
 
+    ; asm: cmpq $-100, %rcx
+    [-,%eflags]         v522 = ifcmp_imm v1, -100   ; bin: 48 83 f9 9c
+    ; asm: cmpq $100, %r10
+    [-,%eflags]         v523 = ifcmp_imm v2, 100    ; bin: 49 83 fa 64
+
+    ; asm: cmpq $-10000, %rcx
+    [-,%eflags]         v524 = ifcmp_imm v1, -10000 ; bin: 48 81 f9 ffffd8f0
+    ; asm: cmpq $10000, %r10
+    [-,%eflags]         v525 = ifcmp_imm v2, 10000  ; bin: 49 81 fa 00002710
+
     return
 }
 
@@ -993,6 +1003,16 @@ ebb0:
     [-,%eflags]         v520 = ifcmp v1, v2      ; bin: 39 f1
     ; asm: cmpl %r10d, %esi
     [-,%eflags]         v521 = ifcmp v2, v3      ; bin: 44 39 d6
+
+    ; asm: cmpl $-100, %ecx
+    [-,%eflags]         v522 = ifcmp_imm v1, -100   ; bin: 83 f9 9c
+    ; asm: cmpl $100, %r10d
+    [-,%eflags]         v523 = ifcmp_imm v3, 100    ; bin: 41 83 fa 64
+
+    ; asm: cmpl $-10000, %ecx
+    [-,%eflags]         v524 = ifcmp_imm v1, -10000 ; bin: 81 f9 ffffd8f0
+    ; asm: cmpl $10000, %r10d
+    [-,%eflags]         v525 = ifcmp_imm v3, 10000  ; bin: 41 81 fa 00002710
 
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1x

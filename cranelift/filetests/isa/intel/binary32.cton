@@ -540,5 +540,15 @@ ebb1:
     ; asm: cmpl %esp, %esi
     [-,%eflags]         v41 = ifcmp_sp v2       ; bin: 39 e6
 
+    ; asm: cmpl $-100, %ecx
+    [-,%eflags]         v42 = ifcmp_imm v1, -100   ; bin: 83 f9 9c
+    ; asm: cmpl $100, %esi
+    [-,%eflags]         v43 = ifcmp_imm v2, 100    ; bin: 83 fe 64
+
+    ; asm: cmpl $-10000, %ecx
+    [-,%eflags]         v44 = ifcmp_imm v1, -10000 ; bin: 81 f9 ffffd8f0
+    ; asm: cmpl $10000, %esi
+    [-,%eflags]         v45 = ifcmp_imm v2, 10000  ; bin: 81 fe 00002710
+
     return
 }

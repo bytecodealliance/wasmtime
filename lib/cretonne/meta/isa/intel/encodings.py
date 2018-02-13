@@ -363,6 +363,9 @@ I64.enc(base.trapif, r.trapif, 0)
 #
 enc_i32_i64(base.icmp, r.icscc, 0x39)
 enc_i32_i64(base.ifcmp, r.rcmp, 0x39)
+enc_i32_i64(base.ifcmp_imm, r.rcmpib, 0x83, rrr=7)
+enc_i32_i64(base.ifcmp_imm, r.rcmpid, 0x81, rrr=7)
+# TODO: We could special-case ifcmp_imm(x, 0) to TEST(x, x).
 
 I32.enc(base.ifcmp_sp.i32, *r.rcmp_sp(0x39))
 I64.enc(base.ifcmp_sp.i64, *r.rcmp_sp.rex(0x39, w=1))
