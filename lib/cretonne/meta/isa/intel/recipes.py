@@ -1081,6 +1081,28 @@ fcmp = TailRecipe(
         modrm_rr(in_reg1, in_reg0, sink);
         ''')
 
+# XX /n, MI form with imm8.
+rcmpib = TailRecipe(
+        'rcmpib', BinaryImm, size=2, ins=GPR, outs=FLAG.eflags,
+        instp=IsSignedInt(BinaryImm.imm, 8),
+        emit='''
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        let imm: i64 = imm.into();
+        sink.put1(imm as u8);
+        ''')
+
+# XX /n, MI form with imm32.
+rcmpid = TailRecipe(
+        'rcmpid', BinaryImm, size=5, ins=GPR, outs=FLAG.eflags,
+        instp=IsSignedInt(BinaryImm.imm, 32),
+        emit='''
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        let imm: i64 = imm.into();
+        sink.put4(imm as u32);
+        ''')
+
 # Same as rcmp, but second operand is the stack pointer.
 rcmp_sp = TailRecipe(
         'rcmp_sp', Unary, size=1, ins=GPR, outs=FLAG.eflags,
