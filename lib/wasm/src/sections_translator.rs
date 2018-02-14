@@ -75,11 +75,16 @@ pub fn parse_import_section<'data>(
                 environ.declare_func_import(sig as SignatureIndex, module_name, field_name);
             }
             ParserState::ImportSectionEntry {
-                ty: ImportSectionEntryType::Memory(MemoryType { limits: ref memlimits }), ..
+                ty: ImportSectionEntryType::Memory(MemoryType {
+                                                   limits: ref memlimits,
+                                                   shared,
+                                               }),
+                ..
             } => {
                 environ.declare_memory(Memory {
                     pages_count: memlimits.initial as usize,
                     maximum: memlimits.maximum.map(|x| x as usize),
+                    shared,
                 });
             }
             ParserState::ImportSectionEntry {
@@ -186,6 +191,7 @@ pub fn parse_memory_section(
                 environ.declare_memory(Memory {
                     pages_count: ty.limits.initial as usize,
                     maximum: ty.limits.maximum.map(|x| x as usize),
+                    shared: ty.shared,
                 });
             }
             ParserState::EndSection => break,

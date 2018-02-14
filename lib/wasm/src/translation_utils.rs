@@ -67,6 +67,8 @@ pub struct Memory {
     pub pages_count: usize,
     /// The maximum number of pages in the memory.
     pub maximum: Option<usize>,
+    /// Whether the memory may be shared between multiple threads.
+    pub shared: bool,
 }
 
 /// Wrapper to a `get_local` and `set_local` index. They are WebAssembly's non-SSA variables.
