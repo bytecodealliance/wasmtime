@@ -218,11 +218,12 @@ def gen_display(sgrp, fmt):
                 '}'):
             fmt.line('writeln!(f, "[{}]")?;'.format(sgrp.name))
             with fmt.indented('for d in &DESCRIPTORS {', '}'):
-                fmt.line('write!(f, "{} = ", d.name)?;')
-                fmt.line(
-                        'TEMPLATE.format_toml_value(d.detail,' +
-                        'self.bytes[d.offset as usize], f)?;')
-                fmt.line('writeln!(f, "")?;')
+                with fmt.indented('if !d.detail.is_preset() {', '}'):
+                    fmt.line('write!(f, "{} = ", d.name)?;')
+                    fmt.line(
+                            'TEMPLATE.format_toml_value(d.detail,' +
+                            'self.bytes[d.offset as usize], f)?;')
+                    fmt.line('writeln!(f, "")?;')
             fmt.line('Ok(())')
 
 
