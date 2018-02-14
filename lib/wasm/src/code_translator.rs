@@ -618,6 +618,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = state.pop1();
             state.push1(builder.ins().bitcast(I64, val));
         }
+        Operator::I32Extend8S |
+        Operator::I32Extend16S |
+        Operator::I64Extend8S |
+        Operator::I64Extend16S |
+        Operator::I64Extend32S => {
+            panic!("proposed sign-extend operators not yet supported");
+        }
         /****************************** Binary Operators ************************************/
         Operator::I32Add | Operator::I64Add => {
             let (arg1, arg2) = state.pop2();
@@ -813,6 +820,74 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (arg1, arg2) = state.pop2();
             let val = builder.ins().fcmp(FloatCC::LessThanOrEqual, arg1, arg2);
             state.push1(builder.ins().bint(I32, val));
+        }
+        Operator::Wake { .. } |
+        Operator::I32Wait { .. } |
+        Operator::I64Wait { .. } |
+        Operator::I32AtomicLoad { .. } |
+        Operator::I64AtomicLoad { .. } |
+        Operator::I32AtomicLoad8U { .. } |
+        Operator::I32AtomicLoad16U { .. } |
+        Operator::I64AtomicLoad8U { .. } |
+        Operator::I64AtomicLoad16U { .. } |
+        Operator::I64AtomicLoad32U { .. } |
+        Operator::I32AtomicStore { .. } |
+        Operator::I64AtomicStore { .. } |
+        Operator::I32AtomicStore8 { .. } |
+        Operator::I32AtomicStore16 { .. } |
+        Operator::I64AtomicStore8 { .. } |
+        Operator::I64AtomicStore16 { .. } |
+        Operator::I64AtomicStore32 { .. } |
+        Operator::I32AtomicRmwAdd { .. } |
+        Operator::I64AtomicRmwAdd { .. } |
+        Operator::I32AtomicRmw8UAdd { .. } |
+        Operator::I32AtomicRmw16UAdd { .. } |
+        Operator::I64AtomicRmw8UAdd { .. } |
+        Operator::I64AtomicRmw16UAdd { .. } |
+        Operator::I64AtomicRmw32UAdd { .. } |
+        Operator::I32AtomicRmwSub { .. } |
+        Operator::I64AtomicRmwSub { .. } |
+        Operator::I32AtomicRmw8USub { .. } |
+        Operator::I32AtomicRmw16USub { .. } |
+        Operator::I64AtomicRmw8USub { .. } |
+        Operator::I64AtomicRmw16USub { .. } |
+        Operator::I64AtomicRmw32USub { .. } |
+        Operator::I32AtomicRmwAnd { .. } |
+        Operator::I64AtomicRmwAnd { .. } |
+        Operator::I32AtomicRmw8UAnd { .. } |
+        Operator::I32AtomicRmw16UAnd { .. } |
+        Operator::I64AtomicRmw8UAnd { .. } |
+        Operator::I64AtomicRmw16UAnd { .. } |
+        Operator::I64AtomicRmw32UAnd { .. } |
+        Operator::I32AtomicRmwOr { .. } |
+        Operator::I64AtomicRmwOr { .. } |
+        Operator::I32AtomicRmw8UOr { .. } |
+        Operator::I32AtomicRmw16UOr { .. } |
+        Operator::I64AtomicRmw8UOr { .. } |
+        Operator::I64AtomicRmw16UOr { .. } |
+        Operator::I64AtomicRmw32UOr { .. } |
+        Operator::I32AtomicRmwXor { .. } |
+        Operator::I64AtomicRmwXor { .. } |
+        Operator::I32AtomicRmw8UXor { .. } |
+        Operator::I32AtomicRmw16UXor { .. } |
+        Operator::I64AtomicRmw8UXor { .. } |
+        Operator::I64AtomicRmw16UXor { .. } |
+        Operator::I64AtomicRmw32UXor { .. } |
+        Operator::I32AtomicRmwXchg { .. } |
+        Operator::I64AtomicRmwXchg { .. } |
+        Operator::I32AtomicRmw8UXchg { .. } |
+        Operator::I32AtomicRmw16UXchg { .. } |
+        Operator::I64AtomicRmw8UXchg { .. } |
+        Operator::I64AtomicRmw16UXchg { .. } |
+        Operator::I64AtomicRmw32UXchg { .. } |
+        Operator::I32AtomicRmwCmpxchg { .. } |
+        Operator::I64AtomicRmwCmpxchg { .. } |
+        Operator::I32AtomicRmw8UCmpxchg { .. } |
+        Operator::I32AtomicRmw16UCmpxchg { .. } |
+        Operator::I64AtomicRmw8UCmpxchg { .. } |
+        Operator::I64AtomicRmw16UCmpxchg { .. } |
+        Operator::I64AtomicRmw32UCmpxchg { .. } => {
+            panic!("proposed thread operators not yet supported");
         }
     }
 }
