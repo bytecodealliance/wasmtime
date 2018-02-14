@@ -12,7 +12,9 @@ readme = "README.md"
 name = "cton_frontend"
 
 [dependencies]
-cretonne = { path = "../cretonne", version = "0.1.0" }
+cretonne = { path = "../cretonne", version = "0.1.0", default-features = false }
 
 [features]
+default = ["std"]
+std = ["cretonne/std"]
 no_std = ["cretonne/no_std"]

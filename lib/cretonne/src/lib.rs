@@ -1,16 +1,16 @@
 //! Cretonne code generation library.
-#![cfg_attr(feature = "no_std", no_std)]
 #![deny(missing_docs)]
 
 // Turns on alloc feature if no_std
-#![cfg_attr(feature = "no_std", feature(alloc))]
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 // Include the `hashmap_core` crate if no_std
 #[cfg(feature = "no_std")]
 extern crate hashmap_core;
 #[cfg(feature = "no_std")]
 extern crate error_core;
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
 
@@ -60,7 +60,7 @@ mod unreachable_code;
 mod write;
 
 /// This replaces `std` in builds with no_std.
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 mod std {
     pub use core::*;
     pub use alloc::{boxed, vec, string};
