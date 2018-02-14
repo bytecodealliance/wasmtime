@@ -11,10 +11,12 @@ readme = "README.md"
 name = "cton_native"
 
 [dependencies]
-cretonne = { path = "../cretonne", version = "0.1.0" }
+cretonne = { path = "../cretonne", version = "0.1.0", default-features = false }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 raw-cpuid = "3.0.0"
 
 [features]
+default = ["std"]
+std = ["cretonne/std"]
 no_std = ["cretonne/no_std"]

@@ -60,18 +60,20 @@ installed.
 Building with `no_std`
 ----------------------
 
-To build cretonne without libstd, enable the `no_std` feature on `lib/cretonne`,
-`lib/frontend`, `lib/native`, and `lib/wasm`.
+To build cretonne without libstd, disable the `std` feature on `lib/cretonne`,
+`lib/frontend`, `lib/native`, and `lib/wasm`, which is otherwise enabled by
+default, and enable the `no_std` feature.
 
 For example, to build `cretonne`:
 
     cd lib/cretonne
-    cargo build --features no_std
+    cargo build --no-default-features --features no_std
 
 Or, when using `cretonne` as a dependency (in Cargo.toml):
 
     [dependency.cretonne]
-    path = "..."
+    ...
+    default-features = false
     features = ["no_std"]
 
 `no_std` is currently "best effort". We won't try to break it, and we'll
