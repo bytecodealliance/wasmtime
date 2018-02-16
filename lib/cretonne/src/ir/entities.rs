@@ -65,6 +65,19 @@ entity_impl!(Inst, "inst");
 pub struct StackSlot(u32);
 entity_impl!(StackSlot, "ss");
 
+impl StackSlot {
+    /// Create a new stack slot reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<StackSlot> {
+        if n < u32::MAX {
+            Some(StackSlot(n))
+        } else {
+            None
+        }
+    }
+}
+
 /// An opaque reference to a global variable.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct GlobalVar(u32);
@@ -88,20 +101,60 @@ impl GlobalVar {
 pub struct JumpTable(u32);
 entity_impl!(JumpTable, "jt");
 
+impl JumpTable {
+    /// Create a new jump table reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<JumpTable> {
+        if n < u32::MAX {
+            Some(JumpTable(n))
+        } else {
+            None
+        }
+    }
+}
+
 /// A reference to an external function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct FuncRef(u32);
 entity_impl!(FuncRef, "fn");
+
+impl FuncRef {
+    /// Create a new external function reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<FuncRef> {
+        if n < u32::MAX { Some(FuncRef(n)) } else { None }
+    }
+}
 
 /// A reference to a function signature.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct SigRef(u32);
 entity_impl!(SigRef, "sig");
 
+impl SigRef {
+    /// Create a new function signature reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<SigRef> {
+        if n < u32::MAX { Some(SigRef(n)) } else { None }
+    }
+}
+
 /// A reference to a heap.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Heap(u32);
 entity_impl!(Heap, "heap");
+
+impl Heap {
+    /// Create a new heap reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<Heap> {
+        if n < u32::MAX { Some(Heap(n)) } else { None }
+    }
+}
 
 /// A reference to any of the entities defined in this module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]

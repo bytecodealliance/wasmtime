@@ -8,7 +8,7 @@ use ir::{Type, StackSlot};
 use packed_option::PackedOption;
 use std::cmp;
 use std::fmt;
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
 use std::str::FromStr;
 
 /// The size of an object on the stack, or the size of a stack frame.
@@ -225,6 +225,12 @@ impl Index<StackSlot> for StackSlots {
 
     fn index(&self, ss: StackSlot) -> &StackSlotData {
         &self.slots[ss]
+    }
+}
+
+impl IndexMut<StackSlot> for StackSlots {
+    fn index_mut(&mut self, ss: StackSlot) -> &mut StackSlotData {
+        &mut self.slots[ss]
     }
 }
 

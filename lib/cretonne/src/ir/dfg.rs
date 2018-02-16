@@ -8,6 +8,7 @@ use ir::extfunc::ExtFuncData;
 use ir::instructions::{InstructionData, CallInfo, BranchInfo};
 use ir::types;
 use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
+use packed_option::ReservedValue;
 use write::write_operands;
 use std::fmt;
 use std::iter;
@@ -287,16 +288,6 @@ impl DataFlowGraph {
 
         self.clear_results(dest_inst);
     }
-
-    /// Create a new value alias.
-    ///
-    /// Note that this function should only be called by the parser.
-    pub fn make_value_alias(&mut self, src: Value) -> Value {
-        let ty = self.value_type(src);
-
-        let data = ValueData::Alias { ty, original: src };
-        self.make_value(data)
-    }
 }
 
 /// Where did a value come from?
@@ -368,14 +359,6 @@ impl DataFlowGraph {
         let n = self.num_insts() + 1;
         self.results.resize(n);
         self.insts.push(data)
-    }
-
-    /// Get the instruction reference that will be assigned to the next instruction created by
-    /// `make_inst`.
-    ///
-    /// This is only really useful to the parser.
-    pub fn next_inst(&self) -> Inst {
-        self.insts.next_key()
     }
 
     /// Returns an object that displays `inst`.
@@ -870,6 +853,91 @@ impl<'a> fmt::Display for DisplayInst<'a> {
     }
 }
 
+/// Parser routines. These routines should not be used outside the parser.
+impl DataFlowGraph {
+    /// Set the type of a value. This is only for use in the parser, which needs
+    /// to create invalid values for index padding which may be reassigned later.
+    #[cold]
+    fn set_value_type_for_parser(&mut self, v: Value, t: Type) {
+        debug_assert!(
+            self.value_type(v) == types::VOID,
+            "this function is only for assigning types to previously invalid values"
+        );
+        match self.values[v] {
+            ValueData::Inst { ref mut ty, .. } |
+            ValueData::Param { ref mut ty, .. } |
+            ValueData::Alias { ref mut ty, .. } => *ty = t,
+        }
+    }
+
+    /// Create result values for `inst`, reusing the provided detached values.
+    /// This is similar to `make_inst_results_reusing` except it's only for use
+    /// in the parser, which needs to reuse previously invalid values.
+    #[cold]
+    pub fn make_inst_results_for_parser(
+        &mut self,
+        inst: Inst,
+        ctrl_typevar: Type,
+        reuse: &[Value],
+    ) -> usize {
+        // Get the call signature if this is a function call.
+        if let Some(sig) = self.call_signature(inst) {
+            debug_assert_eq!(self.insts[inst].opcode().constraints().fixed_results(), 0);
+            for res_idx in 0..self.signatures[sig].returns.len() {
+                let ty = self.signatures[sig].returns[res_idx].value_type;
+                if let Some(v) = reuse.get(res_idx) {
+                    self.set_value_type_for_parser(*v, ty);
+                }
+            }
+        } else {
+            let constraints = self.insts[inst].opcode().constraints();
+            for res_idx in 0..constraints.fixed_results() {
+                let ty = constraints.result_type(res_idx, ctrl_typevar);
+                if let Some(v) = reuse.get(res_idx) {
+                    self.set_value_type_for_parser(*v, ty);
+                }
+            }
+        }
+
+        self.make_inst_results_reusing(inst, ctrl_typevar, reuse.iter().map(|x| Some(*x)))
+    }
+
+    /// Similar to `append_ebb_param`, append a parameter with type `ty` to
+    /// `ebb`, but using value `val`. This is only for use by the parser to
+    /// create parameters with specific values.
+    #[cold]
+    pub fn append_ebb_param_for_parser(&mut self, ebb: Ebb, ty: Type, val: Value) {
+        let num = self.ebbs[ebb].params.push(val, &mut self.value_lists);
+        assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
+        self.values[val] = ValueData::Param {
+            ty,
+            num: num as u16,
+            ebb,
+        };
+    }
+
+    /// Create a new value alias. This is only for use by the parser to create
+    /// aliases with specific values.
+    #[cold]
+    pub fn make_value_alias_for_parser(&mut self, src: Value, dest: Value) {
+        let ty = self.value_type(src);
+
+        let data = ValueData::Alias { ty, original: src };
+        self.values[dest] = data;
+    }
+
+    /// Create an invalid value, to pad the index space. This is only for use by
+    /// the parser to pad out the value index space.
+    #[cold]
+    pub fn make_invalid_value_for_parser(&mut self) {
+        let data = ValueData::Alias {
+            ty: types::VOID,
+            original: Value::reserved_value(),
+        };
+        self.make_value(data);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -885,9 +953,7 @@ mod tests {
             opcode: Opcode::Iconst,
             imm: 0.into(),
         };
-        let next = dfg.next_inst();
         let inst = dfg.make_inst(idata);
-        assert_eq!(next, inst);
 
         dfg.make_inst_results(inst, types::I32);
         assert_eq!(inst.to_string(), "inst0");

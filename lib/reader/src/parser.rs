@@ -1,13 +1,13 @@
 //! Parser for .cton files.
 
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::{u16, u32};
 use std::mem;
 use cretonne::ir::{Function, Ebb, Opcode, Value, Type, ExternalName, CallConv, StackSlotData,
-                   JumpTable, JumpTableData, Signature, AbiParam, ArgumentExtension, ExtFuncData,
-                   SigRef, FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags, GlobalVar,
-                   GlobalVarData, Heap, HeapData, HeapStyle, HeapBase};
+                   StackSlotKind, JumpTable, JumpTableData, Signature, AbiParam,
+                   ArgumentExtension, ExtFuncData, SigRef, FuncRef, StackSlot, ValueLoc,
+                   ArgumentLoc, MemFlags, GlobalVar, GlobalVarData, Heap, HeapData, HeapStyle,
+                   HeapBase};
 use cretonne::ir;
 use cretonne::ir::types::VOID;
 use cretonne::ir::immediates::{Imm64, Uimm32, Offset32, Ieee32, Ieee64};
@@ -15,12 +15,14 @@ use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs};
 use cretonne::isa::{self, TargetIsa, Encoding, RegUnit};
 use cretonne::{settings, timing};
+use cretonne::entity::EntityRef;
+use cretonne::packed_option::ReservedValue;
 use testfile::{TestFile, Details, Comment};
 use error::{Location, Error, Result};
 use lexer::{self, Lexer, Token};
 use testcommand::TestCommand;
 use isaspec;
-use sourcemap::{SourceMap, MutableSourceMap};
+use sourcemap::SourceMap;
 
 /// Parse the entire `text` into a list of functions.
 ///
@@ -38,11 +40,15 @@ pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
 pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
     let _tt = timing::parse_text();
     let mut parser = Parser::new(text);
-    // Gather the preamble comments as 'Function'.
-    parser.gather_comments(AnyEntity::Function);
+    // Gather the preamble comments.
+    parser.start_gathering_comments();
 
     let commands = parser.parse_test_commands();
     let isa_spec = parser.parse_isa_specs()?;
+
+    parser.token();
+    parser.claim_gathered_comments(AnyEntity::Function);
+
     let preamble_comments = parser.take_comments();
     let functions = parser.parse_function_list(isa_spec.unique_isa())?;
 
@@ -65,9 +71,11 @@ pub struct Parser<'a> {
     // Location of lookahead.
     loc: Location,
 
-    // The currently active entity that should be associated with collected comments, or `None` if
-    // comments are ignored.
-    comment_entity: Option<AnyEntity>,
+    // Are we gathering any comments that we encounter?
+    gathering_comments: bool,
+
+    // The gathered comments; claim them with `claim_gathered_comments`.
+    gathered_comments: Vec<&'a str>,
 
     // Comments collected so far.
     comments: Vec<Comment<'a>>,
@@ -80,8 +88,6 @@ pub struct Parser<'a> {
 struct Context<'a> {
     function: Function,
     map: SourceMap,
-    // Store aliases until the values can be reliably looked up.
-    aliases: HashMap<Value, (Value, Location)>,
 
     // Reference to the unique_isa for things like parsing ISA-specific instruction encoding
     // information. This is only `Some` if exactly one set of `isa` directives were found in the
@@ -95,7 +101,6 @@ impl<'a> Context<'a> {
         Context {
             function: f,
             map: SourceMap::new(),
-            aliases: HashMap::new(),
             unique_isa,
         }
     }
@@ -115,200 +120,134 @@ impl<'a> Context<'a> {
     }
 
     // Allocate a new stack slot and add a mapping number -> StackSlot.
-    fn add_ss(&mut self, number: u32, data: StackSlotData, loc: &Location) -> Result<()> {
-        self.map.def_ss(
-            number,
-            self.function.create_stack_slot(data),
-            loc,
-        )
+    fn add_ss(&mut self, ss: StackSlot, data: StackSlotData, loc: &Location) -> Result<()> {
+        while self.function.stack_slots.next_key().index() <= ss.index() {
+            self.function.create_stack_slot(
+                StackSlotData::new(StackSlotKind::SpillSlot, 0),
+            );
+        }
+        self.function.stack_slots[ss] = data;
+        self.map.def_ss(ss, loc)
     }
 
     // Resolve a reference to a stack slot.
-    fn get_ss(&self, number: u32, loc: &Location) -> Result<StackSlot> {
-        match self.map.get_ss(number) {
-            Some(sig) => Ok(sig),
-            None => err!(loc, "undefined stack slot ss{}", number),
+    fn check_ss(&self, ss: StackSlot, loc: &Location) -> Result<()> {
+        if !self.map.contains_ss(ss) {
+            err!(loc, "undefined stack slot {}", ss)
+        } else {
+            Ok(())
         }
     }
 
     // Allocate a global variable slot and add a mapping number -> GlobalVar.
-    fn add_gv(&mut self, number: u32, data: GlobalVarData, loc: &Location) -> Result<()> {
-        self.map.def_gv(
-            number,
-            self.function.create_global_var(data),
-            loc,
-        )
+    fn add_gv(&mut self, gv: GlobalVar, data: GlobalVarData, loc: &Location) -> Result<()> {
+        while self.function.global_vars.next_key().index() <= gv.index() {
+            self.function.create_global_var(GlobalVarData::Sym {
+                name: ExternalName::testcase(""),
+            });
+        }
+        self.function.global_vars[gv] = data;
+        self.map.def_gv(gv, loc)
     }
 
     // Resolve a reference to a global variable.
-    fn get_gv(&self, number: u32, loc: &Location) -> Result<GlobalVar> {
-        match self.map.get_gv(number) {
-            Some(gv) => Ok(gv),
-            None => err!(loc, "undefined global variable gv{}", number),
+    fn check_gv(&self, gv: GlobalVar, loc: &Location) -> Result<()> {
+        if !self.map.contains_gv(gv) {
+            err!(loc, "undefined global variable {}", gv)
+        } else {
+            Ok(())
         }
     }
 
     // Allocate a heap slot and add a mapping number -> Heap.
-    fn add_heap(&mut self, number: u32, data: HeapData, loc: &Location) -> Result<()> {
-        self.map.def_heap(
-            number,
-            self.function.create_heap(data),
-            loc,
-        )
+    fn add_heap(&mut self, heap: Heap, data: HeapData, loc: &Location) -> Result<()> {
+        while self.function.heaps.next_key().index() <= heap.index() {
+            self.function.create_heap(HeapData {
+                base: HeapBase::ReservedReg,
+                min_size: Imm64::new(0),
+                guard_size: Imm64::new(0),
+                style: HeapStyle::Static { bound: Imm64::new(0) },
+            });
+        }
+        self.function.heaps[heap] = data;
+        self.map.def_heap(heap, loc)
     }
 
     // Resolve a reference to a heap.
-    fn get_heap(&self, number: u32, loc: &Location) -> Result<Heap> {
-        match self.map.get_heap(number) {
-            Some(heap) => Ok(heap),
-            None => err!(loc, "undefined heap heap{}", number),
+    fn check_heap(&self, heap: Heap, loc: &Location) -> Result<()> {
+        if !self.map.contains_heap(heap) {
+            err!(loc, "undefined heap {}", heap)
+        } else {
+            Ok(())
         }
     }
 
     // Allocate a new signature and add a mapping number -> SigRef.
-    fn add_sig(&mut self, number: u32, data: Signature, loc: &Location) -> Result<()> {
-        self.map.def_sig(
-            number,
-            self.function.import_signature(data),
-            loc,
-        )
+    fn add_sig(&mut self, sig: SigRef, data: Signature, loc: &Location) -> Result<()> {
+        while self.function.dfg.signatures.next_key().index() <= sig.index() {
+            self.function.import_signature(
+                Signature::new(CallConv::Native),
+            );
+        }
+        self.function.dfg.signatures[sig] = data;
+        self.map.def_sig(sig, loc)
     }
 
     // Resolve a reference to a signature.
-    fn get_sig(&self, number: u32, loc: &Location) -> Result<SigRef> {
-        match self.map.get_sig(number) {
-            Some(sig) => Ok(sig),
-            None => err!(loc, "undefined signature sig{}", number),
+    fn check_sig(&self, sig: SigRef, loc: &Location) -> Result<()> {
+        if !self.map.contains_sig(sig) {
+            err!(loc, "undefined signature {}", sig)
+        } else {
+            Ok(())
         }
     }
 
     // Allocate a new external function and add a mapping number -> FuncRef.
-    fn add_fn(&mut self, number: u32, data: ExtFuncData, loc: &Location) -> Result<()> {
-        self.map.def_fn(
-            number,
-            self.function.import_function(data),
-            loc,
-        )
+    fn add_fn(&mut self, fn_: FuncRef, data: ExtFuncData, loc: &Location) -> Result<()> {
+        while self.function.dfg.ext_funcs.next_key().index() <= fn_.index() {
+            self.function.import_function(ExtFuncData {
+                name: ExternalName::testcase(""),
+                signature: SigRef::reserved_value(),
+            });
+        }
+        self.function.dfg.ext_funcs[fn_] = data;
+        self.map.def_fn(fn_, loc)
     }
 
     // Resolve a reference to a function.
-    fn get_fn(&self, number: u32, loc: &Location) -> Result<FuncRef> {
-        match self.map.get_fn(number) {
-            Some(fnref) => Ok(fnref),
-            None => err!(loc, "undefined function fn{}", number),
+    fn check_fn(&self, fn_: FuncRef, loc: &Location) -> Result<()> {
+        if !self.map.contains_fn(fn_) {
+            err!(loc, "undefined function {}", fn_)
+        } else {
+            Ok(())
         }
     }
 
     // Allocate a new jump table and add a mapping number -> JumpTable.
-    fn add_jt(&mut self, number: u32, data: JumpTableData, loc: &Location) -> Result<()> {
-        self.map.def_jt(
-            number,
-            self.function.create_jump_table(data),
-            loc,
-        )
+    fn add_jt(&mut self, jt: JumpTable, data: JumpTableData, loc: &Location) -> Result<()> {
+        while self.function.jump_tables.next_key().index() <= jt.index() {
+            self.function.create_jump_table(JumpTableData::new());
+        }
+        self.function.jump_tables[jt] = data;
+        self.map.def_jt(jt, loc)
     }
 
     // Resolve a reference to a jump table.
-    fn get_jt(&self, number: u32, loc: &Location) -> Result<JumpTable> {
-        match self.map.get_jt(number) {
-            Some(jt) => Ok(jt),
-            None => err!(loc, "undefined jump table jt{}", number),
+    fn check_jt(&self, jt: JumpTable, loc: &Location) -> Result<()> {
+        if !self.map.contains_jt(jt) {
+            err!(loc, "undefined jump table {}", jt)
+        } else {
+            Ok(())
         }
     }
 
     // Allocate a new EBB and add a mapping src_ebb -> Ebb.
-    fn add_ebb(&mut self, src_ebb: Ebb, loc: &Location) -> Result<Ebb> {
-        let ebb = self.function.dfg.make_ebb();
+    fn add_ebb(&mut self, ebb: Ebb, loc: &Location) -> Result<Ebb> {
+        while self.function.dfg.num_ebbs() <= ebb.index() {
+            self.function.dfg.make_ebb();
+        }
         self.function.layout.append_ebb(ebb);
-        self.map.def_ebb(src_ebb, ebb, loc).and(Ok(ebb))
-    }
-
-    fn add_alias(&mut self, src: Value, dest: Value, loc: Location) -> Result<()> {
-        match self.aliases.insert(src, (dest, loc)) {
-            Some((v, _)) if v != dest => err!(loc, "duplicate alias: {} -> {}", src, dest),
-            _ => Ok(()),
-        }
-    }
-
-    // The parser creates all instructions with Ebb and Value references using the source file
-    // numbering. These references need to be rewritten after parsing is complete since forward
-    // references are allowed.
-    fn rewrite_references(&mut self) -> Result<()> {
-        for (&source_from, &(source_to, source_loc)) in &self.aliases {
-            let ir_to = match self.map.get_value(source_to) {
-                Some(v) => v,
-                None => {
-                    return err!(
-                        source_loc,
-                        "IR destination value alias not found for {}",
-                        source_to
-                    );
-                }
-            };
-            let dest_loc = self.map.location(AnyEntity::from(ir_to)).expect(&*format!(
-                "Error in looking up location of IR destination value alias \
-                                   for {}",
-                ir_to
-            ));
-            let ir_from = self.function.dfg.make_value_alias(ir_to);
-            self.map.def_value(source_from, ir_from, &dest_loc)?;
-        }
-
-        for ebb in self.function.layout.ebbs() {
-            for inst in self.function.layout.ebb_insts(ebb) {
-                let loc = inst.into();
-                self.map.rewrite_values(
-                    self.function.dfg.inst_args_mut(inst),
-                    loc,
-                )?;
-                if let Some(dest) = self.function.dfg[inst].branch_destination_mut() {
-                    self.map.rewrite_ebb(dest, loc)?;
-                }
-            }
-        }
-
-        // Rewrite EBB references in jump tables.
-        for jt in self.function.jump_tables.keys() {
-            let loc = jt.into();
-            for ebb_ref in self.function.jump_tables[jt].as_mut_slice() {
-                if let Some(mut ebb) = ebb_ref.expand() {
-                    self.map.rewrite_ebb(&mut ebb, loc)?;
-                    // Convert back to a packed option.
-                    *ebb_ref = ebb.into();
-                }
-            }
-        }
-
-        // Rewrite base references in `deref` globals. Other `GlobalVar` references are already
-        // resolved.
-        for gv in self.function.global_vars.keys() {
-            let loc = gv.into();
-            match self.function.global_vars[gv] {
-                GlobalVarData::Deref { ref mut base, .. } => {
-                    self.map.rewrite_gv(base, loc)?;
-                }
-                _ => {}
-            }
-        }
-
-        // Rewrite references to global variables in heaps.
-        for heap in self.function.heaps.keys() {
-            let loc = heap.into();
-            match self.function.heaps[heap].base {
-                HeapBase::GlobalVar(ref mut base) => {
-                    self.map.rewrite_gv(base, loc)?;
-                }
-                _ => {}
-            }
-            match self.function.heaps[heap].style {
-                HeapStyle::Dynamic { ref mut bound_gv } => {
-                    self.map.rewrite_gv(bound_gv, loc)?;
-                }
-                _ => {}
-            }
-        }
-
-        Ok(())
+        self.map.def_ebb(ebb, loc).and(Ok(ebb))
     }
 }
 
@@ -320,7 +259,8 @@ impl<'a> Parser<'a> {
             lex_error: None,
             lookahead: None,
             loc: Location { line_number: 0 },
-            comment_entity: None,
+            gathering_comments: false,
+            gathered_comments: Vec::new(),
             comments: Vec::new(),
         }
     }
@@ -345,9 +285,8 @@ impl<'a> Parser<'a> {
                 Some(Ok(lexer::LocatedToken { token, location })) => {
                     match token {
                         Token::Comment(text) => {
-                            // Gather comments, associate them with `comment_entity`.
-                            if let Some(entity) = self.comment_entity {
-                                self.comments.push(Comment { entity, text });
+                            if self.gathering_comments {
+                                self.gathered_comments.push(text);
                             }
                         }
                         _ => self.lookahead = Some(token),
@@ -365,13 +304,29 @@ impl<'a> Parser<'a> {
         self.lookahead
     }
 
-    // Begin gathering comments associated with `entity`.
-    fn gather_comments<E: Into<AnyEntity>>(&mut self, entity: E) {
-        self.comment_entity = Some(entity.into());
+    // Enable gathering of all comments encountered.
+    fn start_gathering_comments(&mut self) {
+        debug_assert!(!self.gathering_comments);
+        self.gathering_comments = true;
+        debug_assert!(self.gathered_comments.is_empty());
     }
 
-    // Get the comments gathered so far, clearing out the internal list.
+    // Claim the comments gathered up to the current position for the
+    // given entity.
+    fn claim_gathered_comments<E: Into<AnyEntity>>(&mut self, entity: E) {
+        debug_assert!(self.gathering_comments);
+        let entity = entity.into();
+        self.comments.extend(
+            self.gathered_comments.drain(..).map(|text| {
+                Comment { entity, text }
+            }),
+        );
+        self.gathering_comments = false;
+    }
+
+    // Get the comments collected so far, clearing out the internal list.
     fn take_comments(&mut self) -> Vec<Comment<'a>> {
+        debug_assert!(!self.gathering_comments);
         mem::replace(&mut self.comments, Vec::new())
     }
 
@@ -415,74 +370,69 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a stack slot reference.
-    fn match_ss(&mut self, err_msg: &str) -> Result<u32> {
+    fn match_ss(&mut self, err_msg: &str) -> Result<StackSlot> {
         if let Some(Token::StackSlot(ss)) = self.token() {
             self.consume();
-            Ok(ss)
-        } else {
-            err!(self.loc, err_msg)
+            if let Some(ss) = StackSlot::with_number(ss) {
+                return Ok(ss);
+            }
         }
+        err!(self.loc, err_msg)
     }
 
     // Match and consume a global variable reference.
-    fn match_gv(&mut self, err_msg: &str) -> Result<u32> {
+    fn match_gv(&mut self, err_msg: &str) -> Result<GlobalVar> {
         if let Some(Token::GlobalVar(gv)) = self.token() {
             self.consume();
-            Ok(gv)
-        } else {
-            err!(self.loc, err_msg)
+            if let Some(gv) = GlobalVar::with_number(gv) {
+                return Ok(gv);
+            }
         }
-    }
-
-    // Match and consume a global variable reference in the preamble where it can't be rewritten.
-    //
-    // Any global variable references appearing in the preamble need to be rewritten after parsing
-    // the whole preamble.
-    fn match_gv_preamble(&mut self, err_msg: &str) -> Result<GlobalVar> {
-        match GlobalVar::with_number(self.match_gv(err_msg)?) {
-            Some(gv) => Ok(gv),
-            None => err!(self.loc, "Invalid global variable number"),
-        }
+        err!(self.loc, err_msg)
     }
 
     // Match and consume a function reference.
-    fn match_fn(&mut self, err_msg: &str) -> Result<u32> {
+    fn match_fn(&mut self, err_msg: &str) -> Result<FuncRef> {
         if let Some(Token::FuncRef(fnref)) = self.token() {
             self.consume();
-            Ok(fnref)
-        } else {
-            err!(self.loc, err_msg)
+            if let Some(fnref) = FuncRef::with_number(fnref) {
+                return Ok(fnref);
+            }
         }
+        err!(self.loc, err_msg)
     }
 
     // Match and consume a signature reference.
-    fn match_sig(&mut self, err_msg: &str) -> Result<u32> {
+    fn match_sig(&mut self, err_msg: &str) -> Result<SigRef> {
         if let Some(Token::SigRef(sigref)) = self.token() {
             self.consume();
-            Ok(sigref)
-        } else {
-            err!(self.loc, err_msg)
+            if let Some(sigref) = SigRef::with_number(sigref) {
+                return Ok(sigref);
+            }
         }
+        err!(self.loc, err_msg)
     }
 
     // Match and consume a heap reference.
-    fn match_heap(&mut self, err_msg: &str) -> Result<u32> {
+    fn match_heap(&mut self, err_msg: &str) -> Result<Heap> {
         if let Some(Token::Heap(heap)) = self.token() {
             self.consume();
-            Ok(heap)
-        } else {
-            err!(self.loc, err_msg)
+            if let Some(heap) = Heap::with_number(heap) {
+                return Ok(heap);
+            }
         }
+        err!(self.loc, err_msg)
     }
 
     // Match and consume a jump table reference.
-    fn match_jt(&mut self) -> Result<u32> {
+    fn match_jt(&mut self) -> Result<JumpTable> {
         if let Some(Token::JumpTable(jt)) = self.token() {
             self.consume();
-            Ok(jt)
-        } else {
-            err!(self.loc, "expected jump table number: jt«n»")
+            if let Some(jt) = JumpTable::with_number(jt) {
+                return Ok(jt);
+            }
         }
+        err!(self.loc, "expected jump table number: jt«n»")
     }
 
     // Match and consume an ebb reference.
@@ -816,8 +766,8 @@ impl<'a> Parser<'a> {
         // Begin gathering comments.
         // Make sure we don't include any comments before the `function` keyword.
         self.token();
-        self.comments.clear();
-        self.gather_comments(AnyEntity::Function);
+        debug_assert!(self.comments.is_empty());
+        self.start_gathering_comments();
 
         let (location, name, sig) = self.parse_function_spec(unique_isa)?;
         let mut ctx = Context::new(Function::with_name_signature(name, sig), unique_isa);
@@ -827,6 +777,10 @@ impl<'a> Parser<'a> {
             Token::LBrace,
             "expected '{' before function body",
         )?;
+
+        self.token();
+        self.claim_gathered_comments(AnyEntity::Function);
+
         // function ::= function-spec "{" * preamble function-body "}"
         self.parse_preamble(&mut ctx)?;
         // function ::= function-spec "{"  preamble * function-body "}"
@@ -838,13 +792,9 @@ impl<'a> Parser<'a> {
         )?;
 
         // Collect any comments following the end of the function, then stop gathering comments.
-        self.gather_comments(AnyEntity::Function);
+        self.start_gathering_comments();
         self.token();
-        self.comment_entity = None;
-
-        // Rewrite references to values and EBBs after parsing everything to allow forward
-        // references.
-        ctx.rewrite_references()?;
+        self.claim_gathered_comments(AnyEntity::Function);
 
         let details = Details {
             location,
@@ -1051,42 +1001,42 @@ impl<'a> Parser<'a> {
         loop {
             match self.token() {
                 Some(Token::StackSlot(..)) => {
-                    self.gather_comments(ctx.function.stack_slots.next_key());
+                    self.start_gathering_comments();
                     let loc = self.loc;
-                    self.parse_stack_slot_decl().and_then(|(num, dat)| {
-                        ctx.add_ss(num, dat, &loc)
+                    self.parse_stack_slot_decl().and_then(|(ss, dat)| {
+                        ctx.add_ss(ss, dat, &loc)
                     })
                 }
                 Some(Token::GlobalVar(..)) => {
-                    self.gather_comments(ctx.function.global_vars.next_key());
-                    self.parse_global_var_decl().and_then(|(num, dat)| {
-                        ctx.add_gv(num, dat, &self.loc)
+                    self.start_gathering_comments();
+                    self.parse_global_var_decl().and_then(|(gv, dat)| {
+                        ctx.add_gv(gv, dat, &self.loc)
                     })
                 }
                 Some(Token::Heap(..)) => {
-                    self.gather_comments(ctx.function.heaps.next_key());
-                    self.parse_heap_decl().and_then(|(num, dat)| {
-                        ctx.add_heap(num, dat, &self.loc)
+                    self.start_gathering_comments();
+                    self.parse_heap_decl().and_then(|(heap, dat)| {
+                        ctx.add_heap(heap, dat, &self.loc)
                     })
                 }
                 Some(Token::SigRef(..)) => {
-                    self.gather_comments(ctx.function.dfg.signatures.next_key());
+                    self.start_gathering_comments();
                     self.parse_signature_decl(ctx.unique_isa).and_then(
-                        |(num, dat)| {
-                            ctx.add_sig(num, dat, &self.loc)
+                        |(sig, dat)| {
+                            ctx.add_sig(sig, dat, &self.loc)
                         },
                     )
                 }
                 Some(Token::FuncRef(..)) => {
-                    self.gather_comments(ctx.function.dfg.ext_funcs.next_key());
-                    self.parse_function_decl(ctx).and_then(|(num, dat)| {
-                        ctx.add_fn(num, dat, &self.loc)
+                    self.start_gathering_comments();
+                    self.parse_function_decl(ctx).and_then(|(fn_, dat)| {
+                        ctx.add_fn(fn_, dat, &self.loc)
                     })
                 }
                 Some(Token::JumpTable(..)) => {
-                    self.gather_comments(ctx.function.jump_tables.next_key());
-                    self.parse_jump_table_decl().and_then(|(num, dat)| {
-                        ctx.add_jt(num, dat, &self.loc)
+                    self.start_gathering_comments();
+                    self.parse_jump_table_decl().and_then(|(jt, dat)| {
+                        ctx.add_jt(jt, dat, &self.loc)
                     })
                 }
                 // More to come..
@@ -1102,8 +1052,8 @@ impl<'a> Parser<'a> {
     //                   | "spill_slot"
     //                   | "incoming_arg"
     //                   | "outgoing_arg"
-    fn parse_stack_slot_decl(&mut self) -> Result<(u32, StackSlotData)> {
-        let number = self.match_ss("expected stack slot number: ss«n»")?;
+    fn parse_stack_slot_decl(&mut self) -> Result<(StackSlot, StackSlotData)> {
+        let ss = self.match_ss("expected stack slot number: ss«n»")?;
         self.match_token(
             Token::Equal,
             "expected '=' in stack slot declaration",
@@ -1129,8 +1079,12 @@ impl<'a> Parser<'a> {
             }
         }
 
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(ss);
+
         // TBD: stack-slot-decl ::= StackSlot(ss) "=" stack-slot-kind Bytes * {"," stack-slot-flag}
-        Ok((number, data))
+        Ok((ss, data))
     }
 
     // Parse a global variable decl.
@@ -1140,8 +1094,9 @@ impl<'a> Parser<'a> {
     //                   | "deref" "(" GlobalVar(base) ")" offset32
     //                   | "globalsym" name
     //
-    fn parse_global_var_decl(&mut self) -> Result<(u32, GlobalVarData)> {
-        let number = self.match_gv("expected global variable number: gv«n»")?;
+    fn parse_global_var_decl(&mut self) -> Result<(GlobalVar, GlobalVarData)> {
+        let gv = self.match_gv("expected global variable number: gv«n»")?;
+
         self.match_token(
             Token::Equal,
             "expected '=' in global variable declaration",
@@ -1157,7 +1112,7 @@ impl<'a> Parser<'a> {
                     Token::LPar,
                     "expected '(' in 'deref' global variable decl",
                 )?;
-                let base = self.match_gv_preamble("expected global variable: gv«n»")?;
+                let base = self.match_gv("expected global variable: gv«n»")?;
                 self.match_token(
                     Token::RPar,
                     "expected ')' in 'deref' global variable decl",
@@ -1172,7 +1127,11 @@ impl<'a> Parser<'a> {
             other => return err!(self.loc, "Unknown global variable kind '{}'", other),
         };
 
-        Ok((number, data))
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(gv);
+
+        Ok((gv, data))
     }
 
     // Parse a heap decl.
@@ -1186,8 +1145,8 @@ impl<'a> Parser<'a> {
     //             | "max" Imm64(bytes)
     //             | "guard" Imm64(bytes)
     //
-    fn parse_heap_decl(&mut self) -> Result<(u32, HeapData)> {
-        let number = self.match_heap("expected heap number: heap«n»")?;
+    fn parse_heap_decl(&mut self) -> Result<(Heap, HeapData)> {
+        let heap = self.match_heap("expected heap number: heap«n»")?;
         self.match_token(
             Token::Equal,
             "expected '=' in heap declaration",
@@ -1227,9 +1186,7 @@ impl<'a> Parser<'a> {
                 "bound" => {
                     data.style = match style_name {
                         "dynamic" => {
-                            HeapStyle::Dynamic {
-                                bound_gv: self.match_gv_preamble("expected gv bound")?,
-                            }
+                            HeapStyle::Dynamic { bound_gv: self.match_gv("expected gv bound")? }
                         }
                         "static" => {
                             HeapStyle::Static { bound: self.match_imm64("expected integer bound")? }
@@ -1244,21 +1201,33 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok((number, data))
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(heap);
+
+        Ok((heap, data))
     }
 
     // Parse a signature decl.
     //
     // signature-decl ::= SigRef(sigref) "=" signature
     //
-    fn parse_signature_decl(&mut self, unique_isa: Option<&TargetIsa>) -> Result<(u32, Signature)> {
-        let number = self.match_sig("expected signature number: sig«n»")?;
+    fn parse_signature_decl(
+        &mut self,
+        unique_isa: Option<&TargetIsa>,
+    ) -> Result<(SigRef, Signature)> {
+        let sig = self.match_sig("expected signature number: sig«n»")?;
         self.match_token(
             Token::Equal,
             "expected '=' in signature decl",
         )?;
         let data = self.parse_signature(unique_isa)?;
-        Ok((number, data))
+
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(sig);
+
+        Ok((sig, data))
     }
 
     // Parse a function decl.
@@ -1271,8 +1240,8 @@ impl<'a> Parser<'a> {
     // The first variant allocates a new signature reference. The second references an existing
     // signature which must be declared first.
     //
-    fn parse_function_decl(&mut self, ctx: &mut Context) -> Result<(u32, ExtFuncData)> {
-        let number = self.match_fn("expected function number: fn«n»")?;
+    fn parse_function_decl(&mut self, ctx: &mut Context) -> Result<(FuncRef, ExtFuncData)> {
+        let fn_ = self.match_fn("expected function number: fn«n»")?;
         self.match_token(
             Token::Equal,
             "expected '=' in function decl",
@@ -1291,7 +1260,13 @@ impl<'a> Parser<'a> {
                 }
             }
             Some(Token::SigRef(sig_src)) => {
-                let sig = ctx.get_sig(sig_src, &self.loc)?;
+                let sig = match SigRef::with_number(sig_src) {
+                    None => {
+                        return err!(self.loc, "attempted to use invalid signature ss{}", sig_src)
+                    }
+                    Some(sig) => sig,
+                };
+                ctx.check_sig(sig, &self.loc)?;
                 self.consume();
                 let name = self.parse_external_name()?;
                 ExtFuncData {
@@ -1301,14 +1276,19 @@ impl<'a> Parser<'a> {
             }
             _ => return err!(self.loc, "expected 'function' or sig«n» in function decl"),
         };
-        Ok((number, data))
+
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(fn_);
+
+        Ok((fn_, data))
     }
 
     // Parse a jump table decl.
     //
     // jump-table-decl ::= * JumpTable(jt) "=" "jump_table" jt-entry {"," jt-entry}
-    fn parse_jump_table_decl(&mut self) -> Result<(u32, JumpTableData)> {
-        let number = self.match_jt()?;
+    fn parse_jump_table_decl(&mut self) -> Result<(JumpTable, JumpTableData)> {
+        let jt = self.match_jt()?;
         self.match_token(
             Token::Equal,
             "expected '=' in jump_table decl",
@@ -1323,7 +1303,11 @@ impl<'a> Parser<'a> {
                 data.set_entry(idx, dest);
             }
             if !self.optional(Token::Comma) {
-                return Ok((number, data));
+                // Collect any trailing comments.
+                self.token();
+                self.claim_gathered_comments(jt);
+
+                return Ok((jt, data));
             }
         }
 
@@ -1366,9 +1350,11 @@ impl<'a> Parser<'a> {
     // ebb-header           ::= Ebb(ebb) [ebb-params] ":"
     //
     fn parse_extended_basic_block(&mut self, ctx: &mut Context) -> Result<()> {
+        // Collect comments for the next ebb.
+        self.start_gathering_comments();
+
         let ebb_num = self.match_ebb("expected EBB header")?;
         let ebb = ctx.add_ebb(ebb_num, &self.loc)?;
-        self.gather_comments(ebb);
 
         if !self.optional(Token::Colon) {
             // ebb-header ::= Ebb(ebb) [ * ebb-params ] ":"
@@ -1378,6 +1364,10 @@ impl<'a> Parser<'a> {
                 "expected ':' after EBB parameters",
             )?;
         }
+
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(ebb);
 
         // extended-basic-block ::= ebb-header * { instruction }
         while match self.token() {
@@ -1396,6 +1386,12 @@ impl<'a> Parser<'a> {
             //
             // inst-results ::= Value(v) { "," Value(v) }
             let results = self.parse_inst_results()?;
+
+            for result in &results {
+                while ctx.function.dfg.num_values() <= result.index() {
+                    ctx.function.dfg.make_invalid_value_for_parser();
+                }
+            }
 
             match self.token() {
                 Some(Token::Arrow) => {
@@ -1474,15 +1470,20 @@ impl<'a> Parser<'a> {
             "expected ':' after EBB argument",
         )?;
         // ebb-param ::= Value(v) ":" * Type(t) arg-loc?
+
+        while ctx.function.dfg.num_values() <= v.index() {
+            ctx.function.dfg.make_invalid_value_for_parser();
+        }
+
         let t = self.match_type("expected EBB argument type")?;
         // Allocate the EBB argument and add the mapping.
-        let value = ctx.function.dfg.append_ebb_param(ebb, t);
-        ctx.map.def_value(v, value, &v_location)?;
+        ctx.function.dfg.append_ebb_param_for_parser(ebb, t, v);
+        ctx.map.def_value(v, &v_location)?;
 
         // ebb-param ::= Value(v) ":" Type(t) * arg-loc?
         if self.optional(Token::LBracket) {
             let loc = self.parse_value_location(ctx)?;
-            ctx.function.locations[value] = loc;
+            ctx.function.locations[v] = loc;
             self.match_token(
                 Token::RBracket,
                 "expected ']' after value location",
@@ -1496,15 +1497,18 @@ impl<'a> Parser<'a> {
         match self.token() {
             Some(Token::StackSlot(src_num)) => {
                 self.consume();
-                if let Some(ss) = ctx.map.get_ss(src_num) {
-                    Ok(ValueLoc::Stack(ss))
-                } else {
-                    err!(
-                        self.loc,
-                        "attempted to use undefined stack slot ss{}",
-                        src_num
-                    )
-                }
+                let ss = match StackSlot::with_number(src_num) {
+                    None => {
+                        return err!(
+                            self.loc,
+                            "attempted to use invalid stack slot ss{}",
+                            src_num
+                        )
+                    }
+                    Some(ss) => ss,
+                };
+                ctx.check_ss(ss, &self.loc)?;
+                Ok(ValueLoc::Stack(ss))
             }
             Some(Token::Name(name)) => {
                 self.consume();
@@ -1584,6 +1588,7 @@ impl<'a> Parser<'a> {
         // inst-results ::= * Value(v) { "," Value(v) }
         if let Some(Token::Value(v)) = self.token() {
             self.consume();
+
             results.push(v);
 
             // inst-results ::= Value(v) * { "," Value(v) }
@@ -1605,7 +1610,13 @@ impl<'a> Parser<'a> {
             return err!(self.loc, "wrong number of aliases");
         }
         let dest = self.match_value("expected value alias")?;
-        ctx.add_alias(results[0], dest, self.loc)
+
+        ctx.function.dfg.make_value_alias_for_parser(
+            dest,
+            results[0],
+        );
+        ctx.map.def_value(results[0], &self.loc)?;
+        Ok(())
     }
 
     // Parse an instruction, append it to `ebb`.
@@ -1621,8 +1632,8 @@ impl<'a> Parser<'a> {
         ctx: &mut Context,
         ebb: Ebb,
     ) -> Result<()> {
-        // Collect comments for the next instruction to be allocated.
-        self.gather_comments(ctx.function.dfg.next_inst());
+        // Collect comments for the next instruction.
+        self.start_gathering_comments();
 
         // instruction ::=  [inst-results "="] * Opcode(opc) ["." Type] ...
         let opcode = if let Some(Token::Identifier(text)) = self.token() {
@@ -1659,7 +1670,11 @@ impl<'a> Parser<'a> {
             &inst_data,
         )?;
         let inst = ctx.function.dfg.make_inst(inst_data);
-        let num_results = ctx.function.dfg.make_inst_results(inst, ctrl_typevar);
+        let num_results = ctx.function.dfg.make_inst_results_for_parser(
+            inst,
+            ctrl_typevar,
+            &results,
+        );
         ctx.function.layout.append_inst(inst, ebb);
         ctx.map.def_entity(inst.into(), &opcode_loc).expect(
             "duplicate inst references created",
@@ -1697,11 +1712,7 @@ impl<'a> Parser<'a> {
         // Now map the source result values to the just created instruction results.
         // Pass a reference to `ctx.values` instead of `ctx` itself since the `Values` iterator
         // holds a reference to `ctx.function`.
-        self.add_values(
-            &mut ctx.map,
-            results.into_iter(),
-            ctx.function.dfg.inst_results(inst).iter().cloned(),
-        )?;
+        self.add_values(&mut ctx.map, results.into_iter())?;
 
         if let Some(result_locations) = result_locations {
             for (&value, loc) in ctx.function.dfg.inst_results(inst).iter().zip(
@@ -1711,6 +1722,10 @@ impl<'a> Parser<'a> {
                 ctx.function.locations[value] = loc;
             }
         }
+
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(inst);
 
         Ok(())
     }
@@ -1732,54 +1747,35 @@ impl<'a> Parser<'a> {
         inst_data: &InstructionData,
     ) -> Result<Type> {
         let constraints = opcode.constraints();
-        let ctrl_type =
-            match explicit_ctrl_type {
-                Some(t) => t,
-                None => {
-                    if constraints.use_typevar_operand() {
-                        // This is an opcode that supports type inference, AND there was no
-                        // explicit type specified. Look up `ctrl_value` to see if it was defined
-                        // already.
-                        // TBD: If it is defined in another block, the type should have been
-                        // specified explicitly. It is unfortunate that the correctness of IL
-                        // depends on the layout of the blocks.
-                        let ctrl_src_value = inst_data
-                            .typevar_operand(&ctx.function.dfg.value_lists)
-                            .expect("Constraints <-> Format inconsistency");
-                        ctx.function.dfg.value_type(
-                            match ctx.map.get_value(ctrl_src_value) {
-                                Some(v) => v,
-                                None => {
-                                    if let Some(v) = ctx.aliases.get(&ctrl_src_value).and_then(
-                                        |&(aliased, _)| ctx.map.get_value(aliased),
-                                    )
-                                    {
-                                        v
-                                    } else {
-                                        return err!(
-                                            self.loc,
-                                            "cannot determine type of operand {}",
-                                            ctrl_src_value
-                                        );
-                                    }
-                                }
-                            },
-                        )
-                    } else if constraints.is_polymorphic() {
-                        // This opcode does not support type inference, so the explicit type
-                        // variable is required.
-                        return err!(
-                            self.loc,
-                            "type variable required for polymorphic opcode, e.g. '{}.{}'",
-                            opcode,
-                            constraints.ctrl_typeset().unwrap().example()
-                        );
-                    } else {
-                        // This is a non-polymorphic opcode. No typevar needed.
-                        VOID
-                    }
+        let ctrl_type = match explicit_ctrl_type {
+            Some(t) => t,
+            None => {
+                if constraints.use_typevar_operand() {
+                    // This is an opcode that supports type inference, AND there was no
+                    // explicit type specified. Look up `ctrl_value` to see if it was defined
+                    // already.
+                    // TBD: If it is defined in another block, the type should have been
+                    // specified explicitly. It is unfortunate that the correctness of IL
+                    // depends on the layout of the blocks.
+                    let ctrl_src_value = inst_data
+                        .typevar_operand(&ctx.function.dfg.value_lists)
+                        .expect("Constraints <-> Format inconsistency");
+                    ctx.function.dfg.value_type(ctrl_src_value)
+                } else if constraints.is_polymorphic() {
+                    // This opcode does not support type inference, so the explicit type
+                    // variable is required.
+                    return err!(
+                        self.loc,
+                        "type variable required for polymorphic opcode, e.g. '{}.{}'",
+                        opcode,
+                        constraints.ctrl_typeset().unwrap().example()
+                    );
+                } else {
+                    // This is a non-polymorphic opcode. No typevar needed.
+                    VOID
                 }
-            };
+            }
+        };
 
         // Verify that `ctrl_type` is valid for the controlling type variable. We don't want to
         // attempt deriving types from an incorrect basis.
@@ -1805,13 +1801,12 @@ impl<'a> Parser<'a> {
     }
 
     // Add mappings for a list of source values to their corresponding new values.
-    fn add_values<S, V>(&self, map: &mut SourceMap, results: S, new_results: V) -> Result<()>
+    fn add_values<V>(&self, map: &mut SourceMap, new_results: V) -> Result<()>
     where
-        S: Iterator<Item = Value>,
         V: Iterator<Item = Value>,
     {
-        for (src, val) in results.zip(new_results) {
-            map.def_value(src, val, &self.loc)?;
+        for val in new_results {
+            map.def_value(val, &self.loc)?;
         }
         Ok(())
     }
@@ -1892,11 +1887,11 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::UnaryGlobalVar => {
+                let gv = self.match_gv("expected global variable")?;
+                ctx.check_gv(gv, &self.loc)?;
                 InstructionData::UnaryGlobalVar {
                     opcode,
-                    global_var: self.match_gv("expected global variable").and_then(|num| {
-                        ctx.get_gv(num, &self.loc)
-                    })?,
+                    global_var: gv,
                 }
             }
             InstructionFormat::Binary => {
@@ -2036,7 +2031,8 @@ impl<'a> Parser<'a> {
                     Token::Comma,
                     "expected ',' between operands",
                 )?;
-                let table = self.match_jt().and_then(|num| ctx.get_jt(num, &self.loc))?;
+                let table = self.match_jt()?;
+                ctx.check_jt(table, &self.loc)?;
                 InstructionData::BranchTable { opcode, arg, table }
             }
             InstructionFormat::InsertLane => {
@@ -2139,11 +2135,8 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::Call => {
-                let func_ref = self.match_fn("expected function reference").and_then(
-                    |num| {
-                        ctx.get_fn(num, &self.loc)
-                    },
-                )?;
+                let func_ref = self.match_fn("expected function reference")?;
+                ctx.check_fn(func_ref, &self.loc)?;
                 self.match_token(
                     Token::LPar,
                     "expected '(' before arguments",
@@ -2160,11 +2153,8 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::IndirectCall => {
-                let sig_ref = self.match_sig("expected signature reference").and_then(
-                    |num| {
-                        ctx.get_sig(num, &self.loc)
-                    },
-                )?;
+                let sig_ref = self.match_sig("expected signature reference")?;
+                ctx.check_sig(sig_ref, &self.loc)?;
                 self.match_token(
                     Token::Comma,
                     "expected ',' between operands",
@@ -2186,16 +2176,13 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::FuncAddr => {
-                let func_ref = self.match_fn("expected function reference").and_then(
-                    |num| {
-                        ctx.get_fn(num, &self.loc)
-                    },
-                )?;
+                let func_ref = self.match_fn("expected function reference")?;
+                ctx.check_fn(func_ref, &self.loc)?;
                 InstructionData::FuncAddr { opcode, func_ref }
             }
             InstructionFormat::StackLoad => {
-                let ss = self.match_ss("expected stack slot number: ss«n»")
-                    .and_then(|num| ctx.get_ss(num, &self.loc))?;
+                let ss = self.match_ss("expected stack slot number: ss«n»")?;
+                ctx.check_ss(ss, &self.loc)?;
                 let offset = self.optional_offset32()?;
                 InstructionData::StackLoad {
                     opcode,
@@ -2209,8 +2196,8 @@ impl<'a> Parser<'a> {
                     Token::Comma,
                     "expected ',' between operands",
                 )?;
-                let ss = self.match_ss("expected stack slot number: ss«n»")
-                    .and_then(|num| ctx.get_ss(num, &self.loc))?;
+                let ss = self.match_ss("expected stack slot number: ss«n»")?;
+                ctx.check_ss(ss, &self.loc)?;
                 let offset = self.optional_offset32()?;
                 InstructionData::StackStore {
                     opcode,
@@ -2220,9 +2207,8 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::HeapAddr => {
-                let heap = self.match_heap("expected heap identifier").and_then(|h| {
-                    ctx.get_heap(h, &self.loc)
-                })?;
+                let heap = self.match_heap("expected heap identifier")?;
+                ctx.check_heap(heap, &self.loc)?;
                 self.match_token(
                     Token::Comma,
                     "expected ',' between operands",
@@ -2306,8 +2292,8 @@ impl<'a> Parser<'a> {
                     Token::Arrow,
                     "expected '->' before destination stack slot",
                 )?;
-                let dst = self.match_ss("expected stack slot number: ss«n»")
-                    .and_then(|num| ctx.get_ss(num, &self.loc))?;
+                let dst = self.match_ss("expected stack slot number: ss«n»")?;
+                ctx.check_ss(dst, &self.loc)?;
                 InstructionData::RegSpill {
                     opcode,
                     arg,
@@ -2321,8 +2307,8 @@ impl<'a> Parser<'a> {
                     Token::Comma,
                     "expected ',' between operands",
                 )?;
-                let src = self.match_ss("expected stack slot number: ss«n»")
-                    .and_then(|num| ctx.get_ss(num, &self.loc))?;
+                let src = self.match_ss("expected stack slot number: ss«n»")?;
+                ctx.check_ss(src, &self.loc)?;
                 self.match_token(
                     Token::Arrow,
                     "expected '->' before destination register units",
@@ -2419,13 +2405,13 @@ mod tests {
             .unwrap();
         assert_eq!(func.name.to_string(), "%qux");
         let v4 = details.map.lookup_str("v4").unwrap();
-        assert_eq!(v4.to_string(), "v0");
+        assert_eq!(v4.to_string(), "v4");
         let v3 = details.map.lookup_str("v3").unwrap();
-        assert_eq!(v3.to_string(), "v2");
+        assert_eq!(v3.to_string(), "v3");
         match v3 {
             AnyEntity::Value(v3) => {
                 let aliased_to = func.dfg.resolve_aliases(v3);
-                assert_eq!(aliased_to.to_string(), "v0");
+                assert_eq!(aliased_to.to_string(), "v4");
             }
             _ => panic!("expected value: {}", v3),
         }
@@ -2495,14 +2481,16 @@ mod tests {
             .unwrap();
         assert_eq!(func.name.to_string(), "%foo");
         let mut iter = func.stack_slots.keys();
-        let ss0 = iter.next().unwrap();
-        assert_eq!(ss0.to_string(), "ss0");
-        assert_eq!(func.stack_slots[ss0].kind, StackSlotKind::IncomingArg);
-        assert_eq!(func.stack_slots[ss0].size, 13);
+        let _ss0 = iter.next().unwrap();
         let ss1 = iter.next().unwrap();
         assert_eq!(ss1.to_string(), "ss1");
         assert_eq!(func.stack_slots[ss1].kind, StackSlotKind::SpillSlot);
         assert_eq!(func.stack_slots[ss1].size, 1);
+        let _ss2 = iter.next().unwrap();
+        let ss3 = iter.next().unwrap();
+        assert_eq!(ss3.to_string(), "ss3");
+        assert_eq!(func.stack_slots[ss3].kind, StackSlotKind::IncomingArg);
+        assert_eq!(func.stack_slots[ss3].size, 13);
         assert_eq!(iter.next(), None);
 
         // Catch duplicate definitions.
@@ -2515,7 +2503,7 @@ mod tests {
             ).parse_function(None)
                 .unwrap_err()
                 .to_string(),
-            "3: duplicate stack slot: ss1"
+            "3: duplicate entity: ss1"
         );
     }
 
@@ -2565,10 +2553,10 @@ mod tests {
                 text: "; decl",
             }
         );
-        assert_eq!(comments[1].entity.to_string(), "ss0");
-        assert_eq!(comments[2].entity.to_string(), "ss0");
+        assert_eq!(comments[1].entity.to_string(), "ss10");
+        assert_eq!(comments[2].entity.to_string(), "ss10");
         assert_eq!(comments[2].text, "; Still stackslot.");
-        assert_eq!(comments[3].entity.to_string(), "jt0");
+        assert_eq!(comments[3].entity.to_string(), "jt10");
         assert_eq!(comments[3].text, "; Jumptable");
         assert_eq!(comments[4].entity.to_string(), "ebb0");
         assert_eq!(comments[4].text, "; Basic block");

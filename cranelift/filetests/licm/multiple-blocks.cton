@@ -25,22 +25,22 @@ ebb3(v30: i32):
 }
 ; sameln:function %multiple_blocks(i32) -> i32 {
 ; nextln: ebb0(v0: i32):
-; nextln:     v2 = iconst.i32 1
-; nextln:     v3 = iconst.i32 2
-; nextln:     v4 = iadd v2, v3
-; nextln:     v9 = iadd v2, v4
+; nextln:     v11 = iconst.i32 1
+; nextln:     v12 = iconst.i32 2
+; nextln:     v13 = iadd v11, v12
+; nextln:     v31 = iadd v11, v13
 ; nextln:     jump ebb1(v0)
 ; nextln: 
-; nextln: ebb1(v1: i32):
-; nextln:     brz v1, ebb2(v1)
-; nextln:     v5 = isub v1, v2
-; nextln:     brz v5, ebb3(v5)
-; nextln:     v6 = isub v1, v2
-; nextln:     jump ebb1(v6)
+; nextln: ebb1(v10: i32):
+; nextln:     brz v10, ebb2(v10)
+; nextln:     v15 = isub v10, v11
+; nextln:     brz v15, ebb3(v15)
+; nextln:     v14 = isub v10, v11
+; nextln:     jump ebb1(v14)
 ; nextln: 
-; nextln: ebb2(v7: i32):
-; nextln:     return v7
+; nextln: ebb2(v20: i32):
+; nextln:     return v20
 ; nextln: 
-; nextln: ebb3(v8: i32):
-; nextln:     jump ebb1(v8)
+; nextln: ebb3(v30: i32):
+; nextln:     jump ebb1(v30)
 ; nextln: }

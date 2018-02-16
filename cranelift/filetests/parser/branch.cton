@@ -95,19 +95,18 @@ ebb40:
     trap user4
 }
 ; sameln: function %jumptable(i32) native {
-; nextln:     jt0 = jump_table 0
-; nextln:     jt1 = jump_table 0, 0, ebb0, ebb3, ebb1, ebb2
-; nextln: 
-; nextln: ebb0($v3: i32):
-; nextln:     br_table $v3, jt1
+; check:      jt2 = jump_table 0, 0, ebb10, ebb40, ebb20, ebb30
+; check:      jt200 = jump_table 0
+; check:  ebb10($v3: i32):
+; nextln:     br_table $v3, jt2
 ; nextln:     trap user1
 ; nextln: 
-; nextln: ebb1:
+; nextln: ebb20:
 ; nextln:     trap user2
 ; nextln: 
-; nextln: ebb2:
+; nextln: ebb30:
 ; nextln:     trap user3
 ; nextln: 
-; nextln: ebb3:
+; nextln: ebb40:
 ; nextln:     trap user4
 ; nextln: }

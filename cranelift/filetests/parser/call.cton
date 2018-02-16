@@ -6,7 +6,7 @@ ebb1:
     return
 }
 ; sameln: function %mini() native {
-; nextln: ebb0:
+; nextln: ebb1:
 ; nextln:     return
 ; nextln: }
 
@@ -17,7 +17,7 @@ ebb1:
     return v1, v2
 }
 ; sameln: function %r1() -> i32, f32 spiderwasm {
-; nextln: ebb0:
+; nextln: ebb1:
 ; nextln:     $v1 = iconst.i32 3
 ; nextln:     $v2 = f32const 0.0
 ; nextln:     return $v1, $v2
@@ -30,12 +30,12 @@ function %signatures() {
     fn8 = function %bar(i32) -> b1
 }
 ; sameln: function %signatures() native {
-; nextln:     $sig10 = () native
-; nextln:     $sig11 = (i32, f64) -> i32, b1 spiderwasm
-; nextln:     sig2 = (i32) -> b1 native
-; nextln:     $fn5 = $sig11 %foo
-; nextln:     $fn8 = sig2 %bar
-; nextln: }
+; check:      $sig10 = () native
+; check:      $sig11 = (i32, f64) -> i32, b1 spiderwasm
+; check:      sig12 = (i32) -> b1 native
+; check:      $fn5 = $sig11 %foo
+; check:      $fn8 = sig12 %bar
+; check:  }
 
 function %direct() {
     fn0 = function %none()

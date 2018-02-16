@@ -11,8 +11,8 @@ isa intel haswell
 
 ; Tests for i64 instructions.
 function %I64() {
-    fn0 = function %foo()
     sig0 = ()
+    fn0 = function %foo()
 
     gv0 = globalsym %some_gv
 
@@ -641,8 +641,8 @@ ebb1:
 ; encodings which are chosen by default. Switching to non-REX encodings should
 ; be done by an instruction shrinking pass.
 function %I32() {
-    fn0 = function %foo()
     sig0 = ()
+    fn0 = function %foo()
 
     ss0 = incoming_arg 8, offset 0
     ss1 = incoming_arg 1024, offset -1024

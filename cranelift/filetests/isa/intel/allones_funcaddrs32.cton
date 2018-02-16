@@ -11,8 +11,8 @@ isa intel haswell
 
 ; Tests from binary32.cton affected by allones_funcaddrs.
 function %I32() {
-    fn0 = function %foo()
     sig0 = ()
+    fn0 = function %foo()
 
 ebb0:
 
