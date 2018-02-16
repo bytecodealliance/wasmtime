@@ -41,6 +41,18 @@ return_at_end = BoolSetting(
         instruction at the end.
         """)
 
+avoid_div_traps = BoolSetting(
+        """
+        Generate explicit checks around native division instructions to avoid
+        their trapping.
+
+        This is primarily used by SpiderMonkey which doesn't install a signal
+        handler for SIGFPE, but expects a SIGILL trap for division by zero.
+
+        On ISAs like ARM where the native division instructions don't trap,
+        this setting has no effect - explicit checks are always inserted.
+        """)
+
 is_compressed = BoolSetting("Enable compressed instructions")
 
 enable_float = BoolSetting(

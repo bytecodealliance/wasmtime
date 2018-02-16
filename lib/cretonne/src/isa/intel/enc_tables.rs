@@ -1,9 +1,9 @@
 //! Encoding tables for Intel ISAs.
 
-use bitset::BitSet;
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
 use ir::{self, InstBuilder};
+use ir::condcodes::IntCC;
 use isa::constraints::*;
 use isa::enc_tables::*;
 use isa::encoding::RecipeSizing;
@@ -14,55 +14,87 @@ use super::registers::*;
 include!(concat!(env!("OUT_DIR"), "/encoding-intel.rs"));
 include!(concat!(env!("OUT_DIR"), "/legalize-intel.rs"));
 
-/// Expand the `srem` instruction using `x86_sdivmodx`.
-fn expand_srem(
+/// Expand the `sdiv` and `srem` instructions using `x86_sdivmodx`.
+fn expand_sdivrem(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &isa::TargetIsa,
+    isa: &isa::TargetIsa,
 ) {
-    use ir::condcodes::IntCC;
 
-    let (x, y) = match func.dfg[inst] {
+    let (x, y, is_srem) = match func.dfg[inst] {
+        ir::InstructionData::Binary {
+            opcode: ir::Opcode::Sdiv,
+            args,
+        } => (args[0], args[1], false),
         ir::InstructionData::Binary {
             opcode: ir::Opcode::Srem,
             args,
-        } => (args[0], args[1]),
-        _ => panic!("Need srem: {}", func.dfg.display_inst(inst, None)),
+        } => (args[0], args[1], true),
+        _ => panic!("Need sdiv/srem: {}", func.dfg.display_inst(inst, None)),
     };
+    let avoid_div_traps = isa.flags().avoid_div_traps();
     let old_ebb = func.layout.pp_ebb(inst);
-
-    // EBB handling the -1 divisor case.
-    let minus_one = func.dfg.make_ebb();
-
-    // Final EBB with one argument representing the final result value.
-    let done = func.dfg.make_ebb();
-
-    // Move the `inst` result value onto the `done` EBB.
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
-    func.dfg.clear_results(inst);
-    func.dfg.attach_ebb_param(done, result);
 
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
+    pos.func.dfg.clear_results(inst);
+
+    // If we can tolerate native division traps, sdiv doesn't need branching.
+    if !avoid_div_traps && !is_srem {
+        let xhi = pos.ins().sshr_imm(x, i64::from(ty.lane_bits()) - 1);
+        pos.ins().with_result(result).x86_sdivmodx(x, xhi, y);
+        pos.remove_inst();
+        return;
+    }
+
+    // EBB handling the -1 divisor case.
+    let minus_one = pos.func.dfg.make_ebb();
+
+    // Final EBB with one argument representing the final result value.
+    let done = pos.func.dfg.make_ebb();
+
+    // Move the `inst` result value onto the `done` EBB.
+    pos.func.dfg.attach_ebb_param(done, result);
 
     // Start by checking for a -1 divisor which needs to be handled specially.
-    let is_m1 = pos.ins().icmp_imm(IntCC::Equal, y, -1);
-    pos.ins().brnz(is_m1, minus_one, &[]);
+    let is_m1 = pos.ins().ifcmp_imm(y, -1);
+    pos.ins().brif(IntCC::Equal, is_m1, minus_one, &[]);
+
+    // Put in an explicit division-by-zero trap if the environment requires it.
+    if avoid_div_traps {
+        pos.ins().trapz(y, ir::TrapCode::IntegerDivisionByZero);
+    }
 
     // Now it is safe to execute the `x86_sdivmodx` instruction which will still trap on division
     // by zero.
     let xhi = pos.ins().sshr_imm(x, i64::from(ty.lane_bits()) - 1);
-    let (_qout, rem) = pos.ins().x86_sdivmodx(x, xhi, y);
-    pos.ins().jump(done, &[rem]);
+    let (quot, rem) = pos.ins().x86_sdivmodx(x, xhi, y);
+    let divres = if is_srem { rem } else { quot };
+    pos.ins().jump(done, &[divres]);
 
-    // Now deal with the -1 divisor which always yields a 0 remainder.
+    // Now deal with the -1 divisor case.
     pos.insert_ebb(minus_one);
-    let zero = pos.ins().iconst(ty, 0);
+    let m1_result = if is_srem {
+        // x % -1 = 0.
+        pos.ins().iconst(ty, 0)
+    } else {
+        // Explicitly check for overflow: Trap when x == INT_MIN.
+        debug_assert!(avoid_div_traps, "Native trapping divide handled above");
+        let f = pos.ins().ifcmp_imm(x, -1 << (ty.lane_bits() - 1));
+        pos.ins().trapif(
+            IntCC::Equal,
+            f,
+            ir::TrapCode::IntegerOverflow,
+        );
+        // x / -1 = -x.
+        pos.ins().irsub_imm(x, 0)
+    };
 
     // Recycle the original instruction as a jump.
-    pos.func.dfg.replace(inst).jump(done, &[zero]);
+    pos.func.dfg.replace(inst).jump(done, &[m1_result]);
 
     // Finally insert a label for the completion.
     pos.next_inst();
@@ -71,6 +103,49 @@ fn expand_srem(
     cfg.recompute_ebb(pos.func, old_ebb);
     cfg.recompute_ebb(pos.func, minus_one);
     cfg.recompute_ebb(pos.func, done);
+}
+
+/// Expand the `udiv` and `urem` instructions using `x86_udivmodx`.
+fn expand_udivrem(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &isa::TargetIsa,
+) {
+
+    let (x, y, is_urem) = match func.dfg[inst] {
+        ir::InstructionData::Binary {
+            opcode: ir::Opcode::Udiv,
+            args,
+        } => (args[0], args[1], false),
+        ir::InstructionData::Binary {
+            opcode: ir::Opcode::Urem,
+            args,
+        } => (args[0], args[1], true),
+        _ => panic!("Need udiv/urem: {}", func.dfg.display_inst(inst, None)),
+    };
+    let avoid_div_traps = isa.flags().avoid_div_traps();
+    let result = func.dfg.first_result(inst);
+    let ty = func.dfg.value_type(result);
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+    pos.func.dfg.clear_results(inst);
+
+    // Put in an explicit division-by-zero trap if the environment requires it.
+    if avoid_div_traps {
+        pos.ins().trapz(y, ir::TrapCode::IntegerDivisionByZero);
+    }
+
+    // Now it is safe to execute the `x86_udivmodx` instruction.
+    let xhi = pos.ins().iconst(ty, 0);
+    let reuse = if is_urem {
+        [None, Some(result)]
+    } else {
+        [Some(result), None]
+    };
+    pos.ins().with_results(reuse).x86_udivmodx(x, xhi, y);
+    pos.remove_inst();
 }
 
 /// Expand the `fmin` and `fmax` instructions using the Intel `x86_fmin` and `x86_fmax`
