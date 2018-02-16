@@ -5,7 +5,6 @@ from __future__ import absolute_import
 from cdsl.ast import Var
 from cdsl.xform import Rtl, XFormGroup
 from base.immediates import imm64, intcc, floatcc
-from base.types import i32, i64
 from base import legalize as shared
 from base import instructions as insts
 from . import instructions as x86
@@ -31,31 +30,12 @@ a2 = Var('a2')
 #
 # Division and remainder.
 #
-intel_expand.legalize(
-        a << insts.udiv(x, y),
-        Rtl(
-            xhi << insts.iconst(imm64(0)),
-            (a, dead) << x86.udivmodx(x, xhi, y)
-        ))
-
-intel_expand.legalize(
-        a << insts.urem(x, y),
-        Rtl(
-            xhi << insts.iconst(imm64(0)),
-            (dead, a) << x86.udivmodx(x, xhi, y)
-        ))
-
-for ty in [i32, i64]:
-    intel_expand.legalize(
-            a << insts.sdiv.bind(ty)(x, y),
-            Rtl(
-                xhi << insts.sshr_imm(x, imm64(ty.lane_bits() - 1)),
-                (a, dead) << x86.sdivmodx(x, xhi, y)
-            ))
-
 # The srem expansion requires custom code because srem INT_MIN, -1 is not
-# allowed to trap.
-intel_expand.custom_legalize(insts.srem, 'expand_srem')
+# allowed to trap. The other ops need to check avoid_div_traps.
+intel_expand.custom_legalize(insts.sdiv, 'expand_sdivrem')
+intel_expand.custom_legalize(insts.srem, 'expand_sdivrem')
+intel_expand.custom_legalize(insts.udiv, 'expand_udivrem')
+intel_expand.custom_legalize(insts.urem, 'expand_udivrem')
 
 # Floating point condition codes.
 #
