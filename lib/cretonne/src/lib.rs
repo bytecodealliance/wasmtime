@@ -8,11 +8,12 @@
 // Include the `hashmap_core` crate if no_std
 #[cfg(feature = "no_std")]
 extern crate hashmap_core;
-#[cfg(feature = "no_std")]
-extern crate error_core;
 #[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
+extern crate failure;
+#[macro_use]
+extern crate failure_derive;
 
 pub use context::Context;
 pub use legalizer::legalize_function;
@@ -68,8 +69,5 @@ mod std {
         pub use hashmap_core::{HashMap, HashSet};
         pub use hashmap_core::map as hash_map;
         pub use alloc::BTreeSet;
-    }
-    pub mod error {
-        pub use error_core::Error;
     }
 }

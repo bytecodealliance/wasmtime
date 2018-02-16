@@ -9,7 +9,6 @@ use cretonne::ir::types::*;
 use cretonne::cursor::FuncCursor;
 use cretonne::settings;
 use wasmparser;
-use std::error::Error;
 use std::vec::Vec;
 use std::string::String;
 
@@ -387,7 +386,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             let reader = wasmparser::BinaryReader::new(body_bytes);
             self.trans
                 .translate_from_reader(reader, &mut func, &mut func_environ)
-                .map_err(|e| String::from(e.description()))?;
+                .map_err(|e| format!("{}", e))?;
             func
         };
         self.func_bytecode_sizes.push(body_bytes.len());

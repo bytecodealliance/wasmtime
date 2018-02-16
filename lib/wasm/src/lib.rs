@@ -20,8 +20,6 @@ extern crate alloc;
 
 #[cfg(feature = "no_std")]
 extern crate hashmap_core;
-#[cfg(feature = "no_std")]
-extern crate error_core;
 
 extern crate wasmparser;
 extern crate cton_frontend;
@@ -49,8 +47,5 @@ mod std {
     pub use core::{u32, i32, str, cmp};
     pub mod collections {
         pub use hashmap_core::{HashMap, map as hash_map};
-    }
-    pub mod error {
-        pub use error_core::Error;
     }
 }
