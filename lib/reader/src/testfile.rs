@@ -36,8 +36,7 @@ pub struct Details<'a> {
     pub location: Location,
     /// Annotation comments that appeared inside or after the function.
     pub comments: Vec<Comment<'a>>,
-    /// Mapping of source entity numbers to parsed entity numbers.
-    /// Source locations of parsed entities.
+    /// Mapping of entity numbers to source locations.
     pub map: SourceMap,
 }
 

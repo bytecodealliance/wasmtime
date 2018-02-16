@@ -27,7 +27,7 @@ function %parse_encoding(i32 [%x5]) -> i32 [%x10] {
     ; check: sig5 = () -> f32 [0] native
 
     ; function + signature
-    fn15 = function %bar(i32 [%x10]) -> b1 [%x10] native
+    fn0 = function %bar(i32 [%x10]) -> b1 [%x10] native
     ; check: sig6 = (i32 [%x10]) -> b1 [%x10] native
     ; nextln: fn0 = sig6 %bar
 

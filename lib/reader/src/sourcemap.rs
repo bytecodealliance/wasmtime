@@ -1,31 +1,20 @@
-//! Source map for translating source entity names to parsed entities.
+//! Source map associating entities with their source locations.
 //!
-//! When the parser reads in a source file, entities like instructions, EBBs, and values get new
-//! entity numbers. The parser maintains a mapping from the entity names in the source to the final
-//! entity references.
+//! When the parser reads in a source file, it records the locations of the
+//! definitions of entities like instructions, EBBs, and values.
 //!
-//! The `SourceMap` struct defined in this module makes the same mapping available to parser
-//! clients.
+//! The `SourceMap` struct defined in this module makes this mapping available
+//! to parser clients.
 
-use cretonne::entity::EntityRef;
 use cretonne::ir::entities::AnyEntity;
 use cretonne::ir::{StackSlot, GlobalVar, Heap, JumpTable, Ebb, Value, SigRef, FuncRef};
 use error::{Result, Location};
 use lexer::split_entity_name;
 use std::collections::HashMap;
 
-/// Mapping from source entity names to entity references that are valid in the parsed function.
+/// Mapping from entity names to source locations.
 #[derive(Debug)]
 pub struct SourceMap {
-    values: HashMap<Value, Value>, // vNN
-    ebbs: HashMap<Ebb, Ebb>, // ebbNN
-    stack_slots: HashMap<u32, StackSlot>, // ssNN
-    global_vars: HashMap<u32, GlobalVar>, // gvNN
-    heaps: HashMap<u32, Heap>, // heapNN
-    signatures: HashMap<u32, SigRef>, // sigNN
-    functions: HashMap<u32, FuncRef>, // fnNN
-    jump_tables: HashMap<u32, JumpTable>, // jtNN
-
     // Store locations for entities, including instructions.
     locations: HashMap<AnyEntity, Location>,
 }
@@ -33,43 +22,43 @@ pub struct SourceMap {
 /// Read-only interface which is exposed outside the parser crate.
 impl SourceMap {
     /// Look up a value entity by its source number.
-    pub fn get_value(&self, src: Value) -> Option<Value> {
-        self.values.get(&src).cloned()
+    pub fn contains_value(&self, v: Value) -> bool {
+        self.locations.contains_key(&v.into())
     }
 
     /// Look up a EBB entity by its source number.
-    pub fn get_ebb(&self, src: Ebb) -> Option<Ebb> {
-        self.ebbs.get(&src).cloned()
+    pub fn contains_ebb(&self, ebb: Ebb) -> bool {
+        self.locations.contains_key(&ebb.into())
     }
 
     /// Look up a stack slot entity by its source number.
-    pub fn get_ss(&self, src_num: u32) -> Option<StackSlot> {
-        self.stack_slots.get(&src_num).cloned()
+    pub fn contains_ss(&self, ss: StackSlot) -> bool {
+        self.locations.contains_key(&ss.into())
     }
 
     /// Look up a global variable entity by its source number.
-    pub fn get_gv(&self, src_num: u32) -> Option<GlobalVar> {
-        self.global_vars.get(&src_num).cloned()
+    pub fn contains_gv(&self, gv: GlobalVar) -> bool {
+        self.locations.contains_key(&gv.into())
     }
 
     /// Look up a heap entity by its source number.
-    pub fn get_heap(&self, src_num: u32) -> Option<Heap> {
-        self.heaps.get(&src_num).cloned()
+    pub fn contains_heap(&self, heap: Heap) -> bool {
+        self.locations.contains_key(&heap.into())
     }
 
     /// Look up a signature entity by its source number.
-    pub fn get_sig(&self, src_num: u32) -> Option<SigRef> {
-        self.signatures.get(&src_num).cloned()
+    pub fn contains_sig(&self, sig: SigRef) -> bool {
+        self.locations.contains_key(&sig.into())
     }
 
     /// Look up a function entity by its source number.
-    pub fn get_fn(&self, src_num: u32) -> Option<FuncRef> {
-        self.functions.get(&src_num).cloned()
+    pub fn contains_fn(&self, fn_: FuncRef) -> bool {
+        self.locations.contains_key(&fn_.into())
     }
 
     /// Look up a jump table entity by its source number.
-    pub fn get_jt(&self, src_num: u32) -> Option<JumpTable> {
-        self.jump_tables.get(&src_num).cloned()
+    pub fn contains_jt(&self, jt: JumpTable) -> bool {
+        self.locations.contains_key(&jt.into())
     }
 
     /// Look up an entity by source name.
@@ -77,193 +66,120 @@ impl SourceMap {
     pub fn lookup_str(&self, name: &str) -> Option<AnyEntity> {
         split_entity_name(name).and_then(|(ent, num)| match ent {
             "v" => {
-                Value::with_number(num)
-                    .and_then(|v| self.get_value(v))
-                    .map(AnyEntity::Value)
+                Value::with_number(num).and_then(|v| if !self.contains_value(v) {
+                    None
+                } else {
+                    Some(v.into())
+                })
             }
             "ebb" => {
-                Ebb::with_number(num).and_then(|e| self.get_ebb(e)).map(
-                    AnyEntity::Ebb,
-                )
+                Ebb::with_number(num).and_then(|ebb| if !self.contains_ebb(ebb) {
+                    None
+                } else {
+                    Some(ebb.into())
+                })
             }
-            "ss" => self.get_ss(num).map(AnyEntity::StackSlot),
-            "gv" => self.get_gv(num).map(AnyEntity::GlobalVar),
-            "heap" => self.get_heap(num).map(AnyEntity::Heap),
-            "sig" => self.get_sig(num).map(AnyEntity::SigRef),
-            "fn" => self.get_fn(num).map(AnyEntity::FuncRef),
-            "jt" => self.get_jt(num).map(AnyEntity::JumpTable),
+            "ss" => {
+                StackSlot::with_number(num).and_then(|ss| if !self.contains_ss(ss) {
+                    None
+                } else {
+                    Some(ss.into())
+                })
+            }
+            "gv" => {
+                GlobalVar::with_number(num).and_then(|gv| if !self.contains_gv(gv) {
+                    None
+                } else {
+                    Some(gv.into())
+                })
+            }
+            "heap" => {
+                Heap::with_number(num).and_then(|heap| if !self.contains_heap(heap) {
+                    None
+                } else {
+                    Some(heap.into())
+                })
+            }
+            "sig" => {
+                SigRef::with_number(num).and_then(|sig| if !self.contains_sig(sig) {
+                    None
+                } else {
+                    Some(sig.into())
+                })
+            }
+            "fn" => {
+                FuncRef::with_number(num).and_then(|fn_| if !self.contains_fn(fn_) {
+                    None
+                } else {
+                    Some(fn_.into())
+                })
+            }
+            "jt" => {
+                JumpTable::with_number(num).and_then(|jt| if !self.contains_jt(jt) {
+                    None
+                } else {
+                    Some(jt.into())
+                })
+            }
             _ => None,
         })
     }
 
     /// Get the source location where an entity was defined.
-    /// This looks up entities in the parsed function, not the source entity numbers.
     pub fn location(&self, entity: AnyEntity) -> Option<Location> {
         self.locations.get(&entity).cloned()
     }
-
-    /// Rewrite an Ebb reference.
-    pub fn rewrite_ebb(&self, ebb: &mut Ebb, loc: AnyEntity) -> Result<()> {
-        match self.get_ebb(*ebb) {
-            Some(new) => {
-                *ebb = new;
-                Ok(())
-            }
-            None => {
-                err!(
-                    self.location(loc).unwrap_or_default(),
-                    "undefined reference: {}",
-                    ebb
-                )
-            }
-        }
-    }
-
-    /// Rewrite a value reference.
-    pub fn rewrite_value(&self, val: &mut Value, loc: AnyEntity) -> Result<()> {
-        match self.get_value(*val) {
-            Some(new) => {
-                *val = new;
-                Ok(())
-            }
-            None => {
-                err!(
-                    self.location(loc).unwrap_or_default(),
-                    "undefined reference: {}",
-                    val
-                )
-            }
-        }
-    }
-
-    /// Rewrite a slice of value references.
-    pub fn rewrite_values(&self, vals: &mut [Value], loc: AnyEntity) -> Result<()> {
-        for val in vals {
-            self.rewrite_value(val, loc)?;
-        }
-        Ok(())
-    }
-
-    /// Rewrite a `GlobalVar` reference.
-    pub fn rewrite_gv(&self, gv: &mut GlobalVar, loc: AnyEntity) -> Result<()> {
-        match self.get_gv(gv.index() as u32) {
-            Some(new) => {
-                *gv = new;
-                Ok(())
-            }
-            None => {
-                err!(
-                    self.location(loc).unwrap_or_default(),
-                    "undefined reference: {}",
-                    gv
-                )
-            }
-        }
-    }
 }
 
-
-/// Interface for mutating a source map.
-///
-/// This interface is provided for the parser itself, it is not made available outside the crate.
-pub trait MutableSourceMap {
-    fn new() -> Self;
-
-    /// Define a value mapping from the source name `src` to the final `entity`.
-    fn def_value(&mut self, src: Value, entity: Value, loc: &Location) -> Result<()>;
-    fn def_ebb(&mut self, src: Ebb, entity: Ebb, loc: &Location) -> Result<()>;
-    fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()>;
-    fn def_gv(&mut self, src_num: u32, entity: GlobalVar, loc: &Location) -> Result<()>;
-    fn def_heap(&mut self, src_num: u32, entity: Heap, loc: &Location) -> Result<()>;
-    fn def_sig(&mut self, src_num: u32, entity: SigRef, loc: &Location) -> Result<()>;
-    fn def_fn(&mut self, src_num: u32, entity: FuncRef, loc: &Location) -> Result<()>;
-    fn def_jt(&mut self, src_num: u32, entity: JumpTable, loc: &Location) -> Result<()>;
-
-    /// Define an entity without an associated source number. This can be used for instructions
-    /// whose numbers never appear in source, or implicitly defined signatures.
-    fn def_entity(&mut self, entity: AnyEntity, loc: &Location) -> Result<()>;
-}
-
-impl MutableSourceMap for SourceMap {
-    fn new() -> Self {
-        Self {
-            values: HashMap::new(),
-            ebbs: HashMap::new(),
-            stack_slots: HashMap::new(),
-            global_vars: HashMap::new(),
-            heaps: HashMap::new(),
-            signatures: HashMap::new(),
-            functions: HashMap::new(),
-            jump_tables: HashMap::new(),
-            locations: HashMap::new(),
-        }
+impl SourceMap {
+    /// Create a new empty `SourceMap`.
+    pub fn new() -> Self {
+        Self { locations: HashMap::new() }
     }
 
-    fn def_value(&mut self, src: Value, entity: Value, loc: &Location) -> Result<()> {
-        if self.values.insert(src, entity).is_some() {
-            err!(loc, "duplicate value: {}", src)
-        } else {
-            self.def_entity(entity.into(), loc)
-        }
+    /// Define the value `entity`.
+    pub fn def_value(&mut self, entity: Value, loc: &Location) -> Result<()> {
+        self.def_entity(entity.into(), loc)
     }
 
-    fn def_ebb(&mut self, src: Ebb, entity: Ebb, loc: &Location) -> Result<()> {
-        if self.ebbs.insert(src, entity).is_some() {
-            err!(loc, "duplicate EBB: {}", src)
-        } else {
-            self.def_entity(entity.into(), loc)
-        }
+    /// Define the ebb `entity`.
+    pub fn def_ebb(&mut self, entity: Ebb, loc: &Location) -> Result<()> {
+        self.def_entity(entity.into(), loc)
     }
 
-    fn def_ss(&mut self, src_num: u32, entity: StackSlot, loc: &Location) -> Result<()> {
-        if self.stack_slots.insert(src_num, entity).is_some() {
-            err!(loc, "duplicate stack slot: ss{}", src_num)
-        } else {
-            self.def_entity(entity.into(), loc)
-        }
+    /// Define the stack slot `entity`.
+    pub fn def_ss(&mut self, entity: StackSlot, loc: &Location) -> Result<()> {
+        self.def_entity(entity.into(), loc)
     }
 
-    fn def_gv(&mut self, src_num: u32, entity: GlobalVar, loc: &Location) -> Result<()> {
-        if self.global_vars.insert(src_num, entity).is_some() {
-            err!(loc, "duplicate global variable: gv{}", src_num)
-        } else {
-            self.def_entity(entity.into(), loc)
-        }
+    /// Define the global variable `entity`.
+    pub fn def_gv(&mut self, entity: GlobalVar, loc: &Location) -> Result<()> {
+        self.def_entity(entity.into(), loc)
     }
 
-    fn def_heap(&mut self, src_num: u32, entity: Heap, loc: &Location) -> Result<()> {
-        if self.heaps.insert(src_num, entity).is_some() {
-            err!(loc, "duplicate heap: heap{}", src_num)
-        } else {
-            self.def_entity(entity.into(), loc)
-        }
+    /// Define the heap `entity`.
+    pub fn def_heap(&mut self, entity: Heap, loc: &Location) -> Result<()> {
+        self.def_entity(entity.into(), loc)
     }
 
-    fn def_sig(&mut self, src_num: u32, entity: SigRef, loc: &Location) -> Result<()> {
-        if self.signatures.insert(src_num, entity).is_some() {
-            err!(loc, "duplicate signature: sig{}", src_num)
-        } else {
-            self.def_entity(entity.into(), loc)
-        }
+    /// Define the signature `entity`.
+    pub fn def_sig(&mut self, entity: SigRef, loc: &Location) -> Result<()> {
+        self.def_entity(entity.into(), loc)
     }
 
-    fn def_fn(&mut self, src_num: u32, entity: FuncRef, loc: &Location) -> Result<()> {
-        if self.functions.insert(src_num, entity).is_some() {
-            err!(loc, "duplicate function: fn{}", src_num)
-        } else {
-            self.def_entity(entity.into(), loc)
-        }
+    /// Define the external function `entity`.
+    pub fn def_fn(&mut self, entity: FuncRef, loc: &Location) -> Result<()> {
+        self.def_entity(entity.into(), loc)
     }
 
-    fn def_jt(&mut self, src_num: u32, entity: JumpTable, loc: &Location) -> Result<()> {
-        if self.jump_tables.insert(src_num, entity).is_some() {
-            err!(loc, "duplicate jump table: jt{}", src_num)
-        } else {
-            self.def_entity(entity.into(), loc)
-        }
+    /// Define the jump table `entity`.
+    pub fn def_jt(&mut self, entity: JumpTable, loc: &Location) -> Result<()> {
+        self.def_entity(entity.into(), loc)
     }
 
-    fn def_entity(&mut self, entity: AnyEntity, loc: &Location) -> Result<()> {
+    /// Define an entity. This can be used for instructions whose numbers never
+    /// appear in source, or implicitly defined signatures.
+    pub fn def_entity(&mut self, entity: AnyEntity, loc: &Location) -> Result<()> {
         if self.locations.insert(entity, *loc).is_some() {
             err!(loc, "duplicate entity: {}", entity)
         } else {
@@ -290,11 +206,11 @@ mod tests {
 
         assert_eq!(map.lookup_str("v0"), None);
         assert_eq!(map.lookup_str("ss1"), None);
-        assert_eq!(map.lookup_str("ss10").unwrap().to_string(), "ss0");
-        assert_eq!(map.lookup_str("jt10").unwrap().to_string(), "jt0");
+        assert_eq!(map.lookup_str("ss10").unwrap().to_string(), "ss10");
+        assert_eq!(map.lookup_str("jt10").unwrap().to_string(), "jt10");
         assert_eq!(map.lookup_str("ebb0").unwrap().to_string(), "ebb0");
-        assert_eq!(map.lookup_str("v4").unwrap().to_string(), "v0");
-        assert_eq!(map.lookup_str("v7").unwrap().to_string(), "v1");
-        assert_eq!(map.lookup_str("v10").unwrap().to_string(), "v2");
+        assert_eq!(map.lookup_str("v4").unwrap().to_string(), "v4");
+        assert_eq!(map.lookup_str("v7").unwrap().to_string(), "v7");
+        assert_eq!(map.lookup_str("v10").unwrap().to_string(), "v10");
     }
 }

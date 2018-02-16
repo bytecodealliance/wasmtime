@@ -76,9 +76,9 @@ ebb0(v0: i32, v999: i64):
     ; check: $ebb0(
     ; nextln:     trap heap_oob
     ; check: ebb1:
-    ; nextln:     v2 = iconst.i64 0
-    ; nextln:     v3 = load.f32 v2+16
-    ; nextln:     return v3
+    ; nextln:     v1 = iconst.i64 0
+    ; nextln:     v2 = load.f32 v1+16
+    ; nextln:     return v2
     ; nextln: }
     v1 = heap_addr.i64 heap0, v0, 0x1000_0001
     v2 = load.f32 v1+16

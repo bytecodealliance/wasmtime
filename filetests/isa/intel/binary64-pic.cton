@@ -12,8 +12,8 @@ isa intel haswell
 
 ; Tests for i64 instructions.
 function %I64() {
-    fn0 = function %foo()
     sig0 = ()
+    fn0 = function %foo()
 
     gv0 = globalsym %some_gv
 
