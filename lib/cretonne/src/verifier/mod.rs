@@ -70,7 +70,6 @@ use self::flags::verify_flags;
 use settings::{Flags, FlagsOrIsa};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
-use std::error as std_error;
 use std::fmt::{self, Display, Formatter, Write};
 use std::result;
 use std::vec::Vec;
@@ -104,7 +103,7 @@ mod liveness;
 mod locations;
 
 /// A verifier error.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Fail, Debug, PartialEq, Eq)]
 pub struct Error {
     /// The entity causing the verifier error.
     pub location: AnyEntity,
@@ -115,12 +114,6 @@ pub struct Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}: {}", self.location, self.message)
-    }
-}
-
-impl std_error::Error for Error {
-    fn description(&self) -> &str {
-        &self.message
     }
 }
 

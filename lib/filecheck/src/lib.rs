@@ -243,6 +243,9 @@ pub use variable::{VariableMap, Value, NO_VARIABLES};
 pub use checker::{Checker, CheckerBuilder};
 
 extern crate regex;
+extern crate failure;
+#[macro_use]
+extern crate failure_derive;
 
 mod error;
 mod variable;

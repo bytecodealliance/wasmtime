@@ -12,3 +12,5 @@ name = "filecheck"
 
 [dependencies]
 regex = "0.2.6"
+failure = "0.1.1"
+failure_derive = "0.1.1"
