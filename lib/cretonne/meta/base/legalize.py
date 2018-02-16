@@ -11,7 +11,7 @@ from .immediates import intcc, imm64, ieee32, ieee64
 from . import instructions as insts
 from . import types
 from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry, iadd_imm
-from .instructions import isub, isub_bin, isub_bout, isub_borrow
+from .instructions import isub, isub_bin, isub_bout, isub_borrow, irsub_imm
 from .instructions import imul, imul_imm
 from .instructions import band, bor, bxor, isplit, iconcat
 from .instructions import bnot, band_not, bor_not, bxor_not
@@ -196,6 +196,12 @@ for inst_imm,      inst in [
                 a1 << iconst(y),
                 a << inst(x, a1)
             ))
+expand.legalize(
+    a << irsub_imm(y, x),
+    Rtl(
+        a1 << iconst(x),
+        a << isub(a1, y)
+    ))
 
 # Rotates and shifts.
 for inst_imm,      inst in [
