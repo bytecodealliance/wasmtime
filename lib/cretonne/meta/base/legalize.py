@@ -13,9 +13,12 @@ from . import types
 from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry, iadd_imm
 from .instructions import isub, isub_bin, isub_bout, isub_borrow, irsub_imm
 from .instructions import imul, imul_imm
+from .instructions import sdiv, sdiv_imm, udiv, udiv_imm
+from .instructions import srem, srem_imm, urem, urem_imm
 from .instructions import band, bor, bxor, isplit, iconcat
 from .instructions import bnot, band_not, bor_not, bxor_not
-from .instructions import icmp, icmp_imm
+from .instructions import band_imm, bor_imm, bxor_imm
+from .instructions import icmp, icmp_imm, ifcmp, ifcmp_imm
 from .instructions import iconst, bint, select
 from .instructions import ishl, ishl_imm, sshr, sshr_imm, ushr, ushr_imm
 from .instructions import rotl, rotl_imm, rotr, rotr_imm
@@ -189,7 +192,15 @@ expand.legalize(
 # Expansions for immediate operands that are out of range.
 for inst_imm,      inst in [
         (iadd_imm, iadd),
-        (imul_imm, imul)]:
+        (imul_imm, imul),
+        (sdiv_imm, sdiv),
+        (udiv_imm, udiv),
+        (srem_imm, srem),
+        (urem_imm, urem),
+        (band_imm, band),
+        (bor_imm, bor),
+        (bxor_imm, bor),
+        (ifcmp_imm, ifcmp)]:
     expand.legalize(
             a << inst_imm(x, y),
             Rtl(

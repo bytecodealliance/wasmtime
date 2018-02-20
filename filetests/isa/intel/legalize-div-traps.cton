@@ -44,7 +44,8 @@ ebb0(v0: i64, v1: i64):
     ; nextln: $(q=$V), $(r=$V) = x86_sdivmodx $v0, $hi, $v1
     ; nextln: jump $(done=$EBB)($q)
     ; check: $m1:
-    ; nextln: $(fm=$V) = ifcmp_imm.i64 $v0, 0x8000_0000_0000_0000
+    ; nextln: $(imin=$V) = iconst.i64 0x8000_0000_0000_0000
+    ; nextln: $(fm=$V) = ifcmp.i64 $v0, $imin
     ; nextln: trapif eq $fm, int_ovf
     ; check: $done($v2: i64):
     return v2
