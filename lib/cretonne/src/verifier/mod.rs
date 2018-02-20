@@ -366,6 +366,7 @@ impl<'a> Verifier<'a> {
             Trap { .. } |
             CondTrap { .. } |
             IntCondTrap { .. } |
+            FloatCondTrap { .. } |
             NullAry { .. } => {}
         }
 

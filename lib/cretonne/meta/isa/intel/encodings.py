@@ -357,6 +357,8 @@ I64.enc(base.trap, *r.trap(0x0f, 0x0b))
 # Using a standard EncRecipe, not the TailRecipe.
 I32.enc(base.trapif, r.trapif, 0)
 I64.enc(base.trapif, r.trapif, 0)
+I32.enc(base.trapff, r.trapff, 0)
+I64.enc(base.trapff, r.trapff, 0)
 
 #
 # Comparisons
