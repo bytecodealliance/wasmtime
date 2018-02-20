@@ -160,20 +160,6 @@ directives in the test file. LLVM's :command:`FileCheck` command has a
 ``CHECK-LABEL:`` directive to help separate the output from different functions.
 Cretonne's tests don't need this.
 
-Filecheck variables
-~~~~~~~~~~~~~~~~~~~
-
-Cretonne's IL parser causes entities like values and EBBs to be renumbered. It
-maintains a source mapping to resolve references in the text, but when a
-function is written out as text as part of a test, all of the entities have the
-new numbers. This can complicate the filecheck directives since they need to
-refer to the new entity numbers, not the ones in the adjacent source text.
-
-To help with this, the parser's source-to-entity mapping is made available as
-predefined filecheck variables. A value by the source name ``v10`` can be
-referenced as the filecheck variable ``$v10``. The variable expands to the
-renumbered entity name.
-
 `test cat`
 ----------
 
@@ -192,26 +178,9 @@ Example::
     }
     ; sameln: function %r1() -> i32, f32 {
     ; nextln: ebb0:
-    ; nextln:     v0 = iconst.i32 3
-    ; nextln:     v1 = f32const 0.0
-    ; nextln:     return v0, v1
-    ; nextln: }
-
-Notice that the values ``v10`` and ``v20`` in the source were renumbered to
-``v0`` and ``v1`` respectively during parsing. The equivalent test using
-filecheck variables would be::
-
-    function %r1() -> i32, f32 {
-    ebb1:
-        v10 = iconst.i32 3
-        v20 = f32const 0.0
-        return v10, v20
-    }
-    ; sameln: function %r1() -> i32, f32 {
-    ; nextln: ebb0:
-    ; nextln:     $v10 = iconst.i32 3
-    ; nextln:     $v20 = f32const 0.0
-    ; nextln:     return $v10, $v20
+    ; nextln:     v10 = iconst.i32 3
+    ; nextln:     v20 = f32const 0.0
+    ; nextln:     return v10, v20
     ; nextln: }
 
 `test verifier`

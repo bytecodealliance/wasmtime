@@ -3,34 +3,34 @@ test verifier
 
 function %vmglobal() -> i32 {
     gv3 = vmctx+16
-    ; check: $gv3 = vmctx+16
+    ; check: gv3 = vmctx+16
     gv4 = vmctx+0
-    ; check: $gv4 = vmctx
+    ; check: gv4 = vmctx
     ; not: +0
     gv5 = vmctx -256
-    ; check: $gv5 = vmctx-256
+    ; check: gv5 = vmctx-256
 ebb0:
     v1 = global_addr.i32 gv3
-    ; check: $v1 = global_addr.i32 $gv3
+    ; check: v1 = global_addr.i32 gv3
     return v1
 }
 
 function %deref() -> i32 {
     gv3 = vmctx+16
     gv4 = deref(gv3)-32
-    ; check: $gv4 = deref($gv3)-32
+    ; check: gv4 = deref(gv3)-32
 ebb0:
     v1 = global_addr.i32 gv4
-    ; check: $v1 = global_addr.i32 $gv4
+    ; check: v1 = global_addr.i32 gv4
     return v1
 }
 
 ; Refer to a global variable before it's been declared.
 function %backref() -> i32 {
     gv1 = deref(gv2)-32
-    ; check: $gv1 = deref($gv2)-32
+    ; check: gv1 = deref(gv2)-32
     gv2 = vmctx+16
-    ; check: $gv2 = vmctx+16
+    ; check: gv2 = vmctx+16
 ebb0:
     v1 = global_addr.i32 gv1
     return v1
@@ -38,14 +38,14 @@ ebb0:
 
 function %sym() -> i32 {
     gv0 = globalsym %something
-    ; check: $gv0 = globalsym %something
+    ; check: gv0 = globalsym %something
     gv1 = globalsym u8:9
-    ; check: $gv1 = globalsym u8:9
+    ; check: gv1 = globalsym u8:9
 ebb0:
     v0 = global_addr.i32 gv0
-    ; check: $v0 = global_addr.i32 $gv0
+    ; check: v0 = global_addr.i32 gv0
     v1 = global_addr.i32 gv1
-    ; check: $v1 = global_addr.i32 $gv1
+    ; check: v1 = global_addr.i32 gv1
     v2 = bxor v0, v1
     return v2
 }
@@ -56,11 +56,11 @@ function %sheap(i32) -> i64 {
     heap2 = static gv5, guard 0x1000, bound 0x1_0000
     gv5 = vmctx+64
 
-    ; check: $heap1 = static reserved_reg, min 0x0001_0000, bound 0x0001_0000_0000, guard 0x8000_0000
-    ; check: $heap2 = static $gv5, min 0, bound 0x0001_0000, guard 4096
+    ; check: heap1 = static reserved_reg, min 0x0001_0000, bound 0x0001_0000_0000, guard 0x8000_0000
+    ; check: heap2 = static gv5, min 0, bound 0x0001_0000, guard 4096
 ebb0(v1: i32):
     v2 = heap_addr.i64 heap1, v1, 0
-    ; check: $v2 = heap_addr.i64 $heap1, $v1, 0
+    ; check: v2 = heap_addr.i64 heap1, v1, 0
     return v2
 }
 
@@ -71,10 +71,10 @@ function %dheap(i32) -> i64 {
     gv5 = vmctx+64
     gv6 = vmctx+72
 
-    ; check: $heap1 = dynamic reserved_reg, min 0x0001_0000, bound $gv6, guard 0x8000_0000
-    ; check: $heap2 = dynamic $gv5, min 0, bound $gv6, guard 4096
+    ; check: heap1 = dynamic reserved_reg, min 0x0001_0000, bound gv6, guard 0x8000_0000
+    ; check: heap2 = dynamic gv5, min 0, bound gv6, guard 4096
 ebb0(v1: i32):
     v2 = heap_addr.i64 heap2, v1, 0
-    ; check: $v2 = heap_addr.i64 $heap2, $v1, 0
+    ; check: v2 = heap_addr.i64 heap2, v1, 0
     return v2
 }
