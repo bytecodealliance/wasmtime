@@ -452,29 +452,15 @@ impl DataFlowGraph {
         I: Iterator<Item = Option<Value>>,
     {
         let mut reuse = reuse.fuse();
-        let constraints = self.insts[inst].opcode().constraints();
-        let fixed_results = constraints.fixed_results();
-        let mut total_results = fixed_results;
 
         self.results[inst].clear(&mut self.value_lists);
-
-        // The fixed results will appear at the front of the list.
-        for res_idx in 0..fixed_results {
-            let ty = constraints.result_type(res_idx, ctrl_typevar);
-            if let Some(Some(v)) = reuse.next() {
-                debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
-                self.attach_result(inst, v);
-            } else {
-                self.append_result(inst, ty);
-            }
-        }
 
         // Get the call signature if this is a function call.
         if let Some(sig) = self.call_signature(inst) {
             // Create result values corresponding to the call return types.
-            let var_results = self.signatures[sig].returns.len();
-            total_results += var_results;
-            for res_idx in 0..var_results {
+            debug_assert_eq!(self.insts[inst].opcode().constraints().fixed_results(), 0);
+            let num_results = self.signatures[sig].returns.len();
+            for res_idx in 0..num_results {
                 let ty = self.signatures[sig].returns[res_idx].value_type;
                 if let Some(Some(v)) = reuse.next() {
                     debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
@@ -483,9 +469,22 @@ impl DataFlowGraph {
                     self.append_result(inst, ty);
                 }
             }
+            num_results
+        } else {
+            // Create result values corresponding to the opcode's constraints.
+            let constraints = self.insts[inst].opcode().constraints();
+            let num_results = constraints.fixed_results();
+            for res_idx in 0..num_results {
+                let ty = constraints.result_type(res_idx, ctrl_typevar);
+                if let Some(Some(v)) = reuse.next() {
+                    debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
+                    self.attach_result(inst, v);
+                } else {
+                    self.append_result(inst, ty);
+                }
+            }
+            num_results
         }
-
-        total_results
     }
 
     /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
