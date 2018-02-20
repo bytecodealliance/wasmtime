@@ -270,6 +270,12 @@ pub enum InstructionData {
         arg: Value,
         code: ir::TrapCode,
     },
+    FloatCondTrap {
+        opcode: Opcode,
+        cond: FloatCC,
+        arg: Value,
+        code: ir::TrapCode,
+    },
 }
 
 /// A variable list of `Value` operands used for function call arguments and passing arguments to

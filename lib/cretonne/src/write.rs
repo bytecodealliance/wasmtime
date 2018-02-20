@@ -429,6 +429,7 @@ pub fn write_operands(
         Trap { code, .. } => write!(w, " {}", code),
         CondTrap { arg, code, .. } => write!(w, " {}, {}", arg, code),
         IntCondTrap { cond, arg, code, .. } => write!(w, " {} {}, {}", cond, arg, code),
+        FloatCondTrap { cond, arg, code, .. } => write!(w, " {} {}, {}", cond, arg, code),
     }
 }
 

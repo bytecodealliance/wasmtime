@@ -494,6 +494,23 @@ ebb1:
     ; asm: jbe ebb1
     brff ule v1, ebb1                                           ; bin: 76 f0
 
+    ; asm: jp .+4; ud2
+    trapff ord v1, user0                                        ; bin: 7a 02 0f 0b
+    ; asm: jnp .+4; ud2
+    trapff uno v1, user0                                        ; bin: 7b 02 0f 0b
+    ; asm: je .+4; ud2
+    trapff one v1, user0                                        ; bin: 74 02 0f 0b
+    ; asm: jne .+4; ud2
+    trapff ueq v1, user0                                        ; bin: 75 02 0f 0b
+    ; asm: jna .+4; ud2
+    trapff gt v1, user0                                         ; bin: 76 02 0f 0b
+    ; asm: jnae .+4; ud2
+    trapff ge v1, user0                                         ; bin: 72 02 0f 0b
+    ; asm: jnb .+4; ud2
+    trapff ult v1, user0                                        ; bin: 73 02 0f 0b
+    ; asm: jnbe .+4; ud2
+    trapff ule v1, user0                                        ; bin: 77 02 0f 0b
+
     ; asm: setnp %bl
     [-,%rbx]            v10 = trueff ord v1                     ; bin: 0f 9b c3
     ; asm: setp %bl

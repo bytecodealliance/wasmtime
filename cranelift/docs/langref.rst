@@ -381,6 +381,7 @@ is zero.
 .. autoinst:: trapz
 .. autoinst:: trapnz
 .. autoinst:: trapif
+.. autoinst:: trapff
 
 
 Function calls

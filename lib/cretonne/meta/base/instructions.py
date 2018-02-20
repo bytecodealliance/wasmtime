@@ -176,6 +176,15 @@ trapif = Instruction(
         """,
         ins=(Cond, f, code), can_trap=True)
 
+Cond = Operand('Cond', floatcc)
+f = Operand('f', fflags)
+
+trapff = Instruction(
+        'trapff', r"""
+        Trap when condition is true in floating point CPU flags.
+        """,
+        ins=(Cond, f, code), can_trap=True)
+
 rvals = Operand('rvals', VARIABLE_ARGS, doc='return values')
 
 x_return = Instruction(
