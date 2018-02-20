@@ -6,7 +6,7 @@ use cretonne::ir::Function;
 use cretonne::isa::TargetIsa;
 use cretonne::settings::{Flags, FlagsOrIsa};
 use cton_reader::{Details, Comment};
-use filecheck::{self, CheckerBuilder, Checker, Value as FCValue};
+use filecheck::{CheckerBuilder, Checker, NO_VARIABLES};
 
 pub type Result<T> = result::Result<T, String>;
 
@@ -67,34 +67,19 @@ pub trait SubTest {
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()>;
 }
 
-/// Make the parser's source map available as filecheck variables.
-///
-/// This means that the filecheck directives can refer to entities like `jump $ebb3`, where `$ebb3`
-/// will expand to the EBB number that was assigned to `ebb3` in the input source.
-///
-/// The expanded entity names are wrapped in word boundary regex guards so that 'inst1' doesn't
-/// match 'inst10'.
-impl<'a> filecheck::VariableMap for Context<'a> {
-    fn lookup(&self, varname: &str) -> Option<FCValue> {
-        self.details.map.lookup_str(varname).map(|e| {
-            FCValue::Regex(format!(r"\b{}\b", e).into())
-        })
-    }
-}
-
 /// Run filecheck on `text`, using directives extracted from `context`.
 pub fn run_filecheck(text: &str, context: &Context) -> Result<()> {
     let checker = build_filechecker(context)?;
-    if checker.check(text, context).map_err(
-        |e| format!("filecheck: {}", e),
-    )?
+    if checker.check(text, NO_VARIABLES).map_err(|e| {
+        format!("filecheck: {}", e)
+    })?
     {
         Ok(())
     } else {
         // Filecheck mismatch. Emit an explanation as output.
-        let (_, explain) = checker.explain(text, context).map_err(
-            |e| format!("explain: {}", e),
-        )?;
+        let (_, explain) = checker.explain(text, NO_VARIABLES).map_err(|e| {
+            format!("explain: {}", e)
+        })?;
         Err(format!("filecheck failed:\n{}{}", checker, explain))
     }
 }

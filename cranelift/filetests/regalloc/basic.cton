@@ -17,7 +17,7 @@ ebb0(v1: i32, v2: i32):
 function %dead_arg(i32, i32) -> i32{
 ebb0(v1: i32, v2: i32):
 ; not: regmove
-; check: return $v1
+; check: return v1
     return v1
 }
 
@@ -25,8 +25,8 @@ ebb0(v1: i32, v2: i32):
 function %move1(i32, i32) -> i32 {
 ebb0(v1: i32, v2: i32):
 ; not: regmove
-; check: regmove $v2, %x11 -> %x10
-; nextln: return $v2
+; check: regmove v2, %x11 -> %x10
+; nextln: return v2
         return v2
 }
 
@@ -34,10 +34,10 @@ ebb0(v1: i32, v2: i32):
 function %swap(i32, i32) -> i32, i32 {
 ebb0(v1: i32, v2: i32):
 ; not: regmove
-; check: regmove $v2, %x11 -> $(tmp=$RX)
-; nextln: regmove $v1, %x10 -> %x11
-; nextln: regmove $v2, $tmp -> %x10
-; nextln: return $v2, $v1
+; check: regmove v2, %x11 -> $(tmp=$RX)
+; nextln: regmove v1, %x10 -> %x11
+; nextln: regmove v2, $tmp -> %x10
+; nextln: return v2, v1
         return v2, v1
 }
 

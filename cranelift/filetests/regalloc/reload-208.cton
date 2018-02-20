@@ -52,8 +52,8 @@ ebb6:
     v25 = load.i64 v24
     v8 = iadd v25, v23
     v9 = load.i32 v8+56
-    ; check: $v9 = spill
-    ; check: brnz $V, $ebb3($v9)
+    ; check: v9 = spill
+    ; check: brnz $V, ebb3(v9)
     brnz v9, ebb3(v9)
     jump ebb4
 

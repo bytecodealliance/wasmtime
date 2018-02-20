@@ -26,11 +26,11 @@ ebb1(v91: i32):
     jump ebb0(v91)
 }
 ; sameln: function %onearg(i32) native {
-; nextln: ebb0($v90: i32):
-; nextln:     jump ebb1($v90)
+; nextln: ebb0(v90: i32):
+; nextln:     jump ebb1(v90)
 ; nextln: 
-; nextln: ebb1($v91: i32):
-; nextln:     jump ebb0($v91)
+; nextln: ebb1(v91: i32):
+; nextln:     jump ebb0(v91)
 ; nextln: }
 
 ; Jumps with 2 args.
@@ -42,11 +42,11 @@ ebb1(v92: i32, v93: f32):
     jump ebb0(v92, v93)
 }
 ; sameln: function %twoargs(i32, f32) native {
-; nextln: ebb0($v90: i32, $v91: f32):
-; nextln:     jump ebb1($v90, $v91)
+; nextln: ebb0(v90: i32, v91: f32):
+; nextln:     jump ebb1(v90, v91)
 ; nextln: 
-; nextln: ebb1($v92: i32, $v93: f32):
-; nextln:     jump ebb0($v92, $v93)
+; nextln: ebb1(v92: i32, v93: f32):
+; nextln:     jump ebb0(v92, v93)
 ; nextln: }
 
 ; Branches with no arguments. The '()' empty argument list is optional.
@@ -58,11 +58,11 @@ ebb1:
     brnz v90, ebb1()
 }
 ; sameln: function %minimal(i32) native {
-; nextln: ebb0($v90: i32):
-; nextln:     brz $v90, ebb1
+; nextln: ebb0(v90: i32):
+; nextln:     brz v90, ebb1
 ; nextln: 
 ; nextln: ebb1:
-; nextln:     brnz.i32 $v90, ebb1
+; nextln:     brnz.i32 v90, ebb1
 ; nextln: }
 
 function %twoargs(i32, f32) {
@@ -73,11 +73,11 @@ ebb1(v92: i32, v93: f32):
     brnz v90, ebb0(v92, v93)
 }
 ; sameln: function %twoargs(i32, f32) native {
-; nextln: ebb0($v90: i32, $v91: f32):
-; nextln:     brz $v90, ebb1($v90, $v91)
+; nextln: ebb0(v90: i32, v91: f32):
+; nextln:     brz v90, ebb1(v90, v91)
 ; nextln: 
-; nextln: ebb1($v92: i32, $v93: f32):
-; nextln:     brnz.i32 $v90, ebb0($v92, $v93)
+; nextln: ebb1(v92: i32, v93: f32):
+; nextln:     brnz.i32 v90, ebb0(v92, v93)
 ; nextln: }
 
 function %jumptable(i32) {
@@ -97,8 +97,8 @@ ebb40:
 ; sameln: function %jumptable(i32) native {
 ; check:      jt2 = jump_table 0, 0, ebb10, ebb40, ebb20, ebb30
 ; check:      jt200 = jump_table 0
-; check:  ebb10($v3: i32):
-; nextln:     br_table $v3, jt2
+; check:  ebb10(v3: i32):
+; nextln:     br_table v3, jt2
 ; nextln:     trap user1
 ; nextln: 
 ; nextln: ebb20:

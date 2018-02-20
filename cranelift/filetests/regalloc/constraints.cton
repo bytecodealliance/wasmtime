@@ -20,10 +20,10 @@ function %tied_alive() -> i32 {
 ebb0:
     v0 = iconst.i32 12
     v1 = iconst.i32 13
-    ; check: $(v0c=$V) = copy $v0
-    ; check: $v2 = isub $v0c, $v1
+    ; check: $(v0c=$V) = copy v0
+    ; check: v2 = isub $v0c, v1
     v2 = isub v0, v1
-    ; check: $v3 = iadd $v2, $v0
+    ; check: v3 = iadd v2, v0
     v3 = iadd v2, v0
     return v3
 }
@@ -32,11 +32,11 @@ ebb0:
 function %fixed_op() -> i32 {
 ebb0:
     ; check: ,%rax]
-    ; sameln: $v0 = iconst.i32 12
+    ; sameln: v0 = iconst.i32 12
     v0 = iconst.i32 12
     v1 = iconst.i32 13
     ; The dynamic shift amount must be in %rcx
-    ; check: regmove $v0, %rax -> %rcx
+    ; check: regmove v0, %rax -> %rcx
     v2 = ishl v1, v0
     return v2
 }
@@ -45,14 +45,14 @@ ebb0:
 function %fixed_op_twice() -> i32 {
 ebb0:
     ; check: ,%rax]
-    ; sameln: $v0 = iconst.i32 12
+    ; sameln: v0 = iconst.i32 12
     v0 = iconst.i32 12
     v1 = iconst.i32 13
     ; The dynamic shift amount must be in %rcx
-    ; check: regmove $v0, %rax -> %rcx
+    ; check: regmove v0, %rax -> %rcx
     v2 = ishl v1, v0
-    ; check: regmove $v0, %rcx -> $REG
-    ; check: regmove $v2, $REG -> %rcx
+    ; check: regmove v0, %rcx -> $REG
+    ; check: regmove v2, $REG -> %rcx
     v3 = ishl v0, v2
 
     return v3
@@ -62,12 +62,12 @@ ebb0:
 function %fixed_op_twice() -> i32 {
 ebb0:
     ; check: ,%rax]
-    ; sameln: $v0 = iconst.i32 12
+    ; sameln: v0 = iconst.i32 12
     v0 = iconst.i32 12
     v1 = iconst.i32 13
     ; The dynamic shift amount must be in %rcx
-    ; check: regmove $v0, %rax -> %rcx
-    ; check: $v2 = ishl $v1, $v0
+    ; check: regmove v0, %rax -> %rcx
+    ; check: v2 = ishl v1, v0
     v2 = ishl v1, v0
 
     ; Now v0 is globally allocated to %rax, but diverted to %rcx.
@@ -77,6 +77,6 @@ ebb0:
     ; check: ,%rcx]
     ; sameln: isub
     ; Move it into place for the return value.
-    ; check: regmove $v3, %rcx -> %rax
+    ; check: regmove v3, %rcx -> %rax
     return v3
 }

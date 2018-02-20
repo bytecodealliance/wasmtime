@@ -12,4 +12,4 @@ ebb0(v0: f32):
 ; check: function %floor(f32 [%xmm0]) -> f32 [%xmm0] native {
 ; check: sig0 = (f32) -> f32 native
 ; check: fn0 = sig0 %FloorF32
-; check: $v1 = call fn0($v0)
+; check: v1 = call fn0(v0)

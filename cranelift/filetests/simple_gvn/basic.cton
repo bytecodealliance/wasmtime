@@ -5,7 +5,7 @@ ebb0(v0: i32, v1: i32):
     v2 = iadd v0, v1
     v3 = iadd v0, v1
     v4 = imul v2, v3
-; check: v4 = imul $v2, $v2
+; check: v4 = imul v2, v2
     return v4
 }
 
@@ -16,7 +16,7 @@ ebb0(v0: i32, v1: i32):
     v4 = imul v2, v3
     v5 = imul v2, v2
     v6 = iadd v4, v5
-; check: v6 = iadd $v4, $v4
+; check: v6 = iadd v4, v4
     return v6
 }
 
