@@ -449,21 +449,43 @@ fn expand_fcvt_to_uint(
         ir::types::F64 => pos.ins().f64const(Ieee64::pow2(ty.lane_bits() - 1)),
         _ => panic!("Can't convert {}", xty),
     };
-    let is_large = pos.ins().fcmp(FloatCC::GreaterThanOrEqual, x, pow2nm1);
-    pos.ins().brnz(is_large, large, &[]);
+    let is_large = pos.ins().ffcmp(x, pow2nm1);
+    pos.ins().brff(
+        FloatCC::GreaterThanOrEqual,
+        is_large,
+        large,
+        &[],
+    );
 
-    // Now we know that x < 2^(N-1) or x is NaN.
+    // We need to generate a specific trap code when `x` is NaN, so reuse the flags from the
+    // previous comparison.
+    pos.ins().trapff(
+        FloatCC::Unordered,
+        is_large,
+        ir::TrapCode::BadConversionToInteger,
+    );
+
+    // Now we know that x < 2^(N-1) and not NaN.
     let sres = pos.ins().x86_cvtt2si(ty, x);
-    let is_neg = pos.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
-    pos.ins().brz(is_neg, done, &[sres]);
-    pos.ins().trap(ir::TrapCode::BadConversionToInteger);
+    let is_neg = pos.ins().ifcmp_imm(sres, 0);
+    pos.ins().brif(
+        IntCC::SignedGreaterThanOrEqual,
+        is_neg,
+        done,
+        &[sres],
+    );
+    pos.ins().trap(ir::TrapCode::IntegerOverflow);
 
     // Handle the case where x >= 2^(N-1) and not NaN.
     pos.insert_ebb(large);
     let adjx = pos.ins().fsub(x, pow2nm1);
     let lres = pos.ins().x86_cvtt2si(ty, adjx);
-    let is_neg = pos.ins().icmp_imm(IntCC::SignedLessThan, lres, 0);
-    pos.ins().trapnz(is_neg, ir::TrapCode::IntegerOverflow);
+    let is_neg = pos.ins().ifcmp_imm(lres, 0);
+    pos.ins().trapif(
+        IntCC::SignedLessThan,
+        is_neg,
+        ir::TrapCode::IntegerOverflow,
+    );
     let lfinal = pos.ins().iadd_imm(lres, 1 << (ty.lane_bits() - 1));
 
     // Recycle the original instruction as a jump.
