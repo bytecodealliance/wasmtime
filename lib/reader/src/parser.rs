@@ -1735,8 +1735,6 @@ impl<'a> Parser<'a> {
     // The controlling type variable can be specified explicitly as 'splat.i32x4 v5', or it can be
     // inferred from `inst_data.typevar_operand` for some opcodes.
     //
-    // The value operands in `inst_data` are expected to use source numbering.
-    //
     // Returns the controlling typevar for a polymorphic opcode, or `VOID` for a non-polymorphic
     // opcode.
     fn infer_typevar(

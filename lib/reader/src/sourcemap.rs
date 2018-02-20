@@ -21,42 +21,42 @@ pub struct SourceMap {
 
 /// Read-only interface which is exposed outside the parser crate.
 impl SourceMap {
-    /// Look up a value entity by its source number.
+    /// Look up a value entity.
     pub fn contains_value(&self, v: Value) -> bool {
         self.locations.contains_key(&v.into())
     }
 
-    /// Look up a EBB entity by its source number.
+    /// Look up a EBB entity.
     pub fn contains_ebb(&self, ebb: Ebb) -> bool {
         self.locations.contains_key(&ebb.into())
     }
 
-    /// Look up a stack slot entity by its source number.
+    /// Look up a stack slot entity.
     pub fn contains_ss(&self, ss: StackSlot) -> bool {
         self.locations.contains_key(&ss.into())
     }
 
-    /// Look up a global variable entity by its source number.
+    /// Look up a global variable entity.
     pub fn contains_gv(&self, gv: GlobalVar) -> bool {
         self.locations.contains_key(&gv.into())
     }
 
-    /// Look up a heap entity by its source number.
+    /// Look up a heap entity.
     pub fn contains_heap(&self, heap: Heap) -> bool {
         self.locations.contains_key(&heap.into())
     }
 
-    /// Look up a signature entity by its source number.
+    /// Look up a signature entity.
     pub fn contains_sig(&self, sig: SigRef) -> bool {
         self.locations.contains_key(&sig.into())
     }
 
-    /// Look up a function entity by its source number.
+    /// Look up a function entity.
     pub fn contains_fn(&self, fn_: FuncRef) -> bool {
         self.locations.contains_key(&fn_.into())
     }
 
-    /// Look up a jump table entity by its source number.
+    /// Look up a jump table entity.
     pub fn contains_jt(&self, jt: JumpTable) -> bool {
         self.locations.contains_key(&jt.into())
     }
