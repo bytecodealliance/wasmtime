@@ -391,6 +391,15 @@ fn expand_fcvt_to_sint(
     let overflow = pos.ins().fcmp(overflow_cc, x, flimit);
     pos.ins().trapnz(overflow, ir::TrapCode::IntegerOverflow);
 
+    // Finally, we could have a positive value that is too large.
+    let fzero = match xty {
+        ir::types::F32 => pos.ins().f32const(Ieee32::with_float(0.0)),
+        ir::types::F64 => pos.ins().f64const(Ieee64::with_float(0.0)),
+        _ => panic!("Can't convert {}", xty),
+    };
+    let overflow = pos.ins().fcmp(FloatCC::GreaterThanOrEqual, x, fzero);
+    pos.ins().trapnz(overflow, ir::TrapCode::IntegerOverflow);
+
     pos.ins().jump(done, &[]);
     pos.insert_ebb(done);
 
