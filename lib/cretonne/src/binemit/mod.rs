@@ -6,11 +6,11 @@
 mod relaxation;
 mod memorysink;
 
+pub use regalloc::RegDiversions;
 pub use self::relaxation::relax_branches;
 pub use self::memorysink::{MemoryCodeSink, RelocSink};
 
 use ir::{ExternalName, JumpTable, Function, Inst};
-use regalloc::RegDiversions;
 use std::fmt;
 
 /// Offset in bytes from the beginning of the function.
