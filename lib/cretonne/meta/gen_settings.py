@@ -86,6 +86,7 @@ def gen_getters(sgrp, fmt):
     Emit getter functions for all the settings in fmt.
     """
     fmt.doc_comment("User-defined settings.")
+    fmt.line('#[allow(dead_code)]')
     with fmt.indented('impl Flags {', '}'):
         fmt.doc_comment('Get a view of the boolean predicates.')
         with fmt.indented(
