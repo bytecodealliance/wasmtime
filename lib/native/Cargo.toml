@@ -1,8 +1,7 @@
 [package]
 name = "cretonne-native"
-version = "0.0.0"
+version = "0.1.0"
 authors = ["The Cretonne Project Developers"]
-publish = false
 description = "Support for targeting the host with Cretonne"
 repository = "https://github.com/stoklund/cretonne"
 license = "Apache-2.0"
@@ -12,7 +11,7 @@ readme = "README.md"
 name = "cton_native"
 
 [dependencies]
-cretonne = { path = "../cretonne" }
+cretonne = { path = "../cretonne", version = "0.1.0" }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 raw-cpuid = "3.0.0"
