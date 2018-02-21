@@ -4,7 +4,7 @@
 //! defined in this module expresses the low-level details of accessing a stack slot from an
 //! encoded instruction.
 
-use ir::stackslot::{StackSlots, StackOffset};
+use ir::stackslot::{StackSlots, StackOffset, StackSlotKind};
 use ir::StackSlot;
 
 /// A method for referencing a stack slot in the current stack frame.
@@ -38,12 +38,19 @@ impl StackRef {
         let size = frame.frame_size.expect(
             "Stack layout must be computed before referencing stack slots",
         );
-
-        // Offset where SP is pointing. (All ISAs have stacks growing downwards.)
-        let sp_offset = -(size as StackOffset);
+        let slot = &frame[ss];
+        let offset = if slot.kind == StackSlotKind::OutgoingArg {
+            // Outgoing argument slots have offsets relative to our stack pointer.
+            slot.offset
+        } else {
+            // All other slots have offsets relative to our caller's stack frame.
+            // Offset where SP is pointing. (All ISAs have stacks growing downwards.)
+            let sp_offset = -(size as StackOffset);
+            slot.offset - sp_offset
+        };
         StackRef {
             base: StackBase::SP,
-            offset: frame[ss].offset - sp_offset,
+            offset,
         }
     }
 }
