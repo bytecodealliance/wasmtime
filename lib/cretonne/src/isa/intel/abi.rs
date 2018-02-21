@@ -224,7 +224,7 @@ pub fn native_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> res
     });
 
     let total_stack_size = layout_stack(&mut func.stack_slots, stack_align)? as i32;
-    let local_stack_size = (total_stack_size - csr_stack_size) as i64;
+    let local_stack_size = i64::from(total_stack_size - csr_stack_size);
 
     // Add CSRs to function signature
     let fp_arg = ir::AbiParam::special_reg(

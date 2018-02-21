@@ -106,7 +106,7 @@ fn put_i<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, imm: i64, rd: RegUnit, 
 ///
 /// Encoding bits: `opcode[6:2] | (funct3 << 5)`
 fn put_u<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rd: RegUnit, sink: &mut CS) {
-    let bits = bits as u32;
+    let bits = u32::from(bits);
     let opcode5 = bits & 0x1f;
     let rd = u32::from(rd) & 0x1f;
 
