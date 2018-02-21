@@ -17,7 +17,6 @@ pub mod entity;
 
 pub mod bforest;
 pub mod binemit;
-pub mod bitset;
 pub mod cursor;
 pub mod dominator_tree;
 pub mod flowgraph;
@@ -31,6 +30,7 @@ pub mod timing;
 pub mod verifier;
 
 mod abi;
+mod bitset;
 mod constant_hash;
 mod context;
 mod iterators;
