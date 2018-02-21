@@ -634,6 +634,23 @@ ebb1:
     return
 }
 
+; Test for the encoding of outgoing_arg stack slots.
+function %outargs() {
+    ss0 = incoming_arg 16, offset -16
+    ss1 = outgoing_arg 8, offset 8
+    ss2 = outgoing_arg 8, offset 0
+
+ebb0:
+    [-,%rcx]            v1 = iconst.i64 1
+
+    ; asm: movq %rcx, 8(%rsp)
+    [-,ss1]             v10 = spill v1              ; bin: 48 89 8c 24 00000008
+    ; asm: movq %rcx, (%rsp)
+    [-,ss2]             v11 = spill v1              ; bin: 48 89 8c 24 00000000
+
+    return
+}
+
 ; Tests for i32 instructions in 64-bit mode.
 ;
 ; Note that many i32 instructions can be encoded both with and without a REX
