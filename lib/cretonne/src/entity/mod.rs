@@ -90,8 +90,8 @@ macro_rules! entity_impl {
 
         impl ::std::fmt::Debug for $entity {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-            	(self as &::std::fmt::Display).fmt(f)
-			}
-		}
+                (self as &::std::fmt::Display).fmt(f)
+            }
+        }
     }
 }
