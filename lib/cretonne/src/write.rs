@@ -4,10 +4,11 @@
 //! equivalent textual representation. This textual representation can be read back by the
 //! `cretonne-reader` crate.
 
-use ir::{Function, DataFlowGraph, Ebb, Inst, Value, ValueDef, Type};
+use ir::{Function, DataFlowGraph, Ebb, Inst, Value, ValueDef, Type, SigRef};
 use isa::{TargetIsa, RegInfo};
 use std::fmt::{self, Result, Error, Write};
 use std::result;
+use packed_option::ReservedValue;
 
 /// Write `func` to `w` as equivalent text.
 /// Use `isa` to emit ISA-dependent annotations.
@@ -74,7 +75,10 @@ fn write_preamble(
 
     for fnref in func.dfg.ext_funcs.keys() {
         any = true;
-        writeln!(w, "    {} = {}", fnref, func.dfg.ext_funcs[fnref])?;
+        let ext_func = &func.dfg.ext_funcs[fnref];
+        if ext_func.signature != SigRef::reserved_value() {
+            writeln!(w, "    {} = {}", fnref, ext_func)?;
+        }
     }
 
     for jt in func.jump_tables.keys() {

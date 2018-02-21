@@ -33,6 +33,7 @@ function %signatures() {
 ; check:      sig10 = () native
 ; check:      sig11 = (i32, f64) -> i32, b1 spiderwasm
 ; check:      sig12 = (i32) -> b1 native
+; not:        fn0
 ; check:      fn5 = sig11 %foo
 ; check:      fn8 = sig12 %bar
 ; check:  }
