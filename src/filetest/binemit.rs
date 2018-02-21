@@ -10,7 +10,7 @@ use cretonne::binemit;
 use cretonne::dbg::DisplayList;
 use cretonne::ir;
 use cretonne::ir::entities::AnyEntity;
-use cretonne::regalloc::RegDiversions;
+use cretonne::binemit::RegDiversions;
 use cton_reader::TestCommand;
 use filetest::subtest::{SubTest, Context, Result};
 use utils::{match_directive, pretty_error};
