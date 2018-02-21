@@ -56,16 +56,16 @@ use isa::enc_tables::Encodings;
 use std::fmt;
 
 #[cfg(build_riscv)]
-pub mod riscv;
+mod riscv;
 
 #[cfg(build_intel)]
-pub mod intel;
+mod intel;
 
 #[cfg(build_arm32)]
-pub mod arm32;
+mod arm32;
 
 #[cfg(build_arm64)]
-pub mod arm64;
+mod arm64;
 
 pub mod registers;
 mod encoding;
