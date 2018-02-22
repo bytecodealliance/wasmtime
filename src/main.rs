@@ -126,7 +126,8 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
     let translation = environ.finish_translation();
     let instance = match compile_module(isa, &translation) {
         Ok(compilation) => {
-            let mut instance = Instance::new(compilation.module);
+            let mut instance =
+                Instance::new(compilation.module, &translation.lazy.data_initializers);
             execute(&compilation, &mut instance)?;
             instance
         }

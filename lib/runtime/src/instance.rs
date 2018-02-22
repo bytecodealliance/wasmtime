@@ -4,6 +4,7 @@
 use cretonne::ir;
 use cton_wasm::GlobalIndex;
 use module::Module;
+use DataInitializer;
 
 const PAGE_SIZE: usize = 65536;
 
@@ -22,14 +23,14 @@ pub struct Instance {
 
 impl Instance {
     /// Create a new `Instance`.
-    pub fn new(module: &Module) -> Self {
+    pub fn new(module: &Module, data_initializers: &[DataInitializer]) -> Self {
         let mut result = Self {
             tables: Vec::new(),
             memories: Vec::new(),
             globals: Vec::new(),
         };
         result.instantiate_tables(module);
-        result.instantiate_memories(module);
+        result.instantiate_memories(module, data_initializers);
         result.instantiate_globals(module);
         result
     }
@@ -49,7 +50,7 @@ impl Instance {
 
     /// Allocate memory in `instance` for just the memories of the current module,
     /// without any initializers applied yet.
-    fn instantiate_memories(&mut self, module: &Module) {
+    fn instantiate_memories(&mut self, module: &Module, data_initializers: &[DataInitializer]) {
         debug_assert!(self.memories.is_empty());
         // Allocate the underlying memory and initialize it to all zeros.
         self.memories.reserve_exact(module.memories.len());
@@ -58,6 +59,12 @@ impl Instance {
             let mut v = Vec::with_capacity(len);
             v.resize(len, 0);
             self.memories.push(v);
+        }
+        for init in data_initializers {
+            debug_assert!(init.base.is_none(), "globalvar base not supported yet");
+            let to_init = &mut self.memories[init.memory_index][init.offset..
+                                                                    init.offset + init.data.len()];
+            to_init.copy_from_slice(init.data);
         }
     }
 

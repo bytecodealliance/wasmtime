@@ -10,5 +10,5 @@ license = "MIT/Apache-2.0"
 [dependencies]
 cretonne = { git = "https://github.com/stoklund/cretonne.git" }
 cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
-region = "0.0.8"
+region = "0.1.1"
 wasmstandalone_runtime = { path = "../runtime" }

@@ -28,12 +28,12 @@ use cretonne::ir;
 use cretonne::isa;
 use cretonne::settings;
 use cretonne::binemit;
-use std::str::from_utf8;
 use std::error::Error;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FunctionIndex) -> cretonne::ir::ExternalName {
-    ir::ExternalName::new(format!("wasm_0x{:x}", func_index))
+    debug_assert!(func_index as u32 as FunctionIndex == func_index);
+    ir::ExternalName::user(0, func_index as u32)
 }
 
 /// An entity to export.
@@ -48,12 +48,11 @@ pub enum Export {
     Global(GlobalIndex),
 }
 
-type RelocRef = u16;
-
-// Implementation of a relocation sink that just saves all the information for later
-struct RelocSink<'func> {
+/// Implementation of a relocation sink that just saves all the information for later
+pub struct RelocSink<'func> {
     func: &'func ir::Function,
-    pub func_relocs: Vec<(RelocRef, FunctionIndex, binemit::CodeOffset)>,
+    /// Relocations recorded for the function.
+    pub func_relocs: Vec<Relocation>,
 }
 
 impl<'func> binemit::RelocSink for RelocSink<'func> {
@@ -71,14 +70,21 @@ impl<'func> binemit::RelocSink for RelocSink<'func> {
         offset: binemit::CodeOffset,
         reloc: binemit::Reloc,
         name: &ExternalName,
+        addend: binemit::Addend,
     ) {
-        let name_bytes: &[u8] = name.as_ref();
-        let name = from_utf8(name_bytes).unwrap();
-        // See `get_func_name`; names are encoded as `wasm_0x...`, so grab the
-        // part after `0x...` and convert it back to an integer to get the index.
         // FIXME: Handle grow_memory/current_memory.
-        let func_index = FunctionIndex::from_str_radix(&name[7..], 16).unwrap();
-        self.func_relocs.push((reloc.0, func_index, offset));
+        let func_index = if let ExternalName::User { namespace, index } = *name {
+            debug_assert!(namespace == 0);
+            index
+        } else {
+            panic!("unrecognized external name")
+        } as usize;
+        self.func_relocs.push(Relocation {
+            reloc,
+            func_index,
+            offset,
+            addend,
+        });
     }
     fn reloc_jt(
         &mut self,
@@ -100,6 +106,18 @@ impl<'func> RelocSink<'func> {
     }
 }
 
+/// A data initializer for linear memory.
+pub struct DataInitializer<'data> {
+    /// The index of the memory to initialize.
+    pub memory_index: MemoryIndex,
+    /// Optionally a globalvar base to initialize at.
+    pub base: Option<GlobalIndex>,
+    /// A constant offset to initialize at.
+    pub offset: usize,
+    /// The initialization data.
+    pub data: &'data [u8],
+}
+
 /// References to the input wasm data buffer to be decoded and processed later.
 /// separately from the main module translation.
 pub struct LazyContents<'data> {
@@ -107,7 +125,7 @@ pub struct LazyContents<'data> {
     pub function_body_inputs: Vec<&'data [u8]>,
 
     /// References to the data initializers.
-    pub data_initializers: Vec<(MemoryIndex, Option<GlobalIndex>, usize, &'data [u8])>,
+    pub data_initializers: Vec<DataInitializer<'data>>,
 }
 
 impl<'data> LazyContents<'data> {
@@ -259,12 +277,13 @@ impl<'module_environment> cton_wasm::FuncEnvironment for FuncEnvironment<'module
             base: memories_base,
             offset: Offset32::new(offset32),
         });
-        func.create_heap(ir::HeapData {
+        let h = func.create_heap(ir::HeapData {
             base: ir::HeapBase::GlobalVar(heap_base),
             min_size: 0.into(),
             guard_size: 0x8000_0000.into(),
             style: ir::HeapStyle::Static { bound: 0x1_0000_0000.into() },
-        })
+        });
+        h
     }
 
     fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {
@@ -320,8 +339,9 @@ impl<'module_environment> cton_wasm::FuncEnvironment for FuncEnvironment<'module
                 params: vec![AbiParam::new(I32)],
                 returns: vec![AbiParam::new(I32)],
             });
+            // FIXME: Use a real ExternalName system.
             pos.func.import_function(ExtFuncData {
-                name: ExternalName::new("grow_memory"),
+                name: ExternalName::testcase("grow_memory"),
                 signature: sig_ref,
             })
         });
@@ -344,8 +364,9 @@ impl<'module_environment> cton_wasm::FuncEnvironment for FuncEnvironment<'module
                 params: Vec::new(),
                 returns: vec![AbiParam::new(I32)],
             });
+            // FIXME: Use a real ExternalName system.
             pos.func.import_function(ExtFuncData {
-                name: ExternalName::new("current_memory"),
+                name: ExternalName::testcase("current_memory"),
                 signature: sig_ref,
             })
         });
@@ -446,12 +467,12 @@ impl<'data, 'module> cton_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'
         data: &'data [u8],
     ) {
         debug_assert!(base.is_none(), "global-value offsets not supported yet");
-        self.lazy.data_initializers.push((
+        self.lazy.data_initializers.push(DataInitializer {
             memory_index,
             base,
             offset,
             data,
-        ));
+        });
     }
 
     fn declare_func_export(&mut self, func_index: FunctionIndex, name: &str) {
@@ -493,8 +514,21 @@ impl<'data, 'module> cton_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'
     }
 }
 
+/// A record of a relocation to perform.
+#[derive(Debug)]
+pub struct Relocation {
+    /// The relocation code.
+    pub reloc: binemit::Reloc,
+    /// The function index.
+    pub func_index: FunctionIndex,
+    /// The offset where to apply the relocation.
+    pub offset: binemit::CodeOffset,
+    /// The addend to add to the relocation value.
+    pub addend: binemit::Addend,
+}
+
 /// Relocations to apply to function bodies.
-pub type Relocations = Vec<Vec<(RelocRef, FunctionIndex, binemit::CodeOffset)>>;
+pub type Relocations = Vec<Vec<Relocation>>;
 
 /// The result of translating via `ModuleEnvironment`.
 pub struct ModuleTranslation<'data, 'module> {

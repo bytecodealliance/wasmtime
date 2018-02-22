@@ -95,12 +95,14 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     let mut environ = wasmstandalone_runtime::ModuleEnvironment::new(isa.flags(), &mut module);
     translate_module(&data, &mut environ)?;
 
-    let mut obj = Artifact::new(faerie_target(&*isa)?, Some(String::from(output)));
+    let mut obj = Artifact::new(faerie_target(&*isa)?, String::from(output));
 
     // FIXME: We need to initialize memory in a way that supports alternate
     // memory spaces, imported base addresses, and offsets.
-    for &(_mem_index, _base, _offset, data) in &environ.lazy.data_initializers {
-        obj.add_data("memory", Vec::from(data));
+    for init in &environ.lazy.data_initializers {
+        obj.define("memory", Vec::from(init.data)).map_err(|err| {
+            format!("{}", err)
+        })?;
     }
 
     let translation = environ.finish_translation();

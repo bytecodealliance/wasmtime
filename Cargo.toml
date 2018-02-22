@@ -25,9 +25,9 @@ cretonne-native = { git = "https://github.com/stoklund/cretonne.git" }
 wasmstandalone_runtime = { path = "lib/runtime" }
 wasmstandalone_execute = { path = "lib/execute" }
 wasmstandalone_obj = { path = "lib/obj" }
-docopt = "0.8.0"
-serde = "1.0.8"
-serde_derive = "1.0.8"
+docopt = "0.8.3"
+serde = "1.0.27"
+serde_derive = "1.0.27"
 tempdir = "*"
 faerie = { git = "https://github.com/m4b/faerie" }
 

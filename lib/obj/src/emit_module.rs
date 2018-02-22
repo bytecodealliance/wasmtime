@@ -1,9 +1,8 @@
+use cretonne::ir;
 use cretonne::settings;
 use cretonne::settings::Configurable;
 use faerie::Artifact;
 use wasmstandalone_runtime;
-use std::error::Error;
-use std::str;
 
 /// Emits a module that has been emitted with the `WasmRuntime` runtime
 /// implementation to a native object file.
@@ -28,11 +27,19 @@ pub fn emit_module<'module>(
         let body = &compilation.functions[i];
         let external_name =
             wasmstandalone_runtime::get_func_name(compilation.module.imported_funcs.len() + i);
-        let string_name = str::from_utf8(external_name.as_ref()).map_err(|err| {
-            err.description().to_string()
-        })?;
+        let func_index = match external_name {
+            ir::ExternalName::User { namespace, index } => {
+                debug_assert!(namespace == 0);
+                index
+            }
+            _ => panic!(),
+        };
 
-        obj.add_code(string_name, body.clone());
+        let string_name = format!("wasm_function[{}]", func_index);
+
+        obj.define(string_name, body.clone()).map_err(|err| {
+            format!("{}", err)
+        })?;
     }
 
     Ok(())

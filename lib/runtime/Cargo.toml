@@ -10,4 +10,4 @@ license = "Apache-2.0"
 [dependencies]
 cretonne = { git = "https://github.com/stoklund/cretonne.git" }
 cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
-wasmparser = "0.13.0"
+wasmparser = "0.14.1"
