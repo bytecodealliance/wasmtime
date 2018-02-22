@@ -1,7 +1,7 @@
 //! Cretonne IL builder library.
 //!
 //! Provides a straightforward way to create a Cretonne IL function and fill it with instructions
-//! translated from another language. Contains a SSA construction module that lets you translate
+//! translated from another language. Contains an SSA construction module that lets you translate
 //! your non-SSA variables into SSA Cretonne IL values via `use_var` and `def_var` calls.
 //!
 //! To get started, create an [`IlBuilder`](struct.ILBuilder.html) and pass it as an argument
