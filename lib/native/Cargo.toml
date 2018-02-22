@@ -3,9 +3,10 @@ name = "cretonne-native"
 version = "0.0.0"
 authors = ["The Cretonne Project Developers"]
 publish = false
-description = "Support for targetting the host with Cretonne"
+description = "Support for targeting the host with Cretonne"
 repository = "https://github.com/stoklund/cretonne"
 license = "Apache-2.0"
+readme = "README.md"
 
 [lib]
 name = "cton_native"

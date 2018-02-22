@@ -6,6 +6,7 @@ publish = false
 description = "Translator from WebAssembly to Cretonne IL"
 repository = "https://github.com/stoklund/cretonne"
 license = "Apache-2.0"
+readme = "README.md"
 
 [lib]
 name = "cton_wasm"
