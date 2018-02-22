@@ -2,6 +2,7 @@
 *.bk
 *.swp
 *.swo
+*.swx
 tags
 target
 Cargo.lock
