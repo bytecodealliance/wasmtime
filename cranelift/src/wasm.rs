@@ -39,6 +39,7 @@ pub fn run(
     flag_print: bool,
     flag_set: Vec<String>,
     flag_isa: String,
+    flag_print_size: bool,
 ) -> Result<(), String> {
     let parsed = parse_sets_and_isa(flag_set, flag_isa)?;
 
@@ -50,6 +51,7 @@ pub fn run(
             flag_just_decode,
             flag_check_translation,
             flag_print,
+            flag_print_size,
             path.to_path_buf(),
             name,
             parsed.as_fisa(),
@@ -63,6 +65,7 @@ fn handle_module(
     flag_just_decode: bool,
     flag_check_translation: bool,
     flag_print: bool,
+    flag_print_size: bool,
     path: PathBuf,
     name: String,
     fisa: FlagsOrIsa,
@@ -75,6 +78,7 @@ fn handle_module(
     terminal.fg(term::color::MAGENTA).unwrap();
     vprint!(flag_verbose, "Translating... ");
     terminal.reset().unwrap();
+
     let mut data = read_to_end(path.clone()).map_err(|err| {
         String::from(err.description())
     })?;
@@ -96,11 +100,14 @@ fn handle_module(
             |err| String::from(err.description()),
         )?;
     }
+
     let mut dummy_environ = DummyEnvironment::with_flags(fisa.flags.clone());
     translate_module(&data, &mut dummy_environ)?;
+
     terminal.fg(term::color::GREEN).unwrap();
     vprintln!(flag_verbose, "ok");
     terminal.reset().unwrap();
+
     if flag_just_decode {
         if flag_print {
             let num_func_imports = dummy_environ.get_num_func_imports();
@@ -124,6 +131,7 @@ fn handle_module(
         }
         return Ok(());
     }
+
     terminal.fg(term::color::MAGENTA).unwrap();
     if flag_check_translation {
         vprint!(flag_verbose, "Checking... ");
@@ -131,7 +139,13 @@ fn handle_module(
         vprint!(flag_verbose, "Compiling... ");
     }
     terminal.reset().unwrap();
+
+    if flag_print_size {
+        vprintln!(flag_verbose, "");
+    }
+
     let num_func_imports = dummy_environ.get_num_func_imports();
+    let mut total_module_code_size = 0;
     for (def_index, func) in dummy_environ.info.function_bodies.iter().enumerate() {
         let func_index = num_func_imports + def_index;
         let mut context = Context::new();
@@ -142,9 +156,22 @@ fn handle_module(
             })?;
         } else {
             if let Some(isa) = fisa.isa {
-                context.compile(isa).map_err(|err| {
+                let compiled_size = context.compile(isa).map_err(|err| {
                     pretty_error(&context.func, fisa.isa, err)
                 })?;
+                if flag_print_size {
+                    println!(
+                        "Function #{} code size: {} bytes",
+                        func_index,
+                        compiled_size
+                    );
+                    total_module_code_size += compiled_size;
+                    println!(
+                        "Function #{} bytecode size: {} bytes",
+                        func_index,
+                        dummy_environ.func_bytecode_sizes[func_index]
+                    );
+                }
             } else {
                 return Err(String::from("compilation requires a target isa"));
             }
@@ -163,6 +190,16 @@ fn handle_module(
             vprintln!(flag_verbose, "");
         }
     }
+
+    if !flag_check_translation && flag_print_size {
+        println!("Total module code size: {} bytes", total_module_code_size);
+        let total_bytecode_size = dummy_environ.func_bytecode_sizes.iter().fold(
+            0,
+            |sum, x| sum + x,
+        );
+        println!("Total module bytecode size: {} bytes", total_bytecode_size);
+    }
+
     terminal.fg(term::color::GREEN).unwrap();
     vprintln!(flag_verbose, "ok");
     terminal.reset().unwrap();

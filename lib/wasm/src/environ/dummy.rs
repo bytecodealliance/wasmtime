@@ -92,6 +92,9 @@ pub struct DummyEnvironment {
 
     /// Function translation.
     trans: FuncTranslator,
+
+    /// Vector of wasm bytecode size for each function.
+    pub func_bytecode_sizes: Vec<usize>,
 }
 
 impl DummyEnvironment {
@@ -105,6 +108,7 @@ impl DummyEnvironment {
         Self {
             info: DummyModuleInfo::with_flags(flags),
             trans: FuncTranslator::new(),
+            func_bytecode_sizes: Vec::new(),
         }
     }
 
@@ -384,6 +388,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
                 .map_err(|e| String::from(e.description()))?;
             func
         };
+        self.func_bytecode_sizes.push(body_bytes.len());
         self.info.function_bodies.push(func);
         Ok(())
     }

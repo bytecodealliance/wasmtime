@@ -32,7 +32,7 @@ Usage:
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
     cton-util compile [-vpT] [--set <set>]... [--isa <isa>] <file>...
-    cton-util wasm [-ctvpT] [--set <set>]... [--isa <isa>] <file>...
+    cton-util wasm [-ctvpTs] [--set <set>]... [--isa <isa>] <file>...
     cton-util --help | --version
 
 Options:
@@ -41,6 +41,8 @@ Options:
                     print pass timing report
     -t, --just-decode
                     just decode WebAssembly to Cretonne IL
+    -s, --print-size
+                    prints generated code size
     -c, --check-translation
                     just checks the correctness of Cretonne IL translated from WebAssembly
     -p, --print     print the resulting Cretonne IL
@@ -67,6 +69,7 @@ struct Args {
     flag_set: Vec<String>,
     flag_isa: String,
     flag_time_passes: bool,
+    flag_print_size: bool,
 }
 
 /// A command either succeeds or fails with an error message.
@@ -103,6 +106,7 @@ fn cton_util() -> CommandResult {
             args.flag_print,
             args.flag_set,
             args.flag_isa,
+            args.flag_print_size,
         )
     } else {
         // Debugging / shouldn't happen with proper command line handling above.
