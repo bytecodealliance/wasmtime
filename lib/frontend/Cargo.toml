@@ -5,7 +5,7 @@ version = "0.1.0"
 description = "Cretonne IL builder helper"
 license = "Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/"
-repository = "https://github.com/stoklund/cretonne"
+repository = "https://github.com/Cretonne/cretonne"
 readme = "README.md"
 
 [lib]

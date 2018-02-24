@@ -12,8 +12,8 @@ machine code.
     :target: https://cretonne.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
 
-.. image:: https://travis-ci.org/stoklund/cretonne.svg?branch=master
-    :target: https://travis-ci.org/stoklund/cretonne
+.. image:: https://travis-ci.org/Cretonne/cretonne.svg?branch=master
+    :target: https://travis-ci.org/Cretonne/cretonne
     :alt: Build Status
 
 For more information, see `the documentation

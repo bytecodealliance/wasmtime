@@ -5,7 +5,7 @@ version = "0.1.0"
 description = "Low-level code generator library"
 license = "Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/"
-repository = "https://github.com/stoklund/cretonne"
+repository = "https://github.com/Cretonne/cretonne"
 readme = "README.md"
 build = "build.rs"
 
