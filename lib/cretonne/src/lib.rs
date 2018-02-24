@@ -1,6 +1,8 @@
 //! Cretonne code generation library.
 
-#![deny(missing_docs)]
+#![deny(missing_docs,
+        trivial_numeric_casts,
+        unused_extern_crates)]
 
 pub use context::Context;
 pub use legalizer::legalize_function;

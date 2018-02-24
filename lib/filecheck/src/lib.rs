@@ -236,7 +236,9 @@
 //! This will match `"one, two"` , but not `"one,two"`. Without the `$()`, trailing whitespace
 //! would be trimmed from the pattern.
 
-#![deny(missing_docs)]
+#![deny(missing_docs,
+        trivial_numeric_casts,
+        unused_extern_crates)]
 
 pub use error::{Error, Result};
 pub use variable::{VariableMap, Value, NO_VARIABLES};

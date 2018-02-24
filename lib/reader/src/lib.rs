@@ -3,7 +3,9 @@
 //! The cton_reader library supports reading .cton files. This functionality is needed for testing
 //! Cretonne, but is not essential for a JIT compiler.
 
-#![deny(missing_docs)]
+#![deny(missing_docs,
+        trivial_numeric_casts,
+        unused_extern_crates)]
 
 extern crate cretonne;
 
