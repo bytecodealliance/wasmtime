@@ -1,7 +1,9 @@
 //! Performs autodetection of the host for the purposes of running
 //! Cretonne to generate code to run on the same machine.
 
-#![deny(missing_docs)]
+#![deny(missing_docs,
+        trivial_numeric_casts,
+        unused_extern_crates)]
 
 extern crate cretonne;
 
