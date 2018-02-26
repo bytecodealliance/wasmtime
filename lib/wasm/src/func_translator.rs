@@ -206,9 +206,11 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     //
     // If the exit block is unreachable, it may not have the correct arguments, so we would
     // generate a return instruction that doesn't match the signature.
-    debug_assert!(builder.is_pristine());
-    if !builder.is_unreachable() {
-        builder.ins().return_(&state.stack);
+    if state.reachable {
+        debug_assert!(builder.is_pristine());
+        if !builder.is_unreachable() {
+            builder.ins().return_(&state.stack);
+        }
     }
 
     // Discard any remaining values on the stack. Either we just returned them,
