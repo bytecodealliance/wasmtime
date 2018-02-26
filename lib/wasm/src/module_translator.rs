@@ -124,6 +124,10 @@ pub fn translate_module<'data>(
                     }
                 }
             }
+            ParserState::BeginSection { code: SectionCode::Custom { .. }, .. } => {
+                // Ignore unknown custom sections.
+                next_input = ParserInput::SkipSection;
+            }
             _ => return Err(String::from("wrong content in the preamble")),
         };
     }
