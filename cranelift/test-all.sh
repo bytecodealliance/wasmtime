@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # This is the top-level test script:
 #
@@ -9,9 +10,6 @@
 # - Run file-level tests with the release build of cton-util.
 #
 # All tests run by this script should be passing at all times.
-
-# Exit immediately on errors.
-set -e
 
 # Repository top-level directory.
 cd $(dirname "$0")
