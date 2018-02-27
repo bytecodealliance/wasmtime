@@ -66,10 +66,14 @@ default, and enable the `no_std` feature.
 
 For example, to build `cretonne`:
 
+.. code-block:: sh
+
     cd lib/cretonne
     cargo build --no-default-features --features no_std
 
 Or, when using `cretonne` as a dependency (in Cargo.toml):
+
+.. code-block::
 
     [dependency.cretonne]
     ...
