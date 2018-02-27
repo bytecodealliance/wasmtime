@@ -5,7 +5,7 @@ topdir="$(pwd)"
 
 # All the cretonne-* crates have the same version number
 # The filecheck crate version is managed independently.
-version="0.1.0"
+version="0.2.0"
 
 # Update all of the Cargo.toml files.
 #
@@ -29,7 +29,7 @@ cargo update
 #
 # Note that libraries need to be published in topological order.
 
-echo git commit -a -m "Bump version to $version"
+echo git commit -a -m "\"Bump version to $version"\"
 for crate in filecheck cretonne frontend native reader wasm; do
     echo cargo publish --manifest-path "lib/$crate/Cargo.toml"
 done
