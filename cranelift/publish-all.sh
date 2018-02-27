@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd $(dirname "$0")
-topdir=$(pwd)
+topdir="$(pwd)"
 
 # All the cretonne-* crates have the same version number
 # The filecheck crate version is managed independently.
@@ -16,9 +16,9 @@ for crate in . lib/*; do
         continue
     fi
     # Update the version number of this crate to $version.
-    sed -i "" -e "s/^version = .*/version = \"$version\"/" $crate/Cargo.toml
+    sed -i "" -e "s/^version = .*/version = \"$version\"/" "$crate/Cargo.toml"
     # Update the required version number of any cretonne* dependencies.
-    sed -i "" -e "/^cretonne/s/version = \"[^\"]*\"/version = \"$version\"/" $crate/Cargo.toml
+    sed -i "" -e "/^cretonne/s/version = \"[^\"]*\"/version = \"$version\"/" "$crate/Cargo.toml"
 done
 
 # Update our local Cargo.lock (not checked in).
@@ -30,5 +30,5 @@ cargo update
 # Note that libraries need to be published in topological order.
 
 for crate in filecheck cretonne frontend native reader wasm; do
-    echo cargo publish --manifest-path lib/$crate/Cargo.toml
+    echo cargo publish --manifest-path "lib/$crate/Cargo.toml"
 done
