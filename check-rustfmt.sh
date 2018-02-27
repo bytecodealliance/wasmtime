@@ -1,5 +1,6 @@
 #!/bin/bash
-#
+set -euo pipefail
+
 # Usage: check-rustfmt.sh [--install]
 #
 # Check that the desired version of rustfmt is installed.

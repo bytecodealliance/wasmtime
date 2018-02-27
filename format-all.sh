@@ -1,9 +1,7 @@
 #!/bin/bash
+set -euo pipefail
 
 # Format all sources using rustfmt.
-
-# Exit immediately on errors.
-set -e
 
 cd $(dirname "$0")
 
