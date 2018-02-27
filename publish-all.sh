@@ -16,9 +16,9 @@ for crate in . lib/*; do
         continue
     fi
     # Update the version number of this crate to $version.
-    sed -i "" -e "s/^version = .*/version = \"$version\"/" "$crate/Cargo.toml"
+    sed -i.bk -e "s/^version = .*/version = \"$version\"/" "$crate/Cargo.toml"
     # Update the required version number of any cretonne* dependencies.
-    sed -i "" -e "/^cretonne/s/version = \"[^\"]*\"/version = \"$version\"/" "$crate/Cargo.toml"
+    sed -i.bk -e "/^cretonne/s/version = \"[^\"]*\"/version = \"$version\"/" "$crate/Cargo.toml"
 done
 
 # Update our local Cargo.lock (not checked in).
