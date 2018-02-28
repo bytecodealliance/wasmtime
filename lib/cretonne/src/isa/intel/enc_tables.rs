@@ -1,5 +1,6 @@
 //! Encoding tables for Intel ISAs.
 
+use bitset::BitSet;
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
 use ir::{self, InstBuilder};

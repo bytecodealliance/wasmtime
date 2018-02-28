@@ -833,6 +833,26 @@ imul = Instruction(
         """,
         ins=(x, y), outs=a)
 
+umulhi = Instruction(
+        'umulhi', r"""
+        Unsigned integer multiplication, producing the high half of a
+        double-length result.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(x, y), outs=a)
+
+smulhi = Instruction(
+        'smulhi', """
+        Signed integer multiplication, producing the high half of a
+        double-length result.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(x, y), outs=a)
+
 udiv = Instruction(
         'udiv', r"""
         Unsigned integer division: :math:`a := \lfloor {x \over y} \rfloor`.
