@@ -20,6 +20,7 @@ ebb0:
     [-,%rsi]            v1 = iconst.i32 2
     [-,%rax]            v2 = iconst.i64 11
     [-,%r14]            v3 = iconst.i64 12
+    [-,%r13]            v4 = iconst.i64 13
 
     ; asm: cvtsi2ssl %r11d, %xmm5
     [-,%xmm5]           v10 = fcvt_from_sint.f32 v0             ; bin: f3 41 0f 2a eb
@@ -173,6 +174,10 @@ ebb0:
     [-]                 store.f32 v100, v3                      ; bin: 66 41 0f 7e 2e
     ; asm: movd %xmm10, (%rax)
     [-]                 store.f32 v101, v2                      ; bin: 66 44 0f 7e 10
+    ; asm: movd %xmm5, (%r13)
+    [-]                 store.f32 v100, v4                      ; bin: 66 41 0f 7e 6d 00
+    ; asm: movd %xmm10, (%r13)
+    [-]                 store.f32 v101, v4                      ; bin: 66 45 0f 7e 55 00
     ; asm: movd %xmm5, 50(%r14)
     [-]                 store.f32 v100, v3+50                   ; bin: 66 41 0f 7e 6e 32
     ; asm: movd %xmm10, -50(%rax)
@@ -250,6 +255,7 @@ ebb0:
     [-,%rsi]            v1 = iconst.i32 2
     [-,%rax]            v2 = iconst.i64 11
     [-,%r14]            v3 = iconst.i64 12
+    [-,%r13]            v4 = iconst.i64 13
 
     ; asm: cvtsi2sdl %r11d, %xmm5
     [-,%xmm5]           v10 = fcvt_from_sint.f64 v0             ; bin: f2 41 0f 2a eb
@@ -403,6 +409,10 @@ ebb0:
     [-]                 store.f64 v100, v3                      ; bin: 66 41 0f d6 2e
     ; asm: movq %xmm10, (%rax)
     [-]                 store.f64 v101, v2                      ; bin: 66 44 0f d6 10
+    ; asm: movq %xmm5, (%r13)
+    [-]                 store.f64 v100, v4                      ; bin: 66 41 0f d6 6d 00
+    ; asm: movq %xmm10, (%r13)
+    [-]                 store.f64 v101, v4                      ; bin: 66 45 0f d6 55 00
     ; asm: movq %xmm5, 50(%r14)
     [-]                 store.f64 v100, v3+50                   ; bin: 66 41 0f d6 6e 32
     ; asm: movq %xmm10, -50(%rax)
