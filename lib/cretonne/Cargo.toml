@@ -7,6 +7,7 @@ license = "Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/"
 repository = "https://github.com/Cretonne/cretonne"
 readme = "README.md"
+keywords = [ "compile", "compiler", "jit" ]
 build = "build.rs"
 
 [lib]
