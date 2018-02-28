@@ -46,7 +46,7 @@ fn main() {
     let cur_dir = env::current_dir().expect("Can't access current working directory");
     let crate_dir = cur_dir.as_path();
 
-    // Make sure we rebuild is this build script changes.
+    // Make sure we rebuild if this build script changes.
     // I guess that won't happen if you have non-UTF8 bytes in your path names.
     // The `build.py` script prints out its own dependencies.
     println!(
