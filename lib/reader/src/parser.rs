@@ -1044,7 +1044,7 @@ impl<'a> Parser<'a> {
     // Parse a stack slot decl.
     //
     // stack-slot-decl ::= * StackSlot(ss) "=" stack-slot-kind Bytes {"," stack-slot-flag}
-    // stack-slot-kind ::= "local"
+    // stack-slot-kind ::= "explicit_slot"
     //                   | "spill_slot"
     //                   | "incoming_arg"
     //                   | "outgoing_arg"
