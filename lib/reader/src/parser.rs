@@ -82,9 +82,6 @@ pub struct Parser<'a> {
 }
 
 // Context for resolving references when parsing a single function.
-//
-// Many entities like values, stack slots, and function signatures are referenced in the `.cton`
-// file by number. We need to map these numbers to real references.
 struct Context<'a> {
     function: Function,
     map: SourceMap,
@@ -119,7 +116,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Allocate a new stack slot and add a mapping number -> StackSlot.
+    // Allocate a new stack slot.
     fn add_ss(&mut self, ss: StackSlot, data: StackSlotData, loc: &Location) -> Result<()> {
         while self.function.stack_slots.next_key().index() <= ss.index() {
             self.function.create_stack_slot(
@@ -139,7 +136,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Allocate a global variable slot and add a mapping number -> GlobalVar.
+    // Allocate a global variable slot.
     fn add_gv(&mut self, gv: GlobalVar, data: GlobalVarData, loc: &Location) -> Result<()> {
         while self.function.global_vars.next_key().index() <= gv.index() {
             self.function.create_global_var(GlobalVarData::Sym {
@@ -159,7 +156,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Allocate a heap slot and add a mapping number -> Heap.
+    // Allocate a heap slot.
     fn add_heap(&mut self, heap: Heap, data: HeapData, loc: &Location) -> Result<()> {
         while self.function.heaps.next_key().index() <= heap.index() {
             self.function.create_heap(HeapData {
@@ -182,7 +179,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Allocate a new signature and add a mapping number -> SigRef.
+    // Allocate a new signature.
     fn add_sig(&mut self, sig: SigRef, data: Signature, loc: &Location) -> Result<()> {
         while self.function.dfg.signatures.next_key().index() <= sig.index() {
             self.function.import_signature(
@@ -202,7 +199,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Allocate a new external function and add a mapping number -> FuncRef.
+    // Allocate a new external function.
     fn add_fn(&mut self, fn_: FuncRef, data: ExtFuncData, loc: &Location) -> Result<()> {
         while self.function.dfg.ext_funcs.next_key().index() <= fn_.index() {
             self.function.import_function(ExtFuncData {
@@ -223,7 +220,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Allocate a new jump table and add a mapping number -> JumpTable.
+    // Allocate a new jump table.
     fn add_jt(&mut self, jt: JumpTable, data: JumpTableData, loc: &Location) -> Result<()> {
         while self.function.jump_tables.next_key().index() <= jt.index() {
             self.function.create_jump_table(JumpTableData::new());
@@ -241,7 +238,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Allocate a new EBB and add a mapping src_ebb -> Ebb.
+    // Allocate a new EBB.
     fn add_ebb(&mut self, ebb: Ebb, loc: &Location) -> Result<Ebb> {
         while self.function.dfg.num_ebbs() <= ebb.index() {
             self.function.dfg.make_ebb();
@@ -446,7 +443,6 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a value reference, direct or vtable.
-    // This does not convert from the source value numbering to our in-memory value numbering.
     fn match_value(&mut self, err_msg: &str) -> Result<Value> {
         if let Some(Token::Value(v)) = self.token() {
             self.consume();
@@ -1427,7 +1423,7 @@ impl<'a> Parser<'a> {
     }
 
     // Parse parenthesized list of EBB parameters. Returns a vector of (u32, Type) pairs with the
-    // source value numbers of the defined values and the defined types.
+    // value numbers of the defined values and the defined types.
     //
     // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
     fn parse_ebb_params(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
@@ -1476,7 +1472,7 @@ impl<'a> Parser<'a> {
         }
 
         let t = self.match_type("expected EBB argument type")?;
-        // Allocate the EBB argument and add the mapping.
+        // Allocate the EBB argument.
         ctx.function.dfg.append_ebb_param_for_parser(ebb, t, v);
         ctx.map.def_value(v, &v_location)?;
 
@@ -1936,7 +1932,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::NullAry => InstructionData::NullAry { opcode },
             InstructionFormat::Jump => {
-                // Parse the destination EBB number. Don't translate source to local numbers yet.
+                // Parse the destination EBB number.
                 let ebb_num = self.match_ebb("expected jump destination EBB")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::Jump {
