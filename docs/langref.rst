@@ -37,7 +37,7 @@ The first line of a function definition provides the function *name* and
 the :term:`function signature` which declares the parameter and return types.
 Then follows the :term:`function preamble` which declares a number of entities
 that can be referenced inside the function. In the example above, the preamble
-declares a single local variable, ``ss1``.
+declares a single explicit stack slot, ``ss1``.
 
 After the preamble follows the :term:`function body` which consists of
 :term:`extended basic block`\s (EBBs), the first of which is the
@@ -471,8 +471,8 @@ the expected alignment. By default, misaligned loads and stores are allowed,
 but when the ``aligned`` flag is set, a misaligned memory access is allowed to
 :term:`trap`.
 
-Local variables
----------------
+Explicit Stack Slots
+--------------------
 
 One set of restricted memory operations access the current function's stack
 frame. The stack frame is divided into fixed-size stack slots that are
@@ -480,9 +480,9 @@ allocated in the :term:`function preamble`. Stack slots are not typed, they
 simply represent a contiguous sequence of :term:`accessible` bytes in the stack
 frame.
 
-.. inst:: SS = local Bytes, Flags...
+.. inst:: SS = explicit_slot Bytes, Flags...
 
-    Allocate a stack slot for a local variable in the preamble.
+    Allocate a stack slot in the preamble.
 
     If no alignment is specified, Cretonne will pick an appropriate alignment
     for the stack slot based on its size and access patterns.
@@ -1135,7 +1135,7 @@ Glossary
         A list of declarations of entities that are used by the function body.
         Some of the entities that can be declared in the preamble are:
 
-        - Local variables.
+        - Stack slots.
         - Functions that are called directly.
         - Function signatures for indirect function calls.
         - Function flags and attributes that are not part of the signature.
@@ -1158,9 +1158,16 @@ Glossary
         intermediate representation. Cretonne's IR can be converted to text
         losslessly.
 
-    stack slot
+    explicit stack slot
         A fixed size memory allocation in the current function's activation
-        frame. Also called a local variable.
+        frame. These differ from :term:`spill stack slots` in that they can
+        be created by frontends and they may have their addresses taken.
+
+    spill stack slot
+        A fixed size memory allocation in the current function's activation
+        frame. These differ from :term:`explicit stack slots` in that they are
+        only created during register allocation, and they may not have their
+        address taken.
 
     terminator instruction
         A control flow instruction that unconditionally directs the flow of

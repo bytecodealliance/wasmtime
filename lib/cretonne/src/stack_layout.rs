@@ -7,8 +7,8 @@ use std::cmp::{min, max};
 
 /// Compute the stack frame layout.
 ///
-/// Determine the total size of this stack frame and assign offsets to all `Spill` and `Local`
-/// stack slots.
+/// Determine the total size of this stack frame and assign offsets to all `Spill` and
+/// `Explicit` stack slots.
 ///
 /// The total frame size will be a multiple of `alignment` which must be a power of two.
 ///
@@ -25,7 +25,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
     // stack layout from high to low addresses will be:
     //
     // 1. incoming arguments.
-    // 2. spills + locals.
+    // 2. spills + explicits.
     // 3. outgoing arguments.
     //
     // The incoming arguments can have both positive and negative offsets. A negative offset
@@ -57,15 +57,15 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
                 outgoing_max = max(outgoing_max, offset);
             }
             StackSlotKind::SpillSlot |
-            StackSlotKind::Local |
+            StackSlotKind::ExplicitSlot |
             StackSlotKind::EmergencySlot => {
-                // Determine the smallest alignment of any local or spill slot.
+                // Determine the smallest alignment of any explicit or spill slot.
                 min_align = slot.alignment(min_align);
             }
         }
     }
 
-    // Lay out spill slots and locals below the incoming arguments.
+    // Lay out spill slots and explicit slots below the incoming arguments.
     // The offset is negative, growing downwards.
     // Start with the smallest alignments for better packing.
     let mut offset = incoming_min;
@@ -74,9 +74,10 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
         for ss in frame.keys() {
             let slot = frame[ss].clone();
 
-            // Pick out locals and spill slots with exact alignment `min_align`.
+            // Pick out explicit and spill slots with exact alignment `min_align`.
             match slot.kind {
-                StackSlotKind::SpillSlot | StackSlotKind::Local => {
+                StackSlotKind::SpillSlot |
+                StackSlotKind::ExplicitSlot => {
                     if slot.alignment(alignment) != min_align {
                         continue;
                     }

@@ -40,9 +40,9 @@ pub enum StackSlotKind {
     /// A spill slot. This is a stack slot created by the register allocator.
     SpillSlot,
 
-    /// A local variable. This is a chunk of local stack memory for use by the `stack_load` and
-    /// `stack_store` instructions.
-    Local,
+    /// An explicit stack slot. This is a chunk of stack memory for use by the `stack_load`
+    /// and `stack_store` instructions.
+    ExplicitSlot,
 
     /// An incoming function argument.
     ///
@@ -71,7 +71,7 @@ impl FromStr for StackSlotKind {
     fn from_str(s: &str) -> Result<StackSlotKind, ()> {
         use self::StackSlotKind::*;
         match s {
-            "local" => Ok(Local),
+            "explicit_slot" => Ok(ExplicitSlot),
             "spill_slot" => Ok(SpillSlot),
             "incoming_arg" => Ok(IncomingArg),
             "outgoing_arg" => Ok(OutgoingArg),
@@ -85,7 +85,7 @@ impl fmt::Display for StackSlotKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::StackSlotKind::*;
         f.write_str(match *self {
-            Local => "local",
+            ExplicitSlot => "explicit_slot",
             SpillSlot => "spill_slot",
             IncomingArg => "incoming_arg",
             OutgoingArg => "outgoing_arg",
@@ -366,7 +366,7 @@ mod tests {
         assert_eq!(slot.alignment(8), 8);
         assert_eq!(slot.alignment(16), 8);
 
-        let slot2 = StackSlotData::new(StackSlotKind::Local, 24);
+        let slot2 = StackSlotData::new(StackSlotKind::ExplicitSlot, 24);
 
         assert_eq!(slot2.alignment(4), 4);
         assert_eq!(slot2.alignment(8), 8);
