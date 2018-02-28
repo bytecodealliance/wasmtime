@@ -5,7 +5,7 @@ topdir="$(pwd)"
 
 # All the cretonne-* crates have the same version number
 # The filecheck crate version is managed independently.
-version="0.2.0"
+version="0.3.0"
 
 # Update all of the Cargo.toml files.
 #
