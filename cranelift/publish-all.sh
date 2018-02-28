@@ -30,6 +30,9 @@ cargo update
 # Note that libraries need to be published in topological order.
 
 echo git commit -a -m "\"Bump version to $version"\"
+echo git push
 for crate in filecheck cretonne frontend native reader wasm; do
     echo cargo publish --manifest-path "lib/$crate/Cargo.toml"
 done
+echo
+echo Then, go to https://github.com/Cretonne/cretonne/releases/ and define a new release.
