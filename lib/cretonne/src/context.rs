@@ -23,6 +23,7 @@ use unreachable_code::eliminate_unreachable_code;
 use verifier;
 use simple_gvn::do_simple_gvn;
 use licm::do_licm;
+use preopt::do_preopt;
 use timing;
 
 /// Persistent data structures and compilation pipeline.
@@ -87,6 +88,7 @@ impl Context {
         self.verify_if(isa)?;
 
         self.compute_cfg();
+        self.preopt(isa)?;
         self.legalize(isa)?;
         /* TODO: Enable additional optimization passes.
         if isa.flags().opt_level() == OptLevel::Best {
@@ -129,6 +131,13 @@ impl Context {
         } else {
             Ok(())
         }
+    }
+
+    /// Perform pre-legalization rewrites on the function.
+    pub fn preopt(&mut self, isa: &TargetIsa) -> CtonResult {
+        do_preopt(&mut self.func);
+        self.verify_if(isa)?;
+        Ok(())
     }
 
     /// Run the legalizer for `isa` on the function.

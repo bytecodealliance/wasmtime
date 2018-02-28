@@ -47,6 +47,28 @@ sdivmodx = Instruction(
         """,
         ins=(nlo, nhi, d), outs=(q, r), can_trap=True)
 
+argL = Operand('argL', iWord)
+argR = Operand('argR', iWord)
+resLo = Operand('resLo', iWord)
+resHi = Operand('resHi', iWord)
+
+umulx = Instruction(
+        'x86_umulx', r"""
+        Unsigned integer multiplication, producing a double-length result.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(argL, argR), outs=(resLo, resHi))
+
+smulx = Instruction(
+        'x86_smulx', r"""
+        Signed integer multiplication, producing a double-length result.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(argL, argR), outs=(resLo, resHi))
 
 Float = TypeVar(
         'Float', 'A scalar or vector floating point number',

@@ -336,6 +336,28 @@ ebb0:
     ; asm: divq %r10
     [-,%rax,%rdx] v202, v203 = x86_udivmodx v190, v191, v3  ; bin: 49 f7 f2
 
+    ; double-length multiply instructions, 64 bit
+    [-,%rax]       v1001 = iconst.i64 1
+    [-,%r15]       v1002 = iconst.i64 2
+    ; asm: mulq %r15
+    [-,%rax,%rdx]  v1003, v1004 = x86_umulx v1001, v1002 ; bin: 49 f7 e7
+    ; asm: imulq %r15
+    [-,%rax,%rdx]  v1005, v1006 = x86_smulx v1001, v1002 ; bin: 49 f7 ef
+
+    ; double-length multiply instructions, 32 bit
+    [-,%rax]       v1011 = iconst.i32 1
+    [-,%r15]       v1012 = iconst.i32 2
+    [-,%rcx]       v1017 = iconst.i32 3
+    ; asm: mull %r15d
+    [-,%rax,%rdx]  v1013, v1014 = x86_umulx v1011, v1012    ; bin: 41 f7 e7
+    ; asm: imull %r15d
+    [-,%rax,%rdx]  v1015, v1016 = x86_smulx v1011, v1012    ; bin: 41 f7 ef
+
+    ; asm: mull %ecx
+    [-,%rax,%rdx]  v1018, v1019 = x86_umulx v1011, v1017    ; bin: f7 e1
+    ; asm: imull %ecx
+    [-,%rax,%rdx]  v1020, v1021 = x86_smulx v1011, v1017    ; bin: f7 e9
+
     ; Bit-counting instructions.
 
     ; asm: popcntq %rsi, %rcx

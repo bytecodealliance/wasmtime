@@ -55,6 +55,7 @@ define_passes!{
     flowgraph: "Control flow graph",
     domtree: "Dominator tree",
     loop_analysis: "Loop analysis",
+    preopt: "Pre-legalization rewriting",
     legalize: "Legalization",
     gvn: "Global value numbering",
     licm: "Loop invariant code motion",

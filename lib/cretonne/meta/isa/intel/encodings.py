@@ -120,6 +120,9 @@ enc_i32_i64(base.imul, r.rrx, 0x0f, 0xaf)
 enc_i32_i64(x86.sdivmodx, r.div, 0xf7, rrr=7)
 enc_i32_i64(x86.udivmodx, r.div, 0xf7, rrr=6)
 
+enc_i32_i64(x86.smulx, r.mulx, 0xf7, rrr=5)
+enc_i32_i64(x86.umulx, r.mulx, 0xf7, rrr=4)
+
 enc_i32_i64(base.copy, r.umr, 0x89)
 enc_both(base.copy.b1, r.umr, 0x89)
 enc_i32_i64(base.regmove, r.rmov, 0x89)
