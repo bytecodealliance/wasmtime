@@ -675,7 +675,7 @@ st_abcd = TailRecipe(
 
 # XX /r register-indirect store of FPR with no offset.
 fst = TailRecipe(
-        'fst', Store, size=1, ins=(FPR, GPR), outs=(),
+        'fst', Store, size=1, ins=(FPR, GPR_ZERO_DEREF_SAFE), outs=(),
         instp=IsEqual(Store.offset, 0),
         clobbers_flags=False,
         emit='''
