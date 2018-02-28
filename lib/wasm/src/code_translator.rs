@@ -634,12 +634,35 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = state.pop1();
             state.push1(builder.ins().bitcast(I64, val));
         }
-        Operator::I32Extend8S |
-        Operator::I32Extend16S |
-        Operator::I64Extend8S |
-        Operator::I64Extend16S |
+        Operator::I32Extend8S => {
+            let val = state.pop1();
+            state.push1(builder.ins().ireduce(I8, val));
+            let val = state.pop1();
+            state.push1(builder.ins().sextend(I32, val));
+        }
+        Operator::I32Extend16S => {
+            let val = state.pop1();
+            state.push1(builder.ins().ireduce(I16, val));
+            let val = state.pop1();
+            state.push1(builder.ins().sextend(I32, val));
+        }
+        Operator::I64Extend8S => {
+            let val = state.pop1();
+            state.push1(builder.ins().ireduce(I8, val));
+            let val = state.pop1();
+            state.push1(builder.ins().sextend(I64, val));
+        }
+        Operator::I64Extend16S => {
+            let val = state.pop1();
+            state.push1(builder.ins().ireduce(I8, val));
+            let val = state.pop1();
+            state.push1(builder.ins().sextend(I64, val));
+        }
         Operator::I64Extend32S => {
-            panic!("proposed sign-extend operators not yet supported");
+            let val = state.pop1();
+            state.push1(builder.ins().ireduce(I32, val));
+            let val = state.pop1();
+            state.push1(builder.ins().sextend(I64, val));
         }
         /****************************** Binary Operators ************************************/
         Operator::I32Add | Operator::I64Add => {
