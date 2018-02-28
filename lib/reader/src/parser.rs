@@ -1632,6 +1632,11 @@ impl<'a> Parser<'a> {
         ctx: &mut Context,
         ebb: Ebb,
     ) -> Result<()> {
+        // Define the result values.
+        for val in &results {
+            ctx.map.def_value(*val, &self.loc)?;
+        }
+
         // Collect comments for the next instruction.
         self.start_gathering_comments();
 
@@ -1708,11 +1713,6 @@ impl<'a> Parser<'a> {
                 );
             }
         }
-
-        // Now map the source result values to the just created instruction results.
-        // Pass a reference to `ctx.values` instead of `ctx` itself since the `Values` iterator
-        // holds a reference to `ctx.function`.
-        self.add_values(&mut ctx.map, results.into_iter())?;
 
         if let Some(result_locations) = result_locations {
             for (&value, loc) in ctx.function.dfg.inst_results(inst).iter().zip(
@@ -1796,17 +1796,6 @@ impl<'a> Parser<'a> {
         }
 
         Ok(ctrl_type)
-    }
-
-    // Add mappings for a list of source values to their corresponding new values.
-    fn add_values<V>(&self, map: &mut SourceMap, new_results: V) -> Result<()>
-    where
-        V: Iterator<Item = Value>,
-    {
-        for val in new_results {
-            map.def_value(val, &self.loc)?;
-        }
-        Ok(())
     }
 
     // Parse comma-separated value list into a VariableArgs struct.
