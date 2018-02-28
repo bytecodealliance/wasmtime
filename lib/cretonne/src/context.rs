@@ -18,7 +18,7 @@ use isa::TargetIsa;
 use legalize_function;
 use regalloc;
 use result::{CtonError, CtonResult};
-use settings::FlagsOrIsa;
+use settings::{FlagsOrIsa, OptLevel};
 use unreachable_code::eliminate_unreachable_code;
 use verifier;
 use simple_gvn::do_simple_gvn;
@@ -90,14 +90,12 @@ impl Context {
         self.compute_cfg();
         self.preopt(isa)?;
         self.legalize(isa)?;
-        /* TODO: Enable additional optimization passes.
         if isa.flags().opt_level() == OptLevel::Best {
             self.compute_domtree();
             self.compute_loop_analysis();
             self.licm(isa)?;
             self.simple_gvn(isa)?;
         }
-        */
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
         self.regalloc(isa)?;
