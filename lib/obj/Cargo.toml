@@ -5,7 +5,7 @@ authors = ["The Cretonne Project Developers"]
 publish = false
 
 [dependencies]
-cretonne = { git = "https://github.com/stoklund/cretonne.git" }
-cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
+cretonne = "0.3.0"
+cretonne-wasm = "0.3.0"
 wasmstandalone_runtime = { path = "../runtime" }
-faerie = { git = "https://github.com/m4b/faerie" }
+faerie = "0.1.0"

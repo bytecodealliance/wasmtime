@@ -14,13 +14,13 @@ path = "../lib/runtime"
 path = "../lib/execute"
 
 [dependencies.cretonne]
-git = "https://github.com/stoklund/cretonne.git"
+version = "0.3.0"
 
 [dependencies.cretonne-wasm]
-git = "https://github.com/stoklund/cretonne.git"
+version = "0.3.0"
 
 [dependencies.cretonne-native]
-git = "https://github.com/stoklund/cretonne.git"
+version = "0.3.0"
 
 [dependencies.libfuzzer-sys]
 git = "https://github.com/rust-fuzz/libfuzzer-sys.git"

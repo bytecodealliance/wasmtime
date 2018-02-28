@@ -17,11 +17,11 @@ name = "wasm2obj"
 path = "src/wasm2obj.rs"
 
 [dependencies]
-cretonne = { git = "https://github.com/stoklund/cretonne.git" }
-cretonne-frontend = { git = "https://github.com/stoklund/cretonne.git" }
-cretonne-reader = { git = "https://github.com/stoklund/cretonne.git" }
-cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
-cretonne-native = { git = "https://github.com/stoklund/cretonne.git" }
+cretonne = "0.3.0"
+cretonne-frontend = "0.3.0"
+cretonne-reader = "0.3.0"
+cretonne-wasm = "0.3.0"
+cretonne-native = "0.3.0"
 wasmstandalone_runtime = { path = "lib/runtime" }
 wasmstandalone_execute = { path = "lib/execute" }
 wasmstandalone_obj = { path = "lib/obj" }
@@ -29,6 +29,6 @@ docopt = "0.8.3"
 serde = "1.0.27"
 serde_derive = "1.0.27"
 tempdir = "*"
-faerie = { git = "https://github.com/m4b/faerie" }
+faerie = "0.1.0"
 
 [workspace]

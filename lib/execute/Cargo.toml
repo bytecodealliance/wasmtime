@@ -8,7 +8,7 @@ repository = "https://github.com/sunfishcode/wasmstandalone"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-cretonne = { git = "https://github.com/stoklund/cretonne.git" }
-cretonne-wasm = { git = "https://github.com/stoklund/cretonne.git" }
+cretonne = "0.3.0"
+cretonne-wasm = "0.3.0"
 region = "0.1.1"
 wasmstandalone_runtime = { path = "../runtime" }
