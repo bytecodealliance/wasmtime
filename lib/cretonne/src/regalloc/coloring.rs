@@ -908,7 +908,7 @@ impl<'a> Context<'a> {
 
         let inst = self.cur.current_inst().expect("Not on an instruction");
         let ctx = self.liveness.context(&self.cur.func.layout);
-        match self.cur.func.dfg[inst].analyze_branch(&self.cur.func.dfg.value_lists) {
+        match self.cur.func.dfg.analyze_branch(inst) {
             NotABranch => false,
             SingleDest(ebb, _) => {
                 let lr = &self.liveness[value];
