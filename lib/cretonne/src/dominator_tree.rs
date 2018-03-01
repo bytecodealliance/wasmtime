@@ -340,7 +340,7 @@ impl DominatorTree {
     /// post-order except for the insertion of the new EBB header at the split point.
     fn push_successors(&mut self, func: &Function, ebb: Ebb) {
         for inst in func.layout.ebb_insts(ebb) {
-            match func.dfg[inst].analyze_branch(&func.dfg.value_lists) {
+            match func.dfg.analyze_branch(inst) {
                 BranchInfo::SingleDest(succ, _) => {
                     if self.nodes[succ].rpo_number == 0 {
                         self.nodes[succ].rpo_number = SEEN;

@@ -260,7 +260,7 @@ impl LiveValueTracker {
     ) -> (&[LiveValue], &[LiveValue], &[LiveValue]) {
         // Save a copy of the live values before any branches or jumps that could be somebody's
         // immediate dominator.
-        match dfg[inst].analyze_branch(&dfg.value_lists) {
+        match dfg.analyze_branch(inst) {
             BranchInfo::NotABranch => {}
             _ => self.save_idom_live_set(inst),
         }

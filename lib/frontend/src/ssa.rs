@@ -620,7 +620,7 @@ where
         val: Value,
         var: Variable,
     ) -> Option<(Ebb, Block, Inst)> {
-        match func.dfg[jump_inst].analyze_branch(&func.dfg.value_lists) {
+        match func.dfg.analyze_branch(jump_inst) {
             BranchInfo::NotABranch => {
                 panic!("you have declared a non-branch instruction as a predecessor to an ebb");
             }
@@ -855,7 +855,7 @@ mod tests {
             cur.ins().iadd(x_use3, y_use3)
         };
         ssa.def_var(y_var, y2_ssa, block2);
-        match func.dfg[jump_inst].analyze_branch(&func.dfg.value_lists) {
+        match func.dfg.analyze_branch(jump_inst) {
             BranchInfo::SingleDest(dest, jump_args) => {
                 assert_eq!(dest, ebb1);
                 assert_eq!(jump_args.len(), 0);

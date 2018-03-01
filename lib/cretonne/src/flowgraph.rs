@@ -108,7 +108,7 @@ impl ControlFlowGraph {
 
     fn compute_ebb(&mut self, func: &Function, ebb: Ebb) {
         for inst in func.layout.ebb_insts(ebb) {
-            match func.dfg[inst].analyze_branch(&func.dfg.value_lists) {
+            match func.dfg.analyze_branch(inst) {
                 BranchInfo::SingleDest(dest, _) => {
                     self.add_edge((ebb, inst), dest);
                 }
