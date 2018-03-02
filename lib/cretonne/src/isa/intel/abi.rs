@@ -180,11 +180,9 @@ pub fn spiderwasm_prologue_epilogue(
     func: &mut ir::Function,
     isa: &TargetIsa,
 ) -> result::CtonResult {
-    let (word_size, stack_align) = if isa.flags().is_64bit() {
-        (8, 16)
-    } else {
-        (4, 4)
-    };
+    // Spiderwasm on 32-bit x86 always aligns its stack pointer to 16 bytes.
+    let stack_align = 16;
+    let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
     let bytes = StackSize::from(isa.flags().spiderwasm_prologue_words()) * word_size;
 
     let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
@@ -197,11 +195,10 @@ pub fn spiderwasm_prologue_epilogue(
 
 /// Insert a System V-compatible prologue and epilogue.
 pub fn native_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
-    let (word_size, stack_align) = if isa.flags().is_64bit() {
-        (8, 16)
-    } else {
-        (4, 4)
-    };
+    // The original 32-bit x86 ELF ABI had a 4-byte aligned stack pointer, but
+    // newer versions use a 16-byte aligned stack pointer.
+    let stack_align = 16;
+    let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
     let csr_type = if isa.flags().is_64bit() {
         ir::types::I64
     } else {
