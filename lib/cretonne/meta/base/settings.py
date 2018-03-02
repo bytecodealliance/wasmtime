@@ -56,7 +56,11 @@ avoid_div_traps = BoolSetting(
 is_compressed = BoolSetting("Enable compressed instructions")
 
 enable_float = BoolSetting(
-        """Enable the use of floating-point instructions""",
+        """
+        Enable the use of floating-point instructions
+
+        Disabling use of floating-point instructions is not yet implemented.
+        """,
         default=True)
 
 enable_simd = BoolSetting(
