@@ -498,14 +498,14 @@ mod tests {
         println!("Testing UP magicU64");
         for x in 2..(200 * 1000u64) {
             let m = magicU64(x);
-            total = total ^ (m.mulBy as u64);
+            total = total ^ m.mulBy;
             total = total + (m.shiftBy as u64);
             total = total - (if m.doAdd { 123 } else { 456 });
         }
         println!("Testing DOWN magicU64");
         for x in 0..(200 * 1000u64) {
             let m = magicU64(0xFFFF_FFFF_FFFF_FFFFu64 - x);
-            total = total ^ (m.mulBy as u64);
+            total = total ^ m.mulBy;
             total = total + (m.shiftBy as u64);
             total = total - (if m.doAdd { 123 } else { 456 });
         }
