@@ -251,7 +251,7 @@ pub trait TargetIsa: fmt::Display {
         if func.signature.call_conv == ir::CallConv::SpiderWASM {
             let bytes = StackSize::from(self.flags().spiderwasm_prologue_words()) * word_size;
             let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
-            ss.offset = -(bytes as StackOffset);
+            ss.offset = Some(-(bytes as StackOffset));
             func.stack_slots.push(ss);
         }
 

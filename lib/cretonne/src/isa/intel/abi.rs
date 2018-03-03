@@ -186,7 +186,7 @@ pub fn spiderwasm_prologue_epilogue(
     let bytes = StackSize::from(isa.flags().spiderwasm_prologue_words()) * word_size;
 
     let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
-    ss.offset = -(bytes as StackOffset);
+    ss.offset = Some(-(bytes as StackOffset));
     func.stack_slots.push(ss);
 
     layout_stack(&mut func.stack_slots, stack_align)?;
@@ -217,7 +217,7 @@ pub fn native_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> res
     func.create_stack_slot(ir::StackSlotData {
         kind: ir::StackSlotKind::IncomingArg,
         size: csr_stack_size as u32,
-        offset: -csr_stack_size,
+        offset: Some(-csr_stack_size),
     });
 
     let total_stack_size = layout_stack(&mut func.stack_slots, stack_align)? as i32;
