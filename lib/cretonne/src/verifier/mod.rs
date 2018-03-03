@@ -808,7 +808,7 @@ impl<'a> Verifier<'a> {
                             slot
                         );
                     }
-                    if slot.offset != offset {
+                    if slot.offset != Some(offset) {
                         return err!(
                             inst,
                             "Outgoing stack argument {} should have offset {}: {} = {}",

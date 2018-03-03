@@ -1070,7 +1070,7 @@ impl<'a> Parser<'a> {
         // Take additional options.
         while self.optional(Token::Comma) {
             match self.match_any_identifier("expected stack slot flags")? {
-                "offset" => data.offset = self.match_imm32("expected byte offset")?,
+                "offset" => data.offset = Some(self.match_imm32("expected byte offset")?),
                 other => return err!(self.loc, "Unknown stack slot flag '{}'", other),
             }
         }

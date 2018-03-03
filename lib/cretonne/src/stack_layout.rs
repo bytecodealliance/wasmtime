@@ -48,12 +48,13 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
 
         match slot.kind {
             StackSlotKind::IncomingArg => {
-                incoming_min = min(incoming_min, slot.offset);
+                incoming_min = min(incoming_min, slot.offset.unwrap());
             }
             StackSlotKind::OutgoingArg => {
-                let offset = slot.offset.checked_add(slot.size as StackOffset).ok_or(
-                    CtonError::ImplLimitExceeded,
-                )?;
+                let offset = slot.offset
+                    .unwrap()
+                    .checked_add(slot.size as StackOffset)
+                    .ok_or(CtonError::ImplLimitExceeded)?;
                 outgoing_max = max(outgoing_max, offset);
             }
             StackSlotKind::SpillSlot |
@@ -77,12 +78,14 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
             // Pick out explicit and spill slots with exact alignment `min_align`.
             match slot.kind {
                 StackSlotKind::SpillSlot |
-                StackSlotKind::ExplicitSlot => {
+                StackSlotKind::ExplicitSlot |
+                StackSlotKind::EmergencySlot => {
                     if slot.alignment(alignment) != min_align {
                         continue;
                     }
                 }
-                _ => continue,
+                StackSlotKind::IncomingArg |
+                StackSlotKind::OutgoingArg => continue,
             }
 
             offset = offset.checked_sub(slot.size as StackOffset).ok_or(
@@ -111,7 +114,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
 
 #[cfg(test)]
 mod tests {
-    use ir::StackSlots;
+    use ir::{StackSlots, StackSlotData, StackSlotKind};
     use ir::types;
     use super::layout_stack;
     use ir::stackslot::StackOffset;
@@ -131,64 +134,82 @@ mod tests {
 
         assert_eq!(layout_stack(sss, 1), Ok(0));
         assert_eq!(layout_stack(sss, 16), Ok(0));
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
+        assert_eq!(sss[in0].offset, Some(0));
+        assert_eq!(sss[in1].offset, Some(8));
 
         // Add some spill slots.
         let ss0 = sss.make_spill_slot(types::I64);
         let ss1 = sss.make_spill_slot(types::I32);
 
         assert_eq!(layout_stack(sss, 1), Ok(12));
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-        assert_eq!(sss[ss0].offset, -8);
-        assert_eq!(sss[ss1].offset, -12);
+        assert_eq!(sss[in0].offset, Some(0));
+        assert_eq!(sss[in1].offset, Some(8));
+        assert_eq!(sss[ss0].offset, Some(-8));
+        assert_eq!(sss[ss1].offset, Some(-12));
 
         assert_eq!(layout_stack(sss, 16), Ok(16));
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-        assert_eq!(sss[ss0].offset, -16);
-        assert_eq!(sss[ss1].offset, -4);
+        assert_eq!(sss[in0].offset, Some(0));
+        assert_eq!(sss[in1].offset, Some(8));
+        assert_eq!(sss[ss0].offset, Some(-16));
+        assert_eq!(sss[ss1].offset, Some(-4));
 
         // An incoming argument with negative offset counts towards the total frame size, but it
         // should still pack nicely with the spill slots.
         let in2 = sss.make_incoming_arg(types::I32, -4);
 
         assert_eq!(layout_stack(sss, 1), Ok(16));
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-        assert_eq!(sss[in2].offset, -4);
-        assert_eq!(sss[ss0].offset, -12);
-        assert_eq!(sss[ss1].offset, -16);
+        assert_eq!(sss[in0].offset, Some(0));
+        assert_eq!(sss[in1].offset, Some(8));
+        assert_eq!(sss[in2].offset, Some(-4));
+        assert_eq!(sss[ss0].offset, Some(-12));
+        assert_eq!(sss[ss1].offset, Some(-16));
 
         assert_eq!(layout_stack(sss, 16), Ok(16));
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-        assert_eq!(sss[in2].offset, -4);
-        assert_eq!(sss[ss0].offset, -16);
-        assert_eq!(sss[ss1].offset, -8);
+        assert_eq!(sss[in0].offset, Some(0));
+        assert_eq!(sss[in1].offset, Some(8));
+        assert_eq!(sss[in2].offset, Some(-4));
+        assert_eq!(sss[ss0].offset, Some(-16));
+        assert_eq!(sss[ss1].offset, Some(-8));
 
         // Finally, make sure there is room for the outgoing args.
         let out0 = sss.get_outgoing_arg(types::I32, 0);
 
         assert_eq!(layout_stack(sss, 1), Ok(20));
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-        assert_eq!(sss[in2].offset, -4);
-        assert_eq!(sss[ss0].offset, -12);
-        assert_eq!(sss[ss1].offset, -16);
-        assert_eq!(sss[out0].offset, 0);
+        assert_eq!(sss[in0].offset, Some(0));
+        assert_eq!(sss[in1].offset, Some(8));
+        assert_eq!(sss[in2].offset, Some(-4));
+        assert_eq!(sss[ss0].offset, Some(-12));
+        assert_eq!(sss[ss1].offset, Some(-16));
+        assert_eq!(sss[out0].offset, Some(0));
 
         assert_eq!(layout_stack(sss, 16), Ok(32));
-        assert_eq!(sss[in0].offset, 0);
-        assert_eq!(sss[in1].offset, 8);
-        assert_eq!(sss[in2].offset, -4);
-        assert_eq!(sss[ss0].offset, -16);
-        assert_eq!(sss[ss1].offset, -8);
-        assert_eq!(sss[out0].offset, 0);
+        assert_eq!(sss[in0].offset, Some(0));
+        assert_eq!(sss[in1].offset, Some(8));
+        assert_eq!(sss[in2].offset, Some(-4));
+        assert_eq!(sss[ss0].offset, Some(-16));
+        assert_eq!(sss[ss1].offset, Some(-8));
+        assert_eq!(sss[out0].offset, Some(0));
 
         // Also test that an unsupported offset is rejected.
         sss.get_outgoing_arg(types::I8, StackOffset::max_value() - 1);
         assert_eq!(layout_stack(sss, 1), Err(CtonError::ImplLimitExceeded));
+    }
+
+    #[test]
+    fn slot_kinds() {
+        let sss = &mut StackSlots::new();
+
+        // Add some slots of various kinds.
+        let ss0 = sss.make_spill_slot(types::I32);
+        let ss1 = sss.push(StackSlotData::new(
+            StackSlotKind::ExplicitSlot,
+            types::I32.bytes(),
+        ));
+        let ss2 = sss.get_emergency_slot(types::I32, &[]);
+
+        assert_eq!(layout_stack(sss, 1), Ok(12));
+        assert_eq!(sss[ss0].offset, Some(-4));
+        assert_eq!(sss[ss1].offset, Some(-8));
+        assert_eq!(sss[ss2].offset, Some(-12));
     }
 }

@@ -207,14 +207,14 @@ impl<'a> LocationVerifier<'a> {
                             slot.kind
                         );
                     }
-                    if slot.offset != offset {
+                    if slot.offset.unwrap() != offset {
                         return err!(
                             inst,
                             "ABI expects {} at stack offset {}, but {} is at {}",
                             value,
                             offset,
                             ss,
-                            slot.offset
+                            slot.offset.unwrap()
                         );
                     }
                 } else {
