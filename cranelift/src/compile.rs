@@ -6,8 +6,44 @@ use cton_reader::parse_test;
 use std::path::PathBuf;
 use cretonne::Context;
 use cretonne::settings::FlagsOrIsa;
+use cretonne::{binemit, ir};
 use std::path::Path;
 use utils::{pretty_error, read_to_string, parse_sets_and_isa};
+
+struct PrintRelocs {
+    flag_print: bool,
+}
+
+impl binemit::RelocSink for PrintRelocs {
+    fn reloc_ebb(
+        &mut self,
+        where_: binemit::CodeOffset,
+        r: binemit::Reloc,
+        offset: binemit::CodeOffset,
+    ) {
+        if self.flag_print {
+            println!("reloc_ebb: {} {} at {}", r, offset, where_);
+        }
+    }
+
+    fn reloc_external(
+        &mut self,
+        where_: binemit::CodeOffset,
+        r: binemit::Reloc,
+        name: &ir::ExternalName,
+        addend: binemit::Addend,
+    ) {
+        if self.flag_print {
+            println!("reloc_ebb: {} {} {} at {}", r, name, addend, where_);
+        }
+    }
+
+    fn reloc_jt(&mut self, where_: binemit::CodeOffset, r: binemit::Reloc, jt: ir::JumpTable) {
+        if self.flag_print {
+            println!("reloc_ebb: {} {} at {}", r, jt, where_);
+        }
+    }
+}
 
 pub fn run(
     files: Vec<String>,
@@ -49,11 +85,31 @@ fn handle_module(
     for (func, _) in test_file.functions {
         let mut context = Context::new();
         context.func = func;
-        context.compile(isa).map_err(|err| {
+        let size = context.compile(isa).map_err(|err| {
             pretty_error(&context.func, Some(isa), err)
         })?;
         if flag_print {
             println!("{}", context.func.display(isa));
+        }
+
+        // Encode the result as machine code.
+        let mut mem = Vec::new();
+        let mut relocs = PrintRelocs { flag_print };
+        mem.resize(size as usize, 0);
+        context.emit_to_memory(mem.as_mut_ptr(), &mut relocs, &*isa);
+
+        if flag_print {
+            print!(".byte ");
+            let mut first = true;
+            for byte in &mem {
+                if first {
+                    first = false;
+                } else {
+                    print!(", ");
+                }
+                print!("{}", byte);
+            }
+            println!();
         }
     }
 
