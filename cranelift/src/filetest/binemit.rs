@@ -271,13 +271,12 @@ impl SubTest for TestBinEmit {
                                 "No encodings found for: {}",
                                 func.dfg.display_inst(inst, isa)
                             ));
-                        } else {
-                            return Err(format!(
+                        }
+                        return Err(format!(
                                 "No matching encodings for {} in {}",
                                 func.dfg.display_inst(inst, isa),
                                 DisplayList(&encodings),
                             ));
-                        }
                     }
                     let have = sink.text.trim();
                     if have != want {
