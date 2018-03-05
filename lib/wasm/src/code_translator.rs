@@ -654,7 +654,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::I64Extend16S => {
             let val = state.pop1();
-            state.push1(builder.ins().ireduce(I8, val));
+            state.push1(builder.ins().ireduce(I16, val));
             let val = state.pop1();
             state.push1(builder.ins().sextend(I64, val));
         }
