@@ -4,11 +4,11 @@
 
 //----------------------------------------------------------------------
 //
-// Math helpers for division by (non-power-of-2) constants.  This is based
-// on the presentation in "Hacker's Delight" by Henry Warren, 2003.  There
-// are four cases: {unsigned, signed} x {32 bit, 64 bit}.  The word size
+// Math helpers for division by (non-power-of-2) constants. This is based
+// on the presentation in "Hacker's Delight" by Henry Warren, 2003. There
+// are four cases: {unsigned, signed} x {32 bit, 64 bit}. The word size
 // makes little difference, but the signed-vs-unsigned aspect has a large
-// effect.  Therefore everything is presented in the order U32 U64 S32 S64
+// effect. Therefore everything is presented in the order U32 U64 S32 S64
 // so as to emphasise the similarity of the U32 and U64 cases and the S32
 // and S64 cases.
 
@@ -478,7 +478,7 @@ mod tests {
     fn test_magic_generators_dont_panic() {
         // The point of this is to check that the magic number generators
         // don't panic with integer wraparounds, especially at boundary
-        // cases for their arguments.  The actual results are thrown away.
+        // cases for their arguments. The actual results are thrown away.
         let mut total: u64 = 0;
         println!("Testing UP magicU32");
         for x in 2..(200 * 1000u32) {

@@ -154,7 +154,7 @@ rflags = Operand('rflags', iflags)
 bsr = Instruction(
     'x86_bsr', r"""
     Bit Scan Reverse -- returns the bit-index of the most significant 1
-    in the word.  Result is undefined if the argument is zero.  However, it
+    in the word. Result is undefined if the argument is zero. However, it
     sets the Z flag depending on the argument, so it is at least easy to
     detect and handle that case.
 
@@ -166,7 +166,7 @@ bsr = Instruction(
 bsf = Instruction(
     'x86_bsf', r"""
     Bit Scan Forwards -- returns the bit-index of the least significant 1
-    in the word.  Is otherwise identical to 'bsr', just above.
+    in the word. Is otherwise identical to 'bsr', just above.
     """,
     ins=x, outs=(y, rflags))
 

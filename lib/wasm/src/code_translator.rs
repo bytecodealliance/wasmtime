@@ -90,7 +90,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             }
         }
         /********************************* Stack misc ***************************************
-         *  `drop`, `nop`,  `unreachable` and `select`.
+         *  `drop`, `nop`, `unreachable` and `select`.
          ***********************************************************************************/
         Operator::Drop => {
             state.pop1();

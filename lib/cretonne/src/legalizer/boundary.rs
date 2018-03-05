@@ -180,7 +180,7 @@ where
     // We theoretically allow for call instructions that return a number of fixed results before
     // the call return values. In practice, it doesn't happen.
     let fixed_results = pos.func.dfg[call].opcode().constraints().fixed_results();
-    assert_eq!(fixed_results, 0, "Fixed results  on calls not supported");
+    assert_eq!(fixed_results, 0, "Fixed results on calls not supported");
 
     let results = pos.func.dfg.detach_results(call);
     let mut next_res = 0;
