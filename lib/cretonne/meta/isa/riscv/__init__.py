@@ -2,7 +2,7 @@
 RISC-V Target
 -------------
 
-`RISC-V <http://riscv.org/>`_ is an open instruction set architecture
+`RISC-V <https://riscv.org/>`_ is an open instruction set architecture
 originally developed at UC Berkeley. It is a RISC-style ISA with either a
 32-bit (RV32I) or 64-bit (RV32I) base instruction set and a number of optional
 extensions:
