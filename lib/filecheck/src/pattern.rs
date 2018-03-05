@@ -42,7 +42,7 @@ pub enum Part {
 }
 
 impl Part {
-    /// Get the variabled referenced by this part, if any.
+    /// Get the variable referenced by this part, if any.
     pub fn ref_var(&self) -> Option<&str> {
         match *self {
             Part::Var(ref var) |
@@ -217,10 +217,10 @@ impl Pattern {
 }
 
 /// Compute the length of a regular expression terminated by `)` or `}`.
-/// Handle nested and escaped parentheses in the rx, but don't actualy parse it.
+/// Handle nested and escaped parentheses in the rx, but don't actually parse it.
 /// Return the position of the terminating brace or the length of the string.
 fn regex_prefix(s: &str) -> usize {
-    // The prevous char was a backslash.
+    // The previous char was a backslash.
     let mut escape = false;
     // State around parsing charsets.
     enum State {

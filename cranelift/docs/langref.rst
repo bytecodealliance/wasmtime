@@ -440,7 +440,7 @@ Cretonne provides fully general :inst:`load` and :inst:`store` instructions for
 accessing memory, as well as :ref:`extending loads and truncating stores
 <extload-truncstore>`.
 
-If the memory at the given addresss is not :term:`addressable`, the behavior of
+If the memory at the given address is not :term:`addressable`, the behavior of
 these instructions is undefined. If it is addressable but not
 :term:`accessible`, they :term:`trap`.
 
@@ -559,7 +559,7 @@ runtime data structures.
     The address of GV can be computed by first loading a pointer from BaseGV
     and adding Offset to it.
 
-    It is assumed the BaseGV resides in readable memory with the apropriate
+    It is assumed the BaseGV resides in readable memory with the appropriate
     alignment for storing a pointer.
 
     Chains of ``deref`` global variables are possible, but cycles are not

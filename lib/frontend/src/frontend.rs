@@ -12,7 +12,7 @@ use cretonne::packed_option::PackedOption;
 
 /// Structure used for translating a series of functions into Cretonne IL.
 ///
-/// In order to reduce memory reallocations whem compiling multiple functions,
+/// In order to reduce memory reallocations when compiling multiple functions,
 /// `ILBuilder` holds various data structures which are cleared between
 /// functions, rather than dropped, preserving the underlying allocations.
 pub struct ILBuilder<Variable>
@@ -259,7 +259,7 @@ where
     /// block, in the order they are declared. You must declare the types of the Ebb arguments
     /// you will use here.
     ///
-    /// When inserting the terminator instruction (which doesn't have a falltrough to its immediate
+    /// When inserting the terminator instruction (which doesn't have a fallthrough to its immediate
     /// successor), the block will be declared filled and it will not be possible to append
     /// instructions to it.
     pub fn switch_to_block(&mut self, ebb: Ebb) {
@@ -283,7 +283,7 @@ where
     /// Declares that all the predecessors of this block are known.
     ///
     /// Function to call with `ebb` as soon as the last branch instruction to `ebb` has been
-    /// created. Forgetting to call this method on every block will cause inconsistences in the
+    /// created. Forgetting to call this method on every block will cause inconsistencies in the
     /// produced functions.
     pub fn seal_block(&mut self, ebb: Ebb) {
         let side_effects = self.builder.ssa.seal_ebb_header_block(ebb, self.func);

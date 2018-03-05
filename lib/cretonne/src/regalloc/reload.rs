@@ -298,7 +298,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Find reload candidates for `inst` and add them to `self.condidates`.
+    // Find reload candidates for `inst` and add them to `self.candidates`.
     //
     // These are uses of spilled values where the operand constraint requires a register.
     fn find_candidates(&mut self, inst: Inst, constraints: &RecipeConstraints) {
