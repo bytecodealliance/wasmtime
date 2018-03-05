@@ -782,7 +782,7 @@ Integer operations
 
     For example, see
     `llvm.sadd.with.overflow.*` and `llvm.ssub.with.overflow.*` in
-    `LLVM <http://llvm.org/docs/LangRef.html#arithmetic-with-overflow-intrinsics>`_.
+    `LLVM <https://llvm.org/docs/LangRef.html#arithmetic-with-overflow-intrinsics>`_.
 
 .. autoinst:: imul
 .. autoinst:: imul_imm

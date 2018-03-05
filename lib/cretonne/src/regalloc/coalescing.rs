@@ -26,7 +26,7 @@ use timing;
 // The coalescing algorithm implemented follows this paper fairly closely:
 //
 //     Budimlic, Z., Cooper, K. D., Harvey, T. J., et al. (2002). Fast copy coalescing and
-//     live-range identification (Vol. 37, pp. 25–32). ACM. http://doi.org/10.1145/543552.512534
+//     live-range identification (Vol. 37, pp. 25–32). ACM. https://doi.org/10.1145/543552.512534
 //
 // We use a more efficient dominator forest representation (a linear stack) described here:
 //
