@@ -406,9 +406,55 @@ I64.enc(base.bint.i32.b1, *r.urm_abcd(0x0f, 0xb6))
 
 # Numerical conversions.
 
-# Converting i64 to i32 is a no-op in 64-bit mode.
+# Reducing an integer is a no-op.
+I32.enc(base.ireduce.i8.i32, r.null, 0)
+I32.enc(base.ireduce.i16.i32, r.null, 0)
+I64.enc(base.ireduce.i8.i32, r.null, 0)
+I64.enc(base.ireduce.i16.i32, r.null, 0)
+I64.enc(base.ireduce.i8.i64, r.null, 0)
+I64.enc(base.ireduce.i16.i64, r.null, 0)
 I64.enc(base.ireduce.i32.i64, r.null, 0)
+
+# TODO: Add encodings for cbw, cwde, cdqe, which are sign-extending
+# instructions for %al/%ax/%eax to %ax/%eax/%rax.
+
+# movsbl
+I32.enc(base.sextend.i32.i8, *r.urm(0x0f, 0xbe))
+I64.enc(base.sextend.i32.i8, *r.urm.rex(0x0f, 0xbe))
+I64.enc(base.sextend.i32.i8, *r.urm(0x0f, 0xbe))
+
+# movswl
+I32.enc(base.sextend.i32.i16, *r.urm(0x0f, 0xbf))
+I64.enc(base.sextend.i32.i16, *r.urm.rex(0x0f, 0xbf))
+I64.enc(base.sextend.i32.i16, *r.urm(0x0f, 0xbf))
+
+# movsbq
+I64.enc(base.sextend.i64.i8, *r.urm.rex(0x0f, 0xbe, w=1))
+
+# movswq
+I64.enc(base.sextend.i64.i16, *r.urm.rex(0x0f, 0xbf, w=1))
+
+# movslq
 I64.enc(base.sextend.i64.i32, *r.urm.rex(0x63, w=1))
+
+# movzbl
+I32.enc(base.uextend.i32.i8, *r.urm(0x0f, 0xb6))
+I64.enc(base.uextend.i32.i8, *r.urm.rex(0x0f, 0xb6))
+I64.enc(base.uextend.i32.i8, *r.urm(0x0f, 0xb6))
+
+# movzwl
+I32.enc(base.uextend.i32.i16, *r.urm(0x0f, 0xb7))
+I64.enc(base.uextend.i32.i16, *r.urm.rex(0x0f, 0xb7))
+I64.enc(base.uextend.i32.i16, *r.urm(0x0f, 0xb7))
+
+# movzbq, encoded as movzbl because it's equivalent and shorter
+I64.enc(base.uextend.i64.i8, *r.urm.rex(0x0f, 0xb6))
+I64.enc(base.uextend.i64.i8, *r.urm(0x0f, 0xb6))
+
+# movzwq, encoded as movzwl because it's equivalent and shorter
+I64.enc(base.uextend.i64.i16, *r.urm.rex(0x0f, 0xb7))
+I64.enc(base.uextend.i64.i16, *r.urm(0x0f, 0xb7))
+
 # A 32-bit register copy clears the high 32 bits.
 I64.enc(base.uextend.i64.i32, *r.umr.rex(0x89))
 I64.enc(base.uextend.i64.i32, *r.umr(0x89))
