@@ -1158,14 +1158,19 @@ Glossary
         intermediate representation. Cretonne's IR can be converted to text
         losslessly.
 
+    stack slot
+        A fixed size memory allocation in the current function's activation
+        frame. These include :term:`explicit stack slot`\s and
+        :term:`spill stack slot`\s.
+
     explicit stack slot
         A fixed size memory allocation in the current function's activation
-        frame. These differ from :term:`spill stack slots` in that they can
+        frame. These differ from :term:`spill stack slot`\s in that they can
         be created by frontends and they may have their addresses taken.
 
     spill stack slot
         A fixed size memory allocation in the current function's activation
-        frame. These differ from :term:`explicit stack slots` in that they are
+        frame. These differ from :term:`explicit stack slot`\s in that they are
         only created during register allocation, and they may not have their
         address taken.
 
