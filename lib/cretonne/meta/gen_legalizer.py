@@ -211,7 +211,7 @@ def unwrap_inst(iref, node, fmt):
             fmt.format('let typeof_{0} = pos.func.dfg.value_type({0});', v)
 
     # If the node has results, detach the values.
-    # Place the values in  locals.
+    # Place the values in locals.
     replace_inst = False
     if len(node.defs) > 0:
         if node.defs == node.defs[0].dst_def.defs:

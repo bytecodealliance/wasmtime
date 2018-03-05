@@ -322,7 +322,7 @@ class TypeEnv(object):
         # type: (TypeVar, TypeVar) -> None
         """
         Record a that the free tv1 is part of the same equivalence class as
-        tv2.  The canonical representative of the merged class is tv2's
+        tv2. The canonical representative of the merged class is tv2's
         cannonical representative.
         """
         assert not tv1.is_derived
@@ -364,9 +364,9 @@ class TypeEnv(object):
         # type: (TypeVar) -> int
         """
         Get the rank of tv in the partial order. TVs directly associated with a
-        Var get their rank from the Var (see register()).  Internally generated
+        Var get their rank from the Var (see register()). Internally generated
         non-derived TVs implicitly get the lowest rank (0). Derived variables
-        get their rank from their free typevar.  Singletons have the highest
+        get their rank from their free typevar. Singletons have the highest
         rank. TVs associated with vars in a source pattern have a higher rank
         than TVs associted with temporary vars.
         """
@@ -381,7 +381,7 @@ class TypeEnv(object):
     def register(self, v):
         # type: (Var) -> None
         """
-        Register a new Var v.  This computes a rank for the associated TypeVar
+        Register a new Var v. This computes a rank for the associated TypeVar
         for v, which is used to impose a partial order on type variables.
         """
         self.vars.add(v)
@@ -848,7 +848,7 @@ def ti_def(definition, typ):
 def ti_rtl(rtl, typ):
     # type: (Rtl, TypeEnv) -> TypingOrError
     """
-    Perform type inference on an Rtl in a starting type env typ.  Return an
+    Perform type inference on an Rtl in a starting type env typ. Return an
     updated type environment or error.
     """
     for (i, d) in enumerate(rtl.rtl):
@@ -866,7 +866,7 @@ def ti_rtl(rtl, typ):
 def ti_xform(xform, typ):
     # type: (XForm, TypeEnv) -> TypingOrError
     """
-    Perform type inference on an Rtl in a starting type env typ.  Return an
+    Perform type inference on an Rtl in a starting type env typ. Return an
     updated type environment or error.
     """
     typ_or_err = ti_rtl(xform.src, typ)

@@ -20,7 +20,7 @@ use timing;
 // Simple math helpers
 
 // if `x` is a power of two, or the negation thereof, return the power along
-// with a boolean that indicates whether `x` is negative.  Else return None.
+// with a boolean that indicates whether `x` is negative. Else return None.
 #[inline]
 fn isPowerOf2_S32(x: i32) -> Option<(bool, u32)> {
     // We have to special-case this because abs(x) isn't representable.
@@ -128,10 +128,10 @@ fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
     }
 
     // TODO: should we actually bother to do this (that is, manually match
-    // the case that the second argument is an iconst)?  Or should we assume
+    // the case that the second argument is an iconst)? Or should we assume
     // that some previous constant propagation pass has pushed all such
     // immediates to their use points, creating BinaryImm instructions
-    // instead?  For now we take the conservative approach.
+    // instead? For now we take the conservative approach.
     if let &InstructionData::Binary { opcode, args } = idata {
         let (isSigned, isRem) = match opcode {
             Opcode::Udiv => (false, false),
@@ -153,10 +153,10 @@ fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
 }
 
 // Actually do the transformation given a bundle containing the relevant
-// information.  `divrem_info` describes a div or rem by a constant, that
+// information. `divrem_info` describes a div or rem by a constant, that
 // `pos` currently points at, and `inst` is the associated instruction.
 // `inst` is replaced by a sequence of other operations that calculate the
-// same result.  Note that there are various `divrem_info` cases where we
+// same result. Note that there are various `divrem_info` cases where we
 // cannot do any transformation, in which case `inst` is left unchanged.
 fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCursor, inst: Inst) {
     let isRem = match *divrem_info {
@@ -234,7 +234,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                     qf = q1;
                 }
             }
-            // Now qf holds the final quotient.  If necessary calculate the
+            // Now qf holds the final quotient. If necessary calculate the
             // remainder instead.
             if isRem {
                 let tt = pos.ins().imul_imm(qf, d as i64);
@@ -306,7 +306,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                     qf = q1;
                 }
             }
-            // Now qf holds the final quotient.  If necessary calculate the
+            // Now qf holds the final quotient. If necessary calculate the
             // remainder instead.
             if isRem {
                 let tt = pos.ins().imul_imm(qf, d as i64);
@@ -382,7 +382,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 };
                 let t1 = pos.ins().ushr_imm(q3, 31);
                 let qf = pos.ins().iadd(q3, t1);
-                // Now qf holds the final quotient.  If necessary calculate
+                // Now qf holds the final quotient. If necessary calculate
                 // the remainder instead.
                 if isRem {
                     let tt = pos.ins().imul_imm(qf, d as i64);
@@ -459,7 +459,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 };
                 let t1 = pos.ins().ushr_imm(q3, 63);
                 let qf = pos.ins().iadd(q3, t1);
-                // Now qf holds the final quotient.  If necessary calculate
+                // Now qf holds the final quotient. If necessary calculate
                 // the remainder instead.
                 if isRem {
                     let tt = pos.ins().imul_imm(qf, d);

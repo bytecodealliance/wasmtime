@@ -285,7 +285,7 @@ impl<F: Forest> Path<F> {
     fn split_and_insert(&mut self, mut key: F::Key, value: F::Value, pool: &mut NodePool<F>) {
         let orig_root = self.node[0];
 
-        // Loop invariant: We need to split the  node at `level` and then retry a failed insertion.
+        // Loop invariant: We need to split the node at `level` and then retry a failed insertion.
         // The items to insert are either `(key, ins_node)` or `(key, value)`.
         let mut ins_node = None;
         let mut split;
