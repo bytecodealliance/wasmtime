@@ -59,8 +59,11 @@ fn main() {
     let build_script = meta_dir.join("build.py");
 
     // Launch build script with Python. We'll just find python in the path.
+    // Use -B to disable .pyc files, because they cause trouble for vendoring
+    // scripts, and this is a build step that isn't run very often anyway.
     let status = process::Command::new("python")
         .current_dir(crate_dir)
+        .arg("-B")
         .arg(build_script)
         .arg("--out-dir")
         .arg(out_dir)
