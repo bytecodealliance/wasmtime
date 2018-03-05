@@ -1,4 +1,4 @@
-//! Translation skeletton that traverses the whole WebAssembly module and call helper functions
+//! Translation skeleton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
 use cretonne::timing;
 use wasmparser::{ParserState, SectionCode, ParserInput, Parser, WasmDecoder, BinaryReaderError};

@@ -42,7 +42,7 @@ pub struct Details<'a> {
 
 /// A comment in a parsed function.
 ///
-/// The comment belongs to the immediately preceeding entity, whether that is an EBB header, and
+/// The comment belongs to the immediately preceding entity, whether that is an EBB header, and
 /// instruction, or one of the preamble declarations.
 ///
 /// Comments appearing inside the function but before the preamble, as well as comments appearing

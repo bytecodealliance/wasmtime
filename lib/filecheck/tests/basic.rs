@@ -153,7 +153,7 @@ fn nextln() {
 #[test]
 fn leading_nextln() {
     // A leading nextln directive should match from line 2.
-    // This is somewhat arbitrary, but consistent with a preceeding 'check: $()' directive.
+    // This is somewhat arbitrary, but consistent with a preceding 'check: $()' directive.
     let c = CheckerBuilder::new()
         .text(
             "

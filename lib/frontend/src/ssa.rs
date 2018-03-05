@@ -35,7 +35,7 @@ pub struct SSABuilder<Variable>
 where
     Variable: EntityRef,
 {
-    // Records for every variable and for every revelant block, the last definition of
+    // Records for every variable and for every relevant block, the last definition of
     // the variable in the block.
     variables: EntityMap<Variable, EntityMap<Block, PackedOption<Value>>>,
     // Records the position of the basic blocks and the list of values used but not defined in the
@@ -81,7 +81,7 @@ enum BlockData<Variable> {
     // A block at the top of an `Ebb`.
     EbbHeader(EbbHeaderBlockData<Variable>),
     // A block inside an `Ebb` with an unique other block as its predecessor.
-    // The block is implicitely sealed at creation.
+    // The block is implicitly sealed at creation.
     EbbBody { predecessor: Block },
 }
 
@@ -394,7 +394,7 @@ where
     /// Remove a previously declared Ebb predecessor by giving a reference to the jump
     /// instruction. Returns the basic block containing the instruction.
     ///
-    /// Note: use only when you know what you are doing, this might break the SSA bbuilding problem
+    /// Note: use only when you know what you are doing, this might break the SSA building problem
     pub fn remove_ebb_predecessor(&mut self, ebb: Ebb, inst: Inst) -> Block {
         debug_assert!(!self.is_sealed(ebb));
         let header_block = self.header_block(ebb);
@@ -422,7 +422,7 @@ where
     pub fn seal_all_ebb_header_blocks(&mut self, func: &mut Function) -> SideEffects {
         // Seal all `Ebb`s currently in the function. This can entail splitting
         // and creation of new blocks, however such new blocks are sealed on
-        // the fly, so we don't need to accout for them here.
+        // the fly, so we don't need to account for them here.
         for ebb in self.ebb_headers.keys() {
             self.seal_one_ebb_header_block(ebb, func);
         }
@@ -470,8 +470,8 @@ where
         }
     }
 
-    /// Look up in the predecessors of an Ebb the def for a value an decides wether or not
-    /// to keep the eeb arg, and act accordingly. Returns the chosen value and optionnaly a
+    /// Look up in the predecessors of an Ebb the def for a value an decides whether or not
+    /// to keep the eeb arg, and act accordingly. Returns the chosen value and optionally a
     /// list of Ebb that are the middle of newly created critical edges splits.
     fn predecessors_lookup(
         &mut self,
@@ -554,7 +554,7 @@ where
             ZeroOneOrMore::One(pred_val) => {
                 // Here all the predecessors use a single value to represent our variable
                 // so we don't need to have it as an ebb argument.
-                // We need to replace all the occurences of val with pred_val but since
+                // We need to replace all the occurrences of val with pred_val but since
                 // we can't afford a re-writing pass right now we just declare an alias.
                 // Resolve aliases eagerly so that we can check for cyclic aliasing,
                 // which can occur in unreachable code.
@@ -1119,7 +1119,7 @@ mod tests {
 
     #[test]
     fn undef() {
-        // Use vars of varous types which have not been defined.
+        // Use vars of various types which have not been defined.
         let mut func = Function::new();
         let mut ssa: SSABuilder<Variable> = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();

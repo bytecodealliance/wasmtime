@@ -221,7 +221,7 @@ impl TestRunner {
         }
         self.tests[jobid].state = State::Done(result);
 
-        // Rports jobs in order.
+        // Reports jobs in order.
         while self.report_job() {
             self.reported_tests += 1;
         }

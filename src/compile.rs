@@ -37,7 +37,7 @@ fn handle_module(
     let test_file = parse_test(&buffer).map_err(|e| format!("{}: {}", name, e))?;
 
     // If we have an isa from the command-line, use that. Otherwise if the
-    // file contins a unique isa, use that.
+    // file contains a unique isa, use that.
     let isa = if let Some(isa) = fisa.isa {
         isa
     } else if let Some(isa) = test_file.isa_spec.unique_isa() {

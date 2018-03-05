@@ -51,7 +51,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     match *op {
         /********************************** Locals ****************************************
          *  `get_local` and `set_local` are treated as non-SSA variables and will completely
-         *  diseappear in the Cretonne Code
+         *  disappear in the Cretonne Code
          ***********************************************************************************/
         Operator::GetLocal { local_index } => state.push1(builder.use_var(Local(local_index))),
         Operator::SetLocal { local_index } => {
@@ -1003,7 +1003,7 @@ fn translate_unreachable_operator(
                 builder.switch_to_block(frame.following_code());
                 builder.seal_block(frame.following_code());
 
-                // And add the return values of the block but only if the next block is reachble
+                // And add the return values of the block but only if the next block is reachable
                 // (which corresponds to testing if the stack depth is 1)
                 stack.extend_from_slice(builder.ebb_params(frame.following_code()));
                 state.reachable = true;
