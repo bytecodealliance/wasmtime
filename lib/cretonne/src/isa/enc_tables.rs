@@ -225,7 +225,7 @@ impl<'a> Encodings<'a> {
         self.legalize_actions[self.legalize as usize]
     }
 
-    /// Check if the `rpred` recipe predicate s satisfied.
+    /// Check if the `rpred` recipe predicate is satisfied.
     fn check_recipe(&self, rpred: RecipePredicate) -> bool {
         match rpred {
             Some(p) => p(self.isa_preds, self.inst),
