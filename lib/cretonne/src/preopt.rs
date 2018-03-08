@@ -223,7 +223,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 let t3 = pos.ins().iadd(t2, q1);
                 // I never found any case where shiftBy == 1 here.
                 // So there's no attempt to fold out a zero shift.
-                debug_assert!(shiftBy != 1);
+                debug_assert_ne!(shiftBy, 1);
                 qf = pos.ins().ushr_imm(t3, (shiftBy - 1) as i64);
             } else {
                 debug_assert!(shiftBy >= 0 && shiftBy <= 31);
@@ -295,7 +295,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 let t3 = pos.ins().iadd(t2, q1);
                 // I never found any case where shiftBy == 1 here.
                 // So there's no attempt to fold out a zero shift.
-                debug_assert!(shiftBy != 1);
+                debug_assert_ne!(shiftBy, 1);
                 qf = pos.ins().ushr_imm(t3, (shiftBy - 1) as i64);
             } else {
                 debug_assert!(shiftBy >= 0 && shiftBy <= 63);
