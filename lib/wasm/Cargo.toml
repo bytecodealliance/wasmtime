@@ -1,6 +1,6 @@
 [package]
 name = "cretonne-wasm"
-version = "0.3.2"
+version = "0.3.3"
 authors = ["The Cretonne Project Developers"]
 description = "Translator from WebAssembly to Cretonne IL"
 repository = "https://github.com/Cretonne/cretonne"
@@ -13,8 +13,8 @@ name = "cton_wasm"
 
 [dependencies]
 wasmparser = "0.14.1"
-cretonne = { path = "../cretonne", version = "0.3.2" }
-cretonne-frontend = { path = "../frontend", version = "0.3.2" }
+cretonne = { path = "../cretonne", version = "0.3.3" }
+cretonne-frontend = { path = "../frontend", version = "0.3.3" }
 
 [dev-dependencies]
 tempdir = "0.3.5"
