@@ -152,13 +152,23 @@ fn relax_branch(
     if let Some(enc) = isa.legal_encodings(dfg, &dfg[inst], ctrl_type).find(
         |&enc| {
             let range = encinfo.branch_range(enc).expect("Branch with no range");
-            let in_range = range.contains(offset, dest_offset);
-            dbg!(
-                "  trying [{}]: {}",
-                encinfo.display(enc),
-                if in_range { "OK" } else { "out of range" }
-            );
-            in_range
+            if !range.contains(offset, dest_offset) {
+                dbg!("  trying [{}]: out of range", encinfo.display(enc));
+                false
+            } else if encinfo.operand_constraints(enc) !=
+                       encinfo.operand_constraints(cur.func.encodings[inst])
+            {
+                // Conservatively give up if the encoding has different constraints
+                // than the original, so that we don't risk picking a new encoding
+                // which the existing operands don't satisfy. We can't check for
+                // validity directly because we don't have a RegDiversions active so
+                // we don't know which registers are actually in use.
+                dbg!("  trying [{}]: constraints differ", encinfo.display(enc));
+                false
+            } else {
+                dbg!("  trying [{}]: OK", encinfo.display(enc));
+                true
+            }
         },
     )
     {
