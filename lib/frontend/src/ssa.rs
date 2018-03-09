@@ -720,21 +720,7 @@ mod tests {
     use cretonne::ir::instructions::BranchInfo;
     use cretonne::settings;
     use ssa::SSABuilder;
-    use std::u32;
-
-    /// An opaque reference to variable.
-    #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-    pub struct Variable(u32);
-    impl EntityRef for Variable {
-        fn new(index: usize) -> Self {
-            assert!(index < (u32::MAX as usize));
-            Variable(index as u32)
-        }
-
-        fn index(self) -> usize {
-            self.0 as usize
-        }
-    }
+    use Variable;
 
     #[test]
     fn simple_block() {
@@ -748,14 +734,14 @@ mod tests {
         // z = x + z;
 
         let block = ssa.declare_ebb_header_block(ebb0);
-        let x_var = Variable(0);
+        let x_var = Variable::new(0);
         let x_ssa = {
             let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
             cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x_ssa, block);
-        let y_var = Variable(1);
+        let y_var = Variable::new(1);
         let y_ssa = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
             cur.ins().iconst(I32, 2)
@@ -764,7 +750,7 @@ mod tests {
 
         assert_eq!(ssa.use_var(&mut func, x_var, I32, block).0, x_ssa);
         assert_eq!(ssa.use_var(&mut func, y_var, I32, block).0, y_ssa);
-        let z_var = Variable(2);
+        let z_var = Variable::new(2);
         let x_use1 = ssa.use_var(&mut func, x_var, I32, block).0;
         let y_use1 = ssa.use_var(&mut func, y_var, I32, block).0;
         let z1_ssa = {
@@ -800,7 +786,7 @@ mod tests {
         //    y = x + y;
 
         let block0 = ssa.declare_ebb_header_block(ebb0);
-        let x_var = Variable(0);
+        let x_var = Variable::new(0);
         let x_ssa = {
             let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
@@ -809,7 +795,7 @@ mod tests {
             cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x_ssa, block0);
-        let y_var = Variable(1);
+        let y_var = Variable::new(1);
         let y_ssa = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
             cur.ins().iconst(I32, 2)
@@ -817,7 +803,7 @@ mod tests {
         ssa.def_var(y_var, y_ssa, block0);
         assert_eq!(ssa.use_var(&mut func, x_var, I32, block0).0, x_ssa);
         assert_eq!(ssa.use_var(&mut func, y_var, I32, block0).0, y_ssa);
-        let z_var = Variable(2);
+        let z_var = Variable::new(2);
         let x_use1 = ssa.use_var(&mut func, x_var, I32, block0).0;
         let y_use1 = ssa.use_var(&mut func, y_var, I32, block0).0;
         let z1_ssa = {
@@ -888,7 +874,7 @@ mod tests {
 
         let block0 = ssa.declare_ebb_header_block(ebb0);
         ssa.seal_ebb_header_block(ebb0, &mut func);
-        let x_var = Variable(0);
+        let x_var = Variable::new(0);
         let x1 = {
             let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
@@ -899,14 +885,14 @@ mod tests {
         };
         ssa.def_var(x_var, x1, block0);
         assert_eq!(ssa.use_var(&mut func, x_var, I32, block0).0, x1);
-        let y_var = Variable(1);
+        let y_var = Variable::new(1);
         let y1 = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
             cur.ins().iconst(I32, 2)
         };
         ssa.def_var(y_var, y1, block0);
         assert_eq!(ssa.use_var(&mut func, y_var, I32, block0).0, y1);
-        let z_var = Variable(2);
+        let z_var = Variable::new(2);
         let x2 = ssa.use_var(&mut func, x_var, I32, block0).0;
         assert_eq!(x2, x1);
         let y2 = ssa.use_var(&mut func, y_var, I32, block0).0;
@@ -995,7 +981,7 @@ mod tests {
         //
         let block0 = ssa.declare_ebb_header_block(ebb0);
         ssa.seal_ebb_header_block(ebb0, &mut func);
-        let x_var = Variable(0);
+        let x_var = Variable::new(0);
         let x1 = {
             let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
@@ -1060,9 +1046,9 @@ mod tests {
         //    jump ebb1
         //
         let block0 = ssa.declare_ebb_header_block(ebb0);
-        let x_var = Variable(0);
-        let y_var = Variable(1);
-        let z_var = Variable(2);
+        let x_var = Variable::new(0);
+        let y_var = Variable::new(1);
+        let z_var = Variable::new(2);
         ssa.seal_ebb_header_block(ebb0, &mut func);
         let x1 = {
             let mut cur = FuncCursor::new(&mut func);
@@ -1125,11 +1111,11 @@ mod tests {
         let ebb0 = func.dfg.make_ebb();
         let block = ssa.declare_ebb_header_block(ebb0);
         ssa.seal_ebb_header_block(ebb0, &mut func);
-        let i32_var = Variable(0);
-        let f32_var = Variable(1);
-        let f64_var = Variable(2);
-        let b1_var = Variable(3);
-        let f32x4_var = Variable(4);
+        let i32_var = Variable::new(0);
+        let f32_var = Variable::new(1);
+        let f64_var = Variable::new(2);
+        let b1_var = Variable::new(3);
+        let f32x4_var = Variable::new(4);
         ssa.use_var(&mut func, i32_var, I32, block);
         ssa.use_var(&mut func, f32_var, F32, block);
         ssa.use_var(&mut func, f64_var, F64, block);
@@ -1147,7 +1133,7 @@ mod tests {
         let ebb0 = func.dfg.make_ebb();
         let block = ssa.declare_ebb_header_block(ebb0);
         ssa.seal_ebb_header_block(ebb0, &mut func);
-        let x_var = Variable(0);
+        let x_var = Variable::new(0);
         assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
         ssa.use_var(&mut func, x_var, I32, block);
         assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
@@ -1166,7 +1152,7 @@ mod tests {
         let mut ssa: SSABuilder<Variable> = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         let block = ssa.declare_ebb_header_block(ebb0);
-        let x_var = Variable(0);
+        let x_var = Variable::new(0);
         assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
         ssa.use_var(&mut func, x_var, I32, block);
         assert_eq!(func.dfg.num_ebb_params(ebb0), 1);
@@ -1200,7 +1186,7 @@ mod tests {
             cur.insert_ebb(ebb1);
             cur.goto_bottom(ebb0);
             cur.ins().return_(&[]);
-            let x_var = Variable(0);
+            let x_var = Variable::new(0);
             cur.goto_bottom(ebb1);
             let val = ssa.use_var(&mut cur.func, x_var, I32, block1).0;
             let brz = cur.ins().brz(val, ebb1, &[]);
@@ -1237,7 +1223,7 @@ mod tests {
         let block2 = ssa.declare_ebb_header_block(ebb2);
         {
             let mut cur = FuncCursor::new(&mut func);
-            let x_var = Variable(0);
+            let x_var = Variable::new(0);
             cur.insert_ebb(ebb0);
             cur.insert_ebb(ebb1);
             cur.insert_ebb(ebb2);
