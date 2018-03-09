@@ -38,7 +38,7 @@ use std::{i32, u32};
 /// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
-    op: &Operator,
+    op: Operator,
     builder: &mut FunctionBuilder<Local>,
     state: &mut TranslationState,
     environ: &mut FE,
@@ -48,7 +48,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     }
 
     // This big match treats all Wasm code operators.
-    match *op {
+    match op {
         /********************************** Locals ****************************************
          *  `get_local` and `set_local` are treated as non-SSA variables and will completely
          *  disappear in the Cretonne Code
@@ -265,7 +265,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 state.peekn(return_count),
             );
         }
-        Operator::BrTable { ref table } => {
+        Operator::BrTable { table } => {
             let (depths, default) = table.read_table();
             let mut min_depth = default;
             for depth in &depths {
@@ -935,11 +935,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 /// are dropped but special ones like `End` or `Else` signal the potential end of the unreachable
 /// portion so the translation state muts be updated accordingly.
 fn translate_unreachable_operator(
-    op: &Operator,
+    op: Operator,
     builder: &mut FunctionBuilder<Local>,
     state: &mut TranslationState,
 ) {
-    match *op {
+    match op {
         Operator::If { ty: _ } => {
             // Push a placeholder control stack entry. The if isn't reachable,
             // so we don't have any branches anywhere.

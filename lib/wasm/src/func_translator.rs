@@ -198,7 +198,7 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     while !state.control_stack.is_empty() {
         builder.set_srcloc(cur_srcloc(&reader));
         let op = reader.read_operator().map_err(|_| CtonError::InvalidInput)?;
-        translate_operator(&op, builder, state, environ);
+        translate_operator(op, builder, state, environ);
     }
 
     // The final `End` operator left us in the exit block where we need to manually add a return
