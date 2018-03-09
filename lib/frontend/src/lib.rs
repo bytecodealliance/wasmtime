@@ -39,23 +39,8 @@
 //! use cretonne::ir::{ExternalName, CallConv, Function, Signature, AbiParam, InstBuilder};
 //! use cretonne::ir::types::*;
 //! use cretonne::settings;
-//! use cton_frontend::{ILBuilder, FunctionBuilder};
+//! use cton_frontend::{ILBuilder, FunctionBuilder, Variable};
 //! use cretonne::verifier::verify_function;
-//! use std::u32;
-//!
-//! // An opaque reference to variable.
-//! #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-//! pub struct Variable(u32);
-//! impl EntityRef for Variable {
-//!     fn new(index: usize) -> Self {
-//!         assert!(index < (u32::MAX as usize));
-//!         Variable(index as u32)
-//!     }
-//!
-//!     fn index(self) -> usize {
-//!         self.0 as usize
-//!     }
-//! }
 //!
 //! fn main() {
 //!     let mut sig = Signature::new(CallConv::Native);
@@ -69,9 +54,9 @@
 //!         let block0 = builder.create_ebb();
 //!         let block1 = builder.create_ebb();
 //!         let block2 = builder.create_ebb();
-//!         let x = Variable(0);
-//!         let y = Variable(1);
-//!         let z = Variable(2);
+//!         let x = Variable::new(0);
+//!         let y = Variable::new(1);
+//!         let z = Variable::new(2);
 //!         builder.declare_var(x, I32);
 //!         builder.declare_var(y, I32);
 //!         builder.declare_var(z, I32);
@@ -149,6 +134,8 @@
 extern crate cretonne;
 
 pub use frontend::{ILBuilder, FunctionBuilder};
+pub use variable::Variable;
 
 mod frontend;
 mod ssa;
+mod variable;
