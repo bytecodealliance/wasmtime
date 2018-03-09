@@ -282,10 +282,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     min_depth_frame.num_return_values()
                 }
             };
+            let val = state.pop1();
+            let mut data = JumpTableData::with_capacity(depths.len());
             if jump_args_count == 0 {
                 // No jump arguments
-                let val = state.pop1();
-                let mut data = JumpTableData::with_capacity(depths.len());
                 for depth in depths {
                     let ebb = {
                         let i = state.control_stack.len() - 1 - (depth as usize);
@@ -307,9 +307,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             } else {
                 // Here we have jump arguments, but Cretonne's br_table doesn't support them
                 // We then proceed to split the edges going out of the br_table
-                let val = state.pop1();
                 let return_count = jump_args_count;
-                let mut data = JumpTableData::with_capacity(depths.len());
                 let mut dest_ebb_sequence = Vec::new();
                 let mut dest_ebb_map = HashMap::new();
                 for depth in depths {
