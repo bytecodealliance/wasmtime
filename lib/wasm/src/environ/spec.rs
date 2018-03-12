@@ -148,7 +148,7 @@ pub trait FuncEnvironment {
     ) -> ir::Value;
 }
 
-/// An object satisfyng the `ModuleEnvironment` trait can be passed as argument to the
+/// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
 /// by the user, they are only for `cretonne-wasm` internal use.
 pub trait ModuleEnvironment<'data> {

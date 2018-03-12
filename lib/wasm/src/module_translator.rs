@@ -1,4 +1,4 @@
-//! Translation skeletton that traverses the whole WebAssembly module and call helper functions
+//! Translation skeleton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
 use cretonne::timing;
 use wasmparser::{ParserState, SectionCode, ParserInput, Parser, WasmDecoder, BinaryReaderError};
@@ -125,6 +125,10 @@ pub fn translate_module<'data>(
                         return Err(format!("wrong content in the data section: {}", s))
                     }
                 }
+            }
+            ParserState::BeginSection { code: SectionCode::Custom { .. }, .. } => {
+                // Ignore unknown custom sections.
+                next_input = ParserInput::SkipSection;
             }
             _ => return Err(String::from("wrong content in the preamble")),
         };

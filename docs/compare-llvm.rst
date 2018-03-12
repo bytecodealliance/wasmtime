@@ -2,9 +2,9 @@
 Cretonne compared to LLVM
 *************************
 
-`LLVM <http://llvm.org>`_ is a collection of compiler components implemented as
+`LLVM <https://llvm.org>`_ is a collection of compiler components implemented as
 a set of C++ libraries. It can be used to build both JIT compilers and static
-compilers like `Clang <http://clang.llvm.org>`_, and it is deservedly very
+compilers like `Clang <https://clang.llvm.org>`_, and it is deservedly very
 popular. `Chris Lattner's chapter about LLVM
 <http://www.aosabook.org/en/llvm.html>`_ in the `Architecture of Open Source
 Applications <http://aosabook.org/en/index.html>`_ book gives an excellent
@@ -40,7 +40,7 @@ Intermediate representations
 LLVM uses multiple intermediate representations as it translates a program to
 binary machine code:
 
-`LLVM IR <http://llvm.org/docs/LangRef.html>`_
+`LLVM IR <https://llvm.org/docs/LangRef.html>`_
     This is the primary intermediate language which has textual, binary, and
     in-memory representations. It serves two main purposes:
 
@@ -49,7 +49,7 @@ binary machine code:
     - Intermediate representation for common mid-level optimizations. A large
       library of code analysis and transformation passes operate on LLVM IR.
 
-`SelectionDAG <http://llvm.org/docs/CodeGenerator.html#instruction-selection-section>`_
+`SelectionDAG <https://llvm.org/docs/CodeGenerator.html#instruction-selection-section>`_
     A graph-based representation of the code in a single basic block is used by
     the instruction selector. It has both ISA-agnostic and ISA-specific
     opcodes. These main passes are run on the SelectionDAG representation:
@@ -65,7 +65,7 @@ binary machine code:
     The SelectionDAG representation automatically eliminates common
     subexpressions and dead code.
 
-`MachineInstr <http://llvm.org/docs/CodeGenerator.html#machine-code-representation>`_
+`MachineInstr <https://llvm.org/docs/CodeGenerator.html#machine-code-representation>`_
     A linear representation of ISA-specific instructions that initially is in
     SSA form, but it can also represent non-SSA form during and after register
     allocation. Many low-level optimizations run on MI code. The most important
@@ -74,7 +74,7 @@ binary machine code:
     - Scheduling.
     - Register allocation.
 
-`MC <http://llvm.org/docs/CodeGenerator.html#the-mc-layer>`_
+`MC <https://llvm.org/docs/CodeGenerator.html#the-mc-layer>`_
     MC serves as the output abstraction layer and is the basis for LLVM's
     integrated assembler. It is used for:
 
@@ -126,7 +126,7 @@ condition is false. The Cretonne representation is closer to how machine code
 works; LLVM's representation is more abstract.
 
 LLVM uses `phi instructions
-<http://llvm.org/docs/LangRef.html#phi-instruction>`_ in its SSA
+<https://llvm.org/docs/LangRef.html#phi-instruction>`_ in its SSA
 representation. Cretonne passes arguments to EBBs instead. The two
 representations are equivalent, but the EBB arguments are better suited to
 handle EBBs that may contain multiple branches to the same destination block

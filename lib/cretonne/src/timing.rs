@@ -55,6 +55,7 @@ define_passes!{
     flowgraph: "Control flow graph",
     domtree: "Dominator tree",
     loop_analysis: "Loop analysis",
+    preopt: "Pre-legalization rewriting",
     legalize: "Legalization",
     gvn: "Global value numbering",
     licm: "Loop invariant code motion",
@@ -186,7 +187,7 @@ mod details {
             let duration = self.start.elapsed();
             dbg!("timing: Ending {}", self.pass);
             let old_cur = CURRENT_PASS.with(|p| p.replace(self.prev));
-            assert_eq!(self.pass, old_cur, "Timing tokens dropped out of order");
+            debug_assert_eq!(self.pass, old_cur, "Timing tokens dropped out of order");
             PASS_TIME.with(|rc| {
                 let mut table = rc.borrow_mut();
                 table.pass[self.pass.idx()].total += duration;

@@ -29,7 +29,7 @@ pub enum CtonError {
     /// Cretonne can compile very large and complicated functions, but the [implementation has
     /// limits][limits] that cause compilation to fail when they are exceeded.
     ///
-    /// [limits]: http://cretonne.readthedocs.io/en/latest/langref.html#implementation-limits
+    /// [limits]: https://cretonne.readthedocs.io/en/latest/langref.html#implementation-limits
     #[fail(display = "Implementation limit exceeded")]
     ImplLimitExceeded,
 

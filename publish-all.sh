@@ -1,11 +1,11 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 cd $(dirname "$0")
-topdir=$(pwd)
+topdir="$(pwd)"
 
 # All the cretonne-* crates have the same version number
 # The filecheck crate version is managed independently.
-version="0.1.0"
+version="0.3.4"
 
 # Update all of the Cargo.toml files.
 #
@@ -16,9 +16,9 @@ for crate in . lib/*; do
         continue
     fi
     # Update the version number of this crate to $version.
-    sed -i "" -e "s/^version = .*/version = \"$version\"/" $crate/Cargo.toml
+    sed -i.bk -e "s/^version = .*/version = \"$version\"/" "$crate/Cargo.toml"
     # Update the required version number of any cretonne* dependencies.
-    sed -i "" -e "/^cretonne/s/version = \"[^\"]*\"/version = \"$version\"/" $crate/Cargo.toml
+    sed -i.bk -e "/^cretonne/s/version = \"[^\"]*\"/version = \"$version\"/" "$crate/Cargo.toml"
 done
 
 # Update our local Cargo.lock (not checked in).
@@ -29,6 +29,10 @@ cargo update
 #
 # Note that libraries need to be published in topological order.
 
+echo git commit -a -m "\"Bump version to $version"\"
+echo git push
 for crate in filecheck cretonne frontend native reader wasm; do
-    echo cargo publish --manifest-path lib/$crate/Cargo.toml
+    echo cargo publish --manifest-path "lib/$crate/Cargo.toml"
 done
+echo
+echo Then, go to https://github.com/Cretonne/cretonne/releases/ and define a new release.

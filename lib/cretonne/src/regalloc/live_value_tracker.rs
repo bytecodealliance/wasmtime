@@ -208,7 +208,7 @@ impl LiveValueTracker {
         let first_arg = self.live.values.len();
         for &value in dfg.ebb_params(ebb) {
             let lr = &liveness[value];
-            assert_eq!(lr.def(), ebb.into());
+            debug_assert_eq!(lr.def(), ebb.into());
             match lr.def_local_end().into() {
                 ExpandedProgramPoint::Inst(endpoint) => {
                     self.live.push(value, endpoint, lr);
@@ -216,7 +216,7 @@ impl LiveValueTracker {
                 ExpandedProgramPoint::Ebb(local_ebb) => {
                     // This is a dead EBB parameter which is not even live into the first
                     // instruction in the EBB.
-                    assert_eq!(
+                    debug_assert_eq!(
                         local_ebb,
                         ebb,
                         "EBB parameter live range ends at wrong EBB header"
@@ -261,7 +261,7 @@ impl LiveValueTracker {
     ) -> (&[LiveValue], &[LiveValue], &[LiveValue]) {
         // Save a copy of the live values before any branches or jumps that could be somebody's
         // immediate dominator.
-        match dfg[inst].analyze_branch(&dfg.value_lists) {
+        match dfg.analyze_branch(inst) {
             BranchInfo::NotABranch => {}
             _ => self.save_idom_live_set(inst),
         }
@@ -274,7 +274,7 @@ impl LiveValueTracker {
         let first_def = self.live.values.len();
         for &value in dfg.inst_results(inst) {
             let lr = &liveness[value];
-            assert_eq!(lr.def(), inst.into());
+            debug_assert_eq!(lr.def(), inst.into());
             match lr.def_local_end().into() {
                 ExpandedProgramPoint::Inst(endpoint) => {
                     self.live.push(value, endpoint, lr);

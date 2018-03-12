@@ -119,7 +119,7 @@ All types of tests allow shared Cretonne settings to be modified:
     option        : flag | setting "=" value
 
 The shared settings available for all target ISAs are defined in
-:file:`lib/cretonne/meta/cretonne/settings.py`.
+:file:`lib/cretonne/meta/base/settings.py`.
 
 The ``set`` lines apply settings cumulatively::
 

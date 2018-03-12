@@ -336,6 +336,28 @@ ebb0:
     ; asm: divq %r10
     [-,%rax,%rdx] v202, v203 = x86_udivmodx v190, v191, v3  ; bin: 49 f7 f2
 
+    ; double-length multiply instructions, 64 bit
+    [-,%rax]       v1001 = iconst.i64 1
+    [-,%r15]       v1002 = iconst.i64 2
+    ; asm: mulq %r15
+    [-,%rax,%rdx]  v1003, v1004 = x86_umulx v1001, v1002 ; bin: 49 f7 e7
+    ; asm: imulq %r15
+    [-,%rax,%rdx]  v1005, v1006 = x86_smulx v1001, v1002 ; bin: 49 f7 ef
+
+    ; double-length multiply instructions, 32 bit
+    [-,%rax]       v1011 = iconst.i32 1
+    [-,%r15]       v1012 = iconst.i32 2
+    [-,%rcx]       v1017 = iconst.i32 3
+    ; asm: mull %r15d
+    [-,%rax,%rdx]  v1013, v1014 = x86_umulx v1011, v1012    ; bin: 41 f7 e7
+    ; asm: imull %r15d
+    [-,%rax,%rdx]  v1015, v1016 = x86_smulx v1011, v1012    ; bin: 41 f7 ef
+
+    ; asm: mull %ecx
+    [-,%rax,%rdx]  v1018, v1019 = x86_umulx v1011, v1017    ; bin: f7 e1
+    ; asm: imull %ecx
+    [-,%rax,%rdx]  v1020, v1021 = x86_smulx v1011, v1017    ; bin: f7 e9
+
     ; Bit-counting instructions.
 
     ; asm: popcntq %rsi, %rcx
@@ -1060,6 +1082,118 @@ ebb1:
     ; asm: ebb2x:
 ebb2:
     jump ebb1                                   ; bin: eb fd
+}
+
+; Tests for i32/i8 conversion instructions.
+function %I32_I8() {
+ebb0:
+    [-,%rcx]            v1 = iconst.i32 1
+    [-,%rsi]            v2 = iconst.i32 2
+    [-,%r10]            v3 = iconst.i32 3
+
+    [-,%rcx]            v11 = ireduce.i8 v1             ; bin:
+    [-,%rsi]            v12 = ireduce.i8 v2             ; bin:
+    [-,%r10]            v13 = ireduce.i8 v3             ; bin:
+
+    ; asm: movsbl %cl, %esi
+    [-,%rsi]            v20 = sextend.i32 v11           ; bin: 0f be f1
+    ; asm: movsbl %sil, %r10d
+    [-,%r10]            v21 = sextend.i32 v12           ; bin: 44 0f be d6
+    ; asm: movsbl %r10b, %ecx
+    [-,%rcx]            v22 = sextend.i32 v13           ; bin: 41 0f be ca
+
+    ; asm: movzbl %cl, %esi
+    [-,%rsi]            v30 = uextend.i32 v11           ; bin: 0f b6 f1
+    ; asm: movzbl %sil, %r10d
+    [-,%r10]            v31 = uextend.i32 v12           ; bin: 44 0f b6 d6
+    ; asm: movzbl %r10b, %ecx
+    [-,%rcx]            v32 = uextend.i32 v13           ; bin: 41 0f b6 ca
+
+    trap user0                                          ; bin: 0f 0b
+}
+
+; Tests for i32/i16 conversion instructions.
+function %I32_I16() {
+ebb0:
+    [-,%rcx]            v1 = iconst.i32 1
+    [-,%rsi]            v2 = iconst.i32 2
+    [-,%r10]            v3 = iconst.i32 3
+
+    [-,%rcx]            v11 = ireduce.i16 v1            ; bin:
+    [-,%rsi]            v12 = ireduce.i16 v2            ; bin:
+    [-,%r10]            v13 = ireduce.i16 v3            ; bin:
+
+    ; asm: movswl %cx, %esi
+    [-,%rsi]            v20 = sextend.i32 v11           ; bin: 0f bf f1
+    ; asm: movswl %si, %r10d
+    [-,%r10]            v21 = sextend.i32 v12           ; bin: 44 0f bf d6
+    ; asm: movswl %r10w, %ecx
+    [-,%rcx]            v22 = sextend.i32 v13           ; bin: 41 0f bf ca
+
+    ; asm: movzwl %cx, %esi
+    [-,%rsi]            v30 = uextend.i32 v11           ; bin: 0f b7 f1
+    ; asm: movzwl %si, %r10d
+    [-,%r10]            v31 = uextend.i32 v12           ; bin: 44 0f b7 d6
+    ; asm: movzwl %r10w, %ecx
+    [-,%rcx]            v32 = uextend.i32 v13           ; bin: 41 0f b7 ca
+
+    trap user0                                          ; bin: 0f 0b
+}
+
+; Tests for i64/i8 conversion instructions.
+function %I64_I8() {
+ebb0:
+    [-,%rcx]            v1 = iconst.i64 1
+    [-,%rsi]            v2 = iconst.i64 2
+    [-,%r10]            v3 = iconst.i64 3
+
+    [-,%rcx]            v11 = ireduce.i8 v1             ; bin:
+    [-,%rsi]            v12 = ireduce.i8 v2             ; bin:
+    [-,%r10]            v13 = ireduce.i8 v3             ; bin:
+
+    ; asm: movsbq %cl, %rsi
+    [-,%rsi]            v20 = sextend.i64 v11           ; bin: 48 0f be f1
+    ; asm: movsbq %sil, %r10
+    [-,%r10]            v21 = sextend.i64 v12           ; bin: 4c 0f be d6
+    ; asm: movsbq %r10b, %rcx
+    [-,%rcx]            v22 = sextend.i64 v13           ; bin: 49 0f be ca
+
+    ; asm: movzbl %cl, %esi
+    [-,%rsi]            v30 = uextend.i64 v11           ; bin: 0f b6 f1
+    ; asm: movzbl %sil, %r10d
+    [-,%r10]            v31 = uextend.i64 v12           ; bin: 44 0f b6 d6
+    ; asm: movzbl %r10b, %ecx
+    [-,%rcx]            v32 = uextend.i64 v13           ; bin: 41 0f b6 ca
+
+    trap user0                                          ; bin: 0f 0b
+}
+
+; Tests for i64/i16 conversion instructions.
+function %I64_I16() {
+ebb0:
+    [-,%rcx]            v1 = iconst.i64 1
+    [-,%rsi]            v2 = iconst.i64 2
+    [-,%r10]            v3 = iconst.i64 3
+
+    [-,%rcx]            v11 = ireduce.i16 v1            ; bin:
+    [-,%rsi]            v12 = ireduce.i16 v2            ; bin:
+    [-,%r10]            v13 = ireduce.i16 v3            ; bin:
+
+    ; asm: movswq %cx, %rsi
+    [-,%rsi]            v20 = sextend.i64 v11           ; bin: 48 0f bf f1
+    ; asm: movswq %si, %r10
+    [-,%r10]            v21 = sextend.i64 v12           ; bin: 4c 0f bf d6
+    ; asm: movswq %r10w, %rcx
+    [-,%rcx]            v22 = sextend.i64 v13           ; bin: 49 0f bf ca
+
+    ; asm: movzwl %cx, %esi
+    [-,%rsi]            v30 = uextend.i64 v11           ; bin: 0f b7 f1
+    ; asm: movzwl %si, %r10d
+    [-,%r10]            v31 = uextend.i64 v12           ; bin: 44 0f b7 d6
+    ; asm: movzwl %r10w, %ecx
+    [-,%rcx]            v32 = uextend.i64 v13           ; bin: 41 0f b7 ca
+
+    trap user0                                          ; bin: 0f 0b
 }
 
 ; Tests for i64/i32 conversion instructions.

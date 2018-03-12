@@ -4,13 +4,13 @@ set is_compressed
 isa intel haswell
 
 function %foo() {
-    ss0 = local 168
+    ss0 = explicit_slot 168
 ebb0:
     return
 }
 
 ; check: function %foo(i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15]) -> i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15] native {
-; nextln:     ss0 = local 168, offset -224
+; nextln:     ss0 = explicit_slot 168, offset -224
 ; nextln:     ss1 = incoming_arg 56, offset -56
 ; check: ebb0(v0: i64 [%rbp], v1: i64 [%rbx], v2: i64 [%r12], v3: i64 [%r13], v4: i64 [%r14], v5: i64 [%r15]):
 ; nextln:     x86_push v0

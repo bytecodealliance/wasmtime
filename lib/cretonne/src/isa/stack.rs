@@ -41,12 +41,12 @@ impl StackRef {
         let slot = &frame[ss];
         let offset = if slot.kind == StackSlotKind::OutgoingArg {
             // Outgoing argument slots have offsets relative to our stack pointer.
-            slot.offset
+            slot.offset.unwrap()
         } else {
             // All other slots have offsets relative to our caller's stack frame.
             // Offset where SP is pointing. (All ISAs have stacks growing downwards.)
             let sp_offset = -(size as StackOffset);
-            slot.offset - sp_offset
+            slot.offset.unwrap() - sp_offset
         };
         StackRef {
             base: StackBase::SP,

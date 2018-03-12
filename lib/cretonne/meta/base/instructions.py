@@ -833,6 +833,26 @@ imul = Instruction(
         """,
         ins=(x, y), outs=a)
 
+umulhi = Instruction(
+        'umulhi', r"""
+        Unsigned integer multiplication, producing the high half of a
+        double-length result.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(x, y), outs=a)
+
+smulhi = Instruction(
+        'smulhi', """
+        Signed integer multiplication, producing the high half of a
+        double-length result.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(x, y), outs=a)
+
 udiv = Instruction(
         'udiv', r"""
         Unsigned integer division: :math:`a := \lfloor {x \over y} \rfloor`.
@@ -1679,7 +1699,7 @@ fpromote = Instruction(
         This is an exact operation.
 
         Cretonne currently only supports two floating point formats
-        - :type:`f32` and :type:`f64`.  This may change in the future.
+        - :type:`f32` and :type:`f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
         and the result lanes must not have fewer bits than the input lanes. If
@@ -1695,10 +1715,10 @@ fdemote = Instruction(
         by rounding to nearest, ties to even.
 
         Cretonne currently only supports two floating point formats
-        - :type:`f32` and :type:`f64`.  This may change in the future.
+        - :type:`f32` and :type:`f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
-        and the result lanes must not have more bits than the input lanes.  If
+        and the result lanes must not have more bits than the input lanes. If
         the input and output types are the same, this is a no-op.
         """,
         ins=x, outs=a, constraints=WiderOrEq(Float, FloatTo))

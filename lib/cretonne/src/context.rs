@@ -18,11 +18,12 @@ use isa::TargetIsa;
 use legalize_function;
 use regalloc;
 use result::{CtonError, CtonResult};
-use settings::FlagsOrIsa;
+use settings::{FlagsOrIsa, OptLevel};
 use unreachable_code::eliminate_unreachable_code;
 use verifier;
 use simple_gvn::do_simple_gvn;
 use licm::do_licm;
+use preopt::do_preopt;
 use timing;
 
 /// Persistent data structures and compilation pipeline.
@@ -87,15 +88,14 @@ impl Context {
         self.verify_if(isa)?;
 
         self.compute_cfg();
+        self.preopt(isa)?;
         self.legalize(isa)?;
-        /* TODO: Enable additional optimization passes.
         if isa.flags().opt_level() == OptLevel::Best {
             self.compute_domtree();
             self.compute_loop_analysis();
             self.licm(isa)?;
             self.simple_gvn(isa)?;
         }
-        */
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
         self.regalloc(isa)?;
@@ -129,6 +129,27 @@ impl Context {
         } else {
             Ok(())
         }
+    }
+
+    /// Run the locations verifier on the function.
+    pub fn verify_locations<'a>(&self, isa: &TargetIsa) -> verifier::Result {
+        verifier::verify_locations(isa, &self.func, None)
+    }
+
+    /// Run the locations verifier only if the `enable_verifier` setting is true.
+    pub fn verify_locations_if<'a>(&self, isa: &TargetIsa) -> CtonResult {
+        if isa.flags().enable_verifier() {
+            self.verify_locations(isa).map_err(Into::into)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Perform pre-legalization rewrites on the function.
+    pub fn preopt(&mut self, isa: &TargetIsa) -> CtonResult {
+        do_preopt(&mut self.func);
+        self.verify_if(isa)?;
+        Ok(())
     }
 
     /// Run the legalizer for `isa` on the function.
@@ -205,13 +226,16 @@ impl Context {
     /// Insert prologue and epilogues after computing the stack frame layout.
     pub fn prologue_epilogue(&mut self, isa: &TargetIsa) -> CtonResult {
         isa.prologue_epilogue(&mut self.func)?;
-        self.verify_if(isa)
+        self.verify_if(isa)?;
+        self.verify_locations_if(isa)?;
+        Ok(())
     }
 
     /// Run the branch relaxation pass and return the final code size.
     pub fn relax_branches(&mut self, isa: &TargetIsa) -> Result<CodeOffset, CtonError> {
         let code_size = relax_branches(&mut self.func, isa)?;
         self.verify_if(isa)?;
+        self.verify_locations_if(isa)?;
 
         Ok(code_size)
     }

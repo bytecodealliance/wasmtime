@@ -1,5 +1,8 @@
 //! Cretonne code generation library.
-#![deny(missing_docs)]
+
+#![deny(missing_docs,
+        trivial_numeric_casts,
+        unused_extern_crates)]
 
 // Turns on alloc feature if no_std
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -46,11 +49,13 @@ mod abi;
 mod bitset;
 mod constant_hash;
 mod context;
+mod divconst_magic_numbers;
 mod iterators;
 mod legalizer;
 mod licm;
 mod partition_slice;
 mod predicates;
+mod preopt;
 mod ref_slice;
 mod regalloc;
 mod scoped_hash_map;

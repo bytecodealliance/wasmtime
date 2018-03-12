@@ -19,6 +19,7 @@ mod concurrent;
 mod domtree;
 mod legalizer;
 mod licm;
+mod preopt;
 mod regalloc;
 mod runner;
 mod runone;
@@ -64,6 +65,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::Result<Box<subtest::SubTest>> {
         "domtree" => domtree::subtest(parsed),
         "legalizer" => legalizer::subtest(parsed),
         "licm" => licm::subtest(parsed),
+        "preopt" => preopt::subtest(parsed),
         "print-cfg" => print_cfg::subtest(parsed),
         "regalloc" => regalloc::subtest(parsed),
         "simple-gvn" => simple_gvn::subtest(parsed),

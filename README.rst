@@ -3,7 +3,7 @@ Cretonne Code Generator
 =======================
 
 Cretonne is a low-level retargetable code generator. It translates a `target-independent
-intermediate language <http://cretonne.readthedocs.io/en/latest/langref.html>`_ into executable
+intermediate language <https://cretonne.readthedocs.io/en/latest/langref.html>`_ into executable
 machine code.
 
 *This is a work in progress that is not yet functional.*
@@ -100,7 +100,7 @@ Building the documentation
 --------------------------
 
 To build the Cretonne documentation, you need the `Sphinx documentation
-generator <http://www.sphinx-doc.org/>`_::
+generator <https://www.sphinx-doc.org/>`_::
 
     $ pip install sphinx sphinx-autobuild sphinx_rtd_theme
     $ cd cretonne/docs

@@ -688,7 +688,7 @@ impl<'a> Verifier<'a> {
     }
 
     fn typecheck_variable_args(&self, inst: Inst) -> Result {
-        match self.func.dfg[inst].analyze_branch(&self.func.dfg.value_lists) {
+        match self.func.dfg.analyze_branch(inst) {
             BranchInfo::SingleDest(ebb, _) => {
                 let iter = self.func.dfg.ebb_params(ebb).iter().map(|&v| {
                     self.func.dfg.value_type(v)
@@ -803,7 +803,7 @@ impl<'a> Verifier<'a> {
                             slot
                         );
                     }
-                    if slot.offset != offset {
+                    if slot.offset != Some(offset) {
                         return err!(
                             inst,
                             "Outgoing stack argument {} should have offset {}: {} = {}",

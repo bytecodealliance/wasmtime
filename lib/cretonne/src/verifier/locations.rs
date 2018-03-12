@@ -207,14 +207,14 @@ impl<'a> LocationVerifier<'a> {
                             slot.kind
                         );
                     }
-                    if slot.offset != offset {
+                    if slot.offset.unwrap() != offset {
                         return err!(
                             inst,
                             "ABI expects {} at stack offset {}, but {} is at {}",
                             value,
                             offset,
                             ss,
-                            slot.offset
+                            slot.offset.unwrap()
                         );
                     }
                 } else {
@@ -274,7 +274,7 @@ impl<'a> LocationVerifier<'a> {
         };
         let dfg = &self.func.dfg;
 
-        match dfg[inst].analyze_branch(&dfg.value_lists) {
+        match dfg.analyze_branch(inst) {
             NotABranch => {
                 panic!(
                     "No branch information for {}",

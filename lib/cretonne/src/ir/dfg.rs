@@ -217,11 +217,11 @@ impl DataFlowGraph {
     ///
     /// The `dest` value can't be attached to an instruction or EBB.
     pub fn change_to_alias(&mut self, dest: Value, src: Value) {
-        assert!(!self.value_is_attached(dest));
+        debug_assert!(!self.value_is_attached(dest));
         // Try to create short alias chains by finding the original source value.
         // This also avoids the creation of loops.
         let original = self.resolve_aliases(src);
-        assert_ne!(
+        debug_assert_ne!(
             dest,
             original,
             "Aliasing {} to {} would create a loop",
@@ -229,7 +229,7 @@ impl DataFlowGraph {
             src
         );
         let ty = self.value_type(original);
-        assert_eq!(
+        debug_assert_eq!(
             self.value_type(dest),
             ty,
             "Aliasing {} to {} would change its type {} to {}",
@@ -273,7 +273,7 @@ impl DataFlowGraph {
         {
             let original = src;
             let ty = self.value_type(original);
-            assert_eq!(
+            debug_assert_eq!(
                 self.value_type(dest),
                 ty,
                 "Aliasing {} to {} would change its type {} to {}",
@@ -498,9 +498,9 @@ impl DataFlowGraph {
     /// This is a very low-level operation. Usually, instruction results with the correct types are
     /// created automatically. The `res` value must not be attached to anything else.
     pub fn attach_result(&mut self, inst: Inst, res: Value) {
-        assert!(!self.value_is_attached(res));
+        debug_assert!(!self.value_is_attached(res));
         let num = self.results[inst].push(res, &mut self.value_lists);
-        assert!(num <= u16::MAX as usize, "Too many result values");
+        debug_assert!(num <= u16::MAX as usize, "Too many result values");
         let ty = self.value_type(res);
         self.values[res] = ValueData::Inst {
             ty,
@@ -533,7 +533,7 @@ impl DataFlowGraph {
                 .expect("Replacing detached result"),
             new_value,
         );
-        assert_eq!(
+        debug_assert_eq!(
             attached,
             old_value,
             "{} wasn't detached from {}",
@@ -547,7 +547,7 @@ impl DataFlowGraph {
     pub fn append_result(&mut self, inst: Inst, ty: Type) -> Value {
         let res = self.values.next_key();
         let num = self.results[inst].push(res, &mut self.value_lists);
-        assert!(num <= u16::MAX as usize, "Too many result values");
+        debug_assert!(num <= u16::MAX as usize, "Too many result values");
         self.make_value(ValueData::Inst {
             ty,
             inst,
@@ -684,7 +684,7 @@ impl DataFlowGraph {
     pub fn append_ebb_param(&mut self, ebb: Ebb, ty: Type) -> Value {
         let param = self.values.next_key();
         let num = self.ebbs[ebb].params.push(param, &mut self.value_lists);
-        assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
+        debug_assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
         self.make_value(ValueData::Param {
             ty,
             num: num as u16,
@@ -761,9 +761,9 @@ impl DataFlowGraph {
     ///
     /// In almost all cases, you should be using `append_ebb_param()` instead of this method.
     pub fn attach_ebb_param(&mut self, ebb: Ebb, param: Value) {
-        assert!(!self.value_is_attached(param));
+        debug_assert!(!self.value_is_attached(param));
         let num = self.ebbs[ebb].params.push(param, &mut self.value_lists);
-        assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
+        debug_assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
         let ty = self.value_type(param);
         self.values[param] = ValueData::Param {
             ty,
@@ -859,7 +859,7 @@ impl DataFlowGraph {
     /// to create invalid values for index padding which may be reassigned later.
     #[cold]
     fn set_value_type_for_parser(&mut self, v: Value, t: Type) {
-        debug_assert!(
+        assert!(
             self.value_type(v) == types::VOID,
             "this function is only for assigning types to previously invalid values"
         );
@@ -882,7 +882,7 @@ impl DataFlowGraph {
     ) -> usize {
         // Get the call signature if this is a function call.
         if let Some(sig) = self.call_signature(inst) {
-            debug_assert_eq!(self.insts[inst].opcode().constraints().fixed_results(), 0);
+            assert_eq!(self.insts[inst].opcode().constraints().fixed_results(), 0);
             for res_idx in 0..self.signatures[sig].returns.len() {
                 let ty = self.signatures[sig].returns[res_idx].value_type;
                 if let Some(v) = reuse.get(res_idx) {

@@ -26,20 +26,20 @@ pub enum ControlStackFrame {
         branch_inst: Inst,
         num_return_values: usize,
         original_stack_size: usize,
-        reachable: bool,
+        exit_is_branched_to: bool,
+        reachable_from_top: bool,
     },
     Block {
         destination: Ebb,
         num_return_values: usize,
         original_stack_size: usize,
-        reachable: bool,
+        exit_is_branched_to: bool,
     },
     Loop {
         destination: Ebb,
         header: Ebb,
         num_return_values: usize,
         original_stack_size: usize,
-        reachable: bool,
     },
 }
 
@@ -81,19 +81,21 @@ impl ControlStackFrame {
         }
     }
 
-    pub fn is_reachable(&self) -> bool {
+    pub fn exit_is_branched_to(&self) -> bool {
         match *self {
-            ControlStackFrame::If { reachable, .. } |
-            ControlStackFrame::Block { reachable, .. } |
-            ControlStackFrame::Loop { reachable, .. } => reachable,
+            ControlStackFrame::If { exit_is_branched_to, .. } |
+            ControlStackFrame::Block { exit_is_branched_to, .. } => exit_is_branched_to,
+            ControlStackFrame::Loop { .. } => false,
         }
     }
 
-    pub fn set_reachable(&mut self) {
+    pub fn set_branched_to_exit(&mut self) {
         match *self {
-            ControlStackFrame::If { ref mut reachable, .. } |
-            ControlStackFrame::Block { ref mut reachable, .. } |
-            ControlStackFrame::Loop { ref mut reachable, .. } => *reachable = true,
+            ControlStackFrame::If { ref mut exit_is_branched_to, .. } |
+            ControlStackFrame::Block { ref mut exit_is_branched_to, .. } => {
+                *exit_is_branched_to = true
+            }
+            ControlStackFrame::Loop { .. } => {}
         }
     }
 }
@@ -106,8 +108,7 @@ impl ControlStackFrame {
 pub struct TranslationState {
     pub stack: Vec<Value>,
     pub control_stack: Vec<ControlStackFrame>,
-    pub phantom_unreachable_stack_depth: usize,
-    pub real_unreachable_stack_depth: usize,
+    pub reachable: bool,
 
     // Map of global variables that have already been created by `FuncEnvironment::make_global`.
     globals: HashMap<GlobalIndex, GlobalValue>,
@@ -131,8 +132,7 @@ impl TranslationState {
         Self {
             stack: Vec::new(),
             control_stack: Vec::new(),
-            phantom_unreachable_stack_depth: 0,
-            real_unreachable_stack_depth: 0,
+            reachable: true,
             globals: HashMap::new(),
             heaps: HashMap::new(),
             signatures: HashMap::new(),
@@ -143,8 +143,7 @@ impl TranslationState {
     fn clear(&mut self) {
         debug_assert!(self.stack.is_empty());
         debug_assert!(self.control_stack.is_empty());
-        debug_assert_eq!(self.phantom_unreachable_stack_depth, 0);
-        debug_assert_eq!(self.real_unreachable_stack_depth, 0);
+        self.reachable = true;
         self.globals.clear();
         self.heaps.clear();
         self.signatures.clear();
@@ -220,7 +219,7 @@ impl TranslationState {
             destination: following_code,
             original_stack_size: self.stack.len(),
             num_return_values: num_result_types,
-            reachable: false,
+            exit_is_branched_to: false,
         });
     }
 
@@ -231,7 +230,6 @@ impl TranslationState {
             destination: following_code,
             original_stack_size: self.stack.len(),
             num_return_values: num_result_types,
-            reachable: false,
         });
     }
 
@@ -242,18 +240,9 @@ impl TranslationState {
             destination: following_code,
             original_stack_size: self.stack.len(),
             num_return_values: num_result_types,
-            reachable: false,
+            exit_is_branched_to: false,
+            reachable_from_top: self.reachable,
         });
-    }
-
-    /// Test if the translation state is currently in unreachable code.
-    pub fn in_unreachable_code(&self) -> bool {
-        if self.real_unreachable_stack_depth > 0 {
-            true
-        } else {
-            debug_assert_eq!(self.phantom_unreachable_stack_depth, 0, "in reachable code");
-            false
-        }
     }
 }
 

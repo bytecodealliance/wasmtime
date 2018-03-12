@@ -25,9 +25,10 @@
 use cretonne::ir::{self, InstBuilder, MemFlags, JumpTableData};
 use cretonne::ir::types::*;
 use cretonne::ir::condcodes::{IntCC, FloatCC};
-use cton_frontend::FunctionBuilder;
+use cretonne::packed_option::ReservedValue;
+use cton_frontend::{FunctionBuilder, Variable};
 use wasmparser::{Operator, MemoryImmediate};
-use translation_utils::{f32_translation, f64_translation, type_to_type, num_return_values, Local};
+use translation_utils::{f32_translation, f64_translation, type_to_type, num_return_values};
 use translation_utils::{TableIndex, SignatureIndex, FunctionIndex, MemoryIndex};
 use state::{TranslationState, ControlStackFrame};
 use std::collections::{HashMap, hash_map};
@@ -38,29 +39,31 @@ use std::vec::Vec;
 /// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
-    op: &Operator,
-    builder: &mut FunctionBuilder<Local>,
+    op: Operator,
+    builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
     environ: &mut FE,
 ) {
-    if state.in_unreachable_code() {
+    if !state.reachable {
         return translate_unreachable_operator(op, builder, state);
     }
 
     // This big match treats all Wasm code operators.
-    match *op {
+    match op {
         /********************************** Locals ****************************************
          *  `get_local` and `set_local` are treated as non-SSA variables and will completely
-         *  diseappear in the Cretonne Code
+         *  disappear in the Cretonne Code
          ***********************************************************************************/
-        Operator::GetLocal { local_index } => state.push1(builder.use_var(Local(local_index))),
+        Operator::GetLocal { local_index } => {
+            state.push1(builder.use_var(Variable::with_u32(local_index)))
+        }
         Operator::SetLocal { local_index } => {
             let val = state.pop1();
-            builder.def_var(Local(local_index), val);
+            builder.def_var(Variable::with_u32(local_index), val);
         }
         Operator::TeeLocal { local_index } => {
             let val = state.peek1();
-            builder.def_var(Local(local_index), val);
+            builder.def_var(Variable::with_u32(local_index), val);
         }
         /********************************** Globals ****************************************
          *  `get_global` and `set_global` are handled by the environment.
@@ -90,7 +93,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             }
         }
         /********************************* Stack misc ***************************************
-         *  `drop`, `nop`,  `unreachable` and `select`.
+         *  `drop`, `nop`, `unreachable` and `select`.
          ***********************************************************************************/
         Operator::Drop => {
             state.pop1();
@@ -106,7 +109,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // We use `trap user0` to indicate a user-generated trap.
             // We could make the trap code configurable if need be.
             builder.ins().trap(ir::TrapCode::User(0));
-            state.real_unreachable_stack_depth = 1;
+            state.reachable = false;
         }
         /***************************** Control flow blocks **********************************
          *  When starting a control flow block, we create a new `Ebb` that will hold the code
@@ -156,15 +159,24 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // and push a new control frame with a new ebb for the code after the if/then/else
             // At the end of the then clause we jump to the destination
             let i = state.control_stack.len() - 1;
-            let (destination, return_count, branch_inst) = match state.control_stack[i] {
-                ControlStackFrame::If {
-                    destination,
-                    num_return_values,
-                    branch_inst,
-                    ..
-                } => (destination, num_return_values, branch_inst),
-                _ => panic!("should not happen"),
-            };
+            let (destination, return_count, branch_inst, ref mut reachable_from_top) =
+                match state.control_stack[i] {
+                    ControlStackFrame::If {
+                        destination,
+                        num_return_values,
+                        branch_inst,
+                        reachable_from_top,
+                        ..
+                    } => (
+                        destination,
+                        num_return_values,
+                        branch_inst,
+                        reachable_from_top,
+                    ),
+                    _ => panic!("should not happen"),
+                };
+            // The if has an else, so there's no branch to the end from the top.
+            *reachable_from_top = false;
             builder.ins().jump(destination, state.peekn(return_count));
             state.popn(return_count);
             // We change the target of the branch instruction
@@ -220,7 +232,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (return_count, br_destination) = {
                 let frame = &mut state.control_stack[i];
                 // We signal that all the code that follows until the next End is unreachable
-                frame.set_reachable();
+                frame.set_branched_to_exit();
                 let return_count = if frame.is_loop() {
                     0
                 } else {
@@ -233,7 +245,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 state.peekn(return_count),
             );
             state.popn(return_count);
-            state.real_unreachable_stack_depth = 1 + relative_depth as usize;
+            state.reachable = false;
         }
         Operator::BrIf { relative_depth } => {
             let val = state.pop1();
@@ -242,7 +254,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 let frame = &mut state.control_stack[i];
                 // The values returned by the branch are still available for the reachable
                 // code that comes after it
-                frame.set_reachable();
+                frame.set_branched_to_exit();
                 let return_count = if frame.is_loop() {
                     0
                 } else {
@@ -256,7 +268,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 state.peekn(return_count),
             );
         }
-        Operator::BrTable { ref table } => {
+        Operator::BrTable { table } => {
             let (depths, default) = table.read_table();
             let mut min_depth = default;
             for depth in &depths {
@@ -273,31 +285,32 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     min_depth_frame.num_return_values()
                 }
             };
+            let val = state.pop1();
+            let mut data = JumpTableData::with_capacity(depths.len());
             if jump_args_count == 0 {
                 // No jump arguments
-                let val = state.pop1();
-                let mut data = JumpTableData::with_capacity(depths.len());
                 for depth in depths {
-                    let i = state.control_stack.len() - 1 - (depth as usize);
-                    let frame = &mut state.control_stack[i];
-                    let ebb = frame.br_destination();
+                    let ebb = {
+                        let i = state.control_stack.len() - 1 - (depth as usize);
+                        let frame = &mut state.control_stack[i];
+                        frame.set_branched_to_exit();
+                        frame.br_destination()
+                    };
                     data.push_entry(ebb);
-                    frame.set_reachable();
                 }
                 let jt = builder.create_jump_table(data);
                 builder.ins().br_table(val, jt);
-                let i = state.control_stack.len() - 1 - (default as usize);
-                let frame = &mut state.control_stack[i];
-                let ebb = frame.br_destination();
+                let ebb = {
+                    let i = state.control_stack.len() - 1 - (default as usize);
+                    let frame = &mut state.control_stack[i];
+                    frame.set_branched_to_exit();
+                    frame.br_destination()
+                };
                 builder.ins().jump(ebb, &[]);
-                state.real_unreachable_stack_depth = 1 + min_depth as usize;
-                frame.set_reachable();
             } else {
                 // Here we have jump arguments, but Cretonne's br_table doesn't support them
                 // We then proceed to split the edges going out of the br_table
-                let val = state.pop1();
                 let return_count = jump_args_count;
-                let mut data = JumpTableData::with_capacity(depths.len());
                 let mut dest_ebb_sequence = Vec::new();
                 let mut dest_ebb_map = HashMap::new();
                 for depth in depths {
@@ -313,29 +326,32 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 }
                 let jt = builder.create_jump_table(data);
                 builder.ins().br_table(val, jt);
-                let default_ebb = state.control_stack[state.control_stack.len() - 1 -
-                                                          (default as usize)]
-                    .br_destination();
+                let default_ebb = {
+                    let i = state.control_stack.len() - 1 - (default as usize);
+                    let frame = &mut state.control_stack[i];
+                    frame.set_branched_to_exit();
+                    frame.br_destination()
+                };
                 builder.ins().jump(default_ebb, state.peekn(return_count));
                 for (depth, dest_ebb) in dest_ebb_sequence {
                     builder.switch_to_block(dest_ebb);
                     builder.seal_block(dest_ebb);
-                    let i = state.control_stack.len() - 1 - depth;
                     let real_dest_ebb = {
+                        let i = state.control_stack.len() - 1 - depth;
                         let frame = &mut state.control_stack[i];
-                        frame.set_reachable();
+                        frame.set_branched_to_exit();
                         frame.br_destination()
                     };
                     builder.ins().jump(real_dest_ebb, state.peekn(return_count));
                 }
                 state.popn(return_count);
-                state.real_unreachable_stack_depth = 1 + min_depth as usize;
             }
+            state.reachable = false;
         }
         Operator::Return => {
             let (return_count, br_destination) = {
                 let frame = &mut state.control_stack[0];
-                frame.set_reachable();
+                frame.set_branched_to_exit();
                 let return_count = frame.num_return_values();
                 (return_count, frame.br_destination())
             };
@@ -348,7 +364,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 }
             }
             state.popn(return_count);
-            state.real_unreachable_stack_depth = 1;
+            state.reachable = false;
         }
         /************************************ Calls ****************************************
          * The call instructions pop off their arguments from the stack and append their
@@ -619,12 +635,35 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = state.pop1();
             state.push1(builder.ins().bitcast(I64, val));
         }
-        Operator::I32Extend8S |
-        Operator::I32Extend16S |
-        Operator::I64Extend8S |
-        Operator::I64Extend16S |
+        Operator::I32Extend8S => {
+            let val = state.pop1();
+            state.push1(builder.ins().ireduce(I8, val));
+            let val = state.pop1();
+            state.push1(builder.ins().sextend(I32, val));
+        }
+        Operator::I32Extend16S => {
+            let val = state.pop1();
+            state.push1(builder.ins().ireduce(I16, val));
+            let val = state.pop1();
+            state.push1(builder.ins().sextend(I32, val));
+        }
+        Operator::I64Extend8S => {
+            let val = state.pop1();
+            state.push1(builder.ins().ireduce(I8, val));
+            let val = state.pop1();
+            state.push1(builder.ins().sextend(I64, val));
+        }
+        Operator::I64Extend16S => {
+            let val = state.pop1();
+            state.push1(builder.ins().ireduce(I16, val));
+            let val = state.pop1();
+            state.push1(builder.ins().sextend(I64, val));
+        }
         Operator::I64Extend32S => {
-            panic!("proposed sign-extend operators not yet supported");
+            let val = state.pop1();
+            state.push1(builder.ins().ireduce(I32, val));
+            let val = state.pop1();
+            state.push1(builder.ins().sextend(I64, val));
         }
         /****************************** Binary Operators ************************************/
         Operator::I32Add | Operator::I64Add => {
@@ -897,80 +936,78 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 /// are dropped but special ones like `End` or `Else` signal the potential end of the unreachable
 /// portion so the translation state muts be updated accordingly.
 fn translate_unreachable_operator(
-    op: &Operator,
-    builder: &mut FunctionBuilder<Local>,
+    op: Operator,
+    builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
 ) {
-    let stack = &mut state.stack;
-    let control_stack = &mut state.control_stack;
-
-    // We don't translate because the code is unreachable
-    // Nevertheless we have to record a phantom stack for this code
-    // to know when the unreachable code ends
-    match *op {
-        Operator::If { ty: _ } |
+    match op {
+        Operator::If { ty: _ } => {
+            // Push a placeholder control stack entry. The if isn't reachable,
+            // so we don't have any branches anywhere.
+            state.push_if(ir::Inst::reserved_value(), ir::Ebb::reserved_value(), 0);
+        }
         Operator::Loop { ty: _ } |
         Operator::Block { ty: _ } => {
-            state.phantom_unreachable_stack_depth += 1;
-        }
-        Operator::End => {
-            if state.phantom_unreachable_stack_depth > 0 {
-                state.phantom_unreachable_stack_depth -= 1;
-            } else {
-                // This End corresponds to a real control stack frame
-                // We switch to the destination block but we don't insert
-                // a jump instruction since the code is still unreachable
-                let frame = control_stack.pop().unwrap();
-
-                builder.switch_to_block(frame.following_code());
-                builder.seal_block(frame.following_code());
-                match frame {
-                    // If it is a loop we also have to seal the body loop block
-                    ControlStackFrame::Loop { header, .. } => builder.seal_block(header),
-                    // If it is an if then the code after is reachable again
-                    ControlStackFrame::If { .. } => {
-                        state.real_unreachable_stack_depth = 1;
-                    }
-                    _ => {}
-                }
-                if frame.is_reachable() {
-                    state.real_unreachable_stack_depth = 1;
-                }
-                // Now we have to split off the stack the values not used
-                // by unreachable code that hasn't been translated
-                stack.truncate(frame.original_stack_size());
-                // And add the return values of the block but only if the next block is reachble
-                // (which corresponds to testing if the stack depth is 1)
-                if state.real_unreachable_stack_depth == 1 {
-                    stack.extend_from_slice(builder.ebb_params(frame.following_code()));
-                }
-                state.real_unreachable_stack_depth -= 1;
-            }
+            state.push_block(ir::Ebb::reserved_value(), 0);
         }
         Operator::Else => {
-            if state.phantom_unreachable_stack_depth > 0 {
-                // This is part of a phantom if-then-else, we do nothing
-            } else {
-                // Encountering an real else means that the code in the else
-                // clause is reachable again
-                let (branch_inst, original_stack_size) = match control_stack[control_stack.len() -
-                                                                                   1] {
-                    ControlStackFrame::If {
-                        branch_inst,
-                        original_stack_size,
-                        ..
-                    } => (branch_inst, original_stack_size),
-                    _ => panic!("should not happen"),
-                };
-                // We change the target of the branch instruction
-                let else_ebb = builder.create_ebb();
-                builder.change_jump_destination(branch_inst, else_ebb);
-                builder.seal_block(else_ebb);
-                builder.switch_to_block(else_ebb);
-                // Now we have to split off the stack the values not used
-                // by unreachable code that hasn't been translated
-                stack.truncate(original_stack_size);
-                state.real_unreachable_stack_depth = 0;
+            let i = state.control_stack.len() - 1;
+            match state.control_stack[i] {
+                ControlStackFrame::If {
+                    branch_inst,
+                    ref mut reachable_from_top,
+                    ..
+                } => {
+                    if *reachable_from_top {
+                        // We have a branch from the top of the if to the else.
+                        state.reachable = true;
+                        // And because there's an else, there can no longer be a
+                        // branch from the top directly to the end.
+                        *reachable_from_top = false;
+
+                        // We change the target of the branch instruction
+                        let else_ebb = builder.create_ebb();
+                        builder.change_jump_destination(branch_inst, else_ebb);
+                        builder.seal_block(else_ebb);
+                        builder.switch_to_block(else_ebb);
+                    }
+                }
+                _ => {}
+            }
+        }
+        Operator::End => {
+            let stack = &mut state.stack;
+            let control_stack = &mut state.control_stack;
+            let frame = control_stack.pop().unwrap();
+
+            // Now we have to split off the stack the values not used
+            // by unreachable code that hasn't been translated
+            stack.truncate(frame.original_stack_size());
+
+            let reachable_anyway = match frame {
+                // If it is a loop we also have to seal the body loop block
+                ControlStackFrame::Loop { header, .. } => {
+                    builder.seal_block(header);
+                    // And loops can't have branches to the end.
+                    false
+                }
+                ControlStackFrame::If { reachable_from_top, .. } => {
+                    // A reachable if without an else has a branch from the top
+                    // directly to the bottom.
+                    reachable_from_top
+                }
+                // All other control constructs are already handled.
+                _ => false,
+            };
+
+            if frame.exit_is_branched_to() || reachable_anyway {
+                builder.switch_to_block(frame.following_code());
+                builder.seal_block(frame.following_code());
+
+                // And add the return values of the block but only if the next block is reachable
+                // (which corresponds to testing if the stack depth is 1)
+                stack.extend_from_slice(builder.ebb_params(frame.following_code()));
+                state.reachable = true;
             }
         }
         _ => {
@@ -985,12 +1022,12 @@ fn get_heap_addr(
     addr32: ir::Value,
     offset: u32,
     addr_ty: ir::Type,
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
 ) -> (ir::Value, i32) {
     use std::cmp::min;
 
     let guard_size: i64 = builder.func.heaps[heap].guard_size.into();
-    assert!(guard_size > 0, "Heap guard pages currently required");
+    debug_assert!(guard_size > 0, "Heap guard pages currently required");
 
     // Generate `heap_addr` instructions that are friendly to CSE by checking offsets that are
     // multiples of the guard size. Add one to make sure that we check the pointer itself is in
@@ -1021,7 +1058,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     offset: u32,
     opcode: ir::Opcode,
     result_ty: ir::Type,
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
     environ: &mut FE,
 ) {
@@ -1044,7 +1081,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
 fn translate_store<FE: FuncEnvironment + ?Sized>(
     offset: u32,
     opcode: ir::Opcode,
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
     environ: &mut FE,
 ) {
