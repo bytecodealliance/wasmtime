@@ -197,7 +197,7 @@ impl DominatorTree {
             }
         }
 
-        assert_eq!(a.0, b.0, "Unreachable block passed to common_dominator?");
+        debug_assert_eq!(a.0, b.0, "Unreachable block passed to common_dominator?");
 
         // We're in the same EBB. The common dominator is the earlier instruction.
         if layout.cmp(a.1, b.1) == Ordering::Less {
@@ -241,7 +241,7 @@ impl DominatorTree {
     pub fn clear(&mut self) {
         self.nodes.clear();
         self.postorder.clear();
-        assert!(self.stack.is_empty());
+        debug_assert!(self.stack.is_empty());
         self.valid = false;
     }
 
@@ -539,7 +539,7 @@ impl DominatorTreePreorder {
     /// Recompute this data structure to match `domtree`.
     pub fn compute(&mut self, domtree: &DominatorTree, layout: &Layout) {
         self.nodes.clear();
-        assert_eq!(self.stack.len(), 0);
+        debug_assert_eq!(self.stack.len(), 0);
 
         // Step 1: Populate the child and sibling links.
         //
@@ -557,7 +557,7 @@ impl DominatorTreePreorder {
         }
 
         // Step 2. Assign pre-order numbers from a DFS of the dominator tree.
-        assert!(self.stack.len() <= 1);
+        debug_assert!(self.stack.len() <= 1);
         let mut n = 0;
         while let Some(ebb) = self.stack.pop() {
             n += 1;

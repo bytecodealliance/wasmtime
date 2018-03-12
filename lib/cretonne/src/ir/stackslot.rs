@@ -244,7 +244,7 @@ impl StackSlots {
     /// Create a stack slot representing an incoming function argument.
     pub fn make_incoming_arg(&mut self, ty: Type, offset: StackOffset) -> StackSlot {
         let mut data = StackSlotData::new(StackSlotKind::IncomingArg, ty.bytes());
-        assert!(offset <= StackOffset::max_value() - data.size as StackOffset);
+        debug_assert!(offset <= StackOffset::max_value() - data.size as StackOffset);
         data.offset = Some(offset);
         self.push(data)
     }
@@ -269,7 +269,7 @@ impl StackSlots {
 
         // No existing slot found. Make one and insert it into `outgoing`.
         let mut data = StackSlotData::new(StackSlotKind::OutgoingArg, size);
-        assert!(offset <= StackOffset::max_value() - size as StackOffset);
+        debug_assert!(offset <= StackOffset::max_value() - size as StackOffset);
         data.offset = Some(offset);
         let ss = self.slots.push(data);
         self.outgoing.insert(inspos, ss);

@@ -107,7 +107,7 @@ impl ArgAssigner for Args {
         // Assign a stack location.
         let loc = ArgumentLoc::Stack(self.offset as i32);
         self.offset += self.pointer_bytes;
-        assert!(self.offset <= i32::MAX as u32);
+        debug_assert!(self.offset <= i32::MAX as u32);
         loc.into()
     }
 }

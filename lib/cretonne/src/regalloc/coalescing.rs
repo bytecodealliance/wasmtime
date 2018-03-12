@@ -238,7 +238,7 @@ impl<'a> Context<'a> {
                 // 1. It is defined in a dominating EBB and live-in to `ebb`.
                 // 2. If is itself a parameter value for `ebb`. This case should already have been
                 //    eliminated by `isolate_conflicting_params()`.
-                assert!(
+                debug_assert!(
                     lr.def() != ebb.into(),
                     "{} parameter {} was missed by isolate_conflicting_params()",
                     ebb,
@@ -494,8 +494,8 @@ impl<'a> Context<'a> {
         // Second everything else in reverse layout order. Again, short forward branches get merged
         // first. There can also be backwards branches mixed in here, though, as long as they are
         // not loop backedges.
-        assert!(self.predecessors.is_empty());
-        assert!(self.backedges.is_empty());
+        debug_assert!(self.predecessors.is_empty());
+        debug_assert!(self.backedges.is_empty());
         for (pred_ebb, pred_inst) in self.cfg.pred_iter(ebb) {
             if self.preorder.dominates(ebb, pred_ebb) {
                 self.backedges.push(pred_inst);
@@ -957,7 +957,8 @@ impl VirtualCopies {
 
     /// Indicate that `param` is now fully merged.
     pub fn merged_param(&mut self, param: Value, func: &Function) {
-        assert_eq!(self.params.pop(), Some(param));
+        let popped = self.params.pop();
+        debug_assert_eq!(popped, Some(param));
 
         // The domtree pre-order in `self.params` guarantees that all parameters defined at the
         // same EBB will be adjacent. This means we can see when all parameters at an EBB have been

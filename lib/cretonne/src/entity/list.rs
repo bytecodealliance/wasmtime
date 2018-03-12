@@ -219,8 +219,8 @@ impl<T: EntityRef> ListPool<T> {
         to_sclass: SizeClass,
         elems_to_copy: usize,
     ) -> usize {
-        assert!(elems_to_copy <= sclass_size(from_sclass));
-        assert!(elems_to_copy <= sclass_size(to_sclass));
+        debug_assert!(elems_to_copy <= sclass_size(from_sclass));
+        debug_assert!(elems_to_copy <= sclass_size(to_sclass));
         let new_block = self.alloc(to_sclass);
 
         if elems_to_copy > 0 {
@@ -301,7 +301,7 @@ impl<T: EntityRef> EntityList<T> {
     pub fn clear(&mut self, pool: &mut ListPool<T>) {
         let idx = self.index as usize;
         match pool.len_of(self) {
-            None => assert_eq!(idx, 0, "Invalid pool"),
+            None => debug_assert_eq!(idx, 0, "Invalid pool"),
             Some(len) => pool.free(idx - 1, sclass_for_length(len)),
         }
         // Switch back to the empty list representation which has no storage.
@@ -322,7 +322,7 @@ impl<T: EntityRef> EntityList<T> {
         match pool.len_of(self) {
             None => {
                 // This is an empty list. Allocate a block and set length=1.
-                assert_eq!(idx, 0, "Invalid pool");
+                debug_assert_eq!(idx, 0, "Invalid pool");
                 let block = pool.alloc(sclass_for_length(1));
                 pool.data[block] = T::new(1);
                 pool.data[block + 1] = element;
@@ -358,7 +358,7 @@ impl<T: EntityRef> EntityList<T> {
         match pool.len_of(self) {
             None => {
                 // This is an empty list. Allocate a block.
-                assert_eq!(idx, 0, "Invalid pool");
+                debug_assert_eq!(idx, 0, "Invalid pool");
                 if count == 0 {
                     return &mut [];
                 }
@@ -409,7 +409,7 @@ impl<T: EntityRef> EntityList<T> {
             }
             tail[0] = element;
         } else {
-            assert_eq!(index, seq.len());
+            debug_assert_eq!(index, seq.len());
         }
     }
 
@@ -419,7 +419,7 @@ impl<T: EntityRef> EntityList<T> {
         {
             let seq = self.as_mut_slice(pool);
             len = seq.len();
-            assert!(index < len);
+            debug_assert!(index < len);
 
             // Copy elements down.
             for i in index..len - 1 {
@@ -449,7 +449,7 @@ impl<T: EntityRef> EntityList<T> {
     /// the list.
     pub fn swap_remove(&mut self, index: usize, pool: &mut ListPool<T>) {
         let len = self.len(pool);
-        assert!(index < len);
+        debug_assert!(index < len);
         if index == len - 1 {
             self.remove(index, pool);
         } else {

@@ -140,7 +140,7 @@ impl VirtRegs {
         func: &Function,
         preorder: &DominatorTreePreorder,
     ) -> VirtReg {
-        assert_eq!(self.get(single), None, "Expected singleton {}", single);
+        debug_assert_eq!(self.get(single), None, "Expected singleton {}", single);
 
         // Make sure `big` has a vreg.
         let vreg = self.get(big).unwrap_or_else(|| {
@@ -208,7 +208,7 @@ impl VirtRegs {
             }
         }
 
-        assert_eq!(
+        debug_assert_eq!(
             values.len(),
             singletons + cleared,
             "Can't unify partial virtual registers"

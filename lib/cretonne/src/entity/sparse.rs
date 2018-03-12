@@ -149,7 +149,7 @@ where
 
         // There was no previous entry for `key`. Add it to the end of `dense`.
         let idx = self.dense.len();
-        assert!(idx <= u32::MAX as usize, "SparseMap overflow");
+        debug_assert!(idx <= u32::MAX as usize, "SparseMap overflow");
         self.dense.push(value);
         self.sparse[key] = idx as u32;
         None

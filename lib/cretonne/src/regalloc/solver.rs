@@ -565,7 +565,7 @@ impl Solver {
                 dbg!("-> converting variable {} to a fixed constraint", v);
                 // The spiller is responsible for ensuring that all constraints on the uses of a
                 // value are compatible.
-                assert!(
+                debug_assert!(
                     v.constraint.contains(to),
                     "Incompatible constraints for {}",
                     value
@@ -665,7 +665,7 @@ impl Solver {
             // No variable, then it must be a fixed reassignment.
             if let Some(a) = self.assignments.get(value) {
                 dbg!("-> already fixed assignment {}", a);
-                assert!(
+                debug_assert!(
                     constraint.contains(a.to),
                     "Incompatible constraints for {}",
                     value
@@ -708,7 +708,7 @@ impl Solver {
     /// Call this method to indicate that there will be no more fixed input reassignments added
     /// and prepare for the output side constraints.
     pub fn inputs_done(&mut self) {
-        assert!(!self.has_fixed_input_conflicts());
+        debug_assert!(!self.has_fixed_input_conflicts());
 
         // At this point, `regs_out` contains the `to` side of the input reassignments, and the
         // `from` side has already been marked as available in `regs_in`.
@@ -746,7 +746,7 @@ impl Solver {
         // interference constraints on the output side.
         // Variables representing tied operands will get their `is_output` flag set again later.
         if let Some(v) = self.vars.iter_mut().find(|v| v.value == value) {
-            assert!(v.is_input);
+            debug_assert!(v.is_input);
             v.is_output = false;
             return;
         }
@@ -782,7 +782,7 @@ impl Solver {
 
         // Check if a variable was created.
         if let Some(v) = self.vars.iter_mut().find(|v| v.value == value) {
-            assert!(v.is_input);
+            debug_assert!(v.is_input);
             v.is_output = true;
             v.is_global = is_global;
             return None;
@@ -1026,7 +1026,7 @@ impl Solver {
     /// Returns the number of spills that had to be emitted.
     pub fn schedule_moves(&mut self, regs: &AllocatableSet) -> usize {
         self.collect_moves();
-        assert!(self.fills.is_empty());
+        debug_assert!(self.fills.is_empty());
 
         let mut num_spill_slots = 0;
         let mut avail = regs.clone();

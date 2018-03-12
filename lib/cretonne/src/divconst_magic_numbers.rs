@@ -43,8 +43,8 @@ pub struct MS64 {
 // The actual "magic number" generators follow.
 
 pub fn magicU32(d: u32) -> MU32 {
-    assert_ne!(d, 0);
-    assert_ne!(d, 1); // d==1 generates out of range shifts.
+    debug_assert_ne!(d, 0);
+    debug_assert_ne!(d, 1); // d==1 generates out of range shifts.
 
     let mut do_add: bool = false;
     let mut p: i32 = 31;
@@ -89,8 +89,8 @@ pub fn magicU32(d: u32) -> MU32 {
 }
 
 pub fn magicU64(d: u64) -> MU64 {
-    assert_ne!(d, 0);
-    assert_ne!(d, 1); // d==1 generates out of range shifts.
+    debug_assert_ne!(d, 0);
+    debug_assert_ne!(d, 1); // d==1 generates out of range shifts.
 
     let mut do_add: bool = false;
     let mut p: i32 = 63;
@@ -135,9 +135,9 @@ pub fn magicU64(d: u64) -> MU64 {
 }
 
 pub fn magicS32(d: i32) -> MS32 {
-    assert_ne!(d, -1);
-    assert_ne!(d, 0);
-    assert_ne!(d, 1);
+    debug_assert_ne!(d, -1);
+    debug_assert_ne!(d, 0);
+    debug_assert_ne!(d, 1);
     let two31: u32 = 0x80000000u32;
     let mut p: i32 = 31;
     let ad: u32 = i32::wrapping_abs(d) as u32;
@@ -178,9 +178,9 @@ pub fn magicS32(d: i32) -> MS32 {
 }
 
 pub fn magicS64(d: i64) -> MS64 {
-    assert_ne!(d, -1);
-    assert_ne!(d, 0);
-    assert_ne!(d, 1);
+    debug_assert_ne!(d, -1);
+    debug_assert_ne!(d, 0);
+    debug_assert_ne!(d, 1);
     let two63: u64 = 0x8000000000000000u64;
     let mut p: i32 = 63;
     let ad: u64 = i64::wrapping_abs(d) as u64;

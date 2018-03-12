@@ -1026,7 +1026,7 @@ fn get_heap_addr(
     use std::cmp::min;
 
     let guard_size: i64 = builder.func.heaps[heap].guard_size.into();
-    assert!(guard_size > 0, "Heap guard pages currently required");
+    debug_assert!(guard_size > 0, "Heap guard pages currently required");
 
     // Generate `heap_addr` instructions that are friendly to CSE by checking offsets that are
     // multiples of the guard size. Add one to make sure that we check the pointer itself is in

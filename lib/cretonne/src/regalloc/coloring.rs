@@ -246,7 +246,7 @@ impl<'a> Context<'a> {
     /// Return the set of remaining allocatable registers after filtering out the dead arguments.
     fn color_entry_params(&mut self, args: &[LiveValue]) -> AvailableRegs {
         let sig = &self.cur.func.signature;
-        assert_eq!(sig.params.len(), args.len());
+        debug_assert_eq!(sig.params.len(), args.len());
 
         let mut regs = AvailableRegs::new(&self.usable_regs);
 
@@ -271,7 +271,7 @@ impl<'a> Context<'a> {
 
                 }
                 // The spiller will have assigned an incoming stack slot already.
-                Affinity::Stack => assert!(abi.location.is_stack()),
+                Affinity::Stack => debug_assert!(abi.location.is_stack()),
                 // This is a ghost value, unused in the function. Don't assign it to a location
                 // either.
                 Affinity::None => {}
@@ -340,7 +340,7 @@ impl<'a> Context<'a> {
             } else {
                 // This is a multi-way branch like `br_table`. We only support arguments on
                 // single-destination branches.
-                assert_eq!(
+                debug_assert_eq!(
                     self.cur.func.dfg.inst_variable_args(inst).len(),
                     0,
                     "Can't handle EBB arguments: {}",
@@ -586,7 +586,7 @@ impl<'a> Context<'a> {
         // Now handle the EBB arguments.
         let br_args = self.cur.func.dfg.inst_variable_args(inst);
         let dest_args = self.cur.func.dfg.ebb_params(dest);
-        assert_eq!(br_args.len(), dest_args.len());
+        debug_assert_eq!(br_args.len(), dest_args.len());
         for (&dest_arg, &br_arg) in dest_args.iter().zip(br_args) {
             // The first time we encounter a branch to `dest`, we get to pick the location. The
             // following times we see a branch to `dest`, we must follow suit.
@@ -631,7 +631,7 @@ impl<'a> Context<'a> {
     fn color_ebb_params(&mut self, inst: Inst, dest: Ebb) {
         let br_args = self.cur.func.dfg.inst_variable_args(inst);
         let dest_args = self.cur.func.dfg.ebb_params(dest);
-        assert_eq!(br_args.len(), dest_args.len());
+        debug_assert_eq!(br_args.len(), dest_args.len());
         for (&dest_arg, &br_arg) in dest_args.iter().zip(br_args) {
             match self.cur.func.locations[dest_arg] {
                 ValueLoc::Unassigned => {
@@ -741,7 +741,7 @@ impl<'a> Context<'a> {
         // It's technically possible for a call instruction to have fixed results before the
         // variable list of results, but we have no known instances of that.
         // Just assume all results are variable return values.
-        assert_eq!(defs.len(), self.cur.func.dfg.signatures[sig].returns.len());
+        debug_assert_eq!(defs.len(), self.cur.func.dfg.signatures[sig].returns.len());
         for (i, lv) in defs.iter().enumerate() {
             let abi = self.cur.func.dfg.signatures[sig].returns[i];
             if let ArgumentLoc::Reg(reg) = abi.location {
@@ -787,7 +787,7 @@ impl<'a> Context<'a> {
             }
 
             let ok = self.solver.add_fixed_output(rc, reg);
-            assert!(ok, "Couldn't clear fixed output interference for {}", value);
+            debug_assert!(ok, "Couldn't clear fixed output interference for {}", value);
         }
         self.cur.func.locations[value] = ValueLoc::Reg(reg);
     }
@@ -858,11 +858,8 @@ impl<'a> Context<'a> {
                 Ok(regs) => return regs,
                 Err(SolverError::Divert(rc)) => {
                     // Do we have any live-through `rc` registers that are not already variables?
-                    assert!(
-                        self.try_add_var(rc, throughs),
-                        "Ran out of registers in {}",
-                        rc
-                    );
+                    let added = self.try_add_var(rc, throughs);
+                    debug_assert!(added, "Ran out of registers in {}", rc);
                 }
                 Err(SolverError::Global(value)) => {
                     dbg!("Not enough global registers for {}, trying as local", value);
@@ -941,7 +938,7 @@ impl<'a> Context<'a> {
         // It is very unlikely (impossible?) that we would need more than one spill per top-level
         // register class, so avoid allocation by using a fixed array here.
         let mut slot = [PackedOption::default(); 8];
-        assert!(spills <= slot.len(), "Too many spills ({})", spills);
+        debug_assert!(spills <= slot.len(), "Too many spills ({})", spills);
 
         for m in self.solver.moves() {
             match *m {

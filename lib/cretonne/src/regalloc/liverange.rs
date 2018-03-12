@@ -253,7 +253,7 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
             order.cmp(to, self.def_begin) != Ordering::Less
         {
             let to_pp = to.into();
-            assert_ne!(
+            debug_assert_ne!(
                 to_pp,
                 self.def_begin,
                 "Can't use value in the defining instruction."

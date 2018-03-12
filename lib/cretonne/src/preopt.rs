@@ -192,10 +192,10 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // U32 div, rem by a power-of-2
         &DivRemByConstInfo::DivU32(n1, d) |
         &DivRemByConstInfo::RemU32(n1, d) if d.is_power_of_two() => {
-            assert!(d >= 2);
+            debug_assert!(d >= 2);
             // compute k where d == 2^k
             let k = d.trailing_zeros();
-            assert!(k >= 1 && k <= 31);
+            debug_assert!(k >= 1 && k <= 31);
             if isRem {
                 let mask = (1u64 << k) - 1;
                 pos.func.dfg.replace(inst).band_imm(n1, mask as i64);
@@ -207,7 +207,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // U32 div, rem by non-power-of-2
         &DivRemByConstInfo::DivU32(n1, d) |
         &DivRemByConstInfo::RemU32(n1, d) => {
-            assert!(d >= 3);
+            debug_assert!(d >= 3);
             let MU32 {
                 mulBy,
                 doAdd,
@@ -217,7 +217,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             let q0 = pos.ins().iconst(I32, mulBy as i64);
             let q1 = pos.ins().umulhi(n1, q0);
             if doAdd {
-                assert!(shiftBy >= 1 && shiftBy <= 32);
+                debug_assert!(shiftBy >= 1 && shiftBy <= 32);
                 let t1 = pos.ins().isub(n1, q1);
                 let t2 = pos.ins().ushr_imm(t1, 1);
                 let t3 = pos.ins().iadd(t2, q1);
@@ -226,7 +226,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 debug_assert!(shiftBy != 1);
                 qf = pos.ins().ushr_imm(t3, (shiftBy - 1) as i64);
             } else {
-                assert!(shiftBy >= 0 && shiftBy <= 31);
+                debug_assert!(shiftBy >= 0 && shiftBy <= 31);
                 // Whereas there are known cases here for shiftBy == 0.
                 if shiftBy > 0 {
                     qf = pos.ins().ushr_imm(q1, shiftBy as i64);
@@ -264,10 +264,10 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // U64 div, rem by a power-of-2
         &DivRemByConstInfo::DivU64(n1, d) |
         &DivRemByConstInfo::RemU64(n1, d) if d.is_power_of_two() => {
-            assert!(d >= 2);
+            debug_assert!(d >= 2);
             // compute k where d == 2^k
             let k = d.trailing_zeros();
-            assert!(k >= 1 && k <= 63);
+            debug_assert!(k >= 1 && k <= 63);
             if isRem {
                 let mask = (1u64 << k) - 1;
                 pos.func.dfg.replace(inst).band_imm(n1, mask as i64);
@@ -279,7 +279,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // U64 div, rem by non-power-of-2
         &DivRemByConstInfo::DivU64(n1, d) |
         &DivRemByConstInfo::RemU64(n1, d) => {
-            assert!(d >= 3);
+            debug_assert!(d >= 3);
             let MU64 {
                 mulBy,
                 doAdd,
@@ -289,7 +289,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             let q0 = pos.ins().iconst(I64, mulBy as i64);
             let q1 = pos.ins().umulhi(n1, q0);
             if doAdd {
-                assert!(shiftBy >= 1 && shiftBy <= 64);
+                debug_assert!(shiftBy >= 1 && shiftBy <= 64);
                 let t1 = pos.ins().isub(n1, q1);
                 let t2 = pos.ins().ushr_imm(t1, 1);
                 let t3 = pos.ins().iadd(t2, q1);
@@ -298,7 +298,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 debug_assert!(shiftBy != 1);
                 qf = pos.ins().ushr_imm(t3, (shiftBy - 1) as i64);
             } else {
-                assert!(shiftBy >= 0 && shiftBy <= 63);
+                debug_assert!(shiftBy >= 0 && shiftBy <= 63);
                 // Whereas there are known cases here for shiftBy == 0.
                 if shiftBy > 0 {
                     qf = pos.ins().ushr_imm(q1, shiftBy as i64);
@@ -339,7 +339,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         &DivRemByConstInfo::RemS32(n1, d) => {
             if let Some((isNeg, k)) = isPowerOf2_S32(d) {
                 // k can be 31 only in the case that d is -2^31.
-                assert!(k >= 1 && k <= 31);
+                debug_assert!(k >= 1 && k <= 31);
                 let t1 = if k - 1 == 0 {
                     n1
                 } else {
@@ -363,7 +363,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 }
             } else {
                 // S32 div, rem by a non-power-of-2
-                assert!(d < -2 || d > 2);
+                debug_assert!(d < -2 || d > 2);
                 let MS32 { mulBy, shiftBy } = magicS32(d);
                 let q0 = pos.ins().iconst(I32, mulBy as i64);
                 let q1 = pos.ins().smulhi(n1, q0);
@@ -374,7 +374,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 } else {
                     q1
                 };
-                assert!(shiftBy >= 0 && shiftBy <= 31);
+                debug_assert!(shiftBy >= 0 && shiftBy <= 31);
                 let q3 = if shiftBy == 0 {
                     q2
                 } else {
@@ -416,7 +416,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         &DivRemByConstInfo::RemS64(n1, d) => {
             if let Some((isNeg, k)) = isPowerOf2_S64(d) {
                 // k can be 63 only in the case that d is -2^63.
-                assert!(k >= 1 && k <= 63);
+                debug_assert!(k >= 1 && k <= 63);
                 let t1 = if k - 1 == 0 {
                     n1
                 } else {
@@ -440,7 +440,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 }
             } else {
                 // S64 div, rem by a non-power-of-2
-                assert!(d < -2 || d > 2);
+                debug_assert!(d < -2 || d > 2);
                 let MS64 { mulBy, shiftBy } = magicS64(d);
                 let q0 = pos.ins().iconst(I64, mulBy);
                 let q1 = pos.ins().smulhi(n1, q0);
@@ -451,7 +451,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 } else {
                     q1
                 };
-                assert!(shiftBy >= 0 && shiftBy <= 63);
+                debug_assert!(shiftBy >= 0 && shiftBy <= 63);
                 let q3 = if shiftBy == 0 {
                     q2
                 } else {
