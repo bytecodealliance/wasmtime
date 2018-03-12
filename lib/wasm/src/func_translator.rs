@@ -9,10 +9,9 @@ use cretonne::entity::EntityRef;
 use cretonne::ir::{self, InstBuilder, Ebb};
 use cretonne::result::{CtonResult, CtonError};
 use cretonne::timing;
-use cton_frontend::{ILBuilder, FunctionBuilder};
+use cton_frontend::{ILBuilder, FunctionBuilder, Variable};
 use environ::FuncEnvironment;
 use state::TranslationState;
-use translation_utils::Local;
 use wasmparser::{self, BinaryReader};
 
 /// WebAssembly to Cretonne IL function translator.
@@ -21,7 +20,7 @@ use wasmparser::{self, BinaryReader};
 /// by a `FuncEnvironment` object. A single translator instance can be reused to translate multiple
 /// functions which will reduce heap allocation traffic.
 pub struct FuncTranslator {
-    il_builder: ILBuilder<Local>,
+    il_builder: ILBuilder<Variable>,
     state: TranslationState,
 }
 
@@ -107,7 +106,7 @@ impl FuncTranslator {
 /// Declare local variables for the signature parameters that correspond to WebAssembly locals.
 ///
 /// Return the number of local variables declared.
-fn declare_wasm_parameters(builder: &mut FunctionBuilder<Local>, entry_block: Ebb) -> usize {
+fn declare_wasm_parameters(builder: &mut FunctionBuilder<Variable>, entry_block: Ebb) -> usize {
     let sig_len = builder.func.signature.params.len();
     let mut next_local = 0;
     for i in 0..sig_len {
@@ -116,7 +115,7 @@ fn declare_wasm_parameters(builder: &mut FunctionBuilder<Local>, entry_block: Eb
         // signature parameters. For example, a `vmctx` pointer.
         if param_type.purpose == ir::ArgumentPurpose::Normal {
             // This is a normal WebAssembly signature parameter, so create a local for it.
-            let local = Local::new(next_local);
+            let local = Variable::new(next_local);
             builder.declare_var(local, param_type.value_type);
             next_local += 1;
 
@@ -133,7 +132,7 @@ fn declare_wasm_parameters(builder: &mut FunctionBuilder<Local>, entry_block: Eb
 /// Declare local variables, starting from `num_params`.
 fn parse_local_decls(
     reader: &mut BinaryReader,
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
     num_params: usize,
 ) -> CtonResult {
     let mut next_local = num_params;
@@ -157,7 +156,7 @@ fn parse_local_decls(
 ///
 /// Fail of too many locals are declared in the function, or if the type is not valid for a local.
 fn declare_locals(
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
     count: u32,
     wasm_type: wasmparser::Type,
     next_local: &mut usize,
@@ -174,7 +173,7 @@ fn declare_locals(
 
     let ty = builder.func.dfg.value_type(zeroval);
     for _ in 0..count {
-        let local = Local::new(*next_local);
+        let local = Variable::new(*next_local);
         builder.declare_var(local, ty);
         builder.def_var(local, zeroval);
         *next_local += 1;
@@ -187,7 +186,7 @@ fn declare_locals(
 /// arguments and locals are declared in the builder.
 fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     mut reader: BinaryReader,
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
     environ: &mut FE,
 ) -> CtonResult {

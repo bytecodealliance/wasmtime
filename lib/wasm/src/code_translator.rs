@@ -26,9 +26,9 @@ use cretonne::ir::{self, InstBuilder, MemFlags, JumpTableData};
 use cretonne::ir::types::*;
 use cretonne::ir::condcodes::{IntCC, FloatCC};
 use cretonne::packed_option::ReservedValue;
-use cton_frontend::FunctionBuilder;
+use cton_frontend::{FunctionBuilder, Variable};
 use wasmparser::{Operator, MemoryImmediate};
-use translation_utils::{f32_translation, f64_translation, type_to_type, num_return_values, Local};
+use translation_utils::{f32_translation, f64_translation, type_to_type, num_return_values};
 use translation_utils::{TableIndex, SignatureIndex, FunctionIndex, MemoryIndex};
 use state::{TranslationState, ControlStackFrame};
 use std::collections::{HashMap, hash_map};
@@ -39,7 +39,7 @@ use std::{i32, u32};
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     op: Operator,
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
     environ: &mut FE,
 ) {
@@ -53,14 +53,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          *  `get_local` and `set_local` are treated as non-SSA variables and will completely
          *  disappear in the Cretonne Code
          ***********************************************************************************/
-        Operator::GetLocal { local_index } => state.push1(builder.use_var(Local(local_index))),
+        Operator::GetLocal { local_index } => {
+            state.push1(builder.use_var(Variable::with_u32(local_index)))
+        }
         Operator::SetLocal { local_index } => {
             let val = state.pop1();
-            builder.def_var(Local(local_index), val);
+            builder.def_var(Variable::with_u32(local_index), val);
         }
         Operator::TeeLocal { local_index } => {
             let val = state.peek1();
-            builder.def_var(Local(local_index), val);
+            builder.def_var(Variable::with_u32(local_index), val);
         }
         /********************************** Globals ****************************************
          *  `get_global` and `set_global` are handled by the environment.
@@ -934,7 +936,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 /// portion so the translation state muts be updated accordingly.
 fn translate_unreachable_operator(
     op: Operator,
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
 ) {
     match op {
@@ -1019,7 +1021,7 @@ fn get_heap_addr(
     addr32: ir::Value,
     offset: u32,
     addr_ty: ir::Type,
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
 ) -> (ir::Value, i32) {
     use std::cmp::min;
 
@@ -1055,7 +1057,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     offset: u32,
     opcode: ir::Opcode,
     result_ty: ir::Type,
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
     environ: &mut FE,
 ) {
@@ -1078,7 +1080,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
 fn translate_store<FE: FuncEnvironment + ?Sized>(
     offset: u32,
     opcode: ir::Opcode,
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
     environ: &mut FE,
 ) {
