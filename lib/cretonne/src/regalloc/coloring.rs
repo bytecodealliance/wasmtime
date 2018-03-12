@@ -23,7 +23,7 @@
 //!    operands are allowed to read spilled values, but each such instance must be counted as using
 //!    a register.
 //!
-//! 5. The code must be in conventional SSA form. Among other things, this means that values passed
+//! 5. The code must be in Conventional SSA form. Among other things, this means that values passed
 //!    as arguments when branching to an EBB must belong to the same virtual register as the
 //!    corresponding EBB argument value.
 //!
