@@ -12,7 +12,7 @@ keywords = [ "webassembly", "wasm" ]
 name = "cton_wasm"
 
 [dependencies]
-wasmparser = "0.14.1"
+wasmparser = "0.15.1"
 cretonne = { path = "../cretonne", version = "0.3.4" }
 cretonne-frontend = { path = "../frontend", version = "0.3.4" }
 
