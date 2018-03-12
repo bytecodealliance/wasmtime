@@ -20,6 +20,7 @@
 #[macro_use]
 extern crate alloc;
 
+#[allow(unused_extern_crates)]
 #[cfg(feature = "no_std")]
 extern crate hashmap_core;
 

@@ -9,6 +9,7 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 // Include the `hashmap_core` crate if no_std
+#[allow(unused_extern_crates)]
 #[cfg(feature = "no_std")]
 extern crate hashmap_core;
 #[cfg(not(feature = "std"))]
