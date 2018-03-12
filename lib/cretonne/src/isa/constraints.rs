@@ -13,6 +13,7 @@ use ir::{Function, ValueLoc, Inst};
 use regalloc::RegDiversions;
 
 /// Register constraint for a single value operand or instruction result.
+#[derive(PartialEq, Debug)]
 pub struct OperandConstraint {
     /// The kind of constraint.
     pub kind: ConstraintKind,
@@ -53,7 +54,7 @@ impl OperandConstraint {
 }
 
 /// The different kinds of operand constraints.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ConstraintKind {
     /// This operand or result must be a register from the given register class.
     Reg,
@@ -89,7 +90,7 @@ pub enum ConstraintKind {
 }
 
 /// Value operand constraints for an encoding recipe.
-#[derive(Clone)]
+#[derive(PartialEq, Clone)]
 pub struct RecipeConstraints {
     /// Constraints for the instruction's fixed value operands.
     ///
@@ -160,7 +161,7 @@ impl RecipeConstraints {
 /// - Intel uses the address of the instruction following the branch, `origin = 2` for a 2-byte
 ///   branch instruction.
 /// - ARM's A32 encoding uses the address of the branch instruction + 8 bytes, `origin = 8`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct BranchRange {
     /// Offset in bytes from the address of the branch instruction to the origin used for computing
     /// the branch displacement. This is the destination of a branch that encodes a 0 displacement.

@@ -453,6 +453,15 @@ div = TailRecipe(
         modrm_r_bits(in_reg2, bits, sink);
         ''')
 
+# XX /n for {s,u}mulx: inputs in %rax, r. Outputs in %rdx(hi):%rax(lo)
+mulx = TailRecipe(
+        'mulx', Binary, size=1,
+        ins=(GPR.rax, GPR), outs=(GPR.rax, GPR.rdx),
+        emit='''
+        PUT_OP(bits, rex1(in_reg1), sink);
+        modrm_r_bits(in_reg1, bits, sink);
+        ''')
+
 # XX /n ib with 8-bit immediate sign-extended.
 rib = TailRecipe(
         'rib', BinaryImm, size=2, ins=GPR, outs=0,
@@ -675,7 +684,7 @@ st_abcd = TailRecipe(
 
 # XX /r register-indirect store of FPR with no offset.
 fst = TailRecipe(
-        'fst', Store, size=1, ins=(FPR, GPR), outs=(),
+        'fst', Store, size=1, ins=(FPR, GPR_ZERO_DEREF_SAFE), outs=(),
         instp=IsEqual(Store.offset, 0),
         clobbers_flags=False,
         emit='''

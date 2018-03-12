@@ -36,7 +36,7 @@ pub struct SSABuilder<Variable>
 where
     Variable: EntityRef,
 {
-    // Records for every variable and for every revelant block, the last definition of
+    // Records for every variable and for every relevant block, the last definition of
     // the variable in the block.
     variables: EntityMap<Variable, EntityMap<Block, PackedOption<Value>>>,
     // Records the position of the basic blocks and the list of values used but not defined in the
@@ -82,7 +82,7 @@ enum BlockData<Variable> {
     // A block at the top of an `Ebb`.
     EbbHeader(EbbHeaderBlockData<Variable>),
     // A block inside an `Ebb` with an unique other block as its predecessor.
-    // The block is implicitely sealed at creation.
+    // The block is implicitly sealed at creation.
     EbbBody { predecessor: Block },
 }
 
@@ -395,7 +395,7 @@ where
     /// Remove a previously declared Ebb predecessor by giving a reference to the jump
     /// instruction. Returns the basic block containing the instruction.
     ///
-    /// Note: use only when you know what you are doing, this might break the SSA bbuilding problem
+    /// Note: use only when you know what you are doing, this might break the SSA building problem
     pub fn remove_ebb_predecessor(&mut self, ebb: Ebb, inst: Inst) -> Block {
         debug_assert!(!self.is_sealed(ebb));
         let header_block = self.header_block(ebb);
@@ -423,7 +423,7 @@ where
     pub fn seal_all_ebb_header_blocks(&mut self, func: &mut Function) -> SideEffects {
         // Seal all `Ebb`s currently in the function. This can entail splitting
         // and creation of new blocks, however such new blocks are sealed on
-        // the fly, so we don't need to accout for them here.
+        // the fly, so we don't need to account for them here.
         for ebb in self.ebb_headers.keys() {
             self.seal_one_ebb_header_block(ebb, func);
         }
@@ -471,8 +471,8 @@ where
         }
     }
 
-    /// Look up in the predecessors of an Ebb the def for a value an decides wether or not
-    /// to keep the eeb arg, and act accordingly. Returns the chosen value and optionnaly a
+    /// Look up in the predecessors of an Ebb the def for a value an decides whether or not
+    /// to keep the eeb arg, and act accordingly. Returns the chosen value and optionally a
     /// list of Ebb that are the middle of newly created critical edges splits.
     fn predecessors_lookup(
         &mut self,
@@ -555,7 +555,7 @@ where
             ZeroOneOrMore::One(pred_val) => {
                 // Here all the predecessors use a single value to represent our variable
                 // so we don't need to have it as an ebb argument.
-                // We need to replace all the occurences of val with pred_val but since
+                // We need to replace all the occurrences of val with pred_val but since
                 // we can't afford a re-writing pass right now we just declare an alias.
                 // Resolve aliases eagerly so that we can check for cyclic aliasing,
                 // which can occur in unreachable code.
@@ -621,7 +621,7 @@ where
         val: Value,
         var: Variable,
     ) -> Option<(Ebb, Block, Inst)> {
-        match func.dfg[jump_inst].analyze_branch(&func.dfg.value_lists) {
+        match func.dfg.analyze_branch(jump_inst) {
             BranchInfo::NotABranch => {
                 panic!("you have declared a non-branch instruction as a predecessor to an ebb");
             }
@@ -721,21 +721,7 @@ mod tests {
     use cretonne::ir::instructions::BranchInfo;
     use cretonne::settings;
     use ssa::SSABuilder;
-    use std::u32;
-
-    /// An opaque reference to variable.
-    #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-    pub struct Variable(u32);
-    impl EntityRef for Variable {
-        fn new(index: usize) -> Self {
-            assert!(index < (u32::MAX as usize));
-            Variable(index as u32)
-        }
-
-        fn index(self) -> usize {
-            self.0 as usize
-        }
-    }
+    use Variable;
 
     #[test]
     fn simple_block() {
@@ -749,14 +735,14 @@ mod tests {
         // z = x + z;
 
         let block = ssa.declare_ebb_header_block(ebb0);
-        let x_var = Variable(0);
+        let x_var = Variable::new(0);
         let x_ssa = {
             let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
             cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x_ssa, block);
-        let y_var = Variable(1);
+        let y_var = Variable::new(1);
         let y_ssa = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
             cur.ins().iconst(I32, 2)
@@ -765,7 +751,7 @@ mod tests {
 
         assert_eq!(ssa.use_var(&mut func, x_var, I32, block).0, x_ssa);
         assert_eq!(ssa.use_var(&mut func, y_var, I32, block).0, y_ssa);
-        let z_var = Variable(2);
+        let z_var = Variable::new(2);
         let x_use1 = ssa.use_var(&mut func, x_var, I32, block).0;
         let y_use1 = ssa.use_var(&mut func, y_var, I32, block).0;
         let z1_ssa = {
@@ -801,7 +787,7 @@ mod tests {
         //    y = x + y;
 
         let block0 = ssa.declare_ebb_header_block(ebb0);
-        let x_var = Variable(0);
+        let x_var = Variable::new(0);
         let x_ssa = {
             let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
@@ -810,7 +796,7 @@ mod tests {
             cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x_ssa, block0);
-        let y_var = Variable(1);
+        let y_var = Variable::new(1);
         let y_ssa = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
             cur.ins().iconst(I32, 2)
@@ -818,7 +804,7 @@ mod tests {
         ssa.def_var(y_var, y_ssa, block0);
         assert_eq!(ssa.use_var(&mut func, x_var, I32, block0).0, x_ssa);
         assert_eq!(ssa.use_var(&mut func, y_var, I32, block0).0, y_ssa);
-        let z_var = Variable(2);
+        let z_var = Variable::new(2);
         let x_use1 = ssa.use_var(&mut func, x_var, I32, block0).0;
         let y_use1 = ssa.use_var(&mut func, y_var, I32, block0).0;
         let z1_ssa = {
@@ -856,7 +842,7 @@ mod tests {
             cur.ins().iadd(x_use3, y_use3)
         };
         ssa.def_var(y_var, y2_ssa, block2);
-        match func.dfg[jump_inst].analyze_branch(&func.dfg.value_lists) {
+        match func.dfg.analyze_branch(jump_inst) {
             BranchInfo::SingleDest(dest, jump_args) => {
                 assert_eq!(dest, ebb1);
                 assert_eq!(jump_args.len(), 0);
@@ -889,7 +875,7 @@ mod tests {
 
         let block0 = ssa.declare_ebb_header_block(ebb0);
         ssa.seal_ebb_header_block(ebb0, &mut func);
-        let x_var = Variable(0);
+        let x_var = Variable::new(0);
         let x1 = {
             let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
@@ -900,14 +886,14 @@ mod tests {
         };
         ssa.def_var(x_var, x1, block0);
         assert_eq!(ssa.use_var(&mut func, x_var, I32, block0).0, x1);
-        let y_var = Variable(1);
+        let y_var = Variable::new(1);
         let y1 = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
             cur.ins().iconst(I32, 2)
         };
         ssa.def_var(y_var, y1, block0);
         assert_eq!(ssa.use_var(&mut func, y_var, I32, block0).0, y1);
-        let z_var = Variable(2);
+        let z_var = Variable::new(2);
         let x2 = ssa.use_var(&mut func, x_var, I32, block0).0;
         assert_eq!(x2, x1);
         let y2 = ssa.use_var(&mut func, y_var, I32, block0).0;
@@ -996,7 +982,7 @@ mod tests {
         //
         let block0 = ssa.declare_ebb_header_block(ebb0);
         ssa.seal_ebb_header_block(ebb0, &mut func);
-        let x_var = Variable(0);
+        let x_var = Variable::new(0);
         let x1 = {
             let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
@@ -1066,9 +1052,9 @@ mod tests {
         //    jump ebb1
         //
         let block0 = ssa.declare_ebb_header_block(ebb0);
-        let x_var = Variable(0);
-        let y_var = Variable(1);
-        let z_var = Variable(2);
+        let x_var = Variable::new(0);
+        let y_var = Variable::new(1);
+        let z_var = Variable::new(2);
         ssa.seal_ebb_header_block(ebb0, &mut func);
         let x1 = {
             let mut cur = FuncCursor::new(&mut func);
@@ -1125,17 +1111,17 @@ mod tests {
 
     #[test]
     fn undef() {
-        // Use vars of varous types which have not been defined.
+        // Use vars of various types which have not been defined.
         let mut func = Function::new();
         let mut ssa: SSABuilder<Variable> = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         let block = ssa.declare_ebb_header_block(ebb0);
         ssa.seal_ebb_header_block(ebb0, &mut func);
-        let i32_var = Variable(0);
-        let f32_var = Variable(1);
-        let f64_var = Variable(2);
-        let b1_var = Variable(3);
-        let f32x4_var = Variable(4);
+        let i32_var = Variable::new(0);
+        let f32_var = Variable::new(1);
+        let f64_var = Variable::new(2);
+        let b1_var = Variable::new(3);
+        let f32x4_var = Variable::new(4);
         ssa.use_var(&mut func, i32_var, I32, block);
         ssa.use_var(&mut func, f32_var, F32, block);
         ssa.use_var(&mut func, f64_var, F64, block);
@@ -1153,7 +1139,7 @@ mod tests {
         let ebb0 = func.dfg.make_ebb();
         let block = ssa.declare_ebb_header_block(ebb0);
         ssa.seal_ebb_header_block(ebb0, &mut func);
-        let x_var = Variable(0);
+        let x_var = Variable::new(0);
         assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
         ssa.use_var(&mut func, x_var, I32, block);
         assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
@@ -1172,7 +1158,7 @@ mod tests {
         let mut ssa: SSABuilder<Variable> = SSABuilder::new();
         let ebb0 = func.dfg.make_ebb();
         let block = ssa.declare_ebb_header_block(ebb0);
-        let x_var = Variable(0);
+        let x_var = Variable::new(0);
         assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
         ssa.use_var(&mut func, x_var, I32, block);
         assert_eq!(func.dfg.num_ebb_params(ebb0), 1);
@@ -1206,7 +1192,7 @@ mod tests {
             cur.insert_ebb(ebb1);
             cur.goto_bottom(ebb0);
             cur.ins().return_(&[]);
-            let x_var = Variable(0);
+            let x_var = Variable::new(0);
             cur.goto_bottom(ebb1);
             let val = ssa.use_var(&mut cur.func, x_var, I32, block1).0;
             let brz = cur.ins().brz(val, ebb1, &[]);
@@ -1248,7 +1234,7 @@ mod tests {
         let block2 = ssa.declare_ebb_header_block(ebb2);
         {
             let mut cur = FuncCursor::new(&mut func);
-            let x_var = Variable(0);
+            let x_var = Variable::new(0);
             cur.insert_ebb(ebb0);
             cur.insert_ebb(ebb1);
             cur.insert_ebb(ebb2);

@@ -211,7 +211,7 @@ def unwrap_inst(iref, node, fmt):
             fmt.format('let typeof_{0} = pos.func.dfg.value_type({0});', v)
 
     # If the node has results, detach the values.
-    # Place the values in  locals.
+    # Place the values in locals.
     replace_inst = False
     if len(node.defs) > 0:
         if node.defs == node.defs[0].dst_def.defs:
@@ -348,7 +348,8 @@ def gen_xform(xform, fmt, type_sets):
         # Delete the original instruction if we didn't have an opportunity to
         # replace it.
         if not replace_inst:
-            fmt.line('assert_eq!(pos.remove_inst(), inst);')
+            fmt.line('let removed = pos.remove_inst();')
+            fmt.line('debug_assert_eq!(removed, inst);')
         fmt.line('return true;')
 
 

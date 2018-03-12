@@ -1,19 +1,20 @@
 [package]
 name = "cretonne-wasm"
-version = "0.1.0"
+version = "0.3.4"
 authors = ["The Cretonne Project Developers"]
 description = "Translator from WebAssembly to Cretonne IL"
 repository = "https://github.com/Cretonne/cretonne"
 license = "Apache-2.0"
 readme = "README.md"
+keywords = [ "webassembly", "wasm" ]
 
 [lib]
 name = "cton_wasm"
 
 [dependencies]
 wasmparser = "0.14.1"
-cretonne = { path = "../cretonne", version = "0.1.0", default_features = false }
-cretonne-frontend = { path = "../frontend", version = "0.1.0", default_features = false }
+cretonne = { path = "../cretonne", version = "0.3.4", default_features = false }
+cretonne-frontend = { path = "../frontend", version = "0.3.4", default_features = false }
 
 [dependencies.hashmap_core]
 version = "0.1.1"

@@ -41,9 +41,9 @@ pub enum StackSlotKind {
     /// A spill slot. This is a stack slot created by the register allocator.
     SpillSlot,
 
-    /// A local variable. This is a chunk of local stack memory for use by the `stack_load` and
-    /// `stack_store` instructions.
-    Local,
+    /// An explicit stack slot. This is a chunk of stack memory for use by the `stack_load`
+    /// and `stack_store` instructions.
+    ExplicitSlot,
 
     /// An incoming function argument.
     ///
@@ -72,7 +72,7 @@ impl FromStr for StackSlotKind {
     fn from_str(s: &str) -> Result<StackSlotKind, ()> {
         use self::StackSlotKind::*;
         match s {
-            "local" => Ok(Local),
+            "explicit_slot" => Ok(ExplicitSlot),
             "spill_slot" => Ok(SpillSlot),
             "incoming_arg" => Ok(IncomingArg),
             "outgoing_arg" => Ok(OutgoingArg),
@@ -86,7 +86,7 @@ impl fmt::Display for StackSlotKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::StackSlotKind::*;
         f.write_str(match *self {
-            Local => "local",
+            ExplicitSlot => "explicit_slot",
             SpillSlot => "spill_slot",
             IncomingArg => "incoming_arg",
             OutgoingArg => "outgoing_arg",
@@ -112,7 +112,7 @@ pub struct StackSlotData {
     ///
     /// For `OutgoingArg` stack slots, the offset is relative to the current function's stack
     /// pointer immediately before the call.
-    pub offset: StackOffset,
+    pub offset: Option<StackOffset>,
 }
 
 impl StackSlotData {
@@ -121,7 +121,7 @@ impl StackSlotData {
         StackSlotData {
             kind,
             size,
-            offset: 0,
+            offset: None,
         }
     }
 
@@ -139,8 +139,8 @@ impl StackSlotData {
 impl fmt::Display for StackSlotData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.kind, self.size)?;
-        if self.offset != 0 {
-            write!(f, ", offset {}", self.offset)?;
+        if let Some(offset) = self.offset {
+            write!(f, ", offset {}", offset)?;
         }
         Ok(())
     }
@@ -205,7 +205,7 @@ impl StackSlots {
 
     /// Set the offset of a stack slot.
     pub fn set_offset(&mut self, ss: StackSlot, offset: StackOffset) {
-        self.slots[ss].offset = offset;
+        self.slots[ss].offset = Some(offset);
     }
 
     /// Get an iterator over all the stack slot keys.
@@ -245,8 +245,8 @@ impl StackSlots {
     /// Create a stack slot representing an incoming function argument.
     pub fn make_incoming_arg(&mut self, ty: Type, offset: StackOffset) -> StackSlot {
         let mut data = StackSlotData::new(StackSlotKind::IncomingArg, ty.bytes());
-        assert!(offset <= StackOffset::max_value() - data.size as StackOffset);
-        data.offset = offset;
+        debug_assert!(offset <= StackOffset::max_value() - data.size as StackOffset);
+        data.offset = Some(offset);
         self.push(data)
     }
 
@@ -262,7 +262,7 @@ impl StackSlots {
 
         // Look for an existing outgoing stack slot with the same offset and size.
         let inspos = match self.outgoing.binary_search_by_key(&(offset, size), |&ss| {
-            (self[ss].offset, self[ss].size)
+            (self[ss].offset.unwrap(), self[ss].size)
         }) {
             Ok(idx) => return self.outgoing[idx],
             Err(idx) => idx,
@@ -270,8 +270,8 @@ impl StackSlots {
 
         // No existing slot found. Make one and insert it into `outgoing`.
         let mut data = StackSlotData::new(StackSlotKind::OutgoingArg, size);
-        assert!(offset <= StackOffset::max_value() - size as StackOffset);
-        data.offset = offset;
+        debug_assert!(offset <= StackOffset::max_value() - size as StackOffset);
+        data.offset = Some(offset);
         let ss = self.slots.push(data);
         self.outgoing.insert(inspos, ss);
         ss
@@ -346,13 +346,13 @@ mod tests {
         let ss1 = sss.get_outgoing_arg(types::I32, 4);
         let ss2 = sss.get_outgoing_arg(types::I64, 8);
 
-        assert_eq!(sss[ss0].offset, 8);
+        assert_eq!(sss[ss0].offset, Some(8));
         assert_eq!(sss[ss0].size, 4);
 
-        assert_eq!(sss[ss1].offset, 4);
+        assert_eq!(sss[ss1].offset, Some(4));
         assert_eq!(sss[ss1].size, 4);
 
-        assert_eq!(sss[ss2].offset, 8);
+        assert_eq!(sss[ss2].offset, Some(8));
         assert_eq!(sss[ss2].size, 8);
 
         assert_eq!(sss.get_outgoing_arg(types::I32, 8), ss0);
@@ -368,7 +368,7 @@ mod tests {
         assert_eq!(slot.alignment(8), 8);
         assert_eq!(slot.alignment(16), 8);
 
-        let slot2 = StackSlotData::new(StackSlotKind::Local, 24);
+        let slot2 = StackSlotData::new(StackSlotKind::ExplicitSlot, 24);
 
         assert_eq!(slot2.alignment(4), 4);
         assert_eq!(slot2.alignment(8), 8);

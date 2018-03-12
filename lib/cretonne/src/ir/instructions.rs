@@ -561,7 +561,7 @@ impl OpcodeConstraints {
     /// Get the value type of result number `n`, having resolved the controlling type variable to
     /// `ctrl_type`.
     pub fn result_type(self, n: usize, ctrl_type: Type) -> Type {
-        assert!(n < self.fixed_results(), "Invalid result index");
+        debug_assert!(n < self.fixed_results(), "Invalid result index");
         if let ResolvedConstraint::Bound(t) =
             OPERAND_CONSTRAINTS[self.constraint_offset() + n].resolve(ctrl_type)
         {
@@ -577,7 +577,7 @@ impl OpcodeConstraints {
     /// Unlike results, it is possible for some input values to vary freely within a specific
     /// `ValueTypeSet`. This is represented with the `ArgumentConstraint::Free` variant.
     pub fn value_argument_constraint(self, n: usize, ctrl_type: Type) -> ResolvedConstraint {
-        assert!(
+        debug_assert!(
             n < self.fixed_value_arguments(),
             "Invalid value argument index"
         );

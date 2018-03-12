@@ -12,7 +12,7 @@ use std::vec::Vec;
 ///
 /// An argument may go through a sequence of legalization steps before it reaches the final
 /// `Assign` action.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ArgAction {
     /// Assign the argument to the given location.
     Assign(ArgumentLoc),
@@ -151,7 +151,7 @@ pub fn legalize_abi_value(have: Type, arg: &AbiParam) -> ValueConversion {
     match have_bits.cmp(&arg_bits) {
         // We have fewer bits than the ABI argument.
         Ordering::Less => {
-            assert!(
+            debug_assert!(
                 have.is_int() && arg.value_type.is_int(),
                 "Can only extend integer values"
             );
@@ -164,8 +164,8 @@ pub fn legalize_abi_value(have: Type, arg: &AbiParam) -> ValueConversion {
         // We have the same number of bits as the argument.
         Ordering::Equal => {
             // This must be an integer vector that is split and then extended.
-            assert!(arg.value_type.is_int());
-            assert!(have.is_vector());
+            debug_assert!(arg.value_type.is_int());
+            debug_assert!(have.is_vector());
             ValueConversion::VectorSplit
         }
         // We have more bits than the argument.

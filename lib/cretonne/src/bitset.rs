@@ -36,8 +36,8 @@ where
 
     /// Check if this BitSet contains the number num
     pub fn contains(&self, num: u8) -> bool {
-        assert!((num as usize) < Self::bits());
-        assert!((num as usize) < Self::max_bits());
+        debug_assert!((num as usize) < Self::bits());
+        debug_assert!((num as usize) < Self::max_bits());
         self.0.into() & (1 << num) != 0
     }
 
@@ -62,8 +62,8 @@ where
 
     /// Construct a BitSet with the half-open range [lo,hi) filled in
     pub fn from_range(lo: u8, hi: u8) -> Self {
-        assert!(lo <= hi);
-        assert!((hi as usize) <= Self::bits());
+        debug_assert!(lo <= hi);
+        debug_assert!((hi as usize) <= Self::bits());
         let one: T = T::from(1);
         // I can't just do (one << hi) - one here as the shift may overflow
         let hi_rng = if hi >= 1 {

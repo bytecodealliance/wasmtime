@@ -9,7 +9,9 @@
 //!
 //! The main function of this module is [`translate_module`](fn.translate_module.html).
 
-#![deny(missing_docs)]
+#![deny(missing_docs,
+        trivial_numeric_casts,
+        unused_extern_crates)]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]

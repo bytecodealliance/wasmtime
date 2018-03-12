@@ -1,7 +1,7 @@
 [package]
 name = "cretonne-tools"
 authors = ["The Cretonne Project Developers"]
-version = "0.1.0"
+version = "0.3.4"
 description = "Binaries for testing the Cretonne library"
 license = "Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/"
@@ -13,18 +13,18 @@ name = "cton-util"
 path = "src/cton-util.rs"
 
 [dependencies]
-cretonne = { path = "lib/cretonne", version = "0.1.0" }
-cretonne-reader = { path = "lib/reader", version = "0.1.0" }
-cretonne-frontend = { path = "lib/frontend", version = "0.1.0" }
-cretonne-wasm = { path = "lib/wasm", version = "0.1.0" }
-cretonne-native = { path = "lib/native", version = "0.1.0" }
+cretonne = { path = "lib/cretonne", version = "0.3.4" }
+cretonne-reader = { path = "lib/reader", version = "0.3.4" }
+cretonne-frontend = { path = "lib/frontend", version = "0.3.4" }
+cretonne-wasm = { path = "lib/wasm", version = "0.3.4" }
+cretonne-native = { path = "lib/native", version = "0.3.4" }
 filecheck = { path = "lib/filecheck" }
 docopt = "0.8.0"
 serde = "1.0.8"
 serde_derive = "1.0.8"
 num_cpus = "1.5.1"
 tempdir="0.3.5"
-term = "0.4.6"
+term = "0.5"
 
 [workspace]
 

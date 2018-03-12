@@ -3,7 +3,7 @@ use std::borrow::Cow;
 /// A variable name is one or more ASCII alphanumerical characters, including underscore.
 /// Note that numerical variable names like `$45` are allowed too.
 ///
-/// Try to parse a variable name from the begining of `s`.
+/// Try to parse a variable name from the beginning of `s`.
 /// Return the index of the character following the varname.
 /// This returns 0 if `s` doesn't have a prefix that is a variable name.
 pub fn varname_prefix(s: &str) -> usize {

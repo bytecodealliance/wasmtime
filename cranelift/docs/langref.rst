@@ -37,7 +37,7 @@ The first line of a function definition provides the function *name* and
 the :term:`function signature` which declares the parameter and return types.
 Then follows the :term:`function preamble` which declares a number of entities
 that can be referenced inside the function. In the example above, the preamble
-declares a single local variable, ``ss1``.
+declares a single explicit stack slot, ``ss1``.
 
 After the preamble follows the :term:`function body` which consists of
 :term:`extended basic block`\s (EBBs), the first of which is the
@@ -440,7 +440,7 @@ Cretonne provides fully general :inst:`load` and :inst:`store` instructions for
 accessing memory, as well as :ref:`extending loads and truncating stores
 <extload-truncstore>`.
 
-If the memory at the given addresss is not :term:`addressable`, the behavior of
+If the memory at the given address is not :term:`addressable`, the behavior of
 these instructions is undefined. If it is addressable but not
 :term:`accessible`, they :term:`trap`.
 
@@ -471,8 +471,8 @@ the expected alignment. By default, misaligned loads and stores are allowed,
 but when the ``aligned`` flag is set, a misaligned memory access is allowed to
 :term:`trap`.
 
-Local variables
----------------
+Explicit Stack Slots
+--------------------
 
 One set of restricted memory operations access the current function's stack
 frame. The stack frame is divided into fixed-size stack slots that are
@@ -480,9 +480,9 @@ allocated in the :term:`function preamble`. Stack slots are not typed, they
 simply represent a contiguous sequence of :term:`accessible` bytes in the stack
 frame.
 
-.. inst:: SS = local Bytes, Flags...
+.. inst:: SS = explicit_slot Bytes, Flags...
 
-    Allocate a stack slot for a local variable in the preamble.
+    Allocate a stack slot in the preamble.
 
     If no alignment is specified, Cretonne will pick an appropriate alignment
     for the stack slot based on its size and access patterns.
@@ -559,7 +559,7 @@ runtime data structures.
     The address of GV can be computed by first loading a pointer from BaseGV
     and adding Offset to it.
 
-    It is assumed the BaseGV resides in readable memory with the apropriate
+    It is assumed the BaseGV resides in readable memory with the appropriate
     alignment for storing a pointer.
 
     Chains of ``deref`` global variables are possible, but cycles are not
@@ -782,7 +782,7 @@ Integer operations
 
     For example, see
     `llvm.sadd.with.overflow.*` and `llvm.ssub.with.overflow.*` in
-    `LLVM <http://llvm.org/docs/LangRef.html#arithmetic-with-overflow-intrinsics>`_.
+    `LLVM <https://llvm.org/docs/LangRef.html#arithmetic-with-overflow-intrinsics>`_.
 
 .. autoinst:: imul
 .. autoinst:: imul_imm
@@ -1135,7 +1135,7 @@ Glossary
         A list of declarations of entities that are used by the function body.
         Some of the entities that can be declared in the preamble are:
 
-        - Local variables.
+        - Stack slots.
         - Functions that are called directly.
         - Function signatures for indirect function calls.
         - Function flags and attributes that are not part of the signature.
@@ -1160,7 +1160,19 @@ Glossary
 
     stack slot
         A fixed size memory allocation in the current function's activation
-        frame. Also called a local variable.
+        frame. These include :term:`explicit stack slot`\s and
+        :term:`spill stack slot`\s.
+
+    explicit stack slot
+        A fixed size memory allocation in the current function's activation
+        frame. These differ from :term:`spill stack slot`\s in that they can
+        be created by frontends and they may have their addresses taken.
+
+    spill stack slot
+        A fixed size memory allocation in the current function's activation
+        frame. These differ from :term:`explicit stack slot`\s in that they are
+        only created during register allocation, and they may not have their
+        address taken.
 
     terminator instruction
         A control flow instruction that unconditionally directs the flow of

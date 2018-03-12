@@ -128,7 +128,7 @@ fn split_any(
     while let Some(repair) = repairs.pop() {
         for (_, inst) in cfg.pred_iter(repair.ebb) {
             let branch_opc = pos.func.dfg[inst].opcode();
-            assert!(
+            debug_assert!(
                 branch_opc.is_branch(),
                 "Predecessor not a branch: {}",
                 pos.func.dfg.display_inst(inst, None)
@@ -199,7 +199,7 @@ fn split_value(
             // This is an instruction result. See if the value was created by a `concat`
             // instruction.
             if let InstructionData::Binary { opcode, args, .. } = pos.func.dfg[inst] {
-                assert_eq!(num, 0);
+                debug_assert_eq!(num, 0);
                 if opcode == concat {
                     reuse = Some((args[0], args[1]));
                 }

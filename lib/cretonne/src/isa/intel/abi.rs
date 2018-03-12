@@ -107,7 +107,7 @@ impl ArgAssigner for Args {
         // Assign a stack location.
         let loc = ArgumentLoc::Stack(self.offset as i32);
         self.offset += self.pointer_bytes;
-        assert!(self.offset <= i32::MAX as u32);
+        debug_assert!(self.offset <= i32::MAX as u32);
         loc.into()
     }
 }
@@ -180,15 +180,13 @@ pub fn spiderwasm_prologue_epilogue(
     func: &mut ir::Function,
     isa: &TargetIsa,
 ) -> result::CtonResult {
-    let (word_size, stack_align) = if isa.flags().is_64bit() {
-        (8, 16)
-    } else {
-        (4, 4)
-    };
+    // Spiderwasm on 32-bit x86 always aligns its stack pointer to 16 bytes.
+    let stack_align = 16;
+    let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
     let bytes = StackSize::from(isa.flags().spiderwasm_prologue_words()) * word_size;
 
     let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
-    ss.offset = -(bytes as StackOffset);
+    ss.offset = Some(-(bytes as StackOffset));
     func.stack_slots.push(ss);
 
     layout_stack(&mut func.stack_slots, stack_align)?;
@@ -197,11 +195,10 @@ pub fn spiderwasm_prologue_epilogue(
 
 /// Insert a System V-compatible prologue and epilogue.
 pub fn native_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
-    let (word_size, stack_align) = if isa.flags().is_64bit() {
-        (8, 16)
-    } else {
-        (4, 4)
-    };
+    // The original 32-bit x86 ELF ABI had a 4-byte aligned stack pointer, but
+    // newer versions use a 16-byte aligned stack pointer.
+    let stack_align = 16;
+    let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
     let csr_type = if isa.flags().is_64bit() {
         ir::types::I64
     } else {
@@ -220,11 +217,11 @@ pub fn native_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> res
     func.create_stack_slot(ir::StackSlotData {
         kind: ir::StackSlotKind::IncomingArg,
         size: csr_stack_size as u32,
-        offset: -csr_stack_size,
+        offset: Some(-csr_stack_size),
     });
 
     let total_stack_size = layout_stack(&mut func.stack_slots, stack_align)? as i32;
-    let local_stack_size = (total_stack_size - csr_stack_size) as i64;
+    let local_stack_size = i64::from(total_stack_size - csr_stack_size);
 
     // Add CSRs to function signature
     let fp_arg = ir::AbiParam::special_reg(

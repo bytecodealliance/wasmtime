@@ -552,3 +552,35 @@ ebb1:
 
     return
 }
+
+; Tests for i32/i8 conversion instructions.
+function %I32_I8() {
+ebb0:
+    [-,%rcx]            v1 = iconst.i32 1
+
+    [-,%rcx]            v11 = ireduce.i8 v1             ; bin:
+
+    ; asm: movsbl %cl, %esi
+    [-,%rsi]            v20 = sextend.i32 v11           ; bin: 0f be f1
+
+    ; asm: movzbl %cl, %esi
+    [-,%rsi]            v30 = uextend.i32 v11           ; bin: 0f b6 f1
+
+    trap user0                                          ; bin: 0f 0b
+}
+
+; Tests for i32/i16 conversion instructions.
+function %I32_I16() {
+ebb0:
+    [-,%rcx]            v1 = iconst.i32 1
+
+    [-,%rcx]            v11 = ireduce.i16 v1            ; bin:
+
+    ; asm: movswl %cx, %esi
+    [-,%rsi]            v20 = sextend.i32 v11           ; bin: 0f bf f1
+
+    ; asm: movzwl %cx, %esi
+    [-,%rsi]            v30 = uextend.i32 v11           ; bin: 0f b7 f1
+
+    trap user0                                          ; bin: 0f 0b
+}

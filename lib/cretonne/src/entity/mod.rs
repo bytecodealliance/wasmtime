@@ -61,7 +61,7 @@ macro_rules! entity_impl {
     ($entity:ident) => {
         impl $crate::entity::EntityRef for $entity {
             fn new(index: usize) -> Self {
-                assert!(index < (::std::u32::MAX as usize));
+                debug_assert!(index < (::std::u32::MAX as usize));
                 $entity(index as u32)
             }
 

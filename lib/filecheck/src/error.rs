@@ -19,7 +19,7 @@ pub enum Error {
     UndefVariable(String),
     /// A pattern contains a back-reference to a variable that was defined in the same pattern.
     ///
-    /// For example, `check: Hello $(world=.*) $world`. Backreferences are not support. Often the
+    /// For example, `check: Hello $(world=.*) $world`. Backreferences are not supported. Often the
     /// desired effect can be achieved with the `sameln` check:
     ///
     /// ```text

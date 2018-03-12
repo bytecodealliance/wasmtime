@@ -88,7 +88,7 @@ const LOCAL_LIMIT: SequenceNumber = 100 * MINOR_STRIDE;
 // Compute the midpoint between `a` and `b`.
 // Return `None` if the midpoint would be equal to either.
 fn midpoint(a: SequenceNumber, b: SequenceNumber) -> Option<SequenceNumber> {
-    assert!(a < b);
+    debug_assert!(a < b);
     // Avoid integer overflow.
     let m = a + (b - a) / 2;
     if m > a { Some(m) } else { None }
@@ -148,7 +148,7 @@ impl Layout {
     /// Assign a valid sequence number to `ebb` such that the numbers are still monotonic. This may
     /// require renumbering.
     fn assign_ebb_seq(&mut self, ebb: Ebb) {
-        assert!(self.is_ebb_inserted(ebb));
+        debug_assert!(self.is_ebb_inserted(ebb));
 
         // Get the sequence number immediately before `ebb`, or 0.
         let prev_seq = self.ebbs[ebb]
@@ -334,13 +334,13 @@ impl Layout {
 
     /// Insert `ebb` as the last EBB in the layout.
     pub fn append_ebb(&mut self, ebb: Ebb) {
-        assert!(
+        debug_assert!(
             !self.is_ebb_inserted(ebb),
             "Cannot append EBB that is already in the layout"
         );
         {
             let node = &mut self.ebbs[ebb];
-            assert!(node.first_inst.is_none() && node.last_inst.is_none());
+            debug_assert!(node.first_inst.is_none() && node.last_inst.is_none());
             node.prev = self.last_ebb.into();
             node.next = None.into();
         }
@@ -355,11 +355,11 @@ impl Layout {
 
     /// Insert `ebb` in the layout before the existing EBB `before`.
     pub fn insert_ebb(&mut self, ebb: Ebb, before: Ebb) {
-        assert!(
+        debug_assert!(
             !self.is_ebb_inserted(ebb),
             "Cannot insert EBB that is already in the layout"
         );
-        assert!(
+        debug_assert!(
             self.is_ebb_inserted(before),
             "EBB Insertion point not in the layout"
         );
@@ -379,11 +379,11 @@ impl Layout {
 
     /// Insert `ebb` in the layout *after* the existing EBB `after`.
     pub fn insert_ebb_after(&mut self, ebb: Ebb, after: Ebb) {
-        assert!(
+        debug_assert!(
             !self.is_ebb_inserted(ebb),
             "Cannot insert EBB that is already in the layout"
         );
-        assert!(
+        debug_assert!(
             self.is_ebb_inserted(after),
             "EBB Insertion point not in the layout"
         );
@@ -403,8 +403,8 @@ impl Layout {
 
     /// Remove `ebb` from the layout.
     pub fn remove_ebb(&mut self, ebb: Ebb) {
-        assert!(self.is_ebb_inserted(ebb), "EBB not in the layout");
-        assert!(self.first_inst(ebb).is_none(), "EBB must be empty.");
+        debug_assert!(self.is_ebb_inserted(ebb), "EBB not in the layout");
+        debug_assert!(self.first_inst(ebb).is_none(), "EBB must be empty.");
 
         // Clear the `ebb` node and extract links.
         let prev;
@@ -521,8 +521,8 @@ impl Layout {
 
     /// Append `inst` to the end of `ebb`.
     pub fn append_inst(&mut self, inst: Inst, ebb: Ebb) {
-        assert_eq!(self.inst_ebb(inst), None);
-        assert!(
+        debug_assert_eq!(self.inst_ebb(inst), None);
+        debug_assert!(
             self.is_ebb_inserted(ebb),
             "Cannot append instructions to EBB not in layout"
         );
@@ -532,7 +532,7 @@ impl Layout {
                 let inst_node = &mut self.insts[inst];
                 inst_node.ebb = ebb.into();
                 inst_node.prev = ebb_node.last_inst;
-                assert!(inst_node.next.is_none());
+                debug_assert!(inst_node.next.is_none());
             }
             if ebb_node.first_inst.is_none() {
                 ebb_node.first_inst = inst.into();
@@ -566,7 +566,7 @@ impl Layout {
 
     /// Insert `inst` before the instruction `before` in the same EBB.
     pub fn insert_inst(&mut self, inst: Inst, before: Inst) {
-        assert_eq!(self.inst_ebb(inst), None);
+        debug_assert_eq!(self.inst_ebb(inst), None);
         let ebb = self.inst_ebb(before).expect(
             "Instruction before insertion point not in the layout",
         );
@@ -645,7 +645,7 @@ impl Layout {
         let old_ebb = self.inst_ebb(before).expect(
             "The `before` instruction must be in the layout",
         );
-        assert!(!self.is_ebb_inserted(new_ebb));
+        debug_assert!(!self.is_ebb_inserted(new_ebb));
 
         // Insert new_ebb after old_ebb.
         let next_ebb = self.ebbs[old_ebb].next;

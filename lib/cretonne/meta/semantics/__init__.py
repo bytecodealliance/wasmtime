@@ -17,7 +17,7 @@ def verify_semantics(inst, src, xforms):
     # type: (Instruction, Rtl, InstructionSemantics) -> None
     """
     Verify that the semantics transforms in xforms correctly describe the
-    instruction described by the src Rtl.  This involves checking that:
+    instruction described by the src Rtl. This involves checking that:
         0) src is a single instance of inst
         1) For all x\in xforms x.src is a single instance of inst
         2) For any concrete values V of Literals in inst:

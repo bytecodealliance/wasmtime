@@ -13,7 +13,7 @@ use filetest::subtest::{self, SubTest, Context, Result as STResult};
 pub fn run(files: Vec<String>) -> CommandResult {
     for (i, f) in files.into_iter().enumerate() {
         if i != 0 {
-            println!("");
+            println!();
         }
         cat_one(f)?
     }
@@ -30,7 +30,7 @@ fn cat_one(filename: String) -> CommandResult {
 
     for (idx, func) in items.into_iter().enumerate() {
         if idx != 0 {
-            println!("");
+            println!();
         }
         print!("{}", func);
     }

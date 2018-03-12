@@ -117,7 +117,7 @@ pub fn parse_import_section<'data>(
     Ok(())
 }
 
-/// Retrieves the correspondances between functions and signatures from the function section
+/// Retrieves the correspondences between functions and signatures from the function section
 pub fn parse_function_section(
     parser: &mut Parser,
     environ: &mut ModuleEnvironment,

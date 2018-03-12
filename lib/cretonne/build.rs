@@ -46,7 +46,7 @@ fn main() {
     let cur_dir = env::current_dir().expect("Can't access current working directory");
     let crate_dir = cur_dir.as_path();
 
-    // Make sure we rebuild is this build script changes.
+    // Make sure we rebuild if this build script changes.
     // I guess that won't happen if you have non-UTF8 bytes in your path names.
     // The `build.py` script prints out its own dependencies.
     println!(
@@ -59,8 +59,11 @@ fn main() {
     let build_script = meta_dir.join("build.py");
 
     // Launch build script with Python. We'll just find python in the path.
+    // Use -B to disable .pyc files, because they cause trouble for vendoring
+    // scripts, and this is a build step that isn't run very often anyway.
     let status = process::Command::new("python")
         .current_dir(crate_dir)
+        .arg("-B")
         .arg(build_script)
         .arg("--out-dir")
         .arg(out_dir)

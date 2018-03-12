@@ -47,6 +47,28 @@ sdivmodx = Instruction(
         """,
         ins=(nlo, nhi, d), outs=(q, r), can_trap=True)
 
+argL = Operand('argL', iWord)
+argR = Operand('argR', iWord)
+resLo = Operand('resLo', iWord)
+resHi = Operand('resHi', iWord)
+
+umulx = Instruction(
+        'x86_umulx', r"""
+        Unsigned integer multiplication, producing a double-length result.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(argL, argR), outs=(resLo, resHi))
+
+smulx = Instruction(
+        'x86_smulx', r"""
+        Signed integer multiplication, producing a double-length result.
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        """,
+        ins=(argL, argR), outs=(resLo, resHi))
 
 Float = TypeVar(
         'Float', 'A scalar or vector floating point number',
@@ -132,7 +154,7 @@ rflags = Operand('rflags', iflags)
 bsr = Instruction(
     'x86_bsr', r"""
     Bit Scan Reverse -- returns the bit-index of the most significant 1
-    in the word.  Result is undefined if the argument is zero.  However, it
+    in the word. Result is undefined if the argument is zero. However, it
     sets the Z flag depending on the argument, so it is at least easy to
     detect and handle that case.
 
@@ -144,7 +166,7 @@ bsr = Instruction(
 bsf = Instruction(
     'x86_bsf', r"""
     Bit Scan Forwards -- returns the bit-index of the least significant 1
-    in the word.  Is otherwise identical to 'bsr', just above.
+    in the word. Is otherwise identical to 'bsr', just above.
     """,
     ins=x, outs=(y, rflags))
 

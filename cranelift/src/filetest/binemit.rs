@@ -126,7 +126,7 @@ impl SubTest for TestBinEmit {
         // Fix the stack frame layout so we can test spill/fill encodings.
         let min_offset = func.stack_slots
             .keys()
-            .map(|ss| func.stack_slots[ss].offset)
+            .map(|ss| func.stack_slots[ss].offset.unwrap())
             .min();
         func.stack_slots.frame_size = min_offset.map(|off| (-off) as u32);
 
@@ -271,13 +271,12 @@ impl SubTest for TestBinEmit {
                                 "No encodings found for: {}",
                                 func.dfg.display_inst(inst, isa)
                             ));
-                        } else {
-                            return Err(format!(
+                        }
+                        return Err(format!(
                                 "No matching encodings for {} in {}",
                                 func.dfg.display_inst(inst, isa),
                                 DisplayList(&encodings),
                             ));
-                        }
                     }
                     let have = sink.text.trim();
                     if have != want {

@@ -106,7 +106,7 @@ fn put_i<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, imm: i64, rd: RegUnit, 
 ///
 /// Encoding bits: `opcode[6:2] | (funct3 << 5)`
 fn put_u<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rd: RegUnit, sink: &mut CS) {
-    let bits = bits as u32;
+    let bits = u32::from(bits);
     let opcode5 = bits & 0x1f;
     let rd = u32::from(rd) & 0x1f;
 
@@ -133,7 +133,7 @@ fn put_sb<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rs1: RegUnit, rs2: RegUnit
     let rs1 = u32::from(rs1) & 0x1f;
     let rs2 = u32::from(rs2) & 0x1f;
 
-    assert!(is_signed_int(imm, 13, 1), "SB out of range {:#x}", imm);
+    debug_assert!(is_signed_int(imm, 13, 1), "SB out of range {:#x}", imm);
     let imm = imm as u32;
 
     // 0-6: opcode
@@ -164,7 +164,7 @@ fn put_uj<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rd: RegUnit, sink: &mut CS
     let opcode5 = bits & 0x1f;
     let rd = u32::from(rd) & 0x1f;
 
-    assert!(is_signed_int(imm, 21, 1), "UJ out of range {:#x}", imm);
+    debug_assert!(is_signed_int(imm, 21, 1), "UJ out of range {:#x}", imm);
     let imm = imm as u32;
 
     // 0-6: opcode

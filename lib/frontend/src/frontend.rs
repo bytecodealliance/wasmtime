@@ -12,9 +12,13 @@ use cretonne::packed_option::PackedOption;
 
 /// Structure used for translating a series of functions into Cretonne IL.
 ///
-/// In order to reduce memory reallocations whem compiling multiple functions,
+/// In order to reduce memory reallocations when compiling multiple functions,
 /// `ILBuilder` holds various data structures which are cleared between
 /// functions, rather than dropped, preserving the underlying allocations.
+///
+/// The `Variable` parameter can be any index-like type that can be made to
+/// implement `EntityRef`. For frontends that don't have an obvious type to
+/// use here, `variable::Variable` can be used.
 pub struct ILBuilder<Variable>
 where
     Variable: EntityRef,
@@ -259,7 +263,7 @@ where
     /// block, in the order they are declared. You must declare the types of the Ebb arguments
     /// you will use here.
     ///
-    /// When inserting the terminator instruction (which doesn't have a falltrough to its immediate
+    /// When inserting the terminator instruction (which doesn't have a fallthrough to its immediate
     /// successor), the block will be declared filled and it will not be possible to append
     /// instructions to it.
     pub fn switch_to_block(&mut self, ebb: Ebb) {
@@ -283,7 +287,7 @@ where
     /// Declares that all the predecessors of this block are known.
     ///
     /// Function to call with `ebb` as soon as the last branch instruction to `ebb` has been
-    /// created. Forgetting to call this method on every block will cause inconsistences in the
+    /// created. Forgetting to call this method on every block will cause inconsistencies in the
     /// produced functions.
     pub fn seal_block(&mut self, ebb: Ebb) {
         let side_effects = self.builder.ssa.seal_ebb_header_block(ebb, self.func);
@@ -590,22 +594,7 @@ mod tests {
     use frontend::{ILBuilder, FunctionBuilder};
     use cretonne::verifier::verify_function;
     use cretonne::settings;
-
-    use std::u32;
-
-    // An opaque reference to variable.
-    #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-    pub struct Variable(u32);
-    impl EntityRef for Variable {
-        fn new(index: usize) -> Self {
-            assert!(index < (u32::MAX as usize));
-            Variable(index as u32)
-        }
-
-        fn index(self) -> usize {
-            self.0 as usize
-        }
-    }
+    use Variable;
 
     fn sample_function(lazy_seal: bool) {
         let mut sig = Signature::new(CallConv::Native);
@@ -620,9 +609,9 @@ mod tests {
             let block0 = builder.create_ebb();
             let block1 = builder.create_ebb();
             let block2 = builder.create_ebb();
-            let x = Variable(0);
-            let y = Variable(1);
-            let z = Variable(2);
+            let x = Variable::new(0);
+            let y = Variable::new(1);
+            let z = Variable::new(2);
             builder.declare_var(x, I32);
             builder.declare_var(y, I32);
             builder.declare_var(z, I32);

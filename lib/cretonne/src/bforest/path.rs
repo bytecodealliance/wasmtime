@@ -285,7 +285,7 @@ impl<F: Forest> Path<F> {
     fn split_and_insert(&mut self, mut key: F::Key, value: F::Value, pool: &mut NodePool<F>) {
         let orig_root = self.node[0];
 
-        // Loop invariant: We need to split the  node at `level` and then retry a failed insertion.
+        // Loop invariant: We need to split the node at `level` and then retry a failed insertion.
         // The items to insert are either `(key, ins_node)` or `(key, value)`.
         let mut ins_node = None;
         let mut split;
@@ -316,7 +316,8 @@ impl<F: Forest> Path<F> {
             // Now that we have a not-full node, it must be possible to insert.
             match ins_node {
                 None => {
-                    assert!(pool[node].try_leaf_insert(entry, key, value));
+                    let inserted = pool[node].try_leaf_insert(entry, key, value);
+                    debug_assert!(inserted);
                     // If we inserted at the front of the new rhs_node leaf, we need to propagate
                     // the inserted key as the critical key instead of the previous front key.
                     if entry == 0 && node == rhs_node {
@@ -324,7 +325,8 @@ impl<F: Forest> Path<F> {
                     }
                 }
                 Some(n) => {
-                    assert!(pool[node].try_inner_insert(entry, key, n));
+                    let inserted = pool[node].try_inner_insert(entry, key, n);
+                    debug_assert!(inserted);
                     // The lower level was moved to the new RHS node, so make sure that is
                     // reflected here.
                     if n == self.node[level + 1] {

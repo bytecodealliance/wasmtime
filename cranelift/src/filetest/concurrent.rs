@@ -119,7 +119,7 @@ fn worker_thread(
             loop {
                 // Lock the mutex only long enough to extract a request.
                 let Request(jobid, path) = match requests.lock().unwrap().recv() {
-                    Err(..) => break, // TX end shuit down. exit thread.
+                    Err(..) => break, // TX end shut down. exit thread.
                     Ok(req) => req,
                 };
 

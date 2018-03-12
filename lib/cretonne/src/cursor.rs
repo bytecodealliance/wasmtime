@@ -256,7 +256,7 @@ pub trait Cursor {
     /// Go to a specific instruction which must be inserted in the layout.
     /// New instructions will be inserted before `inst`.
     fn goto_inst(&mut self, inst: ir::Inst) {
-        assert!(self.layout().inst_ebb(inst).is_some());
+        debug_assert!(self.layout().inst_ebb(inst).is_some());
         self.set_position(CursorPosition::At(inst));
     }
 
@@ -287,14 +287,14 @@ pub trait Cursor {
     /// At this position, instructions cannot be inserted, but `next_inst()` will move to the first
     /// instruction in `ebb`.
     fn goto_top(&mut self, ebb: ir::Ebb) {
-        assert!(self.layout().is_ebb_inserted(ebb));
+        debug_assert!(self.layout().is_ebb_inserted(ebb));
         self.set_position(CursorPosition::Before(ebb));
     }
 
     /// Go to the bottom of `ebb` which must be inserted into the layout.
     /// At this position, inserted instructions will be appended to `ebb`.
     fn goto_bottom(&mut self, ebb: ir::Ebb) {
-        assert!(self.layout().is_ebb_inserted(ebb));
+        debug_assert!(self.layout().is_ebb_inserted(ebb));
         self.set_position(CursorPosition::After(ebb));
     }
 

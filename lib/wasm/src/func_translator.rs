@@ -9,10 +9,9 @@ use cretonne::entity::EntityRef;
 use cretonne::ir::{self, InstBuilder, Ebb};
 use cretonne::result::{CtonResult, CtonError};
 use cretonne::timing;
-use cton_frontend::{ILBuilder, FunctionBuilder};
+use cton_frontend::{ILBuilder, FunctionBuilder, Variable};
 use environ::FuncEnvironment;
 use state::TranslationState;
-use translation_utils::Local;
 use wasmparser::{self, BinaryReader};
 
 /// WebAssembly to Cretonne IL function translator.
@@ -21,7 +20,7 @@ use wasmparser::{self, BinaryReader};
 /// by a `FuncEnvironment` object. A single translator instance can be reused to translate multiple
 /// functions which will reduce heap allocation traffic.
 pub struct FuncTranslator {
-    il_builder: ILBuilder<Local>,
+    il_builder: ILBuilder<Variable>,
     state: TranslationState,
 }
 
@@ -45,7 +44,7 @@ impl FuncTranslator {
     ///
     /// See [the WebAssembly specification][wasm].
     ///
-    /// [wasm]: http://webassembly.github.io/spec/binary/modules.html#code-section
+    /// [wasm]: https://webassembly.github.io/spec/binary/modules.html#code-section
     ///
     /// The Cretonne IR function `func` should be completely empty except for the `func.signature`
     /// and `func.name` fields. The signature may contain special-purpose arguments which are not
@@ -75,8 +74,8 @@ impl FuncTranslator {
             func.name,
             func.signature
         );
-        assert_eq!(func.dfg.num_ebbs(), 0, "Function must be empty");
-        assert_eq!(func.dfg.num_insts(), 0, "Function must be empty");
+        debug_assert_eq!(func.dfg.num_ebbs(), 0, "Function must be empty");
+        debug_assert_eq!(func.dfg.num_insts(), 0, "Function must be empty");
 
         // This clears the `ILBuilder`.
         let mut builder = FunctionBuilder::new(func, &mut self.il_builder);
@@ -107,7 +106,7 @@ impl FuncTranslator {
 /// Declare local variables for the signature parameters that correspond to WebAssembly locals.
 ///
 /// Return the number of local variables declared.
-fn declare_wasm_parameters(builder: &mut FunctionBuilder<Local>, entry_block: Ebb) -> usize {
+fn declare_wasm_parameters(builder: &mut FunctionBuilder<Variable>, entry_block: Ebb) -> usize {
     let sig_len = builder.func.signature.params.len();
     let mut next_local = 0;
     for i in 0..sig_len {
@@ -116,7 +115,7 @@ fn declare_wasm_parameters(builder: &mut FunctionBuilder<Local>, entry_block: Eb
         // signature parameters. For example, a `vmctx` pointer.
         if param_type.purpose == ir::ArgumentPurpose::Normal {
             // This is a normal WebAssembly signature parameter, so create a local for it.
-            let local = Local::new(next_local);
+            let local = Variable::new(next_local);
             builder.declare_var(local, param_type.value_type);
             next_local += 1;
 
@@ -133,7 +132,7 @@ fn declare_wasm_parameters(builder: &mut FunctionBuilder<Local>, entry_block: Eb
 /// Declare local variables, starting from `num_params`.
 fn parse_local_decls(
     reader: &mut BinaryReader,
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
     num_params: usize,
 ) -> CtonResult {
     let mut next_local = num_params;
@@ -157,7 +156,7 @@ fn parse_local_decls(
 ///
 /// Fail of too many locals are declared in the function, or if the type is not valid for a local.
 fn declare_locals(
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
     count: u32,
     wasm_type: wasmparser::Type,
     next_local: &mut usize,
@@ -174,7 +173,7 @@ fn declare_locals(
 
     let ty = builder.func.dfg.value_type(zeroval);
     for _ in 0..count {
-        let local = Local::new(*next_local);
+        let local = Variable::new(*next_local);
         builder.declare_var(local, ty);
         builder.def_var(local, zeroval);
         *next_local += 1;
@@ -187,18 +186,18 @@ fn declare_locals(
 /// arguments and locals are declared in the builder.
 fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     mut reader: BinaryReader,
-    builder: &mut FunctionBuilder<Local>,
+    builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
     environ: &mut FE,
 ) -> CtonResult {
     // The control stack is initialized with a single block representing the whole function.
-    assert_eq!(state.control_stack.len(), 1, "State not initialized");
+    debug_assert_eq!(state.control_stack.len(), 1, "State not initialized");
 
     // Keep going until the final `End` operator which pops the outermost block.
     while !state.control_stack.is_empty() {
         builder.set_srcloc(cur_srcloc(&reader));
         let op = reader.read_operator().map_err(|_| CtonError::InvalidInput)?;
-        translate_operator(&op, builder, state, environ);
+        translate_operator(op, builder, state, environ);
     }
 
     // The final `End` operator left us in the exit block where we need to manually add a return
@@ -206,9 +205,11 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     //
     // If the exit block is unreachable, it may not have the correct arguments, so we would
     // generate a return instruction that doesn't match the signature.
-    debug_assert!(builder.is_pristine());
-    if !builder.is_unreachable() {
-        builder.ins().return_(&state.stack);
+    if state.reachable {
+        debug_assert!(builder.is_pristine());
+        if !builder.is_unreachable() {
+            builder.ins().return_(&state.stack);
+        }
     }
 
     // Discard any remaining values on the stack. Either we just returned them,

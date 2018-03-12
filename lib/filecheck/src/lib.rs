@@ -1,5 +1,5 @@
 //! This crate provides a text pattern matching library with functionality similar to the LLVM
-//! project's [FileCheck command](http://llvm.org/docs/CommandGuide/FileCheck.html).
+//! project's [FileCheck command](https://llvm.org/docs/CommandGuide/FileCheck.html).
 //!
 //! A list of directives is typically extracted from a file containing a test case. The test case
 //! is then run through the program under test, and its output matched against the directives.
@@ -236,7 +236,9 @@
 //! This will match `"one, two"` , but not `"one,two"`. Without the `$()`, trailing whitespace
 //! would be trimmed from the pattern.
 
-#![deny(missing_docs)]
+#![deny(missing_docs,
+        trivial_numeric_casts,
+        unused_extern_crates)]
 
 pub use error::{Error, Result};
 pub use variable::{VariableMap, Value, NO_VARIABLES};

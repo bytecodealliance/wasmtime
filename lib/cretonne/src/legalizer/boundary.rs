@@ -86,15 +86,15 @@ fn legalize_entry_params(func: &mut Function, entry: Ebb) {
                 ArgumentPurpose::FramePointer => {}
                 ArgumentPurpose::CalleeSaved => {}
                 ArgumentPurpose::StructReturn => {
-                    assert!(!has_sret, "Multiple sret arguments found");
+                    debug_assert!(!has_sret, "Multiple sret arguments found");
                     has_sret = true;
                 }
                 ArgumentPurpose::VMContext => {
-                    assert!(!has_vmctx, "Multiple vmctx arguments found");
+                    debug_assert!(!has_vmctx, "Multiple vmctx arguments found");
                     has_vmctx = true;
                 }
                 ArgumentPurpose::SignatureId => {
-                    assert!(!has_sigid, "Multiple sigid arguments found");
+                    debug_assert!(!has_sigid, "Multiple sigid arguments found");
                     has_sigid = true;
                 }
                 _ => panic!("Unexpected special-purpose arg {}", abi_type),
@@ -104,7 +104,7 @@ fn legalize_entry_params(func: &mut Function, entry: Ebb) {
             // Compute the value we want for `arg` from the legalized ABI parameters.
             let mut get_arg = |func: &mut Function, ty| {
                 let abi_type = func.signature.params[abi_arg];
-                assert_eq!(
+                debug_assert_eq!(
                     abi_type.purpose,
                     ArgumentPurpose::Normal,
                     "Can't legalize special-purpose argument"
@@ -119,7 +119,7 @@ fn legalize_entry_params(func: &mut Function, entry: Ebb) {
             let converted = convert_from_abi(&mut pos, arg_type, Some(arg), &mut get_arg);
             // The old `arg` is no longer an attached EBB argument, but there are probably still
             // uses of the value.
-            assert_eq!(pos.func.dfg.resolve_aliases(arg), converted);
+            debug_assert_eq!(pos.func.dfg.resolve_aliases(arg), converted);
         }
     }
 
@@ -139,19 +139,19 @@ fn legalize_entry_params(func: &mut Function, entry: Ebb) {
             }
             // These can be meaningfully added by `legalize_signature()`.
             ArgumentPurpose::Link => {
-                assert!(!has_link, "Multiple link parameters found");
+                debug_assert!(!has_link, "Multiple link parameters found");
                 has_link = true;
             }
             ArgumentPurpose::StructReturn => {
-                assert!(!has_sret, "Multiple sret parameters found");
+                debug_assert!(!has_sret, "Multiple sret parameters found");
                 has_sret = true;
             }
             ArgumentPurpose::VMContext => {
-                assert!(!has_vmctx, "Multiple vmctx parameters found");
+                debug_assert!(!has_vmctx, "Multiple vmctx parameters found");
                 has_vmctx = true;
             }
             ArgumentPurpose::SignatureId => {
-                assert!(!has_sigid, "Multiple sigid parameters found");
+                debug_assert!(!has_sigid, "Multiple sigid parameters found");
                 has_sigid = true;
             }
         }
@@ -181,7 +181,7 @@ where
     // We theoretically allow for call instructions that return a number of fixed results before
     // the call return values. In practice, it doesn't happen.
     let fixed_results = pos.func.dfg[call].opcode().constraints().fixed_results();
-    assert_eq!(fixed_results, 0, "Fixed results  on calls not supported");
+    debug_assert_eq!(fixed_results, 0, "Fixed results on calls not supported");
 
     let results = pos.func.dfg.detach_results(call);
     let mut next_res = 0;
@@ -210,7 +210,7 @@ where
                 }
             };
             let v = convert_from_abi(pos, res_type, Some(res), &mut get_res);
-            assert_eq!(pos.func.dfg.resolve_aliases(res), v);
+            debug_assert_eq!(pos.func.dfg.resolve_aliases(res), v);
         }
     }
 
@@ -239,7 +239,7 @@ where
     let arg_type = match get_arg(pos.func, ty) {
         Ok(v) => {
             debug_assert_eq!(pos.func.dfg.value_type(v), ty);
-            assert_eq!(into_result, None);
+            debug_assert_eq!(into_result, None);
             return v;
         }
         Err(t) => t,
@@ -275,7 +275,7 @@ where
         }
         // Construct a `ty` by bit-casting from an integer type.
         ValueConversion::IntBits => {
-            assert!(!ty.is_int());
+            debug_assert!(!ty.is_int());
             let abi_ty = Type::int(ty.bits()).expect("Invalid type for conversion");
             let arg = convert_from_abi(pos, abi_ty, None, get_arg);
             pos.ins().with_results([into_result]).bitcast(ty, arg)
@@ -341,7 +341,7 @@ fn convert_to_abi<PutArg>(
             convert_to_abi(pos, cfg, hi, put_arg);
         }
         ValueConversion::IntBits => {
-            assert!(!ty.is_int());
+            debug_assert!(!ty.is_int());
             let abi_ty = Type::int(ty.bits()).expect("Invalid type for conversion");
             let arg = pos.ins().bitcast(abi_ty, value);
             convert_to_abi(pos, cfg, arg, put_arg);
@@ -556,7 +556,7 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
     legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
         func.signature.returns[abi_arg]
     });
-    assert_eq!(pos.func.dfg.inst_variable_args(inst).len(), abi_args);
+    debug_assert_eq!(pos.func.dfg.inst_variable_args(inst).len(), abi_args);
 
     // Append special return arguments for any `sret`, `link`, and `vmctx` return values added to
     // the legalized signature. These values should simply be propagated from the entry block

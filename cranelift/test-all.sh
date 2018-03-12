@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # This is the top-level test script:
 #
@@ -10,8 +11,9 @@
 #
 # All tests run by this script should be passing at all times.
 
-# Exit immediately on errors.
-set -e
+# Disable generation of .pyc files because they cause trouble for vendoring
+# scripts, and this is a build step that isn't run very often anyway.
+export PYTHONDONTWRITEBYTECODE=1
 
 # Repository top-level directory.
 cd $(dirname "$0")

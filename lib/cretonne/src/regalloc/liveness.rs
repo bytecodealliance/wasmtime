@@ -252,7 +252,7 @@ fn extend_to_use(
     forest: &mut LiveRangeForest,
 ) {
     // This is our scratch working space, and we'll leave it empty when we return.
-    assert!(worklist.is_empty());
+    debug_assert!(worklist.is_empty());
 
     // Extend the range locally in `ebb`.
     // If there already was a live interval in that block, we're done.
@@ -339,7 +339,7 @@ impl Liveness {
         let old = self.ranges.insert(
             LiveRange::new(value, def.into(), affinity),
         );
-        assert!(old.is_none(), "{} already has a live range", value);
+        debug_assert!(old.is_none(), "{} already has a live range", value);
     }
 
     /// Move the definition of `value` to `def`.
@@ -368,7 +368,7 @@ impl Liveness {
         debug_assert_eq!(Some(ebb), layout.inst_ebb(user));
         let lr = self.ranges.get_mut(value).expect("Value has no live range");
         let livein = lr.extend_in_ebb(ebb, user, layout, &mut self.forest);
-        assert!(!livein, "{} should already be live in {}", value, ebb);
+        debug_assert!(!livein, "{} should already be live in {}", value, ebb);
         &mut lr.affinity
     }
 

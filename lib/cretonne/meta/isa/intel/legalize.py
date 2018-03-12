@@ -37,6 +37,23 @@ intel_expand.custom_legalize(insts.srem, 'expand_sdivrem')
 intel_expand.custom_legalize(insts.udiv, 'expand_udivrem')
 intel_expand.custom_legalize(insts.urem, 'expand_udivrem')
 
+#
+# Double length (widening) multiplication
+#
+resLo = Var('resLo')
+resHi = Var('resHi')
+intel_expand.legalize(
+        resHi << insts.umulhi(x, y),
+        Rtl(
+            (resLo, resHi) << x86.umulx(x, y)
+        ))
+
+intel_expand.legalize(
+        resHi << insts.smulhi(x, y),
+        Rtl(
+            (resLo, resHi) << x86.smulx(x, y)
+        ))
+
 # Floating point condition codes.
 #
 # The 8 condition codes in `supported_floatccs` are directly supported by a
