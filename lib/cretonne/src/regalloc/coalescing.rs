@@ -1,9 +1,9 @@
-//! Constructing conventional SSA form.
+//! Constructing Conventional SSA form.
 //!
-//! Conventional SSA form is a subset of SSA form where any (transitively) phi-related values do
-//! not interfere. We construct CSSA by building virtual registers that are as large as possible
-//! and inserting copies where necessary such that all argument values passed to an EBB parameter
-//! will belong to the same virtual register as the EBB parameter value itself.
+//! Conventional SSA (CSSA) form is a subset of SSA form where any (transitively) phi-related
+//! values do not interfere. We construct CSSA by building virtual registers that are as large as
+//! possible and inserting copies where necessary such that all argument values passed to an EBB
+//! parameter will belong to the same virtual register as the EBB parameter value itself.
 
 use cursor::{Cursor, EncCursor};
 use dbg::DisplayList;
@@ -103,7 +103,7 @@ impl Coalescing {
         self.backedges.clear();
     }
 
-    /// Convert `func` to conventional SSA form and build virtual registers in the process.
+    /// Convert `func` to Conventional SSA form and build virtual registers in the process.
     pub fn conventional_ssa(
         &mut self,
         isa: &TargetIsa,

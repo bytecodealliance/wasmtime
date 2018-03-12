@@ -90,7 +90,7 @@ impl Context {
             verify_liveness(isa, func, cfg, &self.liveness)?;
         }
 
-        // Pass: Coalesce and create conventional SSA form.
+        // Pass: Coalesce and create Conventional SSA form.
         self.coalescing.conventional_ssa(
             isa,
             func,
