@@ -13,3 +13,7 @@ name = "cton_frontend"
 
 [dependencies]
 cretonne = { path = "../cretonne", version = "0.3.4" }
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "Cretonne/cretonne" }

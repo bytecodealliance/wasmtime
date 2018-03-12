@@ -15,3 +15,7 @@ cretonne = { path = "../cretonne", version = "0.3.4" }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 raw-cpuid = "3.0.0"
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "Cretonne/cretonne" }
