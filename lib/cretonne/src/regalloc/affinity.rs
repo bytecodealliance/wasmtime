@@ -13,7 +13,7 @@ use ir::{AbiParam, ArgumentLoc};
 use isa::{TargetIsa, RegInfo, RegClassIndex, OperandConstraint, ConstraintKind};
 
 /// Preferred register allocation for an SSA value.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Affinity {
     /// No affinity.
     ///

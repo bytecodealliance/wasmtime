@@ -11,7 +11,7 @@ use std::cmp::Ordering;
 ///
 /// An argument may go through a sequence of legalization steps before it reaches the final
 /// `Assign` action.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ArgAction {
     /// Assign the argument to the given location.
     Assign(ArgumentLoc),
