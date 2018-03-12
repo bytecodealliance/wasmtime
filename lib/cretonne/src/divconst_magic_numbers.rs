@@ -480,56 +480,63 @@ mod tests {
         // don't panic with integer wraparounds, especially at boundary
         // cases for their arguments. The actual results are thrown away.
         let mut total: u64 = 0;
-        println!("Testing UP magicU32");
+        // Testing UP magicU32
         for x in 2..(200 * 1000u32) {
             let m = magicU32(x);
             total = total ^ (m.mulBy as u64);
             total = total + (m.shiftBy as u64);
             total = total - (if m.doAdd { 123 } else { 456 });
         }
-        println!("Testing DOWN magicU32");
+        assert_eq!(total, 1747815691);
+        // Testing DOWN magicU32
         for x in 0..(200 * 1000u32) {
             let m = magicU32(0xFFFF_FFFFu32 - x);
             total = total ^ (m.mulBy as u64);
             total = total + (m.shiftBy as u64);
             total = total - (if m.doAdd { 123 } else { 456 });
         }
+        assert_eq!(total, 2210292772);
 
-        println!("Testing UP magicU64");
+        // Testing UP magicU64
         for x in 2..(200 * 1000u64) {
             let m = magicU64(x);
             total = total ^ m.mulBy;
             total = total + (m.shiftBy as u64);
             total = total - (if m.doAdd { 123 } else { 456 });
         }
-        println!("Testing DOWN magicU64");
+        assert_eq!(total, 7430004084791260605);
+        // Testing DOWN magicU64
         for x in 0..(200 * 1000u64) {
             let m = magicU64(0xFFFF_FFFF_FFFF_FFFFu64 - x);
             total = total ^ m.mulBy;
             total = total + (m.shiftBy as u64);
             total = total - (if m.doAdd { 123 } else { 456 });
         }
+        assert_eq!(total, 7547519887519825919);
 
-        println!("Testing UP magicS32");
+        // Testing UP magicS32
         for x in 0..(200 * 1000i32) {
             let m = magicS32(-0x8000_0000i32 + x);
             total = total ^ (m.mulBy as u64);
             total = total + (m.shiftBy as u64);
         }
-        println!("Testing DOWN magicS32");
+        assert_eq!(total, 10899224186731671235);
+        // Testing DOWN magicS32
         for x in 0..(200 * 1000i32) {
             let m = magicS32(0x7FFF_FFFFi32 - x);
             total = total ^ (m.mulBy as u64);
             total = total + (m.shiftBy as u64);
         }
+        assert_eq!(total, 7547519887517897369);
 
-        println!("Testing UP magicS64");
+        // Testing UP magicS64
         for x in 0..(200 * 1000i64) {
             let m = magicS64(-0x8000_0000_0000_0000i64 + x);
             total = total ^ (m.mulBy as u64);
             total = total + (m.shiftBy as u64);
         }
-        println!("Testing DOWN magicS64");
+        assert_eq!(total, 8029756891368555163);
+        // Testing DOWN magicS64
         for x in 0..(200 * 1000i64) {
             let m = magicS64(0x7FFF_FFFF_FFFF_FFFFi64 - x);
             total = total ^ (m.mulBy as u64);
