@@ -18,7 +18,7 @@ pub fn expand_global_addr(
     // Unpack the instruction.
     let gv = match func.dfg[inst] {
         ir::InstructionData::UnaryGlobalVar { opcode, global_var } => {
-            assert_eq!(opcode, ir::Opcode::GlobalAddr);
+            debug_assert_eq!(opcode, ir::Opcode::GlobalAddr);
             global_var
         }
         _ => panic!("Wanted global_addr: {}", func.dfg.display_inst(inst, None)),

@@ -74,8 +74,8 @@ impl FuncTranslator {
             func.name,
             func.signature
         );
-        assert_eq!(func.dfg.num_ebbs(), 0, "Function must be empty");
-        assert_eq!(func.dfg.num_insts(), 0, "Function must be empty");
+        debug_assert_eq!(func.dfg.num_ebbs(), 0, "Function must be empty");
+        debug_assert_eq!(func.dfg.num_insts(), 0, "Function must be empty");
 
         // This clears the `ILBuilder`.
         let mut builder = FunctionBuilder::new(func, &mut self.il_builder);
@@ -191,7 +191,7 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     environ: &mut FE,
 ) -> CtonResult {
     // The control stack is initialized with a single block representing the whole function.
-    assert_eq!(state.control_stack.len(), 1, "State not initialized");
+    debug_assert_eq!(state.control_stack.len(), 1, "State not initialized");
 
     // Keep going until the final `End` operator which pops the outermost block.
     while !state.control_stack.is_empty() {

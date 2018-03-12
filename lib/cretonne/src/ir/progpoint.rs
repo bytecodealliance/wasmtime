@@ -19,7 +19,7 @@ pub struct ProgramPoint(u32);
 impl From<Inst> for ProgramPoint {
     fn from(inst: Inst) -> ProgramPoint {
         let idx = inst.index();
-        assert!(idx < (u32::MAX / 2) as usize);
+        debug_assert!(idx < (u32::MAX / 2) as usize);
         ProgramPoint((idx * 2) as u32)
     }
 }
@@ -27,7 +27,7 @@ impl From<Inst> for ProgramPoint {
 impl From<Ebb> for ProgramPoint {
     fn from(ebb: Ebb) -> ProgramPoint {
         let idx = ebb.index();
-        assert!(idx < (u32::MAX / 2) as usize);
+        debug_assert!(idx < (u32::MAX / 2) as usize);
         ProgramPoint((idx * 2 + 1) as u32)
     }
 }

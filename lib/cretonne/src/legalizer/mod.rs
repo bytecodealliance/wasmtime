@@ -248,7 +248,7 @@ fn expand_fconst(
     _isa: &TargetIsa,
 ) {
     let ty = func.dfg.value_type(func.dfg.first_result(inst));
-    assert!(!ty.is_vector(), "Only scalar fconst supported: {}", ty);
+    debug_assert!(!ty.is_vector(), "Only scalar fconst supported: {}", ty);
 
     // In the future, we may want to generate constant pool entries for these constants, but for
     // now use an `iconst` and a bit cast.

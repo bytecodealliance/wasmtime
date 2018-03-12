@@ -60,7 +60,7 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> Result<CodeOffset
         while let Some(ebb) = cur.next_ebb() {
             // Record the offset for `ebb` and make sure we iterate until offsets are stable.
             if cur.func.offsets[ebb] != offset {
-                assert!(
+                debug_assert!(
                     cur.func.offsets[ebb] < offset,
                     "Code shrinking during relaxation"
                 );
@@ -111,7 +111,7 @@ fn fallthroughs(func: &mut Function) {
                 Opcode::Fallthrough => {
                     // Somebody used a fall-through instruction before the branch relaxation pass.
                     // Make sure it is correct, i.e. the destination is the layout successor.
-                    assert_eq!(destination, succ, "Illegal fall-through in {}", ebb)
+                    debug_assert_eq!(destination, succ, "Illegal fall-through in {}", ebb)
                 }
                 Opcode::Jump => {
                     // If this is a jump to the successor EBB, change it to a fall-through.

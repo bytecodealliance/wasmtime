@@ -245,7 +245,7 @@ def gen_constructor(sgrp, parent, fmt):
                 'pub fn new({}) -> Flags {{'.format(args), '}'):
             fmt.line('let bvec = builder.state_for("{}");'.format(sgrp.name))
             fmt.line('let mut bytes = [0; {}];'.format(sgrp.byte_size()))
-            fmt.line('assert_eq!(bvec.len(), {});'.format(sgrp.settings_size))
+            fmt.line('debug_assert_eq!(bvec.len(), {});'.format(sgrp.settings_size))
             with fmt.indented(
                     'for (i, b) in bvec.iter().enumerate() {', '}'):
                 fmt.line('bytes[i] = *b;')

@@ -211,7 +211,7 @@ def gen_instruction_data_impl(fmt):
                     if f.has_value_list:
                         fmt.line(n + ' { ref mut args, .. } => args,')
                 fmt.line('_ => panic!("No value list: {:?}", self),')
-            fmt.line('assert!(args.is_empty(), "Value list already in use");')
+            fmt.line('debug_assert!(args.is_empty(), "Value list already in use");')
             fmt.line('*args = vlist;')
 
 

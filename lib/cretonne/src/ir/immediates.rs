@@ -490,7 +490,7 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
         significand <<= adjust;
         exponent -= i32::from(adjust);
     }
-    assert_eq!(significand >> t, 1);
+    debug_assert_eq!(significand >> t, 1);
 
     // Trailing significand excludes the high bit.
     let t_bits = significand & ((1 << t) - 1);

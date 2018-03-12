@@ -242,7 +242,7 @@ impl<'a> Context<'a> {
         debug_assert_eq!(self.cur.current_ebb(), Some(ebb));
 
         // We may need to resolve register constraints if there are any noteworthy uses.
-        assert!(self.reg_uses.is_empty());
+        debug_assert!(self.reg_uses.is_empty());
         self.collect_reg_uses(inst, ebb, constraints);
 
         // Calls usually have fixed register uses.

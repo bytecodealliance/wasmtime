@@ -145,7 +145,7 @@ impl<'a> Context<'a> {
         );
 
         if self.cur.func.layout.entry_block() == Some(ebb) {
-            assert_eq!(liveins.len(), 0);
+            debug_assert_eq!(liveins.len(), 0);
             self.visit_entry_params(ebb, args);
         } else {
             self.visit_ebb_params(ebb, args);
@@ -155,7 +155,7 @@ impl<'a> Context<'a> {
     /// Visit the parameters on the entry block.
     /// These values have ABI constraints from the function signature.
     fn visit_entry_params(&mut self, ebb: Ebb, args: &[LiveValue]) {
-        assert_eq!(self.cur.func.signature.params.len(), args.len());
+        debug_assert_eq!(self.cur.func.signature.params.len(), args.len());
         self.cur.goto_first_inst(ebb);
 
         for (arg_idx, arg) in args.iter().enumerate() {
@@ -175,7 +175,7 @@ impl<'a> Context<'a> {
                     }
                 }
                 ArgumentLoc::Stack(_) => {
-                    assert!(arg.affinity.is_stack());
+                    debug_assert!(arg.affinity.is_stack());
                 }
                 ArgumentLoc::Unassigned => panic!("Unexpected ABI location"),
             }
@@ -203,7 +203,7 @@ impl<'a> Context<'a> {
         );
 
         // Identify reload candidates.
-        assert!(self.candidates.is_empty());
+        debug_assert!(self.candidates.is_empty());
         self.find_candidates(inst, constraints);
 
         // Insert fill instructions before `inst` and replace `cand.value` with the filled value.
@@ -375,7 +375,7 @@ fn handle_abi_args(
     isa: &TargetIsa,
     liveness: &Liveness,
 ) {
-    assert_eq!(abi_types.len(), var_args.len());
+    debug_assert_eq!(abi_types.len(), var_args.len());
     for ((abi, &arg), argidx) in abi_types.iter().zip(var_args).zip(offset..) {
         if abi.location.is_reg() {
             let lv = liveness.get(arg).expect("Missing live range for ABI arg");

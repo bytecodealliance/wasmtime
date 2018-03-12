@@ -348,7 +348,8 @@ def gen_xform(xform, fmt, type_sets):
         # Delete the original instruction if we didn't have an opportunity to
         # replace it.
         if not replace_inst:
-            fmt.line('assert_eq!(pos.remove_inst(), inst);')
+            fmt.line('let removed = pos.remove_inst();')
+            fmt.line('debug_assert_eq!(removed, inst);')
         fmt.line('return true;')
 
 

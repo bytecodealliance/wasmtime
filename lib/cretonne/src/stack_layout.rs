@@ -19,7 +19,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
     // Each object and the whole stack frame must fit in 2 GB such that any relative offset within
     // the frame fits in a `StackOffset`.
     let max_size = StackOffset::max_value() as StackSize;
-    assert!(alignment.is_power_of_two() && alignment <= max_size);
+    debug_assert!(alignment.is_power_of_two() && alignment <= max_size);
 
     // We assume a stack that grows toward lower addresses as implemented by modern ISAs. The
     // stack layout from high to low addresses will be:
@@ -70,7 +70,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
     // The offset is negative, growing downwards.
     // Start with the smallest alignments for better packing.
     let mut offset = incoming_min;
-    assert!(min_align.is_power_of_two());
+    debug_assert!(min_align.is_power_of_two());
     while min_align <= alignment {
         for ss in frame.keys() {
             let slot = frame[ss].clone();
