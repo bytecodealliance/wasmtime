@@ -538,6 +538,17 @@ impl Ieee32 {
         Ieee32(exponent << t)
     }
 
+    /// Create an `Ieee32` number representing the greatest negative value
+    /// not convertable from f32 to a signed integer with width n.
+    pub fn fcvt_to_sint_negative_overflow<I: Into<i32>>(n: I) -> Ieee32 {
+        let n = n.into();
+        debug_assert!(n < 32);
+        debug_assert!(23 + 1 - n < 32);
+        Self::with_bits(
+            (1u32 << (32 - 1)) | Self::pow2(n - 1).0 | (1u32 << (23 + 1 - n)),
+        )
+    }
+
     /// Return self negated.
     pub fn neg(self) -> Ieee32 {
         Ieee32(self.0 ^ (1 << 31))
@@ -588,6 +599,17 @@ impl Ieee64 {
         assert!(exponent > 0, "Underflow n={}", n);
         assert!(exponent < (1 << w) + 1, "Overflow n={}", n);
         Ieee64(exponent << t)
+    }
+
+    /// Create an `Ieee64` number representing the greatest negative value
+    /// not convertable from f64 to a signed integer with width n.
+    pub fn fcvt_to_sint_negative_overflow<I: Into<i64>>(n: I) -> Ieee64 {
+        let n = n.into();
+        debug_assert!(n < 64);
+        debug_assert!(52 + 1 - n < 64);
+        Self::with_bits(
+            (1u64 << (64 - 1)) | Self::pow2(n - 1).0 | (1u64 << (52 + 1 - n)),
+        )
     }
 
     /// Return self negated.
@@ -858,6 +880,15 @@ mod tests {
     }
 
     #[test]
+    fn fcvt_to_sint_negative_overflow_ieee32() {
+        for n in &[8, 16] {
+            assert_eq!(-((1u32 << (n - 1)) as f32) - 1.0, unsafe {
+                mem::transmute(Ieee32::fcvt_to_sint_negative_overflow(*n))
+            });
+        }
+    }
+
+    #[test]
     fn format_ieee64() {
         assert_eq!(Ieee64::with_float(0.0).to_string(), "0.0");
         assert_eq!(Ieee64::with_float(-0.0).to_string(), "-0.0");
@@ -984,5 +1015,14 @@ mod tests {
         assert_eq!(Ieee64::pow2(-1022).to_string(), "0x1.0000000000000p-1022");
 
         assert_eq!(Ieee64::pow2(1).neg().to_string(), "-0x1.0000000000000p1");
+    }
+
+    #[test]
+    fn fcvt_to_sint_negative_overflow_ieee64() {
+        for n in &[8, 16, 32] {
+            assert_eq!(-((1u64 << (n - 1)) as f64) - 1.0, unsafe {
+                mem::transmute(Ieee64::fcvt_to_sint_negative_overflow(*n))
+            });
+        }
     }
 }
