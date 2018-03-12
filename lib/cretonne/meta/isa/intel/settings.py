@@ -11,9 +11,6 @@ ISA.settings = SettingGroup('intel', parent=shared.group)
 
 # The has_* settings here correspond to CPUID bits.
 
-# CPUID.01H:EDX
-has_sse2 = BoolSetting("SSE2: CPUID.01H:EDX.SSE2[bit 26]")
-
 # CPUID.01H:ECX
 has_sse3 = BoolSetting("SSE3: CPUID.01H:ECX.SSE3[bit 0]")
 has_ssse3 = BoolSetting("SSSE3: CPUID.01H:ECX.SSSE3[bit 9]")
@@ -40,9 +37,9 @@ use_lzcnt = And(has_lzcnt)
 
 # Presets corresponding to Intel CPUs.
 
-baseline = Preset(has_sse2)
+baseline = Preset()
 nehalem = Preset(
-        has_sse2, has_sse3, has_ssse3, has_sse41, has_sse42, has_popcnt)
+        has_sse3, has_ssse3, has_sse41, has_sse42, has_popcnt)
 haswell = Preset(nehalem, has_bmi1, has_lzcnt)
 
 ISA.settings.close(globals())
