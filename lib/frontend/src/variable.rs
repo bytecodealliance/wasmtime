@@ -12,6 +12,14 @@ use std::u32;
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Variable(u32);
 
+impl Variable {
+    /// Create a new Variable with the given index.
+    pub fn with_u32(index: u32) -> Self {
+        assert!(index < u32::MAX);
+        Variable(index)
+    }
+}
+
 impl EntityRef for Variable {
     fn new(index: usize) -> Self {
         assert!(index < (u32::MAX as usize));

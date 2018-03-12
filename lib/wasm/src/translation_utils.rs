@@ -71,25 +71,6 @@ pub struct Memory {
     pub shared: bool,
 }
 
-/// Wrapper to a `get_local` and `set_local` index. They are WebAssembly's non-SSA variables.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Local(pub u32);
-impl cretonne::entity::EntityRef for Local {
-    fn new(index: usize) -> Self {
-        debug_assert!(index < (u32::MAX as usize));
-        Local(index as u32)
-    }
-
-    fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-impl Default for Local {
-    fn default() -> Self {
-        Local(u32::MAX)
-    }
-}
-
 /// Helper function translating wasmparser types to Cretonne types when possible.
 pub fn type_to_type(ty: &wasmparser::Type) -> Result<cretonne::ir::Type, ()> {
     match *ty {
