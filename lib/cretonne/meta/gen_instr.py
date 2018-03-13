@@ -103,6 +103,38 @@ def gen_arguments_method(fmt, is_mut):
                         .format(n, capture, arg))
 
 
+def gen_instruction_data(fmt):
+    # type: (srcgen.Formatter) -> None
+    """
+    Generate the InstructionData enum.
+
+    Every variant must contain `opcode` and `ty` fields. An instruction that
+    doesn't produce a value should have its `ty` field set to `VOID`. The size
+    of `InstructionData` should be kept at 16 bytes on 64-bit architectures. If
+    more space is needed to represent an instruction, use a `Box<AuxData>` to
+    store the additional information out of line.
+    """
+
+    fmt.line('#[derive(Clone, Debug, Hash, PartialEq, Eq)]')
+    fmt.line('#[allow(missing_docs)]')
+    with fmt.indented('pub enum InstructionData {', '}'):
+        for f in InstructionFormat.all_formats:
+            with fmt.indented('{} {{'.format(f.name), '},'):
+                fmt.line('opcode: Opcode,')
+                if f.typevar_operand is None:
+                    pass
+                elif f.has_value_list:
+                    fmt.line('args: ValueList,')
+                elif f.num_value_operands == 1:
+                    fmt.line('arg: Value,')
+                else:
+                    fmt.line('args: [Value; {}],'.format(f.num_value_operands))
+                for field in f.imm_fields:
+                    fmt.line(
+                            '{}: {},'
+                            .format(field.member, field.kind.rust_type))
+
+
 def gen_instruction_data_impl(fmt):
     # type: (srcgen.Formatter) -> None
     """
@@ -682,6 +714,8 @@ def generate(isas, out_dir):
     # opcodes.rs
     fmt = srcgen.Formatter()
     gen_formats(fmt)
+    gen_instruction_data(fmt)
+    fmt.line()
     gen_instruction_data_impl(fmt)
     fmt.line()
     instrs = gen_opcodes(groups, fmt)
