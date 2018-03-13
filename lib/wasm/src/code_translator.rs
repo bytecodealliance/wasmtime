@@ -247,27 +247,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.popn(return_count);
             state.reachable = false;
         }
-        Operator::BrIf { relative_depth } => {
-            let val = state.pop1();
-            let i = state.control_stack.len() - 1 - (relative_depth as usize);
-            let (return_count, br_destination) = {
-                let frame = &mut state.control_stack[i];
-                // The values returned by the branch are still available for the reachable
-                // code that comes after it
-                frame.set_branched_to_exit();
-                let return_count = if frame.is_loop() {
-                    0
-                } else {
-                    frame.num_return_values()
-                };
-                (return_count, frame.br_destination())
-            };
-            builder.ins().brnz(
-                val,
-                br_destination,
-                state.peekn(return_count),
-            );
-        }
+        Operator::BrIf { relative_depth } => translate_br_if(relative_depth, builder, state),
         Operator::BrTable { table } => {
             let (depths, default) = table.read_table();
             let mut min_depth = default;
@@ -1064,4 +1044,35 @@ fn translate_fcmp(
     let (arg0, arg1) = state.pop2();
     let val = builder.ins().fcmp(cc, arg0, arg1);
     state.push1(builder.ins().bint(I32, val));
+}
+
+fn translate_br_if(
+    relative_depth: u32,
+    builder: &mut FunctionBuilder<Variable>,
+    state: &mut TranslationState,
+) {
+    let val = state.pop1();
+    let (br_destination, inputs) = translate_br_if_args(relative_depth, state);
+    builder.ins().brnz(val, br_destination, inputs);
+}
+
+fn translate_br_if_args<'state>(
+    relative_depth: u32,
+    state: &'state mut TranslationState,
+) -> (ir::Ebb, &'state [ir::Value]) {
+    let i = state.control_stack.len() - 1 - (relative_depth as usize);
+    let (return_count, br_destination) = {
+        let frame = &mut state.control_stack[i];
+        // The values returned by the branch are still available for the reachable
+        // code that comes after it
+        frame.set_branched_to_exit();
+        let return_count = if frame.is_loop() {
+            0
+        } else {
+            frame.num_return_values()
+        };
+        (return_count, frame.br_destination())
+    };
+    let inputs = state.peekn(return_count);
+    (br_destination, inputs)
 }
