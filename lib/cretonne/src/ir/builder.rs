@@ -36,7 +36,7 @@ pub trait InstBuilderBase<'f>: Sized {
 //
 // This file defines the `InstBuilder` trait as an extension of `InstBuilderBase` with methods per
 // instruction format and per opcode.
-include!(concat!(env!("OUT_DIR"), "/builder.rs"));
+include!(concat!(env!("OUT_DIR"), "/inst_builder.rs"));
 
 /// Any type implementing `InstBuilderBase` gets all the `InstBuilder` methods for free.
 impl<'f, T: InstBuilderBase<'f>> InstBuilder<'f> for T {}
