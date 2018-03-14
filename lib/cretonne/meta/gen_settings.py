@@ -57,12 +57,11 @@ def gen_getter(setting, sgrp, fmt):
         ty = camel_case(setting.name)
         proto = 'pub fn {}(&self) -> {}'.format(setting.name, ty)
         with fmt.indented(proto + ' {', '}'):
-            with fmt.indented(
-                    'match self.bytes[{}] {{'
-                    .format(setting.byte_offset), '}'):
-                for i, v in enumerate(setting.values):
-                    fmt.line('{} => {}::{},'.format(i, ty, camel_case(v)))
-                fmt.line('_ => panic!("Invalid enum value"),')
+            m = srcgen.Match('self.bytes[{}]'.format(setting.byte_offset))
+            for i, v in enumerate(setting.values):
+                m.arm(str(i), [], '{}::{}'.format(ty, camel_case(v)))
+            m.arm('_', [], 'panic!("Invalid enum value")')
+            fmt.match(m)
     else:
         raise AssertionError("Unknown setting kind")
 
