@@ -49,11 +49,11 @@ def gen_formats(fmt):
         with fmt.indented(
                 "fn from(inst: &'a InstructionData) -> InstructionFormat {",
                 '}'):
-            with fmt.indented('match *inst {', '}'):
-                for f in InstructionFormat.all_formats:
-                    fmt.line(('InstructionData::{} {{ .. }} => ' +
-                              'InstructionFormat::{},')
-                             .format(f.name, f.name))
+            m = srcgen.Match('*inst')
+            for f in InstructionFormat.all_formats:
+                m.arm('InstructionData::' + f.name, ['..'],
+                      'InstructionFormat::' + f.name)
+            fmt.match(m)
     fmt.line()
 
 
@@ -74,33 +74,32 @@ def gen_arguments_method(fmt, is_mut):
             'pool: &\'a {m}ir::ValueListPool) -> '
             '&{m}[Value] {{'
             .format(f=method, m=mut), '}'):
-        with fmt.indented('match *self {', '}'):
-            for f in InstructionFormat.all_formats:
-                n = 'InstructionData::' + f.name
+        m = srcgen.Match('*self')
+        for f in InstructionFormat.all_formats:
+            n = 'InstructionData::' + f.name
 
-                # Formats with a value list put all of their arguments in the
-                # list. We don't split them up, just return it all as variable
-                # arguments. (I expect the distinction to go away).
-                if f.has_value_list:
-                    arg = ''.format(mut)
-                    fmt.line(
-                        '{} {{ ref {}args, .. }} => args.{}(pool),'
-                        .format(n, mut, as_slice))
-                    continue
+            # Formats with a value list put all of their arguments in the
+            # list. We don't split them up, just return it all as variable
+            # arguments. (I expect the distinction to go away).
+            if f.has_value_list:
+                m.arm(n, ['ref {}args'.format(mut), '..'],
+                      'args.{}(pool)'.format(as_slice))
+                continue
 
-                # Fixed args.
-                if f.num_value_operands == 0:
-                    arg = '&{}[]'.format(mut)
-                    capture = ''
-                elif f.num_value_operands == 1:
-                    capture = 'ref {}arg, '.format(mut)
-                    arg = '{}(arg)'.format(rslice)
-                else:
-                    capture = 'ref {}args, '.format(mut)
-                    arg = 'args'
-                fmt.line(
-                        '{} {{ {}.. }} => {},'
-                        .format(n, capture, arg))
+            # Fixed args.
+            fields = []
+            if f.num_value_operands == 0:
+                arg = '&{}[]'.format(mut)
+            elif f.num_value_operands == 1:
+                fields.append('ref {}arg'.format(mut))
+                arg = '{}(arg)'.format(rslice)
+            else:
+                args = 'args_arity{}'.format(f.num_value_operands)
+                fields.append('args: ref {}{}'.format(mut, args))
+                arg = args
+            fields.append('..')
+            m.arm(n, fields, arg)
+        fmt.match(m)
 
 
 def gen_instruction_data(fmt):
@@ -155,39 +154,37 @@ def gen_instruction_data_impl(fmt):
     with fmt.indented('impl InstructionData {', '}'):
         fmt.doc_comment('Get the opcode of this instruction.')
         with fmt.indented('pub fn opcode(&self) -> Opcode {', '}'):
-            with fmt.indented('match *self {', '}'):
-                for f in InstructionFormat.all_formats:
-                    fmt.line(
-                            'InstructionData::{} {{ opcode, .. }} => opcode,'
-                            .format(f.name))
+            m = srcgen.Match('*self')
+            for f in InstructionFormat.all_formats:
+                m.arm('InstructionData::' + f.name, ['opcode', '..'],
+                      'opcode')
+            fmt.match(m)
         fmt.line()
 
         fmt.doc_comment('Get the controlling type variable operand.')
         with fmt.indented(
                 'pub fn typevar_operand(&self, pool: &ir::ValueListPool) -> '
                 'Option<Value> {', '}'):
-            with fmt.indented('match *self {', '}'):
-                for f in InstructionFormat.all_formats:
-                    n = 'InstructionData::' + f.name
-                    if f.typevar_operand is None:
-                        fmt.line(n + ' { .. } => None,')
-                    elif f.has_value_list:
-                        # We keep all arguments in a value list.
-                        i = f.typevar_operand
-                        fmt.line(
-                                '{} {{ ref args, .. }} => '
-                                'args.get({}, pool),'.format(n, i))
-                    elif f.num_value_operands == 1:
-                        # We have a single value operand called 'arg'.
-                        fmt.line(n + ' { arg, .. } => Some(arg),')
-                    else:
-                        # We have multiple value operands and an array `args`.
-                        # Which `args` index to use?
-                        i = f.typevar_operand
-                        fmt.line(
-                                n +
-                                ' {{ ref args, .. }} => Some(args[{}]),'
-                                .format(i))
+            m = srcgen.Match('*self')
+            for f in InstructionFormat.all_formats:
+                n = 'InstructionData::' + f.name
+                if f.typevar_operand is None:
+                    m.arm(n, ['..'], 'None')
+                elif f.has_value_list:
+                    # We keep all arguments in a value list.
+                    i = f.typevar_operand
+                    m.arm(n, ['ref args', '..'],
+                          'args.get({}, pool)'.format(i))
+                elif f.num_value_operands == 1:
+                    # We have a single value operand called 'arg'.
+                    m.arm(n, ['arg', '..'], 'Some(arg)')
+                else:
+                    # We have multiple value operands and an array `args`.
+                    # Which `args` index to use?
+                    args = 'args_arity{}'.format(f.num_value_operands)
+                    m.arm(n, ['args: ref {}'.format(args), '..'],
+                          'Some({}[{}])'.format(args, f.typevar_operand))
+            fmt.match(m)
         fmt.line()
 
         fmt.doc_comment(
@@ -216,13 +213,13 @@ def gen_instruction_data_impl(fmt):
         with fmt.indented(
                 'pub fn take_value_list(&mut self) -> Option<ir::ValueList> {',
                 '}'):
-            with fmt.indented('match *self {', '}'):
-                for f in InstructionFormat.all_formats:
-                    n = 'InstructionData::' + f.name
-                    if f.has_value_list:
-                        fmt.line(
-                            n + ' { ref mut args, .. } => Some(args.take()),')
-                fmt.line('_ => None,')
+            m = srcgen.Match('*self')
+            for f in InstructionFormat.all_formats:
+                n = 'InstructionData::' + f.name
+                if f.has_value_list:
+                    m.arm(n, ['ref mut args', '..'], 'Some(args.take())')
+            m.arm('_', [], 'None')
+            fmt.match(m)
         fmt.line()
 
         fmt.doc_comment(
@@ -307,14 +304,12 @@ def gen_opcodes(groups, fmt):
             fmt.doc_comment(Instruction.ATTRIBS[attr])
             with fmt.indented('pub fn {}(self) -> bool {{'
                               .format(attr), '}'):
-                with fmt.indented('match self {', '}'):
-                    for i in instrs:
-                        if getattr(i, attr):
-                            fmt.format(
-                                    'Opcode::{} => true,',
-                                    i.camel_name, i.name)
-
-                    fmt.line('_ => false,')
+                m = srcgen.Match('self')
+                for i in instrs:
+                    if getattr(i, attr):
+                        m.arm('Opcode::' + i.camel_name, [], 'true')
+                m.arm('_', [], 'false')
+                fmt.match(m)
             fmt.line()
     fmt.line()
 
@@ -331,9 +326,10 @@ def gen_opcodes(groups, fmt):
 
     # Generate a private opcode_name function.
     with fmt.indented('fn opcode_name(opc: Opcode) -> &\'static str {', '}'):
-        with fmt.indented('match opc {', '}'):
-            for i in instrs:
-                fmt.format('Opcode::{} => "{}",', i.camel_name, i.name)
+        m = srcgen.Match('opc')
+        for i in instrs:
+            m.arm('Opcode::' + i.camel_name, [], '"{}"'.format(i.name))
+        fmt.match(m)
     fmt.line()
 
     # Generate an opcode hash table for looking up opcodes by name.
