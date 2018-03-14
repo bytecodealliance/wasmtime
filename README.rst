@@ -16,6 +16,10 @@ machine code.
     :target: https://travis-ci.org/Cretonne/cretonne
     :alt: Build Status
 
+.. image:: https://badges.gitter.im/gitterHQ/gitter.png
+    :target: https://gitter.im/Cretonne/Lobby
+    :alt: Gitter chat
+
 For more information, see `the documentation
 <https://cretonne.readthedocs.io/en/latest/?badge=latest>`_.
 
