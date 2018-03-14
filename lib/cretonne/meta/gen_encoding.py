@@ -756,7 +756,7 @@ def emit_recipe_constraints(isa, fmt):
             'static RECIPE_CONSTRAINTS: [RecipeConstraints; {}] = ['
             .format(len(isa.all_recipes)), '];'):
         for r in isa.all_recipes:
-            fmt.comment(r.name)
+            fmt.comment('Constraints for recipe {}:'.format(r.name))
             tied_i2o, tied_o2i = r.ties()
             fixed_ins, fixed_outs = r.fixed_ops()
             with fmt.indented('RecipeConstraints {', '},'):
@@ -830,7 +830,7 @@ def emit_recipe_sizing(isa, fmt):
             'static RECIPE_SIZING: [RecipeSizing; {}] = ['
             .format(len(isa.all_recipes)), '];'):
         for r in isa.all_recipes:
-            fmt.comment(r.name)
+            fmt.comment('Code size information for recipe {}:'.format(r.name))
             with fmt.indented('RecipeSizing {', '},'):
                 fmt.format('bytes: {},', r.size)
                 if r.branch_range:
