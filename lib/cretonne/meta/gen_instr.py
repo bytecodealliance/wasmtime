@@ -687,7 +687,7 @@ def gen_builder(insts, fmt):
     fmt.doc_comment("""
             Convenience methods for building instructions.
 
-            The `InstrBuilder` trait has one method per instruction opcode for
+            The `InstBuilder` trait has one method per instruction opcode for
             conveniently constructing the instruction with minimum arguments.
             Polymorphic instructions infer their result types from the input
             arguments when possible. In some cases, an explicit `ctrl_typevar`
@@ -722,7 +722,7 @@ def generate(isas, out_dir):
     gen_type_constraints(fmt, instrs)
     fmt.update_file('opcodes.rs', out_dir)
 
-    # builder.rs
+    # inst_builder.rs
     fmt = srcgen.Formatter()
     gen_builder(instrs, fmt)
-    fmt.update_file('builder.rs', out_dir)
+    fmt.update_file('inst_builder.rs', out_dir)
