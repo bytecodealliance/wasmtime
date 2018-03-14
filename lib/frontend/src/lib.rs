@@ -4,8 +4,8 @@
 //! translated from another language. Contains an SSA construction module that lets you translate
 //! your non-SSA variables into SSA Cretonne IL values via `use_var` and `def_var` calls.
 //!
-//! To get started, create an [`IlBuilder`](struct.ILBuilder.html) and pass it as an argument
-//! to a [`FunctionBuilder`](struct.FunctionBuilder.html).
+//! To get started, create an [`FunctionBuilderContext`](struct.FunctionBuilderContext.html) and
+//! pass it as an argument to a [`FunctionBuilder`](struct.FunctionBuilder.html).
 //!
 //! # Example
 //!
@@ -29,7 +29,7 @@
 //! }
 //! ```
 //!
-//! Here is how you build the corresponding Cretonne IL function using `ILBuilder`:
+//! Here is how you build the corresponding Cretonne IL function using `FunctionBuilderContext`:
 //!
 //! ```rust
 //! extern crate cretonne;
@@ -39,17 +39,17 @@
 //! use cretonne::ir::{ExternalName, CallConv, Function, Signature, AbiParam, InstBuilder};
 //! use cretonne::ir::types::*;
 //! use cretonne::settings;
-//! use cton_frontend::{ILBuilder, FunctionBuilder, Variable};
+//! use cton_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
 //! use cretonne::verifier::verify_function;
 //!
 //! fn main() {
 //!     let mut sig = Signature::new(CallConv::Native);
 //!     sig.returns.push(AbiParam::new(I32));
 //!     sig.params.push(AbiParam::new(I32));
-//!     let mut il_builder = ILBuilder::<Variable>::new();
+//!     let mut fn_builder_ctx = FunctionBuilderContext::<Variable>::new();
 //!     let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
 //!     {
-//!         let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut il_builder);
+//!         let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut fn_builder_ctx);
 //!
 //!         let block0 = builder.create_ebb();
 //!         let block1 = builder.create_ebb();
@@ -133,7 +133,7 @@
 
 extern crate cretonne;
 
-pub use frontend::{ILBuilder, FunctionBuilder};
+pub use frontend::{FunctionBuilderContext, FunctionBuilder};
 pub use variable::Variable;
 
 mod frontend;
