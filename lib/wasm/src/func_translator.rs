@@ -9,7 +9,7 @@ use cretonne::entity::EntityRef;
 use cretonne::ir::{self, InstBuilder, Ebb};
 use cretonne::result::{CtonResult, CtonError};
 use cretonne::timing;
-use cton_frontend::{ILBuilder, FunctionBuilder, Variable};
+use cton_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
 use environ::FuncEnvironment;
 use state::TranslationState;
 use wasmparser::{self, BinaryReader};
@@ -20,7 +20,7 @@ use wasmparser::{self, BinaryReader};
 /// by a `FuncEnvironment` object. A single translator instance can be reused to translate multiple
 /// functions which will reduce heap allocation traffic.
 pub struct FuncTranslator {
-    il_builder: ILBuilder<Variable>,
+    func_ctx: FunctionBuilderContext<Variable>,
     state: TranslationState,
 }
 
@@ -28,7 +28,7 @@ impl FuncTranslator {
     /// Create a new translator.
     pub fn new() -> Self {
         Self {
-            il_builder: ILBuilder::new(),
+            func_ctx: FunctionBuilderContext::new(),
             state: TranslationState::new(),
         }
     }
@@ -77,8 +77,8 @@ impl FuncTranslator {
         debug_assert_eq!(func.dfg.num_ebbs(), 0, "Function must be empty");
         debug_assert_eq!(func.dfg.num_insts(), 0, "Function must be empty");
 
-        // This clears the `ILBuilder`.
-        let mut builder = FunctionBuilder::new(func, &mut self.il_builder);
+        // This clears the `FunctionBuilderContext`.
+        let mut builder = FunctionBuilder::new(func, &mut self.func_ctx);
         let entry_block = builder.create_ebb();
         builder.append_ebb_params_for_function_params(entry_block);
         builder.switch_to_block(entry_block); // This also creates values for the arguments.
