@@ -1,32 +1,29 @@
-//! Test command for testing the LICM pass.
-//!
-//! The `licm` test command runs each function through the LICM pass after ensuring
-//! that all instructions are legal for the target.
+//! Test command for testing the preopt pass.
 //!
 //! The resulting function is sent to `filecheck`.
 
 use cretonne::ir::Function;
 use cretonne;
+use cretonne::print_errors::pretty_error;
 use cton_reader::TestCommand;
-use filetest::subtest::{SubTest, Context, Result, run_filecheck};
+use subtest::{SubTest, Context, Result, run_filecheck};
 use std::borrow::Cow;
 use std::fmt::Write;
-use utils::pretty_error;
 
-struct TestLICM;
+struct TestPreopt;
 
 pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
-    assert_eq!(parsed.command, "licm");
+    assert_eq!(parsed.command, "preopt");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))
     } else {
-        Ok(Box::new(TestLICM))
+        Ok(Box::new(TestPreopt))
     }
 }
 
-impl SubTest for TestLICM {
+impl SubTest for TestPreopt {
     fn name(&self) -> Cow<str> {
-        Cow::from("licm")
+        Cow::from("preopt")
     }
 
     fn is_mutating(&self) -> bool {
@@ -37,10 +34,10 @@ impl SubTest for TestLICM {
         // Create a compilation context, and drop in the function.
         let mut comp_ctx = cretonne::Context::new();
         comp_ctx.func = func.into_owned();
+        let isa = context.isa.expect("preopt needs an ISA");
 
         comp_ctx.flowgraph();
-        comp_ctx.compute_loop_analysis();
-        comp_ctx.licm(context.flags_or_isa()).map_err(|e| {
+        comp_ctx.preopt(isa).map_err(|e| {
             pretty_error(&comp_ctx.func, context.isa, Into::into(e))
         })?;
 

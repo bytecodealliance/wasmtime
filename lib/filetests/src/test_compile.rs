@@ -5,11 +5,11 @@
 use cretonne::binemit;
 use cretonne::ir;
 use cretonne;
+use cretonne::print_errors::pretty_error;
 use cton_reader::TestCommand;
-use filetest::subtest::{SubTest, Context, Result, run_filecheck};
+use subtest::{SubTest, Context, Result, run_filecheck};
 use std::borrow::Cow;
 use std::fmt::Write;
-use utils::pretty_error;
 
 struct TestCompile;
 

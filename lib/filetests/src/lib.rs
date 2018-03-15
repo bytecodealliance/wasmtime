@@ -1,18 +1,24 @@
 //! File tests.
 //!
-//! This module contains the main driver for `cton-util test` as well as implementations of the
-//! available test commands.
+//! This crate contains the main test driver as well as implementations of the
+//! available filetest commands.
+
+#[macro_use(dbg)]
+extern crate cretonne;
+extern crate cton_reader;
+extern crate filecheck;
+extern crate num_cpus;
 
 use std::path::Path;
 use std::time;
 use cton_reader::TestCommand;
-use CommandResult;
-use filetest::runner::TestRunner;
+use runner::TestRunner;
 
 mod concurrent;
 mod runner;
 mod runone;
 mod subtest;
+mod match_directive;
 
 mod test_binemit;
 mod test_cat;
@@ -38,7 +44,7 @@ type TestResult = Result<time::Duration, String>;
 /// Directories are scanned recursively for test cases ending in `.cton`. These test cases are
 /// executed on background threads.
 ///
-pub fn run(verbose: bool, files: Vec<String>) -> CommandResult {
+pub fn run(verbose: bool, files: Vec<String>) -> TestResult {
     let mut runner = TestRunner::new(verbose);
 
     for path in files.iter().map(Path::new) {

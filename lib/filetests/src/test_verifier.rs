@@ -2,7 +2,9 @@
 //!
 //! The `test verifier` test command looks for annotations on instructions like this:
 //!
+//! ```cton
 //!     jump ebb3 ; error: jump to non-existent EBB
+//! ```
 //!
 //! This annotation means that the verifier is expected to given an error for the jump instruction
 //! containing the substring "jump to non-existent EBB".
@@ -11,8 +13,8 @@ use std::borrow::{Borrow, Cow};
 use cretonne::verify_function;
 use cretonne::ir::Function;
 use cton_reader::TestCommand;
-use filetest::subtest::{SubTest, Context, Result};
-use utils::match_directive;
+use subtest::{SubTest, Context, Result};
+use match_directive::match_directive;
 
 struct TestVerifier;
 

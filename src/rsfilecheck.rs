@@ -1,3 +1,7 @@
+//! The `filecheck` sub-command.
+//!
+//! This file is named to avoid a name collision with the filecheck crate.
+
 use CommandResult;
 use utils::read_to_string;
 use filecheck::{CheckerBuilder, Checker, NO_VARIABLES};

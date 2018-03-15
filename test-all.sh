@@ -3,11 +3,10 @@ set -euo pipefail
 
 # This is the top-level test script:
 #
-# - Build documentation for Rust code in 'src/tools/target/doc'.
-# - Run unit tests for all Rust crates.
-# - Make a debug build of all crates.
-# - Make a release build of cton-util.
-# - Run file-level tests with the release build of cton-util.
+# - Make a debug build.
+# - Make a release build.
+# - Run unit tests for all Rust crates (including the filetests)
+# - Build API documentation.
 #
 # All tests run by this script should be passing at all times.
 

@@ -11,9 +11,10 @@ use cretonne::dbg::DisplayList;
 use cretonne::ir;
 use cretonne::ir::entities::AnyEntity;
 use cretonne::binemit::RegDiversions;
+use cretonne::print_errors::pretty_error;
 use cton_reader::TestCommand;
-use filetest::subtest::{SubTest, Context, Result};
-use utils::{match_directive, pretty_error};
+use subtest::{SubTest, Context, Result};
+use match_directive::match_directive;
 
 struct TestBinEmit;
 

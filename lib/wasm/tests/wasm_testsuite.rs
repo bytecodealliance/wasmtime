@@ -11,11 +11,9 @@ use std::str;
 use std::io::prelude::*;
 use std::process::Command;
 use std::fs;
-use cretonne::ir;
-use cretonne::ir::entities::AnyEntity;
-use cretonne::isa::TargetIsa;
 use cretonne::settings::{self, Configurable, Flags};
 use cretonne::verifier;
+use cretonne::print_errors::pretty_verifier_error;
 use tempdir::TempDir;
 
 #[test]
@@ -108,26 +106,4 @@ fn handle_module(path: PathBuf, flags: &Flags) {
             .map_err(|err| panic!(pretty_verifier_error(func, None, err)))
             .unwrap();
     }
-}
-
-
-/// Pretty-print a verifier error.
-pub fn pretty_verifier_error(
-    func: &ir::Function,
-    isa: Option<&TargetIsa>,
-    err: verifier::Error,
-) -> String {
-    let msg = err.to_string();
-    let str1 = match err.location {
-        AnyEntity::Inst(inst) => {
-            format!(
-                "{}\n{}: {}\n\n",
-                msg,
-                inst,
-                func.dfg.display_inst(inst, isa)
-            )
-        }
-        _ => String::from(format!("{}\n", msg)),
-    };
-    format!("{}{}", str1, func.display(isa))
 }
