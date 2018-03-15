@@ -172,8 +172,7 @@ class TargetISA(object):
         """
         for cpumode in self.cpumodes:
             self.legalize_code(cpumode.default_legalize)
-            for x in sorted(cpumode.type_legalize.values(),
-                            key=lambda x: x.name):
+            for x in cpumode.type_legalize.values():
                 self.legalize_code(x)
 
     def legalize_code(self, xgrp):
@@ -232,7 +231,7 @@ class CPUMode(object):
         # Tables for configuring legalization actions when no valid encoding
         # exists for an instruction.
         self.default_legalize = None  # type: XFormGroup
-        self.type_legalize = dict()  # type: Dict[ValueType, XFormGroup]
+        self.type_legalize = OrderedDict()  # type: OrderedDict[ValueType, XFormGroup]  # noqa
 
     def __str__(self):
         # type: () -> str
