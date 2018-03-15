@@ -8,7 +8,7 @@ source code.
 from __future__ import absolute_import
 import sys
 import os
-import collections
+from collections import OrderedDict
 
 try:
     from typing import Any, List, Set, Tuple  # noqa
@@ -267,11 +267,11 @@ class Match(object):
     def __init__(self, expr):
         # type: (str) -> None
         self.expr = expr
-        self.arms = collections.OrderedDict()  # type: collections.OrderedDict[Tuple[Tuple[str, ...], str], collections.OrderedDict[str, None]]  # noqa
+        self.arms = OrderedDict()  # type: OrderedDict[Tuple[Tuple[str, ...], str], OrderedDict[str, None]]  # noqa
 
     def arm(self, name, fields, body):
         # type: (str, List[str], str) -> None
         key = (tuple(fields), body)
         if key not in self.arms:
-            self.arms[key] = collections.OrderedDict()
+            self.arms[key] = OrderedDict()
         self.arms[key][name] = None
