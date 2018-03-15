@@ -144,8 +144,7 @@ Filecheck
 
 Many of the test commands described below use *filecheck* to verify their
 output. Filecheck is a Rust implementation of the LLVM tool of the same name.
-See the :file:`lib/filecheck` `documentation <https://docs.rs/filecheck/>`_ for
-details of its syntax.
+See the `documentation <https://docs.rs/filecheck/>`_ for details of its syntax.
 
 Comments in :file:`.cton` files are associated with the entity they follow.
 This typically means an instruction or the whole function. Those tests that
