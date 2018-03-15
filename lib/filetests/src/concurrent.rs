@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use num_cpus;
-use filetest::{TestResult, runone};
+use {TestResult, runone};
 
 // Request sent to worker threads contains jobid and path.
 struct Request(usize, PathBuf);

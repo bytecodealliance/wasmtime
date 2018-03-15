@@ -7,8 +7,9 @@ use std::path::PathBuf;
 use cretonne::Context;
 use cretonne::settings::FlagsOrIsa;
 use cretonne::{binemit, ir};
+use cretonne::print_errors::pretty_error;
 use std::path::Path;
-use utils::{pretty_error, read_to_string, parse_sets_and_isa};
+use utils::{read_to_string, parse_sets_and_isa};
 
 struct PrintRelocs {
     flag_print: bool,

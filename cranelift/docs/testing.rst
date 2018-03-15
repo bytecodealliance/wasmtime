@@ -136,6 +136,9 @@ This example will run the legalizer test twice. Both runs will have
 ``opt_level=best``, but they will have different ``is_64bit`` settings. The 32-bit
 run will also have the RISC-V specific flag ``supports_m`` disabled.
 
+The filetests are run automatically as part of `cargo test`, and they can
+also be run manually with the `cton-util test` command.
+
 Filecheck
 ---------
 

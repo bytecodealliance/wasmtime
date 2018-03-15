@@ -3,16 +3,26 @@
 use std::borrow::Cow;
 use std::path::Path;
 use std::time;
+use std::io::{self, Read};
+use std::fs;
 use cretonne::ir::Function;
 use cretonne::isa::TargetIsa;
 use cretonne::settings::Flags;
 use cretonne::timing;
 use cretonne::verify_function;
+use cretonne::print_errors::pretty_verifier_error;
 use cton_reader::parse_test;
 use cton_reader::IsaSpec;
-use utils::{read_to_string, pretty_verifier_error};
-use filetest::{TestResult, new_subtest};
-use filetest::subtest::{SubTest, Context, Result};
+use {TestResult, new_subtest};
+use subtest::{SubTest, Context, Result};
+
+/// Read an entire file into a string.
+fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
+    let mut file = fs::File::open(path)?;
+    let mut buffer = String::new();
+    file.read_to_string(&mut buffer)?;
+    Ok(buffer)
+}
 
 /// Load `path` and run the test in it.
 ///

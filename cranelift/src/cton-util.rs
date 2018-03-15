@@ -1,12 +1,11 @@
-#[macro_use(dbg)]
 extern crate cretonne;
 extern crate cton_reader;
 extern crate cton_wasm;
+extern crate cton_filetests;
 extern crate docopt;
 #[macro_use]
 extern crate serde_derive;
 extern crate filecheck;
-extern crate num_cpus;
 extern crate tempdir;
 extern crate term;
 
@@ -16,7 +15,6 @@ use std::io::{self, Write};
 use std::process;
 
 mod utils;
-mod filetest;
 mod cat;
 mod print_cfg;
 mod rsfilecheck;
@@ -88,7 +86,7 @@ fn cton_util() -> CommandResult {
 
     // Find the sub-command to execute.
     let result = if args.cmd_test {
-        filetest::run(args.flag_verbose, args.arg_file)
+        cton_filetests::run(args.flag_verbose, args.arg_file).map(|_time| ())
     } else if args.cmd_cat {
         cat::run(args.arg_file)
     } else if args.cmd_filecheck {

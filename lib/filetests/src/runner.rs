@@ -7,9 +7,9 @@ use std::error::Error;
 use std::fmt::{self, Display};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use filetest::{TestResult, runone};
-use filetest::concurrent::{ConcurrentRunner, Reply};
-use CommandResult;
+use std::time;
+use {TestResult, runone};
+use concurrent::{ConcurrentRunner, Reply};
 
 // Timeout in seconds when we're not making progress.
 const TIMEOUT_PANIC: usize = 10;
@@ -323,14 +323,15 @@ impl TestRunner {
     }
 
     /// Scan pushed directories for tests and run them.
-    pub fn run(&mut self) -> CommandResult {
+    pub fn run(&mut self) -> TestResult {
+        let started = time::Instant::now();
         self.scan_dirs();
         self.schedule_jobs();
         self.drain_threads();
         self.report_slow_tests();
         println!("{} tests", self.tests.len());
         match self.errors {
-            0 => Ok(()),
+            0 => Ok(started.elapsed()),
             1 => Err("1 failure".to_string()),
             n => Err(format!("{} failures", n)),
         }

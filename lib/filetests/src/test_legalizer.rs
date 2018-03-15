@@ -6,10 +6,10 @@
 use std::borrow::Cow;
 use cretonne;
 use cretonne::ir::Function;
+use cretonne::print_errors::pretty_error;
 use cton_reader::TestCommand;
-use filetest::subtest::{SubTest, Context, Result, run_filecheck};
+use subtest::{SubTest, Context, Result, run_filecheck};
 use std::fmt::Write;
-use utils::pretty_error;
 
 struct TestLegalizer;
 

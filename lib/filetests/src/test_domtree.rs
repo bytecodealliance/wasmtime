@@ -2,7 +2,9 @@
 //!
 //! The `test domtree` test command looks for annotations on instructions like this:
 //!
+//! ```cton
 //!     jump ebb3 ; dominates: ebb3
+//! ```
 //!
 //! This annotation means that the jump instruction is expected to be the immediate dominator of
 //! `ebb3`.
@@ -15,12 +17,12 @@ use cretonne::flowgraph::ControlFlowGraph;
 use cretonne::ir::Function;
 use cretonne::ir::entities::AnyEntity;
 use cton_reader::TestCommand;
-use filetest::subtest::{SubTest, Context, Result, run_filecheck};
+use subtest::{SubTest, Context, Result, run_filecheck};
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
 use std::fmt::{self, Write};
 use std::result;
-use utils::match_directive;
+use match_directive::match_directive;
 
 struct TestDomtree;
 

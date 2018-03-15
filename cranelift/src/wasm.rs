@@ -6,6 +6,7 @@ use cton_wasm::{translate_module, DummyEnvironment, ModuleEnvironment};
 use std::path::PathBuf;
 use cretonne::Context;
 use cretonne::settings::FlagsOrIsa;
+use cretonne::print_errors::{pretty_error, pretty_verifier_error};
 use std::fs::File;
 use std::error::Error;
 use std::io;
@@ -13,7 +14,7 @@ use std::path::Path;
 use std::process::Command;
 use tempdir::TempDir;
 use term;
-use utils::{pretty_verifier_error, pretty_error, parse_sets_and_isa, read_to_end};
+use utils::{parse_sets_and_isa, read_to_end};
 
 macro_rules! vprintln {
     ($x: expr, $($tts:tt)*) => {

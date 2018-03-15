@@ -27,6 +27,7 @@ pub mod ir;
 pub mod isa;
 pub mod loop_analysis;
 pub mod packed_option;
+pub mod print_errors;
 pub mod result;
 pub mod settings;
 pub mod timing;
