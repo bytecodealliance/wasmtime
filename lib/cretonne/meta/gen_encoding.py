@@ -600,8 +600,8 @@ def make_tables(cpumode):
         table[ty][inst].encodings.append(enc)
 
     # Ensure there are level 1 table entries for all types with a custom
-    # legalize action. Try to be stable relative to dict ordering.
-    for ty in sorted(cpumode.type_legalize.keys(), key=str):
+    # legalize action.
+    for ty in cpumode.type_legalize.keys():
         table[ty]
 
     return table
