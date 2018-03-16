@@ -104,8 +104,8 @@ impl<F: Forest> NodePool<F> {
             );
             let mut lower = lkey;
 
-            match &self[node] {
-                &NodeData::Inner { size, keys, tree } => {
+            match self[node] {
+                NodeData::Inner { size, keys, tree } => {
                     let size = size as usize;
                     let capacity = tree.len();
                     let keys = &keys[0..size];
@@ -147,7 +147,7 @@ impl<F: Forest> NodePool<F> {
                         lower = upper;
                     }
                 }
-                &NodeData::Leaf { size, keys, .. } => {
+                NodeData::Leaf { size, keys, .. } => {
                     let size = size as usize;
                     let capacity = keys.borrow().len();
                     let keys = &keys.borrow()[0..size];
@@ -190,7 +190,7 @@ impl<F: Forest> NodePool<F> {
                         lower = upper;
                     }
                 }
-                &NodeData::Free { .. } => panic!("Free {} reached", node),
+                NodeData::Free { .. } => panic!("Free {} reached", node),
             }
         }
     }
