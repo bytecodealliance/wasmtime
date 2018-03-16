@@ -17,11 +17,11 @@ name = "wasm2obj"
 path = "src/wasm2obj.rs"
 
 [dependencies]
-cretonne = "0.3.0"
-cretonne-frontend = "0.3.0"
-cretonne-reader = "0.3.0"
-cretonne-wasm = "0.3.0"
-cretonne-native = "0.3.0"
+cretonne = "0.4.0"
+cretonne-frontend = "0.4.0"
+cretonne-reader = "0.4.0"
+cretonne-wasm = "0.4.0"
+cretonne-native = "0.4.0"
 wasmstandalone_runtime = { path = "lib/runtime" }
 wasmstandalone_execute = { path = "lib/execute" }
 wasmstandalone_obj = { path = "lib/obj" }
