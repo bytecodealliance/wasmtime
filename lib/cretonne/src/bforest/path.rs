@@ -55,8 +55,8 @@ impl<F: Forest> Path<F> {
         for level in 0.. {
             self.size = level + 1;
             self.node[level] = node;
-            match &pool[node] {
-                &NodeData::Inner { size, keys, tree } => {
+            match pool[node] {
+                NodeData::Inner { size, keys, tree } => {
                     // Invariant: `tree[i]` contains keys smaller than
                     // `keys[i]`, greater or equal to `keys[i-1]`.
                     let i = match comp.search(key, &keys[0..size.into()]) {
@@ -68,7 +68,7 @@ impl<F: Forest> Path<F> {
                     self.entry[level] = i as u8;
                     node = tree[i];
                 }
-                &NodeData::Leaf { size, keys, vals } => {
+                NodeData::Leaf { size, keys, vals } => {
                     // For a leaf we want either the found key or an insert position.
                     return match comp.search(key, &keys.borrow()[0..size.into()]) {
                         Ok(i) => {
@@ -81,7 +81,7 @@ impl<F: Forest> Path<F> {
                         }
                     };
                 }
-                &NodeData::Free { .. } => panic!("Free {} reached from {}", node, root),
+                NodeData::Free { .. } => panic!("Free {} reached from {}", node, root),
             }
         }
         unreachable!();
@@ -94,10 +94,10 @@ impl<F: Forest> Path<F> {
             self.size = level + 1;
             self.node[level] = node;
             self.entry[level] = 0;
-            match &pool[node] {
-                &NodeData::Inner { tree, .. } => node = tree[0],
-                &NodeData::Leaf { keys, vals, .. } => return (keys.borrow()[0], vals.borrow()[0]),
-                &NodeData::Free { .. } => panic!("Free {} reached from {}", node, root),
+            match pool[node] {
+                NodeData::Inner { tree, .. } => node = tree[0],
+                NodeData::Leaf { keys, vals, .. } => return (keys.borrow()[0], vals.borrow()[0]),
+                NodeData::Free { .. } => panic!("Free {} reached from {}", node, root),
             }
         }
         unreachable!();
@@ -205,17 +205,17 @@ impl<F: Forest> Path<F> {
         let mut node = root;
         for l in level.. {
             self.node[l] = node;
-            match &pool[node] {
-                &NodeData::Inner { size, ref tree, .. } => {
+            match pool[node] {
+                NodeData::Inner { size, ref tree, .. } => {
                     self.entry[l] = size;
                     node = tree[usize::from(size)];
                 }
-                &NodeData::Leaf { size, .. } => {
+                NodeData::Leaf { size, .. } => {
                     self.entry[l] = size - 1;
                     self.size = l + 1;
                     break;
                 }
-                &NodeData::Free { .. } => panic!("Free {} reached from {}", node, root),
+                NodeData::Free { .. } => panic!("Free {} reached from {}", node, root),
             }
         }
         node
@@ -405,8 +405,8 @@ impl<F: Forest> Path<F> {
         let crit_key = pool[self.leaf_node()].leaf_crit_key();
         let crit_node = self.node[crit_level];
 
-        match &mut pool[crit_node] {
-            &mut NodeData::Inner { size, ref mut keys, .. } => {
+        match pool[crit_node] {
+            NodeData::Inner { size, ref mut keys, .. } => {
                 debug_assert!(crit_kidx < size);
                 keys[usize::from(crit_kidx)] = crit_key;
             }
@@ -581,8 +581,8 @@ impl<F: Forest> Path<F> {
     ///
     /// Returns `None` if the current node is a right-most node so no right sibling exists.
     fn right_sibling_branch_level(&self, level: usize, pool: &NodePool<F>) -> Option<usize> {
-        (0..level).rposition(|l| match &pool[self.node[l]] {
-            &NodeData::Inner { size, .. } => self.entry[l] < size,
+        (0..level).rposition(|l| match pool[self.node[l]] {
+            NodeData::Inner { size, .. } => self.entry[l] < size,
             _ => panic!("Expected inner node"),
         })
     }
@@ -622,8 +622,8 @@ impl<F: Forest> Path<F> {
         let bl = self.right_sibling_branch_level(level, pool).expect(
             "No right sibling exists",
         );
-        match &mut pool[self.node[bl]] {
-            &mut NodeData::Inner { ref mut keys, .. } => {
+        match pool[self.node[bl]] {
+            NodeData::Inner { ref mut keys, .. } => {
                 keys[usize::from(self.entry[bl])] = crit_key;
             }
             _ => panic!("Expected inner node"),
@@ -647,8 +647,8 @@ impl<F: Forest> Path<F> {
     /// Check the internal consistency of this path.
     pub fn verify(&self, pool: &NodePool<F>) {
         for level in 0..self.size {
-            match &pool[self.node[level]] {
-                &NodeData::Inner { size, tree, .. } => {
+            match pool[self.node[level]] {
+                NodeData::Inner { size, tree, .. } => {
                     assert!(
                         level < self.size - 1,
                         "Expected leaf node at level {}",
@@ -668,7 +668,7 @@ impl<F: Forest> Path<F> {
                         level
                     );
                 }
-                &NodeData::Leaf { size, .. } => {
+                NodeData::Leaf { size, .. } => {
                     assert_eq!(level, self.size - 1, "Expected inner node");
                     assert!(
                         self.entry[level] <= size,
@@ -677,7 +677,7 @@ impl<F: Forest> Path<F> {
                         size,
                     );
                 }
-                &NodeData::Free { .. } => {
+                NodeData::Free { .. } => {
                     panic!("Free {} in path", self.node[level]);
                 }
             }

@@ -170,18 +170,18 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         DivRemByConstInfo::RemS64(_, _) => true,
     };
 
-    match divrem_info {
+    match *divrem_info {
 
         // -------------------- U32 --------------------
 
         // U32 div, rem by zero: ignore
-        &DivRemByConstInfo::DivU32(_n1, 0) |
-        &DivRemByConstInfo::RemU32(_n1, 0) => {}
+        DivRemByConstInfo::DivU32(_n1, 0) |
+        DivRemByConstInfo::RemU32(_n1, 0) => {}
 
         // U32 div by 1: identity
         // U32 rem by 1: zero
-        &DivRemByConstInfo::DivU32(n1, 1) |
-        &DivRemByConstInfo::RemU32(n1, 1) => {
+        DivRemByConstInfo::DivU32(n1, 1) |
+        DivRemByConstInfo::RemU32(n1, 1) => {
             if isRem {
                 pos.func.dfg.replace(inst).iconst(I32, 0);
             } else {
@@ -190,8 +190,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         }
 
         // U32 div, rem by a power-of-2
-        &DivRemByConstInfo::DivU32(n1, d) |
-        &DivRemByConstInfo::RemU32(n1, d) if d.is_power_of_two() => {
+        DivRemByConstInfo::DivU32(n1, d) |
+        DivRemByConstInfo::RemU32(n1, d) if d.is_power_of_two() => {
             debug_assert!(d >= 2);
             // compute k where d == 2^k
             let k = d.trailing_zeros();
@@ -205,8 +205,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         }
 
         // U32 div, rem by non-power-of-2
-        &DivRemByConstInfo::DivU32(n1, d) |
-        &DivRemByConstInfo::RemU32(n1, d) => {
+        DivRemByConstInfo::DivU32(n1, d) |
+        DivRemByConstInfo::RemU32(n1, d) => {
             debug_assert!(d >= 3);
             let MU32 {
                 mulBy,
@@ -247,13 +247,13 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // -------------------- U64 --------------------
 
         // U64 div, rem by zero: ignore
-        &DivRemByConstInfo::DivU64(_n1, 0) |
-        &DivRemByConstInfo::RemU64(_n1, 0) => {}
+        DivRemByConstInfo::DivU64(_n1, 0) |
+        DivRemByConstInfo::RemU64(_n1, 0) => {}
 
         // U64 div by 1: identity
         // U64 rem by 1: zero
-        &DivRemByConstInfo::DivU64(n1, 1) |
-        &DivRemByConstInfo::RemU64(n1, 1) => {
+        DivRemByConstInfo::DivU64(n1, 1) |
+        DivRemByConstInfo::RemU64(n1, 1) => {
             if isRem {
                 pos.func.dfg.replace(inst).iconst(I64, 0);
             } else {
@@ -262,8 +262,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         }
 
         // U64 div, rem by a power-of-2
-        &DivRemByConstInfo::DivU64(n1, d) |
-        &DivRemByConstInfo::RemU64(n1, d) if d.is_power_of_two() => {
+        DivRemByConstInfo::DivU64(n1, d) |
+        DivRemByConstInfo::RemU64(n1, d) if d.is_power_of_two() => {
             debug_assert!(d >= 2);
             // compute k where d == 2^k
             let k = d.trailing_zeros();
@@ -277,8 +277,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         }
 
         // U64 div, rem by non-power-of-2
-        &DivRemByConstInfo::DivU64(n1, d) |
-        &DivRemByConstInfo::RemU64(n1, d) => {
+        DivRemByConstInfo::DivU64(n1, d) |
+        DivRemByConstInfo::RemU64(n1, d) => {
             debug_assert!(d >= 3);
             let MU64 {
                 mulBy,
@@ -319,15 +319,15 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // -------------------- S32 --------------------
 
         // S32 div, rem by zero or -1: ignore
-        &DivRemByConstInfo::DivS32(_n1, -1) |
-        &DivRemByConstInfo::RemS32(_n1, -1) |
-        &DivRemByConstInfo::DivS32(_n1, 0) |
-        &DivRemByConstInfo::RemS32(_n1, 0) => {}
+        DivRemByConstInfo::DivS32(_n1, -1) |
+        DivRemByConstInfo::RemS32(_n1, -1) |
+        DivRemByConstInfo::DivS32(_n1, 0) |
+        DivRemByConstInfo::RemS32(_n1, 0) => {}
 
         // S32 div by 1: identity
         // S32 rem by 1: zero
-        &DivRemByConstInfo::DivS32(n1, 1) |
-        &DivRemByConstInfo::RemS32(n1, 1) => {
+        DivRemByConstInfo::DivS32(n1, 1) |
+        DivRemByConstInfo::RemS32(n1, 1) => {
             if isRem {
                 pos.func.dfg.replace(inst).iconst(I32, 0);
             } else {
@@ -335,8 +335,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             }
         }
 
-        &DivRemByConstInfo::DivS32(n1, d) |
-        &DivRemByConstInfo::RemS32(n1, d) => {
+        DivRemByConstInfo::DivS32(n1, d) |
+        DivRemByConstInfo::RemS32(n1, d) => {
             if let Some((isNeg, k)) = isPowerOf2_S32(d) {
                 // k can be 31 only in the case that d is -2^31.
                 debug_assert!(k >= 1 && k <= 31);
@@ -396,15 +396,15 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // -------------------- S64 --------------------
 
         // S64 div, rem by zero or -1: ignore
-        &DivRemByConstInfo::DivS64(_n1, -1) |
-        &DivRemByConstInfo::RemS64(_n1, -1) |
-        &DivRemByConstInfo::DivS64(_n1, 0) |
-        &DivRemByConstInfo::RemS64(_n1, 0) => {}
+        DivRemByConstInfo::DivS64(_n1, -1) |
+        DivRemByConstInfo::RemS64(_n1, -1) |
+        DivRemByConstInfo::DivS64(_n1, 0) |
+        DivRemByConstInfo::RemS64(_n1, 0) => {}
 
         // S64 div by 1: identity
         // S64 rem by 1: zero
-        &DivRemByConstInfo::DivS64(n1, 1) |
-        &DivRemByConstInfo::RemS64(n1, 1) => {
+        DivRemByConstInfo::DivS64(n1, 1) |
+        DivRemByConstInfo::RemS64(n1, 1) => {
             if isRem {
                 pos.func.dfg.replace(inst).iconst(I64, 0);
             } else {
@@ -412,8 +412,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             }
         }
 
-        &DivRemByConstInfo::DivS64(n1, d) |
-        &DivRemByConstInfo::RemS64(n1, d) => {
+        DivRemByConstInfo::DivS64(n1, d) |
+        DivRemByConstInfo::RemS64(n1, d) => {
             if let Some((isNeg, k)) = isPowerOf2_S64(d) {
                 // k can be 63 only in the case that d is -2^63.
                 debug_assert!(k >= 1 && k <= 63);
