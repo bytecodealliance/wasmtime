@@ -41,8 +41,6 @@ if [ -n "$needcheck" ]; then
     touch $tsfile || echo no target directory
 fi
 
-cd "$topdir"
-
 # Make sure the code builds in debug mode.
 banner "Rust debug build"
 cargo build
