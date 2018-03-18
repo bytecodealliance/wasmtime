@@ -186,8 +186,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::End => {
             let frame = state.control_stack.pop().unwrap();
-            let return_count = frame.num_return_values();
             if !builder.is_unreachable() || !builder.is_pristine() {
+                let return_count = frame.num_return_values();
                 builder.ins().jump(
                     frame.following_code(),
                     state.peekn(return_count),
