@@ -137,6 +137,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.ins().jump(loop_body, &[]);
             state.push_loop(loop_body, next, num_return_values(ty));
             builder.switch_to_block(loop_body);
+            environ.translate_loop_header(builder.cursor());
         }
         Operator::If { ty } => {
             let val = state.pop1();

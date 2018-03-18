@@ -144,6 +144,14 @@ pub trait FuncEnvironment {
         index: MemoryIndex,
         heap: ir::Heap,
     ) -> ir::Value;
+
+    /// Emit code at the beginning of every wasm loop.
+    ///
+    /// This can be used to insert explicit interrupt or safepoint checking at
+    /// the beginnings of loops.
+    fn translate_loop_header(&mut self, _pos: FuncCursor) {
+        // By default, don't emit anything.
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
