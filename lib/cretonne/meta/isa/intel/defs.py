@@ -12,8 +12,8 @@ from base.immediates import floatcc
 ISA = TargetISA('intel', [base.instructions.GROUP, x86.GROUP])
 
 # CPU modes for 32-bit and 64-bit operation.
-I64 = CPUMode('I64', ISA)
-I32 = CPUMode('I32', ISA)
+X86_64 = CPUMode('I64', ISA)
+X86_32 = CPUMode('I32', ISA)
 
 # The set of floating point condition codes that are directly supported.
 # Other condition codes need to be reversed or expressed as two tests.
