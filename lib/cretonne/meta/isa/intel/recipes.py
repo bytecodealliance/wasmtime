@@ -756,8 +756,8 @@ fstDisp32 = TailRecipe(
         ''')
 
 # Unary spill with SIB and 32-bit displacement.
-spSib32 = TailRecipe(
-        'spSib32', Unary, size=6, ins=GPR, outs=StackGPR32,
+spillSib32 = TailRecipe(
+        'spillSib32', Unary, size=6, ins=GPR, outs=StackGPR32,
         clobbers_flags=False,
         emit='''
         let base = stk_base(out_stk0.base);
@@ -766,8 +766,10 @@ spSib32 = TailRecipe(
         sib_noindex(base, sink);
         sink.put4(out_stk0.offset as u32);
         ''')
-fspSib32 = TailRecipe(
-        'fspSib32', Unary, size=6, ins=FPR, outs=StackFPR32,
+
+# Like spillSib32, but targeting an FPR rather than a GPR.
+fspillSib32 = TailRecipe(
+        'fspillSib32', Unary, size=6, ins=FPR, outs=StackFPR32,
         clobbers_flags=False,
         emit='''
         let base = stk_base(out_stk0.base);
@@ -778,8 +780,8 @@ fspSib32 = TailRecipe(
         ''')
 
 # Regspill using RSP-relative addressing.
-rsp32 = TailRecipe(
-        'rsp32', RegSpill, size=6, ins=GPR, outs=(),
+regspill32 = TailRecipe(
+        'regspill32', RegSpill, size=6, ins=GPR, outs=(),
         clobbers_flags=False,
         emit='''
         let dst = StackRef::sp(dst, &func.stack_slots);
@@ -789,8 +791,10 @@ rsp32 = TailRecipe(
         sib_noindex(base, sink);
         sink.put4(dst.offset as u32);
         ''')
-frsp32 = TailRecipe(
-        'frsp32', RegSpill, size=6, ins=FPR, outs=(),
+
+# Like regspill32, but targeting an FPR rather than a GPR.
+fregspill32 = TailRecipe(
+        'fregspill32', RegSpill, size=6, ins=FPR, outs=(),
         clobbers_flags=False,
         emit='''
         let dst = StackRef::sp(dst, &func.stack_slots);
@@ -874,8 +878,8 @@ fldDisp32 = TailRecipe(
         ''')
 
 # Unary fill with SIB and 32-bit displacement.
-fiSib32 = TailRecipe(
-        'fiSib32', Unary, size=6, ins=StackGPR32, outs=GPR,
+fillSib32 = TailRecipe(
+        'fillSib32', Unary, size=6, ins=StackGPR32, outs=GPR,
         clobbers_flags=False,
         emit='''
         let base = stk_base(in_stk0.base);
@@ -884,8 +888,10 @@ fiSib32 = TailRecipe(
         sib_noindex(base, sink);
         sink.put4(in_stk0.offset as u32);
         ''')
-ffiSib32 = TailRecipe(
-        'ffiSib32', Unary, size=6, ins=StackFPR32, outs=FPR,
+
+# Like fillSib32, but targeting an FPR rather than a GPR.
+ffillSib32 = TailRecipe(
+        'ffillSib32', Unary, size=6, ins=StackFPR32, outs=FPR,
         clobbers_flags=False,
         emit='''
         let base = stk_base(in_stk0.base);
@@ -896,8 +902,8 @@ ffiSib32 = TailRecipe(
         ''')
 
 # Regfill with RSP-relative 32-bit displacement.
-rfi32 = TailRecipe(
-        'rfi32', RegFill, size=6, ins=StackGPR32, outs=(),
+regfill32 = TailRecipe(
+        'regfill32', RegFill, size=6, ins=StackGPR32, outs=(),
         clobbers_flags=False,
         emit='''
         let src = StackRef::sp(src, &func.stack_slots);
@@ -907,8 +913,10 @@ rfi32 = TailRecipe(
         sib_noindex(base, sink);
         sink.put4(src.offset as u32);
         ''')
-frfi32 = TailRecipe(
-        'frfi32', RegFill, size=6, ins=StackFPR32, outs=(),
+
+# Like regfill32, but targeting an FPR rather than a GPR.
+fregfill32 = TailRecipe(
+        'fregfill32', RegFill, size=6, ins=StackFPR32, outs=(),
         clobbers_flags=False,
         emit='''
         let src = StackRef::sp(src, &func.stack_slots);
