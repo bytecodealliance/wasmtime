@@ -205,14 +205,14 @@ for recipe in [r.st_abcd, r.stDisp8_abcd, r.stDisp32_abcd]:
     enc_both(base.istore8.i32.any, recipe, 0x88)
     enc_x86_64(base.istore8.i64.any, recipe, 0x88)
 
-enc_i32_i64(base.spill, r.spSib32, 0x89)
-enc_i32_i64(base.regspill, r.rsp32, 0x89)
+enc_i32_i64(base.spill, r.spillSib32, 0x89)
+enc_i32_i64(base.regspill, r.regspill32, 0x89)
 
 # Use a 32-bit write for spilling `b1` to avoid constraining the permitted
 # registers.
 # See MIN_SPILL_SLOT_SIZE which makes this safe.
-enc_both(base.spill.b1, r.spSib32, 0x89)
-enc_both(base.regspill.b1, r.rsp32, 0x89)
+enc_both(base.spill.b1, r.spillSib32, 0x89)
+enc_both(base.regspill.b1, r.regspill32, 0x89)
 
 for recipe in [r.ld, r.ldDisp8, r.ldDisp32]:
     enc_i32_i64_ld_st(base.load, True, recipe, 0x8b)
@@ -223,12 +223,12 @@ for recipe in [r.ld, r.ldDisp8, r.ldDisp32]:
     enc_i32_i64_ld_st(base.uload8, True, recipe, 0x0f, 0xb6)
     enc_i32_i64_ld_st(base.sload8, True, recipe, 0x0f, 0xbe)
 
-enc_i32_i64(base.fill, r.fiSib32, 0x8b)
-enc_i32_i64(base.regfill, r.rfi32, 0x8b)
+enc_i32_i64(base.fill, r.fillSib32, 0x8b)
+enc_i32_i64(base.regfill, r.regfill32, 0x8b)
 
 # Load 32 bits from `b1` spill slots. See `spill.b1` above.
-enc_both(base.fill.b1, r.fiSib32, 0x8b)
-enc_both(base.regfill.b1, r.rfi32, 0x8b)
+enc_both(base.fill.b1, r.fillSib32, 0x8b)
+enc_both(base.regfill.b1, r.regfill32, 0x8b)
 
 # Push and Pop
 X86_32.enc(x86.push.i32, *r.pushq(0x50))
@@ -267,15 +267,15 @@ enc_both(base.store.f64.any, r.fst, 0x66, 0x0f, 0xd6)
 enc_both(base.store.f64.any, r.fstDisp8, 0x66, 0x0f, 0xd6)
 enc_both(base.store.f64.any, r.fstDisp32, 0x66, 0x0f, 0xd6)
 
-enc_both(base.fill.f32, r.ffiSib32, 0x66, 0x0f, 0x6e)
-enc_both(base.regfill.f32, r.frfi32, 0x66, 0x0f, 0x6e)
-enc_both(base.fill.f64, r.ffiSib32, 0xf3, 0x0f, 0x7e)
-enc_both(base.regfill.f64, r.frfi32, 0xf3, 0x0f, 0x7e)
+enc_both(base.fill.f32, r.ffillSib32, 0x66, 0x0f, 0x6e)
+enc_both(base.regfill.f32, r.fregfill32, 0x66, 0x0f, 0x6e)
+enc_both(base.fill.f64, r.ffillSib32, 0xf3, 0x0f, 0x7e)
+enc_both(base.regfill.f64, r.fregfill32, 0xf3, 0x0f, 0x7e)
 
-enc_both(base.spill.f32, r.fspSib32, 0x66, 0x0f, 0x7e)
-enc_both(base.regspill.f32, r.frsp32, 0x66, 0x0f, 0x7e)
-enc_both(base.spill.f64, r.fspSib32, 0x66, 0x0f, 0xd6)
-enc_both(base.regspill.f64, r.frsp32, 0x66, 0x0f, 0xd6)
+enc_both(base.spill.f32, r.fspillSib32, 0x66, 0x0f, 0x7e)
+enc_both(base.regspill.f32, r.fregspill32, 0x66, 0x0f, 0x7e)
+enc_both(base.spill.f64, r.fspillSib32, 0x66, 0x0f, 0xd6)
+enc_both(base.regspill.f64, r.fregspill32, 0x66, 0x0f, 0xd6)
 
 #
 # Function addresses.
