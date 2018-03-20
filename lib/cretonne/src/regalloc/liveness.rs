@@ -184,6 +184,7 @@ use regalloc::affinity::Affinity;
 use regalloc::liverange::{LiveRange, LiveRangeForest, LiveRangeContext};
 use std::mem;
 use std::ops::Index;
+use std::vec::Vec;
 use timing;
 
 /// A set of live ranges, indexed by value number.

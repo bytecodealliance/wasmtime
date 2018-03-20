@@ -10,6 +10,7 @@ use std::cmp;
 use std::fmt;
 use std::ops::{Index, IndexMut};
 use std::str::FromStr;
+use std::vec::Vec;
 
 /// The size of an object on the stack, or the size of a stack frame.
 ///
@@ -319,6 +320,7 @@ mod tests {
     use ir::Function;
     use ir::types;
     use super::*;
+    use std::string::ToString;
 
     #[test]
     fn stack_slot() {

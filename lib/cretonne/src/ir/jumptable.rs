@@ -8,6 +8,7 @@ use ir::entities::Ebb;
 use std::iter;
 use std::slice;
 use std::fmt::{self, Display, Formatter};
+use std::vec::Vec;
 
 /// Contents of a jump table.
 ///
@@ -141,6 +142,8 @@ mod tests {
     use super::JumpTableData;
     use ir::Ebb;
     use entity::EntityRef;
+    use std::vec::Vec;
+    use std::string::ToString;
 
     #[test]
     fn empty() {

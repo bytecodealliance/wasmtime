@@ -351,6 +351,7 @@ where
 #[cfg(test)]
 mod test {
     use std::mem;
+    use std::vec::Vec;
     use super::*;
     use super::super::NodeData;
 

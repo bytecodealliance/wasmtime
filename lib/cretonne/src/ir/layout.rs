@@ -743,6 +743,7 @@ mod tests {
     use entity::EntityRef;
     use ir::{Ebb, Inst, ProgramOrder, SourceLoc};
     use std::cmp::Ordering;
+    use std::vec::Vec;
 
     struct LayoutCursor<'f> {
         /// Borrowed function layout. Public so it can be re-borrowed from this cursor.

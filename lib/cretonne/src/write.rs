@@ -9,6 +9,7 @@ use isa::{TargetIsa, RegInfo};
 use std::fmt::{self, Result, Error, Write};
 use std::result;
 use packed_option::ReservedValue;
+use std::string::String;
 
 /// Write `func` to `w` as equivalent text.
 /// Use `isa` to emit ISA-dependent annotations.
@@ -466,6 +467,7 @@ impl<'a> fmt::Display for DisplayValues<'a> {
 mod tests {
     use ir::{Function, ExternalName, StackSlotData, StackSlotKind};
     use ir::types;
+    use std::string::ToString;
 
     #[test]
     fn basic() {

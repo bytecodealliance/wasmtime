@@ -262,6 +262,7 @@ impl From<Heap> for AnyEntity {
 mod tests {
     use super::*;
     use std::u32;
+    use std::string::ToString;
 
     #[test]
     fn value_with_number() {

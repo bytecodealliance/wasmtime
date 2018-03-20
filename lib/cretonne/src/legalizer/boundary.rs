@@ -25,6 +25,7 @@ use ir::{Function, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value, Signature
 use ir::instructions::CallInfo;
 use isa::TargetIsa;
 use legalizer::split::{isplit, vsplit};
+use std::vec::Vec;
 
 /// Legalize all the function signatures in `func`.
 ///

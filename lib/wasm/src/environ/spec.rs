@@ -5,6 +5,8 @@ use cretonne::cursor::FuncCursor;
 use cretonne::settings::Flags;
 use translation_utils::{SignatureIndex, FunctionIndex, TableIndex, GlobalIndex, MemoryIndex,
                         Global, Table, Memory};
+use std::vec::Vec;
+use std::string::String;
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]

@@ -12,6 +12,7 @@ include!(concat!(env!("OUT_DIR"), "/settings-riscv.rs"));
 mod tests {
     use super::{builder, Flags};
     use settings::{self, Configurable};
+    use std::string::ToString;
 
     #[test]
     fn display_default() {

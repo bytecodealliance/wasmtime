@@ -652,6 +652,7 @@ mod tests {
     use std::{f32, f64};
     use std::str::FromStr;
     use std::fmt::Display;
+    use std::string::ToString;
 
     #[test]
     fn format_imm64() {

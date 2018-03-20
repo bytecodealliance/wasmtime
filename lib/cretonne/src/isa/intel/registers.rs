@@ -8,6 +8,7 @@ include!(concat!(env!("OUT_DIR"), "/registers-intel.rs"));
 mod tests {
     use super::*;
     use isa::RegUnit;
+    use std::string::{String, ToString};
 
     #[test]
     fn unit_encodings() {

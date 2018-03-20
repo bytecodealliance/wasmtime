@@ -148,6 +148,7 @@ mod tests {
     use super::*;
     use entity::EntityRef;
     use ir::{Inst, Ebb};
+    use std::string::ToString;
 
     #[test]
     fn convert() {

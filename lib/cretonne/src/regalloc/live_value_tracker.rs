@@ -13,6 +13,7 @@ use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
 use regalloc::liverange::LiveRange;
 use std::collections::HashMap;
+use std::vec::Vec;
 
 type ValueList = EntityList<Value>;
 

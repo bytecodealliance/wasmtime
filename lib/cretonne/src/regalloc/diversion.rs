@@ -11,6 +11,7 @@ use ir::{Value, ValueLoc, ValueLocations, StackSlot};
 use ir::{InstructionData, Opcode};
 use isa::{RegUnit, RegInfo};
 use std::fmt;
+use std::vec::Vec;
 
 /// A diversion of a value from its original location to a new register or stack location.
 ///

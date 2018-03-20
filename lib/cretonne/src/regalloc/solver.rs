@@ -108,6 +108,7 @@ use std::fmt;
 use std::mem;
 use super::AllocatableSet;
 use std::u16;
+use std::vec::Vec;
 
 /// A variable in the constraint problem.
 ///
@@ -1162,6 +1163,7 @@ mod tests {
     use isa::{TargetIsa, RegClass, RegUnit, RegInfo};
     use regalloc::AllocatableSet;
     use super::{Solver, Move};
+    use std::boxed::Box;
 
     // Make an arm32 `TargetIsa`, if possible.
     fn arm32() -> Option<Box<TargetIsa>> {

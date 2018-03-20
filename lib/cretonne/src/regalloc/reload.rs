@@ -21,6 +21,7 @@ use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
 use timing;
 use topo_order::TopoOrder;
+use std::vec::Vec;
 
 /// Reusable data structures for the reload pass.
 pub struct Reload {

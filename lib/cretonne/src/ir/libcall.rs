@@ -100,6 +100,7 @@ impl LibCall {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::string::ToString;
 
     #[test]
     fn display() {

@@ -463,6 +463,7 @@ mod tests {
     use entity::EntityRef;
     use ir::{ProgramOrder, ExpandedProgramPoint};
     use std::cmp::Ordering;
+    use std::vec::Vec;
 
     // Dummy program order which simply compares indexes.
     // It is assumed that EBBs have indexes that are multiples of 10, and instructions have indexes
