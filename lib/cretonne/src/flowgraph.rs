@@ -204,6 +204,7 @@ mod tests {
     use super::*;
     use cursor::{Cursor, FuncCursor};
     use ir::{Function, InstBuilder, types};
+    use std::vec::Vec;
 
     #[test]
     fn empty() {

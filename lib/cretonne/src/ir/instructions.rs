@@ -9,6 +9,7 @@
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use std::ops::{Deref, DerefMut};
+use std::vec::Vec;
 
 use ir;
 use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef};
@@ -537,6 +538,7 @@ pub enum ResolvedConstraint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::string::ToString;
 
     #[test]
     fn opcodes() {

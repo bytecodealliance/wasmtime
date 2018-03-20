@@ -10,6 +10,7 @@ use isa::{RegInfo, RegUnit};
 use std::cmp;
 use std::fmt;
 use std::str::FromStr;
+use std::vec::Vec;
 
 /// Function signature.
 ///
@@ -378,6 +379,7 @@ impl FromStr for CallConv {
 mod tests {
     use super::*;
     use ir::types::{I32, F32, B8};
+    use std::string::ToString;
 
     #[test]
     fn argument_type() {

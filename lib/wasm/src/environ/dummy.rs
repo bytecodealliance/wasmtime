@@ -10,6 +10,8 @@ use cretonne::cursor::FuncCursor;
 use cretonne::settings;
 use wasmparser;
 use std::error::Error;
+use std::vec::Vec;
+use std::string::String;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 fn get_func_name(func_index: FunctionIndex) -> ir::ExternalName {

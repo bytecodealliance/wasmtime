@@ -122,6 +122,7 @@ impl FromStr for ExternalName {
 mod tests {
     use super::ExternalName;
     use ir::LibCall;
+    use std::string::ToString;
 
     #[test]
     fn display_testcase() {

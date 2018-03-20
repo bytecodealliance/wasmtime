@@ -68,6 +68,7 @@ use cursor::{Cursor, CursorPosition, FuncCursor};
 use flowgraph::ControlFlowGraph;
 use ir::{self, Ebb, Inst, Value, Type, Opcode, ValueDef, InstructionData, InstBuilder};
 use std::iter;
+use std::vec::Vec;
 
 /// Split `value` into two values using the `isplit` semantics. Do this by reusing existing values
 /// if possible.

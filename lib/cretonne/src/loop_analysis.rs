@@ -8,6 +8,7 @@ use flowgraph::ControlFlowGraph;
 use ir::{Function, Ebb, Layout};
 use packed_option::PackedOption;
 use timing;
+use std::vec::Vec;
 
 /// A opaque reference to a code loop.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -230,6 +231,7 @@ mod test {
     use loop_analysis::{Loop, LoopAnalysis};
     use flowgraph::ControlFlowGraph;
     use dominator_tree::DominatorTree;
+    use std::vec::Vec;
 
     #[test]
     fn nested_loops_detection() {

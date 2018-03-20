@@ -24,6 +24,7 @@ use constant_hash::{probe, simple_hash};
 use isa::TargetIsa;
 use std::fmt;
 use std::result;
+use std::vec::Vec;
 
 /// A string-based configurator for settings groups.
 ///
@@ -347,6 +348,7 @@ mod tests {
     use super::{builder, Flags};
     use super::Error::*;
     use super::Configurable;
+    use std::string::ToString;
 
     #[test]
     fn display_default() {

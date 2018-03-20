@@ -21,6 +21,7 @@ use packed_option::PackedOption;
 use ref_slice::ref_slice;
 use std::cmp::Ordering;
 use std::fmt;
+use std::vec::Vec;
 
 /// A virtual register reference.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

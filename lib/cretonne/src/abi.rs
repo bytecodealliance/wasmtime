@@ -5,6 +5,7 @@
 
 use ir::{ArgumentLoc, AbiParam, ArgumentExtension, Type};
 use std::cmp::Ordering;
+use std::vec::Vec;
 
 /// Legalization action to perform on a single argument or return value when converting a
 /// signature.
