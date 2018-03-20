@@ -14,5 +14,5 @@ name = "cton_filetests"
 [dependencies]
 cretonne = { path = "../cretonne", version = "0.4.1" }
 cretonne-reader = { path = "../reader", version = "0.4.1" }
-filecheck = "0.2.1"
+filecheck = "0.3.0"
 num_cpus = "1.8.0"
