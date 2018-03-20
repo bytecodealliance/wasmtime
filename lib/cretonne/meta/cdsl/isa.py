@@ -12,7 +12,7 @@ from .instructions import InstructionGroup
 try:
     from typing import Tuple, Union, Any, Iterable, Sequence, List, Set, Dict, TYPE_CHECKING  # noqa
     if TYPE_CHECKING:
-        from .instructions import MaybeBoundInst, InstructionGroup, InstructionFormat  # noqa
+        from .instructions import MaybeBoundInst, InstructionFormat  # noqa
         from .predicates import PredNode, PredKey  # noqa
         from .settings import SettingGroup  # noqa
         from .registers import RegBank  # noqa
