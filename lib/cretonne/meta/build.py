@@ -14,19 +14,27 @@ import gen_legalizer
 import gen_registers
 import gen_binemit
 
-parser = argparse.ArgumentParser(description='Generate sources for Cretonne.')
-parser.add_argument('--out-dir', help='set output directory')
 
-args = parser.parse_args()
-out_dir = args.out_dir
+def main():
+    # type: () -> None
+    parser = argparse.ArgumentParser(
+            description='Generate sources for Cretonne.')
+    parser.add_argument('--out-dir', help='set output directory')
 
-isas = isa.all_isas()
+    args = parser.parse_args()
+    out_dir = args.out_dir
 
-gen_types.generate(out_dir)
-gen_instr.generate(isas, out_dir)
-gen_settings.generate(isas, out_dir)
-gen_encoding.generate(isas, out_dir)
-gen_legalizer.generate(isas, out_dir)
-gen_registers.generate(isas, out_dir)
-gen_binemit.generate(isas, out_dir)
-gen_build_deps.generate()
+    isas = isa.all_isas()
+
+    gen_types.generate(out_dir)
+    gen_instr.generate(isas, out_dir)
+    gen_settings.generate(isas, out_dir)
+    gen_encoding.generate(isas, out_dir)
+    gen_legalizer.generate(isas, out_dir)
+    gen_registers.generate(isas, out_dir)
+    gen_binemit.generate(isas, out_dir)
+    gen_build_deps.generate()
+
+
+if __name__ == "__main__":
+    main()
