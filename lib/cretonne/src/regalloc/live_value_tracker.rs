@@ -6,7 +6,6 @@
 
 use dominator_tree::DominatorTree;
 use entity::{EntityList, ListPool};
-use ir::instructions::BranchInfo;
 use ir::{Inst, Ebb, Value, DataFlowGraph, Layout, ExpandedProgramPoint};
 use partition_slice::partition_slice;
 use regalloc::affinity::Affinity;
@@ -261,9 +260,8 @@ impl LiveValueTracker {
     ) -> (&[LiveValue], &[LiveValue], &[LiveValue]) {
         // Save a copy of the live values before any branches or jumps that could be somebody's
         // immediate dominator.
-        match dfg.analyze_branch(inst) {
-            BranchInfo::NotABranch => {}
-            _ => self.save_idom_live_set(inst),
+        if dfg[inst].opcode().is_branch() {
+            self.save_idom_live_set(inst);
         }
 
         // Move killed values to the end of the vector.
