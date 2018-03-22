@@ -19,4 +19,4 @@ raw-cpuid = "3.0.0"
 [features]
 default = ["std"]
 std = ["cretonne/std"]
-no_std = ["cretonne/no_std"]
+core = ["cretonne/core"]

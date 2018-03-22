@@ -62,14 +62,14 @@ Building with `no_std`
 
 To build cretonne without libstd, disable the `std` feature on `lib/cretonne`,
 `lib/frontend`, `lib/native`, and `lib/wasm`, which is otherwise enabled by
-default, and enable the `no_std` feature.
+default, and enable the `core` feature.
 
 For example, to build `cretonne`:
 
 .. code-block:: sh
 
     cd lib/cretonne
-    cargo build --no-default-features --features no_std
+    cargo build --no-default-features --features core
 
 Or, when using `cretonne` as a dependency (in Cargo.toml):
 
@@ -78,23 +78,23 @@ Or, when using `cretonne` as a dependency (in Cargo.toml):
     [dependency.cretonne]
     ...
     default-features = false
-    features = ["no_std"]
+    features = ["core"]
 
-`no_std` is currently "best effort". We won't try to break it, and we'll
-accept patches fixing problems, however we don't expect all developers to
-build and test with `no_std` when submitting patches. Accordingly, the
+`no_std` support is currently "best effort". We won't try to break it, and
+we'll accept patches fixing problems, however we don't expect all developers to
+build and test `no_std` when submitting patches. Accordingly, the
 `./test-all.sh` script does not test `no_std`.
 
 There is a separate `./test-no_std.sh` script that tests the `no_std`
-feature in packages which support it.
+support in packages which support it.
 
 It's important to note that cretonne still needs liballoc to compile.
 Thus, whatever environment is used must implement an allocator.
 
-Also, to allow the use of HashMaps in `no_std` mode, an external crate
-called `hashmap_core` is pulled in (only in `no_std` builds). This
-is mostly the same as `std::collections::HashMap`, except that it doesn't
-have DOS protection. Just something to think about.
+Also, to allow the use of HashMaps with `no_std`, an external crate called
+`hashmap_core` is pulled in (via the `core` feature). This is mostly the same
+as `std::collections::HashMap`, except that it doesn't have DOS protection.
+Just something to think about.
 
 Building the documentation
 --------------------------

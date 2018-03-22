@@ -21,7 +21,7 @@
 extern crate alloc;
 
 #[allow(unused_extern_crates)]
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 extern crate hashmap_core;
 
 extern crate wasmparser;

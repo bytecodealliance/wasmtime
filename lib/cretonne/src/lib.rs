@@ -4,13 +4,13 @@
         trivial_numeric_casts,
         unused_extern_crates)]
 
-// Turns on alloc feature if no_std
+// Turns on no_std and alloc features if std is not available.
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-// Include the `hashmap_core` crate if no_std
+// Include the `hashmap_core` crate if std is not available.
 #[allow(unused_extern_crates)]
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 extern crate hashmap_core;
 #[cfg(not(feature = "std"))]
 #[macro_use]
@@ -66,7 +66,7 @@ mod topo_order;
 mod unreachable_code;
 mod write;
 
-/// This replaces `std` in builds with no_std.
+/// This replaces `std` in builds with `core`.
 #[cfg(not(feature = "std"))]
 mod std {
     pub use core::*;

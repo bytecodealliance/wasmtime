@@ -17,4 +17,4 @@ cretonne = { path = "../cretonne", version = "0.3.4", default-features = false }
 [features]
 default = ["std"]
 std = ["cretonne/std"]
-no_std = ["cretonne/no_std"]
+core = ["cretonne/core"]

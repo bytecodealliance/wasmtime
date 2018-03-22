@@ -1125,9 +1125,9 @@ mod tests {
                 Ok(_) => { panic!("Expected an error!") },
                 Err(Error { message, .. } ) => {
                     if !message.contains($msg) {
-                       #[cfg(not(feature = "no_std"))]
+                       #[cfg(feature = "std")]
                        panic!(format!("'{}' did not contain the substring '{}'", message, $msg));
-                       #[cfg(feature = "no_std")]
+                       #[cfg(not(feature = "std"))]
                        panic!("error message did not contain the expected substring");
                     }
                 }
