@@ -1,6 +1,7 @@
 //! CLI tool to use the functions provided by the [cretonne-wasm](../cton_wasm/index.html) crate.
 //!
 //! Reads Wasm binary files, translates the functions' code to Cretonne IL.
+#![cfg_attr(feature = "cargo-clippy", allow(too_many_arguments, cyclomatic_complexity))]
 
 use cton_wasm::{translate_module, DummyEnvironment, ModuleEnvironment};
 use std::path::PathBuf;
@@ -38,8 +39,8 @@ pub fn run(
     flag_just_decode: bool,
     flag_check_translation: bool,
     flag_print: bool,
-    flag_set: Vec<String>,
-    flag_isa: String,
+    flag_set: &[String],
+    flag_isa: &str,
     flag_print_size: bool,
 ) -> Result<(), String> {
     let parsed = parse_sets_and_isa(flag_set, flag_isa)?;
@@ -53,8 +54,8 @@ pub fn run(
             flag_check_translation,
             flag_print,
             flag_print_size,
-            path.to_path_buf(),
-            name,
+            &path.to_path_buf(),
+            &name,
             parsed.as_fisa(),
         )?;
     }
@@ -67,8 +68,8 @@ fn handle_module(
     flag_check_translation: bool,
     flag_print: bool,
     flag_print_size: bool,
-    path: PathBuf,
-    name: String,
+    path: &PathBuf,
+    name: &str,
     fisa: FlagsOrIsa,
 ) -> Result<(), String> {
     let mut terminal = term::stdout().unwrap();
@@ -153,29 +154,27 @@ fn handle_module(
         context.func = func.clone();
         if flag_check_translation {
             context.verify(fisa).map_err(|err| {
-                pretty_verifier_error(&context.func, fisa.isa, err)
+                pretty_verifier_error(&context.func, fisa.isa, &err)
             })?;
-        } else {
-            if let Some(isa) = fisa.isa {
-                let compiled_size = context.compile(isa).map_err(|err| {
-                    pretty_error(&context.func, fisa.isa, err)
-                })?;
-                if flag_print_size {
-                    println!(
-                        "Function #{} code size: {} bytes",
-                        func_index,
-                        compiled_size
-                    );
-                    total_module_code_size += compiled_size;
-                    println!(
-                        "Function #{} bytecode size: {} bytes",
-                        func_index,
-                        dummy_environ.func_bytecode_sizes[func_index]
-                    );
-                }
-            } else {
-                return Err(String::from("compilation requires a target isa"));
+        } else if let Some(isa) = fisa.isa {
+            let compiled_size = context.compile(isa).map_err(|err| {
+                pretty_error(&context.func, fisa.isa, err)
+            })?;
+            if flag_print_size {
+                println!(
+                    "Function #{} code size: {} bytes",
+                    func_index,
+                    compiled_size
+                );
+                total_module_code_size += compiled_size;
+                println!(
+                    "Function #{} bytecode size: {} bytes",
+                    func_index,
+                    dummy_environ.func_bytecode_sizes[func_index]
+                );
             }
+        } else {
+            return Err(String::from("compilation requires a target isa"));
         }
         if flag_print {
             vprintln!(flag_verbose, "");
@@ -194,10 +193,7 @@ fn handle_module(
 
     if !flag_check_translation && flag_print_size {
         println!("Total module code size: {} bytes", total_module_code_size);
-        let total_bytecode_size = dummy_environ.func_bytecode_sizes.iter().fold(
-            0,
-            |sum, x| sum + x,
-        );
+        let total_bytecode_size: usize = dummy_environ.func_bytecode_sizes.iter().sum();
         println!("Total module bytecode size: {} bytes", total_bytecode_size);
     }
 

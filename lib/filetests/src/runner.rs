@@ -45,7 +45,7 @@ impl Display for QueueEntry {
                     f,
                     "{}.{:03} {}",
                     dur.as_secs(),
-                    dur.subsec_nanos() / 1000000,
+                    dur.subsec_nanos() / 1_000_000,
                     p
                 )
             }
@@ -135,7 +135,7 @@ impl TestRunner {
                     // This lets us skip spurious extensionless files without statting everything
                     // needlessly.
                     if !dir.is_file() {
-                        self.path_error(dir, err);
+                        self.path_error(&dir, &err);
                     }
                 }
                 Ok(entries) => {
@@ -149,7 +149,7 @@ impl TestRunner {
                                 // libstd/sys/unix/fs.rs seems to suggest that breaking now would
                                 // be a good idea, or the iterator could keep returning the same
                                 // error forever.
-                                self.path_error(dir, err);
+                                self.path_error(&dir, &err);
                                 break;
                             }
                             Ok(entry) => {
@@ -172,7 +172,7 @@ impl TestRunner {
     }
 
     /// Report an error related to a path.
-    fn path_error<E: Error>(&mut self, path: PathBuf, err: E) {
+    fn path_error<E: Error>(&mut self, path: &PathBuf, err: &E) {
         self.errors += 1;
         println!("{}: {}", path.to_string_lossy(), err);
     }

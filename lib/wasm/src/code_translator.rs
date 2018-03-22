@@ -36,6 +36,8 @@ use environ::{FuncEnvironment, GlobalValue};
 use std::{i32, u32};
 use std::vec::Vec;
 
+// Clippy warns about "flags: _" but its important to document that the flags field is ignored
+#[cfg_attr(feature = "cargo-clippy", allow(unneeded_field_pattern))]
 /// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
@@ -45,7 +47,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     environ: &mut FE,
 ) {
     if !state.reachable {
-        return translate_unreachable_operator(op, builder, state);
+        return translate_unreachable_operator(&op, builder, state);
     }
 
     // This big match treats all Wasm code operators.
@@ -198,9 +200,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.switch_to_block(frame.following_code());
             builder.seal_block(frame.following_code());
             // If it is a loop we also have to seal the body loop block
-            match frame {
-                ControlStackFrame::Loop { header, .. } => builder.seal_block(header),
-                _ => {}
+            if let ControlStackFrame::Loop { header, .. } = frame {
+                builder.seal_block(header)
             }
             state.stack.truncate(frame.original_stack_size());
             state.stack.extend_from_slice(
@@ -857,15 +858,17 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     }
 }
 
+// Clippy warns us of some fields we are deliberately ignoring
+#[cfg_attr(feature = "cargo-clippy", allow(unneeded_field_pattern))]
 /// Deals with a Wasm instruction located in an unreachable portion of the code. Most of them
 /// are dropped but special ones like `End` or `Else` signal the potential end of the unreachable
 /// portion so the translation state muts be updated accordingly.
 fn translate_unreachable_operator(
-    op: Operator,
+    op: &Operator,
     builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
 ) {
-    match op {
+    match *op {
         Operator::If { ty: _ } => {
             // Push a placeholder control stack entry. The if isn't reachable,
             // so we don't have any branches anywhere.
@@ -877,27 +880,25 @@ fn translate_unreachable_operator(
         }
         Operator::Else => {
             let i = state.control_stack.len() - 1;
-            match state.control_stack[i] {
-                ControlStackFrame::If {
-                    branch_inst,
-                    ref mut reachable_from_top,
-                    ..
-                } => {
-                    if *reachable_from_top {
-                        // We have a branch from the top of the if to the else.
-                        state.reachable = true;
-                        // And because there's an else, there can no longer be a
-                        // branch from the top directly to the end.
-                        *reachable_from_top = false;
+            if let ControlStackFrame::If {
+                branch_inst,
+                ref mut reachable_from_top,
+                ..
+            } = state.control_stack[i]
+            {
+                if *reachable_from_top {
+                    // We have a branch from the top of the if to the else.
+                    state.reachable = true;
+                    // And because there's an else, there can no longer be a
+                    // branch from the top directly to the end.
+                    *reachable_from_top = false;
 
-                        // We change the target of the branch instruction
-                        let else_ebb = builder.create_ebb();
-                        builder.change_jump_destination(branch_inst, else_ebb);
-                        builder.seal_block(else_ebb);
-                        builder.switch_to_block(else_ebb);
-                    }
+                    // We change the target of the branch instruction
+                    let else_ebb = builder.create_ebb();
+                    builder.change_jump_destination(branch_inst, else_ebb);
+                    builder.seal_block(else_ebb);
+                    builder.switch_to_block(else_ebb);
                 }
-                _ => {}
             }
         }
         Operator::End => {
@@ -1057,10 +1058,10 @@ fn translate_br_if(
     builder.ins().brnz(val, br_destination, inputs);
 }
 
-fn translate_br_if_args<'state>(
+fn translate_br_if_args(
     relative_depth: u32,
-    state: &'state mut TranslationState,
-) -> (ir::Ebb, &'state [ir::Value]) {
+    state: &mut TranslationState,
+) -> (ir::Ebb, &[ir::Value]) {
     let i = state.control_stack.len() - 1 - (relative_depth as usize);
     let (return_count, br_destination) = {
         let frame = &mut state.control_stack[i];

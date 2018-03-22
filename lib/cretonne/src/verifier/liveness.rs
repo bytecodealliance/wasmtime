@@ -86,16 +86,14 @@ impl<'a> LivenessVerifier<'a> {
                                 self.isa.encoding_info().display(encoding)
                             );
                         }
-                    } else {
+                    } else if !lr.affinity.is_none() {
                         // A non-encoded instruction can only define ghost values.
-                        if !lr.affinity.is_none() {
-                            return err!(
-                                inst,
-                                "{} is a real {} value defined by a ghost instruction",
-                                val,
-                                lr.affinity.display(&self.isa.register_info())
-                            );
-                        }
+                        return err!(
+                            inst,
+                            "{} is a real {} value defined by a ghost instruction",
+                            val,
+                            lr.affinity.display(&self.isa.register_info())
+                        );
                     }
                 }
 
@@ -109,16 +107,14 @@ impl<'a> LivenessVerifier<'a> {
                         return err!(inst, "{} is not live at this use", val);
                     }
 
-                    if encoding.is_legal() {
-                        // A legal instruction is not allowed to depend on ghost values.
-                        if lr.affinity.is_none() {
-                            return err!(
-                                inst,
-                                "{} is a ghost value used by a real [{}] instruction",
-                                val,
-                                self.isa.encoding_info().display(encoding)
-                            );
-                        }
+                    // A legal instruction is not allowed to depend on ghost values.
+                    if encoding.is_legal() && lr.affinity.is_none() {
+                        return err!(
+                            inst,
+                            "{} is a ghost value used by a real [{}] instruction",
+                            val,
+                            self.isa.encoding_info().display(encoding)
+                        );
                     }
                 }
             }

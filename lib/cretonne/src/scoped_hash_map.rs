@@ -1,4 +1,4 @@
-//! ScopedHashMap
+//! `ScopedHashMap`
 //!
 //! This module defines a struct `ScopedHashMap<K, V>` which defines a `HashMap`-like
 //! container that has a concept of scopes that can be entered and exited, such that

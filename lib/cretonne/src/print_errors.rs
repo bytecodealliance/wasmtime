@@ -10,7 +10,7 @@ use std::fmt::Write;
 pub fn pretty_verifier_error(
     func: &ir::Function,
     isa: Option<&TargetIsa>,
-    err: verifier::Error,
+    err: &verifier::Error,
 ) -> String {
     let mut msg = err.to_string();
     match err.location {
@@ -26,7 +26,7 @@ pub fn pretty_verifier_error(
 /// Pretty-print a Cretonne error.
 pub fn pretty_error(func: &ir::Function, isa: Option<&TargetIsa>, err: CtonError) -> String {
     if let CtonError::Verifier(e) = err {
-        pretty_verifier_error(func, isa, e)
+        pretty_verifier_error(func, isa, &e)
     } else {
         err.to_string()
     }

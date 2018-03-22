@@ -12,6 +12,10 @@
 #![deny(missing_docs,
         trivial_numeric_casts,
         unused_extern_crates)]
+#![cfg_attr(feature="clippy",
+            plugin(clippy(conf_file="../../clippy.toml")))]
+#![cfg_attr(feature="cargo-clippy",
+            allow(new_without_default, redundant_field_names))]
 
 extern crate wasmparser;
 extern crate cton_frontend;

@@ -132,12 +132,12 @@ impl Context {
     }
 
     /// Run the locations verifier on the function.
-    pub fn verify_locations<'a>(&self, isa: &TargetIsa) -> verifier::Result {
+    pub fn verify_locations(&self, isa: &TargetIsa) -> verifier::Result {
         verifier::verify_locations(isa, &self.func, None)
     }
 
     /// Run the locations verifier only if the `enable_verifier` setting is true.
-    pub fn verify_locations_if<'a>(&self, isa: &TargetIsa) -> CtonResult {
+    pub fn verify_locations_if(&self, isa: &TargetIsa) -> CtonResult {
         if isa.flags().enable_verifier() {
             self.verify_locations(isa).map_err(Into::into)
         } else {

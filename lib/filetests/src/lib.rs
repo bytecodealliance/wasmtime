@@ -3,6 +3,11 @@
 //! This crate contains the main test driver as well as implementations of the
 //! available filetest commands.
 
+#![cfg_attr(feature="cargo-clippy", allow(
+        type_complexity,
+// Rustfmt 0.9.0 is at odds with this lint:
+        block_in_if_condition_stmt))]
+
 #[macro_use(dbg)]
 extern crate cretonne;
 extern crate cton_reader;
@@ -44,7 +49,7 @@ type TestResult = Result<time::Duration, String>;
 /// Directories are scanned recursively for test cases ending in `.cton`. These test cases are
 /// executed on background threads.
 ///
-pub fn run(verbose: bool, files: Vec<String>) -> TestResult {
+pub fn run(verbose: bool, files: &[String]) -> TestResult {
     let mut runner = TestRunner::new(verbose);
 
     for path in files.iter().map(Path::new) {

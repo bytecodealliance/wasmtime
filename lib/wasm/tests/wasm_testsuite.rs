@@ -25,7 +25,7 @@ fn testsuite() {
             // Ignore files starting with `.`, which could be editor temporary files
             if let Some(stem) = p.path().file_stem() {
                 if let Some(stemstr) = stem.to_str() {
-                    return !stemstr.starts_with(".");
+                    return !stemstr.starts_with('.');
                 }
             }
             false
@@ -35,7 +35,7 @@ fn testsuite() {
     let flags = Flags::new(&settings::builder());
     for path in paths {
         let path = path.path();
-        handle_module(path, &flags);
+        handle_module(&path, &flags);
     }
 }
 
@@ -44,7 +44,7 @@ fn return_at_end() {
     let mut flag_builder = settings::builder();
     flag_builder.enable("return_at_end").unwrap();
     let flags = Flags::new(&flag_builder);
-    handle_module(PathBuf::from("../../wasmtests/return_at_end.wat"), &flags);
+    handle_module(&PathBuf::from("../../wasmtests/return_at_end.wat"), &flags);
 }
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -54,7 +54,7 @@ fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
     Ok(buf)
 }
 
-fn handle_module(path: PathBuf, flags: &Flags) {
+fn handle_module(path: &PathBuf, flags: &Flags) {
     let data = match path.extension() {
         None => {
             panic!("the file extension is not wasm or wat");
@@ -103,7 +103,7 @@ fn handle_module(path: PathBuf, flags: &Flags) {
     translate_module(&data, &mut dummy_environ).unwrap();
     for func in &dummy_environ.info.function_bodies {
         verifier::verify_function(func, flags)
-            .map_err(|err| panic!(pretty_verifier_error(func, None, err)))
+            .map_err(|err| panic!(pretty_verifier_error(func, None, &err)))
             .unwrap();
     }
 }

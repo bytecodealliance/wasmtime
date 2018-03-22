@@ -53,7 +53,7 @@ pub struct LocatedToken<'a> {
 }
 
 /// Wrap up a `Token` with the given location.
-fn token<'a>(token: Token<'a>, loc: Location) -> Result<LocatedToken<'a>, LocatedError> {
+fn token(token: Token, loc: Location) -> Result<LocatedToken, LocatedError> {
     Ok(LocatedToken {
         token,
         location: loc,

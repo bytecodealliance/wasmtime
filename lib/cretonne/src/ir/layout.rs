@@ -428,7 +428,7 @@ impl Layout {
     }
 
     /// Return an iterator over all EBBs in layout order.
-    pub fn ebbs<'f>(&'f self) -> Ebbs<'f> {
+    pub fn ebbs(&self) -> Ebbs {
         Ebbs {
             layout: self,
             next: self.first_ebb,
@@ -611,7 +611,7 @@ impl Layout {
     }
 
     /// Iterate over the instructions in `ebb` in layout order.
-    pub fn ebb_insts<'f>(&'f self, ebb: Ebb) -> Insts<'f> {
+    pub fn ebb_insts(&self, ebb: Ebb) -> Insts {
         Insts {
             layout: self,
             head: self.ebbs[ebb].first_inst.into(),

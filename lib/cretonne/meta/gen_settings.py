@@ -28,7 +28,7 @@ def gen_enum_types(sgrp, fmt):
         if not isinstance(setting, EnumSetting):
             continue
         ty = camel_case(setting.name)
-        fmt.doc_comment('Values for {}.'.format(setting))
+        fmt.doc_comment('Values for `{}`.'.format(setting))
         fmt.line('#[derive(Debug, PartialEq, Eq)]')
         with fmt.indented('pub enum {} {{'.format(ty), '}'):
             for v in setting.values:

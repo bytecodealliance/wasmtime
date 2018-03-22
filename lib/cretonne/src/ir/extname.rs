@@ -16,7 +16,7 @@ const TESTCASE_NAME_LENGTH: usize = 16;
 /// to keep track of a sy mbol table.
 ///
 /// External names are primarily used as keys by code using Cretonne to map
-/// from a cretonne::ir::FuncRef or similar to additional associated data.
+/// from a `cretonne::ir::FuncRef` or similar to additional associated data.
 ///
 /// External names can also serve as a primitive testing and debugging tool.
 /// In particular, many `.cton` test files use function names to identify

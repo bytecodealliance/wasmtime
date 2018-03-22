@@ -299,6 +299,7 @@ impl Move {
     }
 
     /// Get the "from" register and register class, if possible.
+    #[cfg_attr(feature = "cargo-clippy", allow(wrong_self_convention))]
     fn from_reg(&self) -> Option<(RegClass, RegUnit)> {
         match *self {
             Move::Reg { rc, from, .. } |

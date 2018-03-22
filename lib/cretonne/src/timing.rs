@@ -11,7 +11,7 @@ pub use self::details::{TimingToken, PassTimes, take_current, add_to_current};
 //
 // This macro defines:
 //
-// - A C-style enum containing all the pass names and a `NoPass` variant.
+// - A C-style enum containing all the pass names and a `None` variant.
 // - A usize constant with the number of defined passes.
 // - A const array of pass descriptions.
 // - A public function per pass used to start the timing of that pass.
@@ -21,9 +21,9 @@ macro_rules! define_passes {
     } => {
         #[allow(non_camel_case_types)]
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        enum $enum { $($pass,)+ NoPass }
+        enum $enum { $($pass,)+ None}
 
-        const $num_passes: usize = $enum::NoPass as usize;
+        const $num_passes: usize = $enum::None as usize;
 
         const $descriptions: [&str; $num_passes] = [ $($desc),+ ];
 
@@ -164,7 +164,7 @@ mod details {
 
     /// Information about passes in a single thread.
     thread_local!{
-        static CURRENT_PASS: Cell<Pass> = Cell::new(Pass::NoPass);
+        static CURRENT_PASS: Cell<Pass> = Cell::new(Pass::None);
         static PASS_TIME: RefCell<PassTimes> = RefCell::new(Default::default());
     }
 
@@ -204,7 +204,7 @@ mod details {
     }
 
     /// Add `timings` to the accumulated timings for the current thread.
-    pub fn add_to_current(times: PassTimes) {
+    pub fn add_to_current(times: &PassTimes) {
         PASS_TIME.with(|rc| for (a, b) in rc.borrow_mut().pass.iter_mut().zip(
             &times.pass,
         )
@@ -221,7 +221,7 @@ mod test {
 
     #[test]
     fn display() {
-        assert_eq!(Pass::NoPass.to_string(), "<no pass>");
+        assert_eq!(Pass::None.to_string(), "<no pass>");
         assert_eq!(Pass::regalloc.to_string(), "Register allocation");
     }
 }
