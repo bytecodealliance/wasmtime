@@ -276,33 +276,31 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
             } else {
                 return first_time_livein;
             }
-        } else {
+        } else if let Some((_, end)) = c.prev() {
             // There's no interval beginning at `ebb`, but we could still be live-in at `ebb` with
             // a coalesced interval that begins before and ends after.
-            if let Some((_, end)) = c.prev() {
-                if order.cmp(end, ebb) == Ordering::Greater {
-                    // Yep, the previous interval overlaps `ebb`.
-                    first_time_livein = false;
-                    if order.cmp(end, to) == Ordering::Less {
-                        *c.value_mut().unwrap() = to;
-                    } else {
-                        return first_time_livein;
-                    }
+            if order.cmp(end, ebb) == Ordering::Greater {
+                // Yep, the previous interval overlaps `ebb`.
+                first_time_livein = false;
+                if order.cmp(end, to) == Ordering::Less {
+                    *c.value_mut().unwrap() = to;
                 } else {
-                    first_time_livein = true;
-                    // The current interval does not overlap `ebb`, but it may still be possible to
-                    // coalesce with it.
-                    if order.is_ebb_gap(end, ebb) {
-                        *c.value_mut().unwrap() = to;
-                    } else {
-                        c.insert(ebb, to);
-                    }
+                    return first_time_livein;
                 }
             } else {
-                // There is no existing interval before `ebb`.
                 first_time_livein = true;
-                c.insert(ebb, to);
+                // The current interval does not overlap `ebb`, but it may still be possible to
+                // coalesce with it.
+                if order.is_ebb_gap(end, ebb) {
+                    *c.value_mut().unwrap() = to;
+                } else {
+                    c.insert(ebb, to);
+                }
             }
+        } else {
+            // There is no existing interval before `ebb`.
+            first_time_livein = true;
+            c.insert(ebb, to);
         }
 
         // Now `c` to left pointing at an interval that ends in `to`.

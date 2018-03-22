@@ -1,4 +1,4 @@
-//! SubTest trait.
+//! `SubTest` trait.
 
 use std::result;
 use std::borrow::Cow;

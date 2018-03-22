@@ -306,14 +306,12 @@ impl<'a> Context<'a> {
         let args = self.cur.func.dfg.inst_args(inst);
 
         for (argidx, (op, &arg)) in constraints.ins.iter().zip(args).enumerate() {
-            if op.kind != ConstraintKind::Stack {
-                if self.liveness[arg].affinity.is_stack() {
-                    self.candidates.push(ReloadCandidate {
-                        argidx,
-                        value: arg,
-                        regclass: op.regclass,
-                    })
-                }
+            if op.kind != ConstraintKind::Stack && self.liveness[arg].affinity.is_stack() {
+                self.candidates.push(ReloadCandidate {
+                    argidx,
+                    value: arg,
+                    regclass: op.regclass,
+                })
             }
         }
 

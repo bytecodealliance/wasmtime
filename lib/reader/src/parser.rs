@@ -37,7 +37,7 @@ pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
 /// Parse the entire `text` as a test case file.
 ///
 /// The returned `TestFile` contains direct references to substrings of `text`.
-pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
+pub fn parse_test(text: &str) -> Result<TestFile> {
     let _tt = timing::parse_text();
     let mut parser = Parser::new(text);
     // Gather the preamble comments.
@@ -277,6 +277,10 @@ impl<'a> Parser<'a> {
 
     // Get the current lookahead token, after making sure there is one.
     fn token(&mut self) -> Option<Token<'a>> {
+        // clippy says self.lookahead is immutable so this loop is either infinite or never
+        // running. I don't think this is true - self.lookahead is mutated in the loop body - so
+        // maybe this is a clippy bug? Either way, disable clippy for this.
+        #[cfg_attr(feature = "cargo-clippy", allow(while_immutable_condition))]
         while self.lookahead == None {
             match self.lex.next() {
                 Some(Ok(lexer::LocatedToken { token, location })) => {
@@ -957,7 +961,7 @@ impl<'a> Parser<'a> {
                         isa.register_info()
                             .parse_regunit(name)
                             .map(ArgumentLoc::Reg)
-                            .ok_or(self.error("invalid register name"))
+                            .ok_or_else(|| self.error("invalid register name"))
                     } else {
                         err!(self.loc, "argument location requires exactly one isa")
                     }
@@ -1392,12 +1396,12 @@ impl<'a> Parser<'a> {
             match self.token() {
                 Some(Token::Arrow) => {
                     self.consume();
-                    self.parse_value_alias(results, ctx)?;
+                    self.parse_value_alias(&results, ctx)?;
                 }
                 Some(Token::Equal) => {
                     self.consume();
                     self.parse_instruction(
-                        results,
+                        &results,
                         srcloc,
                         encoding,
                         result_locations,
@@ -1408,7 +1412,7 @@ impl<'a> Parser<'a> {
                 _ if !results.is_empty() => return err!(self.loc, "expected -> or ="),
                 _ => {
                     self.parse_instruction(
-                        results,
+                        &results,
                         srcloc,
                         encoding,
                         result_locations,
@@ -1512,7 +1516,7 @@ impl<'a> Parser<'a> {
                     isa.register_info()
                         .parse_regunit(name)
                         .map(ValueLoc::Reg)
-                        .ok_or(self.error("invalid register value location"))
+                        .ok_or_else(|| self.error("invalid register value location"))
                 } else {
                     err!(self.loc, "value location requires exactly one isa")
                 }
@@ -1601,7 +1605,7 @@ impl<'a> Parser<'a> {
     //
     // value_alias ::= [inst-results] "->" Value(v)
     //
-    fn parse_value_alias(&mut self, results: Vec<Value>, ctx: &mut Context) -> Result<()> {
+    fn parse_value_alias(&mut self, results: &[Value], ctx: &mut Context) -> Result<()> {
         if results.len() != 1 {
             return err!(self.loc, "wrong number of aliases");
         }
@@ -1621,7 +1625,7 @@ impl<'a> Parser<'a> {
     //
     fn parse_instruction(
         &mut self,
-        results: Vec<Value>,
+        results: &[Value],
         srcloc: ir::SourceLoc,
         encoding: Option<Encoding>,
         result_locations: Option<Vec<ValueLoc>>,
@@ -1629,7 +1633,7 @@ impl<'a> Parser<'a> {
         ebb: Ebb,
     ) -> Result<()> {
         // Define the result values.
-        for val in &results {
+        for val in results {
             ctx.map.def_value(*val, &self.loc)?;
         }
 
@@ -1674,7 +1678,7 @@ impl<'a> Parser<'a> {
         let num_results = ctx.function.dfg.make_inst_results_for_parser(
             inst,
             ctrl_typevar,
-            &results,
+            results,
         );
         ctx.function.layout.append_inst(inst, ebb);
         ctx.map.def_entity(inst.into(), &opcode_loc).expect(
@@ -1784,11 +1788,9 @@ impl<'a> Parser<'a> {
                     opcode
                 );
             }
-        } else {
-            // Treat it as a syntax error to speficy a typevar on a non-polymorphic opcode.
-            if ctrl_type != VOID {
-                return err!(self.loc, "{} does not take a typevar", opcode);
-            }
+        // Treat it as a syntax error to speficy a typevar on a non-polymorphic opcode.
+        } else if ctrl_type != VOID {
+            return err!(self.loc, "{} does not take a typevar", opcode);
         }
 
         Ok(ctrl_type)

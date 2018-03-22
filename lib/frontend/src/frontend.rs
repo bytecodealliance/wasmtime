@@ -400,7 +400,7 @@ where
     ///
     /// This can be used to insert SSA code that doesn't need to access locals and that doesn't
     /// need to know about `FunctionBuilder` at all.
-    pub fn cursor<'f>(&'f mut self) -> FuncCursor<'f> {
+    pub fn cursor(&mut self) -> FuncCursor {
         self.ensure_inserted_ebb();
         FuncCursor::new(self.func)
             .with_srcloc(self.srcloc)
@@ -548,6 +548,8 @@ where
     /// Returns a displayable object for the function as it is.
     ///
     /// Useful for debug purposes. Use it with `None` for standard printing.
+    // Clippy thinks the lifetime that follows is needless, but rustc needs it
+    #[cfg_attr(feature = "cargo-clippy", allow(needless_lifetimes))]
     pub fn display<'b, I: Into<Option<&'b TargetIsa>>>(&'b self, isa: I) -> DisplayFunction {
         self.func.display(isa)
     }

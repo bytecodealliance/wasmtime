@@ -70,7 +70,7 @@ impl ConcurrentRunner {
         assert!(self.request_tx.is_none(), "must shutdown before join");
         for h in self.handles.drain(..) {
             match h.join() {
-                Ok(t) => timing::add_to_current(t),
+                Ok(t) => timing::add_to_current(&t),
                 Err(e) => println!("worker panicked: {:?}", e),
             }
         }

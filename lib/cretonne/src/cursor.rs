@@ -744,8 +744,9 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
         if !self.srcloc.is_default() {
             self.func.srclocs[inst] = self.srcloc;
         }
-
         // Assign an encoding.
+        // XXX Is there a way to describe this error to the user?
+        #[cfg_attr(feature = "cargo-clippy", allow(match_wild_err_arm))]
         match self.isa.encode(
             &self.func.dfg,
             &self.func.dfg[inst],

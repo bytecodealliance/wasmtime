@@ -121,7 +121,7 @@ impl DummyEnvironment {
     }
 }
 
-/// The FuncEnvironment implementation for use by the `DummyEnvironment`.
+/// The `FuncEnvironment` implementation for use by the `DummyEnvironment`.
 pub struct DummyFuncEnvironment<'dummy_environment> {
     pub mod_info: &'dummy_environment DummyModuleInfo,
 }

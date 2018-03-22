@@ -437,7 +437,7 @@ impl<F: Forest> Path<F> {
 
         // Discard the root node if it has shrunk to a single sub-tree.
         let mut ns = 0;
-        while let &NodeData::Inner { size: 0, ref tree, .. } = &pool[self.node[ns]] {
+        while let NodeData::Inner { size: 0, ref tree, .. } = pool[self.node[ns]] {
             ns += 1;
             self.node[ns] = tree[0];
         }
@@ -529,12 +529,11 @@ impl<F: Forest> Path<F> {
             // current entry[level] was one off the end of the node, it will now point at a proper
             // entry.
             debug_assert!(usize::from(self.entry[level]) < pool[self.node[level]].entries());
-        } else {
+
+        } else if usize::from(self.entry[level]) >= pool[self.node[level]].entries() {
             // There's no right sibling at this level, so the node can't be rebalanced.
             // Check if we are in an off-the-end position.
-            if usize::from(self.entry[level]) >= pool[self.node[level]].entries() {
-                self.size = 0;
-            }
+            self.size = 0;
         }
     }
 

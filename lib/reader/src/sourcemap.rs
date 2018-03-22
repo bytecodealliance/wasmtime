@@ -13,7 +13,7 @@ use lexer::split_entity_name;
 use std::collections::HashMap;
 
 /// Mapping from entity names to source locations.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SourceMap {
     // Store locations for entities, including instructions.
     locations: HashMap<AnyEntity, Location>,

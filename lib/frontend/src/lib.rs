@@ -131,6 +131,9 @@
         trivial_numeric_casts,
         unused_extern_crates)]
 
+#![cfg_attr(feature="cargo-clippy",
+            allow(new_without_default, redundant_field_names))]
+
 extern crate cretonne;
 
 pub use frontend::{FunctionBuilderContext, FunctionBuilder};

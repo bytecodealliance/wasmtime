@@ -8,7 +8,7 @@ use cretonne::cfg_printer::CFGPrinter;
 use cton_reader::parse_functions;
 use utils::read_to_string;
 
-pub fn run(files: Vec<String>) -> CommandResult {
+pub fn run(files: &[String]) -> CommandResult {
     for (i, f) in files.into_iter().enumerate() {
         if i != 0 {
             println!();
@@ -18,8 +18,8 @@ pub fn run(files: Vec<String>) -> CommandResult {
     Ok(())
 }
 
-fn print_cfg(filename: String) -> CommandResult {
-    let buffer = read_to_string(&filename).map_err(
+fn print_cfg(filename: &str) -> CommandResult {
+    let buffer = read_to_string(filename).map_err(
         |e| format!("{}: {}", filename, e),
     )?;
     let items = parse_functions(&buffer).map_err(

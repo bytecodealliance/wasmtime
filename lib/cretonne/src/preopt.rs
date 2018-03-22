@@ -114,7 +114,7 @@ fn package_up_divrem_info(
 fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
     let idata: &InstructionData = &dfg[inst];
 
-    if let &InstructionData::BinaryImm { opcode, arg, imm } = idata {
+    if let InstructionData::BinaryImm { opcode, arg, imm } = *idata {
         let (isSigned, isRem) = match opcode {
             Opcode::UdivImm => (false, false),
             Opcode::UremImm => (false, true),
@@ -132,7 +132,7 @@ fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
     // that some previous constant propagation pass has pushed all such
     // immediates to their use points, creating BinaryImm instructions
     // instead? For now we take the conservative approach.
-    if let &InstructionData::Binary { opcode, args } = idata {
+    if let InstructionData::Binary { opcode, args } = *idata {
         let (isSigned, isRem) = match opcode {
             Opcode::Udiv => (false, false),
             Opcode::Urem => (false, true),
@@ -484,7 +484,7 @@ fn get_const(value: Value, dfg: &DataFlowGraph) -> Option<i64> {
     match dfg.value_def(value) {
         ValueDef::Result(definingInst, resultNo) => {
             let definingIData: &InstructionData = &dfg[definingInst];
-            if let &InstructionData::UnaryImm { opcode, imm } = definingIData {
+            if let InstructionData::UnaryImm { opcode, imm } = *definingIData {
                 if opcode == Opcode::Iconst && resultNo == 0 {
                     return Some(imm.into());
                 }

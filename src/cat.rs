@@ -7,7 +7,7 @@ use cton_reader::parse_functions;
 use CommandResult;
 use utils::read_to_string;
 
-pub fn run(files: Vec<String>) -> CommandResult {
+pub fn run(files: &[String]) -> CommandResult {
     for (i, f) in files.into_iter().enumerate() {
         if i != 0 {
             println!();
@@ -17,7 +17,7 @@ pub fn run(files: Vec<String>) -> CommandResult {
     Ok(())
 }
 
-fn cat_one(filename: String) -> CommandResult {
+fn cat_one(filename: &str) -> CommandResult {
     let buffer = read_to_string(&filename).map_err(
         |e| format!("{}: {}", filename, e),
     )?;

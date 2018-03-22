@@ -7,7 +7,7 @@ use utils::read_to_string;
 use filecheck::{CheckerBuilder, Checker, NO_VARIABLES};
 use std::io::{self, Read};
 
-pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
+pub fn run(files: &[String], verbose: bool) -> CommandResult {
     if files.is_empty() {
         return Err("No check files".to_string());
     }
