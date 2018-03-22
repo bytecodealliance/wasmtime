@@ -21,8 +21,8 @@ for LIB in $LIBS
 do
     banner "Rust unit tests in $LIB"
     cd "lib/$LIB"
-    cargo test --no-default-features --features no_std
-    cargo test --features no_std
+    cargo test --no-default-features --features core
+    cargo test --features core
     cd "$topdir"
 done
 

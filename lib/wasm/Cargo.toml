@@ -26,4 +26,4 @@ tempdir = "0.3.5"
 [features]
 default = ["std"]
 std = ["cretonne/std", "cretonne-frontend/std"]
-no_std = ["hashmap_core", "cretonne/no_std", "cretonne-frontend/no_std"]
+core = ["hashmap_core", "cretonne/core", "cretonne-frontend/core"]

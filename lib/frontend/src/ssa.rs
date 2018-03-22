@@ -1026,9 +1026,9 @@ mod tests {
         match verify_function(&func, &flags) {
             Ok(()) => {}
             Err(err) => {
-                #[cfg(not(feature = "no_std"))]
+                #[cfg(feature = "std")]
                 panic!(err.message);
-                #[cfg(feature = "no_std")]
+                #[cfg(not(feature = "std"))]
                 panic!("function failed to verify");
             }
         }
@@ -1205,9 +1205,9 @@ mod tests {
         match verify_function(&func, &flags) {
             Ok(()) => {}
             Err(err) => {
-                #[cfg(not(feature = "no_std"))]
+                #[cfg(feature = "std")]
                 panic!(err.message);
-                #[cfg(feature = "no_std")]
+                #[cfg(not(feature = "std"))]
                 panic!("function failed to verify");
             }
         }
@@ -1256,9 +1256,9 @@ mod tests {
         match verify_function(&func, &flags) {
             Ok(()) => {}
             Err(err) => {
-                #[cfg(not(feature = "no_std"))]
+                #[cfg(feature = "std")]
                 panic!(err.message);
-                #[cfg(feature = "no_std")]
+                #[cfg(not(feature = "std"))]
                 panic!("function failed to verify");
             }
         }
