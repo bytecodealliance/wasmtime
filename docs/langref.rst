@@ -654,6 +654,8 @@ trap when accessed.
             address space reserved for the heap, not including the guard pages.
     :arg GuardBytes: Size of the guard pages in bytes.
 
+The ``reserved_reg`` option is not yet implemented.
+
 Dynamic heaps
 ~~~~~~~~~~~~~
 
@@ -671,6 +673,8 @@ is resized. The bound of a dynamic heap is stored in a global variable.
             size will never trap.
     :arg BoundGV: Global variable containing the current heap bound in bytes.
     :arg GuardBytes: Size of the guard pages in bytes.
+
+The ``reserved_reg`` option is not yet implemented.
 
 Heap examples
 ~~~~~~~~~~~~~
