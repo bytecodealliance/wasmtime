@@ -23,7 +23,7 @@ function %deref(i64 vmctx) -> i64 {
 ebb1(v1: i64):
     v2 = global_addr.i64 gv2
     ; check: $(a1=$V) = iadd_imm v1, -16
-    ; check: $(p1=$V) = load.i64 $a1
+    ; check: $(p1=$V) = load.i64 notrap aligned $a1
     ; check: v2 = iadd_imm $p1, 32
     return v2
     ; check: return v2
@@ -55,7 +55,7 @@ ebb0(v0: i32, v999: i64):
     ; Checks here are assuming that no pipehole opts fold the load offsets.
     ; nextln: $(xoff=$V) = uextend.i64 v0
     ; nextln: $(haddr=$V) = iadd_imm v999, 64
-    ; nextln: $(hbase=$V) = load.i64 $haddr
+    ; nextln: $(hbase=$V) = load.i64 notrap aligned $haddr
     ; nextln: v1 = iadd $hbase, $xoff
     v2 = load.f32 v1+16
     ; nextln: v2 = load.f32 v1+16
@@ -103,7 +103,7 @@ ebb0(v0: i32, v999: i64):
     ; Checks here are assuming that no pipehole opts fold the load offsets.
     ; nextln: $(xoff=$V) = uextend.i64 v0
     ; nextln: $(haddr=$V) = iadd_imm.i64 v999, 64
-    ; nextln: $(hbase=$V) = load.i64 $haddr
+    ; nextln: $(hbase=$V) = load.i64 notrap aligned $haddr
     ; nextln: v1 = iadd $hbase, $xoff
     v2 = load.f32 v1+0x7fff_ffff
     ; nextln: v2 = load.f32 v1+0x7fff_ffff
