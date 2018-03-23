@@ -25,6 +25,8 @@ pub struct HeapData {
 #[derive(Clone)]
 pub enum HeapBase {
     /// The heap base lives in a reserved register.
+    ///
+    /// This feature is not yet implemented.
     ReservedReg,
 
     /// The heap base is in a global variable.

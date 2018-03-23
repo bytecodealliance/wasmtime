@@ -68,6 +68,8 @@ pub enum StackBase {
     FP = 1,
 
     /// Use an explicit zone pointer in a general-purpose register.
+    ///
+    /// This feature is not yet implemented.
     Zone = 2,
 }
 
