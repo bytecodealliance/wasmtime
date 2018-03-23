@@ -56,19 +56,19 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
             let opcode = pos.func.dfg[inst].opcode();
 
             // Check for ABI boundaries that need to be converted to the legalized signature.
-            if opcode.is_call() && boundary::handle_call_abi(inst, pos.func, cfg) {
-                // Go back and legalize the inserted argument conversion instructions.
-                pos.set_position(prev_pos);
-                continue;
-            }
-
-            if opcode.is_return() && boundary::handle_return_abi(inst, pos.func, cfg) {
-                // Go back and legalize the inserted return value conversion instructions.
-                pos.set_position(prev_pos);
-                continue;
-            }
-
-            if opcode.is_branch() {
+            if opcode.is_call() {
+                if boundary::handle_call_abi(inst, pos.func, cfg) {
+                    // Go back and legalize the inserted argument conversion instructions.
+                    pos.set_position(prev_pos);
+                    continue;
+                }
+            } else if opcode.is_return() {
+                if boundary::handle_return_abi(inst, pos.func, cfg) {
+                    // Go back and legalize the inserted return value conversion instructions.
+                    pos.set_position(prev_pos);
+                    continue;
+                }
+            } else if opcode.is_branch() {
                 split::simplify_branch_arguments(&mut pos.func.dfg, inst);
             }
 
