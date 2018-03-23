@@ -75,8 +75,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 GlobalValue::Const(val) => val,
                 GlobalValue::Memory { gv, ty } => {
                     let addr = builder.ins().global_addr(environ.native_pointer(), gv);
-                    // TODO: It is likely safe to set `aligned notrap` flags on a global load.
-                    let flags = ir::MemFlags::new();
+                    let mut flags = ir::MemFlags::new();
+                    flags.set_notrap();
+                    flags.set_aligned();
                     builder.ins().load(ty, flags, addr, 0)
                 }
             };
@@ -87,8 +88,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 GlobalValue::Const(_) => panic!("global #{} is a constant", global_index),
                 GlobalValue::Memory { gv, .. } => {
                     let addr = builder.ins().global_addr(environ.native_pointer(), gv);
-                    // TODO: It is likely safe to set `aligned notrap` flags on a global store.
-                    let flags = ir::MemFlags::new();
+                    let mut flags = ir::MemFlags::new();
+                    flags.set_notrap();
+                    flags.set_aligned();
                     let val = state.pop1();
                     builder.ins().store(flags, val, addr, 0);
                 }
@@ -992,6 +994,9 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ);
     let (base, offset) = get_heap_addr(heap, addr32, offset, environ.native_pointer(), builder);
+    // Note that we don't set `is_aligned` here, even if the load instruction's
+    // alignment immediate says it's aligned, because WebAssembly's immediate
+    // field is just a hint, while Cretonne's aligned flag needs a guarantee.
     let flags = MemFlags::new();
     let (load, dfg) = builder.ins().Load(
         opcode,
@@ -1017,6 +1022,7 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ);
     let (base, offset) = get_heap_addr(heap, addr32, offset, environ.native_pointer(), builder);
+    // See the comments in `translate_load` about the flags.
     let flags = MemFlags::new();
     builder.ins().Store(
         opcode,

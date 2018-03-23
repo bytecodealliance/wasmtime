@@ -209,7 +209,10 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             let ext = pos.ins().uextend(I64, callee);
             pos.ins().imul_imm(ext, 4)
         };
-        let func_ptr = pos.ins().load(ptr, ir::MemFlags::new(), callee_offset, 0);
+        let mut mflags = ir::MemFlags::new();
+        mflags.set_notrap();
+        mflags.set_aligned();
+        let func_ptr = pos.ins().load(ptr, mflags, callee_offset, 0);
 
         // Build a value list for the indirect call instruction containing the callee, call_args,
         // and the vmctx parameter.
