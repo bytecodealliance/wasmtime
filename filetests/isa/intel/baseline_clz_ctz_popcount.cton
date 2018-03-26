@@ -47,28 +47,23 @@ ebb1(v20: i32):
 function %i64_popcount(i64) -> i64 {
 ebb0(v30: i64):
   v31 = popcnt v30;
-  ; check: iconst.i32
-  ; check: ushr
+  ; check: ushr_imm
   ; check: iconst.i64
   ; check: band
   ; check: isub
-  ; check: iconst.i32
-  ; check: ushr
+  ; check: ushr_imm
   ; check: band
   ; check: isub
-  ; check: iconst.i32
-  ; check: ushr
+  ; check: ushr_imm
   ; check: band
   ; check: isub
-  ; check: iconst.i32
-  ; check: ushr
+  ; check: ushr_imm
   ; check: iadd
   ; check: iconst.i64
   ; check: band
   ; check: iconst.i64
   ; check: imul
-  ; check: iconst.i32
-  ; check: ushr
+  ; check: ushr_imm
   return v31;
 }
 
@@ -78,27 +73,22 @@ ebb0(v30: i64):
 function %i32_popcount(i32) -> i32 {
 ebb0(v40: i32):
   v41 = popcnt v40;
-  ; check: iconst.i32
-  ; check: ushr
+  ; check: ushr_imm
   ; check: iconst.i32
   ; check: band
   ; check: isub
-  ; check: iconst.i32
-  ; check: ushr
+  ; check: ushr_imm
   ; check: band
   ; check: isub
-  ; check: iconst.i32
-  ; check: ushr
+  ; check: ushr_imm
   ; check: band
   ; check: isub
-  ; check: iconst.i32
-  ; check: ushr
+  ; check: ushr_imm
   ; check: iadd
   ; check: iconst.i32
   ; check: band
   ; check: iconst.i32
   ; check: imul
-  ; check: iconst.i32
-  ; check: ushr
+  ; check: ushr_imm
   return v41;
 }

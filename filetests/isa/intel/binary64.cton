@@ -529,6 +529,21 @@ ebb0:
     ; asm: addq $-2147483648, %rsp
     adjust_sp_imm -2147483648                   ; bin: 48 81 c4 80000000
 
+    ; Shift immediates
+    ; asm: shlq $12, %rsi
+    [-,%rsi]             v515 = ishl_imm v2, 12   ; bin: 48 c1 e6 0c
+    ; asm: shlq $13, %r8
+    [-,%r8]              v516 = ishl_imm v4, 13   ; bin: 49 c1 e0 0d
+    ; asm: sarq $32, %rsi
+    [-,%rsi]             v517 = sshr_imm v2, 32   ; bin: 48 c1 fe 20
+    ; asm: sarq $33, %r8
+    [-,%r8]              v518 = sshr_imm v4, 33   ; bin: 49 c1 f8 21
+    ; asm: shrl $62, %rsi
+    [-,%rsi]             v519 = ushr_imm v2, 62   ; bin: 48 c1 ee 3e
+    ; asm: shrl $63, %r8
+    [-,%r8]              v520 = ushr_imm v4, 63   ; bin: 49 c1 e8 3f
+
+
     ; asm: testq %rcx, %rcx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 48 85 c9 74 1b
@@ -652,6 +667,7 @@ ebb1:
     [-,%eflags]         v524 = ifcmp_imm v1, -10000 ; bin: 48 81 f9 ffffd8f0
     ; asm: cmpq $10000, %r10
     [-,%eflags]         v525 = ifcmp_imm v2, 10000  ; bin: 49 81 fa 00002710
+
 
     return
 }
@@ -1053,6 +1069,19 @@ ebb0:
     ; asm: cmpl $10000, %r10d
     [-,%eflags]         v525 = ifcmp_imm v3, 10000  ; bin: 41 81 fa 00002710
 
+    ; asm: shll $2, %esi
+    [-,%rsi]             v526 = ishl_imm v2, 2    ; bin: c1 e6 02
+    ; asm: shll $12, %r10d
+    [-,%r10]             v527 = ishl_imm v3, 12   ; bin: 41 c1 e2 0c
+    ; asm: sarl $5, %esi
+    [-,%rsi]             v529 = sshr_imm v2, 5    ; bin: c1 fe 05
+    ; asm: sarl $32, %r10d
+    [-,%r10]             v530 = sshr_imm v3, 32   ; bin: 41 c1 fa 20
+    ; asm: shrl $8, %esi
+    [-,%rsi]             v532 = ushr_imm v2, 8    ; bin: c1 ee 08
+    ; asm: shrl $31, %r10d
+    [-,%r10]             v533 = ushr_imm v3, 31   ; bin: 41 c1 ea 1f
+
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1x
     brz v1, ebb1                                ; bin: 85 c9 74 18
@@ -1082,6 +1111,7 @@ ebb1:
     ; asm: ebb2x:
 ebb2:
     jump ebb1                                   ; bin: eb fd
+
 }
 
 ; Tests for i32/i8 conversion instructions.

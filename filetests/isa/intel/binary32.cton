@@ -403,6 +403,13 @@ ebb0:
     ; asm: addl $-2147483648, %esp
     adjust_sp_imm -2147483648                   ; bin: 81 c4 80000000
 
+    ; Shift immediates
+    ; asm: shll $2, %esi
+    [-,%rsi]             v513 = ishl_imm v2, 2    ; bin: c1 e6 02
+    ; asm: sarl $5, %esi
+    [-,%rsi]             v514 = sshr_imm v2, 5    ; bin: c1 fe 05
+    ; asm: shrl $8, %esi
+    [-,%rsi]             v515 = ushr_imm v2, 8    ; bin: c1 ee 08
 
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1
