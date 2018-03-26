@@ -32,6 +32,7 @@ pub struct LiveValueTracker {
 }
 
 /// Information about a value that is live at the current program point.
+#[derive(Debug)]
 pub struct LiveValue {
     /// The live value.
     pub value: Value,
