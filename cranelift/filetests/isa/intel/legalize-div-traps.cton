@@ -40,7 +40,7 @@ ebb0(v0: i64, v1: i64):
     ; nextln: brif eq $fm1, $(m1=$EBB)
     ; nextln: $(fz=$V) = ifcmp_imm v1, 0
     ; nextln: trapif eq $fz, int_divz
-    ; check: $(hi=$V) = sshr
+    ; check: $(hi=$V) = sshr_imm
     ; nextln: $(q=$V), $(r=$V) = x86_sdivmodx v0, $hi, v1
     ; nextln: jump $(done=$EBB)($q)
     ; check: $m1:
@@ -60,7 +60,7 @@ ebb0(v0: i64, v1: i64):
     v2 = srem v0, v1
     ; nextln: $(fm1=$V) = ifcmp_imm v1, -1
     ; nextln: brif eq $fm1, $(m1=$EBB)
-    ; check: $(hi=$V) = sshr
+    ; check: $(hi=$V) = sshr_imm
     ; nextln: $(d=$V), $(r=$V) = x86_sdivmodx v0, $hi, v1
     ; nextln: jump $(done=$EBB)($r)
     ; check: $m1:
