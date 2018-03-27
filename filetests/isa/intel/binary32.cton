@@ -473,9 +473,9 @@ ebb0:
 
 ebb1:
     ; asm: cmpl %esi, %ecx
-    [-,%eflags]         v10 = ifcmp v1, v2      ; bin: 39 f1
+    [-,%rflags]         v10 = ifcmp v1, v2      ; bin: 39 f1
     ; asm: cmpl %ecx, %esi
-    [-,%eflags]         v11 = ifcmp v2, v1      ; bin: 39 ce
+    [-,%rflags]         v11 = ifcmp v2, v1      ; bin: 39 ce
 
     ; asm: je ebb1
     brif eq v11, ebb1                           ; bin: 74 fa
@@ -543,19 +543,19 @@ ebb1:
 
     ; Stack check.
     ; asm: cmpl %esp, %ecx
-    [-,%eflags]         v40 = ifcmp_sp v1       ; bin: 39 e1
+    [-,%rflags]         v40 = ifcmp_sp v1       ; bin: 39 e1
     ; asm: cmpl %esp, %esi
-    [-,%eflags]         v41 = ifcmp_sp v2       ; bin: 39 e6
+    [-,%rflags]         v41 = ifcmp_sp v2       ; bin: 39 e6
 
     ; asm: cmpl $-100, %ecx
-    [-,%eflags]         v42 = ifcmp_imm v1, -100   ; bin: 83 f9 9c
+    [-,%rflags]         v42 = ifcmp_imm v1, -100   ; bin: 83 f9 9c
     ; asm: cmpl $100, %esi
-    [-,%eflags]         v43 = ifcmp_imm v2, 100    ; bin: 83 fe 64
+    [-,%rflags]         v43 = ifcmp_imm v2, 100    ; bin: 83 fe 64
 
     ; asm: cmpl $-10000, %ecx
-    [-,%eflags]         v44 = ifcmp_imm v1, -10000 ; bin: 81 f9 ffffd8f0
+    [-,%rflags]         v44 = ifcmp_imm v1, -10000 ; bin: 81 f9 ffffd8f0
     ; asm: cmpl $10000, %esi
-    [-,%eflags]         v45 = ifcmp_imm v2, 10000  ; bin: 81 fe 00002710
+    [-,%rflags]         v45 = ifcmp_imm v2, 10000  ; bin: 81 fe 00002710
 
     return
 }

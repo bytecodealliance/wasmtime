@@ -221,11 +221,11 @@ ebb0:
     [-,%rdx]            v307 = fcmp ule v11, v10                ; bin: 0f 2e d5 0f 96 c2
 
     ; asm: ucomiss %xmm2, %xmm5
-    [-,%eflags]         v310 = ffcmp v10, v11                   ; bin: 0f 2e ea
+    [-,%rflags]         v310 = ffcmp v10, v11                   ; bin: 0f 2e ea
     ; asm: ucomiss %xmm2, %xmm5
-    [-,%eflags]         v311 = ffcmp v11, v10                   ; bin: 0f 2e d5
+    [-,%rflags]         v311 = ffcmp v11, v10                   ; bin: 0f 2e d5
     ; asm: ucomiss %xmm5, %xmm5
-    [-,%eflags]         v312 = ffcmp v10, v10                   ; bin: 0f 2e ed
+    [-,%rflags]         v312 = ffcmp v10, v10                   ; bin: 0f 2e ed
 
     return
 }
@@ -436,11 +436,11 @@ ebb0:
     [-,%rdx]            v307 = fcmp ule v11, v10                ; bin: 66 0f 2e d5 0f 96 c2
 
     ; asm: ucomisd %xmm2, %xmm5
-    [-,%eflags]         v310 = ffcmp v10, v11                   ; bin: 66 0f 2e ea
+    [-,%rflags]         v310 = ffcmp v10, v11                   ; bin: 66 0f 2e ea
     ; asm: ucomisd %xmm2, %xmm5
-    [-,%eflags]         v311 = ffcmp v11, v10                   ; bin: 66 0f 2e d5
+    [-,%rflags]         v311 = ffcmp v11, v10                   ; bin: 66 0f 2e d5
     ; asm: ucomisd %xmm5, %xmm5
-    [-,%eflags]         v312 = ffcmp v10, v10                   ; bin: 66 0f 2e ed
+    [-,%rflags]         v312 = ffcmp v10, v10                   ; bin: 66 0f 2e ed
 
     return
 }
@@ -448,7 +448,7 @@ ebb0:
 function %cpuflags_float(f32 [%xmm0]) {
 ebb0(v0: f32 [%xmm0]):
     ; asm: ucomiss %xmm0, %xmm0
-    [-,%eflags]         v1 = ffcmp v0, v0                       ; bin: 0f 2e c0
+    [-,%rflags]         v1 = ffcmp v0, v0                       ; bin: 0f 2e c0
 
     jump ebb1
 

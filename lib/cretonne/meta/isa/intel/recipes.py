@@ -281,7 +281,7 @@ trap = TailRecipe(
 
 # Macro: conditional jump over a ud2.
 trapif = EncRecipe(
-        'trapif', IntCondTrap, size=4, ins=FLAG.eflags, outs=(),
+        'trapif', IntCondTrap, size=4, ins=FLAG.rflags, outs=(),
         clobbers_flags=False,
         emit='''
         // Jump over a 2-byte ud2.
@@ -293,7 +293,7 @@ trapif = EncRecipe(
         ''')
 
 trapff = EncRecipe(
-        'trapff', FloatCondTrap, size=4, ins=FLAG.eflags, outs=(),
+        'trapff', FloatCondTrap, size=4, ins=FLAG.rflags, outs=(),
         clobbers_flags=False,
         instp=floatccs(FloatCondTrap),
         emit='''
@@ -985,7 +985,7 @@ jmpd = TailRecipe(
         ''')
 
 brib = TailRecipe(
-        'brib', BranchInt, size=1, ins=FLAG.eflags, outs=(),
+        'brib', BranchInt, size=1, ins=FLAG.rflags, outs=(),
         branch_range=8,
         clobbers_flags=False,
         emit='''
@@ -994,7 +994,7 @@ brib = TailRecipe(
         ''')
 
 brid = TailRecipe(
-        'brid', BranchInt, size=4, ins=FLAG.eflags, outs=(),
+        'brid', BranchInt, size=4, ins=FLAG.rflags, outs=(),
         branch_range=32,
         clobbers_flags=False,
         emit='''
@@ -1003,7 +1003,7 @@ brid = TailRecipe(
         ''')
 
 brfb = TailRecipe(
-        'brfb', BranchFloat, size=1, ins=FLAG.eflags, outs=(),
+        'brfb', BranchFloat, size=1, ins=FLAG.rflags, outs=(),
         branch_range=8,
         clobbers_flags=False,
         instp=floatccs(BranchFloat),
@@ -1013,7 +1013,7 @@ brfb = TailRecipe(
         ''')
 
 brfd = TailRecipe(
-        'brfd', BranchFloat, size=4, ins=FLAG.eflags, outs=(),
+        'brfd', BranchFloat, size=4, ins=FLAG.rflags, outs=(),
         branch_range=32,
         clobbers_flags=False,
         instp=floatccs(BranchFloat),
@@ -1033,7 +1033,7 @@ brfd = TailRecipe(
 #
 
 seti = TailRecipe(
-        'seti', IntCond, size=1, ins=FLAG.eflags, outs=GPR,
+        'seti', IntCond, size=1, ins=FLAG.rflags, outs=GPR,
         requires_prefix=True,
         clobbers_flags=False,
         emit='''
@@ -1041,7 +1041,7 @@ seti = TailRecipe(
         modrm_r_bits(out_reg0, bits, sink);
         ''')
 seti_abcd = TailRecipe(
-        'seti_abcd', IntCond, size=1, ins=FLAG.eflags, outs=ABCD,
+        'seti_abcd', IntCond, size=1, ins=FLAG.rflags, outs=ABCD,
         when_prefixed=seti,
         clobbers_flags=False,
         emit='''
@@ -1050,7 +1050,7 @@ seti_abcd = TailRecipe(
         ''')
 
 setf = TailRecipe(
-        'setf', FloatCond, size=1, ins=FLAG.eflags, outs=GPR,
+        'setf', FloatCond, size=1, ins=FLAG.rflags, outs=GPR,
         requires_prefix=True,
         clobbers_flags=False,
         emit='''
@@ -1058,7 +1058,7 @@ setf = TailRecipe(
         modrm_r_bits(out_reg0, bits, sink);
         ''')
 setf_abcd = TailRecipe(
-        'setf_abcd', FloatCond, size=1, ins=FLAG.eflags, outs=ABCD,
+        'setf_abcd', FloatCond, size=1, ins=FLAG.rflags, outs=ABCD,
         when_prefixed=setf,
         clobbers_flags=False,
         emit='''
@@ -1072,7 +1072,7 @@ setf_abcd = TailRecipe(
 # 1 byte, modrm(r,r), is after the opcode
 #
 cmov = TailRecipe(
-        'cmov', IntSelect, size=1, ins=(FLAG.eflags, GPR, GPR), outs=2,
+        'cmov', IntSelect, size=1, ins=(FLAG.rflags, GPR, GPR), outs=2,
         requires_prefix=False,
         clobbers_flags=False,
         emit='''
@@ -1084,7 +1084,7 @@ cmov = TailRecipe(
 # Bit scan forwards and reverse
 #
 bsf_and_bsr = TailRecipe(
-        'bsf_and_bsr', Unary, size=1, ins=GPR, outs=(GPR, FLAG.eflags),
+        'bsf_and_bsr', Unary, size=1, ins=GPR, outs=(GPR, FLAG.rflags),
         requires_prefix=False,
         clobbers_flags=True,
         emit='''
@@ -1098,7 +1098,7 @@ bsf_and_bsr = TailRecipe(
 
 # XX /r, MR form. Compare two GPR registers and set flags.
 rcmp = TailRecipe(
-        'rcmp', Binary, size=1, ins=(GPR, GPR), outs=FLAG.eflags,
+        'rcmp', Binary, size=1, ins=(GPR, GPR), outs=FLAG.rflags,
         emit='''
         PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
         modrm_rr(in_reg0, in_reg1, sink);
@@ -1106,7 +1106,7 @@ rcmp = TailRecipe(
 
 # XX /r, RM form. Compare two FPR registers and set flags.
 fcmp = TailRecipe(
-        'fcmp', Binary, size=1, ins=(FPR, FPR), outs=FLAG.eflags,
+        'fcmp', Binary, size=1, ins=(FPR, FPR), outs=FLAG.rflags,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rr(in_reg1, in_reg0, sink);
@@ -1114,7 +1114,7 @@ fcmp = TailRecipe(
 
 # XX /n, MI form with imm8.
 rcmpib = TailRecipe(
-        'rcmpib', BinaryImm, size=2, ins=GPR, outs=FLAG.eflags,
+        'rcmpib', BinaryImm, size=2, ins=GPR, outs=FLAG.rflags,
         instp=IsSignedInt(BinaryImm.imm, 8),
         emit='''
         PUT_OP(bits, rex1(in_reg0), sink);
@@ -1125,7 +1125,7 @@ rcmpib = TailRecipe(
 
 # XX /n, MI form with imm32.
 rcmpid = TailRecipe(
-        'rcmpid', BinaryImm, size=5, ins=GPR, outs=FLAG.eflags,
+        'rcmpid', BinaryImm, size=5, ins=GPR, outs=FLAG.rflags,
         instp=IsSignedInt(BinaryImm.imm, 32),
         emit='''
         PUT_OP(bits, rex1(in_reg0), sink);
@@ -1136,7 +1136,7 @@ rcmpid = TailRecipe(
 
 # Same as rcmp, but second operand is the stack pointer.
 rcmp_sp = TailRecipe(
-        'rcmp_sp', Unary, size=1, ins=GPR, outs=FLAG.eflags,
+        'rcmp_sp', Unary, size=1, ins=GPR, outs=FLAG.rflags,
         emit='''
         PUT_OP(bits, rex2(in_reg0, RU::rsp.into()), sink);
         modrm_rr(in_reg0, RU::rsp.into(), sink);
@@ -1302,7 +1302,7 @@ icscc = TailRecipe(
 
 # Same thing for floating point.
 #
-# The ucomiss/ucomisd instructions set the EFLAGS bits CF/PF/CF like this:
+# The ucomiss/ucomisd instructions set the FLAGS bits CF/PF/CF like this:
 #
 #    ZPC OSA
 # UN 111 000
