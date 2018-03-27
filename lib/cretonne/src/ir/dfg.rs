@@ -1,7 +1,7 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
 use entity::{PrimaryMap, EntityMap};
-use isa::TargetIsa;
+use isa::{TargetIsa, Encoding, Legalize};
 use ir;
 use ir::builder::ReplaceBuilder;
 use ir::extfunc::ExtFuncData;
@@ -644,6 +644,12 @@ impl DataFlowGraph {
         } else {
             self.value_type(self.first_result(inst))
         }
+    }
+
+    /// Wrapper around `TargetIsa::encode` for encoding an existing instruction
+    /// in the `DataFlowGraph`.
+    pub fn encode(&self, inst: Inst, isa: &TargetIsa) -> Result<Encoding, Legalize> {
+        isa.encode(&self, &self[inst], self.ctrl_typevar(inst))
     }
 }
 

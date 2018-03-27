@@ -1058,11 +1058,7 @@ impl<'a> Verifier<'a> {
         if let Some(text) = needs_enc {
             // This instruction needs an encoding, so generate an error.
             // Provide the ISA default encoding as a hint.
-            match isa.encode(
-                &self.func.dfg,
-                &self.func.dfg[inst],
-                self.func.dfg.ctrl_typevar(inst),
-            ) {
+            match self.func.dfg.encode(inst, isa) {
                 Ok(enc) => {
                     return err!(
                         inst,

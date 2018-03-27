@@ -10,7 +10,7 @@ use ir::{ExternalName, CallConv, Signature, DataFlowGraph, Layout};
 use ir::{InstEncodings, ValueLocations, JumpTables, StackSlots, EbbOffsets, SourceLocs};
 use ir::{Ebb, JumpTableData, JumpTable, StackSlotData, StackSlot, SigRef, ExtFuncData, FuncRef,
          GlobalVarData, GlobalVar, HeapData, Heap};
-use isa::{TargetIsa, EncInfo};
+use isa::{TargetIsa, EncInfo, Legalize};
 use std::fmt;
 use write::write_function;
 
@@ -175,6 +175,13 @@ impl Function {
             offset: self.offsets[ebb],
             iter: self.layout.ebb_insts(ebb),
         }
+    }
+
+    /// Wrapper around `DataFlowGraph::encode` which assigns `inst` the resulting encoding.
+    pub fn update_encoding(&mut self, inst: ir::Inst, isa: &TargetIsa) -> Result<(), Legalize> {
+        self.dfg.encode(inst, isa).map(
+            |e| { self.encodings[inst] = e; },
+        )
     }
 }
 
