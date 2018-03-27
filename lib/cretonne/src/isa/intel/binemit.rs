@@ -257,7 +257,7 @@ fn icc2opc(cond: IntCC) -> u16 {
 
 /// Get the low 4 bits of an opcode for a floating point condition code.
 ///
-/// The ucomiss/ucomisd instructions set the EFLAGS bits CF/PF/CF like this:
+/// The ucomiss/ucomisd instructions set the FLAGS bits CF/PF/CF like this:
 ///
 ///    ZPC OSA
 /// UN 111 000
