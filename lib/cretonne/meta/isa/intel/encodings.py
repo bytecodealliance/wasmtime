@@ -259,31 +259,31 @@ X86_64.enc(base.adjust_sp_imm, *r.adjustsp32.rex(0x81, w=1))
 # Float loads and stores.
 #
 
-enc_both(base.load.f32.any, r.fld, 0x66, 0x0f, 0x6e)
-enc_both(base.load.f32.any, r.fldDisp8, 0x66, 0x0f, 0x6e)
-enc_both(base.load.f32.any, r.fldDisp32, 0x66, 0x0f, 0x6e)
+enc_both(base.load.f32.any, r.fld, 0xf3, 0x0f, 0x10)
+enc_both(base.load.f32.any, r.fldDisp8, 0xf3, 0x0f, 0x10)
+enc_both(base.load.f32.any, r.fldDisp32, 0xf3, 0x0f, 0x10)
 
-enc_both(base.load.f64.any, r.fld, 0xf3, 0x0f, 0x7e)
-enc_both(base.load.f64.any, r.fldDisp8, 0xf3, 0x0f, 0x7e)
-enc_both(base.load.f64.any, r.fldDisp32, 0xf3, 0x0f, 0x7e)
+enc_both(base.load.f64.any, r.fld, 0xf2, 0x0f, 0x10)
+enc_both(base.load.f64.any, r.fldDisp8, 0xf2, 0x0f, 0x10)
+enc_both(base.load.f64.any, r.fldDisp32, 0xf2, 0x0f, 0x10)
 
-enc_both(base.store.f32.any, r.fst, 0x66, 0x0f, 0x7e)
-enc_both(base.store.f32.any, r.fstDisp8, 0x66, 0x0f, 0x7e)
-enc_both(base.store.f32.any, r.fstDisp32, 0x66, 0x0f, 0x7e)
+enc_both(base.store.f32.any, r.fst, 0xf3, 0x0f, 0x11)
+enc_both(base.store.f32.any, r.fstDisp8, 0xf3, 0x0f, 0x11)
+enc_both(base.store.f32.any, r.fstDisp32, 0xf3, 0x0f, 0x11)
 
-enc_both(base.store.f64.any, r.fst, 0x66, 0x0f, 0xd6)
-enc_both(base.store.f64.any, r.fstDisp8, 0x66, 0x0f, 0xd6)
-enc_both(base.store.f64.any, r.fstDisp32, 0x66, 0x0f, 0xd6)
+enc_both(base.store.f64.any, r.fst, 0xf2, 0x0f, 0x11)
+enc_both(base.store.f64.any, r.fstDisp8, 0xf2, 0x0f, 0x11)
+enc_both(base.store.f64.any, r.fstDisp32, 0xf2, 0x0f, 0x11)
 
-enc_both(base.fill.f32, r.ffillSib32, 0x66, 0x0f, 0x6e)
-enc_both(base.regfill.f32, r.fregfill32, 0x66, 0x0f, 0x6e)
-enc_both(base.fill.f64, r.ffillSib32, 0xf3, 0x0f, 0x7e)
-enc_both(base.regfill.f64, r.fregfill32, 0xf3, 0x0f, 0x7e)
+enc_both(base.fill.f32, r.ffillSib32, 0xf3, 0x0f, 0x10)
+enc_both(base.regfill.f32, r.fregfill32, 0xf3, 0x0f, 0x10)
+enc_both(base.fill.f64, r.ffillSib32, 0xf2, 0x0f, 0x10)
+enc_both(base.regfill.f64, r.fregfill32, 0xf2, 0x0f, 0x10)
 
-enc_both(base.spill.f32, r.fspillSib32, 0x66, 0x0f, 0x7e)
-enc_both(base.regspill.f32, r.fregspill32, 0x66, 0x0f, 0x7e)
-enc_both(base.spill.f64, r.fspillSib32, 0x66, 0x0f, 0xd6)
-enc_both(base.regspill.f64, r.fregspill32, 0x66, 0x0f, 0xd6)
+enc_both(base.spill.f32, r.fspillSib32, 0xf3, 0x0f, 0x11)
+enc_both(base.regspill.f32, r.fregspill32, 0xf3, 0x0f, 0x11)
+enc_both(base.spill.f64, r.fspillSib32, 0xf2, 0x0f, 0x11)
+enc_both(base.regspill.f64, r.fregspill32, 0xf2, 0x0f, 0x11)
 
 #
 # Function addresses.

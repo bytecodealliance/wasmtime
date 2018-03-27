@@ -157,52 +157,52 @@ ebb0:
 
     ; Load/Store
 
-    ; asm: movd (%r14), %xmm5
-    [-,%xmm5]           v100 = load.f32 v3                      ; bin: 66 41 0f 6e 2e
-    ; asm: movd (%rax), %xmm10
-    [-,%xmm10]          v101 = load.f32 v2                      ; bin: 66 44 0f 6e 10
-    ; asm: movd 50(%r14), %xmm5
-    [-,%xmm5]           v110 = load.f32 v3+50                   ; bin: 66 41 0f 6e 6e 32
-    ; asm: movd -50(%rax), %xmm10
-    [-,%xmm10]          v111 = load.f32 v2-50                   ; bin: 66 44 0f 6e 50 ce
-    ; asm: movd 10000(%r14), %xmm5
-    [-,%xmm5]           v120 = load.f32 v3+10000                ; bin: 66 41 0f 6e ae 00002710
-    ; asm: movd -10000(%rax), %xmm10
-    [-,%xmm10]          v121 = load.f32 v2-10000                ; bin: 66 44 0f 6e 90 ffffd8f0
+    ; asm: movss (%r14), %xmm5
+    [-,%xmm5]           v100 = load.f32 v3                      ; bin: f3 41 0f 10 2e
+    ; asm: movss (%rax), %xmm10
+    [-,%xmm10]          v101 = load.f32 v2                      ; bin: f3 44 0f 10 10
+    ; asm: movss 50(%r14), %xmm5
+    [-,%xmm5]           v110 = load.f32 v3+50                   ; bin: f3 41 0f 10 6e 32
+    ; asm: movss -50(%rax), %xmm10
+    [-,%xmm10]          v111 = load.f32 v2-50                   ; bin: f3 44 0f 10 50 ce
+    ; asm: movss 10000(%r14), %xmm5
+    [-,%xmm5]           v120 = load.f32 v3+10000                ; bin: f3 41 0f 10 ae 00002710
+    ; asm: movss -10000(%rax), %xmm10
+    [-,%xmm10]          v121 = load.f32 v2-10000                ; bin: f3 44 0f 10 90 ffffd8f0
 
-    ; asm: movd %xmm5, (%r14)
-    [-]                 store.f32 v100, v3                      ; bin: 66 41 0f 7e 2e
-    ; asm: movd %xmm10, (%rax)
-    [-]                 store.f32 v101, v2                      ; bin: 66 44 0f 7e 10
-    ; asm: movd %xmm5, (%r13)
-    [-]                 store.f32 v100, v4                      ; bin: 66 41 0f 7e 6d 00
-    ; asm: movd %xmm10, (%r13)
-    [-]                 store.f32 v101, v4                      ; bin: 66 45 0f 7e 55 00
-    ; asm: movd %xmm5, 50(%r14)
-    [-]                 store.f32 v100, v3+50                   ; bin: 66 41 0f 7e 6e 32
-    ; asm: movd %xmm10, -50(%rax)
-    [-]                 store.f32 v101, v2-50                   ; bin: 66 44 0f 7e 50 ce
-    ; asm: movd %xmm5, 10000(%r14)
-    [-]                 store.f32 v100, v3+10000                ; bin: 66 41 0f 7e ae 00002710
-    ; asm: movd %xmm10, -10000(%rax)
-    [-]                 store.f32 v101, v2-10000                ; bin: 66 44 0f 7e 90 ffffd8f0
+    ; asm: movss %xmm5, (%r14)
+    [-]                 store.f32 v100, v3                      ; bin: f3 41 0f 11 2e
+    ; asm: movss %xmm10, (%rax)
+    [-]                 store.f32 v101, v2                      ; bin: f3 44 0f 11 10
+    ; asm: movss %xmm5, (%r13)
+    [-]                 store.f32 v100, v4                      ; bin: f3 41 0f 11 6d 00
+    ; asm: movss %xmm10, (%r13)
+    [-]                 store.f32 v101, v4                      ; bin: f3 45 0f 11 55 00
+    ; asm: movss %xmm5, 50(%r14)
+    [-]                 store.f32 v100, v3+50                   ; bin: f3 41 0f 11 6e 32
+    ; asm: movss %xmm10, -50(%rax)
+    [-]                 store.f32 v101, v2-50                   ; bin: f3 44 0f 11 50 ce
+    ; asm: movss %xmm5, 10000(%r14)
+    [-]                 store.f32 v100, v3+10000                ; bin: f3 41 0f 11 ae 00002710
+    ; asm: movss %xmm10, -10000(%rax)
+    [-]                 store.f32 v101, v2-10000                ; bin: f3 44 0f 11 90 ffffd8f0
 
     ; Spill / Fill.
 
-    ; asm: movd %xmm5, 1032(%rsp)
-    [-,ss1]             v200 = spill v100                       ; bin: 66 0f 7e ac 24 00000408
-    ; asm: movd %xmm10, 1032(%rsp)
-    [-,ss1]             v201 = spill v101                       ; bin: 66 44 0f 7e 94 24 00000408
+    ; asm: movss %xmm5, 1032(%rsp)
+    [-,ss1]             v200 = spill v100                       ; bin: f3 0f 11 ac 24 00000408
+    ; asm: movss %xmm10, 1032(%rsp)
+    [-,ss1]             v201 = spill v101                       ; bin: f3 44 0f 11 94 24 00000408
 
-    ; asm: movd 1032(%rsp), %xmm5
-    [-,%xmm5]           v210 = fill v200                        ; bin: 66 0f 6e ac 24 00000408
-    ; asm: movd 1032(%rsp), %xmm10
-    [-,%xmm10]          v211 = fill v201                        ; bin: 66 44 0f 6e 94 24 00000408
+    ; asm: movss 1032(%rsp), %xmm5
+    [-,%xmm5]           v210 = fill v200                        ; bin: f3 0f 10 ac 24 00000408
+    ; asm: movss 1032(%rsp), %xmm10
+    [-,%xmm10]          v211 = fill v201                        ; bin: f3 44 0f 10 94 24 00000408
 
-    ; asm: movd %xmm5, 1032(%rsp)
-    regspill v100, %xmm5 -> ss1                                 ; bin: 66 0f 7e ac 24 00000408
-    ; asm: movd 1032(%rsp), %xmm5
-    regfill v100, ss1 -> %xmm5                                  ; bin: 66 0f 6e ac 24 00000408
+    ; asm: movss %xmm5, 1032(%rsp)
+    regspill v100, %xmm5 -> ss1                                 ; bin: f3 0f 11 ac 24 00000408
+    ; asm: movss 1032(%rsp), %xmm5
+    regfill v100, ss1 -> %xmm5                                  ; bin: f3 0f 10 ac 24 00000408
 
     ; Comparisons.
     ;
@@ -392,52 +392,52 @@ ebb0:
 
     ; Load/Store
 
-    ; asm: movq (%r14), %xmm5
-    [-,%xmm5]           v100 = load.f64 v3                      ; bin: f3 41 0f 7e 2e
-    ; asm: movq (%rax), %xmm10
-    [-,%xmm10]          v101 = load.f64 v2                      ; bin: f3 44 0f 7e 10
-    ; asm: movq 50(%r14), %xmm5
-    [-,%xmm5]           v110 = load.f64 v3+50                   ; bin: f3 41 0f 7e 6e 32
-    ; asm: movq -50(%rax), %xmm10
-    [-,%xmm10]          v111 = load.f64 v2-50                   ; bin: f3 44 0f 7e 50 ce
-    ; asm: movq 10000(%r14), %xmm5
-    [-,%xmm5]           v120 = load.f64 v3+10000                ; bin: f3 41 0f 7e ae 00002710
-    ; asm: movq -10000(%rax), %xmm10
-    [-,%xmm10]          v121 = load.f64 v2-10000                ; bin: f3 44 0f 7e 90 ffffd8f0
+    ; asm: movsd (%r14), %xmm5
+    [-,%xmm5]           v100 = load.f64 v3                      ; bin: f2 41 0f 10 2e
+    ; asm: movsd (%rax), %xmm10
+    [-,%xmm10]          v101 = load.f64 v2                      ; bin: f2 44 0f 10 10
+    ; asm: movsd 50(%r14), %xmm5
+    [-,%xmm5]           v110 = load.f64 v3+50                   ; bin: f2 41 0f 10 6e 32
+    ; asm: movsd -50(%rax), %xmm10
+    [-,%xmm10]          v111 = load.f64 v2-50                   ; bin: f2 44 0f 10 50 ce
+    ; asm: movsd 10000(%r14), %xmm5
+    [-,%xmm5]           v120 = load.f64 v3+10000                ; bin: f2 41 0f 10 ae 00002710
+    ; asm: movsd -10000(%rax), %xmm10
+    [-,%xmm10]          v121 = load.f64 v2-10000                ; bin: f2 44 0f 10 90 ffffd8f0
 
-    ; asm: movq %xmm5, (%r14)
-    [-]                 store.f64 v100, v3                      ; bin: 66 41 0f d6 2e
-    ; asm: movq %xmm10, (%rax)
-    [-]                 store.f64 v101, v2                      ; bin: 66 44 0f d6 10
-    ; asm: movq %xmm5, (%r13)
-    [-]                 store.f64 v100, v4                      ; bin: 66 41 0f d6 6d 00
-    ; asm: movq %xmm10, (%r13)
-    [-]                 store.f64 v101, v4                      ; bin: 66 45 0f d6 55 00
-    ; asm: movq %xmm5, 50(%r14)
-    [-]                 store.f64 v100, v3+50                   ; bin: 66 41 0f d6 6e 32
-    ; asm: movq %xmm10, -50(%rax)
-    [-]                 store.f64 v101, v2-50                   ; bin: 66 44 0f d6 50 ce
-    ; asm: movq %xmm5, 10000(%r14)
-    [-]                 store.f64 v100, v3+10000                ; bin: 66 41 0f d6 ae 00002710
-    ; asm: movq %xmm10, -10000(%rax)
-    [-]                 store.f64 v101, v2-10000                ; bin: 66 44 0f d6 90 ffffd8f0
+    ; asm: movsd %xmm5, (%r14)
+    [-]                 store.f64 v100, v3                      ; bin: f2 41 0f 11 2e
+    ; asm: movsd %xmm10, (%rax)
+    [-]                 store.f64 v101, v2                      ; bin: f2 44 0f 11 10
+    ; asm: movsd %xmm5, (%r13)
+    [-]                 store.f64 v100, v4                      ; bin: f2 41 0f 11 6d 00
+    ; asm: movsd %xmm10, (%r13)
+    [-]                 store.f64 v101, v4                      ; bin: f2 45 0f 11 55 00
+    ; asm: movsd %xmm5, 50(%r14)
+    [-]                 store.f64 v100, v3+50                   ; bin: f2 41 0f 11 6e 32
+    ; asm: movsd %xmm10, -50(%rax)
+    [-]                 store.f64 v101, v2-50                   ; bin: f2 44 0f 11 50 ce
+    ; asm: movsd %xmm5, 10000(%r14)
+    [-]                 store.f64 v100, v3+10000                ; bin: f2 41 0f 11 ae 00002710
+    ; asm: movsd %xmm10, -10000(%rax)
+    [-]                 store.f64 v101, v2-10000                ; bin: f2 44 0f 11 90 ffffd8f0
 
     ; Spill / Fill.
 
-    ; asm: movq %xmm5, 1032(%rsp)
-    [-,ss1]             v200 = spill v100                       ; bin: 66 0f d6 ac 24 00000408
-    ; asm: movq %xmm10, 1032(%rsp)
-    [-,ss1]             v201 = spill v101                       ; bin: 66 44 0f d6 94 24 00000408
+    ; asm: movsd %xmm5, 1032(%rsp)
+    [-,ss1]             v200 = spill v100                       ; bin: f2 0f 11 ac 24 00000408
+    ; asm: movsd %xmm10, 1032(%rsp)
+    [-,ss1]             v201 = spill v101                       ; bin: f2 44 0f 11 94 24 00000408
 
-    ; asm: movq 1032(%rsp), %xmm5
-    [-,%xmm5]           v210 = fill v200                        ; bin: f3 0f 7e ac 24 00000408
-    ; asm: movq 1032(%rsp), %xmm10
-    [-,%xmm10]          v211 = fill v201                        ; bin: f3 44 0f 7e 94 24 00000408
+    ; asm: movsd 1032(%rsp), %xmm5
+    [-,%xmm5]           v210 = fill v200                        ; bin: f2 0f 10 ac 24 00000408
+    ; asm: movsd 1032(%rsp), %xmm10
+    [-,%xmm10]          v211 = fill v201                        ; bin: f2 44 0f 10 94 24 00000408
 
-    ; asm: movq %xmm5, 1032(%rsp)
-    regspill v100, %xmm5 -> ss1                                 ; bin: 66 0f d6 ac 24 00000408
-    ; asm: movq 1032(%rsp), %xmm5
-    regfill v100, ss1 -> %xmm5                                  ; bin: f3 0f 7e ac 24 00000408
+    ; asm: movsd %xmm5, 1032(%rsp)
+    regspill v100, %xmm5 -> ss1                                 ; bin: f2 0f 11 ac 24 00000408
+    ; asm: movsd 1032(%rsp), %xmm5
+    regfill v100, ss1 -> %xmm5                                  ; bin: f2 0f 10 ac 24 00000408
 
     ; Comparisons.
     ;
