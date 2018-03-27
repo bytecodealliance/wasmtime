@@ -105,7 +105,9 @@ impl Context {
         }
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
-        self.dce(isa)?;
+        if isa.flags().opt_level() != OptLevel::Fastest {
+            self.dce(isa)?;
+        }
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
         self.relax_branches(isa)
