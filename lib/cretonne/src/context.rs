@@ -191,7 +191,7 @@ impl Context {
 
     /// Perform simple GVN on the function.
     pub fn simple_gvn<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult {
-        do_simple_gvn(&mut self.func, &mut self.cfg, &mut self.domtree);
+        do_simple_gvn(&mut self.func, &mut self.domtree);
         self.verify_if(fisa)
     }
 
