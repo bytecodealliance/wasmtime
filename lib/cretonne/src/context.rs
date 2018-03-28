@@ -92,10 +92,8 @@ impl Context {
         self.legalize(isa)?;
         if isa.flags().opt_level() == OptLevel::Best {
             self.compute_domtree();
-            /* TODO: Re-enable LICM.
             self.compute_loop_analysis();
             self.licm(isa)?;
-            */
             self.simple_gvn(isa)?;
         }
         self.compute_domtree();
