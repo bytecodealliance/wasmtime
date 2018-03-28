@@ -86,6 +86,9 @@ struct Context<'a> {
     function: Function,
     map: SourceMap,
 
+    // Aliases to resolve once value definitions are known.
+    aliases: Vec<Value>,
+
     // Reference to the unique_isa for things like parsing ISA-specific instruction encoding
     // information. This is only `Some` if exactly one set of `isa` directives were found in the
     // prologue (it is valid to have directives for multiple different ISAs, but in that case we
@@ -99,6 +102,7 @@ impl<'a> Context<'a> {
             function: f,
             map: SourceMap::new(),
             unique_isa,
+            aliases: Vec::new(),
         }
     }
 
@@ -1341,6 +1345,30 @@ impl<'a> Parser<'a> {
         while self.token() != Some(Token::RBrace) {
             self.parse_extended_basic_block(ctx)?;
         }
+
+        // Now that we've seen all defined values in the function, ensure that
+        // all references refer to a definition.
+        for ebb in &ctx.function.layout {
+            for inst in ctx.function.layout.ebb_insts(ebb) {
+                for value in ctx.function.dfg.inst_args(inst) {
+                    if !ctx.map.contains_value(*value) {
+                        return err!(
+                            ctx.map.location(AnyEntity::Inst(inst)).unwrap(),
+                            "undefined operand value {}",
+                            value
+                        );
+                    }
+                }
+            }
+        }
+
+        for alias in &ctx.aliases {
+            if !ctx.function.dfg.set_alias_type_for_parser(*alias) {
+                let loc = ctx.map.location(AnyEntity::Value(*alias)).unwrap();
+                return err!(loc, "alias cycle involving {}", alias);
+            }
+        }
+
         Ok(())
     }
 
@@ -1616,6 +1644,7 @@ impl<'a> Parser<'a> {
             results[0],
         );
         ctx.map.def_value(results[0], &self.loc)?;
+        ctx.aliases.push(results[0]);
         Ok(())
     }
 
@@ -1758,6 +1787,26 @@ impl<'a> Parser<'a> {
                     let ctrl_src_value = inst_data
                         .typevar_operand(&ctx.function.dfg.value_lists)
                         .expect("Constraints <-> Format inconsistency");
+                    if !ctx.map.contains_value(ctrl_src_value) {
+                        return err!(
+                            self.loc,
+                            "type variable required for polymorphic opcode, e.g. '{}.{}'; \
+                            can't infer from {} which is not yet defined",
+                            opcode,
+                            constraints.ctrl_typeset().unwrap().example(),
+                            ctrl_src_value
+                        );
+                    }
+                    if !ctx.function.dfg.value_is_valid_for_parser(ctrl_src_value) {
+                        return err!(
+                            self.loc,
+                            "type variable required for polymorphic opcode, e.g. '{}.{}'; \
+                            can't infer from {} which is not yet resolved",
+                            opcode,
+                            constraints.ctrl_typeset().unwrap().example(),
+                            ctrl_src_value
+                        );
+                    }
                     ctx.function.dfg.value_type(ctrl_src_value)
                 } else if constraints.is_polymorphic() {
                     // This opcode does not support type inference, so the explicit type
