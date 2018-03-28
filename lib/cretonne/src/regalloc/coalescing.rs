@@ -907,7 +907,7 @@ impl VirtualCopies {
         self.filter.clear();
     }
 
-    /// Initialise virtual copies from the (interfering) values in a union-find virtual register
+    /// Initialize virtual copies from the (interfering) values in a union-find virtual register
     /// that is going to be broken up and reassembled iteratively.
     ///
     /// The values are assumed to be in domtree pre-order.
