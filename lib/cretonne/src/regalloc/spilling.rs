@@ -548,8 +548,8 @@ impl<'a> Context<'a> {
     }
 }
 
-// Struct representing a register use of a value.
-// Used to detect multiple uses of the same value with incompatible register constraints.
+/// Struct representing a register use of a value.
+/// Used to detect multiple uses of the same value with incompatible register constraints.
 #[derive(Clone, Copy)]
 struct RegUse {
     value: Value,

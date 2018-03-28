@@ -77,12 +77,12 @@ impl SideEffects {
     }
 }
 
-// Describes the current position of a basic block in the control flow graph.
+/// Describes the current position of a basic block in the control flow graph.
 enum BlockData<Variable> {
-    // A block at the top of an `Ebb`.
+    /// A block at the top of an `Ebb`.
     EbbHeader(EbbHeaderBlockData<Variable>),
-    // A block inside an `Ebb` with an unique other block as its predecessor.
-    // The block is implicitly sealed at creation.
+    /// A block inside an `Ebb` with an unique other block as its predecessor.
+    /// The block is implicitly sealed at creation.
     EbbBody { predecessor: Block },
 }
 
@@ -179,7 +179,7 @@ where
     }
 }
 
-// Small enum used for clarity in some functions.
+/// Small enum used for clarity in some functions.
 #[derive(Debug)]
 enum ZeroOneOrMore<T> {
     Zero(),
@@ -194,7 +194,7 @@ enum UseVarCases {
     SealedMultiplePredecessors(Value, Ebb),
 }
 
-// States for the `use_var`/`predecessors_lookup` state machine.
+/// States for the `use_var`/`predecessors_lookup` state machine.
 enum Call {
     UseVar(Block),
     FinishSealedOnePredecessor(Block),

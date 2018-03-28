@@ -348,18 +348,18 @@ impl ValueDef {
     }
 }
 
-// Internal table storage for extended values.
+/// Internal table storage for extended values.
 #[derive(Clone, Debug)]
 enum ValueData {
-    // Value is defined by an instruction.
+    /// Value is defined by an instruction.
     Inst { ty: Type, num: u16, inst: Inst },
 
-    // Value is an EBB parameter.
+    /// Value is an EBB parameter.
     Param { ty: Type, num: u16, ebb: Ebb },
 
-    // Value is an alias of another value.
-    // An alias value can't be linked as an instruction result or EBB parameter. It is used as a
-    // placeholder when the original instruction or EBB has been rewritten or modified.
+    /// Value is an alias of another value.
+    /// An alias value can't be linked as an instruction result or EBB parameter. It is used as a
+    /// placeholder when the original instruction or EBB has been rewritten or modified.
     Alias { ty: Type, original: Value },
 }
 
@@ -829,14 +829,14 @@ impl DataFlowGraph {
     }
 }
 
-// Contents of an extended basic block.
-//
-// Parameters on an extended basic block are values that dominate everything in the EBB. All
-// branches to this EBB must provide matching arguments, and the arguments to the entry EBB must
-// match the function arguments.
+/// Contents of an extended basic block.
+///
+/// Parameters on an extended basic block are values that dominate everything in the EBB. All
+/// branches to this EBB must provide matching arguments, and the arguments to the entry EBB must
+/// match the function arguments.
 #[derive(Clone)]
 struct EbbData {
-    // List of parameters to this EBB.
+    /// List of parameters to this EBB.
     params: ValueList,
 }
 

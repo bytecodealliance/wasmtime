@@ -76,7 +76,7 @@ impl SubTest for TestCompile {
     }
 }
 
-// Code sink that simply counts bytes.
+/// Code sink that simply counts bytes.
 struct SizeSink {
     offset: binemit::CodeOffset,
 }

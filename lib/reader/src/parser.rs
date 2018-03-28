@@ -65,34 +65,34 @@ pub struct Parser<'a> {
 
     lex_error: Option<lexer::Error>,
 
-    // Current lookahead token.
+    /// Current lookahead token.
     lookahead: Option<Token<'a>>,
 
-    // Location of lookahead.
+    /// Location of lookahead.
     loc: Location,
 
-    // Are we gathering any comments that we encounter?
+    /// Are we gathering any comments that we encounter?
     gathering_comments: bool,
 
-    // The gathered comments; claim them with `claim_gathered_comments`.
+    /// The gathered comments; claim them with `claim_gathered_comments`.
     gathered_comments: Vec<&'a str>,
 
-    // Comments collected so far.
+    /// Comments collected so far.
     comments: Vec<Comment<'a>>,
 }
 
-// Context for resolving references when parsing a single function.
+/// Context for resolving references when parsing a single function.
 struct Context<'a> {
     function: Function,
     map: SourceMap,
 
-    // Aliases to resolve once value definitions are known.
+    /// Aliases to resolve once value definitions are known.
     aliases: Vec<Value>,
 
-    // Reference to the unique_isa for things like parsing ISA-specific instruction encoding
-    // information. This is only `Some` if exactly one set of `isa` directives were found in the
-    // prologue (it is valid to have directives for multiple different ISAs, but in that case we
-    // couldn't know which ISA the provided encodings are intended for)
+    /// Reference to the unique_isa for things like parsing ISA-specific instruction encoding
+    /// information. This is only `Some` if exactly one set of `isa` directives were found in the
+    /// prologue (it is valid to have directives for multiple different ISAs, but in that case we
+    /// couldn't know which ISA the provided encodings are intended for)
     unique_isa: Option<&'a TargetIsa>,
 }
 

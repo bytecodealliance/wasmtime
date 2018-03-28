@@ -11,28 +11,28 @@ use timing;
 use std::cmp::Ordering;
 use std::vec::Vec;
 
-// RPO numbers are not first assigned in a contiguous way but as multiples of STRIDE, to leave
-// room for modifications of the dominator tree.
+/// RPO numbers are not first assigned in a contiguous way but as multiples of STRIDE, to leave
+/// room for modifications of the dominator tree.
 const STRIDE: u32 = 4;
 
-// Special RPO numbers used during `compute_postorder`.
+/// Special RPO numbers used during `compute_postorder`.
 const DONE: u32 = 1;
 const SEEN: u32 = 2;
 
-// Dominator tree node. We keep one of these per EBB.
+/// Dominator tree node. We keep one of these per EBB.
 #[derive(Clone, Default)]
 struct DomNode {
-    // Number of this node in a reverse post-order traversal of the CFG, starting from 1.
-    // This number is monotonic in the reverse postorder but not contiguous, since we leave
-    // holes for later localized modifications of the dominator tree.
-    // Unreachable nodes get number 0, all others are positive.
+    /// Number of this node in a reverse post-order traversal of the CFG, starting from 1.
+    /// This number is monotonic in the reverse postorder but not contiguous, since we leave
+    /// holes for later localized modifications of the dominator tree.
+    /// Unreachable nodes get number 0, all others are positive.
     rpo_number: u32,
 
-    // The immediate dominator of this EBB, represented as the branch or jump instruction at the
-    // end of the dominating basic block.
-    //
-    // This is `None` for unreachable blocks and the entry block which doesn't have an immediate
-    // dominator.
+    /// The immediate dominator of this EBB, represented as the branch or jump instruction at the
+    /// end of the dominating basic block.
+    ///
+    /// This is `None` for unreachable blocks and the entry block which doesn't have an immediate
+    /// dominator.
     idom: PackedOption<Inst>,
 }
 
@@ -40,10 +40,10 @@ struct DomNode {
 pub struct DominatorTree {
     nodes: EntityMap<Ebb, DomNode>,
 
-    // CFG post-order of all reachable EBBs.
+    /// CFG post-order of all reachable EBBs.
     postorder: Vec<Ebb>,
 
-    // Scratch memory used by `compute_postorder()`.
+    /// Scratch memory used by `compute_postorder()`.
     stack: Vec<Ebb>,
 
     valid: bool,

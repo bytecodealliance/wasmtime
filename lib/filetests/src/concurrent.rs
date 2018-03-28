@@ -13,7 +13,7 @@ use std::time::Duration;
 use num_cpus;
 use {TestResult, runone};
 
-// Request sent to worker threads contains jobid and path.
+/// Request sent to worker threads contains jobid and path.
 struct Request(usize, PathBuf);
 
 /// Reply from worker thread,
@@ -25,13 +25,13 @@ pub enum Reply {
 
 /// Manage threads that run test jobs concurrently.
 pub struct ConcurrentRunner {
-    // Channel for sending requests to the worker threads.
-    // The workers are sharing the receiver with an `Arc<Mutex<Receiver>>`.
-    // This is `None` when shutting down.
+    /// Channel for sending requests to the worker threads.
+    /// The workers are sharing the receiver with an `Arc<Mutex<Receiver>>`.
+    /// This is `None` when shutting down.
     request_tx: Option<Sender<Request>>,
 
-    // Channel for receiving replies from the workers.
-    // Workers have their own `Sender`.
+    /// Channel for receiving replies from the workers.
+    /// Workers have their own `Sender`.
     reply_rx: Receiver<Reply>,
 
     handles: Vec<thread::JoinHandle<timing::PassTimes>>,
