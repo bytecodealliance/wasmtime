@@ -944,7 +944,7 @@ fn translate_unreachable_operator(
     }
 }
 
-// Get the address+offset to use for a heap access.
+/// Get the address+offset to use for a heap access.
 fn get_heap_addr(
     heap: ir::Heap,
     addr32: ir::Value,
@@ -981,7 +981,7 @@ fn get_heap_addr(
     }
 }
 
-// Translate a load instruction.
+/// Translate a load instruction.
 fn translate_load<FE: FuncEnvironment + ?Sized>(
     offset: u32,
     opcode: ir::Opcode,
@@ -1008,7 +1008,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     state.push1(dfg.first_result(load));
 }
 
-// Translate a store instruction.
+/// Translate a store instruction.
 fn translate_store<FE: FuncEnvironment + ?Sized>(
     offset: u32,
     opcode: ir::Opcode,

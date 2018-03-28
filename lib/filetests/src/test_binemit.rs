@@ -27,7 +27,7 @@ pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
     }
 }
 
-// Code sink that generates text.
+/// Code sink that generates text.
 struct TextSink {
     offset: binemit::CodeOffset,
     text: String,

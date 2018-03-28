@@ -11,10 +11,10 @@ use std::time;
 use {TestResult, runone};
 use concurrent::{ConcurrentRunner, Reply};
 
-// Timeout in seconds when we're not making progress.
+/// Timeout in seconds when we're not making progress.
 const TIMEOUT_PANIC: usize = 10;
 
-// Timeout for reporting slow tests without panicking.
+/// Timeout for reporting slow tests without panicking.
 const TIMEOUT_SLOW: usize = 3;
 
 struct QueueEntry {
