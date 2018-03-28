@@ -5,7 +5,8 @@ from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual, Or
 from cdsl.registers import RegClass
-from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry, NullAry
+from base.formats import Unary, UnaryImm, UnaryBool, Binary, BinaryImm
+from base.formats import MultiAry, NullAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
 from base.formats import IntSelect, IntCondTrap, FloatCondTrap
@@ -504,6 +505,17 @@ puid = TailRecipe(
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         let imm: i64 = imm.into();
         sink.put4(imm as u32);
+        ''')
+
+# XX+rd id unary with bool immediate. Note no recipe predicate.
+puid_bool = TailRecipe(
+        'puid_bool', UnaryBool, size=4, ins=(), outs=GPR,
+        emit='''
+        // The destination register is encoded in the low bits of the opcode.
+        // No ModR/M.
+        PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+        let imm: u32 = if imm.into() { 1 } else { 0 };
+        sink.put4(imm);
         ''')
 
 # XX+rd iq unary with 64-bit immediate.
