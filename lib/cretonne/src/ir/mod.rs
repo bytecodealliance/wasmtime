@@ -1,4 +1,4 @@
-//! Representation of Cretonne IL functions.
+//! Representation of Cretonne IR functions.
 
 pub mod types;
 pub mod entities;

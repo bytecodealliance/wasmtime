@@ -1,5 +1,5 @@
-//! Performs the translation from a wasm module in binary format to the in-memory representation
-//! of the Cretonne IL. More particularly, it translates the code of all the functions bodies and
+//! Performs translation from a wasm module in binary format to the in-memory form
+//! of Cretonne IR. More particularly, it translates the code of all the functions bodies and
 //! interacts with an environment implementing the
 //! [`ModuleEnvironment`](trait.ModuleEnvironment.html)
 //! trait to deal with tables, globals and linear memory.

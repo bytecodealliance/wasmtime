@@ -12,7 +12,7 @@ use std::cmp;
 /// 1. An instruction or
 /// 2. An EBB header.
 ///
-/// This corresponds more or less to the lines in the textual representation of Cretonne IL.
+/// This corresponds more or less to the lines in the textual form of Cretonne IR.
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct ProgramPoint(u32);
 

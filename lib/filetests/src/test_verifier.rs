@@ -1,4 +1,4 @@
-//! Test command for checking the IL verifier.
+//! Test command for checking the IR verifier.
 //!
 //! The `test verifier` test command looks for annotations on instructions like this:
 //!

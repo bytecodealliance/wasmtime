@@ -1,8 +1,7 @@
-//! Converting Cretonne IL to text.
+//! Converting Cretonne IR to text.
 //!
-//! The `write` module provides the `write_function` function which converts an IL `Function` to an
-//! equivalent textual representation. This textual representation can be read back by the
-//! `cretonne-reader` crate.
+//! The `write` module provides the `write_function` function which converts an IR `Function` to an
+//! equivalent textual form. This textual form can be read back by the `cretonne-reader` crate.
 
 use ir::{Function, DataFlowGraph, Ebb, Inst, Value, ValueDef, Type, SigRef};
 use isa::{TargetIsa, RegInfo};

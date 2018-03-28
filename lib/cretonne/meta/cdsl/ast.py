@@ -559,7 +559,7 @@ class Enumerator(Literal):
     is an AST leaf node representing one of the values.
 
     :param kind: The enumerated `ImmediateKind` containing the value.
-    :param value: The textual IL representation of the value.
+    :param value: The textual IR representation of the value.
 
     `Enumerator` nodes are not usually created directly. They are created by
     using the dot syntax on immediate kinds: `intcc.ult`.

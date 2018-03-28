@@ -2,7 +2,7 @@
 name = "cretonne-wasm"
 version = "0.4.1"
 authors = ["The Cretonne Project Developers"]
-description = "Translator from WebAssembly to Cretonne IL"
+description = "Translator from WebAssembly to Cretonne IR"
 repository = "https://github.com/Cretonne/cretonne"
 license = "Apache-2.0"
 readme = "README.md"

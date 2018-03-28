@@ -1,6 +1,4 @@
-//! CLI tool to compile cretonne IL into native code.
-//!
-//! Reads IR files into Cretonne IL and compiles it.
+//! CLI tool to read Cretonne IR files and compile them into native code.
 
 use cton_reader::parse_test;
 use std::path::PathBuf;

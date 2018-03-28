@@ -26,7 +26,7 @@ pub enum GlobalValue {
 /// Environment affecting the translation of a single WebAssembly function.
 ///
 /// A `FuncEnvironment` trait object is required to translate a WebAssembly function to Cretonne
-/// IL. The function environment provides information about the WebAssembly module as well as the
+/// IR. The function environment provides information about the WebAssembly module as well as the
 /// runtime environment.
 pub trait FuncEnvironment {
     /// Get the flags for the current compilation.

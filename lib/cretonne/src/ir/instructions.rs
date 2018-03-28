@@ -1,7 +1,7 @@
 //! Instruction formats and opcodes.
 //!
 //! The `instructions` module contains definitions for instruction formats, opcodes, and the
-//! in-memory representation of IL instructions.
+//! in-memory representation of IR instructions.
 //!
 //! A large part of this module is auto-generated from the instruction descriptions in the meta
 //! directory.

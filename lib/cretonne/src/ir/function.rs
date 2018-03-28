@@ -55,7 +55,7 @@ pub struct Function {
     ///
     /// This information is only transiently available after the `binemit::relax_branches` function
     /// computes it, and it can easily be recomputed by calling that function. It is not included
-    /// in the textual IL format.
+    /// in the textual IR format.
     pub offsets: EbbOffsets,
 
     /// Source locations.

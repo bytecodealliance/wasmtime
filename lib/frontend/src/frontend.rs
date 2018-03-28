@@ -1,4 +1,4 @@
-//! A frontend for building Cretonne IL from other languages.
+//! A frontend for building Cretonne IR from other languages.
 use cretonne::cursor::{Cursor, FuncCursor};
 use cretonne::ir;
 use cretonne::ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData,
@@ -10,7 +10,7 @@ use ssa::{SSABuilder, SideEffects, Block};
 use cretonne::entity::{EntityRef, EntityMap, EntitySet};
 use cretonne::packed_option::PackedOption;
 
-/// Structure used for translating a series of functions into Cretonne IL.
+/// Structure used for translating a series of functions into Cretonne IR.
 ///
 /// In order to reduce memory reallocations when compiling multiple functions,
 /// `FunctionBuilderContext` holds various data structures which are cleared between
@@ -29,7 +29,7 @@ where
 }
 
 
-/// Temporary object used to build a single Cretonne IL `Function`.
+/// Temporary object used to build a single Cretonne IR `Function`.
 pub struct FunctionBuilder<'a, Variable: 'a>
 where
     Variable: EntityRef,
@@ -103,7 +103,7 @@ where
 }
 
 /// Implementation of the [`InstBuilder`](../cretonne/ir/builder/trait.InstBuilder.html) that has
-/// one convenience method per Cretonne IL instruction.
+/// one convenience method per Cretonne IR instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short, Variable: 'long>
 where
     Variable: EntityRef,
@@ -191,7 +191,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
     }
 }
 
-/// This module allows you to create a function in Cretonne IL in a straightforward way, hiding
+/// This module allows you to create a function in Cretonne IR in a straightforward way, hiding
 /// all the complexity of its internal representation.
 ///
 /// The module is parametrized by one type which is the representation of variables in your
@@ -203,10 +203,10 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 /// - the last instruction of each block is a terminator instruction which has no natural successor,
 ///   and those instructions can only appear at the end of extended blocks.
 ///
-/// The parameters of Cretonne IL instructions are Cretonne IL values, which can only be created
-/// as results of other Cretonne IL instructions. To be able to create variables redefined multiple
+/// The parameters of Cretonne IR instructions are Cretonne IR values, which can only be created
+/// as results of other Cretonne IR instructions. To be able to create variables redefined multiple
 /// times in your program, use the `def_var` and `use_var` command, that will maintain the
-/// correspondence between your variables and Cretonne IL SSA values.
+/// correspondence between your variables and Cretonne IR SSA values.
 ///
 /// The first block for which you call `switch_to_block` will be assumed to be the beginning of
 /// the function.
@@ -220,7 +220,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 ///
 /// # Errors
 ///
-/// The functions below will panic in debug mode whenever you try to modify the Cretonne IL
+/// The functions below will panic in debug mode whenever you try to modify the Cretonne IR
 /// function in a way that violate the coherence of the code. For instance: switching to a new
 /// `Ebb` when you haven't filled the current one with a terminator instruction, inserting a
 /// return instruction with arguments that don't match the function's signature.
@@ -311,7 +311,7 @@ where
         self.func_ctx.types[var] = ty;
     }
 
-    /// Returns the Cretonne IL value corresponding to the utilization at the current program
+    /// Returns the Cretonne IR value corresponding to the utilization at the current program
     /// position of a previously defined user variable.
     pub fn use_var(&mut self, var: Variable) -> Value {
         let ty = *self.func_ctx.types.get(var).expect(
@@ -462,8 +462,8 @@ where
 }
 
 /// All the functions documented in the previous block are write-only and help you build a valid
-/// Cretonne IL functions via multiple debug asserts. However, you might need to improve the
-/// performance of your translation perform more complex transformations to your Cretonne IL
+/// Cretonne IR functions via multiple debug asserts. However, you might need to improve the
+/// performance of your translation perform more complex transformations to your Cretonne IR
 /// function. The functions below help you inspect the function you're creating and modify it
 /// in ways that can be unsafe if used incorrectly.
 impl<'a, Variable> FunctionBuilder<'a, Variable>
