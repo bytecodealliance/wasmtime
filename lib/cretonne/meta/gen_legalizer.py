@@ -103,18 +103,19 @@ def emit_runtime_typecheck(check, fmt, type_sets):
 
         base_exp = build_derived_expr(tv.base)
         if (tv.derived_func == TypeVar.LANEOF):
-            return "{}.map(|t: Type| -> t.lane_type())".format(base_exp)
+            return "{}.map(|t: ir::Type| t.lane_type())".format(base_exp)
         elif (tv.derived_func == TypeVar.ASBOOL):
-            return "{}.map(|t: Type| -> t.as_bool())".format(base_exp)
+            return "{}.map(|t: ir::Type| t.as_bool())".format(base_exp)
         elif (tv.derived_func == TypeVar.HALFWIDTH):
-            return "{}.and_then(|t: Type| -> t.half_width())".format(base_exp)
+            return "{}.and_then(|t: ir::Type| t.half_width())".format(base_exp)
         elif (tv.derived_func == TypeVar.DOUBLEWIDTH):
-            return "{}.and_then(|t: Type| -> t.double_width())"\
+            return "{}.and_then(|t: ir::Type| t.double_width())"\
                 .format(base_exp)
         elif (tv.derived_func == TypeVar.HALFVECTOR):
-            return "{}.and_then(|t: Type| -> t.half_vector())".format(base_exp)
+            return "{}.and_then(|t: ir::Type| t.half_vector())"\
+                .format(base_exp)
         elif (tv.derived_func == TypeVar.DOUBLEVECTOR):
-            return "{}.and_then(|t: Type| -> t.by(2))".format(base_exp)
+            return "{}.and_then(|t: ir::Type| t.by(2))".format(base_exp)
         else:
             assert False, "Unknown derived function {}".format(tv.derived_func)
 
