@@ -170,7 +170,7 @@ fn handle_module(
                 println!(
                     "Function #{} bytecode size: {} bytes",
                     func_index,
-                    dummy_environ.func_bytecode_sizes[func_index]
+                    dummy_environ.func_bytecode_sizes[def_index]
                 );
             }
         } else {
