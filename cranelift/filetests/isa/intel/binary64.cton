@@ -38,6 +38,11 @@ ebb0:
     ; asm: movq $0xffffffff88001122, %r14                     # 32-bit sign-extended constant.
     [-,%r14]            v5 = iconst.i64 0xffff_ffff_8800_1122 ; bin: 49 c7 c6 88001122
 
+    ; asm: movb $1, %cl
+    [-,%rcx]            v9007 = bconst.b1 true      ; bin: b9 00000001
+    ; asm: movb $1, %sil
+    [-,%r10]            v9008 = bconst.b1 true      ; bin: 41 ba 00000001
+
     ; Integer Register-Register Operations.
 
     ; asm: addq %rsi, %rcx

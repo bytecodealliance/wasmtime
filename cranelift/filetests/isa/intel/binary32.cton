@@ -25,6 +25,9 @@ ebb0:
     ; asm: movl $2, %esi
     [-,%rsi]            v2 = iconst.i32 2        ; bin: be 00000002
 
+    ; asm: movb $1, %cl
+    [-,%rcx]            v9007 = bconst.b1 true      ; bin: b9 00000001
+
     ; Integer Register-Register Operations.
 
     ; asm: addl %esi, %ecx

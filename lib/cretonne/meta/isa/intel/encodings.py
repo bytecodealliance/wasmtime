@@ -155,6 +155,9 @@ X86_64.enc(base.iconst.i64, *r.uid.rex(0xc7, rrr=0, w=1))
 # Finally, the 0xb8 opcode takes an 8-byte immediate with a REX.W prefix.
 X86_64.enc(base.iconst.i64, *r.puiq.rex(0xb8, w=1))
 
+# bool constants.
+enc_both(base.bconst.b1, r.puid_bool, 0xb8)
+
 # Shifts and rotates.
 # Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
 # and 16-bit shifts would need explicit masking.
