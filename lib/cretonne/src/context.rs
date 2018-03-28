@@ -88,7 +88,9 @@ impl Context {
         self.verify_if(isa)?;
 
         self.compute_cfg();
-        self.preopt(isa)?;
+        if isa.flags().opt_level() != OptLevel::Fastest {
+            self.preopt(isa)?;
+        }
         self.legalize(isa)?;
         if isa.flags().opt_level() == OptLevel::Best {
             self.compute_domtree();
