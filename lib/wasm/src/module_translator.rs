@@ -10,7 +10,7 @@ use environ::ModuleEnvironment;
 
 use std::string::String;
 
-/// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cretonne IL
+/// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cretonne IR
 /// [`Function`](../cretonne/ir/function/struct.Function.html).
 /// Returns the functions and also the mappings for imported functions and signature between the
 /// indexes in the wasm module and the indexes inside each functions.

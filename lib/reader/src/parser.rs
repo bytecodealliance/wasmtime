@@ -1782,7 +1782,7 @@ impl<'a> Parser<'a> {
                     // explicit type specified. Look up `ctrl_value` to see if it was defined
                     // already.
                     // TBD: If it is defined in another block, the type should have been
-                    // specified explicitly. It is unfortunate that the correctness of IL
+                    // specified explicitly. It is unfortunate that the correctness of IR
                     // depends on the layout of the blocks.
                     let ctrl_src_value = inst_data
                         .typevar_operand(&ctx.function.dfg.value_lists)

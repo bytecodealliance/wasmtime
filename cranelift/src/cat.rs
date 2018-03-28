@@ -1,6 +1,6 @@
 //! The `cat` sub-command.
 //!
-//! Read a sequence of Cretonne IL files and print them again to stdout. This has the effect of
+//! Read a sequence of Cretonne IR files and print them again to stdout. This has the effect of
 //! normalizing formatting and removing comments.
 
 use cton_reader::parse_functions;

@@ -15,9 +15,9 @@ pub enum CtonError {
     /// code. This should never happen for validated WebAssembly code.
     InvalidInput,
 
-    /// An IL verifier error.
+    /// An IR verifier error.
     ///
-    /// This always represents a bug, either in the code that generated IL for Cretonne, or a bug
+    /// This always represents a bug, either in the code that generated IR for Cretonne, or a bug
     /// in Cretonne itself.
     Verifier(verifier::Error),
 

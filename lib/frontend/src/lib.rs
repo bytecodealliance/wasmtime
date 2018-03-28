@@ -1,15 +1,15 @@
-//! Cretonne IL builder library.
+//! Cretonne IR builder library.
 //!
-//! Provides a straightforward way to create a Cretonne IL function and fill it with instructions
+//! Provides a straightforward way to create a Cretonne IR function and fill it with instructions
 //! translated from another language. Contains an SSA construction module that lets you translate
-//! your non-SSA variables into SSA Cretonne IL values via `use_var` and `def_var` calls.
+//! your non-SSA variables into SSA Cretonne IR values via `use_var` and `def_var` calls.
 //!
 //! To get started, create an [`FunctionBuilderContext`](struct.FunctionBuilderContext.html) and
 //! pass it as an argument to a [`FunctionBuilder`](struct.FunctionBuilder.html).
 //!
 //! # Example
 //!
-//! Here is a pseudo-program we want to transform into Cretonne IL:
+//! Here is a pseudo-program we want to transform into Cretonne IR:
 //!
 //! ```cton
 //! function(x) {
@@ -29,7 +29,7 @@
 //! }
 //! ```
 //!
-//! Here is how you build the corresponding Cretonne IL function using `FunctionBuilderContext`:
+//! Here is how you build the corresponding Cretonne IR function using `FunctionBuilderContext`:
 //!
 //! ```rust
 //! extern crate cretonne;

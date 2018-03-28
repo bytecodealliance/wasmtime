@@ -41,11 +41,11 @@ define_passes!{
     Pass, NUM_PASSES, DESCRIPTIONS;
 
     process_file: "Processing test file",
-    parse_text: "Parsing textual Cretonne IL",
+    parse_text: "Parsing textual Cretonne IR",
     wasm_translate_module: "Translate WASM module",
     wasm_translate_function: "Translate WASM function",
 
-    verifier: "Verify Cretonne IL",
+    verifier: "Verify Cretonne IR",
     verify_cssa: "Verify CSSA",
     verify_liveness: "Verify live ranges",
     verify_locations: "Verify value locations",

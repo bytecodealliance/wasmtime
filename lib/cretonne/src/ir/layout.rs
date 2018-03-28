@@ -71,8 +71,7 @@ impl Layout {
 // within an EBB. The instruction sequence numbers are all between the sequence number of their
 // containing EBB and the following EBB.
 //
-// The result is that sequence numbers work like BASIC line numbers for the textual representation
-// of the IL.
+// The result is that sequence numbers work like BASIC line numbers for the textual form of the IR.
 type SequenceNumber = u32;
 
 // Initial stride assigned to new sequence numbers.

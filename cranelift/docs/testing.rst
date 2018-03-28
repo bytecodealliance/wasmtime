@@ -89,7 +89,7 @@ easier to provide substantial input functions for the compiler tests.
 
 File tests are :file:`*.cton` files in the :file:`filetests/` directory
 hierarchy. Each file has a header describing what to test followed by a number
-of input functions in the :doc:`Cretonne textual intermediate language
+of input functions in the :doc:`Cretonne textual intermediate representation
 <langref>`:
 
 .. productionlist::
@@ -166,7 +166,7 @@ Cretonne's tests don't need this.
 ----------
 
 This is one of the simplest file tests, used for testing the conversion to and
-from textual IL. The ``test cat`` command simply parses each function and
+from textual IR. The ``test cat`` command simply parses each function and
 converts it back to text again. The text of each function is then matched
 against the associated filecheck directives.
 
@@ -188,7 +188,7 @@ Example::
 `test verifier`
 ---------------
 
-Run each function through the IL verifier and check that it produces the
+Run each function through the IR verifier and check that it produces the
 expected error messages.
 
 Expected error messages are indicated with an ``error:`` directive *on the
@@ -351,4 +351,4 @@ Each function is passed through the full ``Context::compile()`` function
 which is normally used to compile code. This type of test often depends
 on assertions or verifier errors, but it is also possible to use
 filecheck directives which will be matched against the final form of the
-Cretonne IL right before binary machine code emission.
+Cretonne IR right before binary machine code emission.

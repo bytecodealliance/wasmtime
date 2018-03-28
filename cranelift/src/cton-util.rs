@@ -38,12 +38,12 @@ Options:
     -T, --time-passes
                     print pass timing report
     -t, --just-decode
-                    just decode WebAssembly to Cretonne IL
+                    just decode WebAssembly to Cretonne IR
     -s, --print-size
                     prints generated code size
     -c, --check-translation
-                    just checks the correctness of Cretonne IL translated from WebAssembly
-    -p, --print     print the resulting Cretonne IL
+                    just checks the correctness of Cretonne IR translated from WebAssembly
+    -p, --print     print the resulting Cretonne IR
     -h, --help      print this help message
     --set=<set>     configure Cretonne settings
     --isa=<isa>     specify the Cretonne ISA

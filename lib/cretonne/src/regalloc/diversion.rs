@@ -15,7 +15,7 @@ use std::vec::Vec;
 
 /// A diversion of a value from its original location to a new register or stack location.
 ///
-/// In IL, a diversion is represented by a `regmove` instruction, possibly a chain of them for the
+/// In IR, a diversion is represented by a `regmove` instruction, possibly a chain of them for the
 /// same value.
 ///
 /// When tracking diversions, the `from` field is the original assigned value location, and `to` is

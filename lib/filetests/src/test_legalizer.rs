@@ -1,4 +1,4 @@
-//! Test command for checking the IL legalizer.
+//! Test command for checking the IR legalizer.
 //!
 //! The `test legalizer` test command runs each function through `legalize_function()` and sends
 //! the result to filecheck.

@@ -231,7 +231,7 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
     }
 }
 /// The following methods are the API of the SSA builder. Here is how it should be used when
-/// translating to Cretonne IL:
+/// translating to Cretonne IR:
 ///
 /// - for each sequence of contiguous instructions (with no branches), create a corresponding
 ///   basic block with `declare_ebb_body_block` or `declare_ebb_header_block` depending on the

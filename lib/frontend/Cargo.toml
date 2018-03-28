@@ -2,7 +2,7 @@
 authors = ["The Cretonne Project Developers"]
 name = "cretonne-frontend"
 version = "0.4.1"
-description = "Cretonne IL builder helper"
+description = "Cretonne IR builder helper"
 license = "Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/"
 repository = "https://github.com/Cretonne/cretonne"

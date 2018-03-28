@@ -1,7 +1,7 @@
-//! Stand-alone WebAssembly to Cretonne IL translator.
+//! Stand-alone WebAssembly to Cretonne IR translator.
 //!
 //! This module defines the `FuncTranslator` type which can translate a single WebAssembly
-//! function to Cretonne IL guided by a `FuncEnvironment` which provides information about the
+//! function to Cretonne IR guided by a `FuncEnvironment` which provides information about the
 //! WebAssembly module and the runtime environment.
 
 use code_translator::translate_operator;
@@ -14,9 +14,9 @@ use environ::FuncEnvironment;
 use state::TranslationState;
 use wasmparser::{self, BinaryReader};
 
-/// WebAssembly to Cretonne IL function translator.
+/// WebAssembly to Cretonne IR function translator.
 ///
-/// A `FuncTranslator` is used to translate a binary WebAssembly function into Cretonne IL guided
+/// A `FuncTranslator` is used to translate a binary WebAssembly function into Cretonne IR guided
 /// by a `FuncEnvironment` object. A single translator instance can be reused to translate multiple
 /// functions which will reduce heap allocation traffic.
 pub struct FuncTranslator {

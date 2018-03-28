@@ -1,5 +1,5 @@
 //! This module contains the bulk of the interesting code performing the translation between
-//! WebAssembly and Cretonne IL.
+//! WebAssembly and Cretonne IR.
 //!
 //! The translation is done in one pass, opcode by opcode. Two main data structures are used during
 //! code translations: the value stack and the control stack. The value stack mimics the execution
@@ -38,7 +38,7 @@ use std::vec::Vec;
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored
 #[cfg_attr(feature = "cargo-clippy", allow(unneeded_field_pattern))]
-/// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
+/// Translates wasm operators into Cretonne IR instructions. Returns `true` if it inserted
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     op: Operator,

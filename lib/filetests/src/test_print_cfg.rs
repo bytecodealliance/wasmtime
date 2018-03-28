@@ -1,6 +1,6 @@
 //! The `print-cfg` sub-command.
 //!
-//! Read a series of Cretonne IL files and print their control flow graphs
+//! Read a series of Cretonne IR files and print their control flow graphs
 //! in graphviz format.
 
 use std::borrow::Cow;

@@ -16,8 +16,8 @@ highlighting some of the differences and similarities. Both projects:
 - Use an ISA-agnostic input language in order to mostly abstract away the
   differences between target instruction set architectures.
 - Depend extensively on SSA form.
-- Have both textual and in-memory forms of their primary intermediate language.
-  (LLVM also has a binary bitcode format; Cretonne doesn't.)
+- Have both textual and in-memory forms of their primary intermediate
+  representation. (LLVM also has a binary bitcode format; Cretonne doesn't.)
 - Can target multiple ISAs.
 - Can cross-compile by default without rebuilding the code generator.
 
@@ -41,8 +41,8 @@ LLVM uses multiple intermediate representations as it translates a program to
 binary machine code:
 
 `LLVM IR <https://llvm.org/docs/LangRef.html>`_
-    This is the primary intermediate language which has textual, binary, and
-    in-memory representations. It serves two main purposes:
+    This is the primary intermediate representation which has textual, binary, and
+    in-memory forms. It serves two main purposes:
 
     - An ISA-agnostic, stable(ish) input language that front ends can generate
       easily.
@@ -89,9 +89,9 @@ representation. Some target ISAs have a fast instruction selector that can
 translate simple code directly to MachineInstrs, bypassing SelectionDAG when
 possible.
 
-:doc:`Cretonne <langref>` uses a single intermediate language to cover these
-levels of abstraction. This is possible in part because of Cretonne's smaller
-scope.
+:doc:`Cretonne <langref>` uses a single intermediate representation to cover
+these levels of abstraction. This is possible in part because of Cretonne's
+smaller scope.
 
 - Cretonne does not provide assemblers and disassemblers, so it is not
   necessary to be able to represent every weird instruction in an ISA. Only
@@ -102,7 +102,7 @@ scope.
 - SSA form is preserved throughout. After register allocation, each SSA value
   is annotated with an assigned ISA register or stack slot.
 
-The Cretonne intermediate language is similar to LLVM IR, but at a slightly
+The Cretonne intermediate representation is similar to LLVM IR, but at a slightly
 lower level of abstraction.
 
 Program structure
@@ -112,12 +112,12 @@ In LLVM IR, the largest representable unit is the *module* which corresponds
 more or less to a C translation unit. It is a collection of functions and
 global variables that may contain references to external symbols too.
 
-In Cretonne IL, the largest representable unit is the *function*. This is so
+In Cretonne IR, the largest representable unit is the *function*. This is so
 that functions can easily be compiled in parallel without worrying about
 references to shared data structures. Cretonne does not have any
 inter-procedural optimizations like inlining.
 
-An LLVM IR function is a graph of *basic blocks*. A Cretonne IL function is a
+An LLVM IR function is a graph of *basic blocks*. A Cretonne IR function is a
 graph of *extended basic blocks* that may contain internal branch instructions.
 The main difference is that an LLVM conditional branch instruction has two
 target basic blocks---a true and a false edge. A Cretonne branch instruction

@@ -1,6 +1,6 @@
 //! CLI tool to use the functions provided by the [cretonne-wasm](../cton_wasm/index.html) crate.
 //!
-//! Reads Wasm binary files, translates the functions' code to Cretonne IL.
+//! Reads Wasm binary files, translates the functions' code to Cretonne IR.
 #![cfg_attr(feature = "cargo-clippy", allow(too_many_arguments, cyclomatic_complexity))]
 
 use cton_wasm::{translate_module, DummyEnvironment, ModuleEnvironment};
