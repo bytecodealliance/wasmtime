@@ -41,6 +41,8 @@ widen = XFormGroup('widen', """
 
         The transformations in the 'widen' group work by expressing
         instructions in terms of larger types.
+
+        This group is not yet implemented.
         """)
 
 expand = XFormGroup('expand', """
