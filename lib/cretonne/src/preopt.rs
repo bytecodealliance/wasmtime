@@ -19,8 +19,8 @@ use timing;
 
 // Simple math helpers
 
-// if `x` is a power of two, or the negation thereof, return the power along
-// with a boolean that indicates whether `x` is negative. Else return None.
+/// if `x` is a power of two, or the negation thereof, return the power along
+/// with a boolean that indicates whether `x` is negative. Else return None.
 #[inline]
 fn isPowerOf2_S32(x: i32) -> Option<(bool, u32)> {
     // We have to special-case this because abs(x) isn't representable.
@@ -34,7 +34,7 @@ fn isPowerOf2_S32(x: i32) -> Option<(bool, u32)> {
     None
 }
 
-// Same comments as for isPowerOf2_S64 apply.
+/// Same comments as for isPowerOf2_S64 apply.
 #[inline]
 fn isPowerOf2_S64(x: i64) -> Option<(bool, u32)> {
     // We have to special-case this because abs(x) isn't representable.
@@ -60,9 +60,9 @@ enum DivRemByConstInfo {
     RemS64(Value, i64),
 }
 
-// Possibly create a DivRemByConstInfo from the given components, by
-// figuring out which, if any, of the 8 cases apply, and also taking care to
-// sanity-check the immediate.
+/// Possibly create a DivRemByConstInfo from the given components, by
+/// figuring out which, if any, of the 8 cases apply, and also taking care to
+/// sanity-check the immediate.
 fn package_up_divrem_info(
     argL: Value,
     argL_ty: Type,
@@ -108,9 +108,9 @@ fn package_up_divrem_info(
     None
 }
 
-// Examine `idata` to see if it is a div or rem by a constant, and if so
-// return the operands, signedness, operation size and div-vs-rem-ness in a
-// handy bundle.
+/// Examine `idata` to see if it is a div or rem by a constant, and if so
+/// return the operands, signedness, operation size and div-vs-rem-ness in a
+/// handy bundle.
 fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
     let idata: &InstructionData = &dfg[inst];
 
@@ -152,12 +152,12 @@ fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
     None
 }
 
-// Actually do the transformation given a bundle containing the relevant
-// information. `divrem_info` describes a div or rem by a constant, that
-// `pos` currently points at, and `inst` is the associated instruction.
-// `inst` is replaced by a sequence of other operations that calculate the
-// same result. Note that there are various `divrem_info` cases where we
-// cannot do any transformation, in which case `inst` is left unchanged.
+/// Actually do the transformation given a bundle containing the relevant
+/// information. `divrem_info` describes a div or rem by a constant, that
+/// `pos` currently points at, and `inst` is the associated instruction.
+/// `inst` is replaced by a sequence of other operations that calculate the
+/// same result. Note that there are various `divrem_info` cases where we
+/// cannot do any transformation, in which case `inst` is left unchanged.
 fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCursor, inst: Inst) {
     let isRem = match *divrem_info {
         DivRemByConstInfo::DivU32(_, _) |
@@ -478,8 +478,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
 //
 // General pattern-match helpers.
 
-// Find out if `value` actually resolves to a constant, and if so what its
-// value is.
+/// Find out if `value` actually resolves to a constant, and if so what its
+/// value is.
 fn get_const(value: Value, dfg: &DataFlowGraph) -> Option<i64> {
     match dfg.value_def(value) {
         ValueDef::Result(definingInst, resultNo) => {
@@ -496,10 +496,7 @@ fn get_const(value: Value, dfg: &DataFlowGraph) -> Option<i64> {
 }
 
 
-//----------------------------------------------------------------------
-//
-// The main pre-opt pass.
-
+/// The main pre-opt pass.
 pub fn do_preopt(func: &mut Function) {
     let _tt = timing::preopt();
     let mut pos = FuncCursor::new(func);

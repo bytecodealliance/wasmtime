@@ -1,16 +1,14 @@
 //! Compute "magic numbers" for division-by-constants transformations.
+//!
+//! Math helpers for division by (non-power-of-2) constants. This is based
+//! on the presentation in "Hacker's Delight" by Henry Warren, 2003. There
+//! are four cases: {unsigned, signed} x {32 bit, 64 bit}. The word size
+//! makes little difference, but the signed-vs-unsigned aspect has a large
+//! effect. Therefore everything is presented in the order U32 U64 S32 S64
+//! so as to emphasise the similarity of the U32 and U64 cases and the S32
+//! and S64 cases.
 
 #![allow(non_snake_case)]
-
-//----------------------------------------------------------------------
-//
-// Math helpers for division by (non-power-of-2) constants. This is based
-// on the presentation in "Hacker's Delight" by Henry Warren, 2003. There
-// are four cases: {unsigned, signed} x {32 bit, 64 bit}. The word size
-// makes little difference, but the signed-vs-unsigned aspect has a large
-// effect. Therefore everything is presented in the order U32 U64 S32 S64
-// so as to emphasise the similarity of the U32 and U64 cases and the S32
-// and S64 cases.
 
 // Structures to hold the "magic numbers" computed.
 
