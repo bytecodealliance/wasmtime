@@ -102,6 +102,10 @@ impl binemit::CodeSink for TextSink {
     fn reloc_jt(&mut self, reloc: binemit::Reloc, jt: ir::JumpTable) {
         write!(self.text, "{}({}) ", reloc, jt).unwrap();
     }
+
+    fn trap(&mut self, code: ir::TrapCode, _srcloc: ir::SourceLoc) {
+        write!(self.text, "{} ", code).unwrap();
+    }
 }
 
 impl SubTest for TestBinEmit {

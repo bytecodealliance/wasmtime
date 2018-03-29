@@ -8,9 +8,9 @@ mod memorysink;
 
 pub use regalloc::RegDiversions;
 pub use self::relaxation::relax_branches;
-pub use self::memorysink::{MemoryCodeSink, RelocSink};
+pub use self::memorysink::{MemoryCodeSink, RelocSink, TrapSink};
 
-use ir::{ExternalName, JumpTable, Function, Inst};
+use ir::{ExternalName, JumpTable, Function, Inst, TrapCode, SourceLoc};
 use std::fmt;
 
 /// Offset in bytes from the beginning of the function.
@@ -86,6 +86,9 @@ pub trait CodeSink {
 
     /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, Reloc, JumpTable);
+
+    /// Add trap information for the current offset.
+    fn trap(&mut self, TrapCode, SourceLoc);
 }
 
 /// Report a bad encoding error.
