@@ -268,7 +268,7 @@ impl<'a> Verifier<'a> {
         use ir::instructions::InstructionData::*;
 
         for &arg in self.func.dfg.inst_args(inst) {
-            self.verify_value(inst, arg)?;
+            self.verify_inst_arg(inst, arg)?;
 
             // All used values must be attached to something.
             let original = self.func.dfg.resolve_aliases(arg);
@@ -278,7 +278,7 @@ impl<'a> Verifier<'a> {
         }
 
         for &res in self.func.dfg.inst_results(inst) {
-            self.verify_value(inst, res)?;
+            self.verify_inst_result(inst, res)?;
         }
 
         match self.func.dfg[inst] {
@@ -446,8 +446,16 @@ impl<'a> Verifier<'a> {
     fn verify_value(&self, loc_inst: Inst, v: Value) -> Result {
         let dfg = &self.func.dfg;
         if !dfg.value_is_valid(v) {
-            return err!(loc_inst, "invalid value reference {}", v);
+            err!(loc_inst, "invalid value reference {}", v)
+        } else {
+            Ok(())
         }
+    }
+
+    fn verify_inst_arg(&self, loc_inst: Inst, v: Value) -> Result {
+        self.verify_value(loc_inst, v)?;
+
+        let dfg = &self.func.dfg;
         let loc_ebb = self.func.layout.pp_ebb(loc_inst);
         let is_reachable = self.expected_domtree.is_reachable(loc_ebb);
 
@@ -473,14 +481,23 @@ impl<'a> Verifier<'a> {
                     );
                 }
                 // Defining instruction dominates the instruction that uses the value.
-                if is_reachable &&
-                    !self.expected_domtree.dominates(
+                if is_reachable {
+                    if !self.expected_domtree.dominates(
                         def_inst,
                         loc_inst,
                         &self.func.layout,
                     )
-                {
-                    return err!(loc_inst, "uses value from non-dominating {}", def_inst);
+                    {
+                        return err!(loc_inst, "uses value from non-dominating {}", def_inst);
+                    }
+                    if def_inst == loc_inst {
+                        return err!(
+                            loc_inst,
+                            "uses value from itself {},  {}",
+                            def_inst,
+                            loc_inst
+                        );
+                    }
                 }
             }
             ValueDef::Param(ebb, _) => {
@@ -510,6 +527,31 @@ impl<'a> Verifier<'a> {
             }
         }
         Ok(())
+    }
+
+    fn verify_inst_result(&self, loc_inst: Inst, v: Value) -> Result {
+        self.verify_value(loc_inst, v)?;
+
+        match self.func.dfg.value_def(v) {
+            ValueDef::Result(def_inst, _) => {
+                if def_inst != loc_inst {
+                    err!(
+                        loc_inst,
+                        "instruction result {} is not defined by the instruction",
+                        v
+                    )
+                } else {
+                    Ok(())
+                }
+            }
+            ValueDef::Param(_, _) => {
+                err!(
+                    loc_inst,
+                    "instruction result {} is not defined by the instruction",
+                    v
+                )
+            }
+        }
     }
 
     fn domtree_integrity(&self, domtree: &DominatorTree) -> Result {
