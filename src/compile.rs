@@ -44,6 +44,18 @@ impl binemit::RelocSink for PrintRelocs {
     }
 }
 
+struct PrintTraps {
+    flag_print: bool,
+}
+
+impl binemit::TrapSink for PrintTraps {
+    fn trap(&mut self, offset: binemit::CodeOffset, _srcloc: ir::SourceLoc, code: ir::TrapCode) {
+        if self.flag_print {
+            println!("trap: {} at {}", code, offset);
+        }
+    }
+}
+
 pub fn run(
     files: Vec<String>,
     flag_print: bool,
@@ -94,8 +106,9 @@ fn handle_module(
         // Encode the result as machine code.
         let mut mem = Vec::new();
         let mut relocs = PrintRelocs { flag_print };
+        let mut traps = PrintTraps { flag_print };
         mem.resize(size as usize, 0);
-        context.emit_to_memory(mem.as_mut_ptr(), &mut relocs, &*isa);
+        context.emit_to_memory(mem.as_mut_ptr(), &mut relocs, &mut traps, &*isa);
 
         if flag_print {
             print!(".byte ");
