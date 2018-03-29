@@ -92,7 +92,7 @@ pub trait CodeSink {
 }
 
 /// Report a bad encoding error.
-#[inline(never)]
+#[cold]
 pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
     panic!(
         "Bad encoding {} for {}",
