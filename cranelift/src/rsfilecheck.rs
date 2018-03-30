@@ -1,9 +1,13 @@
-use CommandResult;
-use utils::read_to_string;
-use filecheck::{CheckerBuilder, Checker, NO_VARIABLES};
-use std::io::{self, Read};
+//! The `filecheck` sub-command.
+//!
+//! This file is named to avoid a name collision with the filecheck crate.
 
-pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
+use CommandResult;
+use filecheck::{Checker, CheckerBuilder, NO_VARIABLES};
+use std::io::{self, Read};
+use utils::read_to_string;
+
+pub fn run(files: &[String], verbose: bool) -> CommandResult {
     if files.is_empty() {
         return Err("No check files".to_string());
     }

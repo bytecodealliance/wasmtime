@@ -9,22 +9,24 @@
 //! contexts concurrently. Typically, you would have one context per compilation thread and only a
 //! single ISA instance.
 
-use binemit::{CodeOffset, relax_branches, MemoryCodeSink, RelocSink};
+use binemit::{relax_branches, CodeOffset, MemoryCodeSink, RelocSink, TrapSink};
+use dce::do_dce;
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir::Function;
-use loop_analysis::LoopAnalysis;
 use isa::TargetIsa;
 use legalize_function;
+use licm::do_licm;
+use loop_analysis::LoopAnalysis;
+use postopt::do_postopt;
+use preopt::do_preopt;
 use regalloc;
 use result::{CtonError, CtonResult};
 use settings::{FlagsOrIsa, OptLevel};
+use simple_gvn::do_simple_gvn;
+use timing;
 use unreachable_code::eliminate_unreachable_code;
 use verifier;
-use simple_gvn::do_simple_gvn;
-use licm::do_licm;
-use preopt::do_preopt;
-use timing;
 
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
@@ -88,8 +90,13 @@ impl Context {
         self.verify_if(isa)?;
 
         self.compute_cfg();
-        self.preopt(isa)?;
+        if isa.flags().opt_level() != OptLevel::Fastest {
+            self.preopt(isa)?;
+        }
         self.legalize(isa)?;
+        if isa.flags().opt_level() != OptLevel::Fastest {
+            self.postopt(isa)?;
+        }
         if isa.flags().opt_level() == OptLevel::Best {
             self.compute_domtree();
             self.compute_loop_analysis();
@@ -98,6 +105,9 @@ impl Context {
         }
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
+        if isa.flags().opt_level() != OptLevel::Fastest {
+            self.dce(isa)?;
+        }
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
         self.relax_branches(isa)
@@ -109,9 +119,15 @@ impl Context {
     /// code is returned by `compile` above.
     ///
     /// The machine code is not relocated. Instead, any relocations are emitted into `relocs`.
-    pub fn emit_to_memory(&self, mem: *mut u8, relocs: &mut RelocSink, isa: &TargetIsa) {
+    pub fn emit_to_memory(
+        &self,
+        mem: *mut u8,
+        relocs: &mut RelocSink,
+        traps: &mut TrapSink,
+        isa: &TargetIsa,
+    ) {
         let _tt = timing::binemit();
-        isa.emit_function(&self.func, &mut MemoryCodeSink::new(mem, relocs));
+        isa.emit_function(&self.func, &mut MemoryCodeSink::new(mem, relocs, traps));
     }
 
     /// Run the verifier on the function.
@@ -132,17 +148,24 @@ impl Context {
     }
 
     /// Run the locations verifier on the function.
-    pub fn verify_locations<'a>(&self, isa: &TargetIsa) -> verifier::Result {
+    pub fn verify_locations(&self, isa: &TargetIsa) -> verifier::Result {
         verifier::verify_locations(isa, &self.func, None)
     }
 
     /// Run the locations verifier only if the `enable_verifier` setting is true.
-    pub fn verify_locations_if<'a>(&self, isa: &TargetIsa) -> CtonResult {
+    pub fn verify_locations_if(&self, isa: &TargetIsa) -> CtonResult {
         if isa.flags().enable_verifier() {
             self.verify_locations(isa).map_err(Into::into)
         } else {
             Ok(())
         }
+    }
+
+    /// Perform dead-code elimination on the function.
+    pub fn dce<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult {
+        do_dce(&mut self.func, &mut self.domtree);
+        self.verify_if(fisa)?;
+        Ok(())
     }
 
     /// Perform pre-legalization rewrites on the function.
@@ -160,6 +183,13 @@ impl Context {
         self.loop_analysis.clear();
         legalize_function(&mut self.func, &mut self.cfg, isa);
         self.verify_if(isa)
+    }
+
+    /// Perform post-legalization rewrites on the function.
+    pub fn postopt(&mut self, isa: &TargetIsa) -> CtonResult {
+        do_postopt(&mut self.func, isa);
+        self.verify_if(isa)?;
+        Ok(())
     }
 
     /// Compute the control flow graph.
@@ -189,7 +219,7 @@ impl Context {
 
     /// Perform simple GVN on the function.
     pub fn simple_gvn<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult {
-        do_simple_gvn(&mut self.func, &mut self.cfg, &mut self.domtree);
+        do_simple_gvn(&mut self.func, &mut self.domtree);
         self.verify_if(fisa)
     }
 

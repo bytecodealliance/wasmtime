@@ -1,8 +1,8 @@
 //! B+-tree node pool.
 
+use super::{Forest, Node, NodeData};
 use entity::PrimaryMap;
 use std::ops::{Index, IndexMut};
-use super::{Forest, Node, NodeData};
 
 /// A pool of nodes, including a free list.
 pub(super) struct NodePool<F: Forest> {
@@ -57,6 +57,7 @@ impl<F: Forest> NodePool<F> {
     pub fn free_tree(&mut self, node: Node) {
         if let NodeData::Inner { size, tree, .. } = self[node] {
             // Note that we have to capture `tree` by value to avoid borrow checker trouble.
+            #[cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
             for i in 0..usize::from(size + 1) {
                 // Recursively free sub-trees. This recursion can never be deeper than `MAX_PATH`,
                 // and since most trees have less than a handful of nodes, it is worthwhile to
@@ -76,11 +77,11 @@ impl<F: Forest> NodePool<F> {
         NodeData<F>: ::std::fmt::Display,
         F::Key: ::std::fmt::Display,
     {
+        use super::Comparator;
+        use entity::SparseSet;
         use std::borrow::Borrow;
         use std::cmp::Ordering;
         use std::vec::Vec;
-        use super::Comparator;
-        use entity::SparseSet;
 
         // The root node can't be an inner node with just a single sub-tree. It should have been
         // pruned.
@@ -105,8 +106,8 @@ impl<F: Forest> NodePool<F> {
             );
             let mut lower = lkey;
 
-            match &self[node] {
-                &NodeData::Inner { size, keys, tree } => {
+            match self[node] {
+                NodeData::Inner { size, keys, tree } => {
                     let size = size as usize;
                     let capacity = tree.len();
                     let keys = &keys[0..size];
@@ -148,7 +149,7 @@ impl<F: Forest> NodePool<F> {
                         lower = upper;
                     }
                 }
-                &NodeData::Leaf { size, keys, .. } => {
+                NodeData::Leaf { size, keys, .. } => {
                     let size = size as usize;
                     let capacity = keys.borrow().len();
                     let keys = &keys.borrow()[0..size];
@@ -191,7 +192,7 @@ impl<F: Forest> NodePool<F> {
                         lower = upper;
                     }
                 }
-                &NodeData::Free { .. } => panic!("Free {} reached", node),
+                NodeData::Free { .. } => panic!("Free {} reached", node),
             }
         }
     }

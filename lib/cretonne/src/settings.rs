@@ -190,8 +190,8 @@ impl<'a> PredicateView<'a> {
 /// This module holds definitions that need to be public so the can be instantiated by generated
 /// code in other modules.
 pub mod detail {
-    use std::fmt;
     use constant_hash;
+    use std::fmt;
 
     /// An instruction group template.
     pub struct Template {
@@ -303,8 +303,8 @@ pub mod detail {
         /// Check if a detail is a Detail::Preset. Useful because the Descriptor
         /// offset field has a different meaning when the detail is a preset.
         pub fn is_preset(&self) -> bool {
-            match self {
-                &Detail::Preset => true,
+            match *self {
+                Detail::Preset => true,
                 _ => false,
             }
         }
@@ -345,9 +345,9 @@ impl<'a> From<&'a TargetIsa> for FlagsOrIsa<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{builder, Flags};
-    use super::Error::*;
     use super::Configurable;
+    use super::Error::*;
+    use super::{builder, Flags};
     use std::string::ToString;
 
     #[test]
@@ -357,18 +357,18 @@ mod tests {
         assert_eq!(
             f.to_string(),
             "[shared]\n\
-                    opt_level = \"default\"\n\
-                    enable_verifier = true\n\
-                    is_64bit = false\n\
-                    is_pic = false\n\
-                    return_at_end = false\n\
-                    avoid_div_traps = false\n\
-                    is_compressed = false\n\
-                    enable_float = true\n\
-                    enable_simd = true\n\
-                    enable_atomics = true\n\
-                    spiderwasm_prologue_words = 0\n\
-                    allones_funcaddrs = false\n"
+             opt_level = \"default\"\n\
+             enable_verifier = true\n\
+             is_64bit = false\n\
+             is_pic = false\n\
+             return_at_end = false\n\
+             avoid_div_traps = false\n\
+             is_compressed = false\n\
+             enable_float = true\n\
+             enable_simd = true\n\
+             enable_atomics = true\n\
+             spiderwasm_prologue_words = 0\n\
+             allones_funcaddrs = false\n"
         );
         assert_eq!(f.opt_level(), super::OptLevel::Default);
         assert_eq!(f.enable_simd(), true);

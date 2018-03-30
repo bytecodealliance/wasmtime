@@ -6,14 +6,14 @@ isa intel
 ; regex: V=v\d+
 
 function %f() {
-    sig0 = (i32) -> i32 native
-    ; check: sig0 = (i32 [%rdi]) -> i32 [%rax] native
+    sig0 = (i32) -> i32 system_v
+    ; check: sig0 = (i32 [%rdi]) -> i32 [%rax] system_v
 
-    sig1 = (i64) -> b1 native
-    ; check: sig1 = (i64 [%rdi]) -> b1 [%rax] native
+    sig1 = (i64) -> b1 system_v
+    ; check: sig1 = (i64 [%rdi]) -> b1 [%rax] system_v
 
-    sig2 = (f32, i64) -> f64 native
-    ; check: sig2 = (f32 [%xmm0], i64 [%rdi]) -> f64 [%xmm0] native
+    sig2 = (f32, i64) -> f64 system_v
+    ; check: sig2 = (f32 [%xmm0], i64 [%rdi]) -> f64 [%xmm0] system_v
 
 ebb0:
     return

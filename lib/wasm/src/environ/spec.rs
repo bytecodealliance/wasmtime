@@ -1,12 +1,12 @@
 //! All the runtime support necessary for the wasm to cretonne translation is formalized by the
 //! traits `FunctionEnvironment` and `ModuleEnvironment`.
-use cretonne::ir::{self, InstBuilder};
 use cretonne::cursor::FuncCursor;
+use cretonne::ir::{self, InstBuilder};
 use cretonne::settings::Flags;
-use translation_utils::{SignatureIndex, FunctionIndex, TableIndex, GlobalIndex, MemoryIndex,
-                        Global, Table, Memory};
-use std::vec::Vec;
 use std::string::String;
+use std::vec::Vec;
+use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
+                        Table, TableIndex};
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -26,7 +26,7 @@ pub enum GlobalValue {
 /// Environment affecting the translation of a single WebAssembly function.
 ///
 /// A `FuncEnvironment` trait object is required to translate a WebAssembly function to Cretonne
-/// IL. The function environment provides information about the WebAssembly module as well as the
+/// IR. The function environment provides information about the WebAssembly module as well as the
 /// runtime environment.
 pub trait FuncEnvironment {
     /// Get the flags for the current compilation.
@@ -146,6 +146,14 @@ pub trait FuncEnvironment {
         index: MemoryIndex,
         heap: ir::Heap,
     ) -> ir::Value;
+
+    /// Emit code at the beginning of every wasm loop.
+    ///
+    /// This can be used to insert explicit interrupt or safepoint checking at
+    /// the beginnings of loops.
+    fn translate_loop_header(&mut self, _pos: FuncCursor) {
+        // By default, don't emit anything.
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the

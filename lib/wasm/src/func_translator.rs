@@ -1,26 +1,26 @@
-//! Stand-alone WebAssembly to Cretonne IL translator.
+//! Stand-alone WebAssembly to Cretonne IR translator.
 //!
 //! This module defines the `FuncTranslator` type which can translate a single WebAssembly
-//! function to Cretonne IL guided by a `FuncEnvironment` which provides information about the
+//! function to Cretonne IR guided by a `FuncEnvironment` which provides information about the
 //! WebAssembly module and the runtime environment.
 
 use code_translator::translate_operator;
 use cretonne::entity::EntityRef;
-use cretonne::ir::{self, InstBuilder, Ebb};
-use cretonne::result::{CtonResult, CtonError};
+use cretonne::ir::{self, Ebb, InstBuilder};
+use cretonne::result::{CtonError, CtonResult};
 use cretonne::timing;
-use cton_frontend::{ILBuilder, FunctionBuilder, Variable};
+use cton_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use environ::FuncEnvironment;
 use state::TranslationState;
 use wasmparser::{self, BinaryReader};
 
-/// WebAssembly to Cretonne IL function translator.
+/// WebAssembly to Cretonne IR function translator.
 ///
-/// A `FuncTranslator` is used to translate a binary WebAssembly function into Cretonne IL guided
+/// A `FuncTranslator` is used to translate a binary WebAssembly function into Cretonne IR guided
 /// by a `FuncEnvironment` object. A single translator instance can be reused to translate multiple
 /// functions which will reduce heap allocation traffic.
 pub struct FuncTranslator {
-    il_builder: ILBuilder<Variable>,
+    func_ctx: FunctionBuilderContext<Variable>,
     state: TranslationState,
 }
 
@@ -28,7 +28,7 @@ impl FuncTranslator {
     /// Create a new translator.
     pub fn new() -> Self {
         Self {
-            il_builder: ILBuilder::new(),
+            func_ctx: FunctionBuilderContext::new(),
             state: TranslationState::new(),
         }
     }
@@ -77,8 +77,8 @@ impl FuncTranslator {
         debug_assert_eq!(func.dfg.num_ebbs(), 0, "Function must be empty");
         debug_assert_eq!(func.dfg.num_insts(), 0, "Function must be empty");
 
-        // This clears the `ILBuilder`.
-        let mut builder = FunctionBuilder::new(func, &mut self.il_builder);
+        // This clears the `FunctionBuilderContext`.
+        let mut builder = FunctionBuilder::new(func, &mut self.func_ctx);
         let entry_block = builder.create_ebb();
         builder.append_ebb_params_for_function_params(entry_block);
         builder.switch_to_block(entry_block); // This also creates values for the arguments.
@@ -232,10 +232,10 @@ fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
 
 #[cfg(test)]
 mod tests {
-    use cretonne::{ir, Context};
-    use cretonne::ir::types::I32;
-    use environ::{DummyEnvironment, FuncEnvironment};
     use super::FuncTranslator;
+    use cretonne::ir::types::I32;
+    use cretonne::{ir, Context};
+    use environ::{DummyEnvironment, FuncEnvironment};
 
     #[test]
     fn small1() {

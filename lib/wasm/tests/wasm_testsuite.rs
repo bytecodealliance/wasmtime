@@ -1,21 +1,19 @@
-extern crate cton_wasm;
 extern crate cretonne;
+extern crate cton_wasm;
 extern crate tempdir;
 
-use cton_wasm::{translate_module, DummyEnvironment};
-use std::path::PathBuf;
-use std::fs::File;
-use std::error::Error;
-use std::io;
-use std::str;
-use std::io::prelude::*;
-use std::process::Command;
-use std::fs;
-use cretonne::ir;
-use cretonne::ir::entities::AnyEntity;
-use cretonne::isa::TargetIsa;
+use cretonne::print_errors::pretty_verifier_error;
 use cretonne::settings::{self, Configurable, Flags};
 use cretonne::verifier;
+use cton_wasm::{translate_module, DummyEnvironment};
+use std::error::Error;
+use std::fs;
+use std::fs::File;
+use std::io;
+use std::io::prelude::*;
+use std::path::PathBuf;
+use std::process::Command;
+use std::str;
 use tempdir::TempDir;
 
 #[test]
@@ -27,7 +25,7 @@ fn testsuite() {
             // Ignore files starting with `.`, which could be editor temporary files
             if let Some(stem) = p.path().file_stem() {
                 if let Some(stemstr) = stem.to_str() {
-                    return !stemstr.starts_with(".");
+                    return !stemstr.starts_with('.');
                 }
             }
             false
@@ -37,7 +35,7 @@ fn testsuite() {
     let flags = Flags::new(&settings::builder());
     for path in paths {
         let path = path.path();
-        handle_module(path, &flags);
+        handle_module(&path, &flags);
     }
 }
 
@@ -46,7 +44,7 @@ fn return_at_end() {
     let mut flag_builder = settings::builder();
     flag_builder.enable("return_at_end").unwrap();
     let flags = Flags::new(&flag_builder);
-    handle_module(PathBuf::from("../../wasmtests/return_at_end.wat"), &flags);
+    handle_module(&PathBuf::from("../../wasmtests/return_at_end.wat"), &flags);
 }
 
 fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
@@ -56,7 +54,7 @@ fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
     Ok(buf)
 }
 
-fn handle_module(path: PathBuf, flags: &Flags) {
+fn handle_module(path: &PathBuf, flags: &Flags) {
     let data = match path.extension() {
         None => {
             panic!("the file extension is not wasm or wat");
@@ -105,29 +103,7 @@ fn handle_module(path: PathBuf, flags: &Flags) {
     translate_module(&data, &mut dummy_environ).unwrap();
     for func in &dummy_environ.info.function_bodies {
         verifier::verify_function(func, flags)
-            .map_err(|err| panic!(pretty_verifier_error(func, None, err)))
+            .map_err(|err| panic!(pretty_verifier_error(func, None, &err)))
             .unwrap();
     }
-}
-
-
-/// Pretty-print a verifier error.
-pub fn pretty_verifier_error(
-    func: &ir::Function,
-    isa: Option<&TargetIsa>,
-    err: verifier::Error,
-) -> String {
-    let msg = err.to_string();
-    let str1 = match err.location {
-        AnyEntity::Inst(inst) => {
-            format!(
-                "{}\n{}: {}\n\n",
-                msg,
-                inst,
-                func.dfg.display_inst(inst, isa)
-            )
-        }
-        _ => String::from(format!("{}\n", msg)),
-    };
-    format!("{}{}", str1, func.display(isa))
 }

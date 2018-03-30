@@ -4,14 +4,14 @@
 
 use std::fmt;
 
-pub use self::details::{TimingToken, PassTimes, take_current, add_to_current};
+pub use self::details::{add_to_current, take_current, PassTimes, TimingToken};
 
 // Each pass that can be timed is predefined with the `define_passes!` macro. Each pass has a
 // snake_case name and a plain text description used when printing out the timing report.
 //
 // This macro defines:
 //
-// - A C-style enum containing all the pass names and a `NoPass` variant.
+// - A C-style enum containing all the pass names and a `None` variant.
 // - A usize constant with the number of defined passes.
 // - A const array of pass descriptions.
 // - A public function per pass used to start the timing of that pass.
@@ -21,9 +21,9 @@ macro_rules! define_passes {
     } => {
         #[allow(non_camel_case_types)]
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        enum $enum { $($pass,)+ NoPass }
+        enum $enum { $($pass,)+ None}
 
-        const $num_passes: usize = $enum::NoPass as usize;
+        const $num_passes: usize = $enum::None as usize;
 
         const $descriptions: [&str; $num_passes] = [ $($desc),+ ];
 
@@ -41,11 +41,11 @@ define_passes!{
     Pass, NUM_PASSES, DESCRIPTIONS;
 
     process_file: "Processing test file",
-    parse_text: "Parsing textual Cretonne IL",
+    parse_text: "Parsing textual Cretonne IR",
     wasm_translate_module: "Translate WASM module",
     wasm_translate_function: "Translate WASM function",
 
-    verifier: "Verify Cretonne IL",
+    verifier: "Verify Cretonne IR",
     verify_cssa: "Verify CSSA",
     verify_liveness: "Verify live ranges",
     verify_locations: "Verify value locations",
@@ -55,7 +55,9 @@ define_passes!{
     flowgraph: "Control flow graph",
     domtree: "Dominator tree",
     loop_analysis: "Loop analysis",
+    postopt: "Post-legalization rewriting",
     preopt: "Pre-legalization rewriting",
+    dce: "Dead code elimination",
     legalize: "Legalization",
     gvn: "Global value numbering",
     licm: "Loop invariant code motion",
@@ -95,11 +97,11 @@ impl fmt::Display for Pass {
 /// `TimingToken` and `PassTimes` types and `take_current`, `add_to_current`, and `start_pass` funcs
 #[cfg(feature = "std")]
 mod details {
-    use super::{Pass, NUM_PASSES, DESCRIPTIONS};
+    use super::{Pass, DESCRIPTIONS, NUM_PASSES};
     use std::cell::{Cell, RefCell};
     use std::fmt;
     use std::mem;
-    use std::time::{Instant, Duration};
+    use std::time::{Duration, Instant};
 
     /// A timing token is responsible for timing the currently running pass. Timing starts when it
     /// is created and ends when it is dropped.
@@ -164,7 +166,7 @@ mod details {
 
     /// Information about passes in a single thread.
     thread_local!{
-        static CURRENT_PASS: Cell<Pass> = Cell::new(Pass::NoPass);
+        static CURRENT_PASS: Cell<Pass> = Cell::new(Pass::None);
         static PASS_TIME: RefCell<PassTimes> = RefCell::new(Default::default());
     }
 
@@ -204,7 +206,7 @@ mod details {
     }
 
     /// Add `timings` to the accumulated timings for the current thread.
-    pub fn add_to_current(times: PassTimes) {
+    pub fn add_to_current(times: &PassTimes) {
         PASS_TIME.with(|rc| for (a, b) in rc.borrow_mut().pass.iter_mut().zip(
             &times.pass,
         )
@@ -243,7 +245,7 @@ mod test {
 
     #[test]
     fn display() {
-        assert_eq!(Pass::NoPass.to_string(), "<no pass>");
+        assert_eq!(Pass::None.to_string(), "<no pass>");
         assert_eq!(Pass::regalloc.to_string(), "Register allocation");
     }
 }

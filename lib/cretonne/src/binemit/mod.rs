@@ -3,14 +3,14 @@
 //! The `binemit` module contains code for translating Cretonne's intermediate representation into
 //! binary machine code.
 
-mod relaxation;
 mod memorysink;
+mod relaxation;
 
-pub use regalloc::RegDiversions;
+pub use self::memorysink::{MemoryCodeSink, RelocSink, TrapSink};
 pub use self::relaxation::relax_branches;
-pub use self::memorysink::{MemoryCodeSink, RelocSink};
+pub use regalloc::RegDiversions;
 
-use ir::{ExternalName, JumpTable, Function, Inst};
+use ir::{ExternalName, Function, Inst, JumpTable, SourceLoc, TrapCode};
 use std::fmt;
 
 /// Offset in bytes from the beginning of the function.
@@ -86,10 +86,13 @@ pub trait CodeSink {
 
     /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, Reloc, JumpTable);
+
+    /// Add trap information for the current offset.
+    fn trap(&mut self, TrapCode, SourceLoc);
 }
 
 /// Report a bad encoding error.
-#[inline(never)]
+#[cold]
 pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
     panic!(
         "Bad encoding {} for {}",

@@ -5,9 +5,11 @@ from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual, Or
 from cdsl.registers import RegClass
-from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry, NullAry
+from base.formats import Unary, UnaryImm, UnaryBool, Binary, BinaryImm
+from base.formats import MultiAry, NullAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
-from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
+from base.formats import IntCompare, IntCompareImm, FloatCompare
+from base.formats import IntCond, FloatCond
 from base.formats import IntSelect, IntCondTrap, FloatCondTrap
 from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalVar
@@ -277,23 +279,27 @@ null = EncRecipe('null', Unary, size=0, ins=GPR, outs=0, emit='')
 # XX opcode, no ModR/M.
 trap = TailRecipe(
         'trap', Trap, size=0, ins=(), outs=(),
-        emit='PUT_OP(bits, BASE_REX, sink);')
+        emit='''
+        sink.trap(code, func.srclocs[inst]);
+        PUT_OP(bits, BASE_REX, sink);
+        ''')
 
 # Macro: conditional jump over a ud2.
 trapif = EncRecipe(
-        'trapif', IntCondTrap, size=4, ins=FLAG.eflags, outs=(),
+        'trapif', IntCondTrap, size=4, ins=FLAG.rflags, outs=(),
         clobbers_flags=False,
         emit='''
         // Jump over a 2-byte ud2.
         sink.put1(0x70 | (icc2opc(cond.inverse()) as u8));
         sink.put1(2);
         // ud2.
+        sink.trap(code, func.srclocs[inst]);
         sink.put1(0x0f);
         sink.put1(0x0b);
         ''')
 
 trapff = EncRecipe(
-        'trapff', FloatCondTrap, size=4, ins=FLAG.eflags, outs=(),
+        'trapff', FloatCondTrap, size=4, ins=FLAG.rflags, outs=(),
         clobbers_flags=False,
         instp=floatccs(FloatCondTrap),
         emit='''
@@ -301,6 +307,7 @@ trapff = EncRecipe(
         sink.put1(0x70 | (fcc2opc(cond.inverse()) as u8));
         sink.put1(2);
         // ud2.
+        sink.trap(code, func.srclocs[inst]);
         sink.put1(0x0f);
         sink.put1(0x0b);
         ''')
@@ -358,7 +365,7 @@ rfumr = TailRecipe(
         ''')
 
 # XX /r, but for a unary operator with separate input/output register.
-# RM form.
+# RM form. Clobbers FLAGS.
 urm = TailRecipe(
         'urm', Unary, size=1, ins=GPR, outs=GPR,
         emit='''
@@ -366,10 +373,19 @@ urm = TailRecipe(
         modrm_rr(in_reg0, out_reg0, sink);
         ''')
 
-# XX /r. Same as urm, but input limited to ABCD.
-urm_abcd = TailRecipe(
-        'urm_abcd', Unary, size=1, ins=ABCD, outs=GPR,
-        when_prefixed=urm,
+# XX /r. Same as urm, but doesn't clobber FLAGS.
+urm_noflags = TailRecipe(
+        'urm_noflags', Unary, size=1, ins=GPR, outs=GPR,
+        clobbers_flags=False,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_rr(in_reg0, out_reg0, sink);
+        ''')
+
+# XX /r. Same as urm_noflags, but input limited to ABCD.
+urm_noflags_abcd = TailRecipe(
+        'urm_noflags_abcd', Unary, size=1, ins=ABCD, outs=GPR,
+        when_prefixed=urm_noflags,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rr(in_reg0, out_reg0, sink);
@@ -449,6 +465,7 @@ div = TailRecipe(
         'div', Ternary, size=1,
         ins=(GPR.rax, GPR.rdx, GPR), outs=(GPR.rax, GPR.rdx),
         emit='''
+        sink.trap(TrapCode::IntegerDivisionByZero, func.srclocs[inst]);
         PUT_OP(bits, rex1(in_reg2), sink);
         modrm_r_bits(in_reg2, bits, sink);
         ''')
@@ -504,6 +521,17 @@ puid = TailRecipe(
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         let imm: i64 = imm.into();
         sink.put4(imm as u32);
+        ''')
+
+# XX+rd id unary with bool immediate. Note no recipe predicate.
+puid_bool = TailRecipe(
+        'puid_bool', UnaryBool, size=4, ins=(), outs=GPR,
+        emit='''
+        // The destination register is encoded in the low bits of the opcode.
+        // No ModR/M.
+        PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+        let imm: u32 = if imm.into() { 1 } else { 0 };
+        sink.put4(imm);
         ''')
 
 # XX+rd iq unary with 64-bit immediate.
@@ -666,6 +694,9 @@ st = TailRecipe(
         instp=IsEqual(Store.offset, 0),
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rm(in_reg1, in_reg0, sink);
         ''')
@@ -678,6 +709,9 @@ st_abcd = TailRecipe(
         when_prefixed=st,
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rm(in_reg1, in_reg0, sink);
         ''')
@@ -688,6 +722,9 @@ fst = TailRecipe(
         instp=IsEqual(Store.offset, 0),
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rm(in_reg1, in_reg0, sink);
         ''')
@@ -698,6 +735,9 @@ stDisp8 = TailRecipe(
         instp=IsSignedInt(Store.offset, 8),
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp8(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
@@ -709,6 +749,9 @@ stDisp8_abcd = TailRecipe(
         when_prefixed=stDisp8,
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp8(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
@@ -719,6 +762,9 @@ fstDisp8 = TailRecipe(
         instp=IsSignedInt(Store.offset, 8),
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp8(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
@@ -730,6 +776,9 @@ stDisp32 = TailRecipe(
         'stDisp32', Store, size=5, ins=(GPR, GPR_DEREF_SAFE), outs=(),
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp32(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
@@ -740,6 +789,9 @@ stDisp32_abcd = TailRecipe(
         when_prefixed=stDisp32,
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp32(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
@@ -749,6 +801,9 @@ fstDisp32 = TailRecipe(
         'fstDisp32', Store, size=5, ins=(FPR, GPR_DEREF_SAFE), outs=(),
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp32(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
@@ -756,8 +811,8 @@ fstDisp32 = TailRecipe(
         ''')
 
 # Unary spill with SIB and 32-bit displacement.
-spSib32 = TailRecipe(
-        'spSib32', Unary, size=6, ins=GPR, outs=StackGPR32,
+spillSib32 = TailRecipe(
+        'spillSib32', Unary, size=6, ins=GPR, outs=StackGPR32,
         clobbers_flags=False,
         emit='''
         let base = stk_base(out_stk0.base);
@@ -766,8 +821,10 @@ spSib32 = TailRecipe(
         sib_noindex(base, sink);
         sink.put4(out_stk0.offset as u32);
         ''')
-fspSib32 = TailRecipe(
-        'fspSib32', Unary, size=6, ins=FPR, outs=StackFPR32,
+
+# Like spillSib32, but targeting an FPR rather than a GPR.
+fspillSib32 = TailRecipe(
+        'fspillSib32', Unary, size=6, ins=FPR, outs=StackFPR32,
         clobbers_flags=False,
         emit='''
         let base = stk_base(out_stk0.base);
@@ -778,8 +835,8 @@ fspSib32 = TailRecipe(
         ''')
 
 # Regspill using RSP-relative addressing.
-rsp32 = TailRecipe(
-        'rsp32', RegSpill, size=6, ins=GPR, outs=(),
+regspill32 = TailRecipe(
+        'regspill32', RegSpill, size=6, ins=GPR, outs=(),
         clobbers_flags=False,
         emit='''
         let dst = StackRef::sp(dst, &func.stack_slots);
@@ -789,8 +846,10 @@ rsp32 = TailRecipe(
         sib_noindex(base, sink);
         sink.put4(dst.offset as u32);
         ''')
-frsp32 = TailRecipe(
-        'frsp32', RegSpill, size=6, ins=FPR, outs=(),
+
+# Like regspill32, but targeting an FPR rather than a GPR.
+fregspill32 = TailRecipe(
+        'fregspill32', RegSpill, size=6, ins=FPR, outs=(),
         clobbers_flags=False,
         emit='''
         let dst = StackRef::sp(dst, &func.stack_slots);
@@ -811,6 +870,9 @@ ld = TailRecipe(
         instp=IsEqual(Load.offset, 0),
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rm(in_reg0, out_reg0, sink);
         ''')
@@ -821,6 +883,9 @@ fld = TailRecipe(
         instp=IsEqual(Load.offset, 0),
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rm(in_reg0, out_reg0, sink);
         ''')
@@ -831,6 +896,9 @@ ldDisp8 = TailRecipe(
         instp=IsSignedInt(Load.offset, 8),
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp8(in_reg0, out_reg0, sink);
         let offset: i32 = offset.into();
@@ -843,6 +911,9 @@ fldDisp8 = TailRecipe(
         instp=IsSignedInt(Load.offset, 8),
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp8(in_reg0, out_reg0, sink);
         let offset: i32 = offset.into();
@@ -855,6 +926,9 @@ ldDisp32 = TailRecipe(
         instp=IsSignedInt(Load.offset, 32),
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp32(in_reg0, out_reg0, sink);
         let offset: i32 = offset.into();
@@ -867,6 +941,9 @@ fldDisp32 = TailRecipe(
         instp=IsSignedInt(Load.offset, 32),
         clobbers_flags=False,
         emit='''
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp32(in_reg0, out_reg0, sink);
         let offset: i32 = offset.into();
@@ -874,8 +951,8 @@ fldDisp32 = TailRecipe(
         ''')
 
 # Unary fill with SIB and 32-bit displacement.
-fiSib32 = TailRecipe(
-        'fiSib32', Unary, size=6, ins=StackGPR32, outs=GPR,
+fillSib32 = TailRecipe(
+        'fillSib32', Unary, size=6, ins=StackGPR32, outs=GPR,
         clobbers_flags=False,
         emit='''
         let base = stk_base(in_stk0.base);
@@ -884,8 +961,10 @@ fiSib32 = TailRecipe(
         sib_noindex(base, sink);
         sink.put4(in_stk0.offset as u32);
         ''')
-ffiSib32 = TailRecipe(
-        'ffiSib32', Unary, size=6, ins=StackFPR32, outs=FPR,
+
+# Like fillSib32, but targeting an FPR rather than a GPR.
+ffillSib32 = TailRecipe(
+        'ffillSib32', Unary, size=6, ins=StackFPR32, outs=FPR,
         clobbers_flags=False,
         emit='''
         let base = stk_base(in_stk0.base);
@@ -896,8 +975,8 @@ ffiSib32 = TailRecipe(
         ''')
 
 # Regfill with RSP-relative 32-bit displacement.
-rfi32 = TailRecipe(
-        'rfi32', RegFill, size=6, ins=StackGPR32, outs=(),
+regfill32 = TailRecipe(
+        'regfill32', RegFill, size=6, ins=StackGPR32, outs=(),
         clobbers_flags=False,
         emit='''
         let src = StackRef::sp(src, &func.stack_slots);
@@ -907,8 +986,10 @@ rfi32 = TailRecipe(
         sib_noindex(base, sink);
         sink.put4(src.offset as u32);
         ''')
-frfi32 = TailRecipe(
-        'frfi32', RegFill, size=6, ins=StackFPR32, outs=(),
+
+# Like regfill32, but targeting an FPR rather than a GPR.
+fregfill32 = TailRecipe(
+        'fregfill32', RegFill, size=6, ins=StackFPR32, outs=(),
         clobbers_flags=False,
         emit='''
         let src = StackRef::sp(src, &func.stack_slots);
@@ -977,7 +1058,7 @@ jmpd = TailRecipe(
         ''')
 
 brib = TailRecipe(
-        'brib', BranchInt, size=1, ins=FLAG.eflags, outs=(),
+        'brib', BranchInt, size=1, ins=FLAG.rflags, outs=(),
         branch_range=8,
         clobbers_flags=False,
         emit='''
@@ -986,7 +1067,7 @@ brib = TailRecipe(
         ''')
 
 brid = TailRecipe(
-        'brid', BranchInt, size=4, ins=FLAG.eflags, outs=(),
+        'brid', BranchInt, size=4, ins=FLAG.rflags, outs=(),
         branch_range=32,
         clobbers_flags=False,
         emit='''
@@ -995,7 +1076,7 @@ brid = TailRecipe(
         ''')
 
 brfb = TailRecipe(
-        'brfb', BranchFloat, size=1, ins=FLAG.eflags, outs=(),
+        'brfb', BranchFloat, size=1, ins=FLAG.rflags, outs=(),
         branch_range=8,
         clobbers_flags=False,
         instp=floatccs(BranchFloat),
@@ -1005,7 +1086,7 @@ brfb = TailRecipe(
         ''')
 
 brfd = TailRecipe(
-        'brfd', BranchFloat, size=4, ins=FLAG.eflags, outs=(),
+        'brfd', BranchFloat, size=4, ins=FLAG.rflags, outs=(),
         branch_range=32,
         clobbers_flags=False,
         instp=floatccs(BranchFloat),
@@ -1025,7 +1106,7 @@ brfd = TailRecipe(
 #
 
 seti = TailRecipe(
-        'seti', IntCond, size=1, ins=FLAG.eflags, outs=GPR,
+        'seti', IntCond, size=1, ins=FLAG.rflags, outs=GPR,
         requires_prefix=True,
         clobbers_flags=False,
         emit='''
@@ -1033,7 +1114,7 @@ seti = TailRecipe(
         modrm_r_bits(out_reg0, bits, sink);
         ''')
 seti_abcd = TailRecipe(
-        'seti_abcd', IntCond, size=1, ins=FLAG.eflags, outs=ABCD,
+        'seti_abcd', IntCond, size=1, ins=FLAG.rflags, outs=ABCD,
         when_prefixed=seti,
         clobbers_flags=False,
         emit='''
@@ -1042,7 +1123,7 @@ seti_abcd = TailRecipe(
         ''')
 
 setf = TailRecipe(
-        'setf', FloatCond, size=1, ins=FLAG.eflags, outs=GPR,
+        'setf', FloatCond, size=1, ins=FLAG.rflags, outs=GPR,
         requires_prefix=True,
         clobbers_flags=False,
         emit='''
@@ -1050,7 +1131,7 @@ setf = TailRecipe(
         modrm_r_bits(out_reg0, bits, sink);
         ''')
 setf_abcd = TailRecipe(
-        'setf_abcd', FloatCond, size=1, ins=FLAG.eflags, outs=ABCD,
+        'setf_abcd', FloatCond, size=1, ins=FLAG.rflags, outs=ABCD,
         when_prefixed=setf,
         clobbers_flags=False,
         emit='''
@@ -1064,7 +1145,7 @@ setf_abcd = TailRecipe(
 # 1 byte, modrm(r,r), is after the opcode
 #
 cmov = TailRecipe(
-        'cmov', IntSelect, size=1, ins=(FLAG.eflags, GPR, GPR), outs=2,
+        'cmov', IntSelect, size=1, ins=(FLAG.rflags, GPR, GPR), outs=2,
         requires_prefix=False,
         clobbers_flags=False,
         emit='''
@@ -1076,7 +1157,7 @@ cmov = TailRecipe(
 # Bit scan forwards and reverse
 #
 bsf_and_bsr = TailRecipe(
-        'bsf_and_bsr', Unary, size=1, ins=GPR, outs=(GPR, FLAG.eflags),
+        'bsf_and_bsr', Unary, size=1, ins=GPR, outs=(GPR, FLAG.rflags),
         requires_prefix=False,
         clobbers_flags=True,
         emit='''
@@ -1090,7 +1171,7 @@ bsf_and_bsr = TailRecipe(
 
 # XX /r, MR form. Compare two GPR registers and set flags.
 rcmp = TailRecipe(
-        'rcmp', Binary, size=1, ins=(GPR, GPR), outs=FLAG.eflags,
+        'rcmp', Binary, size=1, ins=(GPR, GPR), outs=FLAG.rflags,
         emit='''
         PUT_OP(bits, rex2(in_reg0, in_reg1), sink);
         modrm_rr(in_reg0, in_reg1, sink);
@@ -1098,7 +1179,7 @@ rcmp = TailRecipe(
 
 # XX /r, RM form. Compare two FPR registers and set flags.
 fcmp = TailRecipe(
-        'fcmp', Binary, size=1, ins=(FPR, FPR), outs=FLAG.eflags,
+        'fcmp', Binary, size=1, ins=(FPR, FPR), outs=FLAG.rflags,
         emit='''
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rr(in_reg1, in_reg0, sink);
@@ -1106,7 +1187,7 @@ fcmp = TailRecipe(
 
 # XX /n, MI form with imm8.
 rcmpib = TailRecipe(
-        'rcmpib', BinaryImm, size=2, ins=GPR, outs=FLAG.eflags,
+        'rcmpib', BinaryImm, size=2, ins=GPR, outs=FLAG.rflags,
         instp=IsSignedInt(BinaryImm.imm, 8),
         emit='''
         PUT_OP(bits, rex1(in_reg0), sink);
@@ -1117,7 +1198,7 @@ rcmpib = TailRecipe(
 
 # XX /n, MI form with imm32.
 rcmpid = TailRecipe(
-        'rcmpid', BinaryImm, size=5, ins=GPR, outs=FLAG.eflags,
+        'rcmpid', BinaryImm, size=5, ins=GPR, outs=FLAG.rflags,
         instp=IsSignedInt(BinaryImm.imm, 32),
         emit='''
         PUT_OP(bits, rex1(in_reg0), sink);
@@ -1128,7 +1209,7 @@ rcmpid = TailRecipe(
 
 # Same as rcmp, but second operand is the stack pointer.
 rcmp_sp = TailRecipe(
-        'rcmp_sp', Unary, size=1, ins=GPR, outs=FLAG.eflags,
+        'rcmp_sp', Unary, size=1, ins=GPR, outs=FLAG.rflags,
         emit='''
         PUT_OP(bits, rex2(in_reg0, RU::rsp.into()), sink);
         modrm_rr(in_reg0, RU::rsp.into(), sink);
@@ -1289,12 +1370,67 @@ icscc = TailRecipe(
         modrm_rr(out_reg0, 0, sink);
         ''')
 
+icsccib = TailRecipe(
+        'icsccib', IntCompareImm, size=2 + 3, ins=GPR, outs=ABCD,
+        instp=IsSignedInt(IntCompareImm.imm, 8),
+        emit='''
+        // Comparison instruction.
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        let imm: i64 = imm.into();
+        sink.put1(imm as u8);
+        // `setCC` instruction, no REX.
+        use ir::condcodes::IntCC::*;
+        let setcc = match cond {
+            Equal => 0x94,
+            NotEqual => 0x95,
+            SignedLessThan => 0x9c,
+            SignedGreaterThanOrEqual => 0x9d,
+            SignedGreaterThan => 0x9f,
+            SignedLessThanOrEqual => 0x9e,
+            UnsignedLessThan => 0x92,
+            UnsignedGreaterThanOrEqual => 0x93,
+            UnsignedGreaterThan => 0x97,
+            UnsignedLessThanOrEqual => 0x96,
+        };
+        sink.put1(0x0f);
+        sink.put1(setcc);
+        modrm_rr(out_reg0, 0, sink);
+        ''')
+
+icsccid = TailRecipe(
+        'icsccid', IntCompareImm, size=5 + 3, ins=GPR, outs=ABCD,
+        instp=IsSignedInt(IntCompareImm.imm, 32),
+        emit='''
+        // Comparison instruction.
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        let imm: i64 = imm.into();
+        sink.put4(imm as u32);
+        // `setCC` instruction, no REX.
+        use ir::condcodes::IntCC::*;
+        let setcc = match cond {
+            Equal => 0x94,
+            NotEqual => 0x95,
+            SignedLessThan => 0x9c,
+            SignedGreaterThanOrEqual => 0x9d,
+            SignedGreaterThan => 0x9f,
+            SignedLessThanOrEqual => 0x9e,
+            UnsignedLessThan => 0x92,
+            UnsignedGreaterThanOrEqual => 0x93,
+            UnsignedGreaterThan => 0x97,
+            UnsignedLessThanOrEqual => 0x96,
+        };
+        sink.put1(0x0f);
+        sink.put1(setcc);
+        modrm_rr(out_reg0, 0, sink);
+        ''')
 
 # Make a FloatCompare instruction predicate with the supported condition codes.
 
 # Same thing for floating point.
 #
-# The ucomiss/ucomisd instructions set the EFLAGS bits CF/PF/CF like this:
+# The ucomiss/ucomisd instructions set the FLAGS bits CF/PF/CF like this:
 #
 #    ZPC OSA
 # UN 111 000

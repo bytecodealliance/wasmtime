@@ -4,11 +4,11 @@
 //! determined by the `Layout` data structure defined in this module.
 
 use entity::EntityMap;
+use ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
 use ir::{Ebb, Inst};
-use ir::progpoint::{ProgramOrder, ExpandedProgramPoint};
 use packed_option::PackedOption;
 use std::cmp;
-use std::iter::{Iterator, IntoIterator};
+use std::iter::{IntoIterator, Iterator};
 use timing;
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
@@ -26,18 +26,18 @@ use timing;
 ///
 #[derive(Clone)]
 pub struct Layout {
-    // Linked list nodes for the layout order of EBBs Forms a doubly linked list, terminated in
-    // both ends by `None`.
+    /// Linked list nodes for the layout order of EBBs Forms a doubly linked list, terminated in
+    /// both ends by `None`.
     ebbs: EntityMap<Ebb, EbbNode>,
 
-    // Linked list nodes for the layout order of instructions. Forms a double linked list per EBB,
-    // terminated in both ends by `None`.
+    /// Linked list nodes for the layout order of instructions. Forms a double linked list per EBB,
+    /// terminated in both ends by `None`.
     insts: EntityMap<Inst, InstNode>,
 
-    // First EBB in the layout order, or `None` when no EBBs have been laid out.
+    /// First EBB in the layout order, or `None` when no EBBs have been laid out.
     first_ebb: Option<Ebb>,
 
-    // Last EBB in the layout order, or `None` when no EBBs have been laid out.
+    /// Last EBB in the layout order, or `None` when no EBBs have been laid out.
     last_ebb: Option<Ebb>,
 }
 
@@ -61,32 +61,31 @@ impl Layout {
     }
 }
 
-// Sequence numbers.
-//
-// All instructions and EBBs are given a sequence number that can be used to quickly determine
-// their relative position in the layout. The sequence numbers are not contiguous, but are assigned
-// like line numbers in BASIC: 10, 20, 30, ...
-//
-// The EBB sequence numbers are strictly increasing, and so are the instruction sequence numbers
-// within an EBB. The instruction sequence numbers are all between the sequence number of their
-// containing EBB and the following EBB.
-//
-// The result is that sequence numbers work like BASIC line numbers for the textual representation
-// of the IL.
+/// Sequence numbers.
+///
+/// All instructions and EBBs are given a sequence number that can be used to quickly determine
+/// their relative position in the layout. The sequence numbers are not contiguous, but are assigned
+/// like line numbers in BASIC: 10, 20, 30, ...
+///
+/// The EBB sequence numbers are strictly increasing, and so are the instruction sequence numbers
+/// within an EBB. The instruction sequence numbers are all between the sequence number of their
+/// containing EBB and the following EBB.
+///
+/// The result is that sequence numbers work like BASIC line numbers for the textual form of the IR.
 type SequenceNumber = u32;
 
-// Initial stride assigned to new sequence numbers.
+/// Initial stride assigned to new sequence numbers.
 const MAJOR_STRIDE: SequenceNumber = 10;
 
-// Secondary stride used when renumbering locally.
+/// Secondary stride used when renumbering locally.
 const MINOR_STRIDE: SequenceNumber = 2;
 
-// Limit on the sequence number range we'll renumber locally. If this limit is exceeded, we'll
-// switch to a full function renumbering.
+/// Limit on the sequence number range we'll renumber locally. If this limit is exceeded, we'll
+/// switch to a full function renumbering.
 const LOCAL_LIMIT: SequenceNumber = 100 * MINOR_STRIDE;
 
-// Compute the midpoint between `a` and `b`.
-// Return `None` if the midpoint would be equal to either.
+/// Compute the midpoint between `a` and `b`.
+/// Return `None` if the midpoint would be equal to either.
 fn midpoint(a: SequenceNumber, b: SequenceNumber) -> Option<SequenceNumber> {
     debug_assert!(a < b);
     // Avoid integer overflow.
@@ -428,7 +427,7 @@ impl Layout {
     }
 
     /// Return an iterator over all EBBs in layout order.
-    pub fn ebbs<'f>(&'f self) -> Ebbs<'f> {
+    pub fn ebbs(&self) -> Ebbs {
         Ebbs {
             layout: self,
             next: self.first_ebb,
@@ -611,7 +610,7 @@ impl Layout {
     }
 
     /// Iterate over the instructions in `ebb` in layout order.
-    pub fn ebb_insts<'f>(&'f self, ebb: Ebb) -> Insts<'f> {
+    pub fn ebb_insts(&self, ebb: Ebb) -> Insts {
         Insts {
             layout: self,
             head: self.ebbs[ebb].first_inst.into(),
@@ -735,11 +734,10 @@ impl<'f> DoubleEndedIterator for Insts<'f> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use cursor::{Cursor, CursorPosition};
     use super::Layout;
+    use cursor::{Cursor, CursorPosition};
     use entity::EntityRef;
     use ir::{Ebb, Inst, ProgramOrder, SourceLoc};
     use std::cmp::Ordering;

@@ -2,7 +2,7 @@ test regalloc
 set is_64bit=1
 isa intel haswell
 
-function %foo() native {
+function %foo() system_v {
 ebb4:
     v3 = iconst.i32 0
     jump ebb3

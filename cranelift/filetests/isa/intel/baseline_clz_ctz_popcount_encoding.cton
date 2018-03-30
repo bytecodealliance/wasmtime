@@ -15,56 +15,56 @@ ebb0:
 
     [-,%r11]                 v10 = iconst.i64 0x1234
     ; asm: bsfq %r11, %rcx
-    [-,%rcx,%eflags]         v11, v12 = x86_bsf v10    ; bin: 49 0f bc cb
+    [-,%rcx,%rflags]         v11, v12 = x86_bsf v10    ; bin: 49 0f bc cb
 
     [-,%rdx]                 v14 = iconst.i64 0x5678
     ; asm: bsfq %rdx, %r12
-    [-,%r12,%eflags]         v15, v16 = x86_bsf v14    ; bin: 4c 0f bc e2
+    [-,%r12,%rflags]         v15, v16 = x86_bsf v14    ; bin: 4c 0f bc e2
 
     ; asm: bsfq %rdx, %rdi
-    [-,%rdi,%eflags]         v17, v18 = x86_bsf v14    ; bin: 48 0f bc fa
+    [-,%rdi,%rflags]         v17, v18 = x86_bsf v14    ; bin: 48 0f bc fa
 
 
     ; 32-bit wide bsf
 
     [-,%r11]                 v20 = iconst.i32 0x1234
     ; asm: bsfl %r11d, %ecx
-    [-,%rcx,%eflags]         v21, v22 = x86_bsf v20    ; bin: 41 0f bc cb
+    [-,%rcx,%rflags]         v21, v22 = x86_bsf v20    ; bin: 41 0f bc cb
 
     [-,%rdx]                 v24 = iconst.i32 0x5678
     ; asm: bsfl %edx, %r12d
-    [-,%r12,%eflags]         v25, v26 = x86_bsf v24    ; bin: 44 0f bc e2
+    [-,%r12,%rflags]         v25, v26 = x86_bsf v24    ; bin: 44 0f bc e2
 
     ; asm: bsfl %edx, %esi
-    [-,%rsi,%eflags]         v27, v28 = x86_bsf v24    ; bin: 0f bc f2
+    [-,%rsi,%rflags]         v27, v28 = x86_bsf v24    ; bin: 0f bc f2
 
 
     ; 64-bit wide bsr
 
     [-,%r11]                 v30 = iconst.i64 0x1234
     ; asm: bsrq %r11, %rcx
-    [-,%rcx,%eflags]         v31, v32 = x86_bsr v30    ; bin: 49 0f bd cb
+    [-,%rcx,%rflags]         v31, v32 = x86_bsr v30    ; bin: 49 0f bd cb
 
     [-,%rdx]                 v34 = iconst.i64 0x5678
     ; asm: bsrq %rdx, %r12
-    [-,%r12,%eflags]         v35, v36 = x86_bsr v34    ; bin: 4c 0f bd e2
+    [-,%r12,%rflags]         v35, v36 = x86_bsr v34    ; bin: 4c 0f bd e2
 
     ; asm: bsrq %rdx, %rdi
-    [-,%rdi,%eflags]         v37, v38 = x86_bsr v34    ; bin: 48 0f bd fa
+    [-,%rdi,%rflags]         v37, v38 = x86_bsr v34    ; bin: 48 0f bd fa
 
 
     ; 32-bit wide bsr
 
     [-,%r11]                 v40 = iconst.i32 0x1234
     ; asm: bsrl %r11d, %ecx
-    [-,%rcx,%eflags]         v41, v42 = x86_bsr v40    ; bin: 41 0f bd cb
+    [-,%rcx,%rflags]         v41, v42 = x86_bsr v40    ; bin: 41 0f bd cb
 
     [-,%rdx]                 v44 = iconst.i32 0x5678
     ; asm: bsrl %edx, %r12d
-    [-,%r12,%eflags]         v45, v46 = x86_bsr v44    ; bin: 44 0f bd e2
+    [-,%r12,%rflags]         v45, v46 = x86_bsr v44    ; bin: 44 0f bd e2
 
     ; asm: bsrl %edx, %esi
-    [-,%rsi,%eflags]         v47, v48 = x86_bsr v44    ; bin: 0f bd f2
+    [-,%rsi,%rflags]         v47, v48 = x86_bsr v44    ; bin: 0f bd f2
 
 
     ; 64-bit wide cmov

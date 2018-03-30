@@ -6,7 +6,7 @@
 /// The order of elements is not preserved, unless the slice is already partitioned.
 ///
 /// Returns the number of elements where `p(t)` is true.
-pub fn partition_slice<'a, T: 'a, F>(s: &'a mut [T], mut p: F) -> usize
+pub fn partition_slice<T, F>(s: &mut [T], mut p: F) -> usize
 where
     F: FnMut(&T) -> bool,
 {

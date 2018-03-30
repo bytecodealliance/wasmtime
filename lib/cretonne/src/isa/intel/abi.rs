@@ -1,19 +1,18 @@
 //! Intel ABI implementation.
 
+use super::registers::{FPR, GPR, RU};
+use abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
+use cursor::{Cursor, CursorPosition, EncCursor};
 use ir;
+use ir::immediates::Imm64;
+use ir::stackslot::{StackOffset, StackSize};
+use ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, CallConv, InstBuilder};
 use isa::{RegClass, RegUnit, TargetIsa};
 use regalloc::AllocatableSet;
+use result;
 use settings as shared_settings;
-use super::registers::{GPR, FPR, RU};
-use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
-use ir::{AbiParam, ArgumentPurpose, ArgumentLoc, ArgumentExtension, CallConv, InstBuilder};
-use ir::stackslot::{StackSize, StackOffset};
-use ir::immediates::Imm64;
 use stack_layout::layout_stack;
 use std::i32;
-use cursor::{Cursor, EncCursor, CursorPosition};
-use result;
-
 
 /// Argument registers for x86-64
 static ARG_GPRS: [RU; 6] = [RU::rdi, RU::rsi, RU::rdx, RU::rcx, RU::r8, RU::r9];
@@ -171,7 +170,7 @@ pub fn callee_saved_registers(flags: &shared_settings::Flags) -> &'static [RU] {
 
 pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
     match func.signature.call_conv {
-        ir::CallConv::Native => native_prologue_epilogue(func, isa),
+        ir::CallConv::SystemV => system_v_prologue_epilogue(func, isa),
         ir::CallConv::SpiderWASM => spiderwasm_prologue_epilogue(func, isa),
     }
 }
@@ -194,7 +193,7 @@ pub fn spiderwasm_prologue_epilogue(
 }
 
 /// Insert a System V-compatible prologue and epilogue.
-pub fn native_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
+pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
     // The original 32-bit x86 ELF ABI had a 4-byte aligned stack pointer, but
     // newer versions use a 16-byte aligned stack pointer.
     let stack_align = 16;
@@ -242,17 +241,17 @@ pub fn native_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> res
     // Set up the cursor and insert the prologue
     let entry_ebb = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
-    insert_native_prologue(&mut pos, local_stack_size, csr_type, csrs);
+    insert_system_v_prologue(&mut pos, local_stack_size, csr_type, csrs);
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_native_epilogues(&mut pos, local_stack_size, csr_type, csrs);
+    insert_system_v_epilogues(&mut pos, local_stack_size, csr_type, csrs);
 
     Ok(())
 }
 
 /// Insert the prologue for a given function.
-fn insert_native_prologue(
+fn insert_system_v_prologue(
     pos: &mut EncCursor,
     stack_size: i64,
     csr_type: ir::types::Type,
@@ -286,7 +285,7 @@ fn insert_native_prologue(
 }
 
 /// Find all `return` instructions and insert epilogues before them.
-fn insert_native_epilogues(
+fn insert_system_v_epilogues(
     pos: &mut EncCursor,
     stack_size: i64,
     csr_type: ir::types::Type,
@@ -296,14 +295,14 @@ fn insert_native_epilogues(
         pos.goto_last_inst(ebb);
         if let Some(inst) = pos.current_inst() {
             if pos.func.dfg[inst].opcode().is_return() {
-                insert_native_epilogue(inst, stack_size, pos, csr_type, csrs);
+                insert_system_v_epilogue(inst, stack_size, pos, csr_type, csrs);
             }
         }
     }
 }
 
 /// Insert an epilogue given a specific `return` instruction.
-fn insert_native_epilogue(
+fn insert_system_v_epilogue(
     inst: ir::Inst,
     stack_size: i64,
     pos: &mut EncCursor,

@@ -109,7 +109,7 @@ ebb1(v10: i32):
     return v11
 }
 
-function %gvn_unremovable_phi(i32) native {
+function %gvn_unremovable_phi(i32) system_v {
 ebb0(v0: i32):
     v2 = iconst.i32 0
     jump ebb2(v2, v0)

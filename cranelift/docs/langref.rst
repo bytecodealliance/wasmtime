@@ -5,19 +5,19 @@ Cretonne Language Reference
 .. default-domain:: cton
 .. highlight:: cton
 
-The Cretonne intermediate language (:term:`IL`) has two equivalent
-representations: an *in-memory data structure* that the code generator library
-is using, and a *text format* which is used for test cases and debug output.
-Files containing Cretonne textual IL have the ``.cton`` filename extension.
+The Cretonne intermediate representation (:term:`IR`) has two primary forms:
+an *in-memory data structure* that the code generator library is using, and a
+*text format* which is used for test cases and debug output.
+Files containing Cretonne textual IR have the ``.cton`` filename extension.
 
-This reference uses the text format to describe IL semantics but glosses over
+This reference uses the text format to describe IR semantics but glosses over
 the finer details of the lexical and syntactic structure of the format.
 
 
 Overall structure
 =================
 
-Cretonne compiles functions independently. A ``.cton`` IL file may contain
+Cretonne compiles functions independently. A ``.cton`` IR file may contain
 multiple functions, and the programmatic API can create multiple function
 handles at the same time, but the functions don't share any data or reference
 each other directly.
@@ -27,7 +27,7 @@ This is a simple C function that computes the average of an array of floats:
 .. literalinclude:: example.c
     :language: c
 
-Here is the same function compiled into Cretonne IL:
+Here is the same function compiled into Cretonne IR:
 
 .. literalinclude:: example.cton
     :language: cton
@@ -77,7 +77,7 @@ variable value for the next iteration.
 
 The `cton_frontend` crate contains utilities for translating from programs
 containing multiple assignments to the same variables into SSA form for
-Cretonne :term:`IL`.
+Cretonne :term:`IR`.
 
 Such variables can also be presented to Cretonne as :term:`stack slot`\s.
 Stack slots are accessed with the :inst:`stack_store` and :inst:`stack_load`
@@ -303,7 +303,7 @@ indicate the different kinds of immediate operands on an instruction.
     A floating point condition code. See the :inst:`fcmp` instruction for details.
 
 The two IEEE floating point immediate types :type:`ieee32` and :type:`ieee64`
-are displayed as hexadecimal floating point literals in the textual :term:`IL`
+are displayed as hexadecimal floating point literals in the textual :term:`IR`
 format. Decimal floating point literals are not allowed because some computer
 systems can round differently when converting to binary. The hexadecimal
 floating point format is mostly the same as the one used by C99, but extended
@@ -400,11 +400,11 @@ convention:
     param        : type [paramext] [paramspecial]
     paramext     : "uext" | "sext"
     paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx"
-    callconv     : "native" | "spiderwasm"
+    callconv     : "system_v" | "spiderwasm"
 
 Parameters and return values have flags whose meaning is mostly target
-dependent. They make it possible to call native functions on the target
-platform. When calling other Cretonne functions, the flags are not necessary.
+dependent. These flags support interfacing with code produced by other
+compilers.
 
 Functions that are called directly must be declared in the :term:`function
 preamble`:
@@ -563,7 +563,7 @@ runtime data structures.
     alignment for storing a pointer.
 
     Chains of ``deref`` global variables are possible, but cycles are not
-    allowed. They will be caught by the IL verifier.
+    allowed. They will be caught by the IR verifier.
 
     :arg BaseGV: Global variable containing the base pointer.
     :arg Offset: Byte offset from the loaded base pointer to the global
@@ -654,6 +654,11 @@ trap when accessed.
             address space reserved for the heap, not including the guard pages.
     :arg GuardBytes: Size of the guard pages in bytes.
 
+When the base is a global variable, it must be :term:`accessible` and naturally
+aligned for a pointer value.
+
+The ``reserved_reg`` option is not yet implemented.
+
 Dynamic heaps
 ~~~~~~~~~~~~~
 
@@ -671,6 +676,11 @@ is resized. The bound of a dynamic heap is stored in a global variable.
             size will never trap.
     :arg BoundGV: Global variable containing the current heap bound in bytes.
     :arg GuardBytes: Size of the guard pages in bytes.
+
+When the base is a global variable, it must be :term:`accessible` and naturally
+aligned for a pointer value.
+
+The ``reserved_reg`` option is not yet implemented.
 
 Heap examples
 ~~~~~~~~~~~~~
@@ -1144,19 +1154,11 @@ Glossary
         The extended basic blocks which contain all the executable code in a
         function. The function body follows the function preamble.
 
-    intermediate language
-    IL
-        The language used to describe functions to Cretonne. This reference
-        describes the syntax and semantics of the Cretonne IL. The IL has two
-        forms: Textual and an in-memory intermediate representation
-        (:term:`IR`).
-
     intermediate representation
     IR
-        The in-memory representation of :term:`IL`. The data structures
-        Cretonne uses to represent a program internally are called the
-        intermediate representation. Cretonne's IR can be converted to text
-        losslessly.
+        The language used to describe functions to Cretonne. This reference
+        describes the syntax and semantics of Cretonne IR. The IR has two
+        forms: Textual, and an in-memory data structure.
 
     stack slot
         A fixed size memory allocation in the current function's activation

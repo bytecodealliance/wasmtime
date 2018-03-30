@@ -20,10 +20,10 @@ opt_level = EnumSetting(
 
 enable_verifier = BoolSetting(
         """
-        Run the Cretonne IL verifier at strategic times during compilation.
+        Run the Cretonne IR verifier at strategic times during compilation.
 
         This makes compilation slower but catches many bugs. The verifier is
-        disabled by default, except when reading Cretonne IL from a text file.
+        disabled by default, except when reading Cretonne IR from a text file.
         """,
         default=True)
 

@@ -1,9 +1,9 @@
 //! Computing stack layout.
 
 use ir::StackSlots;
-use ir::stackslot::{StackSize, StackOffset, StackSlotKind};
+use ir::stackslot::{StackOffset, StackSize, StackSlotKind};
 use result::CtonError;
-use std::cmp::{min, max};
+use std::cmp::{max, min};
 
 /// Compute the stack frame layout.
 ///
@@ -39,9 +39,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
     let mut outgoing_max = 0;
     let mut min_align = alignment;
 
-    for ss in frame.keys() {
-        let slot = &frame[ss];
-
+    for slot in frame.values() {
         if slot.size > max_size {
             return Err(CtonError::ImplLimitExceeded);
         }
@@ -72,9 +70,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
     let mut offset = incoming_min;
     debug_assert!(min_align.is_power_of_two());
     while min_align <= alignment {
-        for ss in frame.keys() {
-            let slot = frame[ss].clone();
-
+        for slot in frame.values_mut() {
             // Pick out explicit and spill slots with exact alignment `min_align`.
             match slot.kind {
                 StackSlotKind::SpillSlot |
@@ -94,7 +90,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
 
             // Aligning the negative offset can never cause overflow. We're only clearing bits.
             offset &= -(min_align as StackOffset);
-            frame.set_offset(ss, offset);
+            slot.offset = Some(offset);
         }
 
         // Move on to the next higher alignment.
@@ -114,10 +110,10 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
 
 #[cfg(test)]
 mod tests {
-    use ir::{StackSlots, StackSlotData, StackSlotKind};
-    use ir::types;
     use super::layout_stack;
     use ir::stackslot::StackOffset;
+    use ir::types;
+    use ir::{StackSlotData, StackSlotKind, StackSlots};
     use result::CtonError;
 
     #[test]

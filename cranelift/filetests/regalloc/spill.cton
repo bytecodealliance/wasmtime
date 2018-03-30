@@ -93,7 +93,7 @@ ebb0(v0: i32):
 
 ; The same value used as indirect callee and argument.
 function %doubleuse_icall1(i32) {
-    sig0 = (i32) native
+    sig0 = (i32) system_v
 ebb0(v0: i32):
     ; not:copy
     call_indirect sig0, v0(v0)
@@ -102,7 +102,7 @@ ebb0(v0: i32):
 
 ; The same value used as indirect callee and two arguments.
 function %doubleuse_icall2(i32) {
-    sig0 = (i32, i32) native
+    sig0 = (i32, i32) system_v
 ebb0(v0: i32):
     ; check: $(c=$V) = copy v0
     call_indirect sig0, v0(v0, v0)

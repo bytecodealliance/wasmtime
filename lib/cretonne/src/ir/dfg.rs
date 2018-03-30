@@ -1,20 +1,20 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use entity::{PrimaryMap, EntityMap};
-use isa::TargetIsa;
+use entity::{EntityMap, PrimaryMap};
 use ir;
 use ir::builder::ReplaceBuilder;
 use ir::extfunc::ExtFuncData;
-use ir::instructions::{InstructionData, CallInfo, BranchInfo};
+use ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use ir::types;
-use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
+use ir::{Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueList, ValueListPool};
+use isa::{Encoding, Legalize, TargetIsa};
 use packed_option::ReservedValue;
-use write::write_operands;
 use std::fmt;
 use std::iter;
 use std::mem;
 use std::ops::{Index, IndexMut};
 use std::u16;
+use write::write_operands;
 
 /// A data flow graph defines all instructions and extended basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
@@ -121,8 +121,9 @@ impl DataFlowGraph {
 
 /// Resolve value aliases.
 ///
-/// Find the original SSA value that `value` aliases.
-fn resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) -> Value {
+/// Find the original SSA value that `value` aliases, or None if an
+/// alias cycle is detected.
+fn maybe_resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) -> Option<Value> {
     let mut v = value;
 
     // Note that values may be empty here.
@@ -130,10 +131,22 @@ fn resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) -> Value
         if let ValueData::Alias { original, .. } = values[v] {
             v = original;
         } else {
-            return v;
+            return Some(v);
         }
     }
-    panic!("Value alias loop detected for {}", value);
+
+    None
+}
+
+/// Resolve value aliases.
+///
+/// Find the original SSA value that `value` aliases.
+fn resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) -> Value {
+    if let Some(v) = maybe_resolve_aliases(values, value) {
+        v
+    } else {
+        panic!("Value alias loop detected for {}", value);
+    }
 }
 
 /// Handling values.
@@ -238,6 +251,7 @@ impl DataFlowGraph {
             self.value_type(dest),
             ty
         );
+        debug_assert_ne!(ty, types::VOID);
 
         self.values[dest] = ValueData::Alias { ty, original };
     }
@@ -282,6 +296,7 @@ impl DataFlowGraph {
                 self.value_type(dest),
                 ty
             );
+            debug_assert_ne!(ty, types::VOID);
 
             self.values[dest] = ValueData::Alias { ty, original };
         }
@@ -333,18 +348,18 @@ impl ValueDef {
     }
 }
 
-// Internal table storage for extended values.
+/// Internal table storage for extended values.
 #[derive(Clone, Debug)]
 enum ValueData {
-    // Value is defined by an instruction.
+    /// Value is defined by an instruction.
     Inst { ty: Type, num: u16, inst: Inst },
 
-    // Value is an EBB parameter.
+    /// Value is an EBB parameter.
     Param { ty: Type, num: u16, ebb: Ebb },
 
-    // Value is an alias of another value.
-    // An alias value can't be linked as an instruction result or EBB parameter. It is used as a
-    // placeholder when the original instruction or EBB has been rewritten or modified.
+    /// Value is an alias of another value.
+    /// An alias value can't be linked as an instruction result or EBB parameter. It is used as a
+    /// placeholder when the original instruction or EBB has been rewritten or modified.
     Alias { ty: Type, original: Value },
 }
 
@@ -645,6 +660,12 @@ impl DataFlowGraph {
             self.value_type(self.first_result(inst))
         }
     }
+
+    /// Wrapper around `TargetIsa::encode` for encoding an existing instruction
+    /// in the `DataFlowGraph`.
+    pub fn encode(&self, inst: Inst, isa: &TargetIsa) -> Result<Encoding, Legalize> {
+        isa.encode(&self, &self[inst], self.ctrl_typevar(inst))
+    }
 }
 
 /// Allow immutable access to instructions via indexing.
@@ -754,7 +775,6 @@ impl DataFlowGraph {
         }
     }
 
-
     /// Append an existing value to `ebb`'s parameters.
     ///
     /// The appended value can't already be attached to something else.
@@ -808,14 +828,14 @@ impl DataFlowGraph {
     }
 }
 
-// Contents of an extended basic block.
-//
-// Parameters on an extended basic block are values that dominate everything in the EBB. All
-// branches to this EBB must provide matching arguments, and the arguments to the entry EBB must
-// match the function arguments.
+/// Contents of an extended basic block.
+///
+/// Parameters on an extended basic block are values that dominate everything in the EBB. All
+/// branches to this EBB must provide matching arguments, and the arguments to the entry EBB must
+/// match the function arguments.
 #[derive(Clone)]
 struct EbbData {
-    // List of parameters to this EBB.
+    /// List of parameters to this EBB.
     params: ValueList,
 }
 
@@ -842,7 +862,6 @@ impl<'a> fmt::Display for DisplayInst<'a> {
             write!(f, " = ")?;
         }
 
-
         let typevar = dfg.ctrl_typevar(inst);
         if typevar.is_void() {
             write!(f, "{}", dfg[inst].opcode())?;
@@ -859,8 +878,9 @@ impl DataFlowGraph {
     /// to create invalid values for index padding which may be reassigned later.
     #[cold]
     fn set_value_type_for_parser(&mut self, v: Value, t: Type) {
-        assert!(
-            self.value_type(v) == types::VOID,
+        assert_eq!(
+            self.value_type(v),
+            types::VOID,
             "this function is only for assigning types to previously invalid values"
         );
         match self.values[v] {
@@ -920,10 +940,36 @@ impl DataFlowGraph {
     /// aliases with specific values.
     #[cold]
     pub fn make_value_alias_for_parser(&mut self, src: Value, dest: Value) {
-        let ty = self.value_type(src);
+        assert_ne!(src, Value::reserved_value());
+        assert_ne!(dest, Value::reserved_value());
 
+        let ty = if self.values.is_valid(src) {
+            self.value_type(src)
+        } else {
+            // As a special case, if we can't resolve the aliasee yet, use VOID
+            // temporarily. It will be resolved later in parsing.
+            types::VOID
+        };
         let data = ValueData::Alias { ty, original: src };
         self.values[dest] = data;
+    }
+
+    /// Compute the type of an alias. This is only for use in the parser.
+    /// Returns false if an alias cycle was encountered.
+    #[cold]
+    pub fn set_alias_type_for_parser(&mut self, v: Value) -> bool {
+        if let Some(resolved) = maybe_resolve_aliases(&self.values, v) {
+            let old_ty = self.value_type(v);
+            let new_ty = self.value_type(resolved);
+            if old_ty == types::VOID {
+                self.set_value_type_for_parser(v, new_ty);
+            } else {
+                assert_eq!(old_ty, new_ty);
+            }
+            true
+        } else {
+            false
+        }
     }
 
     /// Create an invalid value, to pad the index space. This is only for use by
@@ -936,6 +982,20 @@ impl DataFlowGraph {
         };
         self.make_value(data);
     }
+
+    /// Check if a value reference is valid, while being aware of aliases which
+    /// may be unresolved while parsing.
+    #[cold]
+    pub fn value_is_valid_for_parser(&self, v: Value) -> bool {
+        if !self.value_is_valid(v) {
+            return false;
+        }
+        if let ValueData::Alias { ty, .. } = self.values[v] {
+            ty != types::VOID
+        } else {
+            true
+        }
+    }
 }
 
 #[cfg(test)]
@@ -943,7 +1003,7 @@ mod tests {
     use super::*;
     use cursor::{Cursor, FuncCursor};
     use ir::types;
-    use ir::{Function, Opcode, InstructionData, TrapCode};
+    use ir::{Function, InstructionData, Opcode, TrapCode};
     use std::string::ToString;
 
     #[test]

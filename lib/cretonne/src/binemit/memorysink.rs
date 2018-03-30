@@ -14,13 +14,13 @@
 //! relocations to a `RelocSink` trait object. Relocations are less frequent than the
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
 
-use ir::{ExternalName, JumpTable};
-use super::{CodeSink, CodeOffset, Reloc, Addend};
+use super::{Addend, CodeOffset, CodeSink, Reloc};
+use ir::{ExternalName, JumpTable, SourceLoc, TrapCode};
 use std::ptr::write_unaligned;
 
 /// A `CodeSink` that writes binary machine code directly into memory.
 ///
-/// A `MemoryCodeSink` object should be used when emitting a Cretonne IL function into executable
+/// A `MemoryCodeSink` object should be used when emitting a Cretonne IR function into executable
 /// memory. It writes machine code directly to a raw pointer without any bounds checking, so make
 /// sure to allocate enough memory for the whole function. The number of bytes required is returned
 /// by the `Context::compile()` function.
@@ -33,15 +33,21 @@ pub struct MemoryCodeSink<'a> {
     data: *mut u8,
     offset: isize,
     relocs: &'a mut RelocSink,
+    traps: &'a mut TrapSink,
 }
 
 impl<'a> MemoryCodeSink<'a> {
     /// Create a new memory code sink that writes a function to the memory pointed to by `data`.
-    pub fn new(data: *mut u8, relocs: &mut RelocSink) -> MemoryCodeSink {
+    pub fn new<'sink>(
+        data: *mut u8,
+        relocs: &'sink mut RelocSink,
+        traps: &'sink mut TrapSink,
+    ) -> MemoryCodeSink<'sink> {
         MemoryCodeSink {
             data,
             offset: 0,
             relocs,
+            traps,
         }
     }
 }
@@ -56,6 +62,12 @@ pub trait RelocSink {
 
     /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, CodeOffset, Reloc, JumpTable);
+}
+
+/// A trait for receiving trap codes and offsets.
+pub trait TrapSink {
+    /// Add trap information for a specific offset.
+    fn trap(&mut self, CodeOffset, SourceLoc, TrapCode);
 }
 
 impl<'a> CodeSink for MemoryCodeSink<'a> {
@@ -104,5 +116,10 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
     fn reloc_jt(&mut self, rel: Reloc, jt: JumpTable) {
         let ofs = self.offset();
         self.relocs.reloc_jt(ofs, rel, jt);
+    }
+
+    fn trap(&mut self, code: TrapCode, srcloc: SourceLoc) {
+        let ofs = self.offset();
+        self.traps.trap(ofs, srcloc, code);
     }
 }

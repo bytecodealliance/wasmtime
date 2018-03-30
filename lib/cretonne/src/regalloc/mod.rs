@@ -2,11 +2,11 @@
 //!
 //! This module contains data structures and algorithms used for register allocation.
 
-pub mod liverange;
-pub mod liveness;
 pub mod allocatable_set;
-pub mod live_value_tracker;
 pub mod coloring;
+pub mod live_value_tracker;
+pub mod liveness;
+pub mod liverange;
 pub mod virtregs;
 
 mod affinity;

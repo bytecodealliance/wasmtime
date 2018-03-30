@@ -1,7 +1,7 @@
 //! Global variables.
 
-use ir::{ExternalName, GlobalVar};
 use ir::immediates::Offset32;
+use ir::{ExternalName, GlobalVar};
 use std::fmt;
 
 /// Information about a global variable declaration.
@@ -17,7 +17,8 @@ pub enum GlobalVarData {
     /// Variable is part of a struct pointed to by another global variable.
     ///
     /// The `base` global variable is assumed to contain a pointer to a struct. This global
-    /// variable lives at an offset into the struct.
+    /// variable lives at an offset into the struct. The memory must be accessible, and
+    /// naturally aligned to hold a pointer value.
     Deref {
         /// The base pointer global variable.
         base: GlobalVar,

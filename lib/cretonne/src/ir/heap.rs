@@ -1,7 +1,7 @@
 //! Heaps.
 
-use ir::immediates::Imm64;
 use ir::GlobalVar;
+use ir::immediates::Imm64;
 use std::fmt;
 
 /// Information about a heap declaration.
@@ -25,9 +25,12 @@ pub struct HeapData {
 #[derive(Clone)]
 pub enum HeapBase {
     /// The heap base lives in a reserved register.
+    ///
+    /// This feature is not yet implemented.
     ReservedReg,
 
-    /// The heap base is in a global variable.
+    /// The heap base is in a global variable. The variable must be accessible and naturally
+    /// aligned for a pointer.
     GlobalVar(GlobalVar),
 }
 
@@ -36,7 +39,8 @@ pub enum HeapBase {
 pub enum HeapStyle {
     /// A dynamic heap can be relocated to a different base address when it is grown.
     Dynamic {
-        /// Global variable holding the current bound of the heap in bytes.
+        /// Global variable holding the current bound of the heap in bytes. It is
+        /// required to be accessible and naturally aligned for a pointer-sized integer.
         bound_gv: GlobalVar,
     },
 

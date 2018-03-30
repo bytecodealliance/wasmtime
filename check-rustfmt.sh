@@ -22,11 +22,11 @@ set -euo pipefail
 # operation, however that doesn't appear to be possible through "cargo fmt").
 VERS="0.9.0"
 
-if cargo install --list | grep -q "^rustfmt v$VERS"; then
+if cargo install --list | tee /dev/null | grep -q "^rustfmt v$VERS"; then
     exit 0
 fi
 
-if [ "$1" != "--install" ]; then
+if [[ ${1:-""} != "--install" ]]; then
     echo "********************************************************************"
     echo "*  Please install rustfmt v$VERS to verify formatting.             *"
     echo "*  If a newer version of rustfmt is available, update this script. *"

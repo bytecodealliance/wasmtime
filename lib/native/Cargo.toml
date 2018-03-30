@@ -1,6 +1,6 @@
 [package]
 name = "cretonne-native"
-version = "0.3.4"
+version = "0.4.1"
 authors = ["The Cretonne Project Developers"]
 description = "Support for targeting the host with Cretonne"
 repository = "https://github.com/Cretonne/cretonne"
@@ -11,7 +11,7 @@ readme = "README.md"
 name = "cton_native"
 
 [dependencies]
-cretonne = { path = "../cretonne", version = "0.3.4", default-features = false }
+cretonne = { path = "../cretonne", version = "0.4.1", default-features = false }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 raw-cpuid = "3.0.0"
@@ -20,3 +20,7 @@ raw-cpuid = "3.0.0"
 default = ["std"]
 std = ["cretonne/std"]
 core = ["cretonne/core"]
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "Cretonne/cretonne" }

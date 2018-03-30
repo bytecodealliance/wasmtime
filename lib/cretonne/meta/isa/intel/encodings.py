@@ -5,7 +5,7 @@ from __future__ import absolute_import
 from cdsl.predicates import IsUnsignedInt, Not, And
 from base import instructions as base
 from base.formats import UnaryImm
-from .defs import I32, I64
+from .defs import X86_64, X86_32
 from . import recipes as r
 from . import settings as cfg
 from . import instructions as x86
@@ -22,83 +22,83 @@ except ImportError:
     pass
 
 
-I32.legalize_monomorphic(expand_flags)
-I32.legalize_type(
-        default=narrow,
-        b1=expand_flags,
-        i32=intel_expand,
-        f32=intel_expand,
-        f64=intel_expand)
+X86_32.legalize_monomorphic(expand_flags)
+X86_32.legalize_type(
+    default=narrow,
+    b1=expand_flags,
+    i32=intel_expand,
+    f32=intel_expand,
+    f64=intel_expand)
 
-I64.legalize_monomorphic(expand_flags)
-I64.legalize_type(
-        default=narrow,
-        b1=expand_flags,
-        i32=intel_expand,
-        i64=intel_expand,
-        f32=intel_expand,
-        f64=intel_expand)
+X86_64.legalize_monomorphic(expand_flags)
+X86_64.legalize_type(
+    default=narrow,
+    b1=expand_flags,
+    i32=intel_expand,
+    i64=intel_expand,
+    f32=intel_expand,
+    f64=intel_expand)
 
 
 #
 # Helper functions for generating encodings.
 #
 
-def enc_i64(inst, recipe, *args, **kwargs):
+def enc_x86_64(inst, recipe, *args, **kwargs):
     # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
     """
-    Add encodings for `inst` to I64 with and without a REX prefix.
+    Add encodings for `inst` to X86_64 with and without a REX prefix.
     """
-    I64.enc(inst, *recipe.rex(*args, **kwargs))
-    I64.enc(inst, *recipe(*args, **kwargs))
+    X86_64.enc(inst, *recipe.rex(*args, **kwargs))
+    X86_64.enc(inst, *recipe(*args, **kwargs))
 
 
 def enc_both(inst, recipe, *args, **kwargs):
     # type: (MaybeBoundInst, r.TailRecipe, *int, **Any) -> None
     """
-    Add encodings for `inst` to both I32 and I64.
+    Add encodings for `inst` to both X86_32 and X86_64.
     """
-    I32.enc(inst, *recipe(*args, **kwargs))
-    enc_i64(inst, recipe, *args, **kwargs)
+    X86_32.enc(inst, *recipe(*args, **kwargs))
+    enc_x86_64(inst, recipe, *args, **kwargs)
 
 
 def enc_i32_i64(inst, recipe, *args, **kwargs):
     # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
     """
-    Add encodings for `inst.i32` to I32.
-    Add encodings for `inst.i32` to I64 with and without REX.
-    Add encodings for `inst.i64` to I64 with a REX.W prefix.
+    Add encodings for `inst.i32` to X86_32.
+    Add encodings for `inst.i32` to X86_64 with and without REX.
+    Add encodings for `inst.i64` to X86_64 with a REX.W prefix.
     """
-    I32.enc(inst.i32, *recipe(*args, **kwargs))
+    X86_32.enc(inst.i32, *recipe(*args, **kwargs))
 
     # REX-less encoding must come after REX encoding so we don't use it by
     # default. Otherwise reg-alloc would never use r8 and up.
-    I64.enc(inst.i32, *recipe.rex(*args, **kwargs))
-    I64.enc(inst.i32, *recipe(*args, **kwargs))
+    X86_64.enc(inst.i32, *recipe.rex(*args, **kwargs))
+    X86_64.enc(inst.i32, *recipe(*args, **kwargs))
 
-    I64.enc(inst.i64, *recipe.rex(*args, w=1, **kwargs))
+    X86_64.enc(inst.i64, *recipe.rex(*args, w=1, **kwargs))
 
 
 def enc_i32_i64_ld_st(inst, w_bit, recipe, *args, **kwargs):
     # type: (MaybeBoundInst, bool, r.TailRecipe, *int, **int) -> None
     """
-    Add encodings for `inst.i32` to I32.
-    Add encodings for `inst.i32` to I64 with and without REX.
-    Add encodings for `inst.i64` to I64 with a REX prefix, using the `w_bit`
+    Add encodings for `inst.i32` to X86_32.
+    Add encodings for `inst.i32` to X86_64 with and without REX.
+    Add encodings for `inst.i64` to X86_64 with a REX prefix, using the `w_bit`
     argument to determine whether or not to set the REX.W bit.
     """
-    I32.enc(inst.i32.any, *recipe(*args, **kwargs))
+    X86_32.enc(inst.i32.any, *recipe(*args, **kwargs))
 
     # REX-less encoding must come after REX encoding so we don't use it by
     # default. Otherwise reg-alloc would never use r8 and up.
-    I64.enc(inst.i32.any, *recipe.rex(*args, **kwargs))
-    I64.enc(inst.i32.any, *recipe(*args, **kwargs))
+    X86_64.enc(inst.i32.any, *recipe.rex(*args, **kwargs))
+    X86_64.enc(inst.i32.any, *recipe(*args, **kwargs))
 
     if w_bit:
-        I64.enc(inst.i64.any, *recipe.rex(*args, w=1, **kwargs))
+        X86_64.enc(inst.i64.any, *recipe.rex(*args, w=1, **kwargs))
     else:
-        I64.enc(inst.i64.any, *recipe.rex(*args, **kwargs))
-        I64.enc(inst.i64.any, *recipe(*args, **kwargs))
+        X86_64.enc(inst.i64.any, *recipe.rex(*args, **kwargs))
+        X86_64.enc(inst.i64.any, *recipe(*args, **kwargs))
 
 
 for inst,           opc in [
@@ -141,19 +141,22 @@ for inst,               rrr in [
 # band_imm.i32. Can even use the single-byte immediate for 0xffff_ffXX masks.
 
 # Immediate constants.
-I32.enc(base.iconst.i32, *r.puid(0xb8))
+X86_32.enc(base.iconst.i32, *r.puid(0xb8))
 
-I64.enc(base.iconst.i32, *r.puid.rex(0xb8))
-I64.enc(base.iconst.i32, *r.puid(0xb8))
+X86_64.enc(base.iconst.i32, *r.puid.rex(0xb8))
+X86_64.enc(base.iconst.i32, *r.puid(0xb8))
 # The 32-bit immediate movl also zero-extends to 64 bits.
-I64.enc(base.iconst.i64, *r.puid.rex(0xb8),
-        instp=IsUnsignedInt(UnaryImm.imm, 32))
-I64.enc(base.iconst.i64, *r.puid(0xb8),
-        instp=IsUnsignedInt(UnaryImm.imm, 32))
+X86_64.enc(base.iconst.i64, *r.puid.rex(0xb8),
+           instp=IsUnsignedInt(UnaryImm.imm, 32))
+X86_64.enc(base.iconst.i64, *r.puid(0xb8),
+           instp=IsUnsignedInt(UnaryImm.imm, 32))
 # Sign-extended 32-bit immediate.
-I64.enc(base.iconst.i64, *r.uid.rex(0xc7, rrr=0, w=1))
+X86_64.enc(base.iconst.i64, *r.uid.rex(0xc7, rrr=0, w=1))
 # Finally, the 0xb8 opcode takes an 8-byte immediate with a REX.W prefix.
-I64.enc(base.iconst.i64, *r.puiq.rex(0xb8, w=1))
+X86_64.enc(base.iconst.i64, *r.puiq.rex(0xb8, w=1))
+
+# bool constants.
+enc_both(base.bconst.b1, r.puid_bool, 0xb8)
 
 # Shifts and rotates.
 # Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
@@ -164,38 +167,46 @@ for inst,           rrr in [
         (base.ishl, 4),
         (base.ushr, 5),
         (base.sshr, 7)]:
-    I32.enc(inst.i32.any, *r.rc(0xd3, rrr=rrr))
-    I64.enc(inst.i64.any, *r.rc.rex(0xd3, rrr=rrr, w=1))
-    I64.enc(inst.i32.any, *r.rc.rex(0xd3, rrr=rrr))
-    I64.enc(inst.i32.any, *r.rc(0xd3, rrr=rrr))
+    # Cannot use enc_i32_i64 for this pattern because instructions require
+    # .any suffix.
+    X86_32.enc(inst.i32.any, *r.rc(0xd3, rrr=rrr))
+    X86_64.enc(inst.i64.any, *r.rc.rex(0xd3, rrr=rrr, w=1))
+    X86_64.enc(inst.i32.any, *r.rc.rex(0xd3, rrr=rrr))
+    X86_64.enc(inst.i32.any, *r.rc(0xd3, rrr=rrr))
+
+for inst,           rrr in [
+        (base.ishl_imm, 4),
+        (base.ushr_imm, 5),
+        (base.sshr_imm, 7)]:
+    enc_i32_i64(inst, r.rib, 0xc1, rrr=rrr)
 
 # Population count.
-I32.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
-I64.enc(base.popcnt.i64, *r.urm.rex(0xf3, 0x0f, 0xb8, w=1),
-        isap=cfg.use_popcnt)
-I64.enc(base.popcnt.i32, *r.urm.rex(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
-I64.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
+X86_32.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
+X86_64.enc(base.popcnt.i64, *r.urm.rex(0xf3, 0x0f, 0xb8, w=1),
+           isap=cfg.use_popcnt)
+X86_64.enc(base.popcnt.i32, *r.urm.rex(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
+X86_64.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
 
 # Count leading zero bits.
-I32.enc(base.clz.i32, *r.urm(0xf3, 0x0f, 0xbd), isap=cfg.use_lzcnt)
-I64.enc(base.clz.i64, *r.urm.rex(0xf3, 0x0f, 0xbd, w=1),
-        isap=cfg.use_lzcnt)
-I64.enc(base.clz.i32, *r.urm.rex(0xf3, 0x0f, 0xbd), isap=cfg.use_lzcnt)
-I64.enc(base.clz.i32, *r.urm(0xf3, 0x0f, 0xbd), isap=cfg.use_lzcnt)
+X86_32.enc(base.clz.i32, *r.urm(0xf3, 0x0f, 0xbd), isap=cfg.use_lzcnt)
+X86_64.enc(base.clz.i64, *r.urm.rex(0xf3, 0x0f, 0xbd, w=1),
+           isap=cfg.use_lzcnt)
+X86_64.enc(base.clz.i32, *r.urm.rex(0xf3, 0x0f, 0xbd), isap=cfg.use_lzcnt)
+X86_64.enc(base.clz.i32, *r.urm(0xf3, 0x0f, 0xbd), isap=cfg.use_lzcnt)
 
 # Count trailing zero bits.
-I32.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
-I64.enc(base.ctz.i64, *r.urm.rex(0xf3, 0x0f, 0xbc, w=1),
-        isap=cfg.use_bmi1)
-I64.enc(base.ctz.i32, *r.urm.rex(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
-I64.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
+X86_32.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
+X86_64.enc(base.ctz.i64, *r.urm.rex(0xf3, 0x0f, 0xbc, w=1),
+           isap=cfg.use_bmi1)
+X86_64.enc(base.ctz.i32, *r.urm.rex(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
+X86_64.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
 
 #
 # Loads and stores.
 #
 for recipe in [r.st, r.stDisp8, r.stDisp32]:
     enc_i32_i64_ld_st(base.store, True, recipe, 0x89)
-    enc_i64(base.istore32.i64.any, recipe, 0x89)
+    enc_x86_64(base.istore32.i64.any, recipe, 0x89)
     enc_i32_i64_ld_st(base.istore16, False, recipe, 0x66, 0x89)
 
 # Byte stores are more complicated because the registers they can address
@@ -203,121 +214,121 @@ for recipe in [r.st, r.stDisp8, r.stDisp32]:
 # the corresponding st* recipes when a REX prefix is applied.
 for recipe in [r.st_abcd, r.stDisp8_abcd, r.stDisp32_abcd]:
     enc_both(base.istore8.i32.any, recipe, 0x88)
-    enc_i64(base.istore8.i64.any, recipe, 0x88)
+    enc_x86_64(base.istore8.i64.any, recipe, 0x88)
 
-enc_i32_i64(base.spill, r.spSib32, 0x89)
-enc_i32_i64(base.regspill, r.rsp32, 0x89)
+enc_i32_i64(base.spill, r.spillSib32, 0x89)
+enc_i32_i64(base.regspill, r.regspill32, 0x89)
 
 # Use a 32-bit write for spilling `b1` to avoid constraining the permitted
 # registers.
 # See MIN_SPILL_SLOT_SIZE which makes this safe.
-enc_both(base.spill.b1, r.spSib32, 0x89)
-enc_both(base.regspill.b1, r.rsp32, 0x89)
+enc_both(base.spill.b1, r.spillSib32, 0x89)
+enc_both(base.regspill.b1, r.regspill32, 0x89)
 
 for recipe in [r.ld, r.ldDisp8, r.ldDisp32]:
     enc_i32_i64_ld_st(base.load, True, recipe, 0x8b)
-    enc_i64(base.uload32.i64, recipe, 0x8b)
-    I64.enc(base.sload32.i64, *recipe.rex(0x63, w=1))
+    enc_x86_64(base.uload32.i64, recipe, 0x8b)
+    X86_64.enc(base.sload32.i64, *recipe.rex(0x63, w=1))
     enc_i32_i64_ld_st(base.uload16, True, recipe, 0x0f, 0xb7)
     enc_i32_i64_ld_st(base.sload16, True, recipe, 0x0f, 0xbf)
     enc_i32_i64_ld_st(base.uload8, True, recipe, 0x0f, 0xb6)
     enc_i32_i64_ld_st(base.sload8, True, recipe, 0x0f, 0xbe)
 
-enc_i32_i64(base.fill, r.fiSib32, 0x8b)
-enc_i32_i64(base.regfill, r.rfi32, 0x8b)
+enc_i32_i64(base.fill, r.fillSib32, 0x8b)
+enc_i32_i64(base.regfill, r.regfill32, 0x8b)
 
 # Load 32 bits from `b1` spill slots. See `spill.b1` above.
-enc_both(base.fill.b1, r.fiSib32, 0x8b)
-enc_both(base.regfill.b1, r.rfi32, 0x8b)
+enc_both(base.fill.b1, r.fillSib32, 0x8b)
+enc_both(base.regfill.b1, r.regfill32, 0x8b)
 
 # Push and Pop
-I32.enc(x86.push.i32, *r.pushq(0x50))
-enc_i64(x86.push.i64, r.pushq, 0x50)
+X86_32.enc(x86.push.i32, *r.pushq(0x50))
+enc_x86_64(x86.push.i64, r.pushq, 0x50)
 
-I32.enc(x86.pop.i32, *r.popq(0x58))
-enc_i64(x86.pop.i64, r.popq, 0x58)
+X86_32.enc(x86.pop.i32, *r.popq(0x58))
+enc_x86_64(x86.pop.i64, r.popq, 0x58)
 
 # Copy Special
-I64.enc(base.copy_special, *r.copysp.rex(0x89, w=1))
-I32.enc(base.copy_special, *r.copysp(0x89))
+X86_64.enc(base.copy_special, *r.copysp.rex(0x89, w=1))
+X86_32.enc(base.copy_special, *r.copysp(0x89))
 
 # Adjust SP Imm
-I32.enc(base.adjust_sp_imm, *r.adjustsp8(0x83))
-I32.enc(base.adjust_sp_imm, *r.adjustsp32(0x81))
-I64.enc(base.adjust_sp_imm, *r.adjustsp8.rex(0x83, w=1))
-I64.enc(base.adjust_sp_imm, *r.adjustsp32.rex(0x81, w=1))
+X86_32.enc(base.adjust_sp_imm, *r.adjustsp8(0x83))
+X86_32.enc(base.adjust_sp_imm, *r.adjustsp32(0x81))
+X86_64.enc(base.adjust_sp_imm, *r.adjustsp8.rex(0x83, w=1))
+X86_64.enc(base.adjust_sp_imm, *r.adjustsp32.rex(0x81, w=1))
 
 #
 # Float loads and stores.
 #
 
-enc_both(base.load.f32.any, r.fld, 0x66, 0x0f, 0x6e)
-enc_both(base.load.f32.any, r.fldDisp8, 0x66, 0x0f, 0x6e)
-enc_both(base.load.f32.any, r.fldDisp32, 0x66, 0x0f, 0x6e)
+enc_both(base.load.f32.any, r.fld, 0xf3, 0x0f, 0x10)
+enc_both(base.load.f32.any, r.fldDisp8, 0xf3, 0x0f, 0x10)
+enc_both(base.load.f32.any, r.fldDisp32, 0xf3, 0x0f, 0x10)
 
-enc_both(base.load.f64.any, r.fld, 0xf3, 0x0f, 0x7e)
-enc_both(base.load.f64.any, r.fldDisp8, 0xf3, 0x0f, 0x7e)
-enc_both(base.load.f64.any, r.fldDisp32, 0xf3, 0x0f, 0x7e)
+enc_both(base.load.f64.any, r.fld, 0xf2, 0x0f, 0x10)
+enc_both(base.load.f64.any, r.fldDisp8, 0xf2, 0x0f, 0x10)
+enc_both(base.load.f64.any, r.fldDisp32, 0xf2, 0x0f, 0x10)
 
-enc_both(base.store.f32.any, r.fst, 0x66, 0x0f, 0x7e)
-enc_both(base.store.f32.any, r.fstDisp8, 0x66, 0x0f, 0x7e)
-enc_both(base.store.f32.any, r.fstDisp32, 0x66, 0x0f, 0x7e)
+enc_both(base.store.f32.any, r.fst, 0xf3, 0x0f, 0x11)
+enc_both(base.store.f32.any, r.fstDisp8, 0xf3, 0x0f, 0x11)
+enc_both(base.store.f32.any, r.fstDisp32, 0xf3, 0x0f, 0x11)
 
-enc_both(base.store.f64.any, r.fst, 0x66, 0x0f, 0xd6)
-enc_both(base.store.f64.any, r.fstDisp8, 0x66, 0x0f, 0xd6)
-enc_both(base.store.f64.any, r.fstDisp32, 0x66, 0x0f, 0xd6)
+enc_both(base.store.f64.any, r.fst, 0xf2, 0x0f, 0x11)
+enc_both(base.store.f64.any, r.fstDisp8, 0xf2, 0x0f, 0x11)
+enc_both(base.store.f64.any, r.fstDisp32, 0xf2, 0x0f, 0x11)
 
-enc_both(base.fill.f32, r.ffiSib32, 0x66, 0x0f, 0x6e)
-enc_both(base.regfill.f32, r.frfi32, 0x66, 0x0f, 0x6e)
-enc_both(base.fill.f64, r.ffiSib32, 0xf3, 0x0f, 0x7e)
-enc_both(base.regfill.f64, r.frfi32, 0xf3, 0x0f, 0x7e)
+enc_both(base.fill.f32, r.ffillSib32, 0xf3, 0x0f, 0x10)
+enc_both(base.regfill.f32, r.fregfill32, 0xf3, 0x0f, 0x10)
+enc_both(base.fill.f64, r.ffillSib32, 0xf2, 0x0f, 0x10)
+enc_both(base.regfill.f64, r.fregfill32, 0xf2, 0x0f, 0x10)
 
-enc_both(base.spill.f32, r.fspSib32, 0x66, 0x0f, 0x7e)
-enc_both(base.regspill.f32, r.frsp32, 0x66, 0x0f, 0x7e)
-enc_both(base.spill.f64, r.fspSib32, 0x66, 0x0f, 0xd6)
-enc_both(base.regspill.f64, r.frsp32, 0x66, 0x0f, 0xd6)
+enc_both(base.spill.f32, r.fspillSib32, 0xf3, 0x0f, 0x11)
+enc_both(base.regspill.f32, r.fregspill32, 0xf3, 0x0f, 0x11)
+enc_both(base.spill.f64, r.fspillSib32, 0xf2, 0x0f, 0x11)
+enc_both(base.regspill.f64, r.fregspill32, 0xf2, 0x0f, 0x11)
 
 #
 # Function addresses.
 #
 
-I32.enc(base.func_addr.i32, *r.fnaddr4(0xb8),
-        isap=Not(allones_funcaddrs))
-I64.enc(base.func_addr.i64, *r.fnaddr8.rex(0xb8, w=1),
-        isap=And(Not(allones_funcaddrs), Not(is_pic)))
+X86_32.enc(base.func_addr.i32, *r.fnaddr4(0xb8),
+           isap=Not(allones_funcaddrs))
+X86_64.enc(base.func_addr.i64, *r.fnaddr8.rex(0xb8, w=1),
+           isap=And(Not(allones_funcaddrs), Not(is_pic)))
 
-I32.enc(base.func_addr.i32, *r.allones_fnaddr4(0xb8),
-        isap=allones_funcaddrs)
-I64.enc(base.func_addr.i64, *r.allones_fnaddr8.rex(0xb8, w=1),
-        isap=And(allones_funcaddrs, Not(is_pic)))
+X86_32.enc(base.func_addr.i32, *r.allones_fnaddr4(0xb8),
+           isap=allones_funcaddrs)
+X86_64.enc(base.func_addr.i64, *r.allones_fnaddr8.rex(0xb8, w=1),
+           isap=And(allones_funcaddrs, Not(is_pic)))
 
-I64.enc(base.func_addr.i64, *r.got_fnaddr8.rex(0x8b, w=1),
-        isap=is_pic)
+X86_64.enc(base.func_addr.i64, *r.got_fnaddr8.rex(0x8b, w=1),
+           isap=is_pic)
 
 #
 # Global addresses.
 #
 
-I32.enc(base.globalsym_addr.i32, *r.gvaddr4(0xb8))
-I64.enc(base.globalsym_addr.i64, *r.gvaddr8.rex(0xb8, w=1),
-        isap=Not(is_pic))
+X86_32.enc(base.globalsym_addr.i32, *r.gvaddr4(0xb8))
+X86_64.enc(base.globalsym_addr.i64, *r.gvaddr8.rex(0xb8, w=1),
+           isap=Not(is_pic))
 
-I64.enc(base.globalsym_addr.i64, *r.got_gvaddr8.rex(0x8b, w=1),
-        isap=is_pic)
+X86_64.enc(base.globalsym_addr.i64, *r.got_gvaddr8.rex(0x8b, w=1),
+           isap=is_pic)
 
 #
 # Call/return
 #
-I32.enc(base.call, *r.call_id(0xe8))
-I64.enc(base.call, *r.call_id(0xe8), isap=Not(is_pic))
-I64.enc(base.call, *r.call_plt_id(0xe8), isap=is_pic)
+X86_32.enc(base.call, *r.call_id(0xe8))
+X86_64.enc(base.call, *r.call_id(0xe8), isap=Not(is_pic))
+X86_64.enc(base.call, *r.call_plt_id(0xe8), isap=is_pic)
 
-I32.enc(base.call_indirect.i32, *r.call_r(0xff, rrr=2))
-I64.enc(base.call_indirect.i64, *r.call_r.rex(0xff, rrr=2))
-I64.enc(base.call_indirect.i64, *r.call_r(0xff, rrr=2))
+X86_32.enc(base.call_indirect.i32, *r.call_r(0xff, rrr=2))
+X86_64.enc(base.call_indirect.i64, *r.call_r.rex(0xff, rrr=2))
+X86_64.enc(base.call_indirect.i64, *r.call_r(0xff, rrr=2))
 
-I32.enc(base.x_return, *r.ret(0xc3))
-I64.enc(base.x_return, *r.ret(0xc3))
+X86_32.enc(base.x_return, *r.ret(0xc3))
+X86_64.enc(base.x_return, *r.ret(0xc3))
 
 #
 # Branches
@@ -341,10 +352,10 @@ enc_i32_i64(base.brnz, r.tjccd, 0x85)
 # Branch on a b1 value in a register only looks at the low 8 bits. See also
 # bint encodings below.
 #
-# Start with the worst-case encoding for I32 only. The register allocator can't
-# handle a branch with an ABCD-constrained operand.
-I32.enc(base.brz.b1, *r.t8jccd_long(0x84))
-I32.enc(base.brnz.b1, *r.t8jccd_long(0x85))
+# Start with the worst-case encoding for X86_32 only. The register allocator
+# can't handle a branch with an ABCD-constrained operand.
+X86_32.enc(base.brz.b1, *r.t8jccd_long(0x84))
+X86_32.enc(base.brnz.b1, *r.t8jccd_long(0x85))
 
 enc_both(base.brz.b1, r.t8jccb_abcd, 0x74)
 enc_both(base.brz.b1, r.t8jccd_abcd, 0x84)
@@ -354,26 +365,28 @@ enc_both(base.brnz.b1, r.t8jccd_abcd, 0x85)
 #
 # Trap as ud2
 #
-I32.enc(base.trap, *r.trap(0x0f, 0x0b))
-I64.enc(base.trap, *r.trap(0x0f, 0x0b))
+X86_32.enc(base.trap, *r.trap(0x0f, 0x0b))
+X86_64.enc(base.trap, *r.trap(0x0f, 0x0b))
 
 # Using a standard EncRecipe, not the TailRecipe.
-I32.enc(base.trapif, r.trapif, 0)
-I64.enc(base.trapif, r.trapif, 0)
-I32.enc(base.trapff, r.trapff, 0)
-I64.enc(base.trapff, r.trapff, 0)
+X86_32.enc(base.trapif, r.trapif, 0)
+X86_64.enc(base.trapif, r.trapif, 0)
+X86_32.enc(base.trapff, r.trapff, 0)
+X86_64.enc(base.trapff, r.trapff, 0)
 
 #
 # Comparisons
 #
 enc_i32_i64(base.icmp, r.icscc, 0x39)
+enc_i32_i64(base.icmp_imm, r.icsccib, 0x83, rrr=7)
+enc_i32_i64(base.icmp_imm, r.icsccid, 0x81, rrr=7)
 enc_i32_i64(base.ifcmp, r.rcmp, 0x39)
 enc_i32_i64(base.ifcmp_imm, r.rcmpib, 0x83, rrr=7)
 enc_i32_i64(base.ifcmp_imm, r.rcmpid, 0x81, rrr=7)
 # TODO: We could special-case ifcmp_imm(x, 0) to TEST(x, x).
 
-I32.enc(base.ifcmp_sp.i32, *r.rcmp_sp(0x39))
-I64.enc(base.ifcmp_sp.i64, *r.rcmp_sp.rex(0x39, w=1))
+X86_32.enc(base.ifcmp_sp.i32, *r.rcmp_sp(0x39))
+X86_64.enc(base.ifcmp_sp.i64, *r.rcmp_sp.rex(0x39, w=1))
 
 #
 # Convert flags to bool.
@@ -398,66 +411,68 @@ enc_i32_i64(x86.bsr, r.bsf_and_bsr, 0x0F, 0xBD)
 #
 # This assumes that b1 is represented as an 8-bit low register with the value 0
 # or 1.
-I32.enc(base.bint.i32.b1, *r.urm_abcd(0x0f, 0xb6))
-I64.enc(base.bint.i64.b1, *r.urm.rex(0x0f, 0xb6))   # zext to i64 implicit.
-I64.enc(base.bint.i64.b1, *r.urm_abcd(0x0f, 0xb6))  # zext to i64 implicit.
-I64.enc(base.bint.i32.b1, *r.urm.rex(0x0f, 0xb6))
-I64.enc(base.bint.i32.b1, *r.urm_abcd(0x0f, 0xb6))
+#
+# Encode movzbq as movzbl, because it's equivalent and shorter.
+X86_32.enc(base.bint.i32.b1, *r.urm_noflags_abcd(0x0f, 0xb6))
+X86_64.enc(base.bint.i64.b1, *r.urm_noflags.rex(0x0f, 0xb6))
+X86_64.enc(base.bint.i64.b1, *r.urm_noflags_abcd(0x0f, 0xb6))
+X86_64.enc(base.bint.i32.b1, *r.urm_noflags.rex(0x0f, 0xb6))
+X86_64.enc(base.bint.i32.b1, *r.urm_noflags_abcd(0x0f, 0xb6))
 
 # Numerical conversions.
 
 # Reducing an integer is a no-op.
-I32.enc(base.ireduce.i8.i32, r.null, 0)
-I32.enc(base.ireduce.i16.i32, r.null, 0)
-I64.enc(base.ireduce.i8.i32, r.null, 0)
-I64.enc(base.ireduce.i16.i32, r.null, 0)
-I64.enc(base.ireduce.i8.i64, r.null, 0)
-I64.enc(base.ireduce.i16.i64, r.null, 0)
-I64.enc(base.ireduce.i32.i64, r.null, 0)
+X86_32.enc(base.ireduce.i8.i32, r.null, 0)
+X86_32.enc(base.ireduce.i16.i32, r.null, 0)
+X86_64.enc(base.ireduce.i8.i32, r.null, 0)
+X86_64.enc(base.ireduce.i16.i32, r.null, 0)
+X86_64.enc(base.ireduce.i8.i64, r.null, 0)
+X86_64.enc(base.ireduce.i16.i64, r.null, 0)
+X86_64.enc(base.ireduce.i32.i64, r.null, 0)
 
 # TODO: Add encodings for cbw, cwde, cdqe, which are sign-extending
 # instructions for %al/%ax/%eax to %ax/%eax/%rax.
 
 # movsbl
-I32.enc(base.sextend.i32.i8, *r.urm(0x0f, 0xbe))
-I64.enc(base.sextend.i32.i8, *r.urm.rex(0x0f, 0xbe))
-I64.enc(base.sextend.i32.i8, *r.urm(0x0f, 0xbe))
+X86_32.enc(base.sextend.i32.i8, *r.urm_noflags(0x0f, 0xbe))
+X86_64.enc(base.sextend.i32.i8, *r.urm_noflags.rex(0x0f, 0xbe))
+X86_64.enc(base.sextend.i32.i8, *r.urm_noflags(0x0f, 0xbe))
 
 # movswl
-I32.enc(base.sextend.i32.i16, *r.urm(0x0f, 0xbf))
-I64.enc(base.sextend.i32.i16, *r.urm.rex(0x0f, 0xbf))
-I64.enc(base.sextend.i32.i16, *r.urm(0x0f, 0xbf))
+X86_32.enc(base.sextend.i32.i16, *r.urm_noflags(0x0f, 0xbf))
+X86_64.enc(base.sextend.i32.i16, *r.urm_noflags.rex(0x0f, 0xbf))
+X86_64.enc(base.sextend.i32.i16, *r.urm_noflags(0x0f, 0xbf))
 
 # movsbq
-I64.enc(base.sextend.i64.i8, *r.urm.rex(0x0f, 0xbe, w=1))
+X86_64.enc(base.sextend.i64.i8, *r.urm_noflags.rex(0x0f, 0xbe, w=1))
 
 # movswq
-I64.enc(base.sextend.i64.i16, *r.urm.rex(0x0f, 0xbf, w=1))
+X86_64.enc(base.sextend.i64.i16, *r.urm_noflags.rex(0x0f, 0xbf, w=1))
 
 # movslq
-I64.enc(base.sextend.i64.i32, *r.urm.rex(0x63, w=1))
+X86_64.enc(base.sextend.i64.i32, *r.urm_noflags.rex(0x63, w=1))
 
 # movzbl
-I32.enc(base.uextend.i32.i8, *r.urm(0x0f, 0xb6))
-I64.enc(base.uextend.i32.i8, *r.urm.rex(0x0f, 0xb6))
-I64.enc(base.uextend.i32.i8, *r.urm(0x0f, 0xb6))
+X86_32.enc(base.uextend.i32.i8, *r.urm_noflags(0x0f, 0xb6))
+X86_64.enc(base.uextend.i32.i8, *r.urm_noflags.rex(0x0f, 0xb6))
+X86_64.enc(base.uextend.i32.i8, *r.urm_noflags(0x0f, 0xb6))
 
 # movzwl
-I32.enc(base.uextend.i32.i16, *r.urm(0x0f, 0xb7))
-I64.enc(base.uextend.i32.i16, *r.urm.rex(0x0f, 0xb7))
-I64.enc(base.uextend.i32.i16, *r.urm(0x0f, 0xb7))
+X86_32.enc(base.uextend.i32.i16, *r.urm_noflags(0x0f, 0xb7))
+X86_64.enc(base.uextend.i32.i16, *r.urm_noflags.rex(0x0f, 0xb7))
+X86_64.enc(base.uextend.i32.i16, *r.urm_noflags(0x0f, 0xb7))
 
 # movzbq, encoded as movzbl because it's equivalent and shorter
-I64.enc(base.uextend.i64.i8, *r.urm.rex(0x0f, 0xb6))
-I64.enc(base.uextend.i64.i8, *r.urm(0x0f, 0xb6))
+X86_64.enc(base.uextend.i64.i8, *r.urm_noflags.rex(0x0f, 0xb6))
+X86_64.enc(base.uextend.i64.i8, *r.urm_noflags(0x0f, 0xb6))
 
 # movzwq, encoded as movzwl because it's equivalent and shorter
-I64.enc(base.uextend.i64.i16, *r.urm.rex(0x0f, 0xb7))
-I64.enc(base.uextend.i64.i16, *r.urm(0x0f, 0xb7))
+X86_64.enc(base.uextend.i64.i16, *r.urm_noflags.rex(0x0f, 0xb7))
+X86_64.enc(base.uextend.i64.i16, *r.urm_noflags(0x0f, 0xb7))
 
 # A 32-bit register copy clears the high 32 bits.
-I64.enc(base.uextend.i64.i32, *r.umr.rex(0x89))
-I64.enc(base.uextend.i64.i32, *r.umr(0x89))
+X86_64.enc(base.uextend.i64.i32, *r.umr.rex(0x89))
+X86_64.enc(base.uextend.i64.i32, *r.umr(0x89))
 
 
 #
@@ -469,8 +484,8 @@ enc_both(base.bitcast.f32.i32, r.frurm, 0x66, 0x0f, 0x6e)
 enc_both(base.bitcast.i32.f32, r.rfumr, 0x66, 0x0f, 0x7e)
 
 # movq
-I64.enc(base.bitcast.f64.i64, *r.frurm.rex(0x66, 0x0f, 0x6e, w=1))
-I64.enc(base.bitcast.i64.f64, *r.rfumr.rex(0x66, 0x0f, 0x7e, w=1))
+X86_64.enc(base.bitcast.f64.i64, *r.frurm.rex(0x66, 0x0f, 0x6e, w=1))
+X86_64.enc(base.bitcast.i64.f64, *r.rfumr.rex(0x66, 0x0f, 0x7e, w=1))
 
 # movaps
 enc_both(base.copy.f32, r.furm, 0x0f, 0x28)
@@ -492,11 +507,11 @@ enc_both(base.fdemote.f32.f64, r.furm, 0xf2, 0x0f, 0x5a)
 
 # cvttss2si
 enc_both(x86.cvtt2si.i32.f32, r.rfurm, 0xf3, 0x0f, 0x2c)
-I64.enc(x86.cvtt2si.i64.f32, *r.rfurm.rex(0xf3, 0x0f, 0x2c, w=1))
+X86_64.enc(x86.cvtt2si.i64.f32, *r.rfurm.rex(0xf3, 0x0f, 0x2c, w=1))
 
 # cvttsd2si
 enc_both(x86.cvtt2si.i32.f64, r.rfurm, 0xf2, 0x0f, 0x2c)
-I64.enc(x86.cvtt2si.i64.f64, *r.rfurm.rex(0xf2, 0x0f, 0x2c, w=1))
+X86_64.enc(x86.cvtt2si.i64.f64, *r.rfurm.rex(0xf2, 0x0f, 0x2c, w=1))
 
 # Exact square roots.
 enc_both(base.sqrt.f32, r.furm, 0xf3, 0x0f, 0x51)

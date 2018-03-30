@@ -1,16 +1,16 @@
 //! Encoding tables for Intel ISAs.
 
+use super::registers::*;
 use bitset::BitSet;
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
-use ir::{self, InstBuilder};
 use ir::condcodes::IntCC;
+use ir::{self, InstBuilder};
+use isa;
 use isa::constraints::*;
 use isa::enc_tables::*;
 use isa::encoding::RecipeSizing;
-use isa;
 use predicates;
-use super::registers::*;
 
 include!(concat!(env!("OUT_DIR"), "/encoding-intel.rs"));
 include!(concat!(env!("OUT_DIR"), "/legalize-intel.rs"));
@@ -22,7 +22,6 @@ fn expand_sdivrem(
     cfg: &mut ControlFlowGraph,
     isa: &isa::TargetIsa,
 ) {
-
     let (x, y, is_srem) = match func.dfg[inst] {
         ir::InstructionData::Binary {
             opcode: ir::Opcode::Sdiv,
@@ -113,7 +112,6 @@ fn expand_udivrem(
     _cfg: &mut ControlFlowGraph,
     isa: &isa::TargetIsa,
 ) {
-
     let (x, y, is_urem) = match func.dfg[inst] {
         ir::InstructionData::Binary {
             opcode: ir::Opcode::Udiv,
@@ -324,7 +322,7 @@ fn expand_fcvt_to_sint(
     cfg: &mut ControlFlowGraph,
     _isa: &isa::TargetIsa,
 ) {
-    use ir::condcodes::{IntCC, FloatCC};
+    use ir::condcodes::{FloatCC, IntCC};
     use ir::immediates::{Ieee32, Ieee64};
 
     let x;
@@ -423,7 +421,7 @@ fn expand_fcvt_to_uint(
     cfg: &mut ControlFlowGraph,
     _isa: &isa::TargetIsa,
 ) {
-    use ir::condcodes::{IntCC, FloatCC};
+    use ir::condcodes::{FloatCC, IntCC};
     use ir::immediates::{Ieee32, Ieee64};
 
     let x;

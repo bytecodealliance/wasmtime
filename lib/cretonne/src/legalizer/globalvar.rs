@@ -45,15 +45,18 @@ fn vmctx_addr(inst: ir::Inst, func: &mut ir::Function, offset: i64) {
 /// Expand a `global_addr` instruction for a deref global.
 fn deref_addr(inst: ir::Inst, func: &mut ir::Function, base: ir::GlobalVar, offset: i64) {
     // We need to load a pointer from the `base` global variable, so insert a new `global_addr`
-    // instruction. This depends on the iterative legalization loop. Note that the IL verifier
+    // instruction. This depends on the iterative legalization loop. Note that the IR verifier
     // detects any cycles in the `deref` globals.
     let ptr_ty = func.dfg.value_type(func.dfg.first_result(inst));
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
     let base_addr = pos.ins().global_addr(ptr_ty, base);
-    // TODO: We could probably set both `notrap` and `aligned` on this load instruction.
-    let base_ptr = pos.ins().load(ptr_ty, ir::MemFlags::new(), base_addr, 0);
+    let mut mflags = ir::MemFlags::new();
+    // Deref globals are required to be accessible and aligned.
+    mflags.set_notrap();
+    mflags.set_aligned();
+    let base_ptr = pos.ins().load(ptr_ty, mflags, base_addr, 0);
     pos.func.dfg.replace(inst).iadd_imm(base_ptr, offset);
 }
 

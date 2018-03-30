@@ -1,14 +1,13 @@
-//! Converting Cretonne IL to text.
+//! Converting Cretonne IR to text.
 //!
-//! The `write` module provides the `write_function` function which converts an IL `Function` to an
-//! equivalent textual representation. This textual representation can be read back by the
-//! `cretonne-reader` crate.
+//! The `write` module provides the `write_function` function which converts an IR `Function` to an
+//! equivalent textual form. This textual form can be read back by the `cretonne-reader` crate.
 
-use ir::{Function, DataFlowGraph, Ebb, Inst, Value, ValueDef, Type, SigRef};
-use isa::{TargetIsa, RegInfo};
-use std::fmt::{self, Result, Error, Write};
-use std::result;
+use ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
+use isa::{RegInfo, TargetIsa};
 use packed_option::ReservedValue;
+use std::fmt::{self, Error, Result, Write};
+use std::result;
 use std::string::String;
 
 /// Write `func` to `w` as equivalent text.
@@ -30,11 +29,9 @@ pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -
     writeln!(w, "}}")
 }
 
-// ====--------------------------------------------------------------------------------------====//
+//----------------------------------------------------------------------
 //
 // Function spec.
-//
-// ====--------------------------------------------------------------------------------------====//
 
 fn write_spec(w: &mut Write, func: &Function, regs: Option<&RegInfo>) -> Result {
     write!(w, "function {}{}", func.name, func.signature.display(regs))
@@ -47,54 +44,46 @@ fn write_preamble(
 ) -> result::Result<bool, Error> {
     let mut any = false;
 
-    for ss in func.stack_slots.keys() {
+    for (ss, slot) in func.stack_slots.iter() {
         any = true;
-        writeln!(w, "    {} = {}", ss, func.stack_slots[ss])?;
+        writeln!(w, "    {} = {}", ss, slot)?;
     }
 
-    for gv in func.global_vars.keys() {
+    for (gv, gv_data) in func.global_vars.iter() {
         any = true;
-        writeln!(w, "    {} = {}", gv, func.global_vars[gv])?;
+        writeln!(w, "    {} = {}", gv, gv_data)?;
     }
 
-    for heap in func.heaps.keys() {
+    for (heap, heap_data) in func.heaps.iter() {
         any = true;
-        writeln!(w, "    {} = {}", heap, func.heaps[heap])?;
+        writeln!(w, "    {} = {}", heap, heap_data)?;
     }
 
     // Write out all signatures before functions since function declarations can refer to
     // signatures.
-    for sig in func.dfg.signatures.keys() {
+    for (sig, sig_data) in func.dfg.signatures.iter() {
         any = true;
-        writeln!(
-            w,
-            "    {} = {}",
-            sig,
-            func.dfg.signatures[sig].display(regs)
-        )?;
+        writeln!(w, "    {} = {}", sig, sig_data.display(regs))?;
     }
 
-    for fnref in func.dfg.ext_funcs.keys() {
+    for (fnref, ext_func) in func.dfg.ext_funcs.iter() {
         any = true;
-        let ext_func = &func.dfg.ext_funcs[fnref];
         if ext_func.signature != SigRef::reserved_value() {
             writeln!(w, "    {} = {}", fnref, ext_func)?;
         }
     }
 
-    for jt in func.jump_tables.keys() {
+    for (jt, jt_data) in func.jump_tables.iter() {
         any = true;
-        writeln!(w, "    {} = {}", jt, func.jump_tables[jt])?;
+        writeln!(w, "    {} = {}", jt, jt_data)?;
     }
 
     Ok(any)
 }
 
-// ====--------------------------------------------------------------------------------------====//
+//----------------------------------------------------------------------
 //
 // Basic blocks
-//
-// ====--------------------------------------------------------------------------------------====//
 
 pub fn write_arg(w: &mut Write, func: &Function, regs: Option<&RegInfo>, arg: Value) -> Result {
     write!(w, "{}: {}", arg, func.dfg.value_type(arg))?;
@@ -157,12 +146,9 @@ pub fn write_ebb(w: &mut Write, func: &Function, isa: Option<&TargetIsa>, ebb: E
     Ok(())
 }
 
-
-// ====--------------------------------------------------------------------------------------====//
+//----------------------------------------------------------------------
 //
 // Instructions
-//
-// ====--------------------------------------------------------------------------------------====//
 
 // Should `inst` be printed with a type suffix?
 //
@@ -465,41 +451,41 @@ impl<'a> fmt::Display for DisplayValues<'a> {
 
 #[cfg(test)]
 mod tests {
-    use ir::{Function, ExternalName, StackSlotData, StackSlotKind};
     use ir::types;
+    use ir::{ExternalName, Function, StackSlotData, StackSlotKind};
     use std::string::ToString;
 
     #[test]
     fn basic() {
         let mut f = Function::new();
-        assert_eq!(f.to_string(), "function u0:0() native {\n}\n");
+        assert_eq!(f.to_string(), "function u0:0() system_v {\n}\n");
 
         f.name = ExternalName::testcase("foo");
-        assert_eq!(f.to_string(), "function %foo() native {\n}\n");
+        assert_eq!(f.to_string(), "function %foo() system_v {\n}\n");
 
         f.create_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4));
         assert_eq!(
             f.to_string(),
-            "function %foo() native {\n    ss0 = explicit_slot 4\n}\n"
+            "function %foo() system_v {\n    ss0 = explicit_slot 4\n}\n"
         );
 
         let ebb = f.dfg.make_ebb();
         f.layout.append_ebb(ebb);
         assert_eq!(
             f.to_string(),
-            "function %foo() native {\n    ss0 = explicit_slot 4\n\nebb0:\n}\n"
+            "function %foo() system_v {\n    ss0 = explicit_slot 4\n\nebb0:\n}\n"
         );
 
         f.dfg.append_ebb_param(ebb, types::I8);
         assert_eq!(
             f.to_string(),
-            "function %foo() native {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8):\n}\n"
+            "function %foo() system_v {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8):\n}\n"
         );
 
         f.dfg.append_ebb_param(ebb, types::F32.by(4).unwrap());
         assert_eq!(
             f.to_string(),
-            "function %foo() native {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n}\n"
+            "function %foo() system_v {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n}\n"
         );
     }
 }

@@ -1,6 +1,6 @@
 //! Functions for converting a reference into a singleton slice.
 //!
-//! See also the ref_slice crate on crates.io.
+//! See also the [`ref_slice` crate](https://crates.io/crates/ref_slice).
 //!
 //! We define the functions here to avoid external dependencies, and to ensure that they are
 //! inlined in this crate.

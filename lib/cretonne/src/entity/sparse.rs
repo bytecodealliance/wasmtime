@@ -7,7 +7,7 @@
 //! > Briggs, Torczon, *An efficient representation for sparse sets*,
 //!   ACM Letters on Programming Languages and Systems, Volume 2, Issue 1-4, March-Dec. 1993.
 
-use entity::{EntityRef, EntityMap};
+use entity::{EntityMap, EntityRef};
 use std::mem;
 use std::slice;
 use std::u32;

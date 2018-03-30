@@ -8,9 +8,9 @@
 //! subclass. This is just a hint, and the register allocator is allowed to pick a register from a
 //! larger register class instead.
 
-use std::fmt;
 use ir::{AbiParam, ArgumentLoc};
-use isa::{TargetIsa, RegInfo, RegClassIndex, OperandConstraint, ConstraintKind};
+use isa::{ConstraintKind, OperandConstraint, RegClassIndex, RegInfo, TargetIsa};
+use std::fmt;
 
 /// Preferred register allocation for an SSA value.
 #[derive(Clone, Copy, Debug)]

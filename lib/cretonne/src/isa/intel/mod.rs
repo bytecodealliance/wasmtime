@@ -1,22 +1,22 @@
 //! Intel Instruction Set Architectures.
 
-pub mod settings;
 mod abi;
 mod binemit;
 mod enc_tables;
 mod registers;
+pub mod settings;
 
-use binemit::{CodeSink, MemoryCodeSink, emit_function};
 use super::super::settings as shared_settings;
-use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encodings};
-use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, RegInfo, RegClass, EncInfo};
+use binemit::{emit_function, CodeSink, MemoryCodeSink};
 use ir;
+use isa::Builder as IsaBuilder;
+use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encodings};
+use isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use regalloc;
 use result;
-use timing;
-use std::fmt;
 use std::boxed::Box;
+use std::fmt;
+use timing;
 
 #[allow(dead_code)]
 struct Isa {
@@ -56,6 +56,10 @@ impl TargetIsa for Isa {
 
     fn flags(&self) -> &shared_settings::Flags {
         &self.shared_flags
+    }
+
+    fn uses_cpu_flags(&self) -> bool {
+        true
     }
 
     fn register_info(&self) -> RegInfo {

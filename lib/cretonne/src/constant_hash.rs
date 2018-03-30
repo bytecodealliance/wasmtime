@@ -18,7 +18,6 @@ pub trait Table<K: Copy + Eq> {
     fn key(&self, idx: usize) -> Option<K>;
 }
 
-
 /// Look for `key` in `table`.
 ///
 /// The provided `hash` value must have been computed from `key` using the same hash function that

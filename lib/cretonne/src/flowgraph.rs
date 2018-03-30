@@ -24,9 +24,9 @@
 //! and `(Ebb0, jmp Ebb2)` respectively.
 
 use bforest;
-use ir::{Function, Inst, Ebb};
-use ir::instructions::BranchInfo;
 use entity::EntityMap;
+use ir::instructions::BranchInfo;
+use ir::{Ebb, Function, Inst};
 use std::mem;
 use timing;
 
@@ -203,7 +203,7 @@ pub type SuccIter<'a> = bforest::SetIter<'a, Ebb, ()>;
 mod tests {
     use super::*;
     use cursor::{Cursor, FuncCursor};
-    use ir::{Function, InstBuilder, types};
+    use ir::{types, Function, InstBuilder};
     use std::vec::Vec;
 
     #[test]

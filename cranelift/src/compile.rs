@@ -1,14 +1,13 @@
-//! CLI tool to compile cretonne IL into native code.
-//!
-//! Reads IR files into Cretonne IL and compiles it.
+//! CLI tool to read Cretonne IR files and compile them into native code.
 
-use cton_reader::parse_test;
-use std::path::PathBuf;
 use cretonne::Context;
+use cretonne::print_errors::pretty_error;
 use cretonne::settings::FlagsOrIsa;
 use cretonne::{binemit, ir};
+use cton_reader::parse_test;
 use std::path::Path;
-use utils::{pretty_error, read_to_string, parse_sets_and_isa};
+use std::path::PathBuf;
+use utils::{parse_sets_and_isa, read_to_string};
 
 struct PrintRelocs {
     flag_print: bool,
@@ -45,26 +44,38 @@ impl binemit::RelocSink for PrintRelocs {
     }
 }
 
+struct PrintTraps {
+    flag_print: bool,
+}
+
+impl binemit::TrapSink for PrintTraps {
+    fn trap(&mut self, offset: binemit::CodeOffset, _srcloc: ir::SourceLoc, code: ir::TrapCode) {
+        if self.flag_print {
+            println!("trap: {} at {}", code, offset);
+        }
+    }
+}
+
 pub fn run(
     files: Vec<String>,
     flag_print: bool,
-    flag_set: Vec<String>,
-    flag_isa: String,
+    flag_set: &[String],
+    flag_isa: &str,
 ) -> Result<(), String> {
     let parsed = parse_sets_and_isa(flag_set, flag_isa)?;
 
     for filename in files {
         let path = Path::new(&filename);
         let name = String::from(path.as_os_str().to_string_lossy());
-        handle_module(flag_print, path.to_path_buf(), name, parsed.as_fisa())?;
+        handle_module(flag_print, &path.to_path_buf(), &name, parsed.as_fisa())?;
     }
     Ok(())
 }
 
 fn handle_module(
     flag_print: bool,
-    path: PathBuf,
-    name: String,
+    path: &PathBuf,
+    name: &str,
     fisa: FlagsOrIsa,
 ) -> Result<(), String> {
     let buffer = read_to_string(&path).map_err(
@@ -95,8 +106,9 @@ fn handle_module(
         // Encode the result as machine code.
         let mut mem = Vec::new();
         let mut relocs = PrintRelocs { flag_print };
+        let mut traps = PrintTraps { flag_print };
         mem.resize(size as usize, 0);
-        context.emit_to_memory(mem.as_mut_ptr(), &mut relocs, &*isa);
+        context.emit_to_memory(mem.as_mut_ptr(), &mut relocs, &mut traps, &*isa);
 
         if flag_print {
             print!(".byte ");

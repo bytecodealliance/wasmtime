@@ -7,15 +7,15 @@
 //! These register diversions are local to an EBB. No values can be diverted when entering a new
 //! EBB.
 
-use ir::{Value, ValueLoc, ValueLocations, StackSlot};
 use ir::{InstructionData, Opcode};
-use isa::{RegUnit, RegInfo};
+use ir::{StackSlot, Value, ValueLoc, ValueLocations};
+use isa::{RegInfo, RegUnit};
 use std::fmt;
 use std::vec::Vec;
 
 /// A diversion of a value from its original location to a new register or stack location.
 ///
-/// In IL, a diversion is represented by a `regmove` instruction, possibly a chain of them for the
+/// In IR, a diversion is represented by a `regmove` instruction, possibly a chain of them for the
 /// same value.
 ///
 /// When tracking diversions, the `from` field is the original assigned value location, and `to` is
@@ -187,8 +187,8 @@ impl<'a> fmt::Display for DisplayDiversions<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ir::Value;
     use entity::EntityRef;
+    use ir::Value;
 
     #[test]
     fn inserts() {

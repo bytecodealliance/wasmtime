@@ -7,7 +7,7 @@
 //! bound is implemented by all the native integer types as well as `Imm64`.
 //!
 //! Some of these predicates may be unused in certain ISA configurations, so we suppress the
-//! dead_code warning.
+//! dead code warning.
 
 /// Check that `x` is the same as `y`.
 #[allow(dead_code)]

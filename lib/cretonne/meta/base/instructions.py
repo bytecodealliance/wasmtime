@@ -588,6 +588,9 @@ stack_check = Instruction(
     Read the stack limit from ``GV`` and compare it to the stack pointer. If
     the stack pointer has reached or exceeded the limit, generate a trap with a
     ``stk_ovf`` code.
+
+    The global variable must be accessible and naturally aligned for a
+    pointer-sized value.
     """,
     ins=GV, can_trap=True)
 

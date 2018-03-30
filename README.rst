@@ -3,7 +3,7 @@ Cretonne Code Generator
 =======================
 
 Cretonne is a low-level retargetable code generator. It translates a `target-independent
-intermediate language <https://cretonne.readthedocs.io/en/latest/langref.html>`_ into executable
+intermediate representation <https://cretonne.readthedocs.io/en/latest/langref.html>`_ into executable
 machine code.
 
 *This is a work in progress that is not yet functional.*
@@ -15,6 +15,10 @@ machine code.
 .. image:: https://travis-ci.org/Cretonne/cretonne.svg?branch=master
     :target: https://travis-ci.org/Cretonne/cretonne
     :alt: Build Status
+
+.. image:: https://badges.gitter.im/Cretonne/cretonne.png
+    :target: https://gitter.im/Cretonne/Lobby/~chat
+    :alt: Gitter chat
 
 For more information, see `the documentation
 <https://cretonne.readthedocs.io/en/latest/?badge=latest>`_.

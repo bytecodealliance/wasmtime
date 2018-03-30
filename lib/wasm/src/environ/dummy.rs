@@ -1,16 +1,16 @@
 //! "Dummy" environment for testing wasm translation.
 
-use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment};
-use translation_utils::{Global, Memory, Table, GlobalIndex, TableIndex, SignatureIndex,
-                        FunctionIndex, MemoryIndex};
-use func_translator::FuncTranslator;
-use cretonne::ir::{self, InstBuilder};
-use cretonne::ir::types::*;
 use cretonne::cursor::FuncCursor;
+use cretonne::ir::types::*;
+use cretonne::ir::{self, InstBuilder};
 use cretonne::settings;
-use wasmparser;
-use std::vec::Vec;
+use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment};
+use func_translator::FuncTranslator;
 use std::string::String;
+use std::vec::Vec;
+use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
+                        Table, TableIndex};
+use wasmparser;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 fn get_func_name(func_index: FunctionIndex) -> ir::ExternalName {
@@ -120,7 +120,7 @@ impl DummyEnvironment {
     }
 }
 
-/// The FuncEnvironment implementation for use by the `DummyEnvironment`.
+/// The `FuncEnvironment` implementation for use by the `DummyEnvironment`.
 pub struct DummyFuncEnvironment<'dummy_environment> {
     pub mod_info: &'dummy_environment DummyModuleInfo,
 }
@@ -208,7 +208,10 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             let ext = pos.ins().uextend(I64, callee);
             pos.ins().imul_imm(ext, 4)
         };
-        let func_ptr = pos.ins().load(ptr, ir::MemFlags::new(), callee_offset, 0);
+        let mut mflags = ir::MemFlags::new();
+        mflags.set_notrap();
+        mflags.set_aligned();
+        let func_ptr = pos.ins().load(ptr, mflags, callee_offset, 0);
 
         // Build a value list for the indirect call instruction containing the callee, call_args,
         // and the vmctx parameter.

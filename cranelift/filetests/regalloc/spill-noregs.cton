@@ -13,7 +13,7 @@ isa intel
 ;
 ; The spiller was not releasing register pressure for dead EBB parameters.
 
-function %pr223(i32 [%rdi], i64 vmctx [%rsi]) -> i64 [%rax] native {
+function %pr223(i32 [%rdi], i64 vmctx [%rsi]) -> i64 [%rax] system_v {
 ebb0(v0: i32, v1: i64):
     v2 = iconst.i32 0
     v3 = iconst.i64 0

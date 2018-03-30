@@ -5,7 +5,7 @@
 //! "register unit" abstraction. Every register contains one or more register units. Registers that
 //! share a register unit can't be in use at the same time.
 
-use isa::registers::{RegInfo, RegUnit, RegUnitMask, RegClass};
+use isa::registers::{RegClass, RegInfo, RegUnit, RegUnitMask};
 use std::char;
 use std::fmt;
 use std::iter::ExactSizeIterator;
@@ -197,9 +197,9 @@ impl<'a> fmt::Display for DisplayAllocatableSet<'a> {
                                 "{}",
                                 bank.names
                                     .get(offset as usize)
-                                    .and_then(|name| name.chars().skip(1).next())
-                                    .unwrap_or(
-                                        char::from_digit(u32::from(offset % 10), 10).unwrap(),
+                                    .and_then(|name| name.chars().nth(1))
+                                    .unwrap_or_else(
+                                        || char::from_digit(u32::from(offset % 10), 10).unwrap(),
                                     )
                             )?;
                         }

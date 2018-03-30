@@ -1,11 +1,11 @@
 //! Emitting binary Intel machine code.
 
-use binemit::{CodeSink, Reloc, bad_encoding};
-use ir::{Function, Inst, Ebb, InstructionData, Opcode};
-use ir::condcodes::{CondCode, IntCC, FloatCC};
-use isa::{RegUnit, StackRef, StackBase, StackBaseMask};
-use regalloc::RegDiversions;
 use super::registers::RU;
+use binemit::{bad_encoding, CodeSink, Reloc};
+use ir::condcodes::{CondCode, FloatCC, IntCC};
+use ir::{Ebb, Function, Inst, InstructionData, Opcode, TrapCode};
+use isa::{RegUnit, StackBase, StackBaseMask, StackRef};
+use regalloc::RegDiversions;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-intel.rs"));
 
@@ -257,7 +257,7 @@ fn icc2opc(cond: IntCC) -> u16 {
 
 /// Get the low 4 bits of an opcode for a floating point condition code.
 ///
-/// The ucomiss/ucomisd instructions set the EFLAGS bits CF/PF/CF like this:
+/// The ucomiss/ucomisd instructions set the FLAGS bits CF/PF/CF like this:
 ///
 ///    ZPC OSA
 /// UN 111 000

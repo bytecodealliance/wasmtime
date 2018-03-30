@@ -30,7 +30,7 @@
 use binemit::CodeOffset;
 use cursor::{Cursor, FuncCursor};
 use ir::{Function, InstructionData, Opcode};
-use isa::{TargetIsa, EncInfo};
+use isa::{EncInfo, TargetIsa};
 use iterators::IteratorExtras;
 use result::CtonError;
 
@@ -76,14 +76,13 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> Result<CodeOffset
                 if let Some(range) = encinfo.branch_range(enc) {
                     if let Some(dest) = cur.func.dfg[inst].branch_destination() {
                         let dest_offset = cur.func.offsets[dest];
-                        if !range.contains(offset, dest_offset) {
-                            // This is an out-of-range branch.
-                            // Relax it unless the destination offset has not been computed yet.
-                            if dest_offset != 0 || Some(dest) == cur.func.layout.entry_block() {
-                                offset +=
-                                    relax_branch(&mut cur, offset, dest_offset, &encinfo, isa);
-                                continue;
-                            }
+                        // This could be an out-of-range branch.
+                        // Relax it unless the destination offset has not been computed yet.
+                        if !range.contains(offset, dest_offset) &&
+                            (dest_offset != 0 || Some(dest) == cur.func.layout.entry_block())
+                        {
+                            offset += relax_branch(&mut cur, offset, dest_offset, &encinfo, isa);
+                            continue;
                         }
                     }
                 }

@@ -6,15 +6,15 @@
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
 use cretonne::cursor::{Cursor, FuncCursor};
-use cretonne::ir::{Ebb, Value, Inst, Type, Function, InstBuilder};
+use cretonne::entity::{EntityMap, EntityRef, PrimaryMap};
+use cretonne::ir::immediates::{Ieee32, Ieee64};
 use cretonne::ir::instructions::BranchInfo;
-use cretonne::entity::{EntityRef, PrimaryMap, EntityMap};
+use cretonne::ir::types::{F32, F64};
+use cretonne::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
 use cretonne::packed_option::PackedOption;
 use cretonne::packed_option::ReservedValue;
-use std::u32;
-use cretonne::ir::types::{F32, F64};
-use cretonne::ir::immediates::{Ieee32, Ieee64};
 use std::mem;
+use std::u32;
 use std::vec::Vec;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
@@ -77,12 +77,12 @@ impl SideEffects {
     }
 }
 
-// Describes the current position of a basic block in the control flow graph.
+/// Describes the current position of a basic block in the control flow graph.
 enum BlockData<Variable> {
-    // A block at the top of an `Ebb`.
+    /// A block at the top of an `Ebb`.
     EbbHeader(EbbHeaderBlockData<Variable>),
-    // A block inside an `Ebb` with an unique other block as its predecessor.
-    // The block is implicitly sealed at creation.
+    /// A block inside an `Ebb` with an unique other block as its predecessor.
+    /// The block is implicitly sealed at creation.
     EbbBody { predecessor: Block },
 }
 
@@ -179,7 +179,7 @@ where
     }
 }
 
-// Small enum used for clarity in some functions.
+/// Small enum used for clarity in some functions.
 #[derive(Debug)]
 enum ZeroOneOrMore<T> {
     Zero(),
@@ -194,7 +194,7 @@ enum UseVarCases {
     SealedMultiplePredecessors(Value, Ebb),
 }
 
-// States for the `use_var`/`predecessors_lookup` state machine.
+/// States for the `use_var`/`predecessors_lookup` state machine.
 enum Call {
     UseVar(Block),
     FinishSealedOnePredecessor(Block),
@@ -231,7 +231,7 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
     }
 }
 /// The following methods are the API of the SSA builder. Here is how it should be used when
-/// translating to Cretonne IL:
+/// translating to Cretonne IR:
 ///
 /// - for each sequence of contiguous instructions (with no branches), create a corresponding
 ///   basic block with `declare_ebb_body_block` or `declare_ebb_header_block` depending on the
@@ -713,15 +713,15 @@ where
 
 #[cfg(test)]
 mod tests {
+    use Variable;
     use cretonne::cursor::{Cursor, FuncCursor};
     use cretonne::entity::EntityRef;
-    use cretonne::ir::{Function, InstBuilder, Inst, JumpTableData, Opcode};
-    use cretonne::ir::types::*;
-    use cretonne::verify_function;
     use cretonne::ir::instructions::BranchInfo;
+    use cretonne::ir::types::*;
+    use cretonne::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
     use cretonne::settings;
+    use cretonne::verify_function;
     use ssa::SSABuilder;
-    use Variable;
 
     #[test]
     fn simple_block() {
@@ -960,7 +960,6 @@ mod tests {
         assert_eq!(func.dfg.ebb_params(ebb1)[0], z2);
         assert_eq!(func.dfg.ebb_params(ebb1)[1], y3);
         assert_eq!(func.dfg.resolve_aliases(x3), x1);
-
     }
 
     #[test]

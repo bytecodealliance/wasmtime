@@ -1,8 +1,8 @@
 //! B+-tree nodes.
 
+use super::{slice_insert, slice_shift, Forest, Node, SetValue, INNER_SIZE};
 use std::borrow::{Borrow, BorrowMut};
 use std::fmt;
-use super::{Forest, Node, INNER_SIZE, SetValue, slice_insert, slice_shift};
 
 /// B+-tree node.
 ///
@@ -579,9 +579,9 @@ where
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use std::mem;
     use std::string::ToString;
-    use super::*;
 
     // Forest impl for a set implementation.
     struct TF();
