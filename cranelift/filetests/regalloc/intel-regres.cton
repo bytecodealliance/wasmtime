@@ -11,7 +11,7 @@ isa intel
 ; This ended up confusong the constraint solver which had not made a record of
 ; the fixed register assignment for v9 since it was already in the correct
 ; register.
-function %pr147(i32) -> i32 native {
+function %pr147(i32) -> i32 system_v {
 ebb0(v0: i32):
     v1 = iconst.i32 0
     v2 = iconst.i32 1

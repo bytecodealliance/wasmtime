@@ -86,7 +86,7 @@ impl Function {
 
     /// Clear all data structures in this function.
     pub fn clear(&mut self) {
-        self.signature.clear(ir::CallConv::Native);
+        self.signature.clear(ir::CallConv::SystemV);
         self.stack_slots.clear();
         self.global_vars.clear();
         self.heaps.clear();
@@ -99,9 +99,9 @@ impl Function {
         self.srclocs.clear();
     }
 
-    /// Create a new empty, anonymous function with a native calling convention.
+    /// Create a new empty, anonymous function with a SystemV calling convention.
     pub fn new() -> Self {
-        Self::with_name_signature(ExternalName::default(), Signature::new(CallConv::Native))
+        Self::with_name_signature(ExternalName::default(), Signature::new(CallConv::SystemV))
     }
 
     /// Creates a jump table in the function, to be used by `br_table` instructions.

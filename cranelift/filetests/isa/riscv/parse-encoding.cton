@@ -3,32 +3,32 @@ test legalizer
 isa riscv
 
 function %parse_encoding(i32 [%x5]) -> i32 [%x10] {
-    ; check: function %parse_encoding(i32 [%x5], i32 link [%x1]) -> i32 [%x10], i32 link [%x1] native {
+    ; check: function %parse_encoding(i32 [%x5], i32 link [%x1]) -> i32 [%x10], i32 link [%x1] system_v {
 
-    sig0 = (i32 [%x10]) -> i32 [%x10] native
-    ; check: sig0 = (i32 [%x10]) -> i32 [%x10] native
+    sig0 = (i32 [%x10]) -> i32 [%x10] system_v
+    ; check: sig0 = (i32 [%x10]) -> i32 [%x10] system_v
 
-    sig1 = (i32 [%x10], i32 [%x11]) -> b1 [%x10] native
-    ; check: sig1 = (i32 [%x10], i32 [%x11]) -> b1 [%x10] native
+    sig1 = (i32 [%x10], i32 [%x11]) -> b1 [%x10] system_v
+    ; check: sig1 = (i32 [%x10], i32 [%x11]) -> b1 [%x10] system_v
 
-    sig2 = (f32 [%f10], i32 [%x12], i32 [%x13]) -> f64 [%f10] native
-    ; check: sig2 = (f32 [%f10], i32 [%x12], i32 [%x13]) -> f64 [%f10] native
+    sig2 = (f32 [%f10], i32 [%x12], i32 [%x13]) -> f64 [%f10] system_v
+    ; check: sig2 = (f32 [%f10], i32 [%x12], i32 [%x13]) -> f64 [%f10] system_v
 
     ; Arguments on stack where not necessary
-    sig3 = (f64 [%f10], i32 [0], i32 [4]) -> f64 [%f10] native
-    ; check: sig3 = (f64 [%f10], i32 [0], i32 [4]) -> f64 [%f10] native
+    sig3 = (f64 [%f10], i32 [0], i32 [4]) -> f64 [%f10] system_v
+    ; check: sig3 = (f64 [%f10], i32 [0], i32 [4]) -> f64 [%f10] system_v
 
     ; Stack argument before register argument
-    sig4 = (f32 [72], i32 [%x10]) native
-    ; check: sig4 = (f32 [72], i32 [%x10]) native
+    sig4 = (f32 [72], i32 [%x10]) system_v
+    ; check: sig4 = (f32 [72], i32 [%x10]) system_v
 
     ; Return value on stack
-    sig5 = () -> f32 [0] native
-    ; check: sig5 = () -> f32 [0] native
+    sig5 = () -> f32 [0] system_v
+    ; check: sig5 = () -> f32 [0] system_v
 
     ; function + signature
-    fn0 = function %bar(i32 [%x10]) -> b1 [%x10] native
-    ; check: sig6 = (i32 [%x10]) -> b1 [%x10] native
+    fn0 = function %bar(i32 [%x10]) -> b1 [%x10] system_v
+    ; check: sig6 = (i32 [%x10]) -> b1 [%x10] system_v
     ; nextln: fn0 = sig6 %bar
 
 ebb0(v0: i32):

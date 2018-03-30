@@ -187,7 +187,7 @@ impl<'a> Context<'a> {
     fn add_sig(&mut self, sig: SigRef, data: Signature, loc: &Location) -> Result<()> {
         while self.function.dfg.signatures.next_key().index() <= sig.index() {
             self.function.import_signature(
-                Signature::new(CallConv::Native),
+                Signature::new(CallConv::SystemV),
             );
         }
         self.function.dfg.signatures[sig] = data;
@@ -871,8 +871,8 @@ impl<'a> Parser<'a> {
     // signature ::=  * "(" [paramlist] ")" ["->" retlist] [callconv]
     //
     fn parse_signature(&mut self, unique_isa: Option<&TargetIsa>) -> Result<Signature> {
-        // Calling convention defaults to `native`, but can be changed.
-        let mut sig = Signature::new(CallConv::Native);
+        // Calling convention defaults to `system_v`, but can be changed.
+        let mut sig = Signature::new(CallConv::SystemV);
 
         self.match_token(
             Token::LPar,
@@ -2429,7 +2429,7 @@ mod tests {
     #[test]
     fn aliases() {
         let (func, details) = Parser::new(
-            "function %qux() native {
+            "function %qux() system_v {
                                            ebb0:
                                              v4 = iconst.i8 6
                                              v3 -> v4
@@ -2453,10 +2453,10 @@ mod tests {
 
     #[test]
     fn signature() {
-        let sig = Parser::new("()native").parse_signature(None).unwrap();
+        let sig = Parser::new("()system_v").parse_signature(None).unwrap();
         assert_eq!(sig.params.len(), 0);
         assert_eq!(sig.returns.len(), 0);
-        assert_eq!(sig.call_conv, CallConv::Native);
+        assert_eq!(sig.call_conv, CallConv::SystemV);
 
         let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 spiderwasm")
             .parse_signature(None)
@@ -2470,7 +2470,7 @@ mod tests {
         // Old-style signature without a calling convention.
         assert_eq!(
             Parser::new("()").parse_signature(None).unwrap().to_string(),
-            "() native"
+            "() system_v"
         );
         assert_eq!(
             Parser::new("() notacc")
@@ -2507,7 +2507,7 @@ mod tests {
     #[test]
     fn stack_slot_decl() {
         let (func, _) = Parser::new(
-            "function %foo() native {
+            "function %foo() system_v {
                                        ss3 = incoming_arg 13
                                        ss1 = spill_slot 1
                                      }",
@@ -2530,7 +2530,7 @@ mod tests {
         // Catch duplicate definitions.
         assert_eq!(
             Parser::new(
-                "function %bar() native {
+                "function %bar() system_v {
                                     ss1  = spill_slot 13
                                     ss1  = spill_slot 1
                                 }",
@@ -2544,7 +2544,7 @@ mod tests {
     #[test]
     fn ebb_header() {
         let (func, _) = Parser::new(
-            "function %ebbs() native {
+            "function %ebbs() system_v {
                                      ebb0:
                                      ebb4(v3: i32):
                                      }",
@@ -2567,7 +2567,7 @@ mod tests {
     fn comments() {
         let (func, Details { comments, .. }) = Parser::new(
             "; before
-                         function %comment() native { ; decl
+                         function %comment() system_v { ; decl
                             ss10  = outgoing_arg 13 ; stackslot.
                             ; Still stackslot.
                             jt10 = jump_table ebb0
@@ -2610,7 +2610,7 @@ mod tests {
                              test verify
                              set enable_float=false
                              ; still preamble
-                             function %comment() native {}",
+                             function %comment() system_v {}",
         ).unwrap();
         assert_eq!(tf.commands.len(), 2);
         assert_eq!(tf.commands[0].command, "cfg");
@@ -2635,7 +2635,7 @@ mod tests {
         assert!(
             parse_test(
                 "isa
-                            function %foo() native {}",
+                            function %foo() system_v {}",
             ).is_err()
         );
 
@@ -2643,14 +2643,14 @@ mod tests {
             parse_test(
                 "isa riscv
                             set enable_float=false
-                            function %foo() native {}",
+                            function %foo() system_v {}",
             ).is_err()
         );
 
         match parse_test(
             "set enable_float=false
                           isa riscv
-                          function %foo() native {}",
+                          function %foo() system_v {}",
         ).unwrap()
             .isa_spec {
             IsaSpec::None(_) => panic!("Expected some ISA"),
@@ -2665,7 +2665,7 @@ mod tests {
     fn user_function_name() {
         // Valid characters in the name:
         let func = Parser::new(
-            "function u1:2() native {
+            "function u1:2() system_v {
                                            ebb0:
                                              trap int_divz
                                            }",
@@ -2676,7 +2676,7 @@ mod tests {
 
         // Invalid characters in the name:
         let mut parser = Parser::new(
-            "function u123:abc() native {
+            "function u123:abc() system_v {
                                            ebb0:
                                              trap stk_ovf
                                            }",
@@ -2685,7 +2685,7 @@ mod tests {
 
         // Incomplete function names should not be valid:
         let mut parser = Parser::new(
-            "function u() native {
+            "function u() system_v {
                                            ebb0:
                                              trap int_ovf
                                            }",
@@ -2693,7 +2693,7 @@ mod tests {
         assert!(parser.parse_function(None).is_err());
 
         let mut parser = Parser::new(
-            "function u0() native {
+            "function u0() system_v {
                                            ebb0:
                                              trap int_ovf
                                            }",
@@ -2701,7 +2701,7 @@ mod tests {
         assert!(parser.parse_function(None).is_err());
 
         let mut parser = Parser::new(
-            "function u0:() native {
+            "function u0:() system_v {
                                            ebb0:
                                              trap int_ovf
                                            }",

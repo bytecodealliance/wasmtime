@@ -1,6 +1,6 @@
 test licm
 
-function %complex(i32) -> i32 native {
+function %complex(i32) -> i32 system_v {
 ebb0(v0: i32):
     jump ebb1(v0)
 

@@ -43,7 +43,7 @@ function %loop1(i32) {
 ; nextln: ebb9:
 ; nextln: }
 
-function %loop2(i32) native {
+function %loop2(i32) system_v {
     ebb0(v0: i32):
         brz v0, ebb1    ; dominates: ebb1 ebb3 ebb4 ebb5
         jump ebb2       ; dominates: ebb2

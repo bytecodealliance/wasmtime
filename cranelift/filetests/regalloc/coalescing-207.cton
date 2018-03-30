@@ -5,12 +5,12 @@ isa intel haswell
 ; Reported as https://github.com/Cretonne/cretonne/issues/207
 ;
 ; The coalescer creates a virtual register with two interfering values.
-function %pr207(i64 vmctx, i32, i32) -> i32 native {
+function %pr207(i64 vmctx, i32, i32) -> i32 system_v {
     gv0 = vmctx-8
     heap0 = static gv0, min 0, bound 0x5000, guard 0x0040_0000
-    sig0 = (i64 vmctx, i32, i32) -> i32 native
-    sig1 = (i64 vmctx, i32, i32, i32) -> i32 native
-    sig2 = (i64 vmctx, i32, i32, i32) -> i32 native
+    sig0 = (i64 vmctx, i32, i32) -> i32 system_v
+    sig1 = (i64 vmctx, i32, i32, i32) -> i32 system_v
+    sig2 = (i64 vmctx, i32, i32, i32) -> i32 system_v
     fn0 = sig0 u0:2
     fn1 = sig1 u0:0
     fn2 = sig2 u0:1
@@ -1034,10 +1034,10 @@ ebb92(v767: i32):
 }
 
 ; Same problem from musl.wasm.
-function %musl(f64 [%xmm0], i64 vmctx [%rdi]) -> f64 [%xmm0] native {
+function %musl(f64 [%xmm0], i64 vmctx [%rdi]) -> f64 [%xmm0] system_v {
     gv0 = vmctx
     heap0 = static gv0, min 0, bound 0x0001_0000_0000, guard 0x8000_0000
-    sig0 = (f64 [%xmm0], i32 [%rdi], i64 vmctx [%rsi]) -> f64 [%xmm0] native
+    sig0 = (f64 [%xmm0], i32 [%rdi], i64 vmctx [%rsi]) -> f64 [%xmm0] system_v
     fn0 = sig0 u0:517
 
 ebb0(v0: f64, v1: i64):
