@@ -1,9 +1,10 @@
 //! Densely numbered entity references as mapping keys.
 
-use entity::{EntityRef, Keys};
+use entity::{EntityRef, Keys, Iter, IterMut};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::vec::Vec;
+use std::slice;
 
 /// A mapping `K -> V` for densely indexed entity references.
 ///
@@ -68,9 +69,29 @@ where
         self.elems.clear()
     }
 
+    /// Iterate over all the keys and values in this map.
+    pub fn iter(&self) -> Iter<K, V> {
+        Iter::new(K::new(0), self.elems.iter())
+    }
+
+    /// Iterate over all the keys and values in this map, mutable edition.
+    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+        IterMut::new(K::new(0), self.elems.iter_mut())
+    }
+
     /// Iterate over all the keys in this map.
     pub fn keys(&self) -> Keys<K> {
         Keys::new(self.elems.len())
+    }
+
+    /// Iterate over all the keys in this map.
+    pub fn values(&self) -> slice::Iter<V> {
+        self.elems.iter()
+    }
+
+    /// Iterate over all the keys in this map, mutable edition.
+    pub fn values_mut(&mut self) -> slice::IterMut<V> {
+        self.elems.iter_mut()
     }
 
     /// Resize the map to have `n` entries by adding default entries as needed.

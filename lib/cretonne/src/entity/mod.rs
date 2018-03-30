@@ -30,6 +30,7 @@
 //!   `Vec`.
 
 mod keys;
+mod iter;
 mod list;
 mod map;
 mod primary;
@@ -37,6 +38,7 @@ mod sparse;
 mod set;
 
 pub use self::keys::Keys;
+pub use self::iter::{Iter, IterMut};
 pub use self::list::{EntityList, ListPool};
 pub use self::map::EntityMap;
 pub use self::primary::PrimaryMap;

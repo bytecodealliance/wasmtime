@@ -3,11 +3,12 @@
 //! The `StackSlotData` struct keeps track of a single stack slot in a function.
 //!
 
-use entity::{PrimaryMap, Keys};
+use entity::{PrimaryMap, Keys, Iter, IterMut};
 use ir::{Type, StackSlot};
 use packed_option::PackedOption;
 use std::cmp;
 use std::fmt;
+use std::slice;
 use std::ops::{Index, IndexMut};
 use std::str::FromStr;
 use std::vec::Vec;
@@ -206,6 +207,26 @@ impl StackSlots {
     /// Set the offset of a stack slot.
     pub fn set_offset(&mut self, ss: StackSlot, offset: StackOffset) {
         self.slots[ss].offset = Some(offset);
+    }
+
+    /// Get an iterator over all the stack slot keys.
+    pub fn iter(&self) -> Iter<StackSlot, StackSlotData> {
+        self.slots.iter()
+    }
+
+    /// Get an iterator over all the stack slot keys, mutable edition.
+    pub fn iter_mut(&mut self) -> IterMut<StackSlot, StackSlotData> {
+        self.slots.iter_mut()
+    }
+
+    /// Get an iterator over all the stack slot records.
+    pub fn values(&self) -> slice::Iter<StackSlotData> {
+        self.slots.values()
+    }
+
+    /// Get an iterator over all the stack slot records, mutable edition.
+    pub fn values_mut(&mut self) -> slice::IterMut<StackSlotData> {
+        self.slots.values_mut()
     }
 
     /// Get an iterator over all the stack slot keys.

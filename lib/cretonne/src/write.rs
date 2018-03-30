@@ -44,44 +44,38 @@ fn write_preamble(
 ) -> result::Result<bool, Error> {
     let mut any = false;
 
-    for ss in func.stack_slots.keys() {
+    for (ss, slot) in func.stack_slots.iter() {
         any = true;
-        writeln!(w, "    {} = {}", ss, func.stack_slots[ss])?;
+        writeln!(w, "    {} = {}", ss, slot)?;
     }
 
-    for gv in func.global_vars.keys() {
+    for (gv, gv_data) in func.global_vars.iter() {
         any = true;
-        writeln!(w, "    {} = {}", gv, func.global_vars[gv])?;
+        writeln!(w, "    {} = {}", gv, gv_data)?;
     }
 
-    for heap in func.heaps.keys() {
+    for (heap, heap_data) in func.heaps.iter() {
         any = true;
-        writeln!(w, "    {} = {}", heap, func.heaps[heap])?;
+        writeln!(w, "    {} = {}", heap, heap_data)?;
     }
 
     // Write out all signatures before functions since function declarations can refer to
     // signatures.
-    for sig in func.dfg.signatures.keys() {
+    for (sig, sig_data) in func.dfg.signatures.iter() {
         any = true;
-        writeln!(
-            w,
-            "    {} = {}",
-            sig,
-            func.dfg.signatures[sig].display(regs)
-        )?;
+        writeln!(w, "    {} = {}", sig, sig_data.display(regs))?;
     }
 
-    for fnref in func.dfg.ext_funcs.keys() {
+    for (fnref, ext_func) in func.dfg.ext_funcs.iter() {
         any = true;
-        let ext_func = &func.dfg.ext_funcs[fnref];
         if ext_func.signature != SigRef::reserved_value() {
             writeln!(w, "    {} = {}", fnref, ext_func)?;
         }
     }
 
-    for jt in func.jump_tables.keys() {
+    for (jt, jt_data) in func.jump_tables.iter() {
         any = true;
-        writeln!(w, "    {} = {}", jt, func.jump_tables[jt])?;
+        writeln!(w, "    {} = {}", jt, jt_data)?;
     }
 
     Ok(any)

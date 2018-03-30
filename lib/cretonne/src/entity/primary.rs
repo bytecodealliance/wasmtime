@@ -1,8 +1,9 @@
 //! Densely numbered entity references as mapping keys.
-use entity::{EntityRef, Keys};
+use entity::{EntityRef, Keys, Iter, IterMut};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::vec::Vec;
+use std::slice;
 
 /// A primary mapping `K -> V` allocating dense entity references.
 ///
@@ -57,6 +58,26 @@ where
     /// Iterate over all the keys in this map.
     pub fn keys(&self) -> Keys<K> {
         Keys::new(self.elems.len())
+    }
+
+    /// Iterate over all the values in this map.
+    pub fn values(&self) -> slice::Iter<V> {
+        self.elems.iter()
+    }
+
+    /// Iterate over all the values in this map, mutable edition.
+    pub fn values_mut(&mut self) -> slice::IterMut<V> {
+        self.elems.iter_mut()
+    }
+
+    /// Iterate over all the keys and values in this map.
+    pub fn iter(&self) -> Iter<K, V> {
+        Iter::new(K::new(0), self.elems.iter())
+    }
+
+    /// Iterate over all the keys and values in this map, mutable edition.
+    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+        IterMut::new(K::new(0), self.elems.iter_mut())
     }
 
     /// Remove all entries from this map.
@@ -133,13 +154,80 @@ mod tests {
     #[test]
     fn push() {
         let mut m = PrimaryMap::new();
-        let k1: E = m.push(12);
-        let k2 = m.push(33);
+        let k0: E = m.push(12);
+        let k1 = m.push(33);
 
-        assert_eq!(m[k1], 12);
-        assert_eq!(m[k2], 33);
+        assert_eq!(m[k0], 12);
+        assert_eq!(m[k1], 33);
 
         let v: Vec<E> = m.keys().collect();
-        assert_eq!(v, [k1, k2]);
+        assert_eq!(v, [k0, k1]);
+    }
+
+    #[test]
+    fn iter() {
+        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
+        m.push(12);
+        m.push(33);
+
+        let mut i = 0;
+        for (key, value) in m.iter() {
+            assert_eq!(key.index(), i);
+            match i {
+                0 => assert_eq!(*value, 12),
+                1 => assert_eq!(*value, 33),
+                _ => panic!(),
+            }
+            i += 1;
+        }
+        i = 0;
+        for (key_mut, value_mut) in m.iter_mut() {
+            assert_eq!(key_mut.index(), i);
+            match i {
+                0 => assert_eq!(*value_mut, 12),
+                1 => assert_eq!(*value_mut, 33),
+                _ => panic!(),
+            }
+            i += 1;
+        }
+    }
+
+    #[test]
+    fn keys() {
+        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
+        m.push(12);
+        m.push(33);
+
+        let mut i = 0;
+        for key in m.keys() {
+            assert_eq!(key.index(), i);
+            i += 1;
+        }
+    }
+
+    #[test]
+    fn values() {
+        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
+        m.push(12);
+        m.push(33);
+
+        let mut i = 0;
+        for value in m.values() {
+            match i {
+                0 => assert_eq!(*value, 12),
+                1 => assert_eq!(*value, 33),
+                _ => panic!(),
+            }
+            i += 1;
+        }
+        i = 0;
+        for value_mut in m.values_mut() {
+            match i {
+                0 => assert_eq!(*value_mut, 12),
+                1 => assert_eq!(*value_mut, 33),
+                _ => panic!(),
+            }
+            i += 1;
+        }
     }
 }
