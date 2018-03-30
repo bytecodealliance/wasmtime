@@ -186,8 +186,8 @@ pub fn legalize_abi_value(have: Type, arg: &AbiParam) -> ValueConversion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ir::types;
     use ir::AbiParam;
+    use ir::types;
 
     #[test]
     fn legalize() {

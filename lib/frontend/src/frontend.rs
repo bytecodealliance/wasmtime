@@ -1,14 +1,14 @@
 //! A frontend for building Cretonne IR from other languages.
 use cretonne::cursor::{Cursor, FuncCursor};
+use cretonne::entity::{EntityMap, EntityRef, EntitySet};
 use cretonne::ir;
+use cretonne::ir::function::DisplayFunction;
 use cretonne::ir::{DataFlowGraph, Ebb, ExtFuncData, FuncRef, Function, GlobalVar, GlobalVarData,
                    Heap, HeapData, Inst, InstBuilderBase, InstructionData, JumpTable,
                    JumpTableData, SigRef, Signature, StackSlot, StackSlotData, Type, Value};
-use cretonne::ir::function::DisplayFunction;
 use cretonne::isa::TargetIsa;
-use ssa::{Block, SSABuilder, SideEffects};
-use cretonne::entity::{EntityMap, EntityRef, EntitySet};
 use cretonne::packed_option::PackedOption;
+use ssa::{Block, SSABuilder, SideEffects};
 
 /// Structure used for translating a series of functions into Cretonne IR.
 ///
@@ -592,13 +592,13 @@ where
 #[cfg(test)]
 mod tests {
 
-    use cretonne::entity::EntityRef;
-    use cretonne::ir::{AbiParam, CallConv, ExternalName, Function, InstBuilder, Signature};
-    use cretonne::ir::types::*;
-    use frontend::{FunctionBuilder, FunctionBuilderContext};
-    use cretonne::verifier::verify_function;
-    use cretonne::settings;
     use Variable;
+    use cretonne::entity::EntityRef;
+    use cretonne::ir::types::*;
+    use cretonne::ir::{AbiParam, CallConv, ExternalName, Function, InstBuilder, Signature};
+    use cretonne::settings;
+    use cretonne::verifier::verify_function;
+    use frontend::{FunctionBuilder, FunctionBuilderContext};
 
     fn sample_function(lazy_seal: bool) {
         let mut sig = Signature::new(CallConv::SystemV);

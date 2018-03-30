@@ -1,25 +1,25 @@
 //! Representation of Cretonne IR functions.
 
-pub mod types;
-pub mod entities;
-pub mod condcodes;
-pub mod immediates;
-pub mod instructions;
-pub mod stackslot;
-pub mod jumptable;
-pub mod dfg;
-pub mod layout;
-pub mod function;
 mod builder;
+pub mod condcodes;
+pub mod dfg;
+pub mod entities;
 mod extfunc;
 mod extname;
+pub mod function;
 mod globalvar;
 mod heap;
+pub mod immediates;
+pub mod instructions;
+pub mod jumptable;
+pub mod layout;
 mod libcall;
 mod memflags;
 mod progpoint;
 mod sourceloc;
+pub mod stackslot;
 mod trapcode;
+pub mod types;
 mod valueloc;
 
 pub use ir::builder::{InsertBuilder, InstBuilder, InstBuilderBase, InstInserterBase};

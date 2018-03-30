@@ -1,7 +1,7 @@
 //! Global variables.
 
-use ir::{ExternalName, GlobalVar};
 use ir::immediates::Offset32;
+use ir::{ExternalName, GlobalVar};
 use std::fmt;
 
 /// Information about a global variable declaration.

@@ -6,15 +6,15 @@
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
 use cretonne::cursor::{Cursor, FuncCursor};
-use cretonne::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
-use cretonne::ir::instructions::BranchInfo;
 use cretonne::entity::{EntityMap, EntityRef, PrimaryMap};
+use cretonne::ir::immediates::{Ieee32, Ieee64};
+use cretonne::ir::instructions::BranchInfo;
+use cretonne::ir::types::{F32, F64};
+use cretonne::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
 use cretonne::packed_option::PackedOption;
 use cretonne::packed_option::ReservedValue;
-use std::u32;
-use cretonne::ir::types::{F32, F64};
-use cretonne::ir::immediates::{Ieee32, Ieee64};
 use std::mem;
+use std::u32;
 use std::vec::Vec;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
@@ -713,15 +713,15 @@ where
 
 #[cfg(test)]
 mod tests {
+    use Variable;
     use cretonne::cursor::{Cursor, FuncCursor};
     use cretonne::entity::EntityRef;
-    use cretonne::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
-    use cretonne::ir::types::*;
-    use cretonne::verify_function;
     use cretonne::ir::instructions::BranchInfo;
+    use cretonne::ir::types::*;
+    use cretonne::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
     use cretonne::settings;
+    use cretonne::verify_function;
     use ssa::SSABuilder;
-    use Variable;
 
     #[test]
     fn simple_block() {

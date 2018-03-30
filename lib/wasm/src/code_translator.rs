@@ -22,19 +22,19 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
-use cretonne::ir::{self, InstBuilder, JumpTableData, MemFlags};
-use cretonne::ir::types::*;
 use cretonne::ir::condcodes::{FloatCC, IntCC};
+use cretonne::ir::types::*;
+use cretonne::ir::{self, InstBuilder, JumpTableData, MemFlags};
 use cretonne::packed_option::ReservedValue;
 use cton_frontend::{FunctionBuilder, Variable};
-use wasmparser::{MemoryImmediate, Operator};
-use translation_utils::{num_return_values, type_to_type, f32_translation, f64_translation};
-use translation_utils::{FunctionIndex, MemoryIndex, SignatureIndex, TableIndex};
+use environ::{FuncEnvironment, GlobalValue};
 use state::{ControlStackFrame, TranslationState};
 use std::collections::{hash_map, HashMap};
-use environ::{FuncEnvironment, GlobalValue};
-use std::{i32, u32};
 use std::vec::Vec;
+use std::{i32, u32};
+use translation_utils::{FunctionIndex, MemoryIndex, SignatureIndex, TableIndex};
+use translation_utils::{num_return_values, type_to_type, f32_translation, f64_translation};
+use wasmparser::{MemoryImmediate, Operator};
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored
 #[cfg_attr(feature = "cargo-clippy", allow(unneeded_field_pattern))]

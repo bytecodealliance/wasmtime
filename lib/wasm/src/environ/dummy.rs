@@ -1,17 +1,17 @@
 //! "Dummy" environment for testing wasm translation.
 
+use cretonne::cursor::FuncCursor;
+use cretonne::ir::types::*;
+use cretonne::ir::{self, InstBuilder};
+use cretonne::settings;
 use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment};
+use func_translator::FuncTranslator;
+use std::error::Error;
+use std::string::String;
+use std::vec::Vec;
 use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
                         Table, TableIndex};
-use func_translator::FuncTranslator;
-use cretonne::ir::{self, InstBuilder};
-use cretonne::ir::types::*;
-use cretonne::cursor::FuncCursor;
-use cretonne::settings;
 use wasmparser;
-use std::error::Error;
-use std::vec::Vec;
-use std::string::String;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 fn get_func_name(func_index: FunctionIndex) -> ir::ExternalName {

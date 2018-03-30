@@ -110,10 +110,10 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
 
 #[cfg(test)]
 mod tests {
-    use ir::{StackSlotData, StackSlotKind, StackSlots};
-    use ir::types;
     use super::layout_stack;
     use ir::stackslot::StackOffset;
+    use ir::types;
+    use ir::{StackSlotData, StackSlotKind, StackSlots};
     use result::CtonError;
 
     #[test]

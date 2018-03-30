@@ -8,16 +8,16 @@
 extern crate cretonne;
 
 pub use error::{Error, Location, Result};
+pub use isaspec::{parse_options, IsaSpec};
 pub use parser::{parse_functions, parse_test};
+pub use sourcemap::SourceMap;
 pub use testcommand::{TestCommand, TestOption};
 pub use testfile::{Comment, Details, TestFile};
-pub use isaspec::{parse_options, IsaSpec};
-pub use sourcemap::SourceMap;
 
 mod error;
+mod isaspec;
 mod lexer;
 mod parser;
-mod testcommand;
-mod isaspec;
-mod testfile;
 mod sourcemap;
+mod testcommand;
+mod testfile;

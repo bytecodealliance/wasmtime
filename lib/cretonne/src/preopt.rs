@@ -3,13 +3,13 @@
 #![allow(non_snake_case)]
 
 use cursor::{Cursor, FuncCursor};
-use ir::dfg::ValueDef;
-use ir::{DataFlowGraph, Function, InstBuilder, InstructionData, Type, Value};
-use ir::Inst;
-use ir::types::{I32, I64};
-use ir::instructions::Opcode;
 use divconst_magic_numbers::{MS32, MS64, MU32, MU64};
 use divconst_magic_numbers::{magicS32, magicS64, magicU32, magicU64};
+use ir::Inst;
+use ir::dfg::ValueDef;
+use ir::instructions::Opcode;
+use ir::types::{I32, I64};
+use ir::{DataFlowGraph, Function, InstBuilder, InstructionData, Type, Value};
 use timing;
 
 //----------------------------------------------------------------------

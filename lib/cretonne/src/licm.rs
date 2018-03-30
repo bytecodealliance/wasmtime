@@ -1,14 +1,14 @@
 //! A Loop Invariant Code Motion optimization pass
 
 use cursor::{Cursor, FuncCursor};
-use ir::{DataFlowGraph, Ebb, Function, Inst, InstBuilder, Layout, Opcode, Type, Value};
-use flowgraph::ControlFlowGraph;
-use std::collections::HashSet;
 use dominator_tree::DominatorTree;
 use entity::{EntityList, ListPool};
+use flowgraph::ControlFlowGraph;
+use ir::{DataFlowGraph, Ebb, Function, Inst, InstBuilder, Layout, Opcode, Type, Value};
 use loop_analysis::{Loop, LoopAnalysis};
-use timing;
+use std::collections::HashSet;
 use std::vec::Vec;
+use timing;
 
 /// Performs the LICM pass by detecting loops within the CFG and moving
 /// loop-invariant instructions out of them.

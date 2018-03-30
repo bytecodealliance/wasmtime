@@ -216,9 +216,9 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
 #[cfg(test)]
 mod tests {
     use cursor::{Cursor, FuncCursor};
-    use ir::{Function, InstBuilder, ValueDef};
-    use ir::types::*;
     use ir::condcodes::*;
+    use ir::types::*;
+    use ir::{Function, InstBuilder, ValueDef};
 
     #[test]
     fn types() {

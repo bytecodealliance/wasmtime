@@ -29,16 +29,16 @@
 //!   references allocated from an associated memory pool. It has a much smaller footprint than
 //!   `Vec`.
 
-mod keys;
 mod iter;
+mod keys;
 mod list;
 mod map;
 mod primary;
-mod sparse;
 mod set;
+mod sparse;
 
-pub use self::keys::Keys;
 pub use self::iter::{Iter, IterMut};
+pub use self::keys::Keys;
 pub use self::list::{EntityList, ListPool};
 pub use self::map::EntityMap;
 pub use self::primary::PrimaryMap;
@@ -95,5 +95,5 @@ macro_rules! entity_impl {
                 (self as &::std::fmt::Display).fmt(f)
             }
         }
-    }
+    };
 }

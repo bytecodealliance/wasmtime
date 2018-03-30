@@ -1,9 +1,9 @@
 //! A path from the root of a B+-tree to a leaf node.
 
+use super::node::Removed;
+use super::{slice_insert, slice_shift, Comparator, Forest, Node, NodeData, NodePool, MAX_PATH};
 use std::borrow::Borrow;
 use std::marker::PhantomData;
-use super::{slice_insert, slice_shift, Comparator, Forest, Node, NodeData, NodePool, MAX_PATH};
-use super::node::Removed;
 
 #[cfg(test)]
 use std::fmt;
@@ -699,9 +699,9 @@ impl<F: Forest> fmt::Display for Path<F> {
 
 #[cfg(test)]
 mod test {
-    use std::cmp::Ordering;
-    use super::*;
     use super::super::{Forest, NodeData, NodePool};
+    use super::*;
+    use std::cmp::Ordering;
 
     struct TC();
 

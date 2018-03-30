@@ -2,18 +2,18 @@ extern crate cretonne;
 extern crate cton_wasm;
 extern crate tempdir;
 
-use cton_wasm::{translate_module, DummyEnvironment};
-use std::path::PathBuf;
-use std::fs::File;
-use std::error::Error;
-use std::io;
-use std::str;
-use std::io::prelude::*;
-use std::process::Command;
-use std::fs;
+use cretonne::print_errors::pretty_verifier_error;
 use cretonne::settings::{self, Configurable, Flags};
 use cretonne::verifier;
-use cretonne::print_errors::pretty_verifier_error;
+use cton_wasm::{translate_module, DummyEnvironment};
+use std::error::Error;
+use std::fs;
+use std::fs::File;
+use std::io;
+use std::io::prelude::*;
+use std::path::PathBuf;
+use std::process::Command;
+use std::str;
 use tempdir::TempDir;
 
 #[test]

@@ -1,7 +1,7 @@
 //! Support for configurable wasm translation.
 
-mod spec;
 mod dummy;
+mod spec;
 
-pub use environ::spec::{FuncEnvironment, GlobalValue, ModuleEnvironment};
 pub use environ::dummy::DummyEnvironment;
+pub use environ::spec::{FuncEnvironment, GlobalValue, ModuleEnvironment};

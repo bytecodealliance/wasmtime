@@ -3,15 +3,15 @@
 //! Reads Wasm binary files, translates the functions' code to Cretonne IR.
 #![cfg_attr(feature = "cargo-clippy", allow(too_many_arguments, cyclomatic_complexity))]
 
-use cton_wasm::{translate_module, DummyEnvironment, ModuleEnvironment};
-use std::path::PathBuf;
 use cretonne::Context;
-use cretonne::settings::FlagsOrIsa;
 use cretonne::print_errors::{pretty_error, pretty_verifier_error};
-use std::fs::File;
+use cretonne::settings::FlagsOrIsa;
+use cton_wasm::{translate_module, DummyEnvironment, ModuleEnvironment};
 use std::error::Error;
+use std::fs::File;
 use std::io;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use tempdir::TempDir;
 use term;

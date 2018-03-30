@@ -9,12 +9,12 @@
 //! This annotation means that the verifier is expected to given an error for the jump instruction
 //! containing the substring "jump to non-existent EBB".
 
-use std::borrow::{Borrow, Cow};
-use cretonne::verify_function;
 use cretonne::ir::Function;
+use cretonne::verify_function;
 use cton_reader::TestCommand;
-use subtest::{Context, Result, SubTest};
 use match_directive::match_directive;
+use std::borrow::{Borrow, Cow};
+use subtest::{Context, Result, SubTest};
 
 struct TestVerifier;
 

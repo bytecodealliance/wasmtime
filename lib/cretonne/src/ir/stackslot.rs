@@ -8,8 +8,8 @@ use ir::{StackSlot, Type};
 use packed_option::PackedOption;
 use std::cmp;
 use std::fmt;
-use std::slice;
 use std::ops::{Index, IndexMut};
+use std::slice;
 use std::str::FromStr;
 use std::vec::Vec;
 
@@ -338,9 +338,9 @@ impl StackSlots {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use ir::Function;
     use ir::types;
-    use super::*;
     use std::string::ToString;
 
     #[test]

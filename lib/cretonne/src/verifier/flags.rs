@@ -2,13 +2,13 @@
 
 use entity::{EntityMap, SparseSet};
 use flowgraph::ControlFlowGraph;
-use ir::instructions::BranchInfo;
 use ir;
+use ir::instructions::BranchInfo;
 use isa;
 use packed_option::PackedOption;
 use std::result;
-use verifier::{Error, Result};
 use timing;
+use verifier::{Error, Result};
 
 /// Verify that CPU flags are used correctly.
 ///

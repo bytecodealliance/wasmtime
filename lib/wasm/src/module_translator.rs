@@ -1,12 +1,12 @@
 //! Translation skeleton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
 use cretonne::timing;
-use wasmparser::{BinaryReaderError, Parser, ParserInput, ParserState, SectionCode, WasmDecoder};
+use environ::ModuleEnvironment;
 use sections_translator::{parse_data_section, parse_elements_section, parse_export_section,
                           parse_function_section, parse_function_signatures, parse_global_section,
                           parse_import_section, parse_memory_section, parse_start_section,
                           parse_table_section, SectionParsingError};
-use environ::ModuleEnvironment;
+use wasmparser::{BinaryReaderError, Parser, ParserInput, ParserState, SectionCode, WasmDecoder};
 
 use std::string::String;
 

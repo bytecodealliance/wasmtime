@@ -14,16 +14,16 @@ extern crate cton_reader;
 extern crate filecheck;
 extern crate num_cpus;
 
-use std::path::Path;
-use std::time;
 use cton_reader::TestCommand;
 use runner::TestRunner;
+use std::path::Path;
+use std::time;
 
 mod concurrent;
+mod match_directive;
 mod runner;
 mod runone;
 mod subtest;
-mod match_directive;
 
 mod test_binemit;
 mod test_cat;

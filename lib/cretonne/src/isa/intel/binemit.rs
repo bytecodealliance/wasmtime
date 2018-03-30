@@ -1,11 +1,11 @@
 //! Emitting binary Intel machine code.
 
+use super::registers::RU;
 use binemit::{bad_encoding, CodeSink, Reloc};
-use ir::{Ebb, Function, Inst, InstructionData, Opcode, TrapCode};
 use ir::condcodes::{CondCode, FloatCC, IntCC};
+use ir::{Ebb, Function, Inst, InstructionData, Opcode, TrapCode};
 use isa::{RegUnit, StackBase, StackBaseMask, StackRef};
 use regalloc::RegDiversions;
-use super::registers::RU;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-intel.rs"));
 

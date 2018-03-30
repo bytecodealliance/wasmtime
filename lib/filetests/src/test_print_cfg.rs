@@ -5,8 +5,8 @@
 
 use std::borrow::Cow;
 
-use cretonne::ir::Function;
 use cretonne::cfg_printer::CFGPrinter;
+use cretonne::ir::Function;
 use cton_reader::TestCommand;
 use subtest::{self, Context, Result as STResult, SubTest};
 

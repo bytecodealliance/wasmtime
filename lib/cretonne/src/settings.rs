@@ -190,8 +190,8 @@ impl<'a> PredicateView<'a> {
 /// This module holds definitions that need to be public so the can be instantiated by generated
 /// code in other modules.
 pub mod detail {
-    use std::fmt;
     use constant_hash;
+    use std::fmt;
 
     /// An instruction group template.
     pub struct Template {
@@ -345,9 +345,9 @@ impl<'a> From<&'a TargetIsa> for FlagsOrIsa<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{builder, Flags};
-    use super::Error::*;
     use super::Configurable;
+    use super::Error::*;
+    use super::{builder, Flags};
     use std::string::ToString;
 
     #[test]

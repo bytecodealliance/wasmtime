@@ -2,8 +2,8 @@
 use entity::{EntityRef, Iter, IterMut, Keys};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
-use std::vec::Vec;
 use std::slice;
+use std::vec::Vec;
 
 /// A primary mapping `K -> V` allocating dense entity references.
 ///

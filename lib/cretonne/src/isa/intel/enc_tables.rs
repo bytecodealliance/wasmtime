@@ -1,16 +1,16 @@
 //! Encoding tables for Intel ISAs.
 
+use super::registers::*;
 use bitset::BitSet;
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
-use ir::{self, InstBuilder};
 use ir::condcodes::IntCC;
+use ir::{self, InstBuilder};
+use isa;
 use isa::constraints::*;
 use isa::enc_tables::*;
 use isa::encoding::RecipeSizing;
-use isa;
 use predicates;
-use super::registers::*;
 
 include!(concat!(env!("OUT_DIR"), "/encoding-intel.rs"));
 include!(concat!(env!("OUT_DIR"), "/legalize-intel.rs"));

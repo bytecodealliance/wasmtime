@@ -269,16 +269,16 @@ impl fmt::Display for Pressure {
 #[cfg(test)]
 #[cfg(build_arm32)]
 mod tests {
+    use super::Pressure;
     use isa::{RegClass, TargetIsa};
     use regalloc::AllocatableSet;
     use std::borrow::Borrow;
-    use super::Pressure;
     use std::boxed::Box;
 
     // Make an arm32 `TargetIsa`, if possible.
     fn arm32() -> Option<Box<TargetIsa>> {
-        use settings;
         use isa;
+        use settings;
 
         let shared_builder = settings::builder();
         let shared_flags = settings::Flags::new(&shared_builder);

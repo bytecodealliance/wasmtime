@@ -20,9 +20,9 @@
 use abi::{legalize_abi_value, ValueConversion};
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
+use ir::instructions::CallInfo;
 use ir::{AbiParam, ArgumentLoc, ArgumentPurpose, DataFlowGraph, Ebb, Function, Inst, InstBuilder,
          SigRef, Signature, Type, Value, ValueLoc};
-use ir::instructions::CallInfo;
 use isa::TargetIsa;
 use legalizer::split::{isplit, vsplit};
 use std::vec::Vec;

@@ -7,8 +7,8 @@
 //! These register diversions are local to an EBB. No values can be diverted when entering a new
 //! EBB.
 
-use ir::{StackSlot, Value, ValueLoc, ValueLocations};
 use ir::{InstructionData, Opcode};
+use ir::{StackSlot, Value, ValueLoc, ValueLocations};
 use isa::{RegInfo, RegUnit};
 use std::fmt;
 use std::vec::Vec;
@@ -187,8 +187,8 @@ impl<'a> fmt::Display for DisplayDiversions<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ir::Value;
     use entity::EntityRef;
+    use ir::Value;
 
     #[test]
     fn inserts() {

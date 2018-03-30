@@ -481,8 +481,8 @@ impl<T: EntityRef> EntityList<T> {
 mod tests {
     use super::*;
     use super::{sclass_for_length, sclass_size};
-    use ir::Inst;
     use entity::EntityRef;
+    use ir::Inst;
 
     #[test]
     fn size_classes() {

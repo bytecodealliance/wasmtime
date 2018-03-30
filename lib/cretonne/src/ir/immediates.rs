@@ -651,10 +651,10 @@ impl FromStr for Ieee64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{f32, f64};
-    use std::str::FromStr;
     use std::fmt::Display;
+    use std::str::FromStr;
     use std::string::ToString;
+    use std::{f32, f64};
 
     #[test]
     fn format_imm64() {

@@ -5,9 +5,9 @@
 //!
 //! If you would like to add support for larger bitsets in the future, you need to change the trait
 //! bound Into<u32> and the u32 in the implementation of `max_bits()`.
+use std::convert::{From, Into};
 use std::mem::size_of;
 use std::ops::{Add, BitOr, Shl, Sub};
-use std::convert::{From, Into};
 
 /// A small bitset built on a single primitive integer type
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

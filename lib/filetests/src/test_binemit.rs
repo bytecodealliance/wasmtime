@@ -3,18 +3,18 @@
 //! The `binemit` test command generates binary machine code for every instruction in the input
 //! functions and compares the results to the expected output.
 
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::fmt::Write;
 use cretonne::binemit;
+use cretonne::binemit::RegDiversions;
 use cretonne::dbg::DisplayList;
 use cretonne::ir;
 use cretonne::ir::entities::AnyEntity;
-use cretonne::binemit::RegDiversions;
 use cretonne::print_errors::pretty_error;
 use cton_reader::TestCommand;
-use subtest::{Context, Result, SubTest};
 use match_directive::match_directive;
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::fmt::Write;
+use subtest::{Context, Result, SubTest};
 
 struct TestBinEmit;
 

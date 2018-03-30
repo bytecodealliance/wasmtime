@@ -5,8 +5,8 @@
 
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
-use ir::{self, InstBuilder, MemFlags};
 use ir::condcodes::IntCC;
+use ir::{self, InstBuilder, MemFlags};
 use isa::TargetIsa;
 
 /// Expand a `heap_addr` instruction according to the definition of the heap.

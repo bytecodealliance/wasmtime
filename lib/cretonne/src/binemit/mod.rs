@@ -3,12 +3,12 @@
 //! The `binemit` module contains code for translating Cretonne's intermediate representation into
 //! binary machine code.
 
-mod relaxation;
 mod memorysink;
+mod relaxation;
 
-pub use regalloc::RegDiversions;
-pub use self::relaxation::relax_branches;
 pub use self::memorysink::{MemoryCodeSink, RelocSink, TrapSink};
+pub use self::relaxation::relax_branches;
+pub use regalloc::RegDiversions;
 
 use ir::{ExternalName, Function, Inst, JumpTable, SourceLoc, TrapCode};
 use std::fmt;

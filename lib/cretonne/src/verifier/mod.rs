@@ -55,26 +55,26 @@
 //! - Swizzle and shuffle instructions take a variable number of lane arguments. The number
 //!   of arguments must match the destination type, and the lane indexes must be in range.
 
+use self::flags::verify_flags;
 use dbg::DisplayList;
 use dominator_tree::DominatorTree;
 use entity::SparseSet;
 use flowgraph::ControlFlowGraph;
+use ir;
 use ir::entities::AnyEntity;
 use ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use ir::{types, ArgumentLoc, Ebb, FuncRef, Function, GlobalVar, Inst, JumpTable, Opcode, SigRef,
          StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc};
-use ir;
 use isa::TargetIsa;
 use iterators::IteratorExtras;
-use self::flags::verify_flags;
 use settings::{Flags, FlagsOrIsa};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter, Write};
 use std::result;
-use std::vec::Vec;
 use std::string::String;
+use std::vec::Vec;
 use timing;
 
 pub use self::cssa::verify_cssa;
@@ -1155,22 +1155,25 @@ impl<'a> Verifier<'a> {
 #[cfg(test)]
 mod tests {
     use super::{Error, Verifier};
+    use entity::EntityList;
     use ir::Function;
     use ir::instructions::{InstructionData, Opcode};
-    use entity::EntityList;
     use settings;
 
     macro_rules! assert_err_with_msg {
-        ($e:expr, $msg:expr) => (
+        ($e:expr, $msg:expr) => {
             match $e {
-                Ok(_) => { panic!("Expected an error!") },
-                Err(Error { message, .. } ) => {
+                Ok(_) => panic!("Expected an error!"),
+                Err(Error { message, .. }) => {
                     if !message.contains($msg) {
-                       panic!(format!("'{}' did not contain the substring '{}'", message, $msg));
+                        panic!(format!(
+                            "'{}' did not contain the substring '{}'",
+                            message, $msg
+                        ));
                     }
                 }
             }
-        )
+        };
     }
 
     #[test]

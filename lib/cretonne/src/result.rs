@@ -1,8 +1,8 @@
 //! Result and error types representing the outcome of compiling a function.
 
-use verifier;
 use std::error::Error as StdError;
 use std::fmt;
+use verifier;
 
 /// A compilation error.
 ///

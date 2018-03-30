@@ -1,7 +1,7 @@
 //! Topological order of EBBs, according to the dominator tree.
 
-use entity::SparseSet;
 use dominator_tree::DominatorTree;
+use entity::SparseSet;
 use ir::{Ebb, Layout};
 use std::vec::Vec;
 
@@ -89,12 +89,12 @@ impl TopoOrder {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use cursor::{Cursor, FuncCursor};
-    use flowgraph::ControlFlowGraph;
     use dominator_tree::DominatorTree;
+    use flowgraph::ControlFlowGraph;
     use ir::{Function, InstBuilder};
     use std::iter;
-    use super::*;
 
     #[test]
     fn empty() {

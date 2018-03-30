@@ -3,8 +3,8 @@
 use entity::{EntityRef, Iter, IterMut, Keys};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
-use std::vec::Vec;
 use std::slice;
+use std::vec::Vec;
 
 /// A mapping `K -> V` for densely indexed entity references.
 ///

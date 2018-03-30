@@ -24,9 +24,9 @@
 //! and `(Ebb0, jmp Ebb2)` respectively.
 
 use bforest;
-use ir::{Ebb, Function, Inst};
-use ir::instructions::BranchInfo;
 use entity::EntityMap;
+use ir::instructions::BranchInfo;
+use ir::{Ebb, Function, Inst};
 use std::mem;
 use timing;
 

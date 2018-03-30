@@ -3,13 +3,13 @@
 //! This module implements the `TestRunner` struct which manages executing tests as well as
 //! scanning directories for tests.
 
+use concurrent::{ConcurrentRunner, Reply};
 use std::error::Error;
-use std::fmt::{self, Display};
 use std::ffi::OsStr;
+use std::fmt::{self, Display};
 use std::path::{Path, PathBuf};
 use std::time;
 use {runone, TestResult};
-use concurrent::{ConcurrentRunner, Reply};
 
 /// Timeout in seconds when we're not making progress.
 const TIMEOUT_PANIC: usize = 10;

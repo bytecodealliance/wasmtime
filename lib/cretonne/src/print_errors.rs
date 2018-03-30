@@ -1,10 +1,10 @@
 //! Utility routines for pretty-printing error messages.
 
 use ir;
-use verifier;
-use result::CtonError;
 use isa::TargetIsa;
+use result::CtonError;
 use std::fmt::Write;
+use verifier;
 
 /// Pretty-print a verifier error.
 pub fn pretty_verifier_error(

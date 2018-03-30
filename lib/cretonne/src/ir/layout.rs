@@ -4,8 +4,8 @@
 //! determined by the `Layout` data structure defined in this module.
 
 use entity::EntityMap;
-use ir::{Ebb, Inst};
 use ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
+use ir::{Ebb, Inst};
 use packed_option::PackedOption;
 use std::cmp;
 use std::iter::{IntoIterator, Iterator};
@@ -736,8 +736,8 @@ impl<'f> DoubleEndedIterator for Insts<'f> {
 
 #[cfg(test)]
 mod tests {
-    use cursor::{Cursor, CursorPosition};
     use super::Layout;
+    use cursor::{Cursor, CursorPosition};
     use entity::EntityRef;
     use ir::{Ebb, Inst, ProgramOrder, SourceLoc};
     use std::cmp::Ordering;

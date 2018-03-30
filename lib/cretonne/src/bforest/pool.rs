@@ -1,8 +1,8 @@
 //! B+-tree node pool.
 
+use super::{Forest, Node, NodeData};
 use entity::PrimaryMap;
 use std::ops::{Index, IndexMut};
-use super::{Forest, Node, NodeData};
 
 /// A pool of nodes, including a free list.
 pub(super) struct NodePool<F: Forest> {
@@ -77,11 +77,11 @@ impl<F: Forest> NodePool<F> {
         NodeData<F>: ::std::fmt::Display,
         F::Key: ::std::fmt::Display,
     {
+        use super::Comparator;
+        use entity::SparseSet;
         use std::borrow::Borrow;
         use std::cmp::Ordering;
         use std::vec::Vec;
-        use super::Comparator;
-        use entity::SparseSet;
 
         // The root node can't be an inner node with just a single sub-tree. It should have been
         // pruned.
