@@ -35,9 +35,9 @@ use std::vec::Vec;
 pub fn legalize_signatures(func: &mut Function, isa: &TargetIsa) {
     isa.legalize_signature(&mut func.signature, true);
     func.signature.compute_argument_bytes();
-    for sig in func.dfg.signatures.keys() {
-        isa.legalize_signature(&mut func.dfg.signatures[sig], false);
-        func.dfg.signatures[sig].compute_argument_bytes();
+    for sig_data in func.dfg.signatures.values_mut() {
+        isa.legalize_signature(sig_data, false);
+        sig_data.compute_argument_bytes();
     }
 
     if let Some(entry) = func.layout.entry_block() {

@@ -29,8 +29,8 @@ pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function) -> bool {
 fn find_funcref(libcall: ir::LibCall, func: &ir::Function) -> Option<ir::FuncRef> {
     // We're assuming that all libcall function decls are at the end.
     // If we get this wrong, worst case we'll have duplicate libcall decls which is harmless.
-    for fref in func.dfg.ext_funcs.keys().rev() {
-        match func.dfg.ext_funcs[fref].name {
+    for (fref, func_data) in func.dfg.ext_funcs.iter().rev() {
+        match func_data.name {
             ir::ExternalName::LibCall(lc) => {
                 if lc == libcall {
                     return Some(fref);

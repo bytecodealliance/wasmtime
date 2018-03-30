@@ -439,14 +439,14 @@ where
     pub fn finalize(&mut self) {
         // Check that all the `Ebb`s are filled and sealed.
         debug_assert!(
-            self.func_ctx.ebbs.keys().all(|ebb| {
-                self.func_ctx.ebbs[ebb].pristine || self.func_ctx.ssa.is_sealed(ebb)
+            self.func_ctx.ebbs.iter().all(|(ebb, ebb_data)| {
+                ebb_data.pristine || self.func_ctx.ssa.is_sealed(ebb)
             }),
             "all blocks should be sealed before dropping a FunctionBuilder"
         );
         debug_assert!(
-            self.func_ctx.ebbs.keys().all(|ebb| {
-                self.func_ctx.ebbs[ebb].pristine || self.func_ctx.ebbs[ebb].filled
+            self.func_ctx.ebbs.values().all(|ebb_data| {
+                ebb_data.pristine || ebb_data.filled
             }),
             "all blocks should be filled before dropping a FunctionBuilder"
         );

@@ -130,8 +130,8 @@ impl SubTest for TestBinEmit {
 
         // Fix the stack frame layout so we can test spill/fill encodings.
         let min_offset = func.stack_slots
-            .keys()
-            .map(|ss| func.stack_slots[ss].offset.unwrap())
+            .values()
+            .map(|slot| slot.offset.unwrap())
             .min();
         func.stack_slots.frame_size = min_offset.map(|off| (-off) as u32);
 
