@@ -21,6 +21,11 @@ impl Imm64 {
     pub fn new(x: i64) -> Imm64 {
         Imm64(x)
     }
+
+    /// Return self negated.
+    pub fn wrapping_neg(self) -> Imm64 {
+        Imm64(self.0.wrapping_neg())
+    }
 }
 
 impl Into<i64> for Imm64 {
@@ -35,12 +40,12 @@ impl From<i64> for Imm64 {
     }
 }
 
-// Hexadecimal with a multiple of 4 digits and group separators:
-//
-//   0xfff0
-//   0x0001_ffff
-//   0xffff_ffff_fff8_4400
-//
+/// Hexadecimal with a multiple of 4 digits and group separators:
+///
+///   0xfff0
+///   0x0001_ffff
+///   0xffff_ffff_fff8_4400
+///
 fn write_hex(x: i64, f: &mut Formatter) -> fmt::Result {
     let mut pos = (64 - x.leading_zeros() - 1) & 0xf0;
     write!(f, "0x{:04x}", (x >> pos) & 0xffff)?;
@@ -179,7 +184,6 @@ impl Display for Uimm32 {
         } else {
             write_hex(i64::from(self.0), f)
         }
-
     }
 }
 
@@ -244,7 +248,6 @@ impl Display for Offset32 {
         } else {
             write_hex(val, f)
         }
-
     }
 }
 
@@ -280,16 +283,16 @@ pub struct Ieee32(u32);
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Ieee64(u64);
 
-// Format a floating point number in a way that is reasonably human-readable, and that can be
-// converted back to binary without any rounding issues. The hexadecimal formatting of normal and
-// subnormal numbers is compatible with C99 and the `printf "%a"` format specifier. The NaN and Inf
-// formats are not supported by C99.
-//
-// The encoding parameters are:
-//
-// w - exponent field width in bits
-// t - trailing significand field width in bits
-//
+/// Format a floating point number in a way that is reasonably human-readable, and that can be
+/// converted back to binary without any rounding issues. The hexadecimal formatting of normal and
+/// subnormal numbers is compatible with C99 and the `printf "%a"` format specifier. The NaN and Inf
+/// formats are not supported by C99.
+///
+/// The encoding parameters are:
+///
+/// w - exponent field width in bits
+/// t - trailing significand field width in bits
+///
 fn format_float(bits: u64, w: u8, t: u8, f: &mut Formatter) -> fmt::Result {
     debug_assert!(w > 0 && w <= 16, "Invalid exponent range");
     debug_assert!(1 + w + t <= 64, "Too large IEEE format for u64");
@@ -358,13 +361,13 @@ fn format_float(bits: u64, w: u8, t: u8, f: &mut Formatter) -> fmt::Result {
     }
 }
 
-// Parse a float using the same format as `format_float` above.
-//
-// The encoding parameters are:
-//
-// w - exponent field width in bits
-// t - trailing significand field width in bits
-//
+/// Parse a float using the same format as `format_float` above.
+///
+/// The encoding parameters are:
+///
+/// w - exponent field width in bits
+/// t - trailing significand field width in bits
+///
 fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
     debug_assert!(w > 0 && w <= 16, "Invalid exponent range");
     debug_assert!(1 + w + t <= 64, "Too large IEEE format for u64");
@@ -456,7 +459,6 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
                     None => return Err("Invalid character"),
                 }
             }
-
         }
     }
 
@@ -649,10 +651,10 @@ impl FromStr for Ieee64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{f32, f64};
-    use std::str::FromStr;
     use std::fmt::Display;
+    use std::str::FromStr;
     use std::string::ToString;
+    use std::{f32, f64};
 
     #[test]
     fn format_imm64() {

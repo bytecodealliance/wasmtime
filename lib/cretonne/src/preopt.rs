@@ -3,15 +3,14 @@
 #![allow(non_snake_case)]
 
 use cursor::{Cursor, FuncCursor};
-use ir::dfg::ValueDef;
-use ir::{Function, InstructionData, Value, DataFlowGraph, InstBuilder, Type};
+use divconst_magic_numbers::{MS32, MS64, MU32, MU64};
+use divconst_magic_numbers::{magicS32, magicS64, magicU32, magicU64};
 use ir::Inst;
-use ir::types::{I32, I64};
+use ir::dfg::ValueDef;
 use ir::instructions::Opcode;
-use divconst_magic_numbers::{MU32, MU64, MS32, MS64};
-use divconst_magic_numbers::{magicU32, magicU64, magicS32, magicS64};
+use ir::types::{I32, I64};
+use ir::{DataFlowGraph, Function, InstBuilder, InstructionData, Type, Value};
 use timing;
-
 
 //----------------------------------------------------------------------
 //
@@ -19,8 +18,8 @@ use timing;
 
 // Simple math helpers
 
-// if `x` is a power of two, or the negation thereof, return the power along
-// with a boolean that indicates whether `x` is negative. Else return None.
+/// if `x` is a power of two, or the negation thereof, return the power along
+/// with a boolean that indicates whether `x` is negative. Else return None.
 #[inline]
 fn isPowerOf2_S32(x: i32) -> Option<(bool, u32)> {
     // We have to special-case this because abs(x) isn't representable.
@@ -34,7 +33,7 @@ fn isPowerOf2_S32(x: i32) -> Option<(bool, u32)> {
     None
 }
 
-// Same comments as for isPowerOf2_S64 apply.
+/// Same comments as for isPowerOf2_S64 apply.
 #[inline]
 fn isPowerOf2_S64(x: i64) -> Option<(bool, u32)> {
     // We have to special-case this because abs(x) isn't representable.
@@ -60,9 +59,9 @@ enum DivRemByConstInfo {
     RemS64(Value, i64),
 }
 
-// Possibly create a DivRemByConstInfo from the given components, by
-// figuring out which, if any, of the 8 cases apply, and also taking care to
-// sanity-check the immediate.
+/// Possibly create a DivRemByConstInfo from the given components, by
+/// figuring out which, if any, of the 8 cases apply, and also taking care to
+/// sanity-check the immediate.
 fn package_up_divrem_info(
     argL: Value,
     argL_ty: Type,
@@ -108,13 +107,13 @@ fn package_up_divrem_info(
     None
 }
 
-// Examine `idata` to see if it is a div or rem by a constant, and if so
-// return the operands, signedness, operation size and div-vs-rem-ness in a
-// handy bundle.
+/// Examine `idata` to see if it is a div or rem by a constant, and if so
+/// return the operands, signedness, operation size and div-vs-rem-ness in a
+/// handy bundle.
 fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
     let idata: &InstructionData = &dfg[inst];
 
-    if let &InstructionData::BinaryImm { opcode, arg, imm } = idata {
+    if let InstructionData::BinaryImm { opcode, arg, imm } = *idata {
         let (isSigned, isRem) = match opcode {
             Opcode::UdivImm => (false, false),
             Opcode::UremImm => (false, true),
@@ -127,37 +126,15 @@ fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
         return package_up_divrem_info(arg, argL_ty, imm.into(), isSigned, isRem);
     }
 
-    // TODO: should we actually bother to do this (that is, manually match
-    // the case that the second argument is an iconst)? Or should we assume
-    // that some previous constant propagation pass has pushed all such
-    // immediates to their use points, creating BinaryImm instructions
-    // instead? For now we take the conservative approach.
-    if let &InstructionData::Binary { opcode, args } = idata {
-        let (isSigned, isRem) = match opcode {
-            Opcode::Udiv => (false, false),
-            Opcode::Urem => (false, true),
-            Opcode::Sdiv => (true, false),
-            Opcode::Srem => (true, true),
-            _other => return None,
-        };
-        let argR: Value = args[1];
-        if let Some(simm64) = get_const(argR, dfg) {
-            let argL: Value = args[0];
-            // Pull the operation size (type) from the left arg
-            let argL_ty = dfg.value_type(argL);
-            return package_up_divrem_info(argL, argL_ty, simm64, isSigned, isRem);
-        }
-    }
-
     None
 }
 
-// Actually do the transformation given a bundle containing the relevant
-// information. `divrem_info` describes a div or rem by a constant, that
-// `pos` currently points at, and `inst` is the associated instruction.
-// `inst` is replaced by a sequence of other operations that calculate the
-// same result. Note that there are various `divrem_info` cases where we
-// cannot do any transformation, in which case `inst` is left unchanged.
+/// Actually do the transformation given a bundle containing the relevant
+/// information. `divrem_info` describes a div or rem by a constant, that
+/// `pos` currently points at, and `inst` is the associated instruction.
+/// `inst` is replaced by a sequence of other operations that calculate the
+/// same result. Note that there are various `divrem_info` cases where we
+/// cannot do any transformation, in which case `inst` is left unchanged.
 fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCursor, inst: Inst) {
     let isRem = match *divrem_info {
         DivRemByConstInfo::DivU32(_, _) |
@@ -170,18 +147,17 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         DivRemByConstInfo::RemS64(_, _) => true,
     };
 
-    match divrem_info {
-
+    match *divrem_info {
         // -------------------- U32 --------------------
 
         // U32 div, rem by zero: ignore
-        &DivRemByConstInfo::DivU32(_n1, 0) |
-        &DivRemByConstInfo::RemU32(_n1, 0) => {}
+        DivRemByConstInfo::DivU32(_n1, 0) |
+        DivRemByConstInfo::RemU32(_n1, 0) => {}
 
         // U32 div by 1: identity
         // U32 rem by 1: zero
-        &DivRemByConstInfo::DivU32(n1, 1) |
-        &DivRemByConstInfo::RemU32(n1, 1) => {
+        DivRemByConstInfo::DivU32(n1, 1) |
+        DivRemByConstInfo::RemU32(n1, 1) => {
             if isRem {
                 pos.func.dfg.replace(inst).iconst(I32, 0);
             } else {
@@ -190,8 +166,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         }
 
         // U32 div, rem by a power-of-2
-        &DivRemByConstInfo::DivU32(n1, d) |
-        &DivRemByConstInfo::RemU32(n1, d) if d.is_power_of_two() => {
+        DivRemByConstInfo::DivU32(n1, d) |
+        DivRemByConstInfo::RemU32(n1, d) if d.is_power_of_two() => {
             debug_assert!(d >= 2);
             // compute k where d == 2^k
             let k = d.trailing_zeros();
@@ -205,8 +181,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         }
 
         // U32 div, rem by non-power-of-2
-        &DivRemByConstInfo::DivU32(n1, d) |
-        &DivRemByConstInfo::RemU32(n1, d) => {
+        DivRemByConstInfo::DivU32(n1, d) |
+        DivRemByConstInfo::RemU32(n1, d) => {
             debug_assert!(d >= 3);
             let MU32 {
                 mulBy,
@@ -223,7 +199,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 let t3 = pos.ins().iadd(t2, q1);
                 // I never found any case where shiftBy == 1 here.
                 // So there's no attempt to fold out a zero shift.
-                debug_assert!(shiftBy != 1);
+                debug_assert_ne!(shiftBy, 1);
                 qf = pos.ins().ushr_imm(t3, (shiftBy - 1) as i64);
             } else {
                 debug_assert!(shiftBy >= 0 && shiftBy <= 31);
@@ -247,13 +223,13 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // -------------------- U64 --------------------
 
         // U64 div, rem by zero: ignore
-        &DivRemByConstInfo::DivU64(_n1, 0) |
-        &DivRemByConstInfo::RemU64(_n1, 0) => {}
+        DivRemByConstInfo::DivU64(_n1, 0) |
+        DivRemByConstInfo::RemU64(_n1, 0) => {}
 
         // U64 div by 1: identity
         // U64 rem by 1: zero
-        &DivRemByConstInfo::DivU64(n1, 1) |
-        &DivRemByConstInfo::RemU64(n1, 1) => {
+        DivRemByConstInfo::DivU64(n1, 1) |
+        DivRemByConstInfo::RemU64(n1, 1) => {
             if isRem {
                 pos.func.dfg.replace(inst).iconst(I64, 0);
             } else {
@@ -262,8 +238,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         }
 
         // U64 div, rem by a power-of-2
-        &DivRemByConstInfo::DivU64(n1, d) |
-        &DivRemByConstInfo::RemU64(n1, d) if d.is_power_of_two() => {
+        DivRemByConstInfo::DivU64(n1, d) |
+        DivRemByConstInfo::RemU64(n1, d) if d.is_power_of_two() => {
             debug_assert!(d >= 2);
             // compute k where d == 2^k
             let k = d.trailing_zeros();
@@ -277,8 +253,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         }
 
         // U64 div, rem by non-power-of-2
-        &DivRemByConstInfo::DivU64(n1, d) |
-        &DivRemByConstInfo::RemU64(n1, d) => {
+        DivRemByConstInfo::DivU64(n1, d) |
+        DivRemByConstInfo::RemU64(n1, d) => {
             debug_assert!(d >= 3);
             let MU64 {
                 mulBy,
@@ -295,7 +271,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 let t3 = pos.ins().iadd(t2, q1);
                 // I never found any case where shiftBy == 1 here.
                 // So there's no attempt to fold out a zero shift.
-                debug_assert!(shiftBy != 1);
+                debug_assert_ne!(shiftBy, 1);
                 qf = pos.ins().ushr_imm(t3, (shiftBy - 1) as i64);
             } else {
                 debug_assert!(shiftBy >= 0 && shiftBy <= 63);
@@ -319,15 +295,15 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // -------------------- S32 --------------------
 
         // S32 div, rem by zero or -1: ignore
-        &DivRemByConstInfo::DivS32(_n1, -1) |
-        &DivRemByConstInfo::RemS32(_n1, -1) |
-        &DivRemByConstInfo::DivS32(_n1, 0) |
-        &DivRemByConstInfo::RemS32(_n1, 0) => {}
+        DivRemByConstInfo::DivS32(_n1, -1) |
+        DivRemByConstInfo::RemS32(_n1, -1) |
+        DivRemByConstInfo::DivS32(_n1, 0) |
+        DivRemByConstInfo::RemS32(_n1, 0) => {}
 
         // S32 div by 1: identity
         // S32 rem by 1: zero
-        &DivRemByConstInfo::DivS32(n1, 1) |
-        &DivRemByConstInfo::RemS32(n1, 1) => {
+        DivRemByConstInfo::DivS32(n1, 1) |
+        DivRemByConstInfo::RemS32(n1, 1) => {
             if isRem {
                 pos.func.dfg.replace(inst).iconst(I32, 0);
             } else {
@@ -335,8 +311,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             }
         }
 
-        &DivRemByConstInfo::DivS32(n1, d) |
-        &DivRemByConstInfo::RemS32(n1, d) => {
+        DivRemByConstInfo::DivS32(n1, d) |
+        DivRemByConstInfo::RemS32(n1, d) => {
             if let Some((isNeg, k)) = isPowerOf2_S32(d) {
                 // k can be 31 only in the case that d is -2^31.
                 debug_assert!(k >= 1 && k <= 31);
@@ -396,15 +372,15 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // -------------------- S64 --------------------
 
         // S64 div, rem by zero or -1: ignore
-        &DivRemByConstInfo::DivS64(_n1, -1) |
-        &DivRemByConstInfo::RemS64(_n1, -1) |
-        &DivRemByConstInfo::DivS64(_n1, 0) |
-        &DivRemByConstInfo::RemS64(_n1, 0) => {}
+        DivRemByConstInfo::DivS64(_n1, -1) |
+        DivRemByConstInfo::RemS64(_n1, -1) |
+        DivRemByConstInfo::DivS64(_n1, 0) |
+        DivRemByConstInfo::RemS64(_n1, 0) => {}
 
         // S64 div by 1: identity
         // S64 rem by 1: zero
-        &DivRemByConstInfo::DivS64(n1, 1) |
-        &DivRemByConstInfo::RemS64(n1, 1) => {
+        DivRemByConstInfo::DivS64(n1, 1) |
+        DivRemByConstInfo::RemS64(n1, 1) => {
             if isRem {
                 pos.func.dfg.replace(inst).iconst(I64, 0);
             } else {
@@ -412,8 +388,8 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             }
         }
 
-        &DivRemByConstInfo::DivS64(n1, d) |
-        &DivRemByConstInfo::RemS64(n1, d) => {
+        DivRemByConstInfo::DivS64(n1, d) |
+        DivRemByConstInfo::RemS64(n1, d) => {
             if let Some((isNeg, k)) = isPowerOf2_S64(d) {
                 // k can be 63 only in the case that d is -2^63.
                 debug_assert!(k >= 1 && k <= 63);
@@ -469,43 +445,120 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 }
             }
         }
-
     }
 }
 
-
-//----------------------------------------------------------------------
-//
-// General pattern-match helpers.
-
-// Find out if `value` actually resolves to a constant, and if so what its
-// value is.
-fn get_const(value: Value, dfg: &DataFlowGraph) -> Option<i64> {
-    match dfg.value_def(value) {
-        ValueDef::Result(definingInst, resultNo) => {
-            let definingIData: &InstructionData = &dfg[definingInst];
-            if let &InstructionData::UnaryImm { opcode, imm } = definingIData {
-                if opcode == Opcode::Iconst && resultNo == 0 {
-                    return Some(imm.into());
+/// Apply basic simplifications.
+///
+/// This folds constants with arithmetic to form `_imm` instructions, and other
+/// minor simplifications.
+fn simplify(pos: &mut FuncCursor, inst: Inst) {
+    match pos.func.dfg[inst] {
+        InstructionData::Binary { opcode, args } => {
+            if let ValueDef::Result(iconst_inst, _) = pos.func.dfg.value_def(args[1]) {
+                if let InstructionData::UnaryImm {
+                    opcode: Opcode::Iconst,
+                    mut imm,
+                } = pos.func.dfg[iconst_inst]
+                {
+                    let new_opcode = match opcode {
+                        Opcode::Iadd => Opcode::IaddImm,
+                        Opcode::Imul => Opcode::ImulImm,
+                        Opcode::Sdiv => Opcode::SdivImm,
+                        Opcode::Udiv => Opcode::UdivImm,
+                        Opcode::Srem => Opcode::SremImm,
+                        Opcode::Urem => Opcode::UremImm,
+                        Opcode::Band => Opcode::BandImm,
+                        Opcode::Bor => Opcode::BorImm,
+                        Opcode::Bxor => Opcode::BxorImm,
+                        Opcode::Rotl => Opcode::RotlImm,
+                        Opcode::Rotr => Opcode::RotrImm,
+                        Opcode::Ishl => Opcode::IshlImm,
+                        Opcode::Ushr => Opcode::UshrImm,
+                        Opcode::Sshr => Opcode::SshrImm,
+                        Opcode::Isub => {
+                            imm = imm.wrapping_neg();
+                            Opcode::IaddImm
+                        }
+                        _ => return,
+                    };
+                    let ty = pos.func.dfg.ctrl_typevar(inst);
+                    pos.func.dfg.replace(inst).BinaryImm(
+                        new_opcode,
+                        ty,
+                        imm,
+                        args[0],
+                    );
+                }
+            } else if let ValueDef::Result(iconst_inst, _) = pos.func.dfg.value_def(args[0]) {
+                if let InstructionData::UnaryImm {
+                    opcode: Opcode::Iconst,
+                    mut imm,
+                } = pos.func.dfg[iconst_inst]
+                {
+                    let new_opcode = match opcode {
+                        Opcode::Isub => Opcode::IrsubImm,
+                        _ => return,
+                    };
+                    let ty = pos.func.dfg.ctrl_typevar(inst);
+                    pos.func.dfg.replace(inst).BinaryImm(
+                        new_opcode,
+                        ty,
+                        imm,
+                        args[0],
+                    );
                 }
             }
-            None
         }
-        ValueDef::Param(_definingEbb, _paramNo) => None,
+        InstructionData::IntCompare { opcode, cond, args } => {
+            debug_assert_eq!(opcode, Opcode::Icmp);
+            if let ValueDef::Result(iconst_inst, _) = pos.func.dfg.value_def(args[1]) {
+                if let InstructionData::UnaryImm {
+                    opcode: Opcode::Iconst,
+                    imm,
+                } = pos.func.dfg[iconst_inst]
+                {
+                    pos.func.dfg.replace(inst).icmp_imm(cond, args[0], imm);
+                }
+            }
+        }
+        InstructionData::CondTrap { .. } |
+        InstructionData::Branch { .. } |
+        InstructionData::Ternary { opcode: Opcode::Select, .. } => {
+            // Fold away a redundant `bint`.
+            let maybe = {
+                let args = pos.func.dfg.inst_args(inst);
+                if let ValueDef::Result(def_inst, _) = pos.func.dfg.value_def(args[0]) {
+                    if let InstructionData::Unary {
+                        opcode: Opcode::Bint,
+                        arg: bool_val,
+                    } = pos.func.dfg[def_inst]
+                    {
+                        Some(bool_val)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
+            if let Some(bool_val) = maybe {
+                let args = pos.func.dfg.inst_args_mut(inst);
+                args[0] = bool_val;
+            }
+        }
+        _ => {}
     }
 }
 
-
-//----------------------------------------------------------------------
-//
-// The main pre-opt pass.
-
+/// The main pre-opt pass.
 pub fn do_preopt(func: &mut Function) {
     let _tt = timing::preopt();
     let mut pos = FuncCursor::new(func);
     while let Some(_ebb) = pos.next_ebb() {
-
         while let Some(inst) = pos.next_inst() {
+            // Apply basic simplifications.
+            simplify(&mut pos, inst);
 
             //-- BEGIN -- division by constants ----------------
 

@@ -3,11 +3,11 @@
 //! Jump tables are declared in the preamble and assigned an `ir::entities::JumpTable` reference.
 //! The actual table of destinations is stored in a `JumpTableData` struct defined in this module.
 
-use packed_option::PackedOption;
 use ir::entities::Ebb;
+use packed_option::PackedOption;
+use std::fmt::{self, Display, Formatter};
 use std::iter;
 use std::slice;
-use std::fmt::{self, Display, Formatter};
 use std::vec::Vec;
 
 /// Contents of a jump table.
@@ -140,10 +140,10 @@ impl Display for JumpTableData {
 #[cfg(test)]
 mod tests {
     use super::JumpTableData;
-    use ir::Ebb;
     use entity::EntityRef;
-    use std::vec::Vec;
+    use ir::Ebb;
     use std::string::ToString;
+    use std::vec::Vec;
 
     #[test]
     fn empty() {

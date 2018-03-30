@@ -43,7 +43,7 @@ FlagRegs = RegBank(
         'Flag registers',
         units=1,
         pressure_tracking=False,
-        names=['eflags'])
+        names=['rflags'])
 
 GPR = RegClass(IntRegs)
 # Certain types of deref encodings cannot be used with all registers.

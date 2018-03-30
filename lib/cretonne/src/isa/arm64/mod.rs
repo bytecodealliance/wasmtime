@@ -1,20 +1,20 @@
 //! ARM 64-bit Instruction Set Architecture.
 
-pub mod settings;
 mod abi;
 mod binemit;
 mod enc_tables;
 mod registers;
+pub mod settings;
 
-use binemit::{CodeSink, MemoryCodeSink, emit_function};
 use super::super::settings as shared_settings;
-use isa::enc_tables::{lookup_enclist, Encodings};
-use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, RegInfo, RegClass, EncInfo};
+use binemit::{emit_function, CodeSink, MemoryCodeSink};
 use ir;
+use isa::Builder as IsaBuilder;
+use isa::enc_tables::{lookup_enclist, Encodings};
+use isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use regalloc;
-use std::fmt;
 use std::boxed::Box;
+use std::fmt;
 
 #[allow(dead_code)]
 struct Isa {

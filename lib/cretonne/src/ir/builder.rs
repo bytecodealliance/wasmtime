@@ -5,8 +5,8 @@
 
 use ir;
 use ir::types;
-use ir::{InstructionData, DataFlowGraph};
-use ir::{Opcode, Type, Inst, Value};
+use ir::{DataFlowGraph, InstructionData};
+use ir::{Inst, Opcode, Type, Value};
 use isa;
 
 /// Base trait for instruction builders.
@@ -36,7 +36,7 @@ pub trait InstBuilderBase<'f>: Sized {
 //
 // This file defines the `InstBuilder` trait as an extension of `InstBuilderBase` with methods per
 // instruction format and per opcode.
-include!(concat!(env!("OUT_DIR"), "/builder.rs"));
+include!(concat!(env!("OUT_DIR"), "/inst_builder.rs"));
 
 /// Any type implementing `InstBuilderBase` gets all the `InstBuilder` methods for free.
 impl<'f, T: InstBuilderBase<'f>> InstBuilder<'f> for T {}
@@ -145,8 +145,9 @@ where
 }
 
 impl<'f, IIB, Array> InstBuilderBase<'f> for InsertReuseBuilder<'f, IIB, Array>
-    where IIB: InstInserterBase<'f>,
-          Array: AsRef<[Option<Value>]>
+where
+    IIB: InstInserterBase<'f>,
+    Array: AsRef<[Option<Value>]>,
 {
     fn data_flow_graph(&self) -> &DataFlowGraph {
         self.inserter.data_flow_graph()
@@ -215,9 +216,9 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
 #[cfg(test)]
 mod tests {
     use cursor::{Cursor, FuncCursor};
-    use ir::{Function, InstBuilder, ValueDef};
-    use ir::types::*;
     use ir::condcodes::*;
+    use ir::types::*;
+    use ir::{Function, InstBuilder, ValueDef};
 
     #[test]
     fn types() {

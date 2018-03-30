@@ -1,10 +1,10 @@
-//! ScopedHashMap
+//! `ScopedHashMap`
 //!
 //! This module defines a struct `ScopedHashMap<K, V>` which defines a `HashMap`-like
 //! container that has a concept of scopes that can be entered and exited, such that
 //! values inserted while inside a scope aren't visible outside the scope.
 
-use std::collections::{HashMap, hash_map};
+use std::collections::{hash_map, HashMap};
 use std::hash::Hash;
 use std::mem;
 

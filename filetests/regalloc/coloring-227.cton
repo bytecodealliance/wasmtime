@@ -2,7 +2,7 @@ test regalloc
 set is_64bit
 isa intel haswell
 
-function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8]) native {
+function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8]) system_v {
     gv0 = vmctx
     heap0 = static gv0, min 0, bound 0x0001_0000_0000, guard 0x8000_0000
 
@@ -21,7 +21,7 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
 @0011 [RexOp1puid#b8]               v9 = iconst.i32 0
 @0015 [RexOp1puid#b8]               v11 = iconst.i32 0
 @0017 [RexOp1icscc#39]              v12 = icmp.i32 eq v15, v11
-@0017 [RexOp2urm#4b6]               v13 = bint.i32 v12
+@0017 [RexOp2urm_noflags#4b6]       v13 = bint.i32 v12
 @001a [RexOp1rr#21]                 v14 = band v9, v13
 @001b [RexOp1tjccb#75]              brnz v14, ebb6
 @001d [RexOp1jmpb#eb]               jump ebb7

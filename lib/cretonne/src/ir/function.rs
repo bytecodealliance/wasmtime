@@ -4,13 +4,13 @@
 //! instructions.
 
 use binemit::CodeOffset;
-use entity::{PrimaryMap, EntityMap};
+use entity::{EntityMap, PrimaryMap};
 use ir;
-use ir::{ExternalName, CallConv, Signature, DataFlowGraph, Layout};
-use ir::{InstEncodings, ValueLocations, JumpTables, StackSlots, EbbOffsets, SourceLocs};
-use ir::{Ebb, JumpTableData, JumpTable, StackSlotData, StackSlot, SigRef, ExtFuncData, FuncRef,
-         GlobalVarData, GlobalVar, HeapData, Heap};
-use isa::{TargetIsa, EncInfo};
+use ir::{CallConv, DataFlowGraph, ExternalName, Layout, Signature};
+use ir::{Ebb, ExtFuncData, FuncRef, GlobalVar, GlobalVarData, Heap, HeapData, JumpTable,
+         JumpTableData, SigRef, StackSlot, StackSlotData};
+use ir::{EbbOffsets, InstEncodings, JumpTables, SourceLocs, StackSlots, ValueLocations};
+use isa::{EncInfo, Legalize, TargetIsa};
 use std::fmt;
 use write::write_function;
 
@@ -55,7 +55,7 @@ pub struct Function {
     ///
     /// This information is only transiently available after the `binemit::relax_branches` function
     /// computes it, and it can easily be recomputed by calling that function. It is not included
-    /// in the textual IL format.
+    /// in the textual IR format.
     pub offsets: EbbOffsets,
 
     /// Source locations.
@@ -86,7 +86,7 @@ impl Function {
 
     /// Clear all data structures in this function.
     pub fn clear(&mut self) {
-        self.signature.clear(ir::CallConv::Native);
+        self.signature.clear(ir::CallConv::SystemV);
         self.stack_slots.clear();
         self.global_vars.clear();
         self.heaps.clear();
@@ -99,9 +99,9 @@ impl Function {
         self.srclocs.clear();
     }
 
-    /// Create a new empty, anonymous function with a native calling convention.
+    /// Create a new empty, anonymous function with a SystemV calling convention.
     pub fn new() -> Self {
-        Self::with_name_signature(ExternalName::default(), Signature::new(CallConv::Native))
+        Self::with_name_signature(ExternalName::default(), Signature::new(CallConv::SystemV))
     }
 
     /// Creates a jump table in the function, to be used by `br_table` instructions.
@@ -175,6 +175,13 @@ impl Function {
             offset: self.offsets[ebb],
             iter: self.layout.ebb_insts(ebb),
         }
+    }
+
+    /// Wrapper around `DataFlowGraph::encode` which assigns `inst` the resulting encoding.
+    pub fn update_encoding(&mut self, inst: ir::Inst, isa: &TargetIsa) -> Result<(), Legalize> {
+        self.dfg.encode(inst, isa).map(
+            |e| { self.encodings[inst] = e; },
+        )
     }
 }
 

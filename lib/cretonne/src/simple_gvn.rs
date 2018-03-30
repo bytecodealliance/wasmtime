@@ -1,12 +1,11 @@
 //! A simple GVN pass.
 
 use cursor::{Cursor, FuncCursor};
-use flowgraph::ControlFlowGraph;
 use dominator_tree::DominatorTree;
-use ir::{InstructionData, Function, Inst, Opcode, Type};
+use ir::{Function, Inst, InstructionData, Opcode, Type};
 use scoped_hash_map::ScopedHashMap;
-use timing;
 use std::vec::Vec;
+use timing;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
 fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
@@ -17,9 +16,8 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
 
 /// Perform simple GVN on `func`.
 ///
-pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph, domtree: &mut DominatorTree) {
+pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
     let _tt = timing::gvn();
-    debug_assert!(cfg.is_valid());
     debug_assert!(domtree.is_valid());
 
     let mut visible_values: ScopedHashMap<(InstructionData, Type), Inst> = ScopedHashMap::new();

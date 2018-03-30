@@ -3,11 +3,10 @@ set -euo pipefail
 
 # This is the top-level test script:
 #
-# - Build documentation for Rust code in 'src/tools/target/doc'.
-# - Run unit tests for all Rust crates.
-# - Make a debug build of all crates.
-# - Make a release build of cton-util.
-# - Run file-level tests with the release build of cton-util.
+# - Make a debug build.
+# - Make a release build.
+# - Run unit tests for all Rust crates (including the filetests)
+# - Build API documentation.
 #
 # All tests run by this script should be passing at all times.
 
@@ -42,22 +41,26 @@ if [ -n "$needcheck" ]; then
     touch $tsfile || echo no target directory
 fi
 
-cd "$topdir"
-banner "Rust unit tests"
-cargo test --all
+# Make sure the code builds in debug mode.
+banner "Rust debug build"
+cargo build
 
-# Build cton-util for parser testing.
-cd "$topdir"
-banner "Rust documentation"
-echo "open $topdir/target/doc/cretonne/index.html"
+# Make sure the code builds in release mode, and run the unit tests. We run
+# these in release mode for speed, but note that the top-level Cargo.toml file
+# does enable debug assertions in release builds.
+banner "Rust release build and unit tests"
+cargo test --all --release
+
+# Make sure the documentation builds.
+banner "Rust documentation: $topdir/target/doc/cretonne/index.html"
 cargo doc
-banner "Rust release build"
-cargo build --release
 
-export CTONUTIL="$topdir/target/release/cton-util"
-
-cd "$topdir"
-banner "File tests"
-"$CTONUTIL" test filetests docs
+# Run clippy if we have it.
+banner "Rust linter"
+if $topdir/check-clippy.sh; then
+    $topdir/clippy-all.sh --write-mode=diff
+else
+    echo "\`cargo +nightly install clippy\` for optional rust linting"
+fi
 
 banner "OK"

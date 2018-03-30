@@ -38,6 +38,10 @@ pub enum TrapCode {
     /// Failed float-to-int conversion.
     BadConversionToInteger,
 
+    /// Execution has potentially run too long and may be interrupted.
+    /// This trap is resumable.
+    Interrupt,
+
     /// A user-defined trap code.
     User(u16),
 }
@@ -54,6 +58,7 @@ impl Display for TrapCode {
             IntegerOverflow => "int_ovf",
             IntegerDivisionByZero => "int_divz",
             BadConversionToInteger => "bad_toint",
+            Interrupt => "interrupt",
             User(x) => return write!(f, "user{}", x),
         };
         f.write_str(identifier)
@@ -74,6 +79,7 @@ impl FromStr for TrapCode {
             "int_ovf" => Ok(IntegerOverflow),
             "int_divz" => Ok(IntegerDivisionByZero),
             "bad_toint" => Ok(BadConversionToInteger),
+            "interrupt" => Ok(Interrupt),
             _ if s.starts_with("user") => s[4..].parse().map(User).map_err(|_| ()),
             _ => Err(()),
         }

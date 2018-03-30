@@ -34,7 +34,7 @@
 //!   For polymorphic opcodes, determine the controlling type variable first.
 //! - Branches and jumps must pass arguments to destination EBBs that match the
 //!   expected types exactly. The number of arguments must match.
-//! - All EBBs in a jump_table must take no arguments.
+//! - All EBBs in a jump table must take no arguments.
 //! - Function calls are type checked against their signature.
 //! - The entry block must take arguments that match the signature of the current
 //!   function.
@@ -55,25 +55,25 @@
 //! - Swizzle and shuffle instructions take a variable number of lane arguments. The number
 //!   of arguments must match the destination type, and the lane indexes must be in range.
 
+use self::flags::verify_flags;
 use dbg::DisplayList;
 use dominator_tree::DominatorTree;
 use entity::SparseSet;
 use flowgraph::ControlFlowGraph;
-use ir::entities::AnyEntity;
-use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallInfo};
-use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
-         StackSlotKind, GlobalVar, Value, Type, Opcode, ValueLoc, ArgumentLoc};
 use ir;
+use ir::entities::AnyEntity;
+use ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
+use ir::{types, ArgumentLoc, Ebb, FuncRef, Function, GlobalVar, Inst, JumpTable, Opcode, SigRef,
+         StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc};
 use isa::TargetIsa;
 use iterators::IteratorExtras;
-use self::flags::verify_flags;
 use settings::{Flags, FlagsOrIsa};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter, Write};
 use std::result;
-use std::vec::Vec;
 use std::string::String;
+use std::vec::Vec;
 use timing;
 
 pub use self::cssa::verify_cssa;
@@ -188,7 +188,6 @@ impl<'a> Verifier<'a> {
     }
 
     fn ebb_integrity(&self, ebb: Ebb, inst: Inst) -> Result {
-
         let is_terminator = self.func.dfg[inst].opcode().is_terminator();
         let is_last_inst = self.func.layout.last_inst(ebb) == Some(inst);
 
@@ -261,7 +260,7 @@ impl<'a> Verifier<'a> {
         use ir::instructions::InstructionData::*;
 
         for &arg in self.func.dfg.inst_args(inst) {
-            self.verify_value(inst, arg)?;
+            self.verify_inst_arg(inst, arg)?;
 
             // All used values must be attached to something.
             let original = self.func.dfg.resolve_aliases(arg);
@@ -271,7 +270,7 @@ impl<'a> Verifier<'a> {
         }
 
         for &res in self.func.dfg.inst_results(inst) {
-            self.verify_value(inst, res)?;
+            self.verify_inst_result(inst, res)?;
         }
 
         match self.func.dfg[inst] {
@@ -439,8 +438,16 @@ impl<'a> Verifier<'a> {
     fn verify_value(&self, loc_inst: Inst, v: Value) -> Result {
         let dfg = &self.func.dfg;
         if !dfg.value_is_valid(v) {
-            return err!(loc_inst, "invalid value reference {}", v);
+            err!(loc_inst, "invalid value reference {}", v)
+        } else {
+            Ok(())
         }
+    }
+
+    fn verify_inst_arg(&self, loc_inst: Inst, v: Value) -> Result {
+        self.verify_value(loc_inst, v)?;
+
+        let dfg = &self.func.dfg;
         let loc_ebb = self.func.layout.pp_ebb(loc_inst);
         let is_reachable = self.expected_domtree.is_reachable(loc_ebb);
 
@@ -466,14 +473,23 @@ impl<'a> Verifier<'a> {
                     );
                 }
                 // Defining instruction dominates the instruction that uses the value.
-                if is_reachable &&
-                    !self.expected_domtree.dominates(
+                if is_reachable {
+                    if !self.expected_domtree.dominates(
                         def_inst,
                         loc_inst,
                         &self.func.layout,
                     )
-                {
-                    return err!(loc_inst, "uses value from non-dominating {}", def_inst);
+                    {
+                        return err!(loc_inst, "uses value from non-dominating {}", def_inst);
+                    }
+                    if def_inst == loc_inst {
+                        return err!(
+                            loc_inst,
+                            "uses value from itself {},  {}",
+                            def_inst,
+                            loc_inst
+                        );
+                    }
                 }
             }
             ValueDef::Param(ebb, _) => {
@@ -503,6 +519,31 @@ impl<'a> Verifier<'a> {
             }
         }
         Ok(())
+    }
+
+    fn verify_inst_result(&self, loc_inst: Inst, v: Value) -> Result {
+        self.verify_value(loc_inst, v)?;
+
+        match self.func.dfg.value_def(v) {
+            ValueDef::Result(def_inst, _) => {
+                if def_inst != loc_inst {
+                    err!(
+                        loc_inst,
+                        "instruction result {} is not defined by the instruction",
+                        v
+                    )
+                } else {
+                    Ok(())
+                }
+            }
+            ValueDef::Param(_, _) => {
+                err!(
+                    loc_inst,
+                    "instruction result {} is not defined by the instruction",
+                    v
+                )
+            }
+        }
     }
 
     fn domtree_integrity(&self, domtree: &DominatorTree) -> Result {
@@ -864,50 +905,47 @@ impl<'a> Verifier<'a> {
     // Check special-purpose type constraints that can't be expressed in the normal opcode
     // constraints.
     fn typecheck_special(&self, inst: Inst, ctrl_type: Type) -> Result {
-        match self.func.dfg[inst] {
-            ir::InstructionData::Unary { opcode, arg } => {
-                let arg_type = self.func.dfg.value_type(arg);
-                match opcode {
-                    Opcode::Bextend | Opcode::Uextend | Opcode::Sextend | Opcode::Fpromote => {
-                        if arg_type.lane_count() != ctrl_type.lane_count() {
-                            return err!(
-                                inst,
-                                "input {} and output {} must have same number of lanes",
-                                arg_type,
-                                ctrl_type
-                            );
-                        }
-                        if arg_type.lane_bits() >= ctrl_type.lane_bits() {
-                            return err!(
-                                inst,
-                                "input {} must be smaller than output {}",
-                                arg_type,
-                                ctrl_type
-                            );
-                        }
+        if let ir::InstructionData::Unary { opcode, arg } = self.func.dfg[inst] {
+            let arg_type = self.func.dfg.value_type(arg);
+            match opcode {
+                Opcode::Bextend | Opcode::Uextend | Opcode::Sextend | Opcode::Fpromote => {
+                    if arg_type.lane_count() != ctrl_type.lane_count() {
+                        return err!(
+                            inst,
+                            "input {} and output {} must have same number of lanes",
+                            arg_type,
+                            ctrl_type
+                        );
                     }
-                    Opcode::Breduce | Opcode::Ireduce | Opcode::Fdemote => {
-                        if arg_type.lane_count() != ctrl_type.lane_count() {
-                            return err!(
-                                inst,
-                                "input {} and output {} must have same number of lanes",
-                                arg_type,
-                                ctrl_type
-                            );
-                        }
-                        if arg_type.lane_bits() <= ctrl_type.lane_bits() {
-                            return err!(
-                                inst,
-                                "input {} must be larger than output {}",
-                                arg_type,
-                                ctrl_type
-                            );
-                        }
+                    if arg_type.lane_bits() >= ctrl_type.lane_bits() {
+                        return err!(
+                            inst,
+                            "input {} must be smaller than output {}",
+                            arg_type,
+                            ctrl_type
+                        );
                     }
-                    _ => {}
                 }
+                Opcode::Breduce | Opcode::Ireduce | Opcode::Fdemote => {
+                    if arg_type.lane_count() != ctrl_type.lane_count() {
+                        return err!(
+                            inst,
+                            "input {} and output {} must have same number of lanes",
+                            arg_type,
+                            ctrl_type
+                        );
+                    }
+                    if arg_type.lane_bits() <= ctrl_type.lane_bits() {
+                        return err!(
+                            inst,
+                            "input {} must be larger than output {}",
+                            arg_type,
+                            ctrl_type
+                        );
+                    }
+                }
+                _ => {}
             }
-            _ => {}
         }
         Ok(())
     }
@@ -1054,11 +1092,7 @@ impl<'a> Verifier<'a> {
         if let Some(text) = needs_enc {
             // This instruction needs an encoding, so generate an error.
             // Provide the ISA default encoding as a hint.
-            match isa.encode(
-                &self.func.dfg,
-                &self.func.dfg[inst],
-                self.func.dfg.ctrl_typevar(inst),
-            ) {
+            match self.func.dfg.encode(inst, isa) {
                 Ok(enc) => {
                     return err!(
                         inst,
@@ -1113,26 +1147,29 @@ impl<'a> Verifier<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Verifier, Error};
+    use super::{Error, Verifier};
+    use entity::EntityList;
     use ir::Function;
     use ir::instructions::{InstructionData, Opcode};
-    use entity::EntityList;
     use settings;
 
     macro_rules! assert_err_with_msg {
-        ($e:expr, $msg:expr) => (
+        ($e:expr, $msg:expr) => {
             match $e {
-                Ok(_) => { panic!("Expected an error!") },
-                Err(Error { message, .. } ) => {
+                Ok(_) => panic!("Expected an error!"),
+                Err(Error { message, .. }) => {
                     if !message.contains($msg) {
-                       #[cfg(feature = "std")]
-                       panic!(format!("'{}' did not contain the substring '{}'", message, $msg));
-                       #[cfg(not(feature = "std"))]
-                       panic!("error message did not contain the expected substring");
+                        #[cfg(feature = "std")]
+                        panic!(format!(
+                            "'{}' did not contain the substring '{}'",
+                            message, $msg
+                        ));
+                        #[cfg(not(feature = "std"))]
+                        panic!("error message did not contain the expected substring");
                     }
                 }
             }
-        )
+        };
     }
 
     #[test]

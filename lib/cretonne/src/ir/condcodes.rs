@@ -13,12 +13,14 @@ pub trait CondCode: Copy {
     ///
     /// The inverse condition code produces the opposite result for all comparisons.
     /// That is, `cmp CC, x, y` is true if and only if `cmp CC.inverse(), x, y` is false.
+    #[must_use]
     fn inverse(self) -> Self;
 
     /// Get the reversed condition code for `self`.
     ///
     /// The reversed condition code produces the same result as swapping `x` and `y` in the
     /// comparison. That is, `cmp CC, x, y` is the same as `cmp CC.reverse(), y, x`.
+    #[must_use]
     fn reverse(self) -> Self;
 }
 

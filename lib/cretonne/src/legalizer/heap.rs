@@ -5,8 +5,8 @@
 
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
-use ir::{self, InstBuilder, MemFlags};
 use ir::condcodes::IntCC;
+use ir::{self, InstBuilder, MemFlags};
 use isa::TargetIsa;
 
 /// Expand a `heap_addr` instruction according to the definition of the heap.
@@ -58,7 +58,11 @@ fn dynamic_addr(
 
     // Start with the bounds check. Trap if `offset + size > bound`.
     let bound_addr = pos.ins().global_addr(addr_ty, bound_gv);
-    let bound = pos.ins().load(offset_ty, MemFlags::new(), bound_addr, 0);
+    let mut mflags = MemFlags::new();
+    // The bound variable is requied to be accessible and aligned.
+    mflags.set_notrap();
+    mflags.set_aligned();
+    let bound = pos.ins().load(offset_ty, mflags, bound_addr, 0);
 
     let oob;
     if size == 1 {
@@ -175,7 +179,11 @@ fn offset_addr(
         ir::HeapBase::ReservedReg => unimplemented!(),
         ir::HeapBase::GlobalVar(base_gv) => {
             let base_addr = pos.ins().global_addr(addr_ty, base_gv);
-            let base = pos.ins().load(addr_ty, MemFlags::new(), base_addr, 0);
+            let mut mflags = MemFlags::new();
+            // The base address variable is requied to be accessible and aligned.
+            mflags.set_notrap();
+            mflags.set_aligned();
+            let base = pos.ins().load(addr_ty, mflags, base_addr, 0);
             pos.func.dfg.replace(inst).iadd(base, offset);
         }
     }

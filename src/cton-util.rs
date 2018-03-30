@@ -1,27 +1,25 @@
-#[macro_use(dbg)]
 extern crate cretonne;
+extern crate cton_filetests;
 extern crate cton_reader;
 extern crate cton_wasm;
 extern crate docopt;
+extern crate filecheck;
 #[macro_use]
 extern crate serde_derive;
-extern crate filecheck;
-extern crate num_cpus;
 extern crate tempdir;
 extern crate term;
 
-use cretonne::{VERSION, timing};
+use cretonne::{timing, VERSION};
 use docopt::Docopt;
 use std::io::{self, Write};
 use std::process;
 
-mod utils;
-mod filetest;
 mod cat;
+mod compile;
 mod print_cfg;
 mod rsfilecheck;
+mod utils;
 mod wasm;
-mod compile;
 
 const USAGE: &str = "
 Cretonne code generator utility
@@ -40,12 +38,12 @@ Options:
     -T, --time-passes
                     print pass timing report
     -t, --just-decode
-                    just decode WebAssembly to Cretonne IL
+                    just decode WebAssembly to Cretonne IR
     -s, --print-size
                     prints generated code size
     -c, --check-translation
-                    just checks the correctness of Cretonne IL translated from WebAssembly
-    -p, --print     print the resulting Cretonne IL
+                    just checks the correctness of Cretonne IR translated from WebAssembly
+    -p, --print     print the resulting Cretonne IR
     -h, --help      print this help message
     --set=<set>     configure Cretonne settings
     --isa=<isa>     specify the Cretonne ISA
@@ -88,15 +86,20 @@ fn cton_util() -> CommandResult {
 
     // Find the sub-command to execute.
     let result = if args.cmd_test {
-        filetest::run(args.flag_verbose, args.arg_file)
+        cton_filetests::run(args.flag_verbose, &args.arg_file).map(|_time| ())
     } else if args.cmd_cat {
-        cat::run(args.arg_file)
+        cat::run(&args.arg_file)
     } else if args.cmd_filecheck {
-        rsfilecheck::run(args.arg_file, args.flag_verbose)
+        rsfilecheck::run(&args.arg_file, args.flag_verbose)
     } else if args.cmd_print_cfg {
-        print_cfg::run(args.arg_file)
+        print_cfg::run(&args.arg_file)
     } else if args.cmd_compile {
-        compile::run(args.arg_file, args.flag_print, args.flag_set, args.flag_isa)
+        compile::run(
+            args.arg_file,
+            args.flag_print,
+            &args.flag_set,
+            &args.flag_isa,
+        )
     } else if args.cmd_wasm {
         wasm::run(
             args.arg_file,
@@ -104,8 +107,8 @@ fn cton_util() -> CommandResult {
             args.flag_just_decode,
             args.flag_check_translation,
             args.flag_print,
-            args.flag_set,
-            args.flag_isa,
+            &args.flag_set,
+            &args.flag_isa,
             args.flag_print_size,
         )
     } else {

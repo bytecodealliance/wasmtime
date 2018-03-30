@@ -4,8 +4,8 @@
 //! defined in this module expresses the low-level details of accessing a stack slot from an
 //! encoded instruction.
 
-use ir::stackslot::{StackSlots, StackOffset, StackSlotKind};
 use ir::StackSlot;
+use ir::stackslot::{StackOffset, StackSlotKind, StackSlots};
 
 /// A method for referencing a stack slot in the current stack frame.
 ///
@@ -68,6 +68,8 @@ pub enum StackBase {
     FP = 1,
 
     /// Use an explicit zone pointer in a general-purpose register.
+    ///
+    /// This feature is not yet implemented.
     Zone = 2,
 }
 

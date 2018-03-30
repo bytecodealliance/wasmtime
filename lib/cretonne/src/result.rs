@@ -14,9 +14,9 @@ pub enum CtonError {
     #[fail(display = "Invalid input code")]
     InvalidInput,
 
-    /// An IL verifier error.
+    /// An IR verifier error.
     ///
-    /// This always represents a bug, either in the code that generated IL for Cretonne, or a bug
+    /// This always represents a bug, either in the code that generated IR for Cretonne, or a bug
     /// in Cretonne itself.
     #[fail(display = "Verifier error: {}", _0)]
     Verifier(

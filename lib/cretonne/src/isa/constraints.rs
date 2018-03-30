@@ -8,8 +8,8 @@
 //! are satisfied.
 
 use binemit::CodeOffset;
+use ir::{Function, Inst, ValueLoc};
 use isa::{RegClass, RegUnit};
-use ir::{Function, ValueLoc, Inst};
 use regalloc::RegDiversions;
 
 /// Register constraint for a single value operand or instruction result.
@@ -205,6 +205,5 @@ mod tests {
         // Backward limit
         assert!(t1.contains(1000, 748));
         assert!(!t1.contains(1000, 746));
-
     }
 }

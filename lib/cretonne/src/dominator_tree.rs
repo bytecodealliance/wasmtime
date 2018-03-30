@@ -1,38 +1,38 @@
 //! A Dominator Tree represented as mappings of Ebbs to their immediate dominator.
 
 use entity::EntityMap;
-use flowgraph::{ControlFlowGraph, BasicBlock};
-use ir::{Ebb, Inst, Value, Function, Layout, ProgramOrder, ExpandedProgramPoint};
+use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir::instructions::BranchInfo;
+use ir::{Ebb, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
 use packed_option::PackedOption;
 use std::cmp;
-use std::mem;
-use timing;
 use std::cmp::Ordering;
+use std::mem;
 use std::vec::Vec;
+use timing;
 
-// RPO numbers are not first assigned in a contiguous way but as multiples of STRIDE, to leave
-// room for modifications of the dominator tree.
+/// RPO numbers are not first assigned in a contiguous way but as multiples of STRIDE, to leave
+/// room for modifications of the dominator tree.
 const STRIDE: u32 = 4;
 
-// Special RPO numbers used during `compute_postorder`.
+/// Special RPO numbers used during `compute_postorder`.
 const DONE: u32 = 1;
 const SEEN: u32 = 2;
 
-// Dominator tree node. We keep one of these per EBB.
+/// Dominator tree node. We keep one of these per EBB.
 #[derive(Clone, Default)]
 struct DomNode {
-    // Number of this node in a reverse post-order traversal of the CFG, starting from 1.
-    // This number is monotonic in the reverse postorder but not contiguous, since we leave
-    // holes for later localized modifications of the dominator tree.
-    // Unreachable nodes get number 0, all others are positive.
+    /// Number of this node in a reverse post-order traversal of the CFG, starting from 1.
+    /// This number is monotonic in the reverse postorder but not contiguous, since we leave
+    /// holes for later localized modifications of the dominator tree.
+    /// Unreachable nodes get number 0, all others are positive.
     rpo_number: u32,
 
-    // The immediate dominator of this EBB, represented as the branch or jump instruction at the
-    // end of the dominating basic block.
-    //
-    // This is `None` for unreachable blocks and the entry block which doesn't have an immediate
-    // dominator.
+    /// The immediate dominator of this EBB, represented as the branch or jump instruction at the
+    /// end of the dominating basic block.
+    ///
+    /// This is `None` for unreachable blocks and the entry block which doesn't have an immediate
+    /// dominator.
     idom: PackedOption<Inst>,
 }
 
@@ -40,10 +40,10 @@ struct DomNode {
 pub struct DominatorTree {
     nodes: EntityMap<Ebb, DomNode>,
 
-    // CFG post-order of all reachable EBBs.
+    /// CFG post-order of all reachable EBBs.
     postorder: Vec<Ebb>,
 
-    // Scratch memory used by `compute_postorder()`.
+    /// Scratch memory used by `compute_postorder()`.
     stack: Vec<Ebb>,
 
     valid: bool,
@@ -144,12 +144,12 @@ impl DominatorTree {
     {
         let (mut ebb_b, mut inst_b) = match b.into() {
             ExpandedProgramPoint::Ebb(ebb) => (ebb, None),
-            ExpandedProgramPoint::Inst(inst) => {
-                (
-                    layout.inst_ebb(inst).expect("Instruction not in layout."),
-                    Some(inst),
-                )
-            }
+            ExpandedProgramPoint::Inst(inst) => (
+                layout.inst_ebb(inst).expect(
+                    "Instruction not in layout.",
+                ),
+                Some(inst),
+            ),
         };
         let rpo_a = self.nodes[a].rpo_number;
 
@@ -460,7 +460,6 @@ impl DominatorTree {
             rpo_number: new_ebb_rpo,
             idom: Some(split_jump_inst).into(),
         };
-
     }
 
     // Insert new_ebb just after ebb in the RPO. This function checks
@@ -667,12 +666,12 @@ impl DominatorTreePreorder {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use cursor::{Cursor, FuncCursor};
     use flowgraph::ControlFlowGraph;
     use ir::types::*;
     use ir::{Function, InstBuilder, TrapCode};
     use settings;
-    use super::*;
     use verifier::verify_context;
 
     #[test]

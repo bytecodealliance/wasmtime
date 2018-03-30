@@ -6,10 +6,10 @@
 
 use cretonne::ir::Function;
 use cretonne::ir::entities::AnyEntity;
-use testcommand::TestCommand;
+use error::Location;
 use isaspec::IsaSpec;
 use sourcemap::SourceMap;
-use error::Location;
+use testcommand::TestCommand;
 
 /// A parsed test case.
 ///

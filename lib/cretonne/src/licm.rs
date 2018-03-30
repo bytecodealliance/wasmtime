@@ -1,14 +1,14 @@
 //! A Loop Invariant Code Motion optimization pass
 
 use cursor::{Cursor, FuncCursor};
-use ir::{Function, Ebb, Inst, Value, Type, InstBuilder, Layout};
-use flowgraph::ControlFlowGraph;
-use std::collections::HashSet;
 use dominator_tree::DominatorTree;
 use entity::{EntityList, ListPool};
+use flowgraph::ControlFlowGraph;
+use ir::{DataFlowGraph, Ebb, Function, Inst, InstBuilder, Layout, Opcode, Type, Value};
 use loop_analysis::{Loop, LoopAnalysis};
-use timing;
+use std::collections::HashSet;
 use std::vec::Vec;
+use timing;
 
 /// Performs the LICM pass by detecting loops within the CFG and moving
 /// loop-invariant instructions out of them.
@@ -27,10 +27,10 @@ pub fn do_licm(
     for lp in loop_analysis.loops() {
         // For each loop that we want to optimize we determine the set of loop-invariant
         // instructions
-        let invariant_inst = remove_loop_invariant_instructions(lp, func, cfg, loop_analysis);
+        let invariant_insts = remove_loop_invariant_instructions(lp, func, cfg, loop_analysis);
         // Then we create the loop's pre-header and fill it with the invariant instructions
         // Then we remove the invariant instructions from the loop body
-        if !invariant_inst.is_empty() {
+        if !invariant_insts.is_empty() {
             // If the loop has a natural pre-header we use it, otherwise we create it.
             let mut pos;
             match has_pre_header(&func.layout, cfg, domtree, loop_analysis.loop_header(lp)) {
@@ -47,7 +47,7 @@ pub fn do_licm(
             };
             // The last instruction of the pre-header is the termination instruction (usually
             // a jump) so we need to insert just before this.
-            for inst in invariant_inst {
+            for inst in invariant_insts {
                 pos.insert_inst(inst);
             }
         }
@@ -121,7 +121,6 @@ fn has_pre_header(
     result
 }
 
-
 // Change the destination of a jump or branch instruction. Does nothing if called with a non-jump
 // or non-branch instruction.
 fn change_branch_jump_destination(inst: Inst, new_ebb: Ebb, func: &mut Function) {
@@ -129,6 +128,29 @@ fn change_branch_jump_destination(inst: Inst, new_ebb: Ebb, func: &mut Function)
         None => (),
         Some(instruction_dest) => *instruction_dest = new_ebb,
     }
+}
+
+/// Test whether the given opcode is unsafe to even consider for LICM.
+fn trivially_unsafe_for_licm(opcode: Opcode) -> bool {
+    opcode.can_load() || opcode.can_store() || opcode.is_call() || opcode.is_branch() ||
+        opcode.is_terminator() || opcode.is_return() ||
+        opcode.can_trap() || opcode.other_side_effects() || opcode.writes_cpu_flags()
+}
+
+/// Test whether the given instruction is loop-invariant.
+fn is_loop_invariant(inst: Inst, dfg: &DataFlowGraph, loop_values: &HashSet<Value>) -> bool {
+    if trivially_unsafe_for_licm(dfg[inst].opcode()) {
+        return false;
+    }
+
+    let inst_args = dfg.inst_args(inst);
+    for arg in inst_args {
+        let arg = dfg.resolve_aliases(*arg);
+        if loop_values.contains(&arg) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // Traverses a loop in reverse post-order from a header EBB and identify loop-invariant
@@ -141,7 +163,7 @@ fn remove_loop_invariant_instructions(
     loop_analysis: &LoopAnalysis,
 ) -> Vec<Inst> {
     let mut loop_values: HashSet<Value> = HashSet::new();
-    let mut invariant_inst: Vec<Inst> = Vec::new();
+    let mut invariant_insts: Vec<Inst> = Vec::new();
     let mut pos = FuncCursor::new(func);
     // We traverse the loop EBB in reverse post-order.
     for ebb in postorder_ebbs_loop(loop_analysis, cfg, lp).iter().rev() {
@@ -150,15 +172,12 @@ fn remove_loop_invariant_instructions(
             loop_values.insert(*val);
         }
         pos.goto_top(*ebb);
-        while let Some(inst) = pos.next_inst() {
-            if pos.func.dfg.has_results(inst) &&
-                pos.func.dfg.inst_args(inst).into_iter().all(|arg| {
-                    !loop_values.contains(arg)
-                })
-            {
+        #[cfg_attr(feature = "cargo-clippy", allow(block_in_if_condition_stmt))]
+        'next_inst: while let Some(inst) = pos.next_inst() {
+            if is_loop_invariant(inst, &pos.func.dfg, &loop_values) {
                 // If all the instruction's argument are defined outside the loop
                 // then this instruction is loop-invariant
-                invariant_inst.push(inst);
+                invariant_insts.push(inst);
                 // We remove it from the loop
                 pos.remove_inst_and_step_back();
             } else {
@@ -170,7 +189,7 @@ fn remove_loop_invariant_instructions(
             }
         }
     }
-    invariant_inst
+    invariant_insts
 }
 
 /// Return ebbs from a loop in post-order, starting from an entry point in the block.

@@ -2,9 +2,9 @@
 
 use entity::EntityRef;
 use ir::{Ebb, Inst, ValueDef};
+use std::cmp;
 use std::fmt;
 use std::u32;
-use std::cmp;
 
 /// A `ProgramPoint` represents a position in a function where the live range of an SSA value can
 /// begin or end. It can be either:
@@ -12,7 +12,7 @@ use std::cmp;
 /// 1. An instruction or
 /// 2. An EBB header.
 ///
-/// This corresponds more or less to the lines in the textual representation of Cretonne IL.
+/// This corresponds more or less to the lines in the textual form of Cretonne IR.
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct ProgramPoint(u32);
 
@@ -147,7 +147,7 @@ pub trait ProgramOrder {
 mod tests {
     use super::*;
     use entity::EntityRef;
-    use ir::{Inst, Ebb};
+    use ir::{Ebb, Inst};
     use std::string::ToString;
 
     #[test]

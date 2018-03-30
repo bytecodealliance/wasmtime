@@ -106,7 +106,7 @@ ebb0(v0: i64x4):
 }
 
 function %indirect(i32) {
-    sig1 = () native
+    sig1 = () system_v
 ebb0(v0: i32):
     call_indirect sig1, v0()
     return
@@ -114,7 +114,7 @@ ebb0(v0: i32):
 
 ; The first argument to call_indirect doesn't get altered.
 function %indirect_arg(i32, f32x2) {
-    sig1 = (f32x2) native
+    sig1 = (f32x2) system_v
 ebb0(v0: i32, v1: f32x2):
     call_indirect sig1, v0(v1)
     ; check: call_indirect sig1, v0($V, $V)

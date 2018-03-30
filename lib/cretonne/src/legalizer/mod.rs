@@ -13,11 +13,11 @@
 //! The legalizer does not deal with register allocation constraints. These constraints are derived
 //! from the encoding recipes, and solved later by the register allocator.
 
+use bitset::BitSet;
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
 use ir::{self, InstBuilder};
 use isa::TargetIsa;
-use bitset::BitSet;
 use timing;
 
 mod boundary;
@@ -56,28 +56,24 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
             let opcode = pos.func.dfg[inst].opcode();
 
             // Check for ABI boundaries that need to be converted to the legalized signature.
-            if opcode.is_call() && boundary::handle_call_abi(inst, pos.func, cfg) {
-                // Go back and legalize the inserted argument conversion instructions.
-                pos.set_position(prev_pos);
-                continue;
-            }
-
-            if opcode.is_return() && boundary::handle_return_abi(inst, pos.func, cfg) {
-                // Go back and legalize the inserted return value conversion instructions.
-                pos.set_position(prev_pos);
-                continue;
-            }
-
-            if opcode.is_branch() {
+            if opcode.is_call() {
+                if boundary::handle_call_abi(inst, pos.func, cfg) {
+                    // Go back and legalize the inserted argument conversion instructions.
+                    pos.set_position(prev_pos);
+                    continue;
+                }
+            } else if opcode.is_return() {
+                if boundary::handle_return_abi(inst, pos.func, cfg) {
+                    // Go back and legalize the inserted return value conversion instructions.
+                    pos.set_position(prev_pos);
+                    continue;
+                }
+            } else if opcode.is_branch() {
                 split::simplify_branch_arguments(&mut pos.func.dfg, inst);
             }
 
-            match isa.encode(
-                &pos.func.dfg,
-                &pos.func.dfg[inst],
-                pos.func.dfg.ctrl_typevar(inst),
-            ) {
-                Ok(encoding) => pos.func.encodings[inst] = encoding,
+            match pos.func.update_encoding(inst, isa) {
+                Ok(()) => {}
                 Err(action) => {
                     // We should transform the instruction into legal equivalents.
                     let changed = action(inst, pos.func, cfg, isa);
@@ -238,7 +234,6 @@ fn expand_select(
     cfg.recompute_ebb(pos.func, new_ebb);
     cfg.recompute_ebb(pos.func, old_ebb);
 }
-
 
 /// Expand illegal `f32const` and `f64const` instructions.
 fn expand_fconst(

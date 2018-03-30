@@ -22,12 +22,12 @@ mod tests {
         assert_eq!(
             f.to_string(),
             "[riscv]\n\
-                    supports_m = false\n\
-                    supports_a = false\n\
-                    supports_f = false\n\
-                    supports_d = false\n\
-                    enable_m = true\n\
-                    enable_e = false\n"
+             supports_m = false\n\
+             supports_a = false\n\
+             supports_f = false\n\
+             supports_d = false\n\
+             enable_m = true\n\
+             enable_e = false\n"
         );
         // Predicates are not part of the Display output.
         assert_eq!(f.full_float(), false);

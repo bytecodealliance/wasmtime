@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Sphinx domain for documenting compiler intermediate languages.
+# Sphinx domain for documenting compiler intermediate representations.
 #
 # This defines a 'cton' Sphinx domain with the following directives and roles:
 #
@@ -29,10 +29,10 @@ import sphinx.ext.autodoc
 
 class CtonObject(ObjectDescription):
     """
-    Any kind of Cretonne IL object.
+    Any kind of Cretonne IR object.
 
     This is a shared base class for the different kinds of indexable objects
-    in the Cretonne IL reference.
+    in the Cretonne IR reference.
     """
     option_spec = {
         'noindex': directives.flag,
@@ -98,7 +98,7 @@ def parse_type(name, signode):
 
 
 class CtonType(CtonObject):
-    """A Cretonne IL type description."""
+    """A Cretonne IR type description."""
 
     def handle_signature(self, sig, signode):
         """
@@ -112,7 +112,7 @@ class CtonType(CtonObject):
         return name
 
     def get_index_text(self, name):
-        return name + ' (IL type)'
+        return name + ' (IR type)'
 
 
 sep_equal = re.compile('\s*=\s*')
@@ -127,7 +127,7 @@ def parse_params(s, signode):
 
 
 class CtonInst(CtonObject):
-    """A Cretonne IL instruction."""
+    """A Cretonne IR instruction."""
 
     doc_field_types = [
         TypedField('argument', label=l_('Arguments'),
@@ -176,11 +176,11 @@ class CtonInst(CtonObject):
 
 
 class CtonInstGroup(CtonObject):
-    """A Cretonne IL instruction group."""
+    """A Cretonne IR instruction group."""
 
 
 class CretonneDomain(Domain):
-    """Cretonne domain for intermediate language objects."""
+    """Cretonne domain for IR objects."""
     name = 'cton'
     label = 'Cretonne'
 

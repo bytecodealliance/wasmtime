@@ -1,15 +1,15 @@
-//! Cretonne IL builder library.
+//! Cretonne IR builder library.
 //!
-//! Provides a straightforward way to create a Cretonne IL function and fill it with instructions
+//! Provides a straightforward way to create a Cretonne IR function and fill it with instructions
 //! translated from another language. Contains an SSA construction module that lets you translate
-//! your non-SSA variables into SSA Cretonne IL values via `use_var` and `def_var` calls.
+//! your non-SSA variables into SSA Cretonne IR values via `use_var` and `def_var` calls.
 //!
-//! To get started, create an [`IlBuilder`](struct.ILBuilder.html) and pass it as an argument
-//! to a [`FunctionBuilder`](struct.FunctionBuilder.html).
+//! To get started, create an [`FunctionBuilderContext`](struct.FunctionBuilderContext.html) and
+//! pass it as an argument to a [`FunctionBuilder`](struct.FunctionBuilder.html).
 //!
 //! # Example
 //!
-//! Here is a pseudo-program we want to transform into Cretonne IL:
+//! Here is a pseudo-program we want to transform into Cretonne IR:
 //!
 //! ```cton
 //! function(x) {
@@ -29,7 +29,7 @@
 //! }
 //! ```
 //!
-//! Here is how you build the corresponding Cretonne IL function using `ILBuilder`:
+//! Here is how you build the corresponding Cretonne IR function using `FunctionBuilderContext`:
 //!
 //! ```rust
 //! extern crate cretonne;
@@ -39,17 +39,17 @@
 //! use cretonne::ir::{ExternalName, CallConv, Function, Signature, AbiParam, InstBuilder};
 //! use cretonne::ir::types::*;
 //! use cretonne::settings;
-//! use cton_frontend::{ILBuilder, FunctionBuilder, Variable};
+//! use cton_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
 //! use cretonne::verifier::verify_function;
 //!
 //! fn main() {
-//!     let mut sig = Signature::new(CallConv::Native);
+//!     let mut sig = Signature::new(CallConv::SystemV);
 //!     sig.returns.push(AbiParam::new(I32));
 //!     sig.params.push(AbiParam::new(I32));
-//!     let mut il_builder = ILBuilder::<Variable>::new();
+//!     let mut fn_builder_ctx = FunctionBuilderContext::<Variable>::new();
 //!     let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
 //!     {
-//!         let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut il_builder);
+//!         let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut fn_builder_ctx);
 //!
 //!         let block0 = builder.create_ebb();
 //!         let block1 = builder.create_ebb();
@@ -127,9 +127,8 @@
 //! }
 //! ```
 
-#![deny(missing_docs,
-        trivial_numeric_casts,
-        unused_extern_crates)]
+#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
+#![cfg_attr(feature = "cargo-clippy", allow(new_without_default, redundant_field_names))]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
@@ -139,7 +138,7 @@ extern crate cretonne;
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-pub use frontend::{ILBuilder, FunctionBuilder};
+pub use frontend::{FunctionBuilder, FunctionBuilderContext};
 pub use variable::Variable;
 
 mod frontend;

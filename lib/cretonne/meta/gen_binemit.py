@@ -152,7 +152,7 @@ def gen_isa(isa, fmt):
             fmt.line('let bits = encoding.bits();')
             with fmt.indented('match func.encodings[inst].recipe() {', '}'):
                 for i, recipe in enumerate(isa.all_recipes):
-                    fmt.comment(recipe.name)
+                    fmt.comment('Recipe {}'.format(recipe.name))
                     with fmt.indented('{} => {{'.format(i), '}'):
                         gen_recipe(recipe, fmt)
                 fmt.line('_ => {},')

@@ -1,10 +1,10 @@
 //! ARM 64 ABI implementation.
 
+use super::registers::{FPR, GPR};
 use ir;
 use isa::RegClass;
 use regalloc::AllocatableSet;
 use settings as shared_settings;
-use super::registers::{GPR, FPR};
 
 /// Legalize `sig`.
 pub fn legalize_signature(

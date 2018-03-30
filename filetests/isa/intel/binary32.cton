@@ -1,4 +1,4 @@
-; binary emission of 32-bit code.
+; binary emission of x86-32 code.
 test binemit
 set is_compressed
 isa intel haswell
@@ -24,6 +24,9 @@ ebb0:
     [-,%rcx]            v1 = iconst.i32 1        ; bin: b9 00000001
     ; asm: movl $2, %esi
     [-,%rsi]            v2 = iconst.i32 2        ; bin: be 00000002
+
+    ; asm: movb $1, %cl
+    [-,%rcx]            v9007 = bconst.b1 true      ; bin: b9 00000001
 
     ; Integer Register-Register Operations.
 
@@ -125,13 +128,13 @@ ebb0:
     ; asm: movl $2, %edx
     [-,%rdx]      v53 = iconst.i32 2                    ; bin: ba 00000002
     ; asm: idivl %ecx
-    [-,%rax,%rdx] v54, v55 = x86_sdivmodx v52, v53, v1  ; bin: f7 f9
+    [-,%rax,%rdx] v54, v55 = x86_sdivmodx v52, v53, v1  ; bin: int_divz f7 f9
     ; asm: idivl %esi
-    [-,%rax,%rdx] v56, v57 = x86_sdivmodx v52, v53, v2  ; bin: f7 fe
+    [-,%rax,%rdx] v56, v57 = x86_sdivmodx v52, v53, v2  ; bin: int_divz f7 fe
     ; asm: divl %ecx
-    [-,%rax,%rdx] v58, v59 = x86_udivmodx v52, v53, v1  ; bin: f7 f1
+    [-,%rax,%rdx] v58, v59 = x86_udivmodx v52, v53, v1  ; bin: int_divz f7 f1
     ; asm: divl %esi
-    [-,%rax,%rdx] v60, v61 = x86_udivmodx v52, v53, v2  ; bin: f7 f6
+    [-,%rax,%rdx] v60, v61 = x86_udivmodx v52, v53, v2  ; bin: int_divz f7 f6
 
     ; Register copies.
 
@@ -152,105 +155,105 @@ ebb0:
     ; Register indirect addressing with no displacement.
 
     ; asm: movl %ecx, (%esi)
-    store v1, v2                                ; bin: 89 0e
+    store v1, v2                                ; bin: heap_oob 89 0e
     ; asm: movl %esi, (%ecx)
-    store v2, v1                                ; bin: 89 31
+    store v2, v1                                ; bin: heap_oob 89 31
     ; asm: movw %cx, (%esi)
-    istore16 v1, v2                             ; bin: 66 89 0e
+    istore16 v1, v2                             ; bin: heap_oob 66 89 0e
     ; asm: movw %si, (%ecx)
-    istore16 v2, v1                             ; bin: 66 89 31
+    istore16 v2, v1                             ; bin: heap_oob 66 89 31
     ; asm: movb %cl, (%esi)
-    istore8 v1, v2                              ; bin: 88 0e
+    istore8 v1, v2                              ; bin: heap_oob 88 0e
     ; Can't store %sil in 32-bit mode (needs REX prefix).
 
     ; asm: movl (%ecx), %edi
-    [-,%rdi]            v100 = load.i32 v1      ; bin: 8b 39
+    [-,%rdi]            v100 = load.i32 v1      ; bin: heap_oob 8b 39
     ; asm: movl (%esi), %edx
-    [-,%rdx]            v101 = load.i32 v2      ; bin: 8b 16
+    [-,%rdx]            v101 = load.i32 v2      ; bin: heap_oob 8b 16
     ; asm: movzwl (%ecx), %edi
-    [-,%rdi]            v102 = uload16.i32 v1   ; bin: 0f b7 39
+    [-,%rdi]            v102 = uload16.i32 v1   ; bin: heap_oob 0f b7 39
     ; asm: movzwl (%esi), %edx
-    [-,%rdx]            v103 = uload16.i32 v2   ; bin: 0f b7 16
+    [-,%rdx]            v103 = uload16.i32 v2   ; bin: heap_oob 0f b7 16
     ; asm: movswl (%ecx), %edi
-    [-,%rdi]            v104 = sload16.i32 v1   ; bin: 0f bf 39
+    [-,%rdi]            v104 = sload16.i32 v1   ; bin: heap_oob 0f bf 39
     ; asm: movswl (%esi), %edx
-    [-,%rdx]            v105 = sload16.i32 v2   ; bin: 0f bf 16
+    [-,%rdx]            v105 = sload16.i32 v2   ; bin: heap_oob 0f bf 16
     ; asm: movzbl (%ecx), %edi
-    [-,%rdi]            v106 = uload8.i32 v1    ; bin: 0f b6 39
+    [-,%rdi]            v106 = uload8.i32 v1    ; bin: heap_oob 0f b6 39
     ; asm: movzbl (%esi), %edx
-    [-,%rdx]            v107 = uload8.i32 v2    ; bin: 0f b6 16
+    [-,%rdx]            v107 = uload8.i32 v2    ; bin: heap_oob 0f b6 16
     ; asm: movsbl (%ecx), %edi
-    [-,%rdi]            v108 = sload8.i32 v1    ; bin: 0f be 39
+    [-,%rdi]            v108 = sload8.i32 v1    ; bin: heap_oob 0f be 39
     ; asm: movsbl (%esi), %edx
-    [-,%rdx]            v109 = sload8.i32 v2    ; bin: 0f be 16
+    [-,%rdx]            v109 = sload8.i32 v2    ; bin: heap_oob 0f be 16
 
     ; Register-indirect with 8-bit signed displacement.
 
     ; asm: movl %ecx, 100(%esi)
-    store v1, v2+100                            ; bin: 89 4e 64
+    store v1, v2+100                            ; bin: heap_oob 89 4e 64
     ; asm: movl %esi, -100(%ecx)
-    store v2, v1-100                            ; bin: 89 71 9c
+    store v2, v1-100                            ; bin: heap_oob 89 71 9c
     ; asm: movw %cx, 100(%esi)
-    istore16 v1, v2+100                         ; bin: 66 89 4e 64
+    istore16 v1, v2+100                         ; bin: heap_oob 66 89 4e 64
     ; asm: movw %si, -100(%ecx)
-    istore16 v2, v1-100                         ; bin: 66 89 71 9c
+    istore16 v2, v1-100                         ; bin: heap_oob 66 89 71 9c
     ; asm: movb %cl, 100(%esi)
-    istore8 v1, v2+100                          ; bin: 88 4e 64
+    istore8 v1, v2+100                          ; bin: heap_oob 88 4e 64
 
     ; asm: movl 50(%ecx), %edi
-    [-,%rdi]            v110 = load.i32 v1+50           ; bin: 8b 79 32
+    [-,%rdi]            v110 = load.i32 v1+50           ; bin: heap_oob 8b 79 32
     ; asm: movl -50(%esi), %edx
-    [-,%rdx]            v111 = load.i32 v2-50           ; bin: 8b 56 ce
+    [-,%rdx]            v111 = load.i32 v2-50           ; bin: heap_oob 8b 56 ce
     ; asm: movzwl 50(%ecx), %edi
-    [-,%rdi]            v112 = uload16.i32 v1+50        ; bin: 0f b7 79 32
+    [-,%rdi]            v112 = uload16.i32 v1+50        ; bin: heap_oob 0f b7 79 32
     ; asm: movzwl -50(%esi), %edx
-    [-,%rdx]            v113 = uload16.i32 v2-50        ; bin: 0f b7 56 ce
+    [-,%rdx]            v113 = uload16.i32 v2-50        ; bin: heap_oob 0f b7 56 ce
     ; asm: movswl 50(%ecx), %edi
-    [-,%rdi]            v114 = sload16.i32 v1+50        ; bin: 0f bf 79 32
+    [-,%rdi]            v114 = sload16.i32 v1+50        ; bin: heap_oob 0f bf 79 32
     ; asm: movswl -50(%esi), %edx
-    [-,%rdx]            v115 = sload16.i32 v2-50        ; bin: 0f bf 56 ce
+    [-,%rdx]            v115 = sload16.i32 v2-50        ; bin: heap_oob 0f bf 56 ce
     ; asm: movzbl 50(%ecx), %edi
-    [-,%rdi]            v116 = uload8.i32 v1+50         ; bin: 0f b6 79 32
+    [-,%rdi]            v116 = uload8.i32 v1+50         ; bin: heap_oob 0f b6 79 32
     ; asm: movzbl -50(%esi), %edx
-    [-,%rdx]            v117 = uload8.i32 v2-50         ; bin: 0f b6 56 ce
+    [-,%rdx]            v117 = uload8.i32 v2-50         ; bin: heap_oob 0f b6 56 ce
     ; asm: movsbl 50(%ecx), %edi
-    [-,%rdi]            v118 = sload8.i32 v1+50         ; bin: 0f be 79 32
+    [-,%rdi]            v118 = sload8.i32 v1+50         ; bin: heap_oob 0f be 79 32
     ; asm: movsbl -50(%esi), %edx
-    [-,%rdx]            v119 = sload8.i32 v2-50         ; bin: 0f be 56 ce
+    [-,%rdx]            v119 = sload8.i32 v2-50         ; bin: heap_oob 0f be 56 ce
 
     ; Register-indirect with 32-bit signed displacement.
 
     ; asm: movl %ecx, 10000(%esi)
-    store v1, v2+10000                          ; bin: 89 8e 00002710
+    store v1, v2+10000                          ; bin: heap_oob 89 8e 00002710
     ; asm: movl %esi, -10000(%ecx)
-    store v2, v1-10000                          ; bin: 89 b1 ffffd8f0
+    store v2, v1-10000                          ; bin: heap_oob 89 b1 ffffd8f0
     ; asm: movw %cx, 10000(%esi)
-    istore16 v1, v2+10000                       ; bin: 66 89 8e 00002710
+    istore16 v1, v2+10000                       ; bin: heap_oob 66 89 8e 00002710
     ; asm: movw %si, -10000(%ecx)
-    istore16 v2, v1-10000                       ; bin: 66 89 b1 ffffd8f0
+    istore16 v2, v1-10000                       ; bin: heap_oob 66 89 b1 ffffd8f0
     ; asm: movb %cl, 10000(%esi)
-    istore8 v1, v2+10000                        ; bin: 88 8e 00002710
+    istore8 v1, v2+10000                        ; bin: heap_oob 88 8e 00002710
 
     ; asm: movl 50000(%ecx), %edi
-    [-,%rdi]            v120 = load.i32 v1+50000           ; bin: 8b b9 0000c350
+    [-,%rdi]            v120 = load.i32 v1+50000           ; bin: heap_oob 8b b9 0000c350
     ; asm: movl -50000(%esi), %edx
-    [-,%rdx]            v121 = load.i32 v2-50000           ; bin: 8b 96 ffff3cb0
+    [-,%rdx]            v121 = load.i32 v2-50000           ; bin: heap_oob 8b 96 ffff3cb0
     ; asm: movzwl 50000(%ecx), %edi
-    [-,%rdi]            v122 = uload16.i32 v1+50000        ; bin: 0f b7 b9 0000c350
+    [-,%rdi]            v122 = uload16.i32 v1+50000        ; bin: heap_oob 0f b7 b9 0000c350
     ; asm: movzwl -50000(%esi), %edx
-    [-,%rdx]            v123 = uload16.i32 v2-50000        ; bin: 0f b7 96 ffff3cb0
+    [-,%rdx]            v123 = uload16.i32 v2-50000        ; bin: heap_oob 0f b7 96 ffff3cb0
     ; asm: movswl 50000(%ecx), %edi
-    [-,%rdi]            v124 = sload16.i32 v1+50000        ; bin: 0f bf b9 0000c350
+    [-,%rdi]            v124 = sload16.i32 v1+50000        ; bin: heap_oob 0f bf b9 0000c350
     ; asm: movswl -50000(%esi), %edx
-    [-,%rdx]            v125 = sload16.i32 v2-50000        ; bin: 0f bf 96 ffff3cb0
+    [-,%rdx]            v125 = sload16.i32 v2-50000        ; bin: heap_oob 0f bf 96 ffff3cb0
     ; asm: movzbl 50000(%ecx), %edi
-    [-,%rdi]            v126 = uload8.i32 v1+50000         ; bin: 0f b6 b9 0000c350
+    [-,%rdi]            v126 = uload8.i32 v1+50000         ; bin: heap_oob 0f b6 b9 0000c350
     ; asm: movzbl -50000(%esi), %edx
-    [-,%rdx]            v127 = uload8.i32 v2-50000         ; bin: 0f b6 96 ffff3cb0
+    [-,%rdx]            v127 = uload8.i32 v2-50000         ; bin: heap_oob 0f b6 96 ffff3cb0
     ; asm: movsbl 50000(%ecx), %edi
-    [-,%rdi]            v128 = sload8.i32 v1+50000         ; bin: 0f be b9 0000c350
+    [-,%rdi]            v128 = sload8.i32 v1+50000         ; bin: heap_oob 0f be b9 0000c350
     ; asm: movsbl -50000(%esi), %edx
-    [-,%rdx]            v129 = sload8.i32 v2-50000         ; bin: 0f be 96 ffff3cb0
+    [-,%rdx]            v129 = sload8.i32 v2-50000         ; bin: heap_oob 0f be 96 ffff3cb0
 
     ; Bit-counting instructions.
 
@@ -403,6 +406,13 @@ ebb0:
     ; asm: addl $-2147483648, %esp
     adjust_sp_imm -2147483648                   ; bin: 81 c4 80000000
 
+    ; Shift immediates
+    ; asm: shll $2, %esi
+    [-,%rsi]             v513 = ishl_imm v2, 2    ; bin: c1 e6 02
+    ; asm: sarl $5, %esi
+    [-,%rsi]             v514 = sshr_imm v2, 5    ; bin: c1 fe 05
+    ; asm: shrl $8, %esi
+    [-,%rsi]             v515 = ushr_imm v2, 8    ; bin: c1 ee 08
 
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1
@@ -427,7 +437,7 @@ ebb1:
 
     ; asm: ebb2:
 ebb2:
-    trap user0                                  ; bin: 0f 0b
+    trap user0                                  ; bin: user0 0f 0b
 }
 
 ; Special branch encodings only for I32 mode.
@@ -466,9 +476,9 @@ ebb0:
 
 ebb1:
     ; asm: cmpl %esi, %ecx
-    [-,%eflags]         v10 = ifcmp v1, v2      ; bin: 39 f1
+    [-,%rflags]         v10 = ifcmp v1, v2      ; bin: 39 f1
     ; asm: cmpl %ecx, %esi
-    [-,%eflags]         v11 = ifcmp v2, v1      ; bin: 39 ce
+    [-,%rflags]         v11 = ifcmp v2, v1      ; bin: 39 ce
 
     ; asm: je ebb1
     brif eq v11, ebb1                           ; bin: 74 fa
@@ -514,41 +524,41 @@ ebb1:
 
     ; The trapif instructions are encoded as macros: a conditional jump over a ud2.
     ; asm: jne .+4; ud2
-    trapif eq v11, user0                           ; bin: 75 02 0f 0b
+    trapif eq v11, user0                           ; bin: 75 02 user0 0f 0b
     ; asm: je .+4; ud2
-    trapif ne v11, user0                           ; bin: 74 02 0f 0b
+    trapif ne v11, user0                           ; bin: 74 02 user0 0f 0b
     ; asm: jnl .+4; ud2
-    trapif slt v11, user0                          ; bin: 7d 02 0f 0b
+    trapif slt v11, user0                          ; bin: 7d 02 user0 0f 0b
     ; asm: jnge .+4; ud2
-    trapif sge v11, user0                          ; bin: 7c 02 0f 0b
+    trapif sge v11, user0                          ; bin: 7c 02 user0 0f 0b
     ; asm: jng .+4; ud2
-    trapif sgt v11, user0                          ; bin: 7e 02 0f 0b
+    trapif sgt v11, user0                          ; bin: 7e 02 user0 0f 0b
     ; asm: jnle .+4; ud2
-    trapif sle v11, user0                          ; bin: 7f 02 0f 0b
+    trapif sle v11, user0                          ; bin: 7f 02 user0 0f 0b
     ; asm: jnb .+4; ud2
-    trapif ult v11, user0                          ; bin: 73 02 0f 0b
+    trapif ult v11, user0                          ; bin: 73 02 user0 0f 0b
     ; asm: jnae .+4; ud2
-    trapif uge v11, user0                          ; bin: 72 02 0f 0b
+    trapif uge v11, user0                          ; bin: 72 02 user0 0f 0b
     ; asm: jna .+4; ud2
-    trapif ugt v11, user0                          ; bin: 76 02 0f 0b
+    trapif ugt v11, user0                          ; bin: 76 02 user0 0f 0b
     ; asm: jnbe .+4; ud2
-    trapif ule v11, user0                          ; bin: 77 02 0f 0b
+    trapif ule v11, user0                          ; bin: 77 02 user0 0f 0b
 
     ; Stack check.
     ; asm: cmpl %esp, %ecx
-    [-,%eflags]         v40 = ifcmp_sp v1       ; bin: 39 e1
+    [-,%rflags]         v40 = ifcmp_sp v1       ; bin: 39 e1
     ; asm: cmpl %esp, %esi
-    [-,%eflags]         v41 = ifcmp_sp v2       ; bin: 39 e6
+    [-,%rflags]         v41 = ifcmp_sp v2       ; bin: 39 e6
 
     ; asm: cmpl $-100, %ecx
-    [-,%eflags]         v42 = ifcmp_imm v1, -100   ; bin: 83 f9 9c
+    [-,%rflags]         v42 = ifcmp_imm v1, -100   ; bin: 83 f9 9c
     ; asm: cmpl $100, %esi
-    [-,%eflags]         v43 = ifcmp_imm v2, 100    ; bin: 83 fe 64
+    [-,%rflags]         v43 = ifcmp_imm v2, 100    ; bin: 83 fe 64
 
     ; asm: cmpl $-10000, %ecx
-    [-,%eflags]         v44 = ifcmp_imm v1, -10000 ; bin: 81 f9 ffffd8f0
+    [-,%rflags]         v44 = ifcmp_imm v1, -10000 ; bin: 81 f9 ffffd8f0
     ; asm: cmpl $10000, %esi
-    [-,%eflags]         v45 = ifcmp_imm v2, 10000  ; bin: 81 fe 00002710
+    [-,%rflags]         v45 = ifcmp_imm v2, 10000  ; bin: 81 fe 00002710
 
     return
 }
@@ -566,7 +576,7 @@ ebb0:
     ; asm: movzbl %cl, %esi
     [-,%rsi]            v30 = uextend.i32 v11           ; bin: 0f b6 f1
 
-    trap user0                                          ; bin: 0f 0b
+    trap user0                                          ; bin: user0 0f 0b
 }
 
 ; Tests for i32/i16 conversion instructions.
@@ -582,5 +592,5 @@ ebb0:
     ; asm: movzwl %cx, %esi
     [-,%rsi]            v30 = uextend.i32 v11           ; bin: 0f b7 f1
 
-    trap user0                                          ; bin: 0f 0b
+    trap user0                                          ; bin: user0 0f 0b
 }

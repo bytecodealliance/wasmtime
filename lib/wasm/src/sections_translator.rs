@@ -7,17 +7,17 @@
 //! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
-use translation_utils::{type_to_type, TableIndex, FunctionIndex, GlobalIndex, SignatureIndex,
-                        MemoryIndex, Global, GlobalInit, Table, TableElementType, Memory};
-use cretonne::ir::{Signature, AbiParam, CallConv};
 use cretonne;
-use wasmparser::{Parser, ParserState, FuncType, ImportSectionEntryType, ExternalKind, WasmDecoder,
-                 MemoryType, Operator};
-use wasmparser;
-use std::str::from_utf8;
+use cretonne::ir::{AbiParam, CallConv, Signature};
 use environ::ModuleEnvironment;
-use std::vec::Vec;
+use std::str::from_utf8;
 use std::string::String;
+use std::vec::Vec;
+use translation_utils::{type_to_type, FunctionIndex, Global, GlobalIndex, GlobalInit, Memory,
+                        MemoryIndex, SignatureIndex, Table, TableElementType, TableIndex};
+use wasmparser;
+use wasmparser::{ExternalKind, FuncType, ImportSectionEntryType, MemoryType, Operator, Parser,
+                 ParserState, WasmDecoder};
 
 pub enum SectionParsingError {
     WrongSectionContent(String),
@@ -36,7 +36,7 @@ pub fn parse_function_signatures(
                                               ref params,
                                               ref returns,
                                           }) => {
-                let mut sig = Signature::new(CallConv::Native);
+                let mut sig = Signature::new(CallConv::SystemV);
                 sig.params.extend(params.iter().map(|ty| {
                     let cret_arg: cretonne::ir::Type = type_to_type(ty).expect(
                         "only numeric types are supported in function signatures",

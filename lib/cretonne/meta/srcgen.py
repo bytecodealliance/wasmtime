@@ -8,9 +8,10 @@ source code.
 from __future__ import absolute_import
 import sys
 import os
+from collections import OrderedDict
 
 try:
-    from typing import Any, List  # noqa
+    from typing import Any, List, Set, Tuple  # noqa
 except ImportError:
     pass
 
@@ -146,6 +147,52 @@ class Formatter(object):
         for l in parse_multiline(s):
             self.line('/// ' + l if l else '///')
 
+    def match(self, m):
+        # type: (Match) -> None
+        """
+        Add a match expression.
+
+        Example:
+
+            >>> f = Formatter()
+            >>> m = Match('x')
+            >>> m.arm('Orange', ['a', 'b'], 'some body')
+            >>> m.arm('Yellow', ['a', 'b'], 'some body')
+            >>> m.arm('Green', ['a', 'b'], 'different body')
+            >>> m.arm('Blue', ['x', 'y'], 'some body')
+            >>> f.match(m)
+            >>> f.writelines()
+            match x {
+                Orange { a, b } |
+                Yellow { a, b } => {
+                    some body
+                }
+                Green { a, b } => {
+                    different body
+                }
+                Blue { x, y } => {
+                    some body
+                }
+            }
+
+        """
+        with self.indented('match {} {{'.format(m.expr), '}'):
+            for (fields, body), names in m.arms.items():
+                with self.indented('', '}'):
+                    names_left = len(names)
+                    for name in names.keys():
+                        fields_str = ', '.join(fields)
+                        if len(fields) != 0:
+                            fields_str = '{{ {} }} '.format(fields_str)
+                        names_left -= 1
+                        if names_left > 0:
+                            suffix = '|'
+                        else:
+                            suffix = '=> {'
+                        self.outdented_line(name + ' ' + fields_str + suffix)
+                        if names_left == 0:
+                            self.multi_line(body)
+
 
 def _indent(s):
     # type: (str) -> int
@@ -195,3 +242,36 @@ def parse_multiline(s):
     while trimmed and not trimmed[0]:
         trimmed.pop(0)
     return trimmed
+
+
+class Match(object):
+    """
+    Match formatting class.
+
+    Match objects collect all the information needed to emit a Rust `match`
+    expression, automatically deduplicating overlapping identical arms.
+
+    Example:
+
+        >>> m = Match('x')
+        >>> m.arm('Orange', ['a', 'b'], 'some body')
+        >>> m.arm('Yellow', ['a', 'b'], 'some body')
+        >>> m.arm('Green', ['a', 'b'], 'different body')
+        >>> m.arm('Blue', ['x', 'y'], 'some body')
+        >>> assert(len(m.arms) == 3)
+
+    Note that this class is ignorant of Rust types, and considers two fields
+    with the same name to be equivalent.
+    """
+
+    def __init__(self, expr):
+        # type: (str) -> None
+        self.expr = expr
+        self.arms = OrderedDict()  # type: OrderedDict[Tuple[Tuple[str, ...], str], OrderedDict[str, None]]  # noqa
+
+    def arm(self, name, fields, body):
+        # type: (str, List[str], str) -> None
+        key = (tuple(fields), body)
+        if key not in self.arms:
+            self.arms[key] = OrderedDict()
+        self.arms[key][name] = None

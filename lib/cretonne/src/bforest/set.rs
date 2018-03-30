@@ -1,8 +1,8 @@
 //! Forest of sets.
 
+use super::{Comparator, Forest, Node, NodeData, NodePool, Path, SetValue, INNER_SIZE};
 use packed_option::PackedOption;
 use std::marker::PhantomData;
-use super::{INNER_SIZE, Comparator, Forest, NodePool, Node, NodeData, Path, SetValue};
 
 /// Tag type defining forest types for a set.
 struct SetTypes<K, C>(PhantomData<(K, C)>);
@@ -351,10 +351,10 @@ where
 
 #[cfg(test)]
 mod test {
+    use super::super::NodeData;
+    use super::*;
     use std::mem;
     use std::vec::Vec;
-    use super::*;
-    use super::super::NodeData;
 
     #[test]
     fn node_size() {

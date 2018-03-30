@@ -3,7 +3,7 @@
 use dbg::DisplayList;
 use dominator_tree::{DominatorTree, DominatorTreePreorder};
 use flowgraph::ControlFlowGraph;
-use ir::{Function, ExpandedProgramPoint};
+use ir::{ExpandedProgramPoint, Function};
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::VirtRegs;
 use timing;

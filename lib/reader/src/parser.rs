@@ -1,28 +1,27 @@
 //! Parser for .cton files.
 
+use cretonne::entity::EntityRef;
+use cretonne::ir;
+use cretonne::ir::entities::AnyEntity;
+use cretonne::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
+use cretonne::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
+use cretonne::ir::types::VOID;
+use cretonne::ir::{AbiParam, ArgumentExtension, ArgumentLoc, CallConv, Ebb, ExtFuncData,
+                   ExternalName, FuncRef, Function, GlobalVar, GlobalVarData, Heap, HeapBase,
+                   HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags, Opcode, SigRef,
+                   Signature, StackSlot, StackSlotData, StackSlotKind, Type, Value, ValueLoc};
+use cretonne::isa::{self, Encoding, RegUnit, TargetIsa};
+use cretonne::packed_option::ReservedValue;
+use cretonne::{settings, timing};
+use error::{Error, Location, Result};
+use isaspec;
+use lexer::{self, Lexer, Token};
+use sourcemap::SourceMap;
+use std::mem;
 use std::str::FromStr;
 use std::{u16, u32};
-use std::mem;
-use cretonne::ir::{Function, Ebb, Opcode, Value, Type, ExternalName, CallConv, StackSlotData,
-                   StackSlotKind, JumpTable, JumpTableData, Signature, AbiParam,
-                   ArgumentExtension, ExtFuncData, SigRef, FuncRef, StackSlot, ValueLoc,
-                   ArgumentLoc, MemFlags, GlobalVar, GlobalVarData, Heap, HeapData, HeapStyle,
-                   HeapBase};
-use cretonne::ir;
-use cretonne::ir::types::VOID;
-use cretonne::ir::immediates::{Imm64, Uimm32, Offset32, Ieee32, Ieee64};
-use cretonne::ir::entities::AnyEntity;
-use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs};
-use cretonne::isa::{self, TargetIsa, Encoding, RegUnit};
-use cretonne::{settings, timing};
-use cretonne::entity::EntityRef;
-use cretonne::packed_option::ReservedValue;
-use testfile::{TestFile, Details, Comment};
-use error::{Location, Error, Result};
-use lexer::{self, Lexer, Token};
 use testcommand::TestCommand;
-use isaspec;
-use sourcemap::SourceMap;
+use testfile::{Comment, Details, TestFile};
 
 /// Parse the entire `text` into a list of functions.
 ///
@@ -37,7 +36,7 @@ pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
 /// Parse the entire `text` as a test case file.
 ///
 /// The returned `TestFile` contains direct references to substrings of `text`.
-pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
+pub fn parse_test(text: &str) -> Result<TestFile> {
     let _tt = timing::parse_text();
     let mut parser = Parser::new(text);
     // Gather the preamble comments.
@@ -65,31 +64,34 @@ pub struct Parser<'a> {
 
     lex_error: Option<lexer::Error>,
 
-    // Current lookahead token.
+    /// Current lookahead token.
     lookahead: Option<Token<'a>>,
 
-    // Location of lookahead.
+    /// Location of lookahead.
     loc: Location,
 
-    // Are we gathering any comments that we encounter?
+    /// Are we gathering any comments that we encounter?
     gathering_comments: bool,
 
-    // The gathered comments; claim them with `claim_gathered_comments`.
+    /// The gathered comments; claim them with `claim_gathered_comments`.
     gathered_comments: Vec<&'a str>,
 
-    // Comments collected so far.
+    /// Comments collected so far.
     comments: Vec<Comment<'a>>,
 }
 
-// Context for resolving references when parsing a single function.
+/// Context for resolving references when parsing a single function.
 struct Context<'a> {
     function: Function,
     map: SourceMap,
 
-    // Reference to the unique_isa for things like parsing ISA-specific instruction encoding
-    // information. This is only `Some` if exactly one set of `isa` directives were found in the
-    // prologue (it is valid to have directives for multiple different ISAs, but in that case we
-    // couldn't know which ISA the provided encodings are intended for)
+    /// Aliases to resolve once value definitions are known.
+    aliases: Vec<Value>,
+
+    /// Reference to the unique_isa for things like parsing ISA-specific instruction encoding
+    /// information. This is only `Some` if exactly one set of `isa` directives were found in the
+    /// prologue (it is valid to have directives for multiple different ISAs, but in that case we
+    /// couldn't know which ISA the provided encodings are intended for)
     unique_isa: Option<&'a TargetIsa>,
 }
 
@@ -99,6 +101,7 @@ impl<'a> Context<'a> {
             function: f,
             map: SourceMap::new(),
             unique_isa,
+            aliases: Vec::new(),
         }
     }
 
@@ -183,7 +186,7 @@ impl<'a> Context<'a> {
     fn add_sig(&mut self, sig: SigRef, data: Signature, loc: &Location) -> Result<()> {
         while self.function.dfg.signatures.next_key().index() <= sig.index() {
             self.function.import_signature(
-                Signature::new(CallConv::Native),
+                Signature::new(CallConv::SystemV),
             );
         }
         self.function.dfg.signatures[sig] = data;
@@ -277,6 +280,10 @@ impl<'a> Parser<'a> {
 
     // Get the current lookahead token, after making sure there is one.
     fn token(&mut self) -> Option<Token<'a>> {
+        // clippy says self.lookahead is immutable so this loop is either infinite or never
+        // running. I don't think this is true - self.lookahead is mutated in the loop body - so
+        // maybe this is a clippy bug? Either way, disable clippy for this.
+        #[cfg_attr(feature = "cargo-clippy", allow(while_immutable_condition))]
         while self.lookahead == None {
             match self.lex.next() {
                 Some(Ok(lexer::LocatedToken { token, location })) => {
@@ -863,8 +870,8 @@ impl<'a> Parser<'a> {
     // signature ::=  * "(" [paramlist] ")" ["->" retlist] [callconv]
     //
     fn parse_signature(&mut self, unique_isa: Option<&TargetIsa>) -> Result<Signature> {
-        // Calling convention defaults to `native`, but can be changed.
-        let mut sig = Signature::new(CallConv::Native);
+        // Calling convention defaults to `system_v`, but can be changed.
+        let mut sig = Signature::new(CallConv::SystemV);
 
         self.match_token(
             Token::LPar,
@@ -957,7 +964,7 @@ impl<'a> Parser<'a> {
                         isa.register_info()
                             .parse_regunit(name)
                             .map(ArgumentLoc::Reg)
-                            .ok_or(self.error("invalid register name"))
+                            .ok_or_else(|| self.error("invalid register name"))
                     } else {
                         err!(self.loc, "argument location requires exactly one isa")
                     }
@@ -1181,12 +1188,12 @@ impl<'a> Parser<'a> {
                 }
                 "bound" => {
                     data.style = match style_name {
-                        "dynamic" => {
-                            HeapStyle::Dynamic { bound_gv: self.match_gv("expected gv bound")? }
-                        }
-                        "static" => {
-                            HeapStyle::Static { bound: self.match_imm64("expected integer bound")? }
-                        }
+                        "dynamic" => HeapStyle::Dynamic {
+                            bound_gv: self.match_gv("expected gv bound")?,
+                        },
+                        "static" => HeapStyle::Static {
+                            bound: self.match_imm64("expected integer bound")?,
+                        },
                         t => return err!(self.loc, "unknown heap style '{}'", t),
                     };
                 }
@@ -1337,6 +1344,30 @@ impl<'a> Parser<'a> {
         while self.token() != Some(Token::RBrace) {
             self.parse_extended_basic_block(ctx)?;
         }
+
+        // Now that we've seen all defined values in the function, ensure that
+        // all references refer to a definition.
+        for ebb in &ctx.function.layout {
+            for inst in ctx.function.layout.ebb_insts(ebb) {
+                for value in ctx.function.dfg.inst_args(inst) {
+                    if !ctx.map.contains_value(*value) {
+                        return err!(
+                            ctx.map.location(AnyEntity::Inst(inst)).unwrap(),
+                            "undefined operand value {}",
+                            value
+                        );
+                    }
+                }
+            }
+        }
+
+        for alias in &ctx.aliases {
+            if !ctx.function.dfg.set_alias_type_for_parser(*alias) {
+                let loc = ctx.map.location(AnyEntity::Value(*alias)).unwrap();
+                return err!(loc, "alias cycle involving {}", alias);
+            }
+        }
+
         Ok(())
     }
 
@@ -1392,12 +1423,12 @@ impl<'a> Parser<'a> {
             match self.token() {
                 Some(Token::Arrow) => {
                     self.consume();
-                    self.parse_value_alias(results, ctx)?;
+                    self.parse_value_alias(&results, ctx)?;
                 }
                 Some(Token::Equal) => {
                     self.consume();
                     self.parse_instruction(
-                        results,
+                        &results,
                         srcloc,
                         encoding,
                         result_locations,
@@ -1408,7 +1439,7 @@ impl<'a> Parser<'a> {
                 _ if !results.is_empty() => return err!(self.loc, "expected -> or ="),
                 _ => {
                     self.parse_instruction(
-                        results,
+                        &results,
                         srcloc,
                         encoding,
                         result_locations,
@@ -1512,7 +1543,7 @@ impl<'a> Parser<'a> {
                     isa.register_info()
                         .parse_regunit(name)
                         .map(ValueLoc::Reg)
-                        .ok_or(self.error("invalid register value location"))
+                        .ok_or_else(|| self.error("invalid register value location"))
                 } else {
                     err!(self.loc, "value location requires exactly one isa")
                 }
@@ -1601,7 +1632,7 @@ impl<'a> Parser<'a> {
     //
     // value_alias ::= [inst-results] "->" Value(v)
     //
-    fn parse_value_alias(&mut self, results: Vec<Value>, ctx: &mut Context) -> Result<()> {
+    fn parse_value_alias(&mut self, results: &[Value], ctx: &mut Context) -> Result<()> {
         if results.len() != 1 {
             return err!(self.loc, "wrong number of aliases");
         }
@@ -1612,6 +1643,7 @@ impl<'a> Parser<'a> {
             results[0],
         );
         ctx.map.def_value(results[0], &self.loc)?;
+        ctx.aliases.push(results[0]);
         Ok(())
     }
 
@@ -1621,7 +1653,7 @@ impl<'a> Parser<'a> {
     //
     fn parse_instruction(
         &mut self,
-        results: Vec<Value>,
+        results: &[Value],
         srcloc: ir::SourceLoc,
         encoding: Option<Encoding>,
         result_locations: Option<Vec<ValueLoc>>,
@@ -1629,7 +1661,7 @@ impl<'a> Parser<'a> {
         ebb: Ebb,
     ) -> Result<()> {
         // Define the result values.
-        for val in &results {
+        for val in results {
             ctx.map.def_value(*val, &self.loc)?;
         }
 
@@ -1674,7 +1706,7 @@ impl<'a> Parser<'a> {
         let num_results = ctx.function.dfg.make_inst_results_for_parser(
             inst,
             ctrl_typevar,
-            &results,
+            results,
         );
         ctx.function.layout.append_inst(inst, ebb);
         ctx.map.def_entity(inst.into(), &opcode_loc).expect(
@@ -1703,7 +1735,7 @@ impl<'a> Parser<'a> {
                 return err!(
                     self.loc,
                     "instruction produces {} result values, but {} locations were \
-                             specified",
+                     specified",
                     results.len(),
                     result_locations.len()
                 );
@@ -1749,11 +1781,31 @@ impl<'a> Parser<'a> {
                     // explicit type specified. Look up `ctrl_value` to see if it was defined
                     // already.
                     // TBD: If it is defined in another block, the type should have been
-                    // specified explicitly. It is unfortunate that the correctness of IL
+                    // specified explicitly. It is unfortunate that the correctness of IR
                     // depends on the layout of the blocks.
                     let ctrl_src_value = inst_data
                         .typevar_operand(&ctx.function.dfg.value_lists)
                         .expect("Constraints <-> Format inconsistency");
+                    if !ctx.map.contains_value(ctrl_src_value) {
+                        return err!(
+                            self.loc,
+                            "type variable required for polymorphic opcode, e.g. '{}.{}'; \
+                             can't infer from {} which is not yet defined",
+                            opcode,
+                            constraints.ctrl_typeset().unwrap().example(),
+                            ctrl_src_value
+                        );
+                    }
+                    if !ctx.function.dfg.value_is_valid_for_parser(ctrl_src_value) {
+                        return err!(
+                            self.loc,
+                            "type variable required for polymorphic opcode, e.g. '{}.{}'; \
+                             can't infer from {} which is not yet resolved",
+                            opcode,
+                            constraints.ctrl_typeset().unwrap().example(),
+                            ctrl_src_value
+                        );
+                    }
                     ctx.function.dfg.value_type(ctrl_src_value)
                 } else if constraints.is_polymorphic() {
                     // This opcode does not support type inference, so the explicit type
@@ -1784,11 +1836,9 @@ impl<'a> Parser<'a> {
                     opcode
                 );
             }
-        } else {
-            // Treat it as a syntax error to speficy a typevar on a non-polymorphic opcode.
-            if ctrl_type != VOID {
-                return err!(self.loc, "{} does not take a typevar", opcode);
-            }
+        // Treat it as a syntax error to speficy a typevar on a non-polymorphic opcode.
+        } else if ctrl_type != VOID {
+            return err!(self.loc, "{} does not take a typevar", opcode);
         }
 
         Ok(ctrl_type)
@@ -1839,36 +1889,26 @@ impl<'a> Parser<'a> {
         opcode: Opcode,
     ) -> Result<InstructionData> {
         let idata = match opcode.format() {
-            InstructionFormat::Unary => {
-                InstructionData::Unary {
-                    opcode,
-                    arg: self.match_value("expected SSA value operand")?,
-                }
-            }
-            InstructionFormat::UnaryImm => {
-                InstructionData::UnaryImm {
-                    opcode,
-                    imm: self.match_imm64("expected immediate integer operand")?,
-                }
-            }
-            InstructionFormat::UnaryIeee32 => {
-                InstructionData::UnaryIeee32 {
-                    opcode,
-                    imm: self.match_ieee32("expected immediate 32-bit float operand")?,
-                }
-            }
-            InstructionFormat::UnaryIeee64 => {
-                InstructionData::UnaryIeee64 {
-                    opcode,
-                    imm: self.match_ieee64("expected immediate 64-bit float operand")?,
-                }
-            }
-            InstructionFormat::UnaryBool => {
-                InstructionData::UnaryBool {
-                    opcode,
-                    imm: self.match_bool("expected immediate boolean operand")?,
-                }
-            }
+            InstructionFormat::Unary => InstructionData::Unary {
+                opcode,
+                arg: self.match_value("expected SSA value operand")?,
+            },
+            InstructionFormat::UnaryImm => InstructionData::UnaryImm {
+                opcode,
+                imm: self.match_imm64("expected immediate integer operand")?,
+            },
+            InstructionFormat::UnaryIeee32 => InstructionData::UnaryIeee32 {
+                opcode,
+                imm: self.match_ieee32("expected immediate 32-bit float operand")?,
+            },
+            InstructionFormat::UnaryIeee64 => InstructionData::UnaryIeee64 {
+                opcode,
+                imm: self.match_ieee64("expected immediate 64-bit float operand")?,
+            },
+            InstructionFormat::UnaryBool => InstructionData::UnaryBool {
+                opcode,
+                imm: self.match_bool("expected immediate boolean operand")?,
+            },
             InstructionFormat::UnaryGlobalVar => {
                 let gv = self.match_gv("expected global variable")?;
                 ctx.check_gv(gv, &self.loc)?;
@@ -2355,13 +2395,13 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne::ir::{CallConv, ArgumentExtension, ArgumentPurpose};
-    use cretonne::ir::types;
     use cretonne::ir::StackSlotKind;
     use cretonne::ir::entities::AnyEntity;
-    use testfile::{Details, Comment};
-    use isaspec::IsaSpec;
+    use cretonne::ir::types;
+    use cretonne::ir::{ArgumentExtension, ArgumentPurpose, CallConv};
     use error::Error;
+    use isaspec::IsaSpec;
+    use testfile::{Comment, Details};
 
     #[test]
     fn argument_type() {
@@ -2378,7 +2418,7 @@ mod tests {
     #[test]
     fn aliases() {
         let (func, details) = Parser::new(
-            "function %qux() native {
+            "function %qux() system_v {
                                            ebb0:
                                              v4 = iconst.i8 6
                                              v3 -> v4
@@ -2402,10 +2442,10 @@ mod tests {
 
     #[test]
     fn signature() {
-        let sig = Parser::new("()native").parse_signature(None).unwrap();
+        let sig = Parser::new("()system_v").parse_signature(None).unwrap();
         assert_eq!(sig.params.len(), 0);
         assert_eq!(sig.returns.len(), 0);
-        assert_eq!(sig.call_conv, CallConv::Native);
+        assert_eq!(sig.call_conv, CallConv::SystemV);
 
         let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 spiderwasm")
             .parse_signature(None)
@@ -2419,7 +2459,7 @@ mod tests {
         // Old-style signature without a calling convention.
         assert_eq!(
             Parser::new("()").parse_signature(None).unwrap().to_string(),
-            "() native"
+            "() system_v"
         );
         assert_eq!(
             Parser::new("() notacc")
@@ -2456,7 +2496,7 @@ mod tests {
     #[test]
     fn stack_slot_decl() {
         let (func, _) = Parser::new(
-            "function %foo() native {
+            "function %foo() system_v {
                                        ss3 = incoming_arg 13
                                        ss1 = spill_slot 1
                                      }",
@@ -2479,7 +2519,7 @@ mod tests {
         // Catch duplicate definitions.
         assert_eq!(
             Parser::new(
-                "function %bar() native {
+                "function %bar() system_v {
                                     ss1  = spill_slot 13
                                     ss1  = spill_slot 1
                                 }",
@@ -2493,7 +2533,7 @@ mod tests {
     #[test]
     fn ebb_header() {
         let (func, _) = Parser::new(
-            "function %ebbs() native {
+            "function %ebbs() system_v {
                                      ebb0:
                                      ebb4(v3: i32):
                                      }",
@@ -2516,7 +2556,7 @@ mod tests {
     fn comments() {
         let (func, Details { comments, .. }) = Parser::new(
             "; before
-                         function %comment() native { ; decl
+                         function %comment() system_v { ; decl
                             ss10  = outgoing_arg 13 ; stackslot.
                             ; Still stackslot.
                             jt10 = jump_table ebb0
@@ -2559,7 +2599,7 @@ mod tests {
                              test verify
                              set enable_float=false
                              ; still preamble
-                             function %comment() native {}",
+                             function %comment() system_v {}",
         ).unwrap();
         assert_eq!(tf.commands.len(), 2);
         assert_eq!(tf.commands[0].command, "cfg");
@@ -2584,7 +2624,7 @@ mod tests {
         assert!(
             parse_test(
                 "isa
-                            function %foo() native {}",
+                            function %foo() system_v {}",
             ).is_err()
         );
 
@@ -2592,14 +2632,14 @@ mod tests {
             parse_test(
                 "isa riscv
                             set enable_float=false
-                            function %foo() native {}",
+                            function %foo() system_v {}",
             ).is_err()
         );
 
         match parse_test(
             "set enable_float=false
                           isa riscv
-                          function %foo() native {}",
+                          function %foo() system_v {}",
         ).unwrap()
             .isa_spec {
             IsaSpec::None(_) => panic!("Expected some ISA"),
@@ -2614,7 +2654,7 @@ mod tests {
     fn user_function_name() {
         // Valid characters in the name:
         let func = Parser::new(
-            "function u1:2() native {
+            "function u1:2() system_v {
                                            ebb0:
                                              trap int_divz
                                            }",
@@ -2625,7 +2665,7 @@ mod tests {
 
         // Invalid characters in the name:
         let mut parser = Parser::new(
-            "function u123:abc() native {
+            "function u123:abc() system_v {
                                            ebb0:
                                              trap stk_ovf
                                            }",
@@ -2634,7 +2674,7 @@ mod tests {
 
         // Incomplete function names should not be valid:
         let mut parser = Parser::new(
-            "function u() native {
+            "function u() system_v {
                                            ebb0:
                                              trap int_ovf
                                            }",
@@ -2642,7 +2682,7 @@ mod tests {
         assert!(parser.parse_function(None).is_err());
 
         let mut parser = Parser::new(
-            "function u0() native {
+            "function u0() system_v {
                                            ebb0:
                                              trap int_ovf
                                            }",
@@ -2650,7 +2690,7 @@ mod tests {
         assert!(parser.parse_function(None).is_err());
 
         let mut parser = Parser::new(
-            "function u0:() native {
+            "function u0:() system_v {
                                            ebb0:
                                              trap int_ovf
                                            }",

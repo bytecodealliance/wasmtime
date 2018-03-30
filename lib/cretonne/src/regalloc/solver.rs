@@ -98,6 +98,7 @@
 //! appropriate candidate among the set of live register values, add it as a variable and start
 //! over.
 
+use super::AllocatableSet;
 use dbg::DisplayList;
 use entity::{SparseMap, SparseMapValue};
 use ir::Value;
@@ -106,7 +107,6 @@ use regalloc::allocatable_set::RegSetIter;
 use std::cmp;
 use std::fmt;
 use std::mem;
-use super::AllocatableSet;
 use std::u16;
 use std::vec::Vec;
 
@@ -299,6 +299,7 @@ impl Move {
     }
 
     /// Get the "from" register and register class, if possible.
+    #[cfg_attr(feature = "cargo-clippy", allow(wrong_self_convention))]
     fn from_reg(&self) -> Option<(RegClass, RegUnit)> {
         match *self {
             Move::Reg { rc, from, .. } |
@@ -348,7 +349,6 @@ impl Move {
             _ => panic!("Expected reg move: {}", self),
         }
     }
-
 
     /// Get the value being moved.
     fn value(&self) -> Value {
@@ -1158,17 +1158,17 @@ impl fmt::Display for Solver {
 #[cfg(test)]
 #[cfg(build_arm32)]
 mod tests {
+    use super::{Move, Solver};
     use entity::EntityRef;
     use ir::Value;
-    use isa::{TargetIsa, RegClass, RegUnit, RegInfo};
+    use isa::{RegClass, RegInfo, RegUnit, TargetIsa};
     use regalloc::AllocatableSet;
-    use super::{Solver, Move};
     use std::boxed::Box;
 
     // Make an arm32 `TargetIsa`, if possible.
     fn arm32() -> Option<Box<TargetIsa>> {
-        use settings;
         use isa;
+        use settings;
 
         let shared_builder = settings::builder();
         let shared_flags = settings::Flags::new(&shared_builder);
@@ -1395,7 +1395,7 @@ mod tests {
                 mov(v15, gpr, r5, r3),
                 mov(v14, gpr, r4, r5),
                 mov(v13, gpr, r1, r4),
-                fill(v10, gpr, 0, r1), // Finally complete cycle 1.
+                fill(v10, gpr, 0, r1) // Finally complete cycle 1.
             ]
         );
     }

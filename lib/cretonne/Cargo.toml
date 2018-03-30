@@ -1,13 +1,13 @@
 [package]
 authors = ["The Cretonne Project Developers"]
 name = "cretonne"
-version = "0.3.4"
+version = "0.4.1"
 description = "Low-level code generator library"
 license = "Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/"
 repository = "https://github.com/Cretonne/cretonne"
 readme = "README.md"
-keywords = [ "compile", "compiler", "jit" ]
+keywords = ["compile", "compiler", "jit"]
 build = "build.rs"
 
 [lib]
@@ -32,3 +32,7 @@ optional = true
 default = ["std"]
 std = []
 core = ["hashmap_core"]
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "Cretonne/cretonne" }

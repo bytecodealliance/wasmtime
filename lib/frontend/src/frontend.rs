@@ -1,25 +1,25 @@
-//! A frontend for building Cretonne IL from other languages.
+//! A frontend for building Cretonne IR from other languages.
 use cretonne::cursor::{Cursor, FuncCursor};
+use cretonne::entity::{EntityMap, EntityRef, EntitySet};
 use cretonne::ir;
-use cretonne::ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData,
-                   StackSlotData, DataFlowGraph, InstructionData, ExtFuncData, FuncRef, SigRef,
-                   Signature, InstBuilderBase, GlobalVarData, GlobalVar, HeapData, Heap};
 use cretonne::ir::function::DisplayFunction;
+use cretonne::ir::{DataFlowGraph, Ebb, ExtFuncData, FuncRef, Function, GlobalVar, GlobalVarData,
+                   Heap, HeapData, Inst, InstBuilderBase, InstructionData, JumpTable,
+                   JumpTableData, SigRef, Signature, StackSlot, StackSlotData, Type, Value};
 use cretonne::isa::TargetIsa;
-use ssa::{SSABuilder, SideEffects, Block};
-use cretonne::entity::{EntityRef, EntityMap, EntitySet};
 use cretonne::packed_option::PackedOption;
+use ssa::{Block, SSABuilder, SideEffects};
 
-/// Structure used for translating a series of functions into Cretonne IL.
+/// Structure used for translating a series of functions into Cretonne IR.
 ///
 /// In order to reduce memory reallocations when compiling multiple functions,
-/// `ILBuilder` holds various data structures which are cleared between
+/// `FunctionBuilderContext` holds various data structures which are cleared between
 /// functions, rather than dropped, preserving the underlying allocations.
 ///
 /// The `Variable` parameter can be any index-like type that can be made to
 /// implement `EntityRef`. For frontends that don't have an obvious type to
 /// use here, `variable::Variable` can be used.
-pub struct ILBuilder<Variable>
+pub struct FunctionBuilderContext<Variable>
 where
     Variable: EntityRef,
 {
@@ -28,8 +28,7 @@ where
     types: EntityMap<Variable, Type>,
 }
 
-
-/// Temporary object used to build a single Cretonne IL `Function`.
+/// Temporary object used to build a single Cretonne IR `Function`.
 pub struct FunctionBuilder<'a, Variable: 'a>
 where
     Variable: EntityRef,
@@ -41,7 +40,7 @@ where
     /// Source location to assign to all new instructions.
     srcloc: ir::SourceLoc,
 
-    builder: &'a mut ILBuilder<Variable>,
+    func_ctx: &'a mut FunctionBuilderContext<Variable>,
     position: Position,
 }
 
@@ -77,12 +76,12 @@ impl Position {
     }
 }
 
-impl<Variable> ILBuilder<Variable>
+impl<Variable> FunctionBuilderContext<Variable>
 where
     Variable: EntityRef,
 {
-    /// Creates a ILBuilder structure. The structure is automatically cleared after each
-    /// [`FunctionBuilder`](struct.FunctionBuilder.html) completes translating a function.
+    /// Creates a FunctionBuilderContext structure. The structure is automatically cleared after
+    /// each [`FunctionBuilder`](struct.FunctionBuilder.html) completes translating a function.
     pub fn new() -> Self {
         Self {
             ssa: SSABuilder::new(),
@@ -103,7 +102,7 @@ where
 }
 
 /// Implementation of the [`InstBuilder`](../cretonne/ir/builder/trait.InstBuilder.html) that has
-/// one convenience method per Cretonne IL instruction.
+/// one convenience method per Cretonne IR instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short, Variable: 'long>
 where
     Variable: EntityRef,
@@ -125,7 +124,8 @@ where
 }
 
 impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long, Variable>
-    where Variable: EntityRef
+where
+    Variable: EntityRef,
 {
     fn data_flow_graph(&self) -> &DataFlowGraph {
         &self.builder.func.dfg
@@ -165,14 +165,15 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 // multiple times, so we must deduplicate.
                         let mut unique = EntitySet::<Ebb>::new();
                         for dest_ebb in self.builder
-                                    .func
-                                    .jump_tables
-                                    .get(table)
-                                    .expect("you are referencing an undeclared jump table")
-                                    .entries()
-                                    .map(|(_, ebb)| ebb)
-                                    .filter(|dest_ebb| unique.insert(*dest_ebb)) {
-                            self.builder.builder.ssa.declare_ebb_predecessor(
+                            .func
+                            .jump_tables
+                            .get(table)
+                            .expect("you are referencing an undeclared jump table")
+                            .entries()
+                            .map(|(_, ebb)| ebb)
+                            .filter(|dest_ebb| unique.insert(*dest_ebb))
+                        {
+                            self.builder.func_ctx.ssa.declare_ebb_predecessor(
                                 dest_ebb,
                                 self.builder.position.basic_block.unwrap(),
                                 inst,
@@ -191,7 +192,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
     }
 }
 
-/// This module allows you to create a function in Cretonne IL in a straightforward way, hiding
+/// This module allows you to create a function in Cretonne IR in a straightforward way, hiding
 /// all the complexity of its internal representation.
 ///
 /// The module is parametrized by one type which is the representation of variables in your
@@ -203,23 +204,24 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 /// - the last instruction of each block is a terminator instruction which has no natural successor,
 ///   and those instructions can only appear at the end of extended blocks.
 ///
-/// The parameters of Cretonne IL instructions are Cretonne IL values, which can only be created
-/// as results of other Cretonne IL instructions. To be able to create variables redefined multiple
+/// The parameters of Cretonne IR instructions are Cretonne IR values, which can only be created
+/// as results of other Cretonne IR instructions. To be able to create variables redefined multiple
 /// times in your program, use the `def_var` and `use_var` command, that will maintain the
-/// correspondence between your variables and Cretonne IL SSA values.
+/// correspondence between your variables and Cretonne IR SSA values.
 ///
 /// The first block for which you call `switch_to_block` will be assumed to be the beginning of
 /// the function.
 ///
 /// At creation, a `FunctionBuilder` instance borrows an already allocated `Function` which it
 /// modifies with the information stored in the mutable borrowed
-/// [`ILBuilder`](struct.ILBuilder.html). The function passed in argument should be newly created
-///  with [`Function::with_name_signature()`](../function/struct.Function.html), whereas the
-/// `ILBuilder` can be kept as is between two function translations.
+/// [`FunctionBuilderContext`](struct.FunctionBuilderContext.html). The function passed in
+/// argument should be newly created with
+/// [`Function::with_name_signature()`](../function/struct.Function.html), whereas the
+/// `FunctionBuilderContext` can be kept as is between two function translations.
 ///
 /// # Errors
 ///
-/// The functions below will panic in debug mode whenever you try to modify the Cretonne IL
+/// The functions below will panic in debug mode whenever you try to modify the Cretonne IR
 /// function in a way that violate the coherence of the code. For instance: switching to a new
 /// `Ebb` when you haven't filled the current one with a terminator instruction, inserting a
 /// return instruction with arguments that don't match the function's signature.
@@ -228,16 +230,16 @@ where
     Variable: EntityRef,
 {
     /// Creates a new FunctionBuilder structure that will operate on a `Function` using a
-    /// `IlBuilder`.
+    /// `FunctionBuilderContext`.
     pub fn new(
         func: &'a mut Function,
-        builder: &'a mut ILBuilder<Variable>,
+        func_ctx: &'a mut FunctionBuilderContext<Variable>,
     ) -> FunctionBuilder<'a, Variable> {
-        debug_assert!(builder.is_empty());
+        debug_assert!(func_ctx.is_empty());
         FunctionBuilder {
             func: func,
             srcloc: Default::default(),
-            builder: builder,
+            func_ctx: func_ctx,
             position: Position::default(),
         }
     }
@@ -250,8 +252,8 @@ where
     /// Creates a new `Ebb` and returns its reference.
     pub fn create_ebb(&mut self) -> Ebb {
         let ebb = self.func.dfg.make_ebb();
-        self.builder.ssa.declare_ebb_header_block(ebb);
-        self.builder.ebbs[ebb] = EbbData {
+        self.func_ctx.ssa.declare_ebb_header_block(ebb);
+        self.func_ctx.ebbs[ebb] = EbbData {
             filled: false,
             pristine: true,
             user_param_count: 0,
@@ -275,11 +277,11 @@ where
         );
         // We cannot switch to a filled block
         debug_assert!(
-            !self.builder.ebbs[ebb].filled,
+            !self.func_ctx.ebbs[ebb].filled,
             "you cannot switch to a block which is already filled"
         );
 
-        let basic_block = self.builder.ssa.header_block(ebb);
+        let basic_block = self.func_ctx.ssa.header_block(ebb);
         // Then we change the cursor position.
         self.position = Position::at(ebb, basic_block);
     }
@@ -290,7 +292,7 @@ where
     /// created. Forgetting to call this method on every block will cause inconsistencies in the
     /// produced functions.
     pub fn seal_block(&mut self, ebb: Ebb) {
-        let side_effects = self.builder.ssa.seal_ebb_header_block(ebb, self.func);
+        let side_effects = self.func_ctx.ssa.seal_ebb_header_block(ebb, self.func);
         self.handle_ssa_side_effects(side_effects);
     }
 
@@ -301,22 +303,22 @@ where
     /// function can be used at the end of translating all blocks to ensure
     /// that everything is sealed.
     pub fn seal_all_blocks(&mut self) {
-        let side_effects = self.builder.ssa.seal_all_ebb_header_blocks(self.func);
+        let side_effects = self.func_ctx.ssa.seal_all_ebb_header_blocks(self.func);
         self.handle_ssa_side_effects(side_effects);
     }
 
     /// In order to use a variable in a `use_var`, you need to declare its type with this method.
     pub fn declare_var(&mut self, var: Variable, ty: Type) {
-        self.builder.types[var] = ty;
+        self.func_ctx.types[var] = ty;
     }
 
-    /// Returns the Cretonne IL value corresponding to the utilization at the current program
+    /// Returns the Cretonne IR value corresponding to the utilization at the current program
     /// position of a previously defined user variable.
     pub fn use_var(&mut self, var: Variable) -> Value {
-        let ty = *self.builder.types.get(var).expect(
+        let ty = *self.func_ctx.types.get(var).expect(
             "this variable is used but its type has not been declared",
         );
-        let (val, side_effects) = self.builder.ssa.use_var(
+        let (val, side_effects) = self.func_ctx.ssa.use_var(
             self.func,
             var,
             ty,
@@ -329,7 +331,7 @@ where
     /// Register a new definition of a user variable. Panics if the type of the value is not the
     /// same as the type registered for the variable.
     pub fn def_var(&mut self, var: Variable, val: Value) {
-        self.builder.ssa.def_var(
+        self.func_ctx.ssa.def_var(
             var,
             val,
             self.position.basic_block.unwrap(),
@@ -382,14 +384,14 @@ where
     /// Make sure that the current EBB is inserted in the layout.
     pub fn ensure_inserted_ebb(&mut self) {
         let ebb = self.position.ebb.unwrap();
-        if self.builder.ebbs[ebb].pristine {
+        if self.func_ctx.ebbs[ebb].pristine {
             if !self.func.layout.is_ebb_inserted(ebb) {
                 self.func.layout.append_ebb(ebb);
             }
-            self.builder.ebbs[ebb].pristine = false;
+            self.func_ctx.ebbs[ebb].pristine = false;
         } else {
             debug_assert!(
-                !self.builder.ebbs[ebb].filled,
+                !self.func_ctx.ebbs[ebb].filled,
                 "you cannot add an instruction to a block already filled"
             );
         }
@@ -399,7 +401,7 @@ where
     ///
     /// This can be used to insert SSA code that doesn't need to access locals and that doesn't
     /// need to know about `FunctionBuilder` at all.
-    pub fn cursor<'f>(&'f mut self) -> FuncCursor<'f> {
+    pub fn cursor(&mut self) -> FuncCursor {
         self.ensure_inserted_ebb();
         FuncCursor::new(self.func)
             .with_srcloc(self.srcloc)
@@ -412,7 +414,7 @@ where
     pub fn append_ebb_params_for_function_params(&mut self, ebb: Ebb) {
         // These parameters count as "user" parameters here because they aren't
         // inserted by the SSABuilder.
-        let user_param_count = &mut self.builder.ebbs[ebb].user_param_count;
+        let user_param_count = &mut self.func_ctx.ebbs[ebb].user_param_count;
         for argtyp in &self.func.signature.params {
             *user_param_count += 1;
             self.func.dfg.append_ebb_param(ebb, argtyp.value_type);
@@ -425,7 +427,7 @@ where
     pub fn append_ebb_params_for_function_returns(&mut self, ebb: Ebb) {
         // These parameters count as "user" parameters here because they aren't
         // inserted by the SSABuilder.
-        let user_param_count = &mut self.builder.ebbs[ebb].user_param_count;
+        let user_param_count = &mut self.func_ctx.ebbs[ebb].user_param_count;
         for argtyp in &self.func.signature.returns {
             *user_param_count += 1;
             self.func.dfg.append_ebb_param(ebb, argtyp.value_type);
@@ -438,21 +440,21 @@ where
     pub fn finalize(&mut self) {
         // Check that all the `Ebb`s are filled and sealed.
         debug_assert!(
-            self.builder.ebbs.keys().all(|ebb| {
-                self.builder.ebbs[ebb].pristine || self.builder.ssa.is_sealed(ebb)
+            self.func_ctx.ebbs.iter().all(|(ebb, ebb_data)| {
+                ebb_data.pristine || self.func_ctx.ssa.is_sealed(ebb)
             }),
             "all blocks should be sealed before dropping a FunctionBuilder"
         );
         debug_assert!(
-            self.builder.ebbs.keys().all(|ebb| {
-                self.builder.ebbs[ebb].pristine || self.builder.ebbs[ebb].filled
+            self.func_ctx.ebbs.values().all(|ebb_data| {
+                ebb_data.pristine || ebb_data.filled
             }),
             "all blocks should be filled before dropping a FunctionBuilder"
         );
 
         // Clear the state (but preserve the allocated buffers) in preparation
         // for translation another function.
-        self.builder.clear();
+        self.func_ctx.clear();
 
         // Reset srcloc and position to initial states.
         self.srcloc = Default::default();
@@ -461,8 +463,8 @@ where
 }
 
 /// All the functions documented in the previous block are write-only and help you build a valid
-/// Cretonne IL functions via multiple debug asserts. However, you might need to improve the
-/// performance of your translation perform more complex transformations to your Cretonne IL
+/// Cretonne IR functions via multiple debug asserts. However, you might need to improve the
+/// performance of your translation perform more complex transformations to your Cretonne IR
 /// function. The functions below help you inspect the function you're creating and modify it
 /// in ways that can be unsafe if used incorrectly.
 impl<'a, Variable> FunctionBuilder<'a, Variable>
@@ -486,12 +488,12 @@ where
     /// **Note:** this function has to be called at the creation of the `Ebb` before adding
     /// instructions to it, otherwise this could interfere with SSA construction.
     pub fn append_ebb_param(&mut self, ebb: Ebb, ty: Type) -> Value {
-        debug_assert!(self.builder.ebbs[ebb].pristine);
+        debug_assert!(self.func_ctx.ebbs[ebb].pristine);
         debug_assert_eq!(
-            self.builder.ebbs[ebb].user_param_count,
+            self.func_ctx.ebbs[ebb].user_param_count,
             self.func.dfg.num_ebb_params(ebb)
         );
-        self.builder.ebbs[ebb].user_param_count += 1;
+        self.func_ctx.ebbs[ebb].user_param_count += 1;
         self.func.dfg.append_ebb_param(ebb, ty)
     }
 
@@ -508,9 +510,9 @@ where
         let old_dest = self.func.dfg[inst].branch_destination_mut().expect(
             "you want to change the jump destination of a non-jump instruction",
         );
-        let pred = self.builder.ssa.remove_ebb_predecessor(*old_dest, inst);
+        let pred = self.func_ctx.ssa.remove_ebb_predecessor(*old_dest, inst);
         *old_dest = new_dest;
-        self.builder.ssa.declare_ebb_predecessor(
+        self.func_ctx.ssa.declare_ebb_predecessor(
             new_dest,
             pred,
             inst,
@@ -525,8 +527,8 @@ where
             None => false,
             Some(entry) => self.position.ebb.unwrap() == entry,
         };
-        !is_entry && self.builder.ssa.is_sealed(self.position.ebb.unwrap()) &&
-            self.builder
+        !is_entry && self.func_ctx.ssa.is_sealed(self.position.ebb.unwrap()) &&
+            self.func_ctx
                 .ssa
                 .predecessors(self.position.ebb.unwrap())
                 .is_empty()
@@ -535,18 +537,20 @@ where
     /// Returns `true` if and only if no instructions have been added since the last call to
     /// `switch_to_block`.
     pub fn is_pristine(&self) -> bool {
-        self.builder.ebbs[self.position.ebb.unwrap()].pristine
+        self.func_ctx.ebbs[self.position.ebb.unwrap()].pristine
     }
 
     /// Returns `true` if and only if a terminator instruction has been inserted since the
     /// last call to `switch_to_block`.
     pub fn is_filled(&self) -> bool {
-        self.builder.ebbs[self.position.ebb.unwrap()].filled
+        self.func_ctx.ebbs[self.position.ebb.unwrap()].filled
     }
 
     /// Returns a displayable object for the function as it is.
     ///
     /// Useful for debug purposes. Use it with `None` for standard printing.
+    // Clippy thinks the lifetime that follows is needless, but rustc needs it
+    #[cfg_attr(feature = "cargo-clippy", allow(needless_lifetimes))]
     pub fn display<'b, I: Into<Option<&'b TargetIsa>>>(&'b self, isa: I) -> DisplayFunction {
         self.func.display(isa)
     }
@@ -558,17 +562,17 @@ where
     Variable: EntityRef,
 {
     fn move_to_next_basic_block(&mut self) {
-        self.position.basic_block = PackedOption::from(self.builder.ssa.declare_ebb_body_block(
+        self.position.basic_block = PackedOption::from(self.func_ctx.ssa.declare_ebb_body_block(
             self.position.basic_block.unwrap(),
         ));
     }
 
     fn fill_current_block(&mut self) {
-        self.builder.ebbs[self.position.ebb.unwrap()].filled = true;
+        self.func_ctx.ebbs[self.position.ebb.unwrap()].filled = true;
     }
 
     fn declare_successor(&mut self, dest_ebb: Ebb, jump_inst: Inst) {
-        self.builder.ssa.declare_ebb_predecessor(
+        self.func_ctx.ssa.declare_ebb_predecessor(
             dest_ebb,
             self.position.basic_block.unwrap(),
             jump_inst,
@@ -577,10 +581,10 @@ where
 
     fn handle_ssa_side_effects(&mut self, side_effects: SideEffects) {
         for split_ebb in side_effects.split_ebbs_created {
-            self.builder.ebbs[split_ebb].filled = true
+            self.func_ctx.ebbs[split_ebb].filled = true
         }
         for modified_ebb in side_effects.instructions_added_to_ebbs {
-            self.builder.ebbs[modified_ebb].pristine = false
+            self.func_ctx.ebbs[modified_ebb].pristine = false
         }
     }
 }
@@ -588,23 +592,23 @@ where
 #[cfg(test)]
 mod tests {
 
-    use cretonne::entity::EntityRef;
-    use cretonne::ir::{ExternalName, Function, CallConv, Signature, AbiParam, InstBuilder};
-    use cretonne::ir::types::*;
-    use frontend::{ILBuilder, FunctionBuilder};
-    use cretonne::verifier::verify_function;
-    use cretonne::settings;
     use Variable;
+    use cretonne::entity::EntityRef;
+    use cretonne::ir::types::*;
+    use cretonne::ir::{AbiParam, CallConv, ExternalName, Function, InstBuilder, Signature};
+    use cretonne::settings;
+    use cretonne::verifier::verify_function;
+    use frontend::{FunctionBuilder, FunctionBuilderContext};
 
     fn sample_function(lazy_seal: bool) {
-        let mut sig = Signature::new(CallConv::Native);
+        let mut sig = Signature::new(CallConv::SystemV);
         sig.returns.push(AbiParam::new(I32));
         sig.params.push(AbiParam::new(I32));
 
-        let mut il_builder = ILBuilder::<Variable>::new();
+        let mut fn_ctx = FunctionBuilderContext::<Variable>::new();
         let mut func = Function::with_name_signature(ExternalName::testcase("sample"), sig);
         {
-            let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut il_builder);
+            let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut fn_ctx);
 
             let block0 = builder.create_ebb();
             let block1 = builder.create_ebb();

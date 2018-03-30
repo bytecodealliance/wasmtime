@@ -89,7 +89,7 @@ easier to provide substantial input functions for the compiler tests.
 
 File tests are :file:`*.cton` files in the :file:`filetests/` directory
 hierarchy. Each file has a header describing what to test followed by a number
-of input functions in the :doc:`Cretonne textual intermediate language
+of input functions in the :doc:`Cretonne textual intermediate representation
 <langref>`:
 
 .. productionlist::
@@ -136,13 +136,15 @@ This example will run the legalizer test twice. Both runs will have
 ``opt_level=best``, but they will have different ``is_64bit`` settings. The 32-bit
 run will also have the RISC-V specific flag ``supports_m`` disabled.
 
+The filetests are run automatically as part of `cargo test`, and they can
+also be run manually with the `cton-util test` command.
+
 Filecheck
 ---------
 
 Many of the test commands described below use *filecheck* to verify their
 output. Filecheck is a Rust implementation of the LLVM tool of the same name.
-See the :file:`lib/filecheck` `documentation <https://docs.rs/filecheck/>`_ for
-details of its syntax.
+See the `documentation <https://docs.rs/filecheck/>`_ for details of its syntax.
 
 Comments in :file:`.cton` files are associated with the entity they follow.
 This typically means an instruction or the whole function. Those tests that
@@ -164,7 +166,7 @@ Cretonne's tests don't need this.
 ----------
 
 This is one of the simplest file tests, used for testing the conversion to and
-from textual IL. The ``test cat`` command simply parses each function and
+from textual IR. The ``test cat`` command simply parses each function and
 converts it back to text again. The text of each function is then matched
 against the associated filecheck directives.
 
@@ -186,7 +188,7 @@ Example::
 `test verifier`
 ---------------
 
-Run each function through the IL verifier and check that it produces the
+Run each function through the IR verifier and check that it produces the
 expected error messages.
 
 Expected error messages are indicated with an ``error:`` directive *on the
@@ -324,6 +326,38 @@ Test the simple GVN pass.
 The simple GVN pass is run on each function, and then results are run
 through filecheck.
 
+`test licm`
+-----------------
+
+Test the LICM pass.
+
+The LICM pass is run on each function, and then results are run
+through filecheck.
+
+`test dce`
+-----------------
+
+Test the DCE pass.
+
+The DCE pass is run on each function, and then results are run
+through filecheck.
+
+`test preopt`
+-----------------
+
+Test the preopt pass.
+
+The preopt pass is run on each function, and then results are run
+through filecheck.
+
+`test postopt`
+-----------------
+
+Test the postopt pass.
+
+The postopt pass is run on each function, and then results are run
+through filecheck.
+
 `test compile`
 --------------
 
@@ -333,4 +367,4 @@ Each function is passed through the full ``Context::compile()`` function
 which is normally used to compile code. This type of test often depends
 on assertions or verifier errors, but it is also possible to use
 filecheck directives which will be matched against the final form of the
-Cretonne IL right before binary machine code emission.
+Cretonne IR right before binary machine code emission.

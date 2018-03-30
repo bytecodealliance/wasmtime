@@ -1,5 +1,5 @@
 //! This module contains the bulk of the interesting code performing the translation between
-//! WebAssembly and Cretonne IL.
+//! WebAssembly and Cretonne IR.
 //!
 //! The translation is done in one pass, opcode by opcode. Two main data structures are used during
 //! code translations: the value stack and the control stack. The value stack mimics the execution
@@ -22,21 +22,23 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
-use cretonne::ir::{self, InstBuilder, MemFlags, JumpTableData};
+use cretonne::ir::condcodes::{FloatCC, IntCC};
 use cretonne::ir::types::*;
-use cretonne::ir::condcodes::{IntCC, FloatCC};
+use cretonne::ir::{self, InstBuilder, JumpTableData, MemFlags};
 use cretonne::packed_option::ReservedValue;
 use cton_frontend::{FunctionBuilder, Variable};
-use wasmparser::{Operator, MemoryImmediate};
-use translation_utils::{f32_translation, f64_translation, type_to_type, num_return_values};
-use translation_utils::{TableIndex, SignatureIndex, FunctionIndex, MemoryIndex};
-use state::{TranslationState, ControlStackFrame};
-use std::collections::{HashMap, hash_map};
 use environ::{FuncEnvironment, GlobalValue};
-use std::{i32, u32};
+use state::{ControlStackFrame, TranslationState};
+use std::collections::{hash_map, HashMap};
 use std::vec::Vec;
+use std::{i32, u32};
+use translation_utils::{FunctionIndex, MemoryIndex, SignatureIndex, TableIndex};
+use translation_utils::{num_return_values, type_to_type, f32_translation, f64_translation};
+use wasmparser::{MemoryImmediate, Operator};
 
-/// Translates wasm operators into Cretonne IL instructions. Returns `true` if it inserted
+// Clippy warns about "flags: _" but its important to document that the flags field is ignored
+#[cfg_attr(feature = "cargo-clippy", allow(unneeded_field_pattern))]
+/// Translates wasm operators into Cretonne IR instructions. Returns `true` if it inserted
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     op: Operator,
@@ -45,7 +47,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     environ: &mut FE,
 ) {
     if !state.reachable {
-        return translate_unreachable_operator(op, builder, state);
+        return translate_unreachable_operator(&op, builder, state);
     }
 
     // This big match treats all Wasm code operators.
@@ -73,8 +75,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 GlobalValue::Const(val) => val,
                 GlobalValue::Memory { gv, ty } => {
                     let addr = builder.ins().global_addr(environ.native_pointer(), gv);
-                    // TODO: It is likely safe to set `aligned notrap` flags on a global load.
-                    let flags = ir::MemFlags::new();
+                    let mut flags = ir::MemFlags::new();
+                    flags.set_notrap();
+                    flags.set_aligned();
                     builder.ins().load(ty, flags, addr, 0)
                 }
             };
@@ -85,8 +88,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 GlobalValue::Const(_) => panic!("global #{} is a constant", global_index),
                 GlobalValue::Memory { gv, .. } => {
                     let addr = builder.ins().global_addr(environ.native_pointer(), gv);
-                    // TODO: It is likely safe to set `aligned notrap` flags on a global store.
-                    let flags = ir::MemFlags::new();
+                    let mut flags = ir::MemFlags::new();
+                    flags.set_notrap();
+                    flags.set_aligned();
                     let val = state.pop1();
                     builder.ins().store(flags, val, addr, 0);
                 }
@@ -138,6 +142,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.ins().jump(loop_body, &[]);
             state.push_loop(loop_body, next, num_return_values(ty));
             builder.switch_to_block(loop_body);
+            environ.translate_loop_header(builder.cursor());
         }
         Operator::If { ty } => {
             let val = state.pop1();
@@ -187,8 +192,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::End => {
             let frame = state.control_stack.pop().unwrap();
-            let return_count = frame.num_return_values();
             if !builder.is_unreachable() || !builder.is_pristine() {
+                let return_count = frame.num_return_values();
                 builder.ins().jump(
                     frame.following_code(),
                     state.peekn(return_count),
@@ -197,9 +202,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.switch_to_block(frame.following_code());
             builder.seal_block(frame.following_code());
             // If it is a loop we also have to seal the body loop block
-            match frame {
-                ControlStackFrame::Loop { header, .. } => builder.seal_block(header),
-                _ => {}
+            if let ControlStackFrame::Loop { header, .. } = frame {
+                builder.seal_block(header)
             }
             state.stack.truncate(frame.original_stack_size());
             state.stack.extend_from_slice(
@@ -247,27 +251,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.popn(return_count);
             state.reachable = false;
         }
-        Operator::BrIf { relative_depth } => {
-            let val = state.pop1();
-            let i = state.control_stack.len() - 1 - (relative_depth as usize);
-            let (return_count, br_destination) = {
-                let frame = &mut state.control_stack[i];
-                // The values returned by the branch are still available for the reachable
-                // code that comes after it
-                frame.set_branched_to_exit();
-                let return_count = if frame.is_loop() {
-                    0
-                } else {
-                    frame.num_return_values()
-                };
-                (return_count, frame.br_destination())
-            };
-            builder.ins().brnz(
-                val,
-                br_destination,
-                state.peekn(return_count),
-            );
-        }
+        Operator::BrIf { relative_depth } => translate_br_if(relative_depth, builder, state),
         Operator::BrTable { table } => {
             let (depths, default) = table.read_table();
             let mut min_depth = default;
@@ -765,101 +749,45 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         /**************************** Comparison Operators **********************************/
         Operator::I32LtS | Operator::I64LtS => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().icmp(IntCC::SignedLessThan, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
+            translate_icmp(IntCC::SignedLessThan, builder, state)
         }
         Operator::I32LtU | Operator::I64LtU => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().icmp(IntCC::UnsignedLessThan, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
+            translate_icmp(IntCC::UnsignedLessThan, builder, state)
         }
         Operator::I32LeS | Operator::I64LeS => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().icmp(IntCC::SignedLessThanOrEqual, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
+            translate_icmp(IntCC::SignedLessThanOrEqual, builder, state)
         }
         Operator::I32LeU | Operator::I64LeU => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().icmp(
-                IntCC::UnsignedLessThanOrEqual,
-                arg1,
-                arg2,
-            );
-            state.push1(builder.ins().bint(I32, val));
+            translate_icmp(IntCC::UnsignedLessThanOrEqual, builder, state)
         }
         Operator::I32GtS | Operator::I64GtS => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().icmp(IntCC::SignedGreaterThan, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
+            translate_icmp(IntCC::SignedGreaterThan, builder, state)
         }
         Operator::I32GtU | Operator::I64GtU => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().icmp(IntCC::UnsignedGreaterThan, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
+            translate_icmp(IntCC::UnsignedGreaterThan, builder, state)
         }
         Operator::I32GeS | Operator::I64GeS => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().icmp(
-                IntCC::SignedGreaterThanOrEqual,
-                arg1,
-                arg2,
-            );
-            state.push1(builder.ins().bint(I32, val));
+            translate_icmp(IntCC::SignedGreaterThanOrEqual, builder, state)
         }
         Operator::I32GeU | Operator::I64GeU => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().icmp(
-                IntCC::UnsignedGreaterThanOrEqual,
-                arg1,
-                arg2,
-            );
-            state.push1(builder.ins().bint(I32, val));
+            translate_icmp(IntCC::UnsignedGreaterThanOrEqual, builder, state)
         }
         Operator::I32Eqz | Operator::I64Eqz => {
             let arg = state.pop1();
             let val = builder.ins().icmp_imm(IntCC::Equal, arg, 0);
             state.push1(builder.ins().bint(I32, val));
         }
-        Operator::I32Eq | Operator::I64Eq => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().icmp(IntCC::Equal, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
-        }
-        Operator::F32Eq | Operator::F64Eq => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().fcmp(FloatCC::Equal, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
-        }
-        Operator::I32Ne | Operator::I64Ne => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().icmp(IntCC::NotEqual, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
-        }
-        Operator::F32Ne | Operator::F64Ne => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().fcmp(FloatCC::NotEqual, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
-        }
-        Operator::F32Gt | Operator::F64Gt => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().fcmp(FloatCC::GreaterThan, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
-        }
+        Operator::I32Eq | Operator::I64Eq => translate_icmp(IntCC::Equal, builder, state),
+        Operator::F32Eq | Operator::F64Eq => translate_fcmp(FloatCC::Equal, builder, state),
+        Operator::I32Ne | Operator::I64Ne => translate_icmp(IntCC::NotEqual, builder, state),
+        Operator::F32Ne | Operator::F64Ne => translate_fcmp(FloatCC::NotEqual, builder, state),
+        Operator::F32Gt | Operator::F64Gt => translate_fcmp(FloatCC::GreaterThan, builder, state),
         Operator::F32Ge | Operator::F64Ge => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().fcmp(FloatCC::GreaterThanOrEqual, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
+            translate_fcmp(FloatCC::GreaterThanOrEqual, builder, state)
         }
-        Operator::F32Lt | Operator::F64Lt => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().fcmp(FloatCC::LessThan, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
-        }
+        Operator::F32Lt | Operator::F64Lt => translate_fcmp(FloatCC::LessThan, builder, state),
         Operator::F32Le | Operator::F64Le => {
-            let (arg1, arg2) = state.pop2();
-            let val = builder.ins().fcmp(FloatCC::LessThanOrEqual, arg1, arg2);
-            state.push1(builder.ins().bint(I32, val));
+            translate_fcmp(FloatCC::LessThanOrEqual, builder, state)
         }
         Operator::Wake { .. } |
         Operator::I32Wait { .. } |
@@ -932,15 +860,17 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     }
 }
 
+// Clippy warns us of some fields we are deliberately ignoring
+#[cfg_attr(feature = "cargo-clippy", allow(unneeded_field_pattern))]
 /// Deals with a Wasm instruction located in an unreachable portion of the code. Most of them
 /// are dropped but special ones like `End` or `Else` signal the potential end of the unreachable
 /// portion so the translation state muts be updated accordingly.
 fn translate_unreachable_operator(
-    op: Operator,
+    op: &Operator,
     builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
 ) {
-    match op {
+    match *op {
         Operator::If { ty: _ } => {
             // Push a placeholder control stack entry. The if isn't reachable,
             // so we don't have any branches anywhere.
@@ -952,27 +882,25 @@ fn translate_unreachable_operator(
         }
         Operator::Else => {
             let i = state.control_stack.len() - 1;
-            match state.control_stack[i] {
-                ControlStackFrame::If {
-                    branch_inst,
-                    ref mut reachable_from_top,
-                    ..
-                } => {
-                    if *reachable_from_top {
-                        // We have a branch from the top of the if to the else.
-                        state.reachable = true;
-                        // And because there's an else, there can no longer be a
-                        // branch from the top directly to the end.
-                        *reachable_from_top = false;
+            if let ControlStackFrame::If {
+                branch_inst,
+                ref mut reachable_from_top,
+                ..
+            } = state.control_stack[i]
+            {
+                if *reachable_from_top {
+                    // We have a branch from the top of the if to the else.
+                    state.reachable = true;
+                    // And because there's an else, there can no longer be a
+                    // branch from the top directly to the end.
+                    *reachable_from_top = false;
 
-                        // We change the target of the branch instruction
-                        let else_ebb = builder.create_ebb();
-                        builder.change_jump_destination(branch_inst, else_ebb);
-                        builder.seal_block(else_ebb);
-                        builder.switch_to_block(else_ebb);
-                    }
+                    // We change the target of the branch instruction
+                    let else_ebb = builder.create_ebb();
+                    builder.change_jump_destination(branch_inst, else_ebb);
+                    builder.seal_block(else_ebb);
+                    builder.switch_to_block(else_ebb);
                 }
-                _ => {}
             }
         }
         Operator::End => {
@@ -1016,7 +944,7 @@ fn translate_unreachable_operator(
     }
 }
 
-// Get the address+offset to use for a heap access.
+/// Get the address+offset to use for a heap access.
 fn get_heap_addr(
     heap: ir::Heap,
     addr32: ir::Value,
@@ -1053,7 +981,7 @@ fn get_heap_addr(
     }
 }
 
-// Translate a load instruction.
+/// Translate a load instruction.
 fn translate_load<FE: FuncEnvironment + ?Sized>(
     offset: u32,
     opcode: ir::Opcode,
@@ -1066,6 +994,9 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ);
     let (base, offset) = get_heap_addr(heap, addr32, offset, environ.native_pointer(), builder);
+    // Note that we don't set `is_aligned` here, even if the load instruction's
+    // alignment immediate says it's aligned, because WebAssembly's immediate
+    // field is just a hint, while Cretonne's aligned flag needs a guarantee.
     let flags = MemFlags::new();
     let (load, dfg) = builder.ins().Load(
         opcode,
@@ -1077,7 +1008,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     state.push1(dfg.first_result(load));
 }
 
-// Translate a store instruction.
+/// Translate a store instruction.
 fn translate_store<FE: FuncEnvironment + ?Sized>(
     offset: u32,
     opcode: ir::Opcode,
@@ -1091,6 +1022,7 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ);
     let (base, offset) = get_heap_addr(heap, addr32, offset, environ.native_pointer(), builder);
+    // See the comments in `translate_load` about the flags.
     let flags = MemFlags::new();
     builder.ins().Store(
         opcode,
@@ -1100,4 +1032,55 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
         val,
         base,
     );
+}
+
+fn translate_icmp(
+    cc: IntCC,
+    builder: &mut FunctionBuilder<Variable>,
+    state: &mut TranslationState,
+) {
+    let (arg0, arg1) = state.pop2();
+    let val = builder.ins().icmp(cc, arg0, arg1);
+    state.push1(builder.ins().bint(I32, val));
+}
+
+fn translate_fcmp(
+    cc: FloatCC,
+    builder: &mut FunctionBuilder<Variable>,
+    state: &mut TranslationState,
+) {
+    let (arg0, arg1) = state.pop2();
+    let val = builder.ins().fcmp(cc, arg0, arg1);
+    state.push1(builder.ins().bint(I32, val));
+}
+
+fn translate_br_if(
+    relative_depth: u32,
+    builder: &mut FunctionBuilder<Variable>,
+    state: &mut TranslationState,
+) {
+    let val = state.pop1();
+    let (br_destination, inputs) = translate_br_if_args(relative_depth, state);
+    builder.ins().brnz(val, br_destination, inputs);
+}
+
+fn translate_br_if_args(
+    relative_depth: u32,
+    state: &mut TranslationState,
+) -> (ir::Ebb, &[ir::Value]) {
+    let i = state.control_stack.len() - 1 - (relative_depth as usize);
+    let (return_count, br_destination) = {
+        let frame = &mut state.control_stack[i];
+        // The values returned by the branch are still available for the reachable
+        // code that comes after it
+        frame.set_branched_to_exit();
+        let return_count = if frame.is_loop() {
+            0
+        } else {
+            frame.num_return_values()
+        };
+        (return_count, frame.br_destination())
+    };
+    let inputs = state.peekn(return_count);
+    (br_destination, inputs)
 }
