@@ -8,7 +8,8 @@ from cdsl.registers import RegClass
 from base.formats import Unary, UnaryImm, UnaryBool, Binary, BinaryImm
 from base.formats import MultiAry, NullAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
-from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
+from base.formats import IntCompare, IntCompareImm, FloatCompare
+from base.formats import IntCond, FloatCond
 from base.formats import IntSelect, IntCondTrap, FloatCondTrap
 from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalVar
@@ -364,7 +365,7 @@ rfumr = TailRecipe(
         ''')
 
 # XX /r, but for a unary operator with separate input/output register.
-# RM form.
+# RM form. Clobbers FLAGS.
 urm = TailRecipe(
         'urm', Unary, size=1, ins=GPR, outs=GPR,
         emit='''
@@ -372,10 +373,19 @@ urm = TailRecipe(
         modrm_rr(in_reg0, out_reg0, sink);
         ''')
 
-# XX /r. Same as urm, but input limited to ABCD.
-urm_abcd = TailRecipe(
-        'urm_abcd', Unary, size=1, ins=ABCD, outs=GPR,
-        when_prefixed=urm,
+# XX /r. Same as urm, but doesn't clobber FLAGS.
+urm_noflags = TailRecipe(
+        'urm_noflags', Unary, size=1, ins=GPR, outs=GPR,
+        clobbers_flags=False,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_rr(in_reg0, out_reg0, sink);
+        ''')
+
+# XX /r. Same as urm_noflags, but input limited to ABCD.
+urm_noflags_abcd = TailRecipe(
+        'urm_noflags_abcd', Unary, size=1, ins=ABCD, outs=GPR,
+        when_prefixed=urm_noflags,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rr(in_reg0, out_reg0, sink);
@@ -1360,6 +1370,61 @@ icscc = TailRecipe(
         modrm_rr(out_reg0, 0, sink);
         ''')
 
+icsccib = TailRecipe(
+        'icsccib', IntCompareImm, size=2 + 3, ins=GPR, outs=ABCD,
+        instp=IsSignedInt(IntCompareImm.imm, 8),
+        emit='''
+        // Comparison instruction.
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        let imm: i64 = imm.into();
+        sink.put1(imm as u8);
+        // `setCC` instruction, no REX.
+        use ir::condcodes::IntCC::*;
+        let setcc = match cond {
+            Equal => 0x94,
+            NotEqual => 0x95,
+            SignedLessThan => 0x9c,
+            SignedGreaterThanOrEqual => 0x9d,
+            SignedGreaterThan => 0x9f,
+            SignedLessThanOrEqual => 0x9e,
+            UnsignedLessThan => 0x92,
+            UnsignedGreaterThanOrEqual => 0x93,
+            UnsignedGreaterThan => 0x97,
+            UnsignedLessThanOrEqual => 0x96,
+        };
+        sink.put1(0x0f);
+        sink.put1(setcc);
+        modrm_rr(out_reg0, 0, sink);
+        ''')
+
+icsccid = TailRecipe(
+        'icsccid', IntCompareImm, size=5 + 3, ins=GPR, outs=ABCD,
+        instp=IsSignedInt(IntCompareImm.imm, 32),
+        emit='''
+        // Comparison instruction.
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        let imm: i64 = imm.into();
+        sink.put4(imm as u32);
+        // `setCC` instruction, no REX.
+        use ir::condcodes::IntCC::*;
+        let setcc = match cond {
+            Equal => 0x94,
+            NotEqual => 0x95,
+            SignedLessThan => 0x9c,
+            SignedGreaterThanOrEqual => 0x9d,
+            SignedGreaterThan => 0x9f,
+            SignedLessThanOrEqual => 0x9e,
+            UnsignedLessThan => 0x92,
+            UnsignedGreaterThanOrEqual => 0x93,
+            UnsignedGreaterThan => 0x97,
+            UnsignedLessThanOrEqual => 0x96,
+        };
+        sink.put1(0x0f);
+        sink.put1(setcc);
+        modrm_rr(out_reg0, 0, sink);
+        ''')
 
 # Make a FloatCompare instruction predicate with the supported condition codes.
 

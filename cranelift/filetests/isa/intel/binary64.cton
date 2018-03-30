@@ -1,4 +1,4 @@
-; binary emission of 64-bit code.
+; binary emission of x86-64 code.
 test binemit
 set is_64bit
 set is_compressed
@@ -457,6 +457,14 @@ ebb0:
     ; asm: cmpq %r10, %rsi
     ; asm: setbe %dl
     [-,%rdx]            v319 = icmp ule v2, v3  ; bin: 4c 39 d6 0f 96 c2
+
+    ; asm: cmpq $37, %rcx
+    ; asm: setl %bl
+    [-,%rbx]            v320 = icmp_imm slt v1, 37     ; bin: 48 83 f9 25 0f 9c c3
+
+    ; asm: cmpq $100000, %rcx
+    ; asm: setl %bl
+    [-,%rbx]            v321 = icmp_imm slt v1, 100000 ; bin: 48 81 f9 000186a0 0f 9c c3
 
     ; Bool-to-int conversions.
 
@@ -1030,6 +1038,14 @@ ebb0:
     ; asm: cmpl %r10d, %esi
     ; asm: setbe %dl
     [-,%rdx]            v319 = icmp ule v2, v3  ; bin: 44 39 d6 0f 96 c2
+
+    ; asm: cmpl $37, %ecx
+    ; asm: setl %bl
+    [-,%rbx]            v320 = icmp_imm slt v1, 37  ; bin: 83 f9 25 0f 9c c3
+
+    ; asm: cmpq $100000, %ecx
+    ; asm: setl %bl
+    [-,%rbx]            v321 = icmp_imm slt v1, 100000 ; bin: 81 f9 000186a0 0f 9c c3
 
     ; Bool-to-int conversions.
 

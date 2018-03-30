@@ -28,9 +28,11 @@ mod match_directive;
 mod test_binemit;
 mod test_cat;
 mod test_compile;
+mod test_dce;
 mod test_domtree;
 mod test_legalizer;
 mod test_licm;
+mod test_postopt;
 mod test_preopt;
 mod test_print_cfg;
 mod test_regalloc;
@@ -73,9 +75,11 @@ fn new_subtest(parsed: &TestCommand) -> subtest::Result<Box<subtest::SubTest>> {
         "binemit" => test_binemit::subtest(parsed),
         "cat" => test_cat::subtest(parsed),
         "compile" => test_compile::subtest(parsed),
+        "dce" => test_dce::subtest(parsed),
         "domtree" => test_domtree::subtest(parsed),
         "legalizer" => test_legalizer::subtest(parsed),
         "licm" => test_licm::subtest(parsed),
+        "postopt" => test_postopt::subtest(parsed),
         "preopt" => test_preopt::subtest(parsed),
         "print-cfg" => test_print_cfg::subtest(parsed),
         "regalloc" => test_regalloc::subtest(parsed),

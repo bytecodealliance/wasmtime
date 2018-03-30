@@ -158,6 +158,11 @@ pub trait TargetIsa: fmt::Display {
     /// Get the ISA-independent flags that were used to make this trait object.
     fn flags(&self) -> &settings::Flags;
 
+    /// Does the CPU implement scalar comparisons using a CPU flags register?
+    fn uses_cpu_flags(&self) -> bool {
+        false
+    }
+
     /// Get a data structure describing the registers in this ISA.
     fn register_info(&self) -> RegInfo;
 

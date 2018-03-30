@@ -127,28 +127,6 @@ fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
         return package_up_divrem_info(arg, argL_ty, imm.into(), isSigned, isRem);
     }
 
-    // TODO: should we actually bother to do this (that is, manually match
-    // the case that the second argument is an iconst)? Or should we assume
-    // that some previous constant propagation pass has pushed all such
-    // immediates to their use points, creating BinaryImm instructions
-    // instead? For now we take the conservative approach.
-    if let InstructionData::Binary { opcode, args } = *idata {
-        let (isSigned, isRem) = match opcode {
-            Opcode::Udiv => (false, false),
-            Opcode::Urem => (false, true),
-            Opcode::Sdiv => (true, false),
-            Opcode::Srem => (true, true),
-            _other => return None,
-        };
-        let argR: Value = args[1];
-        if let Some(simm64) = get_const(argR, dfg) {
-            let argL: Value = args[0];
-            // Pull the operation size (type) from the left arg
-            let argL_ty = dfg.value_type(argL);
-            return package_up_divrem_info(argL, argL_ty, simm64, isSigned, isRem);
-        }
-    }
-
     None
 }
 
@@ -473,25 +451,106 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
     }
 }
 
-
-//----------------------------------------------------------------------
-//
-// General pattern-match helpers.
-
-/// Find out if `value` actually resolves to a constant, and if so what its
-/// value is.
-fn get_const(value: Value, dfg: &DataFlowGraph) -> Option<i64> {
-    match dfg.value_def(value) {
-        ValueDef::Result(definingInst, resultNo) => {
-            let definingIData: &InstructionData = &dfg[definingInst];
-            if let InstructionData::UnaryImm { opcode, imm } = *definingIData {
-                if opcode == Opcode::Iconst && resultNo == 0 {
-                    return Some(imm.into());
+/// Apply basic simplifications.
+///
+/// This folds constants with arithmetic to form `_imm` instructions, and other
+/// minor simplifications.
+fn simplify(pos: &mut FuncCursor, inst: Inst) {
+    match pos.func.dfg[inst] {
+        InstructionData::Binary { opcode, args } => {
+            if let ValueDef::Result(iconst_inst, _) = pos.func.dfg.value_def(args[1]) {
+                if let InstructionData::UnaryImm {
+                    opcode: Opcode::Iconst,
+                    mut imm,
+                } = pos.func.dfg[iconst_inst]
+                {
+                    let new_opcode = match opcode {
+                        Opcode::Iadd => Opcode::IaddImm,
+                        Opcode::Imul => Opcode::ImulImm,
+                        Opcode::Sdiv => Opcode::SdivImm,
+                        Opcode::Udiv => Opcode::UdivImm,
+                        Opcode::Srem => Opcode::SremImm,
+                        Opcode::Urem => Opcode::UremImm,
+                        Opcode::Band => Opcode::BandImm,
+                        Opcode::Bor => Opcode::BorImm,
+                        Opcode::Bxor => Opcode::BxorImm,
+                        Opcode::Rotl => Opcode::RotlImm,
+                        Opcode::Rotr => Opcode::RotrImm,
+                        Opcode::Ishl => Opcode::IshlImm,
+                        Opcode::Ushr => Opcode::UshrImm,
+                        Opcode::Sshr => Opcode::SshrImm,
+                        Opcode::Isub => {
+                            imm = imm.wrapping_neg();
+                            Opcode::IaddImm
+                        }
+                        _ => return,
+                    };
+                    let ty = pos.func.dfg.ctrl_typevar(inst);
+                    pos.func.dfg.replace(inst).BinaryImm(
+                        new_opcode,
+                        ty,
+                        imm,
+                        args[0],
+                    );
+                }
+            } else if let ValueDef::Result(iconst_inst, _) = pos.func.dfg.value_def(args[0]) {
+                if let InstructionData::UnaryImm {
+                    opcode: Opcode::Iconst,
+                    mut imm,
+                } = pos.func.dfg[iconst_inst]
+                {
+                    let new_opcode = match opcode {
+                        Opcode::Isub => Opcode::IrsubImm,
+                        _ => return,
+                    };
+                    let ty = pos.func.dfg.ctrl_typevar(inst);
+                    pos.func.dfg.replace(inst).BinaryImm(
+                        new_opcode,
+                        ty,
+                        imm,
+                        args[0],
+                    );
                 }
             }
-            None
         }
-        ValueDef::Param(_definingEbb, _paramNo) => None,
+        InstructionData::IntCompare { opcode, cond, args } => {
+            debug_assert_eq!(opcode, Opcode::Icmp);
+            if let ValueDef::Result(iconst_inst, _) = pos.func.dfg.value_def(args[1]) {
+                if let InstructionData::UnaryImm {
+                    opcode: Opcode::Iconst,
+                    imm,
+                } = pos.func.dfg[iconst_inst]
+                {
+                    pos.func.dfg.replace(inst).icmp_imm(cond, args[0], imm);
+                }
+            }
+        }
+        InstructionData::CondTrap { .. } |
+        InstructionData::Branch { .. } |
+        InstructionData::Ternary { opcode: Opcode::Select, .. } => {
+            // Fold away a redundant `bint`.
+            let maybe = {
+                let args = pos.func.dfg.inst_args(inst);
+                if let ValueDef::Result(def_inst, _) = pos.func.dfg.value_def(args[0]) {
+                    if let InstructionData::Unary {
+                        opcode: Opcode::Bint,
+                        arg: bool_val,
+                    } = pos.func.dfg[def_inst]
+                    {
+                        Some(bool_val)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
+            if let Some(bool_val) = maybe {
+                let args = pos.func.dfg.inst_args_mut(inst);
+                args[0] = bool_val;
+            }
+        }
+        _ => {}
     }
 }
 
@@ -503,6 +562,8 @@ pub fn do_preopt(func: &mut Function) {
     while let Some(_ebb) = pos.next_ebb() {
 
         while let Some(inst) = pos.next_inst() {
+            // Apply basic simplifications.
+            simplify(&mut pos, inst);
 
             //-- BEGIN -- division by constants ----------------
 

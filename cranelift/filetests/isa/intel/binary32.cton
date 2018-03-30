@@ -1,4 +1,4 @@
-; binary emission of 32-bit code.
+; binary emission of x86-32 code.
 test binemit
 set is_compressed
 isa intel haswell
