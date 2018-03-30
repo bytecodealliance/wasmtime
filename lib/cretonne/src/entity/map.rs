@@ -1,6 +1,6 @@
 //! Densely numbered entity references as mapping keys.
 
-use entity::{EntityRef, Keys, Iter, IterMut};
+use entity::{EntityRef, Iter, IterMut, Keys};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::vec::Vec;

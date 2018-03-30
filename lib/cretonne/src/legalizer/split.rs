@@ -66,7 +66,7 @@
 
 use cursor::{Cursor, CursorPosition, FuncCursor};
 use flowgraph::ControlFlowGraph;
-use ir::{self, Ebb, Inst, Value, Type, Opcode, ValueDef, InstructionData, InstBuilder};
+use ir::{self, Ebb, Inst, InstBuilder, InstructionData, Opcode, Type, Value, ValueDef};
 use std::iter;
 use std::vec::Vec;
 
@@ -228,7 +228,6 @@ fn split_value(
                 let hi_num = pos.func.dfg.num_ebb_params(ebb);
                 let hi = pos.func.dfg.append_ebb_param(ebb, split_type);
                 reuse = Some((lo, hi));
-
 
                 // Now the original value is dangling. Insert a concatenation instruction that can
                 // compute it from the two new parameters. This also serves as a record of what we

@@ -1,13 +1,13 @@
 //! A frontend for building Cretonne IR from other languages.
 use cretonne::cursor::{Cursor, FuncCursor};
 use cretonne::ir;
-use cretonne::ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData,
-                   StackSlotData, DataFlowGraph, InstructionData, ExtFuncData, FuncRef, SigRef,
-                   Signature, InstBuilderBase, GlobalVarData, GlobalVar, HeapData, Heap};
+use cretonne::ir::{DataFlowGraph, Ebb, ExtFuncData, FuncRef, Function, GlobalVar, GlobalVarData,
+                   Heap, HeapData, Inst, InstBuilderBase, InstructionData, JumpTable,
+                   JumpTableData, SigRef, Signature, StackSlot, StackSlotData, Type, Value};
 use cretonne::ir::function::DisplayFunction;
 use cretonne::isa::TargetIsa;
-use ssa::{SSABuilder, SideEffects, Block};
-use cretonne::entity::{EntityRef, EntityMap, EntitySet};
+use ssa::{Block, SSABuilder, SideEffects};
+use cretonne::entity::{EntityMap, EntityRef, EntitySet};
 use cretonne::packed_option::PackedOption;
 
 /// Structure used for translating a series of functions into Cretonne IR.
@@ -27,7 +27,6 @@ where
     ebbs: EntityMap<Ebb, EbbData>,
     types: EntityMap<Variable, Type>,
 }
-
 
 /// Temporary object used to build a single Cretonne IR `Function`.
 pub struct FunctionBuilder<'a, Variable: 'a>
@@ -125,7 +124,8 @@ where
 }
 
 impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long, Variable>
-    where Variable: EntityRef
+where
+    Variable: EntityRef,
 {
     fn data_flow_graph(&self) -> &DataFlowGraph {
         &self.builder.func.dfg
@@ -165,13 +165,14 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 // multiple times, so we must deduplicate.
                         let mut unique = EntitySet::<Ebb>::new();
                         for dest_ebb in self.builder
-                                    .func
-                                    .jump_tables
-                                    .get(table)
-                                    .expect("you are referencing an undeclared jump table")
-                                    .entries()
-                                    .map(|(_, ebb)| ebb)
-                                    .filter(|dest_ebb| unique.insert(*dest_ebb)) {
+                            .func
+                            .jump_tables
+                            .get(table)
+                            .expect("you are referencing an undeclared jump table")
+                            .entries()
+                            .map(|(_, ebb)| ebb)
+                            .filter(|dest_ebb| unique.insert(*dest_ebb))
+                        {
                             self.builder.func_ctx.ssa.declare_ebb_predecessor(
                                 dest_ebb,
                                 self.builder.position.basic_block.unwrap(),
@@ -592,9 +593,9 @@ where
 mod tests {
 
     use cretonne::entity::EntityRef;
-    use cretonne::ir::{ExternalName, Function, CallConv, Signature, AbiParam, InstBuilder};
+    use cretonne::ir::{AbiParam, CallConv, ExternalName, Function, InstBuilder, Signature};
     use cretonne::ir::types::*;
-    use frontend::{FunctionBuilderContext, FunctionBuilder};
+    use frontend::{FunctionBuilder, FunctionBuilderContext};
     use cretonne::verifier::verify_function;
     use cretonne::settings;
     use Variable;

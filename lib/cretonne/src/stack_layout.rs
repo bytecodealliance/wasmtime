@@ -1,9 +1,9 @@
 //! Computing stack layout.
 
 use ir::StackSlots;
-use ir::stackslot::{StackSize, StackOffset, StackSlotKind};
+use ir::stackslot::{StackOffset, StackSize, StackSlotKind};
 use result::CtonError;
-use std::cmp::{min, max};
+use std::cmp::{max, min};
 
 /// Compute the stack frame layout.
 ///
@@ -110,7 +110,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
 
 #[cfg(test)]
 mod tests {
-    use ir::{StackSlots, StackSlotData, StackSlotKind};
+    use ir::{StackSlotData, StackSlotKind, StackSlots};
     use ir::types;
     use super::layout_stack;
     use ir::stackslot::StackOffset;

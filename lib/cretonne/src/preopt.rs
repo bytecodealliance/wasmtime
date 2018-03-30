@@ -4,14 +4,13 @@
 
 use cursor::{Cursor, FuncCursor};
 use ir::dfg::ValueDef;
-use ir::{Function, InstructionData, Value, DataFlowGraph, InstBuilder, Type};
+use ir::{DataFlowGraph, Function, InstBuilder, InstructionData, Type, Value};
 use ir::Inst;
 use ir::types::{I32, I64};
 use ir::instructions::Opcode;
-use divconst_magic_numbers::{MU32, MU64, MS32, MS64};
-use divconst_magic_numbers::{magicU32, magicU64, magicS32, magicS64};
+use divconst_magic_numbers::{MS32, MS64, MU32, MU64};
+use divconst_magic_numbers::{magicS32, magicS64, magicU32, magicU64};
 use timing;
-
 
 //----------------------------------------------------------------------
 //
@@ -149,7 +148,6 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
     };
 
     match *divrem_info {
-
         // -------------------- U32 --------------------
 
         // U32 div, rem by zero: ignore
@@ -447,7 +445,6 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 }
             }
         }
-
     }
 }
 
@@ -554,13 +551,11 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
     }
 }
 
-
 /// The main pre-opt pass.
 pub fn do_preopt(func: &mut Function) {
     let _tt = timing::preopt();
     let mut pos = FuncCursor::new(func);
     while let Some(_ebb) = pos.next_ebb() {
-
         while let Some(inst) = pos.next_inst() {
             // Apply basic simplifications.
             simplify(&mut pos, inst);

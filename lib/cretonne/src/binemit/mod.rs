@@ -10,7 +10,7 @@ pub use regalloc::RegDiversions;
 pub use self::relaxation::relax_branches;
 pub use self::memorysink::{MemoryCodeSink, RelocSink, TrapSink};
 
-use ir::{ExternalName, JumpTable, Function, Inst, TrapCode, SourceLoc};
+use ir::{ExternalName, Function, Inst, JumpTable, SourceLoc, TrapCode};
 use std::fmt;
 
 /// Offset in bytes from the beginning of the function.

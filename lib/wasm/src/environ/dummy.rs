@@ -1,8 +1,8 @@
 //! "Dummy" environment for testing wasm translation.
 
 use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment};
-use translation_utils::{Global, Memory, Table, GlobalIndex, TableIndex, SignatureIndex,
-                        FunctionIndex, MemoryIndex};
+use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
+                        Table, TableIndex};
 use func_translator::FuncTranslator;
 use cretonne::ir::{self, InstBuilder};
 use cretonne::ir::types::*;

@@ -6,7 +6,7 @@
 use cretonne::ir::{self, Ebb, Inst, Value};
 use environ::{FuncEnvironment, GlobalValue};
 use std::collections::HashMap;
-use translation_utils::{GlobalIndex, MemoryIndex, SignatureIndex, FunctionIndex};
+use translation_utils::{FunctionIndex, GlobalIndex, MemoryIndex, SignatureIndex};
 use std::vec::Vec;
 
 /// A control stack frame can be an `if`, a `block` or a `loop`, each one having the following

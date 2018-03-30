@@ -7,7 +7,7 @@ use cretonne::ir;
 use cretonne;
 use cretonne::print_errors::pretty_error;
 use cton_reader::TestCommand;
-use subtest::{SubTest, Context, Result, run_filecheck};
+use subtest::{run_filecheck, Context, Result, SubTest};
 use std::borrow::Cow;
 use std::fmt::Write;
 

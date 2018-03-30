@@ -1,6 +1,6 @@
 //! Emitting binary ARM64 machine code.
 
-use binemit::{CodeSink, bad_encoding};
+use binemit::{bad_encoding, CodeSink};
 use ir::{Function, Inst};
 use regalloc::RegDiversions;
 

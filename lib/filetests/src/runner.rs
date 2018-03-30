@@ -8,7 +8,7 @@ use std::fmt::{self, Display};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::time;
-use {TestResult, runone};
+use {runone, TestResult};
 use concurrent::{ConcurrentRunner, Reply};
 
 /// Timeout in seconds when we're not making progress.
@@ -302,7 +302,6 @@ impl TestRunner {
         // Inter-quartile range.
         let iqr = q3 - q1;
 
-
         // Cut-off for what we consider a 'slow' test: 3 IQR from the 75% quartile.
         //
         // Q3 + 1.5 IQR are the data points that would be plotted as outliers outside a box plot,
@@ -319,7 +318,6 @@ impl TestRunner {
         {
             println!("slow: {}", t)
         }
-
     }
 
     /// Scan pushed directories for tests and run them.

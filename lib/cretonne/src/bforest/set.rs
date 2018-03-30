@@ -2,7 +2,7 @@
 
 use packed_option::PackedOption;
 use std::marker::PhantomData;
-use super::{INNER_SIZE, Comparator, Forest, NodePool, Node, NodeData, Path, SetValue};
+use super::{Comparator, Forest, Node, NodeData, NodePool, Path, SetValue, INNER_SIZE};
 
 /// Tag type defining forest types for a set.
 struct SetTypes<K, C>(PhantomData<(K, C)>);

@@ -4,16 +4,15 @@ use ir;
 use isa::{RegClass, RegUnit, TargetIsa};
 use regalloc::AllocatableSet;
 use settings as shared_settings;
-use super::registers::{GPR, FPR, RU};
-use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
-use ir::{AbiParam, ArgumentPurpose, ArgumentLoc, ArgumentExtension, CallConv, InstBuilder};
-use ir::stackslot::{StackSize, StackOffset};
+use super::registers::{FPR, GPR, RU};
+use abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
+use ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, CallConv, InstBuilder};
+use ir::stackslot::{StackOffset, StackSize};
 use ir::immediates::Imm64;
 use stack_layout::layout_stack;
 use std::i32;
-use cursor::{Cursor, EncCursor, CursorPosition};
+use cursor::{Cursor, CursorPosition, EncCursor};
 use result;
-
 
 /// Argument registers for x86-64
 static ARG_GPRS: [RU; 6] = [RU::rdi, RU::rsi, RU::rdx, RU::rcx, RU::r8, RU::r9];

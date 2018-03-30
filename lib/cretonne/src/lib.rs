@@ -1,12 +1,7 @@
 //! Cretonne code generation library.
 
-#![deny(missing_docs,
-        trivial_numeric_casts,
-        unused_extern_crates)]
-
-#![cfg_attr(feature="clippy",
-            plugin(clippy(conf_file="../../clippy.toml")))]
-
+#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(feature="cargo-clippy", allow(
 // Rustfmt 0.9.0 is at odds with this lint:
                 block_in_if_condition_stmt,

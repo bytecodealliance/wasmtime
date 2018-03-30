@@ -18,7 +18,6 @@
 // The build script expects to be run from the directory where this build.rs file lives. The
 // current directory is used to find the sources.
 
-
 use std::env;
 use std::process;
 

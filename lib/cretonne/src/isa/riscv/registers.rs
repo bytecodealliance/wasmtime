@@ -6,7 +6,7 @@ include!(concat!(env!("OUT_DIR"), "/registers-riscv.rs"));
 
 #[cfg(test)]
 mod tests {
-    use super::{INFO, GPR, FPR};
+    use super::{FPR, GPR, INFO};
     use isa::RegUnit;
     use std::string::{String, ToString};
 

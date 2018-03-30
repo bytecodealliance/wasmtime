@@ -184,7 +184,6 @@ impl Display for Uimm32 {
         } else {
             write_hex(i64::from(self.0), f)
         }
-
     }
 }
 
@@ -249,7 +248,6 @@ impl Display for Offset32 {
         } else {
             write_hex(val, f)
         }
-
     }
 }
 
@@ -461,7 +459,6 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
                     None => return Err("Invalid character"),
                 }
             }
-
         }
     }
 

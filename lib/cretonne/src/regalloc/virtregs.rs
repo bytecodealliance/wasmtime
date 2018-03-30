@@ -14,9 +14,9 @@
 use dbg::DisplayList;
 use dominator_tree::DominatorTreePreorder;
 use entity::{EntityList, ListPool};
-use entity::{PrimaryMap, EntityMap, Keys};
+use entity::{EntityMap, Keys, PrimaryMap};
 use entity::EntityRef;
-use ir::{Value, Function};
+use ir::{Function, Value};
 use packed_option::PackedOption;
 use ref_slice::ref_slice;
 use std::cmp::Ordering;

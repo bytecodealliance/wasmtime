@@ -10,7 +10,7 @@
 
 use std::fmt;
 use ir::{AbiParam, ArgumentLoc};
-use isa::{TargetIsa, RegInfo, RegClassIndex, OperandConstraint, ConstraintKind};
+use isa::{ConstraintKind, OperandConstraint, RegClassIndex, RegInfo, TargetIsa};
 
 /// Preferred register allocation for an SSA value.
 #[derive(Clone, Copy, Debug)]

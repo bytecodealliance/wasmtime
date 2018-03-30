@@ -4,7 +4,7 @@
 
 use CommandResult;
 use utils::read_to_string;
-use filecheck::{CheckerBuilder, Checker, NO_VARIABLES};
+use filecheck::{Checker, CheckerBuilder, NO_VARIABLES};
 use std::io::{self, Read};
 
 pub fn run(files: &[String], verbose: bool) -> CommandResult {

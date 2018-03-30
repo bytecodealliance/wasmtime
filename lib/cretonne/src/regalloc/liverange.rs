@@ -109,7 +109,7 @@
 
 use bforest;
 use entity::SparseMapValue;
-use ir::{Inst, Ebb, Value, Layout, ProgramPoint, ExpandedProgramPoint, ProgramOrder};
+use ir::{Ebb, ExpandedProgramPoint, Inst, Layout, ProgramOrder, ProgramPoint, Value};
 use regalloc::affinity::Affinity;
 use std::cmp::Ordering;
 
@@ -457,9 +457,9 @@ impl<PO: ProgramOrder> SparseMapValue<Value> for GenLiveRange<PO> {
 mod tests {
     use super::{GenLiveRange, LiveRangeContext};
     use bforest;
-    use ir::{Inst, Ebb, Value};
+    use ir::{Ebb, Inst, Value};
     use entity::EntityRef;
-    use ir::{ProgramOrder, ExpandedProgramPoint};
+    use ir::{ExpandedProgramPoint, ProgramOrder};
     use std::cmp::Ordering;
     use std::vec::Vec;
 
@@ -543,7 +543,6 @@ mod tests {
                 // Save for next round.
                 prev_end = Some(end);
             }
-
         }
     }
 

@@ -7,12 +7,12 @@
 //! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
-use translation_utils::{type_to_type, TableIndex, FunctionIndex, GlobalIndex, SignatureIndex,
-                        MemoryIndex, Global, GlobalInit, Table, TableElementType, Memory};
-use cretonne::ir::{Signature, AbiParam, CallConv};
+use translation_utils::{type_to_type, FunctionIndex, Global, GlobalIndex, GlobalInit, Memory,
+                        MemoryIndex, SignatureIndex, Table, TableElementType, TableIndex};
+use cretonne::ir::{AbiParam, CallConv, Signature};
 use cretonne;
-use wasmparser::{Parser, ParserState, FuncType, ImportSectionEntryType, ExternalKind, WasmDecoder,
-                 MemoryType, Operator};
+use wasmparser::{ExternalKind, FuncType, ImportSectionEntryType, MemoryType, Operator, Parser,
+                 ParserState, WasmDecoder};
 use wasmparser;
 use std::str::from_utf8;
 use environ::ModuleEnvironment;

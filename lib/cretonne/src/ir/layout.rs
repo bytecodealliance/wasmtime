@@ -5,10 +5,10 @@
 
 use entity::EntityMap;
 use ir::{Ebb, Inst};
-use ir::progpoint::{ProgramOrder, ExpandedProgramPoint};
+use ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
 use packed_option::PackedOption;
 use std::cmp;
-use std::iter::{Iterator, IntoIterator};
+use std::iter::{IntoIterator, Iterator};
 use timing;
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
@@ -733,7 +733,6 @@ impl<'f> DoubleEndedIterator for Insts<'f> {
         rval
     }
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -7,7 +7,7 @@ use ir;
 use isa;
 use packed_option::PackedOption;
 use std::result;
-use verifier::{Result, Error};
+use verifier::{Error, Result};
 use timing;
 
 /// Verify that CPU flags are used correctly.

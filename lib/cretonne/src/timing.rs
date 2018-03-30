@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-pub use self::details::{TimingToken, PassTimes, take_current, add_to_current};
+pub use self::details::{add_to_current, take_current, PassTimes, TimingToken};
 
 // Each pass that can be timed is predefined with the `define_passes!` macro. Each pass has a
 // snake_case name and a plain text description used when printing out the timing report.
@@ -90,18 +90,17 @@ impl fmt::Display for Pass {
     }
 }
 
-
 /// Implementation details.
 ///
 /// This whole module can be gated on a `cfg` feature to provide a dummy implementation for
 /// performance-sensitive builds or restricted environments. The dummy implementation must provide
 /// `TimingToken` and `PassTimings` types and a `take_current` function.
 mod details {
-    use super::{Pass, NUM_PASSES, DESCRIPTIONS};
+    use super::{Pass, DESCRIPTIONS, NUM_PASSES};
     use std::cell::{Cell, RefCell};
     use std::fmt;
     use std::mem;
-    use std::time::{Instant, Duration};
+    use std::time::{Duration, Instant};
 
     /// A timing token is responsible for timing the currently running pass. Timing starts when it
     /// is created and ends when it is dropped.

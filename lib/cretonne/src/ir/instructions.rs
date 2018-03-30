@@ -12,7 +12,7 @@ use std::ops::{Deref, DerefMut};
 use std::vec::Vec;
 
 use ir;
-use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef};
+use ir::{Ebb, FuncRef, JumpTable, SigRef, Type, Value};
 use ir::types;
 use isa;
 
@@ -73,7 +73,7 @@ impl FromStr for Opcode {
 
     /// Parse an Opcode name from a string.
     fn from_str(s: &str) -> Result<Opcode, &'static str> {
-        use constant_hash::{Table, simple_hash, probe};
+        use constant_hash::{probe, simple_hash, Table};
 
         impl<'a> Table<&'a str> for [Option<Opcode>] {
             fn len(&self) -> usize {
@@ -512,16 +512,12 @@ impl OperandConstraint {
             LaneOf => Bound(ctrl_type.lane_type()),
             AsBool => Bound(ctrl_type.as_bool()),
             HalfWidth => Bound(ctrl_type.half_width().expect("invalid type for half_width")),
-            DoubleWidth => {
-                Bound(ctrl_type.double_width().expect(
-                    "invalid type for double_width",
-                ))
-            }
-            HalfVector => {
-                Bound(ctrl_type.half_vector().expect(
-                    "invalid type for half_vector",
-                ))
-            }
+            DoubleWidth => Bound(ctrl_type.double_width().expect(
+                "invalid type for double_width",
+            )),
+            HalfVector => Bound(ctrl_type.half_vector().expect(
+                "invalid type for half_vector",
+            )),
             DoubleVector => Bound(ctrl_type.by(2).expect("invalid type for double_vector")),
         }
     }

@@ -8,7 +8,7 @@ use cretonne;
 use cretonne::ir::Function;
 use cretonne::print_errors::pretty_error;
 use cton_reader::TestCommand;
-use subtest::{SubTest, Context, Result, run_filecheck};
+use subtest::{run_filecheck, Context, Result, SubTest};
 use std::fmt::Write;
 
 struct TestLegalizer;

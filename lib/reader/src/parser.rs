@@ -3,22 +3,21 @@
 use std::str::FromStr;
 use std::{u16, u32};
 use std::mem;
-use cretonne::ir::{Function, Ebb, Opcode, Value, Type, ExternalName, CallConv, StackSlotData,
-                   StackSlotKind, JumpTable, JumpTableData, Signature, AbiParam,
-                   ArgumentExtension, ExtFuncData, SigRef, FuncRef, StackSlot, ValueLoc,
-                   ArgumentLoc, MemFlags, GlobalVar, GlobalVarData, Heap, HeapData, HeapStyle,
-                   HeapBase};
+use cretonne::ir::{AbiParam, ArgumentExtension, ArgumentLoc, CallConv, Ebb, ExtFuncData,
+                   ExternalName, FuncRef, Function, GlobalVar, GlobalVarData, Heap, HeapBase,
+                   HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags, Opcode, SigRef,
+                   Signature, StackSlot, StackSlotData, StackSlotKind, Type, Value, ValueLoc};
 use cretonne::ir;
 use cretonne::ir::types::VOID;
-use cretonne::ir::immediates::{Imm64, Uimm32, Offset32, Ieee32, Ieee64};
+use cretonne::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
 use cretonne::ir::entities::AnyEntity;
-use cretonne::ir::instructions::{InstructionFormat, InstructionData, VariableArgs};
-use cretonne::isa::{self, TargetIsa, Encoding, RegUnit};
+use cretonne::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
+use cretonne::isa::{self, Encoding, RegUnit, TargetIsa};
 use cretonne::{settings, timing};
 use cretonne::entity::EntityRef;
 use cretonne::packed_option::ReservedValue;
-use testfile::{TestFile, Details, Comment};
-use error::{Location, Error, Result};
+use testfile::{Comment, Details, TestFile};
+use error::{Error, Location, Result};
 use lexer::{self, Lexer, Token};
 use testcommand::TestCommand;
 use isaspec;
@@ -1189,12 +1188,12 @@ impl<'a> Parser<'a> {
                 }
                 "bound" => {
                     data.style = match style_name {
-                        "dynamic" => {
-                            HeapStyle::Dynamic { bound_gv: self.match_gv("expected gv bound")? }
-                        }
-                        "static" => {
-                            HeapStyle::Static { bound: self.match_imm64("expected integer bound")? }
-                        }
+                        "dynamic" => HeapStyle::Dynamic {
+                            bound_gv: self.match_gv("expected gv bound")?,
+                        },
+                        "static" => HeapStyle::Static {
+                            bound: self.match_imm64("expected integer bound")?,
+                        },
                         t => return err!(self.loc, "unknown heap style '{}'", t),
                     };
                 }
@@ -1736,7 +1735,7 @@ impl<'a> Parser<'a> {
                 return err!(
                     self.loc,
                     "instruction produces {} result values, but {} locations were \
-                             specified",
+                     specified",
                     results.len(),
                     result_locations.len()
                 );
@@ -1791,7 +1790,7 @@ impl<'a> Parser<'a> {
                         return err!(
                             self.loc,
                             "type variable required for polymorphic opcode, e.g. '{}.{}'; \
-                            can't infer from {} which is not yet defined",
+                             can't infer from {} which is not yet defined",
                             opcode,
                             constraints.ctrl_typeset().unwrap().example(),
                             ctrl_src_value
@@ -1801,7 +1800,7 @@ impl<'a> Parser<'a> {
                         return err!(
                             self.loc,
                             "type variable required for polymorphic opcode, e.g. '{}.{}'; \
-                            can't infer from {} which is not yet resolved",
+                             can't infer from {} which is not yet resolved",
                             opcode,
                             constraints.ctrl_typeset().unwrap().example(),
                             ctrl_src_value
@@ -1890,36 +1889,26 @@ impl<'a> Parser<'a> {
         opcode: Opcode,
     ) -> Result<InstructionData> {
         let idata = match opcode.format() {
-            InstructionFormat::Unary => {
-                InstructionData::Unary {
-                    opcode,
-                    arg: self.match_value("expected SSA value operand")?,
-                }
-            }
-            InstructionFormat::UnaryImm => {
-                InstructionData::UnaryImm {
-                    opcode,
-                    imm: self.match_imm64("expected immediate integer operand")?,
-                }
-            }
-            InstructionFormat::UnaryIeee32 => {
-                InstructionData::UnaryIeee32 {
-                    opcode,
-                    imm: self.match_ieee32("expected immediate 32-bit float operand")?,
-                }
-            }
-            InstructionFormat::UnaryIeee64 => {
-                InstructionData::UnaryIeee64 {
-                    opcode,
-                    imm: self.match_ieee64("expected immediate 64-bit float operand")?,
-                }
-            }
-            InstructionFormat::UnaryBool => {
-                InstructionData::UnaryBool {
-                    opcode,
-                    imm: self.match_bool("expected immediate boolean operand")?,
-                }
-            }
+            InstructionFormat::Unary => InstructionData::Unary {
+                opcode,
+                arg: self.match_value("expected SSA value operand")?,
+            },
+            InstructionFormat::UnaryImm => InstructionData::UnaryImm {
+                opcode,
+                imm: self.match_imm64("expected immediate integer operand")?,
+            },
+            InstructionFormat::UnaryIeee32 => InstructionData::UnaryIeee32 {
+                opcode,
+                imm: self.match_ieee32("expected immediate 32-bit float operand")?,
+            },
+            InstructionFormat::UnaryIeee64 => InstructionData::UnaryIeee64 {
+                opcode,
+                imm: self.match_ieee64("expected immediate 64-bit float operand")?,
+            },
+            InstructionFormat::UnaryBool => InstructionData::UnaryBool {
+                opcode,
+                imm: self.match_bool("expected immediate boolean operand")?,
+            },
             InstructionFormat::UnaryGlobalVar => {
                 let gv = self.match_gv("expected global variable")?;
                 ctx.check_gv(gv, &self.loc)?;
@@ -2406,11 +2395,11 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne::ir::{CallConv, ArgumentExtension, ArgumentPurpose};
+    use cretonne::ir::{ArgumentExtension, ArgumentPurpose, CallConv};
     use cretonne::ir::types;
     use cretonne::ir::StackSlotKind;
     use cretonne::ir::entities::AnyEntity;
-    use testfile::{Details, Comment};
+    use testfile::{Comment, Details};
     use isaspec::IsaSpec;
     use error::Error;
 

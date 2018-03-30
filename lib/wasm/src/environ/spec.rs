@@ -3,8 +3,8 @@
 use cretonne::ir::{self, InstBuilder};
 use cretonne::cursor::FuncCursor;
 use cretonne::settings::Flags;
-use translation_utils::{SignatureIndex, FunctionIndex, TableIndex, GlobalIndex, MemoryIndex,
-                        Global, Table, Memory};
+use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
+                        Table, TableIndex};
 use std::vec::Vec;
 use std::string::String;
 

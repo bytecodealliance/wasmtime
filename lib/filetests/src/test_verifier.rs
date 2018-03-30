@@ -13,7 +13,7 @@ use std::borrow::{Borrow, Cow};
 use cretonne::verify_function;
 use cretonne::ir::Function;
 use cton_reader::TestCommand;
-use subtest::{SubTest, Context, Result};
+use subtest::{Context, Result, SubTest};
 use match_directive::match_directive;
 
 struct TestVerifier;

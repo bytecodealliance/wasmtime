@@ -3,9 +3,9 @@
 //! The `write` module provides the `write_function` function which converts an IR `Function` to an
 //! equivalent textual form. This textual form can be read back by the `cretonne-reader` crate.
 
-use ir::{Function, DataFlowGraph, Ebb, Inst, Value, ValueDef, Type, SigRef};
-use isa::{TargetIsa, RegInfo};
-use std::fmt::{self, Result, Error, Write};
+use ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
+use isa::{RegInfo, TargetIsa};
+use std::fmt::{self, Error, Result, Write};
 use std::result;
 use packed_option::ReservedValue;
 use std::string::String;
@@ -145,7 +145,6 @@ pub fn write_ebb(w: &mut Write, func: &Function, isa: Option<&TargetIsa>, ebb: E
     }
     Ok(())
 }
-
 
 //----------------------------------------------------------------------
 //
@@ -452,7 +451,7 @@ impl<'a> fmt::Display for DisplayValues<'a> {
 
 #[cfg(test)]
 mod tests {
-    use ir::{Function, ExternalName, StackSlotData, StackSlotKind};
+    use ir::{ExternalName, Function, StackSlotData, StackSlotKind};
     use ir::types;
     use std::string::ToString;
 

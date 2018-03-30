@@ -4,7 +4,7 @@
 //! defined in this module expresses the low-level details of accessing a stack slot from an
 //! encoded instruction.
 
-use ir::stackslot::{StackSlots, StackOffset, StackSlotKind};
+use ir::stackslot::{StackOffset, StackSlotKind, StackSlots};
 use ir::StackSlot;
 
 /// A method for referencing a stack slot in the current stack frame.

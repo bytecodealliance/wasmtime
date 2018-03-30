@@ -235,7 +235,6 @@ fn expand_select(
     cfg.recompute_ebb(pos.func, old_ebb);
 }
 
-
 /// Expand illegal `f32const` and `f64const` instructions.
 fn expand_fconst(
     inst: ir::Inst,

@@ -1,13 +1,13 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use entity::{PrimaryMap, EntityMap};
-use isa::{TargetIsa, Encoding, Legalize};
+use entity::{EntityMap, PrimaryMap};
+use isa::{Encoding, Legalize, TargetIsa};
 use ir;
 use ir::builder::ReplaceBuilder;
 use ir::extfunc::ExtFuncData;
-use ir::instructions::{InstructionData, CallInfo, BranchInfo};
+use ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use ir::types;
-use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
+use ir::{Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueList, ValueListPool};
 use packed_option::ReservedValue;
 use write::write_operands;
 use std::fmt;
@@ -775,7 +775,6 @@ impl DataFlowGraph {
         }
     }
 
-
     /// Append an existing value to `ebb`'s parameters.
     ///
     /// The appended value can't already be attached to something else.
@@ -862,7 +861,6 @@ impl<'a> fmt::Display for DisplayInst<'a> {
             }
             write!(f, " = ")?;
         }
-
 
         let typevar = dfg.ctrl_typevar(inst);
         if typevar.is_void() {
@@ -1005,7 +1003,7 @@ mod tests {
     use super::*;
     use cursor::{Cursor, FuncCursor};
     use ir::types;
-    use ir::{Function, Opcode, InstructionData, TrapCode};
+    use ir::{Function, InstructionData, Opcode, TrapCode};
     use std::string::ToString;
 
     #[test]

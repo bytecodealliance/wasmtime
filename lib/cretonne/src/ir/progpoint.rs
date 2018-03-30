@@ -147,7 +147,7 @@ pub trait ProgramOrder {
 mod tests {
     use super::*;
     use entity::EntityRef;
-    use ir::{Inst, Ebb};
+    use ir::{Ebb, Inst};
     use std::string::ToString;
 
     #[test]

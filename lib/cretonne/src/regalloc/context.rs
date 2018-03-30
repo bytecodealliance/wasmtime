@@ -18,7 +18,7 @@ use regalloc::virtregs::VirtRegs;
 use result::CtonResult;
 use timing;
 use topo_order::TopoOrder;
-use verifier::{verify_context, verify_liveness, verify_cssa, verify_locations};
+use verifier::{verify_context, verify_cssa, verify_liveness, verify_locations};
 
 /// Persistent memory allocations for register allocation.
 pub struct Context {
@@ -105,7 +105,6 @@ impl Context {
             verify_liveness(isa, func, cfg, &self.liveness)?;
             verify_cssa(func, cfg, domtree, &self.liveness, &self.virtregs)?;
         }
-
 
         // Pass: Spilling.
         self.spilling.run(

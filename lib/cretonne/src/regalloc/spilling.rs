@@ -17,9 +17,9 @@
 
 use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
-use ir::{InstBuilder, Function, Ebb, Inst, Value, ValueLoc, SigRef};
-use isa::registers::{RegClassMask, RegClassIndex};
-use isa::{TargetIsa, RegInfo, EncInfo, RecipeConstraints, ConstraintKind};
+use ir::{Ebb, Function, Inst, InstBuilder, SigRef, Value, ValueLoc};
+use isa::registers::{RegClassIndex, RegClassMask};
+use isa::{ConstraintKind, EncInfo, RecipeConstraints, RegInfo, TargetIsa};
 use regalloc::affinity::Affinity;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
@@ -359,12 +359,10 @@ impl<'a> Context<'a> {
             if abi.location.is_reg() {
                 let (rci, spilled) = match self.liveness[arg].affinity {
                     Affinity::Reg(rci) => (rci, false),
-                    Affinity::Stack => {
-                        (
-                            self.cur.isa.regclass_for_abi_type(abi.value_type).into(),
-                            true,
-                        )
-                    }
+                    Affinity::Stack => (
+                        self.cur.isa.regclass_for_abi_type(abi.value_type).into(),
+                        true,
+                    ),
                     Affinity::None => panic!("Missing affinity for {}", arg),
                 };
                 let mut reguse = RegUse::new(arg, fixed_args + idx, rci);

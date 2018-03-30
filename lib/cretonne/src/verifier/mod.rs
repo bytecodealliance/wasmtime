@@ -60,9 +60,9 @@ use dominator_tree::DominatorTree;
 use entity::SparseSet;
 use flowgraph::ControlFlowGraph;
 use ir::entities::AnyEntity;
-use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallInfo};
-use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
-         StackSlotKind, GlobalVar, Value, Type, Opcode, ValueLoc, ArgumentLoc};
+use ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
+use ir::{types, ArgumentLoc, Ebb, FuncRef, Function, GlobalVar, Inst, JumpTable, Opcode, SigRef,
+         StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc};
 use ir;
 use isa::TargetIsa;
 use iterators::IteratorExtras;
@@ -195,7 +195,6 @@ impl<'a> Verifier<'a> {
     }
 
     fn ebb_integrity(&self, ebb: Ebb, inst: Inst) -> Result {
-
         let is_terminator = self.func.dfg[inst].opcode().is_terminator();
         let is_last_inst = self.func.layout.last_inst(ebb) == Some(inst);
 
@@ -1155,7 +1154,7 @@ impl<'a> Verifier<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Verifier, Error};
+    use super::{Error, Verifier};
     use ir::Function;
     use ir::instructions::{InstructionData, Opcode};
     use entity::EntityList;

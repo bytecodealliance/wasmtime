@@ -1,7 +1,7 @@
 //! Common types for the Cretonne code generator.
 
 use std::default::Default;
-use std::fmt::{self, Display, Debug, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 
 /// The type of an SSA value.
 ///

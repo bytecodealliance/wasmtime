@@ -5,12 +5,12 @@
 //!
 //! This doesn't support the soft-float ABI at the moment.
 
-use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
-use ir::{self, Type, AbiParam, ArgumentLoc, ArgumentExtension, ArgumentPurpose};
+use abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
+use ir::{self, AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, Type};
 use isa::RegClass;
 use regalloc::AllocatableSet;
 use settings as shared_settings;
-use super::registers::{GPR, FPR};
+use super::registers::{FPR, GPR};
 use super::settings;
 use std::i32;
 

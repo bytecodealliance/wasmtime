@@ -30,7 +30,7 @@
 use binemit::CodeOffset;
 use cursor::{Cursor, FuncCursor};
 use ir::{Function, InstructionData, Opcode};
-use isa::{TargetIsa, EncInfo};
+use isa::{EncInfo, TargetIsa};
 use iterators::IteratorExtras;
 use result::CtonError;
 

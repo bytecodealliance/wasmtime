@@ -36,7 +36,7 @@
 // Remove once we're using the pressure tracker.
 #![allow(dead_code)]
 
-use isa::registers::{RegInfo, MAX_TRACKED_TOPRCS, RegClass, RegClassMask};
+use isa::registers::{RegClass, RegClassMask, RegInfo, MAX_TRACKED_TOPRCS};
 use regalloc::AllocatableSet;
 use std::cmp::min;
 use std::fmt;
@@ -135,7 +135,7 @@ impl Pressure {
     /// `can_take()` to check again.
     fn check_avail(&self, rc: RegClass) -> RegClassMask {
         let entry = match self.toprc.get(rc.toprc as usize) {
-            None => return 0,  // Not a pressure tracked bank.
+            None => return 0, // Not a pressure tracked bank.
             Some(e) => e,
         };
         let mask = 1 << rc.toprc;
@@ -269,7 +269,7 @@ impl fmt::Display for Pressure {
 #[cfg(test)]
 #[cfg(build_arm32)]
 mod tests {
-    use isa::{TargetIsa, RegClass};
+    use isa::{RegClass, TargetIsa};
     use regalloc::AllocatableSet;
     use std::borrow::Borrow;
     use super::Pressure;

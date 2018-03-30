@@ -4,8 +4,8 @@
 
 use cursor::{Cursor, EncCursor};
 use ir::dfg::ValueDef;
-use ir::{Function, InstructionData, Value, InstBuilder, Ebb, Inst};
-use ir::condcodes::{CondCode, IntCC, FloatCC};
+use ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Value};
+use ir::condcodes::{CondCode, FloatCC, IntCC};
 use ir::instructions::{Opcode, ValueList};
 use ir::immediates::Imm64;
 use isa::TargetIsa;
@@ -67,54 +67,48 @@ fn optimize_cpu_flags(
                         cond,
                         args: cmp_args,
                         ..
-                    } => {
-                        CmpBrInfo {
-                            br_inst: inst,
-                            cmp_inst: cond_inst,
-                            destination,
-                            args: args.clone(),
-                            cmp_arg: cmp_args[0],
-                            invert_branch_cond,
-                            kind: CmpBrKind::Icmp {
-                                cond,
-                                arg: cmp_args[1],
-                            },
-                        }
-                    }
+                    } => CmpBrInfo {
+                        br_inst: inst,
+                        cmp_inst: cond_inst,
+                        destination,
+                        args: args.clone(),
+                        cmp_arg: cmp_args[0],
+                        invert_branch_cond,
+                        kind: CmpBrKind::Icmp {
+                            cond,
+                            arg: cmp_args[1],
+                        },
+                    },
                     InstructionData::IntCompareImm {
                         cond,
                         arg: cmp_arg,
                         imm: cmp_imm,
                         ..
-                    } => {
-                        CmpBrInfo {
-                            br_inst: inst,
-                            cmp_inst: cond_inst,
-                            destination,
-                            args: args.clone(),
-                            cmp_arg,
-                            invert_branch_cond,
-                            kind: CmpBrKind::IcmpImm { cond, imm: cmp_imm },
-                        }
-                    }
+                    } => CmpBrInfo {
+                        br_inst: inst,
+                        cmp_inst: cond_inst,
+                        destination,
+                        args: args.clone(),
+                        cmp_arg,
+                        invert_branch_cond,
+                        kind: CmpBrKind::IcmpImm { cond, imm: cmp_imm },
+                    },
                     InstructionData::FloatCompare {
                         cond,
                         args: cmp_args,
                         ..
-                    } => {
-                        CmpBrInfo {
-                            br_inst: inst,
-                            cmp_inst: cond_inst,
-                            destination,
-                            args: args.clone(),
-                            cmp_arg: cmp_args[0],
-                            invert_branch_cond,
-                            kind: CmpBrKind::Fcmp {
-                                cond,
-                                arg: cmp_args[1],
-                            },
-                        }
-                    }
+                    } => CmpBrInfo {
+                        br_inst: inst,
+                        cmp_inst: cond_inst,
+                        destination,
+                        args: args.clone(),
+                        cmp_arg: cmp_args[0],
+                        invert_branch_cond,
+                        kind: CmpBrKind::Fcmp {
+                            cond,
+                            arg: cmp_args[1],
+                        },
+                    },
                     _ => return,
                 }
             } else {
@@ -179,7 +173,6 @@ fn optimize_cpu_flags(
     pos.func.update_encoding(info.br_inst, isa).is_ok();
 }
 
-
 //----------------------------------------------------------------------
 //
 // The main post-opt pass.
@@ -204,7 +197,6 @@ pub fn do_postopt(func: &mut Function, isa: &TargetIsa) {
                         last_flags_clobber = Some(inst)
                     }
                 }
-
             }
         }
     }

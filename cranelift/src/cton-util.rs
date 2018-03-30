@@ -1,15 +1,15 @@
 extern crate cretonne;
+extern crate cton_filetests;
 extern crate cton_reader;
 extern crate cton_wasm;
-extern crate cton_filetests;
 extern crate docopt;
+extern crate filecheck;
 #[macro_use]
 extern crate serde_derive;
-extern crate filecheck;
 extern crate tempdir;
 extern crate term;
 
-use cretonne::{VERSION, timing};
+use cretonne::{timing, VERSION};
 use docopt::Docopt;
 use std::io::{self, Write};
 use std::process;

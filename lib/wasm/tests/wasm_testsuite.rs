@@ -1,5 +1,5 @@
-extern crate cton_wasm;
 extern crate cretonne;
+extern crate cton_wasm;
 extern crate tempdir;
 
 use cton_wasm::{translate_module, DummyEnvironment};

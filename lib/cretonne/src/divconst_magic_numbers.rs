@@ -220,8 +220,8 @@ pub fn magicS64(d: i64) -> MS64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{magicU32, magicU64, magicS32, magicS64};
-    use super::{MU32, MU64, MS32, MS64};
+    use super::{magicS32, magicS64, magicU32, magicU64};
+    use super::{MS32, MS64, MU32, MU64};
 
     fn mkMU32(mulBy: u32, doAdd: bool, shiftBy: i32) -> MU32 {
         MU32 {

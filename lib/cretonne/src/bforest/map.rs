@@ -2,7 +2,7 @@
 
 use packed_option::PackedOption;
 use std::marker::PhantomData;
-use super::{INNER_SIZE, Comparator, Forest, NodePool, Node, NodeData, Path};
+use super::{Comparator, Forest, Node, NodeData, NodePool, Path, INNER_SIZE};
 
 /// Tag type defining forest types for a map.
 struct MapTypes<K, V, C>(PhantomData<(K, V, C)>);

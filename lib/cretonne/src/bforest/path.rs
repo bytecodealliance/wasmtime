@@ -2,7 +2,7 @@
 
 use std::borrow::Borrow;
 use std::marker::PhantomData;
-use super::{Forest, Node, NodeData, NodePool, MAX_PATH, Comparator, slice_insert, slice_shift};
+use super::{slice_insert, slice_shift, Comparator, Forest, Node, NodeData, NodePool, MAX_PATH};
 use super::node::Removed;
 
 #[cfg(test)]
@@ -414,7 +414,6 @@ impl<F: Forest> Path<F> {
         }
     }
 
-
     /// Given that the current leaf node is in an unhealthy (underflowed or even empty) status,
     /// balance it with sibling nodes.
     ///
@@ -529,7 +528,6 @@ impl<F: Forest> Path<F> {
             // current entry[level] was one off the end of the node, it will now point at a proper
             // entry.
             debug_assert!(usize::from(self.entry[level]) < pool[self.node[level]].entries());
-
         } else if usize::from(self.entry[level]) >= pool[self.node[level]].entries() {
             // There's no right sibling at this level, so the node can't be rebalanced.
             // Check if we are in an off-the-end position.
@@ -703,7 +701,7 @@ impl<F: Forest> fmt::Display for Path<F> {
 mod test {
     use std::cmp::Ordering;
     use super::*;
-    use super::super::{Forest, NodePool, NodeData};
+    use super::super::{Forest, NodeData, NodePool};
 
     struct TC();
 
