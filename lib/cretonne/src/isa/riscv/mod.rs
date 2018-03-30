@@ -7,10 +7,10 @@ mod enc_tables;
 mod registers;
 
 use super::super::settings as shared_settings;
-use binemit::{CodeSink, MemoryCodeSink, emit_function};
+use binemit::{emit_function, CodeSink, MemoryCodeSink};
 use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encodings};
 use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, RegInfo, RegClass, EncInfo};
+use isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use ir;
 use regalloc;
 use std::fmt;
@@ -116,7 +116,7 @@ mod tests {
     use settings::{self, Configurable};
     use isa;
     use ir::{DataFlowGraph, InstructionData, Opcode};
-    use ir::{types, immediates};
+    use ir::{immediates, types};
     use std::string::{String, ToString};
 
     fn encstr(isa: &isa::TargetIsa, enc: Result<isa::Encoding, isa::Legalize>) -> String {

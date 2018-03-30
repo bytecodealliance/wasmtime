@@ -4,13 +4,13 @@
 //! instructions.
 
 use binemit::CodeOffset;
-use entity::{PrimaryMap, EntityMap};
+use entity::{EntityMap, PrimaryMap};
 use ir;
-use ir::{ExternalName, CallConv, Signature, DataFlowGraph, Layout};
-use ir::{InstEncodings, ValueLocations, JumpTables, StackSlots, EbbOffsets, SourceLocs};
-use ir::{Ebb, JumpTableData, JumpTable, StackSlotData, StackSlot, SigRef, ExtFuncData, FuncRef,
-         GlobalVarData, GlobalVar, HeapData, Heap};
-use isa::{TargetIsa, EncInfo, Legalize};
+use ir::{CallConv, DataFlowGraph, ExternalName, Layout, Signature};
+use ir::{EbbOffsets, InstEncodings, JumpTables, SourceLocs, StackSlots, ValueLocations};
+use ir::{Ebb, ExtFuncData, FuncRef, GlobalVar, GlobalVarData, Heap, HeapData, JumpTable,
+         JumpTableData, SigRef, StackSlot, StackSlotData};
+use isa::{EncInfo, Legalize, TargetIsa};
 use std::fmt;
 use write::write_function;
 

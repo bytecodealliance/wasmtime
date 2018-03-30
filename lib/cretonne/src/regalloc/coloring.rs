@@ -44,10 +44,10 @@
 
 use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
-use ir::{Ebb, Inst, Value, Function, Layout, ValueLoc, SigRef};
-use ir::{InstBuilder, AbiParam, ArgumentLoc, ValueDef};
-use isa::{RegUnit, RegClass, RegInfo, regs_overlap};
-use isa::{TargetIsa, EncInfo, RecipeConstraints, OperandConstraint, ConstraintKind};
+use ir::{Ebb, Function, Inst, Layout, SigRef, Value, ValueLoc};
+use ir::{AbiParam, ArgumentLoc, InstBuilder, ValueDef};
+use isa::{regs_overlap, RegClass, RegInfo, RegUnit};
+use isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
 use packed_option::PackedOption;
 use regalloc::RegDiversions;
 use regalloc::affinity::Affinity;
@@ -58,7 +58,6 @@ use regalloc::liverange::{LiveRange, LiveRangeContext};
 use regalloc::solver::{Solver, SolverError};
 use std::mem;
 use timing;
-
 
 /// Data structures for the coloring pass.
 ///
@@ -268,7 +267,6 @@ impl<'a> Context<'a> {
                             abi.display(&self.reginfo)
                         );
                     }
-
                 }
                 // The spiller will have assigned an incoming stack slot already.
                 Affinity::Stack => debug_assert!(abi.location.is_stack()),
@@ -425,7 +423,6 @@ impl<'a> Context<'a> {
             dbg!("quick_solve failed for {}", self.solver);
             self.iterate_solution(throughs, &regs.global, &mut replace_global_defines)
         });
-
 
         // The solution and/or fixed input constraints may require us to shuffle the set of live
         // registers around.
@@ -722,7 +719,6 @@ impl<'a> Context<'a> {
                 ConstraintKind::Reg |
                 ConstraintKind::Tied(_) |
                 ConstraintKind::Stack => {}
-
             }
         }
     }
@@ -869,7 +865,6 @@ impl<'a> Context<'a> {
                     self.solver.clear_all_global_flags();
                 }
             };
-
         }
     }
 

@@ -6,10 +6,10 @@
 
 use code_translator::translate_operator;
 use cretonne::entity::EntityRef;
-use cretonne::ir::{self, InstBuilder, Ebb};
-use cretonne::result::{CtonResult, CtonError};
+use cretonne::ir::{self, Ebb, InstBuilder};
+use cretonne::result::{CtonError, CtonResult};
 use cretonne::timing;
-use cton_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
+use cton_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use environ::FuncEnvironment;
 use state::TranslationState;
 use wasmparser::{self, BinaryReader};

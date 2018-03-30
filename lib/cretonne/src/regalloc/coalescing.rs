@@ -10,7 +10,7 @@ use dbg::DisplayList;
 use dominator_tree::{DominatorTree, DominatorTreePreorder};
 use flowgraph::ControlFlowGraph;
 use ir::{self, InstBuilder, ProgramOrder};
-use ir::{Function, Ebb, Inst, Value, ExpandedProgramPoint};
+use ir::{Ebb, ExpandedProgramPoint, Function, Inst, Value};
 use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::{VirtReg, VirtRegs};
@@ -19,7 +19,7 @@ use std::iter;
 use std::fmt;
 use std::slice;
 use std::vec::Vec;
-use isa::{TargetIsa, EncInfo};
+use isa::{EncInfo, TargetIsa};
 use timing;
 
 // # Implementation
@@ -92,7 +92,6 @@ impl Coalescing {
             predecessors: Vec::new(),
             backedges: Vec::new(),
         }
-
     }
 
     /// Clear all data structures in this coalescing pass.

@@ -13,7 +13,7 @@ use cretonne::ir::entities::AnyEntity;
 use cretonne::binemit::RegDiversions;
 use cretonne::print_errors::pretty_error;
 use cton_reader::TestCommand;
-use subtest::{SubTest, Context, Result};
+use subtest::{Context, Result, SubTest};
 use match_directive::match_directive;
 
 struct TestBinEmit;
@@ -42,8 +42,6 @@ impl TextSink {
         }
     }
 }
-
-
 
 impl binemit::CodeSink for TextSink {
     fn offset(&self) -> binemit::CodeOffset {
@@ -80,23 +78,11 @@ impl binemit::CodeSink for TextSink {
         name: &ir::ExternalName,
         addend: binemit::Addend,
     ) {
-        write!(
-            self.text,
-            "{}({}",
-            reloc,
-            name,
-        ).unwrap();
+        write!(self.text, "{}({}", reloc, name,).unwrap();
         if addend != 0 {
-            write!(
-                self.text,
-                "{:+}",
-                addend,
-            ).unwrap();
+            write!(self.text, "{:+}", addend,).unwrap();
         }
-        write!(
-            self.text,
-            ") ",
-        ).unwrap();
+        write!(self.text, ") ",).unwrap();
     }
 
     fn reloc_jt(&mut self, reloc: binemit::Reloc, jt: ir::JumpTable) {
@@ -278,10 +264,10 @@ impl SubTest for TestBinEmit {
                             ));
                         }
                         return Err(format!(
-                                "No matching encodings for {} in {}",
-                                func.dfg.display_inst(inst, isa),
-                                DisplayList(&encodings),
-                            ));
+                            "No matching encodings for {} in {}",
+                            func.dfg.display_inst(inst, isa),
+                            DisplayList(&encodings),
+                        ));
                     }
                     let have = sink.text.trim();
                     if have != want {

@@ -1,6 +1,6 @@
 //! The `CFGPrinter` utility.
 
-use std::fmt::{Result, Write, Display, Formatter};
+use std::fmt::{Display, Formatter, Result, Write};
 
 use flowgraph::ControlFlowGraph;
 use ir::Function;

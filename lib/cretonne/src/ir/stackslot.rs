@@ -3,8 +3,8 @@
 //! The `StackSlotData` struct keeps track of a single stack slot in a function.
 //!
 
-use entity::{PrimaryMap, Keys, Iter, IterMut};
-use ir::{Type, StackSlot};
+use entity::{Iter, IterMut, Keys, PrimaryMap};
+use ir::{StackSlot, Type};
 use packed_option::PackedOption;
 use std::cmp;
 use std::fmt;

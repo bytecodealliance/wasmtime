@@ -43,7 +43,7 @@ pub use self::list::{EntityList, ListPool};
 pub use self::map::EntityMap;
 pub use self::primary::PrimaryMap;
 pub use self::set::EntitySet;
-pub use self::sparse::{SparseSet, SparseMap, SparseMapValue};
+pub use self::sparse::{SparseMap, SparseMapValue, SparseSet};
 
 /// A type wrapping a small integer index should implement `EntityRef` so it can be used as the key
 /// of an `EntityMap` or `SparseMap`.

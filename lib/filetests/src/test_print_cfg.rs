@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use cretonne::ir::Function;
 use cretonne::cfg_printer::CFGPrinter;
 use cton_reader::TestCommand;
-use subtest::{self, SubTest, Context, Result as STResult};
+use subtest::{self, Context, Result as STResult, SubTest};
 
 /// Object implementing the `test print-cfg` sub-test.
 struct TestPrintCfg;

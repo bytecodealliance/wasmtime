@@ -17,7 +17,7 @@ use cretonne::flowgraph::ControlFlowGraph;
 use cretonne::ir::Function;
 use cretonne::ir::entities::AnyEntity;
 use cton_reader::TestCommand;
-use subtest::{SubTest, Context, Result, run_filecheck};
+use subtest::{run_filecheck, Context, Result, SubTest};
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
 use std::fmt::{self, Write};
@@ -76,7 +76,7 @@ impl SubTest for TestDomtree {
                         Some(got_inst) if got_inst != inst => {
                             return Err(format!(
                                 "mismatching idoms for {}:\n\
-                                                want: {}, got: {}",
+                                 want: {}, got: {}",
                                 src_ebb,
                                 inst,
                                 got_inst
@@ -85,7 +85,7 @@ impl SubTest for TestDomtree {
                         None => {
                             return Err(format!(
                                 "mismatching idoms for {}:\n\
-                                                want: {}, got: unreachable",
+                                 want: {}, got: unreachable",
                                 src_ebb,
                                 inst
                             ));
@@ -105,7 +105,7 @@ impl SubTest for TestDomtree {
             if let Some(got_inst) = domtree.idom(ebb) {
                 return Err(format!(
                     "mismatching idoms for renumbered {}:\n\
-                                    want: unrechable, got: {}",
+                     want: unrechable, got: {}",
                     ebb,
                     got_inst
                 ));

@@ -20,8 +20,8 @@
 use abi::{legalize_abi_value, ValueConversion};
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
-use ir::{Function, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value, Signature, SigRef,
-         AbiParam, ArgumentPurpose, ArgumentLoc, ValueLoc};
+use ir::{AbiParam, ArgumentLoc, ArgumentPurpose, DataFlowGraph, Ebb, Function, Inst, InstBuilder,
+         SigRef, Signature, Type, Value, ValueLoc};
 use ir::instructions::CallInfo;
 use isa::TargetIsa;
 use legalizer::split::{isplit, vsplit};

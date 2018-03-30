@@ -1,7 +1,7 @@
 //! A Loop Invariant Code Motion optimization pass
 
 use cursor::{Cursor, FuncCursor};
-use ir::{Function, Ebb, Inst, Value, Type, InstBuilder, Layout, Opcode, DataFlowGraph};
+use ir::{DataFlowGraph, Ebb, Function, Inst, InstBuilder, Layout, Opcode, Type, Value};
 use flowgraph::ControlFlowGraph;
 use std::collections::HashSet;
 use dominator_tree::DominatorTree;
@@ -120,7 +120,6 @@ fn has_pre_header(
     }
     result
 }
-
 
 // Change the destination of a jump or branch instruction. Does nothing if called with a non-jump
 // or non-branch instruction.

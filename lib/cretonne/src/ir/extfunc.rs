@@ -5,7 +5,7 @@
 //!
 //! This module declares the data types used to represent external functions and call signatures.
 
-use ir::{Type, ExternalName, SigRef, ArgumentLoc};
+use ir::{ArgumentLoc, ExternalName, SigRef, Type};
 use isa::{RegInfo, RegUnit};
 use std::cmp;
 use std::fmt;
@@ -379,7 +379,7 @@ impl FromStr for CallConv {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ir::types::{I32, F32, B8};
+    use ir::types::{B8, F32, I32};
     use std::string::ToString;
 
     #[test]

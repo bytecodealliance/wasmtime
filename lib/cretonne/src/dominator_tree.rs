@@ -1,8 +1,8 @@
 //! A Dominator Tree represented as mappings of Ebbs to their immediate dominator.
 
 use entity::EntityMap;
-use flowgraph::{ControlFlowGraph, BasicBlock};
-use ir::{Ebb, Inst, Value, Function, Layout, ProgramOrder, ExpandedProgramPoint};
+use flowgraph::{BasicBlock, ControlFlowGraph};
+use ir::{Ebb, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
 use ir::instructions::BranchInfo;
 use packed_option::PackedOption;
 use std::cmp;
@@ -144,12 +144,12 @@ impl DominatorTree {
     {
         let (mut ebb_b, mut inst_b) = match b.into() {
             ExpandedProgramPoint::Ebb(ebb) => (ebb, None),
-            ExpandedProgramPoint::Inst(inst) => {
-                (
-                    layout.inst_ebb(inst).expect("Instruction not in layout."),
-                    Some(inst),
-                )
-            }
+            ExpandedProgramPoint::Inst(inst) => (
+                layout.inst_ebb(inst).expect(
+                    "Instruction not in layout.",
+                ),
+                Some(inst),
+            ),
         };
         let rpo_a = self.nodes[a].rpo_number;
 
@@ -460,7 +460,6 @@ impl DominatorTree {
             rpo_number: new_ebb_rpo,
             idom: Some(split_jump_inst).into(),
         };
-
     }
 
     // Insert new_ebb just after ebb in the RPO. This function checks

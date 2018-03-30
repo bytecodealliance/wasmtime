@@ -2,7 +2,7 @@
 
 use std::borrow::{Borrow, BorrowMut};
 use std::fmt;
-use super::{Forest, Node, INNER_SIZE, SetValue, slice_insert, slice_shift};
+use super::{slice_insert, slice_shift, Forest, Node, SetValue, INNER_SIZE};
 
 /// B+-tree node.
 ///

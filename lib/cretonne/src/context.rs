@@ -9,7 +9,7 @@
 //! contexts concurrently. Typically, you would have one context per compilation thread and only a
 //! single ISA instance.
 
-use binemit::{CodeOffset, relax_branches, MemoryCodeSink, RelocSink, TrapSink};
+use binemit::{relax_branches, CodeOffset, MemoryCodeSink, RelocSink, TrapSink};
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir::Function;

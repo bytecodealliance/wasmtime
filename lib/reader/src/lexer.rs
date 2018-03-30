@@ -5,7 +5,7 @@ use std::u16;
 #[allow(unused_imports)]
 use std::ascii::AsciiExt;
 use cretonne::ir::types;
-use cretonne::ir::{Value, Ebb};
+use cretonne::ir::{Ebb, Value};
 use error::Location;
 
 /// A Token returned from the `Lexer`.
@@ -458,7 +458,7 @@ mod tests {
     use super::trailing_digits;
     use super::*;
     use cretonne::ir::types;
-    use cretonne::ir::{Value, Ebb};
+    use cretonne::ir::{Ebb, Value};
     use error::Location;
 
     #[test]
@@ -556,7 +556,7 @@ mod tests {
     fn lex_identifiers() {
         let mut lex = Lexer::new(
             "v0 v00 vx01 ebb1234567890 ebb5234567890 v1x vx1 vxvx4 \
-                                  function0 function b1 i32x4 f32x5 \
+             function0 function b1 i32x4 f32x5 \
              iflags fflags iflagss",
         );
         assert_eq!(

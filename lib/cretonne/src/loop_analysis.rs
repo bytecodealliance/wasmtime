@@ -2,10 +2,10 @@
 //! and parent in the loop tree.
 
 use dominator_tree::DominatorTree;
-use entity::{PrimaryMap, Keys};
+use entity::{Keys, PrimaryMap};
 use entity::EntityMap;
 use flowgraph::ControlFlowGraph;
-use ir::{Function, Ebb, Layout};
+use ir::{Ebb, Function, Layout};
 use packed_option::PackedOption;
 use timing;
 use std::vec::Vec;
@@ -218,7 +218,6 @@ impl LoopAnalysis {
                     }
                 }
             }
-
         }
     }
 }
@@ -227,7 +226,7 @@ impl LoopAnalysis {
 mod test {
 
     use cursor::{Cursor, FuncCursor};
-    use ir::{Function, InstBuilder, types};
+    use ir::{types, Function, InstBuilder};
     use loop_analysis::{Loop, LoopAnalysis};
     use flowgraph::ControlFlowGraph;
     use dominator_tree::DominatorTree;
@@ -257,7 +256,6 @@ mod test {
 
             cur.insert_ebb(ebb3);
             cur.ins().brnz(cond, ebb0, &[]);
-
         }
 
         let mut loop_analysis = LoopAnalysis::new();
@@ -317,7 +315,6 @@ mod test {
 
             cur.insert_ebb(ebb5);
             cur.ins().brnz(cond, ebb0, &[]);
-
         }
 
         let mut loop_analysis = LoopAnalysis::new();

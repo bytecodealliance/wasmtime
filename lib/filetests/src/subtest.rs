@@ -5,8 +5,8 @@ use std::borrow::Cow;
 use cretonne::ir::Function;
 use cretonne::isa::TargetIsa;
 use cretonne::settings::{Flags, FlagsOrIsa};
-use cton_reader::{Details, Comment};
-use filecheck::{CheckerBuilder, Checker, NO_VARIABLES};
+use cton_reader::{Comment, Details};
+use filecheck::{Checker, CheckerBuilder, NO_VARIABLES};
 
 pub type Result<T> = result::Result<T, String>;
 

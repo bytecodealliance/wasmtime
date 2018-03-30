@@ -637,7 +637,6 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
     }
 }
 
-
 /// Encoding cursor.
 ///
 /// An `EncCursor` can be used to insert instructions that are immediately assigned an encoding.

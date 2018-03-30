@@ -6,7 +6,7 @@ include!(concat!(env!("OUT_DIR"), "/registers-arm32.rs"));
 
 #[cfg(test)]
 mod tests {
-    use super::{INFO, GPR, S, D};
+    use super::{D, GPR, INFO, S};
     use isa::RegUnit;
     use std::string::{String, ToString};
 

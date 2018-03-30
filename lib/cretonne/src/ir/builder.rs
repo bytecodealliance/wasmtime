@@ -5,8 +5,8 @@
 
 use ir;
 use ir::types;
-use ir::{InstructionData, DataFlowGraph};
-use ir::{Opcode, Type, Inst, Value};
+use ir::{DataFlowGraph, InstructionData};
+use ir::{Inst, Opcode, Type, Value};
 use isa;
 
 /// Base trait for instruction builders.
@@ -145,8 +145,9 @@ where
 }
 
 impl<'f, IIB, Array> InstBuilderBase<'f> for InsertReuseBuilder<'f, IIB, Array>
-    where IIB: InstInserterBase<'f>,
-          Array: AsRef<[Option<Value>]>
+where
+    IIB: InstInserterBase<'f>,
+    Array: AsRef<[Option<Value>]>,
 {
     fn data_flow_graph(&self) -> &DataFlowGraph {
         self.inserter.data_flow_graph()

@@ -6,11 +6,11 @@ mod binemit;
 mod enc_tables;
 mod registers;
 
-use binemit::{CodeSink, MemoryCodeSink, emit_function};
+use binemit::{emit_function, CodeSink, MemoryCodeSink};
 use super::super::settings as shared_settings;
 use isa::enc_tables::{lookup_enclist, Encodings};
 use isa::Builder as IsaBuilder;
-use isa::{TargetIsa, RegInfo, RegClass, EncInfo};
+use isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use ir;
 use regalloc;
 use std::fmt;

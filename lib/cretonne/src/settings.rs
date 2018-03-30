@@ -357,18 +357,18 @@ mod tests {
         assert_eq!(
             f.to_string(),
             "[shared]\n\
-                    opt_level = \"default\"\n\
-                    enable_verifier = true\n\
-                    is_64bit = false\n\
-                    is_pic = false\n\
-                    return_at_end = false\n\
-                    avoid_div_traps = false\n\
-                    is_compressed = false\n\
-                    enable_float = true\n\
-                    enable_simd = true\n\
-                    enable_atomics = true\n\
-                    spiderwasm_prologue_words = 0\n\
-                    allones_funcaddrs = false\n"
+             opt_level = \"default\"\n\
+             enable_verifier = true\n\
+             is_64bit = false\n\
+             is_pic = false\n\
+             return_at_end = false\n\
+             avoid_div_traps = false\n\
+             is_compressed = false\n\
+             enable_float = true\n\
+             enable_simd = true\n\
+             enable_atomics = true\n\
+             spiderwasm_prologue_words = 0\n\
+             allones_funcaddrs = false\n"
         );
         assert_eq!(f.opt_level(), super::OptLevel::Default);
         assert_eq!(f.enable_simd(), true);

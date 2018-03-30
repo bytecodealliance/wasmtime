@@ -178,10 +178,10 @@
 use entity::SparseMap;
 use flowgraph::ControlFlowGraph;
 use ir::dfg::ValueDef;
-use ir::{Function, Value, Inst, Ebb, Layout, ProgramPoint};
-use isa::{TargetIsa, EncInfo};
+use ir::{Ebb, Function, Inst, Layout, ProgramPoint, Value};
+use isa::{EncInfo, TargetIsa};
 use regalloc::affinity::Affinity;
-use regalloc::liverange::{LiveRange, LiveRangeForest, LiveRangeContext};
+use regalloc::liverange::{LiveRange, LiveRangeContext, LiveRangeForest};
 use std::mem;
 use std::ops::Index;
 use std::vec::Vec;
@@ -377,7 +377,6 @@ impl Liveness {
         let lr = self.ranges.get_mut(value).expect("Value has no live range");
         mem::replace(&mut lr.affinity, Affinity::Stack)
     }
-
 
     /// Compute the live ranges of all SSA values used in `func`.
     /// This clears out any existing analysis stored in this data structure.

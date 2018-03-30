@@ -1,7 +1,7 @@
 //! The `Encoding` struct.
 
 use binemit::CodeOffset;
-use isa::constraints::{RecipeConstraints, BranchRange};
+use isa::constraints::{BranchRange, RecipeConstraints};
 use std::fmt;
 
 /// Bits needed to encode an instruction as binary machine code.

@@ -6,7 +6,7 @@
 use cursor::{Cursor, FuncCursor};
 use dominator_tree::DominatorTree;
 use entity::EntityRef;
-use ir::{Function, Inst, Opcode, DataFlowGraph};
+use ir::{DataFlowGraph, Function, Inst, Opcode};
 use ir::instructions::InstructionData;
 use timing;
 use std::vec::Vec;

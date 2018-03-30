@@ -480,7 +480,7 @@ impl<T: EntityRef> EntityList<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::{sclass_size, sclass_for_length};
+    use super::{sclass_for_length, sclass_size};
     use ir::Inst;
     use entity::EntityRef;
 

@@ -2,7 +2,7 @@
 
 use cursor::{Cursor, FuncCursor};
 use dominator_tree::DominatorTree;
-use ir::{InstructionData, Function, Inst, Opcode, Type};
+use ir::{Function, Inst, InstructionData, Opcode, Type};
 use scoped_hash_map::ScopedHashMap;
 use timing;
 use std::vec::Vec;

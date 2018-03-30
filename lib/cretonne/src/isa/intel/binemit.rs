@@ -1,9 +1,9 @@
 //! Emitting binary Intel machine code.
 
-use binemit::{CodeSink, Reloc, bad_encoding};
-use ir::{Function, Inst, Ebb, InstructionData, Opcode, TrapCode};
-use ir::condcodes::{CondCode, IntCC, FloatCC};
-use isa::{RegUnit, StackRef, StackBase, StackBaseMask};
+use binemit::{bad_encoding, CodeSink, Reloc};
+use ir::{Ebb, Function, Inst, InstructionData, Opcode, TrapCode};
+use ir::condcodes::{CondCode, FloatCC, IntCC};
+use isa::{RegUnit, StackBase, StackBaseMask, StackRef};
 use regalloc::RegDiversions;
 use super::registers::RU;
 

@@ -5,7 +5,7 @@
 //! "register unit" abstraction. Every register contains one or more register units. Registers that
 //! share a register unit can't be in use at the same time.
 
-use isa::registers::{RegInfo, RegUnit, RegUnitMask, RegClass};
+use isa::registers::{RegClass, RegInfo, RegUnit, RegUnitMask};
 use std::char;
 use std::fmt;
 use std::iter::ExactSizeIterator;

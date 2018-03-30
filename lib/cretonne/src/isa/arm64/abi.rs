@@ -4,7 +4,7 @@ use ir;
 use isa::RegClass;
 use regalloc::AllocatableSet;
 use settings as shared_settings;
-use super::registers::{GPR, FPR};
+use super::registers::{FPR, GPR};
 
 /// Legalize `sig`.
 pub fn legalize_signature(

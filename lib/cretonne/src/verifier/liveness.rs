@@ -1,7 +1,7 @@
 //! Liveness verifier.
 
 use flowgraph::ControlFlowGraph;
-use ir::{Function, Inst, Value, ProgramOrder, ProgramPoint, ExpandedProgramPoint};
+use ir::{ExpandedProgramPoint, Function, Inst, ProgramOrder, ProgramPoint, Value};
 use ir::entities::AnyEntity;
 use isa::TargetIsa;
 use regalloc::liveness::Liveness;

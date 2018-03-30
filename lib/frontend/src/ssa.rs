@@ -6,9 +6,9 @@
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
 use cretonne::cursor::{Cursor, FuncCursor};
-use cretonne::ir::{Ebb, Value, Inst, Type, Function, InstBuilder};
+use cretonne::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
 use cretonne::ir::instructions::BranchInfo;
-use cretonne::entity::{EntityRef, PrimaryMap, EntityMap};
+use cretonne::entity::{EntityMap, EntityRef, PrimaryMap};
 use cretonne::packed_option::PackedOption;
 use cretonne::packed_option::ReservedValue;
 use std::u32;
@@ -715,7 +715,7 @@ where
 mod tests {
     use cretonne::cursor::{Cursor, FuncCursor};
     use cretonne::entity::EntityRef;
-    use cretonne::ir::{Function, InstBuilder, Inst, JumpTableData, Opcode};
+    use cretonne::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
     use cretonne::ir::types::*;
     use cretonne::verify_function;
     use cretonne::ir::instructions::BranchInfo;
@@ -960,7 +960,6 @@ mod tests {
         assert_eq!(func.dfg.ebb_params(ebb1)[0], z2);
         assert_eq!(func.dfg.ebb_params(ebb1)[1], y3);
         assert_eq!(func.dfg.resolve_aliases(x3), x1);
-
     }
 
     #[test]

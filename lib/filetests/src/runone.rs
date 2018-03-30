@@ -13,8 +13,8 @@ use cretonne::verify_function;
 use cretonne::print_errors::pretty_verifier_error;
 use cton_reader::parse_test;
 use cton_reader::IsaSpec;
-use {TestResult, new_subtest};
-use subtest::{SubTest, Context, Result};
+use {new_subtest, TestResult};
+use subtest::{Context, Result, SubTest};
 
 /// Read an entire file into a string.
 fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
@@ -81,7 +81,6 @@ pub fn run(path: &Path) -> TestResult {
         // mutating.
         run_one_test(last_tuple, Cow::Owned(func), &mut context)?;
     }
-
 
     Ok(started.elapsed())
 }

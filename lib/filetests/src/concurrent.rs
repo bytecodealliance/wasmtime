@@ -6,12 +6,12 @@
 use cretonne::timing;
 use std::panic::catch_unwind;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use num_cpus;
-use {TestResult, runone};
+use {runone, TestResult};
 
 /// Request sent to worker threads contains jobid and path.
 struct Request(usize, PathBuf);

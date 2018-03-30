@@ -6,7 +6,7 @@
 
 use dominator_tree::DominatorTree;
 use entity::{EntityList, ListPool};
-use ir::{Inst, Ebb, Value, DataFlowGraph, Layout, ExpandedProgramPoint};
+use ir::{DataFlowGraph, Ebb, ExpandedProgramPoint, Inst, Layout, Value};
 use partition_slice::partition_slice;
 use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
