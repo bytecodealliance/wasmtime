@@ -58,6 +58,10 @@ impl TargetIsa for Isa {
         &self.shared_flags
     }
 
+    fn uses_cpu_flags(&self) -> bool {
+        true
+    }
+
     fn register_info(&self) -> RegInfo {
         registers::INFO.clone()
     }

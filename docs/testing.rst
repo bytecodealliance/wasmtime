@@ -334,12 +334,28 @@ Test the LICM pass.
 The LICM pass is run on each function, and then results are run
 through filecheck.
 
+`test dce`
+-----------------
+
+Test the DCE pass.
+
+The DCE pass is run on each function, and then results are run
+through filecheck.
+
 `test preopt`
 -----------------
 
 Test the preopt pass.
 
 The preopt pass is run on each function, and then results are run
+through filecheck.
+
+`test postopt`
+-----------------
+
+Test the postopt pass.
+
+The postopt pass is run on each function, and then results are run
 through filecheck.
 
 `test compile`

@@ -21,6 +21,11 @@ impl Imm64 {
     pub fn new(x: i64) -> Imm64 {
         Imm64(x)
     }
+
+    /// Return self negated.
+    pub fn wrapping_neg(self) -> Imm64 {
+        Imm64(self.0.wrapping_neg())
+    }
 }
 
 impl Into<i64> for Imm64 {

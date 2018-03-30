@@ -378,6 +378,8 @@ X86_64.enc(base.trapff, r.trapff, 0)
 # Comparisons
 #
 enc_i32_i64(base.icmp, r.icscc, 0x39)
+enc_i32_i64(base.icmp_imm, r.icsccib, 0x83, rrr=7)
+enc_i32_i64(base.icmp_imm, r.icsccid, 0x81, rrr=7)
 enc_i32_i64(base.ifcmp, r.rcmp, 0x39)
 enc_i32_i64(base.ifcmp_imm, r.rcmpib, 0x83, rrr=7)
 enc_i32_i64(base.ifcmp_imm, r.rcmpid, 0x81, rrr=7)
@@ -409,11 +411,13 @@ enc_i32_i64(x86.bsr, r.bsf_and_bsr, 0x0F, 0xBD)
 #
 # This assumes that b1 is represented as an 8-bit low register with the value 0
 # or 1.
-X86_32.enc(base.bint.i32.b1, *r.urm_abcd(0x0f, 0xb6))
-X86_64.enc(base.bint.i64.b1, *r.urm.rex(0x0f, 0xb6))   # zext to i64 implicit.
-X86_64.enc(base.bint.i64.b1, *r.urm_abcd(0x0f, 0xb6))  # zext to i64 implicit.
-X86_64.enc(base.bint.i32.b1, *r.urm.rex(0x0f, 0xb6))
-X86_64.enc(base.bint.i32.b1, *r.urm_abcd(0x0f, 0xb6))
+#
+# Encode movzbq as movzbl, because it's equivalent and shorter.
+X86_32.enc(base.bint.i32.b1, *r.urm_noflags_abcd(0x0f, 0xb6))
+X86_64.enc(base.bint.i64.b1, *r.urm_noflags.rex(0x0f, 0xb6))
+X86_64.enc(base.bint.i64.b1, *r.urm_noflags_abcd(0x0f, 0xb6))
+X86_64.enc(base.bint.i32.b1, *r.urm_noflags.rex(0x0f, 0xb6))
+X86_64.enc(base.bint.i32.b1, *r.urm_noflags_abcd(0x0f, 0xb6))
 
 # Numerical conversions.
 
@@ -430,41 +434,41 @@ X86_64.enc(base.ireduce.i32.i64, r.null, 0)
 # instructions for %al/%ax/%eax to %ax/%eax/%rax.
 
 # movsbl
-X86_32.enc(base.sextend.i32.i8, *r.urm(0x0f, 0xbe))
-X86_64.enc(base.sextend.i32.i8, *r.urm.rex(0x0f, 0xbe))
-X86_64.enc(base.sextend.i32.i8, *r.urm(0x0f, 0xbe))
+X86_32.enc(base.sextend.i32.i8, *r.urm_noflags(0x0f, 0xbe))
+X86_64.enc(base.sextend.i32.i8, *r.urm_noflags.rex(0x0f, 0xbe))
+X86_64.enc(base.sextend.i32.i8, *r.urm_noflags(0x0f, 0xbe))
 
 # movswl
-X86_32.enc(base.sextend.i32.i16, *r.urm(0x0f, 0xbf))
-X86_64.enc(base.sextend.i32.i16, *r.urm.rex(0x0f, 0xbf))
-X86_64.enc(base.sextend.i32.i16, *r.urm(0x0f, 0xbf))
+X86_32.enc(base.sextend.i32.i16, *r.urm_noflags(0x0f, 0xbf))
+X86_64.enc(base.sextend.i32.i16, *r.urm_noflags.rex(0x0f, 0xbf))
+X86_64.enc(base.sextend.i32.i16, *r.urm_noflags(0x0f, 0xbf))
 
 # movsbq
-X86_64.enc(base.sextend.i64.i8, *r.urm.rex(0x0f, 0xbe, w=1))
+X86_64.enc(base.sextend.i64.i8, *r.urm_noflags.rex(0x0f, 0xbe, w=1))
 
 # movswq
-X86_64.enc(base.sextend.i64.i16, *r.urm.rex(0x0f, 0xbf, w=1))
+X86_64.enc(base.sextend.i64.i16, *r.urm_noflags.rex(0x0f, 0xbf, w=1))
 
 # movslq
-X86_64.enc(base.sextend.i64.i32, *r.urm.rex(0x63, w=1))
+X86_64.enc(base.sextend.i64.i32, *r.urm_noflags.rex(0x63, w=1))
 
 # movzbl
-X86_32.enc(base.uextend.i32.i8, *r.urm(0x0f, 0xb6))
-X86_64.enc(base.uextend.i32.i8, *r.urm.rex(0x0f, 0xb6))
-X86_64.enc(base.uextend.i32.i8, *r.urm(0x0f, 0xb6))
+X86_32.enc(base.uextend.i32.i8, *r.urm_noflags(0x0f, 0xb6))
+X86_64.enc(base.uextend.i32.i8, *r.urm_noflags.rex(0x0f, 0xb6))
+X86_64.enc(base.uextend.i32.i8, *r.urm_noflags(0x0f, 0xb6))
 
 # movzwl
-X86_32.enc(base.uextend.i32.i16, *r.urm(0x0f, 0xb7))
-X86_64.enc(base.uextend.i32.i16, *r.urm.rex(0x0f, 0xb7))
-X86_64.enc(base.uextend.i32.i16, *r.urm(0x0f, 0xb7))
+X86_32.enc(base.uextend.i32.i16, *r.urm_noflags(0x0f, 0xb7))
+X86_64.enc(base.uextend.i32.i16, *r.urm_noflags.rex(0x0f, 0xb7))
+X86_64.enc(base.uextend.i32.i16, *r.urm_noflags(0x0f, 0xb7))
 
 # movzbq, encoded as movzbl because it's equivalent and shorter
-X86_64.enc(base.uextend.i64.i8, *r.urm.rex(0x0f, 0xb6))
-X86_64.enc(base.uextend.i64.i8, *r.urm(0x0f, 0xb6))
+X86_64.enc(base.uextend.i64.i8, *r.urm_noflags.rex(0x0f, 0xb6))
+X86_64.enc(base.uextend.i64.i8, *r.urm_noflags(0x0f, 0xb6))
 
 # movzwq, encoded as movzwl because it's equivalent and shorter
-X86_64.enc(base.uextend.i64.i16, *r.urm.rex(0x0f, 0xb7))
-X86_64.enc(base.uextend.i64.i16, *r.urm(0x0f, 0xb7))
+X86_64.enc(base.uextend.i64.i16, *r.urm_noflags.rex(0x0f, 0xb7))
+X86_64.enc(base.uextend.i64.i16, *r.urm_noflags(0x0f, 0xb7))
 
 # A 32-bit register copy clears the high 32 bits.
 X86_64.enc(base.uextend.i64.i32, *r.umr.rex(0x89))

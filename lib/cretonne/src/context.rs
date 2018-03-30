@@ -21,9 +21,11 @@ use result::{CtonError, CtonResult};
 use settings::{FlagsOrIsa, OptLevel};
 use unreachable_code::eliminate_unreachable_code;
 use verifier;
+use dce::do_dce;
 use simple_gvn::do_simple_gvn;
 use licm::do_licm;
 use preopt::do_preopt;
+use postopt::do_postopt;
 use timing;
 
 /// Persistent data structures and compilation pipeline.
@@ -92,6 +94,9 @@ impl Context {
             self.preopt(isa)?;
         }
         self.legalize(isa)?;
+        if isa.flags().opt_level() != OptLevel::Fastest {
+            self.postopt(isa)?;
+        }
         if isa.flags().opt_level() == OptLevel::Best {
             self.compute_domtree();
             self.compute_loop_analysis();
@@ -100,6 +105,7 @@ impl Context {
         }
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
+        self.dce(isa)?;
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
         self.relax_branches(isa)
@@ -153,6 +159,13 @@ impl Context {
         }
     }
 
+    /// Perform dead-code elimination on the function.
+    pub fn dce<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult {
+        do_dce(&mut self.func, &mut self.domtree);
+        self.verify_if(fisa)?;
+        Ok(())
+    }
+
     /// Perform pre-legalization rewrites on the function.
     pub fn preopt(&mut self, isa: &TargetIsa) -> CtonResult {
         do_preopt(&mut self.func);
@@ -168,6 +181,13 @@ impl Context {
         self.loop_analysis.clear();
         legalize_function(&mut self.func, &mut self.cfg, isa);
         self.verify_if(isa)
+    }
+
+    /// Perform post-legalization rewrites on the function.
+    pub fn postopt(&mut self, isa: &TargetIsa) -> CtonResult {
+        do_postopt(&mut self.func, isa);
+        self.verify_if(isa)?;
+        Ok(())
     }
 
     /// Compute the control flow graph.
