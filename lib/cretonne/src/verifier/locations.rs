@@ -4,8 +4,8 @@ use ir;
 use isa;
 use regalloc::RegDiversions;
 use regalloc::liveness::Liveness;
-use verifier::Result;
 use timing;
+use verifier::Result;
 
 /// Verify value locations for `func`.
 ///

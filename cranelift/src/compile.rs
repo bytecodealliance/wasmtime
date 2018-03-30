@@ -1,12 +1,12 @@
 //! CLI tool to read Cretonne IR files and compile them into native code.
 
-use cton_reader::parse_test;
-use std::path::PathBuf;
 use cretonne::Context;
+use cretonne::print_errors::pretty_error;
 use cretonne::settings::FlagsOrIsa;
 use cretonne::{binemit, ir};
-use cretonne::print_errors::pretty_error;
+use cton_reader::parse_test;
 use std::path::Path;
+use std::path::PathBuf;
 use utils::{parse_sets_and_isa, read_to_string};
 
 struct PrintRelocs {

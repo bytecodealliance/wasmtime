@@ -1,7 +1,7 @@
 //! Helper functions and structures for the translation.
-use wasmparser;
 use cretonne;
 use std::u32;
+use wasmparser;
 
 /// Index of a function (imported or defined) inside the WebAssembly module.
 pub type FunctionIndex = usize;

@@ -4,13 +4,13 @@
 //! concurrently.
 
 use cretonne::timing;
+use num_cpus;
 use std::panic::catch_unwind;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use num_cpus;
 use {runone, TestResult};
 
 /// Request sent to worker threads contains jobid and path.

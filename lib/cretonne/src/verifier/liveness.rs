@@ -1,14 +1,14 @@
 //! Liveness verifier.
 
 use flowgraph::ControlFlowGraph;
-use ir::{ExpandedProgramPoint, Function, Inst, ProgramOrder, ProgramPoint, Value};
 use ir::entities::AnyEntity;
+use ir::{ExpandedProgramPoint, Function, Inst, ProgramOrder, ProgramPoint, Value};
 use isa::TargetIsa;
 use regalloc::liveness::Liveness;
 use regalloc::liverange::LiveRange;
 use std::cmp::Ordering;
-use verifier::Result;
 use timing;
+use verifier::Result;
 
 /// Verify liveness information for `func`.
 ///

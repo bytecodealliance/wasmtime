@@ -1,20 +1,20 @@
 //! Run the tests in a single test file.
 
-use std::borrow::Cow;
-use std::path::Path;
-use std::time;
-use std::io::{self, Read};
-use std::fs;
 use cretonne::ir::Function;
 use cretonne::isa::TargetIsa;
+use cretonne::print_errors::pretty_verifier_error;
 use cretonne::settings::Flags;
 use cretonne::timing;
 use cretonne::verify_function;
-use cretonne::print_errors::pretty_verifier_error;
-use cton_reader::parse_test;
 use cton_reader::IsaSpec;
-use {new_subtest, TestResult};
+use cton_reader::parse_test;
+use std::borrow::Cow;
+use std::fs;
+use std::io::{self, Read};
+use std::path::Path;
+use std::time;
 use subtest::{Context, Result, SubTest};
+use {new_subtest, TestResult};
 
 /// Read an entire file into a string.
 fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {

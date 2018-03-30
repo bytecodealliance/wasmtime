@@ -14,8 +14,8 @@
 //! relocations to a `RelocSink` trait object. Relocations are less frequent than the
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
 
-use ir::{ExternalName, JumpTable, SourceLoc, TrapCode};
 use super::{Addend, CodeOffset, CodeSink, Reloc};
+use ir::{ExternalName, JumpTable, SourceLoc, TrapCode};
 use std::ptr::write_unaligned;
 
 /// A `CodeSink` that writes binary machine code directly into memory.

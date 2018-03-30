@@ -1,12 +1,12 @@
 //! `SubTest` trait.
 
-use std::result;
-use std::borrow::Cow;
 use cretonne::ir::Function;
 use cretonne::isa::TargetIsa;
 use cretonne::settings::{Flags, FlagsOrIsa};
 use cton_reader::{Comment, Details};
 use filecheck::{Checker, CheckerBuilder, NO_VARIABLES};
+use std::borrow::Cow;
+use std::result;
 
 pub type Result<T> = result::Result<T, String>;
 

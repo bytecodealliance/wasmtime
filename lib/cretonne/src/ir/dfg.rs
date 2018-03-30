@@ -1,20 +1,20 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
 use entity::{EntityMap, PrimaryMap};
-use isa::{Encoding, Legalize, TargetIsa};
 use ir;
 use ir::builder::ReplaceBuilder;
 use ir::extfunc::ExtFuncData;
 use ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use ir::types;
 use ir::{Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueList, ValueListPool};
+use isa::{Encoding, Legalize, TargetIsa};
 use packed_option::ReservedValue;
-use write::write_operands;
 use std::fmt;
 use std::iter;
 use std::mem;
 use std::ops::{Index, IndexMut};
 use std::u16;
+use write::write_operands;
 
 /// A data flow graph defines all instructions and extended basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either

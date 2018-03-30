@@ -10,23 +10,23 @@
 //! single ISA instance.
 
 use binemit::{relax_branches, CodeOffset, MemoryCodeSink, RelocSink, TrapSink};
+use dce::do_dce;
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir::Function;
-use loop_analysis::LoopAnalysis;
 use isa::TargetIsa;
 use legalize_function;
+use licm::do_licm;
+use loop_analysis::LoopAnalysis;
+use postopt::do_postopt;
+use preopt::do_preopt;
 use regalloc;
 use result::{CtonError, CtonResult};
 use settings::{FlagsOrIsa, OptLevel};
+use simple_gvn::do_simple_gvn;
+use timing;
 use unreachable_code::eliminate_unreachable_code;
 use verifier;
-use dce::do_dce;
-use simple_gvn::do_simple_gvn;
-use licm::do_licm;
-use preopt::do_preopt;
-use postopt::do_postopt;
-use timing;
 
 /// Persistent data structures and compilation pipeline.
 pub struct Context {

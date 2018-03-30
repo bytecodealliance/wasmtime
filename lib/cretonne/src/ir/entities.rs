@@ -261,8 +261,8 @@ impl From<Heap> for AnyEntity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::u32;
     use std::string::ToString;
+    use std::u32;
 
     #[test]
     fn value_with_number() {
@@ -275,8 +275,8 @@ mod tests {
 
     #[test]
     fn memory() {
-        use std::mem;
         use packed_option::PackedOption;
+        use std::mem;
         // This is the whole point of `PackedOption`.
         assert_eq!(
             mem::size_of::<Value>(),

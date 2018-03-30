@@ -5,13 +5,13 @@
 //!
 //! The resulting function is sent to `filecheck`.
 
-use cretonne::ir::Function;
 use cretonne;
+use cretonne::ir::Function;
 use cretonne::print_errors::pretty_error;
 use cton_reader::TestCommand;
-use subtest::{run_filecheck, Context, Result, SubTest};
 use std::borrow::Cow;
 use std::fmt::Write;
+use subtest::{run_filecheck, Context, Result, SubTest};
 
 struct TestLICM;
 

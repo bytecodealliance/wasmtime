@@ -6,8 +6,8 @@
 //! If a test case file contains `isa` commands, the tests will only be run against the specified
 //! ISAs. If the file contains no `isa` commands, the tests will be run against all supported ISAs.
 
-use cretonne::settings::{Configurable, Error as SetError, Flags};
 use cretonne::isa::TargetIsa;
+use cretonne::settings::{Configurable, Error as SetError, Flags};
 use error::{Location, Result};
 use testcommand::TestOption;
 

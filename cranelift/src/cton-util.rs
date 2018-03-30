@@ -14,12 +14,12 @@ use docopt::Docopt;
 use std::io::{self, Write};
 use std::process;
 
-mod utils;
 mod cat;
+mod compile;
 mod print_cfg;
 mod rsfilecheck;
+mod utils;
 mod wasm;
-mod compile;
 
 const USAGE: &str = "
 Cretonne code generator utility

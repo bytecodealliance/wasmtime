@@ -1,27 +1,27 @@
 //! Parser for .cton files.
 
-use std::str::FromStr;
-use std::{u16, u32};
-use std::mem;
+use cretonne::entity::EntityRef;
+use cretonne::ir;
+use cretonne::ir::entities::AnyEntity;
+use cretonne::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
+use cretonne::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
+use cretonne::ir::types::VOID;
 use cretonne::ir::{AbiParam, ArgumentExtension, ArgumentLoc, CallConv, Ebb, ExtFuncData,
                    ExternalName, FuncRef, Function, GlobalVar, GlobalVarData, Heap, HeapBase,
                    HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags, Opcode, SigRef,
                    Signature, StackSlot, StackSlotData, StackSlotKind, Type, Value, ValueLoc};
-use cretonne::ir;
-use cretonne::ir::types::VOID;
-use cretonne::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
-use cretonne::ir::entities::AnyEntity;
-use cretonne::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cretonne::isa::{self, Encoding, RegUnit, TargetIsa};
-use cretonne::{settings, timing};
-use cretonne::entity::EntityRef;
 use cretonne::packed_option::ReservedValue;
-use testfile::{Comment, Details, TestFile};
+use cretonne::{settings, timing};
 use error::{Error, Location, Result};
-use lexer::{self, Lexer, Token};
-use testcommand::TestCommand;
 use isaspec;
+use lexer::{self, Lexer, Token};
 use sourcemap::SourceMap;
+use std::mem;
+use std::str::FromStr;
+use std::{u16, u32};
+use testcommand::TestCommand;
+use testfile::{Comment, Details, TestFile};
 
 /// Parse the entire `text` into a list of functions.
 ///
@@ -2395,13 +2395,13 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne::ir::{ArgumentExtension, ArgumentPurpose, CallConv};
-    use cretonne::ir::types;
     use cretonne::ir::StackSlotKind;
     use cretonne::ir::entities::AnyEntity;
-    use testfile::{Comment, Details};
-    use isaspec::IsaSpec;
+    use cretonne::ir::types;
+    use cretonne::ir::{ArgumentExtension, ArgumentPurpose, CallConv};
     use error::Error;
+    use isaspec::IsaSpec;
+    use testfile::{Comment, Details};
 
     #[test]
     fn argument_type() {

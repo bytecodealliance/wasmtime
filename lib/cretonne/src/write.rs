@@ -5,9 +5,9 @@
 
 use ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
 use isa::{RegInfo, TargetIsa};
+use packed_option::ReservedValue;
 use std::fmt::{self, Error, Result, Write};
 use std::result;
-use packed_option::ReservedValue;
 use std::string::String;
 
 /// Write `func` to `w` as equivalent text.
@@ -451,8 +451,8 @@ impl<'a> fmt::Display for DisplayValues<'a> {
 
 #[cfg(test)]
 mod tests {
-    use ir::{ExternalName, Function, StackSlotData, StackSlotKind};
     use ir::types;
+    use ir::{ExternalName, Function, StackSlotData, StackSlotKind};
     use std::string::ToString;
 
     #[test]

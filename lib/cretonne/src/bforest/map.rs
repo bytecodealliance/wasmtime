@@ -1,8 +1,8 @@
 //! Forest of maps.
 
+use super::{Comparator, Forest, Node, NodeData, NodePool, Path, INNER_SIZE};
 use packed_option::PackedOption;
 use std::marker::PhantomData;
-use super::{Comparator, Forest, Node, NodeData, NodePool, Path, INNER_SIZE};
 
 /// Tag type defining forest types for a map.
 struct MapTypes<K, V, C>(PhantomData<(K, V, C)>);
@@ -422,10 +422,10 @@ where
 
 #[cfg(test)]
 mod test {
+    use super::super::NodeData;
+    use super::*;
     use std::mem;
     use std::vec::Vec;
-    use super::*;
-    use super::super::NodeData;
 
     #[test]
     fn node_size() {

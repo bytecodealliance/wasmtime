@@ -1,12 +1,12 @@
 //! All the runtime support necessary for the wasm to cretonne translation is formalized by the
 //! traits `FunctionEnvironment` and `ModuleEnvironment`.
-use cretonne::ir::{self, InstBuilder};
 use cretonne::cursor::FuncCursor;
+use cretonne::ir::{self, InstBuilder};
 use cretonne::settings::Flags;
+use std::string::String;
+use std::vec::Vec;
 use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
                         Table, TableIndex};
-use std::vec::Vec;
-use std::string::String;
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]

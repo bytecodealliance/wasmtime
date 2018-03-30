@@ -17,12 +17,12 @@ use cretonne::flowgraph::ControlFlowGraph;
 use cretonne::ir::Function;
 use cretonne::ir::entities::AnyEntity;
 use cton_reader::TestCommand;
-use subtest::{run_filecheck, Context, Result, SubTest};
+use match_directive::match_directive;
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
 use std::fmt::{self, Write};
 use std::result;
-use match_directive::match_directive;
+use subtest::{run_filecheck, Context, Result, SubTest};
 
 struct TestDomtree;
 

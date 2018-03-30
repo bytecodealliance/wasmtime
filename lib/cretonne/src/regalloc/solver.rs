@@ -98,6 +98,7 @@
 //! appropriate candidate among the set of live register values, add it as a variable and start
 //! over.
 
+use super::AllocatableSet;
 use dbg::DisplayList;
 use entity::{SparseMap, SparseMapValue};
 use ir::Value;
@@ -106,7 +107,6 @@ use regalloc::allocatable_set::RegSetIter;
 use std::cmp;
 use std::fmt;
 use std::mem;
-use super::AllocatableSet;
 use std::u16;
 use std::vec::Vec;
 
@@ -1158,17 +1158,17 @@ impl fmt::Display for Solver {
 #[cfg(test)]
 #[cfg(build_arm32)]
 mod tests {
+    use super::{Move, Solver};
     use entity::EntityRef;
     use ir::Value;
     use isa::{RegClass, RegInfo, RegUnit, TargetIsa};
     use regalloc::AllocatableSet;
-    use super::{Move, Solver};
     use std::boxed::Box;
 
     // Make an arm32 `TargetIsa`, if possible.
     fn arm32() -> Option<Box<TargetIsa>> {
-        use settings;
         use isa;
+        use settings;
 
         let shared_builder = settings::builder();
         let shared_flags = settings::Flags::new(&shared_builder);

@@ -457,8 +457,8 @@ impl<PO: ProgramOrder> SparseMapValue<Value> for GenLiveRange<PO> {
 mod tests {
     use super::{GenLiveRange, LiveRangeContext};
     use bforest;
-    use ir::{Ebb, Inst, Value};
     use entity::EntityRef;
+    use ir::{Ebb, Inst, Value};
     use ir::{ExpandedProgramPoint, ProgramOrder};
     use std::cmp::Ordering;
     use std::vec::Vec;

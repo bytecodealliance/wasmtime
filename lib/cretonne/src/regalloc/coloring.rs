@@ -44,10 +44,10 @@
 
 use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
-use ir::{Ebb, Function, Inst, Layout, SigRef, Value, ValueLoc};
 use ir::{AbiParam, ArgumentLoc, InstBuilder, ValueDef};
-use isa::{regs_overlap, RegClass, RegInfo, RegUnit};
+use ir::{Ebb, Function, Inst, Layout, SigRef, Value, ValueLoc};
 use isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
+use isa::{regs_overlap, RegClass, RegInfo, RegUnit};
 use packed_option::PackedOption;
 use regalloc::RegDiversions;
 use regalloc::affinity::Affinity;

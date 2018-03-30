@@ -3,8 +3,8 @@
 //! Read a sequence of Cretonne IR files and print them again to stdout. This has the effect of
 //! normalizing formatting and removing comments.
 
-use cton_reader::parse_functions;
 use CommandResult;
+use cton_reader::parse_functions;
 use utils::read_to_string;
 
 pub fn run(files: &[String]) -> CommandResult {

@@ -232,10 +232,10 @@ fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
 
 #[cfg(test)]
 mod tests {
-    use cretonne::{ir, Context};
-    use cretonne::ir::types::I32;
-    use environ::{DummyEnvironment, FuncEnvironment};
     use super::FuncTranslator;
+    use cretonne::ir::types::I32;
+    use cretonne::{ir, Context};
+    use environ::{DummyEnvironment, FuncEnvironment};
 
     #[test]
     fn small1() {

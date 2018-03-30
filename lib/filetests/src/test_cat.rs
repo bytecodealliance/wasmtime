@@ -1,8 +1,8 @@
 //! The `cat` subtest.
 
-use std::borrow::Cow;
 use cretonne::ir::Function;
 use cton_reader::TestCommand;
+use std::borrow::Cow;
 use subtest::{self, Context, Result as STResult, SubTest};
 
 /// Object implementing the `test cat` sub-test.

@@ -8,8 +8,8 @@
 //! are satisfied.
 
 use binemit::CodeOffset;
-use isa::{RegClass, RegUnit};
 use ir::{Function, Inst, ValueLoc};
+use isa::{RegClass, RegUnit};
 use regalloc::RegDiversions;
 
 /// Register constraint for a single value operand or instruction result.

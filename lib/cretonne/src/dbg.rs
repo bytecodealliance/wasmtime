@@ -8,7 +8,6 @@
 ///
 /// The output will appear in files named `cretonne.dbg.*`, where the suffix is named after the
 /// thread doing the logging.
-
 use std::cell::RefCell;
 use std::env;
 use std::ffi::OsStr;

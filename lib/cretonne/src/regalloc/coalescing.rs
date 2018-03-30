@@ -11,15 +11,15 @@ use dominator_tree::{DominatorTree, DominatorTreePreorder};
 use flowgraph::ControlFlowGraph;
 use ir::{self, InstBuilder, ProgramOrder};
 use ir::{Ebb, ExpandedProgramPoint, Function, Inst, Value};
+use isa::{EncInfo, TargetIsa};
 use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::{VirtReg, VirtRegs};
 use std::cmp;
-use std::iter;
 use std::fmt;
+use std::iter;
 use std::slice;
 use std::vec::Vec;
-use isa::{EncInfo, TargetIsa};
 use timing;
 
 // # Implementation

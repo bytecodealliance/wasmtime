@@ -3,11 +3,11 @@
 #![allow(non_snake_case)]
 
 use cursor::{Cursor, EncCursor};
-use ir::dfg::ValueDef;
-use ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Value};
 use ir::condcodes::{CondCode, FloatCC, IntCC};
-use ir::instructions::{Opcode, ValueList};
+use ir::dfg::ValueDef;
 use ir::immediates::Imm64;
+use ir::instructions::{Opcode, ValueList};
+use ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Value};
 use isa::TargetIsa;
 use timing;
 

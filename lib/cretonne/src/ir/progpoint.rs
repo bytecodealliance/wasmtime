@@ -2,9 +2,9 @@
 
 use entity::EntityRef;
 use ir::{Ebb, Inst, ValueDef};
+use std::cmp;
 use std::fmt;
 use std::u32;
-use std::cmp;
 
 /// A `ProgramPoint` represents a position in a function where the live range of an SSA value can
 /// begin or end. It can be either:

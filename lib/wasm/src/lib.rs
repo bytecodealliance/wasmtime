@@ -19,15 +19,15 @@ extern crate cton_frontend;
 extern crate wasmparser;
 
 mod code_translator;
+mod environ;
 mod func_translator;
 mod module_translator;
-mod environ;
 mod sections_translator;
 mod state;
 mod translation_utils;
 
+pub use environ::{DummyEnvironment, FuncEnvironment, GlobalValue, ModuleEnvironment};
 pub use func_translator::FuncTranslator;
 pub use module_translator::translate_module;
-pub use environ::{DummyEnvironment, FuncEnvironment, GlobalValue, ModuleEnvironment};
 pub use translation_utils::{FunctionIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
                             SignatureIndex, Table, TableIndex};

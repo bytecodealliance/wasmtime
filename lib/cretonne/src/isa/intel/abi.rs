@@ -1,18 +1,18 @@
 //! Intel ABI implementation.
 
-use ir;
-use isa::{RegClass, RegUnit, TargetIsa};
-use regalloc::AllocatableSet;
-use settings as shared_settings;
 use super::registers::{FPR, GPR, RU};
 use abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
-use ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, CallConv, InstBuilder};
-use ir::stackslot::{StackOffset, StackSize};
+use cursor::{Cursor, CursorPosition, EncCursor};
+use ir;
 use ir::immediates::Imm64;
+use ir::stackslot::{StackOffset, StackSize};
+use ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, CallConv, InstBuilder};
+use isa::{RegClass, RegUnit, TargetIsa};
+use regalloc::AllocatableSet;
+use result;
+use settings as shared_settings;
 use stack_layout::layout_stack;
 use std::i32;
-use cursor::{Cursor, CursorPosition, EncCursor};
-use result;
 
 /// Argument registers for x86-64
 static ARG_GPRS: [RU; 6] = [RU::rdi, RU::rsi, RU::rdx, RU::rcx, RU::r8, RU::r9];

@@ -1,7 +1,7 @@
 //! Heaps.
 
-use ir::immediates::Imm64;
 use ir::GlobalVar;
+use ir::immediates::Imm64;
 use std::fmt;
 
 /// Information about a heap declaration.

@@ -13,11 +13,11 @@
 //! The legalizer does not deal with register allocation constraints. These constraints are derived
 //! from the encoding recipes, and solved later by the register allocator.
 
+use bitset::BitSet;
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
 use ir::{self, InstBuilder};
 use isa::TargetIsa;
-use bitset::BitSet;
 use timing;
 
 mod boundary;

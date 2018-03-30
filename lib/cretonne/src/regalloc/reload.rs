@@ -12,16 +12,16 @@
 use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
 use entity::{SparseMap, SparseMapValue};
-use ir::{Ebb, Function, Inst, Value};
 use ir::{AbiParam, ArgumentLoc, InstBuilder};
+use ir::{Ebb, Function, Inst, Value};
 use isa::RegClass;
 use isa::{ConstraintKind, EncInfo, Encoding, RecipeConstraints, TargetIsa};
 use regalloc::affinity::Affinity;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
+use std::vec::Vec;
 use timing;
 use topo_order::TopoOrder;
-use std::vec::Vec;
 
 /// Reusable data structures for the reload pass.
 pub struct Reload {

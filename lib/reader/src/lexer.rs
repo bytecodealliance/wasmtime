@@ -1,12 +1,12 @@
 //! Lexical analysis for .cton files.
 
-use std::str::CharIndices;
-use std::u16;
-#[allow(unused_imports)]
-use std::ascii::AsciiExt;
 use cretonne::ir::types;
 use cretonne::ir::{Ebb, Value};
 use error::Location;
+#[allow(unused_imports)]
+use std::ascii::AsciiExt;
+use std::str::CharIndices;
+use std::u16;
 
 /// A Token returned from the `Lexer`.
 ///

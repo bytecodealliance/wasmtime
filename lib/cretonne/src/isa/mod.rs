@@ -47,14 +47,14 @@ pub use isa::stack::{StackBase, StackBaseMask, StackRef};
 
 use binemit;
 use flowgraph;
-use settings;
 use ir;
+use isa::enc_tables::Encodings;
 use regalloc;
 use result;
-use timing;
-use isa::enc_tables::Encodings;
-use std::fmt;
+use settings;
 use std::boxed::Box;
+use std::fmt;
+use timing;
 
 #[cfg(build_riscv)]
 mod riscv;
@@ -68,28 +68,26 @@ mod arm32;
 #[cfg(build_arm64)]
 mod arm64;
 
-pub mod registers;
-mod encoding;
-mod enc_tables;
 mod constraints;
+mod enc_tables;
+mod encoding;
+pub mod registers;
 mod stack;
 
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::Unsupported)` if not enabled.
 macro_rules! isa_builder {
-    ($module:ident, $name:ident) => {
-        {
-            #[cfg($name)]
-            fn $name() -> Result<Builder, LookupError> {
-                Ok($module::isa_builder())
-            };
-            #[cfg(not($name))]
-            fn $name() -> Result<Builder, LookupError> {
-                Err(LookupError::Unsupported)
-            }
-            $name()
+    ($module:ident, $name:ident) => {{
+        #[cfg($name)]
+        fn $name() -> Result<Builder, LookupError> {
+            Ok($module::isa_builder())
+        };
+        #[cfg(not($name))]
+        fn $name() -> Result<Builder, LookupError> {
+            Err(LookupError::Unsupported)
         }
-    };
+        $name()
+    }};
 }
 
 /// Look for a supported ISA with the given `name`.
@@ -248,8 +246,8 @@ pub trait TargetIsa: fmt::Display {
     fn prologue_epilogue(&self, func: &mut ir::Function) -> result::CtonResult {
         let _tt = timing::prologue_epilogue();
         // This default implementation is unlikely to be good enough.
-        use stack_layout::layout_stack;
         use ir::stackslot::{StackOffset, StackSize};
+        use stack_layout::layout_stack;
 
         let word_size = if self.flags().is_64bit() { 8 } else { 4 };
 

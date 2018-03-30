@@ -6,10 +6,10 @@
 use cursor::{Cursor, FuncCursor};
 use dominator_tree::DominatorTree;
 use entity::EntityRef;
-use ir::{DataFlowGraph, Function, Inst, Opcode};
 use ir::instructions::InstructionData;
-use timing;
+use ir::{DataFlowGraph, Function, Inst, Opcode};
 use std::vec::Vec;
+use timing;
 
 /// Test whether the given opcode is unsafe to even consider for DCE.
 fn trivially_unsafe_for_dce(opcode: Opcode) -> bool {

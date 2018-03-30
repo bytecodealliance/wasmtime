@@ -2,14 +2,14 @@
 
 use entity::EntityMap;
 use flowgraph::{BasicBlock, ControlFlowGraph};
-use ir::{Ebb, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
 use ir::instructions::BranchInfo;
+use ir::{Ebb, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
 use packed_option::PackedOption;
 use std::cmp;
-use std::mem;
-use timing;
 use std::cmp::Ordering;
+use std::mem;
 use std::vec::Vec;
+use timing;
 
 /// RPO numbers are not first assigned in a contiguous way but as multiples of STRIDE, to leave
 /// room for modifications of the dominator tree.
@@ -666,12 +666,12 @@ impl DominatorTreePreorder {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use cursor::{Cursor, FuncCursor};
     use flowgraph::ControlFlowGraph;
     use ir::types::*;
     use ir::{Function, InstBuilder, TrapCode};
     use settings;
-    use super::*;
     use verifier::verify_context;
 
     #[test]

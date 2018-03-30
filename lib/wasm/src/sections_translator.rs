@@ -7,17 +7,17 @@
 //! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
+use cretonne;
+use cretonne::ir::{AbiParam, CallConv, Signature};
+use environ::ModuleEnvironment;
+use std::str::from_utf8;
+use std::string::String;
+use std::vec::Vec;
 use translation_utils::{type_to_type, FunctionIndex, Global, GlobalIndex, GlobalInit, Memory,
                         MemoryIndex, SignatureIndex, Table, TableElementType, TableIndex};
-use cretonne::ir::{AbiParam, CallConv, Signature};
-use cretonne;
+use wasmparser;
 use wasmparser::{ExternalKind, FuncType, ImportSectionEntryType, MemoryType, Operator, Parser,
                  ParserState, WasmDecoder};
-use wasmparser;
-use std::str::from_utf8;
-use environ::ModuleEnvironment;
-use std::vec::Vec;
-use std::string::String;
 
 pub enum SectionParsingError {
     WrongSectionContent(String),

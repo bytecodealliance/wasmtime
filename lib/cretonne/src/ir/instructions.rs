@@ -7,17 +7,17 @@
 //! directory.
 
 use std::fmt::{self, Display, Formatter};
-use std::str::FromStr;
 use std::ops::{Deref, DerefMut};
+use std::str::FromStr;
 use std::vec::Vec;
 
 use ir;
-use ir::{Ebb, FuncRef, JumpTable, SigRef, Type, Value};
 use ir::types;
+use ir::{Ebb, FuncRef, JumpTable, SigRef, Type, Value};
 use isa;
 
-use entity;
 use bitset::BitSet;
+use entity;
 use ref_slice::{ref_slice, ref_slice_mut};
 
 /// Some instructions use an external list of argument values because there is not enough space in
