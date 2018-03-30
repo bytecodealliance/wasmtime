@@ -36,7 +36,7 @@ pub fn parse_function_signatures(
                                               ref params,
                                               ref returns,
                                           }) => {
-                let mut sig = Signature::new(CallConv::Native);
+                let mut sig = Signature::new(CallConv::SystemV);
                 sig.params.extend(params.iter().map(|ty| {
                     let cret_arg: cretonne::ir::Type = type_to_type(ty).expect(
                         "only numeric types are supported in function signatures",

@@ -5,7 +5,7 @@ isa intel haswell
 ; Reported as https://github.com/Cretonne/cretonne/issues/216 from the Binaryen fuzzer.
 ;
 ; The (old) coalescer creates a virtual register with two identical values.
-function %pr216(i32 [%rdi], i64 vmctx [%rsi]) -> i64 [%rax] native {
+function %pr216(i32 [%rdi], i64 vmctx [%rsi]) -> i64 [%rax] system_v {
 ebb0(v0: i32, v1: i64):
     v3 = iconst.i64 0
     v5 = iconst.i32 0

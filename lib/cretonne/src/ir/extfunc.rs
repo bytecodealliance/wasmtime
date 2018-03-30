@@ -343,10 +343,11 @@ impl fmt::Display for ExtFuncData {
 /// determined by a `(TargetIsa, CallConv)` tuple.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CallConv {
-    /// The C calling convention.
+    /// The System V-style calling convention.
     ///
-    /// This is the native calling convention that a C compiler would use on the platform.
-    Native,
+    /// This is the System V-style calling convention that a C compiler would
+    /// use on many platforms.
+    SystemV,
 
     /// A JIT-compiled WebAssembly function in the SpiderMonkey VM.
     SpiderWASM,
@@ -356,7 +357,7 @@ impl fmt::Display for CallConv {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::CallConv::*;
         f.write_str(match *self {
-            Native => "native",
+            SystemV => "system_v",
             SpiderWASM => "spiderwasm",
         })
     }
@@ -368,7 +369,7 @@ impl FromStr for CallConv {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         use self::CallConv::*;
         match s {
-            "native" => Ok(Native),
+            "system_v" => Ok(SystemV),
             "spiderwasm" => Ok(SpiderWASM),
             _ => Err(()),
         }
@@ -410,7 +411,7 @@ mod tests {
 
     #[test]
     fn call_conv() {
-        for &cc in &[CallConv::Native, CallConv::SpiderWASM] {
+        for &cc in &[CallConv::SystemV, CallConv::SpiderWASM] {
             assert_eq!(Ok(cc), cc.to_string().parse())
         }
     }

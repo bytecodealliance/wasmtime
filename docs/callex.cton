@@ -1,6 +1,6 @@
 test verifier
 
-function %gcd(i32 uext, i32 uext) -> i32 uext native {
+function %gcd(i32 uext, i32 uext) -> i32 uext system_v {
     fn1 = function %divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
 
 ebb1(v1: i32, v2: i32):

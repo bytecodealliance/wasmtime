@@ -400,11 +400,11 @@ convention:
     param        : type [paramext] [paramspecial]
     paramext     : "uext" | "sext"
     paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx"
-    callconv     : "native" | "spiderwasm"
+    callconv     : "system_v" | "spiderwasm"
 
 Parameters and return values have flags whose meaning is mostly target
-dependent. They make it possible to call native functions on the target
-platform. When calling other Cretonne functions, the flags are not necessary.
+dependent. These flags support interfacing with code produced by other
+compilers.
 
 Functions that are called directly must be declared in the :term:`function
 preamble`:

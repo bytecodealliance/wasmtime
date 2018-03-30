@@ -43,7 +43,7 @@
 //! use cretonne::verifier::verify_function;
 //!
 //! fn main() {
-//!     let mut sig = Signature::new(CallConv::Native);
+//!     let mut sig = Signature::new(CallConv::SystemV);
 //!     sig.returns.push(AbiParam::new(I32));
 //!     sig.params.push(AbiParam::new(I32));
 //!     let mut fn_builder_ctx = FunctionBuilderContext::<Variable>::new();

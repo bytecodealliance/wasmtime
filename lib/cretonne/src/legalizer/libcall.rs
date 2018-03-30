@@ -44,8 +44,8 @@ fn find_funcref(libcall: ir::LibCall, func: &ir::Function) -> Option<ir::FuncRef
 
 /// Create a funcref for `libcall` with a signature matching `inst`.
 fn make_funcref(libcall: ir::LibCall, inst: ir::Inst, func: &mut ir::Function) -> ir::FuncRef {
-    // Start with a native calling convention. We'll give the ISA a chance to change it.
-    let mut sig = ir::Signature::new(ir::CallConv::Native);
+    // Start with a system_v calling convention. We'll give the ISA a chance to change it.
+    let mut sig = ir::Signature::new(ir::CallConv::SystemV);
     for &v in func.dfg.inst_args(inst) {
         sig.params.push(ir::AbiParam::new(func.dfg.value_type(v)));
     }

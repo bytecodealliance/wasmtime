@@ -600,7 +600,7 @@ mod tests {
     use Variable;
 
     fn sample_function(lazy_seal: bool) {
-        let mut sig = Signature::new(CallConv::Native);
+        let mut sig = Signature::new(CallConv::SystemV);
         sig.returns.push(AbiParam::new(I32));
         sig.params.push(AbiParam::new(I32));
 
