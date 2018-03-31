@@ -505,7 +505,7 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
                         new_opcode,
                         ty,
                         imm,
-                        args[0],
+                        args[1],
                     );
                 }
             }
