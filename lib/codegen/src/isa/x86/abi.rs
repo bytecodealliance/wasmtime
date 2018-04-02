@@ -34,8 +34,8 @@ struct Args {
 }
 
 impl Args {
-    fn new(bits: u16, gpr: &'static [RU], fpr_limit: usize, call_conv: CallConv) -> Args {
-        Args {
+    fn new(bits: u16, gpr: &'static [RU], fpr_limit: usize, call_conv: CallConv) -> Self {
+        Self {
             pointer_bytes: u32::from(bits) / 8,
             pointer_bits: bits,
             pointer_type: ir::Type::int(bits).unwrap(),
@@ -44,7 +44,7 @@ impl Args {
             fpr_limit,
             fpr_used: 0,
             offset: 0,
-            call_conv: call_conv,
+            call_conv,
         }
     }
 }
@@ -205,7 +205,7 @@ fn callee_saved_gprs_used(flags: &shared_settings::Flags, func: &ir::Function) -
     }
 
     used.intersect(&all_callee_saved);
-    return used;
+    used
 }
 
 pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {

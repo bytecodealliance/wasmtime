@@ -1,3 +1,15 @@
+#![deny(trivial_numeric_casts, unused_extern_crates)]
+#![warn(unused_import_braces, unstable_features)]
+#![cfg_attr(feature="cargo-clippy", warn(
+                float_arithmetic,
+                mut_mut,
+                nonminimal_bool,
+                option_map_unwrap_or,
+                option_map_unwrap_or_else,
+                unicode_not_nfc,
+                use_self,
+                ))]
+
 extern crate cretonne_codegen;
 extern crate cretonne_filetests;
 extern crate cretonne_reader;

@@ -47,7 +47,7 @@ def gen_formats(fmt):
     with fmt.indented(
             "impl<'a> From<&'a InstructionData> for InstructionFormat {", '}'):
         with fmt.indented(
-                "fn from(inst: &'a InstructionData) -> InstructionFormat {",
+                "fn from(inst: &'a InstructionData) -> Self {",
                 '}'):
             m = srcgen.Match('*inst')
             for f in InstructionFormat.all_formats:

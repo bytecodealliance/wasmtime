@@ -39,7 +39,7 @@ impl Type {
     /// Get the lane type of this SIMD vector type.
     ///
     /// A lane type is the same as a SIMD vector type with one lane, so it returns itself.
-    pub fn lane_type(self) -> Type {
+    pub fn lane_type(self) -> Self {
         if self.0 < VECTOR_BASE {
             self
         } else {
@@ -72,7 +72,7 @@ impl Type {
     }
 
     /// Get an integer type with the requested number of bits.
-    pub fn int(bits: u16) -> Option<Type> {
+    pub fn int(bits: u16) -> Option<Self> {
         match bits {
             8 => Some(I8),
             16 => Some(I16),
@@ -83,7 +83,7 @@ impl Type {
     }
 
     /// Get a type with the same number of lanes as `self`, but using `lane` as the lane type.
-    fn replace_lanes(self, lane: Type) -> Type {
+    fn replace_lanes(self, lane: Self) -> Self {
         debug_assert!(lane.is_lane() && !self.is_special());
         Type((lane.0 & 0x0f) | (self.0 & 0xf0))
     }
@@ -93,7 +93,7 @@ impl Type {
     ///
     /// Scalar types are treated as vectors with one lane, so they are converted to the multi-bit
     /// boolean types.
-    pub fn as_bool_pedantic(self) -> Type {
+    pub fn as_bool_pedantic(self) -> Self {
         // Replace the low 4 bits with the boolean version, preserve the high 4 bits.
         self.replace_lanes(match self.lane_type() {
             B8 | I8 => B8,
@@ -108,7 +108,7 @@ impl Type {
     /// booleans of the same size.
     ///
     /// Scalar types are all converted to `b1` which is usually what you want.
-    pub fn as_bool(self) -> Type {
+    pub fn as_bool(self) -> Self {
         if !self.is_vector() {
             B1
         } else {
@@ -118,7 +118,7 @@ impl Type {
 
     /// Get a type with the same number of lanes as this type, but with lanes that are half the
     /// number of bits.
-    pub fn half_width(self) -> Option<Type> {
+    pub fn half_width(self) -> Option<Self> {
         Some(self.replace_lanes(match self.lane_type() {
             I16 => I8,
             I32 => I16,
@@ -133,7 +133,7 @@ impl Type {
 
     /// Get a type with the same number of lanes as this type, but with lanes that are twice the
     /// number of bits.
-    pub fn double_width(self) -> Option<Type> {
+    pub fn double_width(self) -> Option<Self> {
         Some(self.replace_lanes(match self.lane_type() {
             I8 => I16,
             I16 => I32,
@@ -235,7 +235,7 @@ impl Type {
     ///
     /// If this is already a SIMD vector type, this produces a SIMD vector type with `n *
     /// self.lane_count()` lanes.
-    pub fn by(self, n: u16) -> Option<Type> {
+    pub fn by(self, n: u16) -> Option<Self> {
         if self.lane_bits() == 0 || !n.is_power_of_two() {
             return None;
         }
@@ -251,7 +251,7 @@ impl Type {
     /// Get a SIMD vector with half the number of lanes.
     ///
     /// There is no `double_vector()` method. Use `t.by(2)` instead.
-    pub fn half_vector(self) -> Option<Type> {
+    pub fn half_vector(self) -> Option<Self> {
         if self.is_vector() {
             Some(Type(self.0 - 0x10))
         } else {
@@ -268,7 +268,7 @@ impl Type {
     ///
     /// 1. `self.lane_count() == other.lane_count()` and
     /// 2. `self.lane_bits() >= other.lane_bits()`
-    pub fn wider_or_equal(self, other: Type) -> bool {
+    pub fn wider_or_equal(self, other: Self) -> bool {
         self.lane_count() == other.lane_count() && self.lane_bits() >= other.lane_bits()
     }
 }

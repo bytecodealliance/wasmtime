@@ -270,7 +270,7 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
             &self.namespace.get_data_decl(name).name
         };
         let addend_i32 = addend as i32;
-        debug_assert!(addend_i32 as i64 == addend);
+        debug_assert!(i64::from(addend_i32) == addend);
         let raw_reloc = container::raw_relocation(reloc, self.format);
         self.artifact
             .link_with(

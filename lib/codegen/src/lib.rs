@@ -1,6 +1,7 @@
 //! Cretonne code generation library.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
+#![warn(unused_import_braces, unstable_features)]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(feature="cargo-clippy", allow(
 // Rustfmt 0.9.0 is at odds with this lint:
@@ -29,6 +30,16 @@
                 redundant_field_names,
                 useless_let_if_seq,
                 len_without_is_empty))]
+#![cfg_attr(feature="cargo-clippy", warn(
+                float_arithmetic,
+                mut_mut,
+                nonminimal_bool,
+                option_map_unwrap_or,
+                option_map_unwrap_or_else,
+                print_stdout,
+                unicode_not_nfc,
+                use_self,
+                ))]
 
 pub use context::Context;
 pub use legalizer::legalize_function;

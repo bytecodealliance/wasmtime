@@ -22,8 +22,8 @@ pub(super) struct Path<F: Forest> {
 }
 
 impl<F: Forest> Default for Path<F> {
-    fn default() -> Path<F> {
-        Path {
+    fn default() -> Self {
+        Self {
             size: 0,
             node: [Node(0); MAX_PATH],
             entry: [0; MAX_PATH],

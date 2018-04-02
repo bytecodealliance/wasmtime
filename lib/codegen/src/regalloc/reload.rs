@@ -219,7 +219,7 @@ impl<'a> Context<'a> {
 
             self.reloads.insert(ReloadedValue {
                 stack: cand.value,
-                reg: reg,
+                reg,
             });
             cand.value = reg;
 

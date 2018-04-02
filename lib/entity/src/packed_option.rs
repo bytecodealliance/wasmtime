@@ -28,7 +28,7 @@ impl<T: ReservedValue> PackedOption<T> {
 
     /// Returns `true` if the packed option is a `Some` value.
     pub fn is_some(&self) -> bool {
-        !self.is_none()
+        self.0 != T::reserved_value()
     }
 
     /// Expand the packed option into a normal `Option`.
@@ -62,14 +62,14 @@ impl<T: ReservedValue> PackedOption<T> {
 
 impl<T: ReservedValue> Default for PackedOption<T> {
     /// Create a default packed option representing `None`.
-    fn default() -> PackedOption<T> {
+    fn default() -> Self {
         PackedOption(T::reserved_value())
     }
 }
 
 impl<T: ReservedValue> From<T> for PackedOption<T> {
     /// Convert `t` into a packed `Some(x)`.
-    fn from(t: T) -> PackedOption<T> {
+    fn from(t: T) -> Self {
         debug_assert!(
             t != T::reserved_value(),
             "Can't make a PackedOption from the reserved value."
@@ -80,7 +80,7 @@ impl<T: ReservedValue> From<T> for PackedOption<T> {
 
 impl<T: ReservedValue> From<Option<T>> for PackedOption<T> {
     /// Convert an option into its packed equivalent.
-    fn from(opt: Option<T>) -> PackedOption<T> {
+    fn from(opt: Option<T>) -> Self {
         match opt {
             None => Self::default(),
             Some(t) => t.into(),

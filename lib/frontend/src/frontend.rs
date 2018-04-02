@@ -238,9 +238,9 @@ where
     ) -> FunctionBuilder<'a, Variable> {
         debug_assert!(func_ctx.is_empty());
         FunctionBuilder {
-            func: func,
+            func,
             srcloc: Default::default(),
-            func_ctx: func_ctx,
+            func_ctx,
             position: Position::default(),
         }
     }

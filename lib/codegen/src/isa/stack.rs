@@ -23,10 +23,10 @@ pub struct StackRef {
 
 impl StackRef {
     /// Get a reference to the stack slot `ss` using one of the base pointers in `mask`.
-    pub fn masked(ss: StackSlot, mask: StackBaseMask, frame: &StackSlots) -> Option<StackRef> {
+    pub fn masked(ss: StackSlot, mask: StackBaseMask, frame: &StackSlots) -> Option<Self> {
         // Try an SP-relative reference.
         if mask.contains(StackBase::SP) {
-            return Some(StackRef::sp(ss, frame));
+            return Some(Self::sp(ss, frame));
         }
 
         // No reference possible with this mask.
@@ -34,7 +34,7 @@ impl StackRef {
     }
 
     /// Get a reference to `ss` using the stack pointer as a base.
-    pub fn sp(ss: StackSlot, frame: &StackSlots) -> StackRef {
+    pub fn sp(ss: StackSlot, frame: &StackSlots) -> Self {
         let size = frame.frame_size.expect(
             "Stack layout must be computed before referencing stack slots",
         );
@@ -48,7 +48,7 @@ impl StackRef {
             let sp_offset = -(size as StackOffset);
             slot.offset.unwrap() - sp_offset
         };
-        StackRef {
+        Self {
             base: StackBase::SP,
             offset,
         }

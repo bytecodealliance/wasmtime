@@ -304,7 +304,7 @@ impl fmt::Display for ArgumentPurpose {
 
 impl FromStr for ArgumentPurpose {
     type Err = ();
-    fn from_str(s: &str) -> Result<ArgumentPurpose, ()> {
+    fn from_str(s: &str) -> Result<Self, ()> {
         match s {
             "normal" => Ok(ArgumentPurpose::Normal),
             "sret" => Ok(ArgumentPurpose::StructReturn),

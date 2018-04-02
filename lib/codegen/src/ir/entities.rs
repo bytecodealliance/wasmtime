@@ -31,7 +31,7 @@ impl Ebb {
     /// Create a new EBB reference from its number. This corresponds to the `ebbNN` representation.
     ///
     /// This method is for use by the parser.
-    pub fn with_number(n: u32) -> Option<Ebb> {
+    pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX { Some(Ebb(n)) } else { None }
     }
 }
@@ -46,7 +46,7 @@ impl Value {
     /// This is the number in the `vNN` notation.
     ///
     /// This method is for use by the parser.
-    pub fn with_number(n: u32) -> Option<Value> {
+    pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX / 2 {
             Some(Value(n))
         } else {
@@ -69,7 +69,7 @@ impl StackSlot {
     /// Create a new stack slot reference from its number.
     ///
     /// This method is for use by the parser.
-    pub fn with_number(n: u32) -> Option<StackSlot> {
+    pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
             Some(StackSlot(n))
         } else {
@@ -87,7 +87,7 @@ impl GlobalVar {
     /// Create a new global variable reference from its number.
     ///
     /// This method is for use by the parser.
-    pub fn with_number(n: u32) -> Option<GlobalVar> {
+    pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
             Some(GlobalVar(n))
         } else {
@@ -105,7 +105,7 @@ impl JumpTable {
     /// Create a new jump table reference from its number.
     ///
     /// This method is for use by the parser.
-    pub fn with_number(n: u32) -> Option<JumpTable> {
+    pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
             Some(JumpTable(n))
         } else {
@@ -123,7 +123,7 @@ impl FuncRef {
     /// Create a new external function reference from its number.
     ///
     /// This method is for use by the parser.
-    pub fn with_number(n: u32) -> Option<FuncRef> {
+    pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX { Some(FuncRef(n)) } else { None }
     }
 }
@@ -137,7 +137,7 @@ impl SigRef {
     /// Create a new function signature reference from its number.
     ///
     /// This method is for use by the parser.
-    pub fn with_number(n: u32) -> Option<SigRef> {
+    pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX { Some(SigRef(n)) } else { None }
     }
 }
@@ -151,7 +151,7 @@ impl Heap {
     /// Create a new heap reference from its number.
     ///
     /// This method is for use by the parser.
-    pub fn with_number(n: u32) -> Option<Heap> {
+    pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX { Some(Heap(n)) } else { None }
     }
 }
@@ -205,55 +205,55 @@ impl fmt::Debug for AnyEntity {
 }
 
 impl From<Ebb> for AnyEntity {
-    fn from(r: Ebb) -> AnyEntity {
+    fn from(r: Ebb) -> Self {
         AnyEntity::Ebb(r)
     }
 }
 
 impl From<Inst> for AnyEntity {
-    fn from(r: Inst) -> AnyEntity {
+    fn from(r: Inst) -> Self {
         AnyEntity::Inst(r)
     }
 }
 
 impl From<Value> for AnyEntity {
-    fn from(r: Value) -> AnyEntity {
+    fn from(r: Value) -> Self {
         AnyEntity::Value(r)
     }
 }
 
 impl From<StackSlot> for AnyEntity {
-    fn from(r: StackSlot) -> AnyEntity {
+    fn from(r: StackSlot) -> Self {
         AnyEntity::StackSlot(r)
     }
 }
 
 impl From<GlobalVar> for AnyEntity {
-    fn from(r: GlobalVar) -> AnyEntity {
+    fn from(r: GlobalVar) -> Self {
         AnyEntity::GlobalVar(r)
     }
 }
 
 impl From<JumpTable> for AnyEntity {
-    fn from(r: JumpTable) -> AnyEntity {
+    fn from(r: JumpTable) -> Self {
         AnyEntity::JumpTable(r)
     }
 }
 
 impl From<FuncRef> for AnyEntity {
-    fn from(r: FuncRef) -> AnyEntity {
+    fn from(r: FuncRef) -> Self {
         AnyEntity::FuncRef(r)
     }
 }
 
 impl From<SigRef> for AnyEntity {
-    fn from(r: SigRef) -> AnyEntity {
+    fn from(r: SigRef) -> Self {
         AnyEntity::SigRef(r)
     }
 }
 
 impl From<Heap> for AnyEntity {
-    fn from(r: Heap) -> AnyEntity {
+    fn from(r: Heap) -> Self {
         AnyEntity::Heap(r)
     }
 }

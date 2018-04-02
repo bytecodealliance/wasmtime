@@ -72,7 +72,7 @@ impl LibCall {
     /// given opcode and controlling type variable.
     ///
     /// Returns `None` if no well-known library routine name exists for that instruction.
-    pub fn for_inst(opcode: Opcode, ctrl_type: Type) -> Option<LibCall> {
+    pub fn for_inst(opcode: Opcode, ctrl_type: Type) -> Option<Self> {
         Some(match ctrl_type {
             types::F32 => {
                 match opcode {

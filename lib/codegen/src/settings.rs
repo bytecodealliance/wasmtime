@@ -50,8 +50,8 @@ pub struct Builder {
 
 impl Builder {
     /// Create a new builder with defaults and names from the given template.
-    pub fn new(tmpl: &'static detail::Template) -> Builder {
-        Builder {
+    pub fn new(tmpl: &'static detail::Template) -> Self {
+        Self {
             template: tmpl,
             bytes: tmpl.defaults.into(),
         }

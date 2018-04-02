@@ -363,7 +363,7 @@ impl<'a> Context<'a> {
                         self.cur.isa.regclass_for_abi_type(abi.value_type).into(),
                         true,
                     ),
-                    Affinity::None => panic!("Missing affinity for {}", arg),
+                    Affinity::Unassigned => panic!("Missing affinity for {}", arg),
                 };
                 let mut reguse = RegUse::new(arg, fixed_args + idx, rci);
                 reguse.fixed = true;
@@ -393,10 +393,9 @@ impl<'a> Context<'a> {
             } else if ru.fixed {
                 // This is a fixed register use which doesn't necessarily require a copy.
                 // Make a copy only if this is not the first use of the value.
-                self.reg_uses
-                    .get(i.wrapping_sub(1))
-                    .map(|ru2| ru2.value == ru.value)
-                    .unwrap_or(false)
+                self.reg_uses.get(i.wrapping_sub(1)).map_or(false, |ru2| {
+                    ru2.value == ru.value
+                })
             } else {
                 false
             };
@@ -567,8 +566,8 @@ struct RegUse {
 }
 
 impl RegUse {
-    fn new(value: Value, idx: usize, rci: RegClassIndex) -> RegUse {
-        RegUse {
+    fn new(value: Value, idx: usize, rci: RegClassIndex) -> Self {
+        Self {
             value,
             opidx: idx as u16,
             rci,

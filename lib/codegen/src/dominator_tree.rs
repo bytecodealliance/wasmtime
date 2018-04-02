@@ -528,8 +528,8 @@ struct ExtraNode {
 /// Creating and computing the dominator tree pre-order.
 impl DominatorTreePreorder {
     /// Create a new blank `DominatorTreePreorder`.
-    pub fn new() -> DominatorTreePreorder {
-        DominatorTreePreorder {
+    pub fn new() -> Self {
+        Self {
             nodes: EntityMap::new(),
             stack: Vec::new(),
         }

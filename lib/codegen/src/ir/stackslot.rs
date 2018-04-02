@@ -70,7 +70,7 @@ pub enum StackSlotKind {
 impl FromStr for StackSlotKind {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<StackSlotKind, ()> {
+    fn from_str(s: &str) -> Result<Self, ()> {
         use self::StackSlotKind::*;
         match s {
             "explicit_slot" => Ok(ExplicitSlot),
@@ -117,8 +117,8 @@ pub struct StackSlotData {
 
 impl StackSlotData {
     /// Create a stack slot with the specified byte size.
-    pub fn new(kind: StackSlotKind, size: StackSize) -> StackSlotData {
-        StackSlotData {
+    pub fn new(kind: StackSlotKind, size: StackSize) -> Self {
+        Self {
             kind,
             size,
             offset: None,
