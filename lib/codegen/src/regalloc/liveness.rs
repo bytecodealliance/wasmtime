@@ -179,7 +179,7 @@ use entity::SparseMap;
 use flowgraph::ControlFlowGraph;
 use ir::dfg::ValueDef;
 use ir::{Ebb, Function, Inst, Layout, ProgramPoint, Value};
-use isa::{EncInfo, TargetIsa};
+use isa::{EncInfo, TargetIsa, OperandConstraint};
 use regalloc::affinity::Affinity;
 use regalloc::liverange::{LiveRange, LiveRangeContext, LiveRangeForest};
 use std::mem;
@@ -413,11 +413,10 @@ impl Liveness {
 
                 // Iterator of constraints, one per value operand.
                 let encoding = func.encodings[inst];
-                let mut operand_constraints = enc_info
+                let operand_constraint_slice: &[OperandConstraint] = enc_info
                     .operand_constraints(encoding)
-                    .map(|c| c.ins)
-                    .unwrap_or(&[])
-                    .iter();
+                    .map_or(&[], |c| c.ins);
+                let mut operand_constraints = operand_constraint_slice.iter();
 
                 for &arg in func.dfg.inst_args(inst) {
                     // Get the live range, create it as a dead range if necessary.

@@ -19,7 +19,7 @@ pub enum Affinity {
     ///
     /// This indicates a value that is not defined or used by any real instructions. It is a ghost
     /// value that won't appear in the final program.
-    None,
+    Unassigned,
 
     /// This value should be placed in a spill slot on the stack.
     Stack,
@@ -30,16 +30,16 @@ pub enum Affinity {
 
 impl Default for Affinity {
     fn default() -> Self {
-        Affinity::None
+        Affinity::Unassigned
     }
 }
 
 impl Affinity {
     /// Create an affinity that satisfies a single constraint.
     ///
-    /// This will never create an `Affinity::None`.
+    /// This will never create an `Affinity::Unassigned`.
     /// Use the `Default` implementation for that.
-    pub fn new(constraint: &OperandConstraint) -> Affinity {
+    pub fn new(constraint: &OperandConstraint) -> Self {
         if constraint.kind == ConstraintKind::Stack {
             Affinity::Stack
         } else {
@@ -48,18 +48,18 @@ impl Affinity {
     }
 
     /// Create an affinity that matches an ABI argument for `isa`.
-    pub fn abi(arg: &AbiParam, isa: &TargetIsa) -> Affinity {
+    pub fn abi(arg: &AbiParam, isa: &TargetIsa) -> Self {
         match arg.location {
-            ArgumentLoc::Unassigned => Affinity::None,
+            ArgumentLoc::Unassigned => Affinity::Unassigned,
             ArgumentLoc::Reg(_) => Affinity::Reg(isa.regclass_for_abi_type(arg.value_type).into()),
             ArgumentLoc::Stack(_) => Affinity::Stack,
         }
     }
 
-    /// Is this the `None` affinity?
-    pub fn is_none(self) -> bool {
+    /// Is this the `Unassigned` affinity?
+    pub fn is_unassigned(self) -> bool {
         match self {
-            Affinity::None => true,
+            Affinity::Unassigned => true,
             _ => false,
         }
     }
@@ -86,15 +86,15 @@ impl Affinity {
     /// satisfies the constraint.
     pub fn merge(&mut self, constraint: &OperandConstraint, reg_info: &RegInfo) {
         match *self {
-            Affinity::None => *self = Affinity::new(constraint),
+            Affinity::Unassigned => *self = Self::new(constraint),
             Affinity::Reg(rc) => {
                 // If the preferred register class is a subclass of the constraint, there's no need
                 // to change anything.
                 if constraint.kind != ConstraintKind::Stack &&
                     !constraint.regclass.has_subclass(rc)
                 {
-                    // If the register classes don't overlap, `intersect` returns `None`, and we
-                    // just keep our previous affinity.
+                    // If the register classes don't overlap, `intersect` returns `Unassigned`, and
+                    // we just keep our previous affinity.
                     if let Some(subclass) = constraint.regclass.intersect_index(reg_info.rc(rc)) {
                         // This constraint shrinks our preferred register class.
                         *self = Affinity::Reg(subclass);
@@ -118,7 +118,7 @@ pub struct DisplayAffinity<'a>(Affinity, Option<&'a RegInfo>);
 impl<'a> fmt::Display for DisplayAffinity<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
-            Affinity::None => write!(f, "none"),
+            Affinity::Unassigned => write!(f, "unassigned"),
             Affinity::Stack => write!(f, "stack"),
             Affinity::Reg(rci) => {
                 match self.1 {

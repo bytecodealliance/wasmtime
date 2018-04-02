@@ -17,7 +17,7 @@ pub struct SourceLoc(u32);
 
 impl SourceLoc {
     /// Create a new source location with the given bits.
-    pub fn new(bits: u32) -> SourceLoc {
+    pub fn new(bits: u32) -> Self {
         SourceLoc(bits)
     }
 

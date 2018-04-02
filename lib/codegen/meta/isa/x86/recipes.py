@@ -530,7 +530,7 @@ puid_bool = TailRecipe(
         // The destination register is encoded in the low bits of the opcode.
         // No ModR/M.
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
-        let imm: u32 = if imm.into() { 1 } else { 0 };
+        let imm: u32 = if imm { 1 } else { 0 };
         sink.put4(imm);
         ''')
 

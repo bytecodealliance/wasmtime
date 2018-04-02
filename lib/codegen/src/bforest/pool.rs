@@ -12,8 +12,8 @@ pub(super) struct NodePool<F: Forest> {
 
 impl<F: Forest> NodePool<F> {
     /// Allocate a new empty pool of nodes.
-    pub fn new() -> NodePool<F> {
-        NodePool {
+    pub fn new() -> Self {
+        Self {
             nodes: PrimaryMap::new(),
             freelist: None,
         }

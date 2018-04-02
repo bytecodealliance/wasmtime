@@ -54,7 +54,7 @@ impl<'a> Display for TestCommand<'a> {
         for opt in &self.options {
             write!(f, " {}", opt)?;
         }
-        writeln!(f, "")
+        writeln!(f)
     }
 }
 

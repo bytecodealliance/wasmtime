@@ -226,7 +226,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         args.push(vmctx, &mut pos.func.dfg.value_lists);
 
         pos.ins()
-            .CallIndirect(ir::Opcode::CallIndirect, ir::types::VOID, sig_ref, args)
+            .CallIndirect(ir::Opcode::CallIndirect, VOID, sig_ref, args)
             .0
     }
 
@@ -248,9 +248,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         args.extend(call_args.iter().cloned(), &mut pos.func.dfg.value_lists);
         args.push(vmctx, &mut pos.func.dfg.value_lists);
 
-        pos.ins()
-            .Call(ir::Opcode::Call, ir::types::VOID, callee, args)
-            .0
+        pos.ins().Call(ir::Opcode::Call, VOID, callee, args).0
     }
 
     fn translate_grow_memory(

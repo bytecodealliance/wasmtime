@@ -18,8 +18,8 @@ pub struct Encoding {
 
 impl Encoding {
     /// Create a new `Encoding` containing `(recipe, bits)`.
-    pub fn new(recipe: u16, bits: u16) -> Encoding {
-        Encoding { recipe, bits }
+    pub fn new(recipe: u16, bits: u16) -> Self {
+        Self { recipe, bits }
     }
 
     /// Get the recipe number in this encoding.
@@ -122,10 +122,10 @@ impl EncInfo {
     ///
     /// Returns 0 for illegal encodings.
     pub fn bytes(&self, enc: Encoding) -> CodeOffset {
-        self.sizing
-            .get(enc.recipe())
-            .map(|s| CodeOffset::from(s.bytes))
-            .unwrap_or(0)
+        self.sizing.get(enc.recipe()).map_or(
+            0,
+            |s| CodeOffset::from(s.bytes),
+        )
     }
 
     /// Get the branch range that is supported by `enc`, if any.

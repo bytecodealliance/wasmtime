@@ -125,7 +125,7 @@ fn filecheck_text(func: &Function, domtree: &DominatorTree) -> result::Result<St
     for &ebb in domtree.cfg_postorder() {
         write!(s, " {}", ebb)?;
     }
-    writeln!(s, "")?;
+    writeln!(s)?;
 
     // Compute and print out a pre-order of the dominator tree.
     writeln!(s, "domtree_preorder {{")?;
@@ -140,7 +140,7 @@ fn filecheck_text(func: &Function, domtree: &DominatorTree) -> result::Result<St
             write!(s, " {}", ch)?;
             stack.push(ch);
         }
-        writeln!(s, "")?;
+        writeln!(s)?;
         // Reverse the children we just pushed so we'll pop them in order.
         stack[i..].reverse();
     }

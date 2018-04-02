@@ -49,7 +49,7 @@ where
     pub fn with_default(default: V) -> Self {
         Self {
             elems: Vec::new(),
-            default: default,
+            default,
             unused: PhantomData,
         }
     }

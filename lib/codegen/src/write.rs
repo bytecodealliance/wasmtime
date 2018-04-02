@@ -22,7 +22,7 @@ pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -
     let mut any = write_preamble(w, func, regs)?;
     for ebb in &func.layout {
         if any {
-            writeln!(w, "")?;
+            writeln!(w)?;
         }
         write_ebb(w, func, isa, ebb)?;
         any = true;
@@ -258,7 +258,7 @@ fn write_instruction(
     }
 
     write_operands(w, &func.dfg, isa, inst)?;
-    writeln!(w, "")
+    writeln!(w)
 }
 
 /// Write the operands of `inst` to `w` with a prepended space.

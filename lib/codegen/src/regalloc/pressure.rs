@@ -81,8 +81,8 @@ pub struct Pressure {
 
 impl Pressure {
     /// Create a new register pressure tracker.
-    pub fn new(reginfo: &RegInfo, usable: &RegisterSet) -> Pressure {
-        let mut p = Pressure {
+    pub fn new(reginfo: &RegInfo, usable: &RegisterSet) -> Self {
+        let mut p = Self {
             aliased: 0,
             toprc: Default::default(),
         };

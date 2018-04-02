@@ -70,7 +70,7 @@ impl StdError for CtonError {
 }
 
 impl From<verifier::Error> for CtonError {
-    fn from(e: verifier::Error) -> CtonError {
+    fn from(e: verifier::Error) -> Self {
         CtonError::Verifier(e)
     }
 }

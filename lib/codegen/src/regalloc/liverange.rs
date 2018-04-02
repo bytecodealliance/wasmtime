@@ -217,8 +217,8 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
     /// Create a new live range for `value` defined at `def`.
     ///
     /// The live range will be created as dead, but it can be extended with `extend_in_ebb()`.
-    pub fn new(value: Value, def: ProgramPoint, affinity: Affinity) -> GenLiveRange<PO> {
-        GenLiveRange {
+    pub fn new(value: Value, def: ProgramPoint, affinity: Affinity) -> Self {
+        Self {
             value,
             affinity,
             def_begin: def,

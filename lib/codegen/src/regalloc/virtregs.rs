@@ -101,10 +101,9 @@ impl VirtRegs {
     where
         'a: 'b,
     {
-        self.get(*value).map(|vr| self.values(vr)).unwrap_or_else(
-            || {
-                ref_slice(value)
-            },
+        self.get(*value).map_or_else(
+            || ref_slice(value),
+            |vr| self.values(vr),
         )
     }
 
@@ -257,7 +256,7 @@ enum UFEntry {
 /// A singleton set is the same as a set with rank 0. It contains only the leader value.
 impl UFEntry {
     /// Decode a table entry.
-    fn decode(x: i32) -> UFEntry {
+    fn decode(x: i32) -> Self {
         if x < 0 {
             UFEntry::Link(Value::new((!x) as usize))
         } else {

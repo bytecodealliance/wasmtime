@@ -361,7 +361,7 @@ where
         let block = self.blocks.push(BlockData::EbbHeader(EbbHeaderBlockData {
             predecessors: Vec::new(),
             sealed: false,
-            ebb: ebb,
+            ebb,
             undef_variables: Vec::new(),
         }));
         self.ebb_headers[ebb] = block.into();

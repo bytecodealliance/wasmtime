@@ -56,7 +56,7 @@ impl ExternalName {
     /// let name = ExternalName::testcase("hello");
     /// assert_eq!(name.to_string(), "%hello");
     /// ```
-    pub fn testcase<T: AsRef<[u8]>>(v: T) -> ExternalName {
+    pub fn testcase<T: AsRef<[u8]>>(v: T) -> Self {
         let vec = v.as_ref();
         let len = cmp::min(vec.len(), TESTCASE_NAME_LENGTH);
         let mut bytes = [0u8; TESTCASE_NAME_LENGTH];
@@ -77,17 +77,14 @@ impl ExternalName {
     /// let name = ExternalName::user(123, 456);
     /// assert_eq!(name.to_string(), "u123:456");
     /// ```
-    pub fn user(namespace: u32, index: u32) -> ExternalName {
-        ExternalName::User {
-            namespace: namespace,
-            index: index,
-        }
+    pub fn user(namespace: u32, index: u32) -> Self {
+        ExternalName::User { namespace, index }
     }
 }
 
 impl Default for ExternalName {
-    fn default() -> ExternalName {
-        ExternalName::user(0, 0)
+    fn default() -> Self {
+        Self::user(0, 0)
     }
 }
 

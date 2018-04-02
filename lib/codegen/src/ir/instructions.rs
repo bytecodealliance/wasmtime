@@ -72,7 +72,7 @@ impl FromStr for Opcode {
     type Err = &'static str;
 
     /// Parse an Opcode name from a string.
-    fn from_str(s: &str) -> Result<Opcode, &'static str> {
+    fn from_str(s: &str) -> Result<Self, &'static str> {
         use constant_hash::{probe, simple_hash, Table};
 
         impl<'a> Table<&'a str> for [Option<Opcode>] {
@@ -85,7 +85,7 @@ impl FromStr for Opcode {
             }
         }
 
-        match probe::<&str, [Option<Opcode>]>(&OPCODE_HASH_TABLE, s, simple_hash(s)) {
+        match probe::<&str, [Option<Self>]>(&OPCODE_HASH_TABLE, s, simple_hash(s)) {
             Err(_) => Err("Unknown opcode"),
             // We unwrap here because probe() should have ensured that the entry
             // at this index is not None.
