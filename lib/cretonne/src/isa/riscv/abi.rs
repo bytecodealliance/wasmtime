@@ -10,7 +10,7 @@ use super::settings;
 use abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
 use ir::{self, AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, Type};
 use isa::RegClass;
-use regalloc::AllocatableSet;
+use regalloc::RegisterSet;
 use settings as shared_settings;
 use std::i32;
 
@@ -120,8 +120,8 @@ pub fn regclass_for_abi_type(ty: Type) -> RegClass {
     if ty.is_float() { FPR } else { GPR }
 }
 
-pub fn allocatable_registers(_func: &ir::Function, isa_flags: &settings::Flags) -> AllocatableSet {
-    let mut regs = AllocatableSet::new();
+pub fn allocatable_registers(_func: &ir::Function, isa_flags: &settings::Flags) -> RegisterSet {
+    let mut regs = RegisterSet::new();
     regs.take(GPR, GPR.unit(0)); // Hard-wired 0.
     // %x1 is the link register which is available for allocation.
     regs.take(GPR, GPR.unit(2)); // Stack pointer.

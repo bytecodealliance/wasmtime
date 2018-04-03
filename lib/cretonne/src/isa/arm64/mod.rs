@@ -85,7 +85,7 @@ impl TargetIsa for Isa {
         abi::regclass_for_abi_type(ty)
     }
 
-    fn allocatable_registers(&self, func: &ir::Function) -> regalloc::AllocatableSet {
+    fn allocatable_registers(&self, func: &ir::Function) -> regalloc::RegisterSet {
         abi::allocatable_registers(func)
     }
 
