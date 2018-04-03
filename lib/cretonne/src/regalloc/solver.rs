@@ -98,12 +98,12 @@
 //! appropriate candidate among the set of live register values, add it as a variable and start
 //! over.
 
-use super::AllocatableSet;
+use super::RegisterSet;
 use dbg::DisplayList;
 use entity::{SparseMap, SparseMapValue};
 use ir::Value;
 use isa::{RegClass, RegUnit};
-use regalloc::allocatable_set::RegSetIter;
+use regalloc::register_set::RegSetIter;
 use std::cmp;
 use std::fmt;
 use std::mem;
@@ -184,12 +184,7 @@ impl Variable {
 
     /// Get an iterator over possible register choices, given the available registers on the input
     /// and output sides as well as the available global register set.
-    fn iter(
-        &self,
-        iregs: &AllocatableSet,
-        oregs: &AllocatableSet,
-        gregs: &AllocatableSet,
-    ) -> RegSetIter {
+    fn iter(&self, iregs: &RegisterSet, oregs: &RegisterSet, gregs: &RegisterSet) -> RegSetIter {
         if !self.is_output {
             debug_assert!(!self.is_global, "Global implies output");
             debug_assert!(self.is_input, "Missing interference set");
@@ -476,7 +471,7 @@ pub struct Solver {
     /// - The 'to' registers of fixed input reassignments are marked as unavailable.
     /// - Input-side variables are marked as available.
     ///
-    regs_in: AllocatableSet,
+    regs_in: RegisterSet,
 
     /// Available registers on the output side of the instruction / fixed input scratch space.
     ///
@@ -490,7 +485,7 @@ pub struct Solver {
     /// - Fixed output assignments are marked as unavailable.
     /// - Live-through variables are marked as available.
     ///
-    regs_out: AllocatableSet,
+    regs_out: RegisterSet,
 
     /// List of register moves scheduled to avoid conflicts.
     ///
@@ -509,8 +504,8 @@ impl Solver {
             assignments: SparseMap::new(),
             vars: Vec::new(),
             inputs_done: false,
-            regs_in: AllocatableSet::new(),
-            regs_out: AllocatableSet::new(),
+            regs_in: RegisterSet::new(),
+            regs_out: RegisterSet::new(),
             moves: Vec::new(),
             fills: Vec::new(),
         }
@@ -521,8 +516,8 @@ impl Solver {
         self.assignments.clear();
         self.vars.clear();
         self.inputs_done = false;
-        self.regs_in = AllocatableSet::new();
-        self.regs_out = AllocatableSet::new();
+        self.regs_in = RegisterSet::new();
+        self.regs_out = RegisterSet::new();
         self.moves.clear();
         self.fills.clear();
     }
@@ -531,13 +526,13 @@ impl Solver {
     /// allocatable registers.
     ///
     /// The `regs` set is the allocatable registers before any reassignments are applied.
-    pub fn reset(&mut self, regs: &AllocatableSet) {
+    pub fn reset(&mut self, regs: &RegisterSet) {
         self.assignments.clear();
         self.vars.clear();
         self.inputs_done = false;
         self.regs_in = regs.clone();
         // Used for tracking fixed input assignments while `!inputs_done`:
-        self.regs_out = AllocatableSet::new();
+        self.regs_out = RegisterSet::new();
         self.moves.clear();
         self.fills.clear();
     }
@@ -870,10 +865,7 @@ impl Solver {
     /// always trivial.
     ///
     /// Returns `Ok(regs)` if a solution was found.
-    pub fn quick_solve(
-        &mut self,
-        global_regs: &AllocatableSet,
-    ) -> Result<AllocatableSet, SolverError> {
+    pub fn quick_solve(&mut self, global_regs: &RegisterSet) -> Result<RegisterSet, SolverError> {
         self.find_solution(global_regs)
     }
 
@@ -884,10 +876,7 @@ impl Solver {
     /// This may return an error with a register class that has run out of registers. If registers
     /// can be freed up in the starving class, this method can be called again after adding
     /// variables for the freed registers.
-    pub fn real_solve(
-        &mut self,
-        global_regs: &AllocatableSet,
-    ) -> Result<AllocatableSet, SolverError> {
+    pub fn real_solve(&mut self, global_regs: &RegisterSet) -> Result<RegisterSet, SolverError> {
         // Compute domain sizes for all the variables given the current register sets.
         for v in &mut self.vars {
             let d = v.iter(&self.regs_in, &self.regs_out, global_regs).len();
@@ -933,10 +922,7 @@ impl Solver {
     /// If a solution was found, returns `Ok(regs)` with the set of available registers on the
     /// output side after the solution. If no solution could be found, returns `Err(rc)` with the
     /// constraint register class that needs more available registers.
-    fn find_solution(
-        &mut self,
-        global_regs: &AllocatableSet,
-    ) -> Result<AllocatableSet, SolverError> {
+    fn find_solution(&mut self, global_regs: &RegisterSet) -> Result<RegisterSet, SolverError> {
         // Available registers on the input and output sides respectively.
         let mut iregs = self.regs_in.clone();
         let mut oregs = self.regs_out.clone();
@@ -1025,7 +1011,7 @@ impl Solver {
     /// a register.
     ///
     /// Returns the number of spills that had to be emitted.
-    pub fn schedule_moves(&mut self, regs: &AllocatableSet) -> usize {
+    pub fn schedule_moves(&mut self, regs: &RegisterSet) -> usize {
         self.collect_moves();
         debug_assert!(self.fills.is_empty());
 
@@ -1162,7 +1148,7 @@ mod tests {
     use entity::EntityRef;
     use ir::Value;
     use isa::{RegClass, RegInfo, RegUnit, TargetIsa};
-    use regalloc::AllocatableSet;
+    use regalloc::RegisterSet;
     use std::boxed::Box;
 
     // Make an arm32 `TargetIsa`, if possible.
@@ -1219,8 +1205,8 @@ mod tests {
         let r0 = gpr.unit(0);
         let r1 = gpr.unit(1);
         let r2 = gpr.unit(2);
-        let gregs = AllocatableSet::new();
-        let mut regs = AllocatableSet::new();
+        let gregs = RegisterSet::new();
+        let mut regs = RegisterSet::new();
         let mut solver = Solver::new();
         let v10 = Value::new(10);
         let v11 = Value::new(11);
@@ -1277,8 +1263,8 @@ mod tests {
         let s1 = s.unit(1);
         let s2 = s.unit(2);
         let s3 = s.unit(3);
-        let gregs = AllocatableSet::new();
-        let mut regs = AllocatableSet::new();
+        let gregs = RegisterSet::new();
+        let mut regs = RegisterSet::new();
         let mut solver = Solver::new();
         let v10 = Value::new(10);
         let v11 = Value::new(11);
@@ -1337,8 +1323,8 @@ mod tests {
         let r3 = gpr.unit(3);
         let r4 = gpr.unit(4);
         let r5 = gpr.unit(5);
-        let gregs = AllocatableSet::new();
-        let mut regs = AllocatableSet::new();
+        let gregs = RegisterSet::new();
+        let mut regs = RegisterSet::new();
         let mut solver = Solver::new();
         let v10 = Value::new(10);
         let v11 = Value::new(11);

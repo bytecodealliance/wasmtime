@@ -51,7 +51,7 @@ use isa::{regs_overlap, RegClass, RegInfo, RegUnit};
 use packed_option::PackedOption;
 use regalloc::RegDiversions;
 use regalloc::affinity::Affinity;
-use regalloc::allocatable_set::AllocatableSet;
+use regalloc::register_set::RegisterSet;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
 use regalloc::liverange::{LiveRange, LiveRangeContext};
@@ -96,7 +96,7 @@ struct Context<'a> {
 
     // Pristine set of registers that the allocator can use.
     // This set remains immutable, we make clones.
-    usable_regs: AllocatableSet,
+    usable_regs: RegisterSet,
 }
 
 impl Coloring {
@@ -699,7 +699,7 @@ impl<'a> Context<'a> {
         defs: &[LiveValue],
         throughs: &[LiveValue],
         replace_global_defines: &mut bool,
-        global_regs: &AllocatableSet,
+        global_regs: &RegisterSet,
     ) {
         for (op, lv) in constraints.iter().zip(defs) {
             match op.kind {
@@ -732,7 +732,7 @@ impl<'a> Context<'a> {
         defs: &[LiveValue],
         throughs: &[LiveValue],
         replace_global_defines: &mut bool,
-        global_regs: &AllocatableSet,
+        global_regs: &RegisterSet,
     ) {
         // It's technically possible for a call instruction to have fixed results before the
         // variable list of results, but we have no known instances of that.
@@ -797,7 +797,7 @@ impl<'a> Context<'a> {
         constraints: &[OperandConstraint],
         defs: &[LiveValue],
         replace_global_defines: &mut bool,
-        global_regs: &AllocatableSet,
+        global_regs: &RegisterSet,
     ) {
         for (op, lv) in constraints.iter().zip(defs) {
             match op.kind {
@@ -843,9 +843,9 @@ impl<'a> Context<'a> {
     fn iterate_solution(
         &mut self,
         throughs: &[LiveValue],
-        global_regs: &AllocatableSet,
+        global_regs: &RegisterSet,
         replace_global_defines: &mut bool,
-    ) -> AllocatableSet {
+    ) -> RegisterSet {
         // Make sure `try_add_var()` below doesn't create a variable with too loose constraints.
         self.program_complete_input_constraints();
 
@@ -923,7 +923,7 @@ impl<'a> Context<'a> {
     /// inserted before.
     ///
     /// The solver needs to be reminded of the available registers before any moves are inserted.
-    fn shuffle_inputs(&mut self, regs: &mut AllocatableSet) {
+    fn shuffle_inputs(&mut self, regs: &mut RegisterSet) {
         use regalloc::solver::Move::*;
 
         let spills = self.solver.schedule_moves(regs);
@@ -1114,19 +1114,19 @@ fn program_input_abi(
 struct AvailableRegs {
     /// The exact set of registers available on the input side of the current instruction. This
     /// takes into account register diversions, and it includes both local and global live ranges.
-    input: AllocatableSet,
+    input: RegisterSet,
 
     /// Registers available for allocating globally live values. This set ignores any local values,
     /// and it does not account for register diversions.
     ///
     /// Global values must be allocated out of this set because conflicts with other global values
     /// can't be resolved with local diversions.
-    global: AllocatableSet,
+    global: RegisterSet,
 }
 
 impl AvailableRegs {
     /// Initialize both the input and global sets from `regs`.
-    pub fn new(regs: &AllocatableSet) -> AvailableRegs {
+    pub fn new(regs: &RegisterSet) -> AvailableRegs {
         AvailableRegs {
             input: regs.clone(),
             global: regs.clone(),

@@ -37,7 +37,7 @@
 #![allow(dead_code)]
 
 use isa::registers::{RegClass, RegClassMask, RegInfo, MAX_TRACKED_TOPRCS};
-use regalloc::AllocatableSet;
+use regalloc::RegisterSet;
 use std::cmp::min;
 use std::fmt;
 use std::iter::ExactSizeIterator;
@@ -81,7 +81,7 @@ pub struct Pressure {
 
 impl Pressure {
     /// Create a new register pressure tracker.
-    pub fn new(reginfo: &RegInfo, usable: &AllocatableSet) -> Pressure {
+    pub fn new(reginfo: &RegInfo, usable: &RegisterSet) -> Pressure {
         let mut p = Pressure {
             aliased: 0,
             toprc: Default::default(),
@@ -271,7 +271,7 @@ impl fmt::Display for Pressure {
 mod tests {
     use super::Pressure;
     use isa::{RegClass, TargetIsa};
-    use regalloc::AllocatableSet;
+    use regalloc::RegisterSet;
     use std::borrow::Borrow;
     use std::boxed::Box;
 
@@ -302,7 +302,7 @@ mod tests {
         let gpr = rc_by_name(isa, "GPR");
         let s = rc_by_name(isa, "S");
         let reginfo = isa.register_info();
-        let regs = AllocatableSet::new();
+        let regs = RegisterSet::new();
 
         let mut pressure = Pressure::new(&reginfo, &regs);
         let mut count = 0;
@@ -331,7 +331,7 @@ mod tests {
         let d = rc_by_name(isa, "D");
         let q = rc_by_name(isa, "Q");
         let reginfo = isa.register_info();
-        let regs = AllocatableSet::new();
+        let regs = RegisterSet::new();
 
         let mut pressure = Pressure::new(&reginfo, &regs);
         assert_eq!(pressure.check_avail(s), 0);

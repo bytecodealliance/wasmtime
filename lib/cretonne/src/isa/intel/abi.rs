@@ -6,9 +6,10 @@ use cursor::{Cursor, CursorPosition, EncCursor};
 use ir;
 use ir::immediates::Imm64;
 use ir::stackslot::{StackOffset, StackSize};
-use ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, CallConv, InstBuilder};
+use ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, CallConv, InstBuilder,
+         ValueLoc};
 use isa::{RegClass, RegUnit, TargetIsa};
-use regalloc::AllocatableSet;
+use regalloc::RegisterSet;
 use result;
 use settings as shared_settings;
 use stack_layout::layout_stack;
@@ -140,11 +141,8 @@ pub fn regclass_for_abi_type(ty: ir::Type) -> RegClass {
 }
 
 /// Get the set of allocatable registers for `func`.
-pub fn allocatable_registers(
-    _func: &ir::Function,
-    flags: &shared_settings::Flags,
-) -> AllocatableSet {
-    let mut regs = AllocatableSet::new();
+pub fn allocatable_registers(_func: &ir::Function, flags: &shared_settings::Flags) -> RegisterSet {
+    let mut regs = RegisterSet::new();
     regs.take(GPR, RU::rsp as RegUnit);
     regs.take(GPR, RU::rbp as RegUnit);
 
@@ -160,12 +158,34 @@ pub fn allocatable_registers(
 }
 
 /// Get the set of callee-saved registers.
-pub fn callee_saved_registers(flags: &shared_settings::Flags) -> &'static [RU] {
+fn callee_saved_gprs(flags: &shared_settings::Flags) -> &'static [RU] {
     if flags.is_64bit() {
         &[RU::rbx, RU::r12, RU::r13, RU::r14, RU::r15]
     } else {
         &[RU::rbx, RU::rsi, RU::rdi]
     }
+}
+
+fn callee_saved_gprs_used(flags: &shared_settings::Flags, func: &ir::Function) -> RegisterSet {
+    let mut all_callee_saved = RegisterSet::empty();
+    for reg in callee_saved_gprs(flags) {
+        all_callee_saved.free(GPR, *reg as RegUnit);
+    }
+
+    let mut used = RegisterSet::empty();
+    for value_loc in func.locations.values() {
+        // Note that `value_loc` here contains only a single unit of a potentially multi-unit
+        // register. We don't use registers that overlap each other in the x86 ISA, but in others
+        // we do. So this should not be blindly reused.
+        if let ValueLoc::Reg(ru) = *value_loc {
+            if !used.is_avail(GPR, ru) {
+                used.free(GPR, ru);
+            }
+        }
+    }
+
+    used.intersect(&all_callee_saved);
+    return used;
 }
 
 pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
@@ -203,7 +223,8 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     } else {
         ir::types::I32
     };
-    let csrs = callee_saved_registers(isa.flags());
+
+    let csrs = callee_saved_gprs_used(isa.flags(), func);
 
     // The reserved stack area is composed of:
     //   return address + frame pointer + all callee-saved registers
@@ -212,7 +233,7 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     // instruction. Each of the others we will then push explicitly. Then we
     // will adjust the stack pointer to make room for the rest of the required
     // space for this frame.
-    let csr_stack_size = ((csrs.len() + 2) * word_size as usize) as i32;
+    let csr_stack_size = ((csrs.iter(GPR).len() + 2) * word_size as usize) as i32;
     func.create_stack_slot(ir::StackSlotData {
         kind: ir::StackSlotKind::IncomingArg,
         size: csr_stack_size as u32,
@@ -231,9 +252,8 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     func.signature.params.push(fp_arg);
     func.signature.returns.push(fp_arg);
 
-    for csr in csrs.iter() {
-        let csr_arg =
-            ir::AbiParam::special_reg(csr_type, ir::ArgumentPurpose::CalleeSaved, *csr as RegUnit);
+    for csr in csrs.iter(GPR) {
+        let csr_arg = ir::AbiParam::special_reg(csr_type, ir::ArgumentPurpose::CalleeSaved, csr);
         func.signature.params.push(csr_arg);
         func.signature.returns.push(csr_arg);
     }
@@ -241,11 +261,11 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     // Set up the cursor and insert the prologue
     let entry_ebb = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
-    insert_system_v_prologue(&mut pos, local_stack_size, csr_type, csrs);
+    insert_system_v_prologue(&mut pos, local_stack_size, csr_type, &csrs);
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_system_v_epilogues(&mut pos, local_stack_size, csr_type, csrs);
+    insert_system_v_epilogues(&mut pos, local_stack_size, csr_type, &csrs);
 
     Ok(())
 }
@@ -255,7 +275,7 @@ fn insert_system_v_prologue(
     pos: &mut EncCursor,
     stack_size: i64,
     csr_type: ir::types::Type,
-    csrs: &'static [RU],
+    csrs: &RegisterSet,
 ) {
     // Append param to entry EBB
     let ebb = pos.current_ebb().expect("missing ebb under cursor");
@@ -268,12 +288,12 @@ fn insert_system_v_prologue(
         RU::rbp as RegUnit,
     );
 
-    for reg in csrs.iter() {
+    for reg in csrs.iter(GPR) {
         // Append param to entry EBB
         let csr_arg = pos.func.dfg.append_ebb_param(ebb, csr_type);
 
         // Assign it a location
-        pos.func.locations[csr_arg] = ir::ValueLoc::Reg(*reg as RegUnit);
+        pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
 
         // Remember it so we can push it momentarily
         pos.ins().x86_push(csr_arg);
@@ -289,7 +309,7 @@ fn insert_system_v_epilogues(
     pos: &mut EncCursor,
     stack_size: i64,
     csr_type: ir::types::Type,
-    csrs: &'static [RU],
+    csrs: &RegisterSet,
 ) {
     while let Some(ebb) = pos.next_ebb() {
         pos.goto_last_inst(ebb);
@@ -307,7 +327,7 @@ fn insert_system_v_epilogue(
     stack_size: i64,
     pos: &mut EncCursor,
     csr_type: ir::types::Type,
-    csrs: &'static [RU],
+    csrs: &RegisterSet,
 ) {
     if stack_size > 0 {
         pos.ins().adjust_sp_imm(Imm64::new(stack_size));
@@ -321,11 +341,11 @@ fn insert_system_v_epilogue(
     pos.func.locations[fp_ret] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
     pos.func.dfg.append_inst_arg(inst, fp_ret);
 
-    for reg in csrs.iter() {
+    for reg in csrs.iter(GPR) {
         let csr_ret = pos.ins().x86_pop(csr_type);
         pos.prev_inst();
 
-        pos.func.locations[csr_ret] = ir::ValueLoc::Reg(*reg as RegUnit);
+        pos.func.locations[csr_ret] = ir::ValueLoc::Reg(reg);
         pos.func.dfg.append_inst_arg(inst, csr_ret);
     }
 }

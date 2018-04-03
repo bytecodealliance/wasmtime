@@ -238,7 +238,7 @@ pub trait TargetIsa: fmt::Display {
     ///
     /// This set excludes reserved registers like the stack pointer and other special-purpose
     /// registers.
-    fn allocatable_registers(&self, func: &ir::Function) -> regalloc::AllocatableSet;
+    fn allocatable_registers(&self, func: &ir::Function) -> regalloc::RegisterSet;
 
     /// Compute the stack layout and insert prologue and epilogue code into `func`.
     ///
