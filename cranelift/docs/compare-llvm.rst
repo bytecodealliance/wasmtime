@@ -6,8 +6,8 @@ Cretonne compared to LLVM
 a set of C++ libraries. It can be used to build both JIT compilers and static
 compilers like `Clang <https://clang.llvm.org>`_, and it is deservedly very
 popular. `Chris Lattner's chapter about LLVM
-<http://www.aosabook.org/en/llvm.html>`_ in the `Architecture of Open Source
-Applications <http://aosabook.org/en/index.html>`_ book gives an excellent
+<https://www.aosabook.org/en/llvm.html>`_ in the `Architecture of Open Source
+Applications <https://aosabook.org/en/index.html>`_ book gives an excellent
 overview of the architecture and design of LLVM.
 
 Cretonne and LLVM are superficially similar projects, so it is worth
