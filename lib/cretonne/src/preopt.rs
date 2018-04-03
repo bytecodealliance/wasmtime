@@ -493,7 +493,7 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
             } else if let ValueDef::Result(iconst_inst, _) = pos.func.dfg.value_def(args[0]) {
                 if let InstructionData::UnaryImm {
                     opcode: Opcode::Iconst,
-                    mut imm,
+                    imm,
                 } = pos.func.dfg[iconst_inst]
                 {
                     let new_opcode = match opcode {
