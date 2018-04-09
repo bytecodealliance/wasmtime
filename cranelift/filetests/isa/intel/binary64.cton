@@ -474,7 +474,7 @@ ebb0:
     [-,%rsi]             v351 = bint.i64 v301   ; bin: 0f b6 f2
 
     ; asm: call foo
-    call fn0()                                  ; bin: e8 PCRel4(%foo) 00000000
+    call fn0()                                  ; bin: e8 PCRel4(%foo-4) 00000000
 
     ; asm: movabsq $0, %rcx
     [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(%foo) 0000000000000000

@@ -352,7 +352,7 @@ ebb0:
     [-,%rsi]             v351 = bint.i32 v301   ; bin: 0f b6 f2
 
     ; asm: call foo
-    call fn0()                                  ; bin: e8 PCRel4(%foo) 00000000
+    call fn0()                                  ; bin: e8 PCRel4(%foo-4) 00000000
 
     ; asm: movl $0, %ecx
     [-,%rcx]            v400 = func_addr.i32 fn0        ; bin: b9 Abs4(%foo) 00000000

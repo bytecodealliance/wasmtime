@@ -1007,9 +1007,11 @@ call_id = TailRecipe(
         'call_id', Call, size=4, ins=(), outs=(),
         emit='''
         PUT_OP(bits, BASE_REX, sink);
+        // The addend adjusts for the difference between the end of the
+        // instruction and the beginning of the immediate field.
         sink.reloc_external(Reloc::IntelPCRel4,
                             &func.dfg.ext_funcs[func_ref].name,
-                            0);
+                            -4);
         sink.put4(0);
         ''')
 
