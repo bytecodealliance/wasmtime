@@ -1,6 +1,7 @@
 test compile
 set is_64bit
 set is_compressed
+set is_pic
 isa intel haswell
 
 ; An empty function.
