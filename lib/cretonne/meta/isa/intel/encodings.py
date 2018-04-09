@@ -293,12 +293,12 @@ enc_both(base.regspill.f64, r.fregspill32, 0xf2, 0x0f, 0x11)
 #
 
 X86_32.enc(base.func_addr.i32, *r.fnaddr4(0xb8),
-           isap=Not(allones_funcaddrs))
+           isap=And(Not(allones_funcaddrs), Not(is_pic)))
 X86_64.enc(base.func_addr.i64, *r.fnaddr8.rex(0xb8, w=1),
            isap=And(Not(allones_funcaddrs), Not(is_pic)))
 
 X86_32.enc(base.func_addr.i32, *r.allones_fnaddr4(0xb8),
-           isap=allones_funcaddrs)
+           isap=And(allones_funcaddrs, Not(is_pic)))
 X86_64.enc(base.func_addr.i64, *r.allones_fnaddr8.rex(0xb8, w=1),
            isap=And(allones_funcaddrs, Not(is_pic)))
 
@@ -309,7 +309,8 @@ X86_64.enc(base.func_addr.i64, *r.got_fnaddr8.rex(0x8b, w=1),
 # Global addresses.
 #
 
-X86_32.enc(base.globalsym_addr.i32, *r.gvaddr4(0xb8))
+X86_32.enc(base.globalsym_addr.i32, *r.gvaddr4(0xb8),
+           isap=Not(is_pic))
 X86_64.enc(base.globalsym_addr.i64, *r.gvaddr8.rex(0xb8, w=1),
            isap=Not(is_pic))
 
