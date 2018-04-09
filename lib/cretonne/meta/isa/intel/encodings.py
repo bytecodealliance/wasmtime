@@ -321,7 +321,6 @@ X86_64.enc(base.globalsym_addr.i64, *r.got_gvaddr8.rex(0x8b, w=1),
 # Call/return
 #
 X86_32.enc(base.call, *r.call_id(0xe8))
-X86_64.enc(base.call, *r.call_id(0xe8), isap=Not(is_pic))
 X86_64.enc(base.call, *r.call_plt_id(0xe8), isap=is_pic)
 
 X86_32.enc(base.call_indirect.i32, *r.call_r(0xff, rrr=2))

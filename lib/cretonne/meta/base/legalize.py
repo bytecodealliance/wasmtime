@@ -65,6 +65,9 @@ expand_flags = XFormGroup('expand_flags', """
 expand.custom_legalize(insts.global_addr, 'expand_global_addr')
 expand.custom_legalize(insts.heap_addr, 'expand_heap_addr')
 
+# Custom expansions for calls.
+expand.custom_legalize(insts.call, 'expand_call')
+
 # Custom expansions that need to change the CFG.
 # TODO: Add sufficient XForm syntax that we don't need to hand-code these.
 expand.custom_legalize(insts.trapz, 'expand_cond_trap')
