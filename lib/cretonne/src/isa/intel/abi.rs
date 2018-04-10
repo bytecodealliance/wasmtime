@@ -184,6 +184,26 @@ fn callee_saved_gprs_used(flags: &shared_settings::Flags, func: &ir::Function) -
         }
     }
 
+    // regmove and regfill instructions may temporarily divert values into other registers,
+    // and these are not reflected in `func.locations`. Scan the function for such instructions
+    // and note which callee-saved registers they use.
+    //
+    // TODO: Consider re-evaluating how regmove/regfill/regspill work and whether it's possible
+    // to avoid this step.
+    for ebb in &func.layout {
+        for inst in func.layout.ebb_insts(ebb) {
+            match func.dfg[inst] {
+                ir::instructions::InstructionData::RegMove { dst, .. } |
+                ir::instructions::InstructionData::RegFill { dst, .. } => {
+                    if !used.is_avail(GPR, dst) {
+                        used.free(GPR, dst);
+                    }
+                }
+                _ => (),
+            }
+        }
+    }
+
     used.intersect(&all_callee_saved);
     return used;
 }
