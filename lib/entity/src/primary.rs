@@ -1,5 +1,5 @@
 //! Densely numbered entity references as mapping keys.
-use entity::{EntityRef, Iter, IterMut, Keys};
+use {EntityRef, Iter, IterMut, Keys};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;

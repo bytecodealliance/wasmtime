@@ -1,6 +1,6 @@
 //! A double-ended iterator over entity references.
 
-use entity::EntityRef;
+use EntityRef;
 use std::marker::PhantomData;
 
 /// Iterate over all keys in order.

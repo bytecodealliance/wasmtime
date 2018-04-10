@@ -7,7 +7,7 @@
 //! > Briggs, Torczon, *An efficient representation for sparse sets*,
 //!   ACM Letters on Programming Languages and Systems, Volume 2, Issue 1-4, March-Dec. 1993.
 
-use entity::{EntityMap, EntityRef};
+use {EntityMap, EntityRef};
 use std::mem;
 use std::slice;
 use std::u32;
@@ -229,8 +229,12 @@ pub type SparseSet<T> = SparseMap<T, T>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entity::EntityRef;
-    use ir::Inst;
+    use EntityRef;
+
+    /// An opaque reference to an instruction in a function.
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    pub struct Inst(u32);
+    entity_impl!(Inst, "inst");
 
     // Mock key-value object for testing.
     #[derive(PartialEq, Eq, Debug)]

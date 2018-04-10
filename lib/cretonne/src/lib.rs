@@ -39,9 +39,10 @@ pub use write::write_function;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[macro_use]
-pub mod dbg;
+pub extern crate cton_entity as entity;
+
 #[macro_use]
-pub mod entity;
+pub mod dbg;
 
 pub mod bforest;
 pub mod binemit;
@@ -52,12 +53,13 @@ pub mod flowgraph;
 pub mod ir;
 pub mod isa;
 pub mod loop_analysis;
-pub mod packed_option;
 pub mod print_errors;
 pub mod result;
 pub mod settings;
 pub mod timing;
 pub mod verifier;
+
+pub use entity::packed_option;
 
 mod abi;
 mod bitset;

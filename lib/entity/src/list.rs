@@ -1,5 +1,5 @@
 //! Small lists of entity references.
-use entity::EntityRef;
+use EntityRef;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::mem;
@@ -481,8 +481,12 @@ impl<T: EntityRef> EntityList<T> {
 mod tests {
     use super::*;
     use super::{sclass_for_length, sclass_size};
-    use entity::EntityRef;
-    use ir::Inst;
+    use EntityRef;
+
+    /// An opaque reference to an instruction in a function.
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    pub struct Inst(u32);
+    entity_impl!(Inst, "inst");
 
     #[test]
     fn size_classes() {

@@ -1,6 +1,6 @@
 //! Densely numbered entity references as set keys.
 
-use entity::{EntityRef, Keys};
+use {EntityRef, Keys};
 use std::marker::PhantomData;
 use std::vec::Vec;
 

@@ -1,0 +1,21 @@
+[package]
+authors = ["The Cretonne Project Developers"]
+name = "cretonne-entity"
+version = "0.4.2"
+description = "Data structures using entity references as mapping keys"
+license = "Apache-2.0"
+documentation = "https://cretonne.readthedocs.io/"
+repository = "https://github.com/Cretonne/cretonne"
+readme = "README.md"
+keywords = ["entity", "set", "map"]
+
+[lib]
+name = "cton_entity"
+
+[features]
+default = ["std"]
+std = []
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "Cretonne/cretonne" }
