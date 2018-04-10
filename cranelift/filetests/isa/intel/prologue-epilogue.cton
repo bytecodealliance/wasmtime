@@ -207,3 +207,25 @@ ebb0(v0: i64, v1: i64):
 ; nextln:     v54 = x86_pop.i64
 ; nextln:     return v54, v55, v56, v57, v58, v59
 ; nextln: }
+
+; A function which uses diverted registers.
+
+function %divert(i32) -> i32 system_v {
+ebb0(v0: i32):
+    v2 = iconst.i32 0
+    v3 = iconst.i32 1
+    jump ebb3(v0, v3, v2)
+
+ebb3(v4: i32, v5: i32, v6: i32):
+    brz v4, ebb4
+    v7 = iadd v5, v6
+    v8 = iadd_imm v4, -1
+    jump ebb3(v8, v7, v5)
+
+ebb4:
+    return v5
+}
+
+; check: function %divert
+; check: regmove v5, %rcx -> %rbx
+; check: [RexOp1popq#58,%rbx]                v15 = x86_pop.i64
