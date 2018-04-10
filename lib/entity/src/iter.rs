@@ -1,6 +1,6 @@
 //! A double-ended iterator over entity references and entities.
 
-use entity::EntityRef;
+use EntityRef;
 use std::marker::PhantomData;
 use std::slice;
 

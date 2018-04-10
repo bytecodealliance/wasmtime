@@ -1,6 +1,6 @@
 //! Array-based data structures using densely numbered entity references as mapping keys.
 //!
-//! This module defines a number of data structures based on arrays. The arrays are not indexed by
+//! This crate defines a number of data structures based on arrays. The arrays are not indexed by
 //! `usize` as usual, but by *entity references* which are integers wrapped in new-types. This has
 //! a couple advantages:
 //!
@@ -29,21 +29,26 @@
 //!   references allocated from an associated memory pool. It has a much smaller footprint than
 //!   `Vec`.
 
-mod iter;
-mod keys;
-mod list;
-mod map;
-mod primary;
-mod set;
-mod sparse;
+#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
+#![cfg_attr(feature = "cargo-clippy",
+            allow(new_without_default, new_without_default_derive, redundant_field_names))]
 
-pub use self::iter::{Iter, IterMut};
-pub use self::keys::Keys;
-pub use self::list::{EntityList, ListPool};
-pub use self::map::EntityMap;
-pub use self::primary::PrimaryMap;
-pub use self::set::EntitySet;
-pub use self::sparse::{SparseMap, SparseMapValue, SparseSet};
+// Turns on no_std and alloc features if std is not available.
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+
+/// This replaces `std` in builds with `core`.
+#[cfg(not(feature = "std"))]
+mod std {
+    extern crate alloc;
+    pub use self::alloc::{boxed, string, vec};
+    pub use core::*;
+}
+
+// Re-export core so that the macros works with both std and no_std crates
+#[doc(hidden)]
+pub extern crate core as __core;
 
 /// A type wrapping a small integer index should implement `EntityRef` so it can be used as the key
 /// of an `EntityMap` or `SparseMap`.
@@ -61,9 +66,9 @@ pub trait EntityRef: Copy + Eq {
 macro_rules! entity_impl {
     // Basic traits.
     ($entity:ident) => {
-        impl $crate::entity::EntityRef for $entity {
+        impl $crate::EntityRef for $entity {
             fn new(index: usize) -> Self {
-                debug_assert!(index < (::std::u32::MAX as usize));
+                debug_assert!(index < ($crate::__core::u32::MAX as usize));
                 $entity(index as u32)
             }
 
@@ -74,7 +79,7 @@ macro_rules! entity_impl {
 
         impl $crate::packed_option::ReservedValue for $entity {
             fn reserved_value() -> $entity {
-                $entity(::std::u32::MAX)
+                $entity($crate::__core::u32::MAX)
             }
         }
     };
@@ -84,16 +89,34 @@ macro_rules! entity_impl {
     ($entity:ident, $display_prefix:expr) => {
         entity_impl!($entity);
 
-        impl ::std::fmt::Display for $entity {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        impl $crate::__core::fmt::Display for $entity {
+            fn fmt(&self, f: &mut $crate::__core::fmt::Formatter) -> $crate::__core::fmt::Result {
                 write!(f, "{}{}", $display_prefix, self.0)
             }
         }
 
-        impl ::std::fmt::Debug for $entity {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                (self as &::std::fmt::Display).fmt(f)
+        impl $crate::__core::fmt::Debug for $entity {
+            fn fmt(&self, f: &mut $crate::__core::fmt::Formatter) -> $crate::__core::fmt::Result {
+                (self as &$crate::__core::fmt::Display).fmt(f)
             }
         }
     };
 }
+
+pub mod packed_option;
+
+mod iter;
+mod keys;
+mod list;
+mod map;
+mod primary;
+mod set;
+mod sparse;
+
+pub use self::iter::{Iter, IterMut};
+pub use self::keys::Keys;
+pub use self::list::{EntityList, ListPool};
+pub use self::map::EntityMap;
+pub use self::primary::PrimaryMap;
+pub use self::set::EntitySet;
+pub use self::sparse::{SparseMap, SparseMapValue, SparseSet};
