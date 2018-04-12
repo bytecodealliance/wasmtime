@@ -1,6 +1,6 @@
 test regalloc
 set is_64bit
-isa intel
+isa x86
 
 ; Test case found by the Binaryen fuzzer.
 ;

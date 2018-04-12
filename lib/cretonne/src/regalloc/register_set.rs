@@ -196,7 +196,7 @@ impl<'a> fmt::Display for DisplayRegisterSet<'a> {
                             }
                             // Display individual registers as either the second letter of their
                             // name or the last digit of their number.
-                            // This works for Intel (rax, rbx, ...) and for numbered regs.
+                            // This works for x86 (rax, rbx, ...) and for numbered regs.
                             write!(
                                 f,
                                 "{}",

@@ -77,7 +77,7 @@ fn main() {
 #[derive(Copy, Clone)]
 enum Isa {
     Riscv,
-    Intel,
+    X86,
     Arm32,
     Arm64,
 }
@@ -103,14 +103,14 @@ impl Isa {
 
     /// Returns all supported isa targets.
     fn all() -> [Isa; 4] {
-        [Isa::Riscv, Isa::Intel, Isa::Arm32, Isa::Arm64]
+        [Isa::Riscv, Isa::X86, Isa::Arm32, Isa::Arm64]
     }
 
     /// Returns name of the isa target.
     fn name(&self) -> &'static str {
         match *self {
             Isa::Riscv => "riscv",
-            Isa::Intel => "intel",
+            Isa::X86 => "x86",
             Isa::Arm32 => "arm32",
             Isa::Arm64 => "arm64",
         }
@@ -120,7 +120,7 @@ impl Isa {
     fn is_arch_applicable(&self, arch: &str) -> bool {
         match *self {
             Isa::Riscv => arch == "riscv",
-            Isa::Intel => ["x86_64", "i386", "i586", "i686"].contains(&arch),
+            Isa::X86 => ["x86_64", "i386", "i586", "i686"].contains(&arch),
             Isa::Arm32 => arch.starts_with("arm") || arch.starts_with("thumb"),
             Isa::Arm64 => arch == "aarch64",
         }

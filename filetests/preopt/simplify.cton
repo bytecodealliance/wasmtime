@@ -1,5 +1,5 @@
 test preopt
-isa intel
+isa x86
 
 function %iadd_imm(i32) -> i32 {
 ebb0(v0: i32):

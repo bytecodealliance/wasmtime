@@ -10,7 +10,7 @@
 //!
 //! Branch relaxation is the process of ensuring that all branches in the function have enough
 //! range to encode their destination. It is common to have multiple branch encodings in an ISA.
-//! For example, Intel branches can have either an 8-bit or a 32-bit displacement.
+//! For example, x86 branches can have either an 8-bit or a 32-bit displacement.
 //!
 //! On RISC architectures, it can happen that conditional branches have a shorter range than
 //! unconditional branches:

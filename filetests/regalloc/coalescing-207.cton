@@ -1,6 +1,6 @@
 test regalloc
 set is_64bit
-isa intel haswell
+isa x86 haswell
 
 ; Reported as https://github.com/Cretonne/cretonne/issues/207
 ;

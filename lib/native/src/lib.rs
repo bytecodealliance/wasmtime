@@ -27,7 +27,7 @@ pub fn builders() -> Result<(settings::Builder, isa::Builder), &'static str> {
     }
 
     let name = if cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
-        "intel"
+        "x86"
     } else if cfg!(target_arch = "arm") {
         "arm32"
     } else if cfg!(target_arch = "aarch64") {

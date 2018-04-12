@@ -998,20 +998,20 @@ ISA-specific instructions
 Target ISAs can define supplemental instructions that do not make sense to
 support generally.
 
-Intel
+x86
 -----
 
-Instructions that can only be used by the Intel target ISA.
+Instructions that can only be used by the x86 target ISA.
 
-.. autoinst:: isa.intel.instructions.sdivmodx
-.. autoinst:: isa.intel.instructions.udivmodx
-.. autoinst:: isa.intel.instructions.cvtt2si
-.. autoinst:: isa.intel.instructions.fmin
-.. autoinst:: isa.intel.instructions.fmax
-.. autoinst:: isa.intel.instructions.bsf
-.. autoinst:: isa.intel.instructions.bsr
-.. autoinst:: isa.intel.instructions.push
-.. autoinst:: isa.intel.instructions.pop
+.. autoinst:: isa.x86.instructions.sdivmodx
+.. autoinst:: isa.x86.instructions.udivmodx
+.. autoinst:: isa.x86.instructions.cvtt2si
+.. autoinst:: isa.x86.instructions.fmin
+.. autoinst:: isa.x86.instructions.fmax
+.. autoinst:: isa.x86.instructions.bsf
+.. autoinst:: isa.x86.instructions.bsr
+.. autoinst:: isa.x86.instructions.push
+.. autoinst:: isa.x86.instructions.pop
 
 Instruction groups
 ==================
@@ -1023,7 +1023,7 @@ group.
 
 Target ISAs may define further instructions in their own instruction groups:
 
-.. autoinstgroup:: isa.intel.instructions.GROUP
+.. autoinstgroup:: isa.x86.instructions.GROUP
 
 Implementation limits
 =====================
