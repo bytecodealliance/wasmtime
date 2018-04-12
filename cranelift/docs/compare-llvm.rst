@@ -174,7 +174,7 @@ is emitted, there are opcodes for every native instruction that can be
 generated. There is a lot of overlap between different ISAs, so for example the
 :cton:inst:`iadd_imm` instruction is used by every ISA that can add an
 immediate integer to a register. A simple RISC ISA like RISC-V can be defined
-with only shared instructions, while an Intel ISA needs a number of specific
+with only shared instructions, while x86 needs a number of specific
 instructions to model addressing modes.
 
 Undefined behavior

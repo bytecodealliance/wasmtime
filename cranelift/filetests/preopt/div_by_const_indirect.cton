@@ -1,6 +1,6 @@
 
 test preopt
-isa intel baseline
+isa x86 baseline
 
 ; Cases where the denominator is created by an iconst
 

@@ -107,9 +107,8 @@ pub struct StackSlotData {
 
     /// Offset of stack slot relative to the stack pointer in the caller.
     ///
-    /// On Intel ISAs, the base address is the stack pointer *before* the return address was
-    /// pushed. On RISC ISAs, the base address is the value of the stack pointer on entry to the
-    /// function.
+    /// On x86, the base address is the stack pointer *before* the return address was pushed. On
+    /// RISC ISAs, the base address is the value of the stack pointer on entry to the function.
     ///
     /// For `OutgoingArg` stack slots, the offset is relative to the current function's stack
     /// pointer immediately before the call.

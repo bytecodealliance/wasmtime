@@ -79,7 +79,7 @@ Different register banks
 
 Instructions with fixed operands
     Some instructions use a fixed register for an operand. This happens on the
-    Intel ISAs:
+    x86 ISAs:
 
     - Dynamic shift and rotate instructions take the shift amount in CL.
     - Division instructions use RAX and RDX for both input and output operands.
@@ -109,7 +109,7 @@ ABI boundaries
 Aliasing registers
     Different registers sometimes share the same bits in the register bank.
     This can make it difficult to measure register pressure. For example, the
-    Intel registers RAX, EAX, AX, AL, and AH overlap.
+    x86 registers RAX, EAX, AX, AL, and AH overlap.
 
     If only one of the aliasing registers can be used at a time, the aliasing
     doesn't cause problems since the registers can simply be counted as one

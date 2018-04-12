@@ -400,7 +400,7 @@ Fixed register operands
 -----------------------
 
 Some instructions use hard-coded input and output registers for some value
-operands. An example is the ``pblendvb`` Intel SSE instruction which takes one
+operands. An example is the ``pblendvb`` x86 SSE instruction which takes one
 of its three value operands in the hard-coded ``%xmm0`` register::
 
     XMM0 = FPR[0]
@@ -439,7 +439,7 @@ The definitions for each supported target live in a package under
     :members:
 
 .. automodule:: isa.riscv
-.. automodule:: isa.intel
+.. automodule:: isa.x86
 .. automodule:: isa.arm32
 .. automodule:: isa.arm64
 

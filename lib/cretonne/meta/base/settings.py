@@ -85,7 +85,7 @@ spiderwasm_prologue_words = NumSetting(
 
         This setting configures the number of pointer-sized words pushed on the
         stack when the Cretonne-generated code is entered. This includes the
-        pushed return address on Intel ISAs.
+        pushed return address on x86.
         """)
 
 #

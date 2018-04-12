@@ -2,7 +2,7 @@
 test compile
 
 set is_64bit
-isa intel haswell
+isa x86 haswell
 
 ; This function contains unreachable blocks which trip up the register
 ; allocator if they don't get cleared out.

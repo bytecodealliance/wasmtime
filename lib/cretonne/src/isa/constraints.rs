@@ -158,7 +158,7 @@ impl RecipeConstraints {
 /// The origin depends on the ISA and the specific instruction:
 ///
 /// - RISC-V and ARM Aarch64 use the address of the branch instruction, `origin = 0`.
-/// - Intel uses the address of the instruction following the branch, `origin = 2` for a 2-byte
+/// - x86 uses the address of the instruction following the branch, `origin = 2` for a 2-byte
 ///   branch instruction.
 /// - ARM's A32 encoding uses the address of the branch instruction + 8 bytes, `origin = 8`.
 #[derive(Clone, Copy, Debug)]

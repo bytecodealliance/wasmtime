@@ -59,8 +59,8 @@ use timing;
 #[cfg(build_riscv)]
 mod riscv;
 
-#[cfg(build_intel)]
-mod intel;
+#[cfg(build_x86)]
+mod x86;
 
 #[cfg(build_arm32)]
 mod arm32;
@@ -95,7 +95,7 @@ macro_rules! isa_builder {
 pub fn lookup(name: &str) -> Result<Builder, LookupError> {
     match name {
         "riscv" => isa_builder!(riscv, build_riscv),
-        "intel" => isa_builder!(intel, build_intel),
+        "x86" => isa_builder!(x86, build_x86),
         "arm32" => isa_builder!(arm32, build_arm32),
         "arm64" => isa_builder!(arm64, build_arm64),
         _ => Err(LookupError::Unknown),
