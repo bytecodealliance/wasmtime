@@ -179,9 +179,7 @@ impl Function {
 
     /// Wrapper around `DataFlowGraph::encode` which assigns `inst` the resulting encoding.
     pub fn update_encoding(&mut self, inst: ir::Inst, isa: &TargetIsa) -> Result<(), Legalize> {
-        self.dfg.encode(inst, isa).map(
-            |e| { self.encodings[inst] = e; },
-        )
+        self.dfg.encode(inst, isa).map(|e| self.encodings[inst] = e)
     }
 }
 
