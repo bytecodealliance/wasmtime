@@ -5,9 +5,8 @@ rust:
     - nightly
 matrix:
     allow_failures:
-        - rust:
-            - beta
-            - nightly
+        - rust: beta
+        - rust: nightly
 dist: trusty
 sudo: false
 addons:
