@@ -590,7 +590,7 @@ fnaddr4 = TailRecipe(
         'fnaddr4', FuncAddr, size=4, ins=(), outs=GPR,
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
-        sink.reloc_external(Reloc::X86Abs4,
+        sink.reloc_external(Reloc::Abs4,
                             &func.dfg.ext_funcs[func_ref].name,
                             0);
         sink.put4(0);
@@ -601,7 +601,7 @@ fnaddr8 = TailRecipe(
         'fnaddr8', FuncAddr, size=8, ins=(), outs=GPR,
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
-        sink.reloc_external(Reloc::X86Abs8,
+        sink.reloc_external(Reloc::Abs8,
                             &func.dfg.ext_funcs[func_ref].name,
                             0);
         sink.put8(0);
@@ -612,7 +612,7 @@ allones_fnaddr4 = TailRecipe(
         'allones_fnaddr4', FuncAddr, size=4, ins=(), outs=GPR,
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
-        sink.reloc_external(Reloc::X86Abs4,
+        sink.reloc_external(Reloc::Abs4,
                             &func.dfg.ext_funcs[func_ref].name,
                             0);
         // Write the immediate as `!0` for the benefit of BaldrMonkey.
@@ -624,7 +624,7 @@ allones_fnaddr8 = TailRecipe(
         'allones_fnaddr8', FuncAddr, size=8, ins=(), outs=GPR,
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
-        sink.reloc_external(Reloc::X86Abs8,
+        sink.reloc_external(Reloc::Abs8,
                             &func.dfg.ext_funcs[func_ref].name,
                             0);
         // Write the immediate as `!0` for the benefit of BaldrMonkey.
@@ -652,7 +652,7 @@ gvaddr4 = TailRecipe(
         'gvaddr4', UnaryGlobalVar, size=4, ins=(), outs=GPR,
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
-        sink.reloc_external(Reloc::X86Abs4,
+        sink.reloc_external(Reloc::Abs4,
                             &func.global_vars[global_var].symbol_name(),
                             0);
         sink.put4(0);
@@ -663,7 +663,7 @@ gvaddr8 = TailRecipe(
         'gvaddr8', UnaryGlobalVar, size=8, ins=(), outs=GPR,
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
-        sink.reloc_external(Reloc::X86Abs8,
+        sink.reloc_external(Reloc::Abs8,
                             &func.global_vars[global_var].symbol_name(),
                             0);
         sink.put8(0);
