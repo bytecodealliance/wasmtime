@@ -25,12 +25,12 @@ pub type Addend = i64;
 /// Relocation kinds for every ISA
 #[derive(Debug)]
 pub enum Reloc {
+    /// absolute 4-byte
+    Abs4,
+    /// absolute 8-byte
+    Abs8,
     /// x86 PC-relative 4-byte
     X86PCRel4,
-    /// x86 absolute 4-byte
-    X86Abs4,
-    /// x86 absolute 8-byte
-    X86Abs8,
     /// x86 GOT PC-relative 4-byte
     X86GOTPCRel4,
     /// x86 PLT-relative 4-byte
@@ -48,9 +48,9 @@ impl fmt::Display for Reloc {
     /// already unambigious, e.g. cton syntax with isa specified. In other contexts, use Debug.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            Reloc::Abs4 => write!(f, "{}", "Abs4"),
+            Reloc::Abs8 => write!(f, "{}", "Abs8"),
             Reloc::X86PCRel4 => write!(f, "{}", "PCRel4"),
-            Reloc::X86Abs4 => write!(f, "{}", "Abs4"),
-            Reloc::X86Abs8 => write!(f, "{}", "Abs8"),
             Reloc::X86GOTPCRel4 => write!(f, "{}", "GOTPCRel4"),
             Reloc::X86PLTRel4 => write!(f, "{}", "PLTRel4"),
             Reloc::Arm32Call | Reloc::Arm64Call | Reloc::RiscvCall => write!(f, "{}", "Call"),
