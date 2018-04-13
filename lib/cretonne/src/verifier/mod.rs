@@ -1025,7 +1025,7 @@ impl<'a> Verifier<'a> {
         let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
             let mut encodings = isa.legal_encodings(
-                &self.func.dfg,
+                &self.func,
                 &self.func.dfg[inst],
                 self.func.dfg.ctrl_typevar(inst),
             ).peekable();
@@ -1045,7 +1045,7 @@ impl<'a> Verifier<'a> {
                 let mut multiple_encodings = false;
 
                 for enc in isa.legal_encodings(
-                    &self.func.dfg,
+                    &self.func,
                     &self.func.dfg[inst],
                     self.func.dfg.ctrl_typevar(inst),
                 )
@@ -1099,7 +1099,7 @@ impl<'a> Verifier<'a> {
         if let Some(text) = needs_enc {
             // This instruction needs an encoding, so generate an error.
             // Provide the ISA default encoding as a hint.
-            match self.func.dfg.encode(inst, isa) {
+            match self.func.encode(inst, isa) {
                 Ok(enc) => {
                     return err!(
                         inst,

@@ -54,8 +54,10 @@ fn make_funcref(libcall: ir::LibCall, inst: ir::Inst, func: &mut ir::Function) -
     }
     let sigref = func.import_signature(sig);
 
+    // TODO: Can libcalls be colocated in some circumstances?
     func.import_function(ir::ExtFuncData {
         name: ir::ExternalName::LibCall(libcall),
         signature: sigref,
+        colocated: false,
     })
 }

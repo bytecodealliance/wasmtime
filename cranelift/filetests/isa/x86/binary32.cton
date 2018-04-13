@@ -10,7 +10,7 @@ isa x86 haswell
 
 function %I32() {
     sig0 = ()
-    fn0 = function %foo()
+    fn0 = %foo()
 
     gv0 = globalsym %some_gv
 

@@ -12,5 +12,5 @@ ebb0(v0: f32):
 }
 ; check: function %floor(f32 [%xmm0]) -> f32 [%xmm0] system_v {
 ; check: sig0 = (f32) -> f32 system_v
-; check: fn0 = sig0 %FloorF32
+; check: fn0 = %FloorF32 sig0
 ; check: v1 = call fn0(v0)

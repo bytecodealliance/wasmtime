@@ -12,7 +12,7 @@ isa x86 haswell
 ; Tests from binary32.cton affected by allones_funcaddrs.
 function %I32() {
     sig0 = ()
-    fn0 = function %foo()
+    fn0 = %foo()
 
 ebb0:
 

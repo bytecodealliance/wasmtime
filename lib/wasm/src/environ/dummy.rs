@@ -182,7 +182,11 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         // And maybe attempt some signature de-duplication.
         let signature = func.import_signature(self.vmctx_sig(sigidx));
         let name = get_func_name(index);
-        func.import_function(ir::ExtFuncData { name, signature })
+        func.import_function(ir::ExtFuncData {
+            name,
+            signature,
+            colocated: false,
+        })
     }
 
     fn translate_call_indirect(

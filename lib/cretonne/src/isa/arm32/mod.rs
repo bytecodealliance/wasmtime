@@ -66,14 +66,14 @@ impl TargetIsa for Isa {
 
     fn legal_encodings<'a>(
         &'a self,
-        dfg: &'a ir::DataFlowGraph,
+        func: &'a ir::Function,
         inst: &'a ir::InstructionData,
         ctrl_typevar: ir::Type,
     ) -> Encodings<'a> {
         lookup_enclist(
             ctrl_typevar,
             inst,
-            dfg,
+            func,
             self.cpumode,
             &enc_tables::LEVEL2[..],
             &enc_tables::ENCLISTS[..],

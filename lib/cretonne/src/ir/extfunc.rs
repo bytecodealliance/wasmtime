@@ -327,11 +327,18 @@ pub struct ExtFuncData {
     pub name: ExternalName,
     /// Call signature of function.
     pub signature: SigRef,
+    /// Will this function be defined nearby, such that it will always be a certain distance away,
+    /// after linking? If so, references to it can avoid going through a GOT or PLT. Note that
+    /// symbols meant to be preemptible cannot be considered colocated.
+    pub colocated: bool,
 }
 
 impl fmt::Display for ExtFuncData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.signature, self.name)
+        if self.colocated {
+            write!(f, "colocated ")?;
+        }
+        write!(f, "{} {}", self.name, self.signature)
     }
 }
 

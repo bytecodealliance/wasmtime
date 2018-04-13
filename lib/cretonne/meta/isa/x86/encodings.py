@@ -3,8 +3,9 @@ x86 Encodings.
 """
 from __future__ import absolute_import
 from cdsl.predicates import IsUnsignedInt, Not, And
+from base.predicates import IsColocatedFunc, IsColocatedData
 from base import instructions as base
-from base.formats import UnaryImm
+from base.formats import UnaryImm, FuncAddr, Call
 from .defs import X86_64, X86_32
 from . import recipes as r
 from . import settings as cfg
@@ -292,16 +293,22 @@ enc_both(base.regspill.f64, r.fregspill32, 0xf2, 0x0f, 0x11)
 # Function addresses.
 #
 
+# Non-PIC, all-ones funcaddresses.
 X86_32.enc(base.func_addr.i32, *r.fnaddr4(0xb8),
            isap=And(Not(allones_funcaddrs), Not(is_pic)))
 X86_64.enc(base.func_addr.i64, *r.fnaddr8.rex(0xb8, w=1),
            isap=And(Not(allones_funcaddrs), Not(is_pic)))
 
+# Non-PIC, all-zeros funcaddresses.
 X86_32.enc(base.func_addr.i32, *r.allones_fnaddr4(0xb8),
            isap=And(allones_funcaddrs, Not(is_pic)))
 X86_64.enc(base.func_addr.i64, *r.allones_fnaddr8.rex(0xb8, w=1),
            isap=And(allones_funcaddrs, Not(is_pic)))
 
+# PIC
+X86_64.enc(base.func_addr.i64, *r.pcrel_fnaddr8.rex(0x8d, w=1),
+           isap=is_pic,
+           instp=IsColocatedFunc(FuncAddr.func_ref))
 X86_64.enc(base.func_addr.i64, *r.got_fnaddr8.rex(0x8b, w=1),
            isap=is_pic)
 
@@ -309,18 +316,34 @@ X86_64.enc(base.func_addr.i64, *r.got_fnaddr8.rex(0x8b, w=1),
 # Global addresses.
 #
 
+# Non-PIC
 X86_32.enc(base.globalsym_addr.i32, *r.gvaddr4(0xb8),
            isap=Not(is_pic))
 X86_64.enc(base.globalsym_addr.i64, *r.gvaddr8.rex(0xb8, w=1),
            isap=Not(is_pic))
 
+# PIC, colocated
+X86_64.enc(base.globalsym_addr.i64, *r.pcrel_gvaddr8.rex(0x8d, w=1),
+           isap=is_pic,
+           instp=IsColocatedData())
+
+# PIC, non-colocated
 X86_64.enc(base.globalsym_addr.i64, *r.got_gvaddr8.rex(0x8b, w=1),
            isap=is_pic)
 
 #
 # Call/return
 #
+
+# 32-bit, both PIC and non-PIC.
 X86_32.enc(base.call, *r.call_id(0xe8))
+
+# 64-bit, PIC, colocated and non-colocated. There is no 64-bit non-PIC, since
+# non-PIC is currently using the large model, which requires calls be lowered
+# to func_addr+call_indirect.
+X86_64.enc(base.call, *r.call_id(0xe8),
+           isap=is_pic,
+           instp=IsColocatedFunc(Call.func_ref))
 X86_64.enc(base.call, *r.call_plt_id(0xe8), isap=is_pic)
 
 X86_32.enc(base.call_indirect.i32, *r.call_r(0xff, rrr=2))

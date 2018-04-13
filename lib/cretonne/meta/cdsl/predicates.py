@@ -370,9 +370,9 @@ class TypePredicate(object):
         """
         Return Rust code for evaluating this predicate.
 
-        It is assumed that the context has `dfg` and `args` variables.
+        It is assumed that the context has `func` and `args` variables.
         """
-        return 'dfg.value_type(args[{}]) == {}'.format(
+        return 'func.dfg.value_type(args[{}]) == {}'.format(
                 self.value_arg, self.value_type.rust_name())
 
 
@@ -409,7 +409,7 @@ class CtrlTypePredicate(object):
         """
         Return Rust code for evaluating this predicate.
 
-        It is assumed that the context has `dfg` and `inst` variables.
+        It is assumed that the context has `func` and `inst` variables.
         """
-        return 'dfg.ctrl_typevar(inst) == {}'.format(
+        return 'func.dfg.ctrl_typevar(inst) == {}'.format(
                 self.value_type.rust_name())

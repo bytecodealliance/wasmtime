@@ -13,9 +13,11 @@ isa x86 haswell
 ; Tests for i64 instructions.
 function %I64() {
     sig0 = ()
-    fn0 = function %foo()
+    fn0 = %foo()
+    fn1 = colocated %bar()
 
     gv0 = globalsym %some_gv
+    gv1 = globalsym colocated %some_gv
 
     ; Use incoming_arg stack slots because they won't be relocated by the frame
     ; layout.
@@ -28,6 +30,9 @@ ebb0:
 
     ; asm: call foo@PLT
     call fn0()                                  ; bin: e8 PLTRel4(%foo-4) 00000000
+
+    ; asm: call foo
+    call fn1()                                  ; bin: e8 PCRel4(%bar-4) 00000000
 
     ; asm: mov 0x0(%rip), %rax
     [-,%rax]            v0 = func_addr.i64 fn0        ; bin: 48 8b 05 GOTPCRel4(%foo-4) 00000000
@@ -49,6 +54,13 @@ ebb0:
     [-,%rsi]            v4 = globalsym_addr.i64 gv0    ; bin: 48 8b 35 GOTPCRel4(%some_gv-4) 00000000
     ; asm: mov 0x0(%rip), %r10
     [-,%r10]            v5 = globalsym_addr.i64 gv0    ; bin: 4c 8b 15 GOTPCRel4(%some_gv-4) 00000000
+
+    ; asm: lea 0x0(%rip), %rcx
+    [-,%rcx]            v6 = globalsym_addr.i64 gv1    ; bin: 48 8d 0d PCRel4(%some_gv-4) 00000000
+    ; asm: lea 0x0(%rip), %rsi
+    [-,%rsi]            v7 = globalsym_addr.i64 gv1    ; bin: 48 8d 35 PCRel4(%some_gv-4) 00000000
+    ; asm: lea 0x0(%rip), %r10
+    [-,%r10]            v8 = globalsym_addr.i64 gv1    ; bin: 4c 8d 15 PCRel4(%some_gv-4) 00000000
 
     return
 }

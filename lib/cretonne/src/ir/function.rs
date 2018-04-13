@@ -10,7 +10,7 @@ use ir::{CallConv, DataFlowGraph, ExternalName, Layout, Signature};
 use ir::{Ebb, ExtFuncData, FuncRef, GlobalVar, GlobalVarData, Heap, HeapData, JumpTable,
          JumpTableData, SigRef, StackSlot, StackSlotData};
 use ir::{EbbOffsets, InstEncodings, JumpTables, SourceLocs, StackSlots, ValueLocations};
-use isa::{EncInfo, Legalize, TargetIsa};
+use isa::{EncInfo, Legalize, TargetIsa, Encoding};
 use std::fmt;
 use write::write_function;
 
@@ -177,9 +177,15 @@ impl Function {
         }
     }
 
-    /// Wrapper around `DataFlowGraph::encode` which assigns `inst` the resulting encoding.
+    /// Wrapper around `encode` which assigns `inst` the resulting encoding.
     pub fn update_encoding(&mut self, inst: ir::Inst, isa: &TargetIsa) -> Result<(), Legalize> {
-        self.dfg.encode(inst, isa).map(|e| self.encodings[inst] = e)
+        self.encode(inst, isa).map(|e| self.encodings[inst] = e)
+    }
+
+    /// Wrapper around `TargetIsa::encode` for encoding an existing instruction
+    /// in the `Function`.
+    pub fn encode(&self, inst: ir::Inst, isa: &TargetIsa) -> Result<Encoding, Legalize> {
+        isa.encode(&self, &self.dfg[inst], self.dfg.ctrl_typevar(inst))
     }
 }
 

@@ -7,7 +7,7 @@ use ir::extfunc::ExtFuncData;
 use ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use ir::types;
 use ir::{Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueList, ValueListPool};
-use isa::{Encoding, Legalize, TargetIsa};
+use isa::TargetIsa;
 use packed_option::ReservedValue;
 use std::fmt;
 use std::iter;
@@ -659,12 +659,6 @@ impl DataFlowGraph {
         } else {
             self.value_type(self.first_result(inst))
         }
-    }
-
-    /// Wrapper around `TargetIsa::encode` for encoding an existing instruction
-    /// in the `DataFlowGraph`.
-    pub fn encode(&self, inst: Inst, isa: &TargetIsa) -> Result<Encoding, Legalize> {
-        isa.encode(&self, &self[inst], self.ctrl_typevar(inst))
     }
 }
 
