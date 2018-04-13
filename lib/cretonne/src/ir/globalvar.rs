@@ -33,6 +33,11 @@ pub enum GlobalVarData {
     Sym {
         /// The symbolic name.
         name: ExternalName,
+
+        /// Will this variable be defined nearby, such that it will always be a certain distance
+        /// away, after linking? If so, references to it can avoid going through a GOT. Note that
+        /// symbols meant to be preemptible cannot be colocated.
+        colocated: bool,
     },
 }
 
@@ -40,7 +45,7 @@ impl GlobalVarData {
     /// Assume that `self` is an `GlobalVarData::Sym` and return its name.
     pub fn symbol_name(&self) -> &ExternalName {
         match *self {
-            GlobalVarData::Sym { ref name } => name,
+            GlobalVarData::Sym { ref name, .. } => name,
             _ => panic!("only symbols have names"),
         }
     }
@@ -51,7 +56,15 @@ impl fmt::Display for GlobalVarData {
         match *self {
             GlobalVarData::VmCtx { offset } => write!(f, "vmctx{}", offset),
             GlobalVarData::Deref { base, offset } => write!(f, "deref({}){}", base, offset),
-            GlobalVarData::Sym { ref name } => write!(f, "globalsym {}", name),
+            GlobalVarData::Sym {
+                ref name,
+                colocated,
+            } => {
+                if colocated {
+                    write!(f, "colocated ")?;
+                }
+                write!(f, "globalsym {}", name)
+            }
         }
     }
 }

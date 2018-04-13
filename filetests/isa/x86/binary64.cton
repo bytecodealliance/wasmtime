@@ -12,7 +12,7 @@ isa x86 haswell
 ; Tests for i64 instructions.
 function %I64() {
     sig0 = ()
-    fn0 = function %foo()
+    fn0 = %foo()
 
     gv0 = globalsym %some_gv
 
@@ -473,12 +473,6 @@ ebb0:
     ; asm: movzbq %dl, %rsi
     [-,%rsi]             v351 = bint.i64 v301   ; bin: 0f b6 f2
 
-    ; TODO: x86-64 can't encode a direct call to an arbitrary 64-bit address in
-    ; a single instruction. When we add a concept of colocated definitions, this
-    ; test can be re-enabled.
-    ; disabled: asm: call foo
-    ; disabled: call fn0()                                  ; bin: e8 PCRel4(%foo-4) 00000000
-
     ; asm: movabsq $0, %rcx
     [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(%foo) 0000000000000000
     ; asm: movabsq $0, %rsi
@@ -713,7 +707,7 @@ ebb0:
 ; be done by an instruction shrinking pass.
 function %I32() {
     sig0 = ()
-    fn0 = function %foo()
+    fn0 = %foo()
 
     ss0 = incoming_arg 8, offset 0
     ss1 = incoming_arg 1024, offset -1024

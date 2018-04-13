@@ -16,6 +16,7 @@ pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -
     let regs = isa.map(TargetIsa::register_info);
     let regs = regs.as_ref();
 
+    write!(w, "function ")?;
     write_spec(w, func, regs)?;
     writeln!(w, " {{")?;
     let mut any = write_preamble(w, func, regs)?;
@@ -34,7 +35,7 @@ pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -
 // Function spec.
 
 fn write_spec(w: &mut Write, func: &Function, regs: Option<&RegInfo>) -> Result {
-    write!(w, "function {}{}", func.name, func.signature.display(regs))
+    write!(w, "{}{}", func.name, func.signature.display(regs))
 }
 
 fn write_preamble(

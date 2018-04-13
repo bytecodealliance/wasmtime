@@ -9,6 +9,8 @@
 //! Some of these predicates may be unused in certain ISA configurations, so we suppress the
 //! dead code warning.
 
+use ir;
+
 /// Check that `x` is the same as `y`.
 #[allow(dead_code)]
 pub fn is_equal<T: Eq + Copy, O: Into<T> + Copy>(x: T, y: O) -> bool {
@@ -29,6 +31,19 @@ pub fn is_unsigned_int<T: Into<i64>>(x: T, wd: u8, sc: u8) -> bool {
     // Bit-mask of the permitted bits.
     let m = (1 << wd) - (1 << sc);
     u == (u & m)
+}
+
+#[allow(dead_code)]
+pub fn is_colocated_func(func_ref: ir::FuncRef, func: &ir::Function) -> bool {
+    func.dfg.ext_funcs[func_ref].colocated
+}
+
+#[allow(dead_code)]
+pub fn is_colocated_data(global_var: ir::GlobalVar, func: &ir::Function) -> bool {
+    match func.global_vars[global_var] {
+        ir::GlobalVarData::Sym { colocated, .. } => colocated,
+        _ => panic!("is_colocated_data only makes sense for data with symbolic addresses"),
+    }
 }
 
 #[cfg(test)]

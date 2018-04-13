@@ -48,8 +48,7 @@ A ``.cton`` file consists of a sequence of independent function definitions:
 
 .. productionlist::
     function_list : { function }
-    function      : function_spec "{" preamble function_body "}"
-    function_spec : "function" function_name signature
+    function      : "function" function_name signature "{" preamble function_body "}"
     preamble      : { preamble_decl }
     function_body : { extended_basic_block }
 
@@ -409,9 +408,13 @@ compilers.
 Functions that are called directly must be declared in the :term:`function
 preamble`:
 
-.. inst:: FN = function NAME signature
+.. inst:: FN = [colocated] NAME signature
 
     Declare a function so it can be called directly.
+
+    If the colocated keyword is present, the symbol's definition will be
+    defined along with the current function, such that it can use more
+    efficient addressing.
 
     :arg NAME: Name of the function, passed to the linker for resolution.
     :arg signature: Function signature. See below.
@@ -570,12 +573,16 @@ runtime data structures.
                  variable.
     :result GV: Global variable.
 
-.. inst:: GV = globalsym name
+.. inst:: GV = [colocated] globalsym name
 
     Declare a global variable at a symbolic address.
 
     The address of GV is symbolic and will be assigned a relocation, so that
     it can be resolved by a later linking phase.
+
+    If the colocated keyword is present, the symbol's definition will be
+    defined along with the current function, such that it can use more
+    efficient addressing.
 
     :arg name: External name.
     :result GV: Global variable.

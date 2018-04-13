@@ -167,7 +167,7 @@ pub trait TargetIsa: fmt::Display {
     /// Returns an iterartor over legal encodings for the instruction.
     fn legal_encodings<'a>(
         &'a self,
-        dfg: &'a ir::DataFlowGraph,
+        func: &'a ir::Function,
         inst: &'a ir::InstructionData,
         ctrl_typevar: ir::Type,
     ) -> Encodings<'a>;
@@ -180,11 +180,11 @@ pub trait TargetIsa: fmt::Display {
     /// This is also the main entry point for determining if an instruction is legal.
     fn encode(
         &self,
-        dfg: &ir::DataFlowGraph,
+        func: &ir::Function,
         inst: &ir::InstructionData,
         ctrl_typevar: ir::Type,
     ) -> Result<Encoding, Legalize> {
-        let mut iter = self.legal_encodings(dfg, inst, ctrl_typevar);
+        let mut iter = self.legal_encodings(func, inst, ctrl_typevar);
         iter.next().ok_or_else(|| iter.legalize())
     }
 

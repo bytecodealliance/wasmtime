@@ -133,7 +133,7 @@ impl SubTest for TestBinEmit {
                     // constraints.
                     if let Some(enc) = {
                         let mut legal_encodings = isa.legal_encodings(
-                            &func.dfg,
+                            &func,
                             &func.dfg[inst],
                             func.dfg.ctrl_typevar(inst),
                         ).filter(|e| {
@@ -251,7 +251,7 @@ impl SubTest for TestBinEmit {
 
                         // Do any encodings exist?
                         let encodings = isa.legal_encodings(
-                            &func.dfg,
+                            &func,
                             &func.dfg[inst],
                             func.dfg.ctrl_typevar(inst),
                         ).map(|e| encinfo.display(e))

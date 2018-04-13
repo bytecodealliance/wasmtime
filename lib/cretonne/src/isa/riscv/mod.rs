@@ -66,14 +66,14 @@ impl TargetIsa for Isa {
 
     fn legal_encodings<'a>(
         &'a self,
-        dfg: &'a ir::DataFlowGraph,
+        func: &'a ir::Function,
         inst: &'a ir::InstructionData,
         ctrl_typevar: ir::Type,
     ) -> Encodings<'a> {
         lookup_enclist(
             ctrl_typevar,
             inst,
-            dfg,
+            func,
             self.cpumode,
             &enc_tables::LEVEL2[..],
             &enc_tables::ENCLISTS[..],
@@ -113,7 +113,7 @@ impl TargetIsa for Isa {
 
 #[cfg(test)]
 mod tests {
-    use ir::{DataFlowGraph, InstructionData, Opcode};
+    use ir::{Function, InstructionData, Opcode};
     use ir::{immediates, types};
     use isa;
     use settings::{self, Configurable};
@@ -133,10 +133,10 @@ mod tests {
         let shared_flags = settings::Flags::new(&shared_builder);
         let isa = isa::lookup("riscv").unwrap().finish(shared_flags);
 
-        let mut dfg = DataFlowGraph::new();
-        let ebb = dfg.make_ebb();
-        let arg64 = dfg.append_ebb_param(ebb, types::I64);
-        let arg32 = dfg.append_ebb_param(ebb, types::I32);
+        let mut func = Function::new();
+        let ebb = func.dfg.make_ebb();
+        let arg64 = func.dfg.append_ebb_param(ebb, types::I64);
+        let arg32 = func.dfg.append_ebb_param(ebb, types::I32);
 
         // Try to encode iadd_imm.i64 v1, -10.
         let inst64 = InstructionData::BinaryImm {
@@ -147,7 +147,7 @@ mod tests {
 
         // ADDI is I/0b00100
         assert_eq!(
-            encstr(&*isa, isa.encode(&dfg, &inst64, types::I64)),
+            encstr(&*isa, isa.encode(&func, &inst64, types::I64)),
             "Ii#04"
         );
 
@@ -159,7 +159,7 @@ mod tests {
         };
 
         // Immediate is out of range for ADDI.
-        assert!(isa.encode(&dfg, &inst64_large, types::I64).is_err());
+        assert!(isa.encode(&func, &inst64_large, types::I64).is_err());
 
         // Create an iadd_imm.i32 which is encodable in RV64.
         let inst32 = InstructionData::BinaryImm {
@@ -170,7 +170,7 @@ mod tests {
 
         // ADDIW is I/0b00110
         assert_eq!(
-            encstr(&*isa, isa.encode(&dfg, &inst32, types::I32)),
+            encstr(&*isa, isa.encode(&func, &inst32, types::I32)),
             "Ii#06"
         );
     }
@@ -183,10 +183,10 @@ mod tests {
         let shared_flags = settings::Flags::new(&shared_builder);
         let isa = isa::lookup("riscv").unwrap().finish(shared_flags);
 
-        let mut dfg = DataFlowGraph::new();
-        let ebb = dfg.make_ebb();
-        let arg64 = dfg.append_ebb_param(ebb, types::I64);
-        let arg32 = dfg.append_ebb_param(ebb, types::I32);
+        let mut func = Function::new();
+        let ebb = func.dfg.make_ebb();
+        let arg64 = func.dfg.append_ebb_param(ebb, types::I64);
+        let arg32 = func.dfg.append_ebb_param(ebb, types::I32);
 
         // Try to encode iadd_imm.i64 v1, -10.
         let inst64 = InstructionData::BinaryImm {
@@ -196,7 +196,7 @@ mod tests {
         };
 
         // In 32-bit mode, an i64 bit add should be narrowed.
-        assert!(isa.encode(&dfg, &inst64, types::I64).is_err());
+        assert!(isa.encode(&func, &inst64, types::I64).is_err());
 
         // Try to encode iadd_imm.i64 v1, -10000.
         let inst64_large = InstructionData::BinaryImm {
@@ -206,7 +206,7 @@ mod tests {
         };
 
         // In 32-bit mode, an i64 bit add should be narrowed.
-        assert!(isa.encode(&dfg, &inst64_large, types::I64).is_err());
+        assert!(isa.encode(&func, &inst64_large, types::I64).is_err());
 
         // Create an iadd_imm.i32 which is encodable in RV32.
         let inst32 = InstructionData::BinaryImm {
@@ -217,7 +217,7 @@ mod tests {
 
         // ADDI is I/0b00100
         assert_eq!(
-            encstr(&*isa, isa.encode(&dfg, &inst32, types::I32)),
+            encstr(&*isa, isa.encode(&func, &inst32, types::I32)),
             "Ii#04"
         );
 
@@ -227,7 +227,7 @@ mod tests {
             args: [arg32, arg32],
         };
 
-        assert!(isa.encode(&dfg, &mul32, types::I32).is_err());
+        assert!(isa.encode(&func, &mul32, types::I32).is_err());
     }
 
     #[test]
@@ -243,16 +243,19 @@ mod tests {
 
         let isa = isa_builder.finish(shared_flags);
 
-        let mut dfg = DataFlowGraph::new();
-        let ebb = dfg.make_ebb();
-        let arg32 = dfg.append_ebb_param(ebb, types::I32);
+        let mut func = Function::new();
+        let ebb = func.dfg.make_ebb();
+        let arg32 = func.dfg.append_ebb_param(ebb, types::I32);
 
         // Create an imul.i32 which is encodable in RV32M.
         let mul32 = InstructionData::Binary {
             opcode: Opcode::Imul,
             args: [arg32, arg32],
         };
-        assert_eq!(encstr(&*isa, isa.encode(&dfg, &mul32, types::I32)), "R#10c");
+        assert_eq!(
+            encstr(&*isa, isa.encode(&func, &mul32, types::I32)),
+            "R#10c"
+        );
     }
 }
 

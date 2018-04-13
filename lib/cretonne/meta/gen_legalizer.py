@@ -185,9 +185,9 @@ def unwrap_inst(iref, node, fmt):
             fmt.line('ref args,')
         fmt.line('..')
         fmt.outdented_line('} = pos.func.dfg[inst] {')
-        fmt.line('let dfg = &pos.func.dfg;')
+        fmt.line('let func = &pos.func;')
         if iform.has_value_list:
-            fmt.line('let args = args.as_slice(&dfg.value_lists);')
+            fmt.line('let args = args.as_slice(&func.dfg.value_lists);')
         elif nvops == 1:
             fmt.line('let args = [arg];')
         # Generate the values for the tuple.
@@ -198,7 +198,7 @@ def unwrap_inst(iref, node, fmt):
                     fmt.format('{},', iform.imm_fields[n].member)
                 elif op.is_value():
                     n = expr.inst.value_opnums.index(opnum)
-                    fmt.format('dfg.resolve_aliases(args[{}]),', n)
+                    fmt.format('func.dfg.resolve_aliases(args[{}]),', n)
             # Evaluate the instruction predicate, if any.
             instp = expr.inst_predicate_with_ctrl_typevar()
             fmt.line(instp.rust_predicate(0) if instp else 'true')

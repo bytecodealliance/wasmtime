@@ -74,7 +74,7 @@ except ImportError:
     pass
 
 
-def emit_instp(instp, fmt, has_dfg=False):
+def emit_instp(instp, fmt, has_func=False):
     # type: (PredNode, srcgen.Formatter, bool) -> None
     """
     Emit code for matching an instruction predicate against an
@@ -87,7 +87,7 @@ def emit_instp(instp, fmt, has_dfg=False):
 
     # Deal with pure type check predicates which apply to any instruction.
     if iform == instruction_context:
-        fmt.line('let args = inst.arguments(&dfg.value_lists);')
+        fmt.line('let args = inst.arguments(&func.dfg.value_lists);')
         fmt.line(instp.rust_predicate(0))
         return
 
@@ -114,11 +114,11 @@ def emit_instp(instp, fmt, has_dfg=False):
             .format(iform.name, fields), '}'):
         if has_type_check:
             # We could implement this if we need to.
-            assert has_dfg, "Recipe predicates can't check type variables."
-            fmt.line('let args = inst.arguments(&dfg.value_lists);')
-        elif has_dfg:
+            assert has_func, "Recipe predicates can't check type variables."
+            fmt.line('let args = inst.arguments(&func.dfg.value_lists);')
+        elif has_func:
             # Silence dead argument warning.
-            fmt.line('let _ = dfg;')
+            fmt.line('let _ = func;')
         fmt.format('return {};', instp.rust_predicate(0))
     fmt.line('unreachable!();')
 
@@ -132,9 +132,9 @@ def emit_inst_predicates(instps, fmt):
     for instp, number in instps.items():
         name = 'inst_predicate_{}'.format(number)
         with fmt.indented(
-                'fn {}(dfg: &ir::DataFlowGraph, inst: &ir::InstructionData)'
+                'fn {}(func: &ir::Function, inst: &ir::InstructionData)'
                 '-> bool {{'.format(name), '}'):
-            emit_instp(instp, fmt, has_dfg=True)
+            emit_instp(instp, fmt, has_func=True)
 
     # Generate the static table.
     with fmt.indented(

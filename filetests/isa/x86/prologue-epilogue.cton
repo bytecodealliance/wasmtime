@@ -45,7 +45,7 @@ ebb0:
 ; A function performing a call.
 
 function %call() {
-    fn0 = function %foo()
+    fn0 = %foo()
 
 ebb0:
     call fn0()
@@ -55,7 +55,7 @@ ebb0:
 ; check: function %call(i64 fp [%rbp]) -> i64 fp [%rbp] system_v {
 ; nextln:     ss0 = incoming_arg 16, offset -16
 ; nextln:     sig0 = () system_v
-; nextln:     fn0 = sig0 %foo
+; nextln:     fn0 = %foo sig0
 ; nextln: 
 ; nextln: ebb0(v0: i64 [%rbp]):
 ; nextln:     x86_push v0

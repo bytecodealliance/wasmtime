@@ -631,6 +631,21 @@ allones_fnaddr8 = TailRecipe(
         sink.put8(!0);
         ''')
 
+pcrel_fnaddr8 = TailRecipe(
+        'pcrel_fnaddr8', FuncAddr, size=5, ins=(), outs=GPR,
+        # rex2 gets passed 0 for r/m register because the upper bit of
+        # r/m doesnt get decoded when in rip-relative addressing mode.
+        emit='''
+        PUT_OP(bits, rex2(0, out_reg0), sink);
+        modrm_riprel(out_reg0, sink);
+        // The addend adjusts for the difference between the end of the
+        // instruction and the beginning of the immediate field.
+        sink.reloc_external(Reloc::X86PCRel4,
+                            &func.dfg.ext_funcs[func_ref].name,
+                            -4);
+        sink.put4(0);
+        ''')
+
 got_fnaddr8 = TailRecipe(
         'got_fnaddr8', FuncAddr, size=5, ins=(), outs=GPR,
         # rex2 gets passed 0 for r/m register because the upper bit of
@@ -667,6 +682,20 @@ gvaddr8 = TailRecipe(
                             &func.global_vars[global_var].symbol_name(),
                             0);
         sink.put8(0);
+        ''')
+
+# XX+rd iq with PCRel4 globalsym relocation.
+pcrel_gvaddr8 = TailRecipe(
+        'pcrel_gvaddr8', UnaryGlobalVar, size=5, ins=(), outs=GPR,
+        emit='''
+        PUT_OP(bits, rex2(0, out_reg0), sink);
+        modrm_rm(5, out_reg0, sink);
+        // The addend adjusts for the difference between the end of the
+        // instruction and the beginning of the immediate field.
+        sink.reloc_external(Reloc::X86PCRel4,
+                            &func.global_vars[global_var].symbol_name(),
+                            -4);
+        sink.put4(0);
         ''')
 
 # XX+rd iq with Abs8 globalsym relocation.
