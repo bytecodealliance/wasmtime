@@ -14,7 +14,7 @@ build = "build.rs"
 name = "cretonne"
 
 [dependencies]
-cretonne-entity = { path = "../entity" }
+cretonne-entity = { path = "../entity", version = "0.4.3" }
 # It is a goal of the cretonne crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
