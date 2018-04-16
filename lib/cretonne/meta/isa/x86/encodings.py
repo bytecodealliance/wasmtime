@@ -305,10 +305,12 @@ X86_32.enc(base.func_addr.i32, *r.allones_fnaddr4(0xb8),
 X86_64.enc(base.func_addr.i64, *r.allones_fnaddr8.rex(0xb8, w=1),
            isap=And(allones_funcaddrs, Not(is_pic)))
 
-# PIC
+# 64-bit, colocated, both PIC and non-PIC. Use the lea instruction's
+# pc-relative field.
 X86_64.enc(base.func_addr.i64, *r.pcrel_fnaddr8.rex(0x8d, w=1),
-           isap=is_pic,
            instp=IsColocatedFunc(FuncAddr.func_ref))
+
+# 64-bit, non-colocated, PIC.
 X86_64.enc(base.func_addr.i64, *r.got_fnaddr8.rex(0x8b, w=1),
            isap=is_pic)
 
@@ -338,12 +340,14 @@ X86_64.enc(base.globalsym_addr.i64, *r.got_gvaddr8.rex(0x8b, w=1),
 # 32-bit, both PIC and non-PIC.
 X86_32.enc(base.call, *r.call_id(0xe8))
 
-# 64-bit, PIC, colocated and non-colocated. There is no 64-bit non-PIC, since
-# non-PIC is currently using the large model, which requires calls be lowered
-# to func_addr+call_indirect.
+# 64-bit, colocated, both PIC and non-PIC. Use the call instruction's
+# pc-relative field.
 X86_64.enc(base.call, *r.call_id(0xe8),
-           isap=is_pic,
            instp=IsColocatedFunc(Call.func_ref))
+
+# 64-bit, non-colocated, PIC. There is no 64-bit non-colocated non-PIC version,
+# since non-PIC is currently using the large model, which requires calls be
+# lowered to func_addr+call_indirect.
 X86_64.enc(base.call, *r.call_plt_id(0xe8), isap=is_pic)
 
 X86_32.enc(base.call_indirect.i32, *r.call_r(0xff, rrr=2))

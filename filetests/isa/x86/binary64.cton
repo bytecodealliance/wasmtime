@@ -13,6 +13,7 @@ isa x86 haswell
 function %I64() {
     sig0 = ()
     fn0 = %foo()
+    fn1 = colocated %bar()
 
     gv0 = globalsym %some_gv
 
@@ -473,12 +474,17 @@ ebb0:
     ; asm: movzbq %dl, %rsi
     [-,%rsi]             v351 = bint.i64 v301   ; bin: 0f b6 f2
 
-    ; asm: movabsq $0, %rcx
-    [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(%foo) 0000000000000000
-    ; asm: movabsq $0, %rsi
-    [-,%rsi]            v401 = func_addr.i64 fn0        ; bin: 48 be Abs8(%foo) 0000000000000000
-    ; asm: movabsq $0, %r10
-    [-,%r10]            v402 = func_addr.i64 fn0        ; bin: 49 ba Abs8(%foo) 0000000000000000
+    ; Colocated functions.
+
+    ; asm: call bar
+    ; call fn1()                                ; bin: e8 PCRel4(%bar-4) 00000000
+
+    ; asm: lea 0x0(%rip), %rcx
+    [-,%rcx]            v400 = func_addr.i64 fn1        ; bin: 48 8d 0d PCRel4(%bar-4) 00000000
+    ; asm: lea 0x0(%rip), %rsi
+    [-,%rsi]            v401 = func_addr.i64 fn1        ; bin: 48 8d 35 PCRel4(%bar-4) 00000000
+    ; asm: lea 0x0(%rip), %r10
+    [-,%r10]            v402 = func_addr.i64 fn1        ; bin: 4c 8d 15 PCRel4(%bar-4) 00000000
 
     ; asm: call *%rcx
     call_indirect sig0, v400()                  ; bin: ff d1
@@ -486,6 +492,22 @@ ebb0:
     call_indirect sig0, v401()                  ; bin: ff d6
     ; asm: call *%r10
     call_indirect sig0, v402()                  ; bin: 41 ff d2
+
+    ; Non-colocated functions. Note that there is no non-colocated non-PIC call.
+
+    ; asm: movabsq $0, %rcx
+    [-,%rcx]            v410 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(%foo) 0000000000000000
+    ; asm: movabsq $0, %rsi
+    [-,%rsi]            v411 = func_addr.i64 fn0        ; bin: 48 be Abs8(%foo) 0000000000000000
+    ; asm: movabsq $0, %r10
+    [-,%r10]            v412 = func_addr.i64 fn0        ; bin: 49 ba Abs8(%foo) 0000000000000000
+
+    ; asm: call *%rcx
+    call_indirect sig0, v410()                  ; bin: ff d1
+    ; asm: call *%rsi
+    call_indirect sig0, v411()                  ; bin: ff d6
+    ; asm: call *%r10
+    call_indirect sig0, v412()                  ; bin: 41 ff d2
 
     ; asm: movabsq $-1, %rcx
     [-,%rcx]            v450 = globalsym_addr.i64 gv0    ; bin: 48 b9 Abs8(%some_gv) 0000000000000000
@@ -548,9 +570,9 @@ ebb0:
     [-,%rsi]             v517 = sshr_imm v2, 32   ; bin: 48 c1 fe 20
     ; asm: sarq $33, %r8
     [-,%r8]              v518 = sshr_imm v4, 33   ; bin: 49 c1 f8 21
-    ; asm: shrl $62, %rsi
+    ; asm: shrq $62, %rsi
     [-,%rsi]             v519 = ushr_imm v2, 62   ; bin: 48 c1 ee 3e
-    ; asm: shrl $63, %r8
+    ; asm: shrq $63, %r8
     [-,%r8]              v520 = ushr_imm v4, 63   ; bin: 49 c1 e8 3f
 
 
@@ -1040,7 +1062,7 @@ ebb0:
     ; asm: setl %bl
     [-,%rbx]            v320 = icmp_imm slt v1, 37  ; bin: 83 f9 25 0f 9c c3
 
-    ; asm: cmpq $100000, %ecx
+    ; asm: cmpl $100000, %ecx
     ; asm: setl %bl
     [-,%rbx]            v321 = icmp_imm slt v1, 100000 ; bin: 81 f9 000186a0 0f 9c c3
 
