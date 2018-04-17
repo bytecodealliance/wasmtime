@@ -10,12 +10,12 @@ machine code.
     :target: https://cretonne.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
 
-.. image:: https://travis-ci.org/Cretonne/cretonne.svg?branch=master
-    :target: https://travis-ci.org/Cretonne/cretonne
+.. image:: https://travis-ci.org/cretonne/cretonne.svg?branch=master
+    :target: https://travis-ci.org/cretonne/cretonne
     :alt: Build Status
 
-.. image:: https://badges.gitter.im/Cretonne/cretonne.png
-    :target: https://gitter.im/Cretonne/Lobby/~chat
+.. image:: https://badges.gitter.im/cretonne/cretonne.png
+    :target: https://gitter.im/cretonne/Lobby/~chat
     :alt: Gitter chat
 
 For more information, see `the documentation
@@ -37,7 +37,7 @@ produced by Cretonne is not yet impressive, though we have plans to fix that.
 
 The core codegen crates have minimal dependencies, and do not require any host
 floating-point support. Support for `no_std` mode in the core codegen crates is
-`in development <https://github.com/Cretonne/cretonne/tree/no_std>`_.
+`in development <https://github.com/cretonne/cretonne/tree/no_std>`_.
 
 Cretonne does not yet perform mitigations for Spectre or related security
 issues, though it may do so in the future. It does not currently make any

@@ -3,7 +3,7 @@ name = "cretonne-native"
 version = "0.4.4"
 authors = ["The Cretonne Project Developers"]
 description = "Support for targeting the host with Cretonne"
-repository = "https://github.com/Cretonne/cretonne"
+repository = "https://github.com/cretonne/cretonne"
 license = "Apache-2.0"
 readme = "README.md"
 
@@ -15,4 +15,4 @@ raw-cpuid = "3.0.0"
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "Cretonne/cretonne" }
+travis-ci = { repository = "cretonne/cretonne" }

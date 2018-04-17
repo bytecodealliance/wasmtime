@@ -5,7 +5,7 @@ version = "0.4.4"
 description = "Test driver and implementations of the filetest commands"
 license = "Apache-2.0"
 documentation = "http://cretonne.readthedocs.io/en/latest/testing.html#file-tests"
-repository = "https://github.com/Cretonne/cretonne"
+repository = "https://github.com/cretonne/cretonne"
 publish = false
 
 [dependencies]

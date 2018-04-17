@@ -3,7 +3,7 @@ name = "cretonne-wasm"
 version = "0.4.4"
 authors = ["The Cretonne Project Developers"]
 description = "Translator from WebAssembly to Cretonne IR"
-repository = "https://github.com/Cretonne/cretonne"
+repository = "https://github.com/cretonne/cretonne"
 license = "Apache-2.0"
 readme = "README.md"
 keywords = ["webassembly", "wasm"]
@@ -18,4 +18,4 @@ tempdir = "0.3.5"
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "Cretonne/cretonne" }
+travis-ci = { repository = "cretonne/cretonne" }
