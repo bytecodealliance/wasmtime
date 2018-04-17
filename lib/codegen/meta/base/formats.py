@@ -53,7 +53,7 @@ BranchIcmp = InstructionFormat(intcc, VALUE, VALUE, ebb, VARIABLE_ARGS)
 BranchTable = InstructionFormat(VALUE, entities.jump_table)
 
 Call = InstructionFormat(func_ref, VARIABLE_ARGS)
-IndirectCall = InstructionFormat(sig_ref, VALUE, VARIABLE_ARGS)
+CallIndirect = InstructionFormat(sig_ref, VALUE, VARIABLE_ARGS)
 FuncAddr = InstructionFormat(func_ref)
 
 Load = InstructionFormat(memflags, VALUE, offset32)

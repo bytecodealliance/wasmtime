@@ -319,7 +319,7 @@ impl<'a> Verifier<'a> {
                 self.verify_func_ref(inst, func_ref)?;
                 self.verify_value_list(inst, args)?;
             }
-            IndirectCall { sig_ref, ref args, .. } => {
+            CallIndirect { sig_ref, ref args, .. } => {
                 self.verify_sig_ref(inst, sig_ref)?;
                 self.verify_value_list(inst, args)?;
             }

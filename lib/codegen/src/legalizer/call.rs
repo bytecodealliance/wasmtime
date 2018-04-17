@@ -51,7 +51,7 @@ pub fn expand_call(
         );
     }
 
-    func.dfg.replace(inst).IndirectCall(
+    func.dfg.replace(inst).CallIndirect(
         ir::Opcode::CallIndirect,
         ptr_ty,
         sig,
