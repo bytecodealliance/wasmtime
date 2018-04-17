@@ -1,6 +1,6 @@
 //! Defines `SimpleJITBackend`.
 
-use cretonne_codegen::binemit::{Addend, CodeOffset, Reloc, RelocSink, TrapSink};
+use cretonne_codegen::binemit::{Addend, CodeOffset, Reloc, RelocSink, NullTrapSink};
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::result::CtonError;
 use cretonne_codegen::{self, ir, settings};
@@ -100,7 +100,9 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             "TODO: handle OOM etc.",
         );
         let mut reloc_sink = SimpleJITRelocSink::new();
-        let mut trap_sink = SimpleJITTrapSink {};
+        // Ignore traps for now. For now, frontends should just avoid generating code
+        // that traps.
+        let mut trap_sink = NullTrapSink {};
         ctx.emit_to_memory(ptr, &mut reloc_sink, &mut trap_sink, &*self.isa);
 
         Ok(Self::CompiledFunction {
@@ -355,11 +357,4 @@ impl RelocSink for SimpleJITRelocSink {
     fn reloc_jt(&mut self, _offset: CodeOffset, _reloc: Reloc, _jt: ir::JumpTable) {
         unimplemented!();
     }
-}
-
-struct SimpleJITTrapSink {}
-
-impl TrapSink for SimpleJITTrapSink {
-    // Ignore traps for now. For now, frontends should just avoid generating code that traps.
-    fn trap(&mut self, _offset: CodeOffset, _srcloc: ir::SourceLoc, _code: ir::TrapCode) {}
 }

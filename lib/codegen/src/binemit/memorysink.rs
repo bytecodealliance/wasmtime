@@ -123,3 +123,11 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         self.traps.trap(ofs, srcloc, code);
     }
 }
+
+/// A `TrapSink` implementation that does nothing, which is convenient when
+/// compiling code that does not rely on trapping semantics.
+pub struct NullTrapSink {}
+
+impl TrapSink for NullTrapSink {
+    fn trap(&mut self, _offset: CodeOffset, _srcloc: SourceLoc, _code: TrapCode) {}
+}

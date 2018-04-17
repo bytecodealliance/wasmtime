@@ -6,7 +6,7 @@
 mod memorysink;
 mod relaxation;
 
-pub use self::memorysink::{MemoryCodeSink, RelocSink, TrapSink};
+pub use self::memorysink::{MemoryCodeSink, RelocSink, TrapSink, NullTrapSink};
 pub use self::relaxation::relax_branches;
 pub use regalloc::RegDiversions;
 
