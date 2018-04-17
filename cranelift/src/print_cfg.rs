@@ -5,7 +5,7 @@
 
 use CommandResult;
 use cretonne::cfg_printer::CFGPrinter;
-use cton_reader::parse_functions;
+use cretonne_reader::parse_functions;
 use utils::read_to_string;
 
 pub fn run(files: &[String]) -> CommandResult {

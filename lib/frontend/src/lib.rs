@@ -33,13 +33,13 @@
 //!
 //! ```rust
 //! extern crate cretonne;
-//! extern crate cton_frontend;
+//! extern crate cretonne_frontend;
 //!
 //! use cretonne::entity::EntityRef;
 //! use cretonne::ir::{ExternalName, CallConv, Function, Signature, AbiParam, InstBuilder};
 //! use cretonne::ir::types::*;
 //! use cretonne::settings;
-//! use cton_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
+//! use cretonne_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
 //! use cretonne::verifier::verify_function;
 //!
 //! fn main() {

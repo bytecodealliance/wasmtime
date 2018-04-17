@@ -4,7 +4,7 @@ use cretonne::Context;
 use cretonne::print_errors::pretty_error;
 use cretonne::settings::FlagsOrIsa;
 use cretonne::{binemit, ir};
-use cton_reader::parse_test;
+use cretonne_reader::parse_test;
 use std::path::Path;
 use std::path::PathBuf;
 use utils::{parse_sets_and_isa, read_to_string};

@@ -9,7 +9,7 @@ use cretonne::dbg::DisplayList;
 use cretonne::ir;
 use cretonne::ir::entities::AnyEntity;
 use cretonne::print_errors::pretty_error;
-use cton_reader::TestCommand;
+use cretonne_reader::TestCommand;
 use match_directive::match_directive;
 use std::borrow::Cow;
 use std::collections::HashMap;

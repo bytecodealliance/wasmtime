@@ -1,7 +1,7 @@
 extern crate cretonne;
-extern crate cton_filetests;
-extern crate cton_reader;
-extern crate cton_wasm;
+extern crate cretonne_filetests;
+extern crate cretonne_reader;
+extern crate cretonne_wasm;
 extern crate docopt;
 extern crate filecheck;
 #[macro_use]
@@ -86,7 +86,7 @@ fn cton_util() -> CommandResult {
 
     // Find the sub-command to execute.
     let result = if args.cmd_test {
-        cton_filetests::run(args.flag_verbose, &args.arg_file).map(|_time| ())
+        cretonne_filetests::run(args.flag_verbose, &args.arg_file).map(|_time| ())
     } else if args.cmd_cat {
         cat::run(&args.arg_file)
     } else if args.cmd_filecheck {
