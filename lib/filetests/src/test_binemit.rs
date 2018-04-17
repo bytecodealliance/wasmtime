@@ -3,13 +3,13 @@
 //! The `binemit` test command generates binary machine code for every instruction in the input
 //! functions and compares the results to the expected output.
 
-use cretonne::binemit;
-use cretonne::binemit::RegDiversions;
-use cretonne::dbg::DisplayList;
-use cretonne::ir;
-use cretonne::ir::entities::AnyEntity;
-use cretonne::print_errors::pretty_error;
-use cton_reader::TestCommand;
+use cretonne_codegen::binemit;
+use cretonne_codegen::binemit::RegDiversions;
+use cretonne_codegen::dbg::DisplayList;
+use cretonne_codegen::ir;
+use cretonne_codegen::ir::entities::AnyEntity;
+use cretonne_codegen::print_errors::pretty_error;
+use cretonne_reader::TestCommand;
 use match_directive::match_directive;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -133,7 +133,7 @@ impl SubTest for TestBinEmit {
                     // constraints.
                     if let Some(enc) = {
                         let mut legal_encodings = isa.legal_encodings(
-                            &func.dfg,
+                            &func,
                             &func.dfg[inst],
                             func.dfg.ctrl_typevar(inst),
                         ).filter(|e| {
@@ -251,7 +251,7 @@ impl SubTest for TestBinEmit {
 
                         // Do any encodings exist?
                         let encodings = isa.legal_encodings(
-                            &func.dfg,
+                            &func,
                             &func.dfg[inst],
                             func.dfg.ctrl_typevar(inst),
                         ).map(|e| encinfo.display(e))

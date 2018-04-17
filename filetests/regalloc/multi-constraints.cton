@@ -1,10 +1,10 @@
 test regalloc
 set is_64bit
-isa intel haswell
+isa x86 haswell
 
 ; Test combinations of constraints.
 ;
-; The Intel ushr instruction requires its second operand to be passed in %rcx and its output is
+; The x86 ushr instruction requires its second operand to be passed in %rcx and its output is
 ; tied to the first input operand.
 ;
 ; If we pass the same value to both operands, both constraints must be satisfied.

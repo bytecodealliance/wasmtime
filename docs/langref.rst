@@ -48,8 +48,7 @@ A ``.cton`` file consists of a sequence of independent function definitions:
 
 .. productionlist::
     function_list : { function }
-    function      : function_spec "{" preamble function_body "}"
-    function_spec : "function" function_name signature
+    function      : "function" function_name signature "{" preamble function_body "}"
     preamble      : { preamble_decl }
     function_body : { extended_basic_block }
 
@@ -75,7 +74,7 @@ SSA values: In the entry block, ``v4`` is the initial value. In the loop block
 variable during each iteration. Finally, ``v12`` is computed as the induction
 variable value for the next iteration.
 
-The `cton_frontend` crate contains utilities for translating from programs
+The `cretonne_frontend` crate contains utilities for translating from programs
 containing multiple assignments to the same variables into SSA form for
 Cretonne :term:`IR`.
 
@@ -409,9 +408,13 @@ compilers.
 Functions that are called directly must be declared in the :term:`function
 preamble`:
 
-.. inst:: FN = function NAME signature
+.. inst:: FN = [colocated] NAME signature
 
     Declare a function so it can be called directly.
+
+    If the colocated keyword is present, the symbol's definition will be
+    defined along with the current function, such that it can use more
+    efficient addressing.
 
     :arg NAME: Name of the function, passed to the linker for resolution.
     :arg signature: Function signature. See below.
@@ -570,12 +573,16 @@ runtime data structures.
                  variable.
     :result GV: Global variable.
 
-.. inst:: GV = globalsym name
+.. inst:: GV = [colocated] globalsym name
 
     Declare a global variable at a symbolic address.
 
     The address of GV is symbolic and will be assigned a relocation, so that
     it can be resolved by a later linking phase.
+
+    If the colocated keyword is present, the symbol's definition will be
+    defined along with the current function, such that it can use more
+    efficient addressing.
 
     :arg name: External name.
     :result GV: Global variable.
@@ -998,20 +1005,20 @@ ISA-specific instructions
 Target ISAs can define supplemental instructions that do not make sense to
 support generally.
 
-Intel
+x86
 -----
 
-Instructions that can only be used by the Intel target ISA.
+Instructions that can only be used by the x86 target ISA.
 
-.. autoinst:: isa.intel.instructions.sdivmodx
-.. autoinst:: isa.intel.instructions.udivmodx
-.. autoinst:: isa.intel.instructions.cvtt2si
-.. autoinst:: isa.intel.instructions.fmin
-.. autoinst:: isa.intel.instructions.fmax
-.. autoinst:: isa.intel.instructions.bsf
-.. autoinst:: isa.intel.instructions.bsr
-.. autoinst:: isa.intel.instructions.push
-.. autoinst:: isa.intel.instructions.pop
+.. autoinst:: isa.x86.instructions.sdivmodx
+.. autoinst:: isa.x86.instructions.udivmodx
+.. autoinst:: isa.x86.instructions.cvtt2si
+.. autoinst:: isa.x86.instructions.fmin
+.. autoinst:: isa.x86.instructions.fmax
+.. autoinst:: isa.x86.instructions.bsf
+.. autoinst:: isa.x86.instructions.bsr
+.. autoinst:: isa.x86.instructions.push
+.. autoinst:: isa.x86.instructions.pop
 
 Instruction groups
 ==================
@@ -1023,7 +1030,7 @@ group.
 
 Target ISAs may define further instructions in their own instruction groups:
 
-.. autoinstgroup:: isa.intel.instructions.GROUP
+.. autoinstgroup:: isa.x86.instructions.GROUP
 
 Implementation limits
 =====================

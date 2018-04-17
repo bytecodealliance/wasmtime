@@ -32,15 +32,15 @@
 //! Here is how you build the corresponding Cretonne IR function using `FunctionBuilderContext`:
 //!
 //! ```rust
-//! extern crate cretonne;
-//! extern crate cton_frontend;
+//! extern crate cretonne_codegen;
+//! extern crate cretonne_frontend;
 //!
-//! use cretonne::entity::EntityRef;
-//! use cretonne::ir::{ExternalName, CallConv, Function, Signature, AbiParam, InstBuilder};
-//! use cretonne::ir::types::*;
-//! use cretonne::settings;
-//! use cton_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
-//! use cretonne::verifier::verify_function;
+//! use cretonne_codegen::entity::EntityRef;
+//! use cretonne_codegen::ir::{ExternalName, CallConv, Function, Signature, AbiParam, InstBuilder};
+//! use cretonne_codegen::ir::types::*;
+//! use cretonne_codegen::settings;
+//! use cretonne_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
+//! use cretonne_codegen::verifier::verify_function;
 //!
 //! fn main() {
 //!     let mut sig = Signature::new(CallConv::SystemV);
@@ -129,11 +129,10 @@
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![cfg_attr(feature = "cargo-clippy", allow(new_without_default, redundant_field_names))]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate cretonne;
+extern crate cretonne_codegen;
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;

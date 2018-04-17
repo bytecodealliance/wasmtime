@@ -3,7 +3,7 @@
 //! This module provides the `ConcurrentRunner` struct which uses a pool of threads to run tests
 //! concurrently.
 
-use cretonne::timing;
+use cretonne_codegen::timing;
 use num_cpus;
 use std::panic::catch_unwind;
 use std::path::{Path, PathBuf};

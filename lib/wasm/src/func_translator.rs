@@ -5,11 +5,11 @@
 //! WebAssembly module and the runtime environment.
 
 use code_translator::translate_operator;
-use cretonne::entity::EntityRef;
-use cretonne::ir::{self, Ebb, InstBuilder};
-use cretonne::result::{CtonError, CtonResult};
-use cretonne::timing;
-use cton_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
+use cretonne_codegen::entity::EntityRef;
+use cretonne_codegen::ir::{self, Ebb, InstBuilder};
+use cretonne_codegen::result::{CtonError, CtonResult};
+use cretonne_codegen::timing;
+use cretonne_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use environ::FuncEnvironment;
 use state::TranslationState;
 use wasmparser::{self, BinaryReader};
@@ -233,8 +233,8 @@ fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
 #[cfg(test)]
 mod tests {
     use super::FuncTranslator;
-    use cretonne::ir::types::I32;
-    use cretonne::{ir, Context};
+    use cretonne_codegen::ir::types::I32;
+    use cretonne_codegen::{ir, Context};
     use environ::{DummyEnvironment, FuncEnvironment};
 
     #[test]

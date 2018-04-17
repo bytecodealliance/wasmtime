@@ -1,19 +1,16 @@
 [package]
 authors = ["The Cretonne Project Developers"]
 name = "cretonne-reader"
-version = "0.4.1"
+version = "0.5.0"
 description = "Cretonne textual IR reader"
 license = "Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/"
-repository = "https://github.com/Cretonne/cretonne"
+repository = "https://github.com/cretonne/cretonne"
 readme = "README.md"
 
-[lib]
-name = "cton_reader"
-
 [dependencies]
-cretonne = { path = "../cretonne", version = "0.4.1" }
+cretonne-codegen = { path = "../codegen", version = "0.5.0" }
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "Cretonne/cretonne" }
+travis-ci = { repository = "cretonne/cretonne" }

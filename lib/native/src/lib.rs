@@ -2,16 +2,14 @@
 //! Cretonne to generate code to run on the same machine.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate cretonne;
-
+extern crate cretonne_codegen;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 extern crate raw_cpuid;
 
-use cretonne::isa;
-use cretonne::settings::{self, Configurable};
+use cretonne_codegen::isa;
+use cretonne_codegen::settings::{self, Configurable};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use raw_cpuid::CpuId;
@@ -29,7 +27,7 @@ pub fn builders() -> Result<(settings::Builder, isa::Builder), &'static str> {
     }
 
     let name = if cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
-        "intel"
+        "x86"
     } else if cfg!(target_arch = "arm") {
         "arm32"
     } else if cfg!(target_arch = "aarch64") {

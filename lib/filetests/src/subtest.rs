@@ -1,9 +1,9 @@
 //! `SubTest` trait.
 
-use cretonne::ir::Function;
-use cretonne::isa::TargetIsa;
-use cretonne::settings::{Flags, FlagsOrIsa};
-use cton_reader::{Comment, Details};
+use cretonne_codegen::ir::Function;
+use cretonne_codegen::isa::TargetIsa;
+use cretonne_codegen::settings::{Flags, FlagsOrIsa};
+use cretonne_reader::{Comment, Details};
 use filecheck::{Checker, CheckerBuilder, NO_VARIABLES};
 use std::borrow::Cow;
 use std::result;
