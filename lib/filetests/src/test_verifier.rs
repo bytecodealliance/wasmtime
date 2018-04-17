@@ -11,7 +11,7 @@
 
 use cretonne::ir::Function;
 use cretonne::verify_function;
-use cton_reader::TestCommand;
+use cretonne_reader::TestCommand;
 use match_directive::match_directive;
 use std::borrow::{Borrow, Cow};
 use subtest::{Context, Result, SubTest};

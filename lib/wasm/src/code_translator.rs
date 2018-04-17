@@ -26,7 +26,7 @@ use cretonne::ir::condcodes::{FloatCC, IntCC};
 use cretonne::ir::types::*;
 use cretonne::ir::{self, InstBuilder, JumpTableData, MemFlags};
 use cretonne::packed_option::ReservedValue;
-use cton_frontend::{FunctionBuilder, Variable};
+use cretonne_frontend::{FunctionBuilder, Variable};
 use environ::{FuncEnvironment, GlobalValue};
 use state::{ControlStackFrame, TranslationState};
 use std::collections::{hash_map, HashMap};

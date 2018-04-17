@@ -16,7 +16,7 @@ use cretonne::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use cretonne::flowgraph::ControlFlowGraph;
 use cretonne::ir::Function;
 use cretonne::ir::entities::AnyEntity;
-use cton_reader::TestCommand;
+use cretonne_reader::TestCommand;
 use match_directive::match_directive;
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;

@@ -39,7 +39,7 @@ pub use write::write_function;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[macro_use]
-pub extern crate cton_entity as entity;
+pub extern crate cretonne_entity as entity;
 
 #[macro_use]
 pub mod dbg;

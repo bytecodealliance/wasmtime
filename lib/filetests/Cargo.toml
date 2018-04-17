@@ -8,9 +8,6 @@ documentation = "http://cretonne.readthedocs.io/en/latest/testing.html#file-test
 repository = "https://github.com/Cretonne/cretonne"
 publish = false
 
-[lib]
-name = "cton_filetests"
-
 [dependencies]
 cretonne = { path = "../cretonne", version = "0.4.4" }
 cretonne-reader = { path = "../reader", version = "0.4.4" }

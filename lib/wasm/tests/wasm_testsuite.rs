@@ -1,11 +1,11 @@
 extern crate cretonne;
-extern crate cton_wasm;
+extern crate cretonne_wasm;
 extern crate tempdir;
 
 use cretonne::print_errors::pretty_verifier_error;
 use cretonne::settings::{self, Configurable, Flags};
 use cretonne::verifier;
-use cton_wasm::{translate_module, DummyEnvironment};
+use cretonne_wasm::{translate_module, DummyEnvironment};
 use std::error::Error;
 use std::fs;
 use std::fs::File;

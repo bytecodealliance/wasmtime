@@ -3,7 +3,7 @@
 use cretonne::ir::Function;
 use cretonne::isa::TargetIsa;
 use cretonne::settings::{Flags, FlagsOrIsa};
-use cton_reader::{Comment, Details};
+use cretonne_reader::{Comment, Details};
 use filecheck::{Checker, CheckerBuilder, NO_VARIABLES};
 use std::borrow::Cow;
 use std::result;

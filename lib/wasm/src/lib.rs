@@ -15,7 +15,7 @@
 
 #[macro_use(dbg)]
 extern crate cretonne;
-extern crate cton_frontend;
+extern crate cretonne_frontend;
 extern crate wasmparser;
 
 mod code_translator;

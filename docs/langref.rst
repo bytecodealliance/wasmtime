@@ -74,7 +74,7 @@ SSA values: In the entry block, ``v4`` is the initial value. In the loop block
 variable during each iteration. Finally, ``v12`` is computed as the induction
 variable value for the next iteration.
 
-The `cton_frontend` crate contains utilities for translating from programs
+The `cretonne_frontend` crate contains utilities for translating from programs
 containing multiple assignments to the same variables into SSA form for
 Cretonne :term:`IR`.
 

@@ -9,9 +9,6 @@ repository = "https://github.com/Cretonne/cretonne"
 readme = "README.md"
 keywords = ["entity", "set", "map"]
 
-[lib]
-name = "cton_entity"
-
 [features]
 default = ["std"]
 std = []
