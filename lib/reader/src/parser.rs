@@ -1,18 +1,19 @@
 //! Parser for .cton files.
 
-use cretonne::entity::EntityRef;
-use cretonne::ir;
-use cretonne::ir::entities::AnyEntity;
-use cretonne::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
-use cretonne::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
-use cretonne::ir::types::VOID;
-use cretonne::ir::{AbiParam, ArgumentExtension, ArgumentLoc, CallConv, Ebb, ExtFuncData,
-                   ExternalName, FuncRef, Function, GlobalVar, GlobalVarData, Heap, HeapBase,
-                   HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags, Opcode, SigRef,
-                   Signature, StackSlot, StackSlotData, StackSlotKind, Type, Value, ValueLoc};
-use cretonne::isa::{self, Encoding, RegUnit, TargetIsa};
-use cretonne::packed_option::ReservedValue;
-use cretonne::{settings, timing};
+use cretonne_codegen::entity::EntityRef;
+use cretonne_codegen::ir;
+use cretonne_codegen::ir::entities::AnyEntity;
+use cretonne_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
+use cretonne_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
+use cretonne_codegen::ir::types::VOID;
+use cretonne_codegen::ir::{AbiParam, ArgumentExtension, ArgumentLoc, CallConv, Ebb, ExtFuncData,
+                           ExternalName, FuncRef, Function, GlobalVar, GlobalVarData, Heap,
+                           HeapBase, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
+                           Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind,
+                           Type, Value, ValueLoc};
+use cretonne_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
+use cretonne_codegen::packed_option::ReservedValue;
+use cretonne_codegen::{settings, timing};
 use error::{Error, Location, Result};
 use isaspec;
 use lexer::{self, Lexer, Token};
@@ -2398,10 +2399,10 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne::ir::StackSlotKind;
-    use cretonne::ir::entities::AnyEntity;
-    use cretonne::ir::types;
-    use cretonne::ir::{ArgumentExtension, ArgumentPurpose, CallConv};
+    use cretonne_codegen::ir::StackSlotKind;
+    use cretonne_codegen::ir::entities::AnyEntity;
+    use cretonne_codegen::ir::types;
+    use cretonne_codegen::ir::{ArgumentExtension, ArgumentPurpose, CallConv};
     use error::Error;
     use isaspec::IsaSpec;
     use testfile::{Comment, Details};

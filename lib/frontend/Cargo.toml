@@ -9,7 +9,7 @@ repository = "https://github.com/Cretonne/cretonne"
 readme = "README.md"
 
 [dependencies]
-cretonne = { path = "../cretonne", version = "0.4.4" }
+cretonne-codegen = { path = "../codegen", version = "0.4.4" }
 
 [badges]
 maintenance = { status = "experimental" }

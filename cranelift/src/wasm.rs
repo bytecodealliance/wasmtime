@@ -4,9 +4,9 @@
 //! Reads Wasm binary files, translates the functions' code to Cretonne IR.
 #![cfg_attr(feature = "cargo-clippy", allow(too_many_arguments, cyclomatic_complexity))]
 
-use cretonne::Context;
-use cretonne::print_errors::{pretty_error, pretty_verifier_error};
-use cretonne::settings::FlagsOrIsa;
+use cretonne_codegen::Context;
+use cretonne_codegen::print_errors::{pretty_error, pretty_verifier_error};
+use cretonne_codegen::settings::FlagsOrIsa;
 use cretonne_wasm::{translate_module, DummyEnvironment, ModuleEnvironment};
 use std::error::Error;
 use std::fs::File;

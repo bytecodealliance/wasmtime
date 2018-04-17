@@ -22,10 +22,10 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
-use cretonne::ir::condcodes::{FloatCC, IntCC};
-use cretonne::ir::types::*;
-use cretonne::ir::{self, InstBuilder, JumpTableData, MemFlags};
-use cretonne::packed_option::ReservedValue;
+use cretonne_codegen::ir::condcodes::{FloatCC, IntCC};
+use cretonne_codegen::ir::types::*;
+use cretonne_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
+use cretonne_codegen::packed_option::ReservedValue;
 use cretonne_frontend::{FunctionBuilder, Variable};
 use environ::{FuncEnvironment, GlobalValue};
 use state::{ControlStackFrame, TranslationState};

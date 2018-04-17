@@ -31,13 +31,13 @@ fi
 # Check if any Python files have changed since we last checked them.
 tsfile=$topdir/target/meta-checked
 if [ -f $tsfile ]; then
-    needcheck=$(find $topdir/lib/cretonne/meta -name '*.py' -newer $tsfile)
+    needcheck=$(find $topdir/lib/codegen/meta -name '*.py' -newer $tsfile)
 else
     needcheck=yes
 fi
 if [ -n "$needcheck" ]; then
     banner "$(python --version 2>&1), $(python3 --version 2>&1)"
-    $topdir/lib/cretonne/meta/check.sh
+    $topdir/lib/codegen/meta/check.sh
     touch $tsfile || echo no target directory
 fi
 

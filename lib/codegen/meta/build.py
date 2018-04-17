@@ -1,6 +1,6 @@
 # Second-level build script.
 #
-# This script is run from lib/cretonne/build.rs to generate Rust files.
+# This script is run from lib/codegen/build.rs to generate Rust files.
 
 from __future__ import absolute_import
 import argparse

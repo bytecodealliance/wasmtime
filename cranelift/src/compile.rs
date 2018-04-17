@@ -1,9 +1,9 @@
 //! CLI tool to read Cretonne IR files and compile them into native code.
 
-use cretonne::Context;
-use cretonne::print_errors::pretty_error;
-use cretonne::settings::FlagsOrIsa;
-use cretonne::{binemit, ir};
+use cretonne_codegen::Context;
+use cretonne_codegen::print_errors::pretty_error;
+use cretonne_codegen::settings::FlagsOrIsa;
+use cretonne_codegen::{binemit, ir};
 use cretonne_reader::parse_test;
 use std::path::Path;
 use std::path::PathBuf;

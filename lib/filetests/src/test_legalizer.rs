@@ -3,9 +3,9 @@
 //! The `test legalizer` test command runs each function through `legalize_function()` and sends
 //! the result to filecheck.
 
-use cretonne;
-use cretonne::ir::Function;
-use cretonne::print_errors::pretty_error;
+use cretonne_codegen;
+use cretonne_codegen::ir::Function;
+use cretonne_codegen::print_errors::pretty_error;
 use cretonne_reader::TestCommand;
 use std::borrow::Cow;
 use std::fmt::Write;
@@ -36,7 +36,7 @@ impl SubTest for TestLegalizer {
     }
 
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
-        let mut comp_ctx = cretonne::Context::new();
+        let mut comp_ctx = cretonne_codegen::Context::new();
         comp_ctx.func = func.into_owned();
         let isa = context.isa.expect("legalizer needs an ISA");
 

@@ -10,7 +10,7 @@ keywords = ["webassembly", "wasm"]
 
 [dependencies]
 wasmparser = "0.15.1"
-cretonne = { path = "../cretonne", version = "0.4.4" }
+cretonne-codegen = { path = "../codegen", version = "0.4.4" }
 cretonne-frontend = { path = "../frontend", version = "0.4.4" }
 
 [dev-dependencies]

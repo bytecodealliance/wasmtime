@@ -1,7 +1,7 @@
 //! Lexical analysis for .cton files.
 
-use cretonne::ir::types;
-use cretonne::ir::{Ebb, Value};
+use cretonne_codegen::ir::types;
+use cretonne_codegen::ir::{Ebb, Value};
 use error::Location;
 #[allow(unused_imports)]
 use std::ascii::AsciiExt;
@@ -457,8 +457,8 @@ impl<'a> Lexer<'a> {
 mod tests {
     use super::trailing_digits;
     use super::*;
-    use cretonne::ir::types;
-    use cretonne::ir::{Ebb, Value};
+    use cretonne_codegen::ir::types;
+    use cretonne_codegen::ir::{Ebb, Value};
     use error::Location;
 
     #[test]
