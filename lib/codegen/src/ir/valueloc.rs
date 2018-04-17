@@ -95,7 +95,7 @@ impl<'a> fmt::Display for DisplayValueLoc<'a> {
 ///   outgoing arguments.
 /// - For register arguments, there is usually no difference, but if we ever add support for a
 ///   register-window ISA like SPARC, register arguments would also need to be translated.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum ArgumentLoc {
     /// This argument has not been assigned to a location yet.
     Unassigned,
