@@ -1100,7 +1100,7 @@ impl<'a> Parser<'a> {
         let data = match self.match_any_identifier("expected global variable kind")? {
             "vmctx" => {
                 let offset = self.optional_offset32()?;
-                GlobalVarData::VmCtx { offset }
+                GlobalVarData::VMContext { offset }
             }
             "deref" => {
                 self.match_token(
