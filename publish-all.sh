@@ -27,7 +27,7 @@ cargo update
 
 echo git commit -a -m "\"Bump version to $version"\"
 echo git push
-for crate in entity cretonne frontend native reader wasm ; do
+for crate in entity codegen frontend native reader wasm ; do
     echo cargo publish --manifest-path "lib/$crate/Cargo.toml"
 done
 echo

@@ -1,6 +1,6 @@
 [package]
 authors = ["The Cretonne Project Developers"]
-name = "cretonne"
+name = "cretonne-codegen"
 version = "0.4.4"
 description = "Low-level code generator library"
 license = "Apache-2.0"
@@ -12,7 +12,7 @@ build = "build.rs"
 
 [dependencies]
 cretonne-entity = { path = "../entity", version = "0.4.4" }
-# It is a goal of the cretonne crate to have minimal external dependencies.
+# It is a goal of the cretonne-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
 # accomodated in `tests`.

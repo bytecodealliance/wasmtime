@@ -14,7 +14,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(new_without_default, redundant_field_names))]
 
 #[macro_use(dbg)]
-extern crate cretonne;
+extern crate cretonne_codegen;
 extern crate cretonne_frontend;
 extern crate wasmparser;
 

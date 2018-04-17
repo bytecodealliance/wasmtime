@@ -1,5 +1,5 @@
 //! Helper functions and structures for the translation.
-use cretonne;
+use cretonne_codegen::ir;
 use std::u32;
 use wasmparser;
 
@@ -18,7 +18,7 @@ pub type SignatureIndex = usize;
 #[derive(Debug, Clone, Copy)]
 pub struct Global {
     /// The type of the value stored in the global.
-    pub ty: cretonne::ir::Type,
+    pub ty: ir::Type,
     /// A flag indicating whether the value may change at runtime.
     pub mutability: bool,
     /// The source of the initial value.
@@ -56,7 +56,7 @@ pub struct Table {
 /// WebAssembly table element. Can be a function or a scalar type.
 #[derive(Debug, Clone, Copy)]
 pub enum TableElementType {
-    Val(cretonne::ir::Type),
+    Val(ir::Type),
     Func(),
 }
 
@@ -72,24 +72,24 @@ pub struct Memory {
 }
 
 /// Helper function translating wasmparser types to Cretonne types when possible.
-pub fn type_to_type(ty: &wasmparser::Type) -> Result<cretonne::ir::Type, ()> {
+pub fn type_to_type(ty: &wasmparser::Type) -> Result<ir::Type, ()> {
     match *ty {
-        wasmparser::Type::I32 => Ok(cretonne::ir::types::I32),
-        wasmparser::Type::I64 => Ok(cretonne::ir::types::I64),
-        wasmparser::Type::F32 => Ok(cretonne::ir::types::F32),
-        wasmparser::Type::F64 => Ok(cretonne::ir::types::F64),
+        wasmparser::Type::I32 => Ok(ir::types::I32),
+        wasmparser::Type::I64 => Ok(ir::types::I64),
+        wasmparser::Type::F32 => Ok(ir::types::F32),
+        wasmparser::Type::F64 => Ok(ir::types::F64),
         _ => Err(()),
     }
 }
 
 /// Turns a `wasmparser` `f32` into a `Cretonne` one.
-pub fn f32_translation(x: wasmparser::Ieee32) -> cretonne::ir::immediates::Ieee32 {
-    cretonne::ir::immediates::Ieee32::with_bits(x.bits())
+pub fn f32_translation(x: wasmparser::Ieee32) -> ir::immediates::Ieee32 {
+    ir::immediates::Ieee32::with_bits(x.bits())
 }
 
 /// Turns a `wasmparser` `f64` into a `Cretonne` one.
-pub fn f64_translation(x: wasmparser::Ieee64) -> cretonne::ir::immediates::Ieee64 {
-    cretonne::ir::immediates::Ieee64::with_bits(x.bits())
+pub fn f64_translation(x: wasmparser::Ieee64) -> ir::immediates::Ieee64 {
+    ir::immediates::Ieee64::with_bits(x.bits())
 }
 
 /// Translate a `wasmparser` type into its `Cretonne` equivalent, when possible

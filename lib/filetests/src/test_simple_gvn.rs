@@ -5,9 +5,9 @@
 //!
 //! The resulting function is sent to `filecheck`.
 
-use cretonne;
-use cretonne::ir::Function;
-use cretonne::print_errors::pretty_error;
+use cretonne_codegen;
+use cretonne_codegen::ir::Function;
+use cretonne_codegen::print_errors::pretty_error;
 use cretonne_reader::TestCommand;
 use std::borrow::Cow;
 use std::fmt::Write;
@@ -35,7 +35,7 @@ impl SubTest for TestSimpleGVN {
 
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
         // Create a compilation context, and drop in the function.
-        let mut comp_ctx = cretonne::Context::new();
+        let mut comp_ctx = cretonne_codegen::Context::new();
         comp_ctx.func = func.into_owned();
 
         comp_ctx.flowgraph();

@@ -20,8 +20,8 @@
 //! appropriate for the requested ISA:
 //!
 //! ```
-//! use cretonne::settings::{self, Configurable};
-//! use cretonne::isa;
+//! use cretonne_codegen::settings::{self, Configurable};
+//! use cretonne_codegen::isa;
 //!
 //! let shared_builder = settings::builder();
 //! let shared_flags = settings::Flags::new(&shared_builder);

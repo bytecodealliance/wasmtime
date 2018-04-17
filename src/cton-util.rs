@@ -1,4 +1,4 @@
-extern crate cretonne;
+extern crate cretonne_codegen;
 extern crate cretonne_filetests;
 extern crate cretonne_reader;
 extern crate cretonne_wasm;
@@ -9,7 +9,7 @@ extern crate serde_derive;
 extern crate tempdir;
 extern crate term;
 
-use cretonne::{timing, VERSION};
+use cretonne_codegen::{timing, VERSION};
 use docopt::Docopt;
 use std::io::{self, Write};
 use std::process;

@@ -1,7 +1,7 @@
 // Build script.
 //
-// This program is run by Cargo when building lib/cretonne. It is used to generate Rust code from
-// the language definitions in the lib/cretonne/meta directory.
+// This program is run by Cargo when building lib/codegen. It is used to generate Rust code from
+// the language definitions in the lib/codegen/meta directory.
 //
 // Environment:
 //

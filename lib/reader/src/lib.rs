@@ -5,7 +5,7 @@
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 
-extern crate cretonne;
+extern crate cretonne_codegen;
 
 pub use error::{Error, Location, Result};
 pub use isaspec::{parse_options, IsaSpec};

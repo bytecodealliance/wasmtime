@@ -14,7 +14,7 @@ help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 autohtml: html
-	$(SPHINXABUILD) -z ../lib/cretonne/meta --ignore '.*' -b html -E $(ALLSPHINXOPTS) $(BUILDDIR)/html
+	$(SPHINXABUILD) -z ../lib/codegen/meta --ignore '.*' -b html -E $(ALLSPHINXOPTS) $(BUILDDIR)/html
 
 .PHONY: help Makefile
 

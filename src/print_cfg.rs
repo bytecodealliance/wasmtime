@@ -4,7 +4,7 @@
 //! in graphviz format.
 
 use CommandResult;
-use cretonne::cfg_printer::CFGPrinter;
+use cretonne_codegen::cfg_printer::CFGPrinter;
 use cretonne_reader::parse_functions;
 use utils::read_to_string;
 

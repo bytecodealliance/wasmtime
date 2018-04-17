@@ -35,7 +35,7 @@ pub use legalizer::legalize_function;
 pub use verifier::verify_function;
 pub use write::write_function;
 
-/// Version number of the cretonne crate.
+/// Version number of the cretonne-codegen crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[macro_use]

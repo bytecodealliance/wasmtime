@@ -46,8 +46,8 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb, SourceLoc};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb, SourceLoc};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, srcloc: SourceLoc) {
     ///     let mut pos = FuncCursor::new(func).with_srcloc(srcloc);
     ///
@@ -76,8 +76,8 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb, Inst};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, inst: Inst) {
     ///     let mut pos = FuncCursor::new(func).at_inst(inst);
     ///
@@ -99,8 +99,8 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb, Inst};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, ebb: Ebb) {
     ///     let mut pos = FuncCursor::new(func).at_first_insertion_point(ebb);
     ///
@@ -120,8 +120,8 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb, Inst};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, ebb: Ebb) {
     ///     let mut pos = FuncCursor::new(func).at_first_inst(ebb);
     ///
@@ -141,8 +141,8 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb, Inst};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, ebb: Ebb) {
     ///     let mut pos = FuncCursor::new(func).at_last_inst(ebb);
     ///
@@ -162,8 +162,8 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb, Inst};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, inst: Inst) {
     ///     let mut pos = FuncCursor::new(func).after_inst(inst);
     ///
@@ -183,8 +183,8 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb, Inst};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, ebb: Ebb) {
     ///     let mut pos = FuncCursor::new(func).at_top(ebb);
     ///
@@ -204,8 +204,8 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb, Inst};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb, Inst};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, ebb: Ebb) {
     ///     let mut pos = FuncCursor::new(func).at_bottom(ebb);
     ///
@@ -309,8 +309,8 @@ pub trait Cursor {
     /// The `next_ebb()` method is intended for iterating over the EBBs in layout order:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function) {
     ///     let mut cursor = FuncCursor::new(func);
     ///     while let Some(ebb) = cursor.next_ebb() {
@@ -342,8 +342,8 @@ pub trait Cursor {
     /// The `prev_ebb()` method is intended for iterating over the EBBs in backwards layout order:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function) {
     ///     let mut cursor = FuncCursor::new(func);
     ///     while let Some(ebb) = cursor.prev_ebb() {
@@ -379,8 +379,8 @@ pub trait Cursor {
     /// this:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_ebb(func: &mut Function, ebb: Ebb) {
     ///     let mut cursor = FuncCursor::new(func).at_top(ebb);
     ///     while let Some(inst) = cursor.next_inst() {
@@ -393,8 +393,8 @@ pub trait Cursor {
     /// Iterating over all the instructions in a function looks like this:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function) {
     ///     let mut cursor = FuncCursor::new(func);
     ///     while let Some(ebb) = cursor.next_ebb() {
@@ -447,8 +447,8 @@ pub trait Cursor {
     /// EBB like this:
     ///
     /// ```
-    /// # use cretonne::ir::{Function, Ebb};
-    /// # use cretonne::cursor::{Cursor, FuncCursor};
+    /// # use cretonne_codegen::ir::{Function, Ebb};
+    /// # use cretonne_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_ebb(func: &mut Function, ebb: Ebb) {
     ///     let mut cursor = FuncCursor::new(func).at_bottom(ebb);
     ///     while let Some(inst) = cursor.prev_inst() {

@@ -1,8 +1,8 @@
 //! All the runtime support necessary for the wasm to cretonne translation is formalized by the
 //! traits `FunctionEnvironment` and `ModuleEnvironment`.
-use cretonne::cursor::FuncCursor;
-use cretonne::ir::{self, InstBuilder};
-use cretonne::settings::Flags;
+use cretonne_codegen::cursor::FuncCursor;
+use cretonne_codegen::ir::{self, InstBuilder};
+use cretonne_codegen::settings::Flags;
 use std::string::String;
 use std::vec::Vec;
 use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,

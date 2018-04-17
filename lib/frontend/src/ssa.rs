@@ -5,14 +5,14 @@
 //! In: Jhala R., De Bosschere K. (eds) Compiler Construction. CC 2013.
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
-use cretonne::cursor::{Cursor, FuncCursor};
-use cretonne::entity::{EntityMap, EntityRef, PrimaryMap};
-use cretonne::ir::immediates::{Ieee32, Ieee64};
-use cretonne::ir::instructions::BranchInfo;
-use cretonne::ir::types::{F32, F64};
-use cretonne::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
-use cretonne::packed_option::PackedOption;
-use cretonne::packed_option::ReservedValue;
+use cretonne_codegen::cursor::{Cursor, FuncCursor};
+use cretonne_codegen::entity::{EntityMap, EntityRef, PrimaryMap};
+use cretonne_codegen::ir::immediates::{Ieee32, Ieee64};
+use cretonne_codegen::ir::instructions::BranchInfo;
+use cretonne_codegen::ir::types::{F32, F64};
+use cretonne_codegen::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
+use cretonne_codegen::packed_option::PackedOption;
+use cretonne_codegen::packed_option::ReservedValue;
 use std::mem;
 use std::u32;
 use std::vec::Vec;
@@ -714,13 +714,13 @@ where
 #[cfg(test)]
 mod tests {
     use Variable;
-    use cretonne::cursor::{Cursor, FuncCursor};
-    use cretonne::entity::EntityRef;
-    use cretonne::ir::instructions::BranchInfo;
-    use cretonne::ir::types::*;
-    use cretonne::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
-    use cretonne::settings;
-    use cretonne::verify_function;
+    use cretonne_codegen::cursor::{Cursor, FuncCursor};
+    use cretonne_codegen::entity::EntityRef;
+    use cretonne_codegen::ir::instructions::BranchInfo;
+    use cretonne_codegen::ir::types::*;
+    use cretonne_codegen::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
+    use cretonne_codegen::settings;
+    use cretonne_codegen::verify_function;
     use ssa::SSABuilder;
 
     #[test]
