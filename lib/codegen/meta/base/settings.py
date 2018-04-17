@@ -29,6 +29,9 @@ enable_verifier = BoolSetting(
 
 is_64bit = BoolSetting("Enable 64-bit code generation")
 
+# Note that Cretonne doesn't currently need an is_pie flag, because PIE is just
+# PIC where symbols can't be pre-empted, which can be expressed with the
+# `colocated` flag on external functions and global variables.
 is_pic = BoolSetting("Enable Position-Independent Code generation")
 
 return_at_end = BoolSetting(
