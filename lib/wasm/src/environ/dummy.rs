@@ -151,7 +151,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
         // Just create a dummy `vmctx` global.
         let offset = ((index * 8) as i32 + 8).into();
-        let gv = func.create_global_var(ir::GlobalVarData::VmCtx { offset });
+        let gv = func.create_global_var(ir::GlobalVarData::VMContext { offset });
         GlobalValue::Memory {
             gv,
             ty: self.mod_info.globals[index].entity.ty,
@@ -160,7 +160,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
     fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
         // Create a static heap whose base address is stored at `vmctx+0`.
-        let gv = func.create_global_var(ir::GlobalVarData::VmCtx { offset: 0.into() });
+        let gv = func.create_global_var(ir::GlobalVarData::VMContext { offset: 0.into() });
 
         func.create_heap(ir::HeapData {
             base: ir::HeapBase::GlobalVar(gv),

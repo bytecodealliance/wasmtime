@@ -9,7 +9,7 @@ use std::fmt;
 pub enum GlobalVarData {
     /// Variable is part of the VM context struct, it's address is a constant offset from the VM
     /// context pointer.
-    VmCtx {
+    VMContext {
         /// Offset from the `vmctx` pointer to this global.
         offset: Offset32,
     },
@@ -54,7 +54,7 @@ impl GlobalVarData {
 impl fmt::Display for GlobalVarData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            GlobalVarData::VmCtx { offset } => write!(f, "vmctx{}", offset),
+            GlobalVarData::VMContext { offset } => write!(f, "vmctx{}", offset),
             GlobalVarData::Deref { base, offset } => write!(f, "deref({}){}", base, offset),
             GlobalVarData::Sym {
                 ref name,
