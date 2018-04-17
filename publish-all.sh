@@ -27,7 +27,7 @@ cargo update
 
 echo git commit -a -m "\"Bump version to $version"\"
 echo git push
-for crate in entity codegen frontend native reader wasm umbrella ; do
+for crate in entity codegen frontend native reader wasm module simplejit faerie umbrella ; do
     if [ "$crate" == "umbrella" ]; then
         dir="cretonne"
     else

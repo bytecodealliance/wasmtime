@@ -1,7 +1,7 @@
 //! Defines `FaerieBackend`.
 
 use container;
-use cretonne_codegen::binemit::{Addend, CodeOffset, Reloc, RelocSink, TrapSink};
+use cretonne_codegen::binemit::{Addend, CodeOffset, Reloc, RelocSink, NullTrapSink};
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::result::CtonError;
 use cretonne_codegen::{self, binemit, ir};
@@ -103,7 +103,9 @@ impl Backend for FaerieBackend {
                 name,
                 namespace,
             };
-            let mut trap_sink = FaerieTrapSink {};
+            // Ignore traps for now. For now, frontends should just avoid generating code
+            // that traps.
+            let mut trap_sink = NullTrapSink {};
 
             ctx.emit_to_memory(
                 code.as_mut_ptr(),
@@ -288,11 +290,4 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
     fn reloc_jt(&mut self, _offset: CodeOffset, _reloc: Reloc, _jt: ir::JumpTable) {
         unimplemented!();
     }
-}
-
-struct FaerieTrapSink {}
-
-impl TrapSink for FaerieTrapSink {
-    // Ignore traps for now. For now, frontends should just avoid generating code that traps.
-    fn trap(&mut self, _offset: CodeOffset, _srcloc: ir::SourceLoc, _code: ir::TrapCode) {}
 }
