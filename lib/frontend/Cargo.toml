@@ -1,24 +1,21 @@
 [package]
 authors = ["The Cretonne Project Developers"]
 name = "cretonne-frontend"
-version = "0.4.1"
+version = "0.5.0"
 description = "Cretonne IR builder helper"
 license = "Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/"
-repository = "https://github.com/Cretonne/cretonne"
+repository = "https://github.com/cretonne/cretonne"
 readme = "README.md"
 
-[lib]
-name = "cton_frontend"
-
 [dependencies]
-cretonne = { path = "../cretonne", version = "0.4.1", default-features = false }
+cretonne-codegen = { path = "../codegen", version = "0.5.0", default-features = false }
 
 [features]
 default = ["std"]
-std = ["cretonne/std"]
-core = ["cretonne/core"]
+std = ["cretonne-codegen/std"]
+core = ["cretonne-codegen/core"]
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "Cretonne/cretonne" }
+travis-ci = { repository = "cretonne/cretonne" }

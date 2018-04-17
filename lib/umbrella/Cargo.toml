@@ -1,0 +1,18 @@
+[package]
+authors = ["The Cretonne Project Developers"]
+name = "cretonne"
+version = "0.5.0"
+description = "Umbrella for commonly-used cretonne crates"
+license = "Apache-2.0"
+documentation = "https://cretonne.readthedocs.io/"
+repository = "https://github.com/cretonne/cretonne"
+readme = "README.md"
+keywords = ["compile", "compiler", "jit"]
+
+[dependencies]
+cretonne-codegen = { path = "../codegen", version = "0.5.0" }
+cretonne-frontend = { path = "../frontend", version = "0.5.0" }
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "cretonne/cretonne" }

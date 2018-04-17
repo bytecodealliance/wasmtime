@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.abspath('.'))
 
 # Also add the meta directory to sys.path so autodoc can find the Cretonne meta
 # language definitions.
-sys.path.insert(0, os.path.abspath('../lib/cretonne/meta'))
+sys.path.insert(0, os.path.abspath('../lib/codegen/meta'))
 
 # -- General configuration ------------------------------------------------
 

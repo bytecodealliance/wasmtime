@@ -1,9 +1,9 @@
 //! "Dummy" environment for testing wasm translation.
 
-use cretonne::cursor::FuncCursor;
-use cretonne::ir::types::*;
-use cretonne::ir::{self, InstBuilder};
-use cretonne::settings;
+use cretonne_codegen::cursor::FuncCursor;
+use cretonne_codegen::ir::types::*;
+use cretonne_codegen::ir::{self, InstBuilder};
+use cretonne_codegen::settings;
 use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment};
 use func_translator::FuncTranslator;
 use std::string::String;
@@ -150,7 +150,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
         // Just create a dummy `vmctx` global.
         let offset = ((index * 8) as i32 + 8).into();
-        let gv = func.create_global_var(ir::GlobalVarData::VmCtx { offset });
+        let gv = func.create_global_var(ir::GlobalVarData::VMContext { offset });
         GlobalValue::Memory {
             gv,
             ty: self.mod_info.globals[index].entity.ty,
@@ -159,7 +159,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
     fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
         // Create a static heap whose base address is stored at `vmctx+0`.
-        let gv = func.create_global_var(ir::GlobalVarData::VmCtx { offset: 0.into() });
+        let gv = func.create_global_var(ir::GlobalVarData::VMContext { offset: 0.into() });
 
         func.create_heap(ir::HeapData {
             base: ir::HeapBase::GlobalVar(gv),
@@ -181,7 +181,11 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         // And maybe attempt some signature de-duplication.
         let signature = func.import_signature(self.vmctx_sig(sigidx));
         let name = get_func_name(index);
-        func.import_function(ir::ExtFuncData { name, signature })
+        func.import_function(ir::ExtFuncData {
+            name,
+            signature,
+            colocated: false,
+        })
     }
 
     fn translate_call_indirect(
@@ -221,7 +225,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         args.push(vmctx, &mut pos.func.dfg.value_lists);
 
         pos.ins()
-            .IndirectCall(ir::Opcode::CallIndirect, ir::types::VOID, sig_ref, args)
+            .CallIndirect(ir::Opcode::CallIndirect, ir::types::VOID, sig_ref, args)
             .0
     }
 

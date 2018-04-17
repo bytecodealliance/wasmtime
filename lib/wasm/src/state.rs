@@ -3,7 +3,7 @@
 //! The `TranslationState` struct defined in this module is used to keep track of the WebAssembly
 //! value and control stacks during the translation of a single function.
 
-use cretonne::ir::{self, Ebb, Inst, Value};
+use cretonne_codegen::ir::{self, Ebb, Inst, Value};
 use environ::{FuncEnvironment, GlobalValue};
 use std::collections::HashMap;
 use std::vec::Vec;

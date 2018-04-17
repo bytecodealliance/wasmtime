@@ -4,7 +4,7 @@ test compile
 ; We only test on 64-bit since the heap_addr instructions and vmctx parameters
 ; explicitly mention the pointer width.
 set is_64bit=1
-isa intel haswell
+isa x86 haswell
 
 function %i32_load(i32, i64 vmctx) -> i32 {
     gv0 = vmctx

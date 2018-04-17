@@ -70,7 +70,7 @@ ebb0(v1: i32):
 
 ; All values live across a call must be spilled
 function %across_call(i32) {
-    fn0 = function %foo(i32)
+    fn0 = %foo(i32)
 ebb0(v1: i32):
     ; check: v1 = spill
     call fn0(v1)
@@ -83,7 +83,7 @@ ebb0(v1: i32):
 
 ; The same value used for two function arguments.
 function %doubleuse(i32) {
-    fn0 = function %xx(i32, i32)
+    fn0 = %xx(i32, i32)
 ebb0(v0: i32):
     ; check: $(c=$V) = copy v0
     call fn0(v0, v0)

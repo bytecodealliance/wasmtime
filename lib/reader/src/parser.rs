@@ -1,18 +1,19 @@
 //! Parser for .cton files.
 
-use cretonne::entity::EntityRef;
-use cretonne::ir;
-use cretonne::ir::entities::AnyEntity;
-use cretonne::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
-use cretonne::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
-use cretonne::ir::types::VOID;
-use cretonne::ir::{AbiParam, ArgumentExtension, ArgumentLoc, CallConv, Ebb, ExtFuncData,
-                   ExternalName, FuncRef, Function, GlobalVar, GlobalVarData, Heap, HeapBase,
-                   HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags, Opcode, SigRef,
-                   Signature, StackSlot, StackSlotData, StackSlotKind, Type, Value, ValueLoc};
-use cretonne::isa::{self, Encoding, RegUnit, TargetIsa};
-use cretonne::packed_option::ReservedValue;
-use cretonne::{settings, timing};
+use cretonne_codegen::entity::EntityRef;
+use cretonne_codegen::ir;
+use cretonne_codegen::ir::entities::AnyEntity;
+use cretonne_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
+use cretonne_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
+use cretonne_codegen::ir::types::VOID;
+use cretonne_codegen::ir::{AbiParam, ArgumentExtension, ArgumentLoc, CallConv, Ebb, ExtFuncData,
+                           ExternalName, FuncRef, Function, GlobalVar, GlobalVarData, Heap,
+                           HeapBase, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
+                           Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind,
+                           Type, Value, ValueLoc};
+use cretonne_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
+use cretonne_codegen::packed_option::ReservedValue;
+use cretonne_codegen::{settings, timing};
 use error::{Error, Location, Result};
 use isaspec;
 use lexer::{self, Lexer, Token};
@@ -144,6 +145,7 @@ impl<'a> Context<'a> {
         while self.function.global_vars.next_key().index() <= gv.index() {
             self.function.create_global_var(GlobalVarData::Sym {
                 name: ExternalName::testcase(""),
+                colocated: false,
             });
         }
         self.function.global_vars[gv] = data;
@@ -208,6 +210,7 @@ impl<'a> Context<'a> {
             self.function.import_function(ExtFuncData {
                 name: ExternalName::testcase(""),
                 signature: SigRef::reserved_value(),
+                colocated: false,
             });
         }
         self.function.dfg.ext_funcs[fn_] = data;
@@ -760,7 +763,7 @@ impl<'a> Parser<'a> {
 
     // Parse a whole function definition.
     //
-    // function ::= * function-spec "{" preamble function-body "}"
+    // function ::= * "function" name signature "{" preamble function-body "}"
     //
     fn parse_function(
         &mut self,
@@ -772,10 +775,19 @@ impl<'a> Parser<'a> {
         debug_assert!(self.comments.is_empty());
         self.start_gathering_comments();
 
-        let (location, name, sig) = self.parse_function_spec(unique_isa)?;
+        self.match_identifier("function", "expected 'function'")?;
+
+        let location = self.loc;
+
+        // function ::= "function" * name signature "{" preamble function-body "}"
+        let name = self.parse_external_name()?;
+
+        // function ::= "function" name * signature "{" preamble function-body "}"
+        let sig = self.parse_signature(unique_isa)?;
+
         let mut ctx = Context::new(Function::with_name_signature(name, sig), unique_isa);
 
-        // function ::= function-spec * "{" preamble function-body "}"
+        // function ::= "function" name signature * "{" preamble function-body "}"
         self.match_token(
             Token::LBrace,
             "expected '{' before function body",
@@ -784,11 +796,11 @@ impl<'a> Parser<'a> {
         self.token();
         self.claim_gathered_comments(AnyEntity::Function);
 
-        // function ::= function-spec "{" * preamble function-body "}"
+        // function ::= "function" name signature "{" * preamble function-body "}"
         self.parse_preamble(&mut ctx)?;
-        // function ::= function-spec "{"  preamble * function-body "}"
+        // function ::= "function" name signature "{"  preamble * function-body "}"
         self.parse_function_body(&mut ctx)?;
-        // function ::= function-spec "{" preamble function-body * "}"
+        // function ::= "function" name signature "{" preamble function-body * "}"
         self.match_token(
             Token::RBrace,
             "expected '}' after function body",
@@ -808,29 +820,9 @@ impl<'a> Parser<'a> {
         Ok((ctx.function, details))
     }
 
-    // Parse a function spec.
-    //
-    // function-spec ::= * "function" name signature
-    //
-    fn parse_function_spec(
-        &mut self,
-        unique_isa: Option<&TargetIsa>,
-    ) -> Result<(Location, ExternalName, Signature)> {
-        self.match_identifier("function", "expected 'function'")?;
-        let location = self.loc;
-
-        // function-spec ::= "function" * name signature
-        let name = self.parse_external_name()?;
-
-        // function-spec ::= "function" name * signature
-        let sig = self.parse_signature(unique_isa)?;
-
-        Ok((location, name, sig))
-    }
-
     // Parse an external name.
     //
-    // For example, in a function spec, the parser would be in this state:
+    // For example, in a function decl, the parser would be in this state:
     //
     // function ::= "function" * name signature { ... }
     //
@@ -1095,7 +1087,7 @@ impl<'a> Parser<'a> {
     // global-var-decl ::= * GlobalVar(gv) "=" global-var-desc
     // global-var-desc ::= "vmctx" offset32
     //                   | "deref" "(" GlobalVar(base) ")" offset32
-    //                   | "globalsym" name
+    //                   | globalsym ["colocated"] name
     //
     fn parse_global_var_decl(&mut self) -> Result<(GlobalVar, GlobalVarData)> {
         let gv = self.match_gv("expected global variable number: gv«n»")?;
@@ -1108,7 +1100,7 @@ impl<'a> Parser<'a> {
         let data = match self.match_any_identifier("expected global variable kind")? {
             "vmctx" => {
                 let offset = self.optional_offset32()?;
-                GlobalVarData::VmCtx { offset }
+                GlobalVarData::VMContext { offset }
             }
             "deref" => {
                 self.match_token(
@@ -1124,8 +1116,9 @@ impl<'a> Parser<'a> {
                 GlobalVarData::Deref { base, offset }
             }
             "globalsym" => {
+                let colocated = self.optional(Token::Identifier("colocated"));
                 let name = self.parse_external_name()?;
-                GlobalVarData::Sym { name }
+                GlobalVarData::Sym { name, colocated }
             }
             other => return err!(self.loc, "Unknown global variable kind '{}'", other),
         };
@@ -1237,8 +1230,8 @@ impl<'a> Parser<'a> {
     //
     // Two variants:
     //
-    // function-decl ::= FuncRef(fnref) "=" function-spec
-    //                   FuncRef(fnref) "=" SigRef(sig) name
+    // function-decl ::= FuncRef(fnref) "=" ["colocated"]" name function-decl-sig
+    // function-decl-sig ::= SigRef(sig) | signature
     //
     // The first variant allocates a new signature reference. The second references an existing
     // signature which must be declared first.
@@ -1250,9 +1243,19 @@ impl<'a> Parser<'a> {
             "expected '=' in function decl",
         )?;
 
+        let loc = self.loc;
+
+        // function-decl ::= FuncRef(fnref) "=" * ["colocated"] name function-decl-sig
+        let colocated = self.optional(Token::Identifier("colocated"));
+
+        // function-decl ::= FuncRef(fnref) "=" ["colocated"] * name function-decl-sig
+        let name = self.parse_external_name()?;
+
+        // function-decl ::= FuncRef(fnref) "=" ["colocated"] name * function-decl-sig
         let data = match self.token() {
-            Some(Token::Identifier("function")) => {
-                let (loc, name, sig) = self.parse_function_spec(ctx.unique_isa)?;
+            Some(Token::LPar) => {
+                // function-decl ::= FuncRef(fnref) "=" ["colocated"] name * signature
+                let sig = self.parse_signature(ctx.unique_isa)?;
                 let sigref = ctx.function.import_signature(sig);
                 ctx.map.def_entity(sigref.into(), &loc).expect(
                     "duplicate SigRef entities created",
@@ -1260,6 +1263,7 @@ impl<'a> Parser<'a> {
                 ExtFuncData {
                     name,
                     signature: sigref,
+                    colocated,
                 }
             }
             Some(Token::SigRef(sig_src)) => {
@@ -1271,10 +1275,10 @@ impl<'a> Parser<'a> {
                 };
                 ctx.check_sig(sig, &self.loc)?;
                 self.consume();
-                let name = self.parse_external_name()?;
                 ExtFuncData {
                     name,
                     signature: sig,
+                    colocated,
                 }
             }
             _ => return err!(self.loc, "expected 'function' or sig«n» in function decl"),
@@ -2175,7 +2179,7 @@ impl<'a> Parser<'a> {
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
             }
-            InstructionFormat::IndirectCall => {
+            InstructionFormat::CallIndirect => {
                 let sig_ref = self.match_sig("expected signature reference")?;
                 ctx.check_sig(sig_ref, &self.loc)?;
                 self.match_token(
@@ -2192,7 +2196,7 @@ impl<'a> Parser<'a> {
                     Token::RPar,
                     "expected ')' after arguments",
                 )?;
-                InstructionData::IndirectCall {
+                InstructionData::CallIndirect {
                     opcode,
                     sig_ref,
                     args: args.into_value_list(&[callee], &mut ctx.function.dfg.value_lists),
@@ -2395,10 +2399,10 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne::ir::StackSlotKind;
-    use cretonne::ir::entities::AnyEntity;
-    use cretonne::ir::types;
-    use cretonne::ir::{ArgumentExtension, ArgumentPurpose, CallConv};
+    use cretonne_codegen::ir::StackSlotKind;
+    use cretonne_codegen::ir::entities::AnyEntity;
+    use cretonne_codegen::ir::types;
+    use cretonne_codegen::ir::{ArgumentExtension, ArgumentPurpose, CallConv};
     use error::Error;
     use isaspec::IsaSpec;
     use testfile::{Comment, Details};

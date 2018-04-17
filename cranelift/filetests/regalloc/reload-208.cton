@@ -1,10 +1,10 @@
 test regalloc
 set is_64bit
-isa intel haswell
+isa x86 haswell
 
 ; regex: V=v\d+
 
-; Filed as https://github.com/Cretonne/cretonne/issues/208
+; Filed as https://github.com/cretonne/cretonne/issues/208
 ;
 ; The verifier complains about a branch argument that is not in the same virtual register as the
 ; corresponding EBB argument.
@@ -16,8 +16,8 @@ function %pr208(i64 vmctx [%rdi]) system_v {
     heap0 = static gv0, min 0, bound 0x5000, guard 0x0040_0000
     sig0 = (i64 vmctx [%rdi]) -> i32 [%rax] system_v
     sig1 = (i64 vmctx [%rdi], i32 [%rsi]) system_v
-    fn0 = sig0 u0:1
-    fn1 = sig1 u0:3
+    fn0 = u0:1 sig0
+    fn1 = u0:3 sig1
 
 ebb0(v0: i64):
     v1 = iconst.i32 0

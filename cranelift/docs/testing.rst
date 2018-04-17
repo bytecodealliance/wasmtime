@@ -51,7 +51,7 @@ tested::
     //!
     //! # Example
     //! ```
-    //! use cretonne::settings::{self, Configurable};
+    //! use cretonne_codegen::settings::{self, Configurable};
     //!
     //! let mut b = settings::builder();
     //! b.set("opt_level", "fastest");
@@ -73,9 +73,9 @@ test.
 
 These tests are usually found in the :file:`tests` top-level directory where
 they have access to all the crates in the Cretonne repository. The
-:file:`lib/cretonne` and :file:`lib/reader` crates have no external
+:file:`lib/codegen` and :file:`lib/reader` crates have no external
 dependencies, which can make testing tedious. Integration tests that don't need
-to depend on other crates can be placed in :file:`lib/cretonne/tests` and
+to depend on other crates can be placed in :file:`lib/codegen/tests` and
 :file:`lib/reader/tests`.
 
 File tests
@@ -109,7 +109,7 @@ header:
     isa_spec      : "isa" isa_name { `option` } "\n"
 
 The options given on the ``isa`` line modify the ISA-specific settings defined in
-:file:`lib/cretonne/meta/isa/*/settings.py`.
+:file:`lib/codegen/meta/isa/*/settings.py`.
 
 All types of tests allow shared Cretonne settings to be modified:
 
@@ -119,7 +119,7 @@ All types of tests allow shared Cretonne settings to be modified:
     option        : flag | setting "=" value
 
 The shared settings available for all target ISAs are defined in
-:file:`lib/cretonne/meta/base/settings.py`.
+:file:`lib/codegen/meta/base/settings.py`.
 
 The ``set`` lines apply settings cumulatively::
 

@@ -11,7 +11,7 @@ domain specific language embedded in Python. This document describes the Python
 modules that form the embedded DSL.
 
 The meta language descriptions are Python modules under the
-:file:`lib/cretonne/meta` directory. The descriptions are processed in two
+:file:`lib/codegen/meta` directory. The descriptions are processed in two
 steps:
 
 1. The Python modules are imported. This has the effect of building static data
@@ -23,8 +23,8 @@ steps:
    constant tables.
 
 The main driver for this source code generation process is the
-:file:`lib/cretonne/meta/build.py` script which is invoked as part of the build
-process if anything in the :file:`lib/cretonne/meta` directory has changed
+:file:`lib/codegen/meta/build.py` script which is invoked as part of the build
+process if anything in the :file:`lib/codegen/meta` directory has changed
 since the last build.
 
 
@@ -38,7 +38,7 @@ of code generation. Each setting is defined in the meta language so a compact
 and consistent Rust representation can be generated. Shared settings are defined
 in the :mod:`base.settings` module. Some settings are specific to a target ISA,
 and defined in a :file:`settings.py` module under the appropriate
-:file:`lib/cretonne/meta/isa/*` directory.
+:file:`lib/codegen/meta/isa/*` directory.
 
 Settings can take boolean on/off values, small numbers, or explicitly enumerated
 symbolic values. Each type is represented by a sub-class of :class:`Setting`:
@@ -400,7 +400,7 @@ Fixed register operands
 -----------------------
 
 Some instructions use hard-coded input and output registers for some value
-operands. An example is the ``pblendvb`` Intel SSE instruction which takes one
+operands. An example is the ``pblendvb`` x86 SSE instruction which takes one
 of its three value operands in the hard-coded ``%xmm0`` register::
 
     XMM0 = FPR[0]
@@ -433,13 +433,13 @@ architectures. Each ISA is represented by a :py:class:`cdsl.isa.TargetISA` insta
 .. autoclass:: TargetISA
 
 The definitions for each supported target live in a package under
-:file:`lib/cretonne/meta/isa`.
+:file:`lib/codegen/meta/isa`.
 
 .. automodule:: isa
     :members:
 
 .. automodule:: isa.riscv
-.. automodule:: isa.intel
+.. automodule:: isa.x86
 .. automodule:: isa.arm32
 .. automodule:: isa.arm64
 

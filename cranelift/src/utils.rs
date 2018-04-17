@@ -1,9 +1,9 @@
 //! Utility functions.
 
-use cretonne::isa;
-use cretonne::isa::TargetIsa;
-use cretonne::settings::{self, FlagsOrIsa};
-use cton_reader::{parse_options, Location};
+use cretonne_codegen::isa;
+use cretonne_codegen::isa::TargetIsa;
+use cretonne_codegen::settings::{self, FlagsOrIsa};
+use cretonne_reader::{parse_options, Location};
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;

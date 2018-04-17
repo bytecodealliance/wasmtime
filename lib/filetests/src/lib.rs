@@ -9,12 +9,12 @@
         block_in_if_condition_stmt))]
 
 #[macro_use(dbg)]
-extern crate cretonne;
-extern crate cton_reader;
+extern crate cretonne_codegen;
+extern crate cretonne_reader;
 extern crate filecheck;
 extern crate num_cpus;
 
-use cton_reader::TestCommand;
+use cretonne_reader::TestCommand;
 use runner::TestRunner;
 use std::path::Path;
 use std::time;
