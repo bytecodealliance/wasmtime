@@ -14,7 +14,7 @@ from cdsl.predicates import IsSignedInt
 from cdsl.registers import Stack
 from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
 from base.formats import Unary, UnaryImm, BranchIcmp, Branch, Jump
-from base.formats import Call, IndirectCall, RegMove
+from base.formats import Call, CallIndirect, RegMove
 from .registers import GPR
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
@@ -140,11 +140,11 @@ Iret = EncRecipe(
         );
         ''')
 
-# I-type encoding for `jalr` as an indirect call.
+# I-type encoding for `jalr` as a call_indirect.
 Icall = EncRecipe(
-        'Icall', IndirectCall, size=4, ins=GPR, outs=(),
+        'Icall', CallIndirect, size=4, ins=GPR, outs=(),
         emit='''
-        // Indirect instructions are jalr with rd=%x1.
+        // call_indirect instructions are jalr with rd=%x1.
         put_i(
             bits,
             in_reg0,

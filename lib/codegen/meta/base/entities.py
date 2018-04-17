@@ -20,7 +20,7 @@ stack_slot = EntityRefKind('stack_slot', 'A stack slot.')
 global_var = EntityRefKind('global_var', 'A global variable.')
 
 #: A reference to a function sugnature declared in the function preamble.
-#: Tbis is used to provide the call signature in an indirect call instruction.
+#: This is used to provide the call signature in a call_indirect instruction.
 sig_ref = EntityRefKind('sig_ref', 'A function signature.')
 
 #: A reference to an external function declared in the function preamble.

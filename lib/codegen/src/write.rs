@@ -349,7 +349,7 @@ pub fn write_operands(
         Call { func_ref, ref args, .. } => {
             write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool)))
         }
-        IndirectCall { sig_ref, ref args, .. } => {
+        CallIndirect { sig_ref, ref args, .. } => {
             let args = args.as_slice(pool);
             write!(
                 w,

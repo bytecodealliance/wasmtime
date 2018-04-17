@@ -2179,7 +2179,7 @@ impl<'a> Parser<'a> {
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
             }
-            InstructionFormat::IndirectCall => {
+            InstructionFormat::CallIndirect => {
                 let sig_ref = self.match_sig("expected signature reference")?;
                 ctx.check_sig(sig_ref, &self.loc)?;
                 self.match_token(
@@ -2196,7 +2196,7 @@ impl<'a> Parser<'a> {
                     Token::RPar,
                     "expected ')' after arguments",
                 )?;
-                InstructionData::IndirectCall {
+                InstructionData::CallIndirect {
                     opcode,
                     sig_ref,
                     args: args.into_value_list(&[callee], &mut ctx.function.dfg.value_lists),

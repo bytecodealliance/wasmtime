@@ -7,7 +7,7 @@ from cdsl.predicates import IsSignedInt, IsEqual, Or
 from cdsl.registers import RegClass
 from base.formats import Unary, UnaryImm, UnaryBool, Binary, BinaryImm
 from base.formats import MultiAry, NullAry
-from base.formats import Trap, Call, IndirectCall, Store, Load
+from base.formats import Trap, Call, CallIndirect, Store, Load
 from base.formats import IntCompare, IntCompareImm, FloatCompare
 from base.formats import IntCond, FloatCond
 from base.formats import IntSelect, IntCondTrap, FloatCondTrap
@@ -1055,7 +1055,7 @@ call_plt_id = TailRecipe(
         ''')
 
 call_r = TailRecipe(
-        'call_r', IndirectCall, size=1, ins=GPR, outs=(),
+        'call_r', CallIndirect, size=1, ins=GPR, outs=(),
         emit='''
         PUT_OP(bits, rex1(in_reg0), sink);
         modrm_r_bits(in_reg0, bits, sink);

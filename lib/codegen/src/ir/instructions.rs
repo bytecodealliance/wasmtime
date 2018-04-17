@@ -248,7 +248,7 @@ impl InstructionData {
             InstructionData::Call { func_ref, ref args, .. } => {
                 CallInfo::Direct(func_ref, args.as_slice(pool))
             }
-            InstructionData::IndirectCall { sig_ref, ref args, .. } => {
+            InstructionData::CallIndirect { sig_ref, ref args, .. } => {
                 CallInfo::Indirect(sig_ref, &args.as_slice(pool)[1..])
             }
             _ => {

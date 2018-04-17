@@ -226,7 +226,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         args.push(vmctx, &mut pos.func.dfg.value_lists);
 
         pos.ins()
-            .IndirectCall(ir::Opcode::CallIndirect, ir::types::VOID, sig_ref, args)
+            .CallIndirect(ir::Opcode::CallIndirect, ir::types::VOID, sig_ref, args)
             .0
     }
 
