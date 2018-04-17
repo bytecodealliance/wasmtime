@@ -84,6 +84,7 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
 
     fn put2(&mut self, x: u16) {
         unsafe {
+            #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
             write_unaligned(self.data.offset(self.offset) as *mut u16, x);
         }
         self.offset += 2;
@@ -91,6 +92,7 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
 
     fn put4(&mut self, x: u32) {
         unsafe {
+            #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
             write_unaligned(self.data.offset(self.offset) as *mut u32, x);
         }
         self.offset += 4;
@@ -98,6 +100,7 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
 
     fn put8(&mut self, x: u64) {
         unsafe {
+            #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
             write_unaligned(self.data.offset(self.offset) as *mut u64, x);
         }
         self.offset += 8;
