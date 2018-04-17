@@ -23,7 +23,7 @@ pub type CodeOffset = u32;
 pub type Addend = i64;
 
 /// Relocation kinds for every ISA
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum Reloc {
     /// absolute 4-byte
     Abs4,
