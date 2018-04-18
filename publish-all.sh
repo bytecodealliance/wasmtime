@@ -4,7 +4,7 @@ cd $(dirname "$0")
 topdir="$(pwd)"
 
 # All the cretonne-* crates have the same version number
-version="0.5.0"
+version="0.5.1"
 
 # Update all of the Cargo.toml files.
 #
