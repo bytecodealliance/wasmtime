@@ -38,7 +38,10 @@ pub struct MemoryCodeSink<'a> {
 
 impl<'a> MemoryCodeSink<'a> {
     /// Create a new memory code sink that writes a function to the memory pointed to by `data`.
-    pub fn new<'sink>(
+    ///
+    /// This function is unsafe since `MemoryCodeSink` does not perform bounds checking on the
+    /// memory buffer, and it can't guarantee that the `data` pointer is valid.
+    pub unsafe fn new<'sink>(
         data: *mut u8,
         relocs: &'sink mut RelocSink,
         traps: &'sink mut TrapSink,

@@ -78,6 +78,36 @@ impl Context {
         self.loop_analysis.clear();
     }
 
+    /// Compile the function, and emit machine code into a `Vec<u8>`.
+    ///
+    /// Run the function through all the passes necessary to generate code for the target ISA
+    /// represented by `isa`, as well as the final step of emitting machine code into a
+    /// `Vec<u8>`. The machine code is not relocated. Instead, any relocations are emitted
+    /// into `relocs`.
+    ///
+    /// This function calls `compile` and `emit_to_memory`, taking care to resize `mem` as
+    /// needed, so it provides a safe interface.
+    pub fn compile_and_emit(
+        &mut self,
+        isa: &TargetIsa,
+        mem: &mut Vec<u8>,
+        relocs: &mut RelocSink,
+        traps: &mut TrapSink,
+    ) -> CtonResult {
+        let code_size = self.compile(isa)?;
+        let old_len = mem.len();
+        mem.resize(old_len + code_size as usize, 0);
+        unsafe {
+            self.emit_to_memory(
+                isa,
+                mem.as_mut_ptr().offset(old_len as isize),
+                relocs,
+                traps,
+            )
+        };
+        Ok(())
+    }
+
     /// Compile the function.
     ///
     /// Run the function through all the passes necessary to generate code for the target ISA
@@ -119,12 +149,15 @@ impl Context {
     /// code is returned by `compile` above.
     ///
     /// The machine code is not relocated. Instead, any relocations are emitted into `relocs`.
-    pub fn emit_to_memory(
+    ///
+    /// This function is unsafe since it does not perform bounds checking on the memory buffer,
+    /// and it can't guarantee that the `mem` pointer is valid.
+    pub unsafe fn emit_to_memory(
         &self,
+        isa: &TargetIsa,
         mem: *mut u8,
         relocs: &mut RelocSink,
         traps: &mut TrapSink,
-        isa: &TargetIsa,
     ) {
         let _tt = timing::binemit();
         isa.emit_function(&self.func, &mut MemoryCodeSink::new(mem, relocs, traps));

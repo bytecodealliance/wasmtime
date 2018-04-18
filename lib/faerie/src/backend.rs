@@ -107,12 +107,14 @@ impl Backend for FaerieBackend {
             // that traps.
             let mut trap_sink = NullTrapSink {};
 
-            ctx.emit_to_memory(
-                code.as_mut_ptr(),
-                &mut reloc_sink,
-                &mut trap_sink,
-                &*self.isa,
-            );
+            unsafe {
+                ctx.emit_to_memory(
+                    &*self.isa,
+                    code.as_mut_ptr(),
+                    &mut reloc_sink,
+                    &mut trap_sink,
+                )
+            };
         }
 
         self.artifact.define(name, code).expect(
