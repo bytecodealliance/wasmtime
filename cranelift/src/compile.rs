@@ -96,19 +96,18 @@ fn handle_module(
     for (func, _) in test_file.functions {
         let mut context = Context::new();
         context.func = func;
-        let size = context.compile(isa).map_err(|err| {
-            pretty_error(&context.func, Some(isa), err)
-        })?;
-        if flag_print {
-            println!("{}", context.func.display(isa));
-        }
 
-        // Encode the result as machine code.
+        // Compile and encode the result to machine code.
         let mut mem = Vec::new();
         let mut relocs = PrintRelocs { flag_print };
         let mut traps = PrintTraps { flag_print };
-        mem.resize(size as usize, 0);
-        context.emit_to_memory(mem.as_mut_ptr(), &mut relocs, &mut traps, &*isa);
+        context
+            .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
+            .map_err(|err| pretty_error(&context.func, Some(isa), err))?;
+
+        if flag_print {
+            println!("{}", context.func.display(isa));
+        }
 
         if flag_print {
             print!(".byte ");

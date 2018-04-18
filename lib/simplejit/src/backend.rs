@@ -103,7 +103,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         // Ignore traps for now. For now, frontends should just avoid generating code
         // that traps.
         let mut trap_sink = NullTrapSink {};
-        ctx.emit_to_memory(ptr, &mut reloc_sink, &mut trap_sink, &*self.isa);
+        unsafe { ctx.emit_to_memory(&*self.isa, ptr, &mut reloc_sink, &mut trap_sink) };
 
         Ok(Self::CompiledFunction {
             code: ptr,
