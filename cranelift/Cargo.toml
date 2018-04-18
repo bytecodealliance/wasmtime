@@ -1,7 +1,7 @@
 [package]
 name = "cretonne-tools"
 authors = ["The Cretonne Project Developers"]
-version = "0.5.0"
+version = "0.5.1"
 description = "Binaries for testing the Cretonne libraries"
 license = "Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/"
@@ -13,16 +13,16 @@ name = "cton-util"
 path = "src/cton-util.rs"
 
 [dependencies]
-cretonne-codegen = { path = "lib/codegen", version = "0.5.0" }
-cretonne-reader = { path = "lib/reader", version = "0.5.0" }
-cretonne-frontend = { path = "lib/frontend", version = "0.5.0" }
-cretonne-wasm = { path = "lib/wasm", version = "0.5.0" }
-cretonne-native = { path = "lib/native", version = "0.5.0" }
-cretonne-filetests = { path = "lib/filetests", version = "0.5.0" }
-cretonne-module = { path = "lib/module", version = "0.5.0" }
-cretonne-faerie = { path = "lib/faerie", version = "0.5.0" }
-cretonne-simplejit = { path = "lib/simplejit", version = "0.5.0" }
-cretonne = { path = "lib/umbrella", version = "0.5.0" }
+cretonne-codegen = { path = "lib/codegen", version = "0.5.1" }
+cretonne-reader = { path = "lib/reader", version = "0.5.1" }
+cretonne-frontend = { path = "lib/frontend", version = "0.5.1" }
+cretonne-wasm = { path = "lib/wasm", version = "0.5.1" }
+cretonne-native = { path = "lib/native", version = "0.5.1" }
+cretonne-filetests = { path = "lib/filetests", version = "0.5.1" }
+cretonne-module = { path = "lib/module", version = "0.5.1" }
+cretonne-faerie = { path = "lib/faerie", version = "0.5.1" }
+cretonne-simplejit = { path = "lib/simplejit", version = "0.5.1" }
+cretonne = { path = "lib/umbrella", version = "0.5.1" }
 filecheck = "0.2.1"
 docopt = "0.8.0"
 serde = "1.0.8"
