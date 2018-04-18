@@ -231,7 +231,7 @@ class TypeSet(object):
     def __hash__(self):
         # type: () -> int
         h = hash(self.typeset_key())
-        assert h == getattr(self, 'prev_hash', h), "TypeSet changed!"
+        assert h == getattr(self, 'prev_hash', h), "TypeSet changed"
         self.prev_hash = h
         return h
 

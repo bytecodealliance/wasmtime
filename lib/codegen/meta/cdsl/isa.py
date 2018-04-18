@@ -54,7 +54,7 @@ class TargetISA(object):
         self._predicates = dict()  # type: Dict[PredKey, PredNode]
 
         assert InstructionGroup._current is None,\
-            "InstructionGroup {} is still open!"\
+            "InstructionGroup {} is still open"\
             .format(InstructionGroup._current.name)
 
     def __str__(self):
