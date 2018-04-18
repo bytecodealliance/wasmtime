@@ -1,13 +1,14 @@
 //! A frontend for building Cretonne IR from other languages.
-use cretonne::cursor::{Cursor, FuncCursor};
-use cretonne::entity::{EntityMap, EntityRef, EntitySet};
-use cretonne::ir;
-use cretonne::ir::function::DisplayFunction;
-use cretonne::ir::{DataFlowGraph, Ebb, ExtFuncData, FuncRef, Function, GlobalVar, GlobalVarData,
-                   Heap, HeapData, Inst, InstBuilderBase, InstructionData, JumpTable,
-                   JumpTableData, SigRef, Signature, StackSlot, StackSlotData, Type, Value};
-use cretonne::isa::TargetIsa;
-use cretonne::packed_option::PackedOption;
+use cretonne_codegen::cursor::{Cursor, FuncCursor};
+use cretonne_codegen::entity::{EntityMap, EntityRef, EntitySet};
+use cretonne_codegen::ir;
+use cretonne_codegen::ir::function::DisplayFunction;
+use cretonne_codegen::ir::{DataFlowGraph, Ebb, ExtFuncData, FuncRef, Function, GlobalVar,
+                           GlobalVarData, Heap, HeapData, Inst, InstBuilderBase, InstructionData,
+                           JumpTable, JumpTableData, SigRef, Signature, StackSlot, StackSlotData,
+                           Type, Value};
+use cretonne_codegen::isa::TargetIsa;
+use cretonne_codegen::packed_option::PackedOption;
 use ssa::{Block, SSABuilder, SideEffects};
 
 /// Structure used for translating a series of functions into Cretonne IR.
@@ -101,7 +102,7 @@ where
     }
 }
 
-/// Implementation of the [`InstBuilder`](../cretonne/ir/builder/trait.InstBuilder.html) that has
+/// Implementation of the [`InstBuilder`](../codegen/ir/builder/trait.InstBuilder.html) that has
 /// one convenience method per Cretonne IR instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short, Variable: 'long>
 where
@@ -374,7 +375,7 @@ where
         self.func.create_heap(data)
     }
 
-    /// Returns an object with the [`InstBuilder`](../cretonne/ir/builder/trait.InstBuilder.html)
+    /// Returns an object with the [`InstBuilder`](../codegen/ir/builder/trait.InstBuilder.html)
     /// trait that allows to conveniently append an instruction to the current `Ebb` being built.
     pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a, Variable> {
         let ebb = self.position.ebb.unwrap();
@@ -593,11 +594,11 @@ where
 mod tests {
 
     use Variable;
-    use cretonne::entity::EntityRef;
-    use cretonne::ir::types::*;
-    use cretonne::ir::{AbiParam, CallConv, ExternalName, Function, InstBuilder, Signature};
-    use cretonne::settings;
-    use cretonne::verifier::verify_function;
+    use cretonne_codegen::entity::EntityRef;
+    use cretonne_codegen::ir::types::*;
+    use cretonne_codegen::ir::{AbiParam, CallConv, ExternalName, Function, InstBuilder, Signature};
+    use cretonne_codegen::settings;
+    use cretonne_codegen::verifier::verify_function;
     use frontend::{FunctionBuilder, FunctionBuilderContext};
 
     fn sample_function(lazy_seal: bool) {

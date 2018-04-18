@@ -2,10 +2,10 @@
 //!
 //! The resulting function is sent to `filecheck`.
 
-use cretonne;
-use cretonne::ir::Function;
-use cretonne::print_errors::pretty_error;
-use cton_reader::TestCommand;
+use cretonne_codegen;
+use cretonne_codegen::ir::Function;
+use cretonne_codegen::print_errors::pretty_error;
+use cretonne_reader::TestCommand;
 use std::borrow::Cow;
 use std::fmt::Write;
 use subtest::{run_filecheck, Context, Result, SubTest};
@@ -32,7 +32,7 @@ impl SubTest for TestPreopt {
 
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
         // Create a compilation context, and drop in the function.
-        let mut comp_ctx = cretonne::Context::new();
+        let mut comp_ctx = cretonne_codegen::Context::new();
         comp_ctx.func = func.into_owned();
         let isa = context.isa.expect("preopt needs an ISA");
 

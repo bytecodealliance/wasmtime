@@ -6,8 +6,8 @@ Cretonne compared to LLVM
 a set of C++ libraries. It can be used to build both JIT compilers and static
 compilers like `Clang <https://clang.llvm.org>`_, and it is deservedly very
 popular. `Chris Lattner's chapter about LLVM
-<http://www.aosabook.org/en/llvm.html>`_ in the `Architecture of Open Source
-Applications <http://aosabook.org/en/index.html>`_ book gives an excellent
+<https://www.aosabook.org/en/llvm.html>`_ in the `Architecture of Open Source
+Applications <https://aosabook.org/en/index.html>`_ book gives an excellent
 overview of the architecture and design of LLVM.
 
 Cretonne and LLVM are superficially similar projects, so it is worth
@@ -174,7 +174,7 @@ is emitted, there are opcodes for every native instruction that can be
 generated. There is a lot of overlap between different ISAs, so for example the
 :cton:inst:`iadd_imm` instruction is used by every ISA that can add an
 immediate integer to a register. A simple RISC ISA like RISC-V can be defined
-with only shared instructions, while an Intel ISA needs a number of specific
+with only shared instructions, while x86 needs a number of specific
 instructions to model addressing modes.
 
 Undefined behavior

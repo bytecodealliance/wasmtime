@@ -26,22 +26,22 @@ ebb1:
 function %signatures() {
     sig10 = ()
     sig11 = (i32, f64) -> i32, b1 spiderwasm
-    fn5 = sig11 %foo
-    fn8 = function %bar(i32) -> b1
+    fn5 = %foo sig11
+    fn8 = %bar(i32) -> b1
 }
 ; sameln: function %signatures() system_v {
 ; check:      sig10 = () system_v
 ; check:      sig11 = (i32, f64) -> i32, b1 spiderwasm
 ; check:      sig12 = (i32) -> b1 system_v
 ; not:        fn0
-; check:      fn5 = sig11 %foo
-; check:      fn8 = sig12 %bar
+; check:      fn5 = %foo sig11
+; check:      fn8 = %bar sig12
 ; check:  }
 
 function %direct() {
-    fn0 = function %none()
-    fn1 = function %one() -> i32
-    fn2 = function %two() -> i32, f32
+    fn0 = %none()
+    fn1 = %one() -> i32
+    fn2 = %two() -> i32, f32
 
 ebb0:
     call fn0()
@@ -72,7 +72,7 @@ ebb0(v0: i64):
 
 function %long_call() {
     sig0 = ()
-    fn0 = sig0 %none
+    fn0 = %none sig0
 
 ebb0:
     v0 = func_addr.i32 fn0

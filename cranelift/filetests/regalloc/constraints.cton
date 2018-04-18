@@ -1,5 +1,5 @@
 test regalloc
-isa intel
+isa x86
 
 ; regex: V=v\d+
 ; regex: REG=%r([abcd]x|[sd]i)

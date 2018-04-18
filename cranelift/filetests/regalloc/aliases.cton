@@ -1,6 +1,6 @@
 test regalloc
 set is_64bit
-isa intel haswell
+isa x86 haswell
 
 function %value_aliases(i32, f32, i64 vmctx) spiderwasm {
     gv0 = vmctx

@@ -17,8 +17,8 @@ ebb0(v0: i64):
 }
 
 function %split_call_arg(i32) {
-    fn1 = function %foo(i64)
-    fn2 = function %foo(i32, i64)
+    fn1 = %foo(i64)
+    fn2 = %foo(i32, i64)
 ebb0(v0: i32):
     v1 = uextend.i64 v0
     call fn1(v1)
@@ -30,7 +30,7 @@ ebb0(v0: i32):
 }
 
 function %split_ret_val() {
-    fn1 = function %foo() -> i64
+    fn1 = %foo() -> i64
 ebb0:
     v1 = call fn1()
     ; check: ebb0($(link=$V): i32):
@@ -45,7 +45,7 @@ ebb1(v10: i64):
 
 ; First return value is fine, second one is expanded.
 function %split_ret_val2() {
-    fn1 = function %foo() -> i32, i64
+    fn1 = %foo() -> i32, i64
 ebb0:
     v1, v2 = call fn1()
     ; check: ebb0($(link=$V): i32):
@@ -70,7 +70,7 @@ ebb0(v1: i8, v2: i8, v3: i8):
 
 ; Function produces single return value, still need to copy.
 function %ext_ret_val() {
-    fn1 = function %foo() -> i8 sext
+    fn1 = %foo() -> i8 sext
 ebb0:
     v1 = call fn1()
     ; check: ebb0($V: i32):
@@ -124,7 +124,7 @@ ebb0(v0: i32, v1: f32x2):
 ; Call a function that takes arguments on the stack.
 function %stack_args(i32) {
     ; check: $(ss0=$SS) = outgoing_arg 4
-    fn1 = function %foo(i64, i64, i64, i64, i32)
+    fn1 = %foo(i64, i64, i64, i64, i32)
 ebb0(v0: i32):
     v1 = iconst.i64 1
     call fn1(v1, v1, v1, v1, v0)

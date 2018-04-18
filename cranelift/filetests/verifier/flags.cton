@@ -1,5 +1,5 @@
 test verifier
-isa intel
+isa x86
 
 ; Simple, correct use of CPU flags.
 function %simple(i32) -> i32 {

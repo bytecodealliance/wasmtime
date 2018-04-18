@@ -1,5 +1,5 @@
 test preopt
-isa intel
+isa x86
 
 function %iadd_imm(i32) -> i32 {
 ebb0(v0: i32):
@@ -75,6 +75,6 @@ ebb0(v0: i32):
 ; sameln: function %irsub_imm
 ; nextln: ebb0(v0: i32):
 ; nextln:     v1 = iconst.i32 2
-; nextln:     v2 = irsub_imm v1, 2
+; nextln:     v2 = irsub_imm v0, 2
 ; nextln:     return v2
 ; nextln: }

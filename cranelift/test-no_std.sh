@@ -15,7 +15,7 @@ function banner() {
 }
 
 # Test those packages which have no_std support.
-LIBS="cretonne frontend wasm native"
+LIBS="codegen frontend wasm native"
 cd "$topdir"
 for LIB in $LIBS
 do

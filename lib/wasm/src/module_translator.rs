@@ -1,6 +1,6 @@
 //! Translation skeleton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
-use cretonne::timing;
+use cretonne_codegen::timing;
 use environ::ModuleEnvironment;
 use sections_translator::{parse_data_section, parse_elements_section, parse_export_section,
                           parse_function_section, parse_function_signatures, parse_global_section,
@@ -11,7 +11,7 @@ use wasmparser::{BinaryReaderError, Parser, ParserInput, ParserState, SectionCod
 use std::string::String;
 
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cretonne IR
-/// [`Function`](../cretonne/ir/function/struct.Function.html).
+/// [`Function`](../codegen/ir/function/struct.Function.html).
 /// Returns the functions and also the mappings for imported functions and signature between the
 /// indexes in the wasm module and the indexes inside each functions.
 pub fn translate_module<'data>(
