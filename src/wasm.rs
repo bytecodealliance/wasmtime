@@ -1,12 +1,13 @@
-//! CLI tool to use the functions provided by the [cretonne-wasm](../cton_wasm/index.html) crate.
+//! CLI tool to use the functions provided by the [cretonne-wasm](../cretonne_wasm/index.html)
+//! crate.
 //!
 //! Reads Wasm binary files, translates the functions' code to Cretonne IR.
 #![cfg_attr(feature = "cargo-clippy", allow(too_many_arguments, cyclomatic_complexity))]
 
-use cretonne::Context;
-use cretonne::print_errors::{pretty_error, pretty_verifier_error};
-use cretonne::settings::FlagsOrIsa;
-use cton_wasm::{translate_module, DummyEnvironment, ModuleEnvironment};
+use cretonne_codegen::Context;
+use cretonne_codegen::print_errors::{pretty_error, pretty_verifier_error};
+use cretonne_codegen::settings::FlagsOrIsa;
+use cretonne_wasm::{translate_module, DummyEnvironment, ModuleEnvironment};
 use std::error::Error;
 use std::fs::File;
 use std::io;

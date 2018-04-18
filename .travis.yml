@@ -5,6 +5,7 @@ rust:
     - nightly
 matrix:
     allow_failures:
+        - rust: beta
         - rust: nightly
 dist: trusty
 sudo: false

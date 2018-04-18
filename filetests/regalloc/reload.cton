@@ -5,7 +5,7 @@ isa riscv enable_e
 
 ; Check that we can handle a function return value that got spilled.
 function %spill_return() -> i32 {
-    fn0 = function %foo() -> i32 system_v
+    fn0 = %foo() -> i32 system_v
 
 ebb0:
     v0 = call fn0()

@@ -1,8 +1,8 @@
 test regalloc
 set is_64bit
-isa intel haswell
+isa x86 haswell
 
-; Reported as https://github.com/Cretonne/cretonne/issues/207
+; Reported as https://github.com/cretonne/cretonne/issues/207
 ;
 ; The coalescer creates a virtual register with two interfering values.
 function %pr207(i64 vmctx, i32, i32) -> i32 system_v {
@@ -11,9 +11,9 @@ function %pr207(i64 vmctx, i32, i32) -> i32 system_v {
     sig0 = (i64 vmctx, i32, i32) -> i32 system_v
     sig1 = (i64 vmctx, i32, i32, i32) -> i32 system_v
     sig2 = (i64 vmctx, i32, i32, i32) -> i32 system_v
-    fn0 = sig0 u0:2
-    fn1 = sig1 u0:0
-    fn2 = sig2 u0:1
+    fn0 = u0:2 sig0
+    fn1 = u0:0 sig1
+    fn2 = u0:1 sig2
 
 ebb0(v0: i64, v1: i32, v2: i32):
     v3 = iconst.i32 0
@@ -1038,7 +1038,7 @@ function %musl(f64 [%xmm0], i64 vmctx [%rdi]) -> f64 [%xmm0] system_v {
     gv0 = vmctx
     heap0 = static gv0, min 0, bound 0x0001_0000_0000, guard 0x8000_0000
     sig0 = (f64 [%xmm0], i32 [%rdi], i64 vmctx [%rsi]) -> f64 [%xmm0] system_v
-    fn0 = sig0 u0:517
+    fn0 = u0:517 sig0
 
 ebb0(v0: f64, v1: i64):
     v3 = iconst.i64 0

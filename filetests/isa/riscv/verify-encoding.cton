@@ -2,7 +2,7 @@ test verifier
 isa riscv
 
 function %RV32I(i32 link [%x1]) -> i32 link [%x1] {
-    fn0 = function %foo()
+    fn0 = %foo()
 
 ebb0(v9999: i32):
     ; iconst.i32 needs legalizing, so it should throw a
@@ -11,7 +11,7 @@ ebb0(v9999: i32):
 }
 
 function %RV32I(i32 link [%x1]) -> i32 link [%x1] {
-    fn0 = function %foo()
+    fn0 = %foo()
 
 ebb0(v9999: i32):
     v1 = iconst.i32 1
