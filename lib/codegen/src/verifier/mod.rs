@@ -207,7 +207,7 @@ impl<'a> Verifier<'a> {
             );
         }
         if is_last_inst && !is_terminator {
-            return err!(ebb, "block does not end in a terminator instruction!");
+            return err!(ebb, "block does not end in a terminator instruction");
         }
 
         // Instructions belong to the correct ebb.
@@ -1163,7 +1163,7 @@ mod tests {
     macro_rules! assert_err_with_msg {
         ($e:expr, $msg:expr) => {
             match $e {
-                Ok(_) => panic!("Expected an error!"),
+                Ok(_) => panic!("Expected an error"),
                 Err(Error { message, .. }) => {
                     if !message.contains($msg) {
                         panic!(format!(
