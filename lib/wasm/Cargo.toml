@@ -9,7 +9,7 @@ readme = "README.md"
 keywords = ["webassembly", "wasm"]
 
 [dependencies]
-wasmparser = { git = "https://github.com/yurydelendik/wasmparser.rs", default_features = false }
+wasmparser = { version = "0.16.0", default_features = false }
 cretonne-codegen = { path = "../codegen", version = "0.5.0", default_features = false }
 cretonne-frontend = { path = "../frontend", version = "0.5.0", default_features = false }
 
