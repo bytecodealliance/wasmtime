@@ -110,6 +110,7 @@ fn open_file() -> io::BufWriter<File> {
 /// Write a line to the debug trace file if tracing is enabled.
 ///
 /// Arguments are the same as for `printf!`.
+#[cfg(feature = "std")]
 #[macro_export]
 macro_rules! dbg {
     ($($arg:tt)+) => {
@@ -119,6 +120,13 @@ macro_rules! dbg {
             $crate::dbg::writeln_with_format_args(format_args!($($arg)+)).ok();
         }
     }
+}
+
+/// `dbg!` isn't supported in `no_std` mode, so expand it into nothing.
+#[cfg(not(feature = "std"))]
+#[macro_export]
+macro_rules! dbg {
+    ($($arg:tt)+) => {}
 }
 
 /// Helper for printing lists.
