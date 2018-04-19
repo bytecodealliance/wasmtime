@@ -9,6 +9,7 @@ use cretonne_codegen::dbg::DisplayList;
 use cretonne_codegen::ir;
 use cretonne_codegen::ir::entities::AnyEntity;
 use cretonne_codegen::print_errors::pretty_error;
+use cretonne_codegen::settings::OptLevel;
 use cretonne_reader::TestCommand;
 use match_directive::match_directive;
 use std::borrow::Cow;
@@ -121,7 +122,7 @@ impl SubTest for TestBinEmit {
             .min();
         func.stack_slots.frame_size = min_offset.map(|off| (-off) as u32);
 
-        let is_compressed = isa.flags().is_compressed();
+        let opt_level = isa.flags().opt_level();
 
         // Give an encoding to any instruction that doesn't already have one.
         let mut divert = RegDiversions::new();
@@ -141,11 +142,11 @@ impl SubTest for TestBinEmit {
                                 recipe_constraints.satisfied(inst, &divert, &func)
                             });
 
-                        if is_compressed {
+                        if opt_level == OptLevel::Best {
                             // Get the smallest legal encoding
                             legal_encodings.min_by_key(|&e| encinfo.bytes(e))
                         } else {
-                            // If not using compressed, just use the first encoding.
+                            // If not optimizing, just use the first encoding.
                             legal_encodings.next()
                         }
                     }

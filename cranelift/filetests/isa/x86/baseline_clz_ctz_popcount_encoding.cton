@@ -1,7 +1,6 @@
-
 test binemit
 set is_64bit
-set is_compressed
+set opt_level=best
 isa x86 baseline
 
 ; The binary encodings can be verified with the command:
