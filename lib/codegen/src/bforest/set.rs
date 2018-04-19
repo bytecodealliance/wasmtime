@@ -3,6 +3,10 @@
 use super::{Comparator, Forest, Node, NodeData, NodePool, Path, SetValue, INNER_SIZE};
 use packed_option::PackedOption;
 use std::marker::PhantomData;
+#[cfg(test)]
+use std::fmt;
+#[cfg(test)]
+use std::string::String;
 
 /// Tag type defining forest types for a set.
 struct SetTypes<K, C>(PhantomData<(K, C)>);
@@ -305,7 +309,7 @@ where
 #[cfg(test)]
 impl<'a, K, C> SetCursor<'a, K, C>
 where
-    K: Copy + ::std::fmt::Display,
+    K: Copy + fmt::Display,
     C: Comparator<K>,
 {
     fn verify(&self) {
@@ -314,7 +318,7 @@ where
     }
 
     /// Get a text version of the path to the current position.
-    fn tpath(&self) -> ::std::string::String {
+    fn tpath(&self) -> String {
         use std::string::ToString;
         self.path.to_string()
     }

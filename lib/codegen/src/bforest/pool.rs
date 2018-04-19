@@ -3,6 +3,8 @@
 use super::{Forest, Node, NodeData};
 use entity::PrimaryMap;
 use std::ops::{Index, IndexMut};
+#[cfg(test)]
+use std::fmt;
 
 /// A pool of nodes, including a free list.
 pub(super) struct NodePool<F: Forest> {
@@ -74,8 +76,8 @@ impl<F: Forest> NodePool<F> {
     /// Verify the consistency of the tree rooted at `node`.
     pub fn verify_tree(&self, node: Node, comp: &F::Comparator)
     where
-        NodeData<F>: ::std::fmt::Display,
-        F::Key: ::std::fmt::Display,
+        NodeData<F>: fmt::Display,
+        F::Key: fmt::Display,
     {
         use super::Comparator;
         use entity::SparseSet;
