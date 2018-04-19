@@ -1,6 +1,6 @@
 ; binary emission of 32-bit code.
 test binemit
-set is_compressed
+set opt_level=best
 set allones_funcaddrs
 isa x86 haswell
 

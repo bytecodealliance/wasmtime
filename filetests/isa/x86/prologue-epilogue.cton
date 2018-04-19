@@ -1,6 +1,6 @@
 test compile
 set is_64bit
-set is_compressed
+set opt_level=best
 set is_pic
 isa x86 haswell
 

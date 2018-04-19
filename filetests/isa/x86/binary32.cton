@@ -1,6 +1,6 @@
 ; binary emission of x86-32 code.
 test binemit
-set is_compressed
+set opt_level=best
 isa x86 haswell
 
 ; The binary encodings can be verified with the command:
