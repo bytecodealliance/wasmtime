@@ -3,6 +3,10 @@
 use super::{Comparator, Forest, Node, NodeData, NodePool, Path, INNER_SIZE};
 use packed_option::PackedOption;
 use std::marker::PhantomData;
+#[cfg(test)]
+use std::fmt;
+#[cfg(test)]
+use std::string::String;
 
 /// Tag type defining forest types for a map.
 struct MapTypes<K, V, C>(PhantomData<(K, V, C)>);
@@ -207,14 +211,14 @@ where
 #[cfg(test)]
 impl<K, V, C> Map<K, V, C>
 where
-    K: Copy + ::std::fmt::Display,
+    K: Copy + fmt::Display,
     V: Copy,
     C: Comparator<K>,
 {
     /// Verify consistency.
     fn verify(&self, forest: &MapForest<K, V, C>, comp: &C)
     where
-        NodeData<MapTypes<K, V, C>>: ::std::fmt::Display,
+        NodeData<MapTypes<K, V, C>>: fmt::Display,
     {
         if let Some(root) = self.root.expand() {
             forest.nodes.verify_tree(root, comp);
@@ -222,7 +226,7 @@ where
     }
 
     /// Get a text version of the path to `key`.
-    fn tpath(&self, key: K, forest: &MapForest<K, V, C>, comp: &C) -> ::std::string::String {
+    fn tpath(&self, key: K, forest: &MapForest<K, V, C>, comp: &C) -> String {
         use std::string::ToString;
         match self.root.expand() {
             None => "map(empty)".to_string(),
@@ -406,8 +410,8 @@ where
 #[cfg(test)]
 impl<'a, K, V, C> MapCursor<'a, K, V, C>
 where
-    K: Copy + ::std::fmt::Display,
-    V: Copy + ::std::fmt::Display,
+    K: Copy + fmt::Display,
+    V: Copy + fmt::Display,
     C: Comparator<K>,
 {
     fn verify(&self) {
@@ -416,7 +420,7 @@ where
     }
 
     /// Get a text version of the path to the current position.
-    fn tpath(&self) -> ::std::string::String {
+    fn tpath(&self) -> String {
         use std::string::ToString;
         self.path.to_string()
     }

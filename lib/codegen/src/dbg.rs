@@ -116,7 +116,6 @@ macro_rules! dbg {
         if $crate::dbg::enabled() {
             // Drop the error result so we don't get compiler errors for ignoring it.
             // What are you going to do, log the error?
-            #[cfg(feature = "std")]
             $crate::dbg::writeln_with_format_args(format_args!($($arg)+)).ok();
         }
     }

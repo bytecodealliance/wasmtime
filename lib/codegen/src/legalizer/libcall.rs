@@ -2,6 +2,7 @@
 
 use ir;
 use ir::InstBuilder;
+use std::vec::Vec;
 
 /// Try to expand `inst` as a library call, returning true is successful.
 pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function) -> bool {
@@ -15,7 +16,7 @@ pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function) -> bool {
     let funcref = find_funcref(libcall, func).unwrap_or_else(|| make_funcref(libcall, inst, func));
 
     // Now we convert `inst` to a call. First save the arguments.
-    let mut args = vec![];
+    let mut args = Vec::new();
     args.extend_from_slice(func.dfg.inst_args(inst));
     // The replace builder will preserve the instruction result values.
     func.dfg.replace(inst).call(funcref, &args);
