@@ -10,8 +10,13 @@ readme = "README.md"
 keywords = ["compile", "compiler", "jit"]
 
 [dependencies]
-cretonne-codegen = { path = "../codegen", version = "0.5.1" }
-cretonne-frontend = { path = "../frontend", version = "0.5.1" }
+cretonne-codegen = { path = "../codegen", version = "0.5.1", default-features = false }
+cretonne-frontend = { path = "../frontend", version = "0.5.1", default-features = false }
+
+[features]
+default = ["std"]
+std = ["cretonne-codegen/std", "cretonne-frontend/std"]
+core = ["cretonne-codegen/core", "cretonne-frontend/core"]
 
 [badges]
 maintenance = { status = "experimental" }

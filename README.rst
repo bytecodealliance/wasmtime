@@ -35,9 +35,9 @@ the System V AMD64 ABI calling convention used on many platforms, but does not
 yet support the Windows x64 calling convention. The performance of code
 produced by Cretonne is not yet impressive, though we have plans to fix that.
 
-The core codegen crates have minimal dependencies, and do not require any host
-floating-point support. Support for `no_std` mode in the core codegen crates is
-`in development <https://github.com/cretonne/cretonne/tree/no_std>`_.
+The core codegen crates have minimal dependencies, support
+`no_std <#building-with-no-std>` mode, and do not require any host
+floating-point support.
 
 Cretonne does not yet perform mitigations for Spectre or related security
 issues, though it may do so in the future. It does not currently make any
@@ -93,22 +93,31 @@ installed.
 Building with `no_std`
 ----------------------
 
-To build cretonne without libstd, disable the `std` feature on `lib/cretonne`,
-`lib/frontend`, `lib/native`, and `lib/wasm`, which is otherwise enabled by
-default, and enable the `core` feature.
+The following crates support `no_std`:
+ - `cretonne-entity`
+ - `cretonne-codegen`
+ - `cretonne-frontend`
+ - `cretonne-native`
+ - `cretonne-wasm`
+ - `cretonne-module`
+ - `cretonne-simplejit`
+ - `cretonne`
 
-For example, to build `cretonne`:
+To use `no_std` mode, disable the `std` feature and enable the `core` feature.
+This currently requires nightly rust.
+
+For example, to build `cretonne-codegen`:
 
 .. code-block:: sh
 
-    cd lib/cretonne
+    cd lib/codegen
     cargo build --no-default-features --features core
 
-Or, when using `cretonne` as a dependency (in Cargo.toml):
+Or, when using `cretonne-codegen` as a dependency (in Cargo.toml):
 
 .. code-block::
 
-    [dependency.cretonne]
+    [dependency.cretonne-codegen]
     ...
     default-features = false
     features = ["core"]
