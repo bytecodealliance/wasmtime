@@ -26,4 +26,4 @@ extern crate libc;
 mod backend;
 mod memory;
 
-pub use backend::SimpleJITBackend;
+pub use backend::{SimpleJITBuilder, SimpleJITBackend};
