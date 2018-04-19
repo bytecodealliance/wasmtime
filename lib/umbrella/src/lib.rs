@@ -16,17 +16,20 @@
                 use_self,
                 ))]
 
-pub extern crate cretonne_codegen;
-pub extern crate cretonne_frontend;
+/// Provide these crates, renamed to reduce stutter.
+pub extern crate cretonne_codegen as codegen;
+pub extern crate cretonne_frontend as frontend;
 
 /// A prelude providing convenient access to commonly-used cretonne features. Use
 /// as `use cretonne::prelude::*`.
 pub mod prelude {
-    pub use cretonne_codegen;
-    pub use cretonne_codegen::entity::EntityRef;
-    pub use cretonne_codegen::ir::{AbiParam, InstBuilder, Value, Ebb, Signature, CallConv};
-    pub use cretonne_codegen::ir::types;
-    pub use cretonne_codegen::ir::condcodes::IntCC;
+    pub use codegen;
+    pub use codegen::entity::EntityRef;
+    pub use codegen::ir::{AbiParam, InstBuilder, Value, Ebb, Signature, CallConv, Type,
+                          JumpTableData, MemFlags};
+    pub use codegen::ir::types;
+    pub use codegen::ir::condcodes::{IntCC, FloatCC};
+    pub use codegen::ir::immediates::{Ieee32, Ieee64};
 
-    pub use cretonne_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
+    pub use frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
 }
