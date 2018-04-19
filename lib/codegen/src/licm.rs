@@ -150,7 +150,7 @@ fn is_loop_invariant(inst: Inst, dfg: &DataFlowGraph, loop_values: &HashSet<Valu
             return false;
         }
     }
-    return true;
+    true
 }
 
 // Traverses a loop in reverse post-order from a header EBB and identify loop-invariant
@@ -173,7 +173,7 @@ fn remove_loop_invariant_instructions(
         }
         pos.goto_top(*ebb);
         #[cfg_attr(feature = "cargo-clippy", allow(block_in_if_condition_stmt))]
-        'next_inst: while let Some(inst) = pos.next_inst() {
+        while let Some(inst) = pos.next_inst() {
             if is_loop_invariant(inst, &pos.func.dfg, &loop_values) {
                 // If all the instruction's argument are defined outside the loop
                 // then this instruction is loop-invariant

@@ -17,7 +17,7 @@ use std::u32;
 pub struct ProgramPoint(u32);
 
 impl From<Inst> for ProgramPoint {
-    fn from(inst: Inst) -> ProgramPoint {
+    fn from(inst: Inst) -> Self {
         let idx = inst.index();
         debug_assert!(idx < (u32::MAX / 2) as usize);
         ProgramPoint((idx * 2) as u32)
@@ -25,7 +25,7 @@ impl From<Inst> for ProgramPoint {
 }
 
 impl From<Ebb> for ProgramPoint {
-    fn from(ebb: Ebb) -> ProgramPoint {
+    fn from(ebb: Ebb) -> Self {
         let idx = ebb.index();
         debug_assert!(idx < (u32::MAX / 2) as usize);
         ProgramPoint((idx * 2 + 1) as u32)
@@ -33,7 +33,7 @@ impl From<Ebb> for ProgramPoint {
 }
 
 impl From<ValueDef> for ProgramPoint {
-    fn from(def: ValueDef) -> ProgramPoint {
+    fn from(def: ValueDef) -> Self {
         match def {
             ValueDef::Result(inst, _) => inst.into(),
             ValueDef::Param(ebb, _) => ebb.into(),
@@ -62,19 +62,19 @@ impl ExpandedProgramPoint {
 }
 
 impl From<Inst> for ExpandedProgramPoint {
-    fn from(inst: Inst) -> ExpandedProgramPoint {
+    fn from(inst: Inst) -> Self {
         ExpandedProgramPoint::Inst(inst)
     }
 }
 
 impl From<Ebb> for ExpandedProgramPoint {
-    fn from(ebb: Ebb) -> ExpandedProgramPoint {
+    fn from(ebb: Ebb) -> Self {
         ExpandedProgramPoint::Ebb(ebb)
     }
 }
 
 impl From<ValueDef> for ExpandedProgramPoint {
-    fn from(def: ValueDef) -> ExpandedProgramPoint {
+    fn from(def: ValueDef) -> Self {
         match def {
             ValueDef::Result(inst, _) => inst.into(),
             ValueDef::Param(ebb, _) => ebb.into(),
@@ -83,7 +83,7 @@ impl From<ValueDef> for ExpandedProgramPoint {
 }
 
 impl From<ProgramPoint> for ExpandedProgramPoint {
-    fn from(pp: ProgramPoint) -> ExpandedProgramPoint {
+    fn from(pp: ProgramPoint) -> Self {
         if pp.0 & 1 == 0 {
             ExpandedProgramPoint::Inst(Inst::new((pp.0 / 2) as usize))
         } else {

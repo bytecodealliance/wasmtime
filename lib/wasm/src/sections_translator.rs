@@ -241,8 +241,8 @@ pub fn parse_global_section(
         }
         let global = Global {
             ty: type_to_type(&content_type).unwrap(),
-            mutability: mutability,
-            initializer: initializer,
+            mutability,
+            initializer,
         };
         environ.declare_global(global);
         match *parser.read() {

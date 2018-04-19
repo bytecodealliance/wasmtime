@@ -103,7 +103,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         // Ignore traps for now. For now, frontends should just avoid generating code
         // that traps.
         let mut trap_sink = NullTrapSink {};
-        ctx.emit_to_memory(ptr, &mut reloc_sink, &mut trap_sink, &*self.isa);
+        unsafe { ctx.emit_to_memory(&*self.isa, ptr, &mut reloc_sink, &mut trap_sink) };
 
         Ok(Self::CompiledFunction {
             code: ptr,
@@ -238,14 +238,17 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             match reloc {
                 Reloc::Abs4 => {
                     // TODO: Handle overflow.
+                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
                     unsafe { write_unaligned(at as *mut u32, what as u32) };
                 }
                 Reloc::Abs8 => {
+                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
                     unsafe { write_unaligned(at as *mut u64, what as u64) };
                 }
                 Reloc::X86PCRel4 => {
                     // TODO: Handle overflow.
                     let pcrel = ((what as isize) - (at as isize)) as i32;
+                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
                     unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
                 Reloc::X86GOTPCRel4 |
@@ -295,9 +298,11 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                     match reloc {
                         Reloc::Abs4 => {
                             // TODO: Handle overflow.
+                            #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
                             unsafe { write_unaligned(at as *mut u32, what as u32) };
                         }
                         Reloc::Abs8 => {
+                            #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
                             unsafe { write_unaligned(at as *mut u64, what as u64) };
                         }
                         Reloc::X86PCRel4 |

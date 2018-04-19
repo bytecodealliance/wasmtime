@@ -102,8 +102,7 @@ impl<'a> FlagsVerifier<'a> {
                 if self.encinfo
                     .as_ref()
                     .and_then(|ei| ei.operand_constraints(self.func.encodings[inst]))
-                    .map(|c| c.clobbers_flags)
-                    .unwrap_or(false) && live_val.is_some()
+                    .map_or(false, |c| c.clobbers_flags) && live_val.is_some()
                 {
                     return err!(inst, "encoding clobbers live CPU flags in {}", live);
                 }

@@ -38,7 +38,10 @@ pub struct MemoryCodeSink<'a> {
 
 impl<'a> MemoryCodeSink<'a> {
     /// Create a new memory code sink that writes a function to the memory pointed to by `data`.
-    pub fn new<'sink>(
+    ///
+    /// This function is unsafe since `MemoryCodeSink` does not perform bounds checking on the
+    /// memory buffer, and it can't guarantee that the `data` pointer is valid.
+    pub unsafe fn new<'sink>(
         data: *mut u8,
         relocs: &'sink mut RelocSink,
         traps: &'sink mut TrapSink,
@@ -84,6 +87,7 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
 
     fn put2(&mut self, x: u16) {
         unsafe {
+            #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
             write_unaligned(self.data.offset(self.offset) as *mut u16, x);
         }
         self.offset += 2;
@@ -91,6 +95,7 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
 
     fn put4(&mut self, x: u32) {
         unsafe {
+            #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
             write_unaligned(self.data.offset(self.offset) as *mut u32, x);
         }
         self.offset += 4;
@@ -98,6 +103,7 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
 
     fn put8(&mut self, x: u64) {
         unsafe {
+            #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
             write_unaligned(self.data.offset(self.offset) as *mut u64, x);
         }
         self.offset += 8;

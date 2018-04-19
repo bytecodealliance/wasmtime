@@ -200,7 +200,7 @@ impl<'a> Verifier<'a> {
             );
         }
         if is_last_inst && !is_terminator {
-            return err!(ebb, "block does not end in a terminator instruction!");
+            return err!(ebb, "block does not end in a terminator instruction");
         }
 
         // Instructions belong to the correct ebb.
@@ -237,9 +237,9 @@ impl<'a> Verifier<'a> {
 
         let fixed_results = inst_data.opcode().constraints().fixed_results();
         // var_results is 0 if we aren't a call instruction
-        let var_results = dfg.call_signature(inst)
-            .map(|sig| dfg.signatures[sig].returns.len())
-            .unwrap_or(0);
+        let var_results = dfg.call_signature(inst).map_or(0, |sig| {
+            dfg.signatures[sig].returns.len()
+        });
         let total_results = fixed_results + var_results;
 
         // All result values for multi-valued instructions are created
@@ -1156,7 +1156,7 @@ mod tests {
     macro_rules! assert_err_with_msg {
         ($e:expr, $msg:expr) => {
             match $e {
-                Ok(_) => panic!("Expected an error!"),
+                Ok(_) => panic!("Expected an error"),
                 Err(Error { message, .. }) => {
                     if !message.contains($msg) {
                         #[cfg(feature = "std")]

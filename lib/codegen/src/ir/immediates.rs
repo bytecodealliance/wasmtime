@@ -18,12 +18,12 @@ pub struct Imm64(i64);
 
 impl Imm64 {
     /// Create a new `Imm64` representing the signed number `x`.
-    pub fn new(x: i64) -> Imm64 {
+    pub fn new(x: i64) -> Self {
         Imm64(x)
     }
 
     /// Return self negated.
-    pub fn wrapping_neg(self) -> Imm64 {
+    pub fn wrapping_neg(self) -> Self {
         Imm64(self.0.wrapping_neg())
     }
 }
@@ -143,8 +143,8 @@ impl FromStr for Imm64 {
     type Err = &'static str;
 
     // Parse a decimal or hexadecimal `Imm64`, formatted as above.
-    fn from_str(s: &str) -> Result<Imm64, &'static str> {
-        parse_i64(s).map(Imm64::new)
+    fn from_str(s: &str) -> Result<Self, &'static str> {
+        parse_i64(s).map(Self::new)
     }
 }
 
@@ -191,7 +191,7 @@ impl FromStr for Uimm32 {
     type Err = &'static str;
 
     // Parse a decimal or hexadecimal `Uimm32`, formatted as above.
-    fn from_str(s: &str) -> Result<Uimm32, &'static str> {
+    fn from_str(s: &str) -> Result<Self, &'static str> {
         parse_i64(s).and_then(|x| if 0 <= x && x <= i64::from(u32::MAX) {
             Ok(Uimm32(x as u32))
         } else {
@@ -209,7 +209,7 @@ pub struct Offset32(i32);
 
 impl Offset32 {
     /// Create a new `Offset32` representing the signed number `x`.
-    pub fn new(x: i32) -> Offset32 {
+    pub fn new(x: i32) -> Self {
         Offset32(x)
     }
 }
@@ -255,14 +255,14 @@ impl FromStr for Offset32 {
     type Err = &'static str;
 
     // Parse a decimal or hexadecimal `Offset32`, formatted as above.
-    fn from_str(s: &str) -> Result<Offset32, &'static str> {
+    fn from_str(s: &str) -> Result<Self, &'static str> {
         if !(s.starts_with('-') || s.starts_with('+')) {
             return Err("Offset must begin with sign");
         }
         parse_i64(s).and_then(|x| if i64::from(i32::MIN) <= x &&
             x <= i64::from(i32::MAX)
         {
-            Ok(Offset32::new(x as i32))
+            Ok(Self::new(x as i32))
         } else {
             Err("Offset out of range")
         })
@@ -524,12 +524,12 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
 
 impl Ieee32 {
     /// Create a new `Ieee32` containing the bits of `x`.
-    pub fn with_bits(x: u32) -> Ieee32 {
+    pub fn with_bits(x: u32) -> Self {
         Ieee32(x)
     }
 
     /// Create an `Ieee32` number representing `2.0^n`.
-    pub fn pow2<I: Into<i32>>(n: I) -> Ieee32 {
+    pub fn pow2<I: Into<i32>>(n: I) -> Self {
         let n = n.into();
         let w = 8;
         let t = 23;
@@ -542,7 +542,7 @@ impl Ieee32 {
 
     /// Create an `Ieee32` number representing the greatest negative value
     /// not convertable from f32 to a signed integer with width n.
-    pub fn fcvt_to_sint_negative_overflow<I: Into<i32>>(n: I) -> Ieee32 {
+    pub fn fcvt_to_sint_negative_overflow<I: Into<i32>>(n: I) -> Self {
         let n = n.into();
         debug_assert!(n < 32);
         debug_assert!(23 + 1 - n < 32);
@@ -552,12 +552,12 @@ impl Ieee32 {
     }
 
     /// Return self negated.
-    pub fn neg(self) -> Ieee32 {
+    pub fn neg(self) -> Self {
         Ieee32(self.0 ^ (1 << 31))
     }
 
     /// Create a new `Ieee32` representing the number `x`.
-    pub fn with_float(x: f32) -> Ieee32 {
+    pub fn with_float(x: f32) -> Self {
         Ieee32(unsafe { mem::transmute(x) })
     }
 
@@ -577,7 +577,7 @@ impl Display for Ieee32 {
 impl FromStr for Ieee32 {
     type Err = &'static str;
 
-    fn from_str(s: &str) -> Result<Ieee32, &'static str> {
+    fn from_str(s: &str) -> Result<Self, &'static str> {
         match parse_float(s, 8, 23) {
             Ok(b) => Ok(Ieee32(b as u32)),
             Err(s) => Err(s),
@@ -587,12 +587,12 @@ impl FromStr for Ieee32 {
 
 impl Ieee64 {
     /// Create a new `Ieee64` containing the bits of `x`.
-    pub fn with_bits(x: u64) -> Ieee64 {
+    pub fn with_bits(x: u64) -> Self {
         Ieee64(x)
     }
 
     /// Create an `Ieee64` number representing `2.0^n`.
-    pub fn pow2<I: Into<i64>>(n: I) -> Ieee64 {
+    pub fn pow2<I: Into<i64>>(n: I) -> Self {
         let n = n.into();
         let w = 11;
         let t = 52;
@@ -605,7 +605,7 @@ impl Ieee64 {
 
     /// Create an `Ieee64` number representing the greatest negative value
     /// not convertable from f64 to a signed integer with width n.
-    pub fn fcvt_to_sint_negative_overflow<I: Into<i64>>(n: I) -> Ieee64 {
+    pub fn fcvt_to_sint_negative_overflow<I: Into<i64>>(n: I) -> Self {
         let n = n.into();
         debug_assert!(n < 64);
         debug_assert!(52 + 1 - n < 64);
@@ -615,12 +615,12 @@ impl Ieee64 {
     }
 
     /// Return self negated.
-    pub fn neg(self) -> Ieee64 {
+    pub fn neg(self) -> Self {
         Ieee64(self.0 ^ (1 << 63))
     }
 
     /// Create a new `Ieee64` representing the number `x`.
-    pub fn with_float(x: f64) -> Ieee64 {
+    pub fn with_float(x: f64) -> Self {
         Ieee64(unsafe { mem::transmute(x) })
     }
 
@@ -640,7 +640,7 @@ impl Display for Ieee64 {
 impl FromStr for Ieee64 {
     type Err = &'static str;
 
-    fn from_str(s: &str) -> Result<Ieee64, &'static str> {
+    fn from_str(s: &str) -> Result<Self, &'static str> {
         match parse_float(s, 11, 52) {
             Ok(b) => Ok(Ieee64(b)),
             Err(s) => Err(s),

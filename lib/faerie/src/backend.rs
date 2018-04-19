@@ -107,12 +107,14 @@ impl Backend for FaerieBackend {
             // that traps.
             let mut trap_sink = NullTrapSink {};
 
-            ctx.emit_to_memory(
-                code.as_mut_ptr(),
-                &mut reloc_sink,
-                &mut trap_sink,
-                &*self.isa,
-            );
+            unsafe {
+                ctx.emit_to_memory(
+                    &*self.isa,
+                    code.as_mut_ptr(),
+                    &mut reloc_sink,
+                    &mut trap_sink,
+                )
+            };
         }
 
         self.artifact.define(name, code).expect(
@@ -270,7 +272,7 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
             &self.namespace.get_data_decl(name).name
         };
         let addend_i32 = addend as i32;
-        debug_assert!(addend_i32 as i64 == addend);
+        debug_assert!(i64::from(addend_i32) == addend);
         let raw_reloc = container::raw_relocation(reloc, self.format);
         self.artifact
             .link_with(

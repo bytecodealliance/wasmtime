@@ -45,8 +45,8 @@ where
     C: Comparator<K>,
 {
     /// Create a new empty forest.
-    pub fn new() -> MapForest<K, V, C> {
-        MapForest { nodes: NodePool::new() }
+    pub fn new() -> Self {
+        Self { nodes: NodePool::new() }
     }
 
     /// Clear all maps in the forest.
@@ -83,8 +83,8 @@ where
     C: Comparator<K>,
 {
     /// Make an empty map.
-    pub fn new() -> Map<K, V, C> {
-        Map {
+    pub fn new() -> Self {
+        Self {
             root: None.into(),
             unused: PhantomData,
         }

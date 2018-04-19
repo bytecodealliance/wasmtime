@@ -272,7 +272,7 @@ impl<'a> Context<'a> {
                 Affinity::Stack => debug_assert!(abi.location.is_stack()),
                 // This is a ghost value, unused in the function. Don't assign it to a location
                 // either.
-                Affinity::None => {}
+                Affinity::Unassigned => {}
             }
         }
 
@@ -1126,8 +1126,8 @@ struct AvailableRegs {
 
 impl AvailableRegs {
     /// Initialize both the input and global sets from `regs`.
-    pub fn new(regs: &RegisterSet) -> AvailableRegs {
-        AvailableRegs {
+    pub fn new(regs: &RegisterSet) -> Self {
+        Self {
             input: regs.clone(),
             global: regs.clone(),
         }

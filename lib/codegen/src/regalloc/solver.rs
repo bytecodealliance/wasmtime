@@ -151,8 +151,8 @@ pub struct Variable {
 }
 
 impl Variable {
-    fn new_live(value: Value, constraint: RegClass, from: RegUnit, is_output: bool) -> Variable {
-        Variable {
+    fn new_live(value: Value, constraint: RegClass, from: RegUnit, is_output: bool) -> Self {
+        Self {
             value,
             constraint,
             from: Some(from),
@@ -164,8 +164,8 @@ impl Variable {
         }
     }
 
-    fn new_def(value: Value, constraint: RegClass, is_global: bool) -> Variable {
-        Variable {
+    fn new_def(value: Value, constraint: RegClass, is_global: bool) -> Self {
+        Self {
             value,
             constraint,
             from: None,
@@ -280,7 +280,7 @@ pub enum Move {
 
 impl Move {
     /// Create a register move from an assignment, but not for identity assignments.
-    fn with_assignment(a: &Assignment) -> Option<Move> {
+    fn with_assignment(a: &Assignment) -> Option<Self> {
         if a.from != a.to {
             Some(Move::Reg {
                 value: a.value,

@@ -36,7 +36,7 @@ pub enum Linkage {
 }
 
 impl Linkage {
-    fn merge(a: Linkage, b: Linkage) -> Linkage {
+    fn merge(a: Self, b: Self) -> Self {
         match a {
             Linkage::Export => Linkage::Export,
             Linkage::Preemptible => {

@@ -25,7 +25,7 @@ impl PtrLen {
             let err = libc::posix_memalign(&mut ptr, page_size, alloc_size);
             if err == 0 {
                 Ok(Self {
-                    ptr: mem::transmute(ptr),
+                    ptr: ptr as *mut u8,
                     len: alloc_size,
                 })
             } else {
