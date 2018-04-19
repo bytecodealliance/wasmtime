@@ -15,14 +15,19 @@ function banner() {
 }
 
 # Test those packages which have no_std support.
-LIBS="codegen frontend wasm native"
+LIBS="codegen frontend wasm native module simplejit umbrella"
 cd "$topdir"
 for LIB in $LIBS
 do
     banner "Rust unit tests in $LIB"
     cd "lib/$LIB"
+
+    # Test with just "core" enabled.
     cargo test --no-default-features --features core
+
+    # Test with "core" and "std" enabled at the same time.
     cargo test --features core
+
     cd "$topdir"
 done
 
