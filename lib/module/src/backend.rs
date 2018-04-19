@@ -14,6 +14,9 @@ pub trait Backend
 where
     Self: marker::Sized,
 {
+    /// A builder for constructing `Backend` instances.
+    type Builder;
+
     /// The results of compiling a function.
     type CompiledFunction;
 
@@ -21,12 +24,20 @@ where
     type CompiledData;
 
     /// The completed output artifact for a function, if this is meaningful for
-    /// the Backend.
+    /// the `Backend`.
     type FinalizedFunction;
 
     /// The completed output artifact for a data object, if this is meaningful for
-    /// the Backend.
+    /// the `Backend`.
     type FinalizedData;
+
+    /// This is an object returned by `Module`'s
+    /// [`finish`](struct.Module.html#method.finish) function,
+    /// if the `Backend` has a purpose for this.
+    type Product;
+
+    /// Create a new `Backend` instance.
+    fn new(Self::Builder) -> Self;
 
     /// Return the `TargetIsa` to compile for.
     fn isa(&self) -> &TargetIsa;
@@ -94,4 +105,8 @@ where
         data: &Self::CompiledData,
         namespace: &ModuleNamespace<Self>,
     ) -> Self::FinalizedData;
+
+    /// Consume this `Backend` and return a result. Some implementations may
+    /// provide additional functionality through this result.
+    fn finish(self) -> Self::Product;
 }
