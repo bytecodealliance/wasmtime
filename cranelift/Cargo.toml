@@ -23,7 +23,7 @@ cretonne-module = { path = "lib/module", version = "0.5.1" }
 cretonne-faerie = { path = "lib/faerie", version = "0.5.1" }
 cretonne-simplejit = { path = "lib/simplejit", version = "0.5.1" }
 cretonne = { path = "lib/umbrella", version = "0.5.1" }
-filecheck = "0.2.1"
+filecheck = "0.3.0"
 docopt = "0.8.0"
 serde = "1.0.8"
 serde_derive = "1.0.8"
