@@ -31,11 +31,3 @@ tempdir = "0.3.5"
 term = "0.5.1"
 
 [workspace]
-
-# Enable debug assertions and parallel compilation when building cretonne-tools
-# since they are for testing and development mostly. This doesn't affect the
-# flags used to build the cretonne-* crates when used as a dependency.
-[profile.release]
-opt-level = 2
-debug-assertions = true
-codegen-units = 4
