@@ -84,7 +84,7 @@ impl Affinity {
     ///
     /// Note that this does not guarantee that the register allocator will pick a register that
     /// satisfies the constraint.
-    pub fn merge(&mut self, constraint: &OperandConstraint, reg_info: &RegInfo) {
+    pub fn merge(&mut self, constraint: &OperandConstraint, reginfo: &RegInfo) {
         match *self {
             Affinity::Unassigned => *self = Self::new(constraint),
             Affinity::Reg(rc) => {
@@ -95,7 +95,7 @@ impl Affinity {
                 {
                     // If the register classes don't overlap, `intersect` returns `Unassigned`, and
                     // we just keep our previous affinity.
-                    if let Some(subclass) = constraint.regclass.intersect_index(reg_info.rc(rc)) {
+                    if let Some(subclass) = constraint.regclass.intersect_index(reginfo.rc(rc)) {
                         // This constraint shrinks our preferred register class.
                         *self = Affinity::Reg(subclass);
                     }

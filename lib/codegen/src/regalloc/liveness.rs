@@ -197,7 +197,7 @@ fn get_or_create<'a>(
     value: Value,
     isa: &TargetIsa,
     func: &Function,
-    enc_info: &EncInfo,
+    encinfo: &EncInfo,
 ) -> &'a mut LiveRange {
     // It would be better to use `get_mut()` here, but that leads to borrow checker fighting
     // which can probably only be resolved by non-lexical lifetimes.
@@ -211,7 +211,7 @@ fn get_or_create<'a>(
                 def = inst.into();
                 // Initialize the affinity from the defining instruction's result constraints.
                 // Don't do this for call return values which are always tied to a single register.
-                affinity = enc_info
+                affinity = encinfo
                     .operand_constraints(func.encodings[inst])
                     .and_then(|rc| rc.outs.get(rnum))
                     .map(Affinity::new)
@@ -385,8 +385,8 @@ impl Liveness {
         self.ranges.clear();
 
         // Get ISA data structures used for computing live range affinities.
-        let enc_info = isa.encoding_info();
-        let reg_info = isa.register_info();
+        let encinfo = isa.encoding_info();
+        let reginfo = isa.register_info();
 
         // The liveness computation needs to visit all uses, but the order doesn't matter.
         // TODO: Perhaps this traversal of the function could be combined with a dead code
@@ -397,7 +397,7 @@ impl Liveness {
             // TODO: If these parameters are really dead, we could remove them, except for the
             // entry block which must match the function signature.
             for &arg in func.dfg.ebb_params(ebb) {
-                get_or_create(&mut self.ranges, arg, isa, func, &enc_info);
+                get_or_create(&mut self.ranges, arg, isa, func, &encinfo);
             }
 
             for inst in func.layout.ebb_insts(ebb) {
@@ -408,19 +408,18 @@ impl Liveness {
                 // TODO: When we implement DCE, we can use the absence of a live range to indicate
                 // an unused value.
                 for &def in func.dfg.inst_results(inst) {
-                    get_or_create(&mut self.ranges, def, isa, func, &enc_info);
+                    get_or_create(&mut self.ranges, def, isa, func, &encinfo);
                 }
 
                 // Iterator of constraints, one per value operand.
                 let encoding = func.encodings[inst];
-                let operand_constraint_slice: &[OperandConstraint] = enc_info
-                    .operand_constraints(encoding)
-                    .map_or(&[], |c| c.ins);
+                let operand_constraint_slice: &[OperandConstraint] =
+                    encinfo.operand_constraints(encoding).map_or(&[], |c| c.ins);
                 let mut operand_constraints = operand_constraint_slice.iter();
 
                 for &arg in func.dfg.inst_args(inst) {
                     // Get the live range, create it as a dead range if necessary.
-                    let lr = get_or_create(&mut self.ranges, arg, isa, func, &enc_info);
+                    let lr = get_or_create(&mut self.ranges, arg, isa, func, &encinfo);
 
                     // Extend the live range to reach this use.
                     extend_to_use(
@@ -437,7 +436,7 @@ impl Liveness {
                     // operands described by `operand_constraints`. Variable arguments are either
                     // EBB arguments or call/return ABI arguments.
                     if let Some(constraint) = operand_constraints.next() {
-                        lr.affinity.merge(constraint, &reg_info);
+                        lr.affinity.merge(constraint, &reginfo);
                     }
                 }
             }
