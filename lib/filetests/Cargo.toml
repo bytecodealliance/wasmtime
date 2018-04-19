@@ -4,7 +4,7 @@ authors = ["The Cretonne Project Developers"]
 version = "0.5.1"
 description = "Test driver and implementations of the filetest commands"
 license = "Apache-2.0"
-documentation = "http://cretonne.readthedocs.io/en/latest/testing.html#file-tests"
+documentation = "https://cretonne.readthedocs.io/en/latest/testing.html#file-tests"
 repository = "https://github.com/cretonne/cretonne"
 publish = false
 
