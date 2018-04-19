@@ -41,15 +41,17 @@ if [ -n "$needcheck" ]; then
     touch $tsfile || echo no target directory
 fi
 
+# Make sure the code builds in release mode.
+banner "Rust release build"
+cargo build --release
+
 # Make sure the code builds in debug mode.
 banner "Rust debug build"
 cargo build
 
-# Make sure the code builds in release mode, and run the unit tests. We run
-# these in release mode for speed, but note that the top-level Cargo.toml file
-# does enable debug assertions in release builds.
-banner "Rust release build and unit tests"
-cargo test --all --release
+# Run the tests. We run these in debug mode so that assertions are enabled.
+banner "Rust unit tests"
+cargo test --all
 
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/cretonne/index.html"
