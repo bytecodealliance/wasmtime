@@ -32,9 +32,9 @@ pub struct Diversion {
 
 impl Diversion {
     /// Make a new diversion.
-    pub fn new(value: Value, from: ValueLoc, to: ValueLoc) -> Diversion {
+    pub fn new(value: Value, from: ValueLoc, to: ValueLoc) -> Self {
         debug_assert!(from.is_assigned() && to.is_assigned());
-        Diversion { value, from, to }
+        Self { value, from, to }
     }
 }
 

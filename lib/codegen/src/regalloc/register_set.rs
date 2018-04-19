@@ -103,7 +103,7 @@ impl RegisterSet {
     /// of `other`.
     ///
     /// This assumes that unused bits are 1.
-    pub fn interferes_with(&self, other: &RegisterSet) -> bool {
+    pub fn interferes_with(&self, other: &Self) -> bool {
         self.avail.iter().zip(&other.avail).any(
             |(&x, &y)| (x | y) != !0,
         )
@@ -111,7 +111,7 @@ impl RegisterSet {
 
     /// Intersect this set of registers with `other`. This has the effect of removing any register
     /// units from this set that are not in `other`.
-    pub fn intersect(&mut self, other: &RegisterSet) {
+    pub fn intersect(&mut self, other: &Self) {
         for (x, &y) in self.avail.iter_mut().zip(&other.avail) {
             *x &= y;
         }

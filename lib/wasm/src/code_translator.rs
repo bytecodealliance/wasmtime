@@ -949,7 +949,7 @@ fn get_heap_addr(
     heap: ir::Heap,
     addr32: ir::Value,
     offset: u32,
-    addr_ty: ir::Type,
+    addr_ty: Type,
     builder: &mut FunctionBuilder<Variable>,
 ) -> (ir::Value, i32) {
     use std::cmp::min;
@@ -985,7 +985,7 @@ fn get_heap_addr(
 fn translate_load<FE: FuncEnvironment + ?Sized>(
     offset: u32,
     opcode: ir::Opcode,
-    result_ty: ir::Type,
+    result_ty: Type,
     builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
     environ: &mut FE,

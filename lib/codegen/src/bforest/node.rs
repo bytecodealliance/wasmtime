@@ -73,7 +73,7 @@ impl<F: Forest> NodeData<F> {
     }
 
     /// Create an inner node with a single key and two sub-trees.
-    pub fn inner(left: Node, key: F::Key, right: Node) -> NodeData<F> {
+    pub fn inner(left: Node, key: F::Key, right: Node) -> Self {
         // Splat the key and right node to the whole array.
         // Saves us from inventing a default/reserved value.
         let mut tree = [right; INNER_SIZE];
@@ -86,7 +86,7 @@ impl<F: Forest> NodeData<F> {
     }
 
     /// Create a leaf node with a single key-value pair.
-    pub fn leaf(key: F::Key, value: F::Value) -> NodeData<F> {
+    pub fn leaf(key: F::Key, value: F::Value) -> Self {
         NodeData::Leaf {
             size: 1,
             keys: F::splat_key(key),
@@ -360,7 +360,7 @@ impl<F: Forest> NodeData<F> {
     ///
     /// In the first case, `None` is returned. In the second case, the new critical key for the
     /// right sibling node is returned.
-    pub fn balance(&mut self, crit_key: F::Key, rhs: &mut NodeData<F>) -> Option<F::Key> {
+    pub fn balance(&mut self, crit_key: F::Key, rhs: &mut Self) -> Option<F::Key> {
         match (self, rhs) {
             (&mut NodeData::Inner {
                  size: ref mut l_size,
@@ -514,7 +514,7 @@ pub(super) enum Removed {
 
 impl Removed {
     /// Create a `Removed` status from a size and capacity.
-    fn new(removed: usize, new_size: usize, capacity: usize) -> Removed {
+    fn new(removed: usize, new_size: usize, capacity: usize) -> Self {
         if 2 * new_size >= capacity {
             if removed == new_size {
                 Removed::Rightmost

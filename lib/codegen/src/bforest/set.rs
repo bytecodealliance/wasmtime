@@ -42,8 +42,8 @@ where
     C: Comparator<K>,
 {
     /// Create a new empty forest.
-    pub fn new() -> SetForest<K, C> {
-        SetForest { nodes: NodePool::new() }
+    pub fn new() -> Self {
+        Self { nodes: NodePool::new() }
     }
 
     /// Clear all sets in the forest.
@@ -78,8 +78,8 @@ where
     C: Comparator<K>,
 {
     /// Make an empty set.
-    pub fn new() -> Set<K, C> {
-        Set {
+    pub fn new() -> Self {
+        Self {
             root: None.into(),
             unused: PhantomData,
         }

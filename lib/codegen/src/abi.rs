@@ -25,13 +25,13 @@ pub enum ArgAction {
 }
 
 impl From<ArgumentLoc> for ArgAction {
-    fn from(x: ArgumentLoc) -> ArgAction {
+    fn from(x: ArgumentLoc) -> Self {
         ArgAction::Assign(x)
     }
 }
 
 impl From<ValueConversion> for ArgAction {
-    fn from(x: ValueConversion) -> ArgAction {
+    fn from(x: ValueConversion) -> Self {
         ArgAction::Convert(x)
     }
 }

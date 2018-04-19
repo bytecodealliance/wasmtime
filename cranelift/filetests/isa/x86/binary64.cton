@@ -477,7 +477,7 @@ ebb0:
     ; Colocated functions.
 
     ; asm: call bar
-    ; call fn1()                                ; bin: e8 PCRel4(%bar-4) 00000000
+    call fn1()                                  ; bin: e8 PCRel4(%bar-4) 00000000
 
     ; asm: lea 0x0(%rip), %rcx
     [-,%rcx]            v400 = func_addr.i64 fn1        ; bin: 48 8d 0d PCRel4(%bar-4) 00000000

@@ -24,8 +24,8 @@ struct Args {
 }
 
 impl Args {
-    fn new(bits: u16, enable_e: bool) -> Args {
-        Args {
+    fn new(bits: u16, enable_e: bool) -> Self {
+        Self {
             pointer_bits: bits,
             pointer_bytes: u32::from(bits) / 8,
             pointer_type: Type::int(bits).unwrap(),

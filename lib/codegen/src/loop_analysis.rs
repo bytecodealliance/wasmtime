@@ -32,9 +32,9 @@ struct LoopData {
 
 impl LoopData {
     /// Creates a `LoopData` object with the loop header and its eventual parent in the loop tree.
-    pub fn new(header: Ebb, parent: Option<Loop>) -> LoopData {
-        LoopData {
-            header: header,
+    pub fn new(header: Ebb, parent: Option<Loop>) -> Self {
+        Self {
+            header,
             parent: parent.into(),
         }
     }

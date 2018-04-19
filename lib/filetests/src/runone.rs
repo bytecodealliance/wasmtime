@@ -122,7 +122,7 @@ fn run_one_test<'a>(
 ) -> Result<()> {
     let (test, flags, isa) = tuple;
     let name = format!("{}({})", test.name(), func.name);
-    dbg!("Test: {} {}", name, isa.map(TargetIsa::name).unwrap_or("-"));
+    dbg!("Test: {} {}", name, isa.map_or("-", TargetIsa::name));
 
     context.flags = flags;
     context.isa = isa;

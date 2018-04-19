@@ -704,10 +704,10 @@ struct Node {
 
 impl Node {
     /// Create a node representing `value`.
-    pub fn value(value: Value, set_id: u8, func: &Function) -> Node {
+    pub fn value(value: Value, set_id: u8, func: &Function) -> Self {
         let def = func.dfg.value_def(value).pp();
         let ebb = func.layout.pp_ebb(def);
-        Node {
+        Self {
             def,
             ebb,
             is_vcopy: false,
@@ -717,10 +717,10 @@ impl Node {
     }
 
     /// Create a node representing a virtual copy.
-    pub fn vcopy(branch: Inst, value: Value, set_id: u8, func: &Function) -> Node {
+    pub fn vcopy(branch: Inst, value: Value, set_id: u8, func: &Function) -> Self {
         let def = branch.into();
         let ebb = func.layout.pp_ebb(def);
-        Node {
+        Self {
             def,
             ebb,
             is_vcopy: true,
@@ -891,8 +891,8 @@ struct VirtualCopies {
 
 impl VirtualCopies {
     /// Create an empty VirtualCopies struct.
-    pub fn new() -> VirtualCopies {
-        VirtualCopies {
+    pub fn new() -> Self {
+        Self {
             params: Vec::new(),
             branches: Vec::new(),
             filter: Vec::new(),

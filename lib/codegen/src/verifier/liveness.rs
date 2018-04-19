@@ -78,7 +78,7 @@ impl<'a> LivenessVerifier<'a> {
 
                     if encoding.is_legal() {
                         // A legal instruction is not allowed to define ghost values.
-                        if lr.affinity.is_none() {
+                        if lr.affinity.is_unassigned() {
                             return err!(
                                 inst,
                                 "{} is a ghost value defined by a real [{}] instruction",
@@ -86,7 +86,7 @@ impl<'a> LivenessVerifier<'a> {
                                 self.isa.encoding_info().display(encoding)
                             );
                         }
-                    } else if !lr.affinity.is_none() {
+                    } else if !lr.affinity.is_unassigned() {
                         // A non-encoded instruction can only define ghost values.
                         return err!(
                             inst,
@@ -108,7 +108,7 @@ impl<'a> LivenessVerifier<'a> {
                     }
 
                     // A legal instruction is not allowed to depend on ghost values.
-                    if encoding.is_legal() && lr.affinity.is_none() {
+                    if encoding.is_legal() && lr.affinity.is_unassigned() {
                         return err!(
                             inst,
                             "{} is a ghost value used by a real [{}] instruction",

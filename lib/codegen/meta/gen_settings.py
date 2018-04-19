@@ -29,7 +29,7 @@ def gen_enum_types(sgrp, fmt):
             continue
         ty = camel_case(setting.name)
         fmt.doc_comment('Values for `{}`.'.format(setting))
-        fmt.line('#[derive(Debug, PartialEq, Eq)]')
+        fmt.line('#[derive(Debug, Copy, Clone, PartialEq, Eq)]')
         with fmt.indented('pub enum {} {{'.format(ty), '}'):
             for v in setting.values:
                 fmt.doc_comment('`{}`.'.format(v))
@@ -223,7 +223,7 @@ def gen_display(sgrp, fmt):
                     fmt.line(
                             'TEMPLATE.format_toml_value(d.detail,' +
                             'self.bytes[d.offset as usize], f)?;')
-                    fmt.line('writeln!(f, "")?;')
+                    fmt.line('writeln!(f)?;')
             fmt.line('Ok(())')
 
 
@@ -241,7 +241,7 @@ def gen_constructor(sgrp, parent, fmt):
         fmt.doc_comment('Create flags {} settings group.'.format(sgrp.name))
         fmt.line('#[allow(unused_variables)]')
         with fmt.indented(
-                'pub fn new({}) -> Flags {{'.format(args), '}'):
+                'pub fn new({}) -> Self {{'.format(args), '}'):
             fmt.line('let bvec = builder.state_for("{}");'.format(sgrp.name))
             fmt.line('let mut bytes = [0; {}];'.format(sgrp.byte_size()))
             fmt.line(
@@ -252,12 +252,12 @@ def gen_constructor(sgrp, parent, fmt):
 
             # Stop here without predicates.
             if len(sgrp.predicate_number) == sgrp.boolean_settings:
-                fmt.line('Flags { bytes: bytes }')
+                fmt.line('Self { bytes }')
                 return
 
             # Now compute the predicates.
             fmt.line(
-                    'let mut {} = Flags {{ bytes: bytes }};'
+                    'let mut {} = Self {{ bytes }};'
                     .format(sgrp.name))
 
             for pred, number in sgrp.predicate_number.items():

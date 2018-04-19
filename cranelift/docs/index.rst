@@ -34,6 +34,19 @@ Rust Crate Documentation
     This crate translates from Cretonne IR's text format into Cretonne IR
     in in-memory data structures.
 
+`cretonne-module <https://docs.rs/cretonne-module/>`_
+    This crate manages compiling multiple functions and data objects
+    together.
+
+`cretonne-faerie <https://docs.rs/cretonne-faerie/>`_
+    This crate provides a faerie-based backend for `cretonne-module`, which
+    emits native object files using the
+    `faerie <https://crates.io/crates/faerie/>`_ library.
+
+`cretonne-simplejit <https://docs.rs/cretonne-simplejit/>`_
+    This crate provides a simple JIT backend for `cretonne-module`, which
+    emits code and data into memory.
+
 Indices and tables
 ==================
 
