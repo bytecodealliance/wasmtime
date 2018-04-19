@@ -11,19 +11,18 @@ use failure::Error;
 use std::fs::File;
 use target;
 
-pub struct FaerieCompiledFunction {}
-
-pub struct FaerieCompiledData {}
-
-/// A `FaerieBackend` implements `Backend` and emits ".o" files using the `faerie` library.
-pub struct FaerieBackend {
+/// A builder for `FaerieBackend`.
+pub struct FaerieBuilder {
     isa: Box<TargetIsa>,
-    artifact: faerie::Artifact,
+    name: String,
     format: container::Format,
+    faerie_target: faerie::Target,
 }
 
-impl FaerieBackend {
-    /// Create a new `FaerieBackend` using the given Cretonne target.
+impl FaerieBuilder {
+    /// Create a new `FaerieBuilder` using the given Cretonne target, that
+    /// can be passed to
+    /// [`Module::new`](cretonne_module/struct.Module.html#method.new].
     pub fn new(
         isa: Box<TargetIsa>,
         name: String,
@@ -33,34 +32,27 @@ impl FaerieBackend {
         let faerie_target = target::translate(&*isa)?;
         Ok(Self {
             isa,
-            artifact: faerie::Artifact::new(faerie_target, name),
+            name,
             format,
+            faerie_target,
         })
-    }
-
-    /// Return the name of the output file. This is the name passed into `new`.
-    pub fn name(&self) -> &str {
-        &self.artifact.name
-    }
-
-    /// Call `emit` on the faerie `Artifact`, producing bytes in memory.
-    pub fn emit(&self) -> Result<Vec<u8>, Error> {
-        match self.format {
-            container::Format::ELF => self.artifact.emit::<faerie::Elf>(),
-            container::Format::MachO => self.artifact.emit::<faerie::Mach>(),
-        }
-    }
-
-    /// Call `write` on the faerie `Artifact`, writing to a file.
-    pub fn write(&self, sink: File) -> Result<(), Error> {
-        match self.format {
-            container::Format::ELF => self.artifact.write::<faerie::Elf>(sink),
-            container::Format::MachO => self.artifact.write::<faerie::Mach>(sink),
-        }
     }
 }
 
+/// A `FaerieBackend` implements `Backend` and emits ".o" files using the `faerie` library.
+pub struct FaerieBackend {
+    isa: Box<TargetIsa>,
+    artifact: faerie::Artifact,
+    format: container::Format,
+}
+
+pub struct FaerieCompiledFunction {}
+
+pub struct FaerieCompiledData {}
+
 impl Backend for FaerieBackend {
+    type Builder = FaerieBuilder;
+
     type CompiledFunction = FaerieCompiledFunction;
     type CompiledData = FaerieCompiledData;
 
@@ -68,6 +60,19 @@ impl Backend for FaerieBackend {
     // the output file instead.
     type FinalizedFunction = ();
     type FinalizedData = ();
+
+    /// The returned value here provides functions for emitting object files
+    /// to memory and files.
+    type Product = FaerieProduct;
+
+    /// Create a new `FaerieBackend` using the given Cretonne target.
+    fn new(builder: FaerieBuilder) -> Self {
+        Self {
+            isa: builder.isa,
+            artifact: faerie::Artifact::new(builder.faerie_target, builder.name),
+            format: builder.format,
+        }
+    }
 
     fn isa(&self) -> &TargetIsa {
         &*self.isa
@@ -215,6 +220,44 @@ impl Backend for FaerieBackend {
 
     fn finalize_data(&mut self, _data: &FaerieCompiledData, _namespace: &ModuleNamespace<Self>) {
         // Nothing to do.
+    }
+
+    fn finish(self) -> FaerieProduct {
+        FaerieProduct {
+            artifact: self.artifact,
+            format: self.format,
+        }
+    }
+}
+
+/// This is the output of `Module`'s
+/// [`finish`](../cretonne_module/struct.Module.html#method.finish) function.
+/// It provides functions for writing out the object file to memory or a file.
+pub struct FaerieProduct {
+    artifact: faerie::Artifact,
+    format: container::Format,
+}
+
+impl FaerieProduct {
+    /// Return the name of the output file. This is the name passed into `new`.
+    pub fn name(&self) -> &str {
+        &self.artifact.name
+    }
+
+    /// Call `emit` on the faerie `Artifact`, producing bytes in memory.
+    pub fn emit(&self) -> Result<Vec<u8>, Error> {
+        match self.format {
+            container::Format::ELF => self.artifact.emit::<faerie::Elf>(),
+            container::Format::MachO => self.artifact.emit::<faerie::Mach>(),
+        }
+    }
+
+    /// Call `write` on the faerie `Artifact`, writing to a file.
+    pub fn write(&self, sink: File) -> Result<(), Error> {
+        match self.format {
+            container::Format::ELF => self.artifact.write::<faerie::Elf>(sink),
+            container::Format::MachO => self.artifact.write::<faerie::Mach>(sink),
+        }
     }
 }
 

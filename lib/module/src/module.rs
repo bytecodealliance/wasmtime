@@ -236,14 +236,14 @@ where
     B: Backend,
 {
     /// Create a new `Module`.
-    pub fn new(backend: B) -> Self {
+    pub fn new(backend_builder: B::Builder) -> Self {
         Self {
             names: HashMap::new(),
             contents: ModuleContents {
                 functions: PrimaryMap::new(),
                 data_objects: PrimaryMap::new(),
             },
-            backend,
+            backend: B::new(backend_builder),
         }
     }
 
@@ -532,10 +532,10 @@ where
         }
     }
 
-    /// Consume the module and return its contained `Backend`. Some `Backend`
-    /// implementations have additional features not available through the
-    /// `Module` interface.
-    pub fn consume(self) -> B {
-        self.backend
+    /// Consume the module and return the resulting `Product`. Some `Backend`
+    /// implementations may provide additional functionality available after
+    /// a `Module` is complete.
+    pub fn finish(self) -> B::Product {
+        self.backend.finish()
     }
 }

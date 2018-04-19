@@ -144,7 +144,7 @@ mod tests {
     fn basic_data_context() {
         let mut data_ctx = DataContext::new();
         {
-            let description = data_ctx.description();
+            let description = &data_ctx.description;
             assert_eq!(description.writable, Writability::Readonly);
             assert_eq!(description.init, Init::Uninitialized);
             assert!(description.function_decls.is_empty());
@@ -177,7 +177,7 @@ mod tests {
 
         data_ctx.clear();
         {
-            let description = data_ctx.description();
+            let description = &data_ctx.description;
             assert_eq!(description.writable, Writability::Readonly);
             assert_eq!(description.init, Init::Uninitialized);
             assert!(description.function_decls.is_empty());

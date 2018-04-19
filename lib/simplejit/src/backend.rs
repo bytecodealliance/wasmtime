@@ -12,6 +12,43 @@ use std::ptr;
 use libc;
 use memory::Memory;
 
+/// A builder for `SimpleJITBackend`.
+pub struct SimpleJITBuilder {
+    isa: Box<TargetIsa>,
+}
+
+impl SimpleJITBuilder {
+    /// Create a new `SimpleJITBuilder`.
+    pub fn new() -> Self {
+        let (flag_builder, isa_builder) = cretonne_native::builders().unwrap_or_else(|_| {
+            panic!("host machine is not a supported target");
+        });
+        let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
+        Self::with_isa(isa)
+    }
+
+    /// Create a new `SimpleJITBuilder` with an arbitrary target. This is mainly
+    /// useful for testing.
+    ///
+    /// SimpleJIT requires a `TargetIsa` configured for non-PIC.
+    ///
+    /// To create a `SimpleJITBuilder` for native use, use the `new` constructor
+    /// instead.
+    pub fn with_isa(isa: Box<TargetIsa>) -> Self {
+        debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
+        Self { isa }
+    }
+}
+
+/// A `SimpleJITBackend` implements `Backend` and emits code and data into memory where it can be
+/// directly called and accessed.
+pub struct SimpleJITBackend {
+    isa: Box<TargetIsa>,
+    code_memory: Memory,
+    readonly_memory: Memory,
+    writable_memory: Memory,
+}
+
 /// A record of a relocation to perform.
 struct RelocRecord {
     offset: CodeOffset,
@@ -32,49 +69,34 @@ pub struct SimpleJITCompiledData {
     relocs: Vec<RelocRecord>,
 }
 
-/// A `SimpleJITBackend` implements `Backend` and emits code and data into memory where it can be
-/// directly called and accessed.
-pub struct SimpleJITBackend {
-    isa: Box<TargetIsa>,
-    code_memory: Memory,
-    readonly_memory: Memory,
-    writable_memory: Memory,
-}
+impl<'simple_jit_backend> Backend for SimpleJITBackend {
+    type Builder = SimpleJITBuilder;
 
-impl SimpleJITBackend {
+    /// SimpleJIT compiled function and data objects may have outstanding
+    /// relocations that need to be performed before the memory can be used.
+    /// These relocations are performed within `finalize_function` and
+    /// `finalize_data`.
+    type CompiledFunction = SimpleJITCompiledFunction;
+    type CompiledData = SimpleJITCompiledData;
+
+    /// SimpleJIT emits code and data into memory, and provides raw pointers
+    /// to them.
+    type FinalizedFunction = *const u8;
+    type FinalizedData = (*mut u8, usize);
+
+    /// SimpleJIT emits code and data into memory as it processes them, so it
+    /// doesn't need to provide anything after the `Module` is complete.
+    type Product = ();
+
     /// Create a new `SimpleJITBackend`.
-    pub fn new() -> Self {
-        let (flag_builder, isa_builder) = cretonne_native::builders().unwrap_or_else(|_| {
-            panic!("host machine is not a supported target");
-        });
-        let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
-        Self::with_isa(isa)
-    }
-
-    /// Create a new `SimpleJITBackend` with an arbitrary target. This is mainly
-    /// useful for testing.
-    ///
-    /// SimpleJIT requires a `TargetIsa` configured for non-PIC.
-    ///
-    /// To create a `SimpleJITBackend` for native use, use the `new` constructor
-    /// instead.
-    pub fn with_isa(isa: Box<TargetIsa>) -> Self {
-        debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
+    fn new(builder: SimpleJITBuilder) -> Self {
         Self {
-            isa,
+            isa: builder.isa,
             code_memory: Memory::new(),
             readonly_memory: Memory::new(),
             writable_memory: Memory::new(),
         }
     }
-}
-
-impl<'simple_jit_backend> Backend for SimpleJITBackend {
-    type CompiledFunction = SimpleJITCompiledFunction;
-    type CompiledData = SimpleJITCompiledData;
-
-    type FinalizedFunction = *const u8;
-    type FinalizedData = (*mut u8, usize);
 
     fn isa(&self) -> &TargetIsa {
         &*self.isa
@@ -317,6 +339,10 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         self.readonly_memory.set_readonly();
         (data.storage, data.size)
     }
+
+    /// SimpleJIT emits code and data into memory as it processes them, so it
+    /// doesn't need to provide anything after the `Module` is complete.
+    fn finish(self) -> () {}
 }
 
 fn lookup_with_dlsym(name: &str) -> *const u8 {
