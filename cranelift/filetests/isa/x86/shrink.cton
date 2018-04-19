@@ -1,0 +1,29 @@
+test binemit
+set is_64bit=1
+set opt_level=best
+isa x86
+
+; Test that instruction shrinking eliminates REX prefixes when possible.
+
+; The binary encodings can be verified with the command:
+;
+;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/shrink.cton | llvm-mc -show-encoding -triple=x86_64
+;
+
+function %test_shrinking(i32) -> i32 {
+ebb0(v0: i32 [ %rdi ]):
+           ; asm: movl $0x2,%eax
+[-,%rcx]   v1 = iconst.i32 2     ; bin: b9 00000002
+           ; asm: subl %ecx,%edi
+[-,%rdi]   v2 = isub v0, v1      ; bin: 29 cf
+           return v2
+}
+
+function %test_not_shrinking(i32) -> i32 {
+ebb0(v0: i32 [ %r8 ]):
+           ; asm: movl $0x2,%eax
+[-,%rcx]   v1 = iconst.i32 2     ; bin: b9 00000002
+           ; asm: subl %ecx,%edi
+[-,%r8]    v2 = isub v0, v1      ; bin: 41 29 c8
+           return v2
+}
