@@ -26,7 +26,7 @@ optional = true
 [features]
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
-# features to be enabled.
+# features need to be enabled.
 default = ["std"]
 std = ["cretonne-entity/std"]
 core = ["hashmap_core"]
