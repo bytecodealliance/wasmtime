@@ -104,6 +104,10 @@ impl DataContext {
     }
 
     /// Declare an external function import.
+    ///
+    /// Users of the `Module` API generally should call
+    /// `Module::declare_func_in_data` instead, as it takes care of generating
+    /// the appropriate `ExternalName`.
     pub fn import_function(&mut self, name: ir::ExternalName) -> ir::FuncRef {
         self.description.function_decls.push(name)
     }
@@ -111,6 +115,10 @@ impl DataContext {
     /// Declares a global variable import.
     ///
     /// TODO: Rename to import_data?
+    ///
+    /// Users of the `Module` API generally should call
+    /// `Module::declare_data_in_data` instead, as it takes care of generating
+    /// the appropriate `ExternalName`.
     pub fn import_global_var(&mut self, name: ir::ExternalName) -> ir::GlobalVar {
         self.description.data_decls.push(name)
     }
