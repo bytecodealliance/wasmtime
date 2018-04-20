@@ -140,9 +140,12 @@ impl Context {
         }
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
+        // Temporarily disable the shrink_instructions pass, as it causes miscompiles.
+        /*
         if isa.flags().opt_level() == OptLevel::Best {
             self.shrink_instructions(isa)?;
         }
+        */
         self.relax_branches(isa)
     }
 
