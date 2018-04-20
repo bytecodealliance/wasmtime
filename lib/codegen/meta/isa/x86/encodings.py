@@ -126,7 +126,13 @@ enc_i32_i64(x86.umulx, r.mulx, 0xf7, rrr=4)
 
 enc_i32_i64(base.copy, r.umr, 0x89)
 enc_both(base.copy.b1, r.umr, 0x89)
-enc_i32_i64(base.regmove, r.rmov, 0x89)
+
+# For x86-64, only define REX forms for now, since we can't describe the
+# special regunit immediate operands with the current constraint language.
+X86_32.enc(base.regmove.i32, *r.rmov(0x89))
+X86_64.enc(base.regmove.i32, *r.rmov.rex(0x89))
+X86_64.enc(base.regmove.i64, *r.rmov.rex(0x89, w=1))
+
 enc_both(base.regmove.b1, r.rmov, 0x89)
 enc_both(base.regmove.i8, r.rmov, 0x89)
 
@@ -251,6 +257,8 @@ X86_32.enc(x86.pop.i32, *r.popq(0x58))
 enc_x86_64(x86.pop.i64, r.popq, 0x58)
 
 # Copy Special
+# For x86-64, only define REX forms for now, since we can't describe the
+# special regunit immediate operands with the current constraint language.
 X86_64.enc(base.copy_special, *r.copysp.rex(0x89, w=1))
 X86_32.enc(base.copy_special, *r.copysp(0x89))
 
@@ -528,8 +536,16 @@ X86_64.enc(base.bitcast.i64.f64, *r.rfumr.rex(0x66, 0x0f, 0x7e, w=1))
 # movaps
 enc_both(base.copy.f32, r.furm, 0x0f, 0x28)
 enc_both(base.copy.f64, r.furm, 0x0f, 0x28)
-enc_both(base.regmove.f32, r.frmov, 0x0f, 0x28)
-enc_both(base.regmove.f64, r.frmov, 0x0f, 0x28)
+
+# For x86-64, only define REX forms for now, since we can't describe the
+# special regunit immediate operands with the current constraint language.
+X86_32.enc(base.regmove.f32, *r.frmov(0x0f, 0x28))
+X86_64.enc(base.regmove.f32, *r.frmov.rex(0x0f, 0x28))
+
+# For x86-64, only define REX forms for now, since we can't describe the
+# special regunit immediate operands with the current constraint language.
+X86_32.enc(base.regmove.f64, *r.frmov(0x0f, 0x28))
+X86_64.enc(base.regmove.f64, *r.frmov.rex(0x0f, 0x28))
 
 # cvtsi2ss
 enc_i32_i64(base.fcvt_from_sint.f32, r.frurm, 0xf3, 0x0f, 0x2a)
