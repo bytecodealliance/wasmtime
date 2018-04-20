@@ -128,6 +128,7 @@ enc_i32_i64(base.copy, r.umr, 0x89)
 enc_both(base.copy.b1, r.umr, 0x89)
 enc_i32_i64(base.regmove, r.rmov, 0x89)
 enc_both(base.regmove.b1, r.rmov, 0x89)
+enc_both(base.regmove.i8, r.rmov, 0x89)
 
 # Immediate instructions with sign-extended 8-bit and 32-bit immediate.
 for inst,               rrr in [
@@ -461,9 +462,9 @@ X86_64.enc(base.ireduce.i32.i64, r.null, 0)
 # instructions for %al/%ax/%eax to %ax/%eax/%rax.
 
 # movsbl
-X86_32.enc(base.sextend.i32.i8, *r.urm_noflags(0x0f, 0xbe))
+X86_32.enc(base.sextend.i32.i8, *r.urm_noflags_abcd(0x0f, 0xbe))
 X86_64.enc(base.sextend.i32.i8, *r.urm_noflags.rex(0x0f, 0xbe))
-X86_64.enc(base.sextend.i32.i8, *r.urm_noflags(0x0f, 0xbe))
+X86_64.enc(base.sextend.i32.i8, *r.urm_noflags_abcd(0x0f, 0xbe))
 
 # movswl
 X86_32.enc(base.sextend.i32.i16, *r.urm_noflags(0x0f, 0xbf))
@@ -480,9 +481,9 @@ X86_64.enc(base.sextend.i64.i16, *r.urm_noflags.rex(0x0f, 0xbf, w=1))
 X86_64.enc(base.sextend.i64.i32, *r.urm_noflags.rex(0x63, w=1))
 
 # movzbl
-X86_32.enc(base.uextend.i32.i8, *r.urm_noflags(0x0f, 0xb6))
+X86_32.enc(base.uextend.i32.i8, *r.urm_noflags_abcd(0x0f, 0xb6))
 X86_64.enc(base.uextend.i32.i8, *r.urm_noflags.rex(0x0f, 0xb6))
-X86_64.enc(base.uextend.i32.i8, *r.urm_noflags(0x0f, 0xb6))
+X86_64.enc(base.uextend.i32.i8, *r.urm_noflags_abcd(0x0f, 0xb6))
 
 # movzwl
 X86_32.enc(base.uextend.i32.i16, *r.urm_noflags(0x0f, 0xb7))
