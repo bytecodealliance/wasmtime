@@ -1,10 +1,8 @@
 #!/bin/bash
+set -euo pipefail
 
 # This is the test script for testing the no_std configuration of
 # packages which support it.
-
-# Exit immediately on errors.
-set -e
 
 # Repository top-level directory.
 cd $(dirname "$0")
