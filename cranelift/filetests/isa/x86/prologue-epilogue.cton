@@ -228,4 +228,4 @@ ebb4:
 
 ; check: function %divert
 ; check: regmove v5, %rcx -> %rbx
-; check: [RexOp1popq#58,%rbx]                v15 = x86_pop.i64
+; check: [Op1popq#58,%rbx]                   v15 = x86_pop.i64
