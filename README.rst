@@ -36,7 +36,7 @@ yet support the Windows x64 calling convention. The performance of code
 produced by Cretonne is not yet impressive, though we have plans to fix that.
 
 The core codegen crates have minimal dependencies, support
-`no_std <#building-with-no-std>` mode, and do not require any host
+`no_std <#building-with-no-std>`_ mode, and do not require any host
 floating-point support.
 
 Cretonne does not yet perform mitigations for Spectre or related security
