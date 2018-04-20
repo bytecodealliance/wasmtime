@@ -8,15 +8,23 @@
 ///
 /// The output will appear in files named `cretonne.dbg.*`, where the suffix is named after the
 /// thread doing the logging.
+#[cfg(feature = "std")]
 use std::cell::RefCell;
+#[cfg(feature = "std")]
 use std::env;
+#[cfg(feature = "std")]
 use std::ffi::OsStr;
 use std::fmt;
+#[cfg(feature = "std")]
 use std::fs::File;
+#[cfg(feature = "std")]
 use std::io::{self, Write};
+#[cfg(feature = "std")]
 use std::sync::atomic;
+#[cfg(feature = "std")]
 use std::thread;
 
+#[cfg(feature = "std")]
 static STATE: atomic::AtomicIsize = atomic::ATOMIC_ISIZE_INIT;
 
 /// Is debug tracing enabled?
@@ -25,6 +33,7 @@ static STATE: atomic::AtomicIsize = atomic::ATOMIC_ISIZE_INIT;
 /// other than `0`.
 ///
 /// This inline function turns into a constant `false` when debug assertions are disabled.
+#[cfg(feature = "std")]
 #[inline]
 pub fn enabled() -> bool {
     if cfg!(debug_assertions) {
@@ -37,7 +46,15 @@ pub fn enabled() -> bool {
     }
 }
 
+/// Does nothing
+#[cfg(not(feature = "std"))]
+#[inline]
+pub fn enabled() -> bool {
+    false
+}
+
 /// Initialize `STATE` from the environment variable.
+#[cfg(feature = "std")]
 fn initialize() -> bool {
     let enable = match env::var_os("CRETONNE_DBG") {
         Some(s) => s != OsStr::new("0"),
@@ -53,6 +70,7 @@ fn initialize() -> bool {
     enable
 }
 
+#[cfg(feature = "std")]
 thread_local! {
     static WRITER : RefCell<io::BufWriter<File>> = RefCell::new(open_file());
 }
@@ -60,6 +78,7 @@ thread_local! {
 /// Write a line with the given format arguments.
 ///
 /// This is for use by the `dbg!` macro.
+#[cfg(feature = "std")]
 pub fn writeln_with_format_args(args: fmt::Arguments) -> io::Result<()> {
     WRITER.with(|rc| {
         let mut w = rc.borrow_mut();
@@ -69,6 +88,7 @@ pub fn writeln_with_format_args(args: fmt::Arguments) -> io::Result<()> {
 }
 
 /// Open the tracing file for the current thread.
+#[cfg(feature = "std")]
 fn open_file() -> io::BufWriter<File> {
     let curthread = thread::current();
     let tmpstr;
@@ -90,6 +110,7 @@ fn open_file() -> io::BufWriter<File> {
 /// Write a line to the debug trace file if tracing is enabled.
 ///
 /// Arguments are the same as for `printf!`.
+#[cfg(feature = "std")]
 #[macro_export]
 macro_rules! dbg {
     ($($arg:tt)+) => {
@@ -99,6 +120,13 @@ macro_rules! dbg {
             $crate::dbg::writeln_with_format_args(format_args!($($arg)+)).ok();
         }
     }
+}
+
+/// `dbg!` isn't supported in `no_std` mode, so expand it into nothing.
+#[cfg(not(feature = "std"))]
+#[macro_export]
+macro_rules! dbg {
+    ($($arg:tt)+) => {}
 }
 
 /// Helper for printing lists.

@@ -94,7 +94,8 @@ impl fmt::Display for Pass {
 ///
 /// This whole module can be gated on a `cfg` feature to provide a dummy implementation for
 /// performance-sensitive builds or restricted environments. The dummy implementation must provide
-/// `TimingToken` and `PassTimings` types and a `take_current` function.
+/// `TimingToken` and `PassTimes` types and `take_current`, `add_to_current`, and `start_pass` funcs
+#[cfg(feature = "std")]
 mod details {
     use super::{Pass, DESCRIPTIONS, NUM_PASSES};
     use std::cell::{Cell, RefCell};
@@ -216,9 +217,31 @@ mod details {
     }
 }
 
+/// Dummy `debug` implementation
+#[cfg(not(feature = "std"))]
+mod details {
+    use super::Pass;
+    /// Dummy `TimingToken`
+    pub struct TimingToken;
+    /// Dummy `PassTimes`
+    pub struct PassTimes;
+    /// Returns dummy `PassTimes`
+    pub fn take_current() -> PassTimes {
+        PassTimes
+    }
+    /// does nothing
+    pub fn add_to_current(_times: PassTimes) {}
+
+    /// does nothing
+    pub(super) fn start_pass(_pass: Pass) -> TimingToken {
+        TimingToken
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::string::ToString;
 
     #[test]
     fn display() {

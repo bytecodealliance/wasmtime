@@ -41,6 +41,21 @@
                 use_self,
                 ))]
 
+// Turns on no_std and alloc features if std is not available.
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+
+// Include the `hashmap_core` crate if std is not available.
+#[allow(unused_extern_crates)]
+#[cfg(not(feature = "std"))]
+extern crate hashmap_core;
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc;
+extern crate failure;
+#[macro_use]
+extern crate failure_derive;
+
 pub use context::Context;
 pub use legalizer::legalize_function;
 pub use verifier::verify_function;
@@ -93,3 +108,15 @@ mod stack_layout;
 mod topo_order;
 mod unreachable_code;
 mod write;
+
+/// This replaces `std` in builds with `core`.
+#[cfg(not(feature = "std"))]
+mod std {
+    pub use core::*;
+    pub use alloc::{boxed, vec, string};
+    pub mod collections {
+        pub use hashmap_core::{HashMap, HashSet};
+        pub use hashmap_core::map as hash_map;
+        pub use alloc::BTreeSet;
+    }
+}

@@ -35,9 +35,9 @@ the System V AMD64 ABI calling convention used on many platforms, but does not
 yet support the Windows x64 calling convention. The performance of code
 produced by Cretonne is not yet impressive, though we have plans to fix that.
 
-The core codegen crates have minimal dependencies, and do not require any host
-floating-point support. Support for `no_std` mode in the core codegen crates is
-`in development <https://github.com/cretonne/cretonne/tree/no_std>`_.
+The core codegen crates have minimal dependencies, support
+`no_std <#building-with-no-std>`_ mode, and do not require any host
+floating-point support.
 
 Cretonne does not yet perform mitigations for Spectre or related security
 issues, though it may do so in the future. It does not currently make any
@@ -89,6 +89,54 @@ You may need to install the *wat2wasm* tool from the `wabt
 <https://github.com/WebAssembly/wabt>`_ project in order to run all of the
 WebAssembly tests. Tests requiring wat2wasm are ignored if the tool is not
 installed.
+
+Building with `no_std`
+----------------------
+
+The following crates support `no_std`:
+ - `cretonne-entity`
+ - `cretonne-codegen`
+ - `cretonne-frontend`
+ - `cretonne-native`
+ - `cretonne-wasm`
+ - `cretonne-module`
+ - `cretonne-simplejit`
+ - `cretonne`
+
+To use `no_std` mode, disable the `std` feature and enable the `core` feature.
+This currently requires nightly rust.
+
+For example, to build `cretonne-codegen`:
+
+.. code-block:: sh
+
+    cd lib/codegen
+    cargo build --no-default-features --features core
+
+Or, when using `cretonne-codegen` as a dependency (in Cargo.toml):
+
+.. code-block::
+
+    [dependency.cretonne-codegen]
+    ...
+    default-features = false
+    features = ["core"]
+
+`no_std` support is currently "best effort". We won't try to break it, and
+we'll accept patches fixing problems, however we don't expect all developers to
+build and test `no_std` when submitting patches. Accordingly, the
+`./test-all.sh` script does not test `no_std`.
+
+There is a separate `./test-no_std.sh` script that tests the `no_std`
+support in packages which support it.
+
+It's important to note that cretonne still needs liballoc to compile.
+Thus, whatever environment is used must implement an allocator.
+
+Also, to allow the use of HashMaps with `no_std`, an external crate called
+`hashmap_core` is pulled in (via the `core` feature). This is mostly the same
+as `std::collections::HashMap`, except that it doesn't have DOS protection.
+Just something to think about.
 
 Building the documentation
 --------------------------

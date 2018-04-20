@@ -23,6 +23,7 @@ use preopt::do_preopt;
 use regalloc;
 use result::{CtonError, CtonResult};
 use settings::{FlagsOrIsa, OptLevel};
+use std::vec::Vec;
 use simple_gvn::do_simple_gvn;
 use timing;
 use unreachable_code::eliminate_unreachable_code;

@@ -6,7 +6,6 @@ use cretonne_codegen::ir::{self, InstBuilder};
 use cretonne_codegen::settings;
 use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment};
 use func_translator::FuncTranslator;
-use std::error::Error;
 use std::string::String;
 use std::vec::Vec;
 use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
@@ -392,7 +391,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             let reader = wasmparser::BinaryReader::new(body_bytes);
             self.trans
                 .translate_from_reader(reader, &mut func, &mut func_environ)
-                .map_err(|e| String::from(e.description()))?;
+                .map_err(|e| format!("{}", e))?;
             func
         };
         self.func_bytecode_sizes.push(body_bytes.len());
