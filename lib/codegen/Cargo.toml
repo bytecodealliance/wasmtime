@@ -11,11 +11,25 @@ keywords = ["compile", "compiler", "jit"]
 build = "build.rs"
 
 [dependencies]
-cretonne-entity = { path = "../entity", version = "0.5.1" }
+cretonne-entity = { path = "../entity", version = "0.5.1", default-features = false }
+failure = { version = "0.1.1", default-features = false, features = ["derive"] }
+failure_derive = { version = "0.1.1", default-features = false }
 # It is a goal of the cretonne-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
 # accomodated in `tests`.
+
+[dependencies.hashmap_core]
+version = "0.1.1"
+optional = true
+
+[features]
+# The "std" feature enables use of libstd. The "core" feature enables use
+# of some minimal std-like replacement libraries. At least one of these two
+# features need to be enabled.
+default = ["std"]
+std = ["cretonne-entity/std"]
+core = ["hashmap_core"]
 
 [badges]
 maintenance = { status = "experimental" }

@@ -140,8 +140,13 @@
                 unicode_not_nfc,
                 use_self,
                 ))]
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 extern crate cretonne_codegen;
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
 
 pub use frontend::{FunctionBuilder, FunctionBuilderContext};
 pub use variable::Variable;
@@ -149,3 +154,9 @@ pub use variable::Variable;
 mod frontend;
 mod ssa;
 mod variable;
+
+#[cfg(not(feature = "std"))]
+mod std {
+    pub use alloc::vec;
+    pub use core::*;
+}

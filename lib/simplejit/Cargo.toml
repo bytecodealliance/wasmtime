@@ -9,12 +9,17 @@ license = "Apache-2.0"
 readme = "README.md"
 
 [dependencies]
-cretonne-codegen = { path = "../codegen", version = "0.5.1" }
-cretonne-module = { path = "../module", version = "0.5.1" }
-cretonne-native = { path = "../native", version = "0.5.1" }
+cretonne-codegen = { path = "../codegen", version = "0.5.1", default-features = false }
+cretonne-module = { path = "../module", version = "0.5.1", default-features = false }
+cretonne-native = { path = "../native", version = "0.5.1", default-features = false }
 region = "0.2.0"
-libc = "0.2.40"
+libc = { version = "0.2.40", default-features = false }
 errno = "0.2.3"
+
+[features]
+default = ["std"]
+std = ["libc/use_std", "cretonne-codegen/std", "cretonne-module/std", "cretonne-native/std"]
+core = ["cretonne-codegen/core", "cretonne-module/core", "cretonne-native/core"]
 
 [badges]
 maintenance = { status = "experimental" }

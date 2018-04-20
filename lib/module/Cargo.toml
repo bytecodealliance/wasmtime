@@ -9,8 +9,17 @@ license = "Apache-2.0"
 readme = "README.md"
 
 [dependencies]
-cretonne-codegen = { path = "../codegen", version = "0.5.1" }
-cretonne-entity = { path = "../entity", version = "0.5.1" }
+cretonne-codegen = { path = "../codegen", version = "0.5.1", default-features = false }
+cretonne-entity = { path = "../entity", version = "0.5.1", default-features = false }
+
+[dependencies.hashmap_core]
+version = "0.1.1"
+optional = true
+
+[features]
+default = ["std"]
+std = ["cretonne-codegen/std", "cretonne-entity/std"]
+core = ["hashmap_core", "cretonne-codegen/core"]
 
 [badges]
 maintenance = { status = "experimental" }

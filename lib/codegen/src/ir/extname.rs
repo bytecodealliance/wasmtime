@@ -121,6 +121,7 @@ mod tests {
     use super::ExternalName;
     use ir::LibCall;
     use std::string::ToString;
+    use std::u32;
 
     #[test]
     fn display_testcase() {
@@ -143,7 +144,7 @@ mod tests {
         assert_eq!(ExternalName::user(0, 0).to_string(), "u0:0");
         assert_eq!(ExternalName::user(1, 1).to_string(), "u1:1");
         assert_eq!(
-            ExternalName::user(::std::u32::MAX, ::std::u32::MAX).to_string(),
+            ExternalName::user(u32::MAX, u32::MAX).to_string(),
             "u4294967295:4294967295"
         );
     }

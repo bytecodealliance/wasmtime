@@ -9,12 +9,21 @@ readme = "README.md"
 keywords = ["webassembly", "wasm"]
 
 [dependencies]
-wasmparser = "0.15.1"
-cretonne-codegen = { path = "../codegen", version = "0.5.1" }
-cretonne-frontend = { path = "../frontend", version = "0.5.1" }
+wasmparser = { version = "0.16.0", default-features = false }
+cretonne-codegen = { path = "../codegen", version = "0.5.1", default-features = false }
+cretonne-frontend = { path = "../frontend", version = "0.5.1", default-features = false }
+
+[dependencies.hashmap_core]
+version = "0.1.1"
+optional = true
 
 [dev-dependencies]
 tempdir = "0.3.5"
+
+[features]
+default = ["std"]
+std = ["cretonne-codegen/std", "cretonne-frontend/std", "wasmparser/std"]
+core = ["hashmap_core", "cretonne-codegen/core", "cretonne-frontend/core", "wasmparser/core"]
 
 [badges]
 maintenance = { status = "experimental" }

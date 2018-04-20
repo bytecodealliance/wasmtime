@@ -2,6 +2,7 @@
 
 use ir;
 use ir::InstBuilder;
+use std::vec::Vec;
 
 /// Try to expand `inst` as a library call, returning true is successful.
 pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function) -> bool {

@@ -25,6 +25,17 @@
                 use_self,
                 ))]
 
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc;
+
+#[allow(unused_extern_crates)]
+#[cfg(not(feature = "std"))]
+extern crate hashmap_core;
+
 #[macro_use(dbg)]
 extern crate cretonne_codegen;
 extern crate cretonne_frontend;
@@ -43,3 +54,13 @@ pub use func_translator::FuncTranslator;
 pub use module_translator::translate_module;
 pub use translation_utils::{FunctionIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
                             SignatureIndex, Table, TableIndex};
+
+#[cfg(not(feature = "std"))]
+mod std {
+    pub use alloc::vec;
+    pub use alloc::string;
+    pub use core::{u32, i32, str, cmp};
+    pub mod collections {
+        pub use hashmap_core::{HashMap, map as hash_map};
+    }
+}

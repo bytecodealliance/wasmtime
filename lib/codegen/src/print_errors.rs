@@ -4,6 +4,7 @@ use ir;
 use isa::TargetIsa;
 use result::CtonError;
 use std::fmt::Write;
+use std::string::{String, ToString};
 use verifier;
 
 /// Pretty-print a verifier error.
