@@ -591,13 +591,39 @@ stack_check = Instruction(
 
     The global variable must be accessible and naturally aligned for a
     pointer-sized value.
+
+    `stack_check` is an alternative way to detect stack overflow, when using
+    a calling convention that doesn't perform stack probes.
     """,
     ins=GV, can_trap=True)
 
+delta = Operand('delta', Int)
+adjust_sp_down = Instruction(
+    'adjust_sp_down', r"""
+    Subtracts ``delta`` offset value from the stack pointer register.
+
+    This instruction is used to adjust the stack pointer by a dynamic amount.
+    """,
+    ins=(delta,),
+    other_side_effects=True)
+
 StackOffset = Operand('Offset', imm64, 'Offset from current stack pointer')
-adjust_sp_imm = Instruction(
-    'adjust_sp_imm', r"""
+adjust_sp_up_imm = Instruction(
+    'adjust_sp_up_imm', r"""
     Adds ``Offset`` immediate offset value to the stack pointer register.
+
+    This instruction is used to adjust the stack pointer, primarily in function
+    prologues and epilogues. ``Offset`` is constrained to the size of a signed
+    32-bit integer.
+    """,
+    ins=(StackOffset,),
+    other_side_effects=True)
+
+StackOffset = Operand('Offset', imm64, 'Offset from current stack pointer')
+adjust_sp_down_imm = Instruction(
+    'adjust_sp_down_imm', r"""
+    Subtracts ``Offset`` immediate offset value from the stack pointer
+    register.
 
     This instruction is used to adjust the stack pointer, primarily in function
     prologues and epilogues. ``Offset`` is constrained to the size of a signed

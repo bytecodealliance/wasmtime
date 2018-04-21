@@ -480,8 +480,8 @@ mulx = TailRecipe(
         ''')
 
 # XX /n ib with 8-bit immediate sign-extended.
-rib = TailRecipe(
-        'rib', BinaryImm, size=2, ins=GPR, outs=0,
+r_ib = TailRecipe(
+        'r_ib', BinaryImm, size=2, ins=GPR, outs=0,
         instp=IsSignedInt(BinaryImm.imm, 8),
         emit='''
         PUT_OP(bits, rex1(in_reg0), sink);
@@ -491,8 +491,8 @@ rib = TailRecipe(
         ''')
 
 # XX /n id with 32-bit immediate sign-extended.
-rid = TailRecipe(
-        'rid', BinaryImm, size=5, ins=GPR, outs=0,
+r_id = TailRecipe(
+        'r_id', BinaryImm, size=5, ins=GPR, outs=0,
         instp=IsSignedInt(BinaryImm.imm, 32),
         emit='''
         PUT_OP(bits, rex1(in_reg0), sink);
@@ -502,8 +502,8 @@ rid = TailRecipe(
         ''')
 
 # XX /n id with 32-bit immediate sign-extended. UnaryImm version.
-uid = TailRecipe(
-        'uid', UnaryImm, size=5, ins=(), outs=GPR,
+u_id = TailRecipe(
+        'u_id', UnaryImm, size=5, ins=(), outs=GPR,
         instp=IsSignedInt(UnaryImm.imm, 32),
         emit='''
         PUT_OP(bits, rex1(out_reg0), sink);
@@ -513,8 +513,8 @@ uid = TailRecipe(
         ''')
 
 # XX+rd id unary with 32-bit immediate. Note no recipe predicate.
-puid = TailRecipe(
-        'puid', UnaryImm, size=4, ins=(), outs=GPR,
+pu_id = TailRecipe(
+        'pu_id', UnaryImm, size=4, ins=(), outs=GPR,
         emit='''
         // The destination register is encoded in the low bits of the opcode.
         // No ModR/M.
@@ -524,8 +524,8 @@ puid = TailRecipe(
         ''')
 
 # XX+rd id unary with bool immediate. Note no recipe predicate.
-puid_bool = TailRecipe(
-        'puid_bool', UnaryBool, size=4, ins=(), outs=GPR,
+pu_id_bool = TailRecipe(
+        'pu_id_bool', UnaryBool, size=4, ins=(), outs=GPR,
         emit='''
         // The destination register is encoded in the low bits of the opcode.
         // No ModR/M.
@@ -535,8 +535,8 @@ puid_bool = TailRecipe(
         ''')
 
 # XX+rd iq unary with 64-bit immediate.
-puiq = TailRecipe(
-        'puiq', UnaryImm, size=8, ins=(), outs=GPR,
+pu_iq = TailRecipe(
+        'pu_iq', UnaryImm, size=8, ins=(), outs=GPR,
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         let imm: i64 = imm.into();
@@ -564,8 +564,15 @@ copysp = TailRecipe(
         modrm_rr(dst, src, sink);
         ''')
 
-adjustsp8 = TailRecipe(
-    'adjustsp8', UnaryImm, size=2, ins=(), outs=(),
+adjustsp = TailRecipe(
+    'adjustsp', Unary, size=1, ins=(GPR), outs=(),
+    emit='''
+    PUT_OP(bits, rex2(RU::rsp.into(), in_reg0), sink);
+    modrm_rr(RU::rsp.into(), in_reg0, sink);
+    ''')
+
+adjustsp_ib = TailRecipe(
+    'adjustsp_ib', UnaryImm, size=2, ins=(), outs=(),
     instp=IsSignedInt(UnaryImm.imm, 8),
     emit='''
     PUT_OP(bits, rex1(RU::rsp.into()), sink);
@@ -574,8 +581,8 @@ adjustsp8 = TailRecipe(
     sink.put1(imm as u8);
     ''')
 
-adjustsp32 = TailRecipe(
-    'adjustsp32', UnaryImm, size=5, ins=(), outs=(),
+adjustsp_id = TailRecipe(
+    'adjustsp_id', UnaryImm, size=5, ins=(), outs=(),
     instp=IsSignedInt(UnaryImm.imm, 32),
     emit='''
     PUT_OP(bits, rex1(RU::rsp.into()), sink);
@@ -1217,8 +1224,8 @@ fcmp = TailRecipe(
         ''')
 
 # XX /n, MI form with imm8.
-rcmpib = TailRecipe(
-        'rcmpib', BinaryImm, size=2, ins=GPR, outs=FLAG.rflags,
+rcmp_ib = TailRecipe(
+        'rcmp_ib', BinaryImm, size=2, ins=GPR, outs=FLAG.rflags,
         instp=IsSignedInt(BinaryImm.imm, 8),
         emit='''
         PUT_OP(bits, rex1(in_reg0), sink);
@@ -1228,8 +1235,8 @@ rcmpib = TailRecipe(
         ''')
 
 # XX /n, MI form with imm32.
-rcmpid = TailRecipe(
-        'rcmpid', BinaryImm, size=5, ins=GPR, outs=FLAG.rflags,
+rcmp_id = TailRecipe(
+        'rcmp_id', BinaryImm, size=5, ins=GPR, outs=FLAG.rflags,
         instp=IsSignedInt(BinaryImm.imm, 32),
         emit='''
         PUT_OP(bits, rex1(in_reg0), sink);
@@ -1401,8 +1408,8 @@ icscc = TailRecipe(
         modrm_rr(out_reg0, 0, sink);
         ''')
 
-icsccib = TailRecipe(
-        'icsccib', IntCompareImm, size=2 + 3, ins=GPR, outs=ABCD,
+icscc_ib = TailRecipe(
+        'icscc_ib', IntCompareImm, size=2 + 3, ins=GPR, outs=ABCD,
         instp=IsSignedInt(IntCompareImm.imm, 8),
         emit='''
         // Comparison instruction.
@@ -1429,8 +1436,8 @@ icsccib = TailRecipe(
         modrm_rr(out_reg0, 0, sink);
         ''')
 
-icsccid = TailRecipe(
-        'icsccid', IntCompareImm, size=5 + 3, ins=GPR, outs=ABCD,
+icscc_id = TailRecipe(
+        'icscc_id', IntCompareImm, size=5 + 3, ins=GPR, outs=ABCD,
         instp=IsSignedInt(IntCompareImm.imm, 32),
         emit='''
         // Comparison instruction.

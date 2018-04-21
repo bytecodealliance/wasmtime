@@ -38,16 +38,26 @@ call_conv = EnumSetting(
         - system_v: System V-style convention used on many platforms
         - fastcall: Windows "fastcall" convention, also used for x64 and ARM
         - baldrdash: SpiderMonkey WebAssembly convention
+        - probestack: specialized convention for the probestack function
 
         The default calling convention may be overridden by individual
         functions.
         """,
-        'fast', 'cold', 'system_v', 'fastcall', 'baldrdash')
+        'fast', 'cold', 'system_v', 'fastcall', 'baldrdash', 'probestack')
 
 # Note that Cretonne doesn't currently need an is_pie flag, because PIE is just
 # PIC where symbols can't be pre-empted, which can be expressed with the
 # `colocated` flag on external functions and global variables.
 is_pic = BoolSetting("Enable Position-Independent Code generation")
+
+colocated_libcalls = BoolSetting(
+        """
+        Use colocated libcalls.
+
+        Generate code that assumes that libcalls can be declared "colocated",
+        meaning they will be defined along with the current function, such that
+        they can use more efficient addressing.
+        """)
 
 return_at_end = BoolSetting(
         """
@@ -114,5 +124,32 @@ allones_funcaddrs = BoolSetting(
         """
         Emit not-yet-relocated function addresses as all-ones bit patterns.
         """)
+
+#
+# Stack probing options.
+#
+probestack_enabled = BoolSetting(
+        """
+        Enable the use of stack probes, for calling conventions which support
+        this functionality.
+        """,
+        default=True)
+
+probestack_func_adjusts_sp = BoolSetting(
+        """
+        Set this to true of the stack probe function modifies the stack pointer
+        itself.
+        """)
+
+probestack_size_log2 = NumSetting(
+        """
+        The log2 of the size of the stack guard region.
+
+        Stack frames larger than this size will have stack overflow checked
+        by calling the probestack function.
+
+        The default is 12, which translates to a size of 4096.
+        """,
+        default=12)
 
 group.close(globals())

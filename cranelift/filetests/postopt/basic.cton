@@ -10,7 +10,7 @@ ebb0(v0: i32, v1: i32):
 [Op1ret#c3]         return v1
 
 ebb1:
-[Op1puid#b8,%rax]   v8 = iconst.i32 3
+[Op1pu_id#b8,%rax]  v8 = iconst.i32 3
 [Op1ret#c3]         return v8
 }
 ; sameln: function %br_icmp
@@ -34,7 +34,7 @@ ebb0(v0: i32, v1: i32):
 [Op1ret#c3]         return v1
 
 ebb1:
-[Op1puid#b8,%rax]   v8 = iconst.i32 3
+[Op1pu_id#b8,%rax]  v8 = iconst.i32 3
 [Op1ret#c3]         return v8
 }
 ; sameln: function %br_icmp_inverse
@@ -53,12 +53,12 @@ ebb1:
 
 function %br_icmp_imm(i32, i32) -> i32 {
 ebb0(v0: i32, v1: i32):
-[Op1icsccib#7083]   v2 = icmp_imm slt v0, 2
+[Op1icscc_ib#7083]  v2 = icmp_imm slt v0, 2
 [Op1t8jccd_long#84] brz v2, ebb1
 [Op1ret#c3]         return v1
 
 ebb1:
-[Op1puid#b8,%rax]   v8 = iconst.i32 3
+[Op1pu_id#b8,%rax]  v8 = iconst.i32 3
 [Op1ret#c3]         return v8
 }
 ; sameln: function %br_icmp_imm
@@ -82,7 +82,7 @@ ebb0(v0: f32, v1: f32):
 [Op1ret#c3]         return v1
 
 ebb1:
-[Op1puid#b8,%rax]    v18 = iconst.i32 0x40a8_0000
+[Op1pu_id#b8,%rax]   v18 = iconst.i32 0x40a8_0000
 [Mp2frurm#56e,%xmm0] v8 = bitcast.f32 v18
 [Op1ret#c3]         return v8
 }

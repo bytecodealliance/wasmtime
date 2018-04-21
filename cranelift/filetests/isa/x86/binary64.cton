@@ -547,19 +547,37 @@ ebb0:
     ; asm: popq %r10
     [-,%r10]            v514 = x86_pop.i64      ; bin: 41 5a
 
-    ; Adjust Stack Pointer
+    ; Adjust Stack Pointer Up
     ; asm: addq $64, %rsp
-    adjust_sp_imm 64                            ; bin: 48 83 c4 40
+    adjust_sp_up_imm 64                         ; bin: 48 83 c4 40
     ; asm: addq $-64, %rsp
-    adjust_sp_imm -64                           ; bin: 48 83 c4 c0
+    adjust_sp_up_imm -64                        ; bin: 48 83 c4 c0
     ; asm: addq $1024, %rsp
-    adjust_sp_imm 1024                          ; bin: 48 81 c4 00000400
+    adjust_sp_up_imm 1024                       ; bin: 48 81 c4 00000400
     ; asm: addq $-1024, %rsp
-    adjust_sp_imm -1024                         ; bin: 48 81 c4 fffffc00
+    adjust_sp_up_imm -1024                      ; bin: 48 81 c4 fffffc00
     ; asm: addq $2147483647, %rsp
-    adjust_sp_imm 2147483647                    ; bin: 48 81 c4 7fffffff
+    adjust_sp_up_imm 2147483647                 ; bin: 48 81 c4 7fffffff
     ; asm: addq $-2147483648, %rsp
-    adjust_sp_imm -2147483648                   ; bin: 48 81 c4 80000000
+    adjust_sp_up_imm -2147483648                ; bin: 48 81 c4 80000000
+
+    ; Adjust Stack Pointer Down
+    ; asm: subq %rcx, %rsp
+    adjust_sp_down v1                           ; bin: 48 29 cc
+    ; asm: subq %r10, %rsp
+    adjust_sp_down v3                           ; bin: 4c 29 d4
+    ; asm: subq $64, %rsp
+    adjust_sp_down_imm 64                       ; bin: 48 83 ec 40
+    ; asm: subq $-64, %rsp
+    adjust_sp_down_imm -64                      ; bin: 48 83 ec c0
+    ; asm: subq $1024, %rsp
+    adjust_sp_down_imm 1024                     ; bin: 48 81 ec 00000400
+    ; asm: subq $-1024, %rsp
+    adjust_sp_down_imm -1024                    ; bin: 48 81 ec fffffc00
+    ; asm: subq $2147483647, %rsp
+    adjust_sp_down_imm 2147483647               ; bin: 48 81 ec 7fffffff
+    ; asm: subq $-2147483648, %rsp
+    adjust_sp_down_imm -2147483648              ; bin: 48 81 ec 80000000
 
     ; Shift immediates
     ; asm: shlq $12, %rsi

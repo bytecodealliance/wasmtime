@@ -136,29 +136,29 @@ for inst,               rrr in [
         (base.band_imm, 4),
         (base.bor_imm,  1),
         (base.bxor_imm, 6)]:
-    enc_i32_i64(inst, r.rib, 0x83, rrr=rrr)
-    enc_i32_i64(inst, r.rid, 0x81, rrr=rrr)
+    enc_i32_i64(inst, r.r_ib, 0x83, rrr=rrr)
+    enc_i32_i64(inst, r.r_id, 0x81, rrr=rrr)
 
 # TODO: band_imm.i64 with an unsigned 32-bit immediate can be encoded as
 # band_imm.i32. Can even use the single-byte immediate for 0xffff_ffXX masks.
 
 # Immediate constants.
-X86_32.enc(base.iconst.i32, *r.puid(0xb8))
+X86_32.enc(base.iconst.i32, *r.pu_id(0xb8))
 
-X86_64.enc(base.iconst.i32, *r.puid.rex(0xb8))
-X86_64.enc(base.iconst.i32, *r.puid(0xb8))
+X86_64.enc(base.iconst.i32, *r.pu_id.rex(0xb8))
+X86_64.enc(base.iconst.i32, *r.pu_id(0xb8))
 # The 32-bit immediate movl also zero-extends to 64 bits.
-X86_64.enc(base.iconst.i64, *r.puid.rex(0xb8),
+X86_64.enc(base.iconst.i64, *r.pu_id.rex(0xb8),
            instp=IsUnsignedInt(UnaryImm.imm, 32))
-X86_64.enc(base.iconst.i64, *r.puid(0xb8),
+X86_64.enc(base.iconst.i64, *r.pu_id(0xb8),
            instp=IsUnsignedInt(UnaryImm.imm, 32))
 # Sign-extended 32-bit immediate.
-X86_64.enc(base.iconst.i64, *r.uid.rex(0xc7, rrr=0, w=1))
+X86_64.enc(base.iconst.i64, *r.u_id.rex(0xc7, rrr=0, w=1))
 # Finally, the 0xb8 opcode takes an 8-byte immediate with a REX.W prefix.
-X86_64.enc(base.iconst.i64, *r.puiq.rex(0xb8, w=1))
+X86_64.enc(base.iconst.i64, *r.pu_iq.rex(0xb8, w=1))
 
 # bool constants.
-enc_both(base.bconst.b1, r.puid_bool, 0xb8)
+enc_both(base.bconst.b1, r.pu_id_bool, 0xb8)
 
 # Shifts and rotates.
 # Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
@@ -180,7 +180,7 @@ for inst,           rrr in [
         (base.ishl_imm, 4),
         (base.ushr_imm, 5),
         (base.sshr_imm, 7)]:
-    enc_i32_i64(inst, r.rib, 0xc1, rrr=rrr)
+    enc_i32_i64(inst, r.r_ib, 0xc1, rrr=rrr)
 
 # Population count.
 X86_32.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
@@ -254,11 +254,21 @@ enc_x86_64(x86.pop.i64, r.popq, 0x58)
 X86_64.enc(base.copy_special, *r.copysp.rex(0x89, w=1))
 X86_32.enc(base.copy_special, *r.copysp(0x89))
 
-# Adjust SP Imm
-X86_32.enc(base.adjust_sp_imm, *r.adjustsp8(0x83))
-X86_32.enc(base.adjust_sp_imm, *r.adjustsp32(0x81))
-X86_64.enc(base.adjust_sp_imm, *r.adjustsp8.rex(0x83, w=1))
-X86_64.enc(base.adjust_sp_imm, *r.adjustsp32.rex(0x81, w=1))
+# Adjust SP down by a dynamic value (or up, with a negative operand).
+X86_32.enc(base.adjust_sp_down.i32, *r.adjustsp(0x29))
+X86_64.enc(base.adjust_sp_down.i64, *r.adjustsp.rex(0x29, w=1))
+
+# Adjust SP up by an immediate (or down, with a negative immediate)
+X86_32.enc(base.adjust_sp_up_imm, *r.adjustsp_ib(0x83))
+X86_32.enc(base.adjust_sp_up_imm, *r.adjustsp_id(0x81))
+X86_64.enc(base.adjust_sp_up_imm, *r.adjustsp_ib.rex(0x83, w=1))
+X86_64.enc(base.adjust_sp_up_imm, *r.adjustsp_id.rex(0x81, w=1))
+
+# Adjust SP down by an immediate (or up, with a negative immediate)
+X86_32.enc(base.adjust_sp_down_imm, *r.adjustsp_ib(0x83, rrr=5))
+X86_32.enc(base.adjust_sp_down_imm, *r.adjustsp_id(0x81, rrr=5))
+X86_64.enc(base.adjust_sp_down_imm, *r.adjustsp_ib.rex(0x83, rrr=5, w=1))
+X86_64.enc(base.adjust_sp_down_imm, *r.adjustsp_id.rex(0x81, rrr=5, w=1))
 
 #
 # Float loads and stores.
@@ -406,11 +416,11 @@ X86_64.enc(base.trapff, r.trapff, 0)
 # Comparisons
 #
 enc_i32_i64(base.icmp, r.icscc, 0x39)
-enc_i32_i64(base.icmp_imm, r.icsccib, 0x83, rrr=7)
-enc_i32_i64(base.icmp_imm, r.icsccid, 0x81, rrr=7)
+enc_i32_i64(base.icmp_imm, r.icscc_ib, 0x83, rrr=7)
+enc_i32_i64(base.icmp_imm, r.icscc_id, 0x81, rrr=7)
 enc_i32_i64(base.ifcmp, r.rcmp, 0x39)
-enc_i32_i64(base.ifcmp_imm, r.rcmpib, 0x83, rrr=7)
-enc_i32_i64(base.ifcmp_imm, r.rcmpid, 0x81, rrr=7)
+enc_i32_i64(base.ifcmp_imm, r.rcmp_ib, 0x83, rrr=7)
+enc_i32_i64(base.ifcmp_imm, r.rcmp_id, 0x81, rrr=7)
 # TODO: We could special-case ifcmp_imm(x, 0) to TEST(x, x).
 
 X86_32.enc(base.ifcmp_sp.i32, *r.rcmp_sp(0x39))

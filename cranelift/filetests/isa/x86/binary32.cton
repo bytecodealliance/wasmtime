@@ -392,19 +392,37 @@ ebb0:
     ; asm: popl %ecx
     [-,%rcx]            v512 = x86_pop.i32      ; bin: 59
 
-    ; Adjust Stack Pointer
+    ; Adjust Stack Pointer Up
     ; asm: addl $64, %esp
-    adjust_sp_imm 64                            ; bin: 83 c4 40
+    adjust_sp_up_imm 64                         ; bin: 83 c4 40
     ; asm: addl $-64, %esp
-    adjust_sp_imm -64                           ; bin: 83 c4 c0
+    adjust_sp_up_imm -64                        ; bin: 83 c4 c0
     ; asm: addl $1024, %esp
-    adjust_sp_imm 1024                          ; bin: 81 c4 00000400
+    adjust_sp_up_imm 1024                       ; bin: 81 c4 00000400
     ; asm: addl $-1024, %esp
-    adjust_sp_imm -1024                         ; bin: 81 c4 fffffc00
+    adjust_sp_up_imm -1024                      ; bin: 81 c4 fffffc00
     ; asm: addl $2147483647, %esp
-    adjust_sp_imm 2147483647                    ; bin: 81 c4 7fffffff
+    adjust_sp_up_imm 2147483647                 ; bin: 81 c4 7fffffff
     ; asm: addl $-2147483648, %esp
-    adjust_sp_imm -2147483648                   ; bin: 81 c4 80000000
+    adjust_sp_up_imm -2147483648                ; bin: 81 c4 80000000
+
+    ; Adjust Stack Pointer Down
+    ; asm: subl %ecx, %esp
+    adjust_sp_down v1                           ; bin: 29 cc
+    ; asm: subl %esi, %esp
+    adjust_sp_down v2                           ; bin: 29 f4
+    ; asm: addl $64, %esp
+    adjust_sp_down_imm 64                       ; bin: 83 ec 40
+    ; asm: addl $-64, %esp
+    adjust_sp_down_imm -64                      ; bin: 83 ec c0
+    ; asm: addl $1024, %esp
+    adjust_sp_down_imm 1024                     ; bin: 81 ec 00000400
+    ; asm: addl $-1024, %esp
+    adjust_sp_down_imm -1024                    ; bin: 81 ec fffffc00
+    ; asm: addl $2147483647, %esp
+    adjust_sp_down_imm 2147483647               ; bin: 81 ec 7fffffff
+    ; asm: addl $-2147483648, %esp
+    adjust_sp_down_imm -2147483648              ; bin: 81 ec 80000000
 
     ; Shift immediates
     ; asm: shll $2, %esi
