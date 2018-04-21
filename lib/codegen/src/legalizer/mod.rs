@@ -32,6 +32,49 @@ use self::heap::expand_heap_addr;
 use self::call::expand_call;
 use self::libcall::expand_as_libcall;
 
+/// Legalize `inst` for `isa`. Return true if any changes to the code were
+/// made; return false if the instruction was successfully encoded as is.
+fn legalize_inst(
+    inst: ir::Inst,
+    pos: &mut FuncCursor,
+    cfg: &mut ControlFlowGraph,
+    isa: &TargetIsa,
+) -> bool {
+    let opcode = pos.func.dfg[inst].opcode();
+
+    // Check for ABI boundaries that need to be converted to the legalized signature.
+    if opcode.is_call() {
+        if boundary::handle_call_abi(inst, pos.func, cfg) {
+            return true;
+        }
+    } else if opcode.is_return() {
+        if boundary::handle_return_abi(inst, pos.func, cfg) {
+            return true;
+        }
+    } else if opcode.is_branch() {
+        split::simplify_branch_arguments(&mut pos.func.dfg, inst);
+    }
+
+    match pos.func.update_encoding(inst, isa) {
+        Ok(()) => false,
+        Err(action) => {
+            // We should transform the instruction into legal equivalents.
+            // If the current instruction was replaced, we need to double back and revisit
+            // the expanded sequence. This is both to assign encodings and possible to
+            // expand further.
+            // There's a risk of infinite looping here if the legalization patterns are
+            // unsound. Should we attempt to detect that?
+            if action(inst, pos.func, cfg, isa) {
+                return true;
+            }
+
+            // We don't have any pattern expansion for this instruction either.
+            // Try converting it to a library call as a last resort.
+            expand_as_libcall(inst, pos.func, isa)
+        }
+    }
+}
+
 /// Legalize `func` for `isa`.
 ///
 /// - Transform any instructions that don't have a legal representation in `isa`.
@@ -55,51 +98,13 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
         let mut prev_pos = pos.position();
 
         while let Some(inst) = pos.next_inst() {
-            let opcode = pos.func.dfg[inst].opcode();
-
-            // Check for ABI boundaries that need to be converted to the legalized signature.
-            if opcode.is_call() {
-                if boundary::handle_call_abi(inst, pos.func, cfg) {
-                    // Go back and legalize the inserted argument conversion instructions.
-                    pos.set_position(prev_pos);
-                    continue;
-                }
-            } else if opcode.is_return() {
-                if boundary::handle_return_abi(inst, pos.func, cfg) {
-                    // Go back and legalize the inserted return value conversion instructions.
-                    pos.set_position(prev_pos);
-                    continue;
-                }
-            } else if opcode.is_branch() {
-                split::simplify_branch_arguments(&mut pos.func.dfg, inst);
+            if legalize_inst(inst, &mut pos, cfg, isa) {
+                // Go back and legalize the inserted return value conversion instructions.
+                pos.set_position(prev_pos);
+            } else {
+                // Remember this position in case we need to double back.
+                prev_pos = pos.position();
             }
-
-            match pos.func.update_encoding(inst, isa) {
-                Ok(()) => {}
-                Err(action) => {
-                    // We should transform the instruction into legal equivalents.
-                    let changed = action(inst, pos.func, cfg, isa);
-                    // If the current instruction was replaced, we need to double back and revisit
-                    // the expanded sequence. This is both to assign encodings and possible to
-                    // expand further.
-                    // There's a risk of infinite looping here if the legalization patterns are
-                    // unsound. Should we attempt to detect that?
-                    if changed {
-                        pos.set_position(prev_pos);
-                        continue;
-                    }
-
-                    // We don't have any pattern expansion for this instruction either.
-                    // Try converting it to a library call as a last resort.
-                    if expand_as_libcall(inst, pos.func, isa) {
-                        pos.set_position(prev_pos);
-                        continue;
-                    }
-                }
-            }
-
-            // Remember this position in case we need to double back.
-            prev_pos = pos.position();
         }
     }
 }
