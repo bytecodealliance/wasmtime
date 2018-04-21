@@ -363,6 +363,7 @@ mod tests {
              is_64bit = false\n\
              call_conv = \"fast\"\n\
              is_pic = false\n\
+             colocated_libcalls = false\n\
              return_at_end = false\n\
              avoid_div_traps = false\n\
              is_compressed = false\n\
@@ -370,7 +371,10 @@ mod tests {
              enable_simd = true\n\
              enable_atomics = true\n\
              baldrdash_prologue_words = 0\n\
-             allones_funcaddrs = false\n"
+             allones_funcaddrs = false\n\
+             probestack_enabled = true\n\
+             probestack_func_adjusts_sp = false\n\
+             probestack_size_log2 = 12\n"
         );
         assert_eq!(f.opt_level(), super::OptLevel::Default);
         assert_eq!(f.enable_simd(), true);

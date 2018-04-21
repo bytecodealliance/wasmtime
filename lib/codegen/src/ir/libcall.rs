@@ -1,6 +1,9 @@
 //! Naming well-known routines in the runtime library.
 
-use ir::{types, Opcode, Type};
+use ir::{types, Opcode, Type, Inst, Function, FuncRef, ExternalName, Signature, AbiParam,
+         ExtFuncData, ArgumentPurpose};
+use settings::CallConv;
+use isa::{TargetIsa, RegUnit};
 use std::fmt;
 use std::str::FromStr;
 
@@ -14,6 +17,9 @@ use std::str::FromStr;
 /// This list is likely to grow over time.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LibCall {
+    /// probe for stack overflow. These are emitted for functions which need
+    /// when the `probestack_enabled` setting is true.
+    Probestack,
     /// ceil.f32
     CeilF32,
     /// ceil.f64
@@ -32,7 +38,8 @@ pub enum LibCall {
     NearestF64,
 }
 
-const NAME: [&str; 8] = [
+const NAME: [&str; 9] = [
+    "Probestack",
     "CeilF32",
     "CeilF64",
     "FloorF32",
@@ -54,6 +61,7 @@ impl FromStr for LibCall {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "Probestack" => Ok(LibCall::Probestack),
             "CeilF32" => Ok(LibCall::CeilF32),
             "CeilF64" => Ok(LibCall::CeilF64),
             "FloorF32" => Ok(LibCall::FloorF32),
@@ -95,6 +103,96 @@ impl LibCall {
             _ => return None,
         })
     }
+}
+
+/// Get a function reference for `libcall` in `func`, following the signature
+/// for `inst`.
+///
+/// If there is an existing reference, use it, otherwise make a new one.
+pub fn get_libcall_funcref(
+    libcall: LibCall,
+    func: &mut Function,
+    inst: Inst,
+    isa: &TargetIsa,
+) -> FuncRef {
+    find_funcref(libcall, func).unwrap_or_else(|| make_funcref_for_inst(libcall, func, inst, isa))
+}
+
+/// Get a function reference for the probestack function in `func`.
+///
+/// If there is an existing reference, use it, otherwise make a new one.
+pub fn get_probestack_funcref(
+    func: &mut Function,
+    reg_type: Type,
+    arg_reg: RegUnit,
+    isa: &TargetIsa,
+) -> FuncRef {
+    find_funcref(LibCall::Probestack, func).unwrap_or_else(|| {
+        make_funcref_for_probestack(func, reg_type, arg_reg, isa)
+    })
+}
+
+/// Get the existing function reference for `libcall` in `func` if it exists.
+fn find_funcref(libcall: LibCall, func: &Function) -> Option<FuncRef> {
+    // We're assuming that all libcall function decls are at the end.
+    // If we get this wrong, worst case we'll have duplicate libcall decls which is harmless.
+    for (fref, func_data) in func.dfg.ext_funcs.iter().rev() {
+        match func_data.name {
+            ExternalName::LibCall(lc) => {
+                if lc == libcall {
+                    return Some(fref);
+                }
+            }
+            _ => break,
+        }
+    }
+    None
+}
+
+/// Create a funcref for `LibCall::Probestack`.
+fn make_funcref_for_probestack(
+    func: &mut Function,
+    reg_type: Type,
+    arg_reg: RegUnit,
+    isa: &TargetIsa,
+) -> FuncRef {
+    let mut sig = Signature::new(CallConv::Probestack);
+    let rax = AbiParam::special_reg(reg_type, ArgumentPurpose::Normal, arg_reg);
+    sig.params.push(rax);
+    if !isa.flags().probestack_func_adjusts_sp() {
+        sig.returns.push(rax);
+    }
+    make_funcref(LibCall::Probestack, func, sig, isa)
+}
+
+/// Create a funcref for `libcall` with a signature matching `inst`.
+fn make_funcref_for_inst(
+    libcall: LibCall,
+    func: &mut Function,
+    inst: Inst,
+    isa: &TargetIsa,
+) -> FuncRef {
+    // Start with a fast calling convention. We'll give the ISA a chance to change it.
+    let mut sig = Signature::new(isa.flags().call_conv());
+    for &v in func.dfg.inst_args(inst) {
+        sig.params.push(AbiParam::new(func.dfg.value_type(v)));
+    }
+    for &v in func.dfg.inst_results(inst) {
+        sig.returns.push(AbiParam::new(func.dfg.value_type(v)));
+    }
+
+    make_funcref(libcall, func, sig, isa)
+}
+
+/// Create a funcref for `libcall`.
+fn make_funcref(libcall: LibCall, func: &mut Function, sig: Signature, isa: &TargetIsa) -> FuncRef {
+    let sigref = func.import_signature(sig);
+
+    func.import_function(ExtFuncData {
+        name: ExternalName::LibCall(libcall),
+        signature: sigref,
+        colocated: isa.flags().colocated_libcalls(),
+    })
 }
 
 #[cfg(test)]

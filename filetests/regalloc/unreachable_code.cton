@@ -2,6 +2,7 @@
 test compile
 
 set is_64bit
+set probestack_enabled=0
 isa x86 haswell
 
 ; This function contains unreachable blocks which trip up the register

@@ -36,8 +36,8 @@ ebb0:
 ; nextln: ebb0(v0: i64 [%rbp]):
 ; nextln:     x86_push v0
 ; nextln:     copy_special %rsp -> %rbp
-; nextln:     adjust_sp_imm -176
-; nextln:     adjust_sp_imm 176
+; nextln:     adjust_sp_down_imm 176
+; nextln:     adjust_sp_up_imm 176
 ; nextln:     v1 = x86_pop.i64
 ; nextln:     return v1
 ; nextln: }
@@ -109,7 +109,7 @@ ebb0(v0: i64, v1: i64):
 ; nextln:     x86_push v18
 ; nextln:     x86_push v19
 ; nextln:     x86_push v20
-; nextln:     adjust_sp_imm -8
+; nextln:     adjust_sp_down_imm 8
 ; nextln:     v2 = load.i32 v0
 ; nextln:     v3 = load.i32 v0+8
 ; nextln:     v4 = load.i32 v0+16
@@ -136,7 +136,7 @@ ebb0(v0: i64, v1: i64):
 ; nextln:     store v12, v1+80
 ; nextln:     store v13, v1+88
 ; nextln:     store v14, v1+96
-; nextln:     adjust_sp_imm 8
+; nextln:     adjust_sp_up_imm 8
 ; nextln:     v26 = x86_pop.i64
 ; nextln:     v25 = x86_pop.i64
 ; nextln:     v24 = x86_pop.i64
@@ -192,13 +192,13 @@ ebb0(v0: i64, v1: i64):
 ; nextln:     x86_push v51
 ; nextln:     x86_push v52
 ; nextln:     x86_push v53
-; nextln:     adjust_sp_imm
+; nextln:     adjust_sp_down_imm
 
 ; check:      spill
 
 ; check:      fill
 
-; check:     adjust_sp_imm
+; check:     adjust_sp_up_imm
 ; nextln:     v59 = x86_pop.i64
 ; nextln:     v58 = x86_pop.i64
 ; nextln:     v57 = x86_pop.i64

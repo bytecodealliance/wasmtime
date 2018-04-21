@@ -6,7 +6,8 @@ use cursor::{Cursor, CursorPosition, EncCursor};
 use ir;
 use ir::immediates::Imm64;
 use ir::stackslot::{StackOffset, StackSize};
-use ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, InstBuilder, ValueLoc};
+use ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, InstBuilder, ValueLoc,
+         get_probestack_funcref};
 use isa::{RegClass, RegUnit, TargetIsa};
 use regalloc::RegisterSet;
 use result;
@@ -216,10 +217,16 @@ pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::Ct
         }
         CallConv::Fastcall => unimplemented!("Windows calling conventions"),
         CallConv::Baldrdash => baldrdash_prologue_epilogue(func, isa),
+        CallConv::Probestack => unimplemented!("probestack calling convention"),
     }
 }
 
 pub fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
+    debug_assert!(
+        !isa.flags().probestack_enabled(),
+        "baldrdash does not expect cretonne to emit stack probes"
+    );
+
     // Baldrdash on 32-bit x86 always aligns its stack pointer to 16 bytes.
     let stack_align = 16;
     let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
@@ -239,7 +246,7 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     // newer versions use a 16-byte aligned stack pointer.
     let stack_align = 16;
     let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
-    let csr_type = if isa.flags().is_64bit() {
+    let reg_type = if isa.flags().is_64bit() {
         ir::types::I64
     } else {
         ir::types::I32
@@ -266,7 +273,7 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
 
     // Add CSRs to function signature
     let fp_arg = ir::AbiParam::special_reg(
-        csr_type,
+        reg_type,
         ir::ArgumentPurpose::FramePointer,
         RU::rbp as RegUnit,
     );
@@ -274,7 +281,7 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     func.signature.returns.push(fp_arg);
 
     for csr in csrs.iter(GPR) {
-        let csr_arg = ir::AbiParam::special_reg(csr_type, ir::ArgumentPurpose::CalleeSaved, csr);
+        let csr_arg = ir::AbiParam::special_reg(reg_type, ir::ArgumentPurpose::CalleeSaved, csr);
         func.signature.params.push(csr_arg);
         func.signature.returns.push(csr_arg);
     }
@@ -282,11 +289,11 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     // Set up the cursor and insert the prologue
     let entry_ebb = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
-    insert_system_v_prologue(&mut pos, local_stack_size, csr_type, &csrs);
+    insert_system_v_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_system_v_epilogues(&mut pos, local_stack_size, csr_type, &csrs);
+    insert_system_v_epilogues(&mut pos, local_stack_size, reg_type, &csrs);
 
     Ok(())
 }
@@ -295,12 +302,13 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
 fn insert_system_v_prologue(
     pos: &mut EncCursor,
     stack_size: i64,
-    csr_type: ir::types::Type,
+    reg_type: ir::types::Type,
     csrs: &RegisterSet,
+    isa: &TargetIsa,
 ) {
     // Append param to entry EBB
     let ebb = pos.current_ebb().expect("missing ebb under cursor");
-    let fp = pos.func.dfg.append_ebb_param(ebb, csr_type);
+    let fp = pos.func.dfg.append_ebb_param(ebb, reg_type);
     pos.func.locations[fp] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
 
     pos.ins().x86_push(fp);
@@ -311,7 +319,7 @@ fn insert_system_v_prologue(
 
     for reg in csrs.iter(GPR) {
         // Append param to entry EBB
-        let csr_arg = pos.func.dfg.append_ebb_param(ebb, csr_type);
+        let csr_arg = pos.func.dfg.append_ebb_param(ebb, reg_type);
 
         // Assign it a location
         pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
@@ -320,8 +328,48 @@ fn insert_system_v_prologue(
         pos.ins().x86_push(csr_arg);
     }
 
+    // Allocate stack frame storage.
     if stack_size > 0 {
-        pos.ins().adjust_sp_imm(Imm64::new(-stack_size));
+        if isa.flags().probestack_enabled() &&
+            stack_size > (1 << isa.flags().probestack_size_log2())
+        {
+            // Emit a stack probe.
+            let rax = RU::rax as RegUnit;
+            let rax_val = ir::ValueLoc::Reg(rax);
+
+            // The probestack function expects its input in %rax.
+            let arg = pos.ins().iconst(reg_type, stack_size);
+            pos.func.locations[arg] = rax_val;
+
+            // Call the probestack function.
+            let callee = get_probestack_funcref(pos.func, reg_type, rax, isa);
+
+            // Make the call.
+            let call = if !isa.flags().is_pic() && isa.flags().is_64bit() &&
+                !pos.func.dfg.ext_funcs[callee].colocated
+            {
+                // 64-bit non-PIC non-colocated calls need to be legalized to call_indirect.
+                // Use r11 as it may be clobbered under all supported calling conventions.
+                let r11 = RU::r11 as RegUnit;
+                let sig = pos.func.dfg.ext_funcs[callee].signature;
+                let addr = pos.ins().func_addr(reg_type, callee);
+                pos.func.locations[addr] = ir::ValueLoc::Reg(r11);
+                pos.ins().call_indirect(sig, addr, &[arg])
+            } else {
+                // Otherwise just do a normal call.
+                pos.ins().call(callee, &[arg])
+            };
+
+            // If the probestack function doesn't adjust sp, do it ourselves.
+            if !isa.flags().probestack_func_adjusts_sp() {
+                let result = pos.func.dfg.inst_results(call)[0];
+                pos.func.locations[result] = rax_val;
+                pos.ins().adjust_sp_down(result);
+            }
+        } else {
+            // Simply decrement the stack pointer.
+            pos.ins().adjust_sp_down_imm(Imm64::new(stack_size));
+        }
     }
 }
 
@@ -329,14 +377,14 @@ fn insert_system_v_prologue(
 fn insert_system_v_epilogues(
     pos: &mut EncCursor,
     stack_size: i64,
-    csr_type: ir::types::Type,
+    reg_type: ir::types::Type,
     csrs: &RegisterSet,
 ) {
     while let Some(ebb) = pos.next_ebb() {
         pos.goto_last_inst(ebb);
         if let Some(inst) = pos.current_inst() {
             if pos.func.dfg[inst].opcode().is_return() {
-                insert_system_v_epilogue(inst, stack_size, pos, csr_type, csrs);
+                insert_system_v_epilogue(inst, stack_size, pos, reg_type, csrs);
             }
         }
     }
@@ -347,23 +395,23 @@ fn insert_system_v_epilogue(
     inst: ir::Inst,
     stack_size: i64,
     pos: &mut EncCursor,
-    csr_type: ir::types::Type,
+    reg_type: ir::types::Type,
     csrs: &RegisterSet,
 ) {
     if stack_size > 0 {
-        pos.ins().adjust_sp_imm(Imm64::new(stack_size));
+        pos.ins().adjust_sp_up_imm(Imm64::new(stack_size));
     }
 
     // Pop all the callee-saved registers, stepping backward each time to
     // preserve the correct order.
-    let fp_ret = pos.ins().x86_pop(csr_type);
+    let fp_ret = pos.ins().x86_pop(reg_type);
     pos.prev_inst();
 
     pos.func.locations[fp_ret] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
     pos.func.dfg.append_inst_arg(inst, fp_ret);
 
     for reg in csrs.iter(GPR) {
-        let csr_ret = pos.ins().x86_pop(csr_type);
+        let csr_ret = pos.ins().x86_pop(reg_type);
         pos.prev_inst();
 
         pos.func.locations[csr_ret] = ir::ValueLoc::Reg(reg);
