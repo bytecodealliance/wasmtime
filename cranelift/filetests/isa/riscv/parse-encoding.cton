@@ -3,7 +3,7 @@ test legalizer
 isa riscv
 
 function %parse_encoding(i32 [%x5]) -> i32 [%x10] {
-    ; check: function %parse_encoding(i32 [%x5], i32 link [%x1]) -> i32 [%x10], i32 link [%x1] system_v {
+    ; check: function %parse_encoding(i32 [%x5], i32 link [%x1]) -> i32 [%x10], i32 link [%x1] fast {
 
     sig0 = (i32 [%x10]) -> i32 [%x10] system_v
     ; check: sig0 = (i32 [%x10]) -> i32 [%x10] system_v

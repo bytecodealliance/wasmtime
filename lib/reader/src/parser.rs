@@ -6,7 +6,7 @@ use cretonne_codegen::ir::entities::AnyEntity;
 use cretonne_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
 use cretonne_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cretonne_codegen::ir::types::VOID;
-use cretonne_codegen::ir::{AbiParam, ArgumentExtension, ArgumentLoc, CallConv, Ebb, ExtFuncData,
+use cretonne_codegen::ir::{AbiParam, ArgumentExtension, ArgumentLoc, Ebb, ExtFuncData,
                            ExternalName, FuncRef, Function, GlobalVar, GlobalVarData, Heap,
                            HeapBase, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
                            Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind,
@@ -14,6 +14,7 @@ use cretonne_codegen::ir::{AbiParam, ArgumentExtension, ArgumentLoc, CallConv, E
 use cretonne_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
 use cretonne_codegen::packed_option::ReservedValue;
 use cretonne_codegen::{settings, timing};
+use cretonne_codegen::settings::CallConv;
 use error::{Error, Location, Result};
 use isaspec;
 use lexer::{self, Lexer, Token};
@@ -188,7 +189,7 @@ impl<'a> Context<'a> {
     fn add_sig(&mut self, sig: SigRef, data: Signature, loc: &Location) -> Result<()> {
         while self.function.dfg.signatures.next_key().index() <= sig.index() {
             self.function.import_signature(
-                Signature::new(CallConv::SystemV),
+                Signature::new(CallConv::Fast),
             );
         }
         self.function.dfg.signatures[sig] = data;
@@ -862,8 +863,8 @@ impl<'a> Parser<'a> {
     // signature ::=  * "(" [paramlist] ")" ["->" retlist] [callconv]
     //
     fn parse_signature(&mut self, unique_isa: Option<&TargetIsa>) -> Result<Signature> {
-        // Calling convention defaults to `system_v`, but can be changed.
-        let mut sig = Signature::new(CallConv::SystemV);
+        // Calling convention defaults to `fast`, but can be changed.
+        let mut sig = Signature::new(CallConv::Fast);
 
         self.match_token(
             Token::LPar,
@@ -2402,7 +2403,8 @@ mod tests {
     use cretonne_codegen::ir::StackSlotKind;
     use cretonne_codegen::ir::entities::AnyEntity;
     use cretonne_codegen::ir::types;
-    use cretonne_codegen::ir::{ArgumentExtension, ArgumentPurpose, CallConv};
+    use cretonne_codegen::ir::{ArgumentExtension, ArgumentPurpose};
+    use cretonne_codegen::settings::CallConv;
     use error::Error;
     use isaspec::IsaSpec;
     use testfile::{Comment, Details};
@@ -2451,19 +2453,19 @@ mod tests {
         assert_eq!(sig.returns.len(), 0);
         assert_eq!(sig.call_conv, CallConv::SystemV);
 
-        let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 spiderwasm")
+        let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 baldrdash")
             .parse_signature(None)
             .unwrap();
         assert_eq!(
             sig2.to_string(),
-            "(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 spiderwasm"
+            "(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 baldrdash"
         );
-        assert_eq!(sig2.call_conv, CallConv::SpiderWASM);
+        assert_eq!(sig2.call_conv, CallConv::Baldrdash);
 
         // Old-style signature without a calling convention.
         assert_eq!(
             Parser::new("()").parse_signature(None).unwrap().to_string(),
-            "() system_v"
+            "() fast"
         );
         assert_eq!(
             Parser::new("() notacc")

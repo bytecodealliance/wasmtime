@@ -11,7 +11,7 @@ ebb0:
     return
 }
 
-; check: function %empty(i64 fp [%rbp]) -> i64 fp [%rbp] system_v {
+; check: function %empty(i64 fp [%rbp]) -> i64 fp [%rbp] fast {
 ; nextln:     ss0 = incoming_arg 16, offset -16
 ; nextln: 
 ; nextln: ebb0(v0: i64 [%rbp]):
@@ -29,7 +29,7 @@ ebb0:
     return
 }
 
-; check: function %one_stack_slot(i64 fp [%rbp]) -> i64 fp [%rbp] system_v {
+; check: function %one_stack_slot(i64 fp [%rbp]) -> i64 fp [%rbp] fast {
 ; nextln:     ss0 = explicit_slot 168, offset -184
 ; nextln:     ss1 = incoming_arg 16, offset -16
 ; nextln: 
@@ -52,9 +52,9 @@ ebb0:
     return
 }
 
-; check: function %call(i64 fp [%rbp]) -> i64 fp [%rbp] system_v {
+; check: function %call(i64 fp [%rbp]) -> i64 fp [%rbp] fast {
 ; nextln:     ss0 = incoming_arg 16, offset -16
-; nextln:     sig0 = () system_v
+; nextln:     sig0 = () fast
 ; nextln:     fn0 = %foo sig0
 ; nextln: 
 ; nextln: ebb0(v0: i64 [%rbp]):
@@ -98,7 +98,7 @@ ebb0(v0: i64, v1: i64):
     return
 }
 
-; check: function %no_spill(i64 [%rdi], i64 [%rsi], i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15]) -> i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15] system_v {
+; check: function %no_spill(i64 [%rdi], i64 [%rsi], i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15]) -> i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15] fast {
 ; nextln:     ss0 = incoming_arg 56, offset -56
 ; nextln: 
 ; nextln: ebb0(v0: i64 [%rdi], v1: i64 [%rsi], v15: i64 [%rbp], v16: i64 [%rbx], v17: i64 [%r12], v18: i64 [%r13], v19: i64 [%r14], v20: i64 [%r15]):
@@ -181,7 +181,7 @@ ebb0(v0: i64, v1: i64):
     return
 }
 
-; check: function %yes_spill(i64 [%rdi], i64 [%rsi], i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15]) -> i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15] system_v {
+; check: function %yes_spill(i64 [%rdi], i64 [%rsi], i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15]) -> i64 fp [%rbp], i64 csr [%rbx], i64 csr [%r12], i64 csr [%r13], i64 csr [%r14], i64 csr [%r15] fast {
 ; check:     ss0 = spill_slot
 
 ; check: ebb0(v16: i64 [%rdi], v17: i64 [%rsi], v48: i64 [%rbp], v49: i64 [%rbx], v50: i64 [%r12], v51: i64 [%r13], v52: i64 [%r14], v53: i64 [%r15]):

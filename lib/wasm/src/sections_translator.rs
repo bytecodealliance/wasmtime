@@ -7,7 +7,7 @@
 //! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
-use cretonne_codegen::ir::{self, AbiParam, CallConv, Signature};
+use cretonne_codegen::ir::{self, AbiParam, Signature};
 use environ::ModuleEnvironment;
 use std::str::from_utf8;
 use std::string::String;
@@ -35,7 +35,7 @@ pub fn parse_function_signatures(
                                               ref params,
                                               ref returns,
                                           }) => {
-                let mut sig = Signature::new(CallConv::SystemV);
+                let mut sig = Signature::new(environ.flags().call_conv());
                 sig.params.extend(params.iter().map(|ty| {
                     let cret_arg: ir::Type = type_to_type(ty).expect(
                         "only numeric types are supported in function signatures",

@@ -36,9 +36,9 @@
 //! extern crate cretonne_frontend;
 //!
 //! use cretonne_codegen::entity::EntityRef;
-//! use cretonne_codegen::ir::{ExternalName, CallConv, Function, Signature, AbiParam, InstBuilder};
+//! use cretonne_codegen::ir::{ExternalName, Function, Signature, AbiParam, InstBuilder};
 //! use cretonne_codegen::ir::types::*;
-//! use cretonne_codegen::settings;
+//! use cretonne_codegen::settings::{self, CallConv};
 //! use cretonne_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
 //! use cretonne_codegen::verifier::verify_function;
 //!

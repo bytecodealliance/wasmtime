@@ -25,12 +25,12 @@ pub extern crate cretonne_frontend as frontend;
 pub mod prelude {
     pub use codegen;
     pub use codegen::entity::EntityRef;
-    pub use codegen::ir::{AbiParam, InstBuilder, Value, Ebb, Signature, CallConv, Type,
-                          JumpTableData, MemFlags};
+    pub use codegen::ir::{AbiParam, InstBuilder, Value, Ebb, Signature, Type, JumpTableData,
+                          MemFlags};
     pub use codegen::ir::types;
     pub use codegen::ir::condcodes::{IntCC, FloatCC};
     pub use codegen::ir::immediates::{Ieee32, Ieee64};
-    pub use codegen::settings::{self, Configurable};
+    pub use codegen::settings::{self, Configurable, CallConv};
     pub use codegen::isa;
 
     pub use frontend::{FunctionBuilderContext, FunctionBuilder, Variable};

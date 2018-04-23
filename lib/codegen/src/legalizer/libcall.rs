@@ -3,9 +3,10 @@
 use ir;
 use ir::InstBuilder;
 use std::vec::Vec;
+use isa::TargetIsa;
 
 /// Try to expand `inst` as a library call, returning true is successful.
-pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function) -> bool {
+pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function, isa: &TargetIsa) -> bool {
     // Does the opcode/ctrl_type combo even have a well-known runtime library name.
     let libcall =
         match ir::LibCall::for_inst(func.dfg[inst].opcode(), func.dfg.ctrl_typevar(inst)) {
@@ -13,7 +14,8 @@ pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function) -> bool {
             None => return false,
         };
 
-    let funcref = find_funcref(libcall, func).unwrap_or_else(|| make_funcref(libcall, inst, func));
+    let funcref =
+        find_funcref(libcall, func).unwrap_or_else(|| make_funcref(libcall, inst, func, isa));
 
     // Now we convert `inst` to a call. First save the arguments.
     let mut args = Vec::new();
@@ -44,9 +46,14 @@ fn find_funcref(libcall: ir::LibCall, func: &ir::Function) -> Option<ir::FuncRef
 }
 
 /// Create a funcref for `libcall` with a signature matching `inst`.
-fn make_funcref(libcall: ir::LibCall, inst: ir::Inst, func: &mut ir::Function) -> ir::FuncRef {
-    // Start with a system_v calling convention. We'll give the ISA a chance to change it.
-    let mut sig = ir::Signature::new(ir::CallConv::SystemV);
+fn make_funcref(
+    libcall: ir::LibCall,
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    isa: &TargetIsa,
+) -> ir::FuncRef {
+    // Start with a fast calling convention. We'll give the ISA a chance to change it.
+    let mut sig = ir::Signature::new(isa.flags().call_conv());
     for &v in func.dfg.inst_args(inst) {
         sig.params.push(ir::AbiParam::new(func.dfg.value_type(v)));
     }

@@ -29,6 +29,21 @@ enable_verifier = BoolSetting(
 
 is_64bit = BoolSetting("Enable 64-bit code generation")
 
+call_conv = EnumSetting(
+        """
+        Default calling convention:
+
+        - fast: not-ABI-stable convention for best performance
+        - cold: not-ABI-stable convention for infrequently executed code
+        - system_v: System V-style convention used on many platforms
+        - fastcall: Windows "fastcall" convention, also used for x64 and ARM
+        - baldrdash: SpiderMonkey WebAssembly convention
+
+        The default calling convention may be overridden by individual
+        functions.
+        """,
+        'fast', 'cold', 'system_v', 'fastcall', 'baldrdash')
+
 # Note that Cretonne doesn't currently need an is_pie flag, because PIE is just
 # PIC where symbols can't be pre-empted, which can be expressed with the
 # `colocated` flag on external functions and global variables.
@@ -75,13 +90,13 @@ enable_atomics = BoolSetting(
         default=True)
 
 #
-# Settings specific to the `spiderwasm` calling convention.
+# Settings specific to the `baldrdash` calling convention.
 #
-spiderwasm_prologue_words = NumSetting(
+baldrdash_prologue_words = NumSetting(
         """
-        Number of pointer-sized words pushed by the spiderwasm prologue.
+        Number of pointer-sized words pushed by the baldrdash prologue.
 
-        Functions with the `spiderwasm` calling convention don't generate their
+        Functions with the `baldrdash` calling convention don't generate their
         own prologue and epilogue. They depend on externally generated code
         that pushes a fixed number of words in the prologue and restores them
         in the epilogue.

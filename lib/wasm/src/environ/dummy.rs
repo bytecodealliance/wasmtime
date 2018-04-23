@@ -271,6 +271,10 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 }
 
 impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
+    fn flags(&self) -> &settings::Flags {
+        &self.info.flags
+    }
+
     fn get_func_name(&self, func_index: FunctionIndex) -> ir::ExternalName {
         get_func_name(func_index)
     }

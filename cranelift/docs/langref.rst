@@ -399,7 +399,28 @@ convention:
     param        : type [paramext] [paramspecial]
     paramext     : "uext" | "sext"
     paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx"
-    callconv     : "system_v" | "spiderwasm"
+    callconv     : "fast" | "cold" | "system_v" | "fastcall" | "baldrdash"
+
+A function's calling convention determines exactly how arguments and return
+values are passed, and how stack frames are managed. Since all of these details
+depend on both the instruction set /// architecture and possibly the operating
+system, a function's calling convention is only fully determined by a
+`(TargetIsa, CallConv)` tuple.
+
+========== ===========================================
+Name       Description
+========== ===========================================
+fast       not-ABI-stable convention for best performance
+cold       not-ABI-stable convention for infrequently executed code
+system_v   System V-style convention used on many platforms
+fastcall   Windows "fastcall" convention, also used for x64 and ARM
+baldrdash  SpiderMonkey WebAssembly convention
+========== ===========================================
+
+The "not-ABI-stable" conventions do not follow an external specification and
+may change between versions of Cretonne.
+
+The "fastcall" convention is not yet implemented.
 
 Parameters and return values have flags whose meaning is mostly target
 dependent. These flags support interfacing with code produced by other

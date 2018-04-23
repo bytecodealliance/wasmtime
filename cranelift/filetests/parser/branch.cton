@@ -9,7 +9,7 @@ ebb0:
 ebb1:
     jump ebb0()
 }
-; sameln: function %minimal() system_v {
+; sameln: function %minimal() fast {
 ; nextln: ebb0:
 ; nextln:     jump ebb1
 ; nextln: 
@@ -25,7 +25,7 @@ ebb0(v90: i32):
 ebb1(v91: i32):
     jump ebb0(v91)
 }
-; sameln: function %onearg(i32) system_v {
+; sameln: function %onearg(i32) fast {
 ; nextln: ebb0(v90: i32):
 ; nextln:     jump ebb1(v90)
 ; nextln: 
@@ -41,7 +41,7 @@ ebb0(v90: i32, v91: f32):
 ebb1(v92: i32, v93: f32):
     jump ebb0(v92, v93)
 }
-; sameln: function %twoargs(i32, f32) system_v {
+; sameln: function %twoargs(i32, f32) fast {
 ; nextln: ebb0(v90: i32, v91: f32):
 ; nextln:     jump ebb1(v90, v91)
 ; nextln: 
@@ -57,7 +57,7 @@ ebb0(v90: i32):
 ebb1:
     brnz v90, ebb1()
 }
-; sameln: function %minimal(i32) system_v {
+; sameln: function %minimal(i32) fast {
 ; nextln: ebb0(v90: i32):
 ; nextln:     brz v90, ebb1
 ; nextln: 
@@ -72,7 +72,7 @@ ebb0(v90: i32, v91: f32):
 ebb1(v92: i32, v93: f32):
     brnz v90, ebb0(v92, v93)
 }
-; sameln: function %twoargs(i32, f32) system_v {
+; sameln: function %twoargs(i32, f32) fast {
 ; nextln: ebb0(v90: i32, v91: f32):
 ; nextln:     brz v90, ebb1(v90, v91)
 ; nextln: 
@@ -94,7 +94,7 @@ ebb30:
 ebb40:
     trap user4
 }
-; sameln: function %jumptable(i32) system_v {
+; sameln: function %jumptable(i32) fast {
 ; check:      jt2 = jump_table 0, 0, ebb10, ebb40, ebb20, ebb30
 ; check:      jt200 = jump_table 0
 ; check:  ebb10(v3: i32):

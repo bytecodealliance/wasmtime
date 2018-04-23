@@ -91,7 +91,7 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
 
                     // We don't have any pattern expansion for this instruction either.
                     // Try converting it to a library call as a last resort.
-                    if expand_as_libcall(inst, pos.func) {
+                    if expand_as_libcall(inst, pos.func, isa) {
                         pos.set_position(prev_pos);
                         continue;
                     }

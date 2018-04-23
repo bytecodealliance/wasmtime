@@ -44,7 +44,7 @@ ebb1:
 
 ; SpiderMonkey VM-style static 4+2 GB heap.
 ; This eliminates bounds checks completely for offsets < 2GB.
-function %staticheap_sm64(i32, i64 vmctx) -> f32 spiderwasm {
+function %staticheap_sm64(i32, i64 vmctx) -> f32 baldrdash {
     gv0 = vmctx+64
     heap0 = static gv0, min 0x1000, bound 0x1_0000_0000, guard 0x8000_0000
 
@@ -65,7 +65,7 @@ ebb0(v0: i32, v999: i64):
     return v4
 }
 
-function %staticheap_static_oob_sm64(i32, i64 vmctx) -> f32 spiderwasm {
+function %staticheap_static_oob_sm64(i32, i64 vmctx) -> f32 baldrdash {
     gv0 = vmctx+64
     heap0 = static gv0, min 0x1000, bound 0x1000_0000, guard 0x8000_0000
 
@@ -88,7 +88,7 @@ ebb0(v0: i32, v999: i64):
 
 ; SpiderMonkey VM-style static 4+2 GB heap.
 ; Offsets >= 2 GB do require a boundscheck.
-function %staticheap_sm64(i32, i64 vmctx) -> f32 spiderwasm {
+function %staticheap_sm64(i32, i64 vmctx) -> f32 baldrdash {
     gv0 = vmctx+64
     heap0 = static gv0, min 0x1000, bound 0x1_0000_0000, guard 0x8000_0000
 
@@ -112,7 +112,7 @@ ebb0(v0: i32, v999: i64):
 
 ; Stack overflow check.
 ; The stack limit is stored in a pointer-sized global variable.
-function %stkchk(i64 vmctx) spiderwasm {
+function %stkchk(i64 vmctx) baldrdash {
     gv0 = vmctx+64
 
 ebb0(v0: i64):

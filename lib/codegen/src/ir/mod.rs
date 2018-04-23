@@ -25,8 +25,7 @@ mod valueloc;
 pub use ir::builder::{InsertBuilder, InstBuilder, InstBuilderBase, InstInserterBase};
 pub use ir::dfg::{DataFlowGraph, ValueDef};
 pub use ir::entities::{Ebb, FuncRef, GlobalVar, Heap, Inst, JumpTable, SigRef, StackSlot, Value};
-pub use ir::extfunc::{AbiParam, ArgumentExtension, ArgumentPurpose, CallConv, ExtFuncData,
-                      Signature};
+pub use ir::extfunc::{AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature};
 pub use ir::extname::ExternalName;
 pub use ir::function::Function;
 pub use ir::globalvar::GlobalVarData;
