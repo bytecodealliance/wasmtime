@@ -17,4 +17,4 @@ failure = "0.1.1"
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "Cretonne/cretonne" }
+travis-ci = { repository = "cretonne/cretonne" }

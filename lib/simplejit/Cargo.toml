@@ -23,4 +23,4 @@ core = ["cretonne-codegen/core", "cretonne-module/core", "cretonne-native/core"]
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "Cretonne/cretonne" }
+travis-ci = { repository = "cretonne/cretonne" }
