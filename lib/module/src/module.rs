@@ -79,18 +79,23 @@ enum FuncOrDataId {
     Data(DataId),
 }
 
+/// Information about a function which can be called.
 pub struct FunctionDeclaration {
     pub name: String,
     pub linkage: Linkage,
     pub signature: ir::Signature,
 }
 
+/// A function belonging to a `Module`.
 struct ModuleFunction<B>
 where
     B: Backend,
 {
+    /// The function declaration.
     decl: FunctionDeclaration,
+    /// The compiled artifact, once it's available.
     compiled: Option<B::CompiledFunction>,
+    /// A flag indicating whether the function has been finalized.
     finalized: bool,
 }
 
@@ -103,18 +108,23 @@ where
     }
 }
 
+/// Information about a data object which can be accessed.
 pub struct DataDeclaration {
     pub name: String,
     pub linkage: Linkage,
     pub writable: bool,
 }
 
+/// A data object belonging to a `Module`.
 struct ModuleData<B>
 where
     B: Backend,
 {
+    /// The data object declaration.
     decl: DataDeclaration,
+    /// The "compiled" artifact, once it's available.
     compiled: Option<B::CompiledData>,
+    /// A flag indicating whether the data object has been finalized.
     finalized: bool,
 }
 
@@ -128,6 +138,7 @@ where
     }
 }
 
+/// The functions and data objects belonging to a module.
 struct ModuleContents<B>
 where
     B: Backend,
