@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cretonne Project Developers"]
 name = "cretonne-codegen"
-version = "0.5.1"
+version = "0.6.0"
 description = "Low-level code generator library"
 license = "Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/"
@@ -11,17 +11,14 @@ keywords = ["compile", "compiler", "jit"]
 build = "build.rs"
 
 [dependencies]
-cretonne-entity = { path = "../entity", version = "0.5.1", default-features = false }
+cretonne-entity = { path = "../entity", version = "0.6.0", default-features = false }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
+hashmap_core = { version = "0.1.4", optional = true }
 # It is a goal of the cretonne-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
 # accomodated in `tests`.
-
-[dependencies.hashmap_core]
-version = "0.1.1"
-optional = true
 
 [features]
 # The "std" feature enables use of libstd. The "core" feature enables use
