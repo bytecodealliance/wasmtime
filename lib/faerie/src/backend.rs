@@ -23,6 +23,10 @@ impl FaerieBuilder {
     /// Create a new `FaerieBuilder` using the given Cretonne target, that
     /// can be passed to
     /// [`Module::new`](cretonne_module/struct.Module.html#method.new].
+    ///
+    /// Note: To support calls JIT'd functions from Rust or other compiled
+    /// code, it's necessary for the `call_conv` setting in `isa`'s flags
+    /// to match the host platform.
     pub fn new(
         isa: Box<TargetIsa>,
         name: String,

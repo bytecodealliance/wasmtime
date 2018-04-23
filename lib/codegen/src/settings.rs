@@ -25,6 +25,7 @@ use isa::TargetIsa;
 use std::fmt;
 use std::result;
 use std::vec::Vec;
+use std::str;
 
 /// A string-based configurator for settings groups.
 ///
@@ -360,6 +361,7 @@ mod tests {
              opt_level = \"default\"\n\
              enable_verifier = true\n\
              is_64bit = false\n\
+             call_conv = \"fast\"\n\
              is_pic = false\n\
              return_at_end = false\n\
              avoid_div_traps = false\n\
@@ -367,12 +369,12 @@ mod tests {
              enable_float = true\n\
              enable_simd = true\n\
              enable_atomics = true\n\
-             spiderwasm_prologue_words = 0\n\
+             baldrdash_prologue_words = 0\n\
              allones_funcaddrs = false\n"
         );
         assert_eq!(f.opt_level(), super::OptLevel::Default);
         assert_eq!(f.enable_simd(), true);
-        assert_eq!(f.spiderwasm_prologue_words(), 0);
+        assert_eq!(f.baldrdash_prologue_words(), 0);
     }
 
     #[test]

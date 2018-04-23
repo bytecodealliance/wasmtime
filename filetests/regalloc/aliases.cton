@@ -2,7 +2,7 @@ test regalloc
 set is_64bit
 isa x86 haswell
 
-function %value_aliases(i32, f32, i64 vmctx) spiderwasm {
+function %value_aliases(i32, f32, i64 vmctx) baldrdash {
     gv0 = vmctx
     heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, guard 0x8000_0000
 

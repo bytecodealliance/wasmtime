@@ -19,6 +19,32 @@ except ImportError:
     pass
 
 
+def gen_to_and_from_str(ty, values, fmt):
+    # type: (str, Tuple[str, ...], srcgen.Formatter) -> None
+    """
+    Emit Display and FromStr implementations for enum settings.
+    """
+    with fmt.indented('impl fmt::Display for {} {{'.format(ty), '}'):
+        with fmt.indented(
+                'fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {',
+                '}'):
+            with fmt.indented('f.write_str(match *self {', '})'):
+                for v in values:
+                    fmt.line('{}::{} => "{}",'
+                             .format(ty, camel_case(v), v))
+
+    with fmt.indented('impl str::FromStr for {} {{'.format(ty), '}'):
+        fmt.line('type Err = ();')
+        with fmt.indented(
+                'fn from_str(s: &str) -> result::Result<Self, Self::Err> {',
+                '}'):
+            with fmt.indented('match s {', '}'):
+                for v in values:
+                    fmt.line('"{}" => Ok({}::{}),'
+                             .format(v, ty, camel_case(v)))
+                fmt.line('_ => Err(()),')
+
+
 def gen_enum_types(sgrp, fmt):
     # type: (SettingGroup, srcgen.Formatter) -> None
     """
@@ -29,11 +55,13 @@ def gen_enum_types(sgrp, fmt):
             continue
         ty = camel_case(setting.name)
         fmt.doc_comment('Values for `{}`.'.format(setting))
-        fmt.line('#[derive(Debug, Copy, Clone, PartialEq, Eq)]')
+        fmt.line('#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]')
         with fmt.indented('pub enum {} {{'.format(ty), '}'):
             for v in setting.values:
                 fmt.doc_comment('`{}`.'.format(v))
                 fmt.line(camel_case(v) + ',')
+
+        gen_to_and_from_str(ty, setting.values, fmt)
 
 
 def gen_getter(setting, sgrp, fmt):
@@ -221,7 +249,7 @@ def gen_display(sgrp, fmt):
                 with fmt.indented('if !d.detail.is_preset() {', '}'):
                     fmt.line('write!(f, "{} = ", d.name)?;')
                     fmt.line(
-                            'TEMPLATE.format_toml_value(d.detail,' +
+                            'TEMPLATE.format_toml_value(d.detail, ' +
                             'self.bytes[d.offset as usize], f)?;')
                     fmt.line('writeln!(f)?;')
             fmt.line('Ok(())')

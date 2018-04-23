@@ -596,8 +596,9 @@ mod tests {
     use Variable;
     use cretonne_codegen::entity::EntityRef;
     use cretonne_codegen::ir::types::*;
-    use cretonne_codegen::ir::{AbiParam, CallConv, ExternalName, Function, InstBuilder, Signature};
+    use cretonne_codegen::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
     use cretonne_codegen::settings;
+    use cretonne_codegen::settings::CallConv;
     use cretonne_codegen::verifier::verify_function;
     use frontend::{FunctionBuilder, FunctionBuilderContext};
 

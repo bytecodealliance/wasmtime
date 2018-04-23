@@ -6,12 +6,12 @@ use cursor::{Cursor, CursorPosition, EncCursor};
 use ir;
 use ir::immediates::Imm64;
 use ir::stackslot::{StackOffset, StackSize};
-use ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, CallConv, InstBuilder,
-         ValueLoc};
+use ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, InstBuilder, ValueLoc};
 use isa::{RegClass, RegUnit, TargetIsa};
 use regalloc::RegisterSet;
 use result;
 use settings as shared_settings;
+use settings::CallConv;
 use stack_layout::layout_stack;
 use std::i32;
 
@@ -74,7 +74,7 @@ impl ArgAssigner for Args {
         }
 
         // Handle special-purpose arguments.
-        if ty.is_int() && self.call_conv == CallConv::SpiderWASM {
+        if ty.is_int() && self.call_conv == CallConv::Baldrdash {
             match arg.purpose {
                 // This is SpiderMonkey's `WasmTlsReg`.
                 ArgumentPurpose::VMContext => {
@@ -210,19 +210,20 @@ fn callee_saved_gprs_used(flags: &shared_settings::Flags, func: &ir::Function) -
 
 pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
     match func.signature.call_conv {
-        ir::CallConv::SystemV => system_v_prologue_epilogue(func, isa),
-        ir::CallConv::SpiderWASM => spiderwasm_prologue_epilogue(func, isa),
+        // For now, just translate fast and cold as system_v.
+        CallConv::Fast | CallConv::Cold | CallConv::SystemV => {
+            system_v_prologue_epilogue(func, isa)
+        }
+        CallConv::Fastcall => unimplemented!("Windows calling conventions"),
+        CallConv::Baldrdash => baldrdash_prologue_epilogue(func, isa),
     }
 }
 
-pub fn spiderwasm_prologue_epilogue(
-    func: &mut ir::Function,
-    isa: &TargetIsa,
-) -> result::CtonResult {
-    // Spiderwasm on 32-bit x86 always aligns its stack pointer to 16 bytes.
+pub fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
+    // Baldrdash on 32-bit x86 always aligns its stack pointer to 16 bytes.
     let stack_align = 16;
     let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
-    let bytes = StackSize::from(isa.flags().spiderwasm_prologue_words()) * word_size;
+    let bytes = StackSize::from(isa.flags().baldrdash_prologue_words()) * word_size;
 
     let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
     ss.offset = Some(-(bytes as StackOffset));

@@ -6,11 +6,12 @@
 use binemit::CodeOffset;
 use entity::{EntityMap, PrimaryMap};
 use ir;
-use ir::{CallConv, DataFlowGraph, ExternalName, Layout, Signature};
+use ir::{DataFlowGraph, ExternalName, Layout, Signature};
 use ir::{Ebb, ExtFuncData, FuncRef, GlobalVar, GlobalVarData, Heap, HeapData, JumpTable,
          JumpTableData, SigRef, StackSlot, StackSlotData};
 use ir::{EbbOffsets, InstEncodings, JumpTables, SourceLocs, StackSlots, ValueLocations};
 use isa::{EncInfo, Legalize, TargetIsa, Encoding};
+use settings::CallConv;
 use std::fmt;
 use write::write_function;
 
@@ -86,7 +87,7 @@ impl Function {
 
     /// Clear all data structures in this function.
     pub fn clear(&mut self) {
-        self.signature.clear(ir::CallConv::SystemV);
+        self.signature.clear(CallConv::Fast);
         self.stack_slots.clear();
         self.global_vars.clear();
         self.heaps.clear();
@@ -99,9 +100,9 @@ impl Function {
         self.srclocs.clear();
     }
 
-    /// Create a new empty, anonymous function with a SystemV calling convention.
+    /// Create a new empty, anonymous function with a Fast calling convention.
     pub fn new() -> Self {
-        Self::with_name_signature(ExternalName::default(), Signature::new(CallConv::SystemV))
+        Self::with_name_signature(ExternalName::default(), Signature::new(CallConv::Fast))
     }
 
     /// Creates a jump table in the function, to be used by `br_table` instructions.

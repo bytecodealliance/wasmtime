@@ -7,6 +7,7 @@
 
 use ir::{ArgumentLoc, ExternalName, SigRef, Type};
 use isa::{RegInfo, RegUnit};
+use settings::CallConv;
 use std::cmp;
 use std::fmt;
 use std::str::FromStr;
@@ -342,47 +343,6 @@ impl fmt::Display for ExtFuncData {
     }
 }
 
-/// A Calling convention.
-///
-/// A function's calling convention determines exactly how arguments and return values are passed,
-/// and how stack frames are managed. Since all of these details depend on both the instruction set
-/// architecture and possibly the operating system, a function's calling convention is only fully
-/// determined by a `(TargetIsa, CallConv)` tuple.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum CallConv {
-    /// The System V-style calling convention.
-    ///
-    /// This is the System V-style calling convention that a C compiler would
-    /// use on many platforms.
-    SystemV,
-
-    /// A JIT-compiled WebAssembly function in the SpiderMonkey VM.
-    SpiderWASM,
-}
-
-impl fmt::Display for CallConv {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::CallConv::*;
-        f.write_str(match *self {
-            SystemV => "system_v",
-            SpiderWASM => "spiderwasm",
-        })
-    }
-}
-
-impl FromStr for CallConv {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::CallConv::*;
-        match s {
-            "system_v" => Ok(SystemV),
-            "spiderwasm" => Ok(SpiderWASM),
-            _ => Err(()),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -418,23 +378,30 @@ mod tests {
 
     #[test]
     fn call_conv() {
-        for &cc in &[CallConv::SystemV, CallConv::SpiderWASM] {
+        for &cc in &[
+            CallConv::Fast,
+            CallConv::Cold,
+            CallConv::SystemV,
+            CallConv::Fastcall,
+            CallConv::Baldrdash,
+        ]
+        {
             assert_eq!(Ok(cc), cc.to_string().parse())
         }
     }
 
     #[test]
     fn signatures() {
-        let mut sig = Signature::new(CallConv::SpiderWASM);
-        assert_eq!(sig.to_string(), "() spiderwasm");
+        let mut sig = Signature::new(CallConv::Baldrdash);
+        assert_eq!(sig.to_string(), "() baldrdash");
         sig.params.push(AbiParam::new(I32));
-        assert_eq!(sig.to_string(), "(i32) spiderwasm");
+        assert_eq!(sig.to_string(), "(i32) baldrdash");
         sig.returns.push(AbiParam::new(F32));
-        assert_eq!(sig.to_string(), "(i32) -> f32 spiderwasm");
+        assert_eq!(sig.to_string(), "(i32) -> f32 baldrdash");
         sig.params.push(AbiParam::new(I32.by(4).unwrap()));
-        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32 spiderwasm");
+        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32 baldrdash");
         sig.returns.push(AbiParam::new(B8));
-        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8 spiderwasm");
+        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8 baldrdash");
 
         // Test the offset computation algorithm.
         assert_eq!(sig.argument_bytes, None);
@@ -450,7 +417,7 @@ mod tests {
         // Writing ABI-annotated signatures.
         assert_eq!(
             sig.to_string(),
-            "(i32 [24], i32x4 [8]) -> f32, b8 spiderwasm"
+            "(i32 [24], i32x4 [8]) -> f32, b8 baldrdash"
         );
     }
 }

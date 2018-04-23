@@ -9,7 +9,7 @@ ebb100(v20: i32):
     v9200 = f64const 0x4.0p0
     trap user4
 }
-; sameln: function %defs() system_v {
+; sameln: function %defs() fast {
 ; nextln: ebb100(v20: i32):
 ; nextln:     v1000 = iconst.i32x8 5
 ; nextln:     v9200 = f64const 0x1.0000000000000p2
@@ -23,7 +23,7 @@ ebb100(v20: i32):
     v200 = iadd v20, v1000
     jump ebb100(v1000)
 }
-; sameln: function %use_value() system_v {
+; sameln: function %use_value() fast {
 ; nextln: ebb100(v20: i32):
 ; nextln:     v1000 = iadd_imm v20, 5
 ; nextln:     v200 = iadd v20, v1000

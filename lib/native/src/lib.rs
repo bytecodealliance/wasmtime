@@ -34,12 +34,21 @@ use raw_cpuid::CpuId;
 pub fn builders() -> Result<(settings::Builder, isa::Builder), &'static str> {
     let mut flag_builder = settings::builder();
 
-    // TODO: Add RISC-V support once Rust supports it.
+    if cfg!(unix) {
+        flag_builder.set("call_conv", "system_v").unwrap();
+    } else if cfg!(windows) {
+        flag_builder.set("call_conv", "fastcall").unwrap();
+    } else {
+        return Err("unrecognized environment");
+    }
 
     if cfg!(target_pointer_width = "64") {
         flag_builder.enable("is_64bit").unwrap();
+    } else if !cfg!(target_pointer_width = "32") {
+        return Err("unrecognized pointer size");
     }
 
+    // TODO: Add RISC-V support once Rust supports it.
     let name = if cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
         "x86"
     } else if cfg!(target_arch = "arm") {

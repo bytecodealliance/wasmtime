@@ -1,6 +1,6 @@
 test verifier
 
-function %add_members(i32) -> f32 spiderwasm {
+function %add_members(i32) -> f32 baldrdash {
     gv0 = vmctx+64
     gv1 = vmctx+72
     heap0 = dynamic gv0, min 0x1000, bound gv1, guard 0

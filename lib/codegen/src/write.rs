@@ -459,34 +459,34 @@ mod tests {
     #[test]
     fn basic() {
         let mut f = Function::new();
-        assert_eq!(f.to_string(), "function u0:0() system_v {\n}\n");
+        assert_eq!(f.to_string(), "function u0:0() fast {\n}\n");
 
         f.name = ExternalName::testcase("foo");
-        assert_eq!(f.to_string(), "function %foo() system_v {\n}\n");
+        assert_eq!(f.to_string(), "function %foo() fast {\n}\n");
 
         f.create_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4));
         assert_eq!(
             f.to_string(),
-            "function %foo() system_v {\n    ss0 = explicit_slot 4\n}\n"
+            "function %foo() fast {\n    ss0 = explicit_slot 4\n}\n"
         );
 
         let ebb = f.dfg.make_ebb();
         f.layout.append_ebb(ebb);
         assert_eq!(
             f.to_string(),
-            "function %foo() system_v {\n    ss0 = explicit_slot 4\n\nebb0:\n}\n"
+            "function %foo() fast {\n    ss0 = explicit_slot 4\n\nebb0:\n}\n"
         );
 
         f.dfg.append_ebb_param(ebb, types::I8);
         assert_eq!(
             f.to_string(),
-            "function %foo() system_v {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8):\n}\n"
+            "function %foo() fast {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8):\n}\n"
         );
 
         f.dfg.append_ebb_param(ebb, types::F32.by(4).unwrap());
         assert_eq!(
             f.to_string(),
-            "function %foo() system_v {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n}\n"
+            "function %foo() fast {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n}\n"
         );
     }
 }

@@ -160,6 +160,9 @@ pub trait FuncEnvironment {
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
 /// by the user, they are only for `cretonne-wasm` internal use.
 pub trait ModuleEnvironment<'data> {
+    /// Get the flags for the current compilation.
+    fn flags(&self) -> &Flags;
+
     /// Return the name for the given function index.
     fn get_func_name(&self, func_index: FunctionIndex) -> ir::ExternalName;
 

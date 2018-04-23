@@ -52,6 +52,7 @@ use isa::enc_tables::Encodings;
 use regalloc;
 use result;
 use settings;
+use settings::CallConv;
 use std::boxed::Box;
 use std::fmt;
 use timing;
@@ -252,8 +253,8 @@ pub trait TargetIsa: fmt::Display {
         let word_size = if self.flags().is_64bit() { 8 } else { 4 };
 
         // Account for the SpiderMonkey standard prologue pushes.
-        if func.signature.call_conv == ir::CallConv::SpiderWASM {
-            let bytes = StackSize::from(self.flags().spiderwasm_prologue_words()) * word_size;
+        if func.signature.call_conv == CallConv::Baldrdash {
+            let bytes = StackSize::from(self.flags().baldrdash_prologue_words()) * word_size;
             let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
             ss.offset = Some(-(bytes as StackOffset));
             func.stack_slots.push(ss);
