@@ -20,6 +20,7 @@ extern crate filecheck;
 extern crate serde_derive;
 extern crate tempdir;
 extern crate term;
+extern crate capstone;
 
 use cretonne_codegen::{timing, VERSION};
 use docopt::Docopt;
