@@ -29,5 +29,6 @@ serde = "1.0.8"
 serde_derive = "1.0.8"
 tempdir = "0.3.5"
 term = "0.5.1"
+capstone = "0.3.1"
 
 [workspace]

@@ -1,8 +1,10 @@
 //! CLI tool to read Cretonne IR files and compile them into native code.
 
-use cretonne_codegen::Context;
+use capstone::prelude::*;
+use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::print_errors::pretty_error;
 use cretonne_codegen::settings::FlagsOrIsa;
+use cretonne_codegen::Context;
 use cretonne_codegen::{binemit, ir};
 use cretonne_reader::parse_test;
 use std::path::Path;
@@ -121,8 +123,45 @@ fn handle_module(
                 print!("{}", byte);
             }
             println!();
+
+            let cs = get_disassembler(isa)?;
+
+            println!("\nDisassembly:");
+            let insns = cs.disasm_all(&mem, 0x0).unwrap();
+            for i in insns.iter() {
+                println!("{}", i);
+            }
         }
     }
 
     Ok(())
+}
+
+fn get_disassembler(isa: &TargetIsa) -> Result<Capstone, String> {
+    let cs = match isa.name() {
+        "riscv" => return Err(String::from("No disassembler for RiscV")),
+        "x86" => {
+            if isa.flags().is_64bit() {
+                Capstone::new()
+                    .x86()
+                    .mode(arch::x86::ArchMode::Mode64)
+                    .build()
+            } else {
+                Capstone::new()
+                    .x86()
+                    .mode(arch::x86::ArchMode::Mode32)
+                    .build()
+            }
+        }
+        "arm32" => Capstone::new().arm().mode(arch::arm::ArchMode::Arm).build(),
+        "arm64" => {
+            Capstone::new()
+                .arm64()
+                .mode(arch::arm64::ArchMode::Arm)
+                .build()
+        }
+        _ => return Err(String::from("Unknown ISA")),
+    };
+
+    cs.map_err(|err| err.to_string())
 }
