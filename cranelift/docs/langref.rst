@@ -116,6 +116,8 @@ Integer values have a fixed size and can be interpreted as either signed or
 unsigned. Some instructions will interpret an operand as a signed or unsigned
 number, others don't care.
 
+The support for i8 and i16 arithmetic is incomplete and use could lead to bugs.
+
 .. autoctontype:: i8
 .. autoctontype:: i16
 .. autoctontype:: i32
