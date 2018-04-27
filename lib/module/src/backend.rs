@@ -3,9 +3,9 @@
 use DataContext;
 use Linkage;
 use ModuleNamespace;
+use ModuleError;
 use cretonne_codegen::Context;
 use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::result::CtonError;
 use cretonne_codegen::{binemit, ir};
 use std::marker;
 
@@ -57,19 +57,17 @@ where
         ctx: &Context,
         namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> Result<Self::CompiledFunction, CtonError>;
+    ) -> Result<Self::CompiledFunction, ModuleError>;
 
     /// Define a zero-initialized data object of the given size.
     ///
     /// Data objects must be declared before being defined.
-    ///
-    /// TODO: Is CtonError the right error code here?
     fn define_data(
         &mut self,
         name: &str,
         data_ctx: &DataContext,
         namespace: &ModuleNamespace<Self>,
-    ) -> Result<Self::CompiledData, CtonError>;
+    ) -> Result<Self::CompiledData, ModuleError>;
 
     /// Write the address of `what` into the data for `data` at `offset`. `data` must refer to a
     /// defined data object.

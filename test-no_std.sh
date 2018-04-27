@@ -21,10 +21,10 @@ do
     cd "lib/$LIB"
 
     # Test with just "core" enabled.
-    cargo test --no-default-features --features core
+    cargo +nightly test --no-default-features --features core
 
     # Test with "core" and "std" enabled at the same time.
-    cargo test --features core
+    cargo +nightly test --features core
 
     cd "$topdir"
 done

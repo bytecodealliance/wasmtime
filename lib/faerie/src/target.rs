@@ -1,9 +1,9 @@
 use cretonne_codegen::isa;
+use cretonne_module::ModuleError;
 use faerie::Target;
-use failure::Error;
 
 /// Translate from a Cretonne `TargetIsa` to a Faerie `Target`.
-pub fn translate(isa: &isa::TargetIsa) -> Result<Target, Error> {
+pub fn translate(isa: &isa::TargetIsa) -> Result<Target, ModuleError> {
     let name = isa.name();
     match name {
         "x86" => Ok(if isa.flags().is_64bit() {
@@ -13,6 +13,8 @@ pub fn translate(isa: &isa::TargetIsa) -> Result<Target, Error> {
         }),
         "arm32" => Ok(Target::ARMv7),
         "arm64" => Ok(Target::ARM64),
-        _ => Err(format_err!("unsupported isa: {}", name)),
+        _ => Err(ModuleError::Backend(
+            format!("unsupported faerie isa: {}", name),
+        )),
     }
 }

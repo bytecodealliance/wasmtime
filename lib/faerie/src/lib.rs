@@ -21,13 +21,13 @@
 extern crate cretonne_codegen;
 extern crate cretonne_module;
 extern crate faerie;
-#[macro_use]
 extern crate failure;
 extern crate goblin;
 
 mod backend;
 mod container;
 mod target;
+pub mod traps;
 
-pub use backend::{FaerieBuilder, FaerieBackend};
+pub use backend::{FaerieBuilder, FaerieBackend, FaerieProduct, FaerieTrapCollection};
 pub use container::Format;
