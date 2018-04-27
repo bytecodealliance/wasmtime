@@ -37,7 +37,7 @@ The first line of a function definition provides the function *name* and
 the :term:`function signature` which declares the parameter and return types.
 Then follows the :term:`function preamble` which declares a number of entities
 that can be referenced inside the function. In the example above, the preamble
-declares a single explicit stack slot, ``ss1``.
+declares a single explicit stack slot, ``ss0``.
 
 After the preamble follows the :term:`function body` which consists of
 :term:`extended basic block`\s (EBBs), the first of which is the
@@ -533,10 +533,10 @@ in :ref:`unrestricted loads and stores <memory>`.
 The :inst:`stack_addr` instruction can be used to macro-expand the stack access
 instructions before instruction selection::
 
-    v1 = stack_load.f64 ss3, 16
+    v0 = stack_load.f64 ss3, 16
     ; Expands to:
-    v9 = stack_addr ss3, 16
-    v1 = load.f64 v9
+    v1 = stack_addr ss3, 16
+    v0 = load.f64 v1
 
 When Cretonne code is running in a sandbox, it can also be necessary to include
 stack overflow checks in the prologue.

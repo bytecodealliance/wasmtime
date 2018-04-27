@@ -1,13 +1,13 @@
 test verifier
 
 function %gcd(i32 uext, i32 uext) -> i32 uext system_v {
-    fn1 = %divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
+    fn0 = %divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
 
-ebb1(v1: i32, v2: i32):
-    brz v2, ebb2
-    v3, v4 = call fn1(v1, v2)
-    return v3
+ebb1(v0: i32, v1: i32):
+    brz v1, ebb2
+    v2, v3 = call fn0(v0, v1)
+    return v2
 
 ebb2:
-    return v1
+    return v0
 }
