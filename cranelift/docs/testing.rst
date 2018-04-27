@@ -226,13 +226,13 @@ command::
     ; regex: I=\binst\d+\b
     ; check: label="{ebb0 | <$(BRZ=$I)>brz ebb2 | <$(JUMP=$I)>jump ebb1}"]
 
-    ebb0(v1: i32, v2: i32):
-        brz v2, ebb2            ; unordered: ebb0:$BRZ -> ebb2
-        v4 = iconst.i32 0
-        jump ebb1(v4)           ; unordered: ebb0:$JUMP -> ebb1
+    ebb0(v0: i32, v1: i32):
+        brz v1, ebb2            ; unordered: ebb0:$BRZ -> ebb2
+        v2 = iconst.i32 0
+        jump ebb1(v2)           ; unordered: ebb0:$JUMP -> ebb1
 
     ebb1(v5: i32):
-        return v1
+        return v0
 
     ebb2:
         v100 = f32const 0.0
@@ -303,10 +303,10 @@ that instruction is compared to the directive::
 
     function %int32() {
     ebb0:
-        [-,%x5]             v1 = iconst.i32 1
-        [-,%x6]             v2 = iconst.i32 2
-        [R#0c,%x7]          v10 = iadd v1, v2       ; bin: 006283b3
-        [R#200c,%x8]        v11 = isub v1, v2       ; bin: 40628433
+        [-,%x5]             v0 = iconst.i32 1
+        [-,%x6]             v1 = iconst.i32 2
+        [R#0c,%x7]          v10 = iadd v0, v1       ; bin: 006283b3
+        [R#200c,%x8]        v11 = isub v0, v1       ; bin: 40628433
         return
     }
 

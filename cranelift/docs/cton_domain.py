@@ -6,7 +6,7 @@
 #
 # .. cton::type:: type
 #     Document an IR type.
-# .. cton:inst:: v1, v2 = inst op1, op2
+# .. cton:inst:: v0, v1 = inst op0, op1
 #     Document an IR instruction.
 #
 from __future__ import absolute_import
@@ -146,9 +146,9 @@ class CtonInst(CtonObject):
     def handle_signature(self, sig, signode):
         # Look for signatures like
         #
-        #   v1, v2 = foo op1, op2
-        #   v1 = foo
-        #   foo op1
+        #   v0, v1 = foo op0, op1
+        #   v0 = foo
+        #   foo op0
 
         parts = re.split(sep_equal, sig, 1)
         if len(parts) == 2:
