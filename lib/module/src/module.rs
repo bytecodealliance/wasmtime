@@ -7,7 +7,7 @@
 
 use Backend;
 use cretonne_codegen::entity::{EntityRef, PrimaryMap};
-use cretonne_codegen::result::{CtonError, CtonResult};
+use cretonne_codegen::result::CtonError;
 use cretonne_codegen::{binemit, ir, Context};
 use data_context::DataContext;
 use std::collections::HashMap;
@@ -17,10 +17,31 @@ use std::collections::HashMap;
 pub struct FuncId(u32);
 entity_impl!(FuncId, "funcid");
 
+/// Function identifiers are namespace 0 in `ir::ExternalName`
+impl From<FuncId> for ir::ExternalName {
+    fn from(id: FuncId) -> ir::ExternalName {
+        ir::ExternalName::User {
+            namespace: 0,
+            index: id.0,
+        }
+    }
+}
+
 /// A data object identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DataId(u32);
 entity_impl!(DataId, "dataid");
+
+/// Data identifiers are namespace 1 in `ir::ExternalName`
+impl From<DataId> for ir::ExternalName {
+    fn from(id: DataId) -> ir::ExternalName {
+        ir::ExternalName::User {
+            namespace: 1,
+            index: id.0,
+        }
+    }
+}
+
 
 /// Linkage refers to where an entity is defined and who can see it.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -73,10 +94,24 @@ impl Linkage {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-enum FuncOrDataId {
+
+/// A declared name may refer to either a function or data declaration
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub enum FuncOrDataId {
+    /// When it's a FuncId
     Func(FuncId),
+    /// When it's a DataId
     Data(DataId),
+}
+
+/// Mapping to `ir::ExternalName` is trivial based on the `FuncId` and `DataId` mapping.
+impl From<FuncOrDataId> for ir::ExternalName {
+    fn from(id: FuncOrDataId) -> ir::ExternalName {
+        match id {
+            FuncOrDataId::Func(funcid) => ir::ExternalName::from(funcid),
+            FuncOrDataId::Data(dataid) => ir::ExternalName::from(dataid),
+        }
+    }
 }
 
 /// Information about a function which can be called.
@@ -84,6 +119,29 @@ pub struct FunctionDeclaration {
     pub name: String,
     pub linkage: Linkage,
     pub signature: ir::Signature,
+}
+
+/// Error messages for all `Module` and `Backend` methods
+#[derive(Fail, Debug)]
+pub enum ModuleError {
+    /// Indicates an identifier was used before it was declared
+    #[fail(display = "Undeclared identifier: {}", _0)]
+    Undeclared(String),
+    /// Indicates an identifier was used contrary to the way it was declared
+    #[fail(display = "Incompatible declaration of identifier: {}", _0)]
+    IncompatibleDeclaration(String),
+    /// Indicates an identifier was defined more than once
+    #[fail(display = "Duplicate definition of identifier: {}", _0)]
+    DuplicateDefinition(String),
+    /// Indicates an identifier was defined, but was declared as an import
+    #[fail(display = "Invalid to define identifier declared as an import: {}", _0)]
+    InvalidImportDefinition(String),
+    /// Wraps a `cretonne-codegen` error
+    #[fail(display = "Compilation error: {}", _0)]
+    Compilation(CtonError),
+    /// Wraps a generic error from a backend
+    #[fail(display = "Backend error: {}", _0)]
+    Backend(String),
 }
 
 /// A function belonging to a `Module`.
@@ -157,7 +215,7 @@ where
             let func = FuncId::new(index as usize);
             &self.functions[func]
         } else {
-            panic!("unexpected ExternalName kind")
+            panic!("unexpected ExternalName kind {}", name)
         }
     }
 
@@ -168,7 +226,7 @@ where
             let data = DataId::new(index as usize);
             &self.data_objects[data]
         } else {
-            panic!("unexpected ExternalName kind")
+            panic!("unexpected ExternalName kind {}", name)
         }
     }
 }
@@ -227,7 +285,7 @@ where
         if let ir::ExternalName::User { namespace, .. } = *name {
             namespace == 0
         } else {
-            panic!("unexpected ExternalName kind")
+            panic!("unexpected ExternalName kind {}", name)
         }
     }
 }
@@ -258,6 +316,12 @@ where
         }
     }
 
+    /// Get the module identifier for a given name, if that name
+    /// has been declared.
+    pub fn get_name(&self, name: &str) -> Option<FuncOrDataId> {
+        self.names.get(name).map(|e| *e)
+    }
+
     /// Return then pointer type for the current target.
     pub fn pointer_type(&self) -> ir::types::Type {
         if self.backend.isa().flags().is_64bit() {
@@ -273,7 +337,7 @@ where
         name: &str,
         linkage: Linkage,
         signature: &ir::Signature,
-    ) -> Result<FuncId, CtonError> {
+    ) -> Result<FuncId, ModuleError> {
         // TODO: Can we avoid allocating names so often?
         use std::collections::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
@@ -285,7 +349,9 @@ where
                         self.backend.declare_function(name, existing.decl.linkage);
                         Ok(id)
                     }
-                    FuncOrDataId::Data(..) => unimplemented!(),
+                    FuncOrDataId::Data(..) => Err(
+                        ModuleError::IncompatibleDeclaration(name.to_owned()),
+                    ),
                 }
             }
             Vacant(entry) => {
@@ -311,7 +377,7 @@ where
         name: &str,
         linkage: Linkage,
         writable: bool,
-    ) -> Result<DataId, CtonError> {
+    ) -> Result<DataId, ModuleError> {
         // TODO: Can we avoid allocating names so often?
         use std::collections::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
@@ -328,7 +394,9 @@ where
                         Ok(id)
                     }
 
-                    FuncOrDataId::Func(..) => unimplemented!(),
+                    FuncOrDataId::Func(..) => Err(
+                        ModuleError::IncompatibleDeclaration(name.to_owned()),
+                    ),
                 }
             }
             Vacant(entry) => {
@@ -386,19 +454,24 @@ where
     }
 
     /// Define a function, producing the function body from the given `Context`.
-    pub fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> CtonResult {
+    pub fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> Result<(), ModuleError> {
         let compiled = {
-            let code_size = ctx.compile(self.backend.isa())?;
+            let code_size = ctx.compile(self.backend.isa()).map_err(|e| {
+                dbg!(
+                    "defining function {}: {}",
+                    func,
+                    ctx.func.display(self.backend.isa())
+                );
+                ModuleError::Compilation(e)
+            })?;
 
             let info = &self.contents.functions[func];
-            debug_assert!(
-                info.compiled.is_none(),
-                "functions can be defined only once"
-            );
-            debug_assert!(
-                info.decl.linkage.is_definable(),
-                "imported functions cannot be defined"
-            );
+            if !info.compiled.is_none() {
+                return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
+            }
+            if !info.decl.linkage.is_definable() {
+                return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
+            }
             Some(self.backend.define_function(
                 &info.decl.name,
                 ctx,
@@ -413,17 +486,15 @@ where
     }
 
     /// Define a function, producing the data contents from the given `DataContext`.
-    pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> CtonResult {
+    pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> Result<(), ModuleError> {
         let compiled = {
             let info = &self.contents.data_objects[data];
-            debug_assert!(
-                info.compiled.is_none(),
-                "functions can be defined only once"
-            );
-            debug_assert!(
-                info.decl.linkage.is_definable(),
-                "imported functions cannot be defined"
-            );
+            if !info.compiled.is_none() {
+                return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
+            }
+            if !info.decl.linkage.is_definable() {
+                return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
+            }
             Some(self.backend.define_data(
                 &info.decl.name,
                 data_ctx,

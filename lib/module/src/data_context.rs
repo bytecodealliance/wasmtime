@@ -94,7 +94,7 @@ impl DataContext {
         self.description.init = Init::Zeros { size };
     }
 
-    /// Define a zero-initialized object with the given size.
+    /// Define an object initialized with the given contents.
     ///
     /// TODO: Can we avoid a Box here?
     pub fn define(&mut self, contents: Box<[u8]>, writable: Writability) {

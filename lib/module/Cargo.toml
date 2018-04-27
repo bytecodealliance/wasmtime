@@ -12,6 +12,7 @@ readme = "README.md"
 cretonne-codegen = { path = "../codegen", version = "0.6.0", default-features = false }
 cretonne-entity = { path = "../entity", version = "0.6.0", default-features = false }
 hashmap_core = { version = "0.1.4", optional = true }
+failure = "0.1.1"
 
 [features]
 default = ["std"]

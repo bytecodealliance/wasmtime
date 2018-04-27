@@ -16,9 +16,12 @@
                 use_self,
                 ))]
 
+#[macro_use]
 extern crate cretonne_codegen;
 #[macro_use]
 extern crate cretonne_entity;
+#[macro_use]
+extern crate failure;
 
 mod backend;
 mod data_context;
@@ -26,4 +29,4 @@ mod module;
 
 pub use backend::Backend;
 pub use data_context::{DataContext, Writability, DataDescription, Init};
-pub use module::{DataId, FuncId, Linkage, Module, ModuleNamespace};
+pub use module::{DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleNamespace, ModuleError};

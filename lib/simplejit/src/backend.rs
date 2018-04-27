@@ -2,10 +2,9 @@
 
 use cretonne_codegen::binemit::{Addend, CodeOffset, Reloc, RelocSink, NullTrapSink};
 use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::result::CtonError;
 use cretonne_codegen::{self, ir, settings};
 use cretonne_module::{Backend, DataContext, Linkage, ModuleNamespace, Writability,
-                      DataDescription, Init};
+                      DataDescription, Init, ModuleError};
 use cretonne_native;
 use std::ffi::CString;
 use std::ptr;
@@ -116,7 +115,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         ctx: &cretonne_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> Result<Self::CompiledFunction, CtonError> {
+    ) -> Result<Self::CompiledFunction, ModuleError> {
         let size = code_size as usize;
         let ptr = self.code_memory.allocate(size).expect(
             "TODO: handle OOM etc.",
@@ -139,7 +138,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         _name: &str,
         data: &DataContext,
         _namespace: &ModuleNamespace<Self>,
-    ) -> Result<Self::CompiledData, CtonError> {
+    ) -> Result<Self::CompiledData, ModuleError> {
         let &DataDescription {
             writable,
             ref init,
