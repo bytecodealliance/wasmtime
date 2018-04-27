@@ -38,8 +38,17 @@ use_lzcnt = And(has_lzcnt)
 # Presets corresponding to x86 CPUs.
 
 baseline = Preset()
+
 nehalem = Preset(
         has_sse3, has_ssse3, has_sse41, has_sse42, has_popcnt)
-haswell = Preset(nehalem, has_bmi1, has_lzcnt)
+haswell = Preset(nehalem, has_bmi1, has_bmi2, has_lzcnt)
+broadwell = Preset(haswell)
+skylake = Preset(broadwell)
+cannonlake = Preset(skylake)
+icelake = Preset(cannonlake)
+
+znver1 = Preset(
+        has_sse3, has_ssse3, has_sse41, has_sse42, has_popcnt,
+        has_bmi1, has_bmi2, has_lzcnt)
 
 ISA.settings.close(globals())
