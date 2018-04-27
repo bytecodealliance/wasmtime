@@ -331,6 +331,25 @@ where
         }
     }
 
+    /// Create a new `Context` initialized for use with this `Module`.
+    ///
+    /// This ensures that the `Context` is initialized with the default calling
+    /// convention for the `TargetIsa`.
+    pub fn make_context(&self) -> Context {
+        let mut ctx = Context::new();
+        ctx.func.signature.call_conv = self.backend.isa().flags().call_conv();
+        ctx
+    }
+
+    /// Create a new `Context` initialized for use with this `Module`.
+    ///
+    /// This ensures that the `Context` is initialized with the default calling
+    /// convention for the `TargetIsa`.
+    pub fn clear_context(&self, ctx: &mut Context) {
+        ctx.clear();
+        ctx.func.signature.call_conv = self.backend.isa().flags().call_conv();
+    }
+
     /// Declare a function in this module.
     pub fn declare_function(
         &mut self,
