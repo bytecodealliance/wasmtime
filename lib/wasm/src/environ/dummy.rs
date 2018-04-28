@@ -101,7 +101,7 @@ pub struct DummyEnvironment {
 impl DummyEnvironment {
     /// Allocates the data structures with default flags.
     pub fn default() -> Self {
-        Self::with_flags(settings::Flags::new(&settings::builder()))
+        Self::with_flags(settings::Flags::new(settings::builder()))
     }
 
     /// Allocates the data structures with the given flags.

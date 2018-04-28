@@ -1021,7 +1021,7 @@ mod tests {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
             cur.ins().return_(&[])
         };
-        let flags = settings::Flags::new(&settings::builder());
+        let flags = settings::Flags::new(settings::builder());
         match verify_function(&func, &flags) {
             Ok(()) => {}
             Err(err) => {
@@ -1200,7 +1200,7 @@ mod tests {
             ssa.declare_ebb_predecessor(ebb1, block2, j);
         }
         ssa.seal_ebb_header_block(ebb1, &mut func);
-        let flags = settings::Flags::new(&settings::builder());
+        let flags = settings::Flags::new(settings::builder());
         match verify_function(&func, &flags) {
             Ok(()) => {}
             Err(err) => {
@@ -1251,7 +1251,7 @@ mod tests {
         }
         ssa.seal_ebb_header_block(ebb1, &mut func);
         ssa.seal_ebb_header_block(ebb2, &mut func);
-        let flags = settings::Flags::new(&settings::builder());
+        let flags = settings::Flags::new(settings::builder());
         match verify_function(&func, &flags) {
             Ok(()) => {}
             Err(err) => {

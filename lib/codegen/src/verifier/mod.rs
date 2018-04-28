@@ -1175,7 +1175,7 @@ mod tests {
     #[test]
     fn empty() {
         let func = Function::new();
-        let flags = &settings::Flags::new(&settings::builder());
+        let flags = &settings::Flags::new(settings::builder());
         let verifier = Verifier::new(&func, flags.into());
         assert_eq!(verifier.run(), Ok(()));
     }
@@ -1198,7 +1198,7 @@ mod tests {
             }),
             ebb0,
         );
-        let flags = &settings::Flags::new(&settings::builder());
+        let flags = &settings::Flags::new(settings::builder());
         let verifier = Verifier::new(&func, flags.into());
         assert_err_with_msg!(verifier.run(), "instruction format");
     }

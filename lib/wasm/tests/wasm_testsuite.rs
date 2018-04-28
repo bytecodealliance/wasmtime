@@ -32,7 +32,7 @@ fn testsuite() {
         })
         .collect();
     paths.sort_by_key(|dir| dir.path());
-    let flags = Flags::new(&settings::builder());
+    let flags = Flags::new(settings::builder());
     for path in paths {
         let path = path.path();
         handle_module(&path, &flags);
@@ -43,7 +43,7 @@ fn testsuite() {
 fn return_at_end() {
     let mut flag_builder = settings::builder();
     flag_builder.enable("return_at_end").unwrap();
-    let flags = Flags::new(&flag_builder);
+    let flags = Flags::new(flag_builder);
     handle_module(&PathBuf::from("../../wasmtests/return_at_end.wat"), &flags);
 }
 

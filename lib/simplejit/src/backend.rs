@@ -22,7 +22,7 @@ impl SimpleJITBuilder {
         let (flag_builder, isa_builder) = cretonne_native::builders().unwrap_or_else(|_| {
             panic!("host machine is not a supported target");
         });
-        let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
+        let isa = isa_builder.finish(settings::Flags::new(flag_builder));
         Self::with_isa(isa)
     }
 

@@ -33,7 +33,7 @@ pub fn isa_builder() -> IsaBuilder {
 
 fn isa_constructor(
     shared_flags: shared_settings::Flags,
-    builder: &shared_settings::Builder,
+    builder: shared_settings::Builder,
 ) -> Box<TargetIsa> {
     let level1 = if shared_flags.is_64bit() {
         &enc_tables::LEVEL1_RV64[..]
@@ -130,7 +130,7 @@ mod tests {
     fn test_64bitenc() {
         let mut shared_builder = settings::builder();
         shared_builder.enable("is_64bit").unwrap();
-        let shared_flags = settings::Flags::new(&shared_builder);
+        let shared_flags = settings::Flags::new(shared_builder);
         let isa = isa::lookup("riscv").unwrap().finish(shared_flags);
 
         let mut func = Function::new();
@@ -180,7 +180,7 @@ mod tests {
     fn test_32bitenc() {
         let mut shared_builder = settings::builder();
         shared_builder.set("is_64bit", "false").unwrap();
-        let shared_flags = settings::Flags::new(&shared_builder);
+        let shared_flags = settings::Flags::new(shared_builder);
         let isa = isa::lookup("riscv").unwrap().finish(shared_flags);
 
         let mut func = Function::new();
@@ -234,7 +234,7 @@ mod tests {
     fn test_rv32m() {
         let mut shared_builder = settings::builder();
         shared_builder.set("is_64bit", "false").unwrap();
-        let shared_flags = settings::Flags::new(&shared_builder);
+        let shared_flags = settings::Flags::new(shared_builder);
 
         // Set the supports_m stting which in turn enables the use_m predicate that unlocks
         // encodings for imul.

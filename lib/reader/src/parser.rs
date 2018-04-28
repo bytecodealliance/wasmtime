@@ -725,14 +725,16 @@ impl<'a> Parser<'a> {
                     isaspec::parse_options(words, &mut isa_builder, &self.loc)?;
 
                     // Construct a trait object with the aggregate settings.
-                    isas.push(isa_builder.finish(settings::Flags::new(&flag_builder)));
+                    isas.push(isa_builder.finish(
+                        settings::Flags::new(flag_builder.clone()),
+                    ));
                 }
                 _ => break,
             }
         }
         if !seen_isa {
             // No `isa` commands, but we allow for `set` commands.
-            Ok(isaspec::IsaSpec::None(settings::Flags::new(&flag_builder)))
+            Ok(isaspec::IsaSpec::None(settings::Flags::new(flag_builder)))
         } else if let Some(loc) = last_set_loc {
             err!(
                 loc,
