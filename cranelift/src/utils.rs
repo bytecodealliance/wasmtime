@@ -61,9 +61,9 @@ pub fn parse_sets_and_isa(flag_set: &[String], flag_isa: &str) -> Result<OwnedFl
             .map_err(|err| err.to_string())?;
 
         Ok(OwnedFlagsOrIsa::Isa(
-            isa_builder.finish(settings::Flags::new(&flag_builder)),
+            isa_builder.finish(settings::Flags::new(flag_builder)),
         ))
     } else {
-        Ok(OwnedFlagsOrIsa::Flags(settings::Flags::new(&flag_builder)))
+        Ok(OwnedFlagsOrIsa::Flags(settings::Flags::new(flag_builder)))
     }
 }

@@ -16,7 +16,7 @@
 //! let mut b = settings::builder();
 //! b.set("opt_level", "fastest");
 //!
-//! let f = settings::Flags::new(&b);
+//! let f = settings::Flags::new(b);
 //! assert_eq!(f.opt_level(), settings::OptLevel::Fastest);
 //! ```
 
@@ -44,6 +44,7 @@ pub trait Configurable {
 }
 
 /// Collect settings values based on a template.
+#[derive(Clone)]
 pub struct Builder {
     template: &'static detail::Template,
     bytes: Box<[u8]>,
@@ -354,7 +355,7 @@ mod tests {
     #[test]
     fn display_default() {
         let b = builder();
-        let f = Flags::new(&b);
+        let f = Flags::new(b);
         assert_eq!(
             f.to_string(),
             "[shared]\n\
@@ -388,7 +389,7 @@ mod tests {
         assert_eq!(b.enable("enable_simd"), Ok(()));
         assert_eq!(b.set("enable_simd", "false"), Ok(()));
 
-        let f = Flags::new(&b);
+        let f = Flags::new(b);
         assert_eq!(f.enable_simd(), false);
     }
 
@@ -402,7 +403,7 @@ mod tests {
         assert_eq!(b.set("opt_level", "best"), Ok(()));
         assert_eq!(b.set("enable_simd", "0"), Ok(()));
 
-        let f = Flags::new(&b);
+        let f = Flags::new(b);
         assert_eq!(f.enable_simd(), false);
         assert_eq!(f.opt_level(), super::OptLevel::Best);
     }

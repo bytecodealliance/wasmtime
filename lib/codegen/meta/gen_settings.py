@@ -262,7 +262,7 @@ def gen_constructor(sgrp, parent, fmt):
     """
 
     with fmt.indented('impl Flags {', '}'):
-        args = 'builder: &Builder'
+        args = 'builder: Builder'
         if sgrp.parent:
             p = sgrp.parent
             args = '{}: &{}::Flags, {}'.format(p.name, p.qual_mod, args)

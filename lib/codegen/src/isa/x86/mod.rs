@@ -35,7 +35,7 @@ pub fn isa_builder() -> IsaBuilder {
 
 fn isa_constructor(
     shared_flags: shared_settings::Flags,
-    builder: &shared_settings::Builder,
+    builder: shared_settings::Builder,
 ) -> Box<TargetIsa> {
     let level1 = if shared_flags.is_64bit() {
         &enc_tables::LEVEL1_I64[..]

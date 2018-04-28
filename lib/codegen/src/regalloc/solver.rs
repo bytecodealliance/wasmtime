@@ -1157,7 +1157,7 @@ mod tests {
         use settings;
 
         let shared_builder = settings::builder();
-        let shared_flags = settings::Flags::new(&shared_builder);
+        let shared_flags = settings::Flags::new(shared_builder);
 
         isa::lookup("arm32").ok().map(|b| b.finish(shared_flags))
     }

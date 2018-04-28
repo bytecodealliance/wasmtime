@@ -929,7 +929,7 @@ mod test {
 
         cfg.compute(cur.func);
 
-        let flags = settings::Flags::new(&settings::builder());
+        let flags = settings::Flags::new(settings::builder());
         verify_context(cur.func, &cfg, &dt, &flags).unwrap();
     }
 }
