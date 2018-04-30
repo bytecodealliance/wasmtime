@@ -128,7 +128,8 @@
 //! ```
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces, unstable_features)]
+#![warn(unused_import_braces)]
+#![cfg_attr(feature = "std", warn(unstable_features))]
 #![cfg_attr(feature = "cargo-clippy", allow(new_without_default))]
 #![cfg_attr(feature="cargo-clippy", warn(
                 float_arithmetic,

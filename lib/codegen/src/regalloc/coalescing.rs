@@ -6,6 +6,7 @@
 //! parameter will belong to the same virtual register as the EBB parameter value itself.
 
 use cursor::{Cursor, EncCursor};
+#[cfg(feature = "std")]
 use dbg::DisplayList;
 use dominator_tree::{DominatorTree, DominatorTreePreorder};
 use flowgraph::ControlFlowGraph;
@@ -546,8 +547,8 @@ impl<'a> Context<'a> {
             return false;
         }
 
-        let vreg = self.virtregs.unify(self.values);
-        dbg!("-> merged into {} = {}", vreg, DisplayList(self.values));
+        let _vreg = self.virtregs.unify(self.values);
+        dbg!("-> merged into {} = {}", _vreg, DisplayList(self.values));
         true
     }
 

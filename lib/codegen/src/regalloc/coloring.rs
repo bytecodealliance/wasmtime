@@ -857,8 +857,11 @@ impl<'a> Context<'a> {
                     let added = self.try_add_var(rc, throughs);
                     debug_assert!(added, "Ran out of registers in {}", rc);
                 }
-                Err(SolverError::Global(value)) => {
-                    dbg!("Not enough global registers for {}, trying as local", value);
+                Err(SolverError::Global(_value)) => {
+                    dbg!(
+                        "Not enough global registers for {}, trying as local",
+                        _value
+                    );
                     // We'll clear the `is_global` flag on all solver variables and instead make a
                     // note to replace all global defines with local defines followed by a copy.
                     *replace_global_defines = true;
