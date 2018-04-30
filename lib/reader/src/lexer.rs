@@ -3,7 +3,7 @@
 use cretonne_codegen::ir::types;
 use cretonne_codegen::ir::{Ebb, Value};
 use error::Location;
-#[allow(unused_imports)]
+#[allow(unused_imports, deprecated)]
 use std::ascii::AsciiExt;
 use std::str::CharIndices;
 use std::u16;
