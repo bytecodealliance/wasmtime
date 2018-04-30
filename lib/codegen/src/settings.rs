@@ -24,7 +24,7 @@ use constant_hash::{probe, simple_hash};
 use isa::TargetIsa;
 use std::fmt;
 use std::result;
-use std::vec::Vec;
+use std::boxed::Box;
 use std::str;
 
 /// A string-based configurator for settings groups.
@@ -46,7 +46,7 @@ pub trait Configurable {
 /// Collect settings values based on a template.
 pub struct Builder {
     template: &'static detail::Template,
-    bytes: Vec<u8>,
+    bytes: Box<[u8]>,
 }
 
 impl Builder {
