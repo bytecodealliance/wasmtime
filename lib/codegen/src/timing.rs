@@ -122,7 +122,7 @@ mod details {
     /// Accumulated timing information for a single pass.
     #[derive(Default)]
     struct PassTime {
-        /// Total time spent running this pas including children.
+        /// Total time spent running this pass including children.
         total: Duration,
 
         /// Time spent running in child passes.
