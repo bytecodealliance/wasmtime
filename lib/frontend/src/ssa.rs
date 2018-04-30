@@ -1024,9 +1024,9 @@ mod tests {
         let flags = settings::Flags::new(settings::builder());
         match verify_function(&func, &flags) {
             Ok(()) => {}
-            Err(err) => {
+            Err(_err) => {
                 #[cfg(feature = "std")]
-                panic!(err.message);
+                panic!(_err.message);
                 #[cfg(not(feature = "std"))]
                 panic!("function failed to verify");
             }
@@ -1203,9 +1203,9 @@ mod tests {
         let flags = settings::Flags::new(settings::builder());
         match verify_function(&func, &flags) {
             Ok(()) => {}
-            Err(err) => {
+            Err(_err) => {
                 #[cfg(feature = "std")]
-                panic!(err.message);
+                panic!(_err.message);
                 #[cfg(not(feature = "std"))]
                 panic!("function failed to verify");
             }
@@ -1254,9 +1254,9 @@ mod tests {
         let flags = settings::Flags::new(settings::builder());
         match verify_function(&func, &flags) {
             Ok(()) => {}
-            Err(err) => {
+            Err(_err) => {
                 #[cfg(feature = "std")]
-                panic!(err.message);
+                panic!(_err.message);
                 #[cfg(not(feature = "std"))]
                 panic!("function failed to verify");
             }
