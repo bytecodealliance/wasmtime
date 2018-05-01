@@ -34,7 +34,7 @@ use raw_cpuid::CpuId;
 pub fn builders() -> Result<(settings::Builder, isa::Builder), &'static str> {
     let mut flag_builder = settings::builder();
 
-    if cfg!(unix) {
+    if cfg!(any(unix, target_os = "nebulet")) {
         flag_builder.set("call_conv", "system_v").unwrap();
     } else if cfg!(windows) {
         flag_builder.set("call_conv", "fastcall").unwrap();
