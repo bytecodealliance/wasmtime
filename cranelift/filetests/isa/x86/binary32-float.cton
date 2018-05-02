@@ -185,9 +185,9 @@ ebb0:
     ; asm: movss 1032(%esp), %xmm2
     [-,%xmm2]           v211 = fill v201                        ; bin: f3 0f 10 94 24 00000408
 
-    ; asm: movss %xmm5, 1032(%rsp)
+    ; asm: movss %xmm5, 1032(%esp)
     regspill v100, %xmm5 -> ss1                                 ; bin: f3 0f 11 ac 24 00000408
-    ; asm: movss 1032(%rsp), %xmm5
+    ; asm: movss 1032(%esp), %xmm5
     regfill v100, ss1 -> %xmm5                                  ; bin: f3 0f 10 ac 24 00000408
 
     ; Comparisons.
@@ -400,9 +400,9 @@ ebb0:
     ; asm: movsd 1032(%esp), %xmm2
     [-,%xmm2]           v211 = fill v201                        ; bin: f2 0f 10 94 24 00000408
 
-    ; asm: movsd %xmm5, 1032(%rsp)
+    ; asm: movsd %xmm5, 1032(%esp)
     regspill v100, %xmm5 -> ss1                                 ; bin: f2 0f 11 ac 24 00000408
-    ; asm: movsd 1032(%rsp), %xmm5
+    ; asm: movsd 1032(%esp), %xmm5
     regfill v100, ss1 -> %xmm5                                  ; bin: f2 0f 10 ac 24 00000408
 
     ; Comparisons.
