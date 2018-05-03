@@ -17,7 +17,7 @@ before_install:
     - wget https://storage.googleapis.com/wasm-llvm/builds/linux/26619/wasm-toolchain_0.1.26619_amd64.deb
     - sudo dpkg -i wasm-toolchain_0.1.26619_amd64.deb
 install:
-    - pip3 install --user --upgrade mypy flake8
+    - pip3 install --user --upgrade mypy==0.521 flake8
     - travis_wait ./check-rustfmt.sh --install
 script: ./test-all.sh
 cache:
