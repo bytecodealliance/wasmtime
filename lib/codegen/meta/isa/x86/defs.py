@@ -9,7 +9,7 @@ import base.instructions
 from . import instructions as x86
 from base.immediates import floatcc
 
-ISA = TargetISA('x86', [base.instructions.GROUP, x86.GROUP])
+ISA = TargetISA('x86', [base.instructions.GROUP, x86.GROUP])  # type: TargetISA
 
 # CPU modes for 32-bit and 64-bit operation.
 X86_64 = CPUMode('I64', ISA)

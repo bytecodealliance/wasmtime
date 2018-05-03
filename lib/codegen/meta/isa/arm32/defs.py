@@ -8,7 +8,7 @@ from cdsl.isa import TargetISA, CPUMode
 import base.instructions
 from base.legalize import narrow
 
-ISA = TargetISA('arm32', [base.instructions.GROUP])
+ISA = TargetISA('arm32', [base.instructions.GROUP])  # type: TargetISA
 
 # CPU modes for 32-bit ARM and Thumb2.
 A32 = CPUMode('A32', ISA)

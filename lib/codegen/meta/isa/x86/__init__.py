@@ -16,6 +16,7 @@ This target ISA generates code for x86 CPUs with two separate CPU modes:
 from __future__ import absolute_import
 from . import defs
 from . import encodings, settings, registers  # noqa
+from cdsl.isa import TargetISA  # noqa
 
 # Re-export the primary target ISA definition.
-ISA = defs.ISA.finish()
+ISA = defs.ISA.finish()  # type: TargetISA
