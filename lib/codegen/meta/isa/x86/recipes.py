@@ -546,12 +546,14 @@ pu_iq = TailRecipe(
 pushq = TailRecipe(
     'pushq', Unary, size=0, ins=GPR, outs=(),
     emit='''
+    sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
     PUT_OP(bits | (in_reg0 & 7), rex1(in_reg0), sink);
     ''')
 
 popq = TailRecipe(
     'popq', NullAry, size=0, ins=(), outs=GPR,
     emit='''
+    sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
     PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
     ''')
 
@@ -851,6 +853,7 @@ spillSib32 = TailRecipe(
         'spillSib32', Unary, size=6, ins=GPR, outs=StackGPR32,
         clobbers_flags=False,
         emit='''
+        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let base = stk_base(out_stk0.base);
         PUT_OP(bits, rex2(base, in_reg0), sink);
         modrm_sib_disp32(in_reg0, sink);
@@ -863,6 +866,7 @@ fspillSib32 = TailRecipe(
         'fspillSib32', Unary, size=6, ins=FPR, outs=StackFPR32,
         clobbers_flags=False,
         emit='''
+        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let base = stk_base(out_stk0.base);
         PUT_OP(bits, rex2(base, in_reg0), sink);
         modrm_sib_disp32(in_reg0, sink);
@@ -875,6 +879,7 @@ regspill32 = TailRecipe(
         'regspill32', RegSpill, size=6, ins=GPR, outs=(),
         clobbers_flags=False,
         emit='''
+        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let dst = StackRef::sp(dst, &func.stack_slots);
         let base = stk_base(dst.base);
         PUT_OP(bits, rex2(base, src), sink);
@@ -888,6 +893,7 @@ fregspill32 = TailRecipe(
         'fregspill32', RegSpill, size=6, ins=FPR, outs=(),
         clobbers_flags=False,
         emit='''
+        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let dst = StackRef::sp(dst, &func.stack_slots);
         let base = stk_base(dst.base);
         PUT_OP(bits, rex2(base, src), sink);
@@ -991,6 +997,7 @@ fillSib32 = TailRecipe(
         'fillSib32', Unary, size=6, ins=StackGPR32, outs=GPR,
         clobbers_flags=False,
         emit='''
+        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let base = stk_base(in_stk0.base);
         PUT_OP(bits, rex2(base, out_reg0), sink);
         modrm_sib_disp32(out_reg0, sink);
@@ -1003,6 +1010,7 @@ ffillSib32 = TailRecipe(
         'ffillSib32', Unary, size=6, ins=StackFPR32, outs=FPR,
         clobbers_flags=False,
         emit='''
+        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let base = stk_base(in_stk0.base);
         PUT_OP(bits, rex2(base, out_reg0), sink);
         modrm_sib_disp32(out_reg0, sink);
@@ -1015,6 +1023,7 @@ regfill32 = TailRecipe(
         'regfill32', RegFill, size=6, ins=StackGPR32, outs=(),
         clobbers_flags=False,
         emit='''
+        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let src = StackRef::sp(src, &func.stack_slots);
         let base = stk_base(src.base);
         PUT_OP(bits, rex2(base, dst), sink);
@@ -1028,6 +1037,7 @@ fregfill32 = TailRecipe(
         'fregfill32', RegFill, size=6, ins=StackFPR32, outs=(),
         clobbers_flags=False,
         emit='''
+        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let src = StackRef::sp(src, &func.stack_slots);
         let base = stk_base(src.base);
         PUT_OP(bits, rex2(base, dst), sink);
@@ -1042,6 +1052,7 @@ fregfill32 = TailRecipe(
 call_id = TailRecipe(
         'call_id', Call, size=4, ins=(), outs=(),
         emit='''
+        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         PUT_OP(bits, BASE_REX, sink);
         // The addend adjusts for the difference between the end of the
         // instruction and the beginning of the immediate field.
@@ -1054,6 +1065,7 @@ call_id = TailRecipe(
 call_plt_id = TailRecipe(
         'call_plt_id', Call, size=4, ins=(), outs=(),
         emit='''
+        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         PUT_OP(bits, BASE_REX, sink);
         sink.reloc_external(Reloc::X86PLTRel4,
                             &func.dfg.ext_funcs[func_ref].name,
@@ -1064,6 +1076,7 @@ call_plt_id = TailRecipe(
 call_r = TailRecipe(
         'call_r', CallIndirect, size=1, ins=GPR, outs=(),
         emit='''
+        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         PUT_OP(bits, rex1(in_reg0), sink);
         modrm_r_bits(in_reg0, bits, sink);
         ''')

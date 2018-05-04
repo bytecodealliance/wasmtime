@@ -352,7 +352,7 @@ ebb0:
     [-,%rsi]             v351 = bint.i32 v301   ; bin: 0f b6 f2
 
     ; asm: call foo
-    call fn0()                                  ; bin: e8 PCRel4(%foo-4) 00000000
+    call fn0()                                  ; bin: stk_ovf e8 PCRel4(%foo-4) 00000000
 
     ; asm: movl $0, %ecx
     [-,%rcx]            v400 = func_addr.i32 fn0        ; bin: b9 Abs4(%foo) 00000000
@@ -360,9 +360,9 @@ ebb0:
     [-,%rsi]            v401 = func_addr.i32 fn0        ; bin: be Abs4(%foo) 00000000
 
     ; asm: call *%ecx
-    call_indirect sig0, v400()                  ; bin: ff d1
+    call_indirect sig0, v400()                  ; bin: stk_ovf ff d1
     ; asm: call *%esi
-    call_indirect sig0, v401()                  ; bin: ff d6
+    call_indirect sig0, v401()                  ; bin: stk_ovf ff d6
 
     ; asm: movl $0, %ecx
     [-,%rcx]            v450 = globalsym_addr.i32 gv0    ; bin: b9 Abs4(%some_gv) 00000000
@@ -372,25 +372,25 @@ ebb0:
     ; Spill / Fill.
 
     ; asm: movl %ecx, 1032(%esp)
-    [-,ss1]             v500 = spill v1         ; bin: 89 8c 24 00000408
+    [-,ss1]             v500 = spill v1         ; bin: stk_ovf 89 8c 24 00000408
     ; asm: movl %esi, 1032(%esp)
-    [-,ss1]             v501 = spill v2         ; bin: 89 b4 24 00000408
+    [-,ss1]             v501 = spill v2         ; bin: stk_ovf 89 b4 24 00000408
 
     ; asm: movl 1032(%esp), %ecx
-    [-,%rcx]            v510 = fill v500        ; bin: 8b 8c 24 00000408
+    [-,%rcx]            v510 = fill v500        ; bin: stk_ovf 8b 8c 24 00000408
     ; asm: movl 1032(%esp), %esi
-    [-,%rsi]            v511 = fill v501        ; bin: 8b b4 24 00000408
+    [-,%rsi]            v511 = fill v501        ; bin: stk_ovf 8b b4 24 00000408
 
     ; asm: movl %ecx, 1032(%esp)
-    regspill v1, %rcx -> ss1                    ; bin: 89 8c 24 00000408
+    regspill v1, %rcx -> ss1                    ; bin: stk_ovf 89 8c 24 00000408
     ; asm: movl 1032(%esp), %ecx
-    regfill v1, ss1 -> %rcx                     ; bin: 8b 8c 24 00000408
+    regfill v1, ss1 -> %rcx                     ; bin: stk_ovf 8b 8c 24 00000408
 
     ; Push and Pop
     ; asm: pushl %ecx
-    x86_push v1                                 ; bin: 51
+    x86_push v1                                 ; bin: stk_ovf 51
     ; asm: popl %ecx
-    [-,%rcx]            v512 = x86_pop.i32      ; bin: 59
+    [-,%rcx]            v512 = x86_pop.i32      ; bin: stk_ovf 59
 
     ; Adjust Stack Pointer Up
     ; asm: addl $64, %esp
