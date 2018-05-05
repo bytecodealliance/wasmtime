@@ -252,6 +252,14 @@ for inst_not,      inst in [
                 a << inst(x, a1)
             ))
 
+# Expand bnot using xor.
+expand.legalize(
+        a << bnot(x),
+        Rtl(
+            y << iconst(imm64(-1)),
+            a << bxor(x, y)
+        ))
+
 # Floating-point sign manipulations.
 for ty,             minus_zero in [
         (types.f32, f32const(ieee32.bits(0x80000000))),
