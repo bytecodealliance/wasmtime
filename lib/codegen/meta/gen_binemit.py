@@ -27,7 +27,7 @@ def gen_recipe(recipe, fmt):
     nvops = iform.num_value_operands
     want_args = any(isinstance(i, RegClass) or isinstance(i, Stack)
                     for i in recipe.ins)
-    assert not want_args or nvops > 0
+    assert not want_args or nvops > 0 or iform.has_value_list
     want_outs = any(isinstance(o, RegClass) or isinstance(o, Stack)
                     for o in recipe.outs)
 

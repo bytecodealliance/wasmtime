@@ -57,7 +57,9 @@ CallIndirect = InstructionFormat(sig_ref, VALUE, VARIABLE_ARGS)
 FuncAddr = InstructionFormat(func_ref)
 
 Load = InstructionFormat(memflags, VALUE, offset32)
+LoadComplex = InstructionFormat(memflags, VARIABLE_ARGS, offset32)
 Store = InstructionFormat(memflags, VALUE, VALUE, offset32)
+StoreComplex = InstructionFormat(memflags, VALUE, VARIABLE_ARGS, offset32)
 
 StackLoad = InstructionFormat(stack_slot, offset32)
 StackStore = InstructionFormat(VALUE, stack_slot, offset32)

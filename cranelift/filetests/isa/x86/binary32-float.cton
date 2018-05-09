@@ -227,6 +227,32 @@ ebb0:
     ; asm: ucomiss %xmm5, %xmm5
     [-,%rflags]         v312 = ffcmp v10, v10                   ; bin: 0f 2e ed
 
+    ; Load/Store Complex
+
+    [-,%rax]            v350 = iconst.i32 1
+    [-,%rbx]            v351 = iconst.i32 2
+
+    ; asm: movss (%rax,%rbx,1),%xmm5
+    [-,%xmm5]           v352 = load_complex.f32 v350+v351               ; bin: heap_oob f3 0f 10 2c 18
+    ; asm: movss 0x32(%rax,%rbx,1),%xmm5
+    [-,%xmm5]           v353 = load_complex.f32 v350+v351+50            ; bin: heap_oob f3 0f 10 6c 18 32
+    ; asm: movss -0x32(%rax,%rbx,1),%xmm5
+    [-,%xmm5]           v354 = load_complex.f32 v350+v351-50            ; bin: heap_oob f3 0f 10 6c 18 ce
+    ; asm: movss 0x2710(%rax,%rbx,1),%xmm5
+    [-,%xmm5]           v355 = load_complex.f32 v350+v351+10000         ; bin: heap_oob f3 0f 10 ac 18 00002710
+    ; asm: movss -0x2710(%rax,%rbx,1),%xmm5
+    [-,%xmm5]           v356 = load_complex.f32 v350+v351-10000         ; bin: heap_oob f3 0f 10 ac 18 ffffd8f0
+    ; asm: movss %xmm5,(%rax,%rbx,1)
+    [-]                 store_complex.f32 v100, v350+v351               ; bin: heap_oob f3 0f 11 2c 18
+    ; asm: movss %xmm5,0x32(%rax,%rbx,1)
+    [-]                 store_complex.f32 v100, v350+v351+50            ; bin: heap_oob f3 0f 11 6c 18 32
+    ; asm: movss %xmm2,-0x32(%rax,%rbx,1)
+    [-]                 store_complex.f32 v101, v350+v351-50            ; bin: heap_oob f3 0f 11 54 18 ce
+    ; asm: movss %xmm5,0x2710(%rax,%rbx,1)
+    [-]                 store_complex.f32 v100, v350+v351+10000         ; bin: heap_oob f3 0f 11 ac 18 00002710
+    ; asm: movss %xmm2,-0x2710(%rax,%rbx,1)
+    [-]                 store_complex.f32 v101, v350+v351-10000         ; bin: heap_oob f3 0f 11 94 18 ffffd8f0
+
     return
 }
 

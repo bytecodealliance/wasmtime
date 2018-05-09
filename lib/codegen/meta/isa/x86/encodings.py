@@ -3,9 +3,9 @@ x86 Encodings.
 """
 from __future__ import absolute_import
 from cdsl.predicates import IsUnsignedInt, Not, And
-from base.predicates import IsColocatedFunc, IsColocatedData
+from base.predicates import IsColocatedFunc, IsColocatedData, LengthEquals
 from base import instructions as base
-from base.formats import UnaryImm, FuncAddr, Call
+from base.formats import UnaryImm, FuncAddr, Call, LoadComplex, StoreComplex
 from .defs import X86_64, X86_32
 from . import recipes as r
 from . import settings as cfg
@@ -19,6 +19,7 @@ try:
     from typing import TYPE_CHECKING, Any  # noqa
     if TYPE_CHECKING:
         from cdsl.instructions import MaybeBoundInst  # noqa
+        from cdsl.predicates import FieldPredicate # noqa
 except ImportError:
     pass
 
@@ -54,6 +55,15 @@ def enc_x86_64(inst, recipe, *args, **kwargs):
     X86_64.enc(inst, *recipe(*args, **kwargs))
 
 
+def enc_x86_64_instp(inst, recipe, instp, *args, **kwargs):
+    # type: (MaybeBoundInst, r.TailRecipe, FieldPredicate, *int, **int) -> None
+    """
+    Add encodings for `inst` to X86_64 with and without a REX prefix.
+    """
+    X86_64.enc(inst, *recipe.rex(*args, **kwargs), instp=instp)
+    X86_64.enc(inst, *recipe(*args, **kwargs), instp=instp)
+
+
 def enc_both(inst, recipe, *args, **kwargs):
     # type: (MaybeBoundInst, r.TailRecipe, *int, **Any) -> None
     """
@@ -61,6 +71,15 @@ def enc_both(inst, recipe, *args, **kwargs):
     """
     X86_32.enc(inst, *recipe(*args, **kwargs))
     enc_x86_64(inst, recipe, *args, **kwargs)
+
+
+def enc_both_instp(inst, recipe, instp, *args, **kwargs):
+    # type: (MaybeBoundInst, r.TailRecipe, FieldPredicate, *int, **Any) -> None
+    """
+    Add encodings for `inst` to both X86_32 and X86_64.
+    """
+    X86_32.enc(inst, *recipe(*args, **kwargs), instp=instp)
+    enc_x86_64_instp(inst, recipe, instp, *args, **kwargs)
 
 
 def enc_i32_i64(inst, recipe, *args, **kwargs):
@@ -78,6 +97,25 @@ def enc_i32_i64(inst, recipe, *args, **kwargs):
     X86_64.enc(inst.i32, *recipe(*args, **kwargs))
 
     X86_64.enc(inst.i64, *recipe.rex(*args, w=1, **kwargs))
+
+
+def enc_i32_i64_instp(inst, recipe, instp, *args, **kwargs):
+    # type: (MaybeBoundInst, r.TailRecipe, FieldPredicate, *int, **int) -> None
+    """
+    Add encodings for `inst.i32` to X86_32.
+    Add encodings for `inst.i32` to X86_64 with and without REX.
+    Add encodings for `inst.i64` to X86_64 with a REX.W prefix.
+
+    Similar to `enc_i32_i64` but applies `instp` to each encoding.
+    """
+    X86_32.enc(inst.i32, *recipe(*args, **kwargs), instp=instp)
+
+    # REX-less encoding must come after REX encoding so we don't use it by
+    # default. Otherwise reg-alloc would never use r8 and up.
+    X86_64.enc(inst.i32, *recipe.rex(*args, **kwargs), instp=instp)
+    X86_64.enc(inst.i32, *recipe(*args, **kwargs), instp=instp)
+
+    X86_64.enc(inst.i64, *recipe.rex(*args, w=1, **kwargs), instp=instp)
 
 
 def enc_i32_i64_ld_st(inst, w_bit, recipe, *args, **kwargs):
@@ -212,6 +250,31 @@ X86_64.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
 #
 # Loads and stores.
 #
+
+ldcomplexp = LengthEquals(LoadComplex, 2)
+for recipe in [r.ldWithIndex, r.ldWithIndexDisp8, r.ldWithIndexDisp32]:
+    enc_i32_i64_instp(base.load_complex, recipe, ldcomplexp, 0x8b)
+    enc_x86_64_instp(base.uload32_complex, recipe, ldcomplexp, 0x8b)
+    X86_64.enc(base.sload32_complex, *recipe.rex(0x63, w=1),
+               instp=ldcomplexp)
+    enc_i32_i64_instp(base.uload16_complex, recipe, ldcomplexp, 0x0f, 0xb7)
+    enc_i32_i64_instp(base.sload16_complex, recipe, ldcomplexp, 0x0f, 0xbf)
+    enc_i32_i64_instp(base.uload8_complex, recipe, ldcomplexp, 0x0f, 0xb6)
+    enc_i32_i64_instp(base.sload8_complex, recipe, ldcomplexp, 0x0f, 0xbe)
+
+stcomplexp = LengthEquals(StoreComplex, 3)
+for recipe in [r.stWithIndex, r.stWithIndexDisp8, r.stWithIndexDisp32]:
+    enc_i32_i64_instp(base.store_complex, recipe, stcomplexp, 0x89)
+    enc_x86_64_instp(base.istore32_complex, recipe, stcomplexp, 0x89)
+    enc_both_instp(base.istore16_complex.i32, recipe, stcomplexp, 0x66, 0x89)
+    enc_x86_64_instp(base.istore16_complex.i64, recipe, stcomplexp, 0x66, 0x89)
+
+for recipe in [r.stWithIndex_abcd,
+               r.stWithIndexDisp8_abcd,
+               r.stWithIndexDisp32_abcd]:
+    enc_both_instp(base.istore8_complex.i32, recipe, stcomplexp, 0x88)
+    enc_x86_64_instp(base.istore8_complex.i64, recipe, stcomplexp, 0x88)
+
 for recipe in [r.st, r.stDisp8, r.stDisp32]:
     enc_i32_i64_ld_st(base.store, True, recipe, 0x89)
     enc_x86_64(base.istore32.i64.any, recipe, 0x89)
@@ -286,17 +349,33 @@ enc_both(base.load.f32.any, r.fld, 0xf3, 0x0f, 0x10)
 enc_both(base.load.f32.any, r.fldDisp8, 0xf3, 0x0f, 0x10)
 enc_both(base.load.f32.any, r.fldDisp32, 0xf3, 0x0f, 0x10)
 
+enc_both(base.load_complex.f32, r.fldWithIndex, 0xf3, 0x0f, 0x10)
+enc_both(base.load_complex.f32, r.fldWithIndexDisp8, 0xf3, 0x0f, 0x10)
+enc_both(base.load_complex.f32, r.fldWithIndexDisp32, 0xf3, 0x0f, 0x10)
+
 enc_both(base.load.f64.any, r.fld, 0xf2, 0x0f, 0x10)
 enc_both(base.load.f64.any, r.fldDisp8, 0xf2, 0x0f, 0x10)
 enc_both(base.load.f64.any, r.fldDisp32, 0xf2, 0x0f, 0x10)
+
+enc_both(base.load_complex.f64, r.fldWithIndex, 0xf2, 0x0f, 0x10)
+enc_both(base.load_complex.f64, r.fldWithIndexDisp8, 0xf2, 0x0f, 0x10)
+enc_both(base.load_complex.f64, r.fldWithIndexDisp32, 0xf2, 0x0f, 0x10)
 
 enc_both(base.store.f32.any, r.fst, 0xf3, 0x0f, 0x11)
 enc_both(base.store.f32.any, r.fstDisp8, 0xf3, 0x0f, 0x11)
 enc_both(base.store.f32.any, r.fstDisp32, 0xf3, 0x0f, 0x11)
 
+enc_both(base.store_complex.f32, r.fstWithIndex, 0xf3, 0x0f, 0x11)
+enc_both(base.store_complex.f32, r.fstWithIndexDisp8, 0xf3, 0x0f, 0x11)
+enc_both(base.store_complex.f32, r.fstWithIndexDisp32, 0xf3, 0x0f, 0x11)
+
 enc_both(base.store.f64.any, r.fst, 0xf2, 0x0f, 0x11)
 enc_both(base.store.f64.any, r.fstDisp8, 0xf2, 0x0f, 0x11)
 enc_both(base.store.f64.any, r.fstDisp32, 0xf2, 0x0f, 0x11)
+
+enc_both(base.store_complex.f64, r.fstWithIndex, 0xf2, 0x0f, 0x11)
+enc_both(base.store_complex.f64, r.fstWithIndexDisp8, 0xf2, 0x0f, 0x11)
+enc_both(base.store_complex.f64, r.fstWithIndexDisp32, 0xf2, 0x0f, 0x11)
 
 enc_both(base.fill.f32, r.ffillSib32, 0xf3, 0x0f, 0x10)
 enc_both(base.regfill.f32, r.fregfill32, 0xf3, 0x0f, 0x10)

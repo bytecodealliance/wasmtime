@@ -22,6 +22,7 @@ pub enum Token<'a> {
     LBracket, // '['
     RBracket, // ']'
     Minus, // '-'
+    Plus, // '+'
     Comma, // ','
     Dot, // '.'
     Colon, // ':'
@@ -169,6 +170,25 @@ impl<'a> Lexer<'a> {
         self.source[self.pos..].starts_with(prefix)
     }
 
+    // Starting from `lookahead`, are we looking at a number?
+    fn looking_at_numeric(&self) -> bool {
+        if let Some(c) = self.lookahead {
+            if c.is_digit(10) {
+                return true;
+            }
+            match c {
+                '-' => return true,
+                '+' => return true,
+                '.' => return true,
+                _ => {}
+            }
+            if self.looking_at("NaN") || self.looking_at("Inf") || self.looking_at("sNaN") {
+                return true;
+            }
+        }
+        false
+    }
+
     // Scan a single-char token.
     fn scan_char(&mut self, tok: Token<'a>) -> Result<LocatedToken<'a>, LocatedError> {
         assert_ne!(self.lookahead, None);
@@ -234,16 +254,17 @@ impl<'a> Lexer<'a> {
         match self.lookahead {
             Some('-') => {
                 self.next_ch();
-
-                if let Some(c) = self.lookahead {
-                    // If the next character won't parse as a number, we return Token::Minus
-                    if !c.is_alphanumeric() && c != '.' {
-                        return token(Token::Minus, loc);
-                    }
+                if !self.looking_at_numeric() {
+                    // If the next characters won't parse as a number, we return Token::Minus
+                    return token(Token::Minus, loc);
                 }
             }
             Some('+') => {
                 self.next_ch();
+                if !self.looking_at_numeric() {
+                    // If the next characters won't parse as a number, we return Token::Minus
+                    return token(Token::Plus, loc);
+                }
             }
             _ => {}
         }

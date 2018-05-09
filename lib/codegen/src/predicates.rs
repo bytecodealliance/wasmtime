@@ -46,6 +46,11 @@ pub fn is_colocated_data(global_var: ir::GlobalVar, func: &ir::Function) -> bool
     }
 }
 
+#[allow(dead_code)]
+pub fn has_length_of(value_list: &ir::ValueList, num: usize, func: &ir::Function) -> bool {
+    value_list.len(&func.dfg.value_lists) == num
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
