@@ -90,6 +90,7 @@ pub use entity::packed_option;
 
 mod abi;
 mod bitset;
+mod nan_canonicalization;
 mod constant_hash;
 mod context;
 mod dce;
