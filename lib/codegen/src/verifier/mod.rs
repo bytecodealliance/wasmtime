@@ -335,6 +335,12 @@ impl<'a> Verifier<'a> {
             RegFill { src, .. } => {
                 self.verify_stack_slot(inst, src)?;
             }
+            LoadComplex { ref args, .. } => {
+                self.verify_value_list(inst, args)?;
+            }
+            StoreComplex { ref args, .. } => {
+                self.verify_value_list(inst, args)?;
+            }
 
             // Exhaustive list so we can't forget to add new formats
             Unary { .. } |
@@ -1149,8 +1155,8 @@ impl<'a> Verifier<'a> {
 mod tests {
     use super::{Error, Verifier};
     use entity::EntityList;
-    use ir::Function;
     use ir::instructions::{InstructionData, Opcode};
+    use ir::Function;
     use settings;
 
     macro_rules! assert_err_with_msg {

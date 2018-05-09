@@ -103,7 +103,7 @@ def emit_instp(instp, fmt, has_func=False):
     fnames = set()  # type: Set[str]
     for p in leafs:
         if isinstance(p, FieldPredicate):
-            fnames.add(p.field.rust_name())
+            fnames.add(p.field.rust_destructuring_name())
         else:
             assert isinstance(p, TypePredicate)
             has_type_check = True

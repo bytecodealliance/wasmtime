@@ -162,6 +162,11 @@ pub trait TargetIsa: fmt::Display {
         false
     }
 
+    /// Does the CPU implement multi-register addressing?
+    fn uses_complex_addresses(&self) -> bool {
+        false
+    }
+
     /// Get a data structure describing the registers in this ISA.
     fn register_info(&self) -> RegInfo;
 

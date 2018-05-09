@@ -476,6 +476,11 @@ these instructions is undefined. If it is addressable but not
 There are also more restricted operations for accessing specific types of memory
 objects.
 
+Additionally, instructions are provided for handling multi-register addressing.
+
+.. autoinst:: load_complex
+.. autoinst:: store_complex
+
 Memory operation flags
 ----------------------
 

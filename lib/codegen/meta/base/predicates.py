@@ -2,12 +2,12 @@
 Cretonne predicates that consider `Function` fields.
 """
 from cdsl.predicates import FieldPredicate
-from .formats import UnaryGlobalVar
+from .formats import UnaryGlobalVar, InstructionFormat
 
 try:
     from typing import TYPE_CHECKING
     if TYPE_CHECKING:
-        from cdsl.formats import FormatField  # noqa
+        from cdsl.formats import InstructionFormat, FormatField  # noqa
 except ImportError:
     pass
 
@@ -33,3 +33,10 @@ class IsColocatedData(FieldPredicate):
         # type: () -> None
         super(IsColocatedData, self).__init__(
             UnaryGlobalVar.global_var, 'is_colocated_data', ('func',))
+
+
+class LengthEquals(FieldPredicate):
+    def __init__(self, iform, num):
+        # type: (InstructionFormat, int) -> None
+        super(LengthEquals, self).__init__(
+            iform.args(), 'has_length_of', (num, 'func'))

@@ -62,6 +62,10 @@ impl TargetIsa for Isa {
         true
     }
 
+    fn uses_complex_addresses(&self) -> bool {
+        true
+    }
+
     fn register_info(&self) -> RegInfo {
         registers::INFO.clone()
     }

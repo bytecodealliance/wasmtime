@@ -594,6 +594,80 @@ ebb0:
     [-,%r8]              v520 = ushr_imm v4, 63   ; bin: 49 c1 e8 3f
 
 
+    ; Load Complex
+    [-,%rax]            v521 = iconst.i64 1
+    [-,%rbx]            v522 = iconst.i64 1
+    [-,%rdi]            v523 = iconst.i32 1
+    [-,%rsi]            v524 = iconst.i32 1
+    ; asm: movq (%rax,%rbx,1), %rcx
+    [-,%rcx]            v525 = load_complex.i64 v521+v522               ; bin: heap_oob 48 8b 0c 18
+    ; asm: movl (%rax,%rbx,1), %ecx
+    [-,%rcx]            v526 = load_complex.i32 v521+v522               ; bin: heap_oob 8b 0c 18
+    ; asm: movq 1(%rax,%rbx,1), %rcx
+    [-,%rcx]            v527 = load_complex.i64 v521+v522+1             ; bin: heap_oob 48 8b 4c 18 01
+    ; asm: movl 1(%rax,%rbx,1), %ecx
+    [-,%rcx]            v528 = load_complex.i32 v521+v522+1             ; bin: heap_oob 8b 4c 18 01
+    ; asm: mov    0x100000(%rax,%rbx,1),%rcx
+    [-,%rcx]            v529 = load_complex.i64 v521+v522+0x1000        ; bin: heap_oob 48 8b 8c 18 00001000
+    ; asm: mov    0x100000(%rax,%rbx,1),%ecx
+    [-,%rcx]            v530 = load_complex.i32 v521+v522+0x1000        ; bin: heap_oob 8b 8c 18 00001000
+    ; asm: movzbq (%rax,%rbx,1),%rcx
+    [-,%rcx]            v531 = uload8_complex.i64 v521+v522             ; bin: heap_oob 48 0f b6 0c 18
+    ; asm: movzbl (%rax,%rbx,1),%ecx
+    [-,%rcx]            v532 = uload8_complex.i32 v521+v522             ; bin: heap_oob 0f b6 0c 18
+    ; asm: movsbq (%rax,%rbx,1),%rcx
+    [-,%rcx]            v533 = sload8_complex.i64 v521+v522             ; bin: heap_oob 48 0f be 0c 18
+    ; asm: movsbl (%rax,%rbx,1),%ecx
+    [-,%rcx]            v534 = sload8_complex.i32 v521+v522             ; bin: heap_oob 0f be 0c 18
+    ; asm: movzwq (%rax,%rbx,1),%rcx
+    [-,%rcx]            v535 = uload16_complex.i64 v521+v522            ; bin: heap_oob 48 0f b7 0c 18
+    ; asm: movzwl (%rax,%rbx,1),%ecx
+    [-,%rcx]            v536 = uload16_complex.i32 v521+v522            ; bin: heap_oob 0f b7 0c 18
+    ; asm: movswq (%rax,%rbx,1),%rcx
+    [-,%rcx]            v537 = sload16_complex.i64 v521+v522            ; bin: heap_oob 48 0f bf 0c 18
+    ; asm: movswl (%rax,%rbx,1),%ecx
+    [-,%rcx]            v538 = sload16_complex.i32 v521+v522            ; bin: heap_oob 0f bf 0c 18
+    ; asm: mov    (%rax,%rbx,1),%ecx
+    [-,%rcx]            v539 = uload32_complex v521+v522                ; bin: heap_oob 8b 0c 18
+    ; asm: movslq (%rax,%rbx,1),%rcx
+    [-,%rcx]            v540 = sload32_complex v521+v522                ; bin: heap_oob 48 63 0c 18
+    [-,%r13]            v550 = iconst.i64 1
+    [-,%r14]            v551 = iconst.i64 1
+    ; asm: mov 0x0(%r13,%r14,1),%r12d
+    [-,%r12]            v552 = load_complex.i32 v550+v551               ; bin: heap_oob 47 8b 64 35 00
+
+    ; Store Complex
+    [-,%rcx]            v600 = iconst.i64 1
+    [-,%rcx]            v601 = iconst.i32 1
+    [-,%r10]            v602 = iconst.i64 1
+    [-,%r11]            v603 = iconst.i32 1
+    ; asm: mov    %rcx,(%rax,%rbx,1)
+    store_complex v600, v521+v522               ; bin: heap_oob 48 89 0c 18
+    ; asm: mov    %rcx,0x1(%rax,%rbx,1)
+    store_complex v600, v521+v522+1             ; bin: heap_oob 48 89 4c 18 01
+    ; asm: mov    %rcx,0x100000(%rax,%rbx,1)
+    store_complex v600, v521+v522+0x1000        ; bin: heap_oob 48 89 8c 18 00001000
+    ; asm: mov    %ecx,(%rax,%rbx,1)
+    store_complex v601, v521+v522               ; bin: heap_oob 89 0c 18
+    ; asm: mov    %ecx,0x1(%rax,%rbx,1)
+    store_complex v601, v521+v522+1             ; bin: heap_oob 89 4c 18 01
+    ; asm: mov    %ecx,0x100000(%rax,%rbx,1)
+    store_complex v601, v521+v522+0x1000        ; bin: heap_oob 89 8c 18 00001000
+    ; asm: mov    %ecx,(%rax,%rbx,1)
+    istore32_complex v600, v521+v522            ; bin: heap_oob 89 0c 18
+    ; asm: mov    %cx,(%rax,%rbx,1)
+    istore16_complex v600, v521+v522            ; bin: heap_oob 66 89 0c 18
+    ; asm: mov    %cx,(%rax,%rbx,1)
+    istore16_complex v601, v521+v522            ; bin: heap_oob 66 89 0c 18
+    ; asm: mov    %r10w,(%rax,%rbx,1)
+    istore16_complex v602, v521+v522            ; bin: heap_oob 66 44 89 14 18
+    ; asm: mov    %r11w,(%rax,%rbx,1)
+    istore16_complex v603, v521+v522            ; bin: heap_oob 66 44 89 1c 18
+    ; asm: mov    %cl,(%rax,%rbx,1)
+    istore8_complex v600, v521+v522             ; bin: heap_oob 88 0c 18
+    ; asm: mov    %cl,(%rax,%rbx,1)
+    istore8_complex v601, v521+v522             ; bin: heap_oob 88 0c 18
+
     ; asm: testq %rcx, %rcx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 48 85 c9 74 1b
