@@ -23,6 +23,9 @@ extern crate errno;
 extern crate region;
 extern crate libc;
 
+#[cfg(target_os = "windows")]
+extern crate winapi;
+
 mod backend;
 mod memory;
 
