@@ -369,6 +369,7 @@ mod tests {
              avoid_div_traps = false\n\
              is_compressed = false\n\
              enable_float = true\n\
+             enable_nan_canonicalization = false\n\
              enable_simd = true\n\
              enable_atomics = true\n\
              baldrdash_prologue_words = 0\n\

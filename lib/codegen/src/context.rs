@@ -18,6 +18,7 @@ use isa::TargetIsa;
 use legalize_function;
 use licm::do_licm;
 use loop_analysis::LoopAnalysis;
+use nan_canonicalization::do_nan_canonicalization;
 use postopt::do_postopt;
 use preopt::do_preopt;
 use regalloc;
@@ -124,6 +125,9 @@ impl Context {
         if isa.flags().opt_level() != OptLevel::Fastest {
             self.preopt(isa)?;
         }
+        if isa.flags().enable_nan_canonicalization() {
+            self.canonicalize_nans(isa)?;
+        }
         self.legalize(isa)?;
         if isa.flags().opt_level() != OptLevel::Fastest {
             self.postopt(isa)?;
@@ -210,6 +214,12 @@ impl Context {
         do_preopt(&mut self.func);
         self.verify_if(isa)?;
         Ok(())
+    }
+
+    /// Perform NaN canonicalizing rewrites on the function.
+    pub fn canonicalize_nans(&mut self, isa: &TargetIsa) -> CtonResult {
+        do_nan_canonicalization(&mut self.func);
+        self.verify_if(isa)
     }
 
     /// Run the legalizer for `isa` on the function.

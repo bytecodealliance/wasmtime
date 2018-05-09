@@ -99,6 +99,16 @@ enable_float = BoolSetting(
         """,
         default=True)
 
+enable_nan_canonicalization = BoolSetting(
+        """
+        Enable NaN canonicalization
+
+        This replaces NaNs with a single canonical value, for users requiring
+        entirely deterministic WebAssembly computation. This is not required
+        by the WebAssembly spec, so it is not enabled by default.
+        """,
+        default=False)
+
 enable_simd = BoolSetting(
         """Enable the use of SIMD instructions.""",
         default=True)
