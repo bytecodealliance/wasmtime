@@ -37,7 +37,7 @@ pub fn builders() -> Result<(settings::Builder, isa::Builder), &'static str> {
     if cfg!(any(unix, target_os = "nebulet")) {
         flag_builder.set("call_conv", "system_v").unwrap();
     } else if cfg!(windows) {
-        flag_builder.set("call_conv", "fastcall").unwrap();
+        flag_builder.set("call_conv", "windows_fastcall").unwrap();
     } else {
         return Err("unrecognized environment");
     }

@@ -26,6 +26,7 @@ impl PtrLen {
 
     /// Create a new `PtrLen` pointing to at least `size` bytes of memory,
     /// suitably sized and aligned for memory protection.
+    #[cfg(not(target_os = "windows"))]
     fn with_size(size: usize) -> Result<Self, String> {
         let page_size = region::page::size();
         let alloc_size = round_up_to_page_size(size, page_size);
@@ -40,6 +41,32 @@ impl PtrLen {
             } else {
                 Err(errno::Errno(err).to_string())
             }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn with_size(size: usize) -> Result<Self, String> {
+        use winapi::um::memoryapi::VirtualAlloc;
+        use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE};
+
+        let page_size = region::page::size();
+
+        // VirtualAlloc always rounds up to the next multiple of the page size
+        let ptr = unsafe {
+            VirtualAlloc(
+                ptr::null_mut(),
+                size,
+                MEM_COMMIT | MEM_RESERVE,
+                PAGE_READWRITE,
+            )
+        };
+        if !ptr.is_null() {
+            Ok(Self {
+                ptr: ptr as *mut u8,
+                len: round_up_to_page_size(size, page_size),
+            })
+        } else {
+            Err(errno::errno().to_string())
         }
     }
 }

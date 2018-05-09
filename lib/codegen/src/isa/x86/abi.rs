@@ -22,6 +22,12 @@ static ARG_GPRS: [RU; 6] = [RU::rdi, RU::rsi, RU::rdx, RU::rcx, RU::r8, RU::r9];
 /// Return value registers.
 static RET_GPRS: [RU; 3] = [RU::rax, RU::rdx, RU::rcx];
 
+/// Argument registers for x86-64, when using windows fastcall
+static ARG_GPRS_WIN_FASTCALL_X64: [RU; 4] = [RU::rcx, RU::rdx, RU::r8, RU::r9];
+
+/// Return value registers for x86-64, when using windows fastcall
+static RET_GPRS_WIN_FASTCALL_X64: [RU; 1] = [RU::rax];
+
 struct Args {
     pointer_bytes: u32,
     pointer_bits: u16,
@@ -36,6 +42,14 @@ struct Args {
 
 impl Args {
     fn new(bits: u16, gpr: &'static [RU], fpr_limit: usize, call_conv: CallConv) -> Self {
+        let offset = if let CallConv::WindowsFastcall = call_conv {
+            // [1] "The caller is responsible for allocating space for parameters to the callee,
+            // and must always allocate sufficient space to store four register parameters"
+            32
+        } else {
+            0
+        };
+
         Self {
             pointer_bytes: u32::from(bits) / 8,
             pointer_bits: bits,
@@ -44,7 +58,7 @@ impl Args {
             gpr_used: 0,
             fpr_limit,
             fpr_used: 0,
-            offset: 0,
+            offset,
             call_conv,
         }
     }
@@ -120,7 +134,11 @@ pub fn legalize_signature(sig: &mut ir::Signature, flags: &shared_settings::Flag
 
     if flags.is_64bit() {
         bits = 64;
-        args = Args::new(bits, &ARG_GPRS, 8, sig.call_conv);
+        args = if sig.call_conv == CallConv::WindowsFastcall {
+            Args::new(bits, &ARG_GPRS_WIN_FASTCALL_X64[..], 4, sig.call_conv)
+        } else {
+            Args::new(bits, &ARG_GPRS[..], 8, sig.call_conv)
+        };
     } else {
         bits = 32;
         args = Args::new(bits, &[], 0, sig.call_conv);
@@ -128,7 +146,13 @@ pub fn legalize_signature(sig: &mut ir::Signature, flags: &shared_settings::Flag
 
     legalize_args(&mut sig.params, &mut args);
 
-    let mut rets = Args::new(bits, &RET_GPRS, 2, sig.call_conv);
+    let regs = if sig.call_conv == CallConv::WindowsFastcall {
+        &RET_GPRS_WIN_FASTCALL_X64[..]
+    } else {
+        &RET_GPRS[..]
+    };
+
+    let mut rets = Args::new(bits, regs, 2, sig.call_conv);
     legalize_args(&mut sig.returns, &mut rets);
 }
 
@@ -161,7 +185,24 @@ pub fn allocatable_registers(_func: &ir::Function, flags: &shared_settings::Flag
 /// Get the set of callee-saved registers.
 fn callee_saved_gprs(flags: &shared_settings::Flags) -> &'static [RU] {
     if flags.is_64bit() {
-        &[RU::rbx, RU::r12, RU::r13, RU::r14, RU::r15]
+        if flags.call_conv() == CallConv::WindowsFastcall {
+            // "registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15 are considered nonvolatile
+            //  and must be saved and restored by a function that uses them."
+            // as per https://msdn.microsoft.com/en-us/library/6t169e9c.aspx
+            // RSP & RSB are not listed below, since they are restored automatically during
+            // a function call. If that wasn't the case, function calls (RET) would not work.
+            &[
+                RU::rbx,
+                RU::rdi,
+                RU::rsi,
+                RU::r12,
+                RU::r13,
+                RU::r14,
+                RU::r15,
+            ]
+        } else {
+            &[RU::rbx, RU::r12, RU::r13, RU::r14, RU::r15]
+        }
     } else {
         &[RU::rbx, RU::rsi, RU::rdi]
     }
@@ -215,7 +256,7 @@ pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::Ct
         CallConv::Fast | CallConv::Cold | CallConv::SystemV => {
             system_v_prologue_epilogue(func, isa)
         }
-        CallConv::Fastcall => unimplemented!("Windows calling conventions"),
+        CallConv::WindowsFastcall => fastcall_prologue_epilogue(func, isa),
         CallConv::Baldrdash => baldrdash_prologue_epilogue(func, isa),
         CallConv::Probestack => unimplemented!("probestack calling convention"),
     }
@@ -240,6 +281,83 @@ pub fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> 
     Ok(())
 }
 
+/// Implementation of the fastcall-based Win64 calling convention described at [1]
+/// [1] https://msdn.microsoft.com/en-us/library/ms235286.aspx
+pub fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
+    if !isa.flags().is_64bit() {
+        panic!("TODO: windows-fastcall: x86-32 not implemented yet");
+    }
+
+    // [1] "The primary exceptions are the stack pointer and malloc or alloca memory,
+    // which are aligned to 16 bytes in order to aid performance"
+    let stack_align = 16;
+
+    let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
+    let reg_type = if isa.flags().is_64bit() {
+        ir::types::I64
+    } else {
+        ir::types::I32
+    };
+
+    let csrs = callee_saved_gprs_used(isa.flags(), func);
+
+    // [1] "Space is allocated on the call stack as a shadow store for callees to save"
+    // This shadow store contains the parameters which are passed through registers (ARG_GPRS)
+    // and is eventually used by the callee to save & restore the values of the arguments.
+    //
+    // [2] https://blogs.msdn.microsoft.com/oldnewthing/20110302-00/?p=11333
+    // "Although the x64 calling convention reserves spill space for parameters,
+    //  you don’t have to use them as such"
+    //
+    // The reserved stack area is composed of:
+    //   return address + frame pointer + all callee-saved registers + shadow space
+    //
+    // Pushing the return address is an implicit function of the `call`
+    // instruction. Each of the others we will then push explicitly. Then we
+    // will adjust the stack pointer to make room for the rest of the required
+    // space for this frame.
+    const SHADOW_STORE_SIZE: i32 = 32;
+    let csr_stack_size = ((csrs.iter(GPR).len() + 2) * word_size) as i32;
+
+    // TODO: eventually use the 32 bytes (shadow store) as spill slot. This currently doesn't work
+    //       since cretonne does not support spill slots before incoming args
+
+    func.create_stack_slot(ir::StackSlotData {
+        kind: ir::StackSlotKind::IncomingArg,
+        size: csr_stack_size as u32,
+        offset: Some(-(SHADOW_STORE_SIZE + csr_stack_size)),
+    });
+
+    let total_stack_size = layout_stack(&mut func.stack_slots, stack_align)? as i32;
+    let local_stack_size = i64::from(total_stack_size - csr_stack_size);
+
+    // Add CSRs to function signature
+    let fp_arg = ir::AbiParam::special_reg(
+        reg_type,
+        ir::ArgumentPurpose::FramePointer,
+        RU::rbp as RegUnit,
+    );
+    func.signature.params.push(fp_arg);
+    func.signature.returns.push(fp_arg);
+
+    for csr in csrs.iter(GPR) {
+        let csr_arg = ir::AbiParam::special_reg(reg_type, ir::ArgumentPurpose::CalleeSaved, csr);
+        func.signature.params.push(csr_arg);
+        func.signature.returns.push(csr_arg);
+    }
+
+    // Set up the cursor and insert the prologue
+    let entry_ebb = func.layout.entry_block().expect("missing entry block");
+    let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
+    insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
+
+    // Reset the cursor and insert the epilogue
+    let mut pos = pos.at_position(CursorPosition::Nowhere);
+    insert_common_epilogues(&mut pos, local_stack_size, reg_type, &csrs);
+
+    Ok(())
+}
+
 /// Insert a System V-compatible prologue and epilogue.
 pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
     // The original 32-bit x86 ELF ABI had a 4-byte aligned stack pointer, but
@@ -261,7 +379,7 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     // instruction. Each of the others we will then push explicitly. Then we
     // will adjust the stack pointer to make room for the rest of the required
     // space for this frame.
-    let csr_stack_size = ((csrs.iter(GPR).len() + 2) * word_size as usize) as i32;
+    let csr_stack_size = ((csrs.iter(GPR).len() + 2) * word_size) as i32;
     func.create_stack_slot(ir::StackSlotData {
         kind: ir::StackSlotKind::IncomingArg,
         size: csr_stack_size as u32,
@@ -289,17 +407,18 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     // Set up the cursor and insert the prologue
     let entry_ebb = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
-    insert_system_v_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
+    insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_system_v_epilogues(&mut pos, local_stack_size, reg_type, &csrs);
+    insert_common_epilogues(&mut pos, local_stack_size, reg_type, &csrs);
 
     Ok(())
 }
 
 /// Insert the prologue for a given function.
-fn insert_system_v_prologue(
+/// This is used by common calling conventions such as System V.
+fn insert_common_prologue(
     pos: &mut EncCursor,
     stack_size: i64,
     reg_type: ir::types::Type,
@@ -374,7 +493,7 @@ fn insert_system_v_prologue(
 }
 
 /// Find all `return` instructions and insert epilogues before them.
-fn insert_system_v_epilogues(
+fn insert_common_epilogues(
     pos: &mut EncCursor,
     stack_size: i64,
     reg_type: ir::types::Type,
@@ -384,14 +503,15 @@ fn insert_system_v_epilogues(
         pos.goto_last_inst(ebb);
         if let Some(inst) = pos.current_inst() {
             if pos.func.dfg[inst].opcode().is_return() {
-                insert_system_v_epilogue(inst, stack_size, pos, reg_type, csrs);
+                insert_common_epilogue(inst, stack_size, pos, reg_type, csrs);
             }
         }
     }
 }
 
 /// Insert an epilogue given a specific `return` instruction.
-fn insert_system_v_epilogue(
+/// This is used by common calling conventions such as System V.
+fn insert_common_epilogue(
     inst: ir::Inst,
     stack_size: i64,
     pos: &mut EncCursor,

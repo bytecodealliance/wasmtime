@@ -382,7 +382,7 @@ mod tests {
             CallConv::Fast,
             CallConv::Cold,
             CallConv::SystemV,
-            CallConv::Fastcall,
+            CallConv::WindowsFastcall,
             CallConv::Baldrdash,
         ]
         {
