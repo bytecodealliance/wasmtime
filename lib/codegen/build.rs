@@ -67,7 +67,9 @@ fn main() {
         .arg("--out-dir")
         .arg(out_dir)
         .status()
-        .expect("Failed to launch second-level build script");
+        .expect(
+            "Failed to launch second-level build script; is python installed?",
+        );
     if !status.success() {
         process::exit(status.code().unwrap());
     }
