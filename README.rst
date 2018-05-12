@@ -14,7 +14,7 @@ machine code.
     :target: https://travis-ci.org/cretonne/cretonne
     :alt: Build Status
 
-.. image:: https://badges.gitter.im/cretonne/cretonne.png
+.. image:: https://badges.gitter.im/cretonne/cretonne.svg
     :target: https://gitter.im/cretonne/Lobby/~chat
     :alt: Gitter chat
 
