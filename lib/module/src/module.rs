@@ -574,7 +574,7 @@ where
             let info = &self.contents.functions[func];
             debug_assert!(
                 info.decl.linkage.is_definable(),
-                "imported data cannot be finalized"
+                "imported function cannot be finalized"
             );
             self.backend.finalize_function(
                 info.compiled.as_ref().expect(
