@@ -65,4 +65,19 @@ else
     echo "\`cargo +nightly install clippy\` for optional rust linting"
 fi
 
+# Ensure fuzzer works by running it with a single input
+# Note LSAN is disabled due to https://github.com/google/sanitizers/issues/764
+banner "cargo fuzz check"
+if rustup toolchain list | grep -q nightly; then
+    if cargo install --list | grep -q cargo-fuzz; then
+        echo "cargo-fuzz found"
+    else
+        echo "installing cargo-fuzz"
+        cargo +nightly install cargo-fuzz
+    fi
+    ASAN_OPTIONS=detect_leaks=0 cargo +nightly fuzz run fuzz_translate_module $topdir/fuzz/corpus/fuzz_translate_module/ffaefab69523eb11935a9b420d58826c8ea65c4c
+else
+    echo "nightly toolchain not found, skipping fuzz target integration test"
+fi
+
 banner "OK"

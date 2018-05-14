@@ -1,0 +1,29 @@
+[package]
+name = "cton-wasm-fuzz"
+version = "0.0.1"
+authors = ["foote@fastly.com"]
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies.cargo-fuzz]
+version = "*"
+
+[dependencies.binaryen]
+git = "https://github.com/pepyakin/binaryen-rs.git"
+version = "*"
+
+[dependencies.libfuzzer-sys]
+git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
+
+[dependencies.cretonne-wasm]
+path = "../lib/wasm"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_translate_module"
+path = "fuzz_translate_module.rs"
