@@ -1,5 +1,5 @@
-use cretonne::settings;
-use cretonne::settings::Configurable;
+use cretonne_codegen::settings;
+use cretonne_codegen::settings::Configurable;
 use faerie::Artifact;
 use wasmstandalone_runtime;
 

@@ -17,18 +17,18 @@ name = "wasm2obj"
 path = "src/wasm2obj.rs"
 
 [dependencies]
-cretonne = "0.4.0"
-cretonne-frontend = "0.4.0"
-cretonne-reader = "0.4.0"
-cretonne-wasm = "0.4.0"
-cretonne-native = "0.4.0"
+cretonne-codegen = "0.8.0"
+cretonne-frontend = "0.8.0"
+cretonne-reader = "0.8.0"
+cretonne-wasm = "0.8.0"
+cretonne-native = "0.8.0"
 wasmstandalone_runtime = { path = "lib/runtime" }
 wasmstandalone_execute = { path = "lib/execute" }
 wasmstandalone_obj = { path = "lib/obj" }
-docopt = "0.8.3"
-serde = "1.0.27"
-serde_derive = "1.0.27"
+docopt = "1.0.0"
+serde = "1.0.55"
+serde_derive = "1.0.55"
 tempdir = "*"
-faerie = "0.1.0"
+faerie = "0.3.0"
 
 [workspace]

@@ -13,14 +13,14 @@ path = "../lib/runtime"
 [dependencies.wasmstandalone_execute]
 path = "../lib/execute"
 
-[dependencies.cretonne]
-version = "0.3.0"
+[dependencies.cretonne-codegen]
+version = "0.8.0"
 
 [dependencies.cretonne-wasm]
-version = "0.3.0"
+version = "0.8.0"
 
 [dependencies.cretonne-native]
-version = "0.3.0"
+version = "0.8.0"
 
 [dependencies.libfuzzer-sys]
 git = "https://github.com/rust-fuzz/libfuzzer-sys.git"

@@ -5,22 +5,22 @@
 //! IL. Can also executes the `start` function of the module by laying out the memories, globals
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
-extern crate cton_wasm;
-extern crate cton_native;
+extern crate cretonne_codegen;
+extern crate cretonne_wasm;
+extern crate cretonne_native;
 extern crate wasmstandalone_runtime;
 extern crate wasmstandalone_execute;
-extern crate cretonne;
 extern crate docopt;
 #[macro_use]
 extern crate serde_derive;
 extern crate tempdir;
 
-use cton_wasm::translate_module;
+use cretonne_wasm::translate_module;
 use wasmstandalone_execute::{compile_module, execute};
 use wasmstandalone_runtime::{Instance, Module, ModuleEnvironment};
 use std::path::PathBuf;
-use cretonne::isa::TargetIsa;
-use cretonne::settings;
+use cretonne_codegen::isa::TargetIsa;
+use cretonne_codegen::settings;
 use std::fs::File;
 use std::error::Error;
 use std::io;
@@ -30,7 +30,7 @@ use docopt::Docopt;
 use std::path::Path;
 use std::process::{exit, Command};
 use tempdir::TempDir;
-use cretonne::settings::Configurable;
+use cretonne_codegen::settings::Configurable;
 
 const USAGE: &str = "
 Wasm to Cretonne IL translation utility.
@@ -70,7 +70,7 @@ fn main() {
                 .deserialize()
         })
         .unwrap_or_else(|e| e.exit());
-    let (mut flag_builder, isa_builder) = cton_native::builders().unwrap_or_else(|_| {
+    let (mut flag_builder, isa_builder) = cretonne_native::builders().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
     });
 
@@ -84,7 +84,7 @@ fn main() {
         flag_builder.set("opt_level", "best").unwrap();
     }
 
-    let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
+    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
     for filename in &args.arg_file {
         let path = Path::new(&filename);
         match handle_module(&args, path.to_path_buf(), &*isa) {

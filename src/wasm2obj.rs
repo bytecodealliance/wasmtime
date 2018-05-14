@@ -4,19 +4,19 @@
 //! IL, then translates it to native code, and writes it out to a native
 //! object file with relocations.
 
-extern crate cton_wasm;
+extern crate cretonne_codegen;
+extern crate cretonne_native;
+extern crate cretonne_wasm;
 extern crate wasmstandalone_obj;
 extern crate wasmstandalone_runtime;
-extern crate cretonne;
-extern crate cton_native;
 extern crate docopt;
 #[macro_use]
 extern crate serde_derive;
 extern crate faerie;
 
-use cton_wasm::translate_module;
-use cretonne::settings;
-use cretonne::isa;
+use cretonne_wasm::translate_module;
+use cretonne_codegen::settings;
+use cretonne_codegen::isa;
 use wasmstandalone_obj::emit_module;
 use std::path::PathBuf;
 use std::fs::File;
@@ -86,10 +86,10 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     };
 
     // FIXME: Make the target a parameter.
-    let (flag_builder, isa_builder) = cton_native::builders().unwrap_or_else(|_| {
+    let (flag_builder, isa_builder) = cretonne_native::builders().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
     });
-    let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
+    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
     let mut module = wasmstandalone_runtime::Module::new();
     let mut environ = wasmstandalone_runtime::ModuleEnvironment::new(isa.flags(), &mut module);

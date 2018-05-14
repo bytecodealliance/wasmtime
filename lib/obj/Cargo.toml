@@ -5,7 +5,7 @@ authors = ["The Cretonne Project Developers"]
 publish = false
 
 [dependencies]
-cretonne = "0.4.0"
-cretonne-wasm = "0.4.0"
+cretonne-codegen = "0.8.0"
+cretonne-wasm = "0.8.0"
 wasmstandalone_runtime = { path = "../runtime" }
-faerie = "0.1.0"
+faerie = "0.3.0"

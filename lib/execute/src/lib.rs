@@ -2,12 +2,12 @@
 
 #![deny(missing_docs)]
 
-extern crate cretonne;
-extern crate cton_wasm;
+extern crate cretonne_codegen;
+extern crate cretonne_wasm;
 extern crate region;
 extern crate wasmstandalone_runtime;
 
-use cretonne::isa::TargetIsa;
+use cretonne_codegen::isa::TargetIsa;
 use std::mem::transmute;
 use region::Protection;
 use region::protect;

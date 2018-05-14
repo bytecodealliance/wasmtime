@@ -1,9 +1,9 @@
 //! A `Module` contains all the relevant information translated from a
 //! WebAssembly module.
 
-use cton_wasm::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, Global, Table, Memory,
-                SignatureIndex};
-use cretonne::ir;
+use cretonne_wasm::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, Global, Table, Memory,
+                    SignatureIndex};
+use cretonne_codegen::ir;
 use std::collections::HashMap;
 
 /// Possible values for a WebAssembly table element.
