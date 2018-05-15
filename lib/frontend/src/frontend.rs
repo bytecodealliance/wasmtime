@@ -10,6 +10,7 @@ use cretonne_codegen::ir::{DataFlowGraph, Ebb, ExtFuncData, FuncRef, Function, G
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::packed_option::PackedOption;
 use ssa::{Block, SSABuilder, SideEffects};
+use std::fmt::Debug;
 
 /// Structure used for translating a series of functions into Cretonne IR.
 ///
@@ -22,7 +23,7 @@ use ssa::{Block, SSABuilder, SideEffects};
 /// use here, `variable::Variable` can be used.
 pub struct FunctionBuilderContext<Variable>
 where
-    Variable: EntityRef,
+    Variable: EntityRef + Debug,
 {
     ssa: SSABuilder<Variable>,
     ebbs: EntityMap<Ebb, EbbData>,
@@ -32,7 +33,7 @@ where
 /// Temporary object used to build a single Cretonne IR `Function`.
 pub struct FunctionBuilder<'a, Variable: 'a>
 where
-    Variable: EntityRef,
+    Variable: EntityRef + Debug,
 {
     /// The function currently being built.
     /// This field is public so the function can be re-borrowed.
@@ -79,7 +80,7 @@ impl Position {
 
 impl<Variable> FunctionBuilderContext<Variable>
 where
-    Variable: EntityRef,
+    Variable: EntityRef + Debug,
 {
     /// Creates a FunctionBuilderContext structure. The structure is automatically cleared after
     /// each [`FunctionBuilder`](struct.FunctionBuilder.html) completes translating a function.
@@ -106,7 +107,7 @@ where
 /// one convenience method per Cretonne IR instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short, Variable: 'long>
 where
-    Variable: EntityRef,
+    Variable: EntityRef + Debug,
 {
     builder: &'short mut FunctionBuilder<'long, Variable>,
     ebb: Ebb,
@@ -114,7 +115,7 @@ where
 
 impl<'short, 'long, Variable> FuncInstBuilder<'short, 'long, Variable>
 where
-    Variable: EntityRef,
+    Variable: EntityRef + Debug,
 {
     fn new<'s, 'l>(
         builder: &'s mut FunctionBuilder<'l, Variable>,
@@ -126,7 +127,7 @@ where
 
 impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long, Variable>
 where
-    Variable: EntityRef,
+    Variable: EntityRef + Debug,
 {
     fn data_flow_graph(&self) -> &DataFlowGraph {
         &self.builder.func.dfg
@@ -228,7 +229,7 @@ where
 /// return instruction with arguments that don't match the function's signature.
 impl<'a, Variable> FunctionBuilder<'a, Variable>
 where
-    Variable: EntityRef,
+    Variable: EntityRef + Debug,
 {
     /// Creates a new FunctionBuilder structure that will operate on a `Function` using a
     /// `FunctionBuilderContext`.
@@ -316,22 +317,40 @@ where
     /// Returns the Cretonne IR value corresponding to the utilization at the current program
     /// position of a previously defined user variable.
     pub fn use_var(&mut self, var: Variable) -> Value {
-        let ty = *self.func_ctx.types.get(var).expect(
-            "this variable is used but its type has not been declared",
-        );
-        let (val, side_effects) = self.func_ctx.ssa.use_var(
-            self.func,
-            var,
-            ty,
-            self.position.basic_block.unwrap(),
-        );
+        let (val, side_effects) = {
+            let ty = *self.func_ctx.types.get(var).unwrap_or_else(|| {
+                panic!(
+                    "variable {:?} is used but its type has not been declared",
+                    var
+                )
+            });
+            self.func_ctx.ssa.use_var(
+                self.func,
+                var,
+                ty,
+                self.position.basic_block.unwrap(),
+            )
+        };
         self.handle_ssa_side_effects(side_effects);
         val
     }
 
-    /// Register a new definition of a user variable. Panics if the type of the value is not the
-    /// same as the type registered for the variable.
+    /// Register a new definition of a user variable. The type of the value must be
+    /// the same as the type registered for the variable.
     pub fn def_var(&mut self, var: Variable, val: Value) {
+        debug_assert_eq!(
+            *self.func_ctx.types.get(var).unwrap_or_else(|| {
+                panic!(
+                    "variable {:?} is used but its type has not been declared",
+                    var
+                )
+            }),
+            self.func.dfg.value_type(val),
+            "declared type of variable {:?} doesn't match type of value {}",
+            var,
+            val
+        );
+
         self.func_ctx.ssa.def_var(
             var,
             val,
@@ -470,7 +489,7 @@ where
 /// in ways that can be unsafe if used incorrectly.
 impl<'a, Variable> FunctionBuilder<'a, Variable>
 where
-    Variable: EntityRef,
+    Variable: EntityRef + Debug,
 {
     /// Retrieves all the parameters for an `Ebb` currently inferred from the jump instructions
     /// inserted that target it and the SSA construction.
@@ -560,7 +579,7 @@ where
 // Helper functions
 impl<'a, Variable> FunctionBuilder<'a, Variable>
 where
-    Variable: EntityRef,
+    Variable: EntityRef + Debug,
 {
     fn move_to_next_basic_block(&mut self) {
         self.position.basic_block = PackedOption::from(self.func_ctx.ssa.declare_ebb_body_block(
