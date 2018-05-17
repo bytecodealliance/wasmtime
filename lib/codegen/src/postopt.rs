@@ -169,8 +169,10 @@ fn optimize_cpu_flags(
             );
         }
     }
-    pos.func.update_encoding(info.cmp_inst, isa).is_ok();
-    pos.func.update_encoding(info.br_inst, isa).is_ok();
+    let ok = pos.func.update_encoding(info.cmp_inst, isa).is_ok();
+    debug_assert!(ok);
+    let ok = pos.func.update_encoding(info.br_inst, isa).is_ok();
+    debug_assert!(ok);
 }
 
 
@@ -320,7 +322,8 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
         }
         _ => return,
     }
-    pos.func.update_encoding(info.inst, isa).is_ok();
+    let ok = pos.func.update_encoding(info.inst, isa).is_ok();
+    debug_assert!(ok);
 }
 
 
