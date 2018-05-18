@@ -6,12 +6,12 @@
 
 use dominator_tree::DominatorTree;
 use entity::{EntityList, ListPool};
+use fx::FxHashMap;
 use ir::{DataFlowGraph, Ebb, ExpandedProgramPoint, Inst, Layout, Value};
 use partition_slice::partition_slice;
 use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
 use regalloc::liverange::LiveRange;
-use std::collections::HashMap;
 use std::vec::Vec;
 
 type ValueList = EntityList<Value>;
@@ -25,7 +25,7 @@ pub struct LiveValueTracker {
     /// dominator of an EBB.
     ///
     /// This is the set of values that are live *before* the branch.
-    idom_sets: HashMap<Inst, ValueList>,
+    idom_sets: FxHashMap<Inst, ValueList>,
 
     /// Memory pool for the live sets.
     idom_pool: ListPool<Value>,
@@ -128,7 +128,7 @@ impl LiveValueTracker {
     pub fn new() -> Self {
         Self {
             live: LiveValueVec::new(),
-            idom_sets: HashMap::new(),
+            idom_sets: FxHashMap(),
             idom_pool: ListPool::new(),
         }
     }

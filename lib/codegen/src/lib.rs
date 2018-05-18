@@ -95,6 +95,7 @@ mod constant_hash;
 mod context;
 mod dce;
 mod divconst_magic_numbers;
+mod fx;
 mod iterators;
 mod legalizer;
 mod licm;
