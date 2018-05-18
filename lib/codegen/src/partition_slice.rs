@@ -1,5 +1,7 @@
 //! Rearrange the elements in a slice according to a predicate.
 
+use std::mem;
+
 /// Rearrange the elements of the mutable slice `s` such that elements where `p(t)` is true precede
 /// the elements where `p(t)` is false.
 ///
@@ -10,24 +12,42 @@ pub fn partition_slice<T, F>(s: &mut [T], mut p: F) -> usize
 where
     F: FnMut(&T) -> bool,
 {
-    // Count the length of the prefix where `p` returns true.
-    let mut count = match s.iter().position(|t| !p(t)) {
-        Some(t) => t,
-        None => return s.len(),
-    };
+    // The iterator works like a deque which we can pop from both ends.
+    let mut i = s.iter_mut();
 
-    // Swap remaining `true` elements into place.
-    //
-    // This actually preserves the order of the `true` elements, but the `false` elements get
-    // shuffled.
-    for i in count + 1..s.len() {
-        if p(&s[i]) {
-            s.swap(count, i);
-            count += 1;
-        }
+    // Number of elements for which the predicate is known to be true.
+    let mut pos = 0;
+
+    loop {
+        // Find the first element for which the predicate fails.
+        let head = loop {
+            match i.next() {
+                Some(head) => {
+                    if !p(&head) {
+                        break head;
+                    }
+                }
+                None => return pos,
+            }
+            pos += 1;
+        };
+
+        // Find the last element for which the predicate succeeds.
+        let tail = loop {
+            match i.next_back() {
+                Some(tail) => {
+                    if p(&tail) {
+                        break tail;
+                    }
+                }
+                None => return pos,
+            }
+        };
+
+        // Swap the two elements into the right order.
+        mem::swap(head, tail);
+        pos += 1;
     }
-
-    count
 }
 
 #[cfg(test)]
@@ -70,8 +90,8 @@ mod tests {
         check(&[1, 2, 3], &[1, 2, 3]);
         check(&[1, 2, 10], &[10, 2, 1]); // Note: 2, 1 order not required.
         check(&[1, 10, 2], &[10, 1, 2]); // Note: 1, 2 order not required.
-        check(&[1, 20, 10], &[20, 10, 1]);
-        check(&[1, 20, 3, 10], &[20, 10, 3, 1]);
+        check(&[1, 20, 10], &[10, 20, 1]); // Note: 10, 20 order not required.
+        check(&[1, 20, 3, 10], &[10, 20, 3, 1]);
         check(&[20, 3, 10, 1], &[20, 10, 3, 1]);
     }
 }
