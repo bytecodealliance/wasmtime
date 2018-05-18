@@ -84,22 +84,25 @@ pub fn execute(
     let start_index = compilation.module.start_func.ok_or_else(|| {
         String::from("No start function defined, aborting execution")
     })?;
-    let code_buf = &compilation.functions[start_index];
-    match unsafe {
-        protect(
-            code_buf.as_ptr(),
-            code_buf.len(),
-            Protection::ReadWriteExecute,
-        )
-    } {
-        Ok(()) => (),
-        Err(err) => {
-            return Err(format!(
-                "failed to give executable permission to code: {}",
-                err
-            ))
+    for code_buf in &compilation.functions {
+        match unsafe {
+            protect(
+                code_buf.as_ptr(),
+                code_buf.len(),
+                Protection::ReadWriteExecute,
+            )
+        } {
+            Ok(()) => (),
+            Err(err) => {
+                return Err(format!(
+                    "failed to give executable permission to code: {}",
+                    err
+                ))
+            }
         }
     }
+
+    let code_buf = &compilation.functions[start_index];
 
     let vmctx = make_vmctx(instance);
 
