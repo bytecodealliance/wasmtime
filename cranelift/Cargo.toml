@@ -32,3 +32,11 @@ term = "0.5.1"
 capstone = "0.3.1"
 
 [workspace]
+
+# We want debug symbols on release binaries by default since it allows profiling
+# tools to give more accurate information. We can always strip them out later if
+# necessary.
+[profile.release]
+debug = true
+[profile.bench]
+debug = true
