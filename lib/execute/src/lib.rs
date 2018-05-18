@@ -84,6 +84,8 @@ pub fn execute(
     let start_index = compilation.module.start_func.ok_or_else(|| {
         String::from("No start function defined, aborting execution")
     })?;
+    // TODO: Put all the function bodies into a page-aligned memory region, and
+    // then make them ReadExecute rather than ReadWriteExecute.
     for code_buf in &compilation.functions {
         match unsafe {
             protect(
