@@ -4,9 +4,9 @@ use cursor::{Cursor, FuncCursor};
 use dominator_tree::DominatorTree;
 use entity::{EntityList, ListPool};
 use flowgraph::ControlFlowGraph;
+use fx::FxHashSet;
 use ir::{DataFlowGraph, Ebb, Function, Inst, InstBuilder, Layout, Opcode, Type, Value};
 use loop_analysis::{Loop, LoopAnalysis};
-use std::collections::HashSet;
 use std::vec::Vec;
 use timing;
 
@@ -138,7 +138,7 @@ fn trivially_unsafe_for_licm(opcode: Opcode) -> bool {
 }
 
 /// Test whether the given instruction is loop-invariant.
-fn is_loop_invariant(inst: Inst, dfg: &DataFlowGraph, loop_values: &HashSet<Value>) -> bool {
+fn is_loop_invariant(inst: Inst, dfg: &DataFlowGraph, loop_values: &FxHashSet<Value>) -> bool {
     if trivially_unsafe_for_licm(dfg[inst].opcode()) {
         return false;
     }
@@ -162,7 +162,7 @@ fn remove_loop_invariant_instructions(
     cfg: &ControlFlowGraph,
     loop_analysis: &LoopAnalysis,
 ) -> Vec<Inst> {
-    let mut loop_values: HashSet<Value> = HashSet::new();
+    let mut loop_values: FxHashSet<Value> = FxHashSet();
     let mut invariant_insts: Vec<Inst> = Vec::new();
     let mut pos = FuncCursor::new(func);
     // We traverse the loop EBB in reverse post-order.
@@ -194,8 +194,8 @@ fn remove_loop_invariant_instructions(
 
 /// Return ebbs from a loop in post-order, starting from an entry point in the block.
 fn postorder_ebbs_loop(loop_analysis: &LoopAnalysis, cfg: &ControlFlowGraph, lp: Loop) -> Vec<Ebb> {
-    let mut grey = HashSet::new();
-    let mut black = HashSet::new();
+    let mut grey = FxHashSet();
+    let mut black = FxHashSet();
     let mut stack = vec![loop_analysis.loop_header(lp)];
     let mut postorder = Vec::new();
 

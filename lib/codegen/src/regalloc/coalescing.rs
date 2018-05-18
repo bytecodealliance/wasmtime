@@ -10,6 +10,7 @@ use cursor::{Cursor, EncCursor};
 use dbg::DisplayList;
 use dominator_tree::{DominatorTree, DominatorTreePreorder};
 use flowgraph::ControlFlowGraph;
+use fx::FxHashMap;
 use ir::{self, InstBuilder, ProgramOrder};
 use ir::{Ebb, ExpandedProgramPoint, Function, Inst, Value};
 use isa::{EncInfo, TargetIsa};
@@ -883,11 +884,9 @@ struct VirtualCopies {
 
     // Filter for the currently active node iterator.
     //
-    // An (ebb, set_id, num) entry means that branches to `ebb` are active in `set_id` with branch
+    // An ebb => (set_id, num) entry means that branches to `ebb` are active in `set_id` with branch
     // argument number `num`.
-    //
-    // This is ordered by EBB number for fast binary search.
-    filter: Vec<(Ebb, u8, usize)>,
+    filter: FxHashMap<Ebb, (u8, usize)>,
 }
 
 impl VirtualCopies {
@@ -896,7 +895,7 @@ impl VirtualCopies {
         Self {
             params: Vec::new(),
             branches: Vec::new(),
-            filter: Vec::new(),
+            filter: FxHashMap(),
         }
     }
 
@@ -1010,12 +1009,10 @@ impl VirtualCopies {
                         // Stop once we're outside the bounds of `self.params`.
                         break;
                     }
-                    self.filter.push((ebb, set_id, num));
+                    self.filter.insert(ebb, (set_id, num));
                 }
             }
         }
-        // We'll be using `binary_search_by` with the numerical EBB ordering.
-        self.filter.sort_unstable();
     }
 
     /// Look up the set_id and argument number for `ebb` in the current filter.
@@ -1023,13 +1020,7 @@ impl VirtualCopies {
     /// Returns `None` if none of the currently active parameters are defined at `ebb`. Otherwise
     /// returns `(set_id, argnum)` for an active parameter defined at `ebb`.
     fn lookup(&self, ebb: Ebb) -> Option<(u8, usize)> {
-        self.filter
-            .binary_search_by(|&(e, _, _)| e.cmp(&ebb))
-            .ok()
-            .map(|i| {
-                let t = self.filter[i];
-                (t.1, t.2)
-            })
+        self.filter.get(&ebb).map(|t| *t)
     }
 
     /// Get an iterator of dom-forest nodes corresponding to the current filter.

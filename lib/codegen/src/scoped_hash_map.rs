@@ -4,7 +4,8 @@
 //! container that has a concept of scopes that can be entered and exited, such that
 //! values inserted while inside a scope aren't visible outside the scope.
 
-use std::collections::{hash_map, HashMap};
+use fx::FxHashMap;
+use std::collections::hash_map;
 use std::hash::Hash;
 use std::mem;
 
@@ -58,7 +59,7 @@ pub enum Entry<'a, K: 'a, V: 'a> {
 /// Shadowing, where one scope has entries with the same keys as a containing scope,
 /// is not supported in this implementation.
 pub struct ScopedHashMap<K, V> {
-    map: HashMap<K, Val<K, V>>,
+    map: FxHashMap<K, Val<K, V>>,
     last_insert: Option<K>,
     current_depth: usize,
 }
@@ -70,7 +71,7 @@ where
     /// Creates an empty `ScopedHashMap`.
     pub fn new() -> Self {
         Self {
-            map: HashMap::new(),
+            map: FxHashMap(),
             last_insert: None,
             current_depth: 0,
         }
