@@ -569,7 +569,8 @@ impl<'data, 'module> ModuleTranslation<'data, 'module> {
     ) -> Result<(Compilation<'module>, Relocations), String> {
         let mut functions = Vec::new();
         let mut relocations = Vec::new();
-        for (func_index, input) in self.lazy.function_body_inputs.iter().enumerate() {
+        for (i, input) in self.lazy.function_body_inputs.iter().enumerate() {
+            let func_index = i + self.module.imported_funcs.len();
             let mut context = cretonne_codegen::Context::new();
             context.func.name = get_func_name(func_index);
             context.func.signature = self.module.signatures[self.module.functions[func_index]]
