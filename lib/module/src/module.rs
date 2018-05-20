@@ -6,8 +6,7 @@
 // shared with `DataContext`?
 
 use cretonne_codegen::entity::{EntityRef, PrimaryMap};
-use cretonne_codegen::result::CodegenError;
-use cretonne_codegen::{binemit, ir, Context};
+use cretonne_codegen::{binemit, ir, CodegenError, Context};
 use data_context::DataContext;
 use std::borrow::ToOwned;
 use std::collections::HashMap;

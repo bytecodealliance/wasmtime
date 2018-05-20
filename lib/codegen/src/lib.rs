@@ -75,7 +75,6 @@ pub mod ir;
 pub mod isa;
 pub mod loop_analysis;
 pub mod print_errors;
-pub mod result;
 pub mod settings;
 pub mod timing;
 pub mod verifier;
@@ -99,12 +98,15 @@ mod predicates;
 mod preopt;
 mod ref_slice;
 mod regalloc;
+mod result;
 mod scoped_hash_map;
 mod simple_gvn;
 mod stack_layout;
 mod topo_order;
 mod unreachable_code;
 mod write;
+
+pub use result::{CodegenError, CodegenResult};
 
 /// This replaces `std` in builds with `core`.
 #[cfg(not(feature = "std"))]
