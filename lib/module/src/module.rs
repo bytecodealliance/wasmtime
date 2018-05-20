@@ -139,6 +139,9 @@ pub enum ModuleError {
     Backend(String),
 }
 
+/// A convenient alias for a `Result` that uses `ModuleError` as the error type.
+pub type ModuleResult<T> = Result<T, ModuleError>;
+
 /// A function belonging to a `Module`.
 struct ModuleFunction<B>
 where
@@ -347,7 +350,7 @@ where
         name: &str,
         linkage: Linkage,
         signature: &ir::Signature,
-    ) -> Result<FuncId, ModuleError> {
+    ) -> ModuleResult<FuncId> {
         // TODO: Can we avoid allocating names so often?
         use std::collections::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
@@ -385,7 +388,7 @@ where
         name: &str,
         linkage: Linkage,
         writable: bool,
-    ) -> Result<DataId, ModuleError> {
+    ) -> ModuleResult<DataId> {
         // TODO: Can we avoid allocating names so often?
         use std::collections::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
@@ -457,7 +460,7 @@ where
     }
 
     /// Define a function, producing the function body from the given `Context`.
-    pub fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> Result<(), ModuleError> {
+    pub fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> ModuleResult<()> {
         let compiled = {
             let code_size = ctx.compile(self.backend.isa()).map_err(|e| {
                 dbg!(
@@ -489,7 +492,7 @@ where
     }
 
     /// Define a function, producing the data contents from the given `DataContext`.
-    pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> Result<(), ModuleError> {
+    pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
         let compiled = {
             let info = &self.contents.data_objects[data];
             if !info.compiled.is_none() {
