@@ -6,7 +6,7 @@
 // shared with `DataContext`?
 
 use cretonne_codegen::entity::{EntityRef, PrimaryMap};
-use cretonne_codegen::result::CtonError;
+use cretonne_codegen::result::CodegenError;
 use cretonne_codegen::{binemit, ir, Context};
 use data_context::DataContext;
 use std::borrow::ToOwned;
@@ -134,7 +134,7 @@ pub enum ModuleError {
     InvalidImportDefinition(String),
     /// Wraps a `cretonne-codegen` error
     #[fail(display = "Compilation error: {}", _0)]
-    Compilation(CtonError),
+    Compilation(CodegenError),
     /// Wraps a generic error from a backend
     #[fail(display = "Backend error: {}", _0)]
     Backend(String),

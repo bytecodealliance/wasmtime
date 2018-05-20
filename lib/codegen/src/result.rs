@@ -6,7 +6,7 @@ use verifier::VerifierError;
 ///
 /// When Cretonne fails to compile a function, it will return one of these error codes.
 #[derive(Fail, Debug, PartialEq, Eq)]
-pub enum CtonError {
+pub enum CodegenError {
     /// An IR verifier error.
     ///
     /// This always represents a bug, either in the code that generated IR for Cretonne, or a bug
@@ -31,11 +31,11 @@ pub enum CtonError {
     CodeTooLarge,
 }
 
-/// A Cretonne compilation result.
-pub type CtonResult<T> = Result<T, CtonError>;
+/// A convenient alias for a `Result` that uses `CodegenError` as the error type.
+pub type CodegenResult<T> = Result<T, CodegenError>;
 
-impl From<VerifierError> for CtonError {
+impl From<VerifierError> for CodegenError {
     fn from(e: VerifierError) -> Self {
-        CtonError::Verifier(e)
+        CodegenError::Verifier(e)
     }
 }
