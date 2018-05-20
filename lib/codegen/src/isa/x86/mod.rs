@@ -13,7 +13,7 @@ use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encodings};
 use isa::Builder as IsaBuilder;
 use isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use regalloc;
-use result::CtonResult;
+use result::CodegenResult;
 use std::boxed::Box;
 use std::fmt;
 use target_lexicon::{PointerWidth, Triple};
@@ -129,7 +129,7 @@ impl TargetIsa for Isa {
         emit_function(func, binemit::emit_inst, sink)
     }
 
-    fn prologue_epilogue(&self, func: &mut ir::Function) -> CtonResult<()> {
+    fn prologue_epilogue(&self, func: &mut ir::Function) -> CodegenResult<()> {
         let _tt = timing::prologue_epilogue();
         abi::prologue_epilogue(func, self)
     }

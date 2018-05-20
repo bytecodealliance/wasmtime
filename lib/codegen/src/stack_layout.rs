@@ -2,7 +2,7 @@
 
 use ir::stackslot::{StackOffset, StackSize, StackSlotKind};
 use ir::StackSlots;
-use result::{CtonError, CtonResult};
+use result::{CodegenError, CodegenResult};
 use std::cmp::{max, min};
 
 /// Compute the stack frame layout.
@@ -15,7 +15,7 @@ use std::cmp::{max, min};
 /// Returns the total stack frame size which is also saved in `frame.frame_size`.
 ///
 /// If the stack frame is too big, returns an `ImplLimitExceeded` error.
-pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CtonResult<StackSize> {
+pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResult<StackSize> {
     // Each object and the whole stack frame must fit in 2 GB such that any relative offset within
     // the frame fits in a `StackOffset`.
     let max_size = StackOffset::max_value() as StackSize;
@@ -41,7 +41,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CtonResult<
 
     for slot in frame.values() {
         if slot.size > max_size {
-            return Err(CtonError::ImplLimitExceeded);
+            return Err(CodegenError::ImplLimitExceeded);
         }
 
         match slot.kind {
@@ -52,7 +52,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CtonResult<
                 let offset = slot.offset
                     .unwrap()
                     .checked_add(slot.size as StackOffset)
-                    .ok_or(CtonError::ImplLimitExceeded)?;
+                    .ok_or(CodegenError::ImplLimitExceeded)?;
                 outgoing_max = max(outgoing_max, offset);
             }
             StackSlotKind::SpillSlot
@@ -85,7 +85,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CtonResult<
 
             offset = offset
                 .checked_sub(slot.size as StackOffset)
-                .ok_or(CtonError::ImplLimitExceeded)?;
+                .ok_or(CodegenError::ImplLimitExceeded)?;
 
             // Aligning the negative offset can never cause overflow. We're only clearing bits.
             offset &= -(min_align as StackOffset);
@@ -99,7 +99,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CtonResult<
     // Finally, make room for the outgoing arguments.
     offset = offset
         .checked_sub(outgoing_max)
-        .ok_or(CtonError::ImplLimitExceeded)?;
+        .ok_or(CodegenError::ImplLimitExceeded)?;
     offset &= -(alignment as StackOffset);
 
     let frame_size = (offset as StackSize).wrapping_neg();
@@ -113,7 +113,7 @@ mod tests {
     use ir::stackslot::StackOffset;
     use ir::types;
     use ir::{StackSlotData, StackSlotKind, StackSlots};
-    use result::CtonError;
+    use result::CodegenError;
 
     #[test]
     fn layout() {
@@ -187,7 +187,7 @@ mod tests {
 
         // Also test that an unsupported offset is rejected.
         sss.get_outgoing_arg(types::I8, StackOffset::max_value() - 1);
-        assert_eq!(layout_stack(sss, 1), Err(CtonError::ImplLimitExceeded));
+        assert_eq!(layout_stack(sss, 1), Err(CodegenError::ImplLimitExceeded));
     }
 
     #[test]

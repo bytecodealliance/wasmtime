@@ -2,7 +2,7 @@
 
 use ir;
 use isa::TargetIsa;
-use result::CtonError;
+use result::CodegenError;
 use std::fmt::Write;
 use std::string::{String, ToString};
 use verifier::VerifierError;
@@ -25,8 +25,8 @@ pub fn pretty_verifier_error(
 }
 
 /// Pretty-print a Cretonne error.
-pub fn pretty_error(func: &ir::Function, isa: Option<&TargetIsa>, err: CtonError) -> String {
-    if let CtonError::Verifier(e) = err {
+pub fn pretty_error(func: &ir::Function, isa: Option<&TargetIsa>, err: CodegenError) -> String {
+    if let CodegenError::Verifier(e) = err {
         pretty_verifier_error(func, isa, &e)
     } else {
         err.to_string()
