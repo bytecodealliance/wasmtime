@@ -8,6 +8,7 @@ use DataContext;
 use Linkage;
 use ModuleError;
 use ModuleNamespace;
+use ModuleResult;
 
 /// A `Backend` implements the functionality needed to support a `Module`.
 pub trait Backend
@@ -57,7 +58,7 @@ where
         ctx: &Context,
         namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> Result<Self::CompiledFunction, ModuleError>;
+    ) -> ModuleResult<Self::CompiledFunction>;
 
     /// Define a zero-initialized data object of the given size.
     ///
@@ -67,7 +68,7 @@ where
         name: &str,
         data_ctx: &DataContext,
         namespace: &ModuleNamespace<Self>,
-    ) -> Result<Self::CompiledData, ModuleError>;
+    ) -> ModuleResult<Self::CompiledData>;
 
     /// Write the address of `what` into the data for `data` at `offset`. `data` must refer to a
     /// defined data object.

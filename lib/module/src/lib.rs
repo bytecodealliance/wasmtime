@@ -33,7 +33,8 @@ mod module;
 
 pub use backend::Backend;
 pub use data_context::{DataContext, DataDescription, Init, Writability};
-pub use module::{DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleError, ModuleNamespace};
+pub use module::{DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleError, ModuleNamespace,
+                 ModuleResult};
 
 /// This replaces `std` in builds with `core`.
 #[cfg(not(feature = "std"))]

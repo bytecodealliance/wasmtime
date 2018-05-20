@@ -3,8 +3,8 @@
 use cretonne_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::{self, ir, settings};
-use cretonne_module::{Backend, DataContext, DataDescription, Init, Linkage, ModuleError,
-                      ModuleNamespace, Writability};
+use cretonne_module::{Backend, DataContext, DataDescription, Init, Linkage, ModuleNamespace,
+                      ModuleResult, Writability};
 use cretonne_native;
 use libc;
 use memory::Memory;
@@ -118,7 +118,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         ctx: &cretonne_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> Result<Self::CompiledFunction, ModuleError> {
+    ) -> ModuleResult<Self::CompiledFunction> {
         let size = code_size as usize;
         let ptr = self.code_memory
             .allocate(size)
@@ -141,7 +141,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         _name: &str,
         data: &DataContext,
         _namespace: &ModuleNamespace<Self>,
-    ) -> Result<Self::CompiledData, ModuleError> {
+    ) -> ModuleResult<Self::CompiledData> {
         let &DataDescription {
             writable,
             ref init,

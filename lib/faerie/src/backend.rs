@@ -5,7 +5,7 @@ use cretonne_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSi
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::{self, binemit, ir};
 use cretonne_module::{Backend, DataContext, DataDescription, Init, Linkage, ModuleError,
-                      ModuleNamespace};
+                      ModuleNamespace, ModuleResult};
 use faerie;
 use failure::Error;
 use std::fs::File;
@@ -52,7 +52,7 @@ impl FaerieBuilder {
         format: BinaryFormat,
         collect_traps: FaerieTrapCollection,
         libcall_names: Box<Fn(ir::LibCall) -> String>,
-    ) -> Result<Self, ModuleError> {
+    ) -> ModuleResult<Self> {
         if !isa.flags().is_pic() {
             return Err(ModuleError::Backend(
                 "faerie requires TargetIsa be PIC".to_owned(),
@@ -149,7 +149,7 @@ impl Backend for FaerieBackend {
         ctx: &cretonne_codegen::Context,
         namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> Result<FaerieCompiledFunction, ModuleError> {
+    ) -> ModuleResult<FaerieCompiledFunction> {
         let mut code: Vec<u8> = Vec::with_capacity(code_size as usize);
         code.resize(code_size as usize, 0);
 
@@ -198,7 +198,7 @@ impl Backend for FaerieBackend {
         name: &str,
         data_ctx: &DataContext,
         namespace: &ModuleNamespace<Self>,
-    ) -> Result<FaerieCompiledData, ModuleError> {
+    ) -> ModuleResult<FaerieCompiledData> {
         let &DataDescription {
             writable: _writable,
             ref init,
