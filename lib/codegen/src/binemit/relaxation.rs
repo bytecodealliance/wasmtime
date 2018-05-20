@@ -32,7 +32,7 @@ use cursor::{Cursor, FuncCursor};
 use ir::{Function, InstructionData, Opcode};
 use isa::{EncInfo, TargetIsa};
 use iterators::IteratorExtras;
-use result::CodegenResult;
+use CodegenResult;
 
 /// Relax branches and compute the final layout of EBB headers in `func`.
 ///
