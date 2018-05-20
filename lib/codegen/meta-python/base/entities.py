@@ -33,3 +33,6 @@ jump_table = EntityRefKind(
 
 #: A reference to a heap declared in the function preamble.
 heap = EntityRefKind('heap', 'A heap.')
+
+#: A reference to a table declared in the function preamble.
+table = EntityRefKind('table', 'A table.')

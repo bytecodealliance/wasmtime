@@ -9,7 +9,7 @@ use ir;
 use ir::{DataFlowGraph, ExternalName, Layout, Signature};
 use ir::{
     Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, JumpTable,
-    JumpTableData, SigRef, StackSlot, StackSlotData,
+    JumpTableData, SigRef, StackSlot, StackSlotData, Table, TableData,
 };
 use ir::{EbbOffsets, InstEncodings, JumpTables, SourceLocs, StackSlots, ValueLocations};
 use isa::{EncInfo, Encoding, Legalize, TargetIsa};
@@ -41,6 +41,9 @@ pub struct Function {
 
     /// Heaps referenced.
     pub heaps: PrimaryMap<ir::Heap, ir::HeapData>,
+
+    /// Tables referenced.
+    pub tables: PrimaryMap<ir::Table, ir::TableData>,
 
     /// Jump tables used in this function.
     pub jump_tables: JumpTables,
@@ -82,6 +85,7 @@ impl Function {
             stack_limit: None,
             global_values: PrimaryMap::new(),
             heaps: PrimaryMap::new(),
+            tables: PrimaryMap::new(),
             jump_tables: PrimaryMap::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),
@@ -98,6 +102,7 @@ impl Function {
         self.stack_slots.clear();
         self.global_values.clear();
         self.heaps.clear();
+        self.tables.clear();
         self.jump_tables.clear();
         self.dfg.clear();
         self.layout.clear();
@@ -155,6 +160,11 @@ impl Function {
     /// Declares a heap accessible to the function.
     pub fn create_heap(&mut self, data: HeapData) -> Heap {
         self.heaps.push(data)
+    }
+
+    /// Declares a table accessible to the function.
+    pub fn create_table(&mut self, data: TableData) -> Table {
+        self.tables.push(data)
     }
 
     /// Return an object that can display this function with correct ISA-specific annotations.

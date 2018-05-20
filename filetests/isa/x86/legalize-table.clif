@@ -1,0 +1,27 @@
+; Test legalization of tables
+test legalizer
+target x86_64
+
+; regex: V=v\d+
+; regex: EBB=ebb\d+
+
+function %test0(i64 vmctx, i64) -> i64 {
+    gv0 = vmctx+12
+    gv1 = vmctx+14
+    table0 = dynamic gv0, min 20, bound gv1, element_size 4
+
+ebb0(v0: i64, v1: i64):
+    v2 = table_addr.i64 table0, v1, +3
+    return v2
+}
+
+; check:    $(bound=$V) = iadd_imm $(input=$V), 14
+; nextln:   $(cond=$V) = icmp uge $(limit=$V), $bound
+; nextln:   brz $cond, ebb1
+; nextln:   trap table_oob
+; nextln: 
+; nextln: ebb1:
+; nextln:   $(base=$V) = iadd_imm.i64 $(vmctx=$V), 12
+; nextln:   $(scaled=$V) = ishl_imm.i64 $(index=$V), 2
+; nextln:   $(elem_addr=$V) = iadd $base, $scaled
+; nextln:   $(field_addr=$V) = iadd_imm $elem_addr, 3

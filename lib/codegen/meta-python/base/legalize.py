@@ -65,6 +65,7 @@ expand_flags = XFormGroup('expand_flags', """
 # Custom expansions for memory objects.
 expand.custom_legalize(insts.global_value, 'expand_global_value')
 expand.custom_legalize(insts.heap_addr, 'expand_heap_addr')
+expand.custom_legalize(insts.table_addr, 'expand_table_addr')
 
 # Custom expansions for calls.
 expand.custom_legalize(insts.call, 'expand_call')

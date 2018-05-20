@@ -16,9 +16,12 @@ pub enum TrapCode {
 
     /// A `heap_addr` instruction detected an out-of-bounds error.
     ///
-    /// Some out-of-bounds heap accesses are detected by a segmentation fault on the heap guard
-    /// pages.
+    /// Note that not all out-of-bounds heap accesses are reported this way;
+    /// some are detected by a segmentation fault on the heap guard pages.
     HeapOutOfBounds,
+
+    /// A `table_addr` instruction detected an out-of-bounds error.
+    TableOutOfBounds,
 
     /// Other bounds checking error.
     OutOfBounds,
@@ -52,6 +55,7 @@ impl Display for TrapCode {
         let identifier = match *self {
             StackOverflow => "stk_ovf",
             HeapOutOfBounds => "heap_oob",
+            TableOutOfBounds => "table_oob",
             OutOfBounds => "oob",
             IndirectCallToNull => "icall_null",
             BadSignature => "bad_sig",
@@ -73,6 +77,7 @@ impl FromStr for TrapCode {
         match s {
             "stk_ovf" => Ok(StackOverflow),
             "heap_oob" => Ok(HeapOutOfBounds),
+            "table_oob" => Ok(TableOutOfBounds),
             "oob" => Ok(OutOfBounds),
             "icall_null" => Ok(IndirectCallToNull),
             "bad_sig" => Ok(BadSignature),
@@ -92,9 +97,10 @@ mod tests {
     use std::string::ToString;
 
     // Everything but user-defined codes.
-    const CODES: [TrapCode; 8] = [
+    const CODES: [TrapCode; 9] = [
         TrapCode::StackOverflow,
         TrapCode::HeapOutOfBounds,
+        TrapCode::TableOutOfBounds,
         TrapCode::OutOfBounds,
         TrapCode::IndirectCallToNull,
         TrapCode::BadSignature,

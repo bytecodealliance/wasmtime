@@ -440,6 +440,7 @@ pub fn write_operands(
             ..
         } => write!(w, " {}, {}{}", arg, stack_slot, offset),
         HeapAddr { heap, arg, imm, .. } => write!(w, " {}, {}, {}", heap, arg, imm),
+        TableAddr { table, arg, .. } => write!(w, " {}, {}", table, arg),
         Load {
             flags, arg, offset, ..
         } => write!(w, "{} {}{}", flags, arg, offset),

@@ -7,7 +7,9 @@
 //! to parser clients.
 
 use cranelift_codegen::ir::entities::AnyEntity;
-use cranelift_codegen::ir::{Ebb, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Value};
+use cranelift_codegen::ir::{
+    Ebb, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Table, Value,
+};
 use error::{Location, ParseResult};
 use lexer::split_entity_name;
 use std::collections::HashMap;
@@ -44,6 +46,11 @@ impl SourceMap {
     /// Look up a heap entity.
     pub fn contains_heap(&self, heap: Heap) -> bool {
         self.locations.contains_key(&heap.into())
+    }
+
+    /// Look up a table entity.
+    pub fn contains_table(&self, table: Table) -> bool {
+        self.locations.contains_key(&table.into())
     }
 
     /// Look up a signature entity.
@@ -98,6 +105,13 @@ impl SourceMap {
                     None
                 } else {
                     Some(heap.into())
+                }
+            }),
+            "table" => Table::with_number(num).and_then(|table| {
+                if !self.contains_table(table) {
+                    None
+                } else {
+                    Some(table.into())
                 }
             }),
             "sig" => SigRef::with_number(num).and_then(|sig| {
@@ -161,6 +175,11 @@ impl SourceMap {
 
     /// Define the heap `entity`.
     pub fn def_heap(&mut self, entity: Heap, loc: Location) -> ParseResult<()> {
+        self.def_entity(entity.into(), loc)
+    }
+
+    /// Define the table `entity`.
+    pub fn def_table(&mut self, entity: Table, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 

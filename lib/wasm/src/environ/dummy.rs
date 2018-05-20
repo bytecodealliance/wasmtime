@@ -1,6 +1,7 @@
 //! "Dummy" environment for testing wasm translation.
 
 use cranelift_codegen::cursor::FuncCursor;
+use cranelift_codegen::ir::immediates::Imm64;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::settings;
@@ -169,7 +170,11 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
     fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
         // Create a static heap whose base address is stored at `vmctx+0`.
-        let gv = func.create_global_value(ir::GlobalValueData::VMContext { offset: 0.into() });
+        let addr = func.create_global_value(ir::GlobalValueData::VMContext { offset: 0.into() });
+        let gv = func.create_global_value(ir::GlobalValueData::Deref {
+            base: addr,
+            offset: 0.into(),
+        });
 
         func.create_heap(ir::HeapData {
             base: gv,
@@ -178,6 +183,29 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             style: ir::HeapStyle::Static {
                 bound: 0x1_0000_0000.into(),
             },
+        })
+    }
+
+    fn make_table(&mut self, func: &mut ir::Function, _index: TableIndex) -> ir::Table {
+        // Create a table whose base address is stored at `vmctx+0`.
+        let base_gv_addr =
+            func.create_global_value(ir::GlobalValueData::VMContext { offset: 0.into() });
+        let base_gv = func.create_global_value(ir::GlobalValueData::Deref {
+            base: base_gv_addr,
+            offset: 0.into(),
+        });
+        let bound_gv_addr =
+            func.create_global_value(ir::GlobalValueData::VMContext { offset: 0.into() });
+        let bound_gv = func.create_global_value(ir::GlobalValueData::Deref {
+            base: bound_gv_addr,
+            offset: 0.into(),
+        });
+
+        func.create_table(ir::TableData {
+            base_gv,
+            min_size: Imm64::new(0),
+            bound_gv,
+            element_size: Imm64::new(i64::from(self.pointer_bytes()) * 2),
         })
     }
 
@@ -204,6 +232,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         mut pos: FuncCursor,
         _table_index: TableIndex,
+        _table: ir::Table,
         _sig_index: SignatureIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,

@@ -7,7 +7,7 @@ use cranelift_codegen::ir::{self, Ebb, Inst, Value};
 use environ::{FuncEnvironment, GlobalVariable};
 use std::collections::HashMap;
 use std::vec::Vec;
-use translation_utils::{FunctionIndex, GlobalIndex, MemoryIndex, SignatureIndex};
+use translation_utils::{FunctionIndex, GlobalIndex, MemoryIndex, SignatureIndex, TableIndex};
 
 /// A control stack frame can be an `if`, a `block` or a `loop`, each one having the following
 /// fields:
@@ -140,6 +140,9 @@ pub struct TranslationState {
     // Map of heaps that have been created by `FuncEnvironment::make_heap`.
     heaps: HashMap<MemoryIndex, ir::Heap>,
 
+    // Map of tables that have been created by `FuncEnvironment::make_table`.
+    tables: HashMap<TableIndex, ir::Table>,
+
     // Map of indirect call signatures that have been created by
     // `FuncEnvironment::make_indirect_sig()`.
     // Stores both the signature reference and the number of WebAssembly arguments
@@ -159,6 +162,7 @@ impl TranslationState {
             reachable: true,
             globals: HashMap::new(),
             heaps: HashMap::new(),
+            tables: HashMap::new(),
             signatures: HashMap::new(),
             functions: HashMap::new(),
         }
@@ -301,6 +305,21 @@ impl TranslationState {
             .heaps
             .entry(index)
             .or_insert_with(|| environ.make_heap(func, index))
+    }
+
+    /// Get the `Table` reference that should be used to access table `index`.
+    /// Create the reference if necessary.
+    pub fn get_table<FE: FuncEnvironment + ?Sized>(
+        &mut self,
+        func: &mut ir::Function,
+        index: u32,
+        environ: &mut FE,
+    ) -> ir::Table {
+        let index = index as TableIndex;
+        *self
+            .tables
+            .entry(index)
+            .or_insert_with(|| environ.make_table(func, index))
     }
 
     /// Get the `SigRef` reference that should be used to make an indirect call with signature
