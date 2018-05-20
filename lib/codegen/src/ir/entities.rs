@@ -172,6 +172,24 @@ impl Heap {
     }
 }
 
+/// A reference to a table.
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Table(u32);
+entity_impl!(Table, "table");
+
+impl Table {
+    /// Create a new table reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<Self> {
+        if n < u32::MAX {
+            Some(Table(n))
+        } else {
+            None
+        }
+    }
+}
+
 /// A reference to any of the entities defined in this module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum AnyEntity {
@@ -195,6 +213,8 @@ pub enum AnyEntity {
     SigRef(SigRef),
     /// A heap.
     Heap(Heap),
+    /// A table.
+    Table(Table),
 }
 
 impl fmt::Display for AnyEntity {
@@ -210,6 +230,7 @@ impl fmt::Display for AnyEntity {
             AnyEntity::FuncRef(r) => r.fmt(f),
             AnyEntity::SigRef(r) => r.fmt(f),
             AnyEntity::Heap(r) => r.fmt(f),
+            AnyEntity::Table(r) => r.fmt(f),
         }
     }
 }
@@ -271,6 +292,12 @@ impl From<SigRef> for AnyEntity {
 impl From<Heap> for AnyEntity {
     fn from(r: Heap) -> Self {
         AnyEntity::Heap(r)
+    }
+}
+
+impl From<Table> for AnyEntity {
+    fn from(r: Table) -> Self {
+        AnyEntity::Table(r)
     }
 }
 

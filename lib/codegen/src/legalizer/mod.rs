@@ -26,11 +26,13 @@ mod globalvalue;
 mod heap;
 mod libcall;
 mod split;
+mod table;
 
 use self::call::expand_call;
 use self::globalvalue::expand_global_value;
 use self::heap::expand_heap_addr;
 use self::libcall::expand_as_libcall;
+use self::table::expand_table_addr;
 
 /// Legalize `inst` for `isa`. Return true if any changes to the code were
 /// made; return false if the instruction was successfully encoded as is.

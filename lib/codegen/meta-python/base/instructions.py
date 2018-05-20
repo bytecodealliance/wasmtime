@@ -221,6 +221,11 @@ call_indirect = Instruction(
 
         Call the function pointed to by `callee` with the given arguments. The
         called function must match the specified signature.
+
+        Note that this is different from WebAssembly's ``call_indirect``; the
+        callee is a native address, rather than a table index. For WebAssembly,
+        :inst:`table_addr` and :inst:`load` are used to obtain a native address
+        from a table.
         """,
         ins=(SIG, callee, args), outs=rvals, is_call=True)
 
@@ -530,6 +535,33 @@ heap_addr = Instruction(
         2. If ``p + Size`` is greater than the heap bound, generate a trap.
         """,
         ins=(H, p, Size), outs=addr)
+
+#
+# WebAssembly bounds-checked table accesses.
+#
+
+TableOffset = TypeVar('TableOffset', 'An unsigned table offset', ints=(32, 64))
+
+T = Operand('T', entities.table)
+p = Operand('p', TableOffset)
+Offset = Operand('Offset', offset32, 'Byte offset from element address')
+
+table_addr = Instruction(
+        'table_addr', r"""
+        Bounds check and compute absolute address of a table entry.
+
+        Verify that the offset ``p`` is in bounds for the table T, and generate
+        an absolute address that is safe to dereference.
+
+        ``Offset`` must be less than the size of a table element.
+
+        1. If ``p`` is not greater than the table bound, return an absolute
+           address corresponding to a byte offset of ``p`` from the table's
+           base address.
+        2. If ``p`` is greater than the table bound, generate a trap.
+        """,
+        ins=(T, p, Offset), outs=addr)
+
 
 #
 # Materializing constants.

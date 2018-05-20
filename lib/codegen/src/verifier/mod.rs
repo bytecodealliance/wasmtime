@@ -349,6 +349,9 @@ impl<'a> Verifier<'a> {
             HeapAddr { heap, .. } => {
                 self.verify_heap(inst, heap)?;
             }
+            TableAddr { table, .. } => {
+                self.verify_table(inst, table)?;
+            }
             RegSpill { dst, .. } => {
                 self.verify_stack_slot(inst, dst)?;
             }
@@ -440,6 +443,14 @@ impl<'a> Verifier<'a> {
     fn verify_heap(&self, inst: Inst, heap: ir::Heap) -> VerifierResult<()> {
         if !self.func.heaps.is_valid(heap) {
             err!(inst, "invalid heap {}", heap)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn verify_table(&self, inst: Inst, table: ir::Table) -> VerifierResult<()> {
+        if !self.func.tables.is_valid(table) {
+            err!(inst, "invalid table {}", table)
         } else {
             Ok(())
         }

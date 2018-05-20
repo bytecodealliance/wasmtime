@@ -82,7 +82,7 @@ fn dynamic_addr(
     }
     pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
 
-    offset_addr(inst, heap, addr_ty, offset, offset_ty, pos.func);
+    compute_addr(inst, heap, addr_ty, offset, offset_ty, pos.func);
 }
 
 /// Expand a `heap_addr` for a static heap.
@@ -134,13 +134,11 @@ fn static_addr(
         pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
     }
 
-    offset_addr(inst, heap, addr_ty, offset, offset_ty, pos.func);
+    compute_addr(inst, heap, addr_ty, offset, offset_ty, pos.func);
 }
 
 /// Emit code for the base address computation of a `heap_addr` instruction.
-///
-///
-fn offset_addr(
+fn compute_addr(
     inst: ir::Inst,
     heap: ir::Heap,
     addr_ty: ir::Type,

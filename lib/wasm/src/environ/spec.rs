@@ -89,6 +89,11 @@ pub trait FuncEnvironment {
         ir::Type::int(u16::from(self.triple().pointer_width().unwrap().bits())).unwrap()
     }
 
+    /// Get the size of a native pointer, in bytes.
+    fn pointer_bytes(&self) -> u8 {
+        self.triple().pointer_width().unwrap().bytes()
+    }
+
     /// Set up the necessary preamble definitions in `func` to access the global variable
     /// identified by `index`.
     ///
@@ -103,6 +108,12 @@ pub trait FuncEnvironment {
     ///
     /// The index space covers both imported and locally declared memories.
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> ir::Heap;
+
+    /// Set up the necessary preamble definitions in `func` to access the table identified
+    /// by `index`.
+    ///
+    /// The index space covers both imported and locally declared tables.
+    fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> ir::Table;
 
     /// Set up a signature definition in the preamble of `func` that can be used for an indirect
     /// call with signature `index`.
@@ -141,6 +152,7 @@ pub trait FuncEnvironment {
         &mut self,
         pos: FuncCursor,
         table_index: TableIndex,
+        table: ir::Table,
         sig_index: SignatureIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,

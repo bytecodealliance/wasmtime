@@ -9,7 +9,8 @@ use cranelift_codegen::ir::types::VOID;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentLoc, Ebb, ExtFuncData, ExternalName, FuncRef, Function,
     GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
-    Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Type, Value, ValueLoc,
+    Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
+    Value, ValueLoc,
 };
 use cranelift_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -183,6 +184,29 @@ impl<'a> Context<'a> {
     fn check_heap(&self, heap: Heap, loc: Location) -> ParseResult<()> {
         if !self.map.contains_heap(heap) {
             err!(loc, "undefined heap {}", heap)
+        } else {
+            Ok(())
+        }
+    }
+
+    // Allocate a table slot.
+    fn add_table(&mut self, table: Table, data: TableData, loc: Location) -> ParseResult<()> {
+        while self.function.tables.next_key().index() <= table.index() {
+            self.function.create_table(TableData {
+                base_gv: GlobalValue::reserved_value(),
+                min_size: Imm64::new(0),
+                bound_gv: GlobalValue::reserved_value(),
+                element_size: Imm64::new(0),
+            });
+        }
+        self.function.tables[table] = data;
+        self.map.def_table(table, loc)
+    }
+
+    // Resolve a reference to a table.
+    fn check_table(&self, table: Table, loc: &Location) -> ParseResult<()> {
+        if !self.map.contains_table(table) {
+            err!(loc, "undefined table {}", table)
         } else {
             Ok(())
         }
@@ -442,6 +466,17 @@ impl<'a> Parser<'a> {
             self.consume();
             if let Some(heap) = Heap::with_number(heap) {
                 return Ok(heap);
+            }
+        }
+        err!(self.loc, err_msg)
+    }
+
+    // Match and consume a table reference.
+    fn match_table(&mut self, err_msg: &str) -> ParseResult<Table> {
+        if let Some(Token::Table(table)) = self.token() {
+            self.consume();
+            if let Some(table) = Table::with_number(table) {
+                return Ok(table);
             }
         }
         err!(self.loc, err_msg)
@@ -1019,6 +1054,11 @@ impl<'a> Parser<'a> {
                     self.parse_heap_decl()
                         .and_then(|(heap, dat)| ctx.add_heap(heap, dat, self.loc))
                 }
+                Some(Token::Table(..)) => {
+                    self.start_gathering_comments();
+                    self.parse_table_decl()
+                        .and_then(|(table, dat)| ctx.add_table(table, dat, self.loc))
+                }
                 Some(Token::SigRef(..)) => {
                     self.start_gathering_comments();
                     self.parse_signature_decl(ctx.unique_isa)
@@ -1129,7 +1169,7 @@ impl<'a> Parser<'a> {
     // heap-style ::= "static" | "dynamic"
     // heap-base ::= GlobalValue(base)
     // heap-attr ::= "min" Imm64(bytes)
-    //             | "max" Imm64(bytes)
+    //             | "bound" Imm64(bytes)
     //             | "guard" Imm64(bytes)
     //
     fn parse_heap_decl(&mut self) -> ParseResult<(Heap, HeapData)> {
@@ -1185,6 +1225,66 @@ impl<'a> Parser<'a> {
         self.claim_gathered_comments(heap);
 
         Ok((heap, data))
+    }
+
+    // Parse a table decl.
+    //
+    // table-decl ::= * Table(table) "=" table-desc
+    // table-desc ::= table-style table-base { "," table-attr }
+    // table-style ::= "dynamic"
+    // table-base ::= GlobalValue(base)
+    // table-attr ::= "min" Imm64(bytes)
+    //              | "bound" Imm64(bytes)
+    //              | "element_size" Imm64(bytes)
+    //
+    fn parse_table_decl(&mut self) -> ParseResult<(Table, TableData)> {
+        let table = self.match_table("expected table number: table«n»")?;
+        self.match_token(Token::Equal, "expected '=' in table declaration")?;
+
+        let style_name = self.match_any_identifier("expected 'static' or 'dynamic'")?;
+
+        // table-desc ::= table-style * table-base { "," table-attr }
+        // table-base ::= * GlobalValue(base)
+        let base = match self.token() {
+            Some(Token::GlobalValue(base_num)) => match GlobalValue::with_number(base_num) {
+                Some(gv) => gv,
+                None => return err!(self.loc, "invalid global value number for table base"),
+            },
+            _ => return err!(self.loc, "expected table base"),
+        };
+        self.consume();
+
+        let mut data = TableData {
+            base_gv: base,
+            min_size: 0.into(),
+            bound_gv: GlobalValue::reserved_value(),
+            element_size: 0.into(),
+        };
+
+        // table-desc ::= * { "," table-attr }
+        while self.optional(Token::Comma) {
+            match self.match_any_identifier("expected table attribute name")? {
+                "min" => {
+                    data.min_size = self.match_imm64("expected integer min size")?;
+                }
+                "bound" => {
+                    data.bound_gv = match style_name {
+                        "dynamic" => self.match_gv("expected gv bound")?,
+                        t => return err!(self.loc, "unknown table style '{}'", t),
+                    };
+                }
+                "element_size" => {
+                    data.element_size = self.match_imm64("expected integer element size")?;
+                }
+                t => return err!(self.loc, "unknown table attribute '{}'", t),
+            }
+        }
+
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(table);
+
+        Ok((table, data))
     }
 
     // Parse a signature decl.
@@ -2153,6 +2253,20 @@ impl<'a> Parser<'a> {
                     heap,
                     arg,
                     imm,
+                }
+            }
+            InstructionFormat::TableAddr => {
+                let table = self.match_table("expected table identifier")?;
+                ctx.check_table(table, &self.loc)?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let arg = self.match_value("expected SSA value table address")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let offset = self.optional_offset32()?;
+                InstructionData::TableAddr {
+                    opcode,
+                    table,
+                    arg,
+                    offset,
                 }
             }
             InstructionFormat::Load => {

@@ -176,6 +176,12 @@ pub enum SerInstData {
         heap: String,
         imm: String,
     },
+    TableAddr {
+        opcode: String,
+        arg: String,
+        table: String,
+        offset: String,
+    },
     RegMove {
         opcode: String,
         arg: String,
@@ -571,6 +577,17 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             arg: arg.to_string(),
             heap: heap.to_string(),
             imm: imm.to_string(),
+        },
+        InstructionData::TableAddr {
+            opcode,
+            arg,
+            table,
+            offset,
+        } => SerInstData::TableAddr {
+            opcode: opcode.to_string(),
+            arg: arg.to_string(),
+            table: table.to_string(),
+            offset: offset.to_string(),
         },
         InstructionData::RegMove {
             opcode,

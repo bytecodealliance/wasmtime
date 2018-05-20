@@ -36,6 +36,7 @@ pub enum Token<'a> {
     StackSlot(u32),       // ss3
     GlobalValue(u32),     // gv3
     Heap(u32),            // heap2
+    Table(u32),           // table2
     JumpTable(u32),       // jt2
     FuncRef(u32),         // fn2
     SigRef(u32),          // sig2
@@ -340,6 +341,7 @@ impl<'a> Lexer<'a> {
             "ss" => Some(Token::StackSlot(number)),
             "gv" => Some(Token::GlobalValue(number)),
             "heap" => Some(Token::Heap(number)),
+            "table" => Some(Token::Table(number)),
             "jt" => Some(Token::JumpTable(number)),
             "fn" => Some(Token::FuncRef(number)),
             "sig" => Some(Token::SigRef(number)),

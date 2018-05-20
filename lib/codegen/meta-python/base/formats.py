@@ -11,7 +11,7 @@ from cdsl.operands import VALUE, VARIABLE_ARGS
 from .immediates import imm64, uimm8, uimm32, ieee32, ieee64, offset32
 from .immediates import boolean, intcc, floatcc, memflags, regunit, trapcode
 from . import entities
-from .entities import ebb, sig_ref, func_ref, stack_slot, heap
+from .entities import ebb, sig_ref, func_ref, stack_slot, heap, table
 
 Unary = InstructionFormat(VALUE)
 UnaryImm = InstructionFormat(imm64)
@@ -66,6 +66,9 @@ StackStore = InstructionFormat(VALUE, stack_slot, offset32)
 
 # Accessing a WebAssembly heap.
 HeapAddr = InstructionFormat(heap, VALUE, uimm32)
+
+# Accessing a WebAssembly table.
+TableAddr = InstructionFormat(table, VALUE, offset32)
 
 RegMove = InstructionFormat(VALUE, ('src', regunit), ('dst', regunit))
 CopySpecial = InstructionFormat(('src', regunit), ('dst', regunit))

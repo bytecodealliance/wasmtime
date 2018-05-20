@@ -377,10 +377,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // `index` is the index of the function's signature and `table_index` is the index of
             // the table to search the function in.
             let (sigref, num_args) = state.get_indirect_sig(builder.func, index, environ);
+            let table = state.get_table(builder.func, table_index, environ);
             let callee = state.pop1();
             let call = environ.translate_call_indirect(
                 builder.cursor(),
                 table_index as TableIndex,
+                table,
                 index as SignatureIndex,
                 sigref,
                 callee,
