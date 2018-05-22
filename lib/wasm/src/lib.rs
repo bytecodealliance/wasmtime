@@ -30,7 +30,6 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(not(feature = "std"))]
-#[macro_use]
 extern crate alloc;
 
 #[allow(unused_extern_crates)]
@@ -65,6 +64,8 @@ mod std {
     pub use alloc::vec;
     pub use alloc::string;
     pub use core::{u32, i32, str, cmp};
+    pub use core::fmt;
+    pub use core::option;
     pub mod collections {
         pub use hashmap_core::{HashMap, map as hash_map};
     }
