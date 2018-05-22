@@ -7,13 +7,6 @@ use verifier;
 /// When Cretonne fails to compile a function, it will return one of these error codes.
 #[derive(Fail, Debug, PartialEq, Eq)]
 pub enum CtonError {
-    /// The input is invalid.
-    ///
-    /// This error code is used by a WebAssembly translator when it encounters invalid WebAssembly
-    /// code. This should never happen for validated WebAssembly code.
-    #[fail(display = "Invalid input code")]
-    InvalidInput,
-
     /// An IR verifier error.
     ///
     /// This always represents a bug, either in the code that generated IR for Cretonne, or a bug

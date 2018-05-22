@@ -3,10 +3,10 @@
 use cretonne_codegen::cursor::FuncCursor;
 use cretonne_codegen::ir::{self, InstBuilder};
 use cretonne_codegen::settings::Flags;
-use std::string::String;
 use std::vec::Vec;
 use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
                         Table, TableIndex};
+use wasmparser::BinaryReaderError;
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -22,6 +22,49 @@ pub enum GlobalValue {
         ty: ir::Type,
     },
 }
+
+/// A WebAssembly translation error.
+///
+/// When a WebAssembly function can't be translated, one of these error codes will be returned
+/// to describe the failure.
+#[derive(Fail, Debug, PartialEq, Eq)]
+pub enum WasmError {
+    /// The input WebAssembly code is invalid.
+    ///
+    /// This error code is used by a WebAssembly translator when it encounters invalid WebAssembly
+    /// code. This should never happen for validated WebAssembly code.
+    #[fail(display = "Invalid input WebAssembly code at offset {}: {}", _1, _0)]
+    InvalidWebAssembly {
+        message: &'static str,
+        offset: usize,
+    },
+
+    /// A feature used by the WebAssembly code is not supported by the embedding environment.
+    ///
+    /// Embedding environments may have their own limitations and feature restrictions.
+    #[fail(display = "Unsupported feature: {}", _0)]
+    Unsupported(&'static str),
+
+    /// An implementation limit was exceeded.
+    ///
+    /// Cretonne can compile very large and complicated functions, but the [implementation has
+    /// limits][limits] that cause compilation to fail when they are exceeded.
+    ///
+    /// [limits]: https://cretonne.readthedocs.io/en/latest/langref.html#implementation-limits
+    #[fail(display = "Implementation limit exceeded")]
+    ImplLimitExceeded,
+}
+
+impl WasmError {
+    /// Convert from a `BinaryReaderError` to a `WasmError`.
+    pub fn from_binary_reader_error(e: BinaryReaderError) -> Self {
+        let BinaryReaderError { message, offset } = e;
+        WasmError::InvalidWebAssembly { message, offset }
+    }
+}
+
+/// A convenient alias for a `Result` that uses `WasmError` as the error type.
+pub type WasmResult<T> = Result<T, WasmError>;
 
 /// Environment affecting the translation of a single WebAssembly function.
 ///
@@ -99,7 +142,7 @@ pub trait FuncEnvironment {
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> ir::Inst;
+    ) -> WasmResult<ir::Inst>;
 
     /// Translate a `call` WebAssembly instruction at `pos`.
     ///
@@ -114,8 +157,8 @@ pub trait FuncEnvironment {
         _callee_index: FunctionIndex,
         callee: ir::FuncRef,
         call_args: &[ir::Value],
-    ) -> ir::Inst {
-        pos.ins().call(callee, call_args)
+    ) -> WasmResult<ir::Inst> {
+        Ok(pos.ins().call(callee, call_args))
     }
 
     /// Translate a `grow_memory` WebAssembly instruction.
@@ -132,7 +175,7 @@ pub trait FuncEnvironment {
         index: MemoryIndex,
         heap: ir::Heap,
         val: ir::Value,
-    ) -> ir::Value;
+    ) -> WasmResult<ir::Value>;
 
     /// Translates a `current_memory` WebAssembly instruction.
     ///
@@ -145,7 +188,7 @@ pub trait FuncEnvironment {
         pos: FuncCursor,
         index: MemoryIndex,
         heap: ir::Heap,
-    ) -> ir::Value;
+    ) -> WasmResult<ir::Value>;
 
     /// Emit code at the beginning of every wasm loop.
     ///
@@ -229,5 +272,5 @@ pub trait ModuleEnvironment<'data> {
     fn declare_start_func(&mut self, index: FunctionIndex);
 
     /// Provides the contents of a function body.
-    fn define_function_body(&mut self, body_bytes: &'data [u8]) -> Result<(), String>;
+    fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()>;
 }

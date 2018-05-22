@@ -27,7 +27,7 @@ use cretonne_codegen::ir::types::*;
 use cretonne_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
 use cretonne_codegen::packed_option::ReservedValue;
 use cretonne_frontend::{FunctionBuilder, Variable};
-use environ::{FuncEnvironment, GlobalValue};
+use environ::{FuncEnvironment, GlobalValue, WasmResult};
 use state::{ControlStackFrame, TranslationState};
 use std::collections::{hash_map, HashMap};
 use std::vec::Vec;
@@ -45,13 +45,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
     environ: &mut FE,
-) {
+) -> WasmResult<()> {
     if !state.reachable {
-        return translate_unreachable_operator(&op, builder, state);
+        return Ok(translate_unreachable_operator(&op, builder, state));
     }
 
     // This big match treats all Wasm code operators.
-    match op {
+    Ok(match op {
         /********************************** Locals ****************************************
          *  `get_local` and `set_local` are treated as non-SSA variables and will completely
          *  disappear in the Cretonne Code
@@ -362,7 +362,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 function_index as FunctionIndex,
                 fref,
                 state.peekn(num_args),
-            );
+            )?;
             state.popn(num_args);
             state.pushn(builder.inst_results(call));
         }
@@ -378,7 +378,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 sigref,
                 callee,
                 state.peekn(num_args),
-            );
+            )?;
             state.popn(num_args);
             state.pushn(builder.inst_results(call));
         }
@@ -397,7 +397,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 heap_index,
                 heap,
                 val,
-            ))
+            )?)
         }
         Operator::CurrentMemory { reserved } => {
             let heap_index = reserved as MemoryIndex;
@@ -406,7 +406,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder.cursor(),
                 heap_index,
                 heap,
-            ));
+            )?);
         }
         /******************************* Load instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cretonne.
@@ -857,7 +857,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I64AtomicRmw32UCmpxchg { .. } => {
             panic!("proposed thread operators not yet supported");
         }
-    }
+    })
 }
 
 // Clippy warns us of some fields we are deliberately ignoring

@@ -105,7 +105,9 @@ fn handle_module(
     }
 
     let mut dummy_environ = DummyEnvironment::with_flags(fisa.flags.clone());
-    translate_module(&data, &mut dummy_environ)?;
+    translate_module(&data, &mut dummy_environ).map_err(
+        |e| e.to_string(),
+    )?;
 
     terminal.fg(term::color::GREEN).unwrap();
     vprintln!(flag_verbose, "ok");

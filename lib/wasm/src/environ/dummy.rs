@@ -4,7 +4,7 @@ use cretonne_codegen::cursor::FuncCursor;
 use cretonne_codegen::ir::types::*;
 use cretonne_codegen::ir::{self, InstBuilder};
 use cretonne_codegen::settings;
-use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment};
+use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment, WasmResult};
 use func_translator::FuncTranslator;
 use std::string::String;
 use std::vec::Vec;
@@ -196,7 +196,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> ir::Inst {
+    ) -> WasmResult<ir::Inst> {
         // Pass the current function's vmctx parameter on to the callee.
         let vmctx = pos.func
             .special_param(ir::ArgumentPurpose::VMContext)
@@ -224,9 +224,11 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         args.extend(call_args.iter().cloned(), &mut pos.func.dfg.value_lists);
         args.push(vmctx, &mut pos.func.dfg.value_lists);
 
-        pos.ins()
-            .CallIndirect(ir::Opcode::CallIndirect, VOID, sig_ref, args)
-            .0
+        Ok(
+            pos.ins()
+                .CallIndirect(ir::Opcode::CallIndirect, VOID, sig_ref, args)
+                .0,
+        )
     }
 
     fn translate_call(
@@ -235,7 +237,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _callee_index: FunctionIndex,
         callee: ir::FuncRef,
         call_args: &[ir::Value],
-    ) -> ir::Inst {
+    ) -> WasmResult<ir::Inst> {
         // Pass the current function's vmctx parameter on to the callee.
         let vmctx = pos.func
             .special_param(ir::ArgumentPurpose::VMContext)
@@ -247,7 +249,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         args.extend(call_args.iter().cloned(), &mut pos.func.dfg.value_lists);
         args.push(vmctx, &mut pos.func.dfg.value_lists);
 
-        pos.ins().Call(ir::Opcode::Call, VOID, callee, args).0
+        Ok(pos.ins().Call(ir::Opcode::Call, VOID, callee, args).0)
     }
 
     fn translate_grow_memory(
@@ -256,8 +258,8 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _index: MemoryIndex,
         _heap: ir::Heap,
         _val: ir::Value,
-    ) -> ir::Value {
-        pos.ins().iconst(I32, -1)
+    ) -> WasmResult<ir::Value> {
+        Ok(pos.ins().iconst(I32, -1))
     }
 
     fn translate_current_memory(
@@ -265,8 +267,8 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         mut pos: FuncCursor,
         _index: MemoryIndex,
         _heap: ir::Heap,
-    ) -> ir::Value {
-        pos.ins().iconst(I32, -1)
+    ) -> WasmResult<ir::Value> {
+        Ok(pos.ins().iconst(I32, -1))
     }
 }
 
@@ -385,7 +387,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info.start_func = Some(func_index);
     }
 
-    fn define_function_body(&mut self, body_bytes: &'data [u8]) -> Result<(), String> {
+    fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()> {
         let func = {
             let mut func_environ = DummyFuncEnvironment::new(&self.info);
             let function_index = self.get_num_func_imports() + self.info.function_bodies.len();
@@ -393,9 +395,11 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             let sig = func_environ.vmctx_sig(self.get_func_type(function_index));
             let mut func = ir::Function::with_name_signature(name, sig);
             let reader = wasmparser::BinaryReader::new(body_bytes);
-            self.trans
-                .translate_from_reader(reader, &mut func, &mut func_environ)
-                .map_err(|e| format!("{}", e))?;
+            self.trans.translate_from_reader(
+                reader,
+                &mut func,
+                &mut func_environ,
+            )?;
             func
         };
         self.func_bytecode_sizes.push(body_bytes.len());
