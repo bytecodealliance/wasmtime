@@ -7,10 +7,9 @@
 use code_translator::translate_operator;
 use cretonne_codegen::entity::EntityRef;
 use cretonne_codegen::ir::{self, Ebb, InstBuilder};
-use cretonne_codegen::result::{CtonError, CtonResult};
 use cretonne_codegen::timing;
 use cretonne_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use environ::FuncEnvironment;
+use environ::{FuncEnvironment, WasmError, WasmResult};
 use state::TranslationState;
 use wasmparser::{self, BinaryReader};
 
@@ -56,7 +55,7 @@ impl FuncTranslator {
         code: &[u8],
         func: &mut ir::Function,
         environ: &mut FE,
-    ) -> CtonResult {
+    ) -> WasmResult<()> {
         self.translate_from_reader(BinaryReader::new(code), func, environ)
     }
 
@@ -66,7 +65,7 @@ impl FuncTranslator {
         mut reader: BinaryReader,
         func: &mut ir::Function,
         environ: &mut FE,
-    ) -> CtonResult {
+    ) -> WasmResult<()> {
         let _tt = timing::wasm_translate_function();
         dbg!(
             "translate({} bytes, {}{})",
@@ -134,17 +133,17 @@ fn parse_local_decls(
     reader: &mut BinaryReader,
     builder: &mut FunctionBuilder<Variable>,
     num_params: usize,
-) -> CtonResult {
+) -> WasmResult<()> {
     let mut next_local = num_params;
-    let local_count = reader.read_local_count().map_err(
-        |_| CtonError::InvalidInput,
-    )?;
+    let local_count = reader.read_local_count().map_err(|e| {
+        WasmError::from_binary_reader_error(e)
+    })?;
 
     let mut locals_total = 0;
     for _ in 0..local_count {
         builder.set_srcloc(cur_srcloc(reader));
-        let (count, ty) = reader.read_local_decl(&mut locals_total).map_err(|_| {
-            CtonError::InvalidInput
+        let (count, ty) = reader.read_local_decl(&mut locals_total).map_err(|e| {
+            WasmError::from_binary_reader_error(e)
         })?;
         declare_locals(builder, count, ty, &mut next_local);
     }
@@ -189,15 +188,17 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
     environ: &mut FE,
-) -> CtonResult {
+) -> WasmResult<()> {
     // The control stack is initialized with a single block representing the whole function.
     debug_assert_eq!(state.control_stack.len(), 1, "State not initialized");
 
     // Keep going until the final `End` operator which pops the outermost block.
     while !state.control_stack.is_empty() {
         builder.set_srcloc(cur_srcloc(&reader));
-        let op = reader.read_operator().map_err(|_| CtonError::InvalidInput)?;
-        translate_operator(op, builder, state, environ);
+        let op = reader.read_operator().map_err(|e| {
+            WasmError::from_binary_reader_error(e)
+        })?;
+        translate_operator(op, builder, state, environ)?;
     }
 
     // The final `End` operator left us in the exit block where we need to manually add a return

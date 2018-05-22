@@ -1,14 +1,12 @@
 //! Translation skeleton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
 use cretonne_codegen::timing;
-use environ::ModuleEnvironment;
+use environ::{ModuleEnvironment, WasmError, WasmResult};
 use sections_translator::{parse_data_section, parse_elements_section, parse_export_section,
                           parse_function_section, parse_function_signatures, parse_global_section,
                           parse_import_section, parse_memory_section, parse_start_section,
-                          parse_table_section, SectionParsingError};
-use wasmparser::{BinaryReaderError, Parser, ParserInput, ParserState, SectionCode, WasmDecoder};
-
-use std::string::String;
+                          parse_table_section};
+use wasmparser::{Parser, ParserInput, ParserState, SectionCode, WasmDecoder};
 
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cretonne IR
 /// [`Function`](../codegen/ir/function/struct.Function.html).
@@ -17,13 +15,13 @@ use std::string::String;
 pub fn translate_module<'data>(
     data: &'data [u8],
     environ: &mut ModuleEnvironment<'data>,
-) -> Result<(), String> {
+) -> WasmResult<()> {
     let _tt = timing::wasm_translate_module();
     let mut parser = Parser::new(data);
     match *parser.read() {
         ParserState::BeginWasm { .. } => {}
-        ParserState::Error(BinaryReaderError { message, offset }) => {
-            return Err(format!("at offset {}: {}", offset, message));
+        ParserState::Error(e) => {
+            return Err(WasmError::from_binary_reader_error(e));
         }
         ref s => panic!("modules should begin properly: {:?}", s),
     }
@@ -31,83 +29,38 @@ pub fn translate_module<'data>(
     loop {
         match *parser.read_with_input(next_input) {
             ParserState::BeginSection { code: SectionCode::Type, .. } => {
-                match parse_function_signatures(&mut parser, environ) {
-                    Ok(()) => (),
-                    Err(SectionParsingError::WrongSectionContent(s)) => {
-                        return Err(format!("wrong content in the type section: {}", s))
-                    }
-                };
+                parse_function_signatures(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Import, .. } => {
-                match parse_import_section(&mut parser, environ) {
-                    Ok(()) => {}
-                    Err(SectionParsingError::WrongSectionContent(s)) => {
-                        return Err(format!("wrong content in the import section: {}", s))
-                    }
-                }
+                parse_import_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Function, .. } => {
-                match parse_function_section(&mut parser, environ) {
-                    Ok(()) => {}
-                    Err(SectionParsingError::WrongSectionContent(s)) => {
-                        return Err(format!("wrong content in the function section: {}", s))
-                    }
-                }
+                parse_function_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Table, .. } => {
-                match parse_table_section(&mut parser, environ) {
-                    Ok(()) => (),
-                    Err(SectionParsingError::WrongSectionContent(s)) => {
-                        return Err(format!("wrong content in the table section: {}", s))
-                    }
-                }
+                parse_table_section(&mut parser, environ)?;
             }
             ParserState::BeginSection { code: SectionCode::Memory, .. } => {
-                match parse_memory_section(&mut parser, environ) {
-                    Ok(()) => {}
-                    Err(SectionParsingError::WrongSectionContent(s)) => {
-                        return Err(format!("wrong content in the memory section: {}", s))
-                    }
-                }
+                parse_memory_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Global, .. } => {
-                match parse_global_section(&mut parser, environ) {
-                    Ok(()) => {}
-                    Err(SectionParsingError::WrongSectionContent(s)) => {
-                        return Err(format!("wrong content in the global section: {}", s))
-                    }
-                }
+                parse_global_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Export, .. } => {
-                match parse_export_section(&mut parser, environ) {
-                    Ok(()) => {}
-                    Err(SectionParsingError::WrongSectionContent(s)) => {
-                        return Err(format!("wrong content in the export section: {}", s))
-                    }
-                }
+                parse_export_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Start, .. } => {
-                match parse_start_section(&mut parser, environ) {
-                    Ok(()) => (),
-                    Err(SectionParsingError::WrongSectionContent(s)) => {
-                        return Err(format!("wrong content in the start section: {}", s))
-                    }
-                }
+                parse_start_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Element, .. } => {
-                match parse_elements_section(&mut parser, environ) {
-                    Ok(()) => (),
-                    Err(SectionParsingError::WrongSectionContent(s)) => {
-                        return Err(format!("wrong content in the element section: {}", s))
-                    }
-                }
+                parse_elements_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
             ParserState::BeginSection { code: SectionCode::Code, .. } => {
@@ -119,18 +72,14 @@ pub fn translate_module<'data>(
             }
             ParserState::EndWasm => return Ok(()),
             ParserState::BeginSection { code: SectionCode::Data, .. } => {
-                match parse_data_section(&mut parser, environ) {
-                    Ok(()) => (),
-                    Err(SectionParsingError::WrongSectionContent(s)) => {
-                        return Err(format!("wrong content in the data section: {}", s))
-                    }
-                }
+                parse_data_section(&mut parser, environ)?;
             }
             ParserState::BeginSection { code: SectionCode::Custom { .. }, .. } => {
                 // Ignore unknown custom sections.
                 next_input = ParserInput::SkipSection;
             }
-            _ => return Err(String::from("wrong content in the preamble")),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            _ => panic!("wrong content in the preamble"),
         };
     }
     // At this point we've entered the code section
@@ -138,25 +87,21 @@ pub fn translate_module<'data>(
         match *parser.read() {
             ParserState::BeginFunctionBody { .. } => {}
             ParserState::EndSection => break,
-            _ => return Err(String::from("wrong content in code section")),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("wrong content in code section: {:?}", s),
         }
         let mut reader = parser.create_binary_reader();
         let size = reader.bytes_remaining();
         environ.define_function_body(
             reader.read_bytes(size).map_err(|e| {
-                format!("at offset {}: {}", e.offset, e.message)
+                WasmError::from_binary_reader_error(e)
             })?,
         )?;
     }
     loop {
         match *parser.read() {
             ParserState::BeginSection { code: SectionCode::Data, .. } => {
-                match parse_data_section(&mut parser, environ) {
-                    Ok(()) => (),
-                    Err(SectionParsingError::WrongSectionContent(s)) => {
-                        return Err(format!("wrong content in the data section: {}", s))
-                    }
-                }
+                parse_data_section(&mut parser, environ)?;
             }
             ParserState::EndWasm => break,
             _ => (),

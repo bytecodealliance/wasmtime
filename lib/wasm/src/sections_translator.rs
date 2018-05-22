@@ -8,9 +8,8 @@
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
 use cretonne_codegen::ir::{self, AbiParam, Signature};
-use environ::ModuleEnvironment;
+use environ::{ModuleEnvironment, WasmError, WasmResult};
 use std::str::from_utf8;
-use std::string::String;
 use std::vec::Vec;
 use translation_utils::{type_to_type, FunctionIndex, Global, GlobalIndex, GlobalInit, Memory,
                         MemoryIndex, SignatureIndex, Table, TableElementType, TableIndex};
@@ -18,15 +17,11 @@ use wasmparser;
 use wasmparser::{ExternalKind, FuncType, ImportSectionEntryType, MemoryType, Operator, Parser,
                  ParserState, WasmDecoder};
 
-pub enum SectionParsingError {
-    WrongSectionContent(String),
-}
-
 /// Reads the Type Section of the wasm module and returns the corresponding function signatures.
 pub fn parse_function_signatures(
     parser: &mut Parser,
     environ: &mut ModuleEnvironment,
-) -> Result<(), SectionParsingError> {
+) -> WasmResult<()> {
     loop {
         match *parser.read() {
             ParserState::EndSection => break,
@@ -50,7 +45,8 @@ pub fn parse_function_signatures(
                 }));
                 environ.declare_signature(&sig);
             }
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         }
     }
     Ok(())
@@ -60,7 +56,7 @@ pub fn parse_function_signatures(
 pub fn parse_import_section<'data>(
     parser: &mut Parser<'data>,
     environ: &mut ModuleEnvironment<'data>,
-) -> Result<(), SectionParsingError> {
+) -> WasmResult<()> {
     loop {
         match *parser.read() {
             ParserState::ImportSectionEntry {
@@ -110,7 +106,8 @@ pub fn parse_import_section<'data>(
                 })
             }
             ParserState::EndSection => break,
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
     }
     Ok(())
@@ -120,14 +117,15 @@ pub fn parse_import_section<'data>(
 pub fn parse_function_section(
     parser: &mut Parser,
     environ: &mut ModuleEnvironment,
-) -> Result<(), SectionParsingError> {
+) -> WasmResult<()> {
     loop {
         match *parser.read() {
             ParserState::FunctionSectionEntry(sigindex) => {
                 environ.declare_func_type(sigindex as SignatureIndex);
             }
             ParserState::EndSection => break,
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
     }
     Ok(())
@@ -137,7 +135,7 @@ pub fn parse_function_section(
 pub fn parse_export_section<'data>(
     parser: &mut Parser<'data>,
     environ: &mut ModuleEnvironment<'data>,
-) -> Result<(), SectionParsingError> {
+) -> WasmResult<()> {
     loop {
         match *parser.read() {
             ParserState::ExportSectionEntry {
@@ -158,24 +156,23 @@ pub fn parse_export_section<'data>(
                 }
             }
             ParserState::EndSection => break,
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
     }
     Ok(())
 }
 
 /// Retrieves the start function index from the start section
-pub fn parse_start_section(
-    parser: &mut Parser,
-    environ: &mut ModuleEnvironment,
-) -> Result<(), SectionParsingError> {
+pub fn parse_start_section(parser: &mut Parser, environ: &mut ModuleEnvironment) -> WasmResult<()> {
     loop {
         match *parser.read() {
             ParserState::StartSectionEntry(index) => {
                 environ.declare_start_func(index as FunctionIndex);
             }
             ParserState::EndSection => break,
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
     }
     Ok(())
@@ -185,7 +182,7 @@ pub fn parse_start_section(
 pub fn parse_memory_section(
     parser: &mut Parser,
     environ: &mut ModuleEnvironment,
-) -> Result<(), SectionParsingError> {
+) -> WasmResult<()> {
     loop {
         match *parser.read() {
             ParserState::MemorySectionEntry(ref ty) => {
@@ -196,7 +193,8 @@ pub fn parse_memory_section(
                 });
             }
             ParserState::EndSection => break,
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
     }
     Ok(())
@@ -206,16 +204,18 @@ pub fn parse_memory_section(
 pub fn parse_global_section(
     parser: &mut Parser,
     environ: &mut ModuleEnvironment,
-) -> Result<(), SectionParsingError> {
+) -> WasmResult<()> {
     loop {
         let (content_type, mutability) = match *parser.read() {
             ParserState::BeginGlobalSectionEntry(ref ty) => (ty.content_type, ty.mutable),
             ParserState::EndSection => break,
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
         match *parser.read() {
             ParserState::BeginInitExpressionBody => (),
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         }
         let initializer = match *parser.read() {
             ParserState::InitExpressionOperator(Operator::I32Const { value }) => {
@@ -233,11 +233,13 @@ pub fn parse_global_section(
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
                 GlobalInit::GlobalRef(global_index as GlobalIndex)
             }
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
         match *parser.read() {
             ParserState::EndInitExpressionBody => (),
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         }
         let global = Global {
             ty: type_to_type(&content_type).unwrap(),
@@ -247,7 +249,8 @@ pub fn parse_global_section(
         environ.declare_global(global);
         match *parser.read() {
             ParserState::EndGlobalSectionEntry => (),
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         }
     }
     Ok(())
@@ -256,16 +259,18 @@ pub fn parse_global_section(
 pub fn parse_data_section<'data>(
     parser: &mut Parser<'data>,
     environ: &mut ModuleEnvironment<'data>,
-) -> Result<(), SectionParsingError> {
+) -> WasmResult<()> {
     loop {
         let memory_index = match *parser.read() {
             ParserState::BeginDataSectionEntry(memory_index) => memory_index,
             ParserState::EndSection => break,
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
         match *parser.read() {
             ParserState::BeginInitExpressionBody => (),
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
         let (base, offset) = match *parser.read() {
             ParserState::InitExpressionOperator(Operator::I32Const { value }) => {
@@ -278,22 +283,26 @@ pub fn parse_data_section<'data>(
                     _ => panic!("should not happen"),
                 }
             }
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
         match *parser.read() {
             ParserState::EndInitExpressionBody => (),
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
         match *parser.read() {
             ParserState::BeginDataSectionEntryBody(_) => (),
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
         let mut running_offset = offset;
         loop {
             let data = match *parser.read() {
                 ParserState::DataSectionEntryBodyChunk(data) => data,
                 ParserState::EndDataSectionEntryBody => break,
-                ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+                ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+                ref s => panic!("unexpected section content: {:?}", s),
             };
             environ.declare_data_initialization(
                 memory_index as MemoryIndex,
@@ -305,17 +314,15 @@ pub fn parse_data_section<'data>(
         }
         match *parser.read() {
             ParserState::EndDataSectionEntry => (),
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
     }
     Ok(())
 }
 
 /// Retrieves the tables from the table section
-pub fn parse_table_section(
-    parser: &mut Parser,
-    environ: &mut ModuleEnvironment,
-) -> Result<(), SectionParsingError> {
+pub fn parse_table_section(parser: &mut Parser, environ: &mut ModuleEnvironment) -> WasmResult<()> {
     loop {
         match *parser.read() {
             ParserState::TableSectionEntry(ref table) => {
@@ -329,7 +336,8 @@ pub fn parse_table_section(
                 })
             }
             ParserState::EndSection => break,
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
     }
     Ok(())
@@ -339,16 +347,18 @@ pub fn parse_table_section(
 pub fn parse_elements_section(
     parser: &mut Parser,
     environ: &mut ModuleEnvironment,
-) -> Result<(), SectionParsingError> {
+) -> WasmResult<()> {
     loop {
         let table_index = match *parser.read() {
             ParserState::BeginElementSectionEntry(table_index) => table_index as TableIndex,
             ParserState::EndSection => break,
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
         match *parser.read() {
             ParserState::BeginInitExpressionBody => (),
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
         let (base, offset) = match *parser.read() {
             ParserState::InitExpressionOperator(Operator::I32Const { value }) => {
@@ -361,11 +371,13 @@ pub fn parse_elements_section(
                     _ => panic!("should not happen"),
                 }
             }
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
         match *parser.read() {
             ParserState::EndInitExpressionBody => (),
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
         match *parser.read() {
             ParserState::ElementSectionEntryBody(ref elements) => {
@@ -373,11 +385,13 @@ pub fn parse_elements_section(
                     elements.iter().map(|&x| x as FunctionIndex).collect();
                 environ.declare_table_elements(table_index, base, offset, elems)
             }
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
         match *parser.read() {
             ParserState::EndElementSectionEntry => (),
-            ref s => return Err(SectionParsingError::WrongSectionContent(format!("{:?}", s))),
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("unexpected section content: {:?}", s),
         };
     }
     Ok(())

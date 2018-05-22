@@ -42,6 +42,10 @@ extern crate cretonne_codegen;
 extern crate cretonne_frontend;
 extern crate wasmparser;
 
+extern crate failure;
+#[macro_use]
+extern crate failure_derive;
+
 mod code_translator;
 mod environ;
 mod func_translator;
