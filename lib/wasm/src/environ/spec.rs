@@ -35,7 +35,9 @@ pub enum WasmError {
     /// code. This should never happen for validated WebAssembly code.
     #[fail(display = "Invalid input WebAssembly code at offset {}: {}", _1, _0)]
     InvalidWebAssembly {
+        /// A string describing the validation error.
         message: &'static str,
+        /// The bytecode offset where the error occurred.
         offset: usize,
     },
 

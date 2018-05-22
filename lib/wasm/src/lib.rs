@@ -53,7 +53,8 @@ mod sections_translator;
 mod state;
 mod translation_utils;
 
-pub use environ::{DummyEnvironment, FuncEnvironment, GlobalValue, ModuleEnvironment};
+pub use environ::{DummyEnvironment, FuncEnvironment, GlobalValue, ModuleEnvironment, WasmError,
+                  WasmResult};
 pub use func_translator::FuncTranslator;
 pub use module_translator::translate_module;
 pub use translation_utils::{FunctionIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
