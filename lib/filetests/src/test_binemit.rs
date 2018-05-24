@@ -79,11 +79,11 @@ impl binemit::CodeSink for TextSink {
         name: &ir::ExternalName,
         addend: binemit::Addend,
     ) {
-        write!(self.text, "{}({}", reloc, name,).unwrap();
+        write!(self.text, "{}({}", reloc, name).unwrap();
         if addend != 0 {
-            write!(self.text, "{:+}", addend,).unwrap();
+            write!(self.text, "{:+}", addend).unwrap();
         }
-        write!(self.text, ") ",).unwrap();
+        write!(self.text, ") ").unwrap();
     }
 
     fn reloc_jt(&mut self, reloc: binemit::Reloc, jt: ir::JumpTable) {
