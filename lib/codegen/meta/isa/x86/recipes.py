@@ -4,8 +4,10 @@ x86 Encoding recipes.
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
 from cdsl.predicates import IsSignedInt, IsEqual, Or
+from cdsl.predicates import IsZero32BitFloat, IsZero64BitFloat
 from cdsl.registers import RegClass
-from base.formats import Unary, UnaryImm, UnaryBool, Binary, BinaryImm
+from base.formats import Unary, UnaryIeee32, UnaryIeee64, UnaryImm, UnaryBool
+from base.formats import Binary, BinaryImm
 from base.formats import MultiAry, NullAry
 from base.formats import Trap, Call, CallIndirect, Store, Load
 from base.formats import IntCompare, IntCompareImm, FloatCompare
@@ -543,6 +545,24 @@ pu_iq = TailRecipe(
         let imm: i64 = imm.into();
         sink.put8(imm as u64);
         ''')
+
+# XX /n Unary with floating point 32-bit immediate equal to zero.
+f32imm_z = TailRecipe(
+    'f32imm_z', UnaryIeee32, size=1, ins=(), outs=FPR,
+    instp=IsZero32BitFloat(UnaryIeee32.imm),
+    emit='''
+        PUT_OP(bits, rex2(out_reg0, out_reg0), sink);
+        modrm_rr(out_reg0, out_reg0, sink);
+    ''')
+
+# XX /n Unary with floating point 64-bit immediate equal to zero.
+f64imm_z = TailRecipe(
+    'f64imm_z', UnaryIeee64, size=1, ins=(), outs=FPR,
+    instp=IsZero64BitFloat(UnaryIeee64.imm),
+    emit='''
+        PUT_OP(bits, rex2(out_reg0, out_reg0), sink);
+        modrm_rr(out_reg0, out_reg0, sink);
+    ''')
 
 pushq = TailRecipe(
     'pushq', Unary, size=0, ins=GPR, outs=(),

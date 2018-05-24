@@ -262,6 +262,38 @@ class IsEqual(FieldPredicate):
         self.value = value
 
 
+class IsZero32BitFloat(FieldPredicate):
+    """
+    Instruction predicate that checks if an immediate instruction format field
+    is equal to zero.
+
+    :param field: `FormatField` to be checked.
+    :param value: The constant value to check.
+    """
+
+    def __init__(self, field):
+        # type: (FormatField) -> None
+        super(IsZero32BitFloat, self).__init__(field,
+                                               'is_zero_32_bit_float',
+                                               ())
+
+
+class IsZero64BitFloat(FieldPredicate):
+    """
+    Instruction predicate that checks if an immediate instruction format field
+    is equal to zero.
+
+    :param field: `FormatField` to be checked.
+    :param value: The constant value to check.
+    """
+
+    def __init__(self, field):
+        # type: (FormatField) -> None
+        super(IsZero64BitFloat, self).__init__(field,
+                                               'is_zero_64_bit_float',
+                                               ())
+
+
 class IsSignedInt(FieldPredicate):
     """
     Instruction predicate that checks if an immediate instruction format field
