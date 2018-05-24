@@ -18,7 +18,7 @@ export PYTHONDONTWRITEBYTECODE=1
 cd $(dirname "$0")
 topdir=$(pwd)
 
-function banner() {
+function banner {
     echo "======  $@  ======"
 }
 

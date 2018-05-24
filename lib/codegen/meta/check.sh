@@ -2,7 +2,7 @@
 set -euo pipefail
 cd $(dirname "$0")
 
-function runif() {
+function runif {
     if command -v "$1" > /dev/null; then
         echo "   === $1 ==="
         "$@"
