@@ -11,6 +11,20 @@
 
 use ir;
 
+/// Check that a 64-bit floating point value is zero.
+#[allow(dead_code)]
+pub fn is_zero_64_bit_float<T: Into<ir::immediates::Ieee64>>(x: T) -> bool {
+    let x64 = x.into();
+    x64.bits() == 0
+}
+
+/// Check that a 32-bit floating point value is zero.
+#[allow(dead_code)]
+pub fn is_zero_32_bit_float<T: Into<ir::immediates::Ieee32>>(x: T) -> bool {
+    let x32 = x.into();
+    x32.bits() == 0
+}
+
 /// Check that `x` is the same as `y`.
 #[allow(dead_code)]
 pub fn is_equal<T: Eq + Copy, O: Into<T> + Copy>(x: T, y: O) -> bool {
