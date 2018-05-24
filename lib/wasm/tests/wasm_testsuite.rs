@@ -1,20 +1,17 @@
 extern crate cretonne_codegen;
 extern crate cretonne_wasm;
-extern crate tempdir;
+extern crate wabt;
 
 use cretonne_codegen::print_errors::pretty_verifier_error;
 use cretonne_codegen::settings::{self, Configurable, Flags};
 use cretonne_codegen::verifier;
 use cretonne_wasm::{translate_module, DummyEnvironment};
-use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use std::path::PathBuf;
-use std::process::Command;
-use std::str;
-use tempdir::TempDir;
+use std::path::Path;
+use wabt::wat2wasm;
 
 #[test]
 fn testsuite() {
@@ -44,56 +41,32 @@ fn return_at_end() {
     let mut flag_builder = settings::builder();
     flag_builder.enable("return_at_end").unwrap();
     let flags = Flags::new(flag_builder);
-    handle_module(&PathBuf::from("../../wasmtests/return_at_end.wat"), &flags);
+    handle_module(Path::new("../../wasmtests/return_at_end.wat"), &flags);
 }
 
-fn read_wasm_file(path: PathBuf) -> Result<Vec<u8>, io::Error> {
+fn read_file(path: &Path) -> Result<Vec<u8>, io::Error> {
     let mut buf: Vec<u8> = Vec::new();
     let mut file = File::open(path)?;
     file.read_to_end(&mut buf)?;
     Ok(buf)
 }
 
-fn handle_module(path: &PathBuf, flags: &Flags) {
+fn handle_module(path: &Path, flags: &Flags) {
     let data = match path.extension() {
         None => {
             panic!("the file extension is not wasm or wat");
         }
         Some(ext) => {
             match ext.to_str() {
-                Some("wasm") => read_wasm_file(path.clone()).expect("error reading wasm file"),
+                Some("wasm") => read_file(path).expect("error reading wasm file"),
                 Some("wat") => {
-                    let tmp_dir = TempDir::new("cretonne-wasm").unwrap();
-                    let file_path = tmp_dir.path().join("module.wasm");
-                    File::create(file_path.clone()).unwrap();
-                    let result_output = Command::new("wat2wasm")
-                        .arg(path.clone())
-                        .arg("-o")
-                        .arg(file_path.to_str().unwrap())
-                        .output();
-                    match result_output {
+                    let wat = read_file(path).expect("error reading wat file");
+                    match wat2wasm(&wat) {
+                        Ok(wasm) => wasm,
                         Err(e) => {
-                            if e.kind() == io::ErrorKind::NotFound {
-                                println!(
-                                    "wat2wasm not found; disabled test {}",
-                                    path.to_str().unwrap()
-                                );
-                                return;
-                            }
-                            panic!("error convering wat file: {}", e.description());
-                        }
-                        Ok(output) => {
-                            if !output.status.success() {
-                                panic!(
-                                    "error running wat2wasm: {}",
-                                    str::from_utf8(&output.stderr).expect(
-                                        "wat2wasm's error message should be valid UTF-8",
-                                    )
-                                );
-                            }
+                            panic!("error converting wat to wasm: {:?}", e);
                         }
                     }
-                    read_wasm_file(file_path).expect("error reading converted wasm file")
                 }
                 None | Some(&_) => panic!("the file extension for {:?} is not wasm or wat", path),
             }

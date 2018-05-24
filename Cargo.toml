@@ -13,10 +13,11 @@ name = "cton-util"
 path = "src/cton-util.rs"
 
 [dependencies]
+cfg-if = "0.1"
 cretonne-codegen = { path = "lib/codegen", version = "0.8.0" }
 cretonne-reader = { path = "lib/reader", version = "0.8.0" }
 cretonne-frontend = { path = "lib/frontend", version = "0.8.0" }
-cretonne-wasm = { path = "lib/wasm", version = "0.8.0" }
+cretonne-wasm = { path = "lib/wasm", version = "0.8.0", optional = true }
 cretonne-native = { path = "lib/native", version = "0.8.0" }
 cretonne-filetests = { path = "lib/filetests", version = "0.8.0" }
 cretonne-module = { path = "lib/module", version = "0.8.0" }
@@ -27,9 +28,13 @@ filecheck = "0.3.0"
 docopt = "1"
 serde = "1.0.8"
 serde_derive = "1.0.8"
-tempdir = "0.3.5"
 term = "0.5.1"
 capstone = "0.3.1"
+wabt = { version = "0.3", optional = true }
+
+[features]
+default = ["wasm"]
+wasm = ["wabt", "cretonne-wasm"]
 
 [workspace]
 
