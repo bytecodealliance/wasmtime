@@ -17,7 +17,7 @@ failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 
 [dev-dependencies]
-tempdir = "0.3.5"
+wabt = "0.3"
 
 [features]
 default = ["std"]

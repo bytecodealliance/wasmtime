@@ -1,5 +1,5 @@
-#![deny(trivial_numeric_casts, unused_extern_crates)]
-#![warn(unused_import_braces, unstable_features)]
+#![deny(trivial_numeric_casts)]
+#![warn(unused_import_braces, unstable_features, unused_extern_crates)]
 #![cfg_attr(feature="cargo-clippy", warn(
                 float_arithmetic,
                 mut_mut,
@@ -10,17 +10,25 @@
                 use_self,
                 ))]
 
+#[macro_use]
+extern crate cfg_if;
 extern crate cretonne_codegen;
 extern crate cretonne_filetests;
 extern crate cretonne_reader;
-extern crate cretonne_wasm;
 extern crate docopt;
 extern crate filecheck;
 #[macro_use]
 extern crate serde_derive;
-extern crate tempdir;
-extern crate term;
 extern crate capstone;
+extern crate term;
+
+cfg_if! {
+    if #[cfg(feature = "wasm")] {
+        extern crate cretonne_wasm;
+        extern crate wabt;
+        mod wasm;
+    }
+}
 
 use cretonne_codegen::{timing, VERSION};
 use docopt::Docopt;
@@ -32,7 +40,6 @@ mod compile;
 mod print_cfg;
 mod rsfilecheck;
 mod utils;
-mod wasm;
 
 const USAGE: &str = "
 Cretonne code generator utility
@@ -114,7 +121,8 @@ fn cton_util() -> CommandResult {
             &args.flag_isa,
         )
     } else if args.cmd_wasm {
-        wasm::run(
+        #[cfg(feature = "wasm")]
+        let result = wasm::run(
             args.arg_file,
             args.flag_verbose,
             args.flag_just_decode,
@@ -123,7 +131,14 @@ fn cton_util() -> CommandResult {
             &args.flag_set,
             &args.flag_isa,
             args.flag_print_size,
-        )
+        );
+
+        #[cfg(not(feature = "wasm"))]
+        let result = Err(
+            "Error: cton-util was compiled without wasm support.".to_owned(),
+        );
+
+        result
     } else {
         // Debugging / shouldn't happen with proper command line handling above.
         Err(format!("Unhandled args: {:?}", args))
