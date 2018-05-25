@@ -22,12 +22,13 @@ use sourcemap::SourceMap;
 use std::mem;
 use std::str::FromStr;
 use std::{u16, u32};
+use target_lexicon::Triple;
 use testcommand::TestCommand;
 use testfile::{Comment, Details, TestFile};
 
 /// Parse the entire `text` into a list of functions.
 ///
-/// Any test commands or ISA declarations are ignored.
+/// Any test commands or target declarations are ignored.
 pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
     let _tt = timing::parse_text();
     parse_test(text).map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
@@ -43,7 +44,7 @@ pub fn parse_test(text: &str) -> Result<TestFile> {
     parser.start_gathering_comments();
 
     let commands = parser.parse_test_commands();
-    let isa_spec = parser.parse_isa_specs()?;
+    let isa_spec = parser.parse_target_specs()?;
 
     parser.token();
     parser.claim_gathered_comments(AnyEntity::Function);
@@ -88,10 +89,10 @@ struct Context<'a> {
     /// Aliases to resolve once value definitions are known.
     aliases: Vec<Value>,
 
-    /// Reference to the unique_isa for things like parsing ISA-specific instruction encoding
+    /// Reference to the unique_isa for things like parsing target-specific instruction encoding
     /// information. This is only `Some` if exactly one set of `isa` directives were found in the
-    /// prologue (it is valid to have directives for multiple different ISAs, but in that case we
-    /// couldn't know which ISA the provided encodings are intended for)
+    /// prologue (it is valid to have directives for multiple different targets, but in that case we
+    /// couldn't know which target the provided encodings are intended for)
     unique_isa: Option<&'a TargetIsa>,
 }
 
@@ -667,17 +668,17 @@ impl<'a> Parser<'a> {
         list
     }
 
-    /// Parse a list of ISA specs.
+    /// Parse a list of target specs.
     ///
-    /// Accept a mix of `isa` and `set` command lines. The `set` commands are cumulative.
+    /// Accept a mix of `target` and `set` command lines. The `set` commands are cumulative.
     ///
-    pub fn parse_isa_specs(&mut self) -> Result<isaspec::IsaSpec> {
-        // Was there any `isa` commands?
-        let mut seen_isa = false;
-        // Location of last `set` command since the last `isa`.
+    pub fn parse_target_specs(&mut self) -> Result<isaspec::IsaSpec> {
+        // Was there any `target` commands?
+        let mut seen_target = false;
+        // Location of last `set` command since the last `target`.
         let mut last_set_loc = None;
 
-        let mut isas = Vec::new();
+        let mut targets = Vec::new();
         let mut flag_builder = settings::builder();
 
         while let Some(Token::Identifier(command)) = self.token() {
@@ -690,38 +691,42 @@ impl<'a> Parser<'a> {
                         &self.loc,
                     )?;
                 }
-                "isa" => {
+                "target" => {
                     let loc = self.loc;
                     // Grab the whole line so the lexer won't go looking for tokens on the
                     // following lines.
                     let mut words = self.consume_line().trim().split_whitespace();
-                    // Look for `isa foo`.
-                    let isa_name = match words.next() {
-                        None => return err!(loc, "expected ISA name"),
+                    // Look for `target foo`.
+                    let target_name = match words.next() {
                         Some(w) => w,
+                        None => return err!(loc, "expected target triple"),
                     };
-                    let mut isa_builder = match isa::lookup(isa_name) {
-                        Err(isa::LookupError::Unknown) => {
-                            return err!(loc, "unknown ISA '{}'", isa_name)
+                    let triple = match Triple::from_str(target_name) {
+                        Ok(triple) => triple,
+                        Err(err) => return err!(loc, err),
+                    };
+                    let mut isa_builder = match isa::lookup(triple) {
+                        Err(isa::LookupError::SupportDisabled) => {
+                            continue;
                         }
                         Err(isa::LookupError::Unsupported) => {
-                            continue;
+                            return err!(loc, "unsupported target '{}'", target_name)
                         }
                         Ok(b) => b,
                     };
                     last_set_loc = None;
-                    seen_isa = true;
-                    // Apply the ISA-specific settings to `isa_builder`.
+                    seen_target = true;
+                    // Apply the target-specific settings to `isa_builder`.
                     isaspec::parse_options(words, &mut isa_builder, &self.loc)?;
 
                     // Construct a trait object with the aggregate settings.
-                    isas.push(isa_builder.finish(settings::Flags::new(flag_builder.clone())));
+                    targets.push(isa_builder.finish(settings::Flags::new(flag_builder.clone())));
                 }
                 _ => break,
             }
         }
-        if !seen_isa {
-            // No `isa` commands, but we allow for `set` commands.
+        if !seen_target {
+            // No `target` commands, but we allow for `set` commands.
             Ok(isaspec::IsaSpec::None(settings::Flags::new(flag_builder)))
         } else if let Some(loc) = last_set_loc {
             err!(
@@ -729,7 +734,7 @@ impl<'a> Parser<'a> {
                 "dangling 'set' command after ISA specification has no effect."
             )
         } else {
-            Ok(isaspec::IsaSpec::Some(isas))
+            Ok(isaspec::IsaSpec::Some(targets))
         }
     }
 
@@ -2466,14 +2471,14 @@ mod tests {
     fn isa_spec() {
         assert!(
             parse_test(
-                "isa
+                "target
                             function %foo() system_v {}",
             ).is_err()
         );
 
         assert!(
             parse_test(
-                "isa riscv
+                "target riscv32
                             set enable_float=false
                             function %foo() system_v {}",
             ).is_err()

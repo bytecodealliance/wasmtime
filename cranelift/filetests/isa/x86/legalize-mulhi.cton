@@ -1,7 +1,5 @@
-
 test compile
-set is_64bit
-isa x86 baseline
+target x86_64 baseline
 
 ; umulhi/smulhi on 64 bit operands
 

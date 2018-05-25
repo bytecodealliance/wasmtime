@@ -1,6 +1,6 @@
 ; Test the legalization of i64 arithmetic instructions.
 test legalizer
-isa riscv supports_m=1
+target riscv32 supports_m=1
 
 ; regex: V=v\d+
 

@@ -20,6 +20,9 @@ git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
 [dependencies.cretonne-wasm]
 path = "../lib/wasm"
 
+[dependencies.target-lexicon]
+version = "0.0.0"
+
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]

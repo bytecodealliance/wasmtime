@@ -1,8 +1,7 @@
 test compile
-set is_64bit
 set opt_level=best
 set is_pic
-isa x86 haswell
+target x86_64 haswell
 
 ; An empty function.
 

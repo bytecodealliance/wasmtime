@@ -40,7 +40,7 @@ macro_rules! err {
     ( $loc:expr, $msg:expr ) => {
         Err($crate::Error {
             location: $loc.clone(),
-            message: String::from($msg),
+            message: $msg.to_string(),
         })
     };
 

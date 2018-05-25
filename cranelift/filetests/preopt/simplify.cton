@@ -1,5 +1,5 @@
 test preopt
-isa x86
+target i686
 
 function %iadd_imm(i32) -> i32 {
 ebb0(v0: i32):

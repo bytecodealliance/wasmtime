@@ -1,5 +1,5 @@
 test regalloc
-isa riscv
+target riscv32
 
 ; Here, the coalescer initially builds vreg0 = [v1, v2, v3]
 ;

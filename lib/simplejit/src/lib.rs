@@ -18,6 +18,7 @@ extern crate cretonne_native;
 extern crate errno;
 extern crate libc;
 extern crate region;
+extern crate target_lexicon;
 
 #[cfg(target_os = "windows")]
 extern crate winapi;

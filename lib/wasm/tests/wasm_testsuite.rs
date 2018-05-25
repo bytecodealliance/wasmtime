@@ -1,5 +1,7 @@
 extern crate cretonne_codegen;
 extern crate cretonne_wasm;
+#[macro_use]
+extern crate target_lexicon;
 extern crate wabt;
 
 use cretonne_codegen::print_errors::pretty_verifier_error;
@@ -11,6 +13,7 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::path::Path;
+use std::str::FromStr;
 use wabt::wat2wasm;
 
 #[test]
@@ -70,7 +73,7 @@ fn handle_module(path: &Path, flags: &Flags) {
             None | Some(&_) => panic!("the file extension for {:?} is not wasm or wat", path),
         },
     };
-    let mut dummy_environ = DummyEnvironment::with_flags(flags.clone());
+    let mut dummy_environ = DummyEnvironment::with_triple_flags(triple!("riscv64"), flags.clone());
     translate_module(&data, &mut dummy_environ).unwrap();
     for func in &dummy_environ.info.function_bodies {
         verifier::verify_function(func, flags)

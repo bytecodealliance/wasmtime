@@ -17,9 +17,11 @@
 extern crate cretonne_codegen;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 extern crate raw_cpuid;
+extern crate target_lexicon;
 
 use cretonne_codegen::isa;
 use cretonne_codegen::settings::{self, Configurable};
+use target_lexicon::Triple;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use raw_cpuid::CpuId;
@@ -38,25 +40,8 @@ pub fn builders() -> Result<(settings::Builder, isa::Builder), &'static str> {
         return Err("unrecognized environment");
     }
 
-    if cfg!(target_pointer_width = "64") {
-        flag_builder.enable("is_64bit").unwrap();
-    } else if !cfg!(target_pointer_width = "32") {
-        return Err("unrecognized pointer size");
-    }
-
-    // TODO: Add RISC-V support once Rust supports it.
-    let name = if cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
-        "x86"
-    } else if cfg!(target_arch = "arm") {
-        "arm32"
-    } else if cfg!(target_arch = "aarch64") {
-        "arm64"
-    } else {
-        return Err("unrecognized architecture");
-    };
-
-    let mut isa_builder = isa::lookup(name).map_err(|err| match err {
-        isa::LookupError::Unknown => panic!(),
+    let mut isa_builder = isa::lookup(Triple::host()).map_err(|err| match err {
+        isa::LookupError::SupportDisabled => "support for architecture disabled at compile time",
         isa::LookupError::Unsupported => "unsupported architecture",
     })?;
 

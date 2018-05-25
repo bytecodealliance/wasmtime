@@ -237,6 +237,7 @@ mod tests {
     use cretonne_codegen::ir::types::I32;
     use cretonne_codegen::{ir, Context};
     use environ::{DummyEnvironment, FuncEnvironment};
+    use target_lexicon::Triple;
 
     #[test]
     fn small1() {
@@ -256,7 +257,7 @@ mod tests {
         ];
 
         let mut trans = FuncTranslator::new();
-        let runtime = DummyEnvironment::default();
+        let runtime = DummyEnvironment::with_triple(Triple::default());
         let mut ctx = Context::new();
 
         ctx.func.name = ir::ExternalName::testcase("small1");
@@ -289,7 +290,7 @@ mod tests {
         ];
 
         let mut trans = FuncTranslator::new();
-        let runtime = DummyEnvironment::default();
+        let runtime = DummyEnvironment::with_triple(Triple::default());
         let mut ctx = Context::new();
 
         ctx.func.name = ir::ExternalName::testcase("small2");
@@ -335,7 +336,7 @@ mod tests {
         ];
 
         let mut trans = FuncTranslator::new();
-        let runtime = DummyEnvironment::default();
+        let runtime = DummyEnvironment::with_triple(Triple::default());
         let mut ctx = Context::new();
 
         ctx.func.name = ir::ExternalName::testcase("infloop");

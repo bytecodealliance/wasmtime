@@ -1,6 +1,6 @@
 test regalloc
 
-isa x86
+target i686
 
 ; regex: V=v\d+
 

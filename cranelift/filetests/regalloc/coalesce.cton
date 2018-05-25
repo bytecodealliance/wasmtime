@@ -1,5 +1,5 @@
 test regalloc
-isa riscv
+target riscv32
 
 ; Test the coalescer.
 ; regex: V=v\d+

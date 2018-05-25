@@ -28,11 +28,7 @@ pub fn expand_call(
         _ => panic!("Wanted call: {}", func.dfg.display_inst(inst, None)),
     };
 
-    let ptr_ty = if isa.flags().is_64bit() {
-        ir::types::I64
-    } else {
-        ir::types::I32
-    };
+    let ptr_ty = isa.pointer_type();
 
     let sig = func.dfg.ext_funcs[func_ref].signature;
 

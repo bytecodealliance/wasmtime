@@ -1,5 +1,5 @@
 test verifier
-isa riscv
+target riscv32
 
 function %RV32I(i32 link [%x1]) -> i32 link [%x1] {
     fn0 = %foo()

@@ -20,13 +20,18 @@
 //! appropriate for the requested ISA:
 //!
 //! ```
+//! # extern crate cretonne_codegen;
+//! # #[macro_use] extern crate target_lexicon;
+//! # fn main() {
 //! use cretonne_codegen::settings::{self, Configurable};
 //! use cretonne_codegen::isa;
+//! use std::str::FromStr;
+//! use target_lexicon::Triple;
 //!
 //! let shared_builder = settings::builder();
 //! let shared_flags = settings::Flags::new(shared_builder);
 //!
-//! match isa::lookup("riscv") {
+//! match isa::lookup(triple!("riscv32")) {
 //!     Err(_) => {
 //!         // The RISC-V target ISA is not available.
 //!     }
@@ -35,6 +40,7 @@
 //!         let isa = isa_builder.finish(shared_flags);
 //!     }
 //! }
+//! # }
 //! ```
 //!
 //! The configured target ISA trait object is a `Box<TargetIsa>` which can be used for multiple
@@ -55,6 +61,7 @@ use settings;
 use settings::CallConv;
 use std::boxed::Box;
 use std::fmt;
+use target_lexicon::{Architecture, Triple};
 use timing;
 
 #[cfg(build_riscv)]
@@ -80,51 +87,61 @@ mod stack;
 macro_rules! isa_builder {
     ($module:ident, $name:ident) => {{
         #[cfg($name)]
-        fn $name() -> Result<Builder, LookupError> {
-            Ok($module::isa_builder())
+        fn $name(triple: Triple) -> Result<Builder, LookupError> {
+            Ok($module::isa_builder(triple))
         };
         #[cfg(not($name))]
-        fn $name() -> Result<Builder, LookupError> {
+        fn $name(_triple: Triple) -> Result<Builder, LookupError> {
             Err(LookupError::Unsupported)
         }
-        $name()
+        $name
     }};
 }
 
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
-pub fn lookup(name: &str) -> Result<Builder, LookupError> {
-    match name {
-        "riscv" => isa_builder!(riscv, build_riscv),
-        "x86" => isa_builder!(x86, build_x86),
-        "arm32" => isa_builder!(arm32, build_arm32),
-        "arm64" => isa_builder!(arm64, build_arm64),
-        _ => Err(LookupError::Unknown),
+pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
+    match triple.architecture {
+        Architecture::Riscv32 | Architecture::Riscv64 => isa_builder!(riscv, build_riscv)(triple),
+        Architecture::I386 | Architecture::I586 | Architecture::I686 | Architecture::X86_64 => {
+            isa_builder!(x86, build_x86)(triple)
+        }
+        Architecture::Thumbv6m
+        | Architecture::Thumbv7em
+        | Architecture::Thumbv7m
+        | Architecture::Arm
+        | Architecture::Armv4t
+        | Architecture::Armv5te
+        | Architecture::Armv7
+        | Architecture::Armv7s => isa_builder!(arm32, build_arm32)(triple),
+        Architecture::Aarch64 => isa_builder!(arm64, build_arm64)(triple),
+        _ => Err(LookupError::Unsupported),
     }
 }
 
 /// Describes reason for target lookup failure
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum LookupError {
-    /// Unknown Target
-    Unknown,
+    /// Support for this target was disabled in the current build.
+    SupportDisabled,
 
-    /// Target known but not built and thus not supported
+    /// Support for this target has not yet been implemented.
     Unsupported,
 }
 
 /// Builder for a `TargetIsa`.
 /// Modify the ISA-specific settings before creating the `TargetIsa` trait object with `finish`.
 pub struct Builder {
+    triple: Triple,
     setup: settings::Builder,
-    constructor: fn(settings::Flags, settings::Builder) -> Box<TargetIsa>,
+    constructor: fn(Triple, settings::Flags, settings::Builder) -> Box<TargetIsa>,
 }
 
 impl Builder {
     /// Combine the ISA-specific settings with the provided ISA-independent settings and allocate a
     /// fully configured `TargetIsa` trait object.
     pub fn finish(self, shared_flags: settings::Flags) -> Box<TargetIsa> {
-        (self.constructor)(shared_flags, self.setup)
+        (self.constructor)(self.triple, shared_flags, self.setup)
     }
 }
 
@@ -151,8 +168,16 @@ pub trait TargetIsa: fmt::Display {
     /// Get the name of this ISA.
     fn name(&self) -> &'static str;
 
+    /// Get the target triple that was used to make this trait object.
+    fn triple(&self) -> &Triple;
+
     /// Get the ISA-independent flags that were used to make this trait object.
     fn flags(&self) -> &settings::Flags;
+
+    /// Get the pointer type of this ISA.
+    fn pointer_type(&self) -> ir::Type {
+        ir::Type::int(u16::from(self.triple().pointer_width().unwrap().bits())).unwrap()
+    }
 
     /// Does the CPU implement scalar comparisons using a CPU flags register?
     fn uses_cpu_flags(&self) -> bool {
@@ -252,7 +277,7 @@ pub trait TargetIsa: fmt::Display {
         use ir::stackslot::{StackOffset, StackSize};
         use stack_layout::layout_stack;
 
-        let word_size = if self.flags().is_64bit() { 8 } else { 4 };
+        let word_size = StackSize::from(self.triple().pointer_width().unwrap().bytes());
 
         // Account for the SpiderMonkey standard prologue pushes.
         if func.signature.call_conv == CallConv::Baldrdash {

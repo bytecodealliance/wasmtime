@@ -9,7 +9,7 @@ use cretonne_module::{Backend, DataContext, DataDescription, Init, Linkage, Modu
 use faerie;
 use failure::Error;
 use std::fs::File;
-use target;
+use target_lexicon::BinaryFormat;
 use traps::{FaerieTrapManifest, FaerieTrapSink};
 
 #[derive(Debug)]
@@ -27,8 +27,7 @@ pub enum FaerieTrapCollection {
 pub struct FaerieBuilder {
     isa: Box<TargetIsa>,
     name: String,
-    format: container::Format,
-    faerie_target: faerie::Target,
+    format: BinaryFormat,
     collect_traps: FaerieTrapCollection,
     libcall_names: Box<Fn(ir::LibCall) -> String>,
 }
@@ -50,7 +49,7 @@ impl FaerieBuilder {
     pub fn new(
         isa: Box<TargetIsa>,
         name: String,
-        format: container::Format,
+        format: BinaryFormat,
         collect_traps: FaerieTrapCollection,
         libcall_names: Box<Fn(ir::LibCall) -> String>,
     ) -> Result<Self, ModuleError> {
@@ -59,12 +58,10 @@ impl FaerieBuilder {
                 "faerie requires TargetIsa be PIC".to_owned(),
             ));
         }
-        let faerie_target = target::translate(&*isa)?;
         Ok(Self {
             isa,
             name,
             format,
-            faerie_target,
             collect_traps,
             libcall_names,
         })
@@ -92,7 +89,7 @@ impl FaerieBuilder {
 pub struct FaerieBackend {
     isa: Box<TargetIsa>,
     artifact: faerie::Artifact,
-    format: container::Format,
+    format: BinaryFormat,
     trap_manifest: Option<FaerieTrapManifest>,
     libcall_names: Box<Fn(ir::LibCall) -> String>,
 }
@@ -119,8 +116,8 @@ impl Backend for FaerieBackend {
     /// Create a new `FaerieBackend` using the given Cretonne target.
     fn new(builder: FaerieBuilder) -> Self {
         Self {
+            artifact: faerie::Artifact::new(builder.isa.triple().clone(), builder.name),
             isa: builder.isa,
-            artifact: faerie::Artifact::new(builder.faerie_target, builder.name),
             format: builder.format,
             trap_manifest: match builder.collect_traps {
                 FaerieTrapCollection::Enabled => Some(FaerieTrapManifest::new()),
@@ -290,7 +287,6 @@ impl Backend for FaerieBackend {
     fn finish(self) -> FaerieProduct {
         FaerieProduct {
             artifact: self.artifact,
-            format: self.format,
             trap_manifest: self.trap_manifest,
         }
     }
@@ -305,8 +301,6 @@ pub struct FaerieProduct {
     /// Optional trap manifest. Contains `FaerieTrapManifest` when `FaerieBuilder.collect_traps` is
     /// set to `FaerieTrapCollection::Enabled`.
     pub trap_manifest: Option<FaerieTrapManifest>,
-    /// The format that the builder specified for output.
-    format: container::Format,
 }
 
 impl FaerieProduct {
@@ -317,18 +311,12 @@ impl FaerieProduct {
 
     /// Call `emit` on the faerie `Artifact`, producing bytes in memory.
     pub fn emit(&self) -> Result<Vec<u8>, Error> {
-        match self.format {
-            container::Format::ELF => self.artifact.emit::<faerie::Elf>(),
-            container::Format::MachO => self.artifact.emit::<faerie::Mach>(),
-        }
+        self.artifact.emit()
     }
 
     /// Call `write` on the faerie `Artifact`, writing to a file.
     pub fn write(&self, sink: File) -> Result<(), Error> {
-        match self.format {
-            container::Format::ELF => self.artifact.write::<faerie::Elf>(sink),
-            container::Format::MachO => self.artifact.write::<faerie::Mach>(sink),
-        }
+        self.artifact.write(sink)
     }
 }
 
@@ -358,7 +346,7 @@ fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
 }
 
 struct FaerieRelocSink<'a> {
-    format: container::Format,
+    format: BinaryFormat,
     artifact: &'a mut faerie::Artifact,
     name: &'a str,
     namespace: &'a ModuleNamespace<'a, FaerieBackend>,

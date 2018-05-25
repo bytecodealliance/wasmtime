@@ -15,6 +15,7 @@ cretonne-frontend = { path = "../frontend", version = "0.8.0", default-features 
 hashmap_core = { version = "0.1.4", optional = true }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
+target-lexicon = { version = "0.0.0", default-features = false }
 
 [dev-dependencies]
 wabt = "0.3"

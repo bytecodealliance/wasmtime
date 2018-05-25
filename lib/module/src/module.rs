@@ -318,11 +318,7 @@ where
 
     /// Return then pointer type for the current target.
     pub fn pointer_type(&self) -> ir::types::Type {
-        if self.backend.isa().flags().is_64bit() {
-            ir::types::I64
-        } else {
-            ir::types::I32
-        }
+        self.backend.isa().pointer_type()
     }
 
     /// Create a new `Context` initialized for use with this `Module`.

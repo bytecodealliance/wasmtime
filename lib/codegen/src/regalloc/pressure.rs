@@ -275,6 +275,8 @@ mod tests {
     use regalloc::RegisterSet;
     use std::borrow::Borrow;
     use std::boxed::Box;
+    use std::str::FromStr;
+    use target_lexicon;
 
     // Make an arm32 `TargetIsa`, if possible.
     fn arm32() -> Option<Box<TargetIsa>> {
@@ -284,7 +286,9 @@ mod tests {
         let shared_builder = settings::builder();
         let shared_flags = settings::Flags::new(shared_builder);
 
-        isa::lookup("arm32").ok().map(|b| b.finish(shared_flags))
+        isa::lookup(triple!("arm"))
+            .ok()
+            .map(|b| b.finish(shared_flags))
     }
 
     // Get a register class by name.

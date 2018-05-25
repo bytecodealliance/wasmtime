@@ -1,5 +1,5 @@
 test regalloc
-isa x86 haswell
+target i686 haswell
 
 function %pr165() system_v {
 ebb0:

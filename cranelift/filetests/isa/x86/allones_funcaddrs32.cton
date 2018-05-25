@@ -2,7 +2,7 @@
 test binemit
 set opt_level=best
 set allones_funcaddrs
-isa x86 haswell
+target i686 haswell
 
 ; The binary encodings can be verified with the command:
 ;

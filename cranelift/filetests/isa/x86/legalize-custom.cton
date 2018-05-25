@@ -1,8 +1,7 @@
 ; Test the custom legalizations.
 test legalizer
-isa x86
-set is_64bit
-isa x86
+target i686
+target x86_64
 
 ; regex: V=v\d+
 ; regex: EBB=ebb\d+

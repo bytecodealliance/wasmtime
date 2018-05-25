@@ -1,7 +1,6 @@
 test binemit
-set is_64bit
 set opt_level=best
-isa x86 baseline
+target x86_64 baseline
 
 ; The binary encodings can be verified with the command:
 ;

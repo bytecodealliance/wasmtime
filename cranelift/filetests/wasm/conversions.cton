@@ -1,8 +1,7 @@
 ; Test code generation for WebAssembly type conversion operators.
 test compile
 
-set is_64bit=1
-isa x86 haswell
+target x86_64 haswell
 
 function %i32_wrap_i64(i64) -> i32 {
 ebb0(v0: i64):

@@ -1,7 +1,6 @@
 test binemit
-set is_64bit=1
 set opt_level=best
-isa x86
+target x86_64
 
 ; Test that instruction shrinking eliminates REX prefixes when possible.
 

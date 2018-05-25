@@ -8,6 +8,7 @@ use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment, WasmResult};
 use func_translator::FuncTranslator;
 use std::string::String;
 use std::vec::Vec;
+use target_lexicon::Triple;
 use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
                         Table, TableIndex};
 use wasmparser;
@@ -39,6 +40,9 @@ impl<T> Exportable<T> {
 /// `DummyEnvironment` to allow it to be borrowed separately from the
 /// `FuncTranslator` field.
 pub struct DummyModuleInfo {
+    /// Target description.
+    pub triple: Triple,
+
     /// Compilation setting flags.
     pub flags: settings::Flags,
 
@@ -69,8 +73,9 @@ pub struct DummyModuleInfo {
 
 impl DummyModuleInfo {
     /// Allocates the data structures with the given flags.
-    pub fn with_flags(flags: settings::Flags) -> Self {
+    pub fn with_triple_flags(triple: Triple, flags: settings::Flags) -> Self {
         Self {
+            triple,
             flags,
             signatures: Vec::new(),
             imported_funcs: Vec::new(),
@@ -100,14 +105,14 @@ pub struct DummyEnvironment {
 
 impl DummyEnvironment {
     /// Allocates the data structures with default flags.
-    pub fn default() -> Self {
-        Self::with_flags(settings::Flags::new(settings::builder()))
+    pub fn with_triple(triple: Triple) -> Self {
+        Self::with_triple_flags(triple, settings::Flags::new(settings::builder()))
     }
 
     /// Allocates the data structures with the given flags.
-    pub fn with_flags(flags: settings::Flags) -> Self {
+    pub fn with_triple_flags(triple: Triple, flags: settings::Flags) -> Self {
         Self {
-            info: DummyModuleInfo::with_flags(flags),
+            info: DummyModuleInfo::with_triple_flags(triple, flags),
             trans: FuncTranslator::new(),
             func_bytecode_sizes: Vec::new(),
         }
@@ -143,6 +148,10 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
 }
 
 impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environment> {
+    fn triple(&self) -> &Triple {
+        &self.mod_info.triple
+    }
+
     fn flags(&self) -> &settings::Flags {
         &self.mod_info.flags
     }

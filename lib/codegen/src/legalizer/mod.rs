@@ -283,11 +283,7 @@ pub fn expand_stack_check(
         ir::InstructionData::UnaryGlobalVar { global_var, .. } => global_var,
         _ => panic!("Want stack_check: {}", func.dfg.display_inst(inst, isa)),
     };
-    let ptr_ty = if isa.flags().is_64bit() {
-        ir::types::I64
-    } else {
-        ir::types::I32
-    };
+    let ptr_ty = isa.pointer_type();
 
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);

@@ -1,6 +1,7 @@
 //! Utilities for working with Faerie container formats.
 
 use cretonne_codegen::binemit::Reloc;
+use target_lexicon::BinaryFormat;
 
 /// An object file format.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -13,9 +14,9 @@ pub enum Format {
 
 /// Translate from a Cretonne `Reloc` to a raw object-file-format-specific
 /// relocation code.
-pub fn raw_relocation(reloc: Reloc, format: Format) -> u32 {
+pub fn raw_relocation(reloc: Reloc, format: BinaryFormat) -> u32 {
     match format {
-        Format::ELF => {
+        BinaryFormat::Elf => {
             use goblin::elf;
             match reloc {
                 Reloc::Abs4 => elf::reloc::R_X86_64_32,
@@ -28,6 +29,7 @@ pub fn raw_relocation(reloc: Reloc, format: Format) -> u32 {
                 _ => unimplemented!(),
             }
         }
-        Format::MachO => unimplemented!(),
+        BinaryFormat::Macho => unimplemented!("macho relocations"),
+        _ => unimplemented!("unsupported format"),
     }
 }

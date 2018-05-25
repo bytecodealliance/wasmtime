@@ -9,7 +9,8 @@ use cretonne_codegen::{binemit, ir};
 use cretonne_reader::parse_test;
 use std::path::Path;
 use std::path::PathBuf;
-use utils::{parse_sets_and_isa, read_to_string};
+use target_lexicon::Architecture;
+use utils::{parse_sets_and_triple, read_to_string};
 
 struct PrintRelocs {
     flag_print: bool,
@@ -64,7 +65,7 @@ pub fn run(
     flag_set: &[String],
     flag_isa: &str,
 ) -> Result<(), String> {
-    let parsed = parse_sets_and_isa(flag_set, flag_isa)?;
+    let parsed = parse_sets_and_triple(flag_set, flag_isa)?;
 
     for filename in files {
         let path = Path::new(&filename);
@@ -136,23 +137,28 @@ fn handle_module(
 }
 
 fn get_disassembler(isa: &TargetIsa) -> Result<Capstone, String> {
-    let cs = match isa.name() {
-        "riscv" => return Err(String::from("No disassembler for RiscV")),
-        "x86" => {
-            if isa.flags().is_64bit() {
-                Capstone::new()
-                    .x86()
-                    .mode(arch::x86::ArchMode::Mode64)
-                    .build()
-            } else {
-                Capstone::new()
-                    .x86()
-                    .mode(arch::x86::ArchMode::Mode32)
-                    .build()
-            }
+    let cs = match isa.triple().architecture {
+        Architecture::Riscv32 | Architecture::Riscv64 => {
+            return Err(String::from("No disassembler for RiscV"))
         }
-        "arm32" => Capstone::new().arm().mode(arch::arm::ArchMode::Arm).build(),
-        "arm64" => Capstone::new()
+        Architecture::I386 | Architecture::I586 | Architecture::I686 => Capstone::new()
+            .x86()
+            .mode(arch::x86::ArchMode::Mode32)
+            .build(),
+        Architecture::X86_64 => Capstone::new()
+            .x86()
+            .mode(arch::x86::ArchMode::Mode64)
+            .build(),
+        Architecture::Arm
+        | Architecture::Armv4t
+        | Architecture::Armv5te
+        | Architecture::Armv7
+        | Architecture::Armv7s => Capstone::new().arm().mode(arch::arm::ArchMode::Arm).build(),
+        Architecture::Thumbv6m | Architecture::Thumbv7em | Architecture::Thumbv7m => Capstone::new(
+        ).arm()
+            .mode(arch::arm::ArchMode::Thumb)
+            .build(),
+        Architecture::Aarch64 => Capstone::new()
             .arm64()
             .mode(arch::arm64::ArchMode::Arm)
             .build(),
