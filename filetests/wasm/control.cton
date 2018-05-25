@@ -1,11 +1,9 @@
 ; Test basic code generation for control flow WebAssembly instructions.
 test compile
 
-set is_64bit=0
-isa x86 haswell
+target i686 haswell
 
-set is_64bit=1
-isa x86 haswell
+target x86_64 haswell
 
 function %br_if(i32) -> i32 {
 ebb0(v0: i32):

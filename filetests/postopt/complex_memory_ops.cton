@@ -1,6 +1,5 @@
 test postopt
-set is_64bit
-isa x86
+target x86_64
 
 function %dual_loads(i64, i64) -> i64 {
 ebb0(v0: i64, v1: i64):

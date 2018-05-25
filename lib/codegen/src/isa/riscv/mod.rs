@@ -15,32 +15,37 @@ use isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use regalloc;
 use std::boxed::Box;
 use std::fmt;
+use target_lexicon::{PointerWidth, Triple};
 
 #[allow(dead_code)]
 struct Isa {
+    triple: Triple,
     shared_flags: shared_settings::Flags,
     isa_flags: settings::Flags,
     cpumode: &'static [shared_enc_tables::Level1Entry<u16>],
 }
 
 /// Get an ISA builder for creating RISC-V targets.
-pub fn isa_builder() -> IsaBuilder {
+pub fn isa_builder(triple: Triple) -> IsaBuilder {
     IsaBuilder {
+        triple,
         setup: settings::builder(),
         constructor: isa_constructor,
     }
 }
 
 fn isa_constructor(
+    triple: Triple,
     shared_flags: shared_settings::Flags,
     builder: shared_settings::Builder,
 ) -> Box<TargetIsa> {
-    let level1 = if shared_flags.is_64bit() {
-        &enc_tables::LEVEL1_RV64[..]
-    } else {
-        &enc_tables::LEVEL1_RV32[..]
+    let level1 = match triple.pointer_width().unwrap() {
+        PointerWidth::U16 => panic!("16-bit RISC-V unrecognized"),
+        PointerWidth::U32 => &enc_tables::LEVEL1_RV32[..],
+        PointerWidth::U64 => &enc_tables::LEVEL1_RV64[..],
     };
     Box::new(Isa {
+        triple,
         isa_flags: settings::Flags::new(&shared_flags, builder),
         shared_flags,
         cpumode: level1,
@@ -50,6 +55,10 @@ fn isa_constructor(
 impl TargetIsa for Isa {
     fn name(&self) -> &'static str {
         "riscv"
+    }
+
+    fn triple(&self) -> &Triple {
+        &self.triple
     }
 
     fn flags(&self) -> &shared_settings::Flags {
@@ -85,7 +94,7 @@ impl TargetIsa for Isa {
     }
 
     fn legalize_signature(&self, sig: &mut ir::Signature, current: bool) {
-        abi::legalize_signature(sig, &self.shared_flags, &self.isa_flags, current)
+        abi::legalize_signature(sig, &self.triple, &self.isa_flags, current)
     }
 
     fn regclass_for_abi_type(&self, ty: ir::Type) -> RegClass {
@@ -117,7 +126,9 @@ mod tests {
     use ir::{Function, InstructionData, Opcode};
     use isa;
     use settings::{self, Configurable};
+    use std::str::FromStr;
     use std::string::{String, ToString};
+    use target_lexicon;
 
     fn encstr(isa: &isa::TargetIsa, enc: Result<isa::Encoding, isa::Legalize>) -> String {
         match enc {
@@ -128,10 +139,11 @@ mod tests {
 
     #[test]
     fn test_64bitenc() {
-        let mut shared_builder = settings::builder();
-        shared_builder.enable("is_64bit").unwrap();
+        let shared_builder = settings::builder();
         let shared_flags = settings::Flags::new(shared_builder);
-        let isa = isa::lookup("riscv").unwrap().finish(shared_flags);
+        let isa = isa::lookup(triple!("riscv64"))
+            .unwrap()
+            .finish(shared_flags);
 
         let mut func = Function::new();
         let ebb = func.dfg.make_ebb();
@@ -178,10 +190,11 @@ mod tests {
     // Same as above, but for RV32.
     #[test]
     fn test_32bitenc() {
-        let mut shared_builder = settings::builder();
-        shared_builder.set("is_64bit", "false").unwrap();
+        let shared_builder = settings::builder();
         let shared_flags = settings::Flags::new(shared_builder);
-        let isa = isa::lookup("riscv").unwrap().finish(shared_flags);
+        let isa = isa::lookup(triple!("riscv32"))
+            .unwrap()
+            .finish(shared_flags);
 
         let mut func = Function::new();
         let ebb = func.dfg.make_ebb();
@@ -232,13 +245,12 @@ mod tests {
 
     #[test]
     fn test_rv32m() {
-        let mut shared_builder = settings::builder();
-        shared_builder.set("is_64bit", "false").unwrap();
+        let shared_builder = settings::builder();
         let shared_flags = settings::Flags::new(shared_builder);
 
         // Set the supports_m stting which in turn enables the use_m predicate that unlocks
         // encodings for imul.
-        let mut isa_builder = isa::lookup("riscv").unwrap();
+        let mut isa_builder = isa::lookup(triple!("riscv32")).unwrap();
         isa_builder.enable("supports_m").unwrap();
 
         let isa = isa_builder.finish(shared_flags);

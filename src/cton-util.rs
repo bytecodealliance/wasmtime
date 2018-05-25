@@ -27,6 +27,7 @@ cfg_if! {
         mod wasm;
     }
 }
+extern crate target_lexicon;
 
 use cretonne_codegen::{timing, VERSION};
 use docopt::Docopt;
@@ -47,8 +48,8 @@ Usage:
     cton-util cat <file>...
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
-    cton-util compile [-vpT] [--set <set>]... [--isa <isa>] <file>...
-    cton-util wasm [-ctvpTs] [--set <set>]... [--isa <isa>] <file>...
+    cton-util compile [-vpT] [--set <set>]... [--target <triple>] <file>...
+    cton-util wasm [-ctvpTs] [--set <set>]... [--target <triple>] <file>...
     cton-util --help | --version
 
 Options:
@@ -64,7 +65,8 @@ Options:
     -p, --print     print the resulting Cretonne IR
     -h, --help      print this help message
     --set=<set>     configure Cretonne settings
-    --isa=<isa>     specify the Cretonne ISA
+    --target=<triple>
+                    specify the Cretonne target
     --version       print the Cretonne version
 
 ";
@@ -83,7 +85,7 @@ struct Args {
     flag_print: bool,
     flag_verbose: bool,
     flag_set: Vec<String>,
-    flag_isa: String,
+    flag_target: String,
     flag_time_passes: bool,
     flag_print_size: bool,
 }
@@ -116,7 +118,7 @@ fn cton_util() -> CommandResult {
             args.arg_file,
             args.flag_print,
             &args.flag_set,
-            &args.flag_isa,
+            &args.flag_target,
         )
     } else if args.cmd_wasm {
         #[cfg(feature = "wasm")]
@@ -127,7 +129,7 @@ fn cton_util() -> CommandResult {
             args.flag_check_translation,
             args.flag_print,
             &args.flag_set,
-            &args.flag_isa,
+            &args.flag_target,
             args.flag_print_size,
         );
 

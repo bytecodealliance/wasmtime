@@ -1,7 +1,6 @@
 ; Test the legalization of memory objects.
 test legalizer
-set is_64bit
-isa x86
+target x86_64
 
 ; regex: V=v\d+
 ; regex: EBB=ebb\d+

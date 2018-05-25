@@ -12,7 +12,7 @@ use std::error::Error;
 use std::path::Path;
 use std::path::PathBuf;
 use term;
-use utils::{parse_sets_and_isa, read_to_end};
+use utils::{parse_sets_and_triple, read_to_end};
 use wabt::wat2wasm;
 
 macro_rules! vprintln {
@@ -38,10 +38,10 @@ pub fn run(
     flag_check_translation: bool,
     flag_print: bool,
     flag_set: &[String],
-    flag_isa: &str,
+    flag_triple: &str,
     flag_print_size: bool,
 ) -> Result<(), String> {
-    let parsed = parse_sets_and_isa(flag_set, flag_isa)?;
+    let parsed = parse_sets_and_triple(flag_set, flag_triple)?;
 
     for filename in files {
         let path = Path::new(&filename);
@@ -79,9 +79,7 @@ fn handle_module(
     vprint!(flag_verbose, "Translating... ");
     terminal.reset().unwrap();
 
-    let mut data = read_to_end(path.clone()).map_err(|err| {
-        String::from(err.description())
-    })?;
+    let mut data = read_to_end(path.clone()).map_err(|err| String::from(err.description()))?;
 
     if !data.starts_with(&[b'\0', b'a', b's', b'm']) {
         data = match wat2wasm(&data) {
@@ -90,10 +88,9 @@ fn handle_module(
         };
     }
 
-    let mut dummy_environ = DummyEnvironment::with_flags(fisa.flags.clone());
-    translate_module(&data, &mut dummy_environ).map_err(
-        |e| e.to_string(),
-    )?;
+    let mut dummy_environ =
+        DummyEnvironment::with_triple_flags(fisa.isa.unwrap().triple().clone(), fisa.flags.clone());
+    translate_module(&data, &mut dummy_environ).map_err(|e| e.to_string())?;
 
     terminal.fg(term::color::GREEN).unwrap();
     vprintln!(flag_verbose, "ok");
@@ -142,24 +139,22 @@ fn handle_module(
         let mut context = Context::new();
         context.func = func.clone();
         if flag_check_translation {
-            context.verify(fisa).map_err(|err| {
-                pretty_verifier_error(&context.func, fisa.isa, &err)
-            })?;
+            context
+                .verify(fisa)
+                .map_err(|err| pretty_verifier_error(&context.func, fisa.isa, &err))?;
         } else if let Some(isa) = fisa.isa {
-            let compiled_size = context.compile(isa).map_err(|err| {
-                pretty_error(&context.func, fisa.isa, err)
-            })?;
+            let compiled_size = context
+                .compile(isa)
+                .map_err(|err| pretty_error(&context.func, fisa.isa, err))?;
             if flag_print_size {
                 println!(
                     "Function #{} code size: {} bytes",
-                    func_index,
-                    compiled_size
+                    func_index, compiled_size
                 );
                 total_module_code_size += compiled_size;
                 println!(
                     "Function #{} bytecode size: {} bytes",
-                    func_index,
-                    dummy_environ.func_bytecode_sizes[def_index]
+                    func_index, dummy_environ.func_bytecode_sizes[def_index]
                 );
             }
         } else {

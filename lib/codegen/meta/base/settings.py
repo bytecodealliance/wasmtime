@@ -27,8 +27,6 @@ enable_verifier = BoolSetting(
         """,
         default=True)
 
-is_64bit = BoolSetting("Enable 64-bit code generation")
-
 call_conv = EnumSetting(
         """
         Default calling convention:
@@ -88,8 +86,6 @@ avoid_div_traps = BoolSetting(
         On ISAs like ARM where the native division instructions don't trap,
         this setting has no effect - explicit checks are always inserted.
         """)
-
-is_compressed = BoolSetting("Enable compressed instructions")
 
 enable_float = BoolSetting(
         """

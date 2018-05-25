@@ -11,10 +11,10 @@ use ir::{get_probestack_funcref, AbiParam, ArgumentExtension, ArgumentLoc, Argum
 use isa::{RegClass, RegUnit, TargetIsa};
 use regalloc::RegisterSet;
 use result;
-use settings as shared_settings;
 use settings::CallConv;
 use stack_layout::layout_stack;
 use std::i32;
+use target_lexicon::{PointerWidth, Triple};
 
 /// Argument registers for x86-64
 static ARG_GPRS: [RU; 6] = [RU::rdi, RU::rsi, RU::rdx, RU::rcx, RU::r8, RU::r9];
@@ -29,8 +29,8 @@ static ARG_GPRS_WIN_FASTCALL_X64: [RU; 4] = [RU::rcx, RU::rdx, RU::r8, RU::r9];
 static RET_GPRS_WIN_FASTCALL_X64: [RU; 1] = [RU::rax];
 
 struct Args {
-    pointer_bytes: u32,
-    pointer_bits: u16,
+    pointer_bytes: u8,
+    pointer_bits: u8,
     pointer_type: ir::Type,
     gpr: &'static [RU],
     gpr_used: usize,
@@ -41,7 +41,7 @@ struct Args {
 }
 
 impl Args {
-    fn new(bits: u16, gpr: &'static [RU], fpr_limit: usize, call_conv: CallConv) -> Self {
+    fn new(bits: u8, gpr: &'static [RU], fpr_limit: usize, call_conv: CallConv) -> Self {
         let offset = if let CallConv::WindowsFastcall = call_conv {
             // [1] "The caller is responsible for allocating space for parameters to the callee,
             // and must always allocate sufficient space to store four register parameters"
@@ -51,9 +51,9 @@ impl Args {
         };
 
         Self {
-            pointer_bytes: u32::from(bits) / 8,
+            pointer_bytes: bits / 8,
             pointer_bits: bits,
-            pointer_type: ir::Type::int(bits).unwrap(),
+            pointer_type: ir::Type::int(u16::from(bits)).unwrap(),
             gpr,
             gpr_used: 0,
             fpr_limit,
@@ -75,12 +75,12 @@ impl ArgAssigner for Args {
         }
 
         // Large integers and booleans are broken down to fit in a register.
-        if !ty.is_float() && ty.bits() > self.pointer_bits {
+        if !ty.is_float() && ty.bits() > u16::from(self.pointer_bits) {
             return ValueConversion::IntSplit.into();
         }
 
         // Small integers are extended to the size of a pointer register.
-        if ty.is_int() && ty.bits() < self.pointer_bits {
+        if ty.is_int() && ty.bits() < u16::from(self.pointer_bits) {
             match arg.extension {
                 ArgumentExtension::None => {}
                 ArgumentExtension::Uext => return ValueConversion::Uext(self.pointer_type).into(),
@@ -122,27 +122,31 @@ impl ArgAssigner for Args {
 
         // Assign a stack location.
         let loc = ArgumentLoc::Stack(self.offset as i32);
-        self.offset += self.pointer_bytes;
+        self.offset += u32::from(self.pointer_bytes);
         debug_assert!(self.offset <= i32::MAX as u32);
         loc.into()
     }
 }
 
 /// Legalize `sig`.
-pub fn legalize_signature(sig: &mut ir::Signature, flags: &shared_settings::Flags, _current: bool) {
+pub fn legalize_signature(sig: &mut ir::Signature, triple: &Triple, _current: bool) {
     let bits;
     let mut args;
 
-    if flags.is_64bit() {
-        bits = 64;
-        args = if sig.call_conv == CallConv::WindowsFastcall {
-            Args::new(bits, &ARG_GPRS_WIN_FASTCALL_X64[..], 4, sig.call_conv)
-        } else {
-            Args::new(bits, &ARG_GPRS[..], 8, sig.call_conv)
-        };
-    } else {
-        bits = 32;
-        args = Args::new(bits, &[], 0, sig.call_conv);
+    match triple.pointer_width().unwrap() {
+        PointerWidth::U16 => panic!(),
+        PointerWidth::U32 => {
+            bits = 32;
+            args = Args::new(bits, &[], 0, sig.call_conv);
+        }
+        PointerWidth::U64 => {
+            bits = 64;
+            args = if sig.call_conv == CallConv::WindowsFastcall {
+                Args::new(bits, &ARG_GPRS_WIN_FASTCALL_X64[..], 4, sig.call_conv)
+            } else {
+                Args::new(bits, &ARG_GPRS[..], 8, sig.call_conv)
+            };
+        }
     }
 
     legalize_args(&mut sig.params, &mut args);
@@ -167,13 +171,13 @@ pub fn regclass_for_abi_type(ty: ir::Type) -> RegClass {
 }
 
 /// Get the set of allocatable registers for `func`.
-pub fn allocatable_registers(_func: &ir::Function, flags: &shared_settings::Flags) -> RegisterSet {
+pub fn allocatable_registers(_func: &ir::Function, triple: &Triple) -> RegisterSet {
     let mut regs = RegisterSet::new();
     regs.take(GPR, RU::rsp as RegUnit);
     regs.take(GPR, RU::rbp as RegUnit);
 
     // 32-bit arch only has 8 registers.
-    if !flags.is_64bit() {
+    if triple.pointer_width().unwrap() != PointerWidth::U64 {
         for i in 8..16 {
             regs.take(GPR, GPR.unit(i));
             regs.take(FPR, FPR.unit(i));
@@ -184,34 +188,36 @@ pub fn allocatable_registers(_func: &ir::Function, flags: &shared_settings::Flag
 }
 
 /// Get the set of callee-saved registers.
-fn callee_saved_gprs(flags: &shared_settings::Flags) -> &'static [RU] {
-    if flags.is_64bit() {
-        if flags.call_conv() == CallConv::WindowsFastcall {
-            // "registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15 are considered nonvolatile
-            //  and must be saved and restored by a function that uses them."
-            // as per https://msdn.microsoft.com/en-us/library/6t169e9c.aspx
-            // RSP & RSB are not listed below, since they are restored automatically during
-            // a function call. If that wasn't the case, function calls (RET) would not work.
-            &[
-                RU::rbx,
-                RU::rdi,
-                RU::rsi,
-                RU::r12,
-                RU::r13,
-                RU::r14,
-                RU::r15,
-            ]
-        } else {
-            &[RU::rbx, RU::r12, RU::r13, RU::r14, RU::r15]
+fn callee_saved_gprs(isa: &TargetIsa) -> &'static [RU] {
+    match isa.triple().pointer_width().unwrap() {
+        PointerWidth::U16 => panic!(),
+        PointerWidth::U32 => &[RU::rbx, RU::rsi, RU::rdi],
+        PointerWidth::U64 => {
+            if isa.flags().call_conv() == CallConv::WindowsFastcall {
+                // "registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15 are considered nonvolatile
+                //  and must be saved and restored by a function that uses them."
+                // as per https://msdn.microsoft.com/en-us/library/6t169e9c.aspx
+                // RSP & RSB are not listed below, since they are restored automatically during
+                // a function call. If that wasn't the case, function calls (RET) would not work.
+                &[
+                    RU::rbx,
+                    RU::rdi,
+                    RU::rsi,
+                    RU::r12,
+                    RU::r13,
+                    RU::r14,
+                    RU::r15,
+                ]
+            } else {
+                &[RU::rbx, RU::r12, RU::r13, RU::r14, RU::r15]
+            }
         }
-    } else {
-        &[RU::rbx, RU::rsi, RU::rdi]
     }
 }
 
-fn callee_saved_gprs_used(flags: &shared_settings::Flags, func: &ir::Function) -> RegisterSet {
+fn callee_saved_gprs_used(isa: &TargetIsa, func: &ir::Function) -> RegisterSet {
     let mut all_callee_saved = RegisterSet::empty();
-    for reg in callee_saved_gprs(flags) {
+    for reg in callee_saved_gprs(isa) {
         all_callee_saved.free(GPR, *reg as RegUnit);
     }
 
@@ -271,7 +277,7 @@ pub fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> 
 
     // Baldrdash on 32-bit x86 always aligns its stack pointer to 16 bytes.
     let stack_align = 16;
-    let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
+    let word_size = StackSize::from(isa.triple().pointer_width().unwrap().bytes());
     let bytes = StackSize::from(isa.flags().baldrdash_prologue_words()) * word_size;
 
     let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
@@ -285,7 +291,7 @@ pub fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> 
 /// Implementation of the fastcall-based Win64 calling convention described at [1]
 /// [1] https://msdn.microsoft.com/en-us/library/ms235286.aspx
 pub fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
-    if !isa.flags().is_64bit() {
+    if isa.triple().pointer_width().unwrap() != PointerWidth::U64 {
         panic!("TODO: windows-fastcall: x86-32 not implemented yet");
     }
 
@@ -293,14 +299,10 @@ pub fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     // which are aligned to 16 bytes in order to aid performance"
     let stack_align = 16;
 
-    let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
-    let reg_type = if isa.flags().is_64bit() {
-        ir::types::I64
-    } else {
-        ir::types::I32
-    };
+    let word_size = isa.triple().pointer_width().unwrap().bytes() as usize;
+    let reg_type = isa.pointer_type();
 
-    let csrs = callee_saved_gprs_used(isa.flags(), func);
+    let csrs = callee_saved_gprs_used(isa, func);
 
     // [1] "Space is allocated on the call stack as a shadow store for callees to save"
     // This shadow store contains the parameters which are passed through registers (ARG_GPRS)
@@ -364,14 +366,11 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     // The original 32-bit x86 ELF ABI had a 4-byte aligned stack pointer, but
     // newer versions use a 16-byte aligned stack pointer.
     let stack_align = 16;
-    let word_size = if isa.flags().is_64bit() { 8 } else { 4 };
-    let reg_type = if isa.flags().is_64bit() {
-        ir::types::I64
-    } else {
-        ir::types::I32
-    };
+    let pointer_width = isa.triple().pointer_width().unwrap();
+    let word_size = pointer_width.bytes() as usize;
+    let reg_type = ir::Type::int(u16::from(pointer_width.bits())).unwrap();
 
-    let csrs = callee_saved_gprs_used(isa.flags(), func);
+    let csrs = callee_saved_gprs_used(isa, func);
 
     // The reserved stack area is composed of:
     //   return address + frame pointer + all callee-saved registers
@@ -463,7 +462,8 @@ fn insert_common_prologue(
             let callee = get_probestack_funcref(pos.func, reg_type, rax, isa);
 
             // Make the call.
-            let call = if !isa.flags().is_pic() && isa.flags().is_64bit()
+            let call = if !isa.flags().is_pic()
+                && isa.triple().pointer_width().unwrap() == PointerWidth::U64
                 && !pos.func.dfg.ext_funcs[callee].colocated
             {
                 // 64-bit non-PIC non-colocated calls need to be legalized to call_indirect.

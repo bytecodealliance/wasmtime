@@ -1,6 +1,6 @@
 ; Test tracking of register moves.
 test binemit
-isa riscv
+target riscv32
 
 function %regmoves(i32 link [%x1]) -> i32 link [%x1] {
 ebb0(v9999: i32):

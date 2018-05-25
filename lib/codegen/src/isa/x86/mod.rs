@@ -16,33 +16,38 @@ use regalloc;
 use result;
 use std::boxed::Box;
 use std::fmt;
+use target_lexicon::{PointerWidth, Triple};
 use timing;
 
 #[allow(dead_code)]
 struct Isa {
+    triple: Triple,
     shared_flags: shared_settings::Flags,
     isa_flags: settings::Flags,
     cpumode: &'static [shared_enc_tables::Level1Entry<u16>],
 }
 
 /// Get an ISA builder for creating x86 targets.
-pub fn isa_builder() -> IsaBuilder {
+pub fn isa_builder(triple: Triple) -> IsaBuilder {
     IsaBuilder {
+        triple,
         setup: settings::builder(),
         constructor: isa_constructor,
     }
 }
 
 fn isa_constructor(
+    triple: Triple,
     shared_flags: shared_settings::Flags,
     builder: shared_settings::Builder,
 ) -> Box<TargetIsa> {
-    let level1 = if shared_flags.is_64bit() {
-        &enc_tables::LEVEL1_I64[..]
-    } else {
-        &enc_tables::LEVEL1_I32[..]
+    let level1 = match triple.pointer_width().unwrap() {
+        PointerWidth::U16 => unimplemented!("x86-16"),
+        PointerWidth::U32 => &enc_tables::LEVEL1_I32[..],
+        PointerWidth::U64 => &enc_tables::LEVEL1_I64[..],
     };
     Box::new(Isa {
+        triple,
         isa_flags: settings::Flags::new(&shared_flags, builder),
         shared_flags,
         cpumode: level1,
@@ -52,6 +57,10 @@ fn isa_constructor(
 impl TargetIsa for Isa {
     fn name(&self) -> &'static str {
         "x86"
+    }
+
+    fn triple(&self) -> &Triple {
+        &self.triple
     }
 
     fn flags(&self) -> &shared_settings::Flags {
@@ -95,7 +104,7 @@ impl TargetIsa for Isa {
     }
 
     fn legalize_signature(&self, sig: &mut ir::Signature, current: bool) {
-        abi::legalize_signature(sig, &self.shared_flags, current)
+        abi::legalize_signature(sig, &self.triple, current)
     }
 
     fn regclass_for_abi_type(&self, ty: ir::Type) -> RegClass {
@@ -103,7 +112,7 @@ impl TargetIsa for Isa {
     }
 
     fn allocatable_registers(&self, func: &ir::Function) -> regalloc::RegisterSet {
-        abi::allocatable_registers(func, &self.shared_flags)
+        abi::allocatable_registers(func, &self.triple)
     }
 
     fn emit_inst(

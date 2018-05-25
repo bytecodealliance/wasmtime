@@ -1,7 +1,7 @@
 test regalloc
 
 ; We can add more ISAs once they have defined encodings.
-isa riscv
+target riscv32
 
 ; regex: RX=%x\d+
 

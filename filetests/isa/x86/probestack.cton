@@ -1,7 +1,6 @@
 test compile
-set is_64bit=1
 set colocated_libcalls=1
-isa x86
+target x86_64
 
 ; A function with a big stack frame. This should have a stack probe.
 

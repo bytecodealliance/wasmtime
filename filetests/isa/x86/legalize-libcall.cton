@@ -1,10 +1,9 @@
 test legalizer
 
 ; Pre-SSE 4.1, we need to use runtime library calls for floating point rounding operations.
-set is_64bit
 set is_pic
 set call_conv=system_v
-isa x86
+target x86_64
 
 function %floor(f32) -> f32 {
 ebb0(v0: f32):

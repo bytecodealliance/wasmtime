@@ -1,9 +1,8 @@
 ; Test the division legalizations.
 test legalizer
-set is_64bit
 ; See also legalize-div.cton.
 set avoid_div_traps=1
-isa x86
+target x86_64
 
 ; regex: V=v\d+
 ; regex: EBB=ebb\d+

@@ -10,6 +10,7 @@ use libc;
 use memory::Memory;
 use std::ffi::CString;
 use std::ptr;
+use target_lexicon::PointerWidth;
 #[cfg(windows)]
 use winapi;
 
@@ -173,10 +174,10 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             }
         }
 
-        let reloc = if self.isa.flags().is_64bit() {
-            Reloc::Abs8
-        } else {
-            Reloc::Abs4
+        let reloc = match self.isa.triple().pointer_width().unwrap() {
+            PointerWidth::U16 => panic!(),
+            PointerWidth::U32 => Reloc::Abs4,
+            PointerWidth::U64 => Reloc::Abs8,
         };
         let mut relocs = Vec::new();
         for &(offset, id) in function_relocs {

@@ -4,6 +4,7 @@ use cretonne_codegen::cursor::FuncCursor;
 use cretonne_codegen::ir::{self, InstBuilder};
 use cretonne_codegen::settings::Flags;
 use std::vec::Vec;
+use target_lexicon::Triple;
 use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
                         Table, TableIndex};
 use wasmparser::BinaryReaderError;
@@ -74,6 +75,9 @@ pub type WasmResult<T> = Result<T, WasmError>;
 /// IR. The function environment provides information about the WebAssembly module as well as the
 /// runtime environment.
 pub trait FuncEnvironment {
+    /// Get the triple for the current compilation.
+    fn triple(&self) -> &Triple;
+
     /// Get the flags for the current compilation.
     fn flags(&self) -> &Flags;
 
@@ -81,11 +85,7 @@ pub trait FuncEnvironment {
     ///
     /// This returns `I64` for 64-bit architectures and `I32` for 32-bit architectures.
     fn native_pointer(&self) -> ir::Type {
-        if self.flags().is_64bit() {
-            ir::types::I64
-        } else {
-            ir::types::I32
-        }
+        ir::Type::int(u16::from(self.triple().pointer_width().unwrap().bits())).unwrap()
     }
 
     /// Set up the necessary preamble definitions in `func` to access the global variable

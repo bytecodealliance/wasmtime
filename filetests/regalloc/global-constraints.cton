@@ -1,5 +1,5 @@
 test regalloc
-isa x86
+target i686
 
 ; This test covers the troubles when values with global live ranges are defined
 ; by instructions with constrained register classes.

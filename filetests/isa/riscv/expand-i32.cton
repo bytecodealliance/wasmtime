@@ -1,11 +1,9 @@
 ; Test the legalization of i32 instructions that don't have RISC-V versions.
 test legalizer
 
-set is_64bit=0
-isa riscv supports_m=1
+target riscv32 supports_m=1
 
-set is_64bit=1
-isa riscv supports_m=1
+target riscv64 supports_m=1
 
 ; regex: V=v\d+
 

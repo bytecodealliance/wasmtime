@@ -1,6 +1,6 @@
 ; Test the legalization of EBB arguments that are split.
 test legalizer
-isa riscv
+target riscv32
 
 ; regex: V=v\d+
 

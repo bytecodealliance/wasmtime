@@ -34,6 +34,7 @@ extern crate hashmap_core;
 #[macro_use(dbg)]
 extern crate cretonne_codegen;
 extern crate cretonne_frontend;
+extern crate target_lexicon;
 extern crate wasmparser;
 
 extern crate failure;

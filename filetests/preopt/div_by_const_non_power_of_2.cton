@@ -1,6 +1,5 @@
-
 test preopt
-isa x86 baseline
+target i686 baseline
 
 ; -------- U32 --------
 

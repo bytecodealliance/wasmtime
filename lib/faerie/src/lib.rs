@@ -19,10 +19,10 @@ extern crate cretonne_module;
 extern crate faerie;
 extern crate failure;
 extern crate goblin;
+extern crate target_lexicon;
 
 mod backend;
 mod container;
-mod target;
 pub mod traps;
 
 pub use backend::{FaerieBackend, FaerieBuilder, FaerieProduct, FaerieTrapCollection};

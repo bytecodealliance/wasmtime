@@ -1,8 +1,7 @@
 test compile
-set is_64bit
 set opt_level=best
 set is_pic
-isa x86 haswell
+target x86_64 haswell
 
 ; check if for one arg we use the right register
 function %one_arg(i64) windows_fastcall {

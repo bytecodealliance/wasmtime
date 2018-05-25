@@ -1,6 +1,6 @@
 test cat
 
-isa riscv
+target riscv32
 
 ; regex: WS=[ \t]*
 

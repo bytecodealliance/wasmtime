@@ -1,6 +1,6 @@
 ; Test the parser's support for encoding annotations.
 test legalizer
-isa riscv
+target riscv32
 
 function %parse_encoding(i32 [%x5]) -> i32 [%x10] {
     ; check: function %parse_encoding(i32 [%x5], i32 link [%x1]) -> i32 [%x10], i32 link [%x1] fast {

@@ -1,17 +1,10 @@
 ; Test basic code generation for f32 arithmetic WebAssembly instructions.
 test compile
 
-set is_64bit=0
-isa x86 haswell
-
-set is_64bit=0
-isa x86 baseline
-
-set is_64bit=1
-isa x86 haswell
-
-set is_64bit=1
-isa x86 baseline
+target i686 haswell
+target i686 baseline
+target x86_64 haswell
+target x86_64 baseline
 
 ; Constants.
 

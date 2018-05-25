@@ -1,8 +1,7 @@
 test compile
-set is_64bit=1
 set colocated_libcalls=1
 set probestack_enabled=0
-isa x86
+target x86_64
 
 ; Like %big in probestack.cton, but with probes disabled.
 

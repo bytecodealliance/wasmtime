@@ -125,15 +125,15 @@ The ``set`` lines apply settings cumulatively::
 
     test legalizer
     set opt_level=best
-    set is_64bit=1
-    isa riscv
-    set is_64bit=0
-    isa riscv supports_m=false
+    set is_pic=1
+    isa riscv64
+    set is_pic=0
+    isa riscv32 supports_m=false
 
     function %foo() {}
 
 This example will run the legalizer test twice. Both runs will have
-``opt_level=best``, but they will have different ``is_64bit`` settings. The 32-bit
+``opt_level=best``, but they will have different ``is_pic`` settings. The 32-bit
 run will also have the RISC-V specific flag ``supports_m`` disabled.
 
 The filetests are run automatically as part of `cargo test`, and they can

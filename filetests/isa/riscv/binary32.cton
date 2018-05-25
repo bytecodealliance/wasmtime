@@ -1,6 +1,6 @@
 ; Binary emission of 32-bit code.
 test binemit
-isa riscv
+target riscv32
 
 function %RV32I(i32 link [%x1]) -> i32 link [%x1] {
     sig0 = ()
