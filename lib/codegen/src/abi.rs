@@ -163,7 +163,7 @@ pub fn legalize_abi_value(have: Type, arg: &AbiParam) -> ValueConversion {
         Ordering::Equal => {
             // This must be an integer vector that is split and then extended.
             debug_assert!(arg.value_type.is_int());
-            debug_assert!(have.is_vector());
+            debug_assert!(have.is_vector(), "expected vector type, got {}", have);
             ValueConversion::VectorSplit
         }
         // We have more bits than the argument.
