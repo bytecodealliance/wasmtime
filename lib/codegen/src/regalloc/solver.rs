@@ -297,8 +297,7 @@ impl Move {
     #[cfg_attr(feature = "cargo-clippy", allow(wrong_self_convention))]
     fn from_reg(&self) -> Option<(RegClass, RegUnit)> {
         match *self {
-            Move::Reg { rc, from, .. } |
-            Move::Spill { rc, from, .. } => Some((rc, from)),
+            Move::Reg { rc, from, .. } | Move::Spill { rc, from, .. } => Some((rc, from)),
             Move::Fill { .. } => None,
         }
     }
@@ -306,8 +305,7 @@ impl Move {
     /// Get the "to" register and register class, if possible.
     fn to_reg(&self) -> Option<(RegClass, RegUnit)> {
         match *self {
-            Move::Reg { rc, to, .. } |
-            Move::Fill { rc, to, .. } => Some((rc, to)),
+            Move::Reg { rc, to, .. } | Move::Fill { rc, to, .. } => Some((rc, to)),
             Move::Spill { .. } => None,
         }
     }
@@ -316,8 +314,7 @@ impl Move {
     fn replace_to_reg(&mut self, new: RegUnit) -> RegUnit {
         mem::replace(
             match *self {
-                Move::Reg { ref mut to, .. } |
-                Move::Fill { ref mut to, .. } => to,
+                Move::Reg { ref mut to, .. } | Move::Fill { ref mut to, .. } => to,
                 Move::Spill { .. } => panic!("No to register in a spill {}", self),
             },
             new,
@@ -348,18 +345,14 @@ impl Move {
     /// Get the value being moved.
     fn value(&self) -> Value {
         match *self {
-            Move::Reg { value, .. } |
-            Move::Fill { value, .. } |
-            Move::Spill { value, .. } => value,
+            Move::Reg { value, .. } | Move::Fill { value, .. } | Move::Spill { value, .. } => value,
         }
     }
 
     /// Get the associated register class.
     fn rc(&self) -> RegClass {
         match *self {
-            Move::Reg { rc, .. } |
-            Move::Fill { rc, .. } |
-            Move::Spill { rc, .. } => rc,
+            Move::Reg { rc, .. } | Move::Fill { rc, .. } | Move::Spill { rc, .. } => rc,
         }
     }
 }
@@ -372,46 +365,40 @@ impl fmt::Display for Move {
                 from,
                 to,
                 rc,
-            } => {
-                write!(
-                    f,
-                    "{}:{}({} -> {})",
-                    value,
-                    rc,
-                    rc.info.display_regunit(from),
-                    rc.info.display_regunit(to)
-                )
-            }
+            } => write!(
+                f,
+                "{}:{}({} -> {})",
+                value,
+                rc,
+                rc.info.display_regunit(from),
+                rc.info.display_regunit(to)
+            ),
             Move::Spill {
                 value,
                 from,
                 to_slot,
                 rc,
-            } => {
-                write!(
-                    f,
-                    "{}:{}({} -> slot {})",
-                    value,
-                    rc,
-                    rc.info.display_regunit(from),
-                    to_slot
-                )
-            }
+            } => write!(
+                f,
+                "{}:{}({} -> slot {})",
+                value,
+                rc,
+                rc.info.display_regunit(from),
+                to_slot
+            ),
             Move::Fill {
                 value,
                 from_slot,
                 to,
                 rc,
-            } => {
-                write!(
-                    f,
-                    "{}:{}(slot {} -> {})",
-                    value,
-                    rc,
-                    from_slot,
-                    rc.info.display_regunit(to)
-                )
-            }
+            } => write!(
+                f,
+                "{}:{}(slot {} -> {})",
+                value,
+                rc,
+                from_slot,
+                rc.info.display_regunit(to)
+            ),
         }
     }
 }
@@ -824,9 +811,8 @@ impl Solver {
     /// This is similar to `add_var`, except the value doesn't have a prior register assignment.
     pub fn add_def(&mut self, value: Value, constraint: RegClass, is_global: bool) {
         debug_assert!(self.inputs_done);
-        self.vars.push(
-            Variable::new_def(value, constraint, is_global),
-        );
+        self.vars
+            .push(Variable::new_def(value, constraint, is_global));
     }
 
     /// Clear the `is_global` flag on all solver variables.
@@ -992,9 +978,8 @@ impl Solver {
 
         // Convert all of the fixed register assignments into moves, but omit the ones that are
         // already in the right register.
-        self.moves.extend(self.assignments.values().filter_map(
-            Move::with_assignment,
-        ));
+        self.moves
+            .extend(self.assignments.values().filter_map(Move::with_assignment));
 
         if !(self.moves.is_empty()) {
             dbg!("collect_moves: {}", DisplayList(&self.moves));
@@ -1029,8 +1014,7 @@ impl Solver {
             if let Some(j) = self.moves[i..].iter().position(|m| match m.to_reg() {
                 Some((rc, reg)) => avail.is_avail(rc, reg),
                 None => true,
-            })
-            {
+            }) {
                 // This move can be executed now.
                 self.moves.swap(i, i + j);
                 let m = &self.moves[i];
@@ -1164,9 +1148,11 @@ mod tests {
 
     // Get a register class by name.
     fn rc_by_name(reginfo: &RegInfo, name: &str) -> RegClass {
-        reginfo.classes.iter().find(|rc| rc.name == name).expect(
-            "Can't find named register class.",
-        )
+        reginfo
+            .classes
+            .iter()
+            .find(|rc| rc.name == name)
+            .expect("Can't find named register class.")
     }
 
     // Construct a register move.

@@ -54,29 +54,24 @@ impl SubTest for TestVerifier {
         }
 
         match verify_function(func, context.flags_or_isa()) {
-            Ok(_) => {
-                match expected {
-                    None => Ok(()),
-                    Some((_, msg)) => Err(format!("passed, expected error: {}", msg)),
-                }
-            }
-            Err(got) => {
-                match expected {
-                    None => Err(format!("verifier pass, got {}", got)),
-                    Some((want_loc, want_msg)) if got.message.contains(want_msg) => {
-                        if want_loc == got.location {
-                            Ok(())
-                        } else {
-                            Err(format!(
-                                "correct error reported on {}, but wanted {}",
-                                got.location,
-                                want_loc
-                            ))
-                        }
+            Ok(_) => match expected {
+                None => Ok(()),
+                Some((_, msg)) => Err(format!("passed, expected error: {}", msg)),
+            },
+            Err(got) => match expected {
+                None => Err(format!("verifier pass, got {}", got)),
+                Some((want_loc, want_msg)) if got.message.contains(want_msg) => {
+                    if want_loc == got.location {
+                        Ok(())
+                    } else {
+                        Err(format!(
+                            "correct error reported on {}, but wanted {}",
+                            got.location, want_loc
+                        ))
                     }
-                    Some(_) => Err(format!("mismatching error: {}", got)),
                 }
-            }
+                Some(_) => Err(format!("mismatching error: {}", got)),
+            },
         }
     }
 }

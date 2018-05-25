@@ -101,9 +101,8 @@ impl DominatorTree {
     {
         let a = a.into();
         let b = b.into();
-        self.rpo_cmp_ebb(layout.pp_ebb(a), layout.pp_ebb(b)).then(
-            layout.cmp(a, b),
-        )
+        self.rpo_cmp_ebb(layout.pp_ebb(a), layout.pp_ebb(b))
+            .then(layout.cmp(a, b))
     }
 
     /// Returns `true` if `a` dominates `b`.
@@ -145,9 +144,7 @@ impl DominatorTree {
         let (mut ebb_b, mut inst_b) = match b.into() {
             ExpandedProgramPoint::Ebb(ebb) => (ebb, None),
             ExpandedProgramPoint::Inst(inst) => (
-                layout.inst_ebb(inst).expect(
-                    "Instruction not in layout.",
-                ),
+                layout.inst_ebb(inst).expect("Instruction not in layout."),
                 Some(inst),
             ),
         };
@@ -163,7 +160,11 @@ impl DominatorTree {
             ebb_b = layout.inst_ebb(idom).expect("Dominator got removed.");
             inst_b = Some(idom);
         }
-        if a == ebb_b { inst_b } else { None }
+        if a == ebb_b {
+            inst_b
+        } else {
+            None
+        }
     }
 
     /// Compute the common dominator of two basic blocks.
@@ -418,14 +419,13 @@ impl DominatorTree {
         // Get an iterator with just the reachable, already visited predecessors to `ebb`.
         // Note that during the first pass, `rpo_number` is 1 for reachable blocks that haven't
         // been visited yet, 0 for unreachable blocks.
-        let mut reachable_preds = cfg.pred_iter(ebb).filter(|&(pred, _)| {
-            self.nodes[pred].rpo_number > 1
-        });
+        let mut reachable_preds = cfg.pred_iter(ebb)
+            .filter(|&(pred, _)| self.nodes[pred].rpo_number > 1);
 
         // The RPO must visit at least one predecessor before this node.
-        let mut idom = reachable_preds.next().expect(
-            "EBB node must have one reachable predecessor",
-        );
+        let mut idom = reachable_preds
+            .next()
+            .expect("EBB node must have one reachable predecessor");
 
         for pred in reachable_preds {
             idom = self.common_dominator(idom, pred, layout);
@@ -450,11 +450,10 @@ impl DominatorTree {
         }
         // We use the RPO comparison on the postorder list so we invert the operands of the
         // comparison
-        let old_ebb_postorder_index =
-            self.postorder
-                .as_slice()
-                .binary_search_by(|probe| self.rpo_cmp_ebb(old_ebb, *probe))
-                .expect("the old ebb is not declared to the dominator tree");
+        let old_ebb_postorder_index = self.postorder
+            .as_slice()
+            .binary_search_by(|probe| self.rpo_cmp_ebb(old_ebb, *probe))
+            .expect("the old ebb is not declared to the dominator tree");
         let new_ebb_rpo = self.insert_after_rpo(old_ebb, old_ebb_postorder_index, new_ebb);
         self.nodes[new_ebb] = DomNode {
             rpo_number: new_ebb_rpo,
@@ -471,11 +470,10 @@ impl DominatorTree {
         // If there is no gaps in RPo numbers to insert this new number, we iterate
         // forward in RPO numbers and backwards in the postorder list of EBBs, renumbering the Ebbs
         // until we find a gap
-        for (&current_ebb, current_rpo) in
-            self.postorder[0..ebb_postorder_index].iter().rev().zip(
-                inserted_rpo_number +
-                    1..,
-            )
+        for (&current_ebb, current_rpo) in self.postorder[0..ebb_postorder_index]
+            .iter()
+            .rev()
+            .zip(inserted_rpo_number + 1..)
         {
             if self.nodes[current_ebb].rpo_number < current_rpo {
                 // There is no gap, we renumber
@@ -644,9 +642,8 @@ impl DominatorTreePreorder {
     {
         let a = a.into();
         let b = b.into();
-        self.pre_cmp_ebb(layout.pp_ebb(a), layout.pp_ebb(b)).then(
-            layout.cmp(a, b),
-        )
+        self.pre_cmp_ebb(layout.pp_ebb(a), layout.pp_ebb(b))
+            .then(layout.cmp(a, b))
     }
 
     /// Compare two value defs according to the dominator tree pre-order.
@@ -658,9 +655,8 @@ impl DominatorTreePreorder {
     pub fn pre_cmp_def(&self, a: Value, b: Value, func: &Function) -> Ordering {
         let da = func.dfg.value_def(a);
         let db = func.dfg.value_def(b);
-        self.pre_cmp(da, db, &func.layout).then_with(
-            || da.num().cmp(&db.num()),
-        )
+        self.pre_cmp(da, db, &func.layout)
+            .then_with(|| da.num().cmp(&db.num()))
     }
 }
 

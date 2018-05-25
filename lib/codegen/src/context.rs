@@ -24,8 +24,8 @@ use preopt::do_preopt;
 use regalloc;
 use result::{CtonError, CtonResult};
 use settings::{FlagsOrIsa, OptLevel};
-use std::vec::Vec;
 use simple_gvn::do_simple_gvn;
+use std::vec::Vec;
 use timing;
 use unreachable_code::eliminate_unreachable_code;
 use verifier;
@@ -251,11 +251,8 @@ impl Context {
 
     /// Compute the loop analysis.
     pub fn compute_loop_analysis(&mut self) {
-        self.loop_analysis.compute(
-            &self.func,
-            &self.cfg,
-            &self.domtree,
-        )
+        self.loop_analysis
+            .compute(&self.func, &self.cfg, &self.domtree)
     }
 
     /// Compute the control flow graph and dominator tree.
@@ -292,12 +289,8 @@ impl Context {
 
     /// Run the register allocator.
     pub fn regalloc(&mut self, isa: &TargetIsa) -> CtonResult {
-        self.regalloc.run(
-            isa,
-            &mut self.func,
-            &self.cfg,
-            &mut self.domtree,
-        )
+        self.regalloc
+            .run(isa, &mut self.func, &self.cfg, &mut self.domtree)
     }
 
     /// Insert prologue and epilogues after computing the stack frame layout.

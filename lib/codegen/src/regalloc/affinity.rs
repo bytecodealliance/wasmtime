@@ -90,8 +90,7 @@ impl Affinity {
             Affinity::Reg(rc) => {
                 // If the preferred register class is a subclass of the constraint, there's no need
                 // to change anything.
-                if constraint.kind != ConstraintKind::Stack &&
-                    !constraint.regclass.has_subclass(rc)
+                if constraint.kind != ConstraintKind::Stack && !constraint.regclass.has_subclass(rc)
                 {
                     // If the register classes don't overlap, `intersect` returns `Unassigned`, and
                     // we just keep our previous affinity.
@@ -120,12 +119,10 @@ impl<'a> fmt::Display for DisplayAffinity<'a> {
         match self.0 {
             Affinity::Unassigned => write!(f, "unassigned"),
             Affinity::Stack => write!(f, "stack"),
-            Affinity::Reg(rci) => {
-                match self.1 {
-                    Some(regs) => write!(f, "{}", regs.rc(rci)),
-                    None => write!(f, "{}", rci),
-                }
-            }
+            Affinity::Reg(rci) => match self.1 {
+                Some(regs) => write!(f, "{}", regs.rc(rci)),
+                None => write!(f, "{}", rci),
+            },
         }
     }
 }

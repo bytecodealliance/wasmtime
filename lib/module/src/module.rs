@@ -42,7 +42,6 @@ impl From<DataId> for ir::ExternalName {
     }
 }
 
-
 /// Linkage refers to where an entity is defined and who can see it.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Linkage {
@@ -60,19 +59,15 @@ impl Linkage {
     fn merge(a: Self, b: Self) -> Self {
         match a {
             Linkage::Export => Linkage::Export,
-            Linkage::Preemptible => {
-                match b {
-                    Linkage::Export => Linkage::Export,
-                    _ => Linkage::Preemptible,
-                }
-            }
-            Linkage::Local => {
-                match b {
-                    Linkage::Export => Linkage::Export,
-                    Linkage::Preemptible => Linkage::Preemptible,
-                    _ => Linkage::Local,
-                }
-            }
+            Linkage::Preemptible => match b {
+                Linkage::Export => Linkage::Export,
+                _ => Linkage::Preemptible,
+            },
+            Linkage::Local => match b {
+                Linkage::Export => Linkage::Export,
+                Linkage::Preemptible => Linkage::Preemptible,
+                _ => Linkage::Local,
+            },
             Linkage::Import => b,
         }
     }
@@ -93,7 +88,6 @@ impl Linkage {
         }
     }
 }
-
 
 /// A declared name may refer to either a function or data declaration
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
@@ -360,19 +354,17 @@ where
         // TODO: Can we avoid allocating names so often?
         use std::collections::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
-            Occupied(entry) => {
-                match *entry.get() {
-                    FuncOrDataId::Func(id) => {
-                        let existing = &mut self.contents.functions[id];
-                        existing.merge(linkage);
-                        self.backend.declare_function(name, existing.decl.linkage);
-                        Ok(id)
-                    }
-                    FuncOrDataId::Data(..) => Err(
-                        ModuleError::IncompatibleDeclaration(name.to_owned()),
-                    ),
+            Occupied(entry) => match *entry.get() {
+                FuncOrDataId::Func(id) => {
+                    let existing = &mut self.contents.functions[id];
+                    existing.merge(linkage);
+                    self.backend.declare_function(name, existing.decl.linkage);
+                    Ok(id)
                 }
-            }
+                FuncOrDataId::Data(..) => {
+                    Err(ModuleError::IncompatibleDeclaration(name.to_owned()))
+                }
+            },
             Vacant(entry) => {
                 let id = self.contents.functions.push(ModuleFunction {
                     decl: FunctionDeclaration {
@@ -400,24 +392,19 @@ where
         // TODO: Can we avoid allocating names so often?
         use std::collections::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
-            Occupied(entry) => {
-                match *entry.get() {
-                    FuncOrDataId::Data(id) => {
-                        let existing = &mut self.contents.data_objects[id];
-                        existing.merge(linkage, writable);
-                        self.backend.declare_data(
-                            name,
-                            existing.decl.linkage,
-                            existing.decl.writable,
-                        );
-                        Ok(id)
-                    }
-
-                    FuncOrDataId::Func(..) => Err(
-                        ModuleError::IncompatibleDeclaration(name.to_owned()),
-                    ),
+            Occupied(entry) => match *entry.get() {
+                FuncOrDataId::Data(id) => {
+                    let existing = &mut self.contents.data_objects[id];
+                    existing.merge(linkage, writable);
+                    self.backend
+                        .declare_data(name, existing.decl.linkage, existing.decl.writable);
+                    Ok(id)
                 }
-            }
+
+                FuncOrDataId::Func(..) => {
+                    Err(ModuleError::IncompatibleDeclaration(name.to_owned()))
+                }
+            },
             Vacant(entry) => {
                 let id = self.contents.data_objects.push(ModuleData {
                     decl: DataDeclaration {
@@ -535,9 +522,9 @@ where
             "imported data cannot contain references"
         );
         self.backend.write_data_funcaddr(
-            &mut info.compiled.as_mut().expect(
-                "`data` must refer to a defined data object",
-            ),
+            &mut info.compiled
+                .as_mut()
+                .expect("`data` must refer to a defined data object"),
             offset,
             what,
         );
@@ -558,9 +545,9 @@ where
             "imported data cannot contain references"
         );
         self.backend.write_data_dataaddr(
-            &mut info.compiled.as_mut().expect(
-                "`data` must refer to a defined data object",
-            ),
+            &mut info.compiled
+                .as_mut()
+                .expect("`data` must refer to a defined data object"),
             offset,
             what,
             addend,
@@ -577,10 +564,12 @@ where
                 "imported function cannot be finalized"
             );
             self.backend.finalize_function(
-                info.compiled.as_ref().expect(
-                    "function must be compiled before it can be finalized",
-                ),
-                &ModuleNamespace::<B> { contents: &self.contents },
+                info.compiled
+                    .as_ref()
+                    .expect("function must be compiled before it can be finalized"),
+                &ModuleNamespace::<B> {
+                    contents: &self.contents,
+                },
             )
         };
         self.contents.functions[func].finalized = true;
@@ -597,10 +586,12 @@ where
                 "imported data cannot be finalized"
             );
             self.backend.finalize_data(
-                info.compiled.as_ref().expect(
-                    "data object must be compiled before it can be finalized",
-                ),
-                &ModuleNamespace::<B> { contents: &self.contents },
+                info.compiled
+                    .as_ref()
+                    .expect("data object must be compiled before it can be finalized"),
+                &ModuleNamespace::<B> {
+                    contents: &self.contents,
+                },
             )
         };
         self.contents.data_objects[data].finalized = true;
@@ -614,20 +605,24 @@ where
         for info in self.contents.functions.values() {
             if info.decl.linkage.is_definable() && !info.finalized {
                 self.backend.finalize_function(
-                    info.compiled.as_ref().expect(
-                        "function must be compiled before it can be finalized",
-                    ),
-                    &ModuleNamespace::<B> { contents: &self.contents },
+                    info.compiled
+                        .as_ref()
+                        .expect("function must be compiled before it can be finalized"),
+                    &ModuleNamespace::<B> {
+                        contents: &self.contents,
+                    },
                 );
             }
         }
         for info in self.contents.data_objects.values() {
             if info.decl.linkage.is_definable() && !info.finalized {
                 self.backend.finalize_data(
-                    info.compiled.as_ref().expect(
-                        "data object must be compiled before it can be finalized",
-                    ),
-                    &ModuleNamespace::<B> { contents: &self.contents },
+                    info.compiled
+                        .as_ref()
+                        .expect("data object must be compiled before it can be finalized"),
+                    &ModuleNamespace::<B> {
+                        contents: &self.contents,
+                    },
                 );
             }
         }

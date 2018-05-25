@@ -10,7 +10,7 @@ use ir::{DataFlowGraph, ExternalName, Layout, Signature};
 use ir::{Ebb, ExtFuncData, FuncRef, GlobalVar, GlobalVarData, Heap, HeapData, JumpTable,
          JumpTableData, SigRef, StackSlot, StackSlotData};
 use ir::{EbbOffsets, InstEncodings, JumpTables, SourceLocs, StackSlots, ValueLocations};
-use isa::{EncInfo, Legalize, TargetIsa, Encoding};
+use isa::{EncInfo, Encoding, Legalize, TargetIsa};
 use settings::CallConv;
 use std::fmt;
 use write::write_function;
@@ -151,9 +151,9 @@ impl Function {
     /// Returns the value of the last `purpose` parameter, or `None` if no such parameter exists.
     pub fn special_param(&self, purpose: ir::ArgumentPurpose) -> Option<ir::Value> {
         let entry = self.layout.entry_block().expect("Function is empty");
-        self.signature.special_param_index(purpose).map(|i| {
-            self.dfg.ebb_params(entry)[i]
-        })
+        self.signature
+            .special_param_index(purpose)
+            .map(|i| self.dfg.ebb_params(entry)[i])
     }
 
     /// Get an iterator over the instructions in `ebb`, including offsets and encoded instruction

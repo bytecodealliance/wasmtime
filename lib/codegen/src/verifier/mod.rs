@@ -237,9 +237,8 @@ impl<'a> Verifier<'a> {
 
         let fixed_results = inst_data.opcode().constraints().fixed_results();
         // var_results is 0 if we aren't a call instruction
-        let var_results = dfg.call_signature(inst).map_or(0, |sig| {
-            dfg.signatures[sig].returns.len()
-        });
+        let var_results = dfg.call_signature(inst)
+            .map_or(0, |sig| dfg.signatures[sig].returns.len());
         let total_results = fixed_results + var_results;
 
         // All result values for multi-valued instructions are created
@@ -281,23 +280,23 @@ impl<'a> Verifier<'a> {
                 destination,
                 ref args,
                 ..
-            } |
-            Branch {
+            }
+            | Branch {
                 destination,
                 ref args,
                 ..
-            } |
-            BranchInt {
+            }
+            | BranchInt {
                 destination,
                 ref args,
                 ..
-            } |
-            BranchFloat {
+            }
+            | BranchFloat {
                 destination,
                 ref args,
                 ..
-            } |
-            BranchIcmp {
+            }
+            | BranchIcmp {
                 destination,
                 ref args,
                 ..
@@ -308,19 +307,22 @@ impl<'a> Verifier<'a> {
             BranchTable { table, .. } => {
                 self.verify_jump_table(inst, table)?;
             }
-            Call { func_ref, ref args, .. } => {
+            Call {
+                func_ref, ref args, ..
+            } => {
                 self.verify_func_ref(inst, func_ref)?;
                 self.verify_value_list(inst, args)?;
             }
-            CallIndirect { sig_ref, ref args, .. } => {
+            CallIndirect {
+                sig_ref, ref args, ..
+            } => {
                 self.verify_sig_ref(inst, sig_ref)?;
                 self.verify_value_list(inst, args)?;
             }
             FuncAddr { func_ref, .. } => {
                 self.verify_func_ref(inst, func_ref)?;
             }
-            StackLoad { stack_slot, .. } |
-            StackStore { stack_slot, .. } => {
+            StackLoad { stack_slot, .. } | StackStore { stack_slot, .. } => {
                 self.verify_stack_slot(inst, stack_slot)?;
             }
             UnaryGlobalVar { global_var, .. } => {
@@ -343,31 +345,31 @@ impl<'a> Verifier<'a> {
             }
 
             // Exhaustive list so we can't forget to add new formats
-            Unary { .. } |
-            UnaryImm { .. } |
-            UnaryIeee32 { .. } |
-            UnaryIeee64 { .. } |
-            UnaryBool { .. } |
-            Binary { .. } |
-            BinaryImm { .. } |
-            Ternary { .. } |
-            InsertLane { .. } |
-            ExtractLane { .. } |
-            IntCompare { .. } |
-            IntCompareImm { .. } |
-            IntCond { .. } |
-            FloatCompare { .. } |
-            FloatCond { .. } |
-            IntSelect { .. } |
-            Load { .. } |
-            Store { .. } |
-            RegMove { .. } |
-            CopySpecial { .. } |
-            Trap { .. } |
-            CondTrap { .. } |
-            IntCondTrap { .. } |
-            FloatCondTrap { .. } |
-            NullAry { .. } => {}
+            Unary { .. }
+            | UnaryImm { .. }
+            | UnaryIeee32 { .. }
+            | UnaryIeee64 { .. }
+            | UnaryBool { .. }
+            | Binary { .. }
+            | BinaryImm { .. }
+            | Ternary { .. }
+            | InsertLane { .. }
+            | ExtractLane { .. }
+            | IntCompare { .. }
+            | IntCompareImm { .. }
+            | IntCond { .. }
+            | FloatCompare { .. }
+            | FloatCond { .. }
+            | IntSelect { .. }
+            | Load { .. }
+            | Store { .. }
+            | RegMove { .. }
+            | CopySpecial { .. }
+            | Trap { .. }
+            | CondTrap { .. }
+            | IntCondTrap { .. }
+            | FloatCondTrap { .. }
+            | NullAry { .. } => {}
         }
 
         Ok(())
@@ -480,11 +482,8 @@ impl<'a> Verifier<'a> {
                 }
                 // Defining instruction dominates the instruction that uses the value.
                 if is_reachable {
-                    if !self.expected_domtree.dominates(
-                        def_inst,
-                        loc_inst,
-                        &self.func.layout,
-                    )
+                    if !self.expected_domtree
+                        .dominates(def_inst, loc_inst, &self.func.layout)
                     {
                         return err!(loc_inst, "uses value from non-dominating {}", def_inst);
                     }
@@ -513,12 +512,9 @@ impl<'a> Verifier<'a> {
                     );
                 }
                 // The defining EBB dominates the instruction using this value.
-                if is_reachable &&
-                    !self.expected_domtree.dominates(
-                        ebb,
-                        loc_inst,
-                        &self.func.layout,
-                    )
+                if is_reachable
+                    && !self.expected_domtree
+                        .dominates(ebb, loc_inst, &self.func.layout)
                 {
                     return err!(loc_inst, "uses value arg from non-dominating {}", ebb);
                 }
@@ -542,13 +538,11 @@ impl<'a> Verifier<'a> {
                     Ok(())
                 }
             }
-            ValueDef::Param(_, _) => {
-                err!(
-                    loc_inst,
-                    "instruction result {} is not defined by the instruction",
-                    v
-                )
-            }
+            ValueDef::Param(_, _) => err!(
+                loc_inst,
+                "instruction result {} is not defined by the instruction",
+                v
+            ),
         }
     }
 
@@ -576,12 +570,11 @@ impl<'a> Verifier<'a> {
                 "incorrect number of Ebbs in postorder traversal"
             );
         }
-        for (index, (&test_ebb, &true_ebb)) in
-            domtree
-                .cfg_postorder()
-                .iter()
-                .zip(self.expected_domtree.cfg_postorder().iter())
-                .enumerate()
+        for (index, (&test_ebb, &true_ebb)) in domtree
+            .cfg_postorder()
+            .iter()
+            .zip(self.expected_domtree.cfg_postorder().iter())
+            .enumerate()
         {
             if test_ebb != true_ebb {
                 return err!(
@@ -595,11 +588,8 @@ impl<'a> Verifier<'a> {
         }
         // We verify rpo_cmp on pairs of adjacent ebbs in the postorder
         for (&prev_ebb, &next_ebb) in domtree.cfg_postorder().iter().adjacent_pairs() {
-            if self.expected_domtree.rpo_cmp(
-                prev_ebb,
-                next_ebb,
-                &self.func.layout,
-            ) != Ordering::Greater
+            if self.expected_domtree
+                .rpo_cmp(prev_ebb, next_ebb, &self.func.layout) != Ordering::Greater
             {
                 return err!(
                     next_ebb,
@@ -737,9 +727,11 @@ impl<'a> Verifier<'a> {
     fn typecheck_variable_args(&self, inst: Inst) -> Result {
         match self.func.dfg.analyze_branch(inst) {
             BranchInfo::SingleDest(ebb, _) => {
-                let iter = self.func.dfg.ebb_params(ebb).iter().map(|&v| {
-                    self.func.dfg.value_type(v)
-                });
+                let iter = self.func
+                    .dfg
+                    .ebb_params(ebb)
+                    .iter()
+                    .map(|&v| self.func.dfg.value_type(v));
                 self.typecheck_variable_args_iterator(inst, iter)?;
             }
             BranchInfo::Table(table) => {
@@ -761,16 +753,18 @@ impl<'a> Verifier<'a> {
         match self.func.dfg[inst].analyze_call(&self.func.dfg.value_lists) {
             CallInfo::Direct(func_ref, _) => {
                 let sig_ref = self.func.dfg.ext_funcs[func_ref].signature;
-                let arg_types = self.func.dfg.signatures[sig_ref].params.iter().map(|a| {
-                    a.value_type
-                });
+                let arg_types = self.func.dfg.signatures[sig_ref]
+                    .params
+                    .iter()
+                    .map(|a| a.value_type);
                 self.typecheck_variable_args_iterator(inst, arg_types)?;
                 self.check_outgoing_args(inst, sig_ref)?;
             }
             CallInfo::Indirect(sig_ref, _) => {
-                let arg_types = self.func.dfg.signatures[sig_ref].params.iter().map(|a| {
-                    a.value_type
-                });
+                let arg_types = self.func.dfg.signatures[sig_ref]
+                    .params
+                    .iter()
+                    .map(|a| a.value_type);
                 self.typecheck_variable_args_iterator(inst, arg_types)?;
                 self.check_outgoing_args(inst, sig_ref)?;
             }
@@ -1047,8 +1041,7 @@ impl<'a> Verifier<'a> {
                     &self.func,
                     &self.func.dfg[inst],
                     self.func.dfg.ctrl_typevar(inst),
-                )
-                {
+                ) {
                     if !possible_encodings.is_empty() {
                         possible_encodings.push_str(", ");
                         multiple_encodings = true;
@@ -1119,8 +1112,7 @@ impl<'a> Verifier<'a> {
     fn verify_return_at_end(&self) -> Result {
         for ebb in self.func.layout.ebbs() {
             let inst = self.func.layout.last_inst(ebb).unwrap();
-            if self.func.dfg[inst].opcode().is_return() &&
-                Some(ebb) != self.func.layout.last_ebb()
+            if self.func.dfg[inst].opcode().is_return() && Some(ebb) != self.func.layout.last_ebb()
             {
                 return err!(inst, "Internal return not allowed with return_at_end=1");
             }
@@ -1155,8 +1147,8 @@ impl<'a> Verifier<'a> {
 mod tests {
     use super::{Error, Verifier};
     use entity::EntityList;
-    use ir::instructions::{InstructionData, Opcode};
     use ir::Function;
+    use ir::instructions::{InstructionData, Opcode};
     use settings;
 
     macro_rules! assert_err_with_msg {

@@ -78,8 +78,8 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> Result<CodeOffset
                         let dest_offset = cur.func.offsets[dest];
                         // This could be an out-of-range branch.
                         // Relax it unless the destination offset has not been computed yet.
-                        if !range.contains(offset, dest_offset) &&
-                            (dest_offset != 0 || Some(dest) == cur.func.layout.entry_block())
+                        if !range.contains(offset, dest_offset)
+                            && (dest_offset != 0 || Some(dest) == cur.func.layout.entry_block())
                         {
                             offset += relax_branch(&mut cur, offset, dest_offset, &encinfo, isa);
                             continue;
@@ -148,14 +148,14 @@ fn relax_branch(
     // Pick the first encoding that can handle the branch range.
     let dfg = &cur.func.dfg;
     let ctrl_type = dfg.ctrl_typevar(inst);
-    if let Some(enc) = isa.legal_encodings(cur.func, &dfg[inst], ctrl_type).find(
-        |&enc| {
+    if let Some(enc) = isa.legal_encodings(cur.func, &dfg[inst], ctrl_type)
+        .find(|&enc| {
             let range = encinfo.branch_range(enc).expect("Branch with no range");
             if !range.contains(offset, dest_offset) {
                 dbg!("  trying [{}]: out of range", encinfo.display(enc));
                 false
-            } else if encinfo.operand_constraints(enc) !=
-                       encinfo.operand_constraints(cur.func.encodings[inst])
+            } else if encinfo.operand_constraints(enc)
+                != encinfo.operand_constraints(cur.func.encodings[inst])
             {
                 // Conservatively give up if the encoding has different constraints
                 // than the original, so that we don't risk picking a new encoding
@@ -168,9 +168,7 @@ fn relax_branch(
                 dbg!("  trying [{}]: OK", encinfo.display(enc));
                 true
             }
-        },
-    )
-    {
+        }) {
         cur.func.encodings[inst] = enc;
         return encinfo.bytes(enc);
     }

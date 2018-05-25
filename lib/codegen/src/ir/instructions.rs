@@ -178,13 +178,13 @@ impl InstructionData {
                 destination,
                 ref args,
                 ..
-            } |
-            InstructionData::BranchFloat {
+            }
+            | InstructionData::BranchFloat {
                 destination,
                 ref args,
                 ..
-            } |
-            InstructionData::Branch {
+            }
+            | InstructionData::Branch {
                 destination,
                 ref args,
                 ..
@@ -208,11 +208,11 @@ impl InstructionData {
     /// Multi-destination branches like `br_table` return `None`.
     pub fn branch_destination(&self) -> Option<Ebb> {
         match *self {
-            InstructionData::Jump { destination, .. } |
-            InstructionData::Branch { destination, .. } |
-            InstructionData::BranchInt { destination, .. } |
-            InstructionData::BranchFloat { destination, .. } |
-            InstructionData::BranchIcmp { destination, .. } => Some(destination),
+            InstructionData::Jump { destination, .. }
+            | InstructionData::Branch { destination, .. }
+            | InstructionData::BranchInt { destination, .. }
+            | InstructionData::BranchFloat { destination, .. }
+            | InstructionData::BranchIcmp { destination, .. } => Some(destination),
             InstructionData::BranchTable { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
@@ -227,11 +227,26 @@ impl InstructionData {
     /// Multi-destination branches like `br_table` return `None`.
     pub fn branch_destination_mut(&mut self) -> Option<&mut Ebb> {
         match *self {
-            InstructionData::Jump { ref mut destination, .. } |
-            InstructionData::Branch { ref mut destination, .. } |
-            InstructionData::BranchInt { ref mut destination, .. } |
-            InstructionData::BranchFloat { ref mut destination, .. } |
-            InstructionData::BranchIcmp { ref mut destination, .. } => Some(destination),
+            InstructionData::Jump {
+                ref mut destination,
+                ..
+            }
+            | InstructionData::Branch {
+                ref mut destination,
+                ..
+            }
+            | InstructionData::BranchInt {
+                ref mut destination,
+                ..
+            }
+            | InstructionData::BranchFloat {
+                ref mut destination,
+                ..
+            }
+            | InstructionData::BranchIcmp {
+                ref mut destination,
+                ..
+            } => Some(destination),
             InstructionData::BranchTable { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
@@ -245,12 +260,12 @@ impl InstructionData {
     /// Any instruction that can call another function reveals its call signature here.
     pub fn analyze_call<'a>(&'a self, pool: &'a ValueListPool) -> CallInfo<'a> {
         match *self {
-            InstructionData::Call { func_ref, ref args, .. } => {
-                CallInfo::Direct(func_ref, args.as_slice(pool))
-            }
-            InstructionData::CallIndirect { sig_ref, ref args, .. } => {
-                CallInfo::Indirect(sig_ref, &args.as_slice(pool)[1..])
-            }
+            InstructionData::Call {
+                func_ref, ref args, ..
+            } => CallInfo::Direct(func_ref, args.as_slice(pool)),
+            InstructionData::CallIndirect {
+                sig_ref, ref args, ..
+            } => CallInfo::Indirect(sig_ref, &args.as_slice(pool)[1..]),
             _ => {
                 debug_assert!(!self.opcode().is_call());
                 CallInfo::NotACall
@@ -512,12 +527,16 @@ impl OperandConstraint {
             LaneOf => Bound(ctrl_type.lane_type()),
             AsBool => Bound(ctrl_type.as_bool()),
             HalfWidth => Bound(ctrl_type.half_width().expect("invalid type for half_width")),
-            DoubleWidth => Bound(ctrl_type.double_width().expect(
-                "invalid type for double_width",
-            )),
-            HalfVector => Bound(ctrl_type.half_vector().expect(
-                "invalid type for half_vector",
-            )),
+            DoubleWidth => Bound(
+                ctrl_type
+                    .double_width()
+                    .expect("invalid type for double_width"),
+            ),
+            HalfVector => Bound(
+                ctrl_type
+                    .half_vector()
+                    .expect("invalid type for half_vector"),
+            ),
             DoubleVector => Bound(ctrl_type.by(2).expect("invalid type for double_vector")),
         }
     }

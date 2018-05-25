@@ -246,9 +246,11 @@ pub trait Cursor {
         let new_pos = if let Some(next) = self.layout().next_inst(inst) {
             CursorPosition::At(next)
         } else {
-            CursorPosition::After(self.layout().inst_ebb(inst).expect(
-                "current instruction removed?",
-            ))
+            CursorPosition::After(
+                self.layout()
+                    .inst_ebb(inst)
+                    .expect("current instruction removed?"),
+            )
         };
         self.set_position(new_pos);
     }
@@ -413,9 +415,11 @@ pub trait Cursor {
                     self.set_position(At(next));
                     Some(next)
                 } else {
-                    let pos = After(self.layout().inst_ebb(inst).expect(
-                        "current instruction removed?",
-                    ));
+                    let pos = After(
+                        self.layout()
+                            .inst_ebb(inst)
+                            .expect("current instruction removed?"),
+                    );
                     self.set_position(pos);
                     None
                 }
@@ -465,9 +469,11 @@ pub trait Cursor {
                     self.set_position(At(prev));
                     Some(prev)
                 } else {
-                    let pos = Before(self.layout().inst_ebb(inst).expect(
-                        "current instruction removed?",
-                    ));
+                    let pos = Before(
+                        self.layout()
+                            .inst_ebb(inst)
+                            .expect("current instruction removed?"),
+                    );
                     self.set_position(pos);
                     None
                 }
@@ -746,11 +752,9 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
         // Assign an encoding.
         // XXX Is there a way to describe this error to the user?
         #[cfg_attr(feature = "cargo-clippy", allow(match_wild_err_arm))]
-        match self.isa.encode(
-            &self.func,
-            &self.func.dfg[inst],
-            ctrl_typevar,
-        ) {
+        match self.isa
+            .encode(&self.func, &self.func.dfg[inst], ctrl_typevar)
+        {
             Ok(e) => self.func.encodings[inst] = e,
             Err(_) => panic!("can't encode {}", self.display_inst(inst)),
         }

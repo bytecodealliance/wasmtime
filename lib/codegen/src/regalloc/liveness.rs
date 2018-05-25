@@ -179,7 +179,7 @@ use entity::SparseMap;
 use flowgraph::ControlFlowGraph;
 use ir::dfg::ValueDef;
 use ir::{Ebb, Function, Inst, Layout, ProgramPoint, Value};
-use isa::{EncInfo, TargetIsa, OperandConstraint};
+use isa::{EncInfo, OperandConstraint, TargetIsa};
 use regalloc::affinity::Affinity;
 use regalloc::liverange::{LiveRange, LiveRangeContext, LiveRangeForest};
 use std::mem;
@@ -217,9 +217,9 @@ fn get_or_create<'a>(
                     .map(Affinity::new)
                     .or_else(|| {
                         // If this is a call, get the return value affinity.
-                        func.dfg.call_signature(inst).map(|sig| {
-                            Affinity::abi(&func.dfg.signatures[sig].returns[rnum], isa)
-                        })
+                        func.dfg
+                            .call_signature(inst)
+                            .map(|sig| Affinity::abi(&func.dfg.signatures[sig].returns[rnum], isa))
                     })
                     .unwrap_or_default();
             }
@@ -336,9 +336,8 @@ impl Liveness {
     where
         PP: Into<ProgramPoint>,
     {
-        let old = self.ranges.insert(
-            LiveRange::new(value, def.into(), affinity),
-        );
+        let old = self.ranges
+            .insert(LiveRange::new(value, def.into(), affinity));
         debug_assert!(old.is_none(), "{} already has a live range", value);
     }
 

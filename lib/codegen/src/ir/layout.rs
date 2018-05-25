@@ -90,7 +90,11 @@ fn midpoint(a: SequenceNumber, b: SequenceNumber) -> Option<SequenceNumber> {
     debug_assert!(a < b);
     // Avoid integer overflow.
     let m = a + (b - a) / 2;
-    if m > a { Some(m) } else { None }
+    if m > a {
+        Some(m)
+    } else {
+        None
+    }
 }
 
 #[test]
@@ -178,9 +182,8 @@ impl Layout {
     /// Assign a valid sequence number to `inst` such that the numbers are still monotonic. This may
     /// require renumbering.
     fn assign_inst_seq(&mut self, inst: Inst) {
-        let ebb = self.inst_ebb(inst).expect(
-            "inst must be inserted before assigning an seq",
-        );
+        let ebb = self.inst_ebb(inst)
+            .expect("inst must be inserted before assigning an seq");
 
         // Get the sequence number immediately before `inst`.
         let prev_seq = match self.insts[inst].prev.expand() {
@@ -566,9 +569,8 @@ impl Layout {
     /// Insert `inst` before the instruction `before` in the same EBB.
     pub fn insert_inst(&mut self, inst: Inst, before: Inst) {
         debug_assert_eq!(self.inst_ebb(inst), None);
-        let ebb = self.inst_ebb(before).expect(
-            "Instruction before insertion point not in the layout",
-        );
+        let ebb = self.inst_ebb(before)
+            .expect("Instruction before insertion point not in the layout");
         let after = self.insts[before].prev;
         {
             let inst_node = &mut self.insts[inst];
@@ -641,9 +643,8 @@ impl Layout {
     ///     i4
     /// ```
     pub fn split_ebb(&mut self, new_ebb: Ebb, before: Inst) {
-        let old_ebb = self.inst_ebb(before).expect(
-            "The `before` instruction must be in the layout",
-        );
+        let old_ebb = self.inst_ebb(before)
+            .expect("The `before` instruction must be in the layout");
         debug_assert!(!self.is_ebb_inserted(new_ebb));
 
         // Insert new_ebb after old_ebb.

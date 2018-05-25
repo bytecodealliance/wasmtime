@@ -126,7 +126,7 @@ macro_rules! dbg {
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! dbg {
-    ($($arg:tt)+) => {}
+    ($($arg:tt)+) => {};
 }
 
 /// Helper for printing lists.

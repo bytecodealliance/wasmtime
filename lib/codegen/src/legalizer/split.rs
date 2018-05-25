@@ -134,9 +134,9 @@ fn split_any(
                 pos.func.dfg.display_inst(inst, None)
             );
             let fixed_args = branch_opc.constraints().fixed_value_arguments();
-            let mut args = pos.func.dfg[inst].take_value_list().expect(
-                "Branches must have value lists.",
-            );
+            let mut args = pos.func.dfg[inst]
+                .take_value_list()
+                .expect("Branches must have value lists.");
             let num_args = args.len(&pos.func.dfg.value_lists);
             // Get the old value passed to the EBB argument we're repairing.
             let old_arg = args.get(fixed_args + repair.num, &pos.func.dfg.value_lists)
@@ -236,12 +236,9 @@ fn split_value(
                 // Note that it is safe to move `pos` here since `reuse` was set above, so we don't
                 // need to insert a split instruction before returning.
                 pos.goto_first_inst(ebb);
-                pos.ins().with_result(value).Binary(
-                    concat,
-                    split_type,
-                    lo,
-                    hi,
-                );
+                pos.ins()
+                    .with_result(value)
+                    .Binary(concat, split_type, lo, hi);
 
                 // Finally, splitting the EBB parameter is not enough. We also have to repair all
                 // of the predecessor instructions that branch here.

@@ -13,19 +13,10 @@
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "std", warn(unstable_features))]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
+#![cfg_attr(feature = "cargo-clippy", allow(new_without_default, new_without_default_derive))]
 #![cfg_attr(feature = "cargo-clippy",
-            allow(new_without_default, new_without_default_derive))]
-#![cfg_attr(feature="cargo-clippy", warn(
-                float_arithmetic,
-                mut_mut,
-                nonminimal_bool,
-                option_map_unwrap_or,
-                option_map_unwrap_or_else,
-                print_stdout,
-                unicode_not_nfc,
-                use_self,
-                ))]
-
+            warn(float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or,
+                 option_map_unwrap_or_else, print_stdout, unicode_not_nfc, use_self))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
@@ -62,12 +53,12 @@ pub use translation_utils::{FunctionIndex, Global, GlobalIndex, GlobalInit, Memo
 
 #[cfg(not(feature = "std"))]
 mod std {
-    pub use alloc::vec;
     pub use alloc::string;
-    pub use core::{u32, i32, str, cmp};
+    pub use alloc::vec;
     pub use core::fmt;
     pub use core::option;
+    pub use core::{cmp, str, i32, u32};
     pub mod collections {
-        pub use hashmap_core::{HashMap, map as hash_map};
+        pub use hashmap_core::{map as hash_map, HashMap};
     }
 }

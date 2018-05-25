@@ -34,9 +34,8 @@ pub fn expand_global_addr(
 /// Expand a `global_addr` instruction for a vmctx global.
 fn vmctx_addr(inst: ir::Inst, func: &mut ir::Function, offset: i64) {
     // Get the value representing the `vmctx` argument.
-    let vmctx = func.special_param(ir::ArgumentPurpose::VMContext).expect(
-        "Missing vmctx parameter",
-    );
+    let vmctx = func.special_param(ir::ArgumentPurpose::VMContext)
+        .expect("Missing vmctx parameter");
 
     // Simply replace the `global_addr` instruction with an `iadd_imm`, reusing the result value.
     func.dfg.replace(inst).iadd_imm(vmctx, offset);

@@ -8,4 +8,4 @@ cd $(dirname "$0")
 # Make sure we can find rustfmt.
 export PATH="$PATH:$HOME/.cargo/bin"
 
-exec cargo fmt --all -- "$@"
+exec cargo +stable fmt --all -- "$@"

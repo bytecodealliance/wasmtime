@@ -384,8 +384,7 @@ mod tests {
             CallConv::SystemV,
             CallConv::WindowsFastcall,
             CallConv::Baldrdash,
-        ]
-        {
+        ] {
             assert_eq!(Ok(cc), cc.to_string().parse())
         }
     }

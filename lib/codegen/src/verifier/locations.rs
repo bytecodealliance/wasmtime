@@ -89,9 +89,9 @@ impl<'a> LocationVerifier<'a> {
         enc: isa::Encoding,
         divert: &RegDiversions,
     ) -> Result {
-        let constraints = self.encinfo.operand_constraints(enc).expect(
-            "check_enc_constraints requires a legal encoding",
-        );
+        let constraints = self.encinfo
+            .operand_constraints(enc)
+            .expect("check_enc_constraints requires a legal encoding");
 
         if constraints.satisfied(inst, divert, self.func) {
             return Ok(());
@@ -235,8 +235,8 @@ impl<'a> LocationVerifier<'a> {
     /// Update diversions to reflect the current instruction and check their consistency.
     fn update_diversions(&self, inst: ir::Inst, divert: &mut RegDiversions) -> Result {
         let (arg, src) = match self.func.dfg[inst] {
-            ir::InstructionData::RegMove { arg, src, .. } |
-            ir::InstructionData::RegSpill { arg, src, .. } => (arg, ir::ValueLoc::Reg(src)),
+            ir::InstructionData::RegMove { arg, src, .. }
+            | ir::InstructionData::RegSpill { arg, src, .. } => (arg, ir::ValueLoc::Reg(src)),
             ir::InstructionData::RegFill { arg, src, .. } => (arg, ir::ValueLoc::Stack(src)),
             _ => return Ok(()),
         };
@@ -275,12 +275,10 @@ impl<'a> LocationVerifier<'a> {
         let dfg = &self.func.dfg;
 
         match dfg.analyze_branch(inst) {
-            NotABranch => {
-                panic!(
-                    "No branch information for {}",
-                    dfg.display_inst(inst, self.isa)
-                )
-            }
+            NotABranch => panic!(
+                "No branch information for {}",
+                dfg.display_inst(inst, self.isa)
+            ),
             SingleDest(ebb, _) => {
                 for d in divert.all() {
                     let lr = &liveness[d.value];

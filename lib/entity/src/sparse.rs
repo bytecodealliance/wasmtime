@@ -7,11 +7,11 @@
 //! > Briggs, Torczon, *An efficient representation for sparse sets*,
 //!   ACM Letters on Programming Languages and Systems, Volume 2, Issue 1-4, March-Dec. 1993.
 
-use {EntityMap, EntityRef};
 use std::mem;
 use std::slice;
 use std::u32;
 use std::vec::Vec;
+use {EntityMap, EntityRef};
 
 /// Trait for extracting keys from values stored in a `SparseMap`.
 ///

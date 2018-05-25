@@ -209,12 +209,11 @@ mod details {
 
     /// Add `timings` to the accumulated timings for the current thread.
     pub fn add_to_current(times: &PassTimes) {
-        PASS_TIME.with(|rc| for (a, b) in rc.borrow_mut().pass.iter_mut().zip(
-            &times.pass,
-        )
-        {
-            a.total += b.total;
-            a.child += b.child;
+        PASS_TIME.with(|rc| {
+            for (a, b) in rc.borrow_mut().pass.iter_mut().zip(&times.pass) {
+                a.total += b.total;
+                a.child += b.child;
+            }
         })
     }
 }

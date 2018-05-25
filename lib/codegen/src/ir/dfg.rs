@@ -166,9 +166,9 @@ impl DataFlowGraph {
     /// Get the type of a value.
     pub fn value_type(&self, v: Value) -> Type {
         match self.values[v] {
-            ValueData::Inst { ty, .. } |
-            ValueData::Param { ty, .. } |
-            ValueData::Alias { ty, .. } => ty,
+            ValueData::Inst { ty, .. }
+            | ValueData::Param { ty, .. }
+            | ValueData::Alias { ty, .. } => ty,
         }
     }
 
@@ -235,11 +235,9 @@ impl DataFlowGraph {
         // This also avoids the creation of loops.
         let original = self.resolve_aliases(src);
         debug_assert_ne!(
-            dest,
-            original,
+            dest, original,
             "Aliasing {} to {} would create a loop",
-            dest,
-            src
+            dest, src
         );
         let ty = self.value_type(original);
         debug_assert_eq!(
@@ -267,8 +265,7 @@ impl DataFlowGraph {
     ///
     pub fn replace_with_aliases(&mut self, dest_inst: Inst, src_inst: Inst) {
         debug_assert_ne!(
-            dest_inst,
-            src_inst,
+            dest_inst, src_inst,
             "Replacing {} with itself would create a loop",
             dest_inst
         );
@@ -342,8 +339,7 @@ impl ValueDef {
     /// this value.
     pub fn num(self) -> usize {
         match self {
-            ValueDef::Result(_, n) |
-            ValueDef::Param(_, n) => n,
+            ValueDef::Result(_, n) | ValueDef::Param(_, n) => n,
         }
     }
 }
@@ -574,9 +570,9 @@ impl DataFlowGraph {
     ///
     /// Panics if the instruction doesn't support arguments.
     pub fn append_inst_arg(&mut self, inst: Inst, new_arg: Value) {
-        let mut branch_values = self.insts[inst].take_value_list().expect(
-            "the instruction doesn't have value arguments",
-        );
+        let mut branch_values = self.insts[inst]
+            .take_value_list()
+            .expect("the instruction doesn't have value arguments");
         branch_values.push(new_arg, &mut self.value_lists);
         self.insts[inst].put_value_list(branch_values)
     }
@@ -585,9 +581,9 @@ impl DataFlowGraph {
     ///
     /// This function panics if the instruction doesn't have any result.
     pub fn first_result(&self, inst: Inst) -> Value {
-        self.results[inst].first(&self.value_lists).expect(
-            "Instruction has no results",
-        )
+        self.results[inst]
+            .first(&self.value_lists)
+            .expect("Instruction has no results")
     }
 
     /// Test if `inst` has any result values currently.
@@ -653,9 +649,11 @@ impl DataFlowGraph {
         } else if constraints.requires_typevar_operand() {
             // Not all instruction formats have a designated operand, but in that case
             // `requires_typevar_operand()` should never be true.
-            self.value_type(self[inst].typevar_operand(&self.value_lists).expect(
-                "Instruction format doesn't have a designated operand, bad opcode.",
-            ))
+            self.value_type(
+                self[inst]
+                    .typevar_operand(&self.value_lists)
+                    .expect("Instruction format doesn't have a designated operand, bad opcode."),
+            )
         } else {
             self.value_type(self.first_result(inst))
         }
@@ -721,13 +719,16 @@ impl DataFlowGraph {
         } else {
             panic!("{} must be an EBB parameter", val);
         };
-        self.ebbs[ebb].params.swap_remove(
-            num as usize,
-            &mut self.value_lists,
-        );
+        self.ebbs[ebb]
+            .params
+            .swap_remove(num as usize, &mut self.value_lists);
         if let Some(last_arg_val) = self.ebbs[ebb].params.get(num as usize, &self.value_lists) {
             // We update the position of the old last arg.
-            if let ValueData::Param { num: ref mut old_num, .. } = self.values[last_arg_val] {
+            if let ValueData::Param {
+                num: ref mut old_num,
+                ..
+            } = self.values[last_arg_val]
+            {
                 *old_num = num;
             } else {
                 panic!("{} should be an Ebb parameter", last_arg_val);
@@ -744,27 +745,25 @@ impl DataFlowGraph {
         } else {
             panic!("{} must be an EBB parameter", val);
         };
-        self.ebbs[ebb].params.remove(
-            num as usize,
-            &mut self.value_lists,
-        );
+        self.ebbs[ebb]
+            .params
+            .remove(num as usize, &mut self.value_lists);
         for index in num..(self.num_ebb_params(ebb) as u16) {
             match self.values[self.ebbs[ebb]
-                                    .params
-                                    .get(index as usize, &self.value_lists)
-                                    .unwrap()] {
+                                  .params
+                                  .get(index as usize, &self.value_lists)
+                                  .unwrap()]
+            {
                 ValueData::Param { ref mut num, .. } => {
                     *num -= 1;
                 }
-                _ => {
-                    panic!(
-                        "{} must be an EBB parameter",
-                        self.ebbs[ebb]
-                            .params
-                            .get(index as usize, &self.value_lists)
-                            .unwrap()
-                    )
-                }
+                _ => panic!(
+                    "{} must be an EBB parameter",
+                    self.ebbs[ebb]
+                        .params
+                        .get(index as usize, &self.value_lists)
+                        .unwrap()
+                ),
             }
         }
     }
@@ -835,7 +834,9 @@ struct EbbData {
 
 impl EbbData {
     fn new() -> Self {
-        Self { params: ValueList::new() }
+        Self {
+            params: ValueList::new(),
+        }
     }
 }
 
@@ -878,9 +879,9 @@ impl DataFlowGraph {
             "this function is only for assigning types to previously invalid values"
         );
         match self.values[v] {
-            ValueData::Inst { ref mut ty, .. } |
-            ValueData::Param { ref mut ty, .. } |
-            ValueData::Alias { ref mut ty, .. } => *ty = t,
+            ValueData::Inst { ref mut ty, .. }
+            | ValueData::Param { ref mut ty, .. }
+            | ValueData::Alias { ref mut ty, .. } => *ty = t,
         }
     }
 

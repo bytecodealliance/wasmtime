@@ -1,9 +1,9 @@
 //! Naming well-known routines in the runtime library.
 
-use ir::{types, Opcode, Type, Inst, Function, FuncRef, ExternalName, Signature, AbiParam,
-         ExtFuncData, ArgumentPurpose};
+use ir::{types, AbiParam, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, Inst,
+         Opcode, Signature, Type};
+use isa::{RegUnit, TargetIsa};
 use settings::CallConv;
-use isa::{TargetIsa, RegUnit};
 use std::fmt;
 use std::str::FromStr;
 
@@ -82,24 +82,20 @@ impl LibCall {
     /// Returns `None` if no well-known library routine name exists for that instruction.
     pub fn for_inst(opcode: Opcode, ctrl_type: Type) -> Option<Self> {
         Some(match ctrl_type {
-            types::F32 => {
-                match opcode {
-                    Opcode::Ceil => LibCall::CeilF32,
-                    Opcode::Floor => LibCall::FloorF32,
-                    Opcode::Trunc => LibCall::TruncF32,
-                    Opcode::Nearest => LibCall::NearestF32,
-                    _ => return None,
-                }
-            }
-            types::F64 => {
-                match opcode {
-                    Opcode::Ceil => LibCall::CeilF64,
-                    Opcode::Floor => LibCall::FloorF64,
-                    Opcode::Trunc => LibCall::TruncF64,
-                    Opcode::Nearest => LibCall::NearestF64,
-                    _ => return None,
-                }
-            }
+            types::F32 => match opcode {
+                Opcode::Ceil => LibCall::CeilF32,
+                Opcode::Floor => LibCall::FloorF32,
+                Opcode::Trunc => LibCall::TruncF32,
+                Opcode::Nearest => LibCall::NearestF32,
+                _ => return None,
+            },
+            types::F64 => match opcode {
+                Opcode::Ceil => LibCall::CeilF64,
+                Opcode::Floor => LibCall::FloorF64,
+                Opcode::Trunc => LibCall::TruncF64,
+                Opcode::Nearest => LibCall::NearestF64,
+                _ => return None,
+            },
             _ => return None,
         })
     }
@@ -127,9 +123,8 @@ pub fn get_probestack_funcref(
     arg_reg: RegUnit,
     isa: &TargetIsa,
 ) -> FuncRef {
-    find_funcref(LibCall::Probestack, func).unwrap_or_else(|| {
-        make_funcref_for_probestack(func, reg_type, arg_reg, isa)
-    })
+    find_funcref(LibCall::Probestack, func)
+        .unwrap_or_else(|| make_funcref_for_probestack(func, reg_type, arg_reg, isa))
 }
 
 /// Get the existing function reference for `libcall` in `func` if it exists.

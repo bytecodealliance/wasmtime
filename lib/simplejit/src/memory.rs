@@ -1,8 +1,8 @@
-use std::mem;
-use std::ptr;
 use errno;
 use libc;
 use region;
+use std::mem;
+use std::ptr;
 
 /// Round `size` up to the nearest multiple of `page_size`.
 fn round_up_to_page_size(size: usize, page_size: usize) -> usize {
@@ -91,10 +91,8 @@ impl Memory {
     }
 
     fn finish_current(&mut self) {
-        self.allocations.push(mem::replace(
-            &mut self.current,
-            PtrLen::new(),
-        ));
+        self.allocations
+            .push(mem::replace(&mut self.current, PtrLen::new()));
         self.position = 0;
     }
 
@@ -136,9 +134,8 @@ impl Memory {
         for &PtrLen { ptr, len } in &self.allocations[self.executable..] {
             if len != 0 {
                 unsafe {
-                    region::protect(ptr, len, region::Protection::Read).expect(
-                        "unable to make memory readonly",
-                    );
+                    region::protect(ptr, len, region::Protection::Read)
+                        .expect("unable to make memory readonly");
                 }
             }
         }

@@ -28,42 +28,72 @@ pub fn translate_module<'data>(
     let mut next_input = ParserInput::Default;
     loop {
         match *parser.read_with_input(next_input) {
-            ParserState::BeginSection { code: SectionCode::Type, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Type,
+                ..
+            } => {
                 parse_function_signatures(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
-            ParserState::BeginSection { code: SectionCode::Import, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Import,
+                ..
+            } => {
                 parse_import_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
-            ParserState::BeginSection { code: SectionCode::Function, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Function,
+                ..
+            } => {
                 parse_function_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
-            ParserState::BeginSection { code: SectionCode::Table, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Table,
+                ..
+            } => {
                 parse_table_section(&mut parser, environ)?;
             }
-            ParserState::BeginSection { code: SectionCode::Memory, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Memory,
+                ..
+            } => {
                 parse_memory_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
-            ParserState::BeginSection { code: SectionCode::Global, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Global,
+                ..
+            } => {
                 parse_global_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
-            ParserState::BeginSection { code: SectionCode::Export, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Export,
+                ..
+            } => {
                 parse_export_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
-            ParserState::BeginSection { code: SectionCode::Start, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Start,
+                ..
+            } => {
                 parse_start_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
-            ParserState::BeginSection { code: SectionCode::Element, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Element,
+                ..
+            } => {
                 parse_elements_section(&mut parser, environ)?;
                 next_input = ParserInput::Default;
             }
-            ParserState::BeginSection { code: SectionCode::Code, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Code,
+                ..
+            } => {
                 // The code section begins
                 break;
             }
@@ -71,10 +101,16 @@ pub fn translate_module<'data>(
                 next_input = ParserInput::Default;
             }
             ParserState::EndWasm => return Ok(()),
-            ParserState::BeginSection { code: SectionCode::Data, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Data,
+                ..
+            } => {
                 parse_data_section(&mut parser, environ)?;
             }
-            ParserState::BeginSection { code: SectionCode::Custom { .. }, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Custom { .. },
+                ..
+            } => {
                 // Ignore unknown custom sections.
                 next_input = ParserInput::SkipSection;
             }
@@ -92,15 +128,16 @@ pub fn translate_module<'data>(
         }
         let mut reader = parser.create_binary_reader();
         let size = reader.bytes_remaining();
-        environ.define_function_body(
-            reader.read_bytes(size).map_err(|e| {
-                WasmError::from_binary_reader_error(e)
-            })?,
-        )?;
+        environ.define_function_body(reader
+            .read_bytes(size)
+            .map_err(|e| WasmError::from_binary_reader_error(e))?)?;
     }
     loop {
         match *parser.read() {
-            ParserState::BeginSection { code: SectionCode::Data, .. } => {
+            ParserState::BeginSection {
+                code: SectionCode::Data,
+                ..
+            } => {
                 parse_data_section(&mut parser, environ)?;
             }
             ParserState::EndWasm => break,

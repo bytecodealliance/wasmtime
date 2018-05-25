@@ -2,9 +2,9 @@
 
 use super::{Forest, Node, NodeData};
 use entity::PrimaryMap;
-use std::ops::{Index, IndexMut};
 #[cfg(test)]
 use std::fmt;
+use std::ops::{Index, IndexMut};
 
 /// A pool of nodes, including a free list.
 pub(super) struct NodePool<F: Forest> {
@@ -51,7 +51,9 @@ impl<F: Forest> NodePool<F> {
     pub fn free_node(&mut self, node: Node) {
         // Quick check for a double free.
         debug_assert!(!self.nodes[node].is_free(), "{} is already free", node);
-        self.nodes[node] = NodeData::Free { next: self.freelist };
+        self.nodes[node] = NodeData::Free {
+            next: self.freelist,
+        };
         self.freelist = Some(node);
     }
 

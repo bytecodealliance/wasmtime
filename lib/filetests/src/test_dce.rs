@@ -40,14 +40,12 @@ impl SubTest for TestDCE {
 
         comp_ctx.flowgraph();
         comp_ctx.compute_loop_analysis();
-        comp_ctx.dce(context.flags_or_isa()).map_err(|e| {
-            pretty_error(&comp_ctx.func, context.isa, Into::into(e))
-        })?;
+        comp_ctx
+            .dce(context.flags_or_isa())
+            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
 
         let mut text = String::new();
-        write!(&mut text, "{}", &comp_ctx.func).map_err(
-            |e| e.to_string(),
-        )?;
+        write!(&mut text, "{}", &comp_ctx.func).map_err(|e| e.to_string())?;
         run_filecheck(&text, context)
     }
 }

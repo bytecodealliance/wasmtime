@@ -1,7 +1,7 @@
 //! Faerie trap manifests record every `TrapCode` that cretonne outputs during code generation,
 //! for every function in the module. This data may be useful at runtime.
 
-use cretonne_codegen::{ir, binemit};
+use cretonne_codegen::{binemit, ir};
 
 /// Record of the arguments cretonne passes to `TrapSink::trap`
 pub struct FaerieTrapSite {
@@ -22,7 +22,6 @@ pub struct FaerieTrapSink {
     /// All trap sites collected in function
     pub sites: Vec<FaerieTrapSite>,
 }
-
 
 impl FaerieTrapSink {
     /// Create an empty `FaerieTrapSink`

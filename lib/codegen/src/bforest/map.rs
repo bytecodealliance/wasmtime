@@ -2,9 +2,9 @@
 
 use super::{Comparator, Forest, Node, NodeData, NodePool, Path, INNER_SIZE};
 use packed_option::PackedOption;
-use std::marker::PhantomData;
 #[cfg(test)]
 use std::fmt;
+use std::marker::PhantomData;
 #[cfg(test)]
 use std::string::String;
 
@@ -50,7 +50,9 @@ where
 {
     /// Create a new empty forest.
     pub fn new() -> Self {
-        Self { nodes: NodePool::new() }
+        Self {
+            nodes: NodePool::new(),
+        }
     }
 
     /// Clear all maps in the forest.
@@ -101,9 +103,9 @@ where
 
     /// Get the value stored for `key`.
     pub fn get(&self, key: K, forest: &MapForest<K, V, C>, comp: &C) -> Option<V> {
-        self.root.expand().and_then(|root| {
-            Path::default().find(key, root, &forest.nodes, comp)
-        })
+        self.root
+            .expand()
+            .and_then(|root| Path::default().find(key, root, &forest.nodes, comp))
     }
 
     /// Look up the value stored for `key`.
@@ -292,30 +294,30 @@ where
     ///
     /// If the cursor is already pointing at the first entry, leave it there and return `None`.
     pub fn prev(&mut self) -> Option<(K, V)> {
-        self.root.expand().and_then(
-            |root| self.path.prev(root, self.pool),
-        )
+        self.root
+            .expand()
+            .and_then(|root| self.path.prev(root, self.pool))
     }
 
     /// Get the current key, or `None` if the cursor is at the end.
     pub fn key(&self) -> Option<K> {
-        self.path.leaf_pos().and_then(|(node, entry)| {
-            self.pool[node].unwrap_leaf().0.get(entry).cloned()
-        })
+        self.path
+            .leaf_pos()
+            .and_then(|(node, entry)| self.pool[node].unwrap_leaf().0.get(entry).cloned())
     }
 
     /// Get the current value, or `None` if the cursor is at the end.
     pub fn value(&self) -> Option<V> {
-        self.path.leaf_pos().and_then(|(node, entry)| {
-            self.pool[node].unwrap_leaf().1.get(entry).cloned()
-        })
+        self.path
+            .leaf_pos()
+            .and_then(|(node, entry)| self.pool[node].unwrap_leaf().1.get(entry).cloned())
     }
 
     /// Get a mutable reference to the current value, or `None` if the cursor is at the end.
     pub fn value_mut(&mut self) -> Option<&mut V> {
-        self.path.leaf_pos().and_then(move |(node, entry)| {
-            self.pool[node].unwrap_leaf_mut().1.get_mut(entry)
-        })
+        self.path
+            .leaf_pos()
+            .and_then(move |(node, entry)| self.pool[node].unwrap_leaf_mut().1.get_mut(entry))
     }
 
     /// Move this cursor to `key`.

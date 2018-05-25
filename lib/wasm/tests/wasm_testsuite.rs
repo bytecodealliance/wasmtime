@@ -56,21 +56,19 @@ fn handle_module(path: &Path, flags: &Flags) {
         None => {
             panic!("the file extension is not wasm or wat");
         }
-        Some(ext) => {
-            match ext.to_str() {
-                Some("wasm") => read_file(path).expect("error reading wasm file"),
-                Some("wat") => {
-                    let wat = read_file(path).expect("error reading wat file");
-                    match wat2wasm(&wat) {
-                        Ok(wasm) => wasm,
-                        Err(e) => {
-                            panic!("error converting wat to wasm: {:?}", e);
-                        }
+        Some(ext) => match ext.to_str() {
+            Some("wasm") => read_file(path).expect("error reading wasm file"),
+            Some("wat") => {
+                let wat = read_file(path).expect("error reading wat file");
+                match wat2wasm(&wat) {
+                    Ok(wasm) => wasm,
+                    Err(e) => {
+                        panic!("error converting wat to wasm: {:?}", e);
                     }
                 }
-                None | Some(&_) => panic!("the file extension for {:?} is not wasm or wat", path),
             }
-        }
+            None | Some(&_) => panic!("the file extension for {:?} is not wasm or wat", path),
+        },
     };
     let mut dummy_environ = DummyEnvironment::with_flags(flags.clone());
     translate_module(&data, &mut dummy_environ).unwrap();

@@ -41,21 +41,17 @@ where
 {
     for opt in iter.map(TestOption::new) {
         match opt {
-            TestOption::Flag(name) => {
-                match config.enable(name) {
-                    Ok(_) => {}
-                    Err(SetError::BadName) => return err!(loc, "unknown flag '{}'", opt),
-                    Err(_) => return err!(loc, "not a boolean flag: '{}'", opt),
-                }
-            }
-            TestOption::Value(name, value) => {
-                match config.set(name, value) {
-                    Ok(_) => {}
-                    Err(SetError::BadName) => return err!(loc, "unknown setting '{}'", opt),
-                    Err(SetError::BadType) => return err!(loc, "invalid setting type: '{}'", opt),
-                    Err(SetError::BadValue) => return err!(loc, "invalid setting value: '{}'", opt),
-                }
-            }
+            TestOption::Flag(name) => match config.enable(name) {
+                Ok(_) => {}
+                Err(SetError::BadName) => return err!(loc, "unknown flag '{}'", opt),
+                Err(_) => return err!(loc, "not a boolean flag: '{}'", opt),
+            },
+            TestOption::Value(name, value) => match config.set(name, value) {
+                Ok(_) => {}
+                Err(SetError::BadName) => return err!(loc, "unknown setting '{}'", opt),
+                Err(SetError::BadType) => return err!(loc, "invalid setting type: '{}'", opt),
+                Err(SetError::BadValue) => return err!(loc, "invalid setting value: '{}'", opt),
+            },
         }
     }
     Ok(())

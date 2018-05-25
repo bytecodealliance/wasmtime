@@ -13,9 +13,8 @@ use timing;
 
 /// Test whether the given opcode is unsafe to even consider for DCE.
 fn trivially_unsafe_for_dce(opcode: Opcode) -> bool {
-    opcode.is_call() || opcode.is_branch() || opcode.is_terminator() ||
-        opcode.is_return() || opcode.can_trap() || opcode.other_side_effects() ||
-        opcode.can_store()
+    opcode.is_call() || opcode.is_branch() || opcode.is_terminator() || opcode.is_return()
+        || opcode.can_trap() || opcode.other_side_effects() || opcode.can_store()
 }
 
 /// Preserve instructions with used result values.
@@ -51,9 +50,8 @@ pub fn do_dce(func: &mut Function, domtree: &mut DominatorTree) {
             {
                 let data = &pos.func.dfg[inst];
                 let opcode = data.opcode();
-                if trivially_unsafe_for_dce(opcode) ||
-                    is_load_with_defined_trapping(opcode, &data) ||
-                    any_inst_results_used(inst, &live, &pos.func.dfg)
+                if trivially_unsafe_for_dce(opcode) || is_load_with_defined_trapping(opcode, &data)
+                    || any_inst_results_used(inst, &live, &pos.func.dfg)
                 {
                     for arg in pos.func.dfg.inst_args(inst) {
                         let v = pos.func.dfg.resolve_aliases(*arg);

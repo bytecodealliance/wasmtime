@@ -362,16 +362,18 @@ impl<F: Forest> NodeData<F> {
     /// right sibling node is returned.
     pub fn balance(&mut self, crit_key: F::Key, rhs: &mut Self) -> Option<F::Key> {
         match (self, rhs) {
-            (&mut NodeData::Inner {
-                 size: ref mut l_size,
-                 keys: ref mut l_keys,
-                 tree: ref mut l_tree,
-             },
-             &mut NodeData::Inner {
-                 size: ref mut r_size,
-                 keys: ref mut r_keys,
-                 tree: ref mut r_tree,
-             }) => {
+            (
+                &mut NodeData::Inner {
+                    size: ref mut l_size,
+                    keys: ref mut l_keys,
+                    tree: ref mut l_tree,
+                },
+                &mut NodeData::Inner {
+                    size: ref mut r_size,
+                    keys: ref mut r_keys,
+                    tree: ref mut r_tree,
+                },
+            ) => {
                 let l_ents = usize::from(*l_size) + 1;
                 let r_ents = usize::from(*r_size) + 1;
                 let ents = l_ents + r_ents;
@@ -408,16 +410,18 @@ impl<F: Forest> NodeData<F> {
                     Some(new_crit)
                 }
             }
-            (&mut NodeData::Leaf {
-                 size: ref mut l_size,
-                 keys: ref mut l_keys,
-                 vals: ref mut l_vals,
-             },
-             &mut NodeData::Leaf {
-                 size: ref mut r_size,
-                 keys: ref mut r_keys,
-                 vals: ref mut r_vals,
-             }) => {
+            (
+                &mut NodeData::Leaf {
+                    size: ref mut l_size,
+                    keys: ref mut l_keys,
+                    vals: ref mut l_vals,
+                },
+                &mut NodeData::Leaf {
+                    size: ref mut r_size,
+                    keys: ref mut r_keys,
+                    vals: ref mut r_vals,
+                },
+            ) => {
                 let l_ents = usize::from(*l_size);
                 let l_keys = l_keys.borrow_mut();
                 let l_vals = l_vals.borrow_mut();
@@ -677,11 +681,7 @@ mod test {
         assert!(leaf.try_leaf_insert(2, 'c', SetValue()));
         assert_eq!(leaf.to_string(), "[ a b c d ]");
         for i in 4..15 {
-            assert!(leaf.try_leaf_insert(
-                usize::from(i),
-                ('a' as u8 + i) as char,
-                SetValue(),
-            ));
+            assert!(leaf.try_leaf_insert(usize::from(i), ('a' as u8 + i) as char, SetValue()));
         }
         assert_eq!(leaf.to_string(), "[ a b c d e f g h i j k l m n o ]");
 
@@ -779,21 +779,13 @@ mod test {
     fn leaf_balance() {
         let mut lhs = NodeData::<TF>::leaf('a', SetValue());
         for i in 1..6 {
-            assert!(lhs.try_leaf_insert(
-                usize::from(i),
-                ('a' as u8 + i) as char,
-                SetValue(),
-            ));
+            assert!(lhs.try_leaf_insert(usize::from(i), ('a' as u8 + i) as char, SetValue()));
         }
         assert_eq!(lhs.to_string(), "[ a b c d e f ]");
 
         let mut rhs = NodeData::<TF>::leaf('0', SetValue());
         for i in 1..8 {
-            assert!(rhs.try_leaf_insert(
-                usize::from(i),
-                ('0' as u8 + i) as char,
-                SetValue(),
-            ));
+            assert!(rhs.try_leaf_insert(usize::from(i), ('0' as u8 + i) as char, SetValue()));
         }
         assert_eq!(rhs.to_string(), "[ 0 1 2 3 4 5 6 7 ]");
 

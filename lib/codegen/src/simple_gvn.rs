@@ -9,9 +9,9 @@ use timing;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
 fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
-    opcode.is_call() || opcode.is_branch() || opcode.is_terminator() ||
-        opcode.is_return() || opcode.can_trap() || opcode.other_side_effects() ||
-        opcode.can_store() || opcode.can_load() || opcode.writes_cpu_flags()
+    opcode.is_call() || opcode.is_branch() || opcode.is_terminator() || opcode.is_return()
+        || opcode.can_trap() || opcode.other_side_effects() || opcode.can_store()
+        || opcode.can_load() || opcode.writes_cpu_flags()
 }
 
 /// Perform simple GVN on `func`.

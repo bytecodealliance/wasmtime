@@ -127,8 +127,8 @@ impl<'a> LivenessVerifier<'a> {
         let ctx = self.liveness.context(&self.func.layout);
 
         // Check if `inst` is in the def range, not including the def itself.
-        if ctx.order.cmp(lr.def(), inst) == Ordering::Less &&
-            ctx.order.cmp(inst, lr.def_local_end()) != Ordering::Greater
+        if ctx.order.cmp(lr.def(), inst) == Ordering::Less
+            && ctx.order.cmp(inst, lr.def_local_end()) != Ordering::Greater
         {
             return true;
         }

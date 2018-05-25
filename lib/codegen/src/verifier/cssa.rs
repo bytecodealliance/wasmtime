@@ -92,8 +92,8 @@ impl<'a> CssaVerifier<'a> {
                     }
 
                     // Enforce topological ordering of defs in the virtual register.
-                    if self.preorder.dominates(def_ebb, prev_ebb) &&
-                        self.domtree.dominates(def, prev_def, &self.func.layout)
+                    if self.preorder.dominates(def_ebb, prev_ebb)
+                        && self.domtree.dominates(def, prev_def, &self.func.layout)
                     {
                         return err!(
                             val,
@@ -112,8 +112,8 @@ impl<'a> CssaVerifier<'a> {
                     let prev_def: ExpandedProgramPoint = self.func.dfg.value_def(prev_val).into();
                     let prev_ebb = self.func.layout.pp_ebb(prev_def);
 
-                    if self.preorder.dominates(prev_ebb, def_ebb) &&
-                        self.domtree.dominates(prev_def, def, &self.func.layout)
+                    if self.preorder.dominates(prev_ebb, def_ebb)
+                        && self.domtree.dominates(prev_def, def, &self.func.layout)
                     {
                         let ctx = self.liveness.context(&self.func.layout);
                         if self.liveness[prev_val].overlaps_def(def, def_ebb, ctx) {

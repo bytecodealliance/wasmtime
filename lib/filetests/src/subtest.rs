@@ -70,16 +70,16 @@ pub trait SubTest {
 /// Run filecheck on `text`, using directives extracted from `context`.
 pub fn run_filecheck(text: &str, context: &Context) -> Result<()> {
     let checker = build_filechecker(context)?;
-    if checker.check(text, NO_VARIABLES).map_err(|e| {
-        format!("filecheck: {}", e)
-    })?
+    if checker
+        .check(text, NO_VARIABLES)
+        .map_err(|e| format!("filecheck: {}", e))?
     {
         Ok(())
     } else {
         // Filecheck mismatch. Emit an explanation as output.
-        let (_, explain) = checker.explain(text, NO_VARIABLES).map_err(|e| {
-            format!("explain: {}", e)
-        })?;
+        let (_, explain) = checker
+            .explain(text, NO_VARIABLES)
+            .map_err(|e| format!("explain: {}", e))?;
         Err(format!("filecheck failed:\n{}{}", checker, explain))
     }
 }
@@ -89,14 +89,14 @@ pub fn build_filechecker(context: &Context) -> Result<Checker> {
     let mut builder = CheckerBuilder::new();
     // Preamble comments apply to all functions.
     for comment in context.preamble_comments {
-        builder.directive(comment.text).map_err(|e| {
-            format!("filecheck: {}", e)
-        })?;
+        builder
+            .directive(comment.text)
+            .map_err(|e| format!("filecheck: {}", e))?;
     }
     for comment in &context.details.comments {
-        builder.directive(comment.text).map_err(|e| {
-            format!("filecheck: {}", e)
-        })?;
+        builder
+            .directive(comment.text)
+            .map_err(|e| format!("filecheck: {}", e))?;
     }
     Ok(builder.finish())
 }

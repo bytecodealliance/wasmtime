@@ -17,7 +17,11 @@ pub fn legalize_signature(
 
 /// Get register class for a type appearing in a legalized signature.
 pub fn regclass_for_abi_type(ty: ir::Type) -> RegClass {
-    if ty.is_int() { GPR } else { FPR }
+    if ty.is_int() {
+        GPR
+    } else {
+        FPR
+    }
 }
 
 /// Get the set of allocatable registers for `func`.

@@ -303,9 +303,9 @@ impl<F: Forest> Path<F> {
             // When inserting into an inner node (`ins_node.is_some()`), we must point to a valid
             // entry in the current node since the new entry is inserted *after* the insert
             // location.
-            if entry > split.lhs_entries ||
-                (entry == split.lhs_entries &&
-                     (split.lhs_entries > split.rhs_entries || ins_node.is_some()))
+            if entry > split.lhs_entries
+                || (entry == split.lhs_entries
+                    && (split.lhs_entries > split.rhs_entries || ins_node.is_some()))
             {
                 node = rhs_node;
                 entry -= split.lhs_entries;
@@ -406,7 +406,9 @@ impl<F: Forest> Path<F> {
         let crit_node = self.node[crit_level];
 
         match pool[crit_node] {
-            NodeData::Inner { size, ref mut keys, .. } => {
+            NodeData::Inner {
+                size, ref mut keys, ..
+            } => {
                 debug_assert!(crit_kidx < size);
                 keys[usize::from(crit_kidx)] = crit_key;
             }
@@ -436,7 +438,10 @@ impl<F: Forest> Path<F> {
 
         // Discard the root node if it has shrunk to a single sub-tree.
         let mut ns = 0;
-        while let NodeData::Inner { size: 0, ref tree, .. } = pool[self.node[ns]] {
+        while let NodeData::Inner {
+            size: 0, ref tree, ..
+        } = pool[self.node[ns]]
+        {
             ns += 1;
             self.node[ns] = tree[0];
         }
@@ -616,9 +621,8 @@ impl<F: Forest> Path<F> {
 
     /// Update the critical key for the right sibling node at `level`.
     fn update_right_crit_key(&self, level: usize, crit_key: F::Key, pool: &mut NodePool<F>) {
-        let bl = self.right_sibling_branch_level(level, pool).expect(
-            "No right sibling exists",
-        );
+        let bl = self.right_sibling_branch_level(level, pool)
+            .expect("No right sibling exists");
         match pool[self.node[bl]] {
             NodeData::Inner { ref mut keys, .. } => {
                 keys[usize::from(self.entry[bl])] = crit_key;

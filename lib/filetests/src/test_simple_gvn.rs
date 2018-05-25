@@ -39,14 +39,12 @@ impl SubTest for TestSimpleGVN {
         comp_ctx.func = func.into_owned();
 
         comp_ctx.flowgraph();
-        comp_ctx.simple_gvn(context.flags_or_isa()).map_err(|e| {
-            pretty_error(&comp_ctx.func, context.isa, Into::into(e))
-        })?;
+        comp_ctx
+            .simple_gvn(context.flags_or_isa())
+            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
 
         let mut text = String::new();
-        write!(&mut text, "{}", &comp_ctx.func).map_err(
-            |e| e.to_string(),
-        )?;
+        write!(&mut text, "{}", &comp_ctx.func).map_err(|e| e.to_string())?;
         run_filecheck(&text, context)
     }
 }

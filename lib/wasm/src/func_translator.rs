@@ -135,16 +135,16 @@ fn parse_local_decls(
     num_params: usize,
 ) -> WasmResult<()> {
     let mut next_local = num_params;
-    let local_count = reader.read_local_count().map_err(|e| {
-        WasmError::from_binary_reader_error(e)
-    })?;
+    let local_count = reader
+        .read_local_count()
+        .map_err(|e| WasmError::from_binary_reader_error(e))?;
 
     let mut locals_total = 0;
     for _ in 0..local_count {
         builder.set_srcloc(cur_srcloc(reader));
-        let (count, ty) = reader.read_local_decl(&mut locals_total).map_err(|e| {
-            WasmError::from_binary_reader_error(e)
-        })?;
+        let (count, ty) = reader
+            .read_local_decl(&mut locals_total)
+            .map_err(|e| WasmError::from_binary_reader_error(e))?;
         declare_locals(builder, count, ty, &mut next_local);
     }
 
@@ -195,9 +195,9 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     // Keep going until the final `End` operator which pops the outermost block.
     while !state.control_stack.is_empty() {
         builder.set_srcloc(cur_srcloc(&reader));
-        let op = reader.read_operator().map_err(|e| {
-            WasmError::from_binary_reader_error(e)
-        })?;
+        let op = reader
+            .read_operator()
+            .map_err(|e| WasmError::from_binary_reader_error(e))?;
         translate_operator(op, builder, state, environ)?;
     }
 
@@ -246,11 +246,13 @@ mod tests {
         //     (i32.add (get_local 0) (i32.const 1))
         // )
         const BODY: [u8; 7] = [
-            0x00,       // local decl count
-            0x20, 0x00, // get_local 0
-            0x41, 0x01, // i32.const 1
-            0x6a,       // i32.add
-            0x0b,       // end
+            0x00, // local decl count
+            0x20,
+            0x00, // get_local 0
+            0x41,
+            0x01, // i32.const 1
+            0x6a, // i32.add
+            0x0b, // end
         ];
 
         let mut trans = FuncTranslator::new();
@@ -276,12 +278,14 @@ mod tests {
         //     (return (i32.add (get_local 0) (i32.const 1)))
         // )
         const BODY: [u8; 8] = [
-            0x00,       // local decl count
-            0x20, 0x00, // get_local 0
-            0x41, 0x01, // i32.const 1
-            0x6a,       // i32.add
-            0x0f,       // return
-            0x0b,       // end
+            0x00, // local decl count
+            0x20,
+            0x00, // get_local 0
+            0x41,
+            0x01, // i32.const 1
+            0x6a, // i32.add
+            0x0f, // return
+            0x0b, // end
         ];
 
         let mut trans = FuncTranslator::new();
@@ -312,16 +316,22 @@ mod tests {
         //     )
         // )
         const BODY: [u8; 16] = [
-            0x01,       // 1 local decl.
-            0x01, 0x7f, // 1 i32 local.
-            0x03, 0x7f, // loop i32
-            0x20, 0x00, // get_local 0
-            0x41, 0x01, // i32.const 0
-            0x6a,       // i32.add
-            0x21, 0x00, // set_local 0
-            0x0c, 0x00, // br 0
-            0x0b,       // end
-            0x0b,       // end
+            0x01, // 1 local decl.
+            0x01,
+            0x7f, // 1 i32 local.
+            0x03,
+            0x7f, // loop i32
+            0x20,
+            0x00, // get_local 0
+            0x41,
+            0x01, // i32.const 0
+            0x6a, // i32.add
+            0x21,
+            0x00, // set_local 0
+            0x0c,
+            0x00, // br 0
+            0x0b, // end
+            0x0b, // end
         ];
 
         let mut trans = FuncTranslator::new();

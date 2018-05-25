@@ -40,15 +40,13 @@ impl Display for QueueEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let p = self.path.to_string_lossy();
         match self.state {
-            State::Done(Ok(dur)) => {
-                write!(
-                    f,
-                    "{}.{:03} {}",
-                    dur.as_secs(),
-                    dur.subsec_nanos() / 1_000_000,
-                    p
-                )
-            }
+            State::Done(Ok(dur)) => write!(
+                f,
+                "{}.{:03} {}",
+                dur.as_secs(),
+                dur.subsec_nanos() / 1_000_000,
+                p
+            ),
             State::Done(Err(ref e)) => write!(f, "FAIL {}: {}", p, e),
             _ => write!(f, "{}", p),
         }
@@ -180,7 +178,11 @@ impl TestRunner {
     /// Report on the next in-order job, if it's done.
     fn report_job(&self) -> bool {
         let jobid = self.reported_tests;
-        if let Some(&QueueEntry { state: State::Done(ref result), .. }) = self.tests.get(jobid) {
+        if let Some(&QueueEntry {
+            state: State::Done(ref result),
+            ..
+        }) = self.tests.get(jobid)
+        {
             if self.verbose || result.is_err() {
                 println!("{}", self.tests[jobid]);
             }
@@ -283,7 +285,10 @@ impl TestRunner {
         let mut times = self.tests
             .iter()
             .filter_map(|entry| match *entry {
-                QueueEntry { state: State::Done(Ok(dur)), .. } => Some(dur),
+                QueueEntry {
+                    state: State::Done(Ok(dur)),
+                    ..
+                } => Some(dur),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -312,10 +317,12 @@ impl TestRunner {
         }
 
         for t in self.tests.iter().filter(|entry| match **entry {
-            QueueEntry { state: State::Done(Ok(dur)), .. } => dur > cut,
+            QueueEntry {
+                state: State::Done(Ok(dur)),
+                ..
+            } => dur > cut,
             _ => false,
-        })
-        {
+        }) {
             println!("slow: {}", t)
         }
     }

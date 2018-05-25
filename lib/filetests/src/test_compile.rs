@@ -3,8 +3,8 @@
 //! The `compile` test command runs each function through the full code generator pipeline
 
 use cretonne_codegen;
-use cretonne_codegen::{binemit, ir};
 use cretonne_codegen::print_errors::pretty_error;
+use cretonne_codegen::{binemit, ir};
 use cretonne_reader::TestCommand;
 use std::borrow::Cow;
 use std::fmt::Write;
@@ -41,9 +41,9 @@ impl SubTest for TestCompile {
         let mut comp_ctx = cretonne_codegen::Context::new();
         comp_ctx.func = func.into_owned();
 
-        let code_size = comp_ctx.compile(isa).map_err(|e| {
-            pretty_error(&comp_ctx.func, context.isa, e)
-        })?;
+        let code_size = comp_ctx
+            .compile(isa)
+            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
 
         dbg!(
             "Generated {} bytes of code:\n{}",
@@ -62,15 +62,13 @@ impl SubTest for TestCompile {
         if sink.offset != code_size {
             return Err(format!(
                 "Expected code size {}, got {}",
-                code_size,
-                sink.offset
+                code_size, sink.offset
             ));
         }
 
         // Run final code through filecheck.
         let mut text = String::new();
-        write!(&mut text, "{}", &comp_ctx.func.display(Some(isa)))
-            .map_err(|e| e.to_string())?;
+        write!(&mut text, "{}", &comp_ctx.func.display(Some(isa))).map_err(|e| e.to_string())?;
         run_filecheck(&text, context)
     }
 }

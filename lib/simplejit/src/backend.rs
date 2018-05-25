@@ -1,17 +1,17 @@
 //! Defines `SimpleJITBackend`.
 
-use cretonne_codegen::binemit::{Addend, CodeOffset, Reloc, RelocSink, NullTrapSink};
+use cretonne_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::{self, ir, settings};
-use cretonne_module::{Backend, DataContext, Linkage, ModuleNamespace, Writability,
-                      DataDescription, Init, ModuleError};
+use cretonne_module::{Backend, DataContext, DataDescription, Init, Linkage, ModuleError,
+                      ModuleNamespace, Writability};
 use cretonne_native;
+use libc;
+use memory::Memory;
 use std::ffi::CString;
 use std::ptr;
-use libc;
 #[cfg(windows)]
 use winapi;
-use memory::Memory;
 
 /// A builder for `SimpleJITBackend`.
 pub struct SimpleJITBuilder {
@@ -119,9 +119,9 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         code_size: u32,
     ) -> Result<Self::CompiledFunction, ModuleError> {
         let size = code_size as usize;
-        let ptr = self.code_memory.allocate(size).expect(
-            "TODO: handle OOM etc.",
-        );
+        let ptr = self.code_memory
+            .allocate(size)
+            .expect("TODO: handle OOM etc.");
         let mut reloc_sink = SimpleJITRelocSink::new();
         // Ignore traps for now. For now, frontends should just avoid generating code
         // that traps.
@@ -152,16 +152,12 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
         let size = init.size();
         let storage = match writable {
-            Writability::Readonly => {
-                self.writable_memory.allocate(size).expect(
-                    "TODO: handle OOM etc.",
-                )
-            }
-            Writability::Writable => {
-                self.writable_memory.allocate(size).expect(
-                    "TODO: handle OOM etc.",
-                )
-            }
+            Writability::Readonly => self.writable_memory
+                .allocate(size)
+                .expect("TODO: handle OOM etc."),
+            Writability::Writable => self.writable_memory
+                .allocate(size)
+                .expect("TODO: handle OOM etc."),
         };
 
         match *init {
@@ -262,20 +258,25 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                 Reloc::Abs4 => {
                     // TODO: Handle overflow.
                     #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
-                    unsafe { write_unaligned(at as *mut u32, what as u32) };
+                    unsafe {
+                        write_unaligned(at as *mut u32, what as u32)
+                    };
                 }
                 Reloc::Abs8 => {
                     #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
-                    unsafe { write_unaligned(at as *mut u64, what as u64) };
+                    unsafe {
+                        write_unaligned(at as *mut u64, what as u64)
+                    };
                 }
                 Reloc::X86PCRel4 => {
                     // TODO: Handle overflow.
                     let pcrel = ((what as isize) - (at as isize)) as i32;
                     #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
-                    unsafe { write_unaligned(at as *mut i32, pcrel) };
+                    unsafe {
+                        write_unaligned(at as *mut i32, pcrel)
+                    };
                 }
-                Reloc::X86GOTPCRel4 |
-                Reloc::X86PLTRel4 => panic!("unexpected PIC relocation"),
+                Reloc::X86GOTPCRel4 | Reloc::X86PLTRel4 => panic!("unexpected PIC relocation"),
                 _ => unimplemented!(),
             }
         }
@@ -322,15 +323,19 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                         Reloc::Abs4 => {
                             // TODO: Handle overflow.
                             #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
-                            unsafe { write_unaligned(at as *mut u32, what as u32) };
+                            unsafe {
+                                write_unaligned(at as *mut u32, what as u32)
+                            };
                         }
                         Reloc::Abs8 => {
                             #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
-                            unsafe { write_unaligned(at as *mut u64, what as u64) };
+                            unsafe {
+                                write_unaligned(at as *mut u64, what as u64)
+                            };
                         }
-                        Reloc::X86PCRel4 |
-                        Reloc::X86GOTPCRel4 |
-                        Reloc::X86PLTRel4 => panic!("unexpected text relocation in data"),
+                        Reloc::X86PCRel4 | Reloc::X86GOTPCRel4 | Reloc::X86PLTRel4 => {
+                            panic!("unexpected text relocation in data")
+                        }
                         _ => unimplemented!(),
                     }
                 }

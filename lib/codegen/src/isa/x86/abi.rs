@@ -6,8 +6,8 @@ use cursor::{Cursor, CursorPosition, EncCursor};
 use ir;
 use ir::immediates::Imm64;
 use ir::stackslot::{StackOffset, StackSize};
-use ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, InstBuilder, ValueLoc,
-         get_probestack_funcref};
+use ir::{get_probestack_funcref, AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose,
+         InstBuilder, ValueLoc};
 use isa::{RegClass, RegUnit, TargetIsa};
 use regalloc::RegisterSet;
 use result;
@@ -97,7 +97,8 @@ impl ArgAssigner for Args {
                         RU::r14
                     } else {
                         RU::rsi
-                    } as RegUnit).into()
+                    } as RegUnit)
+                        .into()
                 }
                 // This is SpiderMonkey's `WasmTableCallSigReg`.
                 ArgumentPurpose::SignatureId => return ArgumentLoc::Reg(RU::rbx as RegUnit).into(),
@@ -235,8 +236,8 @@ fn callee_saved_gprs_used(flags: &shared_settings::Flags, func: &ir::Function) -
     for ebb in &func.layout {
         for inst in func.layout.ebb_insts(ebb) {
             match func.dfg[inst] {
-                ir::instructions::InstructionData::RegMove { dst, .. } |
-                ir::instructions::InstructionData::RegFill { dst, .. } => {
+                ir::instructions::InstructionData::RegMove { dst, .. }
+                | ir::instructions::InstructionData::RegFill { dst, .. } => {
                     if !used.is_avail(GPR, dst) {
                         used.free(GPR, dst);
                     }
@@ -431,10 +432,8 @@ fn insert_common_prologue(
     pos.func.locations[fp] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
 
     pos.ins().x86_push(fp);
-    pos.ins().copy_special(
-        RU::rsp as RegUnit,
-        RU::rbp as RegUnit,
-    );
+    pos.ins()
+        .copy_special(RU::rsp as RegUnit, RU::rbp as RegUnit);
 
     for reg in csrs.iter(GPR) {
         // Append param to entry EBB
@@ -449,8 +448,8 @@ fn insert_common_prologue(
 
     // Allocate stack frame storage.
     if stack_size > 0 {
-        if isa.flags().probestack_enabled() &&
-            stack_size > (1 << isa.flags().probestack_size_log2())
+        if isa.flags().probestack_enabled()
+            && stack_size > (1 << isa.flags().probestack_size_log2())
         {
             // Emit a stack probe.
             let rax = RU::rax as RegUnit;
@@ -464,8 +463,8 @@ fn insert_common_prologue(
             let callee = get_probestack_funcref(pos.func, reg_type, rax, isa);
 
             // Make the call.
-            let call = if !isa.flags().is_pic() && isa.flags().is_64bit() &&
-                !pos.func.dfg.ext_funcs[callee].colocated
+            let call = if !isa.flags().is_pic() && isa.flags().is_64bit()
+                && !pos.func.dfg.ext_funcs[callee].colocated
             {
                 // 64-bit non-PIC non-colocated calls need to be legalized to call_indirect.
                 // Use r11 as it may be clobbered under all supported calling conventions.

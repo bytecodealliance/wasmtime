@@ -46,7 +46,9 @@ pub struct RegDiversions {
 impl RegDiversions {
     /// Create a new empty diversion tracker.
     pub fn new() -> Self {
-        Self { current: Vec::new() }
+        Self {
+            current: Vec::new(),
+        }
     }
 
     /// Clear the tracker, preparing for a new EBB.
@@ -152,11 +154,10 @@ impl RegDiversions {
     ///
     /// Returns the `to` location of the removed diversion.
     pub fn remove(&mut self, value: Value) -> Option<ValueLoc> {
-        self.current.iter().position(|d| d.value == value).map(
-            |i| {
-                self.current.swap_remove(i).to
-            },
-        )
+        self.current
+            .iter()
+            .position(|d| d.value == value)
+            .map(|i| self.current.swap_remove(i).to)
     }
 
     /// Return an object that can display the diversions.

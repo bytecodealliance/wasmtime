@@ -87,8 +87,7 @@ mod tests {
             vec![]
         );
         assert_eq!(
-            []
-                .iter()
+            [].iter()
                 .cloned()
                 .adjacent_pairs()
                 .collect::<Vec<(i32, i32)>>(),

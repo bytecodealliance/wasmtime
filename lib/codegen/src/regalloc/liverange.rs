@@ -249,13 +249,12 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
         //
         // We're assuming here that `to` never precedes `def_begin` in the same EBB, but we can't
         // check it without a method for getting `to`'s EBB.
-        if order.cmp(ebb, self.def_end) != Ordering::Greater &&
-            order.cmp(to, self.def_begin) != Ordering::Less
+        if order.cmp(ebb, self.def_end) != Ordering::Greater
+            && order.cmp(to, self.def_begin) != Ordering::Less
         {
             let to_pp = to.into();
             debug_assert_ne!(
-                to_pp,
-                self.def_begin,
+                to_pp, self.def_begin,
                 "Can't use value in the defining instruction."
             );
             if order.cmp(to, self.def_end) == Ordering::Greater {
@@ -411,8 +410,8 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
         }
 
         // Check for an overlap with the local range.
-        if ctx.order.cmp(def, self.def_begin) != Ordering::Less &&
-            ctx.order.cmp(def, self.def_end) == Ordering::Less
+        if ctx.order.cmp(def, self.def_begin) != Ordering::Less
+            && ctx.order.cmp(def, self.def_end) == Ordering::Less
         {
             return true;
         }
@@ -427,8 +426,8 @@ impl<PO: ProgramOrder> GenLiveRange<PO> {
     /// Check if this live range reaches a use at `user` in `ebb`.
     pub fn reaches_use(&self, user: Inst, ebb: Ebb, ctx: LiveRangeContext<PO>) -> bool {
         // Check for an overlap with the local range.
-        if ctx.order.cmp(user, self.def_begin) == Ordering::Greater &&
-            ctx.order.cmp(user, self.def_end) != Ordering::Greater
+        if ctx.order.cmp(user, self.def_begin) == Ordering::Greater
+            && ctx.order.cmp(user, self.def_end) != Ordering::Greater
         {
             return true;
         }
@@ -535,8 +534,8 @@ mod tests {
                 }
 
                 assert!(
-                    self.cmp(lr.def_end, begin) == Ordering::Less ||
-                        self.cmp(lr.def_begin, end) == Ordering::Greater,
+                    self.cmp(lr.def_end, begin) == Ordering::Less
+                        || self.cmp(lr.def_begin, end) == Ordering::Greater,
                     "Interval can't overlap the def EBB"
                 );
 

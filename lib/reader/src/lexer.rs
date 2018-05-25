@@ -15,35 +15,35 @@ use std::u16;
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Token<'a> {
     Comment(&'a str),
-    LPar, // '('
-    RPar, // ')'
-    LBrace, // '{'
-    RBrace, // '}'
-    LBracket, // '['
-    RBracket, // ']'
-    Minus, // '-'
-    Plus, // '+'
-    Comma, // ','
-    Dot, // '.'
-    Colon, // ':'
-    Equal, // '='
-    Arrow, // '->'
-    Float(&'a str), // Floating point immediate
-    Integer(&'a str), // Integer immediate
-    Type(types::Type), // i32, f32, b32x4, ...
-    Value(Value), // v12, v7
-    Ebb(Ebb), // ebb3
-    StackSlot(u32), // ss3
-    GlobalVar(u32), // gv3
-    Heap(u32), // heap2
-    JumpTable(u32), // jt2
-    FuncRef(u32), // fn2
-    SigRef(u32), // sig2
-    UserRef(u32), // u345
-    Name(&'a str), // %9arbitrary_alphanum, %x3, %0, %function ...
+    LPar,                 // '('
+    RPar,                 // ')'
+    LBrace,               // '{'
+    RBrace,               // '}'
+    LBracket,             // '['
+    RBracket,             // ']'
+    Minus,                // '-'
+    Plus,                 // '+'
+    Comma,                // ','
+    Dot,                  // '.'
+    Colon,                // ':'
+    Equal,                // '='
+    Arrow,                // '->'
+    Float(&'a str),       // Floating point immediate
+    Integer(&'a str),     // Integer immediate
+    Type(types::Type),    // i32, f32, b32x4, ...
+    Value(Value),         // v12, v7
+    Ebb(Ebb),             // ebb3
+    StackSlot(u32),       // ss3
+    GlobalVar(u32),       // gv3
+    Heap(u32),            // heap2
+    JumpTable(u32),       // jt2
+    FuncRef(u32),         // fn2
+    SigRef(u32),          // sig2
+    UserRef(u32),         // u345
+    Name(&'a str),        // %9arbitrary_alphanum, %x3, %0, %function ...
     HexSequence(&'a str), // #89AF
-    Identifier(&'a str), // Unrecognized identifier (opcode, enumerator, ...)
-    SourceLoc(&'a str), // @00c7
+    Identifier(&'a str),  // Unrecognized identifier (opcode, enumerator, ...)
+    SourceLoc(&'a str),   // @00c7
 }
 
 /// A `Token` with an associated location.
@@ -162,7 +162,9 @@ impl<'a> Lexer<'a> {
 
     // Get the location corresponding to `lookahead`.
     fn loc(&self) -> Location {
-        Location { line_number: self.line_number }
+        Location {
+            line_number: self.line_number,
+        }
     }
 
     // Starting from `lookahead`, are we looking at `prefix`?
@@ -317,9 +319,8 @@ impl<'a> Lexer<'a> {
         token(
             split_entity_name(text)
                 .and_then(|(prefix, number)| {
-                    Self::numbered_entity(prefix, number).or_else(|| {
-                        Self::value_type(text, prefix, number)
-                    })
+                    Self::numbered_entity(prefix, number)
+                        .or_else(|| Self::value_type(text, prefix, number))
                 })
                 .unwrap_or_else(|| match text {
                     "iflags" => Token::Type(types::IFLAGS),

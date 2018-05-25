@@ -84,11 +84,8 @@ fn expand_sdivrem(
         // Explicitly check for overflow: Trap when x == INT_MIN.
         debug_assert!(avoid_div_traps, "Native trapping divide handled above");
         let f = pos.ins().ifcmp_imm(x, -1 << (ty.lane_bits() - 1));
-        pos.ins().trapif(
-            IntCC::Equal,
-            f,
-            ir::TrapCode::IntegerOverflow,
-        );
+        pos.ins()
+            .trapif(IntCC::Equal, f, ir::TrapCode::IntegerOverflow);
         // x / -1 = -x.
         pos.ins().irsub_imm(x, 0)
     };
@@ -348,11 +345,8 @@ fn expand_fcvt_to_sint(
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
 
-    let is_done = pos.ins().icmp_imm(
-        IntCC::NotEqual,
-        result,
-        1 << (ty.lane_bits() - 1),
-    );
+    let is_done = pos.ins()
+        .icmp_imm(IntCC::NotEqual, result, 1 << (ty.lane_bits() - 1));
     pos.ins().brnz(is_done, done, &[]);
 
     // We now have the following possibilities:
@@ -364,10 +358,8 @@ fn expand_fcvt_to_sint(
 
     // Check for NaN.
     let is_nan = pos.ins().fcmp(FloatCC::Unordered, x, x);
-    pos.ins().trapnz(
-        is_nan,
-        ir::TrapCode::BadConversionToInteger,
-    );
+    pos.ins()
+        .trapnz(is_nan, ir::TrapCode::BadConversionToInteger);
 
     // Check for case 1: INT_MIN is the correct result.
     // Determine the smallest floating point number that would convert to INT_MIN.
@@ -376,14 +368,12 @@ fn expand_fcvt_to_sint(
     let flimit = match xty {
         // An f32 can represent `i16::min_value() - 1` exactly with precision to spare, so
         // there are values less than -2^(N-1) that convert correctly to INT_MIN.
-        ir::types::F32 => {
-            pos.ins().f32const(if output_bits < 32 {
-                overflow_cc = FloatCC::LessThanOrEqual;
-                Ieee32::fcvt_to_sint_negative_overflow(output_bits)
-            } else {
-                Ieee32::pow2(output_bits - 1).neg()
-            })
-        }
+        ir::types::F32 => pos.ins().f32const(if output_bits < 32 {
+            overflow_cc = FloatCC::LessThanOrEqual;
+            Ieee32::fcvt_to_sint_negative_overflow(output_bits)
+        } else {
+            Ieee32::pow2(output_bits - 1).neg()
+        }),
         ir::types::F64 => {
             // An f64 can represent `i32::min_value() - 1` exactly with precision to spare, so
             // there are values less than -2^(N-1) that convert correctly to INT_MIN.
@@ -458,12 +448,8 @@ fn expand_fcvt_to_uint(
         _ => panic!("Can't convert {}", xty),
     };
     let is_large = pos.ins().ffcmp(x, pow2nm1);
-    pos.ins().brff(
-        FloatCC::GreaterThanOrEqual,
-        is_large,
-        large,
-        &[],
-    );
+    pos.ins()
+        .brff(FloatCC::GreaterThanOrEqual, is_large, large, &[]);
 
     // We need to generate a specific trap code when `x` is NaN, so reuse the flags from the
     // previous comparison.
@@ -476,12 +462,8 @@ fn expand_fcvt_to_uint(
     // Now we know that x < 2^(N-1) and not NaN.
     let sres = pos.ins().x86_cvtt2si(ty, x);
     let is_neg = pos.ins().ifcmp_imm(sres, 0);
-    pos.ins().brif(
-        IntCC::SignedGreaterThanOrEqual,
-        is_neg,
-        done,
-        &[sres],
-    );
+    pos.ins()
+        .brif(IntCC::SignedGreaterThanOrEqual, is_neg, done, &[sres]);
     pos.ins().trap(ir::TrapCode::IntegerOverflow);
 
     // Handle the case where x >= 2^(N-1) and not NaN.
@@ -489,11 +471,8 @@ fn expand_fcvt_to_uint(
     let adjx = pos.ins().fsub(x, pow2nm1);
     let lres = pos.ins().x86_cvtt2si(ty, adjx);
     let is_neg = pos.ins().ifcmp_imm(lres, 0);
-    pos.ins().trapif(
-        IntCC::SignedLessThan,
-        is_neg,
-        ir::TrapCode::IntegerOverflow,
-    );
+    pos.ins()
+        .trapif(IntCC::SignedLessThan, is_neg, ir::TrapCode::IntegerOverflow);
     let lfinal = pos.ins().iadd_imm(lres, 1 << (ty.lane_bits() - 1));
 
     // Recycle the original instruction as a jump.
