@@ -1,7 +1,7 @@
 //! Defines `DataContext`.
 
+use cretonne_codegen::binemit::{Addend, CodeOffset};
 use cretonne_codegen::entity::PrimaryMap;
-use cretonne_codegen::binemit::{CodeOffset, Addend};
 use cretonne_codegen::ir;
 
 /// This specifies how data is to be initialized.
@@ -145,8 +145,8 @@ impl DataContext {
 
 #[cfg(test)]
 mod tests {
-    use {DataContext, Writability, Init};
     use cretonne_codegen::ir;
+    use {DataContext, Init, Writability};
 
     #[test]
     fn basic_data_context() {
@@ -202,7 +202,9 @@ mod tests {
             assert_eq!(description.writable, Writability::Readonly);
             assert_eq!(
                 description.init,
-                Init::Bytes { contents: contents_clone.into_boxed_slice() }
+                Init::Bytes {
+                    contents: contents_clone.into_boxed_slice()
+                }
             );
             assert_eq!(description.function_decls.len(), 0);
             assert_eq!(description.data_decls.len(), 0);

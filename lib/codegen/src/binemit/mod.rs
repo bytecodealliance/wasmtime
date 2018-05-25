@@ -7,7 +7,7 @@ mod memorysink;
 mod relaxation;
 mod shrink;
 
-pub use self::memorysink::{MemoryCodeSink, RelocSink, TrapSink, NullTrapSink};
+pub use self::memorysink::{MemoryCodeSink, NullTrapSink, RelocSink, TrapSink};
 pub use self::relaxation::relax_branches;
 pub use self::shrink::shrink_instructions;
 pub use regalloc::RegDiversions;

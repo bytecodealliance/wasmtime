@@ -1,10 +1,10 @@
 //! CLI tool to read Cretonne IR files and compile them into native code.
 
 use capstone::prelude::*;
+use cretonne_codegen::Context;
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::print_errors::pretty_error;
 use cretonne_codegen::settings::FlagsOrIsa;
-use cretonne_codegen::Context;
 use cretonne_codegen::{binemit, ir};
 use cretonne_reader::parse_test;
 use std::path::Path;
@@ -80,9 +80,7 @@ fn handle_module(
     name: &str,
     fisa: FlagsOrIsa,
 ) -> Result<(), String> {
-    let buffer = read_to_string(&path).map_err(
-        |e| format!("{}: {}", name, e),
-    )?;
+    let buffer = read_to_string(&path).map_err(|e| format!("{}: {}", name, e))?;
     let test_file = parse_test(&buffer).map_err(|e| format!("{}: {}", name, e))?;
 
     // If we have an isa from the command-line, use that. Otherwise if the
@@ -154,12 +152,10 @@ fn get_disassembler(isa: &TargetIsa) -> Result<Capstone, String> {
             }
         }
         "arm32" => Capstone::new().arm().mode(arch::arm::ArchMode::Arm).build(),
-        "arm64" => {
-            Capstone::new()
-                .arm64()
-                .mode(arch::arm64::ArchMode::Arm)
-                .build()
-        }
+        "arm64" => Capstone::new()
+            .arm64()
+            .mode(arch::arm64::ArchMode::Arm)
+            .build(),
         _ => return Err(String::from("Unknown ISA")),
     };
 

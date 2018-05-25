@@ -32,7 +32,11 @@ impl Ebb {
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
-        if n < u32::MAX { Some(Ebb(n)) } else { None }
+        if n < u32::MAX {
+            Some(Ebb(n))
+        } else {
+            None
+        }
     }
 }
 
@@ -124,7 +128,11 @@ impl FuncRef {
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
-        if n < u32::MAX { Some(FuncRef(n)) } else { None }
+        if n < u32::MAX {
+            Some(FuncRef(n))
+        } else {
+            None
+        }
     }
 }
 
@@ -138,7 +146,11 @@ impl SigRef {
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
-        if n < u32::MAX { Some(SigRef(n)) } else { None }
+        if n < u32::MAX {
+            Some(SigRef(n))
+        } else {
+            None
+        }
     }
 }
 
@@ -152,7 +164,11 @@ impl Heap {
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
-        if n < u32::MAX { Some(Heap(n)) } else { None }
+        if n < u32::MAX {
+            Some(Heap(n))
+        } else {
+            None
+        }
     }
 }
 

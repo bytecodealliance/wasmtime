@@ -67,30 +67,21 @@ fn dynamic_addr(
     let oob;
     if size == 1 {
         // `offset > bound - 1` is the same as `offset >= bound`.
-        oob = pos.ins().icmp(
-            IntCC::UnsignedGreaterThanOrEqual,
-            offset,
-            bound,
-        );
+        oob = pos.ins()
+            .icmp(IntCC::UnsignedGreaterThanOrEqual, offset, bound);
     } else if size <= min_size {
         // We know that bound >= min_size, so here we can compare `offset > bound - size` without
         // wrapping.
         let adj_bound = pos.ins().iadd_imm(bound, -size);
-        oob = pos.ins().icmp(
-            IntCC::UnsignedGreaterThan,
-            offset,
-            adj_bound,
-        );
+        oob = pos.ins()
+            .icmp(IntCC::UnsignedGreaterThan, offset, adj_bound);
     } else {
         // We need an overflow check for the adjusted offset.
         let size_val = pos.ins().iconst(offset_ty, size);
         let (adj_offset, overflow) = pos.ins().iadd_cout(offset, size_val);
         pos.ins().trapnz(overflow, ir::TrapCode::HeapOutOfBounds);
-        oob = pos.ins().icmp(
-            IntCC::UnsignedGreaterThan,
-            adj_offset,
-            bound,
-        );
+        oob = pos.ins()
+            .icmp(IntCC::UnsignedGreaterThan, adj_offset, bound);
     }
     pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
 
@@ -137,17 +128,11 @@ fn static_addr(
         let oob = if limit & 1 == 1 {
             // Prefer testing `offset >= limit - 1` when limit is odd because an even number is
             // likely to be a convenient constant on ARM and other RISC architectures.
-            pos.ins().icmp_imm(
-                IntCC::UnsignedGreaterThanOrEqual,
-                offset,
-                limit - 1,
-            )
+            pos.ins()
+                .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, offset, limit - 1)
         } else {
-            pos.ins().icmp_imm(
-                IntCC::UnsignedGreaterThan,
-                offset,
-                limit,
-            )
+            pos.ins()
+                .icmp_imm(IntCC::UnsignedGreaterThan, offset, limit)
         };
         pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
     }

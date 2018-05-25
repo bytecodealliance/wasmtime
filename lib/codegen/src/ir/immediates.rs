@@ -192,10 +192,12 @@ impl FromStr for Uimm32 {
 
     // Parse a decimal or hexadecimal `Uimm32`, formatted as above.
     fn from_str(s: &str) -> Result<Self, &'static str> {
-        parse_i64(s).and_then(|x| if 0 <= x && x <= i64::from(u32::MAX) {
-            Ok(Uimm32(x as u32))
-        } else {
-            Err("Uimm32 out of range")
+        parse_i64(s).and_then(|x| {
+            if 0 <= x && x <= i64::from(u32::MAX) {
+                Ok(Uimm32(x as u32))
+            } else {
+                Err("Uimm32 out of range")
+            }
         })
     }
 }
@@ -259,12 +261,12 @@ impl FromStr for Offset32 {
         if !(s.starts_with('-') || s.starts_with('+')) {
             return Err("Offset must begin with sign");
         }
-        parse_i64(s).and_then(|x| if i64::from(i32::MIN) <= x &&
-            x <= i64::from(i32::MAX)
-        {
-            Ok(Self::new(x as i32))
-        } else {
-            Err("Offset out of range")
+        parse_i64(s).and_then(|x| {
+            if i64::from(i32::MIN) <= x && x <= i64::from(i32::MAX) {
+                Ok(Self::new(x as i32))
+            } else {
+                Err("Offset out of range")
+            }
         })
     }
 }
@@ -447,18 +449,16 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
                     Err(_) => return Err("Bad exponent"),
                 }
             }
-            _ => {
-                match ch.to_digit(16) {
-                    Some(digit) => {
-                        digits += 1;
-                        if digits > 16 {
-                            return Err("Too many digits");
-                        }
-                        significand = (significand << 4) | u64::from(digit);
+            _ => match ch.to_digit(16) {
+                Some(digit) => {
+                    digits += 1;
+                    if digits > 16 {
+                        return Err("Too many digits");
                     }
-                    None => return Err("Invalid character"),
+                    significand = (significand << 4) | u64::from(digit);
                 }
-            }
+                None => return Err("Invalid character"),
+            },
         }
     }
 
@@ -546,9 +546,7 @@ impl Ieee32 {
         let n = n.into();
         debug_assert!(n < 32);
         debug_assert!(23 + 1 - n < 32);
-        Self::with_bits(
-            (1u32 << (32 - 1)) | Self::pow2(n - 1).0 | (1u32 << (23 + 1 - n)),
-        )
+        Self::with_bits((1u32 << (32 - 1)) | Self::pow2(n - 1).0 | (1u32 << (23 + 1 - n)))
     }
 
     /// Return self negated.
@@ -609,9 +607,7 @@ impl Ieee64 {
         let n = n.into();
         debug_assert!(n < 64);
         debug_assert!(52 + 1 - n < 64);
-        Self::with_bits(
-            (1u64 << (64 - 1)) | Self::pow2(n - 1).0 | (1u64 << (52 + 1 - n)),
-        )
+        Self::with_bits((1u64 << (64 - 1)) | Self::pow2(n - 1).0 | (1u64 << (52 + 1 - n)))
     }
 
     /// Return self negated.

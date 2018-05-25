@@ -30,9 +30,7 @@ use testfile::{Comment, Details, TestFile};
 /// Any test commands or ISA declarations are ignored.
 pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
     let _tt = timing::parse_text();
-    parse_test(text).map(|file| {
-        file.functions.into_iter().map(|(func, _)| func).collect()
-    })
+    parse_test(text).map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
 }
 
 /// Parse the entire `text` as a test case file.
@@ -124,9 +122,8 @@ impl<'a> Context<'a> {
     // Allocate a new stack slot.
     fn add_ss(&mut self, ss: StackSlot, data: StackSlotData, loc: &Location) -> Result<()> {
         while self.function.stack_slots.next_key().index() <= ss.index() {
-            self.function.create_stack_slot(
-                StackSlotData::new(StackSlotKind::SpillSlot, 0),
-            );
+            self.function
+                .create_stack_slot(StackSlotData::new(StackSlotKind::SpillSlot, 0));
         }
         self.function.stack_slots[ss] = data;
         self.map.def_ss(ss, loc)
@@ -169,7 +166,9 @@ impl<'a> Context<'a> {
                 base: HeapBase::ReservedReg,
                 min_size: Imm64::new(0),
                 guard_size: Imm64::new(0),
-                style: HeapStyle::Static { bound: Imm64::new(0) },
+                style: HeapStyle::Static {
+                    bound: Imm64::new(0),
+                },
             });
         }
         self.function.heaps[heap] = data;
@@ -188,9 +187,8 @@ impl<'a> Context<'a> {
     // Allocate a new signature.
     fn add_sig(&mut self, sig: SigRef, data: Signature, loc: &Location) -> Result<()> {
         while self.function.dfg.signatures.next_key().index() <= sig.index() {
-            self.function.import_signature(
-                Signature::new(CallConv::Fast),
-            );
+            self.function
+                .import_signature(Signature::new(CallConv::Fast));
         }
         self.function.dfg.signatures[sig] = data;
         self.map.def_sig(sig, loc)
@@ -325,9 +323,9 @@ impl<'a> Parser<'a> {
         debug_assert!(self.gathering_comments);
         let entity = entity.into();
         self.comments.extend(
-            self.gathered_comments.drain(..).map(|text| {
-                Comment { entity, text }
-            }),
+            self.gathered_comments
+                .drain(..)
+                .map(|text| Comment { entity, text }),
         );
         self.gathering_comments = false;
     }
@@ -501,9 +499,8 @@ impl<'a> Parser<'a> {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
             // Parse it as a u8 to check for overflow and other issues.
-            text.parse().map_err(
-                |_| self.error("expected u8 decimal immediate"),
-            )
+            text.parse()
+                .map_err(|_| self.error("expected u8 decimal immediate"))
         } else {
             err!(self.loc, err_msg)
         }
@@ -516,9 +513,8 @@ impl<'a> Parser<'a> {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
             // Parse it as a i32 to check for overflow and other issues.
-            text.parse().map_err(
-                |_| self.error("expected i32 decimal immediate"),
-            )
+            text.parse()
+                .map_err(|_| self.error("expected i32 decimal immediate"))
         } else {
             err!(self.loc, err_msg)
         }
@@ -619,9 +615,8 @@ impl<'a> Parser<'a> {
             // The only error we anticipate from this parse is overflow, the lexer should
             // already have ensured that the string doesn't contain invalid characters, and
             // isn't empty or negative.
-            u16::from_str_radix(bits_str, 16).map_err(|_| {
-                self.error("the hex sequence given overflows the u16 type")
-            })
+            u16::from_str_radix(bits_str, 16)
+                .map_err(|_| self.error("the hex sequence given overflows the u16 type"))
         } else {
             err!(self.loc, err_msg)
         }
@@ -632,16 +627,11 @@ impl<'a> Parser<'a> {
         if let Some(Token::Name(name)) = self.token() {
             self.consume();
             match isa {
-                Some(isa) => {
-                    isa.register_info().parse_regunit(name).ok_or_else(|| {
-                        self.error("invalid register name")
-                    })
-                }
-                None => {
-                    name.parse().map_err(
-                        |_| self.error("invalid register number"),
-                    )
-                }
+                Some(isa) => isa.register_info()
+                    .parse_regunit(name)
+                    .ok_or_else(|| self.error("invalid register name")),
+                None => name.parse()
+                    .map_err(|_| self.error("invalid register number")),
             }
         } else {
             match isa {
@@ -725,9 +715,7 @@ impl<'a> Parser<'a> {
                     isaspec::parse_options(words, &mut isa_builder, &self.loc)?;
 
                     // Construct a trait object with the aggregate settings.
-                    isas.push(isa_builder.finish(
-                        settings::Flags::new(flag_builder.clone()),
-                    ));
+                    isas.push(isa_builder.finish(settings::Flags::new(flag_builder.clone())));
                 }
                 _ => break,
             }
@@ -791,10 +779,7 @@ impl<'a> Parser<'a> {
         let mut ctx = Context::new(Function::with_name_signature(name, sig), unique_isa);
 
         // function ::= "function" name signature * "{" preamble function-body "}"
-        self.match_token(
-            Token::LBrace,
-            "expected '{' before function body",
-        )?;
+        self.match_token(Token::LBrace, "expected '{' before function body")?;
 
         self.token();
         self.claim_gathered_comments(AnyEntity::Function);
@@ -804,10 +789,7 @@ impl<'a> Parser<'a> {
         // function ::= "function" name signature "{"  preamble * function-body "}"
         self.parse_function_body(&mut ctx)?;
         // function ::= "function" name signature "{" preamble function-body * "}"
-        self.match_token(
-            Token::RBrace,
-            "expected '}' after function body",
-        )?;
+        self.match_token(Token::RBrace, "expected '}' after function body")?;
 
         // Collect any comments following the end of the function, then stop gathering comments.
         self.start_gathering_comments();
@@ -833,9 +815,8 @@ impl<'a> Parser<'a> {
         match self.token() {
             Some(Token::Name(s)) => {
                 self.consume();
-                s.parse().map_err(
-                    |_| self.error("invalid test case or libcall name"),
-                )
+                s.parse()
+                    .map_err(|_| self.error("invalid test case or libcall name"))
             }
             Some(Token::UserRef(namespace)) => {
                 self.consume();
@@ -844,9 +825,9 @@ impl<'a> Parser<'a> {
                         self.consume();
                         match self.token() {
                             Some(Token::Integer(index_str)) => {
-                                let index: u32 = u32::from_str_radix(index_str, 10).map_err(|_| {
-                                    self.error("the integer given overflows the u32 type")
-                                })?;
+                                let index: u32 = u32::from_str_radix(index_str, 10).map_err(
+                                    |_| self.error("the integer given overflows the u32 type"),
+                                )?;
                                 self.consume();
                                 Ok(ExternalName::user(namespace, index))
                             }
@@ -868,18 +849,12 @@ impl<'a> Parser<'a> {
         // Calling convention defaults to `fast`, but can be changed.
         let mut sig = Signature::new(CallConv::Fast);
 
-        self.match_token(
-            Token::LPar,
-            "expected function signature: ( args... )",
-        )?;
+        self.match_token(Token::LPar, "expected function signature: ( args... )")?;
         // signature ::=  "(" * [abi-param-list] ")" ["->" retlist] [callconv]
         if self.token() != Some(Token::RPar) {
             sig.params = self.parse_abi_param_list(unique_isa)?;
         }
-        self.match_token(
-            Token::RPar,
-            "expected ')' after function arguments",
-        )?;
+        self.match_token(Token::RPar, "expected ')' after function arguments")?;
         if self.optional(Token::Arrow) {
             sig.returns = self.parse_abi_param_list(unique_isa)?;
         }
@@ -1001,41 +976,33 @@ impl<'a> Parser<'a> {
                 Some(Token::StackSlot(..)) => {
                     self.start_gathering_comments();
                     let loc = self.loc;
-                    self.parse_stack_slot_decl().and_then(|(ss, dat)| {
-                        ctx.add_ss(ss, dat, &loc)
-                    })
+                    self.parse_stack_slot_decl()
+                        .and_then(|(ss, dat)| ctx.add_ss(ss, dat, &loc))
                 }
                 Some(Token::GlobalVar(..)) => {
                     self.start_gathering_comments();
-                    self.parse_global_var_decl().and_then(|(gv, dat)| {
-                        ctx.add_gv(gv, dat, &self.loc)
-                    })
+                    self.parse_global_var_decl()
+                        .and_then(|(gv, dat)| ctx.add_gv(gv, dat, &self.loc))
                 }
                 Some(Token::Heap(..)) => {
                     self.start_gathering_comments();
-                    self.parse_heap_decl().and_then(|(heap, dat)| {
-                        ctx.add_heap(heap, dat, &self.loc)
-                    })
+                    self.parse_heap_decl()
+                        .and_then(|(heap, dat)| ctx.add_heap(heap, dat, &self.loc))
                 }
                 Some(Token::SigRef(..)) => {
                     self.start_gathering_comments();
-                    self.parse_signature_decl(ctx.unique_isa).and_then(
-                        |(sig, dat)| {
-                            ctx.add_sig(sig, dat, &self.loc)
-                        },
-                    )
+                    self.parse_signature_decl(ctx.unique_isa)
+                        .and_then(|(sig, dat)| ctx.add_sig(sig, dat, &self.loc))
                 }
                 Some(Token::FuncRef(..)) => {
                     self.start_gathering_comments();
-                    self.parse_function_decl(ctx).and_then(|(fn_, dat)| {
-                        ctx.add_fn(fn_, dat, &self.loc)
-                    })
+                    self.parse_function_decl(ctx)
+                        .and_then(|(fn_, dat)| ctx.add_fn(fn_, dat, &self.loc))
                 }
                 Some(Token::JumpTable(..)) => {
                     self.start_gathering_comments();
-                    self.parse_jump_table_decl().and_then(|(jt, dat)| {
-                        ctx.add_jt(jt, dat, &self.loc)
-                    })
+                    self.parse_jump_table_decl()
+                        .and_then(|(jt, dat)| ctx.add_jt(jt, dat, &self.loc))
                 }
                 // More to come..
                 _ => return Ok(()),
@@ -1052,10 +1019,7 @@ impl<'a> Parser<'a> {
     //                   | "outgoing_arg"
     fn parse_stack_slot_decl(&mut self) -> Result<(StackSlot, StackSlotData)> {
         let ss = self.match_ss("expected stack slot number: ss«n»")?;
-        self.match_token(
-            Token::Equal,
-            "expected '=' in stack slot declaration",
-        )?;
+        self.match_token(Token::Equal, "expected '=' in stack slot declaration")?;
         let kind = self.match_enum("expected stack slot kind")?;
 
         // stack-slot-decl ::= StackSlot(ss) "=" stack-slot-kind * Bytes {"," stack-slot-flag}
@@ -1095,10 +1059,7 @@ impl<'a> Parser<'a> {
     fn parse_global_var_decl(&mut self) -> Result<(GlobalVar, GlobalVarData)> {
         let gv = self.match_gv("expected global variable number: gv«n»")?;
 
-        self.match_token(
-            Token::Equal,
-            "expected '=' in global variable declaration",
-        )?;
+        self.match_token(Token::Equal, "expected '=' in global variable declaration")?;
 
         let data = match self.match_any_identifier("expected global variable kind")? {
             "vmctx" => {
@@ -1106,15 +1067,9 @@ impl<'a> Parser<'a> {
                 GlobalVarData::VMContext { offset }
             }
             "deref" => {
-                self.match_token(
-                    Token::LPar,
-                    "expected '(' in 'deref' global variable decl",
-                )?;
+                self.match_token(Token::LPar, "expected '(' in 'deref' global variable decl")?;
                 let base = self.match_gv("expected global variable: gv«n»")?;
-                self.match_token(
-                    Token::RPar,
-                    "expected ')' in 'deref' global variable decl",
-                )?;
+                self.match_token(Token::RPar, "expected ')' in 'deref' global variable decl")?;
                 let offset = self.optional_offset32()?;
                 GlobalVarData::Deref { base, offset }
             }
@@ -1146,10 +1101,7 @@ impl<'a> Parser<'a> {
     //
     fn parse_heap_decl(&mut self) -> Result<(Heap, HeapData)> {
         let heap = self.match_heap("expected heap number: heap«n»")?;
-        self.match_token(
-            Token::Equal,
-            "expected '=' in heap declaration",
-        )?;
+        self.match_token(Token::Equal, "expected '=' in heap declaration")?;
 
         let style_name = self.match_any_identifier("expected 'static' or 'dynamic'")?;
 
@@ -1216,10 +1168,7 @@ impl<'a> Parser<'a> {
         unique_isa: Option<&TargetIsa>,
     ) -> Result<(SigRef, Signature)> {
         let sig = self.match_sig("expected signature number: sig«n»")?;
-        self.match_token(
-            Token::Equal,
-            "expected '=' in signature decl",
-        )?;
+        self.match_token(Token::Equal, "expected '=' in signature decl")?;
         let data = self.parse_signature(unique_isa)?;
 
         // Collect any trailing comments.
@@ -1241,10 +1190,7 @@ impl<'a> Parser<'a> {
     //
     fn parse_function_decl(&mut self, ctx: &mut Context) -> Result<(FuncRef, ExtFuncData)> {
         let fn_ = self.match_fn("expected function number: fn«n»")?;
-        self.match_token(
-            Token::Equal,
-            "expected '=' in function decl",
-        )?;
+        self.match_token(Token::Equal, "expected '=' in function decl")?;
 
         let loc = self.loc;
 
@@ -1260,9 +1206,9 @@ impl<'a> Parser<'a> {
                 // function-decl ::= FuncRef(fnref) "=" ["colocated"] name * signature
                 let sig = self.parse_signature(ctx.unique_isa)?;
                 let sigref = ctx.function.import_signature(sig);
-                ctx.map.def_entity(sigref.into(), &loc).expect(
-                    "duplicate SigRef entities created",
-                );
+                ctx.map
+                    .def_entity(sigref.into(), &loc)
+                    .expect("duplicate SigRef entities created");
                 ExtFuncData {
                     name,
                     signature: sigref,
@@ -1299,10 +1245,7 @@ impl<'a> Parser<'a> {
     // jump-table-decl ::= * JumpTable(jt) "=" "jump_table" jt-entry {"," jt-entry}
     fn parse_jump_table_decl(&mut self) -> Result<(JumpTable, JumpTableData)> {
         let jt = self.match_jt()?;
-        self.match_token(
-            Token::Equal,
-            "expected '=' in jump_table decl",
-        )?;
+        self.match_token(Token::Equal, "expected '=' in jump_table decl")?;
         self.match_identifier("jump_table", "expected 'jump_table'")?;
 
         let mut data = JumpTableData::new();
@@ -1393,10 +1336,7 @@ impl<'a> Parser<'a> {
         if !self.optional(Token::Colon) {
             // ebb-header ::= Ebb(ebb) [ * ebb-params ] ":"
             self.parse_ebb_params(ctx, ebb)?;
-            self.match_token(
-                Token::Colon,
-                "expected ':' after EBB parameters",
-            )?;
+            self.match_token(Token::Colon, "expected ':' after EBB parameters")?;
         }
 
         // Collect any trailing comments.
@@ -1405,13 +1345,12 @@ impl<'a> Parser<'a> {
 
         // extended-basic-block ::= ebb-header * { instruction }
         while match self.token() {
-            Some(Token::Value(_)) |
-            Some(Token::Identifier(_)) |
-            Some(Token::LBracket) |
-            Some(Token::SourceLoc(_)) => true,
+            Some(Token::Value(_))
+            | Some(Token::Identifier(_))
+            | Some(Token::LBracket)
+            | Some(Token::SourceLoc(_)) => true,
             _ => false,
-        }
-        {
+        } {
             let srcloc = self.optional_srcloc()?;
             let (encoding, result_locations) = self.parse_instruction_encoding(ctx)?;
 
@@ -1434,25 +1373,11 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::Equal) => {
                     self.consume();
-                    self.parse_instruction(
-                        &results,
-                        srcloc,
-                        encoding,
-                        result_locations,
-                        ctx,
-                        ebb,
-                    )?;
+                    self.parse_instruction(&results, srcloc, encoding, result_locations, ctx, ebb)?;
                 }
                 _ if !results.is_empty() => return err!(self.loc, "expected -> or ="),
                 _ => {
-                    self.parse_instruction(
-                        &results,
-                        srcloc,
-                        encoding,
-                        result_locations,
-                        ctx,
-                        ebb,
-                    )?
+                    self.parse_instruction(&results, srcloc, encoding, result_locations, ctx, ebb)?
                 }
             }
         }
@@ -1466,10 +1391,7 @@ impl<'a> Parser<'a> {
     // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
     fn parse_ebb_params(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
         // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
-        self.match_token(
-            Token::LPar,
-            "expected '(' before EBB parameters",
-        )?;
+        self.match_token(Token::LPar, "expected '(' before EBB parameters")?;
 
         // ebb-params ::= "(" * ebb-param { "," ebb-param } ")"
         self.parse_ebb_param(ctx, ebb)?;
@@ -1481,10 +1403,7 @@ impl<'a> Parser<'a> {
         }
 
         // ebb-params ::= "(" ebb-param { "," ebb-param } * ")"
-        self.match_token(
-            Token::RPar,
-            "expected ')' after EBB parameters",
-        )?;
+        self.match_token(Token::RPar, "expected ')' after EBB parameters")?;
 
         Ok(())
     }
@@ -1499,10 +1418,7 @@ impl<'a> Parser<'a> {
         let v = self.match_value("EBB argument must be a value")?;
         let v_location = self.loc;
         // ebb-param ::= Value(v) * ":" Type(t) arg-loc?
-        self.match_token(
-            Token::Colon,
-            "expected ':' after EBB argument",
-        )?;
+        self.match_token(Token::Colon, "expected ':' after EBB argument")?;
         // ebb-param ::= Value(v) ":" * Type(t) arg-loc?
 
         while ctx.function.dfg.num_values() <= v.index() {
@@ -1518,10 +1434,7 @@ impl<'a> Parser<'a> {
         if self.optional(Token::LBracket) {
             let loc = self.parse_value_location(ctx)?;
             ctx.function.locations[v] = loc;
-            self.match_token(
-                Token::RBracket,
-                "expected ']' after value location",
-            )?;
+            self.match_token(Token::RBracket, "expected ']' after value location")?;
         }
 
         Ok(())
@@ -1573,9 +1486,7 @@ impl<'a> Parser<'a> {
         if self.optional(Token::LBracket) {
             // encoding_literal ::= "-" | Identifier HexSequence
             if !self.optional(Token::Minus) {
-                let recipe = self.match_any_identifier(
-                    "expected instruction encoding or '-'",
-                )?;
+                let recipe = self.match_any_identifier("expected instruction encoding or '-'")?;
                 let bits = self.match_hex16("expected a hex sequence")?;
 
                 if let Some(recipe_index) = ctx.find_recipe_index(recipe) {
@@ -1645,10 +1556,9 @@ impl<'a> Parser<'a> {
         }
         let dest = self.match_value("expected value alias")?;
 
-        ctx.function.dfg.make_value_alias_for_parser(
-            dest,
-            results[0],
-        );
+        ctx.function
+            .dfg
+            .make_value_alias_for_parser(dest, results[0]);
         ctx.map.def_value(results[0], &self.loc)?;
         ctx.aliases.push(results[0]);
         Ok(())
@@ -1703,22 +1613,16 @@ impl<'a> Parser<'a> {
         // We still need to check that the number of result values in the source matches the opcode
         // or function call signature. We also need to create values with the right type for all
         // the instruction results.
-        let ctrl_typevar = self.infer_typevar(
-            ctx,
-            opcode,
-            explicit_ctrl_type,
-            &inst_data,
-        )?;
+        let ctrl_typevar = self.infer_typevar(ctx, opcode, explicit_ctrl_type, &inst_data)?;
         let inst = ctx.function.dfg.make_inst(inst_data);
-        let num_results = ctx.function.dfg.make_inst_results_for_parser(
-            inst,
-            ctrl_typevar,
-            results,
-        );
+        let num_results =
+            ctx.function
+                .dfg
+                .make_inst_results_for_parser(inst, ctrl_typevar, results);
         ctx.function.layout.append_inst(inst, ebb);
-        ctx.map.def_entity(inst.into(), &opcode_loc).expect(
-            "duplicate inst references created",
-        );
+        ctx.map
+            .def_entity(inst.into(), &opcode_loc)
+            .expect("duplicate inst references created");
 
         if !srcloc.is_default() {
             ctx.function.srclocs[inst] = srcloc;
@@ -1750,9 +1654,11 @@ impl<'a> Parser<'a> {
         }
 
         if let Some(result_locations) = result_locations {
-            for (&value, loc) in ctx.function.dfg.inst_results(inst).iter().zip(
-                result_locations,
-            )
+            for (&value, loc) in ctx.function
+                .dfg
+                .inst_results(inst)
+                .iter()
+                .zip(result_locations)
             {
                 ctx.function.locations[value] = loc;
             }
@@ -1887,7 +1793,6 @@ impl<'a> Parser<'a> {
         }
 
         Ok(args)
-
     }
 
     // Parse an optional value list enclosed in parantheses.
@@ -1898,10 +1803,7 @@ impl<'a> Parser<'a> {
 
         let args = self.parse_value_list()?;
 
-        self.match_token(
-            Token::RPar,
-            "expected ')' after arguments",
-        )?;
+        self.match_token(Token::RPar, "expected ')' after arguments")?;
 
         Ok(args)
     }
@@ -1944,10 +1846,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::Binary => {
                 let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value second operand")?;
                 InstructionData::Binary {
                     opcode,
@@ -1956,13 +1855,8 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::BinaryImm => {
                 let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
-                let rhs = self.match_imm64(
-                    "expected immediate integer second operand",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let rhs = self.match_imm64("expected immediate integer second operand")?;
                 InstructionData::BinaryImm {
                     opcode,
                     arg: lhs,
@@ -1973,15 +1867,9 @@ impl<'a> Parser<'a> {
                 // Names here refer to the `select` instruction.
                 // This format is also use by `fma`.
                 let ctrl_arg = self.match_value("expected SSA value control operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let true_arg = self.match_value("expected SSA value true operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let false_arg = self.match_value("expected SSA value false operand")?;
                 InstructionData::Ternary {
                     opcode,
@@ -2008,10 +1896,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::Branch => {
                 let ctrl_arg = self.match_value("expected SSA value control operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let ebb_num = self.match_ebb("expected branch destination EBB")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::Branch {
@@ -2023,10 +1908,7 @@ impl<'a> Parser<'a> {
             InstructionFormat::BranchInt => {
                 let cond = self.match_enum("expected intcc condition code")?;
                 let arg = self.match_value("expected SSA value first operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let ebb_num = self.match_ebb("expected branch destination EBB")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::BranchInt {
@@ -2039,10 +1921,7 @@ impl<'a> Parser<'a> {
             InstructionFormat::BranchFloat => {
                 let cond = self.match_enum("expected floatcc condition code")?;
                 let arg = self.match_value("expected SSA value first operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let ebb_num = self.match_ebb("expected branch destination EBB")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::BranchFloat {
@@ -2055,15 +1934,9 @@ impl<'a> Parser<'a> {
             InstructionFormat::BranchIcmp => {
                 let cond = self.match_enum("expected intcc condition code")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value second operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let ebb_num = self.match_ebb("expected branch destination EBB")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::BranchIcmp {
@@ -2075,25 +1948,16 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::BranchTable => {
                 let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let table = self.match_jt()?;
                 ctx.check_jt(table, &self.loc)?;
                 InstructionData::BranchTable { opcode, arg, table }
             }
             InstructionFormat::InsertLane => {
                 let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let lane = self.match_uimm8("expected lane number")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value last operand")?;
                 InstructionData::InsertLane {
                     opcode,
@@ -2103,20 +1967,14 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::ExtractLane => {
                 let arg = self.match_value("expected SSA value last operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let lane = self.match_uimm8("expected lane number")?;
                 InstructionData::ExtractLane { opcode, lane, arg }
             }
             InstructionFormat::IntCompare => {
                 let cond = self.match_enum("expected intcc condition code")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value second operand")?;
                 InstructionData::IntCompare {
                     opcode,
@@ -2127,10 +1985,7 @@ impl<'a> Parser<'a> {
             InstructionFormat::IntCompareImm => {
                 let cond = self.match_enum("expected intcc condition code")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_imm64("expected immediate second operand")?;
                 InstructionData::IntCompareImm {
                     opcode,
@@ -2147,10 +2002,7 @@ impl<'a> Parser<'a> {
             InstructionFormat::FloatCompare => {
                 let cond = self.match_enum("expected floatcc condition code")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value second operand")?;
                 InstructionData::FloatCompare {
                     opcode,
@@ -2166,15 +2018,9 @@ impl<'a> Parser<'a> {
             InstructionFormat::IntSelect => {
                 let cond = self.match_enum("expected intcc condition code")?;
                 let guard = self.match_value("expected SSA value first operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let v_true = self.match_value("expected SSA value second operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let v_false = self.match_value("expected SSA value third operand")?;
                 InstructionData::IntSelect {
                     opcode,
@@ -2185,15 +2031,9 @@ impl<'a> Parser<'a> {
             InstructionFormat::Call => {
                 let func_ref = self.match_fn("expected function reference")?;
                 ctx.check_fn(func_ref, &self.loc)?;
-                self.match_token(
-                    Token::LPar,
-                    "expected '(' before arguments",
-                )?;
+                self.match_token(Token::LPar, "expected '(' before arguments")?;
                 let args = self.parse_value_list()?;
-                self.match_token(
-                    Token::RPar,
-                    "expected ')' after arguments",
-                )?;
+                self.match_token(Token::RPar, "expected ')' after arguments")?;
                 InstructionData::Call {
                     opcode,
                     func_ref,
@@ -2203,20 +2043,11 @@ impl<'a> Parser<'a> {
             InstructionFormat::CallIndirect => {
                 let sig_ref = self.match_sig("expected signature reference")?;
                 ctx.check_sig(sig_ref, &self.loc)?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let callee = self.match_value("expected SSA value callee operand")?;
-                self.match_token(
-                    Token::LPar,
-                    "expected '(' before arguments",
-                )?;
+                self.match_token(Token::LPar, "expected '(' before arguments")?;
                 let args = self.parse_value_list()?;
-                self.match_token(
-                    Token::RPar,
-                    "expected ')' after arguments",
-                )?;
+                self.match_token(Token::RPar, "expected ')' after arguments")?;
                 InstructionData::CallIndirect {
                     opcode,
                     sig_ref,
@@ -2240,10 +2071,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::StackStore => {
                 let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let ss = self.match_ss("expected stack slot number: ss«n»")?;
                 ctx.check_ss(ss, &self.loc)?;
                 let offset = self.optional_offset32()?;
@@ -2257,15 +2085,9 @@ impl<'a> Parser<'a> {
             InstructionFormat::HeapAddr => {
                 let heap = self.match_heap("expected heap identifier")?;
                 ctx.check_heap(heap, &self.loc)?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let arg = self.match_value("expected SSA value heap address")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let imm = self.match_uimm32("expected 32-bit integer size")?;
                 InstructionData::HeapAddr {
                     opcode,
@@ -2299,10 +2121,7 @@ impl<'a> Parser<'a> {
             InstructionFormat::Store => {
                 let flags = self.optional_memflags();
                 let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let addr = self.match_value("expected SSA value address")?;
                 let offset = self.optional_offset32()?;
                 InstructionData::Store {
@@ -2316,10 +2135,7 @@ impl<'a> Parser<'a> {
             InstructionFormat::StoreComplex => {
                 let flags = self.optional_memflags();
                 let src = self.match_value("expected SSA value operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let args = self.parse_value_sequence()?;
                 let offset = self.optional_offset32()?;
                 InstructionData::StoreComplex {
@@ -2331,15 +2147,9 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::RegMove => {
                 let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let src = self.match_regunit(ctx.unique_isa)?;
-                self.match_token(
-                    Token::Arrow,
-                    "expected '->' between register units",
-                )?;
+                self.match_token(Token::Arrow, "expected '->' between register units")?;
                 let dst = self.match_regunit(ctx.unique_isa)?;
                 InstructionData::RegMove {
                     opcode,
@@ -2350,24 +2160,15 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::CopySpecial => {
                 let src = self.match_regunit(ctx.unique_isa)?;
-                self.match_token(
-                    Token::Arrow,
-                    "expected '->' between register units",
-                )?;
+                self.match_token(Token::Arrow, "expected '->' between register units")?;
                 let dst = self.match_regunit(ctx.unique_isa)?;
                 InstructionData::CopySpecial { opcode, src, dst }
             }
             InstructionFormat::RegSpill => {
                 let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let src = self.match_regunit(ctx.unique_isa)?;
-                self.match_token(
-                    Token::Arrow,
-                    "expected '->' before destination stack slot",
-                )?;
+                self.match_token(Token::Arrow, "expected '->' before destination stack slot")?;
                 let dst = self.match_ss("expected stack slot number: ss«n»")?;
                 ctx.check_ss(dst, &self.loc)?;
                 InstructionData::RegSpill {
@@ -2379,10 +2180,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::RegFill => {
                 let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let src = self.match_ss("expected stack slot number: ss«n»")?;
                 ctx.check_ss(src, &self.loc)?;
                 self.match_token(
@@ -2403,20 +2201,14 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::CondTrap => {
                 let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let code = self.match_enum("expected trap code")?;
                 InstructionData::CondTrap { opcode, arg, code }
             }
             InstructionFormat::IntCondTrap => {
                 let cond = self.match_enum("expected intcc condition code")?;
                 let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let code = self.match_enum("expected trap code")?;
                 InstructionData::IntCondTrap {
                     opcode,
@@ -2428,10 +2220,7 @@ impl<'a> Parser<'a> {
             InstructionFormat::FloatCondTrap => {
                 let cond = self.match_enum("expected floatcc condition code")?;
                 let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected ',' between operands",
-                )?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let code = self.match_enum("expected trap code")?;
                 InstructionData::FloatCondTrap {
                     opcode,
@@ -2448,9 +2237,9 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cretonne_codegen::ir::StackSlotKind;
     use cretonne_codegen::ir::entities::AnyEntity;
     use cretonne_codegen::ir::types;
-    use cretonne_codegen::ir::StackSlotKind;
     use cretonne_codegen::ir::{ArgumentExtension, ArgumentPurpose};
     use cretonne_codegen::settings::CallConv;
     use error::Error;
@@ -2695,7 +2484,8 @@ mod tests {
                           isa riscv
                           function %foo() system_v {}",
         ).unwrap()
-            .isa_spec {
+            .isa_spec
+        {
             IsaSpec::None(_) => panic!("Expected some ISA"),
             IsaSpec::Some(v) => {
                 assert_eq!(v.len(), 1);

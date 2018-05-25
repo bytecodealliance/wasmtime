@@ -2,8 +2,8 @@
 
 use DataContext;
 use Linkage;
-use ModuleNamespace;
 use ModuleError;
+use ModuleNamespace;
 use cretonne_codegen::Context;
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::{binemit, ir};

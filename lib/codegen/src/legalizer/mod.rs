@@ -27,9 +27,9 @@ mod heap;
 mod libcall;
 mod split;
 
+use self::call::expand_call;
 use self::globalvar::expand_global_addr;
 use self::heap::expand_heap_addr;
-use self::call::expand_call;
 use self::libcall::expand_as_libcall;
 
 /// Legalize `inst` for `isa`. Return true if any changes to the code were

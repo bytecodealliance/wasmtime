@@ -7,7 +7,7 @@ use ir::condcodes::{CondCode, FloatCC, IntCC};
 use ir::dfg::ValueDef;
 use ir::immediates::{Imm64, Offset32};
 use ir::instructions::{Opcode, ValueList};
-use ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Value, Type, MemFlags};
+use ir::{Ebb, Function, Inst, InstBuilder, InstructionData, MemFlags, Type, Value};
 use isa::TargetIsa;
 use timing;
 
@@ -135,12 +135,10 @@ fn optimize_cpu_flags(
             if info.invert_branch_cond {
                 cond = cond.inverse();
             }
-            pos.func.dfg.replace(info.br_inst).brif(
-                cond,
-                flags,
-                info.destination,
-                &args,
-            );
+            pos.func
+                .dfg
+                .replace(info.br_inst)
+                .brif(cond, flags, info.destination, &args);
         }
         CmpBrKind::IcmpImm { mut cond, imm } => {
             let flags = pos.ins().ifcmp_imm(info.cmp_arg, imm);
@@ -148,12 +146,10 @@ fn optimize_cpu_flags(
             if info.invert_branch_cond {
                 cond = cond.inverse();
             }
-            pos.func.dfg.replace(info.br_inst).brif(
-                cond,
-                flags,
-                info.destination,
-                &args,
-            );
+            pos.func
+                .dfg
+                .replace(info.br_inst)
+                .brif(cond, flags, info.destination, &args);
         }
         CmpBrKind::Fcmp { mut cond, arg } => {
             let flags = pos.ins().ffcmp(info.cmp_arg, arg);
@@ -161,12 +157,10 @@ fn optimize_cpu_flags(
             if info.invert_branch_cond {
                 cond = cond.inverse();
             }
-            pos.func.dfg.replace(info.br_inst).brff(
-                cond,
-                flags,
-                info.destination,
-                &args,
-            );
+            pos.func
+                .dfg
+                .replace(info.br_inst)
+                .brff(cond, flags, info.destination, &args);
         }
     }
     let ok = pos.func.update_encoding(info.cmp_inst, isa).is_ok();
@@ -174,7 +168,6 @@ fn optimize_cpu_flags(
     let ok = pos.func.update_encoding(info.br_inst, isa).is_ok();
     debug_assert!(ok);
 }
-
 
 struct MemOpInfo {
     opcode: Opcode,
@@ -326,8 +319,6 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
     debug_assert!(ok);
 }
 
-
-
 //----------------------------------------------------------------------
 //
 // The main post-opt pass.
@@ -343,10 +334,8 @@ pub fn do_postopt(func: &mut Function, isa: &TargetIsa) {
                 optimize_cpu_flags(&mut pos, inst, last_flags_clobber, isa);
 
                 // Track the most recent seen instruction that clobbers the flags.
-                if let Some(constraints) =
-                    isa.encoding_info().operand_constraints(
-                        pos.func.encodings[inst],
-                    )
+                if let Some(constraints) = isa.encoding_info()
+                    .operand_constraints(pos.func.encodings[inst])
                 {
                     if constraints.clobbers_flags {
                         last_flags_clobber = Some(inst)

@@ -142,11 +142,8 @@ impl settings::Configurable for Builder {
 /// legalize it?
 ///
 /// The `Encodings` iterator returns a legalization function to call.
-pub type Legalize = fn(ir::Inst,
-                       &mut ir::Function,
-                       &mut flowgraph::ControlFlowGraph,
-                       &TargetIsa)
-                       -> bool;
+pub type Legalize =
+    fn(ir::Inst, &mut ir::Function, &mut flowgraph::ControlFlowGraph, &TargetIsa) -> bool;
 
 /// Methods that are specialized to a target ISA. Implies a Display trait that shows the
 /// shared flags, as well as any isa-specific flags.

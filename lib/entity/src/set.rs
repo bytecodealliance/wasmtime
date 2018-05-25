@@ -1,8 +1,8 @@
 //! Densely numbered entity references as set keys.
 
-use {EntityRef, Keys};
 use std::marker::PhantomData;
 use std::vec::Vec;
+use {EntityRef, Keys};
 
 /// A set of `K` for densely indexed entity references.
 ///

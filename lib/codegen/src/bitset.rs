@@ -107,8 +107,9 @@ mod tests {
 
         let s4 = BitSet::<u16>(4 | 8 | 256 | 1024);
         assert!(
-            !s4.contains(0) && !s4.contains(1) && !s4.contains(4) && !s4.contains(5) &&
-                !s4.contains(6) && !s4.contains(7) && !s4.contains(9) && !s4.contains(11)
+            !s4.contains(0) && !s4.contains(1) && !s4.contains(4) && !s4.contains(5)
+                && !s4.contains(6) && !s4.contains(7) && !s4.contains(9)
+                && !s4.contains(11)
         );
         assert!(s4.contains(2) && s4.contains(3) && s4.contains(8) && s4.contains(10));
     }

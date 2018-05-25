@@ -3,11 +3,11 @@
 //! that will replace nondeterministic NaN's with a single canonical NaN value.
 
 use cursor::{Cursor, FuncCursor};
-use ir::{Function, Inst, InstBuilder, InstructionData, Opcode, Value};
 use ir::condcodes::FloatCC;
 use ir::immediates::{Ieee32, Ieee64};
 use ir::types;
 use ir::types::Type;
+use ir::{Function, Inst, InstBuilder, InstructionData, Opcode, Value};
 use timing;
 
 // Canonical 32-bit and 64-bit NaN values.
@@ -33,13 +33,13 @@ pub fn do_nan_canonicalization(func: &mut Function) {
 fn is_fp_arith(pos: &mut FuncCursor, inst: Inst) -> bool {
     match pos.func.dfg[inst] {
         InstructionData::Unary { opcode, .. } => {
-            opcode == Opcode::Ceil || opcode == Opcode::Floor || opcode == Opcode::Nearest ||
-                opcode == Opcode::Sqrt || opcode == Opcode::Trunc
+            opcode == Opcode::Ceil || opcode == Opcode::Floor || opcode == Opcode::Nearest
+                || opcode == Opcode::Sqrt || opcode == Opcode::Trunc
         }
         InstructionData::Binary { opcode, .. } => {
-            opcode == Opcode::Fadd || opcode == Opcode::Fdiv || opcode == Opcode::Fmax ||
-                opcode == Opcode::Fmin || opcode == Opcode::Fmul ||
-                opcode == Opcode::Fsub
+            opcode == Opcode::Fadd || opcode == Opcode::Fdiv || opcode == Opcode::Fmax
+                || opcode == Opcode::Fmin || opcode == Opcode::Fmul
+                || opcode == Opcode::Fsub
         }
         InstructionData::Ternary { opcode, .. } => opcode == Opcode::Fma,
         _ => false,
@@ -59,11 +59,9 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst) {
     // the canonical NaN value if `val` is NaN, assign the result to `inst`.
     let is_nan = pos.ins().fcmp(FloatCC::NotEqual, new_res, new_res);
     let canon_nan = insert_nan_const(pos, val_type);
-    pos.ins().with_result(val).select(
-        is_nan,
-        canon_nan,
-        new_res,
-    );
+    pos.ins()
+        .with_result(val)
+        .select(is_nan, canon_nan, new_res);
 
     pos.prev_inst(); // Step backwards so the pass does not skip instructions.
 }

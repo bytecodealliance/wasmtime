@@ -196,8 +196,7 @@ impl<'a> Context<'a> {
                     pred_inst,
                     pred_ebb,
                     self.liveness.context(&self.func.layout),
-                )
-                {
+                ) {
                     self.isolate_param(ebb, param);
                 }
             }
@@ -219,8 +218,8 @@ impl<'a> Context<'a> {
             // pre-spilled, and the rest of the virtual register would be forced to spill to the
             // `incoming_arg` stack slot too.
             if let ir::ValueDef::Param(def_ebb, def_num) = self.func.dfg.value_def(arg) {
-                if Some(def_ebb) == self.func.layout.entry_block() &&
-                    self.func.signature.params[def_num].location.is_stack()
+                if Some(def_ebb) == self.func.layout.entry_block()
+                    && self.func.signature.params[def_num].location.is_stack()
                 {
                     dbg!("-> isolating function stack parameter {}", arg);
                     let new_arg = self.isolate_arg(pred_ebb, pred_inst, argnum, arg);
@@ -303,16 +302,11 @@ impl<'a> Context<'a> {
             &self.encinfo
                 .operand_constraints(pos.func.encodings[inst])
                 .expect("Bad copy encoding")
-                .outs
-                [0],
+                .outs[0],
         );
         self.liveness.create_dead(new_val, ebb, affinity);
-        self.liveness.extend_locally(
-            new_val,
-            ebb,
-            inst,
-            &pos.func.layout,
-        );
+        self.liveness
+            .extend_locally(new_val, ebb, inst, &pos.func.layout);
 
         new_val
     }
@@ -353,16 +347,11 @@ impl<'a> Context<'a> {
             &self.encinfo
                 .operand_constraints(pos.func.encodings[inst])
                 .expect("Bad copy encoding")
-                .outs
-                [0],
+                .outs[0],
         );
         self.liveness.create_dead(copy, inst, affinity);
-        self.liveness.extend_locally(
-            copy,
-            pred_ebb,
-            pred_inst,
-            &pos.func.layout,
-        );
+        self.liveness
+            .extend_locally(copy, pred_ebb, pred_inst, &pos.func.layout);
 
         pos.func.dfg.inst_variable_args_mut(pred_inst)[argnum] = copy;
 
@@ -422,12 +411,9 @@ impl<'a> Context<'a> {
             let node = Node::value(value, 0, self.func);
 
             // Push this value and get the nearest dominating def back.
-            let parent = match self.forest.push_node(
-                node,
-                self.func,
-                self.domtree,
-                self.preorder,
-            ) {
+            let parent = match self.forest
+                .push_node(node, self.func, self.domtree, self.preorder)
+            {
                 None => continue,
                 Some(n) => n,
             };
@@ -525,12 +511,8 @@ impl<'a> Context<'a> {
             // Can't merge because of interference. Insert a copy instead.
             let pred_ebb = self.func.layout.pp_ebb(pred_inst);
             let new_arg = self.isolate_arg(pred_ebb, pred_inst, argnum, arg);
-            self.virtregs.insert_single(
-                param,
-                new_arg,
-                self.func,
-                self.preorder,
-            );
+            self.virtregs
+                .insert_single(param, new_arg, self.func, self.preorder);
         }
     }
 
@@ -564,12 +546,8 @@ impl<'a> Context<'a> {
 
         // Restrict the virtual copy nodes we look at and key the `set_id` and `value` properties
         // of the nodes. Set_id 0 will be `param` and set_id 1 will be `arg`.
-        self.vcopies.set_filter(
-            [param, arg],
-            func,
-            self.virtregs,
-            preorder,
-        );
+        self.vcopies
+            .set_filter([param, arg], func, self.virtregs, preorder);
 
         // Now create an ordered sequence of dom-forest nodes from three sources: The two virtual
         // registers and the filtered virtual copies.
@@ -625,8 +603,8 @@ impl<'a> Context<'a> {
 
                 // Check if the parent value interferes with the virtual copy.
                 let inst = node.def.unwrap_inst();
-                if node.set_id != parent.set_id &&
-                    self.liveness[parent.value].reaches_use(inst, node.ebb, ctx)
+                if node.set_id != parent.set_id
+                    && self.liveness[parent.value].reaches_use(inst, node.ebb, ctx)
                 {
                     dbg!(
                         " - interference: {} overlaps vcopy at {}:{}",
@@ -649,8 +627,8 @@ impl<'a> Context<'a> {
 
             // Both node and parent are values, so check for interference.
             debug_assert!(node.is_value() && parent.is_value());
-            if node.set_id != parent.set_id &&
-                self.liveness[parent.value].overlaps_def(node.def, node.ebb, ctx)
+            if node.set_id != parent.set_id
+                && self.liveness[parent.value].overlaps_def(node.def, node.ebb, ctx)
             {
                 // The two values are interfering.
                 dbg!(" - interference: {} overlaps def of {}", parent, node.value);
@@ -945,9 +923,8 @@ impl VirtualCopies {
         }
 
         // Reorder the predecessor branches as required by the dominator forest.
-        self.branches.sort_unstable_by(|&(a, _), &(b, _)| {
-            preorder.pre_cmp(a, b, &func.layout)
-        });
+        self.branches
+            .sort_unstable_by(|&(a, _), &(b, _)| preorder.pre_cmp(a, b, &func.layout));
     }
 
     /// Get the next unmerged parameter value.
@@ -1097,9 +1074,9 @@ where
         let ord = match (self.a.peek(), self.b.peek()) {
             (Some(a), Some(b)) => {
                 let layout = self.layout;
-                self.preorder.pre_cmp_ebb(a.ebb, b.ebb).then_with(|| {
-                    layout.cmp(a.def, b.def)
-                })
+                self.preorder
+                    .pre_cmp_ebb(a.ebb, b.ebb)
+                    .then_with(|| layout.cmp(a.def, b.def))
             }
             (Some(_), None) => cmp::Ordering::Less,
             (None, Some(_)) => cmp::Ordering::Greater,

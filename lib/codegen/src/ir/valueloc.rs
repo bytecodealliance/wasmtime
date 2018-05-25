@@ -66,12 +66,10 @@ impl<'a> fmt::Display for DisplayValueLoc<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
             ValueLoc::Unassigned => write!(f, "-"),
-            ValueLoc::Reg(ru) => {
-                match self.1 {
-                    Some(regs) => write!(f, "{}", regs.display_regunit(ru)),
-                    None => write!(f, "%{}", ru),
-                }
-            }
+            ValueLoc::Reg(ru) => match self.1 {
+                Some(regs) => write!(f, "{}", regs.display_regunit(ru)),
+                None => write!(f, "%{}", ru),
+            },
             ValueLoc::Stack(ss) => write!(f, "{}", ss),
         }
     }
@@ -153,12 +151,10 @@ impl<'a> fmt::Display for DisplayArgumentLoc<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
             ArgumentLoc::Unassigned => write!(f, "-"),
-            ArgumentLoc::Reg(ru) => {
-                match self.1 {
-                    Some(regs) => write!(f, "{}", regs.display_regunit(ru)),
-                    None => write!(f, "%{}", ru),
-                }
-            }
+            ArgumentLoc::Reg(ru) => match self.1 {
+                Some(regs) => write!(f, "{}", regs.display_regunit(ru)),
+                None => write!(f, "%{}", ru),
+            },
             ArgumentLoc::Stack(offset) => write!(f, "{}", offset),
         }
     }

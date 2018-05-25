@@ -46,17 +46,16 @@ impl SubTest for TestRegalloc {
 
         comp_ctx.compute_cfg();
         // TODO: Should we have an option to skip legalization?
-        comp_ctx.legalize(isa).map_err(|e| {
-            pretty_error(&comp_ctx.func, context.isa, e)
-        })?;
+        comp_ctx
+            .legalize(isa)
+            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
         comp_ctx.compute_domtree();
-        comp_ctx.regalloc(isa).map_err(|e| {
-            pretty_error(&comp_ctx.func, context.isa, e)
-        })?;
+        comp_ctx
+            .regalloc(isa)
+            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
 
         let mut text = String::new();
-        write!(&mut text, "{}", &comp_ctx.func.display(Some(isa)))
-            .map_err(|e| e.to_string())?;
+        write!(&mut text, "{}", &comp_ctx.func.display(Some(isa))).map_err(|e| e.to_string())?;
         run_filecheck(&text, context)
     }
 }

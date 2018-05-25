@@ -2,11 +2,11 @@
 //!
 //! This module contains data structures and algorithms used for register allocation.
 
-pub mod register_set;
 pub mod coloring;
 pub mod live_value_tracker;
 pub mod liveness;
 pub mod liverange;
+pub mod register_set;
 pub mod virtregs;
 
 mod affinity;
@@ -18,6 +18,6 @@ mod reload;
 mod solver;
 mod spilling;
 
-pub use self::register_set::RegisterSet;
 pub use self::context::Context;
 pub use self::diversion::RegDiversions;
+pub use self::register_set::RegisterSet;

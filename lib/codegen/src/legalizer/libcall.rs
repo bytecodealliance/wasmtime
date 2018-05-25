@@ -1,18 +1,18 @@
 //! Expanding instructions as runtime library calls.
 
 use ir;
-use ir::{InstBuilder, get_libcall_funcref};
-use std::vec::Vec;
+use ir::{get_libcall_funcref, InstBuilder};
 use isa::TargetIsa;
+use std::vec::Vec;
 
 /// Try to expand `inst` as a library call, returning true is successful.
 pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function, isa: &TargetIsa) -> bool {
     // Does the opcode/ctrl_type combo even have a well-known runtime library name.
-    let libcall =
-        match ir::LibCall::for_inst(func.dfg[inst].opcode(), func.dfg.ctrl_typevar(inst)) {
-            Some(lc) => lc,
-            None => return false,
-        };
+    let libcall = match ir::LibCall::for_inst(func.dfg[inst].opcode(), func.dfg.ctrl_typevar(inst))
+    {
+        Some(lc) => lc,
+        None => return false,
+    };
 
     // Now we convert `inst` to a call. First save the arguments.
     let mut args = Vec::new();

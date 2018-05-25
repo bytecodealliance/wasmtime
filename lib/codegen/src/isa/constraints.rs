@@ -30,16 +30,14 @@ impl OperandConstraint {
     /// counterpart operand has the same value location.
     pub fn satisfied(&self, loc: ValueLoc) -> bool {
         match self.kind {
-            ConstraintKind::Reg |
-            ConstraintKind::Tied(_) => {
+            ConstraintKind::Reg | ConstraintKind::Tied(_) => {
                 if let ValueLoc::Reg(reg) = loc {
                     self.regclass.contains(reg)
                 } else {
                     false
                 }
             }
-            ConstraintKind::FixedReg(reg) |
-            ConstraintKind::FixedTied(reg) => {
+            ConstraintKind::FixedReg(reg) | ConstraintKind::FixedTied(reg) => {
                 loc == ValueLoc::Reg(reg) && self.regclass.contains(reg)
             }
             ConstraintKind::Stack => {

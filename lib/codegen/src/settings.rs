@@ -22,9 +22,9 @@
 
 use constant_hash::{probe, simple_hash};
 use isa::TargetIsa;
+use std::boxed::Box;
 use std::fmt;
 use std::result;
-use std::boxed::Box;
 use std::str;
 
 /// A string-based configurator for settings groups.

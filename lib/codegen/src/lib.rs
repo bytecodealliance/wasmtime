@@ -31,17 +31,9 @@
                 redundant_field_names,
                 useless_let_if_seq,
                 len_without_is_empty))]
-#![cfg_attr(feature="cargo-clippy", warn(
-                float_arithmetic,
-                mut_mut,
-                nonminimal_bool,
-                option_map_unwrap_or,
-                option_map_unwrap_or_else,
-                print_stdout,
-                unicode_not_nfc,
-                use_self,
-                ))]
-
+#![cfg_attr(feature = "cargo-clippy",
+            warn(float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or,
+                 option_map_unwrap_or_else, print_stdout, unicode_not_nfc, use_self))]
 // Turns on no_std and alloc features if std is not available.
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
@@ -90,7 +82,6 @@ pub use entity::packed_option;
 
 mod abi;
 mod bitset;
-mod nan_canonicalization;
 mod constant_hash;
 mod context;
 mod dce;
@@ -99,6 +90,7 @@ mod fx;
 mod iterators;
 mod legalizer;
 mod licm;
+mod nan_canonicalization;
 mod partition_slice;
 mod postopt;
 mod predicates;
@@ -115,11 +107,11 @@ mod write;
 /// This replaces `std` in builds with `core`.
 #[cfg(not(feature = "std"))]
 mod std {
+    pub use alloc::{boxed, string, vec};
     pub use core::*;
-    pub use alloc::{boxed, vec, string};
     pub mod collections {
-        pub use hashmap_core::{HashMap, HashSet};
-        pub use hashmap_core::map as hash_map;
         pub use alloc::BTreeSet;
+        pub use hashmap_core::map as hash_map;
+        pub use hashmap_core::{HashMap, HashSet};
     }
 }

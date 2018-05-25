@@ -2,9 +2,9 @@
 
 use super::{Comparator, Forest, Node, NodeData, NodePool, Path, SetValue, INNER_SIZE};
 use packed_option::PackedOption;
-use std::marker::PhantomData;
 #[cfg(test)]
 use std::fmt;
+use std::marker::PhantomData;
 #[cfg(test)]
 use std::string::String;
 
@@ -47,7 +47,9 @@ where
 {
     /// Create a new empty forest.
     pub fn new() -> Self {
-        Self { nodes: NodePool::new() }
+        Self {
+            nodes: NodePool::new(),
+        }
     }
 
     /// Clear all sets in the forest.
@@ -232,16 +234,16 @@ where
     ///
     /// If the cursor is already pointing at the first element, leave it there and return `None`.
     pub fn prev(&mut self) -> Option<K> {
-        self.root.expand().and_then(|root| {
-            self.path.prev(root, self.pool).map(|(k, _)| k)
-        })
+        self.root
+            .expand()
+            .and_then(|root| self.path.prev(root, self.pool).map(|(k, _)| k))
     }
 
     /// Get the current element, or `None` if the cursor is at the end.
     pub fn elem(&self) -> Option<K> {
-        self.path.leaf_pos().and_then(|(node, entry)| {
-            self.pool[node].unwrap_leaf().0.get(entry).cloned()
-        })
+        self.path
+            .leaf_pos()
+            .and_then(|(node, entry)| self.pool[node].unwrap_leaf().0.get(entry).cloned())
     }
 
     /// Move this cursor to `elem`.

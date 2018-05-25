@@ -102,11 +102,10 @@ impl<Variable> BlockData<Variable> {
             BlockData::EbbHeader(ref mut data) => {
                 // This a linear complexity operation but the number of predecessors is low
                 // in all non-pathological cases
-                let pred: usize =
-                    data.predecessors
-                        .iter()
-                        .position(|pair| pair.1 == inst)
-                        .expect("the predecessor you are trying to remove is not declared");
+                let pred: usize = data.predecessors
+                    .iter()
+                    .position(|pair| pair.1 == inst)
+                    .expect("the predecessor you are trying to remove is not declared");
                 data.predecessors.swap_remove(pred).0
             }
         }
@@ -173,9 +172,9 @@ where
 
     /// Tests whether an `SSABuilder` is in a cleared state.
     pub fn is_empty(&self) -> bool {
-        self.variables.is_empty() && self.blocks.is_empty() && self.ebb_headers.is_empty() &&
-            self.calls.is_empty() &&
-            self.results.is_empty() && self.side_effects.is_empty()
+        self.variables.is_empty() && self.blocks.is_empty() && self.ebb_headers.is_empty()
+            && self.calls.is_empty() && self.results.is_empty()
+            && self.side_effects.is_empty()
     }
 }
 
@@ -493,15 +492,16 @@ where
     /// Initiate use lookups in all predecessors of `dest_ebb`, and arrange for a call
     /// to `finish_predecessors_lookup` once they complete.
     fn begin_predecessors_lookup(&mut self, temp_arg_val: Value, dest_ebb: Ebb) {
-        self.calls.push(Call::FinishPredecessorsLookup(
-            temp_arg_val,
-            dest_ebb,
-        ));
+        self.calls
+            .push(Call::FinishPredecessorsLookup(temp_arg_val, dest_ebb));
         // Iterate over the predecessors.
         let mut calls = mem::replace(&mut self.calls, Vec::new());
-        calls.extend(self.predecessors(dest_ebb).iter().rev().map(|&(pred, _)| {
-            Call::UseVar(pred)
-        }));
+        calls.extend(
+            self.predecessors(dest_ebb)
+                .iter()
+                .rev()
+                .map(|&(pred, _)| Call::UseVar(pred)),
+        );
         self.calls = calls;
     }
 
@@ -584,16 +584,15 @@ where
                         .get(*pred_block)
                         .unwrap()
                         .unwrap();
-                    if let Some((middle_ebb, middle_block, middle_jump_inst)) =
-                        self.append_jump_argument(
-                            func,
-                            *last_inst,
-                            *pred_block,
-                            dest_ebb,
-                            pred_val,
-                            temp_arg_var,
-                        )
-                    {
+                    let jump_arg = self.append_jump_argument(
+                        func,
+                        *last_inst,
+                        *pred_block,
+                        dest_ebb,
+                        pred_val,
+                        temp_arg_var,
+                    );
+                    if let Some((middle_ebb, middle_block, middle_jump_inst)) = jump_arg {
                         *pred_block = middle_block;
                         *last_inst = middle_jump_inst;
                         self.side_effects.split_ebbs_created.push(middle_ebb);

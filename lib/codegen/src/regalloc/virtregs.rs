@@ -101,10 +101,8 @@ impl VirtRegs {
     where
         'a: 'b,
     {
-        self.get(*value).map_or_else(
-            || ref_slice(value),
-            |vr| self.values(vr),
-        )
+        self.get(*value)
+            .map_or_else(|| ref_slice(value), |vr| self.values(vr))
     }
 
     /// Check if `a` and `b` belong to the same congruence class.
@@ -153,9 +151,9 @@ impl VirtRegs {
         });
 
         // Determine the insertion position for `single`.
-        let index = match self.values(vreg).binary_search_by(
-            |&v| preorder.pre_cmp_def(v, single, func),
-        ) {
+        let index = match self.values(vreg)
+            .binary_search_by(|&v| preorder.pre_cmp_def(v, single, func))
+        {
             Ok(_) => panic!("{} already in {}", single, vreg),
             Err(i) => i,
         };
@@ -181,9 +179,9 @@ impl VirtRegs {
 
     /// Allocate a new empty virtual register.
     fn alloc(&mut self) -> VirtReg {
-        self.unused_vregs.pop().unwrap_or_else(|| {
-            self.vregs.push(Default::default())
-        })
+        self.unused_vregs
+            .pop()
+            .unwrap_or_else(|| self.vregs.push(Default::default()))
     }
 
     /// Unify `values` into a single virtual register.

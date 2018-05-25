@@ -194,10 +194,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let frame = state.control_stack.pop().unwrap();
             if !builder.is_unreachable() || !builder.is_pristine() {
                 let return_count = frame.num_return_values();
-                builder.ins().jump(
-                    frame.following_code(),
-                    state.peekn(return_count),
-                );
+                builder
+                    .ins()
+                    .jump(frame.following_code(), state.peekn(return_count));
             }
             builder.switch_to_block(frame.following_code());
             builder.seal_block(frame.following_code());
@@ -206,9 +205,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder.seal_block(header)
             }
             state.stack.truncate(frame.original_stack_size());
-            state.stack.extend_from_slice(
-                builder.ebb_params(frame.following_code()),
-            );
+            state
+                .stack
+                .extend_from_slice(builder.ebb_params(frame.following_code()));
         }
         /**************************** Branch instructions *********************************
          * The branch instructions all have as arguments a target nesting level, which
@@ -244,10 +243,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 };
                 (return_count, frame.br_destination())
             };
-            builder.ins().jump(
-                br_destination,
-                state.peekn(return_count),
-            );
+            builder
+                .ins()
+                .jump(br_destination, state.peekn(return_count));
             state.popn(return_count);
             state.reachable = false;
         }
@@ -392,67 +390,86 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let heap_index = reserved as MemoryIndex;
             let heap = state.get_heap(builder.func, reserved, environ);
             let val = state.pop1();
-            state.push1(environ.translate_grow_memory(
-                builder.cursor(),
-                heap_index,
-                heap,
-                val,
-            )?)
+            state.push1(environ.translate_grow_memory(builder.cursor(), heap_index, heap, val)?)
         }
         Operator::CurrentMemory { reserved } => {
             let heap_index = reserved as MemoryIndex;
             let heap = state.get_heap(builder.func, reserved, environ);
-            state.push1(environ.translate_current_memory(
-                builder.cursor(),
-                heap_index,
-                heap,
-            )?);
+            state.push1(environ.translate_current_memory(builder.cursor(), heap_index, heap)?);
         }
         /******************************* Load instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cretonne.
          * The memory base address is provided by the environment.
          * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
-        Operator::I32Load8U { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Load8U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Uload8, I32, builder, state, environ);
         }
-        Operator::I32Load16U { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Load16U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Uload16, I32, builder, state, environ);
         }
-        Operator::I32Load8S { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Load8S {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Sload8, I32, builder, state, environ);
         }
-        Operator::I32Load16S { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Load16S {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Sload16, I32, builder, state, environ);
         }
-        Operator::I64Load8U { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load8U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Uload8, I64, builder, state, environ);
         }
-        Operator::I64Load16U { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load16U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Uload16, I64, builder, state, environ);
         }
-        Operator::I64Load8S { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load8S {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Sload8, I64, builder, state, environ);
         }
-        Operator::I64Load16S { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load16S {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Sload16, I64, builder, state, environ);
         }
-        Operator::I64Load32S { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load32S {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Sload32, I64, builder, state, environ);
         }
-        Operator::I64Load32U { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load32U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Uload32, I64, builder, state, environ);
         }
-        Operator::I32Load { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Load {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Load, I32, builder, state, environ);
         }
-        Operator::F32Load { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::F32Load {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Load, F32, builder, state, environ);
         }
-        Operator::I64Load { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Load {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Load, I64, builder, state, environ);
         }
-        Operator::F64Load { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::F64Load {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_load(offset, ir::Opcode::Load, F64, builder, state, environ);
         }
         /****************************** Store instructions ***********************************
@@ -460,21 +477,39 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          * The memory base address is provided by the environment.
          * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
-        Operator::I32Store { memarg: MemoryImmediate { flags: _, offset } } |
-        Operator::I64Store { memarg: MemoryImmediate { flags: _, offset } } |
-        Operator::F32Store { memarg: MemoryImmediate { flags: _, offset } } |
-        Operator::F64Store { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Store {
+            memarg: MemoryImmediate { flags: _, offset },
+        }
+        | Operator::I64Store {
+            memarg: MemoryImmediate { flags: _, offset },
+        }
+        | Operator::F32Store {
+            memarg: MemoryImmediate { flags: _, offset },
+        }
+        | Operator::F64Store {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_store(offset, ir::Opcode::Store, builder, state, environ);
         }
-        Operator::I32Store8 { memarg: MemoryImmediate { flags: _, offset } } |
-        Operator::I64Store8 { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Store8 {
+            memarg: MemoryImmediate { flags: _, offset },
+        }
+        | Operator::I64Store8 {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_store(offset, ir::Opcode::Istore8, builder, state, environ);
         }
-        Operator::I32Store16 { memarg: MemoryImmediate { flags: _, offset } } |
-        Operator::I64Store16 { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I32Store16 {
+            memarg: MemoryImmediate { flags: _, offset },
+        }
+        | Operator::I64Store16 {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_store(offset, ir::Opcode::Istore16, builder, state, environ);
         }
-        Operator::I64Store32 { memarg: MemoryImmediate { flags: _, offset } } => {
+        Operator::I64Store32 {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
             translate_store(offset, ir::Opcode::Istore32, builder, state, environ);
         }
         /****************************** Nullary Operators ************************************/
@@ -495,8 +530,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let arg = state.pop1();
             state.push1(builder.ins().ctz(arg));
         }
-        Operator::I32Popcnt |
-        Operator::I64Popcnt => {
+        Operator::I32Popcnt | Operator::I64Popcnt => {
             let arg = state.pop1();
             state.push1(builder.ins().popcnt(arg));
         }
@@ -512,28 +546,23 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = state.pop1();
             state.push1(builder.ins().ireduce(I32, val));
         }
-        Operator::F32Sqrt |
-        Operator::F64Sqrt => {
+        Operator::F32Sqrt | Operator::F64Sqrt => {
             let arg = state.pop1();
             state.push1(builder.ins().sqrt(arg));
         }
-        Operator::F32Ceil |
-        Operator::F64Ceil => {
+        Operator::F32Ceil | Operator::F64Ceil => {
             let arg = state.pop1();
             state.push1(builder.ins().ceil(arg));
         }
-        Operator::F32Floor |
-        Operator::F64Floor => {
+        Operator::F32Floor | Operator::F64Floor => {
             let arg = state.pop1();
             state.push1(builder.ins().floor(arg));
         }
-        Operator::F32Trunc |
-        Operator::F64Trunc => {
+        Operator::F32Trunc | Operator::F64Trunc => {
             let arg = state.pop1();
             state.push1(builder.ins().trunc(arg));
         }
-        Operator::F32Nearest |
-        Operator::F64Nearest => {
+        Operator::F32Nearest | Operator::F64Nearest => {
             let arg = state.pop1();
             state.push1(builder.ins().nearest(arg));
         }
@@ -545,23 +574,19 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let arg = state.pop1();
             state.push1(builder.ins().fneg(arg));
         }
-        Operator::F64ConvertUI64 |
-        Operator::F64ConvertUI32 => {
+        Operator::F64ConvertUI64 | Operator::F64ConvertUI32 => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_from_uint(F64, val));
         }
-        Operator::F64ConvertSI64 |
-        Operator::F64ConvertSI32 => {
+        Operator::F64ConvertSI64 | Operator::F64ConvertSI32 => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_from_sint(F64, val));
         }
-        Operator::F32ConvertSI64 |
-        Operator::F32ConvertSI32 => {
+        Operator::F32ConvertSI64 | Operator::F32ConvertSI32 => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_from_sint(F32, val));
         }
-        Operator::F32ConvertUI64 |
-        Operator::F32ConvertUI32 => {
+        Operator::F32ConvertUI64 | Operator::F32ConvertUI32 => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_from_uint(F32, val));
         }
@@ -573,34 +598,30 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = state.pop1();
             state.push1(builder.ins().fdemote(F32, val));
         }
-        Operator::I64TruncSF64 |
-        Operator::I64TruncSF32 => {
+        Operator::I64TruncSF64 | Operator::I64TruncSF32 => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_sint(I64, val));
         }
-        Operator::I32TruncSF64 |
-        Operator::I32TruncSF32 => {
+        Operator::I32TruncSF64 | Operator::I32TruncSF32 => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_sint(I32, val));
         }
-        Operator::I64TruncUF64 |
-        Operator::I64TruncUF32 => {
+        Operator::I64TruncUF64 | Operator::I64TruncUF32 => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_uint(I64, val));
         }
-        Operator::I32TruncUF64 |
-        Operator::I32TruncUF32 => {
+        Operator::I32TruncUF64 | Operator::I32TruncUF32 => {
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_uint(I32, val));
         }
-        Operator::I64TruncSSatF64 |
-        Operator::I64TruncSSatF32 |
-        Operator::I32TruncSSatF64 |
-        Operator::I32TruncSSatF32 |
-        Operator::I64TruncUSatF64 |
-        Operator::I64TruncUSatF32 |
-        Operator::I32TruncUSatF64 |
-        Operator::I32TruncUSatF32 => {
+        Operator::I64TruncSSatF64
+        | Operator::I64TruncSSatF32
+        | Operator::I32TruncSSatF64
+        | Operator::I32TruncSSatF32
+        | Operator::I64TruncUSatF64
+        | Operator::I64TruncUSatF32
+        | Operator::I32TruncUSatF64
+        | Operator::I32TruncUSatF32 => {
             panic!("proposed saturating conversion operators not yet supported");
         }
         Operator::F32ReinterpretI32 => {
@@ -670,23 +691,19 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().ishl(arg1, arg2));
         }
-        Operator::I32ShrS |
-        Operator::I64ShrS => {
+        Operator::I32ShrS | Operator::I64ShrS => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().sshr(arg1, arg2));
         }
-        Operator::I32ShrU |
-        Operator::I64ShrU => {
+        Operator::I32ShrU | Operator::I64ShrU => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().ushr(arg1, arg2));
         }
-        Operator::I32Rotl |
-        Operator::I64Rotl => {
+        Operator::I32Rotl | Operator::I64Rotl => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().rotl(arg1, arg2));
         }
-        Operator::I32Rotr |
-        Operator::I64Rotr => {
+        Operator::I32Rotr | Operator::I64Rotr => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().rotr(arg1, arg2));
         }
@@ -714,23 +731,19 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().fdiv(arg1, arg2));
         }
-        Operator::I32DivS |
-        Operator::I64DivS => {
+        Operator::I32DivS | Operator::I64DivS => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().sdiv(arg1, arg2));
         }
-        Operator::I32DivU |
-        Operator::I64DivU => {
+        Operator::I32DivU | Operator::I64DivU => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().udiv(arg1, arg2));
         }
-        Operator::I32RemS |
-        Operator::I64RemS => {
+        Operator::I32RemS | Operator::I64RemS => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().srem(arg1, arg2));
         }
-        Operator::I32RemU |
-        Operator::I64RemU => {
+        Operator::I32RemU | Operator::I64RemU => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().urem(arg1, arg2));
         }
@@ -742,8 +755,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().fmax(arg1, arg2));
         }
-        Operator::F32Copysign |
-        Operator::F64Copysign => {
+        Operator::F32Copysign | Operator::F64Copysign => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().fcopysign(arg1, arg2));
         }
@@ -789,72 +801,72 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::F32Le | Operator::F64Le => {
             translate_fcmp(FloatCC::LessThanOrEqual, builder, state)
         }
-        Operator::Wake { .. } |
-        Operator::I32Wait { .. } |
-        Operator::I64Wait { .. } |
-        Operator::I32AtomicLoad { .. } |
-        Operator::I64AtomicLoad { .. } |
-        Operator::I32AtomicLoad8U { .. } |
-        Operator::I32AtomicLoad16U { .. } |
-        Operator::I64AtomicLoad8U { .. } |
-        Operator::I64AtomicLoad16U { .. } |
-        Operator::I64AtomicLoad32U { .. } |
-        Operator::I32AtomicStore { .. } |
-        Operator::I64AtomicStore { .. } |
-        Operator::I32AtomicStore8 { .. } |
-        Operator::I32AtomicStore16 { .. } |
-        Operator::I64AtomicStore8 { .. } |
-        Operator::I64AtomicStore16 { .. } |
-        Operator::I64AtomicStore32 { .. } |
-        Operator::I32AtomicRmwAdd { .. } |
-        Operator::I64AtomicRmwAdd { .. } |
-        Operator::I32AtomicRmw8UAdd { .. } |
-        Operator::I32AtomicRmw16UAdd { .. } |
-        Operator::I64AtomicRmw8UAdd { .. } |
-        Operator::I64AtomicRmw16UAdd { .. } |
-        Operator::I64AtomicRmw32UAdd { .. } |
-        Operator::I32AtomicRmwSub { .. } |
-        Operator::I64AtomicRmwSub { .. } |
-        Operator::I32AtomicRmw8USub { .. } |
-        Operator::I32AtomicRmw16USub { .. } |
-        Operator::I64AtomicRmw8USub { .. } |
-        Operator::I64AtomicRmw16USub { .. } |
-        Operator::I64AtomicRmw32USub { .. } |
-        Operator::I32AtomicRmwAnd { .. } |
-        Operator::I64AtomicRmwAnd { .. } |
-        Operator::I32AtomicRmw8UAnd { .. } |
-        Operator::I32AtomicRmw16UAnd { .. } |
-        Operator::I64AtomicRmw8UAnd { .. } |
-        Operator::I64AtomicRmw16UAnd { .. } |
-        Operator::I64AtomicRmw32UAnd { .. } |
-        Operator::I32AtomicRmwOr { .. } |
-        Operator::I64AtomicRmwOr { .. } |
-        Operator::I32AtomicRmw8UOr { .. } |
-        Operator::I32AtomicRmw16UOr { .. } |
-        Operator::I64AtomicRmw8UOr { .. } |
-        Operator::I64AtomicRmw16UOr { .. } |
-        Operator::I64AtomicRmw32UOr { .. } |
-        Operator::I32AtomicRmwXor { .. } |
-        Operator::I64AtomicRmwXor { .. } |
-        Operator::I32AtomicRmw8UXor { .. } |
-        Operator::I32AtomicRmw16UXor { .. } |
-        Operator::I64AtomicRmw8UXor { .. } |
-        Operator::I64AtomicRmw16UXor { .. } |
-        Operator::I64AtomicRmw32UXor { .. } |
-        Operator::I32AtomicRmwXchg { .. } |
-        Operator::I64AtomicRmwXchg { .. } |
-        Operator::I32AtomicRmw8UXchg { .. } |
-        Operator::I32AtomicRmw16UXchg { .. } |
-        Operator::I64AtomicRmw8UXchg { .. } |
-        Operator::I64AtomicRmw16UXchg { .. } |
-        Operator::I64AtomicRmw32UXchg { .. } |
-        Operator::I32AtomicRmwCmpxchg { .. } |
-        Operator::I64AtomicRmwCmpxchg { .. } |
-        Operator::I32AtomicRmw8UCmpxchg { .. } |
-        Operator::I32AtomicRmw16UCmpxchg { .. } |
-        Operator::I64AtomicRmw8UCmpxchg { .. } |
-        Operator::I64AtomicRmw16UCmpxchg { .. } |
-        Operator::I64AtomicRmw32UCmpxchg { .. } => {
+        Operator::Wake { .. }
+        | Operator::I32Wait { .. }
+        | Operator::I64Wait { .. }
+        | Operator::I32AtomicLoad { .. }
+        | Operator::I64AtomicLoad { .. }
+        | Operator::I32AtomicLoad8U { .. }
+        | Operator::I32AtomicLoad16U { .. }
+        | Operator::I64AtomicLoad8U { .. }
+        | Operator::I64AtomicLoad16U { .. }
+        | Operator::I64AtomicLoad32U { .. }
+        | Operator::I32AtomicStore { .. }
+        | Operator::I64AtomicStore { .. }
+        | Operator::I32AtomicStore8 { .. }
+        | Operator::I32AtomicStore16 { .. }
+        | Operator::I64AtomicStore8 { .. }
+        | Operator::I64AtomicStore16 { .. }
+        | Operator::I64AtomicStore32 { .. }
+        | Operator::I32AtomicRmwAdd { .. }
+        | Operator::I64AtomicRmwAdd { .. }
+        | Operator::I32AtomicRmw8UAdd { .. }
+        | Operator::I32AtomicRmw16UAdd { .. }
+        | Operator::I64AtomicRmw8UAdd { .. }
+        | Operator::I64AtomicRmw16UAdd { .. }
+        | Operator::I64AtomicRmw32UAdd { .. }
+        | Operator::I32AtomicRmwSub { .. }
+        | Operator::I64AtomicRmwSub { .. }
+        | Operator::I32AtomicRmw8USub { .. }
+        | Operator::I32AtomicRmw16USub { .. }
+        | Operator::I64AtomicRmw8USub { .. }
+        | Operator::I64AtomicRmw16USub { .. }
+        | Operator::I64AtomicRmw32USub { .. }
+        | Operator::I32AtomicRmwAnd { .. }
+        | Operator::I64AtomicRmwAnd { .. }
+        | Operator::I32AtomicRmw8UAnd { .. }
+        | Operator::I32AtomicRmw16UAnd { .. }
+        | Operator::I64AtomicRmw8UAnd { .. }
+        | Operator::I64AtomicRmw16UAnd { .. }
+        | Operator::I64AtomicRmw32UAnd { .. }
+        | Operator::I32AtomicRmwOr { .. }
+        | Operator::I64AtomicRmwOr { .. }
+        | Operator::I32AtomicRmw8UOr { .. }
+        | Operator::I32AtomicRmw16UOr { .. }
+        | Operator::I64AtomicRmw8UOr { .. }
+        | Operator::I64AtomicRmw16UOr { .. }
+        | Operator::I64AtomicRmw32UOr { .. }
+        | Operator::I32AtomicRmwXor { .. }
+        | Operator::I64AtomicRmwXor { .. }
+        | Operator::I32AtomicRmw8UXor { .. }
+        | Operator::I32AtomicRmw16UXor { .. }
+        | Operator::I64AtomicRmw8UXor { .. }
+        | Operator::I64AtomicRmw16UXor { .. }
+        | Operator::I64AtomicRmw32UXor { .. }
+        | Operator::I32AtomicRmwXchg { .. }
+        | Operator::I64AtomicRmwXchg { .. }
+        | Operator::I32AtomicRmw8UXchg { .. }
+        | Operator::I32AtomicRmw16UXchg { .. }
+        | Operator::I64AtomicRmw8UXchg { .. }
+        | Operator::I64AtomicRmw16UXchg { .. }
+        | Operator::I64AtomicRmw32UXchg { .. }
+        | Operator::I32AtomicRmwCmpxchg { .. }
+        | Operator::I64AtomicRmwCmpxchg { .. }
+        | Operator::I32AtomicRmw8UCmpxchg { .. }
+        | Operator::I32AtomicRmw16UCmpxchg { .. }
+        | Operator::I64AtomicRmw8UCmpxchg { .. }
+        | Operator::I64AtomicRmw16UCmpxchg { .. }
+        | Operator::I64AtomicRmw32UCmpxchg { .. } => {
             panic!("proposed thread operators not yet supported");
         }
     })
@@ -876,8 +888,7 @@ fn translate_unreachable_operator(
             // so we don't have any branches anywhere.
             state.push_if(ir::Inst::reserved_value(), ir::Ebb::reserved_value(), 0);
         }
-        Operator::Loop { ty: _ } |
-        Operator::Block { ty: _ } => {
+        Operator::Loop { ty: _ } | Operator::Block { ty: _ } => {
             state.push_block(ir::Ebb::reserved_value(), 0);
         }
         Operator::Else => {
@@ -919,7 +930,9 @@ fn translate_unreachable_operator(
                     // And loops can't have branches to the end.
                     false
                 }
-                ControlStackFrame::If { reachable_from_top, .. } => {
+                ControlStackFrame::If {
+                    reachable_from_top, ..
+                } => {
                     // A reachable if without an else has a branch from the top
                     // directly to the bottom.
                     reachable_from_top
@@ -998,13 +1011,9 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     // alignment immediate says it's aligned, because WebAssembly's immediate
     // field is just a hint, while Cretonne's aligned flag needs a guarantee.
     let flags = MemFlags::new();
-    let (load, dfg) = builder.ins().Load(
-        opcode,
-        result_ty,
-        flags,
-        offset.into(),
-        base,
-    );
+    let (load, dfg) = builder
+        .ins()
+        .Load(opcode, result_ty, flags, offset.into(), base);
     state.push1(dfg.first_result(load));
 }
 
@@ -1024,14 +1033,9 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     let (base, offset) = get_heap_addr(heap, addr32, offset, environ.native_pointer(), builder);
     // See the comments in `translate_load` about the flags.
     let flags = MemFlags::new();
-    builder.ins().Store(
-        opcode,
-        val_ty,
-        flags,
-        offset.into(),
-        val,
-        base,
-    );
+    builder
+        .ins()
+        .Store(opcode, val_ty, flags, offset.into(), val, base);
 }
 
 fn translate_icmp(

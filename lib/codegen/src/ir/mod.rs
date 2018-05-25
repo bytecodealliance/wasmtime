@@ -33,7 +33,7 @@ pub use ir::heap::{HeapBase, HeapData, HeapStyle};
 pub use ir::instructions::{InstructionData, Opcode, ValueList, ValueListPool, VariableArgs};
 pub use ir::jumptable::JumpTableData;
 pub use ir::layout::Layout;
-pub use ir::libcall::{LibCall, get_libcall_funcref, get_probestack_funcref};
+pub use ir::libcall::{get_libcall_funcref, get_probestack_funcref, LibCall};
 pub use ir::memflags::MemFlags;
 pub use ir::progpoint::{ExpandedProgramPoint, ProgramOrder, ProgramPoint};
 pub use ir::sourceloc::SourceLoc;

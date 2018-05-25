@@ -104,9 +104,10 @@ impl RegisterSet {
     ///
     /// This assumes that unused bits are 1.
     pub fn interferes_with(&self, other: &Self) -> bool {
-        self.avail.iter().zip(&other.avail).any(
-            |(&x, &y)| (x | y) != !0,
-        )
+        self.avail
+            .iter()
+            .zip(&other.avail)
+            .any(|(&x, &y)| (x | y) != !0)
     }
 
     /// Intersect this set of registers with `other`. This has the effect of removing any register
@@ -203,9 +204,10 @@ impl<'a> fmt::Display for DisplayRegisterSet<'a> {
                                 bank.names
                                     .get(offset as usize)
                                     .and_then(|name| name.chars().nth(1))
-                                    .unwrap_or_else(
-                                        || char::from_digit(u32::from(offset % 10), 10).unwrap(),
-                                    )
+                                    .unwrap_or_else(|| char::from_digit(
+                                        u32::from(offset % 10),
+                                        10
+                                    ).unwrap())
                             )?;
                         }
                     }

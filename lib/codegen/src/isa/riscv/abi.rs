@@ -117,17 +117,21 @@ pub fn legalize_signature(
 
 /// Get register class for a type appearing in a legalized signature.
 pub fn regclass_for_abi_type(ty: Type) -> RegClass {
-    if ty.is_float() { FPR } else { GPR }
+    if ty.is_float() {
+        FPR
+    } else {
+        GPR
+    }
 }
 
 pub fn allocatable_registers(_func: &ir::Function, isa_flags: &settings::Flags) -> RegisterSet {
     let mut regs = RegisterSet::new();
     regs.take(GPR, GPR.unit(0)); // Hard-wired 0.
-    // %x1 is the link register which is available for allocation.
+                                 // %x1 is the link register which is available for allocation.
     regs.take(GPR, GPR.unit(2)); // Stack pointer.
     regs.take(GPR, GPR.unit(3)); // Global pointer.
     regs.take(GPR, GPR.unit(4)); // Thread pointer.
-    // TODO: %x8 is the frame pointer. Reserve it?
+                                 // TODO: %x8 is the frame pointer. Reserve it?
 
     // Remove %x16 and up for RV32E.
     if isa_flags.enable_e() {

@@ -23,9 +23,19 @@ function banner {
 }
 
 # Run rustfmt if we have it.
-if $topdir/check-rustfmt.sh; then
-    banner "Rust formatting"
-    $topdir/format-all.sh --write-mode=diff
+banner "Rust formatting"
+if command -v rustfmt > /dev/null; then
+    # In newer versions of rustfmt, replace --write-mode=diff with --check.
+    if ! $topdir/format-all.sh --write-mode=diff ; then
+        echo "Formatting diffs detected! Run \"cargo fmt --all\" to correct."
+        exit 1
+    fi
+else
+    echo "rustfmt not available; formatting not checked!"
+    echo
+    echo "If you are using rustup, rustfmt can be installed via"
+    echo "\"rustup component add --toolchain=stable rustfmt-preview\", or see"
+    echo "https://github.com/rust-lang-nursery/rustfmt for more information."
 fi
 
 # Check if any Python files have changed since we last checked them.

@@ -47,54 +47,78 @@ pub enum ControlStackFrame {
 impl ControlStackFrame {
     pub fn num_return_values(&self) -> usize {
         match *self {
-            ControlStackFrame::If { num_return_values, .. } |
-            ControlStackFrame::Block { num_return_values, .. } |
-            ControlStackFrame::Loop { num_return_values, .. } => num_return_values,
+            ControlStackFrame::If {
+                num_return_values, ..
+            }
+            | ControlStackFrame::Block {
+                num_return_values, ..
+            }
+            | ControlStackFrame::Loop {
+                num_return_values, ..
+            } => num_return_values,
         }
     }
     pub fn following_code(&self) -> Ebb {
         match *self {
-            ControlStackFrame::If { destination, .. } |
-            ControlStackFrame::Block { destination, .. } |
-            ControlStackFrame::Loop { destination, .. } => destination,
+            ControlStackFrame::If { destination, .. }
+            | ControlStackFrame::Block { destination, .. }
+            | ControlStackFrame::Loop { destination, .. } => destination,
         }
     }
     pub fn br_destination(&self) -> Ebb {
         match *self {
-            ControlStackFrame::If { destination, .. } |
-            ControlStackFrame::Block { destination, .. } => destination,
+            ControlStackFrame::If { destination, .. }
+            | ControlStackFrame::Block { destination, .. } => destination,
             ControlStackFrame::Loop { header, .. } => header,
         }
     }
     pub fn original_stack_size(&self) -> usize {
         match *self {
-            ControlStackFrame::If { original_stack_size, .. } |
-            ControlStackFrame::Block { original_stack_size, .. } |
-            ControlStackFrame::Loop { original_stack_size, .. } => original_stack_size,
+            ControlStackFrame::If {
+                original_stack_size,
+                ..
+            }
+            | ControlStackFrame::Block {
+                original_stack_size,
+                ..
+            }
+            | ControlStackFrame::Loop {
+                original_stack_size,
+                ..
+            } => original_stack_size,
         }
     }
     pub fn is_loop(&self) -> bool {
         match *self {
-            ControlStackFrame::If { .. } |
-            ControlStackFrame::Block { .. } => false,
+            ControlStackFrame::If { .. } | ControlStackFrame::Block { .. } => false,
             ControlStackFrame::Loop { .. } => true,
         }
     }
 
     pub fn exit_is_branched_to(&self) -> bool {
         match *self {
-            ControlStackFrame::If { exit_is_branched_to, .. } |
-            ControlStackFrame::Block { exit_is_branched_to, .. } => exit_is_branched_to,
+            ControlStackFrame::If {
+                exit_is_branched_to,
+                ..
+            }
+            | ControlStackFrame::Block {
+                exit_is_branched_to,
+                ..
+            } => exit_is_branched_to,
             ControlStackFrame::Loop { .. } => false,
         }
     }
 
     pub fn set_branched_to_exit(&mut self) {
         match *self {
-            ControlStackFrame::If { ref mut exit_is_branched_to, .. } |
-            ControlStackFrame::Block { ref mut exit_is_branched_to, .. } => {
-                *exit_is_branched_to = true
+            ControlStackFrame::If {
+                ref mut exit_is_branched_to,
+                ..
             }
+            | ControlStackFrame::Block {
+                ref mut exit_is_branched_to,
+                ..
+            } => *exit_is_branched_to = true,
             ControlStackFrame::Loop { .. } => {}
         }
     }
@@ -258,9 +282,9 @@ impl TranslationState {
         environ: &mut FE,
     ) -> GlobalValue {
         let index = index as GlobalIndex;
-        *self.globals.entry(index).or_insert_with(
-            || environ.make_global(func, index),
-        )
+        *self.globals
+            .entry(index)
+            .or_insert_with(|| environ.make_global(func, index))
     }
 
     /// Get the `Heap` reference that should be used to access linear memory `index`.
@@ -272,9 +296,9 @@ impl TranslationState {
         environ: &mut FE,
     ) -> ir::Heap {
         let index = index as MemoryIndex;
-        *self.heaps.entry(index).or_insert_with(
-            || environ.make_heap(func, index),
-        )
+        *self.heaps
+            .entry(index)
+            .or_insert_with(|| environ.make_heap(func, index))
     }
 
     /// Get the `SigRef` reference that should be used to make an indirect call with signature

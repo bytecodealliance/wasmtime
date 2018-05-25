@@ -125,10 +125,8 @@ impl<'a> Context<'a> {
         self.process_spills(tracker);
 
         while let Some(inst) = self.cur.next_inst() {
-            if let Some(constraints) =
-                self.encinfo.operand_constraints(
-                    self.cur.func.encodings[inst],
-                )
+            if let Some(constraints) = self.encinfo
+                .operand_constraints(self.cur.func.encodings[inst])
             {
                 self.visit_inst(inst, ebb, constraints, tracker);
             } else {
@@ -283,13 +281,11 @@ impl<'a> Context<'a> {
                     dbg!("Need {} reg from {} throughs", op.regclass, throughs.len());
                     match self.spill_candidate(mask, throughs) {
                         Some(cand) => self.spill_reg(cand),
-                        None => {
-                            panic!(
-                                "Ran out of {} registers for {}",
-                                op.regclass,
-                                self.cur.display_inst(inst)
-                            )
-                        }
+                        None => panic!(
+                            "Ran out of {} registers for {}",
+                            op.regclass,
+                            self.cur.display_inst(inst)
+                        ),
                     }
                 }
             }
@@ -349,12 +345,11 @@ impl<'a> Context<'a> {
             .constraints()
             .fixed_value_arguments();
         let args = self.cur.func.dfg.inst_variable_args(inst);
-        for (idx, (abi, &arg)) in
-            self.cur.func.dfg.signatures[sig]
-                .params
-                .iter()
-                .zip(args)
-                .enumerate()
+        for (idx, (abi, &arg)) in self.cur.func.dfg.signatures[sig]
+            .params
+            .iter()
+            .zip(args)
+            .enumerate()
         {
             if abi.location.is_reg() {
                 let (rci, spilled) = match self.liveness[arg].affinity {
@@ -393,9 +388,9 @@ impl<'a> Context<'a> {
             } else if ru.fixed {
                 // This is a fixed register use which doesn't necessarily require a copy.
                 // Make a copy only if this is not the first use of the value.
-                self.reg_uses.get(i.wrapping_sub(1)).map_or(false, |ru2| {
-                    ru2.value == ru.value
-                })
+                self.reg_uses
+                    .get(i.wrapping_sub(1))
+                    .map_or(false, |ru2| ru2.value == ru.value)
             } else {
                 false
             };
@@ -430,13 +425,11 @@ impl<'a> Context<'a> {
                         )
                     } {
                         Some(cand) => self.spill_reg(cand),
-                        None => {
-                            panic!(
-                                "Ran out of {} registers when inserting copy before {}",
-                                rc,
-                                self.cur.display_inst(inst)
-                            )
-                        }
+                        None => panic!(
+                            "Ran out of {} registers when inserting copy before {}",
+                            rc,
+                            self.cur.display_inst(inst)
+                        ),
                     }
                 }
             }
@@ -501,9 +494,10 @@ impl<'a> Context<'a> {
         }
 
         // Assign a spill slot for the whole virtual register.
-        let ss = self.cur.func.stack_slots.make_spill_slot(
-            self.cur.func.dfg.value_type(value),
-        );
+        let ss = self.cur
+            .func
+            .stack_slots
+            .make_spill_slot(self.cur.func.dfg.value_type(value));
         for &v in self.virtregs.congruence_class(&value) {
             self.liveness.spill(v);
             self.cur.func.locations[v] = ValueLoc::Stack(ss);

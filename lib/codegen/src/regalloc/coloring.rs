@@ -51,10 +51,10 @@ use isa::{regs_overlap, RegClass, RegInfo, RegUnit};
 use packed_option::PackedOption;
 use regalloc::RegDiversions;
 use regalloc::affinity::Affinity;
-use regalloc::register_set::RegisterSet;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
 use regalloc::liverange::{LiveRange, LiveRangeContext};
+use regalloc::register_set::RegisterSet;
 use regalloc::solver::{Solver, SolverError};
 use std::mem;
 use timing;
@@ -142,9 +142,10 @@ impl Coloring {
 impl<'a> Context<'a> {
     /// Run the coloring algorithm.
     fn run(&mut self, tracker: &mut LiveValueTracker) {
-        self.cur.func.locations.resize(
-            self.cur.func.dfg.num_values(),
-        );
+        self.cur
+            .func
+            .locations
+            .resize(self.cur.func.dfg.num_values());
 
         // Visit blocks in reverse post-order. We need to ensure that at least one predecessor has
         // been visited before each EBB. That guarantees that the EBB arguments have been colored.
@@ -372,10 +373,8 @@ impl<'a> Context<'a> {
 
                 // Update the global register set which has no diversions.
                 if !lv.is_local {
-                    regs.global.free(
-                        rc,
-                        self.cur.func.locations[lv.value].unwrap_reg(),
-                    );
+                    regs.global
+                        .free(rc, self.cur.func.locations[lv.value].unwrap_reg());
                 }
             }
         }
@@ -500,20 +499,14 @@ impl<'a> Context<'a> {
             // already in a register.
             let cur_reg = self.divert.reg(value, &self.cur.func.locations);
             match op.kind {
-                ConstraintKind::FixedReg(regunit) |
-                ConstraintKind::FixedTied(regunit) => {
+                ConstraintKind::FixedReg(regunit) | ConstraintKind::FixedTied(regunit) => {
                     // Add the fixed constraint even if `cur_reg == regunit`.
                     // It is possible that we will want to convert the value to a variable later,
                     // and this identity assignment prevents that from happening.
-                    self.solver.reassign_in(
-                        value,
-                        op.regclass,
-                        cur_reg,
-                        regunit,
-                    );
+                    self.solver
+                        .reassign_in(value, op.regclass, cur_reg, regunit);
                 }
-                ConstraintKind::Reg |
-                ConstraintKind::Tied(_) => {
+                ConstraintKind::Reg | ConstraintKind::Tied(_) => {
                     if !op.regclass.contains(cur_reg) {
                         self.solver.add_var(value, op.regclass, cur_reg);
                     }
@@ -541,8 +534,7 @@ impl<'a> Context<'a> {
 
         for (op, &value) in constraints.iter().zip(self.cur.func.dfg.inst_args(inst)) {
             match op.kind {
-                ConstraintKind::Reg |
-                ConstraintKind::Tied(_) => {
+                ConstraintKind::Reg | ConstraintKind::Tied(_) => {
                     let cur_reg = self.divert.reg(value, &self.cur.func.locations);
                     // This is the opposite condition of `program_input_constraints()`.
                     if op.regclass.contains(cur_reg) {
@@ -556,9 +548,9 @@ impl<'a> Context<'a> {
                         }
                     }
                 }
-                ConstraintKind::FixedReg(_) |
-                ConstraintKind::FixedTied(_) |
-                ConstraintKind::Stack => {}
+                ConstraintKind::FixedReg(_)
+                | ConstraintKind::FixedTied(_)
+                | ConstraintKind::Stack => {}
             }
         }
     }
@@ -651,9 +643,9 @@ impl<'a> Context<'a> {
         Pred: FnMut(&LiveRange, LiveRangeContext<Layout>) -> bool,
     {
         for rdiv in self.divert.all() {
-            let lr = self.liveness.get(rdiv.value).expect(
-                "Missing live range for diverted register",
-            );
+            let lr = self.liveness
+                .get(rdiv.value)
+                .expect("Missing live range for diverted register");
             if pred(lr, self.liveness.context(&self.cur.func.layout)) {
                 if let Affinity::Reg(rci) = lr.affinity {
                     let rc = self.reginfo.rc(rci);
@@ -703,8 +695,7 @@ impl<'a> Context<'a> {
     ) {
         for (op, lv) in constraints.iter().zip(defs) {
             match op.kind {
-                ConstraintKind::FixedReg(reg) |
-                ConstraintKind::FixedTied(reg) => {
+                ConstraintKind::FixedReg(reg) | ConstraintKind::FixedTied(reg) => {
                     self.add_fixed_output(lv.value, op.regclass, reg, throughs);
                     if !lv.is_local && !global_regs.is_avail(op.regclass, reg) {
                         dbg!(
@@ -716,9 +707,7 @@ impl<'a> Context<'a> {
                         *replace_global_defines = true;
                     }
                 }
-                ConstraintKind::Reg |
-                ConstraintKind::Tied(_) |
-                ConstraintKind::Stack => {}
+                ConstraintKind::Reg | ConstraintKind::Tied(_) | ConstraintKind::Stack => {}
             }
         }
     }
@@ -801,9 +790,9 @@ impl<'a> Context<'a> {
     ) {
         for (op, lv) in constraints.iter().zip(defs) {
             match op.kind {
-                ConstraintKind::FixedReg(_) |
-                ConstraintKind::FixedTied(_) |
-                ConstraintKind::Stack => continue,
+                ConstraintKind::FixedReg(_)
+                | ConstraintKind::FixedTied(_)
+                | ConstraintKind::Stack => continue,
                 ConstraintKind::Reg => {
                     self.solver.add_def(lv.value, op.regclass, !lv.is_local);
                 }
@@ -816,8 +805,7 @@ impl<'a> Context<'a> {
                         op.regclass,
                         self.divert.reg(arg, &self.cur.func.locations),
                         !lv.is_local,
-                    )
-                    {
+                    ) {
                         // The value we're tied to has been assigned to a fixed register.
                         // We need to make sure that fixed output register is compatible with the
                         // global register set.
@@ -881,8 +869,8 @@ impl<'a> Context<'a> {
                 // not actually constrained by the instruction. We just want it out of the way.
                 let toprc2 = self.reginfo.toprc(rci);
                 let reg2 = self.divert.reg(lv.value, &self.cur.func.locations);
-                if rc.contains(reg2) && self.solver.can_add_var(lv.value, toprc2, reg2) &&
-                    !self.is_live_on_outgoing_edge(lv.value)
+                if rc.contains(reg2) && self.solver.can_add_var(lv.value, toprc2, reg2)
+                    && !self.is_live_on_outgoing_edge(lv.value)
                 {
                     self.solver.add_through_var(lv.value, toprc2, reg2);
                     return true;
@@ -911,10 +899,10 @@ impl<'a> Context<'a> {
             }
             Table(jt) => {
                 let lr = &self.liveness[value];
-                !lr.is_local() &&
-                    self.cur.func.jump_tables[jt].entries().any(|(_, ebb)| {
-                        lr.is_livein(ebb, ctx)
-                    })
+                !lr.is_local()
+                    && self.cur.func.jump_tables[jt]
+                        .entries()
+                        .any(|(_, ebb)| lr.is_livein(ebb, ctx))
             }
         }
     }
@@ -940,7 +928,9 @@ impl<'a> Context<'a> {
 
         for m in self.solver.moves() {
             match *m {
-                Reg { value, from, to, .. } => {
+                Reg {
+                    value, from, to, ..
+                } => {
                     self.divert.regmove(value, from, to);
                     self.cur.ins().regmove(value, from, to);
                 }
@@ -951,10 +941,10 @@ impl<'a> Context<'a> {
                     ..
                 } => {
                     debug_assert_eq!(slot[to_slot].expand(), None, "Overwriting slot in use");
-                    let ss = self.cur.func.stack_slots.get_emergency_slot(
-                        self.cur.func.dfg.value_type(value),
-                        &slot[0..spills],
-                    );
+                    let ss = self.cur
+                        .func
+                        .stack_slots
+                        .get_emergency_slot(self.cur.func.dfg.value_type(value), &slot[0..spills]);
                     slot[to_slot] = ss.into();
                     self.divert.regspill(value, from, ss);
                     self.cur.ins().regspill(value, from, ss);
@@ -1013,8 +1003,7 @@ impl<'a> Context<'a> {
             if match self.cur.func.dfg.value_def(lv.value) {
                 ValueDef::Result(i, _) => i != inst,
                 _ => true,
-            }
-            {
+            } {
                 break;
             }
             if lv.is_local || !lv.affinity.is_reg() {
@@ -1072,10 +1061,8 @@ impl<'a> Context<'a> {
                 };
                 regs.input.free(rc, loc.unwrap_reg());
                 if !lv.is_local {
-                    regs.global.free(
-                        rc,
-                        self.cur.func.locations[lv.value].unwrap_reg(),
-                    );
+                    regs.global
+                        .free(rc, self.cur.func.locations[lv.value].unwrap_reg());
                 }
             }
         }
@@ -1096,11 +1083,10 @@ fn program_input_abi(
 ) {
     for (abi, &value) in abi_types.iter().zip(func.dfg.inst_variable_args(inst)) {
         if let ArgumentLoc::Reg(reg) = abi.location {
-            if let Affinity::Reg(rci) =
-                liveness
-                    .get(value)
-                    .expect("ABI register must have live range")
-                    .affinity
+            if let Affinity::Reg(rci) = liveness
+                .get(value)
+                .expect("ABI register must have live range")
+                .affinity
             {
                 let rc = reginfo.rc(rci);
                 let cur_reg = divert.reg(value, &func.locations);

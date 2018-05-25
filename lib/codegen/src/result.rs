@@ -12,10 +12,7 @@ pub enum CtonError {
     /// This always represents a bug, either in the code that generated IR for Cretonne, or a bug
     /// in Cretonne itself.
     #[fail(display = "Verifier error: {}", _0)]
-    Verifier(
-        #[cause]
-        verifier::Error
-    ),
+    Verifier(#[cause] verifier::Error),
 
     /// An implementation limit was exceeded.
     ///

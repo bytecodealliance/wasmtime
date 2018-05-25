@@ -1,9 +1,9 @@
 //! Densely numbered entity references as mapping keys.
-use {EntityRef, Iter, IterMut, Keys};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
 use std::vec::Vec;
+use {EntityRef, Iter, IterMut, Keys};
 
 /// A primary mapping `K -> V` allocating dense entity references.
 ///

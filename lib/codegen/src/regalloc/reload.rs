@@ -166,10 +166,10 @@ impl<'a> Context<'a> {
                     if arg.affinity.is_stack() {
                         // An incoming register parameter was spilled. Replace the parameter value
                         // with a temporary register value that is immediately spilled.
-                        let reg = self.cur.func.dfg.replace_ebb_param(
-                            arg.value,
-                            abi.value_type,
-                        );
+                        let reg = self.cur
+                            .func
+                            .dfg
+                            .replace_ebb_param(arg.value, abi.value_type);
                         let affinity = Affinity::abi(&abi, self.cur.isa);
                         self.liveness.create_dead(reg, ebb, affinity);
                         self.insert_spill(ebb, arg.value, reg);
@@ -199,9 +199,9 @@ impl<'a> Context<'a> {
         self.cur.use_srcloc(inst);
 
         // Get the operand constraints for `inst` that we are trying to satisfy.
-        let constraints = self.encinfo.operand_constraints(encoding).expect(
-            "Missing instruction encoding",
-        );
+        let constraints = self.encinfo
+            .operand_constraints(encoding)
+            .expect("Missing instruction encoding");
 
         // Identify reload candidates.
         debug_assert!(self.candidates.is_empty());
@@ -226,12 +226,8 @@ impl<'a> Context<'a> {
             // Create a live range for the new reload.
             let affinity = Affinity::Reg(cand.regclass.into());
             self.liveness.create_dead(reg, fill, affinity);
-            self.liveness.extend_locally(
-                reg,
-                ebb,
-                inst,
-                &self.cur.func.layout,
-            );
+            self.liveness
+                .extend_locally(reg, ebb, inst, &self.cur.func.layout);
         }
 
         // Rewrite instruction arguments.
@@ -280,19 +276,18 @@ impl<'a> Context<'a> {
         // Same thing for spilled call return values.
         let retvals = &defs[constraints.outs.len()..];
         if !retvals.is_empty() {
-            let sig = self.cur.func.dfg.call_signature(inst).expect(
-                "Extra results on non-call instruction",
-            );
+            let sig = self.cur
+                .func
+                .dfg
+                .call_signature(inst)
+                .expect("Extra results on non-call instruction");
             for (i, lv) in retvals.iter().enumerate() {
                 let abi = self.cur.func.dfg.signatures[sig].returns[i];
                 debug_assert!(abi.location.is_reg());
                 if lv.affinity.is_stack() {
                     let reg = self.cur.func.dfg.replace_result(lv.value, abi.value_type);
-                    self.liveness.create_dead(
-                        reg,
-                        inst,
-                        Affinity::abi(&abi, self.cur.isa),
-                    );
+                    self.liveness
+                        .create_dead(reg, inst, Affinity::abi(&abi, self.cur.isa));
                     self.insert_spill(ebb, lv.value, reg);
                 }
             }
@@ -355,12 +350,8 @@ impl<'a> Context<'a> {
 
         // Update live ranges.
         self.liveness.move_def_locally(stack, inst);
-        self.liveness.extend_locally(
-            reg,
-            ebb,
-            inst,
-            &self.cur.func.layout,
-        );
+        self.liveness
+            .extend_locally(reg, ebb, inst, &self.cur.func.layout);
     }
 }
 

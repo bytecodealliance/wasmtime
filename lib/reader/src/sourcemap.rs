@@ -65,62 +65,62 @@ impl SourceMap {
     /// Returns the entity reference corresponding to `name`, if it exists.
     pub fn lookup_str(&self, name: &str) -> Option<AnyEntity> {
         split_entity_name(name).and_then(|(ent, num)| match ent {
-            "v" => {
-                Value::with_number(num).and_then(|v| if !self.contains_value(v) {
+            "v" => Value::with_number(num).and_then(|v| {
+                if !self.contains_value(v) {
                     None
                 } else {
                     Some(v.into())
-                })
-            }
-            "ebb" => {
-                Ebb::with_number(num).and_then(|ebb| if !self.contains_ebb(ebb) {
+                }
+            }),
+            "ebb" => Ebb::with_number(num).and_then(|ebb| {
+                if !self.contains_ebb(ebb) {
                     None
                 } else {
                     Some(ebb.into())
-                })
-            }
-            "ss" => {
-                StackSlot::with_number(num).and_then(|ss| if !self.contains_ss(ss) {
+                }
+            }),
+            "ss" => StackSlot::with_number(num).and_then(|ss| {
+                if !self.contains_ss(ss) {
                     None
                 } else {
                     Some(ss.into())
-                })
-            }
-            "gv" => {
-                GlobalVar::with_number(num).and_then(|gv| if !self.contains_gv(gv) {
+                }
+            }),
+            "gv" => GlobalVar::with_number(num).and_then(|gv| {
+                if !self.contains_gv(gv) {
                     None
                 } else {
                     Some(gv.into())
-                })
-            }
-            "heap" => {
-                Heap::with_number(num).and_then(|heap| if !self.contains_heap(heap) {
+                }
+            }),
+            "heap" => Heap::with_number(num).and_then(|heap| {
+                if !self.contains_heap(heap) {
                     None
                 } else {
                     Some(heap.into())
-                })
-            }
-            "sig" => {
-                SigRef::with_number(num).and_then(|sig| if !self.contains_sig(sig) {
+                }
+            }),
+            "sig" => SigRef::with_number(num).and_then(|sig| {
+                if !self.contains_sig(sig) {
                     None
                 } else {
                     Some(sig.into())
-                })
-            }
-            "fn" => {
-                FuncRef::with_number(num).and_then(|fn_| if !self.contains_fn(fn_) {
+                }
+            }),
+            "fn" => FuncRef::with_number(num).and_then(|fn_| {
+                if !self.contains_fn(fn_) {
                     None
                 } else {
                     Some(fn_.into())
-                })
-            }
-            "jt" => {
-                JumpTable::with_number(num).and_then(|jt| if !self.contains_jt(jt) {
+                }
+            }),
+            "jt" => JumpTable::with_number(num).and_then(|jt| {
+                if !self.contains_jt(jt) {
                     None
                 } else {
                     Some(jt.into())
-                })
-            }
+                }
+            }),
             _ => None,
         })
     }
@@ -134,7 +134,9 @@ impl SourceMap {
 impl SourceMap {
     /// Create a new empty `SourceMap`.
     pub fn new() -> Self {
-        Self { locations: HashMap::new() }
+        Self {
+            locations: HashMap::new(),
+        }
     }
 
     /// Define the value `entity`.

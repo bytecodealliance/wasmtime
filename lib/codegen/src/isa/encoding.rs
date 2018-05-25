@@ -122,10 +122,9 @@ impl EncInfo {
     ///
     /// Returns 0 for illegal encodings.
     pub fn bytes(&self, enc: Encoding) -> CodeOffset {
-        self.sizing.get(enc.recipe()).map_or(
-            0,
-            |s| CodeOffset::from(s.bytes),
-        )
+        self.sizing
+            .get(enc.recipe())
+            .map_or(0, |s| CodeOffset::from(s.bytes))
     }
 
     /// Get the branch range that is supported by `enc`, if any.

@@ -187,15 +187,15 @@ impl LiveValueTracker {
             // If the immediate dominator exits, we must have a stored list for it. This is a
             // requirement to the order EBBs are visited: All dominators must have been processed
             // before the current EBB.
-            let idom_live_list = self.idom_sets.get(&idom).expect(
-                "No stored live set for dominator",
-            );
+            let idom_live_list = self.idom_sets
+                .get(&idom)
+                .expect("No stored live set for dominator");
             let ctx = liveness.context(layout);
             // Get just the values that are live-in to `ebb`.
             for &value in idom_live_list.as_slice(&self.idom_pool) {
-                let lr = liveness.get(value).expect(
-                    "Immediate dominator value has no live range",
-                );
+                let lr = liveness
+                    .get(value)
+                    .expect("Immediate dominator value has no live range");
 
                 // Check if this value is live-in here.
                 if let Some(endpoint) = lr.livein_local_end(ebb, ctx) {
@@ -217,17 +217,13 @@ impl LiveValueTracker {
                     // This is a dead EBB parameter which is not even live into the first
                     // instruction in the EBB.
                     debug_assert_eq!(
-                        local_ebb,
-                        ebb,
+                        local_ebb, ebb,
                         "EBB parameter live range ends at wrong EBB header"
                     );
                     // Give this value a fake endpoint that is the first instruction in the EBB.
                     // We expect it to be removed by calling `drop_dead_args()`.
-                    self.live.push(
-                        value,
-                        layout.first_inst(ebb).expect("Empty EBB"),
-                        lr,
-                    );
+                    self.live
+                        .push(value, layout.first_inst(ebb).expect("Empty EBB"), lr);
                 }
             }
         }

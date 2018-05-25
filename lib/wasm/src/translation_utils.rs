@@ -96,10 +96,10 @@ pub fn f64_translation(x: wasmparser::Ieee64) -> ir::immediates::Ieee64 {
 pub fn num_return_values(ty: wasmparser::Type) -> usize {
     match ty {
         wasmparser::Type::EmptyBlockType => 0,
-        wasmparser::Type::I32 |
-        wasmparser::Type::F32 |
-        wasmparser::Type::I64 |
-        wasmparser::Type::F64 => 1,
+        wasmparser::Type::I32
+        | wasmparser::Type::F32
+        | wasmparser::Type::I64
+        | wasmparser::Type::F64 => 1,
         _ => panic!("unsupported return value type"),
     }
 }

@@ -19,12 +19,8 @@ pub fn run(files: &[String]) -> CommandResult {
 }
 
 fn print_cfg(filename: &str) -> CommandResult {
-    let buffer = read_to_string(filename).map_err(
-        |e| format!("{}: {}", filename, e),
-    )?;
-    let items = parse_functions(&buffer).map_err(
-        |e| format!("{}: {}", filename, e),
-    )?;
+    let buffer = read_to_string(filename).map_err(|e| format!("{}: {}", filename, e))?;
+    let items = parse_functions(&buffer).map_err(|e| format!("{}: {}", filename, e))?;
 
     for (idx, func) in items.into_iter().enumerate() {
         if idx != 0 {

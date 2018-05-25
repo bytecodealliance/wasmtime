@@ -133,8 +133,7 @@ fn legalize_entry_params(func: &mut Function, entry: Ebb) {
             }
             // The callee-save parameters should not appear until after register allocation is
             // done.
-            ArgumentPurpose::FramePointer |
-            ArgumentPurpose::CalleeSaved => {
+            ArgumentPurpose::FramePointer | ArgumentPurpose::CalleeSaved => {
                 panic!("Premature callee-saved arg {}", arg);
             }
             // These can be meaningfully added by `legalize_signature()`.
@@ -174,9 +173,8 @@ fn legalize_inst_results<ResType>(pos: &mut FuncCursor, mut get_abi_type: ResTyp
 where
     ResType: FnMut(&Function, usize) -> AbiParam,
 {
-    let call = pos.current_inst().expect(
-        "Cursor must point to a call instruction",
-    );
+    let call = pos.current_inst()
+        .expect("Cursor must point to a call instruction");
 
     // We theoretically allow for call instructions that return a number of fixed results before
     // the call return values. In practice, it doesn't happen.
@@ -377,8 +375,8 @@ fn check_call_signature(dfg: &DataFlowGraph, inst: Inst) -> Result<(), SigRef> {
     };
     let sig = &dfg.signatures[sig_ref];
 
-    if check_arg_types(dfg, args, &sig.params[..]) &&
-        check_arg_types(dfg, dfg.inst_results(inst), &sig.returns[..])
+    if check_arg_types(dfg, args, &sig.params[..])
+        && check_arg_types(dfg, dfg.inst_results(inst), &sig.returns[..])
     {
         // All types check out.
         Ok(())
@@ -407,14 +405,13 @@ fn legalize_inst_arguments<ArgType>(
 ) where
     ArgType: FnMut(&Function, usize) -> AbiParam,
 {
-    let inst = pos.current_inst().expect(
-        "Cursor must point to a call instruction",
-    );
+    let inst = pos.current_inst()
+        .expect("Cursor must point to a call instruction");
 
     // Lift the value list out of the call instruction so we modify it.
-    let mut vlist = pos.func.dfg[inst].take_value_list().expect(
-        "Call must have a value list",
-    );
+    let mut vlist = pos.func.dfg[inst]
+        .take_value_list()
+        .expect("Call must have a value list");
 
     // The value list contains all arguments to the instruction, including the callee on an
     // indirect call which isn't part of the call arguments that must match the ABI signature.
@@ -544,8 +541,8 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
         .iter()
         .rev()
         .take_while(|&rt| {
-            rt.purpose == ArgumentPurpose::Link || rt.purpose == ArgumentPurpose::StructReturn ||
-                rt.purpose == ArgumentPurpose::VMContext
+            rt.purpose == ArgumentPurpose::Link || rt.purpose == ArgumentPurpose::StructReturn
+                || rt.purpose == ArgumentPurpose::VMContext
         })
         .count();
     let abi_args = func.signature.returns.len() - special_args;
@@ -570,9 +567,9 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
         let mut vlist = pos.func.dfg[inst].take_value_list().unwrap();
         for arg in &pos.func.signature.returns[abi_args..] {
             match arg.purpose {
-                ArgumentPurpose::Link |
-                ArgumentPurpose::StructReturn |
-                ArgumentPurpose::VMContext => {}
+                ArgumentPurpose::Link
+                | ArgumentPurpose::StructReturn
+                | ArgumentPurpose::VMContext => {}
                 ArgumentPurpose::Normal => panic!("unexpected return value {}", arg),
                 _ => panic!("Unsupported special purpose return value {}", arg),
             }
@@ -587,10 +584,9 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
                 .expect("No matching special purpose argument.");
             // Get the corresponding entry block value and add it to the return instruction's
             // arguments.
-            let val = pos.func.dfg.ebb_params(
-                pos.func.layout.entry_block().unwrap(),
-            )
-                [idx];
+            let val = pos.func
+                .dfg
+                .ebb_params(pos.func.layout.entry_block().unwrap())[idx];
             debug_assert_eq!(pos.func.dfg.value_type(val), arg.value_type);
             vlist.push(val, &mut pos.func.dfg.value_lists);
         }
@@ -630,12 +626,12 @@ fn spill_entry_params(func: &mut Function, entry: Ebb) {
 /// or calls between writing the stack slots and the call instruction. Writing the slots earlier
 /// could help reduce register pressure before the call.
 fn spill_call_arguments(pos: &mut FuncCursor) -> bool {
-    let inst = pos.current_inst().expect(
-        "Cursor must point to a call instruction",
-    );
-    let sig_ref = pos.func.dfg.call_signature(inst).expect(
-        "Call instruction expected.",
-    );
+    let inst = pos.current_inst()
+        .expect("Cursor must point to a call instruction");
+    let sig_ref = pos.func
+        .dfg
+        .call_signature(inst)
+        .expect("Call instruction expected.");
 
     // Start by building a list of stack slots and arguments to be replaced.
     // This requires borrowing `pos.func.dfg`, so we can't change anything.

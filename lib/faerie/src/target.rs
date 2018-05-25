@@ -13,8 +13,9 @@ pub fn translate(isa: &isa::TargetIsa) -> Result<Target, ModuleError> {
         }),
         "arm32" => Ok(Target::ARMv7),
         "arm64" => Ok(Target::ARM64),
-        _ => Err(ModuleError::Backend(
-            format!("unsupported faerie isa: {}", name),
-        )),
+        _ => Err(ModuleError::Backend(format!(
+            "unsupported faerie isa: {}",
+            name
+        ))),
     }
 }

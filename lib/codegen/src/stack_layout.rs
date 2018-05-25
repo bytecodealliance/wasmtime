@@ -55,9 +55,9 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
                     .ok_or(CtonError::ImplLimitExceeded)?;
                 outgoing_max = max(outgoing_max, offset);
             }
-            StackSlotKind::SpillSlot |
-            StackSlotKind::ExplicitSlot |
-            StackSlotKind::EmergencySlot => {
+            StackSlotKind::SpillSlot
+            | StackSlotKind::ExplicitSlot
+            | StackSlotKind::EmergencySlot => {
                 // Determine the smallest alignment of any explicit or spill slot.
                 min_align = slot.alignment(min_align);
             }
@@ -73,20 +73,19 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
         for slot in frame.values_mut() {
             // Pick out explicit and spill slots with exact alignment `min_align`.
             match slot.kind {
-                StackSlotKind::SpillSlot |
-                StackSlotKind::ExplicitSlot |
-                StackSlotKind::EmergencySlot => {
+                StackSlotKind::SpillSlot
+                | StackSlotKind::ExplicitSlot
+                | StackSlotKind::EmergencySlot => {
                     if slot.alignment(alignment) != min_align {
                         continue;
                     }
                 }
-                StackSlotKind::IncomingArg |
-                StackSlotKind::OutgoingArg => continue,
+                StackSlotKind::IncomingArg | StackSlotKind::OutgoingArg => continue,
             }
 
-            offset = offset.checked_sub(slot.size as StackOffset).ok_or(
-                CtonError::ImplLimitExceeded,
-            )?;
+            offset = offset
+                .checked_sub(slot.size as StackOffset)
+                .ok_or(CtonError::ImplLimitExceeded)?;
 
             // Aligning the negative offset can never cause overflow. We're only clearing bits.
             offset &= -(min_align as StackOffset);
@@ -98,9 +97,9 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<Stac
     }
 
     // Finally, make room for the outgoing arguments.
-    offset = offset.checked_sub(outgoing_max).ok_or(
-        CtonError::ImplLimitExceeded,
-    )?;
+    offset = offset
+        .checked_sub(outgoing_max)
+        .ok_or(CtonError::ImplLimitExceeded)?;
     offset &= -(alignment as StackOffset);
 
     let frame_size = (offset as StackSize).wrapping_neg();

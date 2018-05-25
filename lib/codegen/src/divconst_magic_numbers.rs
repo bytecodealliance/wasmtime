@@ -167,10 +167,10 @@ pub fn magicS32(d: i32) -> MS32 {
 
     MS32 {
         mulBy: (if d < 0 {
-                    u32::wrapping_neg(q2 + 1)
-                } else {
-                    q2 + 1
-                }) as i32,
+            u32::wrapping_neg(q2 + 1)
+        } else {
+            q2 + 1
+        }) as i32,
         shiftBy: p - 32,
     }
 }
@@ -210,10 +210,10 @@ pub fn magicS64(d: i64) -> MS64 {
 
     MS64 {
         mulBy: (if d < 0 {
-                    u64::wrapping_neg(q2 + 1)
-                } else {
-                    q2 + 1
-                }) as i64,
+            u64::wrapping_neg(q2 + 1)
+        } else {
+            q2 + 1
+        }) as i64,
         shiftBy: p - 64,
     }
 }

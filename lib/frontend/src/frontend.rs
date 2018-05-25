@@ -141,7 +141,7 @@ where
     // instruction being inserted to add related info to the DFG and the SSA building system,
     // and perform debug sanity checks.
     fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'short mut DataFlowGraph) {
-// We only insert the Ebb in the layout when an instruction is added to it
+        // We only insert the Ebb in the layout when an instruction is added to it
         self.builder.ensure_inserted_ebb();
 
         let inst = self.builder.func.dfg.make_inst(data.clone());
@@ -154,17 +154,17 @@ where
         if data.opcode().is_branch() {
             match data.branch_destination() {
                 Some(dest_ebb) => {
-// If the user has supplied jump arguments we must adapt the arguments of
-// the destination ebb
+                    // If the user has supplied jump arguments we must adapt the arguments of
+                    // the destination ebb
                     self.builder.declare_successor(dest_ebb, inst);
                 }
                 None => {
-// branch_destination() doesn't detect jump_tables
-// If jump table we declare all entries successor
+                    // branch_destination() doesn't detect jump_tables
+                    // If jump table we declare all entries successor
                     if let InstructionData::BranchTable { table, .. } = data {
-// Unlike all other jumps/branches, jump tables are
-// capable of having the same successor appear
-// multiple times, so we must deduplicate.
+                        // Unlike all other jumps/branches, jump tables are
+                        // capable of having the same successor appear
+                        // multiple times, so we must deduplicate.
                         let mut unique = EntitySet::<Ebb>::new();
                         for dest_ebb in self.builder
                             .func
@@ -273,8 +273,8 @@ where
     pub fn switch_to_block(&mut self, ebb: Ebb) {
         // First we check that the previous block has been filled.
         debug_assert!(
-            self.position.is_default() || self.is_unreachable() || self.is_pristine() ||
-                self.is_filled(),
+            self.position.is_default() || self.is_unreachable() || self.is_pristine()
+                || self.is_filled(),
             "you have to fill your block before switching"
         );
         // We cannot switch to a filled block
@@ -324,12 +324,9 @@ where
                     var
                 )
             });
-            self.func_ctx.ssa.use_var(
-                self.func,
-                var,
-                ty,
-                self.position.basic_block.unwrap(),
-            )
+            self.func_ctx
+                .ssa
+                .use_var(self.func, var, ty, self.position.basic_block.unwrap())
         };
         self.handle_ssa_side_effects(side_effects);
         val
@@ -339,23 +336,19 @@ where
     /// the same as the type registered for the variable.
     pub fn def_var(&mut self, var: Variable, val: Value) {
         debug_assert_eq!(
-            *self.func_ctx.types.get(var).unwrap_or_else(|| {
-                panic!(
-                    "variable {:?} is used but its type has not been declared",
-                    var
-                )
-            }),
+            *self.func_ctx.types.get(var).unwrap_or_else(|| panic!(
+                "variable {:?} is used but its type has not been declared",
+                var
+            )),
             self.func.dfg.value_type(val),
             "declared type of variable {:?} doesn't match type of value {}",
             var,
             val
         );
 
-        self.func_ctx.ssa.def_var(
-            var,
-            val,
-            self.position.basic_block.unwrap(),
-        );
+        self.func_ctx
+            .ssa
+            .def_var(var, val, self.position.basic_block.unwrap());
     }
 
     /// Creates a jump table in the function, to be used by `br_table` instructions.
@@ -460,15 +453,17 @@ where
     pub fn finalize(&mut self) {
         // Check that all the `Ebb`s are filled and sealed.
         debug_assert!(
-            self.func_ctx.ebbs.iter().all(|(ebb, ebb_data)| {
-                ebb_data.pristine || self.func_ctx.ssa.is_sealed(ebb)
-            }),
+            self.func_ctx
+                .ebbs
+                .iter()
+                .all(|(ebb, ebb_data)| ebb_data.pristine || self.func_ctx.ssa.is_sealed(ebb)),
             "all blocks should be sealed before dropping a FunctionBuilder"
         );
         debug_assert!(
-            self.func_ctx.ebbs.values().all(|ebb_data| {
-                ebb_data.pristine || ebb_data.filled
-            }),
+            self.func_ctx
+                .ebbs
+                .values()
+                .all(|ebb_data| ebb_data.pristine || ebb_data.filled),
             "all blocks should be filled before dropping a FunctionBuilder"
         );
 
@@ -527,16 +522,14 @@ where
     /// **Note:** You are responsible for maintaining the coherence with the arguments of
     /// other jump instructions.
     pub fn change_jump_destination(&mut self, inst: Inst, new_dest: Ebb) {
-        let old_dest = self.func.dfg[inst].branch_destination_mut().expect(
-            "you want to change the jump destination of a non-jump instruction",
-        );
+        let old_dest = self.func.dfg[inst]
+            .branch_destination_mut()
+            .expect("you want to change the jump destination of a non-jump instruction");
         let pred = self.func_ctx.ssa.remove_ebb_predecessor(*old_dest, inst);
         *old_dest = new_dest;
-        self.func_ctx.ssa.declare_ebb_predecessor(
-            new_dest,
-            pred,
-            inst,
-        );
+        self.func_ctx
+            .ssa
+            .declare_ebb_predecessor(new_dest, pred, inst);
     }
 
     /// Returns `true` if and only if the current `Ebb` is sealed and has no predecessors declared.
@@ -547,8 +540,8 @@ where
             None => false,
             Some(entry) => self.position.ebb.unwrap() == entry,
         };
-        !is_entry && self.func_ctx.ssa.is_sealed(self.position.ebb.unwrap()) &&
-            self.func_ctx
+        !is_entry && self.func_ctx.ssa.is_sealed(self.position.ebb.unwrap())
+            && self.func_ctx
                 .ssa
                 .predecessors(self.position.ebb.unwrap())
                 .is_empty()
@@ -582,9 +575,11 @@ where
     Variable: EntityRef + Debug,
 {
     fn move_to_next_basic_block(&mut self) {
-        self.position.basic_block = PackedOption::from(self.func_ctx.ssa.declare_ebb_body_block(
-            self.position.basic_block.unwrap(),
-        ));
+        self.position.basic_block = PackedOption::from(
+            self.func_ctx
+                .ssa
+                .declare_ebb_body_block(self.position.basic_block.unwrap()),
+        );
     }
 
     fn fill_current_block(&mut self) {

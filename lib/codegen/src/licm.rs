@@ -132,9 +132,9 @@ fn change_branch_jump_destination(inst: Inst, new_ebb: Ebb, func: &mut Function)
 
 /// Test whether the given opcode is unsafe to even consider for LICM.
 fn trivially_unsafe_for_licm(opcode: Opcode) -> bool {
-    opcode.can_load() || opcode.can_store() || opcode.is_call() || opcode.is_branch() ||
-        opcode.is_terminator() || opcode.is_return() ||
-        opcode.can_trap() || opcode.other_side_effects() || opcode.writes_cpu_flags()
+    opcode.can_load() || opcode.can_store() || opcode.is_call() || opcode.is_branch()
+        || opcode.is_terminator() || opcode.is_return() || opcode.can_trap()
+        || opcode.other_side_effects() || opcode.writes_cpu_flags()
 }
 
 /// Test whether the given instruction is loop-invariant.

@@ -47,9 +47,7 @@ impl ConcurrentRunner {
         heartbeat_thread(reply_tx.clone());
 
         let handles = (0..num_cpus::get())
-            .map(|num| {
-                worker_thread(num, request_mutex.clone(), reply_tx.clone())
-            })
+            .map(|num| worker_thread(num, request_mutex.clone(), reply_tx.clone()))
             .collect();
 
         Self {
@@ -101,8 +99,10 @@ impl ConcurrentRunner {
 fn heartbeat_thread(replies: Sender<Reply>) -> thread::JoinHandle<()> {
     thread::Builder::new()
         .name("heartbeat".to_string())
-        .spawn(move || while replies.send(Reply::Tick).is_ok() {
-            thread::sleep(Duration::from_secs(1));
+        .spawn(move || {
+            while replies.send(Reply::Tick).is_ok() {
+                thread::sleep(Duration::from_secs(1));
+            }
         })
         .unwrap()
 }

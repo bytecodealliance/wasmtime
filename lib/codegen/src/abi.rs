@@ -62,16 +62,14 @@ impl ValueConversion {
             ValueConversion::IntSplit => ty.half_width().expect("Integer type too small to split"),
             ValueConversion::VectorSplit => ty.half_vector().expect("Not a vector"),
             ValueConversion::IntBits => Type::int(ty.bits()).expect("Bad integer size"),
-            ValueConversion::Sext(nty) |
-            ValueConversion::Uext(nty) => nty,
+            ValueConversion::Sext(nty) | ValueConversion::Uext(nty) => nty,
         }
     }
 
     /// Is this a split conversion that results in two arguments?
     pub fn is_split(self) -> bool {
         match self {
-            ValueConversion::IntSplit |
-            ValueConversion::VectorSplit => true,
+            ValueConversion::IntSplit | ValueConversion::VectorSplit => true,
             _ => false,
         }
     }

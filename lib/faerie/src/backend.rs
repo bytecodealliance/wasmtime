@@ -1,13 +1,13 @@
 //! Defines `FaerieBackend`.
 
 use container;
-use cretonne_codegen::binemit::{Addend, CodeOffset, Reloc, RelocSink, NullTrapSink};
+use cretonne_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::{self, binemit, ir};
-use cretonne_module::{Backend, DataContext, Linkage, ModuleNamespace, Init, DataDescription,
-                      ModuleError};
-use failure::Error;
+use cretonne_module::{Backend, DataContext, DataDescription, Init, Linkage, ModuleError,
+                      ModuleNamespace};
 use faerie;
+use failure::Error;
 use std::fs::File;
 use target;
 use traps::{FaerieTrapManifest, FaerieTrapSink};
@@ -32,7 +32,6 @@ pub struct FaerieBuilder {
     collect_traps: FaerieTrapCollection,
     libcall_names: Box<Fn(ir::LibCall) -> String>,
 }
-
 
 impl FaerieBuilder {
     /// Create a new `FaerieBuilder` using the given Cretonne target, that
@@ -88,7 +87,6 @@ impl FaerieBuilder {
         })
     }
 }
-
 
 /// A `FaerieBackend` implements `Backend` and emits ".o" files using the `faerie` library.
 pub struct FaerieBackend {
@@ -192,9 +190,9 @@ impl Backend for FaerieBackend {
             }
         }
 
-        self.artifact.define(name, code).expect(
-            "inconsistent declaration",
-        );
+        self.artifact
+            .define(name, code)
+            .expect("inconsistent declaration");
         Ok(FaerieCompiledFunction {})
     }
 
@@ -239,8 +237,7 @@ impl Backend for FaerieBackend {
         }
         for &(offset, id, addend) in data_relocs {
             debug_assert_eq!(
-                addend,
-                0,
+                addend, 0,
                 "faerie doesn't support addends in data section relocations yet"
             );
             let to = &namespace.get_data_decl(&data_decls[id]).name;
@@ -253,9 +250,9 @@ impl Backend for FaerieBackend {
                 .map_err(|e| ModuleError::Backend(format!("{}", e)))?;
         }
 
-        self.artifact.define(name, bytes).expect(
-            "inconsistent declaration",
-        );
+        self.artifact
+            .define(name, bytes)
+            .expect("inconsistent declaration");
         Ok(FaerieCompiledData {})
     }
 
@@ -346,24 +343,19 @@ fn translate_function_linkage(linkage: Linkage) -> faerie::Decl {
 fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
     match linkage {
         Linkage::Import => faerie::Decl::DataImport,
-        Linkage::Local => {
-            faerie::Decl::Data {
-                global: false,
-                writeable: writable,
-            }
-        }
-        Linkage::Export => {
-            faerie::Decl::Data {
-                global: true,
-                writeable: writable,
-            }
-        }
+        Linkage::Local => faerie::Decl::Data {
+            global: false,
+            writeable: writable,
+        },
+        Linkage::Export => faerie::Decl::Data {
+            global: true,
+            writeable: writable,
+        },
         Linkage::Preemptible => {
             unimplemented!("faerie doesn't support preemptible globals yet");
         }
     }
 }
-
 
 struct FaerieRelocSink<'a> {
     format: container::Format,
