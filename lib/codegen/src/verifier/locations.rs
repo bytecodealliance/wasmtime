@@ -2,8 +2,8 @@
 
 use ir;
 use isa;
-use regalloc::RegDiversions;
 use regalloc::liveness::Liveness;
+use regalloc::RegDiversions;
 use timing;
 use verifier::Result;
 

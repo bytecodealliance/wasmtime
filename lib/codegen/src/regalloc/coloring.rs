@@ -46,16 +46,16 @@ use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
 use ir::{AbiParam, ArgumentLoc, InstBuilder, ValueDef};
 use ir::{Ebb, Function, Inst, Layout, SigRef, Value, ValueLoc};
-use isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
 use isa::{regs_overlap, RegClass, RegInfo, RegUnit};
+use isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
 use packed_option::PackedOption;
-use regalloc::RegDiversions;
 use regalloc::affinity::Affinity;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use regalloc::liveness::Liveness;
 use regalloc::liverange::{LiveRange, LiveRangeContext};
 use regalloc::register_set::RegisterSet;
 use regalloc::solver::{Solver, SolverError};
+use regalloc::RegDiversions;
 use std::mem;
 use timing;
 

@@ -1147,8 +1147,8 @@ impl<'a> Verifier<'a> {
 mod tests {
     use super::{Error, Verifier};
     use entity::EntityList;
-    use ir::Function;
     use ir::instructions::{InstructionData, Opcode};
+    use ir::Function;
     use settings;
 
     macro_rules! assert_err_with_msg {

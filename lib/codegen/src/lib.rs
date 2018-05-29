@@ -31,9 +31,13 @@
                 redundant_field_names,
                 useless_let_if_seq,
                 len_without_is_empty))]
-#![cfg_attr(feature = "cargo-clippy",
-            warn(float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or,
-                 option_map_unwrap_or_else, print_stdout, unicode_not_nfc, use_self))]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    warn(
+        float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or, option_map_unwrap_or_else,
+        print_stdout, unicode_not_nfc, use_self
+    )
+)]
 // Turns on no_std and alloc features if std is not available.
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]

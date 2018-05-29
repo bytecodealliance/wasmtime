@@ -3,8 +3,8 @@
 use std::fmt::{Display, Formatter, Result, Write};
 
 use flowgraph::ControlFlowGraph;
-use ir::Function;
 use ir::instructions::BranchInfo;
+use ir::Function;
 
 /// A utility for pretty-printing the CFG of a `Function`.
 pub struct CFGPrinter<'a> {

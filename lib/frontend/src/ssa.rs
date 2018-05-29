@@ -712,7 +712,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use Variable;
     use cretonne_codegen::cursor::{Cursor, FuncCursor};
     use cretonne_codegen::entity::EntityRef;
     use cretonne_codegen::ir::instructions::BranchInfo;
@@ -721,6 +720,7 @@ mod tests {
     use cretonne_codegen::settings;
     use cretonne_codegen::verify_function;
     use ssa::SSABuilder;
+    use Variable;
 
     #[test]
     fn simple_block() {

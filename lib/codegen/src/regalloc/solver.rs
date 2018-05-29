@@ -1367,7 +1367,7 @@ mod tests {
                 mov(v15, gpr, r5, r3),
                 mov(v14, gpr, r4, r5),
                 mov(v13, gpr, r1, r4),
-                fill(v10, gpr, 0, r1) // Finally complete cycle 1.
+                fill(v10, gpr, 0, r1), // Finally complete cycle 1.
             ]
         );
     }

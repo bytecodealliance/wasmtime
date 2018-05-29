@@ -338,8 +338,8 @@ impl StackSlots {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ir::Function;
     use ir::types;
+    use ir::Function;
     use std::string::ToString;
 
     #[test]

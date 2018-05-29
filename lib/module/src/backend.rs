@@ -1,13 +1,13 @@
 //! Defines the `Backend` trait.
 
+use cretonne_codegen::isa::TargetIsa;
+use cretonne_codegen::Context;
+use cretonne_codegen::{binemit, ir};
+use std::marker;
 use DataContext;
 use Linkage;
 use ModuleError;
 use ModuleNamespace;
-use cretonne_codegen::Context;
-use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::{binemit, ir};
-use std::marker;
 
 /// A `Backend` implements the functionality needed to support a `Module`.
 pub trait Backend

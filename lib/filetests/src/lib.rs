@@ -9,9 +9,13 @@
         type_complexity,
 // Rustfmt 0.9.0 is at odds with this lint:
         block_in_if_condition_stmt))]
-#![cfg_attr(feature = "cargo-clippy",
-            warn(mut_mut, nonminimal_bool, option_map_unwrap_or, option_map_unwrap_or_else,
-                 unicode_not_nfc, use_self))]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    warn(
+        mut_mut, nonminimal_bool, option_map_unwrap_or, option_map_unwrap_or_else, unicode_not_nfc,
+        use_self
+    )
+)]
 
 #[macro_use(dbg)]
 extern crate cretonne_codegen;
