@@ -16,7 +16,10 @@ raw-cpuid = "3.1.0"
 [features]
 default = ["std"]
 std = ["cretonne-codegen/std"]
-core = ["cretonne-codegen/core"]
+# when compiling with the "core" feature, nightly must be enabled
+# enabling the "nightly" feature for raw-cpuid allows avoiding
+# linking in a c-library.
+core = ["cretonne-codegen/core", "raw-cpuid/nightly"]
 
 [badges]
 maintenance = { status = "experimental" }
