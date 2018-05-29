@@ -283,7 +283,11 @@ impl<'a> Context<'a> {
                 .expect("Extra results on non-call instruction");
             for (i, lv) in retvals.iter().enumerate() {
                 let abi = self.cur.func.dfg.signatures[sig].returns[i];
-                debug_assert!(abi.location.is_reg());
+                debug_assert!(
+                    abi.location.is_reg(),
+                    "expected reg; got {:?}",
+                    abi.location
+                );
                 if lv.affinity.is_stack() {
                     let reg = self.cur.func.dfg.replace_result(lv.value, abi.value_type);
                     self.liveness
