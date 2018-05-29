@@ -4,8 +4,14 @@ test compile
 set is_64bit=0
 isa x86 haswell
 
+set is_64bit=0
+isa x86 baseline
+
 set is_64bit=1
 isa x86 haswell
+
+set is_64bit=1
+isa x86 baseline
 
 ; Constants.
 
