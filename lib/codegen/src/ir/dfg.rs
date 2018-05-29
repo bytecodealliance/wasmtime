@@ -1151,8 +1151,8 @@ mod tests {
 
     #[test]
     fn aliases() {
-        use ir::InstBuilder;
         use ir::condcodes::IntCC;
+        use ir::InstBuilder;
 
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();

@@ -1,8 +1,12 @@
 #![deny(trivial_numeric_casts)]
 #![warn(unused_import_braces, unstable_features, unused_extern_crates)]
-#![cfg_attr(feature = "cargo-clippy",
-            warn(float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or,
-                 option_map_unwrap_or_else, unicode_not_nfc, use_self))]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    warn(
+        float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or, option_map_unwrap_or_else,
+        unicode_not_nfc, use_self
+    )
+)]
 
 #[macro_use]
 extern crate cfg_if;

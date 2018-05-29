@@ -2237,9 +2237,9 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne_codegen::ir::StackSlotKind;
     use cretonne_codegen::ir::entities::AnyEntity;
     use cretonne_codegen::ir::types;
+    use cretonne_codegen::ir::StackSlotKind;
     use cretonne_codegen::ir::{ArgumentExtension, ArgumentPurpose};
     use cretonne_codegen::settings::CallConv;
     use error::Error;

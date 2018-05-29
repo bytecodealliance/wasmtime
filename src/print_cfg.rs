@@ -3,10 +3,10 @@
 //! Read a series of Cretonne IR files and print their control flow graphs
 //! in graphviz format.
 
-use CommandResult;
 use cretonne_codegen::cfg_printer::CFGPrinter;
 use cretonne_reader::parse_functions;
 use utils::read_to_string;
+use CommandResult;
 
 pub fn run(files: &[String]) -> CommandResult {
     for (i, f) in files.into_iter().enumerate() {

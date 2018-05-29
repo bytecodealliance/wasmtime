@@ -4,8 +4,8 @@
 //! file-based test case.
 //!
 
-use cretonne_codegen::ir::Function;
 use cretonne_codegen::ir::entities::AnyEntity;
+use cretonne_codegen::ir::Function;
 use error::Location;
 use isaspec::IsaSpec;
 use sourcemap::SourceMap;

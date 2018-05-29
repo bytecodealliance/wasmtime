@@ -2,10 +2,10 @@
 //!
 //! This file is named to avoid a name collision with the filecheck crate.
 
-use CommandResult;
 use filecheck::{Checker, CheckerBuilder, NO_VARIABLES};
 use std::io::{self, Read};
 use utils::read_to_string;
+use CommandResult;
 
 pub fn run(files: &[String], verbose: bool) -> CommandResult {
     if files.is_empty() {

@@ -5,12 +5,12 @@
 // TODO: Factor out `ir::Function`'s `ext_funcs` and `global_vars` into a struct
 // shared with `DataContext`?
 
-use Backend;
 use cretonne_codegen::entity::{EntityRef, PrimaryMap};
 use cretonne_codegen::result::CtonError;
 use cretonne_codegen::{binemit, ir, Context};
 use data_context::DataContext;
 use std::collections::HashMap;
+use Backend;
 
 /// A function identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

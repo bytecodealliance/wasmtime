@@ -14,8 +14,8 @@
 
 use cretonne_codegen::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use cretonne_codegen::flowgraph::ControlFlowGraph;
-use cretonne_codegen::ir::Function;
 use cretonne_codegen::ir::entities::AnyEntity;
+use cretonne_codegen::ir::Function;
 use cretonne_reader::TestCommand;
 use match_directive::match_directive;
 use std::borrow::{Borrow, Cow};

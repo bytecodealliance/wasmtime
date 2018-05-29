@@ -1,9 +1,9 @@
 //! Small lists of entity references.
-use EntityRef;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::mem;
 use std::vec::Vec;
+use EntityRef;
 
 /// A small list of entity references allocated from a pool.
 ///

@@ -1,9 +1,9 @@
 //! A double-ended iterator over entity references and entities.
 
-use EntityRef;
 use std::iter::Enumerate;
 use std::marker::PhantomData;
 use std::slice;
+use EntityRef;
 
 /// Iterate over all keys in order.
 pub struct Iter<'a, K: EntityRef, V>

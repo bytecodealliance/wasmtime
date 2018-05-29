@@ -1,7 +1,7 @@
 //! Computing stack layout.
 
-use ir::StackSlots;
 use ir::stackslot::{StackOffset, StackSize, StackSlotKind};
+use ir::StackSlots;
 use result::CtonError;
 use std::cmp::{max, min};
 

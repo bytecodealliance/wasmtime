@@ -3,12 +3,12 @@
 #![allow(non_snake_case)]
 
 use cursor::{Cursor, FuncCursor};
-use divconst_magic_numbers::{MS32, MS64, MU32, MU64};
 use divconst_magic_numbers::{magicS32, magicS64, magicU32, magicU64};
-use ir::Inst;
+use divconst_magic_numbers::{MS32, MS64, MU32, MU64};
 use ir::dfg::ValueDef;
 use ir::instructions::Opcode;
 use ir::types::{I32, I64};
+use ir::Inst;
 use ir::{DataFlowGraph, Function, InstBuilder, InstructionData, Type, Value};
 use timing;
 

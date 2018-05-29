@@ -9,8 +9,8 @@ pub mod settings;
 use super::super::settings as shared_settings;
 use binemit::{emit_function, CodeSink, MemoryCodeSink};
 use ir;
-use isa::Builder as IsaBuilder;
 use isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encodings};
+use isa::Builder as IsaBuilder;
 use isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use regalloc;
 use std::boxed::Box;
@@ -113,8 +113,8 @@ impl TargetIsa for Isa {
 
 #[cfg(test)]
 mod tests {
-    use ir::{Function, InstructionData, Opcode};
     use ir::{immediates, types};
+    use ir::{Function, InstructionData, Opcode};
     use isa;
     use settings::{self, Configurable};
     use std::string::{String, ToString};
