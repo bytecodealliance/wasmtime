@@ -3,6 +3,7 @@
 use ir;
 use ir::{get_libcall_funcref, InstBuilder};
 use isa::TargetIsa;
+use legalizer::boundary::legalize_libcall_signature;
 use std::vec::Vec;
 
 /// Try to expand `inst` as a library call, returning true is successful.
@@ -21,7 +22,10 @@ pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function, isa: &TargetIs
     let funcref = get_libcall_funcref(libcall, func, inst, isa);
     func.dfg.replace(inst).call(funcref, &args);
 
-    // TODO: ask the ISA to legalize the signature.
+    // Ask the ISA to legalize the signature.
+    let fn_data = &func.dfg.ext_funcs[funcref];
+    let sig_data = &mut func.dfg.signatures[fn_data.signature];
+    legalize_libcall_signature(sig_data, isa);
 
     true
 }
