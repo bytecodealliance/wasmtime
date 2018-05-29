@@ -10,6 +10,7 @@ where
     V: 'a,
 {
     pos: usize,
+    rev_pos: usize,
     iter: slice::Iter<'a, V>,
     unused: PhantomData<K>,
 }
@@ -17,9 +18,10 @@ where
 impl<'a, K: EntityRef, V> Iter<'a, K, V> {
     /// Create an `Iter` iterator that visits the `PrimaryMap` keys and values
     /// of `iter`.
-    pub fn new(key: K, iter: slice::Iter<'a, V>) -> Self {
+    pub fn new(iter: slice::Iter<'a, V>) -> Self {
         Self {
-            pos: key.index(),
+            pos: 0,
+            rev_pos: iter.len(),
             iter,
             unused: PhantomData,
         }
@@ -47,7 +49,9 @@ impl<'a, K: EntityRef, V> Iterator for Iter<'a, K, V> {
 impl<'a, K: EntityRef, V> DoubleEndedIterator for Iter<'a, K, V> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if let Some(next_back) = self.iter.next_back() {
-            Some((K::new(self.pos), next_back))
+            let rev_pos = self.rev_pos - 1;
+            self.rev_pos -= 1;
+            Some((K::new(rev_pos), next_back))
         } else {
             None
         }
@@ -62,6 +66,7 @@ where
     V: 'a,
 {
     pos: usize,
+    rev_pos: usize,
     iter: slice::IterMut<'a, V>,
     unused: PhantomData<K>,
 }
@@ -69,9 +74,10 @@ where
 impl<'a, K: EntityRef, V> IterMut<'a, K, V> {
     /// Create an `IterMut` iterator that visits the `PrimaryMap` keys and values
     /// of `iter`.
-    pub fn new(key: K, iter: slice::IterMut<'a, V>) -> Self {
+    pub fn new(iter: slice::IterMut<'a, V>) -> Self {
         Self {
-            pos: key.index(),
+            pos: 0,
+            rev_pos: iter.len(),
             iter,
             unused: PhantomData,
         }
@@ -99,7 +105,9 @@ impl<'a, K: EntityRef, V> Iterator for IterMut<'a, K, V> {
 impl<'a, K: EntityRef, V> DoubleEndedIterator for IterMut<'a, K, V> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if let Some(next_back) = self.iter.next_back() {
-            Some((K::new(self.pos), next_back))
+            let rev_pos = self.rev_pos - 1;
+            self.rev_pos -= 1;
+            Some((K::new(rev_pos), next_back))
         } else {
             None
         }

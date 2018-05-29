@@ -71,17 +71,17 @@ where
 
     /// Iterate over all the keys and values in this map.
     pub fn iter(&self) -> Iter<K, V> {
-        Iter::new(K::new(0), self.elems.iter())
+        Iter::new(self.elems.iter())
     }
 
     /// Iterate over all the keys and values in this map, mutable edition.
     pub fn iter_mut(&mut self) -> IterMut<K, V> {
-        IterMut::new(K::new(0), self.elems.iter_mut())
+        IterMut::new(self.elems.iter_mut())
     }
 
     /// Iterate over all the keys in this map.
     pub fn keys(&self) -> Keys<K> {
-        Keys::new(self.elems.len())
+        Keys::with_len(self.elems.len())
     }
 
     /// Iterate over all the keys in this map.

@@ -57,7 +57,7 @@ where
 
     /// Iterate over all the keys in this map.
     pub fn keys(&self) -> Keys<K> {
-        Keys::new(self.elems.len())
+        Keys::with_len(self.elems.len())
     }
 
     /// Iterate over all the values in this map.
@@ -72,12 +72,12 @@ where
 
     /// Iterate over all the keys and values in this map.
     pub fn iter(&self) -> Iter<K, V> {
-        Iter::new(K::new(0), self.elems.iter())
+        Iter::new(self.elems.iter())
     }
 
     /// Iterate over all the keys and values in this map, mutable edition.
     pub fn iter_mut(&mut self) -> IterMut<K, V> {
-        IterMut::new(K::new(0), self.elems.iter_mut())
+        IterMut::new(self.elems.iter_mut())
     }
 
     /// Remove all entries from this map.
@@ -193,6 +193,34 @@ mod tests {
     }
 
     #[test]
+    fn iter_rev() {
+        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
+        m.push(12);
+        m.push(33);
+
+        let mut i = 2;
+        for (key, value) in m.iter().rev() {
+            i -= 1;
+            assert_eq!(key.index(), i);
+            match i {
+                0 => assert_eq!(*value, 12),
+                1 => assert_eq!(*value, 33),
+                _ => panic!(),
+            }
+        }
+
+        i = 2;
+        for (key, value) in m.iter_mut().rev() {
+            i -= 1;
+            assert_eq!(key.index(), i);
+            match i {
+                0 => assert_eq!(*value, 12),
+                1 => assert_eq!(*value, 33),
+                _ => panic!(),
+            }
+        }
+    }
+    #[test]
     fn keys() {
         let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
         m.push(12);
@@ -202,6 +230,19 @@ mod tests {
         for key in m.keys() {
             assert_eq!(key.index(), i);
             i += 1;
+        }
+    }
+
+    #[test]
+    fn keys_rev() {
+        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
+        m.push(12);
+        m.push(33);
+
+        let mut i = 2;
+        for key in m.keys().rev() {
+            i -= 1;
+            assert_eq!(key.index(), i);
         }
     }
 
@@ -230,4 +271,31 @@ mod tests {
             i += 1;
         }
     }
+
+    #[test]
+    fn values_rev() {
+        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
+        m.push(12);
+        m.push(33);
+
+        let mut i = 2;
+        for value in m.values().rev() {
+            i -= 1;
+            match i {
+                0 => assert_eq!(*value, 12),
+                1 => assert_eq!(*value, 33),
+                _ => panic!(),
+            }
+        }
+        i = 2;
+        for value_mut in m.values_mut().rev() {
+            i -= 1;
+            match i {
+                0 => assert_eq!(*value_mut, 12),
+                1 => assert_eq!(*value_mut, 33),
+                _ => panic!(),
+            }
+        }
+    }
+
 }

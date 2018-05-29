@@ -55,7 +55,7 @@ where
 
     /// Iterate over all the keys in this set.
     pub fn keys(&self) -> Keys<K> {
-        Keys::new(self.len)
+        Keys::with_len(self.len)
     }
 
     /// Resize the set to have `n` entries by adding default entries as needed.
