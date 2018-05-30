@@ -30,6 +30,10 @@ pub struct Function {
     /// Stack slots allocated in this function.
     pub stack_slots: StackSlots,
 
+    /// If not `None`, represents the address that the stack pointer should
+    /// be checked against.
+    pub stack_limit: Option<ir::GlobalVar>,
+
     /// Global variables referenced.
     pub global_vars: PrimaryMap<ir::GlobalVar, ir::GlobalVarData>,
 
@@ -73,6 +77,7 @@ impl Function {
             name,
             signature: sig,
             stack_slots: StackSlots::new(),
+            stack_limit: None,
             global_vars: PrimaryMap::new(),
             heaps: PrimaryMap::new(),
             jump_tables: PrimaryMap::new(),
