@@ -287,7 +287,6 @@ for ty,             minus_zero in [
 
 
 # Expansions using CPU flags.
-expand_flags.custom_legalize(insts.stack_check, 'expand_stack_check')
 
 expand_flags.legalize(
     insts.trapnz(x, c),
