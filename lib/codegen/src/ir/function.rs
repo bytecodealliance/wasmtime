@@ -126,6 +126,15 @@ impl Function {
         self.stack_slots.push(data)
     }
 
+    /// Sets the stack limit for the function.
+    ///
+    /// Returns previous one if any.
+    pub fn set_stack_limit(&mut self, stack_limit: Option<GlobalVar>) -> Option<GlobalVar> {
+        let prev = self.stack_limit.take();
+        self.stack_limit = stack_limit;
+        prev
+    }
+
     /// Adds a signature which can later be used to declare an external function import.
     pub fn import_signature(&mut self, signature: Signature) -> SigRef {
         self.dfg.signatures.push(signature)

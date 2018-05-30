@@ -1,0 +1,18 @@
+test cat
+
+; Verify parsing of stack_limit.
+function %minimal(i64 vmctx) {
+gv0 = vmctx
+; Stack limit
+stack_limit = gv0
+
+ebb0:
+    trap user0
+}
+; sameln: function %minimal(i64 vmctx) fast {
+; nextln: gv0 = vmctx
+; nextln: stack_limit = gv0
+; nextln: 
+; nextln: ebb0:
+; nextln:     trap user0
+; nextln: }
