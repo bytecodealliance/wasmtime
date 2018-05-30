@@ -668,27 +668,6 @@ copy_special = Instruction(
         ins=(src, dst),
         other_side_effects=True)
 
-GV = Operand(
-    'GV', entities.global_var, doc=r"""
-    Global variable containing the stack limit.
-    """)
-
-stack_check = Instruction(
-    'stack_check', r"""
-    Check for stack overflow.
-
-    Read the stack limit from ``GV`` and compare it to the stack pointer. If
-    the stack pointer has reached or exceeded the limit, generate a trap with a
-    ``stk_ovf`` code.
-
-    The global variable must be accessible and naturally aligned for a
-    pointer-sized value.
-
-    `stack_check` is an alternative way to detect stack overflow, when using
-    a calling convention that doesn't perform stack probes.
-    """,
-    ins=GV, can_trap=True)
-
 delta = Operand('delta', Int)
 adjust_sp_down = Instruction(
     'adjust_sp_down', r"""

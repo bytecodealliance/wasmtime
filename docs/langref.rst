@@ -546,8 +546,6 @@ instructions before instruction selection::
 When Cretonne code is running in a sandbox, it can also be necessary to include
 stack overflow checks in the prologue.
 
-.. autoinst:: stack_check
-
 Global variables
 ----------------
 
