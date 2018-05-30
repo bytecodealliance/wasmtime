@@ -79,6 +79,11 @@ fn write_preamble(
         writeln!(w, "    {} = {}", jt, jt_data)?;
     }
 
+    if let Some(stack_limit) = func.stack_limit {
+        any = true;
+        writeln!(w, "    stack_limit = {}", stack_limit)?;
+    }
+
     Ok(any)
 }
 
