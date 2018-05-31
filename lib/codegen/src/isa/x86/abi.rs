@@ -277,7 +277,7 @@ pub fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> 
 
     // Baldrdash on 32-bit x86 always aligns its stack pointer to 16 bytes.
     let stack_align = 16;
-    let word_size = StackSize::from(isa.triple().pointer_width().unwrap().bytes());
+    let word_size = StackSize::from(isa.pointer_bytes());
     let bytes = StackSize::from(isa.flags().baldrdash_prologue_words()) * word_size;
 
     let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
@@ -299,7 +299,7 @@ pub fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     // which are aligned to 16 bytes in order to aid performance"
     let stack_align = 16;
 
-    let word_size = isa.triple().pointer_width().unwrap().bytes() as usize;
+    let word_size = isa.pointer_bytes() as usize;
     let reg_type = isa.pointer_type();
 
     let csrs = callee_saved_gprs_used(isa, func);
