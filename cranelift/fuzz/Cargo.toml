@@ -21,7 +21,7 @@ git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
 path = "../lib/wasm"
 
 [dependencies.target-lexicon]
-version = "0.0.0"
+version = "0.0.1"
 
 # Prevent this from interfering with workspaces
 [workspace]

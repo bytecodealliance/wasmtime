@@ -10,7 +10,7 @@ readme = "README.md"
 
 [dependencies]
 cretonne-codegen = { path = "../codegen", version = "0.8.0" }
-target-lexicon = { version = "0.0.0" }
+target-lexicon = "0.0.1"
 
 [badges]
 maintenance = { status = "experimental" }

@@ -11,10 +11,10 @@ readme = "README.md"
 [dependencies]
 cretonne-codegen = { path = "../codegen", version = "0.8.0" }
 cretonne-module = { path = "../module", version = "0.8.0" }
-faerie = "0.4.0"
+faerie = "0.4.1"
 goblin = "0.0.14"
 failure = "0.1.1"
-target-lexicon = { version = "0.0.0" }
+target-lexicon = "0.0.1"
 
 [badges]
 maintenance = { status = "experimental" }
