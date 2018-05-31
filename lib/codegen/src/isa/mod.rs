@@ -176,7 +176,17 @@ pub trait TargetIsa: fmt::Display {
 
     /// Get the pointer type of this ISA.
     fn pointer_type(&self) -> ir::Type {
-        ir::Type::int(u16::from(self.triple().pointer_width().unwrap().bits())).unwrap()
+        ir::Type::int(u16::from(self.pointer_bits())).unwrap()
+    }
+
+    /// Get the width of pointers on this ISA, in units of bits.
+    fn pointer_bits(&self) -> u8 {
+        self.triple().pointer_width().unwrap().bits()
+    }
+
+    /// Get the width of pointers on this ISA, in units of bytes.
+    fn pointer_bytes(&self) -> u8 {
+        self.triple().pointer_width().unwrap().bytes()
     }
 
     /// Does the CPU implement scalar comparisons using a CPU flags register?
@@ -277,7 +287,7 @@ pub trait TargetIsa: fmt::Display {
         use ir::stackslot::{StackOffset, StackSize};
         use stack_layout::layout_stack;
 
-        let word_size = StackSize::from(self.triple().pointer_width().unwrap().bytes());
+        let word_size = StackSize::from(self.pointer_bytes());
 
         // Account for the SpiderMonkey standard prologue pushes.
         if func.signature.call_conv == CallConv::Baldrdash {
