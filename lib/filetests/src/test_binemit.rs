@@ -96,8 +96,8 @@ impl binemit::CodeSink for TextSink {
 }
 
 impl SubTest for TestBinEmit {
-    fn name(&self) -> Cow<str> {
-        Cow::from("binemit")
+    fn name(&self) -> &'static str {
+        "binemit"
     }
 
     fn is_mutating(&self) -> bool {

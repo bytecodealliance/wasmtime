@@ -36,8 +36,8 @@ pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
 }
 
 impl SubTest for TestDomtree {
-    fn name(&self) -> Cow<str> {
-        Cow::from("domtree")
+    fn name(&self) -> &'static str {
+        "domtree"
     }
 
     // Extract our own dominator tree from

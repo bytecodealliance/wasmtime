@@ -25,8 +25,8 @@ pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
 }
 
 impl SubTest for TestSimpleGVN {
-    fn name(&self) -> Cow<str> {
-        Cow::from("simple-gvn")
+    fn name(&self) -> &'static str {
+        "simple-gvn"
     }
 
     fn is_mutating(&self) -> bool {

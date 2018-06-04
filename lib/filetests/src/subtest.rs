@@ -45,7 +45,7 @@ impl<'a> Context<'a> {
 /// trait object.
 pub trait SubTest {
     /// Name identifying this subtest. Typically the same as the test command.
-    fn name(&self) -> Cow<str>;
+    fn name(&self) -> &'static str;
 
     /// Should the verifier be run on the function before running the test?
     fn needs_verifier(&self) -> bool {

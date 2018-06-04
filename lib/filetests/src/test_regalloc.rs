@@ -25,8 +25,8 @@ pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
 }
 
 impl SubTest for TestRegalloc {
-    fn name(&self) -> Cow<str> {
-        Cow::from("regalloc")
+    fn name(&self) -> &'static str {
+        "regalloc"
     }
 
     fn is_mutating(&self) -> bool {

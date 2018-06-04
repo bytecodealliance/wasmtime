@@ -23,8 +23,8 @@ pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
 }
 
 impl SubTest for TestLegalizer {
-    fn name(&self) -> Cow<str> {
-        Cow::from("legalizer")
+    fn name(&self) -> &'static str {
+        "legalizer"
     }
 
     fn is_mutating(&self) -> bool {
