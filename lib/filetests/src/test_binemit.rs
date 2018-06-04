@@ -15,11 +15,11 @@ use match_directive::match_directive;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Write;
-use subtest::{Context, Result, SubTest};
+use subtest::{Context, SubTest, SubtestResult};
 
 struct TestBinEmit;
 
-pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<SubTest>> {
     assert_eq!(parsed.command, "binemit");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))
@@ -108,7 +108,7 @@ impl SubTest for TestBinEmit {
         true
     }
 
-    fn run(&self, func: Cow<ir::Function>, context: &Context) -> Result<()> {
+    fn run(&self, func: Cow<ir::Function>, context: &Context) -> SubtestResult<()> {
         let isa = context.isa.expect("binemit needs an ISA");
         let encinfo = isa.encoding_info();
         // TODO: Run a verifier pass over the code first to detect any bad encodings or missing/bad

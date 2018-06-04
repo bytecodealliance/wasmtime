@@ -79,7 +79,7 @@ pub fn run(verbose: bool, files: &[String]) -> TestResult {
 ///
 /// This function knows how to create all of the possible `test <foo>` commands that can appear in
 /// a `.cton` test file.
-fn new_subtest(parsed: &TestCommand) -> subtest::Result<Box<subtest::SubTest>> {
+fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<subtest::SubTest>> {
     match parsed.command {
         "binemit" => test_binemit::subtest(parsed),
         "cat" => test_cat::subtest(parsed),

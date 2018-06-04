@@ -3,7 +3,7 @@
 use cretonne_codegen::ir::Function;
 use cretonne_reader::TestCommand;
 use std::borrow::Cow;
-use subtest::{self, Context, Result as STResult, SubTest};
+use subtest::{self, Context, SubTest, SubtestResult as STResult};
 
 /// Object implementing the `test cat` sub-test.
 ///

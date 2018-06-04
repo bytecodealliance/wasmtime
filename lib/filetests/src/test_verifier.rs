@@ -14,11 +14,11 @@ use cretonne_codegen::verify_function;
 use cretonne_reader::TestCommand;
 use match_directive::match_directive;
 use std::borrow::{Borrow, Cow};
-use subtest::{Context, Result, SubTest};
+use subtest::{Context, SubTest, SubtestResult};
 
 struct TestVerifier;
 
-pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<SubTest>> {
     assert_eq!(parsed.command, "verifier");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))
@@ -37,7 +37,7 @@ impl SubTest for TestVerifier {
         false
     }
 
-    fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
+    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
         let func = func.borrow();
 
         // Scan source annotations for "error:" directives.

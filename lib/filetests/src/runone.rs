@@ -13,7 +13,7 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::Path;
 use std::time;
-use subtest::{Context, Result, SubTest};
+use subtest::{Context, SubTest, SubtestResult};
 use {new_subtest, TestResult};
 
 /// Read an entire file into a string.
@@ -42,7 +42,7 @@ pub fn run(path: &Path) -> TestResult {
         .commands
         .iter()
         .map(new_subtest)
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<SubtestResult<Vec<_>>>()?;
 
     // Flags to use for those tests that don't need an ISA.
     // This is the cumulative effect of all the `set` commands in the file.
@@ -90,7 +90,7 @@ fn test_tuples<'a>(
     tests: &'a [Box<SubTest>],
     isa_spec: &'a IsaSpec,
     no_isa_flags: &'a Flags,
-) -> Result<Vec<(&'a SubTest, &'a Flags, Option<&'a TargetIsa>)>> {
+) -> SubtestResult<Vec<(&'a SubTest, &'a Flags, Option<&'a TargetIsa>)>> {
     let mut out = Vec::new();
     for test in tests {
         if test.needs_isa() {
@@ -119,7 +119,7 @@ fn run_one_test<'a>(
     tuple: (&'a SubTest, &'a Flags, Option<&'a TargetIsa>),
     func: Cow<Function>,
     context: &mut Context<'a>,
-) -> Result<()> {
+) -> SubtestResult<()> {
     let (test, flags, isa) = tuple;
     let name = format!("{}({})", test.name(), func.name);
     dbg!("Test: {} {}", name, isa.map_or("-", TargetIsa::name));
