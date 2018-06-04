@@ -230,7 +230,7 @@ impl Backend for FaerieBackend {
                     to,
                     at: offset as usize,
                 })
-                .map_err(|e| ModuleError::Backend(format!("{}", e)))?;
+                .map_err(|e| ModuleError::Backend(e.to_string()))?;
         }
         for &(offset, id, addend) in data_relocs {
             debug_assert_eq!(
@@ -244,7 +244,7 @@ impl Backend for FaerieBackend {
                     to,
                     at: offset as usize,
                 })
-                .map_err(|e| ModuleError::Backend(format!("{}", e)))?;
+                .map_err(|e| ModuleError::Backend(e.to_string()))?;
         }
 
         self.artifact
