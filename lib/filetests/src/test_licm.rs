@@ -34,9 +34,7 @@ impl SubTest for TestLICM {
     }
 
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
-        // Create a compilation context, and drop in the function.
-        let mut comp_ctx = cretonne_codegen::Context::new();
-        comp_ctx.func = func.into_owned();
+        let mut comp_ctx = cretonne_codegen::Context::for_function(func.into_owned());
 
         comp_ctx.flowgraph();
         comp_ctx.compute_loop_analysis();
