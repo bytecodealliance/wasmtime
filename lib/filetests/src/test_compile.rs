@@ -36,10 +36,7 @@ impl SubTest for TestCompile {
 
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> Result<()> {
         let isa = context.isa.expect("compile needs an ISA");
-
-        // Create a compilation context, and drop in the function.
-        let mut comp_ctx = cretonne_codegen::Context::new();
-        comp_ctx.func = func.into_owned();
+        let mut comp_ctx = cretonne_codegen::Context::for_function(func.into_owned());
 
         let code_size = comp_ctx
             .compile(isa)
