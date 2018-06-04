@@ -22,8 +22,8 @@ pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
 }
 
 impl SubTest for TestCompile {
-    fn name(&self) -> Cow<str> {
-        Cow::from("compile")
+    fn name(&self) -> &'static str {
+        "compile"
     }
 
     fn is_mutating(&self) -> bool {

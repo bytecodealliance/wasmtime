@@ -23,8 +23,8 @@ pub fn subtest(parsed: &TestCommand) -> STResult<Box<SubTest>> {
 }
 
 impl SubTest for TestCat {
-    fn name(&self) -> Cow<str> {
-        Cow::from("cat")
+    fn name(&self) -> &'static str {
+        "cat"
     }
 
     fn needs_verifier(&self) -> bool {
