@@ -7,11 +7,11 @@ use cretonne_codegen::ir::Function;
 use cretonne_codegen::print_errors::pretty_error;
 use cretonne_reader::TestCommand;
 use std::borrow::Cow;
-use subtest::{run_filecheck, Context, Result, SubTest};
+use subtest::{run_filecheck, Context, SubTest, SubtestResult};
 
 struct TestPostopt;
 
-pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<SubTest>> {
     assert_eq!(parsed.command, "postopt");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))
@@ -29,7 +29,7 @@ impl SubTest for TestPostopt {
         true
     }
 
-    fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
+    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
         let mut comp_ctx = cretonne_codegen::Context::for_function(func.into_owned());
         let isa = context.isa.expect("postopt needs an ISA");
 

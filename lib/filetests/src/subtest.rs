@@ -6,9 +6,8 @@ use cretonne_codegen::settings::{Flags, FlagsOrIsa};
 use cretonne_reader::{Comment, Details};
 use filecheck::{Checker, CheckerBuilder, NO_VARIABLES};
 use std::borrow::Cow;
-use std::result;
 
-pub type Result<T> = result::Result<T, String>;
+pub type SubtestResult<T> = Result<T, String>;
 
 /// Context for running a test on a single function.
 pub struct Context<'a> {
@@ -64,11 +63,11 @@ pub trait SubTest {
     }
 
     /// Run this test on `func`.
-    fn run(&self, func: Cow<Function>, context: &Context) -> Result<()>;
+    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()>;
 }
 
 /// Run filecheck on `text`, using directives extracted from `context`.
-pub fn run_filecheck(text: &str, context: &Context) -> Result<()> {
+pub fn run_filecheck(text: &str, context: &Context) -> SubtestResult<()> {
     let checker = build_filechecker(context)?;
     if checker
         .check(text, NO_VARIABLES)
@@ -85,7 +84,7 @@ pub fn run_filecheck(text: &str, context: &Context) -> Result<()> {
 }
 
 /// Build a filechecker using the directives in the file preamble and the function's comments.
-pub fn build_filechecker(context: &Context) -> Result<Checker> {
+pub fn build_filechecker(context: &Context) -> SubtestResult<Checker> {
     let mut builder = CheckerBuilder::new();
     // Preamble comments apply to all functions.
     for comment in context.preamble_comments {

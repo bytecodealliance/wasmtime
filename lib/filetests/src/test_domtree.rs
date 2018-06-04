@@ -21,12 +21,11 @@ use match_directive::match_directive;
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
 use std::fmt::{self, Write};
-use std::result;
-use subtest::{run_filecheck, Context, Result, SubTest};
+use subtest::{run_filecheck, Context, SubTest, SubtestResult};
 
 struct TestDomtree;
 
-pub fn subtest(parsed: &TestCommand) -> Result<Box<SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<SubTest>> {
     assert_eq!(parsed.command, "domtree");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))
@@ -41,7 +40,7 @@ impl SubTest for TestDomtree {
     }
 
     // Extract our own dominator tree from
-    fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
+    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
         let func = func.borrow();
         let cfg = ControlFlowGraph::with_function(func);
         let domtree = DominatorTree::with_function(func, &cfg);
@@ -114,7 +113,7 @@ impl SubTest for TestDomtree {
 }
 
 // Generate some output for filecheck testing
-fn filecheck_text(func: &Function, domtree: &DominatorTree) -> result::Result<String, fmt::Error> {
+fn filecheck_text(func: &Function, domtree: &DominatorTree) -> Result<String, fmt::Error> {
     let mut s = String::new();
 
     write!(s, "cfg_postorder:")?;
