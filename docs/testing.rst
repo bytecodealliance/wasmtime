@@ -342,6 +342,14 @@ Test the DCE pass.
 The DCE pass is run on each function, and then results are run
 through filecheck.
 
+`test shrink`
+-----------------
+
+Test the instruction shrinking pass.
+
+The shrink pass is run on each function, and then results are run
+through filecheck.
+
 `test preopt`
 -----------------
 

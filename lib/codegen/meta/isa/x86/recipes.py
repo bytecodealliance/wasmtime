@@ -389,6 +389,7 @@ urm_noflags = TailRecipe(
 urm_noflags_abcd = TailRecipe(
         'urm_noflags_abcd', Unary, size=1, ins=ABCD, outs=GPR,
         when_prefixed=urm_noflags,
+        clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rr(in_reg0, out_reg0, sink);
