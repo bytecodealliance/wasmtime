@@ -123,7 +123,7 @@ fn handle_module(
             }
             println!();
 
-            let cs = get_disassembler(isa)?;
+            let mut cs = get_disassembler(isa)?;
 
             println!("\nDisassembly:");
             let insns = cs.disasm_all(&mem, 0x0).unwrap();
