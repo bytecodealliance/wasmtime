@@ -546,6 +546,20 @@ instructions before instruction selection::
 When Cretonne code is running in a sandbox, it can also be necessary to include
 stack overflow checks in the prologue.
 
+.. inst:: stack_limit = GV
+
+    Set the stack limit of the current function.
+
+    If set, in the preamble read the stack limit from ``GV`` and compare it to the stack pointer. If
+    the stack pointer has reached or exceeded the limit, generate a trap with a
+    ``stk_ovf`` code.
+
+    The global variable must be accessible and naturally aligned for a
+    pointer-sized value.
+
+    Setting `stack_limit` is an alternative way to detect stack overflow, when using
+    a calling convention that doesn't perform stack probes.
+
 Global variables
 ----------------
 
