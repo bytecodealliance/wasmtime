@@ -12,7 +12,7 @@ readme = "README.md"
 cretonne-codegen = { path = "../codegen", version = "0.8.0" }
 cretonne-module = { path = "../module", version = "0.8.0" }
 faerie = "0.4.1"
-goblin = "0.0.14"
+goblin = "0.0.15"
 failure = "0.1.1"
 target-lexicon = "0.0.1"
 
