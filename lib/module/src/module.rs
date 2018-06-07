@@ -9,7 +9,9 @@ use cretonne_codegen::entity::{EntityRef, PrimaryMap};
 use cretonne_codegen::result::CtonError;
 use cretonne_codegen::{binemit, ir, Context};
 use data_context::DataContext;
+use std::borrow::ToOwned;
 use std::collections::HashMap;
+use std::string::String;
 use Backend;
 
 /// A function identifier for use in the `Module` interface.

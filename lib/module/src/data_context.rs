@@ -3,6 +3,8 @@
 use cretonne_codegen::binemit::{Addend, CodeOffset};
 use cretonne_codegen::entity::PrimaryMap;
 use cretonne_codegen::ir;
+use std::boxed::Box;
+use std::vec::Vec;
 
 /// This specifies how data is to be initialized.
 #[derive(PartialEq, Eq, Debug)]

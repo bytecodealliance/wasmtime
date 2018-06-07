@@ -42,10 +42,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-// Include the `hashmap_core` crate if std is not available.
-#[allow(unused_extern_crates)]
-#[cfg(not(feature = "std"))]
-extern crate hashmap_core;
 #[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
@@ -119,8 +115,11 @@ mod std {
     pub use alloc::{boxed, string, vec};
     pub use core::*;
     pub mod collections {
+        #[allow(unused_extern_crates)]
+        extern crate hashmap_core;
+
+        pub use self::hashmap_core::map as hash_map;
+        pub use self::hashmap_core::{HashMap, HashSet};
         pub use alloc::BTreeSet;
-        pub use hashmap_core::map as hash_map;
-        pub use hashmap_core::{HashMap, HashSet};
     }
 }
