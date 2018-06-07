@@ -949,6 +949,18 @@ impl DataFlowGraph {
         self.values[dest] = data;
     }
 
+    /// If `v` is already defined as an alias, return its destination value.
+    /// Otherwise return None. This allows the parser to coalesce identical
+    /// alias definitions.
+    #[cold]
+    pub fn value_alias_dest_for_parser(&self, v: Value) -> Option<Value> {
+        if let ValueData::Alias { original, .. } = self.values[v] {
+            Some(original)
+        } else {
+            None
+        }
+    }
+
     /// Compute the type of an alias. This is only for use in the parser.
     /// Returns false if an alias cycle was encountered.
     #[cold]
