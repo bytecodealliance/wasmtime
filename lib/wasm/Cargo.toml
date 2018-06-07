@@ -22,7 +22,7 @@ wabt = "0.3"
 
 [features]
 default = ["std"]
-std = ["cretonne-codegen/std", "cretonne-frontend/std", "wasmparser/std"]
+std = ["cretonne-codegen/std", "cretonne-frontend/std", "wasmparser/std", "target-lexicon/std"]
 core = ["hashmap_core", "cretonne-codegen/core", "cretonne-frontend/core", "wasmparser/core"]
 
 [badges]
