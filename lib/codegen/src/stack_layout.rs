@@ -2,7 +2,7 @@
 
 use ir::stackslot::{StackOffset, StackSize, StackSlotKind};
 use ir::StackSlots;
-use result::CtonError;
+use result::{CtonError, CtonResult};
 use std::cmp::{max, min};
 
 /// Compute the stack frame layout.
@@ -15,7 +15,7 @@ use std::cmp::{max, min};
 /// Returns the total stack frame size which is also saved in `frame.frame_size`.
 ///
 /// If the stack frame is too big, returns an `ImplLimitExceeded` error.
-pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> Result<StackSize, CtonError> {
+pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CtonResult<StackSize> {
     // Each object and the whole stack frame must fit in 2 GB such that any relative offset within
     // the frame fits in a `StackOffset`.
     let max_size = StackOffset::max_value() as StackSize;

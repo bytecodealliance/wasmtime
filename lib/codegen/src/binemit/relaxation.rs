@@ -32,12 +32,12 @@ use cursor::{Cursor, FuncCursor};
 use ir::{Function, InstructionData, Opcode};
 use isa::{EncInfo, TargetIsa};
 use iterators::IteratorExtras;
-use result::CtonError;
+use result::CtonResult;
 
 /// Relax branches and compute the final layout of EBB headers in `func`.
 ///
 /// Fill in the `func.offsets` table so the function is ready for binary emission.
-pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> Result<CodeOffset, CtonError> {
+pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CtonResult<CodeOffset> {
     let encinfo = isa.encoding_info();
 
     // Clear all offsets so we can recognize EBBs that haven't been visited yet.

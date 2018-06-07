@@ -32,7 +32,7 @@ pub enum CtonError {
 }
 
 /// A Cretonne compilation result.
-pub type CtonResult = Result<(), CtonError>;
+pub type CtonResult<T> = Result<T, CtonError>;
 
 impl From<VerifierError> for CtonError {
     fn from(e: VerifierError) -> Self {
