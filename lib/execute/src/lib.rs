@@ -7,11 +7,11 @@ extern crate cretonne_wasm;
 extern crate region;
 extern crate wasmstandalone_runtime;
 
-use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::binemit::Reloc;
-use std::mem::transmute;
-use region::Protection;
+use cretonne_codegen::isa::TargetIsa;
 use region::protect;
+use region::Protection;
+use std::mem::transmute;
 use std::ptr::write_unaligned;
 use wasmstandalone_runtime::Compilation;
 
@@ -21,8 +21,8 @@ pub fn compile_module<'data, 'module>(
     translation: &wasmstandalone_runtime::ModuleTranslation<'data, 'module>,
 ) -> Result<wasmstandalone_runtime::Compilation<'module>, String> {
     debug_assert!(
-        translation.module.start_func.is_none() ||
-            translation.module.start_func.unwrap() >= translation.module.imported_funcs.len(),
+        translation.module.start_func.is_none()
+            || translation.module.start_func.unwrap() >= translation.module.imported_funcs.len(),
         "imported start functions not supported yet"
     );
 
@@ -53,8 +53,8 @@ fn relocate(compilation: &mut Compilation, relocations: &wasmstandalone_runtime:
                     let reloc_address = body.as_mut_ptr().offset(r.offset as isize) as isize;
                     let reloc_addend = r.addend as isize;
                     // TODO: Handle overflow.
-                    let reloc_delta_i32 = (target_func_address - reloc_address + reloc_addend) as
-                        i32;
+                    let reloc_delta_i32 =
+                        (target_func_address - reloc_address + reloc_addend) as i32;
                     write_unaligned(reloc_address as *mut i32, reloc_delta_i32);
                 },
                 _ => panic!("unsupported reloc kind"),
@@ -81,9 +81,10 @@ pub fn execute(
     compilation: &wasmstandalone_runtime::Compilation,
     instance: &mut wasmstandalone_runtime::Instance,
 ) -> Result<(), String> {
-    let start_index = compilation.module.start_func.ok_or_else(|| {
-        String::from("No start function defined, aborting execution")
-    })?;
+    let start_index = compilation
+        .module
+        .start_func
+        .ok_or_else(|| String::from("No start function defined, aborting execution"))?;
     // TODO: Put all the function bodies into a page-aligned memory region, and
     // then make them ReadExecute rather than ReadWriteExecute.
     for code_buf in &compilation.functions {

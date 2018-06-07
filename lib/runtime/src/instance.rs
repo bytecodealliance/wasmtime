@@ -3,7 +3,7 @@
 
 use cretonne_codegen::ir;
 use cretonne_wasm::GlobalIndex;
-use module::Module;
+use module::{Module, TableElements};
 use DataInitializer;
 
 const PAGE_SIZE: usize = 65536;
@@ -29,15 +29,14 @@ impl Instance {
             memories: Vec::new(),
             globals: Vec::new(),
         };
-        result.instantiate_tables(module);
+        result.instantiate_tables(module, &module.table_elements);
         result.instantiate_memories(module, data_initializers);
         result.instantiate_globals(module);
         result
     }
 
-    /// Allocate memory in `self` for just the tables of the current module,
-    /// without any initializers applied yet.
-    fn instantiate_tables(&mut self, module: &Module) {
+    /// Allocate memory in `self` for just the tables of the current module.
+    fn instantiate_tables(&mut self, module: &Module, table_initializers: &[TableElements]) {
         debug_assert!(self.tables.is_empty());
         self.tables.reserve_exact(module.tables.len());
         for table in &module.tables {
@@ -46,10 +45,15 @@ impl Instance {
             v.resize(len, 0);
             self.tables.push(v);
         }
+        for init in table_initializers {
+            debug_assert!(init.base.is_none(), "globalvar base not supported yet");
+            let to_init =
+                &mut self.tables[init.table_index][init.offset..init.offset + init.elements.len()];
+            to_init.copy_from_slice(&init.elements);
+        }
     }
 
-    /// Allocate memory in `instance` for just the memories of the current module,
-    /// without any initializers applied yet.
+    /// Allocate memory in `instance` for just the memories of the current module.
     fn instantiate_memories(&mut self, module: &Module, data_initializers: &[DataInitializer]) {
         debug_assert!(self.memories.is_empty());
         // Allocate the underlying memory and initialize it to all zeros.
@@ -62,8 +66,8 @@ impl Instance {
         }
         for init in data_initializers {
             debug_assert!(init.base.is_none(), "globalvar base not supported yet");
-            let to_init = &mut self.memories[init.memory_index][init.offset..
-                                                                    init.offset + init.data.len()];
+            let to_init =
+                &mut self.memories[init.memory_index][init.offset..init.offset + init.data.len()];
             to_init.copy_from_slice(init.data);
         }
     }
@@ -79,12 +83,9 @@ impl Instance {
 
     /// Returns a slice of the contents of allocated linear memory.
     pub fn inspect_memory(&self, memory_index: usize, address: usize, len: usize) -> &[u8] {
-        &self.memories.get(memory_index).expect(
-            format!(
-                "no memory for index {}",
-                memory_index
-            ).as_str(),
-        )
+        &self.memories
+            .get(memory_index)
+            .expect(format!("no memory for index {}", memory_index).as_str())
             [address..address + len]
     }
 

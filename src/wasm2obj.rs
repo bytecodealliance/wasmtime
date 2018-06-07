@@ -7,27 +7,27 @@
 extern crate cretonne_codegen;
 extern crate cretonne_native;
 extern crate cretonne_wasm;
+extern crate docopt;
 extern crate wasmstandalone_obj;
 extern crate wasmstandalone_runtime;
-extern crate docopt;
 #[macro_use]
 extern crate serde_derive;
 extern crate faerie;
 
-use cretonne_wasm::translate_module;
-use cretonne_codegen::settings;
 use cretonne_codegen::isa;
-use wasmstandalone_obj::emit_module;
-use std::path::PathBuf;
-use std::fs::File;
+use cretonne_codegen::settings;
+use cretonne_wasm::translate_module;
+use docopt::Docopt;
+use faerie::{Artifact, Elf, Target};
 use std::error::Error;
+use std::fmt::format;
+use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use docopt::Docopt;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process;
-use std::fmt::format;
-use faerie::{Artifact, Elf, Target};
+use wasmstandalone_obj::emit_module;
 
 const USAGE: &str = "
 Wasm to native object translation utility.
@@ -100,9 +100,8 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     // FIXME: We need to initialize memory in a way that supports alternate
     // memory spaces, imported base addresses, and offsets.
     for init in &environ.lazy.data_initializers {
-        obj.define("memory", Vec::from(init.data)).map_err(|err| {
-            format!("{}", err)
-        })?;
+        obj.define("memory", Vec::from(init.data))
+            .map_err(|err| format!("{}", err))?;
     }
 
     let translation = environ.finish_translation();
@@ -119,12 +118,10 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     }
 
     // FIXME: Make the format a parameter.
-    let file = ::std::fs::File::create(Path::new(output)).map_err(|x| {
-        format(format_args!("{}", x))
-    })?;
-    obj.write::<Elf>(file).map_err(
-        |x| format(format_args!("{}", x)),
-    )?;
+    let file =
+        ::std::fs::File::create(Path::new(output)).map_err(|x| format(format_args!("{}", x)))?;
+    obj.write::<Elf>(file)
+        .map_err(|x| format(format_args!("{}", x)))?;
 
     Ok(())
 }

@@ -11,15 +11,15 @@ pub fn emit_module<'module>(
     relocations: &wasmstandalone_runtime::Relocations,
 ) -> Result<(), String> {
     debug_assert!(
-        compilation.module.start_func.is_none() ||
-            compilation.module.start_func.unwrap() >= compilation.module.imported_funcs.len(),
+        compilation.module.start_func.is_none()
+            || compilation.module.start_func.unwrap() >= compilation.module.imported_funcs.len(),
         "imported start functions not supported yet"
     );
 
     let mut shared_builder = settings::builder();
-    shared_builder.enable("enable_verifier").expect(
-        "Missing enable_verifier setting",
-    );
+    shared_builder
+        .enable("enable_verifier")
+        .expect("Missing enable_verifier setting");
 
     for (i, function_relocs) in relocations.iter().enumerate() {
         assert!(function_relocs.is_empty(), "relocations not supported yet");
@@ -27,9 +27,8 @@ pub fn emit_module<'module>(
         let func_index = compilation.module.imported_funcs.len() + i;
         let string_name = format!("wasm_function[{}]", func_index);
 
-        obj.define(string_name, body.clone()).map_err(|err| {
-            format!("{}", err)
-        })?;
+        obj.define(string_name, body.clone())
+            .map_err(|err| format!("{}", err))?;
     }
 
     Ok(())

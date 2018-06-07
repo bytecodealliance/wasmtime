@@ -6,31 +6,31 @@
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
 extern crate cretonne_codegen;
-extern crate cretonne_wasm;
 extern crate cretonne_native;
-extern crate wasmstandalone_runtime;
-extern crate wasmstandalone_execute;
+extern crate cretonne_wasm;
 extern crate docopt;
+extern crate wasmstandalone_execute;
+extern crate wasmstandalone_runtime;
 #[macro_use]
 extern crate serde_derive;
 extern crate tempdir;
 
-use cretonne_wasm::translate_module;
-use wasmstandalone_execute::{compile_module, execute};
-use wasmstandalone_runtime::{Instance, Module, ModuleEnvironment};
-use std::path::PathBuf;
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::settings;
-use std::fs::File;
-use std::error::Error;
-use std::io;
-use std::io::stdout;
-use std::io::prelude::*;
+use cretonne_codegen::settings::Configurable;
+use cretonne_wasm::translate_module;
 use docopt::Docopt;
+use std::error::Error;
+use std::fs::File;
+use std::io;
+use std::io::prelude::*;
+use std::io::stdout;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::{exit, Command};
 use tempdir::TempDir;
-use cretonne_codegen::settings::Configurable;
+use wasmstandalone_execute::{compile_module, execute};
+use wasmstandalone_runtime::{Instance, Module, ModuleEnvironment};
 
 const USAGE: &str = "
 Wasm to Cretonne IL translation utility.
@@ -99,9 +99,7 @@ fn main() {
 }
 
 fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), String> {
-    let mut data = read_to_end(path.clone()).map_err(|err| {
-        String::from(err.description())
-    })?;
+    let mut data = read_to_end(path.clone()).map_err(|err| String::from(err.description()))?;
     if !data.starts_with(&[b'\0', b'a', b's', b'm']) {
         let tmp_dir = TempDir::new("cretonne-wasm").unwrap();
         let file_path = tmp_dir.path().join("module.wasm");
@@ -111,14 +109,14 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
             .arg("-o")
             .arg(file_path.to_str().unwrap())
             .output()
-            .or_else(|e| if let io::ErrorKind::NotFound = e.kind() {
-                return Err(String::from("wat2wasm not found"));
-            } else {
-                return Err(String::from(e.description()));
+            .or_else(|e| {
+                if let io::ErrorKind::NotFound = e.kind() {
+                    return Err(String::from("wat2wasm not found"));
+                } else {
+                    return Err(String::from(e.description()));
+                }
             })?;
-        data = read_to_end(file_path).map_err(
-            |err| String::from(err.description()),
-        )?;
+        data = read_to_end(file_path).map_err(|err| String::from(err.description()))?;
     }
     let mut module = Module::new();
     let mut environ = ModuleEnvironment::new(isa.flags(), &mut module);

@@ -9,25 +9,25 @@ extern crate cretonne_codegen;
 extern crate cretonne_wasm;
 extern crate wasmparser;
 
-pub mod module;
 pub mod compilation;
 pub mod instance;
+pub mod module;
 
-pub use module::Module;
 pub use compilation::Compilation;
 pub use instance::Instance;
+pub use module::Module;
 
-use cretonne_wasm::{FunctionIndex, GlobalIndex, TableIndex, MemoryIndex, Global, Table, Memory,
-                    GlobalValue, SignatureIndex, FuncTranslator};
-use cretonne_codegen::ir::{InstBuilder, FuncRef, ExtFuncData, ExternalName, Signature, AbiParam,
-                           ArgumentPurpose, ArgumentLoc, ArgumentExtension, Function};
-use cretonne_codegen::ir::types::*;
-use cretonne_codegen::ir::immediates::Offset32;
+use cretonne_codegen::binemit;
 use cretonne_codegen::cursor::FuncCursor;
 use cretonne_codegen::ir;
+use cretonne_codegen::ir::immediates::Offset32;
+use cretonne_codegen::ir::types::*;
+use cretonne_codegen::ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, ExtFuncData,
+                           ExternalName, FuncRef, Function, InstBuilder, Signature};
 use cretonne_codegen::isa;
 use cretonne_codegen::settings;
-use cretonne_codegen::binemit;
+use cretonne_wasm::{FuncTranslator, FunctionIndex, Global, GlobalIndex, GlobalValue, Memory,
+                    MemoryIndex, SignatureIndex, Table, TableIndex};
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FunctionIndex) -> cretonne_codegen::ir::ExternalName {
@@ -96,7 +96,9 @@ impl binemit::RelocSink for RelocSink {
 
 impl RelocSink {
     fn new() -> RelocSink {
-        RelocSink { func_relocs: Vec::new() }
+        RelocSink {
+            func_relocs: Vec::new(),
+        }
     }
 }
 
@@ -221,7 +223,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn ptr_size(&self) -> usize {
-        if self.settings_flags.is_64bit() { 8 } else { 4 }
+        if self.settings_flags.is_64bit() {
+            8
+        } else {
+            4
+        }
     }
 }
 
@@ -275,7 +281,9 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
             base: ir::HeapBase::GlobalVar(heap_base),
             min_size: 0.into(),
             guard_size: 0x8000_0000.into(),
-            style: ir::HeapStyle::Static { bound: 0x1_0000_0000.into() },
+            style: ir::HeapStyle::Static {
+                bound: 0x1_0000_0000.into(),
+            },
         });
         h
     }
@@ -422,10 +430,9 @@ impl<'data, 'module> cretonne_wasm::ModuleEnvironment<'data> for ModuleEnvironme
         );
         self.module.functions.push(sig_index);
 
-        self.module.imported_funcs.push((
-            String::from(module),
-            String::from(field),
-        ));
+        self.module
+            .imported_funcs
+            .push((String::from(module), String::from(field)));
     }
 
     fn get_num_func_imports(&self) -> usize {
@@ -489,31 +496,27 @@ impl<'data, 'module> cretonne_wasm::ModuleEnvironment<'data> for ModuleEnvironme
     }
 
     fn declare_func_export(&mut self, func_index: FunctionIndex, name: &str) {
-        self.module.exports.insert(
-            String::from(name),
-            module::Export::Function(func_index),
-        );
+        self.module
+            .exports
+            .insert(String::from(name), module::Export::Function(func_index));
     }
 
     fn declare_table_export(&mut self, table_index: TableIndex, name: &str) {
-        self.module.exports.insert(
-            String::from(name),
-            module::Export::Table(table_index),
-        );
+        self.module
+            .exports
+            .insert(String::from(name), module::Export::Table(table_index));
     }
 
     fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &str) {
-        self.module.exports.insert(
-            String::from(name),
-            module::Export::Memory(memory_index),
-        );
+        self.module
+            .exports
+            .insert(String::from(name), module::Export::Memory(memory_index));
     }
 
     fn declare_global_export(&mut self, global_index: GlobalIndex, name: &str) {
-        self.module.exports.insert(
-            String::from(name),
-            module::Export::Global(global_index),
-        );
+        self.module
+            .exports
+            .insert(String::from(name), module::Export::Global(global_index));
     }
 
     fn declare_start_func(&mut self, func_index: FunctionIndex) {
@@ -573,8 +576,8 @@ impl<'data, 'module> ModuleTranslation<'data, 'module> {
             let func_index = i + self.module.imported_funcs.len();
             let mut context = cretonne_codegen::Context::new();
             context.func.name = get_func_name(func_index);
-            context.func.signature = self.module.signatures[self.module.functions[func_index]]
-                .clone();
+            context.func.signature =
+                self.module.signatures[self.module.functions[func_index]].clone();
 
             let mut trans = FuncTranslator::new();
             let reader = wasmparser::BinaryReader::new(input);
