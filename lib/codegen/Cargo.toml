@@ -26,7 +26,7 @@ target-lexicon = { version = "0.0.1", default-features = false }
 # of some minimal std-like replacement libraries. At least one of these two
 # features need to be enabled.
 default = ["std"]
-std = ["cretonne-entity/std"]
+std = ["cretonne-entity/std", "target-lexicon/std"]
 core = ["hashmap_core"]
 
 [badges]
