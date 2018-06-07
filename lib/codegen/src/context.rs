@@ -22,7 +22,7 @@ use nan_canonicalization::do_nan_canonicalization;
 use postopt::do_postopt;
 use preopt::do_preopt;
 use regalloc;
-use result::{CtonError, CtonResult};
+use result::CtonResult;
 use settings::{FlagsOrIsa, OptLevel};
 use simple_gvn::do_simple_gvn;
 use std::vec::Vec;
@@ -95,7 +95,7 @@ impl Context {
         mem: &mut Vec<u8>,
         relocs: &mut RelocSink,
         traps: &mut TrapSink,
-    ) -> CtonResult {
+    ) -> CtonResult<()> {
         let code_size = self.compile(isa)?;
         let old_len = mem.len();
         mem.resize(old_len + code_size as usize, 0);
@@ -117,7 +117,7 @@ impl Context {
     /// code sink.
     ///
     /// Returns the size of the function's code.
-    pub fn compile(&mut self, isa: &TargetIsa) -> Result<CodeOffset, CtonError> {
+    pub fn compile(&mut self, isa: &TargetIsa) -> CtonResult<CodeOffset> {
         let _tt = timing::compile();
         self.verify_if(isa)?;
 
@@ -179,7 +179,7 @@ impl Context {
     }
 
     /// Run the verifier only if the `enable_verifier` setting is true.
-    pub fn verify_if<'a, FOI: Into<FlagsOrIsa<'a>>>(&self, fisa: FOI) -> CtonResult {
+    pub fn verify_if<'a, FOI: Into<FlagsOrIsa<'a>>>(&self, fisa: FOI) -> CtonResult<()> {
         let fisa = fisa.into();
         if fisa.flags.enable_verifier() {
             self.verify(fisa).map_err(Into::into)
@@ -194,7 +194,7 @@ impl Context {
     }
 
     /// Run the locations verifier only if the `enable_verifier` setting is true.
-    pub fn verify_locations_if(&self, isa: &TargetIsa) -> CtonResult {
+    pub fn verify_locations_if(&self, isa: &TargetIsa) -> CtonResult<()> {
         if isa.flags().enable_verifier() {
             self.verify_locations(isa).map_err(Into::into)
         } else {
@@ -203,27 +203,27 @@ impl Context {
     }
 
     /// Perform dead-code elimination on the function.
-    pub fn dce<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult {
+    pub fn dce<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult<()> {
         do_dce(&mut self.func, &mut self.domtree);
         self.verify_if(fisa)?;
         Ok(())
     }
 
     /// Perform pre-legalization rewrites on the function.
-    pub fn preopt(&mut self, isa: &TargetIsa) -> CtonResult {
+    pub fn preopt(&mut self, isa: &TargetIsa) -> CtonResult<()> {
         do_preopt(&mut self.func);
         self.verify_if(isa)?;
         Ok(())
     }
 
     /// Perform NaN canonicalizing rewrites on the function.
-    pub fn canonicalize_nans(&mut self, isa: &TargetIsa) -> CtonResult {
+    pub fn canonicalize_nans(&mut self, isa: &TargetIsa) -> CtonResult<()> {
         do_nan_canonicalization(&mut self.func);
         self.verify_if(isa)
     }
 
     /// Run the legalizer for `isa` on the function.
-    pub fn legalize(&mut self, isa: &TargetIsa) -> CtonResult {
+    pub fn legalize(&mut self, isa: &TargetIsa) -> CtonResult<()> {
         // Legalization invalidates the domtree and loop_analysis by mutating the CFG.
         // TODO: Avoid doing this when legalization doesn't actually mutate the CFG.
         self.domtree.clear();
@@ -233,7 +233,7 @@ impl Context {
     }
 
     /// Perform post-legalization rewrites on the function.
-    pub fn postopt(&mut self, isa: &TargetIsa) -> CtonResult {
+    pub fn postopt(&mut self, isa: &TargetIsa) -> CtonResult<()> {
         do_postopt(&mut self.func, isa);
         self.verify_if(isa)?;
         Ok(())
@@ -262,13 +262,13 @@ impl Context {
     }
 
     /// Perform simple GVN on the function.
-    pub fn simple_gvn<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult {
+    pub fn simple_gvn<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult<()> {
         do_simple_gvn(&mut self.func, &mut self.domtree);
         self.verify_if(fisa)
     }
 
     /// Perform LICM on the function.
-    pub fn licm<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult {
+    pub fn licm<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult<()> {
         do_licm(
             &mut self.func,
             &mut self.cfg,
@@ -279,7 +279,7 @@ impl Context {
     }
 
     /// Perform unreachable code elimination.
-    pub fn eliminate_unreachable_code<'a, FOI>(&mut self, fisa: FOI) -> CtonResult
+    pub fn eliminate_unreachable_code<'a, FOI>(&mut self, fisa: FOI) -> CtonResult<()>
     where
         FOI: Into<FlagsOrIsa<'a>>,
     {
@@ -288,13 +288,13 @@ impl Context {
     }
 
     /// Run the register allocator.
-    pub fn regalloc(&mut self, isa: &TargetIsa) -> CtonResult {
+    pub fn regalloc(&mut self, isa: &TargetIsa) -> CtonResult<()> {
         self.regalloc
             .run(isa, &mut self.func, &self.cfg, &mut self.domtree)
     }
 
     /// Insert prologue and epilogues after computing the stack frame layout.
-    pub fn prologue_epilogue(&mut self, isa: &TargetIsa) -> CtonResult {
+    pub fn prologue_epilogue(&mut self, isa: &TargetIsa) -> CtonResult<()> {
         assert!(
             self.func.stack_limit.is_none(),
             "stack_limit isn't implemented yet"
@@ -306,7 +306,7 @@ impl Context {
     }
 
     /// Run the instruction shrinking pass.
-    pub fn shrink_instructions(&mut self, isa: &TargetIsa) -> CtonResult {
+    pub fn shrink_instructions(&mut self, isa: &TargetIsa) -> CtonResult<()> {
         shrink_instructions(&mut self.func, isa);
         self.verify_if(isa)?;
         self.verify_locations_if(isa)?;
@@ -314,7 +314,7 @@ impl Context {
     }
 
     /// Run the branch relaxation pass and return the final code size.
-    pub fn relax_branches(&mut self, isa: &TargetIsa) -> Result<CodeOffset, CtonError> {
+    pub fn relax_branches(&mut self, isa: &TargetIsa) -> CtonResult<CodeOffset> {
         let code_size = relax_branches(&mut self.func, isa)?;
         self.verify_if(isa)?;
         self.verify_locations_if(isa)?;

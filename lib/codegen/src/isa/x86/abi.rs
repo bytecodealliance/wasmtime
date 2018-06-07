@@ -10,7 +10,7 @@ use ir::{get_probestack_funcref, AbiParam, ArgumentExtension, ArgumentLoc, Argum
          InstBuilder, ValueLoc};
 use isa::{RegClass, RegUnit, TargetIsa};
 use regalloc::RegisterSet;
-use result;
+use result::CtonResult;
 use settings::CallConv;
 use stack_layout::layout_stack;
 use std::i32;
@@ -257,7 +257,7 @@ fn callee_saved_gprs_used(isa: &TargetIsa, func: &ir::Function) -> RegisterSet {
     used
 }
 
-pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
+pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> CtonResult<()> {
     match func.signature.call_conv {
         // For now, just translate fast and cold as system_v.
         CallConv::Fast | CallConv::Cold | CallConv::SystemV => {
@@ -269,7 +269,7 @@ pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::Ct
     }
 }
 
-pub fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
+pub fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> CtonResult<()> {
     debug_assert!(
         !isa.flags().probestack_enabled(),
         "baldrdash does not expect cretonne to emit stack probes"
@@ -290,7 +290,7 @@ pub fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> 
 
 /// Implementation of the fastcall-based Win64 calling convention described at [1]
 /// [1] https://msdn.microsoft.com/en-us/library/ms235286.aspx
-pub fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
+pub fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> CtonResult<()> {
     if isa.triple().pointer_width().unwrap() != PointerWidth::U64 {
         panic!("TODO: windows-fastcall: x86-32 not implemented yet");
     }
@@ -362,7 +362,7 @@ pub fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
 }
 
 /// Insert a System V-compatible prologue and epilogue.
-pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> result::CtonResult {
+pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> CtonResult<()> {
     // The original 32-bit x86 ELF ABI had a 4-byte aligned stack pointer, but
     // newer versions use a 16-byte aligned stack pointer.
     let stack_align = 16;

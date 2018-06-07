@@ -72,7 +72,7 @@ impl Context {
         func: &mut Function,
         cfg: &ControlFlowGraph,
         domtree: &mut DominatorTree,
-    ) -> CtonResult {
+    ) -> CtonResult<()> {
         let _tt = timing::regalloc();
         debug_assert!(domtree.is_valid());
 

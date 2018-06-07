@@ -56,7 +56,7 @@ use flowgraph;
 use ir;
 use isa::enc_tables::Encodings;
 use regalloc;
-use result;
+use result::CtonResult;
 use settings;
 use settings::CallConv;
 use std::boxed::Box;
@@ -281,7 +281,7 @@ pub trait TargetIsa: fmt::Display {
     /// Compute the stack layout and insert prologue and epilogue code into `func`.
     ///
     /// Return an error if the stack frame is too large.
-    fn prologue_epilogue(&self, func: &mut ir::Function) -> result::CtonResult {
+    fn prologue_epilogue(&self, func: &mut ir::Function) -> CtonResult<()> {
         let _tt = timing::prologue_epilogue();
         // This default implementation is unlikely to be good enough.
         use ir::stackslot::{StackOffset, StackSize};
