@@ -119,8 +119,8 @@ fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), Stri
         data = read_to_end(file_path).map_err(|err| String::from(err.description()))?;
     }
     let mut module = Module::new();
-    let mut environ = ModuleEnvironment::new(isa.flags(), &mut module);
-    translate_module(&data, &mut environ)?;
+    let mut environ = ModuleEnvironment::new(isa, &mut module);
+    translate_module(&data, &mut environ).map_err(|e| e.to_string())?;
     let translation = environ.finish_translation();
     let instance = match compile_module(isa, &translation) {
         Ok(compilation) => {

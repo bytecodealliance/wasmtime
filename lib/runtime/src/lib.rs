@@ -7,6 +7,7 @@
 
 extern crate cretonne_codegen;
 extern crate cretonne_wasm;
+extern crate target_lexicon;
 extern crate wasmparser;
 
 pub mod compilation;
@@ -27,7 +28,8 @@ use cretonne_codegen::ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPur
 use cretonne_codegen::isa;
 use cretonne_codegen::settings;
 use cretonne_wasm::{FuncTranslator, FunctionIndex, Global, GlobalIndex, GlobalValue, Memory,
-                    MemoryIndex, SignatureIndex, Table, TableIndex};
+                    MemoryIndex, SignatureIndex, Table, TableIndex, WasmResult};
+use target_lexicon::Triple;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FunctionIndex) -> cretonne_codegen::ir::ExternalName {
@@ -137,7 +139,7 @@ impl<'data> LazyContents<'data> {
 /// to `cretonne_wasm::translatemodule`.
 pub struct ModuleEnvironment<'data, 'module> {
     /// Compilation setting flags.
-    pub settings_flags: &'module settings::Flags,
+    pub isa: &'module isa::TargetIsa,
 
     /// Module information.
     pub module: &'module mut Module,
@@ -148,16 +150,16 @@ pub struct ModuleEnvironment<'data, 'module> {
 
 impl<'data, 'module> ModuleEnvironment<'data, 'module> {
     /// Allocates the runtime data structures with the given isa.
-    pub fn new(flags: &'module settings::Flags, module: &'module mut Module) -> Self {
+    pub fn new(isa: &'module isa::TargetIsa, module: &'module mut Module) -> Self {
         Self {
-            settings_flags: flags,
+            isa: isa,
             module,
             lazy: LazyContents::new(),
         }
     }
 
     fn func_env(&self) -> FuncEnvironment {
-        FuncEnvironment::new(&self.settings_flags, &self.module)
+        FuncEnvironment::new(self.isa, &self.module)
     }
 
     fn native_pointer(&self) -> ir::Type {
@@ -171,7 +173,7 @@ impl<'data, 'module> ModuleEnvironment<'data, 'module> {
     /// `Module`.
     pub fn finish_translation(self) -> ModuleTranslation<'data, 'module> {
         ModuleTranslation {
-            flags: self.settings_flags,
+            isa: self.isa,
             module: self.module,
             lazy: self.lazy,
         }
@@ -181,7 +183,7 @@ impl<'data, 'module> ModuleEnvironment<'data, 'module> {
 /// The FuncEnvironment implementation for use by the `ModuleEnvironment`.
 pub struct FuncEnvironment<'module_environment> {
     /// Compilation setting flags.
-    settings_flags: &'module_environment settings::Flags,
+    isa: &'module_environment isa::TargetIsa,
 
     /// The module-level environment which this function-level environment belongs to.
     pub module: &'module_environment Module,
@@ -200,12 +202,9 @@ pub struct FuncEnvironment<'module_environment> {
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
-    fn new(
-        flags: &'module_environment settings::Flags,
-        module: &'module_environment Module,
-    ) -> Self {
+    fn new(isa: &'module_environment isa::TargetIsa, module: &'module_environment Module) -> Self {
         Self {
-            settings_flags: flags,
+            isa,
             module,
             memories_base: None,
             globals_base: None,
@@ -223,17 +222,17 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn ptr_size(&self) -> usize {
-        if self.settings_flags.is_64bit() {
-            8
-        } else {
-            4
-        }
+        usize::from(self.isa.pointer_bytes())
     }
 }
 
 impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {
     fn flags(&self) -> &settings::Flags {
-        &self.settings_flags
+        &self.isa.flags()
+    }
+
+    fn triple(&self) -> &Triple {
+        self.isa.triple()
     }
 
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
@@ -314,12 +313,12 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> ir::Inst {
+    ) -> WasmResult<ir::Inst> {
         // TODO: Cretonne's call_indirect doesn't implement bounds checking
         // or signature checking, so we need to implement it ourselves.
         debug_assert_eq!(table_index, 0, "non-default tables not supported yet");
         let real_call_args = FuncEnvironment::get_real_call_args(pos.func, call_args);
-        pos.ins().call_indirect(sig_ref, callee, &real_call_args)
+        Ok(pos.ins().call_indirect(sig_ref, callee, &real_call_args))
     }
 
     fn translate_call(
@@ -328,9 +327,9 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
         _callee_index: FunctionIndex,
         callee: ir::FuncRef,
         call_args: &[ir::Value],
-    ) -> ir::Inst {
+    ) -> WasmResult<ir::Inst> {
         let real_call_args = FuncEnvironment::get_real_call_args(pos.func, call_args);
-        pos.ins().call(callee, &real_call_args)
+        Ok(pos.ins().call(callee, &real_call_args))
     }
 
     fn translate_grow_memory(
@@ -339,11 +338,11 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
         index: MemoryIndex,
         _heap: ir::Heap,
         val: ir::Value,
-    ) -> ir::Value {
+    ) -> WasmResult<ir::Value> {
         debug_assert_eq!(index, 0, "non-default memories not supported yet");
         let grow_mem_func = self.grow_memory_extfunc.unwrap_or_else(|| {
             let sig_ref = pos.func.import_signature(Signature {
-                call_conv: self.settings_flags.call_conv(),
+                call_conv: self.isa.flags().call_conv(),
                 argument_bytes: None,
                 params: vec![AbiParam::new(I32)],
                 returns: vec![AbiParam::new(I32)],
@@ -360,7 +359,7 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
         });
         self.grow_memory_extfunc = Some(grow_mem_func);
         let call_inst = pos.ins().call(grow_mem_func, &[val]);
-        *pos.func.dfg.inst_results(call_inst).first().unwrap()
+        Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 
     fn translate_current_memory(
@@ -368,11 +367,11 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
         mut pos: FuncCursor,
         index: MemoryIndex,
         _heap: ir::Heap,
-    ) -> ir::Value {
+    ) -> WasmResult<ir::Value> {
         debug_assert_eq!(index, 0, "non-default memories not supported yet");
         let cur_mem_func = self.current_memory_extfunc.unwrap_or_else(|| {
             let sig_ref = pos.func.import_signature(Signature {
-                call_conv: self.settings_flags.call_conv(),
+                call_conv: self.isa.flags().call_conv(),
                 argument_bytes: None,
                 params: Vec::new(),
                 returns: vec![AbiParam::new(I32)],
@@ -389,7 +388,7 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
         });
         self.current_memory_extfunc = Some(cur_mem_func);
         let call_inst = pos.ins().call(cur_mem_func, &[]);
-        *pos.func.dfg.inst_results(call_inst).first().unwrap()
+        Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 }
 
@@ -403,7 +402,7 @@ impl<'data, 'module> cretonne_wasm::ModuleEnvironment<'data> for ModuleEnvironme
     }
 
     fn flags(&self) -> &settings::Flags {
-        self.settings_flags
+        self.isa.flags()
     }
 
     fn declare_signature(&mut self, sig: &ir::Signature) {
@@ -524,7 +523,7 @@ impl<'data, 'module> cretonne_wasm::ModuleEnvironment<'data> for ModuleEnvironme
         self.module.start_func = Some(func_index);
     }
 
-    fn define_function_body(&mut self, body_bytes: &'data [u8]) -> Result<(), String> {
+    fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()> {
         self.lazy.function_body_inputs.push(body_bytes);
         Ok(())
     }
@@ -549,7 +548,7 @@ pub type Relocations = Vec<Vec<Relocation>>;
 /// The result of translating via `ModuleEnvironment`.
 pub struct ModuleTranslation<'data, 'module> {
     /// Compilation setting flags.
-    pub flags: &'module settings::Flags,
+    pub isa: &'module isa::TargetIsa,
 
     /// Module information.
     pub module: &'module Module,
@@ -561,7 +560,7 @@ pub struct ModuleTranslation<'data, 'module> {
 /// Convenience functions for the user to be called after execution for debug purposes.
 impl<'data, 'module> ModuleTranslation<'data, 'module> {
     fn func_env(&self) -> FuncEnvironment {
-        FuncEnvironment::new(&self.flags, &self.module)
+        FuncEnvironment::new(self.isa, &self.module)
     }
 
     /// Compile the module, producing a compilation result with associated

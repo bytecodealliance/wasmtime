@@ -14,11 +14,10 @@ extern crate wasmstandalone_runtime;
 extern crate serde_derive;
 extern crate faerie;
 
-use cretonne_codegen::isa;
 use cretonne_codegen::settings;
 use cretonne_wasm::translate_module;
 use docopt::Docopt;
-use faerie::{Artifact, Elf, Target};
+use faerie::Artifact;
 use std::error::Error;
 use std::fmt::format;
 use std::fs::File;
@@ -92,10 +91,10 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
     let mut module = wasmstandalone_runtime::Module::new();
-    let mut environ = wasmstandalone_runtime::ModuleEnvironment::new(isa.flags(), &mut module);
-    translate_module(&data, &mut environ)?;
+    let mut environ = wasmstandalone_runtime::ModuleEnvironment::new(&*isa, &mut module);
+    translate_module(&data, &mut environ).map_err(|e| e.to_string())?;
 
-    let mut obj = Artifact::new(faerie_target(&*isa)?, String::from(output));
+    let mut obj = Artifact::new(isa.triple().clone(), String::from(output));
 
     // FIXME: We need to initialize memory in a way that supports alternate
     // memory spaces, imported base addresses, and offsets.
@@ -120,22 +119,7 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     // FIXME: Make the format a parameter.
     let file =
         ::std::fs::File::create(Path::new(output)).map_err(|x| format(format_args!("{}", x)))?;
-    obj.write::<Elf>(file)
-        .map_err(|x| format(format_args!("{}", x)))?;
+    obj.write(file).map_err(|e| e.to_string())?;
 
     Ok(())
-}
-
-fn faerie_target(isa: &isa::TargetIsa) -> Result<Target, String> {
-    let name = isa.name();
-    match name {
-        "intel" => Ok(if isa.flags().is_64bit() {
-            Target::X86_64
-        } else {
-            Target::X86
-        }),
-        "arm32" => Ok(Target::ARMv7),
-        "arm64" => Ok(Target::ARM64),
-        _ => Err(format!("unsupported isa: {}", name)),
-    }
 }
