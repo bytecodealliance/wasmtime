@@ -1,6 +1,6 @@
 //! Result and error types representing the outcome of compiling a function.
 
-use verifier;
+use verifier::VerifierError;
 
 /// A compilation error.
 ///
@@ -12,7 +12,7 @@ pub enum CtonError {
     /// This always represents a bug, either in the code that generated IR for Cretonne, or a bug
     /// in Cretonne itself.
     #[fail(display = "Verifier error: {}", _0)]
-    Verifier(#[cause] verifier::Error),
+    Verifier(#[cause] VerifierError),
 
     /// An implementation limit was exceeded.
     ///
@@ -34,8 +34,8 @@ pub enum CtonError {
 /// A Cretonne compilation result.
 pub type CtonResult = Result<(), CtonError>;
 
-impl From<verifier::Error> for CtonError {
-    fn from(e: verifier::Error) -> Self {
+impl From<VerifierError> for CtonError {
+    fn from(e: VerifierError) -> Self {
         CtonError::Verifier(e)
     }
 }

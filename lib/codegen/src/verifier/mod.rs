@@ -71,7 +71,6 @@ use settings::{Flags, FlagsOrIsa};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter, Write};
-use std::result;
 use std::string::String;
 use std::vec::Vec;
 use timing;
@@ -80,17 +79,17 @@ pub use self::cssa::verify_cssa;
 pub use self::liveness::verify_liveness;
 pub use self::locations::verify_locations;
 
-// Create an `Err` variant of `Result<X>` from a location and `format!` arguments.
+// Create an `Err` variant of `VerifierResult<X>` from a location and `format!` arguments.
 macro_rules! err {
     ( $loc:expr, $msg:expr ) => {
-        Err(::verifier::Error {
+        Err(::verifier::VerifierError {
             location: $loc.into(),
             message: String::from($msg),
         })
     };
 
     ( $loc:expr, $fmt:expr, $( $arg:expr ),+ ) => {
-        Err(::verifier::Error {
+        Err(::verifier::VerifierError {
             location: $loc.into(),
             message: format!( $fmt, $( $arg ),+ ),
         })
@@ -104,24 +103,27 @@ mod locations;
 
 /// A verifier error.
 #[derive(Fail, Debug, PartialEq, Eq)]
-pub struct Error {
+pub struct VerifierError {
     /// The entity causing the verifier error.
     pub location: AnyEntity,
     /// Error message.
     pub message: String,
 }
 
-impl Display for Error {
+impl Display for VerifierError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}: {}", self.location, self.message)
     }
 }
 
 /// Verifier result.
-pub type Result = result::Result<(), Error>;
+pub type VerifierResult<T> = Result<T, VerifierError>;
 
 /// Verify `func`.
-pub fn verify_function<'a, FOI: Into<FlagsOrIsa<'a>>>(func: &Function, fisa: FOI) -> Result {
+pub fn verify_function<'a, FOI: Into<FlagsOrIsa<'a>>>(
+    func: &Function,
+    fisa: FOI,
+) -> VerifierResult<()> {
     let _tt = timing::verifier();
     Verifier::new(func, fisa.into()).run()
 }
@@ -133,7 +135,7 @@ pub fn verify_context<'a, FOI: Into<FlagsOrIsa<'a>>>(
     cfg: &ControlFlowGraph,
     domtree: &DominatorTree,
     fisa: FOI,
-) -> Result {
+) -> VerifierResult<()> {
     let _tt = timing::verifier();
     let verifier = Verifier::new(func, fisa.into());
     if cfg.is_valid() {
@@ -167,7 +169,7 @@ impl<'a> Verifier<'a> {
     }
 
     // Check for cycles in the global variable declarations.
-    fn verify_global_vars(&self) -> Result {
+    fn verify_global_vars(&self) -> VerifierResult<()> {
         let mut seen = SparseSet::new();
 
         for gv in self.func.global_vars.keys() {
@@ -187,7 +189,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn ebb_integrity(&self, ebb: Ebb, inst: Inst) -> Result {
+    fn ebb_integrity(&self, ebb: Ebb, inst: Inst) -> VerifierResult<()> {
         let is_terminator = self.func.dfg[inst].opcode().is_terminator();
         let is_last_inst = self.func.layout.last_inst(ebb) == Some(inst);
 
@@ -226,7 +228,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn instruction_integrity(&self, inst: Inst) -> Result {
+    fn instruction_integrity(&self, inst: Inst) -> VerifierResult<()> {
         let inst_data = &self.func.dfg[inst];
         let dfg = &self.func.dfg;
 
@@ -255,7 +257,7 @@ impl<'a> Verifier<'a> {
         self.verify_entity_references(inst)
     }
 
-    fn verify_entity_references(&self, inst: Inst) -> Result {
+    fn verify_entity_references(&self, inst: Inst) -> VerifierResult<()> {
         use ir::instructions::InstructionData::*;
 
         for &arg in self.func.dfg.inst_args(inst) {
@@ -375,7 +377,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn verify_ebb(&self, inst: Inst, e: Ebb) -> Result {
+    fn verify_ebb(&self, inst: Inst, e: Ebb) -> VerifierResult<()> {
         if !self.func.dfg.ebb_is_valid(e) || !self.func.layout.is_ebb_inserted(e) {
             return err!(inst, "invalid ebb reference {}", e);
         }
@@ -387,7 +389,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn verify_sig_ref(&self, inst: Inst, s: SigRef) -> Result {
+    fn verify_sig_ref(&self, inst: Inst, s: SigRef) -> VerifierResult<()> {
         if !self.func.dfg.signatures.is_valid(s) {
             err!(inst, "invalid signature reference {}", s)
         } else {
@@ -395,7 +397,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_func_ref(&self, inst: Inst, f: FuncRef) -> Result {
+    fn verify_func_ref(&self, inst: Inst, f: FuncRef) -> VerifierResult<()> {
         if !self.func.dfg.ext_funcs.is_valid(f) {
             err!(inst, "invalid function reference {}", f)
         } else {
@@ -403,7 +405,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_stack_slot(&self, inst: Inst, ss: StackSlot) -> Result {
+    fn verify_stack_slot(&self, inst: Inst, ss: StackSlot) -> VerifierResult<()> {
         if !self.func.stack_slots.is_valid(ss) {
             err!(inst, "invalid stack slot {}", ss)
         } else {
@@ -411,7 +413,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_global_var(&self, inst: Inst, gv: GlobalVar) -> Result {
+    fn verify_global_var(&self, inst: Inst, gv: GlobalVar) -> VerifierResult<()> {
         if !self.func.global_vars.is_valid(gv) {
             err!(inst, "invalid global variable {}", gv)
         } else {
@@ -419,7 +421,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_heap(&self, inst: Inst, heap: ir::Heap) -> Result {
+    fn verify_heap(&self, inst: Inst, heap: ir::Heap) -> VerifierResult<()> {
         if !self.func.heaps.is_valid(heap) {
             err!(inst, "invalid heap {}", heap)
         } else {
@@ -427,7 +429,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_value_list(&self, inst: Inst, l: &ValueList) -> Result {
+    fn verify_value_list(&self, inst: Inst, l: &ValueList) -> VerifierResult<()> {
         if !l.is_valid(&self.func.dfg.value_lists) {
             err!(inst, "invalid value list reference {:?}", l)
         } else {
@@ -435,7 +437,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_jump_table(&self, inst: Inst, j: JumpTable) -> Result {
+    fn verify_jump_table(&self, inst: Inst, j: JumpTable) -> VerifierResult<()> {
         if !self.func.jump_tables.is_valid(j) {
             err!(inst, "invalid jump table reference {}", j)
         } else {
@@ -443,7 +445,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_value(&self, loc_inst: Inst, v: Value) -> Result {
+    fn verify_value(&self, loc_inst: Inst, v: Value) -> VerifierResult<()> {
         let dfg = &self.func.dfg;
         if !dfg.value_is_valid(v) {
             err!(loc_inst, "invalid value reference {}", v)
@@ -452,7 +454,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_inst_arg(&self, loc_inst: Inst, v: Value) -> Result {
+    fn verify_inst_arg(&self, loc_inst: Inst, v: Value) -> VerifierResult<()> {
         self.verify_value(loc_inst, v)?;
 
         let dfg = &self.func.dfg;
@@ -523,7 +525,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn verify_inst_result(&self, loc_inst: Inst, v: Value) -> Result {
+    fn verify_inst_result(&self, loc_inst: Inst, v: Value) -> VerifierResult<()> {
         self.verify_value(loc_inst, v)?;
 
         match self.func.dfg.value_def(v) {
@@ -546,7 +548,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn domtree_integrity(&self, domtree: &DominatorTree) -> Result {
+    fn domtree_integrity(&self, domtree: &DominatorTree) -> VerifierResult<()> {
         // We consider two `DominatorTree`s to be equal if they return the same immediate
         // dominator for each EBB. Therefore the current domtree is valid if it matches the freshly
         // computed one.
@@ -602,7 +604,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn typecheck_entry_block_params(&self) -> Result {
+    fn typecheck_entry_block_params(&self) -> VerifierResult<()> {
         if let Some(ebb) = self.func.layout.entry_block() {
             let expected_types = &self.func.signature.params;
             let ebb_param_count = self.func.dfg.num_ebb_params(ebb);
@@ -632,7 +634,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn typecheck(&self, inst: Inst) -> Result {
+    fn typecheck(&self, inst: Inst) -> VerifierResult<()> {
         let inst_data = &self.func.dfg[inst];
         let constraints = inst_data.opcode().constraints();
 
@@ -660,7 +662,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn typecheck_results(&self, inst: Inst, ctrl_type: Type) -> Result {
+    fn typecheck_results(&self, inst: Inst, ctrl_type: Type) -> VerifierResult<()> {
         let mut i = 0;
         for &result in self.func.dfg.inst_results(inst) {
             let result_type = self.func.dfg.value_type(result);
@@ -689,7 +691,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn typecheck_fixed_args(&self, inst: Inst, ctrl_type: Type) -> Result {
+    fn typecheck_fixed_args(&self, inst: Inst, ctrl_type: Type) -> VerifierResult<()> {
         let constraints = self.func.dfg[inst].opcode().constraints();
 
         for (i, &arg) in self.func.dfg.inst_fixed_args(inst).iter().enumerate() {
@@ -724,7 +726,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn typecheck_variable_args(&self, inst: Inst) -> Result {
+    fn typecheck_variable_args(&self, inst: Inst) -> VerifierResult<()> {
         match self.func.dfg.analyze_branch(inst) {
             BranchInfo::SingleDest(ebb, _) => {
                 let iter = self.func
@@ -777,7 +779,7 @@ impl<'a> Verifier<'a> {
         &self,
         inst: Inst,
         iter: I,
-    ) -> Result {
+    ) -> VerifierResult<()> {
         let variable_args = self.func.dfg.inst_variable_args(inst);
         let mut i = 0;
 
@@ -816,7 +818,7 @@ impl<'a> Verifier<'a> {
     ///
     /// When a signature has been legalized, all values passed as outgoing arguments on the stack
     /// must be assigned to a matching `OutgoingArg` stack slot.
-    fn check_outgoing_args(&self, inst: Inst, sig_ref: SigRef) -> Result {
+    fn check_outgoing_args(&self, inst: Inst, sig_ref: SigRef) -> VerifierResult<()> {
         let sig = &self.func.dfg.signatures[sig_ref];
 
         // Before legalization, there's nothing to check.
@@ -878,7 +880,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn typecheck_return(&self, inst: Inst) -> Result {
+    fn typecheck_return(&self, inst: Inst) -> VerifierResult<()> {
         if self.func.dfg[inst].opcode().is_return() {
             let args = self.func.dfg.inst_variable_args(inst);
             let expected_types = &self.func.signature.returns;
@@ -904,7 +906,7 @@ impl<'a> Verifier<'a> {
 
     // Check special-purpose type constraints that can't be expressed in the normal opcode
     // constraints.
-    fn typecheck_special(&self, inst: Inst, ctrl_type: Type) -> Result {
+    fn typecheck_special(&self, inst: Inst, ctrl_type: Type) -> VerifierResult<()> {
         if let ir::InstructionData::Unary { opcode, arg } = self.func.dfg[inst] {
             let arg_type = self.func.dfg.value_type(arg);
             match opcode {
@@ -950,7 +952,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn cfg_integrity(&self, cfg: &ControlFlowGraph) -> Result {
+    fn cfg_integrity(&self, cfg: &ControlFlowGraph) -> VerifierResult<()> {
         let mut expected_succs = BTreeSet::<Ebb>::new();
         let mut got_succs = BTreeSet::<Ebb>::new();
         let mut expected_preds = BTreeSet::<Inst>::new();
@@ -1001,7 +1003,7 @@ impl<'a> Verifier<'a> {
 
     /// If the verifier has been set up with an ISA, make sure that the recorded encoding for the
     /// instruction (if any) matches how the ISA would encode it.
-    fn verify_encoding(&self, inst: Inst) -> Result {
+    fn verify_encoding(&self, inst: Inst) -> VerifierResult<()> {
         // When the encodings table is empty, we don't require any instructions to be encoded.
         //
         // Once some instructions are encoded, we require all side-effecting instructions to have a
@@ -1109,7 +1111,7 @@ impl<'a> Verifier<'a> {
 
     /// Verify the `return_at_end` property which requires that there are no internal return
     /// instructions.
-    fn verify_return_at_end(&self) -> Result {
+    fn verify_return_at_end(&self) -> VerifierResult<()> {
         for ebb in self.func.layout.ebbs() {
             let inst = self.func.layout.last_inst(ebb).unwrap();
             if self.func.dfg[inst].opcode().is_return() && Some(ebb) != self.func.layout.last_ebb()
@@ -1121,7 +1123,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    pub fn run(&self) -> Result {
+    pub fn run(&self) -> VerifierResult<()> {
         self.verify_global_vars()?;
         self.typecheck_entry_block_params()?;
         for ebb in self.func.layout.ebbs() {
@@ -1145,7 +1147,7 @@ impl<'a> Verifier<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Error, Verifier};
+    use super::{Verifier, VerifierError};
     use entity::EntityList;
     use ir::instructions::{InstructionData, Opcode};
     use ir::Function;
@@ -1155,7 +1157,7 @@ mod tests {
         ($e:expr, $msg:expr) => {
             match $e {
                 Ok(_) => panic!("Expected an error"),
-                Err(Error { message, .. }) => {
+                Err(VerifierError { message, .. }) => {
                     if !message.contains($msg) {
                         #[cfg(feature = "std")]
                         panic!(format!(

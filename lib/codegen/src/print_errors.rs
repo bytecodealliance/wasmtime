@@ -5,13 +5,13 @@ use isa::TargetIsa;
 use result::CtonError;
 use std::fmt::Write;
 use std::string::{String, ToString};
-use verifier;
+use verifier::VerifierError;
 
 /// Pretty-print a verifier error.
 pub fn pretty_verifier_error(
     func: &ir::Function,
     isa: Option<&TargetIsa>,
-    err: &verifier::Error,
+    err: &VerifierError,
 ) -> String {
     let mut msg = err.to_string();
     match err.location {

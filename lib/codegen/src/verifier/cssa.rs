@@ -7,7 +7,7 @@ use ir::{ExpandedProgramPoint, Function};
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::VirtRegs;
 use timing;
-use verifier::Result;
+use verifier::VerifierResult;
 
 /// Verify conventional SSA form for `func`.
 ///
@@ -29,7 +29,7 @@ pub fn verify_cssa(
     domtree: &DominatorTree,
     liveness: &Liveness,
     virtregs: &VirtRegs,
-) -> Result {
+) -> VerifierResult<()> {
     let _tt = timing::verify_cssa();
 
     let mut preorder = DominatorTreePreorder::new();
@@ -58,7 +58,7 @@ struct CssaVerifier<'a> {
 }
 
 impl<'a> CssaVerifier<'a> {
-    fn check_virtregs(&self) -> Result {
+    fn check_virtregs(&self) -> VerifierResult<()> {
         for vreg in self.virtregs.all_virtregs() {
             let values = self.virtregs.values(vreg);
 
@@ -135,7 +135,7 @@ impl<'a> CssaVerifier<'a> {
         Ok(())
     }
 
-    fn check_cssa(&self) -> Result {
+    fn check_cssa(&self) -> VerifierResult<()> {
         for ebb in self.func.layout.ebbs() {
             let ebb_params = self.func.dfg.ebb_params(ebb);
             for (_, pred) in self.cfg.pred_iter(ebb) {

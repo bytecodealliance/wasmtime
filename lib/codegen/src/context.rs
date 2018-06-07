@@ -28,7 +28,7 @@ use simple_gvn::do_simple_gvn;
 use std::vec::Vec;
 use timing;
 use unreachable_code::eliminate_unreachable_code;
-use verifier;
+use verifier::{verify_context, verify_locations, VerifierResult};
 
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
@@ -174,8 +174,8 @@ impl Context {
     /// Run the verifier on the function.
     ///
     /// Also check that the dominator tree and control flow graph are consistent with the function.
-    pub fn verify<'a, FOI: Into<FlagsOrIsa<'a>>>(&self, fisa: FOI) -> verifier::Result {
-        verifier::verify_context(&self.func, &self.cfg, &self.domtree, fisa)
+    pub fn verify<'a, FOI: Into<FlagsOrIsa<'a>>>(&self, fisa: FOI) -> VerifierResult<()> {
+        verify_context(&self.func, &self.cfg, &self.domtree, fisa)
     }
 
     /// Run the verifier only if the `enable_verifier` setting is true.
@@ -189,8 +189,8 @@ impl Context {
     }
 
     /// Run the locations verifier on the function.
-    pub fn verify_locations(&self, isa: &TargetIsa) -> verifier::Result {
-        verifier::verify_locations(isa, &self.func, None)
+    pub fn verify_locations(&self, isa: &TargetIsa) -> VerifierResult<()> {
+        verify_locations(isa, &self.func, None)
     }
 
     /// Run the locations verifier only if the `enable_verifier` setting is true.
