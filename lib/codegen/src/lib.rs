@@ -48,10 +48,7 @@ extern crate alloc;
 extern crate failure;
 #[macro_use]
 extern crate failure_derive;
-#[cfg(test)]
-#[macro_use]
-extern crate target_lexicon;
-#[cfg(not(test))]
+#[cfg_attr(test, macro_use)]
 extern crate target_lexicon;
 
 pub use context::Context;
