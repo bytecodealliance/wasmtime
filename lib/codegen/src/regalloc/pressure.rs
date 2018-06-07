@@ -88,7 +88,7 @@ impl Pressure {
         };
 
         // Get the layout of aliasing top-level register classes from the register banks.
-        for bank in reginfo.banks.iter() {
+        for bank in reginfo.banks {
             let first = bank.first_toprc;
             let num = bank.num_toprcs;
 

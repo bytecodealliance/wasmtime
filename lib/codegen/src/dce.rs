@@ -44,7 +44,7 @@ pub fn do_dce(func: &mut Function, domtree: &mut DominatorTree) {
     let mut live = Vec::with_capacity(func.dfg.num_values());
     live.resize(func.dfg.num_values(), false);
 
-    for &ebb in domtree.cfg_postorder().iter() {
+    for &ebb in domtree.cfg_postorder() {
         let mut pos = FuncCursor::new(func).at_bottom(ebb);
         while let Some(inst) = pos.prev_inst() {
             {
