@@ -1,7 +1,7 @@
 [package]
 name = "cretonne-filetests"
 authors = ["The Cretonne Project Developers"]
-version = "0.8.0"
+version = "0.9.0"
 description = "Test driver and implementations of the filetest commands"
 license = "Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/en/latest/testing.html#file-tests"
@@ -9,7 +9,7 @@ repository = "https://github.com/cretonne/cretonne"
 publish = false
 
 [dependencies]
-cretonne-codegen = { path = "../codegen", version = "0.8.0" }
-cretonne-reader = { path = "../reader", version = "0.8.0" }
+cretonne-codegen = { path = "../codegen", version = "0.9.0" }
+cretonne-reader = { path = "../reader", version = "0.9.0" }
 filecheck = "0.3.0"
 num_cpus = "1.8.0"
