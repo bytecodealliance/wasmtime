@@ -8,7 +8,7 @@ use regalloc::liveness::Liveness;
 use regalloc::liverange::LiveRange;
 use std::cmp::Ordering;
 use timing;
-use verifier::Result;
+use verifier::VerifierResult;
 
 /// Verify liveness information for `func`.
 ///
@@ -27,7 +27,7 @@ pub fn verify_liveness(
     func: &Function,
     cfg: &ControlFlowGraph,
     liveness: &Liveness,
-) -> Result {
+) -> VerifierResult<()> {
     let _tt = timing::verify_liveness();
     let verifier = LivenessVerifier {
         isa,
@@ -49,7 +49,7 @@ struct LivenessVerifier<'a> {
 
 impl<'a> LivenessVerifier<'a> {
     /// Check all EBB arguments.
-    fn check_ebbs(&self) -> Result {
+    fn check_ebbs(&self) -> VerifierResult<()> {
         for ebb in self.func.layout.ebbs() {
             for &val in self.func.dfg.ebb_params(ebb) {
                 let lr = match self.liveness.get(val) {
@@ -63,7 +63,7 @@ impl<'a> LivenessVerifier<'a> {
     }
 
     /// Check all instructions.
-    fn check_insts(&self) -> Result {
+    fn check_insts(&self) -> VerifierResult<()> {
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
                 let encoding = self.func.encodings[inst];
@@ -141,7 +141,7 @@ impl<'a> LivenessVerifier<'a> {
     }
 
     /// Check the integrity of the live range `lr`.
-    fn check_lr(&self, def: ProgramPoint, val: Value, lr: &LiveRange) -> Result {
+    fn check_lr(&self, def: ProgramPoint, val: Value, lr: &LiveRange) -> VerifierResult<()> {
         let l = &self.func.layout;
 
         let loc: AnyEntity = match def.into() {

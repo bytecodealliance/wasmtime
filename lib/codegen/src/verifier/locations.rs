@@ -5,7 +5,7 @@ use isa;
 use regalloc::liveness::Liveness;
 use regalloc::RegDiversions;
 use timing;
-use verifier::Result;
+use verifier::VerifierResult;
 
 /// Verify value locations for `func`.
 ///
@@ -22,7 +22,7 @@ pub fn verify_locations(
     isa: &isa::TargetIsa,
     func: &ir::Function,
     liveness: Option<&Liveness>,
-) -> Result {
+) -> VerifierResult<()> {
     let _tt = timing::verify_locations();
     let verifier = LocationVerifier {
         isa,
@@ -45,7 +45,7 @@ struct LocationVerifier<'a> {
 
 impl<'a> LocationVerifier<'a> {
     /// Check that the assigned value locations match the operand constraints of their uses.
-    fn check_constraints(&self) -> Result {
+    fn check_constraints(&self) -> VerifierResult<()> {
         let dfg = &self.func.dfg;
         let mut divert = RegDiversions::new();
 
@@ -88,7 +88,7 @@ impl<'a> LocationVerifier<'a> {
         inst: ir::Inst,
         enc: isa::Encoding,
         divert: &RegDiversions,
-    ) -> Result {
+    ) -> VerifierResult<()> {
         let constraints = self.encinfo
             .operand_constraints(enc)
             .expect("check_enc_constraints requires a legal encoding");
@@ -107,7 +107,7 @@ impl<'a> LocationVerifier<'a> {
 
     /// Check that the result values produced by a ghost instruction are not assigned a value
     /// location.
-    fn check_ghost_results(&self, inst: ir::Inst) -> Result {
+    fn check_ghost_results(&self, inst: ir::Inst) -> VerifierResult<()> {
         let results = self.func.dfg.inst_results(inst);
 
         for &res in results {
@@ -126,7 +126,12 @@ impl<'a> LocationVerifier<'a> {
     }
 
     /// Check the ABI argument and result locations for a call.
-    fn check_call_abi(&self, inst: ir::Inst, sig: ir::SigRef, divert: &RegDiversions) -> Result {
+    fn check_call_abi(
+        &self,
+        inst: ir::Inst,
+        sig: ir::SigRef,
+        divert: &RegDiversions,
+    ) -> VerifierResult<()> {
         let sig = &self.func.dfg.signatures[sig];
         let varargs = self.func.dfg.inst_variable_args(inst);
         let results = self.func.dfg.inst_results(inst);
@@ -155,7 +160,7 @@ impl<'a> LocationVerifier<'a> {
     }
 
     /// Check the ABI argument locations for a return.
-    fn check_return_abi(&self, inst: ir::Inst, divert: &RegDiversions) -> Result {
+    fn check_return_abi(&self, inst: ir::Inst, divert: &RegDiversions) -> VerifierResult<()> {
         let sig = &self.func.signature;
         let varargs = self.func.dfg.inst_variable_args(inst);
 
@@ -180,7 +185,7 @@ impl<'a> LocationVerifier<'a> {
         abi: &ir::AbiParam,
         loc: ir::ValueLoc,
         want_kind: ir::StackSlotKind,
-    ) -> Result {
+    ) -> VerifierResult<()> {
         match abi.location {
             ir::ArgumentLoc::Unassigned => {}
             ir::ArgumentLoc::Reg(reg) => {
@@ -233,7 +238,7 @@ impl<'a> LocationVerifier<'a> {
     }
 
     /// Update diversions to reflect the current instruction and check their consistency.
-    fn update_diversions(&self, inst: ir::Inst, divert: &mut RegDiversions) -> Result {
+    fn update_diversions(&self, inst: ir::Inst, divert: &mut RegDiversions) -> VerifierResult<()> {
         let (arg, src) = match self.func.dfg[inst] {
             ir::InstructionData::RegMove { arg, src, .. }
             | ir::InstructionData::RegSpill { arg, src, .. } => (arg, ir::ValueLoc::Reg(src)),
@@ -264,7 +269,7 @@ impl<'a> LocationVerifier<'a> {
 
     /// We have active diversions before a branch. Make sure none of the diverted values are live
     /// on the outgoing CFG edges.
-    fn check_cfg_edges(&self, inst: ir::Inst, divert: &RegDiversions) -> Result {
+    fn check_cfg_edges(&self, inst: ir::Inst, divert: &RegDiversions) -> VerifierResult<()> {
         use ir::instructions::BranchInfo::*;
 
         // We can only check CFG edges if we have a liveness analysis.
