@@ -50,7 +50,7 @@ fn main() {
     // The `build.py` script prints out its own dependencies.
     println!(
         "cargo:rerun-if-changed={}",
-        crate_dir.join("build.rs").to_string_lossy()
+        crate_dir.join("build.rs").to_str().unwrap()
     );
 
     // Scripts are in `$crate_dir/meta`.
