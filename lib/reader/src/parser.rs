@@ -1580,13 +1580,34 @@ impl<'a> Parser<'a> {
         if results.len() != 1 {
             return err!(self.loc, "wrong number of aliases");
         }
+        let result = results[0];
         let dest = self.match_value("expected value alias")?;
 
-        ctx.function
-            .dfg
-            .make_value_alias_for_parser(dest, results[0]);
-        ctx.map.def_value(results[0], &self.loc)?;
-        ctx.aliases.push(results[0]);
+        // Allow duplicate definitions of aliases, as long as they are identical.
+        if ctx.map.contains_value(result) {
+            if let Some(old) = ctx.function.dfg.value_alias_dest_for_parser(result) {
+                if old != dest {
+                    return err!(
+                        self.loc,
+                        "value {} is already defined as an alias with destination {}",
+                        result,
+                        old
+                    );
+                }
+            } else {
+                return err!(self.loc, "value {} is already defined");
+            }
+        } else {
+            ctx.map.def_value(result, &self.loc)?;
+        }
+
+        if !ctx.map.contains_value(dest) {
+            return err!(self.loc, "value {} is not yet defined", dest);
+        }
+
+        ctx.function.dfg.make_value_alias_for_parser(dest, result);
+
+        ctx.aliases.push(result);
         Ok(())
     }
 
