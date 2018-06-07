@@ -143,9 +143,6 @@
 
 extern crate cretonne_codegen;
 
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-
 pub use frontend::{FunctionBuilder, FunctionBuilderContext};
 pub use variable::Variable;
 
@@ -155,6 +152,8 @@ mod variable;
 
 #[cfg(not(feature = "std"))]
 mod std {
-    pub use alloc::vec;
+    extern crate alloc;
+
+    pub use self::alloc::vec;
     pub use core::*;
 }
