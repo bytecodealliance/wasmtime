@@ -50,31 +50,31 @@ fn write_preamble(
         writeln!(w, "    {} = {}", ss, slot)?;
     }
 
-    for (gv, gv_data) in func.global_vars.iter() {
+    for (gv, gv_data) in &func.global_vars {
         any = true;
         writeln!(w, "    {} = {}", gv, gv_data)?;
     }
 
-    for (heap, heap_data) in func.heaps.iter() {
+    for (heap, heap_data) in &func.heaps {
         any = true;
         writeln!(w, "    {} = {}", heap, heap_data)?;
     }
 
     // Write out all signatures before functions since function declarations can refer to
     // signatures.
-    for (sig, sig_data) in func.dfg.signatures.iter() {
+    for (sig, sig_data) in &func.dfg.signatures {
         any = true;
         writeln!(w, "    {} = {}", sig, sig_data.display(regs))?;
     }
 
-    for (fnref, ext_func) in func.dfg.ext_funcs.iter() {
+    for (fnref, ext_func) in &func.dfg.ext_funcs {
         any = true;
         if ext_func.signature != SigRef::reserved_value() {
             writeln!(w, "    {} = {}", fnref, ext_func)?;
         }
     }
 
-    for (jt, jt_data) in func.jump_tables.iter() {
+    for (jt, jt_data) in &func.jump_tables {
         any = true;
         writeln!(w, "    {} = {}", jt, jt_data)?;
     }

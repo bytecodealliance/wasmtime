@@ -121,6 +121,30 @@ where
     }
 }
 
+impl<'a, K, V> IntoIterator for &'a PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    type Item = (K, &'a V);
+    type IntoIter = Iter<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Iter::new(self.elems.iter())
+    }
+}
+
+impl<'a, K, V> IntoIterator for &'a mut PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    type Item = (K, &'a mut V);
+    type IntoIter = IterMut<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IterMut::new(self.elems.iter_mut())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,7 +195,7 @@ mod tests {
         m.push(33);
 
         let mut i = 0;
-        for (key, value) in m.iter() {
+        for (key, value) in &m {
             assert_eq!(key.index(), i);
             match i {
                 0 => assert_eq!(*value, 12),
