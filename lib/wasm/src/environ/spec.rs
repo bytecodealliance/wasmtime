@@ -163,7 +163,7 @@ pub trait FuncEnvironment {
         Ok(pos.ins().call(callee, call_args))
     }
 
-    /// Translate a `grow_memory` WebAssembly instruction.
+    /// Translate a `memory.grow` WebAssembly instruction.
     ///
     /// The `index` provided identifies the linear memory to grow, and `heap` is the heap reference
     /// returned by `make_heap` for the same index.
@@ -171,7 +171,7 @@ pub trait FuncEnvironment {
     /// The `val` value is the requested memory size in pages.
     ///
     /// Returns the old size (in pages) of the memory.
-    fn translate_grow_memory(
+    fn translate_memory_grow(
         &mut self,
         pos: FuncCursor,
         index: MemoryIndex,
@@ -179,13 +179,13 @@ pub trait FuncEnvironment {
         val: ir::Value,
     ) -> WasmResult<ir::Value>;
 
-    /// Translates a `current_memory` WebAssembly instruction.
+    /// Translates a `memory.size` WebAssembly instruction.
     ///
     /// The `index` provided identifies the linear memory to query, and `heap` is the heap reference
     /// returned by `make_heap` for the same index.
     ///
     /// Returns the size in pages of the memory.
-    fn translate_current_memory(
+    fn translate_memory_size(
         &mut self,
         pos: FuncCursor,
         index: MemoryIndex,
