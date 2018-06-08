@@ -261,7 +261,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         Ok(pos.ins().Call(ir::Opcode::Call, VOID, callee, args).0)
     }
 
-    fn translate_grow_memory(
+    fn translate_memory_grow(
         &mut self,
         mut pos: FuncCursor,
         _index: MemoryIndex,
@@ -271,7 +271,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         Ok(pos.ins().iconst(I32, -1))
     }
 
-    fn translate_current_memory(
+    fn translate_memory_size(
         &mut self,
         mut pos: FuncCursor,
         _index: MemoryIndex,

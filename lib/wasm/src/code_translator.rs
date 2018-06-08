@@ -16,7 +16,7 @@
 //!
 //! - the loads and stores need the memory base address;
 //! - the `get_global` et `set_global` instructions depends on how the globals are implemented;
-//! - `current_memory` and `grow_memory` are runtime functions;
+//! - `memory.size` and `memory.grow` are runtime functions;
 //! - `call_indirect` has to translate the function index into the address of where this
 //!    is;
 //!
@@ -398,18 +398,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          * Memory management is handled by environment. It is usually translated into calls to
          * special functions.
          ************************************************************************************/
-        Operator::GrowMemory { reserved } => {
+        Operator::MemoryGrow { reserved } => {
             // The WebAssembly MVP only supports one linear memory, but we expect the reserved
             // argument to be a memory index.
             let heap_index = reserved as MemoryIndex;
             let heap = state.get_heap(builder.func, reserved, environ);
             let val = state.pop1();
-            state.push1(environ.translate_grow_memory(builder.cursor(), heap_index, heap, val)?)
+            state.push1(environ.translate_memory_grow(builder.cursor(), heap_index, heap, val)?)
         }
-        Operator::CurrentMemory { reserved } => {
+        Operator::MemorySize { reserved } => {
             let heap_index = reserved as MemoryIndex;
             let heap = state.get_heap(builder.func, reserved, environ);
-            state.push1(environ.translate_current_memory(builder.cursor(), heap_index, heap)?);
+            state.push1(environ.translate_memory_size(builder.cursor(), heap_index, heap)?);
         }
         /******************************* Load instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cretonne.
