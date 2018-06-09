@@ -150,6 +150,9 @@ for inst,           opc in [
         (base.bxor, 0x31)]:
     enc_i32_i64(inst, r.rr, opc)
 
+# x86 has a bitwise not instruction NOT.
+enc_i32_i64(base.bnot, r.ur, 0xf7, rrr=2)
+
 # Also add a `b1` encodings for the logic instructions.
 # TODO: Should this be done with 8-bit instructions? It would improve
 # partial register dependencies.

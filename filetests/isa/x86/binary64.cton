@@ -913,6 +913,15 @@ ebb0:
     ; asm: movsbl -50000(%rsi), %edx
     [-,%rdx]            v39 = sload8.i32 v2-50000         ; bin: heap_oob 0f be 96 ffff3cb0
 
+    ; Integer Register Operations.
+
+    ; asm: notl %ecx
+    [-,%rcx]             v4000 = bnot v1       ; bin: f7 d1
+    ; asm: notl %esi
+    [-,%rsi]             v4001 = bnot v2       ; bin: f7 d6
+    ; asm: notl %r10d
+    [-,%r10]             v4002 = bnot v3       ; bin: 41 f7 d2
+
     ; Integer Register-Register Operations.
 
     ; asm: addl %esi, %ecx
