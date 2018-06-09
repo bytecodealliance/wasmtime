@@ -348,6 +348,14 @@ fax = TailRecipe(
         modrm_rr(in_reg0, in_reg1, sink);
         ''')
 
+# XX /n for a unary operation with extension bits.
+ur = TailRecipe(
+        'ur', Unary, size=1, ins=GPR, outs=0,
+        emit='''
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        ''')
+
 # XX /r, but for a unary operator with separate input/output register, like
 # copies. MR form, preserving flags.
 umr = TailRecipe(
