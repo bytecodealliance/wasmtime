@@ -43,6 +43,15 @@ ebb0:
     ; asm: movb $1, %sil
     [-,%r10]            v9008 = bconst.b1 true      ; bin: 41 ba 00000001
 
+    ; Integer Register Operations.
+
+    ; asm: notq %rcx
+    [-,%rcx]             v4000 = bnot v1       ; bin: 48 f7 d1
+    ; asm: notq %rsi
+    [-,%rsi]             v4001 = bnot v2       ; bin: 48 f7 d6
+    ; asm: notq %r10
+    [-,%r10]             v4002 = bnot v3       ; bin: 49 f7 d2
+
     ; Integer Register-Register Operations.
 
     ; asm: addq %rsi, %rcx
