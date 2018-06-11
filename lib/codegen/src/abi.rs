@@ -107,11 +107,9 @@ pub fn legalize_args<AA: ArgAssigner>(args: &mut Vec<AbiParam>, aa: &mut AA) {
             }
             // Split this argument into two smaller ones. Then revisit both.
             ArgAction::Convert(conv) => {
-                let new_arg = AbiParam {
-                    value_type: conv.apply(arg.value_type),
-                    ..arg
-                };
-                args[argno].value_type = new_arg.value_type;
+                let value_type = conv.apply(arg.value_type);
+                let new_arg = AbiParam { value_type, ..arg };
+                args[argno].value_type = value_type;
                 if conv.is_split() {
                     args.insert(argno + 1, new_arg);
                 }
