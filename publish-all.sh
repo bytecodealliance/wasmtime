@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
-cd $(dirname "$0")
-topdir="$(pwd)"
+topdir=$(dirname "$0")
+cd "$topdir"
 
 # All the cretonne-* crates have the same version number
 version="0.9.0"
@@ -28,12 +28,6 @@ cargo update
 echo git commit -a -m "\"Bump version to $version"\"
 echo git push
 for crate in entity codegen frontend native reader wasm module simplejit faerie umbrella ; do
-    if [ "$crate" == "umbrella" ]; then
-        dir="cretonne"
-    else
-        dir="$crate"
-    fi
-
     echo cargo publish --manifest-path "lib/$crate/Cargo.toml"
 done
 echo

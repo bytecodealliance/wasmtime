@@ -5,11 +5,11 @@ set -euo pipefail
 # packages which support it.
 
 # Repository top-level directory.
-cd $(dirname "$0")
-topdir=$(pwd)
+topdir=$(dirname "$0")
+cd "$topdir"
 
 function banner {
-    echo "======  $@  ======"
+    echo "======  $*  ======"
 }
 
 # Test those packages which have no_std support.
