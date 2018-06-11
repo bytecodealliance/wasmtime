@@ -15,18 +15,18 @@ set -euo pipefail
 export PYTHONDONTWRITEBYTECODE=1
 
 # Repository top-level directory.
-cd $(dirname "$0")
-topdir=$(pwd)
+topdir=$(dirname "$0")
+cd "$topdir"
 
 function banner {
-    echo "======  $@  ======"
+    echo "======  $*  ======"
 }
 
 # Run rustfmt if we have it.
 banner "Rust formatting"
-if command -v rustfmt > /dev/null; then
+if type rustfmt > /dev/null; then
     # In newer versions of rustfmt, replace --write-mode=diff with --check.
-    if ! $topdir/format-all.sh --write-mode=diff ; then
+    if ! "$topdir/format-all.sh" --write-mode=diff ; then
         echo "Formatting diffs detected! Run \"cargo fmt --all\" to correct."
         exit 1
     fi
@@ -39,16 +39,16 @@ else
 fi
 
 # Check if any Python files have changed since we last checked them.
-tsfile=$topdir/target/meta-checked
-if [ -f $tsfile ]; then
-    needcheck=$(find $topdir/lib/codegen/meta -name '*.py' -newer $tsfile)
+tsfile="$topdir/target/meta-checked"
+if [ -f "$tsfile" ]; then
+    needcheck=$(find "$topdir/lib/codegen/meta" -name '*.py' -newer "$tsfile")
 else
     needcheck=yes
 fi
 if [ -n "$needcheck" ]; then
     banner "$(python --version 2>&1), $(python3 --version 2>&1)"
-    $topdir/lib/codegen/meta/check.sh
-    touch $tsfile || echo no target directory
+    "$topdir/lib/codegen/meta/check.sh"
+    touch "$tsfile" || echo no target directory
 fi
 
 # Make sure the code builds in release mode.
@@ -69,8 +69,8 @@ cargo doc
 
 # Run clippy if we have it.
 banner "Rust linter"
-if $topdir/check-clippy.sh; then
-    $topdir/clippy-all.sh --write-mode=diff
+if "$topdir/check-clippy.sh"; then
+    "$topdir/clippy-all.sh" --write-mode=diff
 else
     echo "\`cargo +nightly install clippy\` for optional rust linting"
 fi
@@ -85,7 +85,7 @@ if rustup toolchain list | grep -q nightly; then
         echo "installing cargo-fuzz"
         cargo +nightly install cargo-fuzz
     fi
-    ASAN_OPTIONS=detect_leaks=0 cargo +nightly fuzz run fuzz_translate_module $topdir/fuzz/corpus/fuzz_translate_module/ffaefab69523eb11935a9b420d58826c8ea65c4c
+    ASAN_OPTIONS=detect_leaks=0 cargo +nightly fuzz run fuzz_translate_module "$topdir/fuzz/corpus/fuzz_translate_module/ffaefab69523eb11935a9b420d58826c8ea65c4c"
 else
     echo "nightly toolchain not found, skipping fuzz target integration test"
 fi
