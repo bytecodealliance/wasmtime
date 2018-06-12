@@ -47,7 +47,7 @@ fn return_at_end() {
     handle_module(Path::new("../../wasmtests/return_at_end.wat"), &flags);
 }
 
-fn read_file(path: &Path) -> Result<Vec<u8>, io::Error> {
+fn read_file(path: &Path) -> io::Result<Vec<u8>> {
     let mut buf: Vec<u8> = Vec::new();
     let mut file = File::open(path)?;
     file.read_to_end(&mut buf)?;

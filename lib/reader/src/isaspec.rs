@@ -7,8 +7,8 @@
 //! ISAs. If the file contains no `isa` commands, the tests will be run against all supported ISAs.
 
 use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::settings::{Configurable, Error as SetError, Flags};
-use error::{Location, Result};
+use cretonne_codegen::settings::{Configurable, Flags, SetError};
+use error::{Location, ParseResult};
 use testcommand::TestOption;
 
 /// The ISA specifications in a `.cton` file.
@@ -35,7 +35,7 @@ impl IsaSpec {
 }
 
 /// Parse an iterator of command line options and apply them to `config`.
-pub fn parse_options<'a, I>(iter: I, config: &mut Configurable, loc: &Location) -> Result<()>
+pub fn parse_options<'a, I>(iter: I, config: &mut Configurable, loc: &Location) -> ParseResult<()>
 where
     I: Iterator<Item = &'a str>,
 {

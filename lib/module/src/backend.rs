@@ -6,7 +6,6 @@ use cretonne_codegen::{binemit, ir};
 use std::marker;
 use DataContext;
 use Linkage;
-use ModuleError;
 use ModuleNamespace;
 use ModuleResult;
 

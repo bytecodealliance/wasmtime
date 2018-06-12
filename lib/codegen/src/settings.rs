@@ -24,7 +24,6 @@ use constant_hash::{probe, simple_hash};
 use isa::TargetIsa;
 use std::boxed::Box;
 use std::fmt;
-use std::result;
 use std::str;
 
 /// A string-based configurator for settings groups.
@@ -35,12 +34,12 @@ pub trait Configurable {
     /// Set the string value of any setting by name.
     ///
     /// This can set any type of setting whether it is numeric, boolean, or enumerated.
-    fn set(&mut self, name: &str, value: &str) -> Result<()>;
+    fn set(&mut self, name: &str, value: &str) -> SetResult<()>;
 
     /// Enable a boolean setting or apply a preset.
     ///
     /// If the identified setting isn't a boolean or a preset, a `BadType` error is returned.
-    fn enable(&mut self, name: &str) -> Result<()>;
+    fn enable(&mut self, name: &str) -> SetResult<()>;
 }
 
 /// Collect settings values based on a template.
@@ -84,9 +83,9 @@ impl Builder {
     }
 
     /// Look up a descriptor by name.
-    fn lookup(&self, name: &str) -> Result<(usize, detail::Detail)> {
+    fn lookup(&self, name: &str) -> SetResult<(usize, detail::Detail)> {
         match probe(self.template, name, simple_hash(name)) {
-            Err(_) => Err(Error::BadName),
+            Err(_) => Err(SetError::BadName),
             Ok(entry) => {
                 let d = &self.template.descriptors[self.template.hash_table[entry] as usize];
                 Ok((d.offset as usize, d.detail))
@@ -95,23 +94,23 @@ impl Builder {
     }
 }
 
-fn parse_bool_value(value: &str) -> Result<bool> {
+fn parse_bool_value(value: &str) -> SetResult<bool> {
     match value {
         "true" | "on" | "yes" | "1" => Ok(true),
         "false" | "off" | "no" | "0" => Ok(false),
-        _ => Err(Error::BadValue),
+        _ => Err(SetError::BadValue),
     }
 }
 
-fn parse_enum_value(value: &str, choices: &[&str]) -> Result<u8> {
+fn parse_enum_value(value: &str, choices: &[&str]) -> SetResult<u8> {
     match choices.iter().position(|&tag| tag == value) {
         Some(idx) => Ok(idx as u8),
-        None => Err(Error::BadValue),
+        None => Err(SetError::BadValue),
     }
 }
 
 impl Configurable for Builder {
-    fn enable(&mut self, name: &str) -> Result<()> {
+    fn enable(&mut self, name: &str) -> SetResult<()> {
         use self::detail::Detail;
         let (offset, detail) = self.lookup(name)?;
         match detail {
@@ -123,27 +122,27 @@ impl Configurable for Builder {
                 self.apply_preset(&self.template.presets[offset..]);
                 Ok(())
             }
-            _ => Err(Error::BadType),
+            _ => Err(SetError::BadType),
         }
     }
 
-    fn set(&mut self, name: &str, value: &str) -> Result<()> {
+    fn set(&mut self, name: &str, value: &str) -> SetResult<()> {
         use self::detail::Detail;
         let (offset, detail) = self.lookup(name)?;
         match detail {
             Detail::Bool { bit } => {
-                // Cannot currently propagate Result<()> up on functions returning ()
+                // Cannot currently propagate SetResult<()> up on functions returning ()
                 // with the `?` operator
                 self.set_bit(offset, bit, parse_bool_value(value)?);
             }
             Detail::Num => {
-                self.bytes[offset] = value.parse().map_err(|_| Error::BadValue)?;
+                self.bytes[offset] = value.parse().map_err(|_| SetError::BadValue)?;
             }
             Detail::Enum { last, enumerators } => {
                 self.bytes[offset] =
                     parse_enum_value(value, self.template.enums(last, enumerators))?;
             }
-            Detail::Preset => return Err(Error::BadName),
+            Detail::Preset => return Err(SetError::BadName),
         }
         Ok(())
     }
@@ -151,7 +150,7 @@ impl Configurable for Builder {
 
 /// An error produced when changing a setting.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Error {
+pub enum SetError {
     /// No setting by this name exists.
     BadName,
 
@@ -163,7 +162,7 @@ pub enum Error {
 }
 
 /// A result returned when changing a setting.
-pub type Result<T> = result::Result<T, Error>;
+pub type SetResult<T> = Result<T, SetError>;
 
 /// A reference to just the boolean predicates of a settings object.
 ///
@@ -348,7 +347,7 @@ impl<'a> From<&'a TargetIsa> for FlagsOrIsa<'a> {
 #[cfg(test)]
 mod tests {
     use super::Configurable;
-    use super::Error::*;
+    use super::SetError::*;
     use super::{builder, Flags};
     use std::string::ToString;
 

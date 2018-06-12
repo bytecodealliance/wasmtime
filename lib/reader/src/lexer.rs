@@ -63,19 +63,19 @@ fn token(token: Token, loc: Location) -> Result<LocatedToken, LocatedError> {
 
 /// An error from the lexical analysis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
+pub enum LexError {
     InvalidChar,
 }
 
-/// An `Error` with an associated Location.
+/// A `LexError` with an associated Location.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LocatedError {
-    pub error: Error,
+    pub error: LexError,
     pub location: Location,
 }
 
-/// Wrap up an `Error` with the given location.
-fn error<'a>(error: Error, loc: Location) -> Result<LocatedToken<'a>, LocatedError> {
+/// Wrap up a `LexError` with the given location.
+fn error<'a>(error: LexError, loc: Location) -> Result<LocatedToken<'a>, LocatedError> {
     Err(LocatedError {
         error,
         location: loc,
@@ -468,7 +468,7 @@ impl<'a> Lexer<'a> {
                 _ => {
                     // Skip invalid char, return error.
                     self.next_ch();
-                    Some(error(Error::InvalidChar, loc))
+                    Some(error(LexError::InvalidChar, loc))
                 }
             };
         }
@@ -511,7 +511,7 @@ mod tests {
         Some(super::token(token, Location { line_number: line }))
     }
 
-    fn error<'a>(error: Error, line: usize) -> Option<Result<LocatedToken<'a>, LocatedError>> {
+    fn error<'a>(error: LexError, line: usize) -> Option<Result<LocatedToken<'a>, LocatedError>> {
         Some(super::error(error, Location { line_number: line }))
     }
 
@@ -539,7 +539,7 @@ mod tests {
 
         // Scan a comment after an invalid char.
         let mut lex = Lexer::new("$; hello");
-        assert_eq!(lex.next(), error(Error::InvalidChar, 1));
+        assert_eq!(lex.next(), error(LexError::InvalidChar, 1));
         assert_eq!(lex.next(), token(Token::Comment("; hello"), 1));
         assert_eq!(lex.next(), None);
     }
