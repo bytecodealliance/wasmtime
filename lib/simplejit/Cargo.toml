@@ -15,14 +15,14 @@ cretonne-native = { path = "../native", version = "0.9.0", default-features = fa
 region = "0.3.0"
 libc = { version = "0.2.40", default-features = false }
 errno = "0.2.3"
-target-lexicon = { version = "0.0.1", default-features = false }
+target-lexicon = { version = "0.0.2", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winbase", "memoryapi"] }
 
 [features]
 default = ["std"]
-std = ["libc/use_std", "cretonne-codegen/std", "cretonne-module/std", "cretonne-native/std"]
+std = ["libc/use_std", "cretonne-codegen/std", "cretonne-module/std", "cretonne-native/std", "target-lexicon/std"]
 core = ["cretonne-codegen/core", "cretonne-module/core", "cretonne-native/core"]
 
 [badges]

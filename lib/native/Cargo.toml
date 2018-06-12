@@ -9,14 +9,14 @@ readme = "README.md"
 
 [dependencies]
 cretonne-codegen = { path = "../codegen", version = "0.9.0", default-features = false }
-target-lexicon = { version = "0.0.1", default-features = false }
+target-lexicon = { version = "0.0.2", default-features = false }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 raw-cpuid = "3.1.0"
 
 [features]
 default = ["std"]
-std = ["cretonne-codegen/std"]
+std = ["cretonne-codegen/std", "target-lexicon/std"]
 # when compiling with the "core" feature, nightly must be enabled
 # enabling the "nightly" feature for raw-cpuid allows avoiding
 # linking in a c-library.

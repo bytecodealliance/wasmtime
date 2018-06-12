@@ -7,21 +7,12 @@ publish = false
 [package.metadata]
 cargo-fuzz = true
 
-[dependencies.cargo-fuzz]
-version = "*"
-
-[dependencies.binaryen]
-git = "https://github.com/pepyakin/binaryen-rs.git"
-version = "*"
-
-[dependencies.libfuzzer-sys]
-git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
-
-[dependencies.cretonne-wasm]
-path = "../lib/wasm"
-
-[dependencies.target-lexicon]
-version = "0.0.1"
+[dependencies]
+cargo-fuzz = "*"
+binaryen = { git = "https://github.com/pepyakin/binaryen-rs.git" }
+libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
+cretonne-wasm = { path = "../lib/wasm" }
+target-lexicon = "0.0.2"
 
 # Prevent this from interfering with workspaces
 [workspace]
