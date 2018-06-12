@@ -8,12 +8,12 @@ use std::borrow::Cow;
 use cretonne_codegen::cfg_printer::CFGPrinter;
 use cretonne_codegen::ir::Function;
 use cretonne_reader::TestCommand;
-use subtest::{self, Context, SubTest, SubtestResult as STResult};
+use subtest::{self, Context, SubTest, SubtestResult};
 
 /// Object implementing the `test print-cfg` sub-test.
 struct TestPrintCfg;
 
-pub fn subtest(parsed: &TestCommand) -> STResult<Box<SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<SubTest>> {
     assert_eq!(parsed.command, "print-cfg");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))
@@ -31,7 +31,7 @@ impl SubTest for TestPrintCfg {
         false
     }
 
-    fn run(&self, func: Cow<Function>, context: &Context) -> STResult<()> {
+    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
         subtest::run_filecheck(&CFGPrinter::new(&func).to_string(), context)
     }
 }

@@ -3,7 +3,7 @@
 use cretonne_codegen::ir::Function;
 use cretonne_reader::TestCommand;
 use std::borrow::Cow;
-use subtest::{self, Context, SubTest, SubtestResult as STResult};
+use subtest::{self, Context, SubTest, SubtestResult};
 
 /// Object implementing the `test cat` sub-test.
 ///
@@ -13,7 +13,7 @@ use subtest::{self, Context, SubTest, SubtestResult as STResult};
 /// The result is verified by filecheck.
 struct TestCat;
 
-pub fn subtest(parsed: &TestCommand) -> STResult<Box<SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<SubTest>> {
     assert_eq!(parsed.command, "cat");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))
@@ -31,7 +31,7 @@ impl SubTest for TestCat {
         false
     }
 
-    fn run(&self, func: Cow<Function>, context: &Context) -> STResult<()> {
+    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
         subtest::run_filecheck(&func.display(context.isa).to_string(), context)
     }
 }
