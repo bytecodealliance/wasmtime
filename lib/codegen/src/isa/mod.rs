@@ -58,7 +58,7 @@ use isa::enc_tables::Encodings;
 use regalloc;
 use result::CodegenResult;
 use settings;
-use settings::CallConv;
+use settings::{CallConv, SetResult};
 use std::boxed::Box;
 use std::fmt;
 use target_lexicon::{Architecture, Triple};
@@ -146,11 +146,11 @@ impl Builder {
 }
 
 impl settings::Configurable for Builder {
-    fn set(&mut self, name: &str, value: &str) -> settings::Result<()> {
+    fn set(&mut self, name: &str, value: &str) -> SetResult<()> {
         self.setup.set(name, value)
     }
 
-    fn enable(&mut self, name: &str) -> settings::Result<()> {
+    fn enable(&mut self, name: &str) -> SetResult<()> {
         self.setup.enable(name)
     }
 }

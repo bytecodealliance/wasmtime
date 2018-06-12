@@ -18,7 +18,7 @@
 extern crate cretonne_codegen;
 extern crate target_lexicon;
 
-pub use error::{Error, Location, Result};
+pub use error::{Location, ParseError, ParseResult};
 pub use isaspec::{parse_options, IsaSpec};
 pub use parser::{parse_functions, parse_test};
 pub use sourcemap::SourceMap;

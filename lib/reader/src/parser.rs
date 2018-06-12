@@ -15,9 +15,9 @@ use cretonne_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
 use cretonne_codegen::packed_option::ReservedValue;
 use cretonne_codegen::settings::CallConv;
 use cretonne_codegen::{settings, timing};
-use error::{Error, Location, Result};
+use error::{Location, ParseError, ParseResult};
 use isaspec;
-use lexer::{self, Lexer, Token};
+use lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
 use sourcemap::SourceMap;
 use std::mem;
 use std::str::FromStr;
@@ -29,7 +29,7 @@ use testfile::{Comment, Details, TestFile};
 /// Parse the entire `text` into a list of functions.
 ///
 /// Any test commands or target declarations are ignored.
-pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
+pub fn parse_functions(text: &str) -> ParseResult<Vec<Function>> {
     let _tt = timing::parse_text();
     parse_test(text).map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
 }
@@ -37,7 +37,7 @@ pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
 /// Parse the entire `text` as a test case file.
 ///
 /// The returned `TestFile` contains direct references to substrings of `text`.
-pub fn parse_test(text: &str) -> Result<TestFile> {
+pub fn parse_test(text: &str) -> ParseResult<TestFile> {
     let _tt = timing::parse_text();
     let mut parser = Parser::new(text);
     // Gather the preamble comments.
@@ -63,7 +63,7 @@ pub fn parse_test(text: &str) -> Result<TestFile> {
 pub struct Parser<'a> {
     lex: Lexer<'a>,
 
-    lex_error: Option<lexer::Error>,
+    lex_error: Option<LexError>,
 
     /// Current lookahead token.
     lookahead: Option<Token<'a>>,
@@ -121,7 +121,7 @@ impl<'a> Context<'a> {
     }
 
     // Allocate a new stack slot.
-    fn add_ss(&mut self, ss: StackSlot, data: StackSlotData, loc: &Location) -> Result<()> {
+    fn add_ss(&mut self, ss: StackSlot, data: StackSlotData, loc: &Location) -> ParseResult<()> {
         while self.function.stack_slots.next_key().index() <= ss.index() {
             self.function
                 .create_stack_slot(StackSlotData::new(StackSlotKind::SpillSlot, 0));
@@ -131,7 +131,7 @@ impl<'a> Context<'a> {
     }
 
     // Resolve a reference to a stack slot.
-    fn check_ss(&self, ss: StackSlot, loc: &Location) -> Result<()> {
+    fn check_ss(&self, ss: StackSlot, loc: &Location) -> ParseResult<()> {
         if !self.map.contains_ss(ss) {
             err!(loc, "undefined stack slot {}", ss)
         } else {
@@ -140,7 +140,7 @@ impl<'a> Context<'a> {
     }
 
     // Allocate a global variable slot.
-    fn add_gv(&mut self, gv: GlobalVar, data: GlobalVarData, loc: &Location) -> Result<()> {
+    fn add_gv(&mut self, gv: GlobalVar, data: GlobalVarData, loc: &Location) -> ParseResult<()> {
         while self.function.global_vars.next_key().index() <= gv.index() {
             self.function.create_global_var(GlobalVarData::Sym {
                 name: ExternalName::testcase(""),
@@ -152,7 +152,7 @@ impl<'a> Context<'a> {
     }
 
     // Resolve a reference to a global variable.
-    fn check_gv(&self, gv: GlobalVar, loc: &Location) -> Result<()> {
+    fn check_gv(&self, gv: GlobalVar, loc: &Location) -> ParseResult<()> {
         if !self.map.contains_gv(gv) {
             err!(loc, "undefined global variable {}", gv)
         } else {
@@ -161,7 +161,7 @@ impl<'a> Context<'a> {
     }
 
     // Allocate a heap slot.
-    fn add_heap(&mut self, heap: Heap, data: HeapData, loc: &Location) -> Result<()> {
+    fn add_heap(&mut self, heap: Heap, data: HeapData, loc: &Location) -> ParseResult<()> {
         while self.function.heaps.next_key().index() <= heap.index() {
             self.function.create_heap(HeapData {
                 base: HeapBase::ReservedReg,
@@ -177,7 +177,7 @@ impl<'a> Context<'a> {
     }
 
     // Resolve a reference to a heap.
-    fn check_heap(&self, heap: Heap, loc: &Location) -> Result<()> {
+    fn check_heap(&self, heap: Heap, loc: &Location) -> ParseResult<()> {
         if !self.map.contains_heap(heap) {
             err!(loc, "undefined heap {}", heap)
         } else {
@@ -186,7 +186,7 @@ impl<'a> Context<'a> {
     }
 
     // Allocate a new signature.
-    fn add_sig(&mut self, sig: SigRef, data: Signature, loc: &Location) -> Result<()> {
+    fn add_sig(&mut self, sig: SigRef, data: Signature, loc: &Location) -> ParseResult<()> {
         while self.function.dfg.signatures.next_key().index() <= sig.index() {
             self.function
                 .import_signature(Signature::new(CallConv::Fast));
@@ -196,7 +196,7 @@ impl<'a> Context<'a> {
     }
 
     // Resolve a reference to a signature.
-    fn check_sig(&self, sig: SigRef, loc: &Location) -> Result<()> {
+    fn check_sig(&self, sig: SigRef, loc: &Location) -> ParseResult<()> {
         if !self.map.contains_sig(sig) {
             err!(loc, "undefined signature {}", sig)
         } else {
@@ -205,7 +205,7 @@ impl<'a> Context<'a> {
     }
 
     // Allocate a new external function.
-    fn add_fn(&mut self, fn_: FuncRef, data: ExtFuncData, loc: &Location) -> Result<()> {
+    fn add_fn(&mut self, fn_: FuncRef, data: ExtFuncData, loc: &Location) -> ParseResult<()> {
         while self.function.dfg.ext_funcs.next_key().index() <= fn_.index() {
             self.function.import_function(ExtFuncData {
                 name: ExternalName::testcase(""),
@@ -218,7 +218,7 @@ impl<'a> Context<'a> {
     }
 
     // Resolve a reference to a function.
-    fn check_fn(&self, fn_: FuncRef, loc: &Location) -> Result<()> {
+    fn check_fn(&self, fn_: FuncRef, loc: &Location) -> ParseResult<()> {
         if !self.map.contains_fn(fn_) {
             err!(loc, "undefined function {}", fn_)
         } else {
@@ -227,7 +227,7 @@ impl<'a> Context<'a> {
     }
 
     // Allocate a new jump table.
-    fn add_jt(&mut self, jt: JumpTable, data: JumpTableData, loc: &Location) -> Result<()> {
+    fn add_jt(&mut self, jt: JumpTable, data: JumpTableData, loc: &Location) -> ParseResult<()> {
         while self.function.jump_tables.next_key().index() <= jt.index() {
             self.function.create_jump_table(JumpTableData::new());
         }
@@ -236,7 +236,7 @@ impl<'a> Context<'a> {
     }
 
     // Resolve a reference to a jump table.
-    fn check_jt(&self, jt: JumpTable, loc: &Location) -> Result<()> {
+    fn check_jt(&self, jt: JumpTable, loc: &Location) -> ParseResult<()> {
         if !self.map.contains_jt(jt) {
             err!(loc, "undefined jump table {}", jt)
         } else {
@@ -245,7 +245,7 @@ impl<'a> Context<'a> {
     }
 
     // Assign the global for the stack limit.
-    fn set_stack_limit(&mut self, gv: GlobalVar, loc: &Location) -> Result<()> {
+    fn set_stack_limit(&mut self, gv: GlobalVar, loc: &Location) -> ParseResult<()> {
         if let Some(_) = self.function.set_stack_limit(Some(gv)) {
             err!(loc, "multiple stack_limit declarations")
         } else {
@@ -254,7 +254,7 @@ impl<'a> Context<'a> {
     }
 
     // Allocate a new EBB.
-    fn add_ebb(&mut self, ebb: Ebb, loc: &Location) -> Result<Ebb> {
+    fn add_ebb(&mut self, ebb: Ebb, loc: &Location) -> ParseResult<Ebb> {
         while self.function.dfg.num_ebbs() <= ebb.index() {
             self.function.dfg.make_ebb();
         }
@@ -298,7 +298,7 @@ impl<'a> Parser<'a> {
         #[cfg_attr(feature = "cargo-clippy", allow(while_immutable_condition))]
         while self.lookahead == None {
             match self.lex.next() {
-                Some(Ok(lexer::LocatedToken { token, location })) => {
+                Some(Ok(LocatedToken { token, location })) => {
                     match token {
                         Token::Comment(text) => {
                             if self.gathering_comments {
@@ -309,7 +309,7 @@ impl<'a> Parser<'a> {
                     }
                     self.loc = location;
                 }
-                Some(Err(lexer::LocatedError { error, location })) => {
+                Some(Err(LocatedError { error, location })) => {
                     self.lex_error = Some(error);
                     self.loc = location;
                     break;
@@ -347,7 +347,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a token without payload.
-    fn match_token(&mut self, want: Token<'a>, err_msg: &str) -> Result<Token<'a>> {
+    fn match_token(&mut self, want: Token<'a>, err_msg: &str) -> ParseResult<Token<'a>> {
         if self.token() == Some(want) {
             Ok(self.consume())
         } else {
@@ -367,7 +367,7 @@ impl<'a> Parser<'a> {
 
     // Match and consume a specific identifier string.
     // Used for pseudo-keywords like "stack_slot" that only appear in certain contexts.
-    fn match_identifier(&mut self, want: &'static str, err_msg: &str) -> Result<Token<'a>> {
+    fn match_identifier(&mut self, want: &'static str, err_msg: &str) -> ParseResult<Token<'a>> {
         if self.token() == Some(Token::Identifier(want)) {
             Ok(self.consume())
         } else {
@@ -376,7 +376,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a type.
-    fn match_type(&mut self, err_msg: &str) -> Result<Type> {
+    fn match_type(&mut self, err_msg: &str) -> ParseResult<Type> {
         if let Some(Token::Type(t)) = self.token() {
             self.consume();
             Ok(t)
@@ -386,7 +386,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a stack slot reference.
-    fn match_ss(&mut self, err_msg: &str) -> Result<StackSlot> {
+    fn match_ss(&mut self, err_msg: &str) -> ParseResult<StackSlot> {
         if let Some(Token::StackSlot(ss)) = self.token() {
             self.consume();
             if let Some(ss) = StackSlot::with_number(ss) {
@@ -397,7 +397,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a global variable reference.
-    fn match_gv(&mut self, err_msg: &str) -> Result<GlobalVar> {
+    fn match_gv(&mut self, err_msg: &str) -> ParseResult<GlobalVar> {
         if let Some(Token::GlobalVar(gv)) = self.token() {
             self.consume();
             if let Some(gv) = GlobalVar::with_number(gv) {
@@ -408,7 +408,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a function reference.
-    fn match_fn(&mut self, err_msg: &str) -> Result<FuncRef> {
+    fn match_fn(&mut self, err_msg: &str) -> ParseResult<FuncRef> {
         if let Some(Token::FuncRef(fnref)) = self.token() {
             self.consume();
             if let Some(fnref) = FuncRef::with_number(fnref) {
@@ -419,7 +419,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a signature reference.
-    fn match_sig(&mut self, err_msg: &str) -> Result<SigRef> {
+    fn match_sig(&mut self, err_msg: &str) -> ParseResult<SigRef> {
         if let Some(Token::SigRef(sigref)) = self.token() {
             self.consume();
             if let Some(sigref) = SigRef::with_number(sigref) {
@@ -430,7 +430,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a heap reference.
-    fn match_heap(&mut self, err_msg: &str) -> Result<Heap> {
+    fn match_heap(&mut self, err_msg: &str) -> ParseResult<Heap> {
         if let Some(Token::Heap(heap)) = self.token() {
             self.consume();
             if let Some(heap) = Heap::with_number(heap) {
@@ -441,7 +441,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a jump table reference.
-    fn match_jt(&mut self) -> Result<JumpTable> {
+    fn match_jt(&mut self) -> ParseResult<JumpTable> {
         if let Some(Token::JumpTable(jt)) = self.token() {
             self.consume();
             if let Some(jt) = JumpTable::with_number(jt) {
@@ -452,7 +452,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume an ebb reference.
-    fn match_ebb(&mut self, err_msg: &str) -> Result<Ebb> {
+    fn match_ebb(&mut self, err_msg: &str) -> ParseResult<Ebb> {
         if let Some(Token::Ebb(ebb)) = self.token() {
             self.consume();
             Ok(ebb)
@@ -462,7 +462,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a value reference, direct or vtable.
-    fn match_value(&mut self, err_msg: &str) -> Result<Value> {
+    fn match_value(&mut self, err_msg: &str) -> ParseResult<Value> {
         if let Some(Token::Value(v)) = self.token() {
             self.consume();
             Ok(v)
@@ -471,15 +471,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn error(&self, message: &str) -> Error {
-        Error {
+    fn error(&self, message: &str) -> ParseError {
+        ParseError {
             location: self.loc,
             message: message.to_string(),
         }
     }
 
     // Match and consume an Imm64 immediate.
-    fn match_imm64(&mut self, err_msg: &str) -> Result<Imm64> {
+    fn match_imm64(&mut self, err_msg: &str) -> ParseResult<Imm64> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
@@ -491,7 +491,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a Uimm32 immediate.
-    fn match_uimm32(&mut self, err_msg: &str) -> Result<Uimm32> {
+    fn match_uimm32(&mut self, err_msg: &str) -> ParseResult<Uimm32> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
@@ -504,7 +504,7 @@ impl<'a> Parser<'a> {
 
     // Match and consume a u8 immediate.
     // This is used for lane numbers in SIMD vectors.
-    fn match_uimm8(&mut self, err_msg: &str) -> Result<u8> {
+    fn match_uimm8(&mut self, err_msg: &str) -> ParseResult<u8> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
@@ -518,7 +518,7 @@ impl<'a> Parser<'a> {
 
     // Match and consume an i32 immediate.
     // This is used for stack argument byte offsets.
-    fn match_imm32(&mut self, err_msg: &str) -> Result<i32> {
+    fn match_imm32(&mut self, err_msg: &str) -> ParseResult<i32> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
@@ -534,7 +534,7 @@ impl<'a> Parser<'a> {
     //
     // Note that this will match an empty string as an empty offset, and that if an offset is
     // present, it must contain a sign.
-    fn optional_offset32(&mut self) -> Result<Offset32> {
+    fn optional_offset32(&mut self) -> ParseResult<Offset32> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
@@ -547,7 +547,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume an Ieee32 immediate.
-    fn match_ieee32(&mut self, err_msg: &str) -> Result<Ieee32> {
+    fn match_ieee32(&mut self, err_msg: &str) -> ParseResult<Ieee32> {
         if let Some(Token::Float(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like a float.
@@ -559,7 +559,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume an Ieee64 immediate.
-    fn match_ieee64(&mut self, err_msg: &str) -> Result<Ieee64> {
+    fn match_ieee64(&mut self, err_msg: &str) -> ParseResult<Ieee64> {
         if let Some(Token::Float(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like a float.
@@ -571,7 +571,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a boolean immediate.
-    fn match_bool(&mut self, err_msg: &str) -> Result<bool> {
+    fn match_bool(&mut self, err_msg: &str) -> ParseResult<bool> {
         if let Some(Token::Identifier(text)) = self.token() {
             self.consume();
             match text {
@@ -585,7 +585,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume an enumerated immediate, like one of the condition codes.
-    fn match_enum<T: FromStr>(&mut self, err_msg: &str) -> Result<T> {
+    fn match_enum<T: FromStr>(&mut self, err_msg: &str) -> ParseResult<T> {
         if let Some(Token::Identifier(text)) = self.token() {
             self.consume();
             text.parse().map_err(|_| self.error(err_msg))
@@ -608,7 +608,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume an identifier.
-    fn match_any_identifier(&mut self, err_msg: &str) -> Result<&'a str> {
+    fn match_any_identifier(&mut self, err_msg: &str) -> ParseResult<&'a str> {
         if let Some(Token::Identifier(text)) = self.token() {
             self.consume();
             Ok(text)
@@ -619,7 +619,7 @@ impl<'a> Parser<'a> {
 
     // Match and consume a HexSequence that fits into a u16.
     // This is used for instruction encodings.
-    fn match_hex16(&mut self, err_msg: &str) -> Result<u16> {
+    fn match_hex16(&mut self, err_msg: &str) -> ParseResult<u16> {
         if let Some(Token::HexSequence(bits_str)) = self.token() {
             self.consume();
             // The only error we anticipate from this parse is overflow, the lexer should
@@ -633,7 +633,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume a register unit either by number `%15` or by name `%rax`.
-    fn match_regunit(&mut self, isa: Option<&TargetIsa>) -> Result<RegUnit> {
+    fn match_regunit(&mut self, isa: Option<&TargetIsa>) -> ParseResult<RegUnit> {
         if let Some(Token::Name(name)) = self.token() {
             self.consume();
             match isa {
@@ -654,7 +654,7 @@ impl<'a> Parser<'a> {
     /// Parse an optional source location.
     ///
     /// Return an optional source location if no real location is present.
-    fn optional_srcloc(&mut self) -> Result<ir::SourceLoc> {
+    fn optional_srcloc(&mut self) -> ParseResult<ir::SourceLoc> {
         if let Some(Token::SourceLoc(text)) = self.token() {
             match u32::from_str_radix(text, 16) {
                 Ok(num) => {
@@ -681,7 +681,7 @@ impl<'a> Parser<'a> {
     ///
     /// Accept a mix of `target` and `set` command lines. The `set` commands are cumulative.
     ///
-    pub fn parse_target_specs(&mut self) -> Result<isaspec::IsaSpec> {
+    pub fn parse_target_specs(&mut self) -> ParseResult<isaspec::IsaSpec> {
         // Was there any `target` commands?
         let mut seen_target = false;
         // Location of last `set` command since the last `target`.
@@ -753,14 +753,14 @@ impl<'a> Parser<'a> {
     pub fn parse_function_list(
         &mut self,
         unique_isa: Option<&TargetIsa>,
-    ) -> Result<Vec<(Function, Details<'a>)>> {
+    ) -> ParseResult<Vec<(Function, Details<'a>)>> {
         let mut list = Vec::new();
         while self.token().is_some() {
             list.push(self.parse_function(unique_isa)?);
         }
         if let Some(err) = self.lex_error {
             return match err {
-                lexer::Error::InvalidChar => err!(self.loc, "invalid character"),
+                LexError::InvalidChar => err!(self.loc, "invalid character"),
             };
         }
         Ok(list)
@@ -773,7 +773,7 @@ impl<'a> Parser<'a> {
     fn parse_function(
         &mut self,
         unique_isa: Option<&TargetIsa>,
-    ) -> Result<(Function, Details<'a>)> {
+    ) -> ParseResult<(Function, Details<'a>)> {
         // Begin gathering comments.
         // Make sure we don't include any comments before the `function` keyword.
         self.token();
@@ -825,7 +825,7 @@ impl<'a> Parser<'a> {
     //
     // function ::= "function" * name signature { ... }
     //
-    fn parse_external_name(&mut self) -> Result<ExternalName> {
+    fn parse_external_name(&mut self) -> ParseResult<ExternalName> {
         match self.token() {
             Some(Token::Name(s)) => {
                 self.consume();
@@ -859,7 +859,7 @@ impl<'a> Parser<'a> {
     //
     // signature ::=  * "(" [paramlist] ")" ["->" retlist] [callconv]
     //
-    fn parse_signature(&mut self, unique_isa: Option<&TargetIsa>) -> Result<Signature> {
+    fn parse_signature(&mut self, unique_isa: Option<&TargetIsa>) -> ParseResult<Signature> {
         // Calling convention defaults to `fast`, but can be changed.
         let mut sig = Signature::new(CallConv::Fast);
 
@@ -895,7 +895,10 @@ impl<'a> Parser<'a> {
     //
     // paramlist ::= * param { "," param }
     //
-    fn parse_abi_param_list(&mut self, unique_isa: Option<&TargetIsa>) -> Result<Vec<AbiParam>> {
+    fn parse_abi_param_list(
+        &mut self,
+        unique_isa: Option<&TargetIsa>,
+    ) -> ParseResult<Vec<AbiParam>> {
         let mut list = Vec::new();
 
         // abi-param-list ::= * abi-param { "," abi-param }
@@ -911,7 +914,7 @@ impl<'a> Parser<'a> {
     }
 
     // Parse a single argument type with flags.
-    fn parse_abi_param(&mut self, unique_isa: Option<&TargetIsa>) -> Result<AbiParam> {
+    fn parse_abi_param(&mut self, unique_isa: Option<&TargetIsa>) -> ParseResult<AbiParam> {
         // abi-param ::= * type { flag } [ argumentloc ]
         let mut arg = AbiParam::new(self.match_type("expected parameter type")?);
 
@@ -938,7 +941,10 @@ impl<'a> Parser<'a> {
     }
 
     // Parse an argument location specifier; either a register or a byte offset into the stack.
-    fn parse_argument_location(&mut self, unique_isa: Option<&TargetIsa>) -> Result<ArgumentLoc> {
+    fn parse_argument_location(
+        &mut self,
+        unique_isa: Option<&TargetIsa>,
+    ) -> ParseResult<ArgumentLoc> {
         // argumentloc ::= '[' regname | uimm32 ']'
         if self.optional(Token::LBracket) {
             let result = match self.token() {
@@ -985,7 +991,7 @@ impl<'a> Parser<'a> {
     //                   * stack-limit-decl
     //
     // The parsed decls are added to `ctx` rather than returned.
-    fn parse_preamble(&mut self, ctx: &mut Context) -> Result<()> {
+    fn parse_preamble(&mut self, ctx: &mut Context) -> ParseResult<()> {
         loop {
             match self.token() {
                 Some(Token::StackSlot(..)) => {
@@ -1034,7 +1040,7 @@ impl<'a> Parser<'a> {
     //                   | "spill_slot"
     //                   | "incoming_arg"
     //                   | "outgoing_arg"
-    fn parse_stack_slot_decl(&mut self) -> Result<(StackSlot, StackSlotData)> {
+    fn parse_stack_slot_decl(&mut self) -> ParseResult<(StackSlot, StackSlotData)> {
         let ss = self.match_ss("expected stack slot number: ss«n»")?;
         self.match_token(Token::Equal, "expected '=' in stack slot declaration")?;
         let kind = self.match_enum("expected stack slot kind")?;
@@ -1073,7 +1079,7 @@ impl<'a> Parser<'a> {
     //                   | "deref" "(" GlobalVar(base) ")" offset32
     //                   | globalsym ["colocated"] name
     //
-    fn parse_global_var_decl(&mut self) -> Result<(GlobalVar, GlobalVarData)> {
+    fn parse_global_var_decl(&mut self) -> ParseResult<(GlobalVar, GlobalVarData)> {
         let gv = self.match_gv("expected global variable number: gv«n»")?;
 
         self.match_token(Token::Equal, "expected '=' in global variable declaration")?;
@@ -1116,7 +1122,7 @@ impl<'a> Parser<'a> {
     //             | "max" Imm64(bytes)
     //             | "guard" Imm64(bytes)
     //
-    fn parse_heap_decl(&mut self) -> Result<(Heap, HeapData)> {
+    fn parse_heap_decl(&mut self) -> ParseResult<(Heap, HeapData)> {
         let heap = self.match_heap("expected heap number: heap«n»")?;
         self.match_token(Token::Equal, "expected '=' in heap declaration")?;
 
@@ -1183,7 +1189,7 @@ impl<'a> Parser<'a> {
     fn parse_signature_decl(
         &mut self,
         unique_isa: Option<&TargetIsa>,
-    ) -> Result<(SigRef, Signature)> {
+    ) -> ParseResult<(SigRef, Signature)> {
         let sig = self.match_sig("expected signature number: sig«n»")?;
         self.match_token(Token::Equal, "expected '=' in signature decl")?;
         let data = self.parse_signature(unique_isa)?;
@@ -1205,7 +1211,7 @@ impl<'a> Parser<'a> {
     // The first variant allocates a new signature reference. The second references an existing
     // signature which must be declared first.
     //
-    fn parse_function_decl(&mut self, ctx: &mut Context) -> Result<(FuncRef, ExtFuncData)> {
+    fn parse_function_decl(&mut self, ctx: &mut Context) -> ParseResult<(FuncRef, ExtFuncData)> {
         let fn_ = self.match_fn("expected function number: fn«n»")?;
         self.match_token(Token::Equal, "expected '=' in function decl")?;
 
@@ -1260,7 +1266,7 @@ impl<'a> Parser<'a> {
     // Parse a jump table decl.
     //
     // jump-table-decl ::= * JumpTable(jt) "=" "jump_table" jt-entry {"," jt-entry}
-    fn parse_jump_table_decl(&mut self) -> Result<(JumpTable, JumpTableData)> {
+    fn parse_jump_table_decl(&mut self) -> ParseResult<(JumpTable, JumpTableData)> {
         let jt = self.match_jt()?;
         self.match_token(Token::Equal, "expected '=' in jump_table decl")?;
         self.match_identifier("jump_table", "expected 'jump_table'")?;
@@ -1285,7 +1291,7 @@ impl<'a> Parser<'a> {
     }
 
     // jt-entry ::= * Ebb(dest) | "0"
-    fn parse_jump_table_entry(&mut self) -> Result<Option<Ebb>> {
+    fn parse_jump_table_entry(&mut self) -> ParseResult<Option<Ebb>> {
         match self.token() {
             Some(Token::Integer(s)) => {
                 if s == "0" {
@@ -1304,7 +1310,7 @@ impl<'a> Parser<'a> {
     }
 
     /// stack-limit-decl ::= "stack_limit" "=" GlobalVar(gv)
-    fn parse_stack_limit_decl(&mut self) -> Result<GlobalVar> {
+    fn parse_stack_limit_decl(&mut self) -> ParseResult<GlobalVar> {
         self.consume();
         self.match_token(Token::Equal, "expected '=' in stack limit declaration")?;
         let gv = self.match_gv("expected global variable")?;
@@ -1316,7 +1322,7 @@ impl<'a> Parser<'a> {
     //
     // function-body ::= * { extended-basic-block }
     //
-    fn parse_function_body(&mut self, ctx: &mut Context) -> Result<()> {
+    fn parse_function_body(&mut self, ctx: &mut Context) -> ParseResult<()> {
         while self.token() != Some(Token::RBrace) {
             self.parse_extended_basic_block(ctx)?;
         }
@@ -1352,7 +1358,7 @@ impl<'a> Parser<'a> {
     // extended-basic-block ::= * ebb-header { instruction }
     // ebb-header           ::= Ebb(ebb) [ebb-params] ":"
     //
-    fn parse_extended_basic_block(&mut self, ctx: &mut Context) -> Result<()> {
+    fn parse_extended_basic_block(&mut self, ctx: &mut Context) -> ParseResult<()> {
         // Collect comments for the next ebb.
         self.start_gathering_comments();
 
@@ -1415,7 +1421,7 @@ impl<'a> Parser<'a> {
     // value numbers of the defined values and the defined types.
     //
     // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
-    fn parse_ebb_params(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
+    fn parse_ebb_params(&mut self, ctx: &mut Context, ebb: Ebb) -> ParseResult<()> {
         // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
         self.match_token(Token::LPar, "expected '(' before EBB parameters")?;
 
@@ -1439,7 +1445,7 @@ impl<'a> Parser<'a> {
     // ebb-param ::= * Value(v) ":" Type(t) arg-loc?
     // arg-loc ::= "[" value-location "]"
     //
-    fn parse_ebb_param(&mut self, ctx: &mut Context, ebb: Ebb) -> Result<()> {
+    fn parse_ebb_param(&mut self, ctx: &mut Context, ebb: Ebb) -> ParseResult<()> {
         // ebb-param ::= * Value(v) ":" Type(t) arg-loc?
         let v = self.match_value("EBB argument must be a value")?;
         let v_location = self.loc;
@@ -1466,7 +1472,7 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    fn parse_value_location(&mut self, ctx: &Context) -> Result<ValueLoc> {
+    fn parse_value_location(&mut self, ctx: &Context) -> ParseResult<ValueLoc> {
         match self.token() {
             Some(Token::StackSlot(src_num)) => {
                 self.consume();
@@ -1505,7 +1511,7 @@ impl<'a> Parser<'a> {
     fn parse_instruction_encoding(
         &mut self,
         ctx: &Context,
-    ) -> Result<(Option<Encoding>, Option<Vec<ValueLoc>>)> {
+    ) -> ParseResult<(Option<Encoding>, Option<Vec<ValueLoc>>)> {
         let (mut encoding, mut result_locations) = (None, None);
 
         // encoding ::= "[" encoding_literal result_locations "]"
@@ -1551,7 +1557,7 @@ impl<'a> Parser<'a> {
     //
     // inst-results ::= Value(v) { "," Value(v) }
     //
-    fn parse_inst_results(&mut self) -> Result<Vec<Value>> {
+    fn parse_inst_results(&mut self) -> ParseResult<Vec<Value>> {
         // Result value numbers.
         let mut results = Vec::new();
 
@@ -1576,7 +1582,7 @@ impl<'a> Parser<'a> {
     //
     // value_alias ::= [inst-results] "->" Value(v)
     //
-    fn parse_value_alias(&mut self, results: &[Value], ctx: &mut Context) -> Result<()> {
+    fn parse_value_alias(&mut self, results: &[Value], ctx: &mut Context) -> ParseResult<()> {
         if results.len() != 1 {
             return err!(self.loc, "wrong number of aliases");
         }
@@ -1623,7 +1629,7 @@ impl<'a> Parser<'a> {
         result_locations: Option<Vec<ValueLoc>>,
         ctx: &mut Context,
         ebb: Ebb,
-    ) -> Result<()> {
+    ) -> ParseResult<()> {
         // Define the result values.
         for val in results {
             ctx.map.def_value(*val, &self.loc)?;
@@ -1731,7 +1737,7 @@ impl<'a> Parser<'a> {
         opcode: Opcode,
         explicit_ctrl_type: Option<Type>,
         inst_data: &InstructionData,
-    ) -> Result<Type> {
+    ) -> ParseResult<Type> {
         let constraints = opcode.constraints();
         let ctrl_type = match explicit_ctrl_type {
             Some(t) => t,
@@ -1808,7 +1814,7 @@ impl<'a> Parser<'a> {
     //
     // value_list ::= [ value { "," value } ]
     //
-    fn parse_value_list(&mut self) -> Result<VariableArgs> {
+    fn parse_value_list(&mut self) -> ParseResult<VariableArgs> {
         let mut args = VariableArgs::new();
 
         if let Some(Token::Value(v)) = self.token() {
@@ -1825,7 +1831,7 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    fn parse_value_sequence(&mut self) -> Result<VariableArgs> {
+    fn parse_value_sequence(&mut self) -> ParseResult<VariableArgs> {
         let mut args = VariableArgs::new();
 
         if let Some(Token::Value(v)) = self.token() {
@@ -1843,7 +1849,7 @@ impl<'a> Parser<'a> {
     }
 
     // Parse an optional value list enclosed in parantheses.
-    fn parse_opt_value_list(&mut self) -> Result<VariableArgs> {
+    fn parse_opt_value_list(&mut self) -> ParseResult<VariableArgs> {
         if !self.optional(Token::LPar) {
             return Ok(VariableArgs::new());
         }
@@ -1861,7 +1867,7 @@ impl<'a> Parser<'a> {
         &mut self,
         ctx: &mut Context,
         opcode: Opcode,
-    ) -> Result<InstructionData> {
+    ) -> ParseResult<InstructionData> {
         let idata = match opcode.format() {
             InstructionFormat::Unary => InstructionData::Unary {
                 opcode,
@@ -2289,7 +2295,7 @@ mod tests {
     use cretonne_codegen::ir::StackSlotKind;
     use cretonne_codegen::ir::{ArgumentExtension, ArgumentPurpose};
     use cretonne_codegen::settings::CallConv;
-    use error::Error;
+    use error::ParseError;
     use isaspec::IsaSpec;
     use testfile::{Comment, Details};
 
@@ -2300,7 +2306,7 @@ mod tests {
         assert_eq!(arg.value_type, types::I32);
         assert_eq!(arg.extension, ArgumentExtension::Sext);
         assert_eq!(arg.purpose, ArgumentPurpose::Normal);
-        let Error { location, message } = p.parse_abi_param(None).unwrap_err();
+        let ParseError { location, message } = p.parse_abi_param(None).unwrap_err();
         assert_eq!(location.line_number, 1);
         assert_eq!(message, "expected parameter type");
     }

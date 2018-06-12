@@ -36,7 +36,7 @@ def gen_to_and_from_str(ty, values, fmt):
     with fmt.indented('impl str::FromStr for {} {{'.format(ty), '}'):
         fmt.line('type Err = ();')
         with fmt.indented(
-                'fn from_str(s: &str) -> result::Result<Self, Self::Err> {',
+                'fn from_str(s: &str) -> Result<Self, Self::Err> {',
                 '}'):
             with fmt.indented('match s {', '}'):
                 for v in values:

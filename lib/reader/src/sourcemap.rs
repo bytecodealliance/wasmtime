@@ -8,7 +8,7 @@
 
 use cretonne_codegen::ir::entities::AnyEntity;
 use cretonne_codegen::ir::{Ebb, FuncRef, GlobalVar, Heap, JumpTable, SigRef, StackSlot, Value};
-use error::{Location, Result};
+use error::{Location, ParseResult};
 use lexer::split_entity_name;
 use std::collections::HashMap;
 
@@ -140,48 +140,48 @@ impl SourceMap {
     }
 
     /// Define the value `entity`.
-    pub fn def_value(&mut self, entity: Value, loc: &Location) -> Result<()> {
+    pub fn def_value(&mut self, entity: Value, loc: &Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the ebb `entity`.
-    pub fn def_ebb(&mut self, entity: Ebb, loc: &Location) -> Result<()> {
+    pub fn def_ebb(&mut self, entity: Ebb, loc: &Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the stack slot `entity`.
-    pub fn def_ss(&mut self, entity: StackSlot, loc: &Location) -> Result<()> {
+    pub fn def_ss(&mut self, entity: StackSlot, loc: &Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the global variable `entity`.
-    pub fn def_gv(&mut self, entity: GlobalVar, loc: &Location) -> Result<()> {
+    pub fn def_gv(&mut self, entity: GlobalVar, loc: &Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the heap `entity`.
-    pub fn def_heap(&mut self, entity: Heap, loc: &Location) -> Result<()> {
+    pub fn def_heap(&mut self, entity: Heap, loc: &Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the signature `entity`.
-    pub fn def_sig(&mut self, entity: SigRef, loc: &Location) -> Result<()> {
+    pub fn def_sig(&mut self, entity: SigRef, loc: &Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the external function `entity`.
-    pub fn def_fn(&mut self, entity: FuncRef, loc: &Location) -> Result<()> {
+    pub fn def_fn(&mut self, entity: FuncRef, loc: &Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the jump table `entity`.
-    pub fn def_jt(&mut self, entity: JumpTable, loc: &Location) -> Result<()> {
+    pub fn def_jt(&mut self, entity: JumpTable, loc: &Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define an entity. This can be used for instructions whose numbers never
     /// appear in source, or implicitly defined signatures.
-    pub fn def_entity(&mut self, entity: AnyEntity, loc: &Location) -> Result<()> {
+    pub fn def_entity(&mut self, entity: AnyEntity, loc: &Location) -> ParseResult<()> {
         if self.locations.insert(entity, *loc).is_some() {
             err!(loc, "duplicate entity: {}", entity)
         } else {

@@ -6,13 +6,12 @@
 use ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
 use isa::{RegInfo, TargetIsa};
 use packed_option::ReservedValue;
-use std::fmt::{self, Error, Result, Write};
-use std::result;
+use std::fmt::{self, Write};
 use std::string::String;
 
 /// Write `func` to `w` as equivalent text.
 /// Use `isa` to emit ISA-dependent annotations.
-pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -> Result {
+pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -> fmt::Result {
     let regs = isa.map(TargetIsa::register_info);
     let regs = regs.as_ref();
 
@@ -34,7 +33,7 @@ pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -
 //
 // Function spec.
 
-fn write_spec(w: &mut Write, func: &Function, regs: Option<&RegInfo>) -> Result {
+fn write_spec(w: &mut Write, func: &Function, regs: Option<&RegInfo>) -> fmt::Result {
     write!(w, "{}{}", func.name, func.signature.display(regs))
 }
 
@@ -42,7 +41,7 @@ fn write_preamble(
     w: &mut Write,
     func: &Function,
     regs: Option<&RegInfo>,
-) -> result::Result<bool, Error> {
+) -> Result<bool, fmt::Error> {
     let mut any = false;
 
     for (ss, slot) in func.stack_slots.iter() {
@@ -91,7 +90,12 @@ fn write_preamble(
 //
 // Basic blocks
 
-pub fn write_arg(w: &mut Write, func: &Function, regs: Option<&RegInfo>, arg: Value) -> Result {
+pub fn write_arg(
+    w: &mut Write,
+    func: &Function,
+    regs: Option<&RegInfo>,
+    arg: Value,
+) -> fmt::Result {
     write!(w, "{}: {}", arg, func.dfg.value_type(arg))?;
     let loc = func.locations[arg];
     if loc.is_assigned() {
@@ -107,7 +111,7 @@ pub fn write_ebb_header(
     isa: Option<&TargetIsa>,
     ebb: Ebb,
     indent: usize,
-) -> Result {
+) -> fmt::Result {
     // Write out the basic block header, outdented:
     //
     //    ebb1:
@@ -137,7 +141,7 @@ pub fn write_ebb_header(
     writeln!(w, "):")
 }
 
-pub fn write_ebb(w: &mut Write, func: &Function, isa: Option<&TargetIsa>, ebb: Ebb) -> Result {
+pub fn write_ebb(w: &mut Write, func: &Function, isa: Option<&TargetIsa>, ebb: Ebb) -> fmt::Result {
     // Indent all instructions if any encodings are present.
     let indent = if func.encodings.is_empty() && func.srclocs.is_empty() {
         4
@@ -191,7 +195,7 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
 }
 
 // Write out any value aliases appearing in `inst`.
-fn write_value_aliases(w: &mut Write, func: &Function, inst: Inst, indent: usize) -> Result {
+fn write_value_aliases(w: &mut Write, func: &Function, inst: Inst, indent: usize) -> fmt::Result {
     for &arg in func.dfg.inst_args(inst) {
         let resolved = func.dfg.resolve_aliases(arg);
         if resolved != arg {
@@ -207,7 +211,7 @@ fn write_instruction(
     isa: Option<&TargetIsa>,
     inst: Inst,
     indent: usize,
-) -> Result {
+) -> fmt::Result {
     // Value aliases come out on lines before the instruction using them.
     write_value_aliases(w, func, inst, indent)?;
 
@@ -272,7 +276,7 @@ pub fn write_operands(
     dfg: &DataFlowGraph,
     isa: Option<&TargetIsa>,
     inst: Inst,
-) -> Result {
+) -> fmt::Result {
     let pool = &dfg.value_lists;
     use ir::instructions::InstructionData::*;
     match dfg[inst] {
@@ -472,7 +476,7 @@ pub fn write_operands(
 }
 
 /// Write EBB args using optional parantheses.
-fn write_ebb_args(w: &mut Write, args: &[Value]) -> Result {
+fn write_ebb_args(w: &mut Write, args: &[Value]) -> fmt::Result {
     if args.is_empty() {
         Ok(())
     } else {
@@ -484,7 +488,7 @@ fn write_ebb_args(w: &mut Write, args: &[Value]) -> Result {
 struct DisplayValues<'a>(&'a [Value]);
 
 impl<'a> fmt::Display for DisplayValues<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (i, val) in self.0.iter().enumerate() {
             if i == 0 {
                 write!(f, "{}", val)?;
@@ -499,7 +503,7 @@ impl<'a> fmt::Display for DisplayValues<'a> {
 struct DisplayValuesWithDelimiter<'a>(&'a [Value], char);
 
 impl<'a> fmt::Display for DisplayValuesWithDelimiter<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (i, val) in self.0.iter().enumerate() {
             if i == 0 {
                 write!(f, "{}", val)?;
