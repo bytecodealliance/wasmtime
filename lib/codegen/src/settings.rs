@@ -131,8 +131,6 @@ impl Configurable for Builder {
         let (offset, detail) = self.lookup(name)?;
         match detail {
             Detail::Bool { bit } => {
-                // Cannot currently propagate SetResult<()> up on functions returning ()
-                // with the `?` operator
                 self.set_bit(offset, bit, parse_bool_value(value)?);
             }
             Detail::Num => {
