@@ -4,7 +4,7 @@ version = "0.13.0"
 authors = ["The Cretonne Project Developers"]
 description = "Support for targeting the host with Cretonne"
 repository = "https://github.com/cretonne/cretonne"
-license = "Apache-2.0"
+license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 
 [dependencies]

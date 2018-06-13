@@ -5,7 +5,7 @@ authors = ["The Cretonne Project Developers"]
 description = "A simple JIT library backed by Cretonne"
 repository = "https://github.com/cretonne/cretonne"
 documentation = "https://cretonne.readthedocs.io/"
-license = "Apache-2.0"
+license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 
 [dependencies]
