@@ -49,7 +49,7 @@ fn write_preamble(
         writeln!(w, "    {} = {}", ss, slot)?;
     }
 
-    for (gv, gv_data) in &func.global_vars {
+    for (gv, gv_data) in &func.global_values {
         any = true;
         writeln!(w, "    {} = {}", gv, gv_data)?;
     }
@@ -285,7 +285,7 @@ pub fn write_operands(
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
         UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
         UnaryBool { imm, .. } => write!(w, " {}", imm),
-        UnaryGlobalVar { global_var, .. } => write!(w, " {}", global_var),
+        UnaryGlobalValue { global_value, .. } => write!(w, " {}", global_value),
         Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
         BinaryImm { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
         Ternary { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),

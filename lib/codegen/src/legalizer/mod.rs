@@ -22,13 +22,13 @@ use timing;
 
 mod boundary;
 mod call;
-mod globalvar;
+mod globalvalue;
 mod heap;
 mod libcall;
 mod split;
 
 use self::call::expand_call;
-use self::globalvar::expand_global_addr;
+use self::globalvalue::expand_global_value;
 use self::heap::expand_heap_addr;
 use self::libcall::expand_as_libcall;
 

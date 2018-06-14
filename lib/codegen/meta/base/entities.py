@@ -16,8 +16,8 @@ ebb = EntityRefKind(
 #: A reference to a stack slot declared in the function preamble.
 stack_slot = EntityRefKind('stack_slot', 'A stack slot.')
 
-#: A reference to a global variable.
-global_var = EntityRefKind('global_var', 'A global variable.')
+#: A reference to a global valueiable.
+global_value = EntityRefKind('global_value', 'A global value.')
 
 #: A reference to a function sugnature declared in the function preamble.
 #: This is used to provide the call signature in a call_indirect instruction.

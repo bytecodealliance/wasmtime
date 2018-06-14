@@ -53,9 +53,9 @@ pub fn is_colocated_func(func_ref: ir::FuncRef, func: &ir::Function) -> bool {
 }
 
 #[allow(dead_code)]
-pub fn is_colocated_data(global_var: ir::GlobalVar, func: &ir::Function) -> bool {
-    match func.global_vars[global_var] {
-        ir::GlobalVarData::Sym { colocated, .. } => colocated,
+pub fn is_colocated_data(global_value: ir::GlobalValue, func: &ir::Function) -> bool {
+    match func.global_values[global_value] {
+        ir::GlobalValueData::Sym { colocated, .. } => colocated,
         _ => panic!("is_colocated_data only makes sense for data with symbolic addresses"),
     }
 }

@@ -110,7 +110,7 @@ Program structure
 
 In LLVM IR, the largest representable unit is the *module* which corresponds
 more or less to a C translation unit. It is a collection of functions and
-global variables that may contain references to external symbols too.
+global valueiables that may contain references to external symbols too.
 
 In Cretonne IR, the largest representable unit is the *function*. This is so
 that functions can easily be compiled in parallel without worrying about

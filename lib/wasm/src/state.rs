@@ -134,7 +134,7 @@ pub struct TranslationState {
     pub control_stack: Vec<ControlStackFrame>,
     pub reachable: bool,
 
-    // Map of global variables that have already been created by `FuncEnvironment::make_global`.
+    // Map of global valueiables that have already been created by `FuncEnvironment::make_global`.
     globals: HashMap<GlobalIndex, GlobalValue>,
 
     // Map of heaps that have been created by `FuncEnvironment::make_heap`.
@@ -272,7 +272,7 @@ impl TranslationState {
 
 /// Methods for handling entity references.
 impl TranslationState {
-    /// Get the `GlobalVar` reference that should be used to access the global variable `index`.
+    /// Get the `GlobalValue` reference that should be used to access the global valueiable `index`.
     /// Create the reference if necessary.
     /// Also return the WebAssembly type of the global.
     pub fn get_global<FE: FuncEnvironment + ?Sized>(

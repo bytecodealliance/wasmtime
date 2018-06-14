@@ -18,7 +18,7 @@ UnaryImm = InstructionFormat(imm64)
 UnaryIeee32 = InstructionFormat(ieee32)
 UnaryIeee64 = InstructionFormat(ieee64)
 UnaryBool = InstructionFormat(boolean)
-UnaryGlobalVar = InstructionFormat(entities.global_var)
+UnaryGlobalValue = InstructionFormat(entities.global_value)
 
 Binary = InstructionFormat(VALUE, VALUE)
 BinaryImm = InstructionFormat(VALUE, imm64)
@@ -79,5 +79,5 @@ CondTrap = InstructionFormat(VALUE, trapcode)
 IntCondTrap = InstructionFormat(intcc, VALUE, trapcode)
 FloatCondTrap = InstructionFormat(floatcc, VALUE, trapcode)
 
-# Finally extract the names of global variables in this module.
+# Finally extract the names of global valueiables in this module.
 InstructionFormat.extract_names(globals())

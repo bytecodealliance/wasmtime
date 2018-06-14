@@ -74,7 +74,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = match state.get_global(builder.func, global_index, environ) {
                 GlobalValue::Const(val) => val,
                 GlobalValue::Memory { gv, ty } => {
-                    let addr = builder.ins().global_addr(environ.native_pointer(), gv);
+                    let addr = builder.ins().global_value(environ.native_pointer(), gv);
                     let mut flags = ir::MemFlags::new();
                     flags.set_notrap();
                     flags.set_aligned();
@@ -87,7 +87,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             match state.get_global(builder.func, global_index, environ) {
                 GlobalValue::Const(_) => panic!("global #{} is a constant", global_index),
                 GlobalValue::Memory { gv, .. } => {
-                    let addr = builder.ins().global_addr(environ.native_pointer(), gv);
+                    let addr = builder.ins().global_value(environ.native_pointer(), gv);
                     let mut flags = ir::MemFlags::new();
                     flags.set_notrap();
                     flags.set_aligned();

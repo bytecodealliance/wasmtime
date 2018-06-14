@@ -7,7 +7,7 @@ use binemit::CodeOffset;
 use entity::{EntityMap, PrimaryMap};
 use ir;
 use ir::{DataFlowGraph, ExternalName, Layout, Signature};
-use ir::{Ebb, ExtFuncData, FuncRef, GlobalVar, GlobalVarData, Heap, HeapData, JumpTable,
+use ir::{Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, JumpTable,
          JumpTableData, SigRef, StackSlot, StackSlotData};
 use ir::{EbbOffsets, InstEncodings, JumpTables, SourceLocs, StackSlots, ValueLocations};
 use isa::{EncInfo, Encoding, Legalize, TargetIsa};
@@ -32,10 +32,10 @@ pub struct Function {
 
     /// If not `None`, represents the address that the stack pointer should
     /// be checked against.
-    pub stack_limit: Option<ir::GlobalVar>,
+    pub stack_limit: Option<ir::GlobalValue>,
 
     /// Global variables referenced.
-    pub global_vars: PrimaryMap<ir::GlobalVar, ir::GlobalVarData>,
+    pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
 
     /// Heaps referenced.
     pub heaps: PrimaryMap<ir::Heap, ir::HeapData>,
@@ -78,7 +78,7 @@ impl Function {
             signature: sig,
             stack_slots: StackSlots::new(),
             stack_limit: None,
-            global_vars: PrimaryMap::new(),
+            global_values: PrimaryMap::new(),
             heaps: PrimaryMap::new(),
             jump_tables: PrimaryMap::new(),
             dfg: DataFlowGraph::new(),
@@ -94,7 +94,7 @@ impl Function {
     pub fn clear(&mut self) {
         self.signature.clear(CallConv::Fast);
         self.stack_slots.clear();
-        self.global_vars.clear();
+        self.global_values.clear();
         self.heaps.clear();
         self.jump_tables.clear();
         self.dfg.clear();
@@ -129,7 +129,7 @@ impl Function {
     /// Sets the stack limit for the function.
     ///
     /// Returns previous one if any.
-    pub fn set_stack_limit(&mut self, stack_limit: Option<GlobalVar>) -> Option<GlobalVar> {
+    pub fn set_stack_limit(&mut self, stack_limit: Option<GlobalValue>) -> Option<GlobalValue> {
         let prev = self.stack_limit.take();
         self.stack_limit = stack_limit;
         prev
@@ -145,9 +145,9 @@ impl Function {
         self.dfg.ext_funcs.push(data)
     }
 
-    /// Declares a global variable accessible to the function.
-    pub fn create_global_var(&mut self, data: GlobalVarData) -> GlobalVar {
-        self.global_vars.push(data)
+    /// Declares a global valueiable accessible to the function.
+    pub fn create_global_value(&mut self, data: GlobalValueData) -> GlobalValue {
+        self.global_values.push(data)
     }
 
     /// Declares a heap accessible to the function.

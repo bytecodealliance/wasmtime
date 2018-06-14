@@ -52,11 +52,11 @@ pub struct DataDescription {
     /// External function declarations.
     pub function_decls: PrimaryMap<ir::FuncRef, ir::ExternalName>,
     /// External data object declarations.
-    pub data_decls: PrimaryMap<ir::GlobalVar, ir::ExternalName>,
+    pub data_decls: PrimaryMap<ir::GlobalValue, ir::ExternalName>,
     /// Function addresses to write at specified offsets.
     pub function_relocs: Vec<(CodeOffset, ir::FuncRef)>,
     /// Data addresses to write at specified offsets.
-    pub data_relocs: Vec<(CodeOffset, ir::GlobalVar, Addend)>,
+    pub data_relocs: Vec<(CodeOffset, ir::GlobalValue, Addend)>,
 }
 
 /// This is to data objects what cretonne_codegen::Context is to functions.
@@ -114,14 +114,14 @@ impl DataContext {
         self.description.function_decls.push(name)
     }
 
-    /// Declares a global variable import.
+    /// Declares a global valueiable import.
     ///
     /// TODO: Rename to import_data?
     ///
     /// Users of the `Module` API generally should call
     /// `Module::declare_data_in_data` instead, as it takes care of generating
     /// the appropriate `ExternalName`.
-    pub fn import_global_var(&mut self, name: ir::ExternalName) -> ir::GlobalVar {
+    pub fn import_global_value(&mut self, name: ir::ExternalName) -> ir::GlobalValue {
         self.description.data_decls.push(name)
     }
 
@@ -131,7 +131,7 @@ impl DataContext {
     }
 
     /// Write the address of `data` into the data at offset `offset`.
-    pub fn write_data_addr(&mut self, offset: CodeOffset, data: ir::GlobalVar, addend: Addend) {
+    pub fn write_data_addr(&mut self, offset: CodeOffset, data: ir::GlobalValue, addend: Addend) {
         self.description.data_relocs.push((offset, data, addend))
     }
 
@@ -168,8 +168,8 @@ mod tests {
         let _func_a = data_ctx.import_function(ir::ExternalName::user(0, 0));
         let func_b = data_ctx.import_function(ir::ExternalName::user(0, 1));
         let func_c = data_ctx.import_function(ir::ExternalName::user(1, 0));
-        let _data_a = data_ctx.import_global_var(ir::ExternalName::user(2, 2));
-        let data_b = data_ctx.import_global_var(ir::ExternalName::user(2, 3));
+        let _data_a = data_ctx.import_global_value(ir::ExternalName::user(2, 2));
+        let data_b = data_ctx.import_global_value(ir::ExternalName::user(2, 3));
 
         data_ctx.write_function_addr(8, func_b);
         data_ctx.write_function_addr(16, func_c);

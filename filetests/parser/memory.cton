@@ -10,8 +10,8 @@ function %vmglobal() -> i32 {
     gv5 = vmctx -256
     ; check: gv5 = vmctx-256
 ebb0:
-    v1 = global_addr.i32 gv3
-    ; check: v1 = global_addr.i32 gv3
+    v1 = global_value.i32 gv3
+    ; check: v1 = global_value.i32 gv3
     return v1
 }
 
@@ -20,19 +20,19 @@ function %deref() -> i32 {
     gv4 = deref(gv3)-32
     ; check: gv4 = deref(gv3)-32
 ebb0:
-    v1 = global_addr.i32 gv4
-    ; check: v1 = global_addr.i32 gv4
+    v1 = global_value.i32 gv4
+    ; check: v1 = global_value.i32 gv4
     return v1
 }
 
-; Refer to a global variable before it's been declared.
+; Refer to a global valueiable before it's been declared.
 function %backref() -> i32 {
     gv1 = deref(gv2)-32
     ; check: gv1 = deref(gv2)-32
     gv2 = vmctx+16
     ; check: gv2 = vmctx+16
 ebb0:
-    v1 = global_addr.i32 gv1
+    v1 = global_value.i32 gv1
     return v1
 }
 
@@ -42,10 +42,10 @@ function %sym() -> i32 {
     gv1 = globalsym u8:9
     ; check: gv1 = globalsym u8:9
 ebb0:
-    v0 = global_addr.i32 gv0
-    ; check: v0 = global_addr.i32 gv0
-    v1 = global_addr.i32 gv1
-    ; check: v1 = global_addr.i32 gv1
+    v0 = global_value.i32 gv0
+    ; check: v0 = global_value.i32 gv0
+    v1 = global_value.i32 gv1
+    ; check: v1 = global_value.i32 gv1
     v2 = bxor v0, v1
     return v2
 }

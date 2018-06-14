@@ -7,7 +7,7 @@
 //! to parser clients.
 
 use cretonne_codegen::ir::entities::AnyEntity;
-use cretonne_codegen::ir::{Ebb, FuncRef, GlobalVar, Heap, JumpTable, SigRef, StackSlot, Value};
+use cretonne_codegen::ir::{Ebb, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Value};
 use error::{Location, ParseResult};
 use lexer::split_entity_name;
 use std::collections::HashMap;
@@ -36,8 +36,8 @@ impl SourceMap {
         self.locations.contains_key(&ss.into())
     }
 
-    /// Look up a global variable entity.
-    pub fn contains_gv(&self, gv: GlobalVar) -> bool {
+    /// Look up a global valueiable entity.
+    pub fn contains_gv(&self, gv: GlobalValue) -> bool {
         self.locations.contains_key(&gv.into())
     }
 
@@ -86,7 +86,7 @@ impl SourceMap {
                     Some(ss.into())
                 }
             }),
-            "gv" => GlobalVar::with_number(num).and_then(|gv| {
+            "gv" => GlobalValue::with_number(num).and_then(|gv| {
                 if !self.contains_gv(gv) {
                     None
                 } else {
@@ -154,8 +154,8 @@ impl SourceMap {
         self.def_entity(entity.into(), loc)
     }
 
-    /// Define the global variable `entity`.
-    pub fn def_gv(&mut self, entity: GlobalVar, loc: &Location) -> ParseResult<()> {
+    /// Define the global valueiable `entity`.
+    pub fn def_gv(&mut self, entity: GlobalValue, loc: &Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 

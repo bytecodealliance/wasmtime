@@ -1,7 +1,7 @@
 //! Heaps.
 
 use ir::immediates::Imm64;
-use ir::GlobalVar;
+use ir::GlobalValue;
 use std::fmt;
 
 /// Information about a heap declaration.
@@ -29,9 +29,9 @@ pub enum HeapBase {
     /// This feature is not yet implemented.
     ReservedReg,
 
-    /// The heap base is in a global variable. The variable must be accessible and naturally
+    /// The heap base is in a global valueiable. The variable must be accessible and naturally
     /// aligned for a pointer.
-    GlobalVar(GlobalVar),
+    GlobalValue(GlobalValue),
 }
 
 /// Style of heap including style-specific information.
@@ -41,7 +41,7 @@ pub enum HeapStyle {
     Dynamic {
         /// Global variable holding the current bound of the heap in bytes. It is
         /// required to be accessible and naturally aligned for a pointer-sized integer.
-        bound_gv: GlobalVar,
+        bound_gv: GlobalValue,
     },
 
     /// A static heap has a fixed base address and a number of not-yet-allocated pages before the
@@ -61,7 +61,7 @@ impl fmt::Display for HeapData {
 
         match self.base {
             HeapBase::ReservedReg => write!(f, " reserved_reg")?,
-            HeapBase::GlobalVar(gv) => write!(f, " {}", gv)?,
+            HeapBase::GlobalValue(gv) => write!(f, " {}", gv)?,
         }
 
         write!(f, ", min {}", self.min_size)?;

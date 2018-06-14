@@ -34,7 +34,7 @@ pub enum Token<'a> {
     Value(Value),         // v12, v7
     Ebb(Ebb),             // ebb3
     StackSlot(u32),       // ss3
-    GlobalVar(u32),       // gv3
+    GlobalValue(u32),     // gv3
     Heap(u32),            // heap2
     JumpTable(u32),       // jt2
     FuncRef(u32),         // fn2
@@ -338,7 +338,7 @@ impl<'a> Lexer<'a> {
             "v" => Value::with_number(number).map(Token::Value),
             "ebb" => Ebb::with_number(number).map(Token::Ebb),
             "ss" => Some(Token::StackSlot(number)),
-            "gv" => Some(Token::GlobalVar(number)),
+            "gv" => Some(Token::GlobalValue(number)),
             "heap" => Some(Token::Heap(number)),
             "jt" => Some(Token::JumpTable(number)),
             "fn" => Some(Token::FuncRef(number)),

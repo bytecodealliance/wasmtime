@@ -14,7 +14,7 @@ from base.formats import IntCompare, IntCompareImm, FloatCompare
 from base.formats import IntCond, FloatCond
 from base.formats import IntSelect, IntCondTrap, FloatCondTrap
 from base.formats import Jump, Branch, BranchInt, BranchFloat
-from base.formats import Ternary, FuncAddr, UnaryGlobalVar
+from base.formats import Ternary, FuncAddr, UnaryGlobalValue
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from base.formats import LoadComplex, StoreComplex
 from .registers import GPR, ABCD, FPR, GPR_DEREF_SAFE, GPR_ZERO_DEREF_SAFE
@@ -703,50 +703,50 @@ got_fnaddr8 = TailRecipe(
 
 # XX+rd id with Abs4 globalsym relocation.
 gvaddr4 = TailRecipe(
-        'gvaddr4', UnaryGlobalVar, size=4, ins=(), outs=GPR,
+        'gvaddr4', UnaryGlobalValue, size=4, ins=(), outs=GPR,
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         sink.reloc_external(Reloc::Abs4,
-                            &func.global_vars[global_var].symbol_name(),
+                            &func.global_values[global_value].symbol_name(),
                             0);
         sink.put4(0);
         ''')
 
 # XX+rd iq with Abs8 globalsym relocation.
 gvaddr8 = TailRecipe(
-        'gvaddr8', UnaryGlobalVar, size=8, ins=(), outs=GPR,
+        'gvaddr8', UnaryGlobalValue, size=8, ins=(), outs=GPR,
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         sink.reloc_external(Reloc::Abs8,
-                            &func.global_vars[global_var].symbol_name(),
+                            &func.global_values[global_value].symbol_name(),
                             0);
         sink.put8(0);
         ''')
 
 # XX+rd iq with PCRel4 globalsym relocation.
 pcrel_gvaddr8 = TailRecipe(
-        'pcrel_gvaddr8', UnaryGlobalVar, size=5, ins=(), outs=GPR,
+        'pcrel_gvaddr8', UnaryGlobalValue, size=5, ins=(), outs=GPR,
         emit='''
         PUT_OP(bits, rex2(0, out_reg0), sink);
         modrm_rm(5, out_reg0, sink);
         // The addend adjusts for the difference between the end of the
         // instruction and the beginning of the immediate field.
         sink.reloc_external(Reloc::X86PCRel4,
-                            &func.global_vars[global_var].symbol_name(),
+                            &func.global_values[global_value].symbol_name(),
                             -4);
         sink.put4(0);
         ''')
 
 # XX+rd iq with Abs8 globalsym relocation.
 got_gvaddr8 = TailRecipe(
-        'got_gvaddr8', UnaryGlobalVar, size=5, ins=(), outs=GPR,
+        'got_gvaddr8', UnaryGlobalValue, size=5, ins=(), outs=GPR,
         emit='''
         PUT_OP(bits, rex2(0, out_reg0), sink);
         modrm_rm(5, out_reg0, sink);
         // The addend adjusts for the difference between the end of the
         // instruction and the beginning of the immediate field.
         sink.reloc_external(Reloc::X86GOTPCRel4,
-                            &func.global_vars[global_var].symbol_name(),
+                            &func.global_values[global_value].symbol_name(),
                             -4);
         sink.put4(0);
         ''')

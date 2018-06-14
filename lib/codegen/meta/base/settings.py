@@ -53,7 +53,7 @@ call_conv = EnumSetting(
 
 # Note that Cretonne doesn't currently need an is_pie flag, because PIE is just
 # PIC where symbols can't be pre-empted, which can be expressed with the
-# `colocated` flag on external functions and global variables.
+# `colocated` flag on external functions and global valueiables.
 is_pic = BoolSetting("Enable Position-Independent Code generation")
 
 colocated_libcalls = BoolSetting(

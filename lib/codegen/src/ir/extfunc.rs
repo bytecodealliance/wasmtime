@@ -284,7 +284,7 @@ pub enum ArgumentPurpose {
     /// A VM context pointer.
     ///
     /// This is a pointer to a context struct containing details about the current sandbox. It is
-    /// used as a base pointer for `vmctx` global variables.
+    /// used as a base pointer for `vmctx` global valueiables.
     VMContext,
 
     /// A signature identifier.
