@@ -25,7 +25,7 @@ ebb0:
     return v1
 }
 
-; Refer to a global valueiable before it's been declared.
+; Refer to a global value before it's been declared.
 function %backref() -> i32 {
     gv1 = deref(gv2)-32
     ; check: gv1 = deref(gv2)-32

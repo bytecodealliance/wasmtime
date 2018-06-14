@@ -377,7 +377,7 @@ where
         self.func.import_function(data)
     }
 
-    /// Declares a global valueiable accessible to the function.
+    /// Declares a global value accessible to the function.
     pub fn create_global_value(&mut self, data: GlobalValueData) -> GlobalValue {
         self.func.create_global_value(data)
     }

@@ -145,7 +145,7 @@ impl Function {
         self.dfg.ext_funcs.push(data)
     }
 
-    /// Declares a global valueiable accessible to the function.
+    /// Declares a global value accessible to the function.
     pub fn create_global_value(&mut self, data: GlobalValueData) -> GlobalValue {
         self.global_values.push(data)
     }

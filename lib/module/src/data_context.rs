@@ -114,7 +114,7 @@ impl DataContext {
         self.description.function_decls.push(name)
     }
 
-    /// Declares a global valueiable import.
+    /// Declares a global value import.
     ///
     /// TODO: Rename to import_data?
     ///

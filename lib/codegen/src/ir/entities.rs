@@ -82,13 +82,13 @@ impl StackSlot {
     }
 }
 
-/// An opaque reference to a global valueiable.
+/// An opaque reference to a global value.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct GlobalValue(u32);
 entity_impl!(GlobalValue, "gv");
 
 impl GlobalValue {
-    /// Create a new global valueiable reference from its number.
+    /// Create a new global value reference from its number.
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {

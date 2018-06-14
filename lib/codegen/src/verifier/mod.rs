@@ -168,7 +168,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    // Check for cycles in the global valueiable declarations.
+    // Check for cycles in the global value declarations.
     fn verify_global_values(&self) -> VerifierResult<()> {
         let mut seen = SparseSet::new();
 
@@ -415,7 +415,7 @@ impl<'a> Verifier<'a> {
 
     fn verify_global_value(&self, inst: Inst, gv: GlobalValue) -> VerifierResult<()> {
         if !self.func.global_values.is_valid(gv) {
-            err!(inst, "invalid global valueiable {}", gv)
+            err!(inst, "invalid global value {}", gv)
         } else {
             Ok(())
         }
