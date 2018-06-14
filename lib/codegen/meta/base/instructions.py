@@ -491,19 +491,19 @@ stack_addr = Instruction(
 # Global variables.
 #
 
-GV = Operand('GV', entities.global_var)
+GV = Operand('GV', entities.global_value)
 
-global_addr = Instruction(
-        'global_addr', r"""
-        Compute the address of global variable GV.
+global_value = Instruction(
+        'global_value', r"""
+        Compute the value of global GV.
         """,
         ins=GV, outs=addr)
 
-# A specialized form of global_addr instructions that only handles
+# A specialized form of global_value instructions that only handles
 # symbolic names.
 globalsym_addr = Instruction(
         'globalsym_addr', r"""
-        Compute the address of global variable GV, which is a symbolic name.
+        Compute the address of global GV, which is a symbolic name.
         """,
         ins=GV, outs=addr)
 

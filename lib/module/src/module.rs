@@ -2,7 +2,7 @@
 
 // TODO: Should `ir::Function` really have a `name`?
 
-// TODO: Factor out `ir::Function`'s `ext_funcs` and `global_vars` into a struct
+// TODO: Factor out `ir::Function`'s `ext_funcs` and `global_values` into a struct
 // shared with `DataContext`?
 
 use cretonne_codegen::entity::{EntityRef, PrimaryMap};
@@ -440,10 +440,10 @@ where
     /// Use this when you're building the IR of a function to reference a data object.
     ///
     /// TODO: Same as above.
-    pub fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalVar {
+    pub fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
         let decl = &self.contents.data_objects[data].decl;
         let colocated = decl.linkage.is_final();
-        func.create_global_var(ir::GlobalVarData::Sym {
+        func.create_global_value(ir::GlobalValueData::Sym {
             name: ir::ExternalName::user(1, data.index() as u32),
             colocated,
         })
@@ -455,8 +455,8 @@ where
     }
 
     /// TODO: Same as above.
-    pub fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalVar {
-        ctx.import_global_var(ir::ExternalName::user(1, data.index() as u32))
+    pub fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
+        ctx.import_global_value(ir::ExternalName::user(1, data.index() as u32))
     }
 
     /// Define a function, producing the function body from the given `Context`.
@@ -536,7 +536,7 @@ where
         &mut self,
         data: DataId,
         offset: usize,
-        what: ir::GlobalVar,
+        what: ir::GlobalValue,
         addend: binemit::Addend,
     ) {
         let info = &mut self.contents.data_objects[data];

@@ -82,18 +82,18 @@ impl StackSlot {
     }
 }
 
-/// An opaque reference to a global variable.
+/// An opaque reference to a global valueiable.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct GlobalVar(u32);
-entity_impl!(GlobalVar, "gv");
+pub struct GlobalValue(u32);
+entity_impl!(GlobalValue, "gv");
 
-impl GlobalVar {
-    /// Create a new global variable reference from its number.
+impl GlobalValue {
+    /// Create a new global valueiable reference from its number.
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
         if n < u32::MAX {
-            Some(GlobalVar(n))
+            Some(GlobalValue(n))
         } else {
             None
         }
@@ -186,7 +186,7 @@ pub enum AnyEntity {
     /// A stack slot.
     StackSlot(StackSlot),
     /// A Global variable.
-    GlobalVar(GlobalVar),
+    GlobalValue(GlobalValue),
     /// A jump table.
     JumpTable(JumpTable),
     /// An external function.
@@ -205,7 +205,7 @@ impl fmt::Display for AnyEntity {
             AnyEntity::Inst(r) => r.fmt(f),
             AnyEntity::Value(r) => r.fmt(f),
             AnyEntity::StackSlot(r) => r.fmt(f),
-            AnyEntity::GlobalVar(r) => r.fmt(f),
+            AnyEntity::GlobalValue(r) => r.fmt(f),
             AnyEntity::JumpTable(r) => r.fmt(f),
             AnyEntity::FuncRef(r) => r.fmt(f),
             AnyEntity::SigRef(r) => r.fmt(f),
@@ -244,9 +244,9 @@ impl From<StackSlot> for AnyEntity {
     }
 }
 
-impl From<GlobalVar> for AnyEntity {
-    fn from(r: GlobalVar) -> Self {
-        AnyEntity::GlobalVar(r)
+impl From<GlobalValue> for AnyEntity {
+    fn from(r: GlobalValue) -> Self {
+        AnyEntity::GlobalValue(r)
     }
 }
 

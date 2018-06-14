@@ -777,7 +777,7 @@ impl Solver {
         if is_global {
             let mut new_var = Variable::new_live(value, rc, reg, true);
             new_var.is_global = true;
-            dbg!("add_tied_input: new tied-global var: {}", new_var);
+            dbg!("add_tied_input: new tied-global value: {}", new_var);
             self.vars.push(new_var);
             self.regs_in.free(rc, reg);
         } else {
@@ -920,7 +920,7 @@ impl Solver {
                 Some(reg) => reg,
                 None => {
                     // If `v` must avoid global interference, there is not point in requesting
-                    // live registers be diverted. We need to make it a non-global variable.
+                    // live registers be diverted. We need to make it a non-global valueiable.
                     if v.is_global && gregs.iter(rc).next().is_none() {
                         return Err(SolverError::Global(v.value));
                     } else {

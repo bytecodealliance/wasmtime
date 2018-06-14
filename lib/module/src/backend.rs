@@ -84,7 +84,7 @@ where
         &mut self,
         data: &mut Self::CompiledData,
         offset: usize,
-        what: ir::GlobalVar,
+        what: ir::GlobalValue,
         addend: binemit::Addend,
     );
 

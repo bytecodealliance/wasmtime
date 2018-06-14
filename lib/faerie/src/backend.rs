@@ -266,7 +266,7 @@ impl Backend for FaerieBackend {
         &mut self,
         _data: &mut FaerieCompiledData,
         _offset: usize,
-        _what: ir::GlobalVar,
+        _what: ir::GlobalValue,
         _usize: binemit::Addend,
     ) {
         unimplemented!()

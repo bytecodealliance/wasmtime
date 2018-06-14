@@ -63,7 +63,7 @@ use flowgraph::ControlFlowGraph;
 use ir;
 use ir::entities::AnyEntity;
 use ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
-use ir::{types, ArgumentLoc, Ebb, FuncRef, Function, GlobalVar, Inst, JumpTable, Opcode, SigRef,
+use ir::{types, ArgumentLoc, Ebb, FuncRef, Function, GlobalValue, Inst, JumpTable, Opcode, SigRef,
          StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc};
 use isa::TargetIsa;
 use iterators::IteratorExtras;
@@ -168,16 +168,16 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    // Check for cycles in the global variable declarations.
-    fn verify_global_vars(&self) -> VerifierResult<()> {
+    // Check for cycles in the global valueiable declarations.
+    fn verify_global_values(&self) -> VerifierResult<()> {
         let mut seen = SparseSet::new();
 
-        for gv in self.func.global_vars.keys() {
+        for gv in self.func.global_values.keys() {
             seen.clear();
             seen.insert(gv);
 
             let mut cur = gv;
-            while let ir::GlobalVarData::Deref { base, .. } = self.func.global_vars[cur] {
+            while let ir::GlobalValueData::Deref { base, .. } = self.func.global_values[cur] {
                 if seen.insert(base).is_some() {
                     return err!(gv, "deref cycle: {}", DisplayList(seen.as_slice()));
                 }
@@ -327,8 +327,8 @@ impl<'a> Verifier<'a> {
             StackLoad { stack_slot, .. } | StackStore { stack_slot, .. } => {
                 self.verify_stack_slot(inst, stack_slot)?;
             }
-            UnaryGlobalVar { global_var, .. } => {
-                self.verify_global_var(inst, global_var)?;
+            UnaryGlobalValue { global_value, .. } => {
+                self.verify_global_value(inst, global_value)?;
             }
             HeapAddr { heap, .. } => {
                 self.verify_heap(inst, heap)?;
@@ -413,9 +413,9 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_global_var(&self, inst: Inst, gv: GlobalVar) -> VerifierResult<()> {
-        if !self.func.global_vars.is_valid(gv) {
-            err!(inst, "invalid global variable {}", gv)
+    fn verify_global_value(&self, inst: Inst, gv: GlobalValue) -> VerifierResult<()> {
+        if !self.func.global_values.is_valid(gv) {
+            err!(inst, "invalid global valueiable {}", gv)
         } else {
             Ok(())
         }
@@ -1124,7 +1124,7 @@ impl<'a> Verifier<'a> {
     }
 
     pub fn run(&self) -> VerifierResult<()> {
-        self.verify_global_vars()?;
+        self.verify_global_values()?;
         self.typecheck_entry_block_params()?;
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
