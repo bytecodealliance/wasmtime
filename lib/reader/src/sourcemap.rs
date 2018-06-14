@@ -36,7 +36,7 @@ impl SourceMap {
         self.locations.contains_key(&ss.into())
     }
 
-    /// Look up a global valueiable entity.
+    /// Look up a global value entity.
     pub fn contains_gv(&self, gv: GlobalValue) -> bool {
         self.locations.contains_key(&gv.into())
     }
@@ -154,7 +154,7 @@ impl SourceMap {
         self.def_entity(entity.into(), loc)
     }
 
-    /// Define the global valueiable `entity`.
+    /// Define the global value `entity`.
     pub fn def_gv(&mut self, entity: GlobalValue, loc: &Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }

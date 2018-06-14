@@ -4,7 +4,7 @@ use ir::immediates::Offset32;
 use ir::{ExternalName, GlobalValue};
 use std::fmt;
 
-/// Information about a global valueiable declaration.
+/// Information about a global value declaration.
 #[derive(Clone)]
 pub enum GlobalValueData {
     /// Variable is part of the VM context struct, it's address is a constant offset from the VM
@@ -14,13 +14,13 @@ pub enum GlobalValueData {
         offset: Offset32,
     },
 
-    /// Variable is part of a struct pointed to by another global valueiable.
+    /// Variable is part of a struct pointed to by another global value.
     ///
-    /// The `base` global valueiable is assumed to contain a pointer to a struct. This global
+    /// The `base` global value is assumed to contain a pointer to a struct. This global
     /// variable lives at an offset into the struct. The memory must be accessible, and
     /// naturally aligned to hold a pointer value.
     Deref {
-        /// The base pointer global valueiable.
+        /// The base pointer global value.
         base: GlobalValue,
 
         /// Byte offset to be added to the pointer loaded from `base`.

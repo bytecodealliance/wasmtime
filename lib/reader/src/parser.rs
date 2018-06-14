@@ -139,7 +139,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Allocate a global valueiable slot.
+    // Allocate a global value slot.
     fn add_gv(
         &mut self,
         gv: GlobalValue,
@@ -156,10 +156,10 @@ impl<'a> Context<'a> {
         self.map.def_gv(gv, loc)
     }
 
-    // Resolve a reference to a global valueiable.
+    // Resolve a reference to a global value.
     fn check_gv(&self, gv: GlobalValue, loc: &Location) -> ParseResult<()> {
         if !self.map.contains_gv(gv) {
-            err!(loc, "undefined global valueiable {}", gv)
+            err!(loc, "undefined global value {}", gv)
         } else {
             Ok(())
         }
@@ -401,7 +401,7 @@ impl<'a> Parser<'a> {
         err!(self.loc, err_msg)
     }
 
-    // Match and consume a global valueiable reference.
+    // Match and consume a global value reference.
     fn match_gv(&mut self, err_msg: &str) -> ParseResult<GlobalValue> {
         if let Some(Token::GlobalValue(gv)) = self.token() {
             self.consume();
@@ -1077,7 +1077,7 @@ impl<'a> Parser<'a> {
         Ok((ss, data))
     }
 
-    // Parse a global valueiable decl.
+    // Parse a global value decl.
     //
     // global-var-decl ::= * GlobalValue(gv) "=" global-var-desc
     // global-var-desc ::= "vmctx" offset32
@@ -1085,28 +1085,19 @@ impl<'a> Parser<'a> {
     //                   | globalsym ["colocated"] name
     //
     fn parse_global_value_decl(&mut self) -> ParseResult<(GlobalValue, GlobalValueData)> {
-        let gv = self.match_gv("expected global valueiable number: gv«n»")?;
+        let gv = self.match_gv("expected global value number: gv«n»")?;
 
-        self.match_token(
-            Token::Equal,
-            "expected '=' in global valueiable declaration",
-        )?;
+        self.match_token(Token::Equal, "expected '=' in global value declaration")?;
 
-        let data = match self.match_any_identifier("expected global valueiable kind")? {
+        let data = match self.match_any_identifier("expected global value kind")? {
             "vmctx" => {
                 let offset = self.optional_offset32()?;
                 GlobalValueData::VMContext { offset }
             }
             "deref" => {
-                self.match_token(
-                    Token::LPar,
-                    "expected '(' in 'deref' global valueiable decl",
-                )?;
-                let base = self.match_gv("expected global valueiable: gv«n»")?;
-                self.match_token(
-                    Token::RPar,
-                    "expected ')' in 'deref' global valueiable decl",
-                )?;
+                self.match_token(Token::LPar, "expected '(' in 'deref' global value decl")?;
+                let base = self.match_gv("expected global value: gv«n»")?;
+                self.match_token(Token::RPar, "expected ')' in 'deref' global value decl")?;
                 let offset = self.optional_offset32()?;
                 GlobalValueData::Deref { base, offset }
             }
@@ -1115,7 +1106,7 @@ impl<'a> Parser<'a> {
                 let name = self.parse_external_name()?;
                 GlobalValueData::Sym { name, colocated }
             }
-            other => return err!(self.loc, "Unknown global valueiable kind '{}'", other),
+            other => return err!(self.loc, "Unknown global value kind '{}'", other),
         };
 
         // Collect any trailing comments.
@@ -1150,7 +1141,7 @@ impl<'a> Parser<'a> {
             Some(Token::GlobalValue(base_num)) => {
                 let base_gv = match GlobalValue::with_number(base_num) {
                     Some(gv) => gv,
-                    None => return err!(self.loc, "invalid global valueiable number for heap base"),
+                    None => return err!(self.loc, "invalid global value number for heap base"),
                 };
                 HeapBase::GlobalValue(base_gv)
             }
@@ -1327,7 +1318,7 @@ impl<'a> Parser<'a> {
     fn parse_stack_limit_decl(&mut self) -> ParseResult<GlobalValue> {
         self.consume();
         self.match_token(Token::Equal, "expected '=' in stack limit declaration")?;
-        let gv = self.match_gv("expected global valueiable")?;
+        let gv = self.match_gv("expected global value")?;
 
         Ok(gv)
     }
@@ -1904,7 +1895,7 @@ impl<'a> Parser<'a> {
                 imm: self.match_bool("expected immediate boolean operand")?,
             },
             InstructionFormat::UnaryGlobalValue => {
-                let gv = self.match_gv("expected global valueiable")?;
+                let gv = self.match_gv("expected global value")?;
                 ctx.check_gv(gv, &self.loc)?;
                 InstructionData::UnaryGlobalValue {
                     opcode,

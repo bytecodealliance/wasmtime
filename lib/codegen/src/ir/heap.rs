@@ -29,7 +29,7 @@ pub enum HeapBase {
     /// This feature is not yet implemented.
     ReservedReg,
 
-    /// The heap base is in a global valueiable. The variable must be accessible and naturally
+    /// The heap base is in a global value. The variable must be accessible and naturally
     /// aligned for a pointer.
     GlobalValue(GlobalValue),
 }

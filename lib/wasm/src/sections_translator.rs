@@ -4,7 +4,7 @@
 //! The code of theses helper function is straightforward since it is only about reading metadata
 //! about linear memories, tables, globals, etc. and storing them for later use.
 //!
-//! The special case of the initialize expressions for table elements offsets or global valueiables
+//! The special case of the initialize expressions for table elements offsets or global values
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
 use cretonne_codegen::ir::{self, AbiParam, Signature};

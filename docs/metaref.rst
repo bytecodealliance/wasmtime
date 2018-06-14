@@ -15,7 +15,7 @@ The meta language descriptions are Python modules under the
 steps:
 
 1. The Python modules are imported. This has the effect of building static data
-   structures in global valueiables in the modules. These static data structures
+   structures in global values in the modules. These static data structures
    in the :mod:`base` and :mod:`isa` packages use the classes in the
    :mod:`cdsl` package to describe instruction sets and other properties.
 
@@ -81,7 +81,7 @@ open :class:`InstructionGroup`.
     :members:
 
 The basic Cretonne instruction set described in :doc:`langref` is defined by the
-Python module :mod:`base.instructions`. This module has a global valueiable
+Python module :mod:`base.instructions`. This module has a global value
 :data:`base.instructions.GROUP` which is an :class:`InstructionGroup` instance
 containing all the base instructions.
 

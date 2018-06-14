@@ -9,7 +9,7 @@ use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex,
                         Table, TableIndex};
 use wasmparser::BinaryReaderError;
 
-/// The value of a WebAssembly global valueiable.
+/// The value of a WebAssembly global value.
 #[derive(Clone, Copy)]
 pub enum GlobalValue {
     /// This is a constant global with a value known at compile time.
@@ -17,9 +17,9 @@ pub enum GlobalValue {
 
     /// This is a variable in memory that should be referenced as a `GlobalValue`.
     Memory {
-        /// Which global valueiable should be referenced.
+        /// Which global value should be referenced.
         gv: ir::GlobalValue,
-        /// The global valueiable's type.
+        /// The global value's type.
         ty: ir::Type,
     },
 }
@@ -88,12 +88,12 @@ pub trait FuncEnvironment {
         ir::Type::int(u16::from(self.triple().pointer_width().unwrap().bits())).unwrap()
     }
 
-    /// Set up the necessary preamble definitions in `func` to access the global valueiable
+    /// Set up the necessary preamble definitions in `func` to access the global value
     /// identified by `index`.
     ///
     /// The index space covers both imported globals and globals defined by the module.
     ///
-    /// Return the global valueiable reference that should be used to access the global and the
+    /// Return the global value reference that should be used to access the global and the
     /// WebAssembly type of the global.
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue;
 

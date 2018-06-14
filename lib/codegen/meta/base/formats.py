@@ -79,5 +79,5 @@ CondTrap = InstructionFormat(VALUE, trapcode)
 IntCondTrap = InstructionFormat(intcc, VALUE, trapcode)
 FloatCondTrap = InstructionFormat(floatcc, VALUE, trapcode)
 
-# Finally extract the names of global valueiables in this module.
+# Finally extract the names of global values in this module.
 InstructionFormat.extract_names(globals())

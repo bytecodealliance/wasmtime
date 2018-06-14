@@ -920,7 +920,7 @@ impl Solver {
                 Some(reg) => reg,
                 None => {
                     // If `v` must avoid global interference, there is not point in requesting
-                    // live registers be diverted. We need to make it a non-global valueiable.
+                    // live registers be diverted. We need to make it a non-global value.
                     if v.is_global && gregs.iter(rc).next().is_none() {
                         return Err(SolverError::Global(v.value));
                     } else {

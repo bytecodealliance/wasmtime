@@ -365,7 +365,7 @@ class RegClass(object):
         """
         Given a dict mapping name -> object as returned by `globals()`, find
         all the RegClass objects and set their name from the dict key.
-        This is used to name a bunch of global valueiables in a module.
+        This is used to name a bunch of global values in a module.
         """
         for name, obj in globs.items():
             if isinstance(obj, RegClass):
