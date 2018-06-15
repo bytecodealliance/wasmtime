@@ -554,21 +554,18 @@ stack overflow checks in the prologue.
     the stack pointer has reached or exceeded the limit, generate a trap with a
     ``stk_ovf`` code.
 
-    The global value must be accessible and naturally aligned for a
-    pointer-sized value.
-
     Setting `stack_limit` is an alternative way to detect stack overflow, when using
     a calling convention that doesn't perform stack probes.
 
-Global variables
-----------------
+Global values
+-------------
 
-A *global value* is an :term:`accessible` object in memory whose address is
-not known at compile time. The address is computed at runtime by
-:inst:`global_value`, possibly using information provided by the linker via
-relocations. There are multiple kinds of global values using different
-methods for determining their address. Cretonne does not track the type or even
-the size of global values, they are just pointers to non-stack memory.
+A *global value* is an object whose value is not known at compile time. The
+value is computed at runtime by :inst:`global_value`, possibly using
+information provided by the linker via relocations. There are multiple
+kinds of global values using different methods for determining their value.
+Cretonne does not track the type of a global value, for they are just 
+values stored in non-stack memory.
 
 When Cretonne is generating code for a virtual machine environment, globals can
 be used to access data structures in the VM's runtime. This requires functions
