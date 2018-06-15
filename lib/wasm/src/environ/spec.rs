@@ -93,7 +93,7 @@ pub trait FuncEnvironment {
     ///
     /// The index space covers both imported globals and globals defined by the module.
     ///
-    /// Return the global value reference that should be used to access the global and the
+    /// Return the global variable reference that should be used to access the global and the
     /// WebAssembly type of the global.
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue;
 
