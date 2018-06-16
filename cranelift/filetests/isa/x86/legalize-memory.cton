@@ -53,8 +53,7 @@ ebb0(v0: i32, v999: i64):
     ; Boundscheck should be eliminated.
     ; Checks here are assuming that no pipehole opts fold the load offsets.
     ; nextln: $(xoff=$V) = uextend.i64 v0
-    ; nextln: $(haddr=$V) = iadd_imm v999, 64
-    ; nextln: $(hbase=$V) = load.i64 notrap aligned $haddr
+    ; nextln: $(hbase=$V) = iadd_imm v999, 64
     ; nextln: v1 = iadd $hbase, $xoff
     v2 = load.f32 v1+16
     ; nextln: v2 = load.f32 v1+16
@@ -101,8 +100,7 @@ ebb0(v0: i32, v999: i64):
     ; check: $ok:
     ; Checks here are assuming that no pipehole opts fold the load offsets.
     ; nextln: $(xoff=$V) = uextend.i64 v0
-    ; nextln: $(haddr=$V) = iadd_imm.i64 v999, 64
-    ; nextln: $(hbase=$V) = load.i64 notrap aligned $haddr
+    ; nextln: $(hbase=$V) = iadd_imm.i64 v999, 64
     ; nextln: v1 = iadd $hbase, $xoff
     v2 = load.f32 v1+0x7fff_ffff
     ; nextln: v2 = load.f32 v1+0x7fff_ffff
