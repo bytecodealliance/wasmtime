@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cretonne Project Developers"]
 name = "cretonne-entity"
-version = "0.11.0"
+version = "0.12.0"
 description = "Data structures using entity references as mapping keys"
 license = "Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/"
