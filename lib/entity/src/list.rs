@@ -34,7 +34,7 @@ use EntityRef;
 /// function they belong to. *Cloning an entity list does not allocate new memory for the clone*.
 /// It creates an alias of the same memory.
 ///
-/// Entity lists can also be hashed and compared for equality, but those operations just panic if,
+/// Entity lists can also be hashed and compared for equality, but those operations just panic if
 /// they're ever actually called, because it's not possible to compare the contents of the list
 /// without the pool reference.
 ///
