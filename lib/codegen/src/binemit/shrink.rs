@@ -8,9 +8,12 @@
 use ir::Function;
 use isa::TargetIsa;
 use regalloc::RegDiversions;
+use timing;
 
 /// Pick the smallest valid encodings for instructions.
 pub fn shrink_instructions(func: &mut Function, isa: &TargetIsa) {
+    let _tt = timing::shrink_instructions();
+
     let encinfo = isa.encoding_info();
     let mut divert = RegDiversions::new();
 

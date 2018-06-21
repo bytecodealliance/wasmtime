@@ -71,6 +71,8 @@ define_passes!{
     ra_coloring: "RA coloring",
 
     prologue_epilogue: "Prologue/epilogue insertion",
+    shrink_instructions: "Instruction encoding shrinking",
+    relax_branches: "Branch relaxation",
     binemit: "Binary machine code emission",
     layout_renumber: "Layout full renumbering",
 
