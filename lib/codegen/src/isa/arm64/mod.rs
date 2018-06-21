@@ -108,7 +108,7 @@ impl TargetIsa for Isa {
         binemit::emit_inst(func, inst, divert, sink)
     }
 
-    fn emit_function(&self, func: &ir::Function, sink: &mut MemoryCodeSink) {
+    fn emit_function_to_memory(&self, func: &ir::Function, sink: &mut MemoryCodeSink) {
         emit_function(func, binemit::emit_inst, sink)
     }
 }
