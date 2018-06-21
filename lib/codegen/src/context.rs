@@ -168,7 +168,7 @@ impl Context {
         traps: &mut TrapSink,
     ) {
         let _tt = timing::binemit();
-        isa.emit_function(&self.func, &mut MemoryCodeSink::new(mem, relocs, traps));
+        isa.emit_function_to_memory(&self.func, &mut MemoryCodeSink::new(mem, relocs, traps));
     }
 
     /// Run the verifier on the function.

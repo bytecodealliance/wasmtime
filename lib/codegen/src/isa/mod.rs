@@ -303,8 +303,8 @@ pub trait TargetIsa: fmt::Display {
 
     /// Emit binary machine code for a single instruction into the `sink` trait object.
     ///
-    /// Note that this will call `put*` methods on the trait object via its vtable which is not the
-    /// fastest way of emitting code.
+    /// Note that this will call `put*` methods on the `sink` trait object via its vtable which
+    /// is not the fastest way of emitting code.
     fn emit_inst(
         &self,
         func: &ir::Function,
@@ -316,5 +316,5 @@ pub trait TargetIsa: fmt::Display {
     /// Emit a whole function into memory.
     ///
     /// This is more performant than calling `emit_inst` for each instruction.
-    fn emit_function(&self, func: &ir::Function, sink: &mut binemit::MemoryCodeSink);
+    fn emit_function_to_memory(&self, func: &ir::Function, sink: &mut binemit::MemoryCodeSink);
 }
