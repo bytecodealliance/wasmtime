@@ -466,7 +466,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a value reference, direct or vtable.
+    // Match and consume a value reference.
     fn match_value(&mut self, err_msg: &str) -> ParseResult<Value> {
         if let Some(Token::Value(v)) = self.token() {
             self.consume();
