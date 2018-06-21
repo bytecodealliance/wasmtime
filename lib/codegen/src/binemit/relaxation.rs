@@ -128,9 +128,9 @@ fn fallthroughs(func: &mut Function) {
     }
 }
 
-/// Relax the branch instruction at `pos` so it can cover the range `offset - dest_offset`.
+/// Relax the branch instruction at `cur` so it can cover the range `offset - dest_offset`.
 ///
-/// Return the size of the replacement instructions up to and including the location where `pos` is
+/// Return the size of the replacement instructions up to and including the location where `cur` is
 /// left.
 fn relax_branch(
     cur: &mut FuncCursor,
