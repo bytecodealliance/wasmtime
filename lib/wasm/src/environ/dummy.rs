@@ -4,7 +4,7 @@ use cretonne_codegen::cursor::FuncCursor;
 use cretonne_codegen::ir::types::*;
 use cretonne_codegen::ir::{self, InstBuilder};
 use cretonne_codegen::settings;
-use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment, WasmResult};
+use environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, WasmResult};
 use func_translator::FuncTranslator;
 use std::string::String;
 use std::vec::Vec;
@@ -157,11 +157,11 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &self.mod_info.flags
     }
 
-    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
+    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
         // Just create a dummy `vmctx` global.
         let offset = ((index * 8) as i32 + 8).into();
         let gv = func.create_global_value(ir::GlobalValueData::VMContext { offset });
-        GlobalValue::Memory {
+        GlobalVariable::Memory {
             gv,
             ty: self.mod_info.globals[index].entity.ty,
         }

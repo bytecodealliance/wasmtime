@@ -10,17 +10,17 @@ use translation_utils::{
 };
 use wasmparser::BinaryReaderError;
 
-/// The value of a WebAssembly global value.
+/// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
-pub enum GlobalValue {
+pub enum GlobalVariable {
     /// This is a constant global with a value known at compile time.
     Const(ir::Value),
 
-    /// This is a variable in memory that should be referenced as a `GlobalValue`.
+    /// This is a variable in memory that should be referenced through a `GlobalValue`.
     Memory {
-        /// Which global value should be referenced.
+        /// The address of the global variable storage.
         gv: ir::GlobalValue,
-        /// The global value's type.
+        /// The global variable's type.
         ty: ir::Type,
     },
 }
@@ -89,14 +89,14 @@ pub trait FuncEnvironment {
         ir::Type::int(u16::from(self.triple().pointer_width().unwrap().bits())).unwrap()
     }
 
-    /// Set up the necessary preamble definitions in `func` to access the global value
+    /// Set up the necessary preamble definitions in `func` to access the global variable
     /// identified by `index`.
     ///
     /// The index space covers both imported globals and globals defined by the module.
     ///
     /// Return the global variable reference that should be used to access the global and the
     /// WebAssembly type of the global.
-    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue;
+    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable;
 
     /// Set up the necessary preamble definitions in `func` to access the linear memory identified
     /// by `index`.

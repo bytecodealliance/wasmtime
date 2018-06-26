@@ -4,4 +4,6 @@ mod dummy;
 mod spec;
 
 pub use environ::dummy::DummyEnvironment;
-pub use environ::spec::{FuncEnvironment, GlobalValue, ModuleEnvironment, WasmError, WasmResult};
+pub use environ::spec::{
+    FuncEnvironment, GlobalVariable, ModuleEnvironment, WasmError, WasmResult,
+};

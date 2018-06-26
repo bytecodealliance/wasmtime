@@ -7,7 +7,7 @@ use wasmparser;
 pub type FunctionIndex = usize;
 /// Index of a table (imported or defined) inside the WebAssembly module.
 pub type TableIndex = usize;
-/// Index of a global value (imported or defined) inside the WebAssembly module.
+/// Index of a global variable (imported or defined) inside the WebAssembly module.
 pub type GlobalIndex = usize;
 /// Index of a linear memory (imported or defined) inside the WebAssembly module.
 pub type MemoryIndex = usize;

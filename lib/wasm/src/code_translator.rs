@@ -27,7 +27,7 @@ use cretonne_codegen::ir::types::*;
 use cretonne_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
 use cretonne_codegen::packed_option::ReservedValue;
 use cretonne_frontend::{FunctionBuilder, Variable};
-use environ::{FuncEnvironment, GlobalValue, WasmError, WasmResult};
+use environ::{FuncEnvironment, GlobalVariable, WasmError, WasmResult};
 use state::{ControlStackFrame, TranslationState};
 use std::collections::{hash_map, HashMap};
 use std::vec::Vec;
@@ -72,8 +72,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          ***********************************************************************************/
         Operator::GetGlobal { global_index } => {
             let val = match state.get_global(builder.func, global_index, environ) {
-                GlobalValue::Const(val) => val,
-                GlobalValue::Memory { gv, ty } => {
+                GlobalVariable::Const(val) => val,
+                GlobalVariable::Memory { gv, ty } => {
                     let addr = builder.ins().global_value(environ.native_pointer(), gv);
                     let mut flags = ir::MemFlags::new();
                     flags.set_notrap();
@@ -85,8 +85,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::SetGlobal { global_index } => {
             match state.get_global(builder.func, global_index, environ) {
-                GlobalValue::Const(_) => panic!("global #{} is a constant", global_index),
-                GlobalValue::Memory { gv, .. } => {
+                GlobalVariable::Const(_) => panic!("global #{} is a constant", global_index),
+                GlobalVariable::Memory { gv, .. } => {
                     let addr = builder.ins().global_value(environ.native_pointer(), gv);
                     let mut flags = ir::MemFlags::new();
                     flags.set_notrap();
