@@ -36,7 +36,7 @@ pub struct Function {
     /// be checked against.
     pub stack_limit: Option<ir::GlobalValue>,
 
-    /// Global variables referenced.
+    /// Global values referenced.
     pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
 
     /// Heaps referenced.

@@ -1080,8 +1080,8 @@ impl<'a> Parser<'a> {
 
     // Parse a global value decl.
     //
-    // global-var-decl ::= * GlobalValue(gv) "=" global-var-desc
-    // global-var-desc ::= "vmctx" offset32
+    // global-val-decl ::= * GlobalValue(gv) "=" global-val-desc
+    // global-val-desc ::= "vmctx" offset32
     //                   | "deref" "(" GlobalValue(base) ")" offset32
     //                   | globalsym ["colocated"] name
     //

@@ -1,4 +1,4 @@
-//! Global variables.
+//! Global values.
 
 use ir::immediates::Offset32;
 use ir::{ExternalName, GlobalValue};
@@ -7,34 +7,33 @@ use std::fmt;
 /// Information about a global value declaration.
 #[derive(Clone)]
 pub enum GlobalValueData {
-    /// Variable is part of the VM context struct, it's address is a constant offset from the VM
+    /// Value is the address of a field in the VM context struct, a constant offset from the VM
     /// context pointer.
     VMContext {
-        /// Offset from the `vmctx` pointer to this global.
+        /// Offset from the `vmctx` pointer.
         offset: Offset32,
     },
 
-    /// Variable is part of a struct pointed to by another global value.
+    /// Value is pointed to by another global value.
     ///
-    /// The `base` global value is assumed to contain a pointer to a struct. This global
-    /// variable lives at an offset into the struct. The memory must be accessible, and
-    /// naturally aligned to hold a pointer value.
+    /// The `base` global value is assumed to contain a pointer. This global value is computed
+    /// by loading from memory at that pointer value, and then adding an offset. The memory must
+    /// be accessible, and naturally aligned to hold a pointer value.
     Deref {
         /// The base pointer global value.
         base: GlobalValue,
 
-        /// Byte offset to be added to the pointer loaded from `base`.
+        /// Byte offset to be added to the loaded value.
         offset: Offset32,
     },
 
-    /// Variable is at an address identified by a symbolic name. Cretonne itself
-    /// does not interpret this name; it's used by embedders to link with other
-    /// data structures.
+    /// Value is identified by a symbolic name. Cretonne itself does not interpret this name;
+    /// it's used by embedders to link with other data structures.
     Sym {
         /// The symbolic name.
         name: ExternalName,
 
-        /// Will this variable be defined nearby, such that it will always be a certain distance
+        /// Will this symbol be defined nearby, such that it will always be a certain distance
         /// away, after linking? If so, references to it can avoid going through a GOT. Note that
         /// symbols meant to be preemptible cannot be colocated.
         colocated: bool,

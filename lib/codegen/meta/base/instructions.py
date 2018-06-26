@@ -488,7 +488,7 @@ stack_addr = Instruction(
         ins=(SS, Offset), outs=addr)
 
 #
-# Global variables.
+# Global values.
 #
 
 GV = Operand('GV', entities.global_value)

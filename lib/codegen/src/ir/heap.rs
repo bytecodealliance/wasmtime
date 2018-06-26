@@ -29,8 +29,7 @@ pub enum HeapBase {
     /// This feature is not yet implemented.
     ReservedReg,
 
-    /// The heap base is in a global value. The variable must be accessible and naturally
-    /// aligned for a pointer.
+    /// The heap base is a global value.
     GlobalValue(GlobalValue),
 }
 
@@ -39,8 +38,7 @@ pub enum HeapBase {
 pub enum HeapStyle {
     /// A dynamic heap can be relocated to a different base address when it is grown.
     Dynamic {
-        /// Global variable holding the current bound of the heap in bytes. It is
-        /// required to be accessible and naturally aligned for a pointer-sized integer.
+        /// Global value providing the current bound of the heap in bytes.
         bound_gv: GlobalValue,
     },
 
