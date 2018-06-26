@@ -80,6 +80,10 @@ expand.custom_legalize(insts.select, 'expand_select')
 expand.custom_legalize(insts.f32const, 'expand_fconst')
 expand.custom_legalize(insts.f64const, 'expand_fconst')
 
+# Custom expansions for stack memory accesses.
+expand.custom_legalize(insts.stack_load, 'expand_stack_load')
+expand.custom_legalize(insts.stack_store, 'expand_stack_store')
+
 x = Var('x')
 y = Var('y')
 a = Var('a')
