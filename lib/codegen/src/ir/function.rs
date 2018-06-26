@@ -7,8 +7,10 @@ use binemit::CodeOffset;
 use entity::{EntityMap, PrimaryMap};
 use ir;
 use ir::{DataFlowGraph, ExternalName, Layout, Signature};
-use ir::{Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, JumpTable,
-         JumpTableData, SigRef, StackSlot, StackSlotData};
+use ir::{
+    Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, JumpTable,
+    JumpTableData, SigRef, StackSlot, StackSlotData,
+};
 use ir::{EbbOffsets, InstEncodings, JumpTables, SourceLocs, StackSlots, ValueLocations};
 use isa::{EncInfo, Encoding, Legalize, TargetIsa};
 use settings::CallConv;

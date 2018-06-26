@@ -6,11 +6,12 @@ use cretonne_codegen::ir::entities::AnyEntity;
 use cretonne_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
 use cretonne_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cretonne_codegen::ir::types::VOID;
-use cretonne_codegen::ir::{AbiParam, ArgumentExtension, ArgumentLoc, Ebb, ExtFuncData,
-                           ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Heap,
-                           HeapBase, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
-                           Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind,
-                           Type, Value, ValueLoc};
+use cretonne_codegen::ir::{
+    AbiParam, ArgumentExtension, ArgumentLoc, Ebb, ExtFuncData, ExternalName, FuncRef, Function,
+    GlobalValue, GlobalValueData, Heap, HeapBase, HeapData, HeapStyle, JumpTable, JumpTableData,
+    MemFlags, Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Type, Value,
+    ValueLoc,
+};
 use cretonne_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
 use cretonne_codegen::packed_option::ReservedValue;
 use cretonne_codegen::settings::CallConv;

@@ -42,12 +42,15 @@ mod sections_translator;
 mod state;
 mod translation_utils;
 
-pub use environ::{DummyEnvironment, FuncEnvironment, GlobalValue, ModuleEnvironment, WasmError,
-                  WasmResult};
+pub use environ::{
+    DummyEnvironment, FuncEnvironment, GlobalValue, ModuleEnvironment, WasmError, WasmResult,
+};
 pub use func_translator::FuncTranslator;
 pub use module_translator::translate_module;
-pub use translation_utils::{FunctionIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
-                            SignatureIndex, Table, TableIndex};
+pub use translation_utils::{
+    FunctionIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex, SignatureIndex, Table,
+    TableIndex,
+};
 
 #[cfg(not(feature = "std"))]
 mod std {

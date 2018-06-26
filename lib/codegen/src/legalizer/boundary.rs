@@ -21,8 +21,10 @@ use abi::{legalize_abi_value, ValueConversion};
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
 use ir::instructions::CallInfo;
-use ir::{AbiParam, ArgumentLoc, ArgumentPurpose, DataFlowGraph, Ebb, Function, Inst, InstBuilder,
-         SigRef, Signature, Type, Value, ValueLoc};
+use ir::{
+    AbiParam, ArgumentLoc, ArgumentPurpose, DataFlowGraph, Ebb, Function, Inst, InstBuilder,
+    SigRef, Signature, Type, Value, ValueLoc,
+};
 use isa::TargetIsa;
 use legalizer::split::{isplit, vsplit};
 use std::vec::Vec;
@@ -553,7 +555,8 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
         .iter()
         .rev()
         .take_while(|&rt| {
-            rt.purpose == ArgumentPurpose::Link || rt.purpose == ArgumentPurpose::StructReturn
+            rt.purpose == ArgumentPurpose::Link
+                || rt.purpose == ArgumentPurpose::StructReturn
                 || rt.purpose == ArgumentPurpose::VMContext
         })
         .count();

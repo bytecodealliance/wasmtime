@@ -869,7 +869,8 @@ impl<'a> Context<'a> {
                 // not actually constrained by the instruction. We just want it out of the way.
                 let toprc2 = self.reginfo.toprc(rci);
                 let reg2 = self.divert.reg(lv.value, &self.cur.func.locations);
-                if rc.contains(reg2) && self.solver.can_add_var(lv.value, toprc2, reg2)
+                if rc.contains(reg2)
+                    && self.solver.can_add_var(lv.value, toprc2, reg2)
                     && !self.is_live_on_outgoing_edge(lv.value)
                 {
                     self.solver.add_through_var(lv.value, toprc2, reg2);

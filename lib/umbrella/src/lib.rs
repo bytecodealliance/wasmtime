@@ -24,8 +24,10 @@ pub mod prelude {
     pub use codegen::ir::condcodes::{FloatCC, IntCC};
     pub use codegen::ir::immediates::{Ieee32, Ieee64, Imm64};
     pub use codegen::ir::types;
-    pub use codegen::ir::{AbiParam, Ebb, ExtFuncData, GlobalValueData, InstBuilder, JumpTableData,
-                          MemFlags, Signature, StackSlotData, StackSlotKind, TrapCode, Type, Value};
+    pub use codegen::ir::{
+        AbiParam, Ebb, ExtFuncData, GlobalValueData, InstBuilder, JumpTableData, MemFlags,
+        Signature, StackSlotData, StackSlotKind, TrapCode, Type, Value,
+    };
     pub use codegen::isa;
     pub use codegen::settings::{self, CallConv, Configurable};
 

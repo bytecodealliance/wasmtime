@@ -33,12 +33,18 @@ pub fn do_nan_canonicalization(func: &mut Function) {
 fn is_fp_arith(pos: &mut FuncCursor, inst: Inst) -> bool {
     match pos.func.dfg[inst] {
         InstructionData::Unary { opcode, .. } => {
-            opcode == Opcode::Ceil || opcode == Opcode::Floor || opcode == Opcode::Nearest
-                || opcode == Opcode::Sqrt || opcode == Opcode::Trunc
+            opcode == Opcode::Ceil
+                || opcode == Opcode::Floor
+                || opcode == Opcode::Nearest
+                || opcode == Opcode::Sqrt
+                || opcode == Opcode::Trunc
         }
         InstructionData::Binary { opcode, .. } => {
-            opcode == Opcode::Fadd || opcode == Opcode::Fdiv || opcode == Opcode::Fmax
-                || opcode == Opcode::Fmin || opcode == Opcode::Fmul
+            opcode == Opcode::Fadd
+                || opcode == Opcode::Fdiv
+                || opcode == Opcode::Fmax
+                || opcode == Opcode::Fmin
+                || opcode == Opcode::Fmul
                 || opcode == Opcode::Fsub
         }
         InstructionData::Ternary { opcode, .. } => opcode == Opcode::Fma,

@@ -6,8 +6,10 @@ use cursor::{Cursor, CursorPosition, EncCursor};
 use ir;
 use ir::immediates::Imm64;
 use ir::stackslot::{StackOffset, StackSize};
-use ir::{get_probestack_funcref, AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose,
-         InstBuilder, ValueLoc};
+use ir::{
+    get_probestack_funcref, AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, InstBuilder,
+    ValueLoc,
+};
 use isa::{RegClass, RegUnit, TargetIsa};
 use regalloc::RegisterSet;
 use result::CodegenResult;

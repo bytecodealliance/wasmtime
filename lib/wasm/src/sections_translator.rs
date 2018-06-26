@@ -11,11 +11,15 @@ use cretonne_codegen::ir::{self, AbiParam, Signature};
 use environ::{ModuleEnvironment, WasmError, WasmResult};
 use std::str::from_utf8;
 use std::vec::Vec;
-use translation_utils::{type_to_type, FunctionIndex, Global, GlobalIndex, GlobalInit, Memory,
-                        MemoryIndex, SignatureIndex, Table, TableElementType, TableIndex};
+use translation_utils::{
+    type_to_type, FunctionIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
+    SignatureIndex, Table, TableElementType, TableIndex,
+};
 use wasmparser;
-use wasmparser::{ExternalKind, FuncType, ImportSectionEntryType, MemoryType, Operator, Parser,
-                 ParserState, WasmDecoder};
+use wasmparser::{
+    ExternalKind, FuncType, ImportSectionEntryType, MemoryType, Operator, Parser, ParserState,
+    WasmDecoder,
+};
 
 /// Reads the Type Section of the wasm module and returns the corresponding function signatures.
 pub fn parse_function_signatures(

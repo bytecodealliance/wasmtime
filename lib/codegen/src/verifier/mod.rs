@@ -63,8 +63,10 @@ use flowgraph::ControlFlowGraph;
 use ir;
 use ir::entities::AnyEntity;
 use ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
-use ir::{types, ArgumentLoc, Ebb, FuncRef, Function, GlobalValue, Inst, JumpTable, Opcode, SigRef,
-         StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc};
+use ir::{
+    types, ArgumentLoc, Ebb, FuncRef, Function, GlobalValue, Inst, JumpTable, Opcode, SigRef,
+    StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc,
+};
 use isa::TargetIsa;
 use iterators::IteratorExtras;
 use settings::{Flags, FlagsOrIsa};
