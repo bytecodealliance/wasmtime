@@ -575,18 +575,18 @@ Cretonne functions.
 
 .. inst:: GV = vmctx+Offset
 
-    Declare a global value in the VM context struct.
+    Declare a global value of the address of a field in the VM context struct.
 
-    This declares a global value whose address is a constant offset from the
+    This declares a global value which is a constant offset from the
     VM context pointer which is passed as a hidden argument to all functions
     JIT-compiled for the VM.
 
     Typically, the VM context is a C struct, and the declared global value
-    is a member of the struct.
+    is the address of a member of the struct.
 
     :arg Offset: Byte offset from the VM context pointer to the global
-                 variable.
-    :result GV: Global variable.
+                 value.
+    :result GV: Global value.
 
 The address of a global value can also be derived by treating another global
 variable as a struct pointer. This makes it possible to chase pointers into VM
@@ -599,16 +599,15 @@ runtime data structures.
     The address of GV can be computed by first loading a pointer from BaseGV
     and adding Offset to it.
 
-    It is assumed the BaseGV resides in readable memory with the appropriate
+    It is assumed the BaseGV resides in accessible memory with the appropriate
     alignment for storing a pointer.
 
     Chains of ``deref`` global values are possible, but cycles are not
     allowed. They will be caught by the IR verifier.
 
-    :arg BaseGV: Global variable containing the base pointer.
-    :arg Offset: Byte offset from the loaded base pointer to the global
-                 variable.
-    :result GV: Global variable.
+    :arg BaseGV: Global value providing the base pointer.
+    :arg Offset: Byte offset added to the loaded value.
+    :result GV: Global value.
 
 .. inst:: GV = [colocated] globalsym name
 
@@ -622,7 +621,7 @@ runtime data structures.
     efficient addressing.
 
     :arg name: External name.
-    :result GV: Global variable.
+    :result GV: Global value.
 
 .. autoinst:: global_value
 .. autoinst:: globalsym_addr
@@ -690,16 +689,13 @@ trap when accessed.
 
     Declare a static heap in the preamble.
 
-    :arg Base: Global variable holding the heap's base address or
+    :arg Base: Global value holding the heap's base address or
             ``reserved_reg``.
     :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
             size will never trap.
     :arg BoundBytes: Fixed heap bound in bytes. This defines the amount of
             address space reserved for the heap, not including the guard pages.
     :arg GuardBytes: Size of the guard pages in bytes.
-
-When the base is a global value, it must be :term:`accessible` and naturally
-aligned for a pointer value.
 
 The ``reserved_reg`` option is not yet implemented.
 
@@ -714,15 +710,12 @@ is resized. The bound of a dynamic heap is stored in a global value.
 
     Declare a dynamic heap in the preamble.
 
-    :arg Base: Global variable holding the heap's base address or
+    :arg Base: Global value holding the heap's base address or
             ``reserved_reg``.
     :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
             size will never trap.
-    :arg BoundGV: Global variable containing the current heap bound in bytes.
+    :arg BoundGV: Global value containing the current heap bound in bytes.
     :arg GuardBytes: Size of the guard pages in bytes.
-
-When the base is a global value, it must be :term:`accessible` and naturally
-aligned for a pointer value.
 
 The ``reserved_reg`` option is not yet implemented.
 

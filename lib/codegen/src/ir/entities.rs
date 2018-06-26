@@ -185,7 +185,7 @@ pub enum AnyEntity {
     Value(Value),
     /// A stack slot.
     StackSlot(StackSlot),
-    /// A Global variable.
+    /// A Global value.
     GlobalValue(GlobalValue),
     /// A jump table.
     JumpTable(JumpTable),

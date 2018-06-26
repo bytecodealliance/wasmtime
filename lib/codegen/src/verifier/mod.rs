@@ -41,7 +41,7 @@
 //! - All return instructions must have return value operands matching the current
 //!   function signature.
 //!
-//! Global variables
+//! Global values
 //!
 //! - Detect cycles in deref(base) declarations.
 //!
