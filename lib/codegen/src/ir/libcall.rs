@@ -1,7 +1,9 @@
 //! Naming well-known routines in the runtime library.
 
-use ir::{types, AbiParam, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, Inst,
-         Opcode, Signature, Type};
+use ir::{
+    types, AbiParam, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, Inst, Opcode,
+    Signature, Type,
+};
 use isa::{RegUnit, TargetIsa};
 use settings::CallConv;
 use std::fmt;

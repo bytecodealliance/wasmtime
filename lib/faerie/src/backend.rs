@@ -4,8 +4,10 @@ use container;
 use cretonne_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::{self, binemit, ir};
-use cretonne_module::{Backend, DataContext, DataDescription, Init, Linkage, ModuleError,
-                      ModuleNamespace, ModuleResult};
+use cretonne_module::{
+    Backend, DataContext, DataDescription, Init, Linkage, ModuleError, ModuleNamespace,
+    ModuleResult,
+};
 use faerie;
 use failure::Error;
 use std::fs::File;

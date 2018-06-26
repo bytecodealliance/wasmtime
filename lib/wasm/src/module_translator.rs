@@ -2,10 +2,11 @@
 //! to deal with each part of it.
 use cretonne_codegen::timing;
 use environ::{ModuleEnvironment, WasmError, WasmResult};
-use sections_translator::{parse_data_section, parse_elements_section, parse_export_section,
-                          parse_function_section, parse_function_signatures, parse_global_section,
-                          parse_import_section, parse_memory_section, parse_start_section,
-                          parse_table_section};
+use sections_translator::{
+    parse_data_section, parse_elements_section, parse_export_section, parse_function_section,
+    parse_function_signatures, parse_global_section, parse_import_section, parse_memory_section,
+    parse_start_section, parse_table_section,
+};
 use wasmparser::{Parser, ParserInput, ParserState, SectionCode, WasmDecoder};
 
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cretonne IR

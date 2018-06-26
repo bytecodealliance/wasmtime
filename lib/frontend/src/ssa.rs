@@ -172,8 +172,11 @@ where
 
     /// Tests whether an `SSABuilder` is in a cleared state.
     pub fn is_empty(&self) -> bool {
-        self.variables.is_empty() && self.blocks.is_empty() && self.ebb_headers.is_empty()
-            && self.calls.is_empty() && self.results.is_empty()
+        self.variables.is_empty()
+            && self.blocks.is_empty()
+            && self.ebb_headers.is_empty()
+            && self.calls.is_empty()
+            && self.results.is_empty()
             && self.side_effects.is_empty()
     }
 }

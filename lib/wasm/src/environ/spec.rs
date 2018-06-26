@@ -5,8 +5,9 @@ use cretonne_codegen::ir::{self, InstBuilder};
 use cretonne_codegen::settings::Flags;
 use std::vec::Vec;
 use target_lexicon::Triple;
-use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
-                        Table, TableIndex};
+use translation_utils::{
+    FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+};
 use wasmparser::BinaryReaderError;
 
 /// The value of a WebAssembly global value.

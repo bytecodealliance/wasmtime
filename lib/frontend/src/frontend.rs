@@ -3,10 +3,11 @@ use cretonne_codegen::cursor::{Cursor, FuncCursor};
 use cretonne_codegen::entity::{EntityMap, EntityRef, EntitySet};
 use cretonne_codegen::ir;
 use cretonne_codegen::ir::function::DisplayFunction;
-use cretonne_codegen::ir::{DataFlowGraph, Ebb, ExtFuncData, FuncRef, Function, GlobalValue,
-                           GlobalValueData, Heap, HeapData, Inst, InstBuilderBase,
-                           InstructionData, JumpTable, JumpTableData, SigRef, Signature,
-                           StackSlot, StackSlotData, Type, Value};
+use cretonne_codegen::ir::{
+    DataFlowGraph, Ebb, ExtFuncData, FuncRef, Function, GlobalValue, GlobalValueData, Heap,
+    HeapData, Inst, InstBuilderBase, InstructionData, JumpTable, JumpTableData, SigRef, Signature,
+    StackSlot, StackSlotData, Type, Value,
+};
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::packed_option::PackedOption;
 use ssa::{Block, SSABuilder, SideEffects};
@@ -273,7 +274,9 @@ where
     pub fn switch_to_block(&mut self, ebb: Ebb) {
         // First we check that the previous block has been filled.
         debug_assert!(
-            self.position.is_default() || self.is_unreachable() || self.is_pristine()
+            self.position.is_default()
+                || self.is_unreachable()
+                || self.is_pristine()
                 || self.is_filled(),
             "you have to fill your block before switching"
         );

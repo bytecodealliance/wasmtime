@@ -9,8 +9,9 @@ use func_translator::FuncTranslator;
 use std::string::String;
 use std::vec::Vec;
 use target_lexicon::Triple;
-use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
-                        Table, TableIndex};
+use translation_utils::{
+    FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+};
 use wasmparser;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
