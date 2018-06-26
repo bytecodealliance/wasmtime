@@ -4,7 +4,7 @@
 //! value and control stacks during the translation of a single function.
 
 use cretonne_codegen::ir::{self, Ebb, Inst, Value};
-use environ::{FuncEnvironment, GlobalValue};
+use environ::{FuncEnvironment, GlobalVariable};
 use std::collections::HashMap;
 use std::vec::Vec;
 use translation_utils::{FunctionIndex, GlobalIndex, MemoryIndex, SignatureIndex};
@@ -134,8 +134,8 @@ pub struct TranslationState {
     pub control_stack: Vec<ControlStackFrame>,
     pub reachable: bool,
 
-    // Map of global values that have already been created by `FuncEnvironment::make_global`.
-    globals: HashMap<GlobalIndex, GlobalValue>,
+    // Map of global variables that have already been created by `FuncEnvironment::make_global`.
+    globals: HashMap<GlobalIndex, GlobalVariable>,
 
     // Map of heaps that have been created by `FuncEnvironment::make_heap`.
     heaps: HashMap<MemoryIndex, ir::Heap>,
@@ -272,7 +272,7 @@ impl TranslationState {
 
 /// Methods for handling entity references.
 impl TranslationState {
-    /// Get the `GlobalValue` reference that should be used to access the global value `index`.
+    /// Get the `GlobalVariable` reference that should be used to access the global variable `index`.
     /// Create the reference if necessary.
     /// Also return the WebAssembly type of the global.
     pub fn get_global<FE: FuncEnvironment + ?Sized>(
@@ -280,7 +280,7 @@ impl TranslationState {
         func: &mut ir::Function,
         index: u32,
         environ: &mut FE,
-    ) -> GlobalValue {
+    ) -> GlobalVariable {
         let index = index as GlobalIndex;
         *self.globals
             .entry(index)
