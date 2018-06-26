@@ -17,6 +17,7 @@ from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalValue
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from base.formats import LoadComplex, StoreComplex
+from base.formats import StackLoad
 from .registers import GPR, ABCD, FPR, GPR_DEREF_SAFE, GPR_ZERO_DEREF_SAFE
 from .registers import GPR8, FPR8, GPR8_DEREF_SAFE, GPR8_ZERO_DEREF_SAFE, FLAG
 from .registers import StackGPR32, StackFPR32
@@ -749,6 +750,36 @@ got_gvaddr8 = TailRecipe(
                             &func.global_values[global_value].symbol_name(),
                             -4);
         sink.put4(0);
+        ''')
+
+#
+# Stack addresses.
+#
+# TODO: Alternative forms for 8-bit immediates, when applicable.
+#
+
+spaddr4_id = TailRecipe(
+        'spaddr4_id', StackLoad, size=6, ins=(), outs=GPR,
+        emit='''
+        let sp = StackRef::sp(stack_slot, &func.stack_slots);
+        let base = stk_base(sp.base);
+        PUT_OP(bits, rex2(out_reg0, base), sink);
+        modrm_sib_disp8(out_reg0, sink);
+        sib_noindex(base, sink);
+        let imm : i32 = offset.into();
+        sink.put4(sp.offset.checked_add(imm).unwrap() as u32);
+        ''')
+
+spaddr8_id = TailRecipe(
+        'spaddr8_id', StackLoad, size=6, ins=(), outs=GPR,
+        emit='''
+        let sp = StackRef::sp(stack_slot, &func.stack_slots);
+        let base = stk_base(sp.base);
+        PUT_OP(bits, rex2(base, out_reg0), sink);
+        modrm_sib_disp32(out_reg0, sink);
+        sib_noindex(base, sink);
+        let imm : i32 = offset.into();
+        sink.put4(sp.offset.checked_add(imm).unwrap() as u32);
         ''')
 
 

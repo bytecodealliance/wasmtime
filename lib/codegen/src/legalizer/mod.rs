@@ -16,7 +16,7 @@
 use bitset::BitSet;
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
-use ir::{self, InstBuilder};
+use ir::{self, InstBuilder, MemFlags};
 use isa::TargetIsa;
 use timing;
 
@@ -268,4 +268,72 @@ fn expand_fconst(
         _ => panic!("Expected fconst: {}", pos.func.dfg.display_inst(inst, None)),
     };
     pos.func.dfg.replace(inst).bitcast(ty, ival);
+}
+
+/// Expand illegal `stack_load` instructions.
+fn expand_stack_load(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &TargetIsa,
+) {
+    let ty = func.dfg.value_type(func.dfg.first_result(inst));
+    let addr_ty = isa.pointer_type();
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    let (stack_slot, offset) = match pos.func.dfg[inst] {
+        ir::InstructionData::StackLoad {
+            opcode: _opcode,
+            stack_slot,
+            offset,
+        } => (stack_slot, offset),
+        _ => panic!(
+            "Expected stack_load: {}",
+            pos.func.dfg.display_inst(inst, None)
+        ),
+    };
+
+    let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
+
+    let mut mflags = MemFlags::new();
+    // Stack slots are required to be accessible and aligned.
+    mflags.set_notrap();
+    mflags.set_aligned();
+    pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
+}
+
+/// Expand illegal `stack_store` instructions.
+fn expand_stack_store(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &TargetIsa,
+) {
+    let addr_ty = isa.pointer_type();
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    let (val, stack_slot, offset) = match pos.func.dfg[inst] {
+        ir::InstructionData::StackStore {
+            opcode: _opcode,
+            arg,
+            stack_slot,
+            offset,
+        } => (arg, stack_slot, offset),
+        _ => panic!(
+            "Expected stack_store: {}",
+            pos.func.dfg.display_inst(inst, None)
+        ),
+    };
+
+    let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
+
+    let mut mflags = MemFlags::new();
+    // Stack slots are required to be accessible and aligned.
+    mflags.set_notrap();
+    mflags.set_aligned();
+    pos.func.dfg.replace(inst).store(mflags, val, addr, 0);
 }

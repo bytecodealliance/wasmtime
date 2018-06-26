@@ -437,6 +437,15 @@ X86_64.enc(base.globalsym_addr.i64, *r.got_gvaddr8.rex(0x8b, w=1),
            isap=is_pic)
 
 #
+# Stack addresses.
+#
+# TODO: Add encoding rules for stack_load and stack_store, so that they
+# don't get legalized to stack_addr + load/store.
+#
+X86_32.enc(base.stack_addr.i32, *r.spaddr4_id(0x8d))
+X86_64.enc(base.stack_addr.i64, *r.spaddr8_id.rex(0x8d, w=1))
+
+#
 # Call/return
 #
 
