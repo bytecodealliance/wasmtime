@@ -584,7 +584,6 @@ pushq = TailRecipe(
 popq = TailRecipe(
     'popq', NullAry, size=0, ins=(), outs=GPR,
     emit='''
-    sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
     PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
     ''')
 
@@ -1329,7 +1328,6 @@ fillSib32 = TailRecipe(
         'fillSib32', Unary, size=6, ins=StackGPR32, outs=GPR,
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let base = stk_base(in_stk0.base);
         PUT_OP(bits, rex2(base, out_reg0), sink);
         modrm_sib_disp32(out_reg0, sink);
@@ -1342,7 +1340,6 @@ ffillSib32 = TailRecipe(
         'ffillSib32', Unary, size=6, ins=StackFPR32, outs=FPR,
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let base = stk_base(in_stk0.base);
         PUT_OP(bits, rex2(base, out_reg0), sink);
         modrm_sib_disp32(out_reg0, sink);
@@ -1355,7 +1352,6 @@ regfill32 = TailRecipe(
         'regfill32', RegFill, size=6, ins=StackGPR32, outs=(),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let src = StackRef::sp(src, &func.stack_slots);
         let base = stk_base(src.base);
         PUT_OP(bits, rex2(base, dst), sink);
@@ -1369,7 +1365,6 @@ fregfill32 = TailRecipe(
         'fregfill32', RegFill, size=6, ins=StackFPR32, outs=(),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let src = StackRef::sp(src, &func.stack_slots);
         let base = stk_base(src.base);
         PUT_OP(bits, rex2(base, dst), sink);

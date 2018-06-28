@@ -181,14 +181,14 @@ ebb0:
     [-,ss1]             v201 = spill v101                       ; bin: stk_ovf f3 0f 11 94 24 00000408
 
     ; asm: movss 1032(%esp), %xmm5
-    [-,%xmm5]           v210 = fill v200                        ; bin: stk_ovf f3 0f 10 ac 24 00000408
+    [-,%xmm5]           v210 = fill v200                        ; bin: f3 0f 10 ac 24 00000408
     ; asm: movss 1032(%esp), %xmm2
-    [-,%xmm2]           v211 = fill v201                        ; bin: stk_ovf f3 0f 10 94 24 00000408
+    [-,%xmm2]           v211 = fill v201                        ; bin: f3 0f 10 94 24 00000408
 
     ; asm: movss %xmm5, 1032(%esp)
     regspill v100, %xmm5 -> ss1                                 ; bin: stk_ovf f3 0f 11 ac 24 00000408
     ; asm: movss 1032(%esp), %xmm5
-    regfill v100, ss1 -> %xmm5                                  ; bin: stk_ovf f3 0f 10 ac 24 00000408
+    regfill v100, ss1 -> %xmm5                                  ; bin: f3 0f 10 ac 24 00000408
 
     ; Comparisons.
     ;
@@ -422,14 +422,14 @@ ebb0:
     [-,ss1]             v201 = spill v101                       ; bin: stk_ovf f2 0f 11 94 24 00000408
 
     ; asm: movsd 1032(%esp), %xmm5
-    [-,%xmm5]           v210 = fill v200                        ; bin: stk_ovf f2 0f 10 ac 24 00000408
+    [-,%xmm5]           v210 = fill v200                        ; bin: f2 0f 10 ac 24 00000408
     ; asm: movsd 1032(%esp), %xmm2
-    [-,%xmm2]           v211 = fill v201                        ; bin: stk_ovf f2 0f 10 94 24 00000408
+    [-,%xmm2]           v211 = fill v201                        ; bin: f2 0f 10 94 24 00000408
 
     ; asm: movsd %xmm5, 1032(%esp)
     regspill v100, %xmm5 -> ss1                                 ; bin: stk_ovf f2 0f 11 ac 24 00000408
     ; asm: movsd 1032(%esp), %xmm5
-    regfill v100, ss1 -> %xmm5                                  ; bin: stk_ovf f2 0f 10 ac 24 00000408
+    regfill v100, ss1 -> %xmm5                                  ; bin: f2 0f 10 ac 24 00000408
 
     ; Comparisons.
     ;
