@@ -1388,7 +1388,7 @@ call_id = TailRecipe(
         PUT_OP(bits, BASE_REX, sink);
         // The addend adjusts for the difference between the end of the
         // instruction and the beginning of the immediate field.
-        sink.reloc_external(Reloc::X86PCRel4,
+        sink.reloc_external(Reloc::X86CallPCRel4,
                             &func.dfg.ext_funcs[func_ref].name,
                             -4);
         sink.put4(0);
@@ -1399,7 +1399,7 @@ call_plt_id = TailRecipe(
         emit='''
         sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         PUT_OP(bits, BASE_REX, sink);
-        sink.reloc_external(Reloc::X86PLTRel4,
+        sink.reloc_external(Reloc::X86CallPLTRel4,
                             &func.dfg.ext_funcs[func_ref].name,
                             -4);
         sink.put4(0);

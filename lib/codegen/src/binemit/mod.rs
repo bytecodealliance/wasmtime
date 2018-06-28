@@ -33,10 +33,12 @@ pub enum Reloc {
     Abs8,
     /// x86 PC-relative 4-byte
     X86PCRel4,
+    /// x86 call to PC-relative 4-byte
+    X86CallPCRel4,
+    /// x86 call to PLT-relative 4-byte
+    X86CallPLTRel4,
     /// x86 GOT PC-relative 4-byte
     X86GOTPCRel4,
-    /// x86 PLT-relative 4-byte
-    X86PLTRel4,
     /// Arm32 call target
     Arm32Call,
     /// Arm64 call target
@@ -53,8 +55,9 @@ impl fmt::Display for Reloc {
             Reloc::Abs4 => write!(f, "Abs4"),
             Reloc::Abs8 => write!(f, "Abs8"),
             Reloc::X86PCRel4 => write!(f, "PCRel4"),
+            Reloc::X86CallPCRel4 => write!(f, "CallPCRel4"),
+            Reloc::X86CallPLTRel4 => write!(f, "CallPLTRel4"),
             Reloc::X86GOTPCRel4 => write!(f, "GOTPCRel4"),
-            Reloc::X86PLTRel4 => write!(f, "PLTRel4"),
             Reloc::Arm32Call | Reloc::Arm64Call | Reloc::RiscvCall => write!(f, "Call"),
         }
     }

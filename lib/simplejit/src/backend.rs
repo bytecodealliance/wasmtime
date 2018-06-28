@@ -271,7 +271,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                         write_unaligned(at as *mut u64, what as u64)
                     };
                 }
-                Reloc::X86PCRel4 => {
+                Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
                     // TODO: Handle overflow.
                     let pcrel = ((what as isize) - (at as isize)) as i32;
                     #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
@@ -279,7 +279,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                         write_unaligned(at as *mut i32, pcrel)
                     };
                 }
-                Reloc::X86GOTPCRel4 | Reloc::X86PLTRel4 => panic!("unexpected PIC relocation"),
+                Reloc::X86GOTPCRel4 | Reloc::X86CallPLTRel4 => panic!("unexpected PIC relocation"),
                 _ => unimplemented!(),
             }
         }
@@ -336,9 +336,10 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                                 write_unaligned(at as *mut u64, what as u64)
                             };
                         }
-                        Reloc::X86PCRel4 | Reloc::X86GOTPCRel4 | Reloc::X86PLTRel4 => {
-                            panic!("unexpected text relocation in data")
-                        }
+                        Reloc::X86PCRel4
+                        | Reloc::X86CallPCRel4
+                        | Reloc::X86GOTPCRel4
+                        | Reloc::X86CallPLTRel4 => panic!("unexpected text relocation in data"),
                         _ => unimplemented!(),
                     }
                 }
