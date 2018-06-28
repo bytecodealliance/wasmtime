@@ -9,9 +9,39 @@ use packed_option::ReservedValue;
 use std::fmt::{self, Write};
 use std::string::String;
 
+fn write_function_plain(
+    w: &mut Write,
+    func: &Function,
+    isa: Option<&TargetIsa>,
+    inst: Inst,
+    indent: usize,
+) -> fmt::Result {
+    write_instruction(w, func, isa, inst, indent)?;
+    Ok(())
+}
+
 /// Write `func` to `w` as equivalent text.
 /// Use `isa` to emit ISA-dependent annotations.
 pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -> fmt::Result {
+    decorate_function(
+        &mut |w, func, isa, inst, indent| write_function_plain(w, func, isa, inst, indent),
+        w,
+        func,
+        isa,
+    )
+}
+
+/// Writes 'func' to 'w' as text.
+/// write_function_plain is passed as 'closure' to print instructions as text.
+/// pretty_function_error is passed as 'closure' to add error decoration.
+pub fn decorate_function<
+    WL: FnMut(&mut Write, &Function, Option<&TargetIsa>, Inst, usize) -> fmt::Result,
+>(
+    closure: &mut WL,
+    w: &mut Write,
+    func: &Function,
+    isa: Option<&TargetIsa>,
+) -> fmt::Result {
     let regs = isa.map(TargetIsa::register_info);
     let regs = regs.as_ref();
 
@@ -23,7 +53,7 @@ pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -
         if any {
             writeln!(w)?;
         }
-        write_ebb(w, func, isa, ebb)?;
+        decorate_ebb(closure, w, func, isa, ebb)?;
         any = true;
     }
     writeln!(w, "}}")
@@ -141,7 +171,15 @@ pub fn write_ebb_header(
     writeln!(w, "):")
 }
 
-pub fn write_ebb(w: &mut Write, func: &Function, isa: Option<&TargetIsa>, ebb: Ebb) -> fmt::Result {
+pub fn decorate_ebb<
+    WL: FnMut(&mut Write, &Function, Option<&TargetIsa>, Inst, usize) -> fmt::Result,
+>(
+    closure: &mut WL,
+    w: &mut Write,
+    func: &Function,
+    isa: Option<&TargetIsa>,
+    ebb: Ebb,
+) -> fmt::Result {
     // Indent all instructions if any encodings are present.
     let indent = if func.encodings.is_empty() && func.srclocs.is_empty() {
         4
@@ -151,8 +189,9 @@ pub fn write_ebb(w: &mut Write, func: &Function, isa: Option<&TargetIsa>, ebb: E
 
     write_ebb_header(w, func, isa, ebb, indent)?;
     for inst in func.layout.ebb_insts(ebb) {
-        write_instruction(w, func, isa, inst, indent)?;
+        closure(w, func, isa, inst, indent)?;
     }
+
     Ok(())
 }
 
