@@ -11,7 +11,7 @@ use cretonne_module::{
 use faerie;
 use failure::Error;
 use std::fs::File;
-use target_lexicon::BinaryFormat;
+use target_lexicon::Triple;
 use traps::{FaerieTrapManifest, FaerieTrapSink};
 
 #[derive(Debug)]
@@ -29,7 +29,6 @@ pub enum FaerieTrapCollection {
 pub struct FaerieBuilder {
     isa: Box<TargetIsa>,
     name: String,
-    format: BinaryFormat,
     collect_traps: FaerieTrapCollection,
     libcall_names: Box<Fn(ir::LibCall) -> String>,
 }
@@ -51,7 +50,6 @@ impl FaerieBuilder {
     pub fn new(
         isa: Box<TargetIsa>,
         name: String,
-        format: BinaryFormat,
         collect_traps: FaerieTrapCollection,
         libcall_names: Box<Fn(ir::LibCall) -> String>,
     ) -> ModuleResult<Self> {
@@ -63,7 +61,6 @@ impl FaerieBuilder {
         Ok(Self {
             isa,
             name,
-            format,
             collect_traps,
             libcall_names,
         })
@@ -91,7 +88,6 @@ impl FaerieBuilder {
 pub struct FaerieBackend {
     isa: Box<TargetIsa>,
     artifact: faerie::Artifact,
-    format: BinaryFormat,
     trap_manifest: Option<FaerieTrapManifest>,
     libcall_names: Box<Fn(ir::LibCall) -> String>,
 }
@@ -120,7 +116,6 @@ impl Backend for FaerieBackend {
         Self {
             artifact: faerie::Artifact::new(builder.isa.triple().clone(), builder.name),
             isa: builder.isa,
-            format: builder.format,
             trap_manifest: match builder.collect_traps {
                 FaerieTrapCollection::Enabled => Some(FaerieTrapManifest::new()),
                 FaerieTrapCollection::Disabled => None,
@@ -158,7 +153,7 @@ impl Backend for FaerieBackend {
         // Non-lexical lifetimes would obviate the braces here.
         {
             let mut reloc_sink = FaerieRelocSink {
-                format: self.format,
+                triple: self.isa.triple().clone(),
                 artifact: &mut self.artifact,
                 name,
                 namespace,
@@ -348,7 +343,7 @@ fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
 }
 
 struct FaerieRelocSink<'a> {
-    format: BinaryFormat,
+    triple: Triple,
     artifact: &'a mut faerie::Artifact,
     name: &'a str,
     namespace: &'a ModuleNamespace<'a, FaerieBackend>,
@@ -384,9 +379,11 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
             }
             _ => panic!("invalid ExternalName {}", name),
         };
-        let addend_i32 = addend as i32;
-        debug_assert!(i64::from(addend_i32) == addend);
-        let raw_reloc = container::raw_relocation(reloc, self.format);
+        let (raw_reloc, raw_addend) = container::raw_relocation(reloc, &self.triple);
+        // TODO: Handle overflow.
+        let final_addend = addend + raw_addend;
+        let addend_i32 = final_addend as i32;
+        debug_assert!(i64::from(addend_i32) == final_addend);
         self.artifact
             .link_with(
                 faerie::Link {

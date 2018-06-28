@@ -30,7 +30,7 @@ ebb0:
     ; Colocated functions.
 
     ; asm: call foo
-    call fn1()                                  ; bin: stk_ovf e8 PCRel4(%bar-4) 00000000
+    call fn1()                                  ; bin: stk_ovf e8 CallPCRel4(%bar-4) 00000000
 
     ; asm: lea 0x0(%rip), %rax
     [-,%rax]            v0 = func_addr.i64 fn1        ; bin: 48 8d 05 PCRel4(%bar-4) 00000000
@@ -49,7 +49,7 @@ ebb0:
     ; Non-colocated functions.
 
     ; asm: call foo@PLT
-    call fn0()                                  ; bin: stk_ovf e8 PLTRel4(%foo-4) 00000000
+    call fn0()                                  ; bin: stk_ovf e8 CallPLTRel4(%foo-4) 00000000
 
     ; asm: mov 0x0(%rip), %rax
     [-,%rax]            v100 = func_addr.i64 fn0        ; bin: 48 8b 05 GOTPCRel4(%foo-4) 00000000
