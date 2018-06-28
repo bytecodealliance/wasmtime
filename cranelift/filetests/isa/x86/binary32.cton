@@ -377,20 +377,20 @@ ebb0:
     [-,ss1]             v501 = spill v2         ; bin: stk_ovf 89 b4 24 00000408
 
     ; asm: movl 1032(%esp), %ecx
-    [-,%rcx]            v510 = fill v500        ; bin: stk_ovf 8b 8c 24 00000408
+    [-,%rcx]            v510 = fill v500        ; bin: 8b 8c 24 00000408
     ; asm: movl 1032(%esp), %esi
-    [-,%rsi]            v511 = fill v501        ; bin: stk_ovf 8b b4 24 00000408
+    [-,%rsi]            v511 = fill v501        ; bin: 8b b4 24 00000408
 
     ; asm: movl %ecx, 1032(%esp)
     regspill v1, %rcx -> ss1                    ; bin: stk_ovf 89 8c 24 00000408
     ; asm: movl 1032(%esp), %ecx
-    regfill v1, ss1 -> %rcx                     ; bin: stk_ovf 8b 8c 24 00000408
+    regfill v1, ss1 -> %rcx                     ; bin: 8b 8c 24 00000408
 
     ; Push and Pop
     ; asm: pushl %ecx
     x86_push v1                                 ; bin: stk_ovf 51
     ; asm: popl %ecx
-    [-,%rcx]            v512 = x86_pop.i32      ; bin: stk_ovf 59
+    [-,%rcx]            v512 = x86_pop.i32      ; bin: 59
 
     ; Adjust Stack Pointer Up
     ; asm: addl $64, %esp

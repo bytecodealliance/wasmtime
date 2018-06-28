@@ -534,16 +534,16 @@ ebb0:
     [-,ss1]             v502 = spill v3         ; bin: stk_ovf 4c 89 94 24 00000408
 
     ; asm: movq 1032(%rsp), %rcx
-    [-,%rcx]            v510 = fill v500        ; bin: stk_ovf 48 8b 8c 24 00000408
+    [-,%rcx]            v510 = fill v500        ; bin: 48 8b 8c 24 00000408
     ; asm: movq 1032(%rsp), %rsi
-    [-,%rsi]            v511 = fill v501        ; bin: stk_ovf 48 8b b4 24 00000408
+    [-,%rsi]            v511 = fill v501        ; bin: 48 8b b4 24 00000408
     ; asm: movq 1032(%rsp), %r10
-    [-,%r10]            v512 = fill v502        ; bin: stk_ovf 4c 8b 94 24 00000408
+    [-,%r10]            v512 = fill v502        ; bin: 4c 8b 94 24 00000408
 
     ; asm: movq %rcx, 1032(%rsp)
     regspill v1, %rcx -> ss1                    ; bin: stk_ovf 48 89 8c 24 00000408
     ; asm: movq 1032(%rsp), %rcx
-    regfill v1, ss1 -> %rcx                     ; bin: stk_ovf 48 8b 8c 24 00000408
+    regfill v1, ss1 -> %rcx                     ; bin: 48 8b 8c 24 00000408
 
     ; Push and Pop
     ; asm: pushq %rcx
@@ -551,9 +551,9 @@ ebb0:
     ; asm: pushq %r10
     x86_push v3                                 ; bin: stk_ovf 41 52
     ; asm: popq %rcx
-    [-,%rcx]            v513 = x86_pop.i64      ; bin: stk_ovf 59
+    [-,%rcx]            v513 = x86_pop.i64      ; bin: 59
     ; asm: popq %r10
-    [-,%r10]            v514 = x86_pop.i64      ; bin: stk_ovf 41 5a
+    [-,%r10]            v514 = x86_pop.i64      ; bin: 41 5a
 
     ; Adjust Stack Pointer Up
     ; asm: addq $64, %rsp
@@ -1192,16 +1192,16 @@ ebb0:
     [-,ss1]             v502 = spill v3         ; bin: stk_ovf 44 89 94 24 00000408
 
     ; asm: movl 1032(%rsp), %ecx
-    [-,%rcx]            v510 = fill v500        ; bin: stk_ovf 8b 8c 24 00000408
+    [-,%rcx]            v510 = fill v500        ; bin: 8b 8c 24 00000408
     ; asm: movl 1032(%rsp), %esi
-    [-,%rsi]            v511 = fill v501        ; bin: stk_ovf 8b b4 24 00000408
+    [-,%rsi]            v511 = fill v501        ; bin: 8b b4 24 00000408
     ; asm: movl 1032(%rsp), %r10d
-    [-,%r10]            v512 = fill v502        ; bin: stk_ovf 44 8b 94 24 00000408
+    [-,%r10]            v512 = fill v502        ; bin: 44 8b 94 24 00000408
 
     ; asm: movl %ecx, 1032(%rsp)
     regspill v1, %rcx -> ss1                    ; bin: stk_ovf 89 8c 24 00000408
     ; asm: movl 1032(%rsp), %ecx
-    regfill v1, ss1 -> %rcx                     ; bin: stk_ovf 8b 8c 24 00000408
+    regfill v1, ss1 -> %rcx                     ; bin: 8b 8c 24 00000408
 
     ; asm: cmpl %esi, %ecx
     [-,%rflags]         v520 = ifcmp v1, v2      ; bin: 39 f1
