@@ -5,96 +5,96 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
     gv0 = vmctx
     heap0 = static gv0, min 0, bound 0x0001_0000_0000, guard 0x8000_0000
 
-                                ebb0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i64):
-@0001 [RexOp1pu_id#b8]              v5 = iconst.i32 0
-@0003 [RexOp1pu_id#b8]              v6 = iconst.i32 0
-@0005 [RexOp1tjccb#74]              brz v6, ebb10
-@0007 [RexOp1jmpb#eb]               jump ebb3(v5, v5, v5, v5, v5, v5, v0, v1, v2, v3)
+                          ebb0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i64):
+[RexOp1pu_id#b8]              v5 = iconst.i32 0
+[RexOp1pu_id#b8]              v6 = iconst.i32 0
+[RexOp1tjccb#74]              brz v6, ebb10
+[RexOp1jmpb#eb]               jump ebb3(v5, v5, v5, v5, v5, v5, v0, v1, v2, v3)
 
-                                ebb3(v15: i32, v17: i32, v25: i32, v31: i32, v40: i32, v47: i32, v54: i32, v61: i32, v68: i32, v75: i32):
-@000b [RexOp1jmpb#eb]               jump ebb6
+                          ebb3(v15: i32, v17: i32, v25: i32, v31: i32, v40: i32, v47: i32, v54: i32, v61: i32, v68: i32, v75: i32):
+[RexOp1jmpb#eb]               jump ebb6
 
-                                ebb6:
-@000d [RexOp1pu_id#b8]              v8 = iconst.i32 0
-@000f [RexOp1tjccb#75]              brnz v8, ebb5
-@0011 [RexOp1pu_id#b8]              v9 = iconst.i32 0
-@0015 [RexOp1pu_id#b8]              v11 = iconst.i32 0
-@0017 [RexOp1icscc#39]              v12 = icmp.i32 eq v15, v11
-@0017 [RexOp2urm_noflags#4b6]       v13 = bint.i32 v12
-@001a [RexOp1rr#21]                 v14 = band v9, v13
-@001b [RexOp1tjccb#75]              brnz v14, ebb6
-@001d [RexOp1jmpb#eb]               jump ebb7
+                          ebb6:
+[RexOp1pu_id#b8]              v8 = iconst.i32 0
+[RexOp1tjccb#75]              brnz v8, ebb5
+[RexOp1pu_id#b8]              v9 = iconst.i32 0
+[RexOp1pu_id#b8]              v11 = iconst.i32 0
+[RexOp1icscc#39]              v12 = icmp.i32 eq v15, v11
+[RexOp2urm_noflags#4b6]       v13 = bint.i32 v12
+[RexOp1rr#21]                 v14 = band v9, v13
+[RexOp1tjccb#75]              brnz v14, ebb6
+[RexOp1jmpb#eb]               jump ebb7
 
-                                ebb7:
-@0020 [RexOp1tjccb#74]              brz.i32 v17, ebb8
-@0022 [RexOp1pu_id#b8]              v18 = iconst.i32 0
-@0024 [RexOp1tjccb#74]              brz v18, ebb9
-@0028 [RexOp1pu_id#b8]              v21 = iconst.i32 0
-@002a [RexOp1umr#89]                v79 = uextend.i64 v5
-@002a [RexOp1r_ib#8083]             v80 = iadd_imm.i64 v4, 0
-@002a [RexOp1ld#808b]               v81 = load.i64 v80
-@002a [RexOp1rr#8001]               v22 = iadd v81, v79
-@002a [RexMp1st#189]                istore16 v21, v22
-@002d [RexOp1jmpb#eb]               jump ebb9
+                          ebb7:
+[RexOp1tjccb#74]              brz.i32 v17, ebb8
+[RexOp1pu_id#b8]              v18 = iconst.i32 0
+[RexOp1tjccb#74]              brz v18, ebb9
+[RexOp1pu_id#b8]              v21 = iconst.i32 0
+[RexOp1umr#89]                v79 = uextend.i64 v5
+[RexOp1r_ib#8083]             v80 = iadd_imm.i64 v4, 0
+[RexOp1ld#808b]               v81 = load.i64 v80
+[RexOp1rr#8001]               v22 = iadd v81, v79
+[RexMp1st#189]                istore16 v21, v22
+[RexOp1jmpb#eb]               jump ebb9
 
-                                ebb9:
-@002e [RexOp1jmpb#eb]               jump ebb8
+                          ebb9:
+[RexOp1jmpb#eb]               jump ebb8
 
-                                ebb8:
-@0033 [RexOp1pu_id#b8]              v27 = iconst.i32 3
-@0035 [RexOp1pu_id#b8]              v28 = iconst.i32 4
-@003b [RexOp1rr#09]                 v35 = bor.i32 v31, v13
-@003c [RexOp1tjccb#75]              brnz v35, ebb15(v27)
-@003c [RexOp1jmpb#eb]               jump ebb15(v28)
+                          ebb8:
+[RexOp1pu_id#b8]              v27 = iconst.i32 3
+[RexOp1pu_id#b8]              v28 = iconst.i32 4
+[RexOp1rr#09]                 v35 = bor.i32 v31, v13
+[RexOp1tjccb#75]              brnz v35, ebb15(v27)
+[RexOp1jmpb#eb]               jump ebb15(v28)
 
-                                ebb15(v36: i32):
-@003f [RexOp1jmpb#eb]               jump ebb3(v25, v36, v25, v31, v40, v47, v54, v61, v68, v75)
+                          ebb15(v36: i32):
+[RexOp1jmpb#eb]               jump ebb3(v25, v36, v25, v31, v40, v47, v54, v61, v68, v75)
 
-                                ebb5:
-@0042 [RexOp1jmpb#eb]               jump ebb4
+                          ebb5:
+[RexOp1jmpb#eb]               jump ebb4
 
-                                ebb4:
-@0045 [RexOp1jmpb#eb]               jump ebb2(v40, v47, v54, v61, v68, v75)
+                          ebb4:
+[RexOp1jmpb#eb]               jump ebb2(v40, v47, v54, v61, v68, v75)
 
-                                ebb10:
-@0046 [RexOp1pu_id#b8]              v43 = iconst.i32 0
-@0048 [RexOp1jmpb#eb]               jump ebb2(v43, v5, v0, v1, v2, v3)
+                          ebb10:
+[RexOp1pu_id#b8]              v43 = iconst.i32 0
+[RexOp1jmpb#eb]               jump ebb2(v43, v5, v0, v1, v2, v3)
 
-                                ebb2(v7: i32, v45: i32, v52: i32, v59: i32, v66: i32, v73: i32):
-@004c [RexOp1pu_id#b8]              v44 = iconst.i32 0
-@004e [RexOp1tjccb#74]              brz v44, ebb12
-@0052 [RexOp1pu_id#b8]              v50 = iconst.i32 11
-@0054 [RexOp1tjccb#74]              brz v50, ebb14
-@0058 [RexOp1umr#89]                v82 = uextend.i64 v52
-@0058 [RexOp1r_ib#8083]             v83 = iadd_imm.i64 v4, 0
-@0058 [RexOp1ld#808b]               v84 = load.i64 v83
-@0058 [RexOp1rr#8001]               v57 = iadd v84, v82
-@0058 [RexOp1ld#8b]                 v58 = load.i32 v57
-@005d [RexOp1umr#89]                v85 = uextend.i64 v58
-@005d [RexOp1r_ib#8083]             v86 = iadd_imm.i64 v4, 0
-@005d [RexOp1ld#808b]               v87 = load.i64 v86
-@005d [RexOp1rr#8001]               v64 = iadd v87, v85
-@005d [RexOp1st#88]                 istore8 v59, v64
-@0060 [RexOp1pu_id#b8]              v65 = iconst.i32 0
-@0062 [RexOp1jmpb#eb]               jump ebb13(v65)
+                          ebb2(v7: i32, v45: i32, v52: i32, v59: i32, v66: i32, v73: i32):
+[RexOp1pu_id#b8]              v44 = iconst.i32 0
+[RexOp1tjccb#74]              brz v44, ebb12
+[RexOp1pu_id#b8]              v50 = iconst.i32 11
+[RexOp1tjccb#74]              brz v50, ebb14
+[RexOp1umr#89]                v82 = uextend.i64 v52
+[RexOp1r_ib#8083]             v83 = iadd_imm.i64 v4, 0
+[RexOp1ld#808b]               v84 = load.i64 v83
+[RexOp1rr#8001]               v57 = iadd v84, v82
+[RexOp1ld#8b]                 v58 = load.i32 v57
+[RexOp1umr#89]                v85 = uextend.i64 v58
+[RexOp1r_ib#8083]             v86 = iadd_imm.i64 v4, 0
+[RexOp1ld#808b]               v87 = load.i64 v86
+[RexOp1rr#8001]               v64 = iadd v87, v85
+[RexOp1st#88]                 istore8 v59, v64
+[RexOp1pu_id#b8]              v65 = iconst.i32 0
+[RexOp1jmpb#eb]               jump ebb13(v65)
 
-                                ebb14:
-@0065 [RexOp1jmpb#eb]               jump ebb13(v66)
+                          ebb14:
+[RexOp1jmpb#eb]               jump ebb13(v66)
 
-                                ebb13(v51: i32):
-@0066 [RexOp1umr#89]                v88 = uextend.i64 v45
-@0066 [RexOp1r_ib#8083]             v89 = iadd_imm.i64 v4, 0
-@0066 [RexOp1ld#808b]               v90 = load.i64 v89
-@0066 [RexOp1rr#8001]               v71 = iadd v90, v88
-@0066 [RexOp1st#89]                 store v51, v71
-@0069 [RexOp1jmpb#eb]               jump ebb12
+                          ebb13(v51: i32):
+[RexOp1umr#89]                v88 = uextend.i64 v45
+[RexOp1r_ib#8083]             v89 = iadd_imm.i64 v4, 0
+[RexOp1ld#808b]               v90 = load.i64 v89
+[RexOp1rr#8001]               v71 = iadd v90, v88
+[RexOp1st#89]                 store v51, v71
+[RexOp1jmpb#eb]               jump ebb12
 
-                                ebb12:
-@006a [RexOp1jmpb#eb]               jump ebb11
+                          ebb12:
+[RexOp1jmpb#eb]               jump ebb11
 
-                                ebb11:
-@006e [RexOp1jmpb#eb]               jump ebb1
+                          ebb11:
+[RexOp1jmpb#eb]               jump ebb1
 
-                                ebb1:
-@006e [Op1ret#c3]                   return
+                          ebb1:
+[Op1ret#c3]                   return
 }
