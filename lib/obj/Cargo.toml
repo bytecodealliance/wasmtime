@@ -1,11 +1,11 @@
 [package]
-name = "wasmstandalone_obj"
+name = "wasmtime_obj"
 version = "0.0.0"
 authors = ["The Cretonne Project Developers"]
 publish = false
 
 [dependencies]
-cretonne-codegen = "0.9.0"
-cretonne-wasm = "0.9.0"
-wasmstandalone_runtime = { path = "../runtime" }
-faerie = "0.4.1"
+cretonne-codegen = "0.13.0"
+cretonne-wasm = "0.13.0"
+wasmtime_runtime = { path = "../runtime" }
+faerie = "0.4.2"

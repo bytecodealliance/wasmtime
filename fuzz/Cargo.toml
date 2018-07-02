@@ -1,5 +1,5 @@
 [package]
-name = "wasmstandalone_fuzz"
+name = "wasmtime_fuzz"
 version = "0.0.1"
 authors = ["The Cretonne Project Developers"]
 publish = false
@@ -7,10 +7,10 @@ publish = false
 [package.metadata]
 cargo-fuzz = true
 
-[dependencies.wasmstandalone_runtime]
+[dependencies.wasmtime_runtime]
 path = "../lib/runtime"
 
-[dependencies.wasmstandalone_execute]
+[dependencies.wasmtime_execute]
 path = "../lib/execute"
 
 [dependencies.cretonne-codegen]

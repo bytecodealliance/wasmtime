@@ -1,15 +1,15 @@
 [package]
-name = "wasmstandalone_tools"
+name = "wasmtime_tools"
 authors = ["The Cretonne Project Developers"]
 version = "0.0.0"
-description = "Command-line interface for the wasmstandalone crate"
+description = "Command-line interface for the wasmtime crate"
 license = "MIT/Apache-2.0"
 documentation = "https://cretonne.readthedocs.io/"
-repository = "https://github.com/sunfishcode/wasmstandalone"
+repository = "https://github.com/sunfishcode/wasmtime"
 publish = false
 
 [[bin]]
-name = "wasmstandalone"
+name = "wasmtime"
 path = "src/main.rs"
 
 [[bin]]
@@ -17,18 +17,18 @@ name = "wasm2obj"
 path = "src/wasm2obj.rs"
 
 [dependencies]
-cretonne-codegen = "0.9.0"
-cretonne-frontend = "0.9.0"
-cretonne-reader = "0.9.0"
-cretonne-wasm = "0.9.0"
-cretonne-native = "0.9.0"
-wasmstandalone_runtime = { path = "lib/runtime" }
-wasmstandalone_execute = { path = "lib/execute" }
-wasmstandalone_obj = { path = "lib/obj" }
+cretonne-codegen = "0.13.0"
+cretonne-frontend = "0.13.0"
+cretonne-reader = "0.13.0"
+cretonne-wasm = "0.13.0"
+cretonne-native = "0.13.0"
+wasmtime_runtime = { path = "lib/runtime" }
+wasmtime_execute = { path = "lib/execute" }
+wasmtime_obj = { path = "lib/obj" }
 docopt = "1.0.0"
 serde = "1.0.55"
 serde_derive = "1.0.55"
 tempdir = "*"
-faerie = "0.4.1"
+faerie = "0.4.2"
 
 [workspace]

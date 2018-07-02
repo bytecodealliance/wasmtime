@@ -1,14 +1,14 @@
 [package]
-name = "wasmstandalone_runtime"
+name = "wasmtime_runtime"
 version = "0.0.0"
 authors = ["The Cretonne Project Developers"]
 publish = false
 description = "Standalone runtime support for WebAsssembly code in Cretonne"
-repository = "https://github.com/sunfishcode/wasmstandalone"
+repository = "https://github.com/sunfishcode/wasmtime"
 license = "Apache-2.0"
 
 [dependencies]
-cretonne-codegen = "0.9.0"
-cretonne-wasm = "0.9.0"
-wasmparser = "0.16.1"
-target-lexicon = "0.0.1"
+cretonne-codegen = "0.13.0"
+cretonne-wasm = "0.13.0"
+wasmparser = "0.17.0"
+target-lexicon = "0.0.2"

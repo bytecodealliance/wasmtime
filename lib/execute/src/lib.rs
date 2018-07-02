@@ -5,7 +5,7 @@
 extern crate cretonne_codegen;
 extern crate cretonne_wasm;
 extern crate region;
-extern crate wasmstandalone_runtime;
+extern crate wasmtime_runtime;
 
 use cretonne_codegen::binemit::Reloc;
 use cretonne_codegen::isa::TargetIsa;
@@ -13,13 +13,13 @@ use region::protect;
 use region::Protection;
 use std::mem::transmute;
 use std::ptr::write_unaligned;
-use wasmstandalone_runtime::Compilation;
+use wasmtime_runtime::Compilation;
 
 /// Executes a module that has been translated with the `standalone::Runtime` runtime implementation.
 pub fn compile_module<'data, 'module>(
     isa: &TargetIsa,
-    translation: &wasmstandalone_runtime::ModuleTranslation<'data, 'module>,
-) -> Result<wasmstandalone_runtime::Compilation<'module>, String> {
+    translation: &wasmtime_runtime::ModuleTranslation<'data, 'module>,
+) -> Result<wasmtime_runtime::Compilation<'module>, String> {
     debug_assert!(
         translation.module.start_func.is_none()
             || translation.module.start_func.unwrap() >= translation.module.imported_funcs.len(),
@@ -35,7 +35,7 @@ pub fn compile_module<'data, 'module>(
 }
 
 /// Performs the relocations inside the function bytecode, provided the necessary metadata
-fn relocate(compilation: &mut Compilation, relocations: &wasmstandalone_runtime::Relocations) {
+fn relocate(compilation: &mut Compilation, relocations: &wasmtime_runtime::Relocations) {
     // The relocations are relative to the relocation's address plus four bytes
     // TODO: Support architectures other than x64, and other reloc kinds.
     for (i, function_relocs) in relocations.iter().enumerate() {
@@ -65,7 +65,7 @@ fn relocate(compilation: &mut Compilation, relocations: &wasmstandalone_runtime:
 
 /// Create the VmCtx data structure for the JIT'd code to use. This must
 /// match the VmCtx layout in the runtime.
-fn make_vmctx(instance: &mut wasmstandalone_runtime::Instance) -> Vec<*mut u8> {
+fn make_vmctx(instance: &mut wasmtime_runtime::Instance) -> Vec<*mut u8> {
     let mut memories = Vec::new();
     let mut vmctx = Vec::new();
     vmctx.push(instance.globals.as_mut_ptr());
@@ -78,8 +78,8 @@ fn make_vmctx(instance: &mut wasmstandalone_runtime::Instance) -> Vec<*mut u8> {
 
 /// Jumps to the code region of memory and execute the start function of the module.
 pub fn execute(
-    compilation: &wasmstandalone_runtime::Compilation,
-    instance: &mut wasmstandalone_runtime::Instance,
+    compilation: &wasmtime_runtime::Compilation,
+    instance: &mut wasmtime_runtime::Instance,
 ) -> Result<(), String> {
     let start_index = compilation
         .module

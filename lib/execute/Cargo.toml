@@ -1,14 +1,14 @@
 [package]
-name = "wasmstandalone_execute"
+name = "wasmtime_execute"
 version = "0.0.0"
 authors = ["The Cretonne Project Developers"]
 publish = false
 description = "JIT-style runtime support for WebAsssembly code in Cretonne"
-repository = "https://github.com/sunfishcode/wasmstandalone"
+repository = "https://github.com/sunfishcode/wasmtime"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-cretonne-codegen = "0.9.0"
-cretonne-wasm = "0.9.0"
+cretonne-codegen = "0.13.0"
+cretonne-wasm = "0.13.0"
 region = "0.3.0"
-wasmstandalone_runtime = { path = "../runtime" }
+wasmtime_runtime = { path = "../runtime" }

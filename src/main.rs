@@ -1,4 +1,4 @@
-//! CLI tool to use the functions provided by the [wasmstandalone](../wasmstandalone/index.html)
+//! CLI tool to use the functions provided by the [wasmtime](../wasmtime/index.html)
 //! crate.
 //!
 //! Reads Wasm binary files (one Wasm module per file), translates the functions' code to Cretonne
@@ -9,8 +9,8 @@ extern crate cretonne_codegen;
 extern crate cretonne_native;
 extern crate cretonne_wasm;
 extern crate docopt;
-extern crate wasmstandalone_execute;
-extern crate wasmstandalone_runtime;
+extern crate wasmtime_execute;
+extern crate wasmtime_runtime;
 #[macro_use]
 extern crate serde_derive;
 extern crate tempdir;
@@ -29,8 +29,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::{exit, Command};
 use tempdir::TempDir;
-use wasmstandalone_execute::{compile_module, execute};
-use wasmstandalone_runtime::{Instance, Module, ModuleEnvironment};
+use wasmtime_execute::{compile_module, execute};
+use wasmtime_runtime::{Instance, Module, ModuleEnvironment};
 
 const USAGE: &str = "
 Wasm to Cretonne IL translation utility.
@@ -38,8 +38,8 @@ Takes a binary WebAssembly module and returns its functions in Cretonne IL forma
 The translation is dependent on the environment chosen.
 
 Usage:
-    wasmstandalone [-mop] <file>...
-    wasmstandalone --help | --version
+    wasmtime [-mop] <file>...
+    wasmtime --help | --version
 
 Options:
     -o, --optimize      runs optimization passes on the translated functions

@@ -1,14 +1,14 @@
 use cretonne_codegen::settings;
 use cretonne_codegen::settings::Configurable;
 use faerie::Artifact;
-use wasmstandalone_runtime;
+use wasmtime_runtime;
 
 /// Emits a module that has been emitted with the `WasmRuntime` runtime
 /// implementation to a native object file.
 pub fn emit_module<'module>(
     obj: &mut Artifact,
-    compilation: &wasmstandalone_runtime::Compilation<'module>,
-    relocations: &wasmstandalone_runtime::Relocations,
+    compilation: &wasmtime_runtime::Compilation<'module>,
+    relocations: &wasmtime_runtime::Relocations,
 ) -> Result<(), String> {
     debug_assert!(
         compilation.module.start_func.is_none()

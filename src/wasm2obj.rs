@@ -8,8 +8,8 @@ extern crate cretonne_codegen;
 extern crate cretonne_native;
 extern crate cretonne_wasm;
 extern crate docopt;
-extern crate wasmstandalone_obj;
-extern crate wasmstandalone_runtime;
+extern crate wasmtime_obj;
+extern crate wasmtime_runtime;
 #[macro_use]
 extern crate serde_derive;
 extern crate faerie;
@@ -26,7 +26,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
-use wasmstandalone_obj::emit_module;
+use wasmtime_obj::emit_module;
 
 const USAGE: &str = "
 Wasm to native object translation utility.
@@ -90,8 +90,8 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     });
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
-    let mut module = wasmstandalone_runtime::Module::new();
-    let mut environ = wasmstandalone_runtime::ModuleEnvironment::new(&*isa, &mut module);
+    let mut module = wasmtime_runtime::Module::new();
+    let mut environ = wasmtime_runtime::ModuleEnvironment::new(&*isa, &mut module);
     translate_module(&data, &mut environ).map_err(|e| e.to_string())?;
 
     let mut obj = Artifact::new(isa.triple().clone(), String::from(output));

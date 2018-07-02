@@ -23,12 +23,16 @@ use cretonne_codegen::cursor::FuncCursor;
 use cretonne_codegen::ir;
 use cretonne_codegen::ir::immediates::Offset32;
 use cretonne_codegen::ir::types::*;
-use cretonne_codegen::ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, ExtFuncData,
-                           ExternalName, FuncRef, Function, InstBuilder, Signature};
+use cretonne_codegen::ir::{
+    AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef,
+    Function, InstBuilder, Signature,
+};
 use cretonne_codegen::isa;
 use cretonne_codegen::settings;
-use cretonne_wasm::{FuncTranslator, FunctionIndex, Global, GlobalIndex, GlobalValue, Memory,
-                    MemoryIndex, SignatureIndex, Table, TableIndex, WasmResult};
+use cretonne_wasm::{
+    FuncTranslator, FunctionIndex, Global, GlobalIndex, GlobalVariable, Memory, MemoryIndex,
+    SignatureIndex, Table, TableIndex, WasmResult,
+};
 use target_lexicon::Triple;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
@@ -189,10 +193,10 @@ pub struct FuncEnvironment<'module_environment> {
     pub module: &'module_environment Module,
 
     /// The Cretonne global holding the base address of the memories vector.
-    pub memories_base: Option<ir::GlobalVar>,
+    pub memories_base: Option<ir::GlobalValue>,
 
     /// The Cretonne global holding the base address of the globals vector.
-    pub globals_base: Option<ir::GlobalVar>,
+    pub globals_base: Option<ir::GlobalValue>,
 
     /// The external function declaration for implementing wasm's `current_memory`.
     pub current_memory_extfunc: Option<FuncRef>,
@@ -235,13 +239,13 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
         self.isa.triple()
     }
 
-    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
+    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
         let ptr_size = self.ptr_size();
         let globals_base = self.globals_base.unwrap_or_else(|| {
             let offset = 0 * ptr_size;
             let offset32 = offset as i32;
             debug_assert_eq!(offset32 as usize, offset);
-            let new_base = func.create_global_var(ir::GlobalVarData::VMContext {
+            let new_base = func.create_global_value(ir::GlobalValueData::VMContext {
                 offset: Offset32::new(offset32),
             });
             self.globals_base = Some(new_base);
@@ -250,11 +254,11 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
         let offset = index as usize * 8;
         let offset32 = offset as i32;
         debug_assert_eq!(offset32 as usize, offset);
-        let gv = func.create_global_var(ir::GlobalVarData::Deref {
+        let gv = func.create_global_value(ir::GlobalValueData::Deref {
             base: globals_base,
             offset: Offset32::new(offset32),
         });
-        GlobalValue::Memory {
+        GlobalVariable::Memory {
             gv,
             ty: self.module.globals[index].ty,
         }
@@ -263,7 +267,7 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> ir::Heap {
         let ptr_size = self.ptr_size();
         let memories_base = self.memories_base.unwrap_or_else(|| {
-            let new_base = func.create_global_var(ir::GlobalVarData::VMContext {
+            let new_base = func.create_global_value(ir::GlobalValueData::VMContext {
                 offset: Offset32::new(ptr_size as i32),
             });
             self.globals_base = Some(new_base);
@@ -272,12 +276,16 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
         let offset = index as usize * ptr_size;
         let offset32 = offset as i32;
         debug_assert_eq!(offset32 as usize, offset);
-        let heap_base = func.create_global_var(ir::GlobalVarData::Deref {
+        let heap_base_addr = func.create_global_value(ir::GlobalValueData::Deref {
             base: memories_base,
             offset: Offset32::new(offset32),
         });
+        let heap_base = func.create_global_value(ir::GlobalValueData::Deref {
+            base: heap_base_addr,
+            offset: Offset32::new(0),
+        });
         let h = func.create_heap(ir::HeapData {
-            base: ir::HeapBase::GlobalVar(heap_base),
+            base: ir::HeapBase::GlobalValue(heap_base),
             min_size: 0.into(),
             guard_size: 0x8000_0000.into(),
             style: ir::HeapStyle::Static {
@@ -332,7 +340,7 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
         Ok(pos.ins().call(callee, &real_call_args))
     }
 
-    fn translate_grow_memory(
+    fn translate_memory_grow(
         &mut self,
         mut pos: FuncCursor,
         index: MemoryIndex,
@@ -362,7 +370,7 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 
-    fn translate_current_memory(
+    fn translate_memory_size(
         &mut self,
         mut pos: FuncCursor,
         index: MemoryIndex,

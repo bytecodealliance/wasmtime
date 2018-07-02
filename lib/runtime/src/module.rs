@@ -2,8 +2,9 @@
 //! WebAssembly module.
 
 use cretonne_codegen::ir;
-use cretonne_wasm::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
-                    Table, TableIndex};
+use cretonne_wasm::{
+    FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+};
 use std::collections::HashMap;
 
 /// Possible values for a WebAssembly table element.
