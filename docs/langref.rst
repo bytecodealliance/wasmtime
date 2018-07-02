@@ -564,7 +564,7 @@ A *global value* is an object whose value is not known at compile time. The
 value is computed at runtime by :inst:`global_value`, possibly using
 information provided by the linker via relocations. There are multiple
 kinds of global values using different methods for determining their value.
-Cretonne does not track the type of a global value, for they are just 
+Cretonne does not track the type of a global value, for they are just
 values stored in non-stack memory.
 
 When Cretonne is generating code for a virtual machine environment, globals can
