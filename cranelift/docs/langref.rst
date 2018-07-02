@@ -999,7 +999,9 @@ Special register operations
 The prologue and epilogue of a function needs to manipulate special registers like the stack
 pointer and the frame pointer. These instructions should not be used in regular code.
 
-.. autoinst:: adjust_sp_imm
+.. autoinst:: adjust_sp_down
+.. autoinst:: adjust_sp_up_imm
+.. autoinst:: adjust_sp_down_imm
 .. autoinst:: ifcmp_sp
 .. autoinst:: copy_special
 
