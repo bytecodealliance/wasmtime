@@ -26,6 +26,7 @@ fn main() {
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
     let cretonne_targets = env::var("CRETONNE_TARGETS").ok();
     let cretonne_targets = cretonne_targets.as_ref().map(|s| s.as_ref());
+    let python = identify_python();
 
     // Configure isa targets cfg.
     match isa_targets(cretonne_targets, &target_triple) {
@@ -60,7 +61,7 @@ fn main() {
     // Launch build script with Python. We'll just find python in the path.
     // Use -B to disable .pyc files, because they cause trouble for vendoring
     // scripts, and this is a build step that isn't run very often anyway.
-    let status = process::Command::new("python")
+    let status = process::Command::new(python)
         .current_dir(crate_dir)
         .arg("-B")
         .arg(build_script)
@@ -71,6 +72,19 @@ fn main() {
     if !status.success() {
         process::exit(status.code().unwrap());
     }
+}
+
+fn identify_python() -> &'static str {
+    for python in &["python", "python3", "python2.7"] {
+        if process::Command::new(python)
+            .arg("--version")
+            .status()
+            .is_ok()
+        {
+            return python;
+        }
+    }
+    panic!("The Cretonne build requires Python (version 2.7 or version 3)");
 }
 
 /// Represents known ISA target.
