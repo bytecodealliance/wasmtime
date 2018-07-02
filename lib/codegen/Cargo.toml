@@ -14,7 +14,7 @@ build = "build.rs"
 cretonne-entity = { path = "../entity", version = "0.12.0", default-features = false }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
-hashmap_core = { version = "0.1.7", optional = true }
+hashmap_core = { version = "0.1.8", optional = true }
 target-lexicon = { version = "0.0.2", default-features = false }
 # It is a goal of the cretonne-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary

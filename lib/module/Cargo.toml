@@ -11,7 +11,7 @@ readme = "README.md"
 [dependencies]
 cretonne-codegen = { path = "../codegen", version = "0.12.0", default-features = false }
 cretonne-entity = { path = "../entity", version = "0.12.0", default-features = false }
-hashmap_core = { version = "0.1.7", optional = true }
+hashmap_core = { version = "0.1.8", optional = true }
 failure = "0.1.1"
 
 [features]
