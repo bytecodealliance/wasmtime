@@ -46,7 +46,7 @@ else
     needcheck=yes
 fi
 if [ -n "$needcheck" ]; then
-    banner "$(python --version 2>&1), $(python3 --version 2>&1)"
+    banner "Checking python source files"
     "$topdir/lib/codegen/meta/check.sh"
     touch "$tsfile" || echo no target directory
 fi

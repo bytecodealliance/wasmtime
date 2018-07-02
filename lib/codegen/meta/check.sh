@@ -5,7 +5,8 @@ cd "$topdir"
 
 function runif {
     if type "$1" > /dev/null; then
-        echo "   === $1 ==="
+        version=$("$1" --version 2>&1)
+        echo "   === $1: $version ==="
         "$@"
     else
         echo "$1 not found"
@@ -19,7 +20,7 @@ runif flake8 .
 runif mypy --py2 build.py
 
 # Python unit tests.
-runif python -m unittest discover
+runif python2.7 -m unittest discover
 
 # Then run the unit tests again with Python 3.
 # We get deprecation warnings about assertRaisesRegexp which was renamed in
