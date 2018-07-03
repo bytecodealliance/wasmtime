@@ -1016,7 +1016,7 @@ udiv_imm = Instruction(
         'udiv_imm', """
         Unsigned integer division by an immediate constant.
 
-        This instruction never traps because a divisor of zero is not allowed.
+        This operation traps if the divisor is zero.
         """,
         ins=(x, Y), outs=a)
 
@@ -1024,15 +1024,17 @@ sdiv_imm = Instruction(
         'sdiv_imm', """
         Signed integer division by an immediate constant.
 
-        This instruction never traps because a divisor of -1 or 0 is not
-        allowed. """,
+        This operation traps if the divisor is zero, or if the result is not
+        representable in :math:`B` bits two's complement. This only happens
+        when :math:`x = -2^{B-1}, Y = -1`.
+        """,
         ins=(x, Y), outs=a)
 
 urem_imm = Instruction(
         'urem_imm', """
         Unsigned integer remainder with immediate divisor.
 
-        This instruction never traps because a divisor of zero is not allowed.
+        This operation traps if the divisor is zero.
         """,
         ins=(x, Y), outs=a)
 
@@ -1040,8 +1042,8 @@ srem_imm = Instruction(
         'srem_imm', """
         Signed integer remainder with immediate divisor.
 
-        This instruction never traps because a divisor of 0 or -1 is not
-        allowed. """,
+        This operation traps if the divisor is zero.
+        """,
         ins=(x, Y), outs=a)
 
 irsub_imm = Instruction(
