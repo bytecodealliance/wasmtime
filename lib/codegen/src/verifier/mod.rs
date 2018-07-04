@@ -44,6 +44,7 @@
 //! Global values
 //!
 //! - Detect cycles in deref(base) declarations.
+//! - Detect use of 'vmctx' global value when no corresponding parameter is defined.
 //!
 //! TODO:
 //! Ad hoc checking
@@ -170,7 +171,9 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    // Check for cycles in the global value declarations.
+    // Check for:
+    //  - cycles in the global value declarations.
+    //  - use of 'vmctx' when no special parameter declares it.
     fn verify_global_values(&self) -> VerifierResult<()> {
         let mut seen = SparseSet::new();
 
@@ -185,6 +188,15 @@ impl<'a> Verifier<'a> {
                 }
 
                 cur = base;
+            }
+
+            if let ir::GlobalValueData::VMContext { .. } = self.func.global_values[cur] {
+                if self.func
+                    .special_param(ir::ArgumentPurpose::VMContext)
+                    .is_none()
+                {
+                    return err!(cur, "undeclared vmctx reference {}", cur);
+                }
             }
         }
 
