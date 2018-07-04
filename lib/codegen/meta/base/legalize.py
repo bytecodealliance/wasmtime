@@ -10,6 +10,7 @@ from __future__ import absolute_import
 from .immediates import intcc, imm64, ieee32, ieee64
 from . import instructions as insts
 from . import types
+from .instructions import uextend, sextend, ireduce
 from .instructions import iadd, iadd_cout, iadd_cin, iadd_carry, iadd_imm
 from .instructions import isub, isub_bin, isub_bout, isub_borrow, irsub_imm
 from .instructions import imul, imul_imm
@@ -23,6 +24,8 @@ from .instructions import iconst, bint, select
 from .instructions import ishl, ishl_imm, sshr, sshr_imm, ushr, ushr_imm
 from .instructions import rotl, rotl_imm, rotr, rotr_imm
 from .instructions import f32const, f64const
+from .instructions import store, load
+from .instructions import br_table
 from cdsl.ast import Var
 from cdsl.xform import Rtl, XFormGroup
 
@@ -41,8 +44,6 @@ widen = XFormGroup('widen', """
 
         The transformations in the 'widen' group work by expressing
         instructions in terms of larger types.
-
-        This group is not yet implemented.
         """)
 
 expand = XFormGroup('expand', """
@@ -99,6 +100,7 @@ c1 = Var('c1')
 c2 = Var('c2')
 c_in = Var('c_in')
 c_int = Var('c_int')
+d = Var('d')
 xl = Var('xl')
 xh = Var('xh')
 yl = Var('yl')
@@ -106,6 +108,10 @@ yh = Var('yh')
 al = Var('al')
 ah = Var('ah')
 cc = Var('cc')
+ptr = Var('ptr')
+flags = Var('flags')
+offset = Var('off')
+ss = Var('ss')
 
 narrow.legalize(
         a << iadd(x, y),
@@ -147,6 +153,108 @@ narrow.legalize(
             ah << select(c, xh, yh),
             a << iconcat(al, ah)
         ))
+
+for int_ty in [types.i8, types.i16]:
+    widen.legalize(
+        a << iconst.bind(int_ty)(b),
+        Rtl(
+            c << iconst.i32(b),
+            a << ireduce.bind(int_ty)(c)
+        ))
+
+widen.legalize(
+    store.i8(flags, a, ptr, offset),
+    Rtl(
+        b << uextend.i32(a),
+        insts.istore8(flags, b, ptr, offset)
+    ))
+
+widen.legalize(
+    store.i16(flags, a, ptr, offset),
+    Rtl(
+        b << uextend.i32(a),
+        insts.istore16(flags, b, ptr, offset)
+    ))
+
+widen.legalize(
+    a << load.i8(flags, ptr, offset),
+    Rtl(
+        b << insts.uload8.i32(flags, ptr, offset),
+        a << ireduce(b)
+    ))
+
+widen.legalize(
+    a << load.i16(flags, ptr, offset),
+    Rtl(
+        b << insts.uload16.i32(flags, ptr, offset),
+        a << ireduce(b)
+    ))
+
+for binop in [iadd, isub, imul, udiv, band, bor, bxor]:
+    for int_ty in [types.i8, types.i16]:
+        widen.legalize(
+            a << binop.bind(int_ty)(x, y),
+            Rtl(
+                b << uextend.i32(x),
+                c << uextend.i32(y),
+                d << binop(b, c),
+                a << ireduce(d)
+            )
+        )
+
+for binop in [sdiv]:
+    for int_ty in [types.i8, types.i16]:
+        widen.legalize(
+            a << binop.bind(int_ty)(x, y),
+            Rtl(
+                b << sextend.i32(x),
+                c << sextend.i32(y),
+                d << binop(b, c),
+                a << ireduce(d)
+            )
+        )
+
+for unop in [bnot]:
+    for int_ty in [types.i8, types.i16]:
+        widen.legalize(
+            a << unop.bind(int_ty)(x),
+            Rtl(
+                b << sextend.i32(x),
+                d << unop(b),
+                a << ireduce(d)
+            )
+        )
+
+for binop in [iadd_imm, imul_imm, udiv_imm]:
+    for int_ty in [types.i8, types.i16]:
+        widen.legalize(
+            a << binop.bind(int_ty)(x, y),
+            Rtl(
+                b << uextend.i32(x),
+                c << binop(b, y),
+                a << ireduce(c)
+            )
+        )
+
+for binop in [sdiv_imm]:
+    for int_ty in [types.i8, types.i16]:
+        widen.legalize(
+            a << binop.bind(int_ty)(x, y),
+            Rtl(
+                b << sextend.i32(x),
+                c << binop(b, y),
+                a << ireduce(c)
+            )
+        )
+
+for int_ty in [types.i8, types.i16]:
+    widen.legalize(
+        br_table.bind(int_ty)(x, y),
+        Rtl(
+            b << uextend.i32(x),
+            br_table(b, y),
+        )
+    )
 
 # Expand integer operations with carry for RISC architectures that don't have
 # the flags.
