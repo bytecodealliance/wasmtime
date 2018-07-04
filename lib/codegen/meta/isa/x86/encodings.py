@@ -6,6 +6,7 @@ from cdsl.predicates import IsZero32BitFloat, IsZero64BitFloat
 from cdsl.predicates import IsUnsignedInt, Not, And
 from base.predicates import IsColocatedFunc, IsColocatedData, LengthEquals
 from base import instructions as base
+from base import types
 from base.formats import UnaryIeee32, UnaryIeee64, UnaryImm
 from base.formats import FuncAddr, Call, LoadComplex, StoreComplex
 from .defs import X86_64, X86_32
@@ -13,7 +14,7 @@ from . import recipes as r
 from . import settings as cfg
 from . import instructions as x86
 from .legalize import x86_expand
-from base.legalize import narrow, expand_flags
+from base.legalize import narrow, widen, expand_flags
 from base.settings import allones_funcaddrs, is_pic
 from .settings import use_sse41
 
@@ -30,6 +31,8 @@ X86_32.legalize_monomorphic(expand_flags)
 X86_32.legalize_type(
     default=narrow,
     b1=expand_flags,
+    i8=widen,
+    i16=widen,
     i32=x86_expand,
     f32=x86_expand,
     f64=x86_expand)
@@ -38,6 +41,8 @@ X86_64.legalize_monomorphic(expand_flags)
 X86_64.legalize_type(
     default=narrow,
     b1=expand_flags,
+    i8=widen,
+    i16=widen,
     i32=x86_expand,
     i64=x86_expand,
     f32=x86_expand,
@@ -172,8 +177,9 @@ enc_both(base.copy.b1, r.umr, 0x89)
 
 # For x86-64, only define REX forms for now, since we can't describe the
 # special regunit immediate operands with the current constraint language.
-X86_32.enc(base.regmove.i32, *r.rmov(0x89))
-X86_64.enc(base.regmove.i32, *r.rmov.rex(0x89))
+for ty in [types.i8, types.i16, types.i32]:
+    X86_32.enc(base.regmove.bind(ty), *r.rmov(0x89))
+    X86_64.enc(base.regmove.bind(ty), *r.rmov.rex(0x89))
 X86_64.enc(base.regmove.i64, *r.rmov.rex(0x89, w=1))
 
 enc_both(base.regmove.b1, r.rmov, 0x89)
