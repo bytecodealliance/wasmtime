@@ -29,12 +29,13 @@ docopt = "1"
 serde = "1.0.8"
 serde_derive = "1.0.8"
 term = "0.5.1"
-capstone = "0.4"
+capstone = { version = "0.4", optional = true }
 wabt = { version = "0.3", optional = true }
 target-lexicon = "0.0.2"
 
 [features]
-default = ["wasm"]
+default = ["disas", "wasm"]
+disas = ["capstone"]
 wasm = ["wabt", "cretonne-wasm"]
 
 [workspace]

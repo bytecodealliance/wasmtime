@@ -17,6 +17,7 @@ extern crate docopt;
 extern crate filecheck;
 #[macro_use]
 extern crate serde_derive;
+#[cfg(feature = "disas")]
 extern crate capstone;
 extern crate term;
 
