@@ -1,6 +1,5 @@
 //! CLI tool to read Cretonne IR files and compile them into native code.
 
-use capstone::prelude::*;
 use cretonne_codegen::isa::TargetIsa;
 use cretonne_codegen::print_errors::pretty_error;
 use cretonne_codegen::settings::FlagsOrIsa;
@@ -9,7 +8,6 @@ use cretonne_codegen::{binemit, ir};
 use cretonne_reader::parse_test;
 use std::path::Path;
 use std::path::PathBuf;
-use target_lexicon::Architecture;
 use utils::{parse_sets_and_triple, read_to_string};
 
 struct PrintRelocs {
@@ -121,8 +119,53 @@ fn handle_module(
                 }
                 print!("{}", byte);
             }
-            println!();
 
+            println!();
+            print_disassembly(isa, &mem)?;
+        }
+    }
+
+    Ok(())
+}
+
+cfg_if! {
+    if #[cfg(feature = "disas")] {
+        use capstone::prelude::*;
+        use target_lexicon::Architecture;
+
+        fn get_disassembler(isa: &TargetIsa) -> Result<Capstone, String> {
+            let cs = match isa.triple().architecture {
+                Architecture::Riscv32 | Architecture::Riscv64 => {
+                    return Err(String::from("No disassembler for RiscV"))
+                }
+                Architecture::I386 | Architecture::I586 | Architecture::I686 => Capstone::new()
+                    .x86()
+                    .mode(arch::x86::ArchMode::Mode32)
+                    .build(),
+                Architecture::X86_64 => Capstone::new()
+                    .x86()
+                    .mode(arch::x86::ArchMode::Mode64)
+                    .build(),
+                Architecture::Arm
+                | Architecture::Armv4t
+                | Architecture::Armv5te
+                | Architecture::Armv7
+                | Architecture::Armv7s => Capstone::new().arm().mode(arch::arm::ArchMode::Arm).build(),
+                Architecture::Thumbv6m | Architecture::Thumbv7em | Architecture::Thumbv7m => Capstone::new(
+                ).arm()
+                    .mode(arch::arm::ArchMode::Thumb)
+                    .build(),
+                Architecture::Aarch64 => Capstone::new()
+                    .arm64()
+                    .mode(arch::arm64::ArchMode::Arm)
+                    .build(),
+                _ => return Err(String::from("Unknown ISA")),
+            };
+
+            cs.map_err(|err| err.to_string())
+        }
+
+        fn print_disassembly(isa: &TargetIsa, mem: &[u8]) -> Result<(), String> {
             let mut cs = get_disassembler(isa)?;
 
             println!("\nDisassembly:");
@@ -130,40 +173,12 @@ fn handle_module(
             for i in insns.iter() {
                 println!("{}", i);
             }
+            Ok(())
+        }
+    } else {
+        fn print_disassembly(_: &TargetIsa, _: &[u8]) -> Result<(), String> {
+            println!("\nNo disassembly available.");
+            Ok(())
         }
     }
-
-    Ok(())
-}
-
-fn get_disassembler(isa: &TargetIsa) -> Result<Capstone, String> {
-    let cs = match isa.triple().architecture {
-        Architecture::Riscv32 | Architecture::Riscv64 => {
-            return Err(String::from("No disassembler for RiscV"))
-        }
-        Architecture::I386 | Architecture::I586 | Architecture::I686 => Capstone::new()
-            .x86()
-            .mode(arch::x86::ArchMode::Mode32)
-            .build(),
-        Architecture::X86_64 => Capstone::new()
-            .x86()
-            .mode(arch::x86::ArchMode::Mode64)
-            .build(),
-        Architecture::Arm
-        | Architecture::Armv4t
-        | Architecture::Armv5te
-        | Architecture::Armv7
-        | Architecture::Armv7s => Capstone::new().arm().mode(arch::arm::ArchMode::Arm).build(),
-        Architecture::Thumbv6m | Architecture::Thumbv7em | Architecture::Thumbv7m => Capstone::new(
-        ).arm()
-            .mode(arch::arm::ArchMode::Thumb)
-            .build(),
-        Architecture::Aarch64 => Capstone::new()
-            .arm64()
-            .mode(arch::arm64::ArchMode::Arm)
-            .build(),
-        _ => return Err(String::from("Unknown ISA")),
-    };
-
-    cs.map_err(|err| err.to_string())
 }
