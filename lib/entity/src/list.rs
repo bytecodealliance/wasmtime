@@ -1,5 +1,4 @@
 //! Small lists of entity references.
-use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::mem;
 use std::vec::Vec;
@@ -34,9 +33,8 @@ use EntityRef;
 /// function they belong to. *Cloning an entity list does not allocate new memory for the clone*.
 /// It creates an alias of the same memory.
 ///
-/// Entity lists can also be hashed and compared for equality, but those operations just panic if
-/// they're ever actually called, because it's not possible to compare the contents of the list
-/// without the pool reference.
+/// Entity lists cannot be hashed and compared for equality because it's not possible to compare the
+/// contents of the list without the pool reference.
 ///
 /// # Implementation
 ///
@@ -75,19 +73,6 @@ impl<T: EntityRef> Default for EntityList<T> {
         }
     }
 }
-
-impl<T: EntityRef> Hash for EntityList<T> {
-    fn hash<H: Hasher>(&self, _: &mut H) {
-        panic!("hash called on EntityList");
-    }
-}
-
-impl<T: EntityRef> PartialEq for EntityList<T> {
-    fn eq(&self, _: &Self) -> bool {
-        panic!("eq called on EntityList");
-    }
-}
-impl<T: EntityRef> Eq for EntityList<T> {}
 
 /// A memory pool for storing lists of `T`.
 #[derive(Clone, Debug)]
