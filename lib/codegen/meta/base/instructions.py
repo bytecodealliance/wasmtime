@@ -311,7 +311,7 @@ sload8 = Instruction(
         'sload8', r"""
         Load 8 bits from memory at ``p + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i8`` followed by ``uextend``.
+        This is equivalent to ``load.i8`` followed by ``sextend``.
         """,
         ins=(MemFlags, p, Offset), outs=a, can_load=True)
 
@@ -319,7 +319,7 @@ sload8_complex = Instruction(
         'sload8_complex', r"""
         Load 8 bits from memory at ``sum(args) + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i8`` followed by ``uextend``.
+        This is equivalent to ``load.i8`` followed by ``sextend``.
         """,
         ins=(MemFlags, args, Offset), outs=a, can_load=True)
 
@@ -365,7 +365,7 @@ sload16 = Instruction(
         'sload16', r"""
         Load 16 bits from memory at ``p + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i16`` followed by ``uextend``.
+        This is equivalent to ``load.i16`` followed by ``sextend``.
         """,
         ins=(MemFlags, p, Offset), outs=a, can_load=True)
 
@@ -373,7 +373,7 @@ sload16_complex = Instruction(
         'sload16_complex', r"""
         Load 16 bits from memory at ``sum(args) + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i16`` followed by ``uextend``.
+        This is equivalent to ``load.i16`` followed by ``sextend``.
         """,
         ins=(MemFlags, args, Offset), outs=a, can_load=True)
 
@@ -419,7 +419,7 @@ sload32 = Instruction(
         'sload32', r"""
         Load 32 bits from memory at ``p + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i32`` followed by ``uextend``.
+        This is equivalent to ``load.i32`` followed by ``sextend``.
         """,
         ins=(MemFlags, p, Offset), outs=a, can_load=True)
 
@@ -427,7 +427,7 @@ sload32_complex = Instruction(
         'sload32_complex', r"""
         Load 32 bits from memory at ``sum(args) + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i32`` followed by ``uextend``.
+        This is equivalent to ``load.i32`` followed by ``sextend``.
         """,
         ins=(MemFlags, args, Offset), outs=a, can_load=True)
 
