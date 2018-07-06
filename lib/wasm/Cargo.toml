@@ -18,7 +18,7 @@ failure_derive = { version = "0.1.1", default-features = false }
 target-lexicon = { version = "0.0.2", default-features = false }
 
 [dev-dependencies]
-wabt = "0.3"
+wabt = "0.4"
 
 [features]
 default = ["std"]
