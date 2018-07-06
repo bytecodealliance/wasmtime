@@ -79,44 +79,51 @@ fn handle_module(
     vprint!(flag_verbose, "Translating... ");
     terminal.reset().unwrap();
 
-    let mut data = read_to_end(path.clone()).map_err(|err| String::from(err.description()))?;
+    let mut module_binary = read_to_end(path.clone()).map_err(|err| String::from(err.description()))?;
 
-    if !data.starts_with(&[b'\0', b'a', b's', b'm']) {
-        data = match wat2wasm(&data) {
+    if !module_binary.starts_with(&[b'\0', b'a', b's', b'm']) {
+        module_binary = match wat2wasm(&module_binary) {
             Ok(data) => data,
             Err(e) => return Err(String::from(e.description())),
         };
     }
 
+    let isa = match fisa.isa {
+        Some(isa) => isa,
+        None => return Err(String::from("Error: the wasm command requires an explicit isa."))
+    };
+
     let mut dummy_environ =
-        DummyEnvironment::with_triple_flags(fisa.isa.unwrap().triple().clone(), fisa.flags.clone());
-    translate_module(&data, &mut dummy_environ).map_err(|e| e.to_string())?;
+        DummyEnvironment::with_triple_flags(isa.triple().clone(), fisa.flags.clone());
+    translate_module(&module_binary, &mut dummy_environ).map_err(|e| e.to_string())?;
 
     terminal.fg(term::color::GREEN).unwrap();
     vprintln!(flag_verbose, "ok");
     terminal.reset().unwrap();
 
     if flag_just_decode {
-        if flag_print {
-            let num_func_imports = dummy_environ.get_num_func_imports();
-            for (def_index, func) in dummy_environ.info.function_bodies.iter().enumerate() {
-                let func_index = num_func_imports + def_index;
-                let mut context = Context::new();
-                context.func = func.clone();
-                if let Some(start_func) = dummy_environ.info.start_func {
-                    if func_index == start_func {
-                        println!("; Selected as wasm start function");
-                    }
-                }
-                vprintln!(flag_verbose, "");
-                for export_name in &dummy_environ.info.functions[func_index].export_names {
-                    println!("; Exported as \"{}\"", export_name);
-                }
-                println!("{}", context.func.display(None));
-                vprintln!(flag_verbose, "");
-            }
-            terminal.reset().unwrap();
+        if !flag_print {
+            return Ok(());
         }
+
+        let num_func_imports = dummy_environ.get_num_func_imports();
+        for (def_index, func) in dummy_environ.info.function_bodies.iter().enumerate() {
+            let func_index = num_func_imports + def_index;
+            let mut context = Context::new();
+            context.func = func.clone();
+            if let Some(start_func) = dummy_environ.info.start_func {
+                if func_index == start_func {
+                    println!("; Selected as wasm start function");
+                }
+            }
+            vprintln!(flag_verbose, "");
+            for export_name in &dummy_environ.info.functions[func_index].export_names {
+                println!("; Exported as \"{}\"", export_name);
+            }
+            println!("{}", context.func.display(None));
+            vprintln!(flag_verbose, "");
+        }
+        terminal.reset().unwrap();
         return Ok(());
     }
 
@@ -135,14 +142,15 @@ fn handle_module(
     let num_func_imports = dummy_environ.get_num_func_imports();
     let mut total_module_code_size = 0;
     for (def_index, func) in dummy_environ.info.function_bodies.iter().enumerate() {
-        let func_index = num_func_imports + def_index;
         let mut context = Context::new();
         context.func = func.clone();
+
+        let func_index = num_func_imports + def_index;
         if flag_check_translation {
             context
                 .verify(fisa)
                 .map_err(|err| pretty_verifier_error(&context.func, fisa.isa, &err))?;
-        } else if let Some(isa) = fisa.isa {
+        } else {
             let compiled_size = context
                 .compile(isa)
                 .map_err(|err| pretty_error(&context.func, fisa.isa, err))?;
@@ -157,9 +165,8 @@ fn handle_module(
                     func_index, dummy_environ.func_bytecode_sizes[def_index]
                 );
             }
-        } else {
-            return Err(String::from("compilation requires a target isa"));
         }
+
         if flag_print {
             vprintln!(flag_verbose, "");
             if let Some(start_func) = dummy_environ.info.start_func {
