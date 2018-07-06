@@ -114,7 +114,7 @@ def gen_instruction_data(fmt):
     store the additional information out of line.
     """
 
-    fmt.line('#[derive(Clone, Debug, Hash, PartialEq, Eq)]')
+    fmt.line('#[derive(Clone, Debug)]')
     fmt.line('#[allow(missing_docs)]')
     with fmt.indented('pub enum InstructionData {', '}'):
         for f in InstructionFormat.all_formats:
@@ -147,6 +147,8 @@ def gen_instruction_data_impl(fmt):
     - `pub fn arguments_mut(&mut self, &pool) -> &mut [Value]`
     - `pub fn take_value_list(&mut self) -> Option<ir::ValueList>`
     - `pub fn put_value_list(&mut self, args: ir::ValueList>`
+    - `pub fn eq(&self, &other: Self, &pool) -> bool`
+    - `pub fn hash<H: Hasher>(&self, state: &mut H, &pool)`
     """
 
     # The `opcode` method simply reads the `opcode` members. This is really a
@@ -243,6 +245,93 @@ def gen_instruction_data_impl(fmt):
             fmt.line(
                 'debug_assert!(args.is_empty(), "Value list already in use");')
             fmt.line('*args = vlist;')
+        fmt.line()
+
+        fmt.doc_comment(
+                """
+                Compare two `InstructionData` for equality.
+
+                This operation requires a reference to a `ValueListPool` to
+                determine if the contents of any `ValueLists` are equal.
+                """)
+        with fmt.indented(
+                'pub fn eq(&self, other: &Self, pool: &ir::ValueListPool)'
+                ' -> bool {',
+                '}'):
+            with fmt.indented('if ::std::mem::discriminant(self) != '
+                              '::std::mem::discriminant(other) {', '}'):
+                fmt.line('return false;')
+            with fmt.indented('match (self, other) {', '}'):
+                for f in InstructionFormat.all_formats:
+                    n = '&InstructionData::' + f.name
+                    members = ['opcode']
+                    if f.typevar_operand is None:
+                        args_eq = 'true'
+                    elif f.has_value_list:
+                        members.append('args')
+                        args_eq = 'args1.as_slice(pool) == ' \
+                                  'args2.as_slice(pool)'
+                    elif f.num_value_operands == 1:
+                        members.append('arg')
+                        args_eq = 'arg1 == arg2'
+                    else:
+                        members.append('args')
+                        args_eq = 'args1 == args2'
+                    for field in f.imm_fields:
+                        members.append(field.member)
+                    pat1 = ', '.join('{}: ref {}1'.format(x, x)
+                                     for x in members)
+                    pat2 = ', '.join('{}: ref {}2'.format(x, x)
+                                     for x in members)
+                    with fmt.indented('({} {{ {} }}, {} {{ {} }}) => {{'
+                                      .format(n, pat1, n, pat2), '}'):
+                        fmt.line('opcode1 == opcode2 &&')
+                        for field in f.imm_fields:
+                            fmt.line('{}1 == {}2 &&'
+                                     .format(field.member, field.member))
+                        fmt.line(args_eq)
+                fmt.line('_ => unsafe { '
+                         '::std::hint::unreachable_unchecked() }')
+        fmt.line()
+
+        fmt.doc_comment(
+                """
+                Hash an `InstructionData`.
+
+                This operation requires a reference to a `ValueListPool` to
+                hash the contents of any `ValueLists`.
+                """)
+        with fmt.indented(
+                'pub fn hash<H: ::std::hash::Hasher>'
+                '(&self, state: &mut H, pool: &ir::ValueListPool) {',
+                '}'):
+            with fmt.indented('match self {', '}'):
+                for f in InstructionFormat.all_formats:
+                    n = 'InstructionData::' + f.name
+                    members = ['opcode']
+                    if f.typevar_operand is None:
+                        args = '&()'
+                    elif f.has_value_list:
+                        members.append('args')
+                        args = 'args.as_slice(pool)'
+                    elif f.num_value_operands == 1:
+                        members.append('arg')
+                        args = 'arg'
+                    else:
+                        members.append('args')
+                        args = 'args'
+                    for field in f.imm_fields:
+                        members.append(field.member)
+                    pat = n + ' { ' + ', '.join(members) + ' }'
+                    with fmt.indented(pat + ' => {', '}'):
+                        fmt.line('::std::hash::Hash::hash( '
+                                 '&::std::mem::discriminant(self), state);')
+                        fmt.line('::std::hash::Hash::hash(opcode, state);')
+                        for field in f.imm_fields:
+                            fmt.line('::std::hash::Hash::hash({}, state);'
+                                     .format(field.member))
+                        fmt.line('::std::hash::Hash::hash({}, state);'
+                                 .format(args))
 
 
 def collect_instr_groups(isas):
