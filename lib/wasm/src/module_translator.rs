@@ -131,7 +131,7 @@ pub fn translate_module<'data>(
         let size = reader.bytes_remaining();
         environ.define_function_body(reader
             .read_bytes(size)
-            .map_err(|e| WasmError::from_binary_reader_error(e))?)?;
+            .map_err(WasmError::from_binary_reader_error)?)?;
     }
     loop {
         match *parser.read() {
