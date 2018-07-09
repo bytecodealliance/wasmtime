@@ -51,7 +51,7 @@ pub fn parse_sets_and_triple(
     parse_options(
         flag_set.iter().map(|x| x.as_str()),
         &mut flag_builder,
-        &Location { line_number: 0 },
+        Location { line_number: 0 },
     ).map_err(|err| err.to_string())?;
 
     let mut words = flag_triple.trim().split_whitespace();
@@ -71,7 +71,7 @@ pub fn parse_sets_and_triple(
             ),
         })?;
         // Apply the ISA-specific settings to `isa_builder`.
-        parse_options(words, &mut isa_builder, &Location { line_number: 0 })
+        parse_options(words, &mut isa_builder, Location { line_number: 0 })
             .map_err(|err| err.to_string())?;
 
         Ok(OwnedFlagsOrIsa::Isa(

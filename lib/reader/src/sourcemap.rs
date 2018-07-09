@@ -140,49 +140,49 @@ impl SourceMap {
     }
 
     /// Define the value `entity`.
-    pub fn def_value(&mut self, entity: Value, loc: &Location) -> ParseResult<()> {
+    pub fn def_value(&mut self, entity: Value, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the ebb `entity`.
-    pub fn def_ebb(&mut self, entity: Ebb, loc: &Location) -> ParseResult<()> {
+    pub fn def_ebb(&mut self, entity: Ebb, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the stack slot `entity`.
-    pub fn def_ss(&mut self, entity: StackSlot, loc: &Location) -> ParseResult<()> {
+    pub fn def_ss(&mut self, entity: StackSlot, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the global value `entity`.
-    pub fn def_gv(&mut self, entity: GlobalValue, loc: &Location) -> ParseResult<()> {
+    pub fn def_gv(&mut self, entity: GlobalValue, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the heap `entity`.
-    pub fn def_heap(&mut self, entity: Heap, loc: &Location) -> ParseResult<()> {
+    pub fn def_heap(&mut self, entity: Heap, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the signature `entity`.
-    pub fn def_sig(&mut self, entity: SigRef, loc: &Location) -> ParseResult<()> {
+    pub fn def_sig(&mut self, entity: SigRef, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the external function `entity`.
-    pub fn def_fn(&mut self, entity: FuncRef, loc: &Location) -> ParseResult<()> {
+    pub fn def_fn(&mut self, entity: FuncRef, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define the jump table `entity`.
-    pub fn def_jt(&mut self, entity: JumpTable, loc: &Location) -> ParseResult<()> {
+    pub fn def_jt(&mut self, entity: JumpTable, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
     /// Define an entity. This can be used for instructions whose numbers never
     /// appear in source, or implicitly defined signatures.
-    pub fn def_entity(&mut self, entity: AnyEntity, loc: &Location) -> ParseResult<()> {
-        if self.locations.insert(entity, *loc).is_some() {
+    pub fn def_entity(&mut self, entity: AnyEntity, loc: Location) -> ParseResult<()> {
+        if self.locations.insert(entity, loc).is_some() {
             err!(loc, "duplicate entity: {}", entity)
         } else {
             Ok(())
