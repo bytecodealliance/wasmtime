@@ -36,12 +36,12 @@ pub fn parse_function_signatures(
             }) => {
                 let mut sig = Signature::new(environ.flags().call_conv());
                 sig.params.extend(params.iter().map(|ty| {
-                    let cret_arg: ir::Type = type_to_type(ty)
+                    let cret_arg: ir::Type = type_to_type(*ty)
                         .expect("only numeric types are supported in function signatures");
                     AbiParam::new(cret_arg)
                 }));
                 sig.returns.extend(returns.iter().map(|ty| {
-                    let cret_arg: ir::Type = type_to_type(ty)
+                    let cret_arg: ir::Type = type_to_type(*ty)
                         .expect("only numeric types are supported in function signatures");
                     AbiParam::new(cret_arg)
                 }));
@@ -92,7 +92,7 @@ pub fn parse_import_section<'data>(
                 ..
             } => {
                 environ.declare_global(Global {
-                    ty: type_to_type(&ty.content_type).unwrap(),
+                    ty: type_to_type(ty.content_type).unwrap(),
                     mutability: ty.mutable,
                     initializer: GlobalInit::Import(),
                 });
@@ -101,7 +101,7 @@ pub fn parse_import_section<'data>(
                 ty: ImportSectionEntryType::Table(ref tab),
                 ..
             } => environ.declare_table(Table {
-                ty: match type_to_type(&tab.element_type) {
+                ty: match type_to_type(tab.element_type) {
                     Ok(t) => TableElementType::Val(t),
                     Err(()) => TableElementType::Func(),
                 },
@@ -245,7 +245,7 @@ pub fn parse_global_section(
             ref s => panic!("unexpected section content: {:?}", s),
         }
         let global = Global {
-            ty: type_to_type(&content_type).unwrap(),
+            ty: type_to_type(content_type).unwrap(),
             mutability,
             initializer,
         };
@@ -329,7 +329,7 @@ pub fn parse_table_section(parser: &mut Parser, environ: &mut ModuleEnvironment)
     loop {
         match *parser.read() {
             ParserState::TableSectionEntry(ref table) => environ.declare_table(Table {
-                ty: match type_to_type(&table.element_type) {
+                ty: match type_to_type(table.element_type) {
                     Ok(t) => TableElementType::Val(t),
                     Err(()) => TableElementType::Func(),
                 },

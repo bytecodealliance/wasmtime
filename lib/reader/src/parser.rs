@@ -197,7 +197,7 @@ impl<'a> Context<'a> {
     }
 
     // Resolve a reference to a signature.
-    fn check_sig(&self, sig: SigRef, loc: &Location) -> ParseResult<()> {
+    fn check_sig(&self, sig: SigRef, loc: Location) -> ParseResult<()> {
         if !self.map.contains_sig(sig) {
             err!(loc, "undefined signature {}", sig)
         } else {
@@ -1246,7 +1246,7 @@ impl<'a> Parser<'a> {
                     }
                     Some(sig) => sig,
                 };
-                ctx.check_sig(sig, &self.loc)?;
+                ctx.check_sig(sig, self.loc)?;
                 self.consume();
                 ExtFuncData {
                     name,
@@ -2096,7 +2096,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::CallIndirect => {
                 let sig_ref = self.match_sig("expected signature reference")?;
-                ctx.check_sig(sig_ref, &self.loc)?;
+                ctx.check_sig(sig_ref, self.loc)?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let callee = self.match_value("expected SSA value callee operand")?;
                 self.match_token(Token::LPar, "expected '(' before arguments")?;

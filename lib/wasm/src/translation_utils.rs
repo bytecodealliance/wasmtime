@@ -72,8 +72,8 @@ pub struct Memory {
 }
 
 /// Helper function translating wasmparser types to Cretonne types when possible.
-pub fn type_to_type(ty: &wasmparser::Type) -> Result<ir::Type, ()> {
-    match *ty {
+pub fn type_to_type(ty: wasmparser::Type) -> Result<ir::Type, ()> {
+    match ty {
         wasmparser::Type::I32 => Ok(ir::types::I32),
         wasmparser::Type::I64 => Ok(ir::types::I64),
         wasmparser::Type::F32 => Ok(ir::types::F32),
