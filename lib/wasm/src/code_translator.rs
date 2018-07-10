@@ -47,11 +47,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     environ: &mut FE,
 ) -> WasmResult<()> {
     if !state.reachable {
-        return Ok(translate_unreachable_operator(&op, builder, state));
+        translate_unreachable_operator(&op, builder, state);
+        return Ok(());
     }
 
     // This big match treats all Wasm code operators.
-    Ok(match op {
+    match op {
         /********************************** Locals ****************************************
          *  `get_local` and `set_local` are treated as non-SSA variables and will completely
          *  disappear in the Cretonne Code
@@ -885,7 +886,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64AtomicRmw32UCmpxchg { .. } => {
             return Err(WasmError::Unsupported("proposed thread operators"));
         }
-    })
+    };
+    Ok(())
 }
 
 // Clippy warns us of some fields we are deliberately ignoring
