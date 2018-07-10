@@ -50,8 +50,8 @@ const K: usize = 0x517cc1b727220a95;
 
 impl Default for FxHasher {
     #[inline]
-    fn default() -> FxHasher {
-        FxHasher { hash: 0 }
+    fn default() -> Self {
+        Self { hash: 0 }
     }
 }
 
