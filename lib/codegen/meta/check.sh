@@ -4,7 +4,7 @@ topdir=$(dirname "$0")
 cd "$topdir"
 
 function runif {
-    if type "$1" > /dev/null; then
+    if type "$1" > /dev/null 2>&1; then
         version=$("$1" --version 2>&1)
         echo "   === $1: $version ==="
         "$@"
