@@ -20,7 +20,7 @@ entity_impl!(FuncId, "funcid");
 
 /// Function identifiers are namespace 0 in `ir::ExternalName`
 impl From<FuncId> for ir::ExternalName {
-    fn from(id: FuncId) -> ir::ExternalName {
+    fn from(id: FuncId) -> Self {
         ir::ExternalName::User {
             namespace: 0,
             index: id.0,
@@ -35,7 +35,7 @@ entity_impl!(DataId, "dataid");
 
 /// Data identifiers are namespace 1 in `ir::ExternalName`
 impl From<DataId> for ir::ExternalName {
-    fn from(id: DataId) -> ir::ExternalName {
+    fn from(id: DataId) -> Self {
         ir::ExternalName::User {
             namespace: 1,
             index: id.0,
@@ -74,16 +74,16 @@ impl Linkage {
     }
 
     /// Test whether this linkage can have a definition.
-    pub fn is_definable(&self) -> bool {
-        match *self {
+    pub fn is_definable(self) -> bool {
+        match self {
             Linkage::Import => false,
             Linkage::Local | Linkage::Preemptible | Linkage::Export => true,
         }
     }
 
     /// Test whether this linkage will have a definition that cannot be preempted.
-    pub fn is_final(&self) -> bool {
-        match *self {
+    pub fn is_final(self) -> bool {
+        match self {
             Linkage::Import | Linkage::Preemptible => false,
             Linkage::Local | Linkage::Export => true,
         }
@@ -101,10 +101,10 @@ pub enum FuncOrDataId {
 
 /// Mapping to `ir::ExternalName` is trivial based on the `FuncId` and `DataId` mapping.
 impl From<FuncOrDataId> for ir::ExternalName {
-    fn from(id: FuncOrDataId) -> ir::ExternalName {
+    fn from(id: FuncOrDataId) -> Self {
         match id {
-            FuncOrDataId::Func(funcid) => ir::ExternalName::from(funcid),
-            FuncOrDataId::Data(dataid) => ir::ExternalName::from(dataid),
+            FuncOrDataId::Func(funcid) => Self::from(funcid),
+            FuncOrDataId::Data(dataid) => Self::from(dataid),
         }
     }
 }
@@ -317,7 +317,7 @@ where
     /// Get the module identifier for a given name, if that name
     /// has been declared.
     pub fn get_name(&self, name: &str) -> Option<FuncOrDataId> {
-        self.names.get(name).map(|e| *e)
+        self.names.get(name).cloned()
     }
 
     /// Return then pointer type for the current target.
@@ -472,7 +472,7 @@ where
             })?;
 
             let info = &self.contents.functions[func];
-            if !info.compiled.is_none() {
+            if info.compiled.is_some() {
                 return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
             }
             if !info.decl.linkage.is_definable() {
@@ -495,7 +495,7 @@ where
     pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
         let compiled = {
             let info = &self.contents.data_objects[data];
-            if !info.compiled.is_none() {
+            if info.compiled.is_some() {
                 return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
             }
             if !info.decl.linkage.is_definable() {
