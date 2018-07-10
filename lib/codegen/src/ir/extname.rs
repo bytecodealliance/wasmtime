@@ -111,7 +111,7 @@ impl FromStr for ExternalName {
         // Try to parse as a libcall name, otherwise it's a test case.
         match s.parse() {
             Ok(lc) => Ok(ExternalName::LibCall(lc)),
-            Err(_) => Ok(ExternalName::testcase(s.as_bytes())),
+            Err(_) => Ok(Self::testcase(s.as_bytes())),
         }
     }
 }

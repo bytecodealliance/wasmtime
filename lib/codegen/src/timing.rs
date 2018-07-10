@@ -154,8 +154,7 @@ mod details {
                 fn fmtdur(mut dur: Duration, f: &mut fmt::Formatter) -> fmt::Result {
                     // Round to nearest ms by adding 500us.
                     dur += Duration::new(0, 500_000);
-                    let ms = dur.subsec_nanos() / 1_000_000;
-                    write!(f, "{:4}.{:03} ", dur.as_secs(), ms)
+                    write!(f, "{:4}.{:03} ", dur.as_secs(), dur.subsec_millis())
                 }
 
                 fmtdur(time.total, f)?;

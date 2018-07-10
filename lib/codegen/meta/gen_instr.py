@@ -266,7 +266,7 @@ def gen_instruction_data_impl(fmt):
                     n = '&InstructionData::' + f.name
                     members = ['opcode']
                     if f.typevar_operand is None:
-                        args_eq = 'true'
+                        args_eq = None
                     elif f.has_value_list:
                         members.append('args')
                         args_eq = 'args1.as_slice(pool) == ' \
@@ -285,11 +285,12 @@ def gen_instruction_data_impl(fmt):
                                      for x in members)
                     with fmt.indented('({} {{ {} }}, {} {{ {} }}) => {{'
                                       .format(n, pat1, n, pat2), '}'):
-                        fmt.line('opcode1 == opcode2 &&')
+                        fmt.line('opcode1 == opcode2')
                         for field in f.imm_fields:
-                            fmt.line('{}1 == {}2 &&'
+                            fmt.line('&& {}1 == {}2'
                                      .format(field.member, field.member))
-                        fmt.line(args_eq)
+                        if args_eq is not None:
+                            fmt.line('&& {}'.format(args_eq))
                 fmt.line('_ => unsafe { '
                          '::std::hint::unreachable_unchecked() }')
         fmt.line()

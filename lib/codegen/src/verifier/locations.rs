@@ -69,10 +69,8 @@ impl<'a> LocationVerifier<'a> {
                 let opcode = dfg[inst].opcode();
                 if opcode.is_return() {
                     self.check_return_abi(inst, &divert)?;
-                } else if opcode.is_branch() {
-                    if !divert.is_empty() {
-                        self.check_cfg_edges(inst, &divert)?;
-                    }
+                } else if opcode.is_branch() && !divert.is_empty() {
+                    self.check_cfg_edges(inst, &divert)?;
                 }
 
                 self.update_diversions(inst, &mut divert)?;
