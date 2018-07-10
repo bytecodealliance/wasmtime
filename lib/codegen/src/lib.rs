@@ -60,10 +60,11 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[macro_use]
 pub extern crate cranelift_entity as entity;
 
+pub extern crate cranelift_bforest as bforest;
+
 #[macro_use]
 pub mod dbg;
 
-pub mod bforest;
 pub mod binemit;
 pub mod cfg_printer;
 pub mod cursor;
