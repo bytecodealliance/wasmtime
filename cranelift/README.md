@@ -79,6 +79,7 @@ Building with no\_std
 
 The following crates support \`no\_std\`:
  - cranelift-entity
+ - cranelift-bforest
  - cranelift-codegen
  - cranelift-frontend
  - cranelift-native

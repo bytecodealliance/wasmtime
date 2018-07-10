@@ -12,6 +12,7 @@ build = "build.rs"
 
 [dependencies]
 cranelift-entity = { path = "../entity", version = "0.18.1", default-features = false }
+cranelift-bforest = { path = "../bforest", version = "0.18.1", default-features = false }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 hashmap_core = { version = "0.1.9", optional = true }
@@ -29,7 +30,7 @@ cranelift-codegen-meta = { path = "meta", version = "0.18.1" }
 # of some minimal std-like replacement libraries. At least one of these two
 # features need to be enabled.
 default = ["std"]
-std = ["cranelift-entity/std", "target-lexicon/std"]
+std = ["cranelift-entity/std", "cranelift-bforest/std", "target-lexicon/std"]
 core = ["hashmap_core"]
 
 [badges]
