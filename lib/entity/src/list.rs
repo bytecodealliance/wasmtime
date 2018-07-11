@@ -225,6 +225,23 @@ impl<T: EntityRef> EntityList<T> {
         Default::default()
     }
 
+    /// Create a new list with the contents initialized from a slice.
+    pub fn from_slice(slice: &[T], pool: &mut ListPool<T>) -> Self {
+        let len = slice.len();
+        if len == 0 {
+            return EntityList::new();
+        }
+
+        let block = pool.alloc(sclass_for_length(len));
+        pool.data[block] = T::new(len);
+        pool.data[block + 1..block + len + 1].copy_from_slice(slice);
+
+        EntityList {
+            index: (block + 1) as u32,
+            unused: PhantomData,
+        }
+    }
+
     /// Returns `true` if the list has a length of 0.
     pub fn is_empty(&self) -> bool {
         // 0 is a magic value for the empty list. Any list in the pool array must have a positive
@@ -536,6 +553,25 @@ mod tests {
         assert_eq!(list.len(pool), 0);
         assert_eq!(list.as_slice(pool), &[]);
         assert_eq!(list.first(pool), None);
+    }
+
+    #[test]
+    fn from_slice() {
+        let pool = &mut ListPool::<Inst>::new();
+
+        let list = EntityList::<Inst>::from_slice(&[Inst(0), Inst(1)], pool);
+        assert!(!list.is_empty());
+        assert_eq!(list.len(pool), 2);
+        assert_eq!(list.as_slice(pool), &[Inst(0), Inst(1)]);
+        assert_eq!(list.get(0, pool), Some(Inst(0)));
+        assert_eq!(list.get(100, pool), None);
+
+        let list = EntityList::<Inst>::from_slice(&[], pool);
+        assert!(list.is_empty());
+        assert_eq!(list.len(pool), 0);
+        assert_eq!(list.as_slice(pool), &[]);
+        assert_eq!(list.get(0, pool), None);
+        assert_eq!(list.get(100, pool), None);
     }
 
     #[test]
