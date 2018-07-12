@@ -517,25 +517,19 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
             ..
         } => {
             // Fold away a redundant `bint`.
-            let maybe = {
+            let condition_def = {
                 let args = pos.func.dfg.inst_args(inst);
-                if let ValueDef::Result(def_inst, _) = pos.func.dfg.value_def(args[0]) {
-                    if let InstructionData::Unary {
-                        opcode: Opcode::Bint,
-                        arg: bool_val,
-                    } = pos.func.dfg[def_inst]
-                    {
-                        Some(bool_val)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
+                pos.func.dfg.value_def(args[0])
             };
-            if let Some(bool_val) = maybe {
-                let args = pos.func.dfg.inst_args_mut(inst);
-                args[0] = bool_val;
+            if let ValueDef::Result(def_inst, _) = condition_def {
+                if let InstructionData::Unary {
+                    opcode: Opcode::Bint,
+                    arg: bool_val,
+                } = pos.func.dfg[def_inst]
+                {
+                    let args = pos.func.dfg.inst_args_mut(inst);
+                    args[0] = bool_val;
+                }
             }
         }
         _ => {}

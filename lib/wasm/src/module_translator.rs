@@ -94,10 +94,19 @@ pub fn translate_module<'data>(
             ParserState::BeginSection {
                 code: SectionCode::Code,
                 ..
-            } => {
-                // The code section begins
-                break;
-            }
+            } => loop {
+                match *parser.read() {
+                    ParserState::BeginFunctionBody { .. } => {}
+                    ParserState::EndSection => break,
+                    ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+                    ref s => panic!("wrong content in code section: {:?}", s),
+                }
+                let mut reader = parser.create_binary_reader();
+                let size = reader.bytes_remaining();
+                environ.define_function_body(reader
+                    .read_bytes(size)
+                    .map_err(WasmError::from_binary_reader_error)?)?;
+            },
             ParserState::EndSection => {
                 next_input = ParserInput::Default;
             }
@@ -119,31 +128,4 @@ pub fn translate_module<'data>(
             _ => panic!("wrong content in the preamble"),
         };
     }
-    // At this point we've entered the code section
-    loop {
-        match *parser.read() {
-            ParserState::BeginFunctionBody { .. } => {}
-            ParserState::EndSection => break,
-            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-            ref s => panic!("wrong content in code section: {:?}", s),
-        }
-        let mut reader = parser.create_binary_reader();
-        let size = reader.bytes_remaining();
-        environ.define_function_body(reader
-            .read_bytes(size)
-            .map_err(WasmError::from_binary_reader_error)?)?;
-    }
-    loop {
-        match *parser.read() {
-            ParserState::BeginSection {
-                code: SectionCode::Data,
-                ..
-            } => {
-                parse_data_section(&mut parser, environ)?;
-            }
-            ParserState::EndWasm => break,
-            _ => (),
-        }
-    }
-    Ok(())
 }
