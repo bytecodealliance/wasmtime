@@ -271,7 +271,7 @@ impl DominatorTree {
         //
         // There are two ways of viewing the CFG as a graph:
         //
-        // 1. Each EBB is a node, with outgoing edges for all the branches in the EBB>
+        // 1. Each EBB is a node, with outgoing edges for all the branches in the EBB.
         // 2. Each basic block is a node, with outgoing edges for the single branch at the end of
         //    the BB. (An EBB is a linear sequence of basic blocks).
         //

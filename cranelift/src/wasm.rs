@@ -141,8 +141,8 @@ fn handle_module(
 
     let num_func_imports = dummy_environ.get_num_func_imports();
     let mut total_module_code_size = 0;
+    let mut context = Context::new();
     for (def_index, func) in dummy_environ.info.function_bodies.iter().enumerate() {
-        let mut context = Context::new();
         context.func = func.clone();
 
         let func_index = num_func_imports + def_index;
@@ -180,6 +180,8 @@ fn handle_module(
             println!("{}", context.func.display(fisa.isa));
             vprintln!(flag_verbose, "");
         }
+
+        context.clear();
     }
 
     if !flag_check_translation && flag_print_size {
