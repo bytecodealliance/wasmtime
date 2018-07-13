@@ -3,7 +3,7 @@ name = "cranelift-native"
 version = "0.13.0"
 authors = ["The Cranelift Project Developers"]
 description = "Support for targeting the host with Cranelift"
-repository = "https://github.com/cranelift/cranelift"
+repository = "https://github.com/CraneStation/cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 
@@ -24,4 +24,4 @@ core = ["cranelift-codegen/core", "raw-cpuid/nightly"]
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "cranelift/cranelift" }
+travis-ci = { repository = "CraneStation/cranelift" }

@@ -5,7 +5,7 @@ version = "0.13.0"
 description = "Binaries for testing the Cranelift libraries"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
-repository = "https://github.com/cranelift/cranelift"
+repository = "https://github.com/CraneStation/cranelift"
 publish = false
 
 [[bin]]

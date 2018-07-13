@@ -3,7 +3,7 @@ target x86_64 haswell
 
 ; regex: V=v\d+
 
-; Filed as https://github.com/cranelift/cranelift/issues/208
+; Filed as https://github.com/CraneStation/cranelift/issues/208
 ;
 ; The verifier complains about a branch argument that is not in the same virtual register as the
 ; corresponding EBB argument.

@@ -3,7 +3,7 @@ name = "cranelift-wasm"
 version = "0.13.0"
 authors = ["The Cranelift Project Developers"]
 description = "Translator from WebAssembly to Cranelift IR"
-repository = "https://github.com/cranelift/cranelift"
+repository = "https://github.com/CraneStation/cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 keywords = ["webassembly", "wasm"]
@@ -27,4 +27,4 @@ core = ["hashmap_core", "cranelift-codegen/core", "cranelift-frontend/core", "wa
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "cranelift/cranelift" }
+travis-ci = { repository = "CraneStation/cranelift" }

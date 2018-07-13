@@ -3,7 +3,7 @@ name = "cranelift-faerie"
 version = "0.13.0"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with Faerie"
-repository = "https://github.com/cranelift/cranelift"
+repository = "https://github.com/CraneStation/cranelift"
 documentation = "https://cranelift.readthedocs.io/"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
@@ -18,4 +18,4 @@ target-lexicon = "0.0.2"
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "cranelift/cranelift" }
+travis-ci = { repository = "CraneStation/cranelift" }
