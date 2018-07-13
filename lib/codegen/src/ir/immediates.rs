@@ -1,7 +1,7 @@
-//! Immediate operands for Cretonne instructions
+//! Immediate operands for Cranelift instructions
 //!
-//! This module defines the types of immediate operands that can appear on Cretonne instructions.
-//! Each type here should have a corresponding definition in the `cretonne.immediates` Python
+//! This module defines the types of immediate operands that can appear on Cranelift instructions.
+//! Each type here should have a corresponding definition in the `cranelift.immediates` Python
 //! module in the meta language.
 
 use std::fmt::{self, Display, Formatter};

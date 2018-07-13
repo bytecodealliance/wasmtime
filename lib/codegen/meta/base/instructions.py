@@ -1,7 +1,7 @@
 """
-Cretonne base instruction set.
+Cranelift base instruction set.
 
-This module defines the basic Cretonne instruction set that all targets
+This module defines the basic Cranelift instruction set that all targets
 support.
 """
 from __future__ import absolute_import
@@ -1524,8 +1524,8 @@ fdiv = Instruction(
         'fdiv', r"""
         Floating point division.
 
-        Unlike the integer division instructions :cton:inst:`sdiv` and
-        :cton:inst:`udiv`, this can't trap. Division by zero is infinity or
+        Unlike the integer division instructions :clif:inst:`sdiv` and
+        :clif:inst:`udiv`, this can't trap. Division by zero is infinity or
         NaN, depending on the dividend.
         """,
         ins=(x, y), outs=a)
@@ -1800,7 +1800,7 @@ fpromote = Instruction(
         Each lane in `x` is converted to the destination floating point format.
         This is an exact operation.
 
-        Cretonne currently only supports two floating point formats
+        Cranelift currently only supports two floating point formats
         - :type:`f32` and :type:`f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
@@ -1816,7 +1816,7 @@ fdemote = Instruction(
         Each lane in `x` is converted to the destination floating point format
         by rounding to nearest, ties to even.
 
-        Cretonne currently only supports two floating point formats
+        Cranelift currently only supports two floating point formats
         - :type:`f32` and :type:`f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,

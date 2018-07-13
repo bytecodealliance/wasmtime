@@ -1,4 +1,4 @@
-"""Cretonne ValueType hierarchy"""
+"""Cranelift ValueType hierarchy"""
 from __future__ import absolute_import
 import math
 

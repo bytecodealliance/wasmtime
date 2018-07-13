@@ -14,13 +14,13 @@
 //!
 //! When legalizing a single instruction, it is wrapped in splits and concatenations:
 //!
-//!```cton
+//!```clif
 //!     v1 = bxor.i64 v2, v3
 //! ```
 //!
 //! becomes:
 //!
-//!```cton
+//!```clif
 //!     v20, v21 = isplit v2
 //!     v30, v31 = isplit v3
 //!     v10 = bxor.i32 v20, v30
@@ -38,13 +38,13 @@
 //! first check if the value is defined by the corresponding concatenation. If so, then just use
 //! the two concatenation inputs directly:
 //!
-//! ```cton
+//! ```clif
 //!     v4 = iadd_imm.i64 v1, 1
 //! ```
 //!
 //! becomes, using the expanded code from above:
 //!
-//! ```cton
+//! ```clif
 //!     v40, v5 = iadd_imm_cout.i32 v10, 1
 //!     v6 = bint.i32
 //!     v41 = iadd.i32 v11, v6
@@ -283,7 +283,7 @@ fn add_repair(
 ///
 /// Given this input:
 ///
-/// ```cton
+/// ```clif
 ///     v10 = iconcat v1, v2
 ///     v11, v12 = isplit v10
 /// ```

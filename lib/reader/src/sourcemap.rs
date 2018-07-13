@@ -6,8 +6,8 @@
 //! The `SourceMap` struct defined in this module makes this mapping available
 //! to parser clients.
 
-use cretonne_codegen::ir::entities::AnyEntity;
-use cretonne_codegen::ir::{Ebb, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Value};
+use cranelift_codegen::ir::entities::AnyEntity;
+use cranelift_codegen::ir::{Ebb, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Value};
 use error::{Location, ParseResult};
 use lexer::split_entity_name;
 use std::collections::HashMap;

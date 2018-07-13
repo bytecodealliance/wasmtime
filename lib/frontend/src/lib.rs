@@ -1,17 +1,17 @@
-//! Cretonne IR builder library.
+//! Cranelift IR builder library.
 //!
-//! Provides a straightforward way to create a Cretonne IR function and fill it with instructions
+//! Provides a straightforward way to create a Cranelift IR function and fill it with instructions
 //! translated from another language. Contains an SSA construction module that lets you translate
-//! your non-SSA variables into SSA Cretonne IR values via `use_var` and `def_var` calls.
+//! your non-SSA variables into SSA Cranelift IR values via `use_var` and `def_var` calls.
 //!
 //! To get started, create an [`FunctionBuilderContext`](struct.FunctionBuilderContext.html) and
 //! pass it as an argument to a [`FunctionBuilder`](struct.FunctionBuilder.html).
 //!
 //! # Example
 //!
-//! Here is a pseudo-program we want to transform into Cretonne IR:
+//! Here is a pseudo-program we want to transform into Cranelift IR:
 //!
-//! ```cton
+//! ```clif
 //! function(x) {
 //! x, y, z : i32
 //! block0:
@@ -29,18 +29,18 @@
 //! }
 //! ```
 //!
-//! Here is how you build the corresponding Cretonne IR function using `FunctionBuilderContext`:
+//! Here is how you build the corresponding Cranelift IR function using `FunctionBuilderContext`:
 //!
 //! ```rust
-//! extern crate cretonne_codegen;
-//! extern crate cretonne_frontend;
+//! extern crate cranelift_codegen;
+//! extern crate cranelift_frontend;
 //!
-//! use cretonne_codegen::entity::EntityRef;
-//! use cretonne_codegen::ir::{ExternalName, Function, Signature, AbiParam, InstBuilder};
-//! use cretonne_codegen::ir::types::*;
-//! use cretonne_codegen::settings::{self, CallConv};
-//! use cretonne_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
-//! use cretonne_codegen::verifier::verify_function;
+//! use cranelift_codegen::entity::EntityRef;
+//! use cranelift_codegen::ir::{ExternalName, Function, Signature, AbiParam, InstBuilder};
+//! use cranelift_codegen::ir::types::*;
+//! use cranelift_codegen::settings::{self, CallConv};
+//! use cranelift_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
+//! use cranelift_codegen::verifier::verify_function;
 //!
 //! fn main() {
 //!     let mut sig = Signature::new(CallConv::SystemV);
@@ -141,7 +141,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate cretonne_codegen;
+extern crate cranelift_codegen;
 
 pub use frontend::{FunctionBuilder, FunctionBuilderContext};
 pub use variable::Variable;

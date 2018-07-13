@@ -1,6 +1,6 @@
 """
-The `cretonne.immediates` module predefines all the Cretonne immediate operand
-types.
+The `cranelift.immediates` module predefines all the Cranelift immediate
+operand types.
 """
 from __future__ import absolute_import
 from cdsl.operands import ImmediateKind
@@ -8,7 +8,7 @@ from cdsl.operands import ImmediateKind
 #: A 64-bit immediate integer operand.
 #:
 #: This type of immediate integer can interact with SSA values with any
-#: :py:class:`cretonne.IntType` type.
+#: :py:class:`cranelift.IntType` type.
 imm64 = ImmediateKind('imm64', 'A 64-bit immediate integer.')
 
 #: An unsigned 8-bit immediate integer operand.
@@ -42,13 +42,13 @@ ieee64 = ImmediateKind('ieee64', 'A 64-bit immediate floating point number.')
 #: An immediate boolean operand.
 #:
 #: This type of immediate boolean can interact with SSA values with any
-#: :py:class:`cretonne.BoolType` type.
+#: :py:class:`cranelift.BoolType` type.
 boolean = ImmediateKind('bool', 'An immediate boolean.',
                         rust_type='bool')
 
 #: A condition code for comparing integer values.
 #:
-#: This enumerated operand kind is used for the :cton:inst:`icmp` instruction
+#: This enumerated operand kind is used for the :clif:inst:`icmp` instruction
 #: and corresponds to the `condcodes::IntCC` Rust type.
 intcc = ImmediateKind(
         'intcc',
@@ -70,7 +70,7 @@ intcc = ImmediateKind(
 
 #: A condition code for comparing floating point values.
 #:
-#: This enumerated operand kind is used for the :cton:inst:`fcmp` instruction
+#: This enumerated operand kind is used for the :clif:inst:`fcmp` instruction
 #: and corresponds to the `condcodes::FloatCC` Rust type.
 floatcc = ImmediateKind(
         'floatcc',
@@ -94,7 +94,7 @@ floatcc = ImmediateKind(
             'uge': 'UnorderedOrGreaterThanOrEqual',
         })
 
-#: Flags for memory operations like :cton:inst:`load` and :cton:inst:`store`.
+#: Flags for memory operations like :clif:inst:`load` and :clif:inst:`store`.
 memflags = ImmediateKind(
         'memflags',
         'Memory operation flags',

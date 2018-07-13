@@ -1,9 +1,9 @@
 ========================
-Cretonne in SpiderMonkey
+Cranelift in SpiderMonkey
 ========================
 
 `SpiderMonkey <https://developer.mozilla.org/en-US/docs/Mozilla/Projects/SpiderMonkey>`_ is the
-JavaScript and WebAssembly engine in Firefox. Cretonne is designed to be used in SpiderMonkey with
+JavaScript and WebAssembly engine in Firefox. Cranelift is designed to be used in SpiderMonkey with
 the goal of enabling better code generation for ARM's 32-bit and 64-bit architectures, and building
 a framework for improved low-level code optimizations in the future.
 
@@ -17,11 +17,11 @@ allocation.
 .. image:: media/spidermonkey1.png
     :align: center
     :width: 80%
-    :alt: Cretonne in SpiderMonkey phase 1
+    :alt: Cranelift in SpiderMonkey phase 1
 
-In phase 1, Cretonne aims to replace the IonMonkey-based tier 2 compiler for WebAssembly only. It
+In phase 1, Cranelift aims to replace the IonMonkey-based tier 2 compiler for WebAssembly only. It
 will still be orchestrated by the BaldrMonkey engine and compile WebAssembly modules on multiple
-threads. Cretonne translates binary wasm functions directly into its own intermediate
+threads. Cranelift translates binary wasm functions directly into its own intermediate
 representation, and it generates binary machine code without depending on SpiderMonkey's macro
 assembler.
 
@@ -38,7 +38,7 @@ intermediate representations to do that:
 .. image:: media/spidermonkey2.png
     :align: center
     :width: 80%
-    :alt: Cretonne in SpiderMonkey phase 2
+    :alt: Cranelift in SpiderMonkey phase 2
 
-Cretonne has its own register allocator, so the LIR representation can be skipped when using
-Cretonne as a backend for IonMonkey.
+Cranelift has its own register allocator, so the LIR representation can be skipped when using
+Cranelift as a backend for IonMonkey.

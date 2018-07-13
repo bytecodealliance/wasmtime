@@ -64,7 +64,7 @@ banner "Rust unit tests"
 cargo test --all
 
 # Make sure the documentation builds.
-banner "Rust documentation: $topdir/target/doc/cretonne/index.html"
+banner "Rust documentation: $topdir/target/doc/cranelift/index.html"
 cargo doc
 
 # Run clippy if we have it.

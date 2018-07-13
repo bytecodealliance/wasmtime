@@ -6,10 +6,10 @@ target x86_64 haswell
 
 ; The binary encodings can be verified with the command:
 ;
-;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/allones_funcaddrs64.cton | llvm-mc -show-encoding -triple=x86_64
+;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/allones_funcaddrs64.clif | llvm-mc -show-encoding -triple=x86_64
 ;
 
-; Tests from binary64.cton affected by allones_funcaddrs.
+; Tests from binary64.clif affected by allones_funcaddrs.
 function %I64() {
     sig0 = ()
     fn0 = %foo()

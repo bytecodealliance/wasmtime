@@ -1,12 +1,12 @@
 """
 x86 Target Architecture
--------------------------
+-----------------------
 
 This target ISA generates code for x86 CPUs with two separate CPU modes:
 
 `I32`
     32-bit x86 architecture, also known as 'IA-32', also sometimes referred
-    to as 'i386', however note that Cretonne depends on instructions not
+    to as 'i386', however note that Cranelift depends on instructions not
     in the original `i386`, such as SSE2, CMOVcc, and UD2.
 
 `I64`

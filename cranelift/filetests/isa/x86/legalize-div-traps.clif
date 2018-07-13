@@ -1,6 +1,6 @@
 ; Test the division legalizations.
 test legalizer
-; See also legalize-div.cton.
+; See also legalize-div.clif.
 set avoid_div_traps=1
 target x86_64
 

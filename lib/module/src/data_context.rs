@@ -1,8 +1,8 @@
 //! Defines `DataContext`.
 
-use cretonne_codegen::binemit::{Addend, CodeOffset};
-use cretonne_codegen::entity::PrimaryMap;
-use cretonne_codegen::ir;
+use cranelift_codegen::binemit::{Addend, CodeOffset};
+use cranelift_codegen::entity::PrimaryMap;
+use cranelift_codegen::ir;
 use std::boxed::Box;
 use std::vec::Vec;
 
@@ -59,7 +59,7 @@ pub struct DataDescription {
     pub data_relocs: Vec<(CodeOffset, ir::GlobalValue, Addend)>,
 }
 
-/// This is to data objects what cretonne_codegen::Context is to functions.
+/// This is to data objects what cranelift_codegen::Context is to functions.
 pub struct DataContext {
     description: DataDescription,
 }
@@ -147,7 +147,7 @@ impl DataContext {
 
 #[cfg(test)]
 mod tests {
-    use cretonne_codegen::ir;
+    use cranelift_codegen::ir;
     use {DataContext, Init, Writability};
 
     #[test]

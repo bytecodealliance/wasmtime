@@ -1,4 +1,4 @@
-"""Definitions for the semantics segment of the Cretonne language."""
+"""Definitions for the semantics segment of the Cranelift language."""
 from cdsl.ti import TypeEnv, ti_rtl, get_type_env
 from cdsl.operands import ImmediateKind
 from cdsl.ast import Var

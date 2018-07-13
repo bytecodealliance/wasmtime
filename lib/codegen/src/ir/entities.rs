@@ -1,6 +1,6 @@
-//! Cretonne IR entity references.
+//! Cranelift IR entity references.
 //!
-//! Instructions in Cretonne IR need to reference other entities in the function. This can be other
+//! Instructions in Cranelift IR need to reference other entities in the function. This can be other
 //! parts of the function like extended basic blocks or stack slots, or it can be external entities
 //! that are declared in the function preamble in the text format.
 //!

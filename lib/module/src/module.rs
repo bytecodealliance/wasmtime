@@ -5,8 +5,8 @@
 // TODO: Factor out `ir::Function`'s `ext_funcs` and `global_values` into a struct
 // shared with `DataContext`?
 
-use cretonne_codegen::entity::{EntityRef, PrimaryMap};
-use cretonne_codegen::{binemit, ir, CodegenError, Context};
+use cranelift_codegen::entity::{EntityRef, PrimaryMap};
+use cranelift_codegen::{binemit, ir, CodegenError, Context};
 use data_context::DataContext;
 use std::borrow::ToOwned;
 use std::collections::HashMap;
@@ -131,7 +131,7 @@ pub enum ModuleError {
     /// Indicates an identifier was defined, but was declared as an import
     #[fail(display = "Invalid to define identifier declared as an import: {}", _0)]
     InvalidImportDefinition(String),
-    /// Wraps a `cretonne-codegen` error
+    /// Wraps a `cranelift-codegen` error
     #[fail(display = "Compilation error: {}", _0)]
     Compilation(CodegenError),
     /// Wraps a generic error from a backend

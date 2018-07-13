@@ -6,7 +6,7 @@ target x86_64
 
 ; The binary encodings can be verified with the command:
 ;
-;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/shrink.cton | llvm-mc -show-encoding -triple=x86_64
+;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/shrink.clif | llvm-mc -show-encoding -triple=x86_64
 ;
 
 function %test_shrinking(i32) -> i32 {

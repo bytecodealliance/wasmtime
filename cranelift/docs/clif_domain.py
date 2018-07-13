@@ -2,11 +2,11 @@
 #
 # Sphinx domain for documenting compiler intermediate representations.
 #
-# This defines a 'cton' Sphinx domain with the following directives and roles:
+# This defines a 'clif' Sphinx domain with the following directives and roles:
 #
-# .. cton::type:: type
+# .. clif::type:: type
 #     Document an IR type.
-# .. cton:inst:: v0, v1 = inst op0, op1
+# .. clif:inst:: v0, v1 = inst op0, op1
 #     Document an IR instruction.
 #
 from __future__ import absolute_import
@@ -27,12 +27,12 @@ from sphinx.util.nodes import make_refnode
 import sphinx.ext.autodoc
 
 
-class CtonObject(ObjectDescription):
+class ClifObject(ObjectDescription):
     """
-    Any kind of Cretonne IR object.
+    Any kind of Cranelift IR object.
 
     This is a shared base class for the different kinds of indexable objects
-    in the Cretonne IR reference.
+    in the Cranelift IR reference.
     """
     option_spec = {
         'noindex': directives.flag,
@@ -54,10 +54,10 @@ class CtonObject(ObjectDescription):
             signode['ids'].append(targetname)
             signode['first'] = (not self.names)
             self.state.document.note_explicit_target(signode)
-            inv = self.env.domaindata['cton']['objects']
+            inv = self.env.domaindata['clif']['objects']
             if name in inv:
                 self.state_machine.reporter.warning(
-                    'duplicate Cretonne object description of %s, ' % name +
+                    'duplicate Cranelift object description of %s, ' % name +
                     'other instance in ' + self.env.doc2path(inv[name][0]),
                     line=self.lineno)
             inv[name] = (self.env.docname, self.objtype)
@@ -97,8 +97,8 @@ def parse_type(name, signode):
     return re_str
 
 
-class CtonType(CtonObject):
-    """A Cretonne IR type description."""
+class ClifType(ClifObject):
+    """A Cranelift IR type description."""
 
     def handle_signature(self, sig, signode):
         """
@@ -126,8 +126,8 @@ def parse_params(s, signode):
         signode += nodes.emphasis(p, p)
 
 
-class CtonInst(CtonObject):
-    """A Cretonne IR instruction."""
+class ClifInst(ClifObject):
+    """A Cranelift IR instruction."""
 
     doc_field_types = [
         TypedField('argument', label=l_('Arguments'),
@@ -175,14 +175,14 @@ class CtonInst(CtonObject):
         return name
 
 
-class CtonInstGroup(CtonObject):
-    """A Cretonne IR instruction group."""
+class ClifInstGroup(ClifObject):
+    """A Cranelift IR instruction group."""
 
 
-class CretonneDomain(Domain):
-    """Cretonne domain for IR objects."""
-    name = 'cton'
-    label = 'Cretonne'
+class CraneliftDomain(Domain):
+    """Cranelift domain for IR objects."""
+    name = 'clif'
+    label = 'Cranelift'
 
     object_types = {
         'type': ObjType(l_('type'), 'type'),
@@ -190,9 +190,9 @@ class CretonneDomain(Domain):
     }
 
     directives = {
-        'type': CtonType,
-        'inst': CtonInst,
-        'instgroup': CtonInstGroup,
+        'type': ClifType,
+        'inst': ClifInst,
+        'instgroup': ClifInstGroup,
     }
 
     roles = {
@@ -230,16 +230,16 @@ class CretonneDomain(Domain):
         if target not in objects:
             return []
         obj = objects[target]
-        return [('cton:' + self.role_for_objtype(obj[1]),
+        return [('clif:' + self.role_for_objtype(obj[1]),
                  make_refnode(builder, fromdocname, obj[0],
                               obj[1] + '-' + target, contnode, target))]
 
 
 class TypeDocumenter(sphinx.ext.autodoc.Documenter):
-    # Invoke with .. autoctontype::
-    objtype = 'ctontype'
-    # Convert into cton:type directives
-    domain = 'cton'
+    # Invoke with .. autocliftype::
+    objtype = 'cliftype'
+    # Convert into clif:type directives
+    domain = 'clif'
     directivetype = 'type'
 
     @classmethod
@@ -262,8 +262,8 @@ class TypeDocumenter(sphinx.ext.autodoc.Documenter):
 class InstDocumenter(sphinx.ext.autodoc.Documenter):
     # Invoke with .. autoinst::
     objtype = 'inst'
-    # Convert into cton:inst directives
-    domain = 'cton'
+    # Convert into clif:inst directives
+    domain = 'clif'
     directivetype = 'inst'
 
     @classmethod
@@ -297,7 +297,7 @@ class InstDocumenter(sphinx.ext.autodoc.Documenter):
 
     def add_directive_header(self, sig):
         """Add the directive header and options to the generated content."""
-        domain = getattr(self, 'domain', 'cton')
+        domain = getattr(self, 'domain', 'clif')
         directive = getattr(self, 'directivetype', self.objtype)
         sourcename = self.get_sourcename()
         self.add_line(u'.. %s:%s:: %s' % (domain, directive, sig), sourcename)
@@ -350,8 +350,8 @@ class InstDocumenter(sphinx.ext.autodoc.Documenter):
 class InstGroupDocumenter(sphinx.ext.autodoc.ModuleLevelDocumenter):
     # Invoke with .. autoinstgroup::
     objtype = 'instgroup'
-    # Convert into cton:instgroup directives
-    domain = 'cton'
+    # Convert into clif:instgroup directives
+    domain = 'clif'
     directivetype = 'instgroup'
 
     @classmethod
@@ -365,19 +365,19 @@ class InstGroupDocumenter(sphinx.ext.autodoc.ModuleLevelDocumenter):
         super(InstGroupDocumenter, self).add_content(
                 more_content, no_docstring)
         sourcename = self.get_sourcename()
-        indexed = self.env.domaindata['cton']['objects']
+        indexed = self.env.domaindata['clif']['objects']
 
         names = [inst.name for inst in self.object.instructions]
         names.sort()
         for name in names:
             if name in indexed:
-                self.add_line(u':cton:inst:`{}`'.format(name), sourcename)
+                self.add_line(u':clif:inst:`{}`'.format(name), sourcename)
             else:
                 self.add_line(u'``{}``'.format(name), sourcename)
 
 
 def setup(app):
-    app.add_domain(CretonneDomain)
+    app.add_domain(CraneliftDomain)
     app.add_autodocumenter(TypeDocumenter)
     app.add_autodocumenter(InstDocumenter)
     app.add_autodocumenter(InstGroupDocumenter)

@@ -1,4 +1,4 @@
-//! Representation of Cretonne IR functions.
+//! Representation of Cranelift IR functions.
 
 mod builder;
 pub mod condcodes;

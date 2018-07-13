@@ -1,7 +1,7 @@
-//! Lexical analysis for .cton files.
+//! Lexical analysis for .clif files.
 
-use cretonne_codegen::ir::types;
-use cretonne_codegen::ir::{Ebb, Value};
+use cranelift_codegen::ir::types;
+use cranelift_codegen::ir::{Ebb, Value};
 use error::Location;
 #[allow(unused_imports, deprecated)]
 use std::ascii::AsciiExt;
@@ -479,8 +479,8 @@ impl<'a> Lexer<'a> {
 mod tests {
     use super::trailing_digits;
     use super::*;
-    use cretonne_codegen::ir::types;
-    use cretonne_codegen::ir::{Ebb, Value};
+    use cranelift_codegen::ir::types;
+    use cranelift_codegen::ir::{Ebb, Value};
     use error::Location;
 
     #[test]

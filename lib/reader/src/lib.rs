@@ -1,7 +1,7 @@
-//! Cretonne file reader library.
+//! Cranelift file reader library.
 //!
-//! The `cretonne_reader` library supports reading .cton files. This functionality is needed for
-//! testing Cretonne, but is not essential for a JIT compiler.
+//! The `cranelift_reader` library supports reading .clif files. This functionality is needed for
+//! testing Cranelift, but is not essential for a JIT compiler.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces, unstable_features)]
@@ -15,7 +15,7 @@
     )
 )]
 
-extern crate cretonne_codegen;
+extern crate cranelift_codegen;
 extern crate target_lexicon;
 
 pub use error::{Location, ParseError, ParseResult};

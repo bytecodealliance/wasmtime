@@ -1,4 +1,4 @@
-//! Top-level lib.rs for `cretonne_faerie`.
+//! Top-level lib.rs for `cranelift_faerie`.
 //!
 //! Users of this module should not have to depend on faerie directly.
 
@@ -14,8 +14,8 @@
     )
 )]
 
-extern crate cretonne_codegen;
-extern crate cretonne_module;
+extern crate cranelift_codegen;
+extern crate cranelift_module;
 extern crate faerie;
 extern crate failure;
 extern crate goblin;

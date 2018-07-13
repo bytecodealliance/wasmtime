@@ -2,10 +2,10 @@
 //!
 //! The `compile` test command runs each function through the full code generator pipeline
 
-use cretonne_codegen;
-use cretonne_codegen::print_errors::pretty_error;
-use cretonne_codegen::{binemit, ir};
-use cretonne_reader::TestCommand;
+use cranelift_codegen;
+use cranelift_codegen::print_errors::pretty_error;
+use cranelift_codegen::{binemit, ir};
+use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 use subtest::{run_filecheck, Context, SubTest, SubtestResult};
 
@@ -35,7 +35,7 @@ impl SubTest for TestCompile {
 
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> SubtestResult<()> {
         let isa = context.isa.expect("compile needs an ISA");
-        let mut comp_ctx = cretonne_codegen::Context::for_function(func.into_owned());
+        let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         let code_size = comp_ctx
             .compile(isa)

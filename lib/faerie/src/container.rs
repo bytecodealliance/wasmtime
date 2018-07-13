@@ -1,6 +1,6 @@
 //! Utilities for working with Faerie container formats.
 
-use cretonne_codegen::binemit::Reloc;
+use cranelift_codegen::binemit::Reloc;
 use target_lexicon::{Architecture, BinaryFormat, Triple};
 
 /// An object file format.
@@ -12,7 +12,7 @@ pub enum Format {
     MachO,
 }
 
-/// Translate from a Cretonne `Reloc` to a raw object-file-format-specific
+/// Translate from a Cranelift `Reloc` to a raw object-file-format-specific
 /// relocation code and relocation-implied addend.
 pub fn raw_relocation(reloc: Reloc, triple: &Triple) -> (u32, i64) {
     match triple.binary_format {
@@ -25,7 +25,7 @@ pub fn raw_relocation(reloc: Reloc, triple: &Triple) -> (u32, i64) {
                             Reloc::Abs4 => elf::reloc::R_X86_64_32,
                             Reloc::Abs8 => elf::reloc::R_X86_64_64,
                             Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => elf::reloc::R_X86_64_PC32,
-                            // TODO: Get Cretonne to tell us when we can use
+                            // TODO: Get Cranelift to tell us when we can use
                             // R_X86_64_GOTPCRELX/R_X86_64_REX_GOTPCRELX.
                             Reloc::X86CallPLTRel4 => elf::reloc::R_X86_64_PLT32,
                             Reloc::X86GOTPCRel4 => elf::reloc::R_X86_64_GOTPCREL,

@@ -1,1 +1,1 @@
-"""Definitions for the base Cretonne language."""
+"""Definitions for the base Cranelift language."""

@@ -1,5 +1,5 @@
 """
-Cretonne predicates that consider `Function` fields.
+Cranelift predicates that consider `Function` fields.
 """
 from cdsl.predicates import FieldPredicate
 from .formats import UnaryGlobalValue, InstructionFormat

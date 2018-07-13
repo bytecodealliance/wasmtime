@@ -1,5 +1,5 @@
 """
-Cretonne shared settings.
+Cranelift shared settings.
 
 This module defines settings relevant for all code generators.
 """
@@ -20,10 +20,10 @@ opt_level = EnumSetting(
 
 enable_verifier = BoolSetting(
         """
-        Run the Cretonne IR verifier at strategic times during compilation.
+        Run the Cranelift IR verifier at strategic times during compilation.
 
         This makes compilation slower but catches many bugs. The verifier is
-        disabled by default, except when reading Cretonne IR from a text file.
+        disabled by default, except when reading Cranelift IR from a text file.
         """,
         default=True)
 
@@ -51,8 +51,8 @@ call_conv = EnumSetting(
         'probestack'
 )
 
-# Note that Cretonne doesn't currently need an is_pie flag, because PIE is just
-# PIC where symbols can't be pre-empted, which can be expressed with the
+# Note that Cranelift doesn't currently need an is_pie flag, because PIE is
+# just PIC where symbols can't be pre-empted, which can be expressed with the
 # `colocated` flag on external functions and global values.
 is_pic = BoolSetting("Enable Position-Independent Code generation")
 
@@ -126,7 +126,7 @@ baldrdash_prologue_words = NumSetting(
         in the epilogue.
 
         This setting configures the number of pointer-sized words pushed on the
-        stack when the Cretonne-generated code is entered. This includes the
+        stack when the Cranelift-generated code is entered. This includes the
         pushed return address on x86.
         """)
 

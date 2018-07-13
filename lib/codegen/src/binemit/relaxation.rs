@@ -15,13 +15,13 @@
 //! On RISC architectures, it can happen that conditional branches have a shorter range than
 //! unconditional branches:
 //!
-//! ```cton
+//! ```clif
 //!     brz v1, ebb17
 //! ```
 //!
 //! can be transformed into:
 //!
-//! ```cton
+//! ```clif
 //!     brnz v1, ebb23
 //!     jump ebb17
 //! ebb23:

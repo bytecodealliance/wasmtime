@@ -27,7 +27,7 @@ pub enum GlobalValueData {
         offset: Offset32,
     },
 
-    /// Value is identified by a symbolic name. Cretonne itself does not interpret this name;
+    /// Value is identified by a symbolic name. Cranelift itself does not interpret this name;
     /// it's used by embedders to link with other data structures.
     Sym {
         /// The symbolic name.

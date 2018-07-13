@@ -18,7 +18,7 @@ import gen_binemit
 def main():
     # type: () -> None
     parser = argparse.ArgumentParser(
-            description='Generate sources for Cretonne.')
+            description='Generate sources for Cranelift.')
     parser.add_argument('--out-dir', help='set output directory')
 
     args = parser.parse_args()

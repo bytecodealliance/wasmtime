@@ -274,7 +274,7 @@ pub fn prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> CodegenRes
 pub fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> CodegenResult<()> {
     debug_assert!(
         !isa.flags().probestack_enabled(),
-        "baldrdash does not expect cretonne to emit stack probes"
+        "baldrdash does not expect cranelift to emit stack probes"
     );
 
     // Baldrdash on 32-bit x86 always aligns its stack pointer to 16 bytes.
@@ -325,7 +325,7 @@ pub fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> C
     let csr_stack_size = ((csrs.iter(GPR).len() + 2) * word_size) as i32;
 
     // TODO: eventually use the 32 bytes (shadow store) as spill slot. This currently doesn't work
-    //       since cretonne does not support spill slots before incoming args
+    //       since cranelift does not support spill slots before incoming args
 
     func.create_stack_slot(ir::StackSlotData {
         kind: ir::StackSlotKind::IncomingArg,

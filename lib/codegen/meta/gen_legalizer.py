@@ -1,7 +1,7 @@
 """
 Generate legalizer transformations.
 
-The transformations defined in the `cretonne.legalize` module are all of the
+The transformations defined in the `cranelift.legalize` module are all of the
 macro-expansion form where the input pattern is a single instruction. We
 generate a Rust function for each `XFormGroup` which takes a `Cursor` pointing
 at the instruction to be legalized. The expanded destination pattern replaces

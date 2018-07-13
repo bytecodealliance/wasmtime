@@ -1,6 +1,6 @@
 //! Instruction shrinking.
 //!
-//! Sometimes there are multiple valid encodings for a given instruction. Cretonne often initially
+//! Sometimes there are multiple valid encodings for a given instruction. Cranelift often initially
 //! chooses the largest one, because this typically provides the register allocator the most
 //! flexibility. However, once register allocation is done, this is no longer important, and we
 //! can switch to smaller encodings when possible.

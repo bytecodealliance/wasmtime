@@ -50,7 +50,7 @@ class InstructionFormat(object):
     of values.
 
     All instruction formats must be predefined in the
-    :py:mod:`cretonne.formats` module.
+    :py:mod:`cranelift.formats` module.
 
     :param kinds: List of `OperandKind` objects describing the operands.
     :param name: Instruction format name in CamelCase. This is used as a Rust

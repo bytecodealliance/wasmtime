@@ -1,13 +1,13 @@
 //! Defines `SimpleJITBackend`.
 
-use cretonne_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
-use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::{self, ir, settings};
-use cretonne_module::{
+use cranelift_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::{self, ir, settings};
+use cranelift_module::{
     Backend, DataContext, DataDescription, Init, Linkage, ModuleNamespace, ModuleResult,
     Writability,
 };
-use cretonne_native;
+use cranelift_native;
 use libc;
 use memory::Memory;
 use std::ffi::CString;
@@ -24,7 +24,7 @@ pub struct SimpleJITBuilder {
 impl SimpleJITBuilder {
     /// Create a new `SimpleJITBuilder`.
     pub fn new() -> Self {
-        let (flag_builder, isa_builder) = cretonne_native::builders().unwrap_or_else(|_| {
+        let (flag_builder, isa_builder) = cranelift_native::builders().unwrap_or_else(|_| {
             panic!("host machine is not a supported target");
         });
         let isa = isa_builder.finish(settings::Flags::new(flag_builder));
@@ -117,7 +117,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     fn define_function(
         &mut self,
         _name: &str,
-        ctx: &cretonne_codegen::Context,
+        ctx: &cranelift_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
         code_size: u32,
     ) -> ModuleResult<Self::CompiledFunction> {

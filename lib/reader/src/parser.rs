@@ -1,21 +1,21 @@
-//! Parser for .cton files.
+//! Parser for .clif files.
 
-use cretonne_codegen::entity::EntityRef;
-use cretonne_codegen::ir;
-use cretonne_codegen::ir::entities::AnyEntity;
-use cretonne_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
-use cretonne_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
-use cretonne_codegen::ir::types::VOID;
-use cretonne_codegen::ir::{
+use cranelift_codegen::entity::EntityRef;
+use cranelift_codegen::ir;
+use cranelift_codegen::ir::entities::AnyEntity;
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
+use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
+use cranelift_codegen::ir::types::VOID;
+use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentLoc, Ebb, ExtFuncData, ExternalName, FuncRef, Function,
     GlobalValue, GlobalValueData, Heap, HeapBase, HeapData, HeapStyle, JumpTable, JumpTableData,
     MemFlags, Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Type, Value,
     ValueLoc,
 };
-use cretonne_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
-use cretonne_codegen::packed_option::ReservedValue;
-use cretonne_codegen::settings::CallConv;
-use cretonne_codegen::{settings, timing};
+use cranelift_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
+use cranelift_codegen::packed_option::ReservedValue;
+use cranelift_codegen::settings::CallConv;
+use cranelift_codegen::{settings, timing};
 use error::{Location, ParseError, ParseResult};
 use isaspec;
 use lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
@@ -2291,11 +2291,11 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne_codegen::ir::entities::AnyEntity;
-    use cretonne_codegen::ir::types;
-    use cretonne_codegen::ir::StackSlotKind;
-    use cretonne_codegen::ir::{ArgumentExtension, ArgumentPurpose};
-    use cretonne_codegen::settings::CallConv;
+    use cranelift_codegen::ir::entities::AnyEntity;
+    use cranelift_codegen::ir::types;
+    use cranelift_codegen::ir::StackSlotKind;
+    use cranelift_codegen::ir::{ArgumentExtension, ArgumentPurpose};
+    use cranelift_codegen::settings::CallConv;
     use error::ParseError;
     use isaspec::IsaSpec;
     use testfile::{Comment, Details};

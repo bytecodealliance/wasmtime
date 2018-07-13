@@ -1,15 +1,15 @@
 [package]
-name = "cretonne-filetests"
-authors = ["The Cretonne Project Developers"]
+name = "cranelift-filetests"
+authors = ["The Cranelift Project Developers"]
 version = "0.13.0"
 description = "Test driver and implementations of the filetest commands"
 license = "Apache-2.0 WITH LLVM-exception"
-documentation = "https://cretonne.readthedocs.io/en/latest/testing.html#file-tests"
-repository = "https://github.com/cretonne/cretonne"
+documentation = "https://cranelift.readthedocs.io/en/latest/testing.html#file-tests"
+repository = "https://github.com/cranelift/cranelift"
 publish = false
 
 [dependencies]
-cretonne-codegen = { path = "../codegen", version = "0.13.0" }
-cretonne-reader = { path = "../reader", version = "0.13.0" }
+cranelift-codegen = { path = "../codegen", version = "0.13.0" }
+cranelift-reader = { path = "../reader", version = "0.13.0" }
 filecheck = "0.3.0"
 num_cpus = "1.8.0"

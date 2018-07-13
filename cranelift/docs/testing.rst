@@ -1,21 +1,21 @@
 ****************
-Testing Cretonne
+Testing Cranelift
 ****************
 
-Cretonne is tested at multiple levels of abstraction and integration. When
+Cranelift is tested at multiple levels of abstraction and integration. When
 possible, Rust unit tests are used to verify single functions and types. When
 testing the interaction between compiler passes, file-level tests are
 appropriate.
 
 The top-level shell script :file:`test-all.sh` runs all of the tests in the
-Cretonne repository.
+Cranelift repository.
 
 Rust tests
 ==========
 
 .. highlight:: rust
 
-Rust and Cargo have good support for testing. Cretonne uses unit tests, doc
+Rust and Cargo have good support for testing. Cranelift uses unit tests, doc
 tests, and integration tests where appropriate.
 
 Unit tests
@@ -51,7 +51,7 @@ tested::
     //!
     //! # Example
     //! ```
-    //! use cretonne_codegen::settings::{self, Configurable};
+    //! use cranelift_codegen::settings::{self, Configurable};
     //!
     //! let mut b = settings::builder();
     //! b.set("opt_level", "fastest");
@@ -72,7 +72,7 @@ individually. They are used to exercise the external API of the crates under
 test.
 
 These tests are usually found in the :file:`tests` top-level directory where
-they have access to all the crates in the Cretonne repository. The
+they have access to all the crates in the Cranelift repository. The
 :file:`lib/codegen` and :file:`lib/reader` crates have no external
 dependencies, which can make testing tedious. Integration tests that don't need
 to depend on other crates can be placed in :file:`lib/codegen/tests` and
@@ -81,15 +81,15 @@ to depend on other crates can be placed in :file:`lib/codegen/tests` and
 File tests
 ==========
 
-.. highlight:: cton
+.. highlight:: clif
 
 Compilers work with large data structures representing programs, and it quickly
 gets unwieldy to generate test data programmatically. File-level tests make it
 easier to provide substantial input functions for the compiler tests.
 
-File tests are :file:`*.cton` files in the :file:`filetests/` directory
+File tests are :file:`*.clif` files in the :file:`filetests/` directory
 hierarchy. Each file has a header describing what to test followed by a number
-of input functions in the :doc:`Cretonne textual intermediate representation
+of input functions in the :doc:`Cranelift textual intermediate representation
 <langref>`:
 
 .. productionlist::
@@ -111,7 +111,7 @@ header:
 The options given on the ``isa`` line modify the ISA-specific settings defined in
 :file:`lib/codegen/meta/isa/*/settings.py`.
 
-All types of tests allow shared Cretonne settings to be modified:
+All types of tests allow shared Cranelift settings to be modified:
 
 .. productionlist::
     settings      : { setting }
@@ -137,7 +137,7 @@ This example will run the legalizer test twice. Both runs will have
 run will also have the RISC-V specific flag ``supports_m`` disabled.
 
 The filetests are run automatically as part of `cargo test`, and they can
-also be run manually with the `cton-util test` command.
+also be run manually with the `clif-util test` command.
 
 Filecheck
 ---------
@@ -146,7 +146,7 @@ Many of the test commands described below use *filecheck* to verify their
 output. Filecheck is a Rust implementation of the LLVM tool of the same name.
 See the `documentation <https://docs.rs/filecheck/>`_ for details of its syntax.
 
-Comments in :file:`.cton` files are associated with the entity they follow.
+Comments in :file:`.clif` files are associated with the entity they follow.
 This typically means an instruction or the whole function. Those tests that
 use filecheck will extract comments associated with each function (or its
 entities) and scan them for filecheck directives. The test output for each
@@ -160,7 +160,7 @@ Note that LLVM's file tests don't separate filecheck directives by their
 associated function. It verifies the concatenated output against all filecheck
 directives in the test file. LLVM's :command:`FileCheck` command has a
 ``CHECK-LABEL:`` directive to help separate the output from different functions.
-Cretonne's tests don't need this.
+Cranelift's tests don't need this.
 
 `test cat`
 ----------
@@ -214,7 +214,7 @@ function verifies correctly.
 ----------------
 
 Print the control flow graph of each function as a Graphviz graph, and run
-filecheck over the result. See also the :command:`cton-util print-cfg`
+filecheck over the result. See also the :command:`clif-util print-cfg`
 command::
 
     ; For testing cfg generation. This code is nonsense.
@@ -375,4 +375,4 @@ Each function is passed through the full ``Context::compile()`` function
 which is normally used to compile code. This type of test often depends
 on assertions or verifier errors, but it is also possible to use
 filecheck directives which will be matched against the final form of the
-Cretonne IR right before binary machine code emission.
+Cranelift IR right before binary machine code emission.

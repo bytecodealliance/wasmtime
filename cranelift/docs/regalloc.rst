@@ -1,11 +1,11 @@
 *******************************
-Register Allocation in Cretonne
+Register Allocation in Cranelift
 *******************************
 
-.. default-domain:: cton
-.. highlight:: cton
+.. default-domain:: clif
+.. highlight:: clif
 
-Cretonne uses a *decoupled, SSA-based* register allocator. Decoupled means that
+Cranelift uses a *decoupled, SSA-based* register allocator. Decoupled means that
 register allocation is split into two primary phases: *spilling* and
 *coloring*. SSA-based means that the code stays in SSA form throughout the
 register allocator, and in fact is still in SSA form after register allocation.
@@ -162,13 +162,13 @@ linearly with the number of EBBs covered by a live range.
 This representation is very similar to LLVM's ``LiveInterval`` data structure
 with a few important differences:
 
-- The Cretonne ``LiveRange`` only covers a single SSA value, while LLVM's
+- The Cranelift ``LiveRange`` only covers a single SSA value, while LLVM's
   ``LiveInterval`` represents the union of multiple related SSA values in a
-  virtual register. This makes Cretonne's representation smaller because
+  virtual register. This makes Cranelift's representation smaller because
   individual segments don't have to annotated with a value number.
-- Cretonne stores the def-interval separately from a list of coalesced live-in
+- Cranelift stores the def-interval separately from a list of coalesced live-in
   intervals, while LLVM stores an array of segments. The two representations
-  are equivalent, but Cretonne optimizes for the common case of a value that is
+  are equivalent, but Cranelift optimizes for the common case of a value that is
   only used locally.
 - It is simpler to check if two live ranges are overlapping. The dominance
   properties of SSA form means that it is only necessary to check the
@@ -182,12 +182,12 @@ with a few important differences:
   allows 'tombstone' program points corresponding to instructions that have
   been deleted.
 
-  Cretonne uses a 32-bit program point representation that encodes an
+  Cranelift uses a 32-bit program point representation that encodes an
   instruction or EBB number directly. There are no 'tombstones' for deleted
   instructions, and no mirrored linked list of instructions. Live ranges must
   be updated when instructions are deleted.
 
-A consequence of Cretonne's more compact representation is that two program
+A consequence of Cranelift's more compact representation is that two program
 points can't be compared without the context of a function layout.
 
 Coalescing algorithm
@@ -273,7 +273,7 @@ extra registers to solve, raising the register pressure:
   the tied input value doesn't interfere with the output value by inserting a copy
   if needed.
 
-The spilling heuristic used by Cretonne is very simple. Whenever the spiller
+The spilling heuristic used by Cranelift is very simple. Whenever the spiller
 determines that the register pressure is too high at some instruction, it picks
 the live SSA value whose definition is farthest away as the spill candidate.
 Then it spills all values in the corresponding virtual register to the same

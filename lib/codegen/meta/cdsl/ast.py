@@ -2,7 +2,7 @@
 Abstract syntax trees.
 
 This module defines classes that can be used to create abstract syntax trees
-for patern matching an rewriting of cretonne instructions.
+for patern matching an rewriting of cranelift instructions.
 """
 from __future__ import absolute_import
 from . import instructions

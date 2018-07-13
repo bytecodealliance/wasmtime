@@ -1,4 +1,4 @@
-Cretonne Code Generator
+Cranelift Code Generator
 =======================
 
 Contents:
@@ -15,36 +15,36 @@ Contents:
 Rust Crate Documentation
 ========================
 
-`cretonne <https://docs.rs/cretonne/>`_
-    This is the core code generator crate. It takes Cretonne IR as input
+`cranelift <https://docs.rs/cranelift/>`_
+    This is the core code generator crate. It takes Cranelift IR as input
     and emits encoded machine instructions, along with symbolic relocations,
     as output.
 
-`cretonne-wasm <https://docs.rs/cretonne-wasm/>`_
-    This crate translates WebAssembly code into Cretonne IR.
+`cranelift-wasm <https://docs.rs/cranelift-wasm/>`_
+    This crate translates WebAssembly code into Cranelift IR.
 
-`cretonne-frontend <https://docs.rs/cretonne-frontend/>`_
-    This crate provides utilities for translating code into Cretonne IR.
+`cranelift-frontend <https://docs.rs/cranelift-frontend/>`_
+    This crate provides utilities for translating code into Cranelift IR.
 
-`cretonne-native <https://docs.rs/cretonne-native/>`_
-    This crate performs auto-detection of the host, allowing Cretonne to
+`cranelift-native <https://docs.rs/cranelift-native/>`_
+    This crate performs auto-detection of the host, allowing Cranelift to
     generate code optimized for the machine it's running on.
 
-`cretonne-reader <https://docs.rs/cretonne-reader/>`_
-    This crate translates from Cretonne IR's text format into Cretonne IR
+`cranelift-reader <https://docs.rs/cranelift-reader/>`_
+    This crate translates from Cranelift IR's text format into Cranelift IR
     in in-memory data structures.
 
-`cretonne-module <https://docs.rs/cretonne-module/>`_
+`cranelift-module <https://docs.rs/cranelift-module/>`_
     This crate manages compiling multiple functions and data objects
     together.
 
-`cretonne-faerie <https://docs.rs/cretonne-faerie/>`_
-    This crate provides a faerie-based backend for `cretonne-module`, which
+`cranelift-faerie <https://docs.rs/cranelift-faerie/>`_
+    This crate provides a faerie-based backend for `cranelift-module`, which
     emits native object files using the
     `faerie <https://crates.io/crates/faerie/>`_ library.
 
-`cretonne-simplejit <https://docs.rs/cretonne-simplejit/>`_
-    This crate provides a simple JIT backend for `cretonne-module`, which
+`cranelift-simplejit <https://docs.rs/cranelift-simplejit/>`_
+    This crate provides a simple JIT backend for `cranelift-module`, which
     emits code and data into memory.
 
 Indices and tables

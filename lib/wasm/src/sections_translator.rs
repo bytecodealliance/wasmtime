@@ -7,7 +7,7 @@
 //! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
-use cretonne_codegen::ir::{self, AbiParam, Signature};
+use cranelift_codegen::ir::{self, AbiParam, Signature};
 use environ::{ModuleEnvironment, WasmError, WasmResult};
 use std::str::from_utf8;
 use std::vec::Vec;

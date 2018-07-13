@@ -2,7 +2,7 @@
 //!
 //! The `test domtree` test command looks for annotations on instructions like this:
 //!
-//! ```cton
+//! ```clif
 //!     jump ebb3 ; dominates: ebb3
 //! ```
 //!
@@ -12,11 +12,11 @@
 //! We verify that the dominator tree annotations are complete and correct.
 //!
 
-use cretonne_codegen::dominator_tree::{DominatorTree, DominatorTreePreorder};
-use cretonne_codegen::flowgraph::ControlFlowGraph;
-use cretonne_codegen::ir::entities::AnyEntity;
-use cretonne_codegen::ir::Function;
-use cretonne_reader::TestCommand;
+use cranelift_codegen::dominator_tree::{DominatorTree, DominatorTreePreorder};
+use cranelift_codegen::flowgraph::ControlFlowGraph;
+use cranelift_codegen::ir::entities::AnyEntity;
+use cranelift_codegen::ir::Function;
+use cranelift_reader::TestCommand;
 use match_directive::match_directive;
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;

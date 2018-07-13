@@ -2,15 +2,15 @@
 //!
 //! The `isa` module provides a `TargetIsa` trait which provides the behavior specialization needed
 //! by the ISA-independent code generator. The sub-modules of this module provide definitions for
-//! the instruction sets that Cretonne can target. Each sub-module has it's own implementation of
+//! the instruction sets that Cranelift can target. Each sub-module has it's own implementation of
 //! `TargetIsa`.
 //!
 //! # Constructing a `TargetIsa` instance
 //!
 //! The target ISA is built from the following information:
 //!
-//! - The name of the target ISA as a string. Cretonne is a cross-compiler, so the ISA to target
-//!   can be selected dynamically. Individual ISAs can be left out when Cretonne is compiled, so a
+//! - The name of the target ISA as a string. Cranelift is a cross-compiler, so the ISA to target
+//!   can be selected dynamically. Individual ISAs can be left out when Cranelift is compiled, so a
 //!   string is used to identify the proper sub-module.
 //! - Values for settings that apply to all ISAs. This is represented by a `settings::Flags`
 //!   instance.
@@ -20,11 +20,11 @@
 //! appropriate for the requested ISA:
 //!
 //! ```
-//! # extern crate cretonne_codegen;
+//! # extern crate cranelift_codegen;
 //! # #[macro_use] extern crate target_lexicon;
 //! # fn main() {
-//! use cretonne_codegen::settings::{self, Configurable};
-//! use cretonne_codegen::isa;
+//! use cranelift_codegen::settings::{self, Configurable};
+//! use cranelift_codegen::isa;
 //! use std::str::FromStr;
 //! use target_lexicon::Triple;
 //!

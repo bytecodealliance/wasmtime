@@ -2,10 +2,10 @@
 #[macro_use]
 extern crate libfuzzer_sys;
 extern crate binaryen;
-extern crate cretonne_wasm;
+extern crate cranelift_wasm;
 #[macro_use]
 extern crate target_lexicon;
-use cretonne_wasm::{translate_module, DummyEnvironment};
+use cranelift_wasm::{translate_module, DummyEnvironment};
 use std::str::FromStr;
 
 fuzz_target!(|data: &[u8]| {

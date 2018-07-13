@@ -1,9 +1,9 @@
 //! "Dummy" environment for testing wasm translation.
 
-use cretonne_codegen::cursor::FuncCursor;
-use cretonne_codegen::ir::types::*;
-use cretonne_codegen::ir::{self, InstBuilder};
-use cretonne_codegen::settings;
+use cranelift_codegen::cursor::FuncCursor;
+use cranelift_codegen::ir::types::*;
+use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::settings;
 use environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, WasmResult};
 use func_translator::FuncTranslator;
 use std::string::String;

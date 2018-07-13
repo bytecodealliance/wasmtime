@@ -1,6 +1,6 @@
 //! Code sink that writes binary machine code into contiguous memory.
 //!
-//! The `CodeSink` trait is the most general way of extracting binary machine code from Cretonne,
+//! The `CodeSink` trait is the most general way of extracting binary machine code from Cranelift,
 //! and it is implemented by things like the `test binemit` file test driver to generate
 //! hexadecimal machine code. The `CodeSink` has some undesirable performance properties because of
 //! the dual abstraction: `TargetIsa` is a trait object implemented by each supported ISA, so it
@@ -20,7 +20,7 @@ use std::ptr::write_unaligned;
 
 /// A `CodeSink` that writes binary machine code directly into memory.
 ///
-/// A `MemoryCodeSink` object should be used when emitting a Cretonne IR function into executable
+/// A `MemoryCodeSink` object should be used when emitting a Cranelift IR function into executable
 /// memory. It writes machine code directly to a raw pointer without any bounds checking, so make
 /// sure to allocate enough memory for the whole function. The number of bytes required is returned
 /// by the `Context::compile()` function.

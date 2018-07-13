@@ -1,6 +1,6 @@
 //! Compact representation of `Option<T>` for types with a reserved value.
 //!
-//! Small Cretonne types like the 32-bit entity references are often used in tables and linked
+//! Small Cranelift types like the 32-bit entity references are often used in tables and linked
 //! lists where an `Option<T>` is needed. Unfortunately, that would double the size of the tables
 //! because `Option<T>` is twice as big as `T`.
 //!

@@ -1,14 +1,14 @@
 [package]
-name = "cretonne-native"
+name = "cranelift-native"
 version = "0.13.0"
-authors = ["The Cretonne Project Developers"]
-description = "Support for targeting the host with Cretonne"
-repository = "https://github.com/cretonne/cretonne"
+authors = ["The Cranelift Project Developers"]
+description = "Support for targeting the host with Cranelift"
+repository = "https://github.com/cranelift/cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 
 [dependencies]
-cretonne-codegen = { path = "../codegen", version = "0.13.0", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "0.13.0", default-features = false }
 target-lexicon = { version = "0.0.2", default-features = false }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
@@ -16,12 +16,12 @@ raw-cpuid = "4"
 
 [features]
 default = ["std"]
-std = ["cretonne-codegen/std", "target-lexicon/std"]
+std = ["cranelift-codegen/std", "target-lexicon/std"]
 # when compiling with the "core" feature, nightly must be enabled
 # enabling the "nightly" feature for raw-cpuid allows avoiding
 # linking in a c-library.
-core = ["cretonne-codegen/core", "raw-cpuid/nightly"]
+core = ["cranelift-codegen/core", "raw-cpuid/nightly"]
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "cretonne/cretonne" }
+travis-ci = { repository = "cranelift/cranelift" }

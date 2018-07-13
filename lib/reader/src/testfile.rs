@@ -1,11 +1,11 @@
 //! Data structures representing a parsed test file.
 //!
-//! A test file is a `.cton` file which contains test commands and settings for running a
+//! A test file is a `.clif` file which contains test commands and settings for running a
 //! file-based test case.
 //!
 
-use cretonne_codegen::ir::entities::AnyEntity;
-use cretonne_codegen::ir::Function;
+use cranelift_codegen::ir::entities::AnyEntity;
+use cranelift_codegen::ir::Function;
 use error::Location;
 use isaspec::IsaSpec;
 use sourcemap::SourceMap;
@@ -13,7 +13,7 @@ use testcommand::TestCommand;
 
 /// A parsed test case.
 ///
-/// This is the result of parsing a `.cton` file which contains a number of test commands and ISA
+/// This is the result of parsing a `.clif` file which contains a number of test commands and ISA
 /// specs followed by the functions that should be tested.
 pub struct TestFile<'a> {
     /// `test foo ...` lines.

@@ -12,7 +12,7 @@ use std::u32;
 /// 1. An instruction or
 /// 2. An EBB header.
 ///
-/// This corresponds more or less to the lines in the textual form of Cretonne IR.
+/// This corresponds more or less to the lines in the textual form of Cranelift IR.
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct ProgramPoint(u32);
 

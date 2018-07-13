@@ -1,13 +1,13 @@
 //! Run the tests in a single test file.
 
-use cretonne_codegen::ir::Function;
-use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::print_errors::pretty_verifier_error;
-use cretonne_codegen::settings::Flags;
-use cretonne_codegen::timing;
-use cretonne_codegen::verify_function;
-use cretonne_reader::parse_test;
-use cretonne_reader::IsaSpec;
+use cranelift_codegen::ir::Function;
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::print_errors::pretty_verifier_error;
+use cranelift_codegen::settings::Flags;
+use cranelift_codegen::timing;
+use cranelift_codegen::verify_function;
+use cranelift_reader::parse_test;
+use cranelift_reader::IsaSpec;
 use std::borrow::Cow;
 use std::fs;
 use std::io::{self, Read};

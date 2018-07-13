@@ -1,8 +1,8 @@
 //! Defines the `Backend` trait.
 
-use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::Context;
-use cretonne_codegen::{binemit, ir};
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::Context;
+use cranelift_codegen::{binemit, ir};
 use std::marker;
 use DataContext;
 use Linkage;

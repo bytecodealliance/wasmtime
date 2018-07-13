@@ -1,13 +1,13 @@
 //! Source locations.
 //!
-//! Cretonne tracks the original source location of each instruction, and preserves the source
+//! Cranelift tracks the original source location of each instruction, and preserves the source
 //! location when instructions are transformed.
 
 use std::fmt;
 
 /// A source location.
 ///
-/// This is an opaque 32-bit number attached to each Cretonne IR instruction. Cretonne does not
+/// This is an opaque 32-bit number attached to each Cranelift IR instruction. Cranelift does not
 /// interpret source locations in any way, they are simply preserved from the input to the output.
 ///
 /// The default source location uses the all-ones bit pattern `!0`. It is used for instructions

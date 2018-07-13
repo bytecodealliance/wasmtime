@@ -1,6 +1,6 @@
 //! Test commands.
 //!
-//! A `.cton` file can begin with one or more *test commands* which specify what is to be tested.
+//! A `.clif` file can begin with one or more *test commands* which specify what is to be tested.
 //! The general syntax is:
 //!
 //! <pre>

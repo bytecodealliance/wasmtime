@@ -1,21 +1,21 @@
-//! Stand-alone WebAssembly to Cretonne IR translator.
+//! Stand-alone WebAssembly to Cranelift IR translator.
 //!
 //! This module defines the `FuncTranslator` type which can translate a single WebAssembly
-//! function to Cretonne IR guided by a `FuncEnvironment` which provides information about the
+//! function to Cranelift IR guided by a `FuncEnvironment` which provides information about the
 //! WebAssembly module and the runtime environment.
 
 use code_translator::translate_operator;
-use cretonne_codegen::entity::EntityRef;
-use cretonne_codegen::ir::{self, Ebb, InstBuilder};
-use cretonne_codegen::timing;
-use cretonne_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
+use cranelift_codegen::entity::EntityRef;
+use cranelift_codegen::ir::{self, Ebb, InstBuilder};
+use cranelift_codegen::timing;
+use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use environ::{FuncEnvironment, WasmError, WasmResult};
 use state::TranslationState;
 use wasmparser::{self, BinaryReader};
 
-/// WebAssembly to Cretonne IR function translator.
+/// WebAssembly to Cranelift IR function translator.
 ///
-/// A `FuncTranslator` is used to translate a binary WebAssembly function into Cretonne IR guided
+/// A `FuncTranslator` is used to translate a binary WebAssembly function into Cranelift IR guided
 /// by a `FuncEnvironment` object. A single translator instance can be reused to translate multiple
 /// functions which will reduce heap allocation traffic.
 pub struct FuncTranslator {
@@ -45,7 +45,7 @@ impl FuncTranslator {
     ///
     /// [wasm]: https://webassembly.github.io/spec/binary/modules.html#code-section
     ///
-    /// The Cretonne IR function `func` should be completely empty except for the `func.signature`
+    /// The Cranelift IR function `func` should be completely empty except for the `func.signature`
     /// and `func.name` fields. The signature may contain special-purpose arguments which are not
     /// regarded as WebAssembly local variables. Any signature arguments marked as
     /// `ArgumentPurpose::Normal` are made accessible as WebAssembly local variables.
@@ -226,7 +226,7 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
 fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
     // We record source locations as byte code offsets relative to the beginning of the function.
     // This will wrap around of a single function's byte code is larger than 4 GB, but a) the
-    // WebAssembly format doesn't allow for that, and b) that would hit other Cretonne
+    // WebAssembly format doesn't allow for that, and b) that would hit other Cranelift
     // implementation limits anyway.
     ir::SourceLoc::new(reader.current_position() as u32)
 }
@@ -234,8 +234,8 @@ fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
 #[cfg(test)]
 mod tests {
     use super::FuncTranslator;
-    use cretonne_codegen::ir::types::I32;
-    use cretonne_codegen::{ir, Context};
+    use cranelift_codegen::ir::types::I32;
+    use cranelift_codegen::{ir, Context};
     use environ::{DummyEnvironment, FuncEnvironment};
     use target_lexicon::Triple;
 

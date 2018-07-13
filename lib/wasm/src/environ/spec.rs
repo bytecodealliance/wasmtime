@@ -1,8 +1,8 @@
-//! All the runtime support necessary for the wasm to cretonne translation is formalized by the
+//! All the runtime support necessary for the wasm to cranelift translation is formalized by the
 //! traits `FunctionEnvironment` and `ModuleEnvironment`.
-use cretonne_codegen::cursor::FuncCursor;
-use cretonne_codegen::ir::{self, InstBuilder};
-use cretonne_codegen::settings::Flags;
+use cranelift_codegen::cursor::FuncCursor;
+use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::settings::Flags;
 use std::vec::Vec;
 use target_lexicon::Triple;
 use translation_utils::{
@@ -51,10 +51,10 @@ pub enum WasmError {
 
     /// An implementation limit was exceeded.
     ///
-    /// Cretonne can compile very large and complicated functions, but the [implementation has
+    /// Cranelift can compile very large and complicated functions, but the [implementation has
     /// limits][limits] that cause compilation to fail when they are exceeded.
     ///
-    /// [limits]: https://cretonne.readthedocs.io/en/latest/langref.html#implementation-limits
+    /// [limits]: https://cranelift.readthedocs.io/en/latest/langref.html#implementation-limits
     #[fail(display = "Implementation limit exceeded")]
     ImplLimitExceeded,
 }
@@ -72,7 +72,7 @@ pub type WasmResult<T> = Result<T, WasmError>;
 
 /// Environment affecting the translation of a single WebAssembly function.
 ///
-/// A `FuncEnvironment` trait object is required to translate a WebAssembly function to Cretonne
+/// A `FuncEnvironment` trait object is required to translate a WebAssembly function to Cranelift
 /// IR. The function environment provides information about the WebAssembly module as well as the
 /// runtime environment.
 pub trait FuncEnvironment {
@@ -82,7 +82,7 @@ pub trait FuncEnvironment {
     /// Get the flags for the current compilation.
     fn flags(&self) -> &Flags;
 
-    /// Get the Cretonne integer type to use for native pointers.
+    /// Get the Cranelift integer type to use for native pointers.
     ///
     /// This returns `I64` for 64-bit architectures and `I32` for 32-bit architectures.
     fn native_pointer(&self) -> ir::Type {
@@ -204,7 +204,7 @@ pub trait FuncEnvironment {
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
-/// by the user, they are only for `cretonne-wasm` internal use.
+/// by the user, they are only for `cranelift-wasm` internal use.
 pub trait ModuleEnvironment<'data> {
     /// Get the flags for the current compilation.
     fn flags(&self) -> &Flags;

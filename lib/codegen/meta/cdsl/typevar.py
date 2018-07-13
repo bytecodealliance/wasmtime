@@ -1,7 +1,7 @@
 """
 Type variables for Parametric polymorphism.
 
-Cretonne instructions and instruction transformations can be specified to be
+Cranelift instructions and instruction transformations can be specified to be
 polymorphic by using type variables.
 """
 from __future__ import absolute_import
