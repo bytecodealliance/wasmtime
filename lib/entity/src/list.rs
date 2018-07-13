@@ -229,14 +229,14 @@ impl<T: EntityRef> EntityList<T> {
     pub fn from_slice(slice: &[T], pool: &mut ListPool<T>) -> Self {
         let len = slice.len();
         if len == 0 {
-            return EntityList::new();
+            return Self::new();
         }
 
         let block = pool.alloc(sclass_for_length(len));
         pool.data[block] = T::new(len);
         pool.data[block + 1..block + len + 1].copy_from_slice(slice);
 
-        EntityList {
+        Self {
             index: (block + 1) as u32,
             unused: PhantomData,
         }
