@@ -14,7 +14,7 @@ cranelift-module = { path = "../module", version = "0.14.0" }
 faerie = "0.4.2"
 goblin = "0.0.15"
 failure = "0.1.1"
-target-lexicon = "0.0.2"
+target-lexicon = "0.0.3"
 
 [badges]
 maintenance = { status = "experimental" }
