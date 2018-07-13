@@ -291,8 +291,7 @@ def gen_instruction_data_impl(fmt):
                                      .format(field.member, field.member))
                         if args_eq is not None:
                             fmt.line('&& {}'.format(args_eq))
-                fmt.line('_ => unsafe { '
-                         '::std::hint::unreachable_unchecked() }')
+                fmt.line('_ => unreachable!()')
         fmt.line()
 
         fmt.doc_comment(
@@ -306,20 +305,20 @@ def gen_instruction_data_impl(fmt):
                 'pub fn hash<H: ::std::hash::Hasher>'
                 '(&self, state: &mut H, pool: &ir::ValueListPool) {',
                 '}'):
-            with fmt.indented('match self {', '}'):
+            with fmt.indented('match *self {', '}'):
                 for f in InstructionFormat.all_formats:
                     n = 'InstructionData::' + f.name
                     members = ['opcode']
                     if f.typevar_operand is None:
                         args = '&()'
                     elif f.has_value_list:
-                        members.append('args')
+                        members.append('ref args')
                         args = 'args.as_slice(pool)'
                     elif f.num_value_operands == 1:
-                        members.append('arg')
+                        members.append('ref arg')
                         args = 'arg'
                     else:
-                        members.append('args')
+                        members.append('ref args')
                         args = 'args'
                     for field in f.imm_fields:
                         members.append(field.member)
@@ -327,9 +326,9 @@ def gen_instruction_data_impl(fmt):
                     with fmt.indented(pat + ' => {', '}'):
                         fmt.line('::std::hash::Hash::hash( '
                                  '&::std::mem::discriminant(self), state);')
-                        fmt.line('::std::hash::Hash::hash(opcode, state);')
+                        fmt.line('::std::hash::Hash::hash(&opcode, state);')
                         for field in f.imm_fields:
-                            fmt.line('::std::hash::Hash::hash({}, state);'
+                            fmt.line('::std::hash::Hash::hash(&{}, state);'
                                      .format(field.member))
                         fmt.line('::std::hash::Hash::hash({}, state);'
                                  .format(args))

@@ -40,7 +40,13 @@ impl Display for QueueEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let p = self.path.to_string_lossy();
         match self.state {
-            State::Done(Ok(dur)) => write!(f, "{}.{:03} {}", dur.as_secs(), dur.subsec_millis(), p),
+            State::Done(Ok(dur)) => write!(
+                f,
+                "{}.{:03} {}",
+                dur.as_secs(),
+                dur.subsec_nanos() / 1_000_000,
+                p
+            ),
             State::Done(Err(ref e)) => write!(f, "FAIL {}: {}", p, e),
             _ => write!(f, "{}", p),
         }
