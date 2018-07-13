@@ -119,6 +119,6 @@ mod std {
 
         pub use self::hashmap_core::map as hash_map;
         pub use self::hashmap_core::{HashMap, HashSet};
-        pub use alloc::BTreeSet;
+        pub use alloc::collections::BTreeSet;
     }
 }
