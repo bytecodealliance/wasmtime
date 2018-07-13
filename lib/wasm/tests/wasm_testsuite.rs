@@ -1,13 +1,13 @@
-extern crate cretonne_codegen;
-extern crate cretonne_wasm;
+extern crate cranelift_codegen;
+extern crate cranelift_wasm;
 #[macro_use]
 extern crate target_lexicon;
 extern crate wabt;
 
-use cretonne_codegen::print_errors::pretty_verifier_error;
-use cretonne_codegen::settings::{self, Configurable, Flags};
-use cretonne_codegen::verifier;
-use cretonne_wasm::{translate_module, DummyEnvironment};
+use cranelift_codegen::print_errors::pretty_verifier_error;
+use cranelift_codegen::settings::{self, Configurable, Flags};
+use cranelift_codegen::verifier;
+use cranelift_wasm::{translate_module, DummyEnvironment};
 use std::fs;
 use std::fs::File;
 use std::io;

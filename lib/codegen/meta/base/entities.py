@@ -1,6 +1,6 @@
 """
-The `cretonne.entities` module predefines all the Cretonne entity reference
-operand types. There are corresponding definitions in the `cretonne.entities`
+The `cranelift.entities` module predefines all the Cranelift entity reference
+operand types. There are corresponding definitions in the `cranelift.entities`
 Rust module.
 """
 from __future__ import absolute_import

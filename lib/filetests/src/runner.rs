@@ -116,7 +116,7 @@ impl TestRunner {
         // This recursive search tries to minimize statting in a directory hierarchy containing
         // mostly test cases.
         //
-        // - Directory entries with a "cton" extension are presumed to be test case files.
+        // - Directory entries with a "clif" extension are presumed to be test case files.
         // - Directory entries with no extension are presumed to be subdirectories.
         // - Anything else is ignored.
         //
@@ -149,7 +149,7 @@ impl TestRunner {
                                 // Recognize directories and tests by extension.
                                 // Yes, this means we ignore directories with '.' in their name.
                                 match path.extension().and_then(OsStr::to_str) {
-                                    Some("cton") => self.push_test(path),
+                                    Some("clif") => self.push_test(path),
                                     Some(_) => {}
                                     None => self.push_dir(path),
                                 }

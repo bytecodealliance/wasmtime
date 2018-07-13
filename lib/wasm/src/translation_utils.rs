@@ -1,5 +1,5 @@
 //! Helper functions and structures for the translation.
-use cretonne_codegen::ir;
+use cranelift_codegen::ir;
 use std::u32;
 use wasmparser;
 
@@ -71,7 +71,7 @@ pub struct Memory {
     pub shared: bool,
 }
 
-/// Helper function translating wasmparser types to Cretonne types when possible.
+/// Helper function translating wasmparser types to Cranelift types when possible.
 pub fn type_to_type(ty: wasmparser::Type) -> Result<ir::Type, ()> {
     match ty {
         wasmparser::Type::I32 => Ok(ir::types::I32),
@@ -82,17 +82,17 @@ pub fn type_to_type(ty: wasmparser::Type) -> Result<ir::Type, ()> {
     }
 }
 
-/// Turns a `wasmparser` `f32` into a `Cretonne` one.
+/// Turns a `wasmparser` `f32` into a `Cranelift` one.
 pub fn f32_translation(x: wasmparser::Ieee32) -> ir::immediates::Ieee32 {
     ir::immediates::Ieee32::with_bits(x.bits())
 }
 
-/// Turns a `wasmparser` `f64` into a `Cretonne` one.
+/// Turns a `wasmparser` `f64` into a `Cranelift` one.
 pub fn f64_translation(x: wasmparser::Ieee64) -> ir::immediates::Ieee64 {
     ir::immediates::Ieee64::with_bits(x.bits())
 }
 
-/// Translate a `wasmparser` type into its `Cretonne` equivalent, when possible
+/// Translate a `wasmparser` type into its `Cranelift` equivalent, when possible
 pub fn num_return_values(ty: wasmparser::Type) -> usize {
     match ty {
         wasmparser::Type::EmptyBlockType => 0,

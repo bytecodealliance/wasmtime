@@ -1,4 +1,4 @@
-//! Cretonne compilation context and main entry point.
+//! Cranelift compilation context and main entry point.
 //!
 //! When compiling many small functions, it is important to avoid repeatedly allocating and
 //! deallocating the data structures needed for compilation. The `Context` struct is used to hold

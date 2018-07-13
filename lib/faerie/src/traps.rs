@@ -1,15 +1,15 @@
-//! Faerie trap manifests record every `TrapCode` that cretonne outputs during code generation,
+//! Faerie trap manifests record every `TrapCode` that cranelift outputs during code generation,
 //! for every function in the module. This data may be useful at runtime.
 
-use cretonne_codegen::{binemit, ir};
+use cranelift_codegen::{binemit, ir};
 
-/// Record of the arguments cretonne passes to `TrapSink::trap`
+/// Record of the arguments cranelift passes to `TrapSink::trap`
 pub struct FaerieTrapSite {
     /// Offset into function
     pub offset: binemit::CodeOffset,
-    /// Source location given to cretonne
+    /// Source location given to cranelift
     pub srcloc: ir::SourceLoc,
-    /// Trap code, as determined by cretonne
+    /// Trap code, as determined by cranelift
     pub code: ir::TrapCode,
 }
 

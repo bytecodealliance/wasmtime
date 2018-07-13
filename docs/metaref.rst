@@ -1,12 +1,12 @@
 ********************************
-Cretonne Meta Language Reference
+Cranelift Meta Language Reference
 ********************************
 
 .. default-domain:: py
 .. highlight:: python
 .. module:: cdsl
 
-The Cretonne meta language is used to define instructions for Cretonne. It is a
+The Cranelift meta language is used to define instructions for Cranelift. It is a
 domain specific language embedded in Python. This document describes the Python
 modules that form the embedded DSL.
 
@@ -33,7 +33,7 @@ since the last build.
 Settings
 ========
 
-Settings are used by the environment embedding Cretonne to control the details
+Settings are used by the environment embedding Cranelift to control the details
 of code generation. Each setting is defined in the meta language so a compact
 and consistent Rust representation can be generated. Shared settings are defined
 in the :mod:`base.settings` module. Some settings are specific to a target ISA,
@@ -80,7 +80,7 @@ open :class:`InstructionGroup`.
 .. autoclass:: InstructionGroup
     :members:
 
-The basic Cretonne instruction set described in :doc:`langref` is defined by the
+The basic Cranelift instruction set described in :doc:`langref` is defined by the
 Python module :mod:`base.instructions`. This module has a global value
 :data:`base.instructions.GROUP` which is an :class:`InstructionGroup` instance
 containing all the base instructions.
@@ -94,7 +94,7 @@ must be instances of the :class:`Operand` class.
 
 .. autoclass:: Operand
 
-Cretonne uses two separate type systems for operand kinds and SSA values.
+Cranelift uses two separate type systems for operand kinds and SSA values.
 
 .. module:: cdsl.typevar
 
@@ -191,7 +191,7 @@ Instruction representation
 
 The Rust in-memory representation of instructions is derived from the
 instruction descriptions. Part of the representation is generated, and part is
-written as Rust code in the ``cretonne.instructions`` module. The instruction
+written as Rust code in the ``cranelift.instructions`` module. The instruction
 representation depends on the input operand kinds and whether the instruction
 can produce multiple results.
 
@@ -259,9 +259,9 @@ Encodings
 
 .. currentmodule:: cdsl.isa
 
-Encodings describe how Cretonne instructions are mapped to binary machine code
+Encodings describe how Cranelift instructions are mapped to binary machine code
 for the target architecture. After the legalization pass, all remaining
-instructions are expected to map 1-1 to native instruction encodings. Cretonne
+instructions are expected to map 1-1 to native instruction encodings. Cranelift
 instructions that can't be encoded for the current architecture are called
 :term:`illegal instruction`\s.
 
@@ -270,7 +270,7 @@ incompatible encodings. For example, a modern ARMv8 CPU might support three
 different CPU modes: *A64* where instructions are encoded in 32 bits, *A32*
 where all instructions are 32 bits, and *T32* which has a mix of 16-bit and
 32-bit instruction encodings. These are incompatible encoding spaces, and while
-an :cton:inst:`iadd` instruction can be encoded in 32 bits in each of them, it's
+an :clif:inst:`iadd` instruction can be encoded in 32 bits in each of them, it's
 not the same 32 bits. It's a judgement call if CPU modes should be modelled as
 separate targets, or as sub-modes of the same target. In the ARMv8 case, the
 different register banks means that it makes sense to model A64 as a separate
@@ -293,7 +293,7 @@ is false, the SSE 4.1 instructions are not available.
 Encodings also have a :term:`instruction predicate` which depends on the
 specific values of the instruction's immediate fields. This is used to ensure
 that immediate address offsets are within range, for example. The instructions
-in the base Cretonne instruction set can often represent a wider range of
+in the base Cranelift instruction set can often represent a wider range of
 immediates than any specific encoding. The fixed-size RISC-style encodings tend
 to have more range limitations than CISC-style variable length encodings like
 x86.
@@ -320,7 +320,7 @@ An :py:class:`Encoding` instance specifies the encoding of a concrete
 instruction. The following properties are used to select instructions to be
 encoded:
 
-- An opcode, i.e. :cton:inst:`iadd_imm`, that must match the instruction's
+- An opcode, i.e. :clif:inst:`iadd_imm`, that must match the instruction's
   opcode.
 - Values for any type variables if the opcode represents a polymorphic
   instruction.
@@ -412,8 +412,8 @@ class which consists of all the XMM registers.
 Stack operands
 --------------
 
-Cretonne's register allocator can assign an SSA value to a stack slot if there
-isn't enough registers. It will insert :cton:inst:`spill` and :cton:inst:`fill`
+Cranelift's register allocator can assign an SSA value to a stack slot if there
+isn't enough registers. It will insert :clif:inst:`spill` and :clif:inst:`fill`
 instructions as needed to satisfy instruction operand constraints, but it is
 also possible to have instructions that can access stack slots directly::
 
@@ -427,7 +427,7 @@ load.
 Targets
 =======
 
-Cretonne can be compiled with support for multiple target instruction set
+Cranelift can be compiled with support for multiple target instruction set
 architectures. Each ISA is represented by a :py:class:`cdsl.isa.TargetISA` instance.
 
 .. autoclass:: TargetISA

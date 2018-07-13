@@ -1,5 +1,5 @@
 """
-Cretonne predicates.
+Cranelift predicates.
 
 A *predicate* is a function that computes a boolean result. The inputs to the
 function determine the kind of predicate:

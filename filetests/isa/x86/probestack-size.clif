@@ -3,7 +3,7 @@ set colocated_libcalls=1
 set probestack_size_log2=13
 target x86_64
 
-; Like %big in probestack.cton, but now the probestack size is bigger
+; Like %big in probestack.clif, but now the probestack size is bigger
 ; and it no longer needs a probe.
 
 function %big() system_v {

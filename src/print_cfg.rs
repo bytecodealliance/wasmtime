@@ -1,10 +1,10 @@
 //! The `print-cfg` sub-command.
 //!
-//! Read a series of Cretonne IR files and print their control flow graphs
+//! Read a series of Cranelift IR files and print their control flow graphs
 //! in graphviz format.
 
-use cretonne_codegen::cfg_printer::CFGPrinter;
-use cretonne_reader::parse_functions;
+use cranelift_codegen::cfg_printer::CFGPrinter;
+use cranelift_reader::parse_functions;
 use utils::read_to_string;
 use CommandResult;
 

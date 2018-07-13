@@ -1,5 +1,5 @@
 //! Performs translation from a wasm module in binary format to the in-memory form
-//! of Cretonne IR. More particularly, it translates the code of all the functions bodies and
+//! of Cranelift IR. More particularly, it translates the code of all the functions bodies and
 //! interacts with an environment implementing the
 //! [`ModuleEnvironment`](trait.ModuleEnvironment.html)
 //! trait to deal with tables, globals and linear memory.
@@ -25,8 +25,8 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[macro_use(dbg)]
-extern crate cretonne_codegen;
-extern crate cretonne_frontend;
+extern crate cranelift_codegen;
+extern crate cranelift_frontend;
 extern crate target_lexicon;
 extern crate wasmparser;
 

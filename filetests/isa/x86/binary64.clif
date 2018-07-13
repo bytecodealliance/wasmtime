@@ -5,7 +5,7 @@ target x86_64 haswell
 
 ; The binary encodings can be verified with the command:
 ;
-;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/binary64.cton | llvm-mc -show-encoding -triple=x86_64
+;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/binary64.clif | llvm-mc -show-encoding -triple=x86_64
 ;
 
 ; Tests for i64 instructions.

@@ -51,10 +51,10 @@ impl MemFlags {
     /// Test if the `notrap` flag is set.
     ///
     /// Normally, trapping is part of the semantics of a load/store operation. If the platform
-    /// would cause a trap when accessing the effective address, the Cretonne memory operation is
+    /// would cause a trap when accessing the effective address, the Cranelift memory operation is
     /// also required to trap.
     ///
-    /// The `notrap` flag tells Cretonne that the memory is *accessible*, which means that
+    /// The `notrap` flag tells Cranelift that the memory is *accessible*, which means that
     /// accesses will not trap. This makes it possible to delete an unused load or a dead store
     /// instruction.
     pub fn notrap(self) -> bool {
@@ -68,7 +68,7 @@ impl MemFlags {
 
     /// Test if the `aligned` flag is set.
     ///
-    /// By default, Cretonne memory instructions work with any unaligned effective address. If the
+    /// By default, Cranelift memory instructions work with any unaligned effective address. If the
     /// `aligned` flag is set, the instruction is permitted to trap or return a wrong result if the
     /// effective address is misaligned.
     pub fn aligned(self) -> bool {

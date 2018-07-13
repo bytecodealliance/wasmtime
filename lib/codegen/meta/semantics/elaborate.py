@@ -1,7 +1,7 @@
 """
 Tools to elaborate a given Rtl with concrete types into its semantically
 equivalent primitive version. Its elaborated primitive version contains only
-primitive cretonne instructions, which map well to SMTLIB functions.
+primitive cranelift instructions, which map well to SMTLIB functions.
 """
 from .primitives import GROUP as PRIMITIVES, prim_to_bv, prim_from_bv
 from cdsl.xform import Rtl

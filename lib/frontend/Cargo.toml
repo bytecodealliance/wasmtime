@@ -1,21 +1,21 @@
 [package]
-authors = ["The Cretonne Project Developers"]
-name = "cretonne-frontend"
+authors = ["The Cranelift Project Developers"]
+name = "cranelift-frontend"
 version = "0.13.0"
-description = "Cretonne IR builder helper"
+description = "Cranelift IR builder helper"
 license = "Apache-2.0 WITH LLVM-exception"
-documentation = "https://cretonne.readthedocs.io/"
-repository = "https://github.com/cretonne/cretonne"
+documentation = "https://cranelift.readthedocs.io/"
+repository = "https://github.com/cranelift/cranelift"
 readme = "README.md"
 
 [dependencies]
-cretonne-codegen = { path = "../codegen", version = "0.13.0", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "0.13.0", default-features = false }
 
 [features]
 default = ["std"]
-std = ["cretonne-codegen/std"]
-core = ["cretonne-codegen/core"]
+std = ["cranelift-codegen/std"]
+core = ["cranelift-codegen/core"]
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "cretonne/cretonne" }
+travis-ci = { repository = "cranelift/cranelift" }

@@ -1,16 +1,16 @@
 =================
-Cretonne in Rustc
+Cranelift in Rustc
 =================
 
-One goal for Cretonne is to be usable as a backend suitable for compiling Rust
+One goal for Cranelift is to be usable as a backend suitable for compiling Rust
 in debug mode. This mode doesn't require a lot of mid-level optimization, and it
 does want very fast compile times, and this matches up fairly well with what we
-expect Cretonne's initial strengths and weaknesses will be. Cretonne is being
+expect Cranelift's initial strengths and weaknesses will be. Cranelift is being
 designed to take aggressive advantage of multiple cores, and to be very efficient
 with its use of memory.
 
 Another goal is a "pretty good" backend. The idea here is to do the work to get
-MIR-level inlining enabled, do some basic optimizations in Cretonne to capture the
+MIR-level inlining enabled, do some basic optimizations in Cranelift to capture the
 low-hanging fruit, and then use that along with good low-level optimizations to
 produce code which has a chance of being decently fast, with quite fast compile
 times. It obviously wouldn't compete with LLVM-based release builds in terms of
@@ -22,7 +22,7 @@ enabled a Rust compiler written entirely in Rust, and enabled faster Rust compil
 times for important use cases.
 
 With all that said, there is a potential goal beyond that, which is to build a
-full optimizing release-capable backend. We can't predict how far Cretonne will go
+full optimizing release-capable backend. We can't predict how far Cranelift will go
 yet, but we do have some crazy ideas about what such a thing might look like,
 including:
 
@@ -44,8 +44,8 @@ including:
   less manual effort.
 
 - Build an optimizer IR without the constraints of fast-debug-build compilation.
-  Cretonne's base IR is focused on Codegen, so a full-strength optimizer would either
-  use an IR layer on top of it (possibly using Cretonne's flexible EntityMap system),
+  Cranelift's base IR is focused on Codegen, so a full-strength optimizer would either
+  use an IR layer on top of it (possibly using Cranelift's flexible EntityMap system),
   or possibly an independent IR that could be translated to/from the base IR. Either
   way, this overall architecture would keep the optimizer out of the way of the
   non-optimizing build path, which keeps that path fast and simple, and gives the

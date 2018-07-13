@@ -11,7 +11,7 @@
 // TARGET
 //     Target triple provided by Cargo.
 //
-// CRETONNE_TARGETS (Optional)
+// CRANELIFT_TARGETS (Optional)
 //     A setting for conditional compilation of isa targets. Possible values can be "native" or
 //     known isa targets separated by ','.
 //
@@ -24,12 +24,12 @@ use std::process;
 fn main() {
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
-    let cretonne_targets = env::var("CRETONNE_TARGETS").ok();
-    let cretonne_targets = cretonne_targets.as_ref().map(|s| s.as_ref());
+    let cranelift_targets = env::var("CRANELIFT_TARGETS").ok();
+    let cranelift_targets = cranelift_targets.as_ref().map(|s| s.as_ref());
     let python = identify_python();
 
     // Configure isa targets cfg.
-    match isa_targets(cretonne_targets, &target_triple) {
+    match isa_targets(cranelift_targets, &target_triple) {
         Ok(isa_targets) => {
             for isa in &isa_targets {
                 println!("cargo:rustc-cfg=build_{}", isa.name());
@@ -84,7 +84,7 @@ fn identify_python() -> &'static str {
             return python;
         }
     }
-    panic!("The Cretonne build requires Python (version 2.7 or version 3)");
+    panic!("The Cranelift build requires Python (version 2.7 or version 3)");
 }
 
 /// Represents known ISA target.
@@ -142,8 +142,8 @@ impl Isa {
 }
 
 /// Returns isa targets to configure conditional compilation.
-fn isa_targets(cretonne_targets: Option<&str>, target_triple: &str) -> Result<Vec<Isa>, String> {
-    match cretonne_targets {
+fn isa_targets(cranelift_targets: Option<&str>, target_triple: &str) -> Result<Vec<Isa>, String> {
+    match cranelift_targets {
         Some("native") => Isa::from_arch(target_triple.split('-').next().unwrap())
             .map(|isa| vec![isa])
             .ok_or_else(|| {

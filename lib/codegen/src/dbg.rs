@@ -1,12 +1,12 @@
 //! Debug tracing macros.
 //!
 //! This module defines the `dbg!` macro which works like `println!` except it writes to the
-//! Cretonne tracing output file if enabled.
+//! Cranelift tracing output file if enabled.
 //!
-//! Tracing can be enabled by setting the `CRETONNE_DBG` environment variable to something
+//! Tracing can be enabled by setting the `CRANELIFT_DBG` environment variable to something
 /// other than `0`.
 ///
-/// The output will appear in files named `cretonne.dbg.*`, where the suffix is named after the
+/// The output will appear in files named `cranelift.dbg.*`, where the suffix is named after the
 /// thread doing the logging.
 #[cfg(feature = "std")]
 use std::cell::RefCell;
@@ -29,7 +29,7 @@ static STATE: atomic::AtomicIsize = atomic::ATOMIC_ISIZE_INIT;
 
 /// Is debug tracing enabled?
 ///
-/// Debug tracing can be enabled by setting the `CRETONNE_DBG` environment variable to something
+/// Debug tracing can be enabled by setting the `CRANELIFT_DBG` environment variable to something
 /// other than `0`.
 ///
 /// This inline function turns into a constant `false` when debug assertions are disabled.
@@ -56,7 +56,7 @@ pub fn enabled() -> bool {
 /// Initialize `STATE` from the environment variable.
 #[cfg(feature = "std")]
 fn initialize() -> bool {
-    let enable = match env::var_os("CRETONNE_DBG") {
+    let enable = match env::var_os("CRANELIFT_DBG") {
         Some(s) => s != OsStr::new("0"),
         None => false,
     };
@@ -92,7 +92,7 @@ pub fn writeln_with_format_args(args: fmt::Arguments) -> io::Result<()> {
 fn open_file() -> io::BufWriter<File> {
     let curthread = thread::current();
     let tmpstr;
-    let mut path = "cretonne.dbg.".to_owned();
+    let mut path = "cranelift.dbg.".to_owned();
     path.extend(
         match curthread.name() {
             Some(name) => name.chars(),

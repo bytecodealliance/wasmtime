@@ -11,7 +11,7 @@ use verifier::VerifierResult;
 
 /// Verify conventional SSA form for `func`.
 ///
-/// Conventional SSA form is represented in Cretonne with the help of virtual registers:
+/// Conventional SSA form is represented in Cranelift with the help of virtual registers:
 ///
 /// - Two values are said to be *PHI-related* if one is an EBB argument and the other is passed as
 ///   a branch argument in a location that matches the first value.

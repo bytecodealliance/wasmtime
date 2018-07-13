@@ -6,12 +6,12 @@
 //! If a test case file contains `isa` commands, the tests will only be run against the specified
 //! ISAs. If the file contains no `isa` commands, the tests will be run against all supported ISAs.
 
-use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::settings::{Configurable, Flags, SetError};
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::settings::{Configurable, Flags, SetError};
 use error::{Location, ParseResult};
 use testcommand::TestOption;
 
-/// The ISA specifications in a `.cton` file.
+/// The ISA specifications in a `.clif` file.
 pub enum IsaSpec {
     /// The parsed file does not contain any `isa` commands, but it may contain `set` commands
     /// which are reflected in the finished `Flags` object.

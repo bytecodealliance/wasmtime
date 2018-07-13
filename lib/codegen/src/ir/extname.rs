@@ -2,7 +2,7 @@
 //!
 //! These are identifiers for declaring entities defined outside the current
 //! function. The name of an external declaration doesn't have any meaning to
-//! Cretonne, which compiles functions independently.
+//! Cranelift, which compiles functions independently.
 
 use ir::LibCall;
 use std::cmp;
@@ -15,16 +15,16 @@ const TESTCASE_NAME_LENGTH: usize = 16;
 /// table, or a short sequence of ascii bytes so that test cases do not have
 /// to keep track of a sy mbol table.
 ///
-/// External names are primarily used as keys by code using Cretonne to map
-/// from a `cretonne_codegen::ir::FuncRef` or similar to additional associated
+/// External names are primarily used as keys by code using Cranelift to map
+/// from a `cranelift_codegen::ir::FuncRef` or similar to additional associated
 /// data.
 ///
 /// External names can also serve as a primitive testing and debugging tool.
-/// In particular, many `.cton` test files use function names to identify
+/// In particular, many `.clif` test files use function names to identify
 /// functions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExternalName {
-    /// A name in a user-defined symbol table. Cretonne does not interpret
+    /// A name in a user-defined symbol table. Cranelift does not interpret
     /// these numbers in any way.
     User {
         /// Arbitrary.
@@ -51,7 +51,7 @@ impl ExternalName {
     /// # Examples
     ///
     /// ```rust
-    /// # use cretonne_codegen::ir::ExternalName;
+    /// # use cranelift_codegen::ir::ExternalName;
     /// // Create `ExternalName` from a string.
     /// let name = ExternalName::testcase("hello");
     /// assert_eq!(name.to_string(), "%hello");
@@ -72,7 +72,7 @@ impl ExternalName {
     ///
     /// # Examples
     /// ```rust
-    /// # use cretonne_codegen::ir::ExternalName;
+    /// # use cranelift_codegen::ir::ExternalName;
     /// // Create `ExternalName` from integer indicies
     /// let name = ExternalName::user(123, 456);
     /// assert_eq!(name.to_string(), "u123:456");

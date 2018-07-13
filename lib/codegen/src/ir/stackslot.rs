@@ -15,7 +15,7 @@ use std::vec::Vec;
 
 /// The size of an object on the stack, or the size of a stack frame.
 ///
-/// We don't use `usize` to represent object sizes on the target platform because Cretonne supports
+/// We don't use `usize` to represent object sizes on the target platform because Cranelift supports
 /// cross-compilation, and `usize` is a type that depends on the host platform, not the target
 /// platform.
 pub type StackSize = u32;

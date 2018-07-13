@@ -1,19 +1,19 @@
-//! A frontend for building Cretonne IR from other languages.
-use cretonne_codegen::cursor::{Cursor, FuncCursor};
-use cretonne_codegen::entity::{EntityMap, EntityRef, EntitySet};
-use cretonne_codegen::ir;
-use cretonne_codegen::ir::function::DisplayFunction;
-use cretonne_codegen::ir::{
+//! A frontend for building Cranelift IR from other languages.
+use cranelift_codegen::cursor::{Cursor, FuncCursor};
+use cranelift_codegen::entity::{EntityMap, EntityRef, EntitySet};
+use cranelift_codegen::ir;
+use cranelift_codegen::ir::function::DisplayFunction;
+use cranelift_codegen::ir::{
     DataFlowGraph, Ebb, ExtFuncData, FuncRef, Function, GlobalValue, GlobalValueData, Heap,
     HeapData, Inst, InstBuilderBase, InstructionData, JumpTable, JumpTableData, SigRef, Signature,
     StackSlot, StackSlotData, Type, Value,
 };
-use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::packed_option::PackedOption;
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::packed_option::PackedOption;
 use ssa::{Block, SSABuilder, SideEffects};
 use std::fmt::Debug;
 
-/// Structure used for translating a series of functions into Cretonne IR.
+/// Structure used for translating a series of functions into Cranelift IR.
 ///
 /// In order to reduce memory reallocations when compiling multiple functions,
 /// `FunctionBuilderContext` holds various data structures which are cleared between
@@ -31,7 +31,7 @@ where
     types: EntityMap<Variable, Type>,
 }
 
-/// Temporary object used to build a single Cretonne IR `Function`.
+/// Temporary object used to build a single Cranelift IR `Function`.
 pub struct FunctionBuilder<'a, Variable: 'a>
 where
     Variable: EntityRef + Debug,
@@ -105,7 +105,7 @@ where
 }
 
 /// Implementation of the [`InstBuilder`](../codegen/ir/builder/trait.InstBuilder.html) that has
-/// one convenience method per Cretonne IR instruction.
+/// one convenience method per Cranelift IR instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short, Variable: 'long>
 where
     Variable: EntityRef + Debug,
@@ -195,7 +195,7 @@ where
     }
 }
 
-/// This module allows you to create a function in Cretonne IR in a straightforward way, hiding
+/// This module allows you to create a function in Cranelift IR in a straightforward way, hiding
 /// all the complexity of its internal representation.
 ///
 /// The module is parametrized by one type which is the representation of variables in your
@@ -207,10 +207,10 @@ where
 /// - the last instruction of each block is a terminator instruction which has no natural successor,
 ///   and those instructions can only appear at the end of extended blocks.
 ///
-/// The parameters of Cretonne IR instructions are Cretonne IR values, which can only be created
-/// as results of other Cretonne IR instructions. To be able to create variables redefined multiple
+/// The parameters of Cranelift IR instructions are Cranelift IR values, which can only be created
+/// as results of other Cranelift IR instructions. To be able to create variables redefined multiple
 /// times in your program, use the `def_var` and `use_var` command, that will maintain the
-/// correspondence between your variables and Cretonne IR SSA values.
+/// correspondence between your variables and Cranelift IR SSA values.
 ///
 /// The first block for which you call `switch_to_block` will be assumed to be the beginning of
 /// the function.
@@ -224,7 +224,7 @@ where
 ///
 /// # Errors
 ///
-/// The functions below will panic in debug mode whenever you try to modify the Cretonne IR
+/// The functions below will panic in debug mode whenever you try to modify the Cranelift IR
 /// function in a way that violate the coherence of the code. For instance: switching to a new
 /// `Ebb` when you haven't filled the current one with a terminator instruction, inserting a
 /// return instruction with arguments that don't match the function's signature.
@@ -317,7 +317,7 @@ where
         self.func_ctx.types[var] = ty;
     }
 
-    /// Returns the Cretonne IR value corresponding to the utilization at the current program
+    /// Returns the Cranelift IR value corresponding to the utilization at the current program
     /// position of a previously defined user variable.
     pub fn use_var(&mut self, var: Variable) -> Value {
         let (val, side_effects) = {
@@ -481,8 +481,8 @@ where
 }
 
 /// All the functions documented in the previous block are write-only and help you build a valid
-/// Cretonne IR functions via multiple debug asserts. However, you might need to improve the
-/// performance of your translation perform more complex transformations to your Cretonne IR
+/// Cranelift IR functions via multiple debug asserts. However, you might need to improve the
+/// performance of your translation perform more complex transformations to your Cranelift IR
 /// function. The functions below help you inspect the function you're creating and modify it
 /// in ways that can be unsafe if used incorrectly.
 impl<'a, Variable> FunctionBuilder<'a, Variable>
@@ -610,12 +610,12 @@ where
 #[cfg(test)]
 mod tests {
 
-    use cretonne_codegen::entity::EntityRef;
-    use cretonne_codegen::ir::types::*;
-    use cretonne_codegen::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
-    use cretonne_codegen::settings;
-    use cretonne_codegen::settings::CallConv;
-    use cretonne_codegen::verifier::verify_function;
+    use cranelift_codegen::entity::EntityRef;
+    use cranelift_codegen::ir::types::*;
+    use cranelift_codegen::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
+    use cranelift_codegen::settings;
+    use cranelift_codegen::settings::CallConv;
+    use cranelift_codegen::verifier::verify_function;
     use frontend::{FunctionBuilder, FunctionBuilderContext};
     use Variable;
 

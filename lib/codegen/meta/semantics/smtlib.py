@@ -186,14 +186,16 @@ def equivalent(r1, r2, inp_m, out_m):
     (q1, m1) = to_smt(r1)
     (q2, m2) = to_smt(r2)
 
-    # Build an expression for the equality of real Cretone inputs of r1 and r2
+    # Build an expression for the equality of real Cranelift inputs of
+    # r1 and r2
     args_eq_exp = []  # type: List[ExprRef]
 
     for (v1, v2) in inp_m.items():
         assert isinstance(v2, Var)
         args_eq_exp.append(mk_eq(m1[v1], m2[v2]))
 
-    # Build an expression for the equality of real Cretone outputs of r1 and r2
+    # Build an expression for the equality of real Cranelift outputs of
+    # r1 and r2
     results_eq_exp = []  # type: List[ExprRef]
     for (v1, v2) in out_m.items():
         assert isinstance(v2, Var)

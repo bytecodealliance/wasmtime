@@ -5,7 +5,7 @@
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
 SPHINXABUILD  = sphinx-autobuild
-SPHINXPROJ    = cretonne
+SPHINXPROJ    = cranelift
 SOURCEDIR     = .
 BUILDDIR      = _build
 

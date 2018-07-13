@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Pygments lexer for Cretonne.
+# Pygments lexer for Cranelift.
 from __future__ import absolute_import
 
 from pygments.lexer import RegexLexer, bygroups, words
@@ -12,10 +12,10 @@ def keywords(*args):
     return words(args, prefix=r'\b', suffix=r'\b')
 
 
-class CretonneLexer(RegexLexer):
-    name = 'Cretonne'
-    aliases = ['cton']
-    filenames = ['*.cton']
+class CraneliftLexer(RegexLexer):
+    name = 'Cranelift'
+    aliases = ['clif']
+    filenames = ['*.clif']
 
     tokens = {
         'root': [
@@ -64,6 +64,6 @@ class CretonneLexer(RegexLexer):
 
 def setup(app):
     """Setup Sphinx extension."""
-    app.add_lexer('cton', CretonneLexer())
+    app.add_lexer('clif', CraneliftLexer())
 
     return {'version': '0.1'}

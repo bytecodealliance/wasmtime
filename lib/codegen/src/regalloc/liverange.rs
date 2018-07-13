@@ -41,7 +41,7 @@
 //!
 //! If one live range ends at an instruction that defines another live range, those two live ranges
 //! are not considered to interfere. This is because most ISAs allow instructions to reuse an input
-//! register for an output value. If Cretonne gets support for inline assembly, we will need to
+//! register for an output value. If Cranelift gets support for inline assembly, we will need to
 //! handle *early clobbers* which are output registers that are not allowed to alias any input
 //! registers.
 //!

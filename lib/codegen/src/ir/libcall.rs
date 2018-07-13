@@ -11,9 +11,9 @@ use std::str::FromStr;
 
 /// The name of a runtime library routine.
 ///
-/// Runtime library calls are generated for Cretonne IR instructions that don't have an equivalent
+/// Runtime library calls are generated for Cranelift IR instructions that don't have an equivalent
 /// ISA instruction or an easy macro expansion. A `LibCall` is used as a well-known name to refer to
-/// the runtime library routine. This way, Cretonne doesn't have to know about the naming
+/// the runtime library routine. This way, Cranelift doesn't have to know about the naming
 /// convention in the embedding VM's runtime library.
 ///
 /// This list is likely to grow over time.

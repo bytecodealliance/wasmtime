@@ -1,6 +1,6 @@
 # Fuzzing
 
-This document describes how to fuzz cretonne with [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz). The fuzz targets use `wasm-opt` from [`binaryen-rs`](https://github.com/pepyakin/binaryen-rs) to generate valid WebAssembly modules from the fuzzed input supplied by `cargo-fuzz` (via [libfuzzer](http://llvm.org/docs/LibFuzzer.html)). In this scheme coverage feedback from both cretonne and the `wasm-opt` input generation code is used to inform the fuzzer.
+This document describes how to fuzz cranelift with [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz). The fuzz targets use `wasm-opt` from [`binaryen-rs`](https://github.com/pepyakin/binaryen-rs) to generate valid WebAssembly modules from the fuzzed input supplied by `cargo-fuzz` (via [libfuzzer](http://llvm.org/docs/LibFuzzer.html)). In this scheme coverage feedback from both cranelift and the `wasm-opt` input generation code is used to inform the fuzzer.
 
 # Usage
 

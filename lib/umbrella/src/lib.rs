@@ -1,4 +1,4 @@
-//! Cretonne umbrella crate, providing a convenient one-line dependency.
+//! Cranelift umbrella crate, providing a convenient one-line dependency.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces, unstable_features)]
@@ -13,11 +13,11 @@
 )]
 
 /// Provide these crates, renamed to reduce stutter.
-pub extern crate cretonne_codegen as codegen;
-pub extern crate cretonne_frontend as frontend;
+pub extern crate cranelift_codegen as codegen;
+pub extern crate cranelift_frontend as frontend;
 
-/// A prelude providing convenient access to commonly-used cretonne features. Use
-/// as `use cretonne::prelude::*`.
+/// A prelude providing convenient access to commonly-used cranelift features. Use
+/// as `use cranelift::prelude::*`.
 pub mod prelude {
     pub use codegen;
     pub use codegen::entity::EntityRef;

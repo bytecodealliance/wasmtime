@@ -3,18 +3,18 @@ set -euo pipefail
 topdir=$(dirname "$0")
 cd "$topdir"
 
-# All the cretonne-* crates have the same version number
+# All the cranelift-* crates have the same version number
 version="0.13.0"
 
 # Update all of the Cargo.toml files.
 #
-# The main Cargo.toml in the top-level directory is the cretonne-tools crate which we don't publish.
+# The main Cargo.toml in the top-level directory is the cranelift-tools crate which we don't publish.
 echo "Updating crate versions to $version"
 for crate in . lib/*; do
     # Update the version number of this crate to $version.
     sed -i.bk -e "s/^version = .*/version = \"$version\"/" "$crate/Cargo.toml"
-    # Update the required version number of any cretonne* dependencies.
-    sed -i.bk -e "/^cretonne/s/version = \"[^\"]*\"/version = \"$version\"/" "$crate/Cargo.toml"
+    # Update the required version number of any cranelift* dependencies.
+    sed -i.bk -e "/^cranelift/s/version = \"[^\"]*\"/version = \"$version\"/" "$crate/Cargo.toml"
 done
 
 # Update our local Cargo.lock (not checked in).
@@ -31,4 +31,4 @@ for crate in entity codegen frontend native reader wasm module simplejit faerie 
     echo cargo publish --manifest-path "lib/$crate/Cargo.toml"
 done
 echo
-echo Then, go to https://github.com/cretonne/cretonne/releases/ and define a new release.
+echo Then, go to https://github.com/cranelift/cranelift/releases/ and define a new release.

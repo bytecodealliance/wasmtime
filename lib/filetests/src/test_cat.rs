@@ -1,7 +1,7 @@
 //! The `cat` subtest.
 
-use cretonne_codegen::ir::Function;
-use cretonne_reader::TestCommand;
+use cranelift_codegen::ir::Function;
+use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 use subtest::{self, Context, SubTest, SubtestResult};
 

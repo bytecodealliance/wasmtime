@@ -1,5 +1,5 @@
 """
-The base.types module predefines all the Cretonne scalar types.
+The base.types module predefines all the Cranelift scalar types.
 """
 from __future__ import absolute_import
 from cdsl.types import IntType, FloatType, BoolType, FlagsType

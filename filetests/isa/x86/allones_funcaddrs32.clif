@@ -6,10 +6,10 @@ target i686 haswell
 
 ; The binary encodings can be verified with the command:
 ;
-;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/allones_funcaddrs32.cton | llvm-mc -show-encoding -triple=i386
+;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/allones_funcaddrs32.clif | llvm-mc -show-encoding -triple=i386
 ;
 
-; Tests from binary32.cton affected by allones_funcaddrs.
+; Tests from binary32.clif affected by allones_funcaddrs.
 function %I32() {
     sig0 = ()
     fn0 = %foo()

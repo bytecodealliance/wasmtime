@@ -1,7 +1,7 @@
 """
 Patterns for legalizing the `base` instruction set.
 
-The base Cretonne instruction set is 'fat', and many instructions don't have
+The base Cranelift instruction set is 'fat', and many instructions don't have
 legal representations in a given target ISA. This module defines legalization
 patterns that describe how base instructions can be transformed to other base
 instructions that are legal.

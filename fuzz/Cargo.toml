@@ -1,5 +1,5 @@
 [package]
-name = "cton-wasm-fuzz"
+name = "clif-wasm-fuzz"
 version = "0.0.1"
 authors = ["foote@fastly.com"]
 publish = false
@@ -11,7 +11,7 @@ cargo-fuzz = true
 cargo-fuzz = "*"
 binaryen = { git = "https://github.com/pepyakin/binaryen-rs.git" }
 libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
-cretonne-wasm = { path = "../lib/wasm" }
+cranelift-wasm = { path = "../lib/wasm" }
 target-lexicon = "0.0.2"
 
 # Prevent this from interfering with workspaces

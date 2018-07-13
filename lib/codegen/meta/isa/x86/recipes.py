@@ -34,7 +34,7 @@ except ImportError:
 
 # Opcode representation.
 #
-# Cretonne requires each recipe to have a single encoding size in bytes, and
+# Cranelift requires each recipe to have a single encoding size in bytes, and
 # x86 opcodes are variable length, so we use separate recipes for different
 # styles of opcodes and prefixes. The opcode format is indicated by the recipe
 # name prefix:
@@ -1600,7 +1600,7 @@ rcmp_sp = TailRecipe(
 #
 # 1. Guarantee that the test and branch get scheduled next to each other so
 #    macro fusion is guaranteed to be possible.
-# 2. Hide the status flags from Cretonne which doesn't currently model flags.
+# 2. Hide the status flags from Cranelift which doesn't currently model flags.
 #
 # The encoding bits affect both the test and the branch instruction:
 #

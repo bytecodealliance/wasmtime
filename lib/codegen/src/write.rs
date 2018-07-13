@@ -1,7 +1,7 @@
-//! Converting Cretonne IR to text.
+//! Converting Cranelift IR to text.
 //!
 //! The `write` module provides the `write_function` function which converts an IR `Function` to an
-//! equivalent textual form. This textual form can be read back by the `cretonne-reader` crate.
+//! equivalent textual form. This textual form can be read back by the `cranelift-reader` crate.
 
 use ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
 use isa::{RegInfo, TargetIsa};

@@ -5,7 +5,7 @@ target i686 haswell
 
 ; The binary encodings can be verified with the command:
 ;
-;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/binary32.cton | llvm-mc -show-encoding -triple=i386
+;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/binary32.clif | llvm-mc -show-encoding -triple=i386
 ;
 
 function %I32() {

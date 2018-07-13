@@ -1,5 +1,5 @@
 """
-Cretonne primitive instruction set.
+Cranelift primitive instruction set.
 
 This module defines a primitive instruction set, in terms of which the base set
 is described. Most instructions in this set correspond 1-1 with an SMTLIB
@@ -26,9 +26,9 @@ y = Operand('x', BV, doc="A semantic value Y (same width as X)")
 a = Operand('a', BV, doc="A semantic value A (same width as X)")
 cond = Operand('b', TypeVar.singleton(b1), doc='A b1 value')
 
-real = Operand('real', Real, doc="A real cretonne value")
+real = Operand('real', Real, doc="A real cranelift value")
 fromReal = Operand('fromReal', Real.to_bitvec(),
-                   doc="A real cretonne value converted to a BV")
+                   doc="A real cranelift value converted to a BV")
 
 #
 # BV Conversion/Materialization

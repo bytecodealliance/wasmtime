@@ -1,6 +1,6 @@
 //! External function calls.
 //!
-//! To a Cretonne function, all functions are "external". Directly called functions must be
+//! To a Cranelift function, all functions are "external". Directly called functions must be
 //! declared in the preamble, and all function calls must have a signature.
 //!
 //! This module declares the data types used to represent external functions and call signatures.

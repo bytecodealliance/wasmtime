@@ -1,6 +1,6 @@
 //! Translation skeleton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
-use cretonne_codegen::timing;
+use cranelift_codegen::timing;
 use environ::{ModuleEnvironment, WasmError, WasmResult};
 use sections_translator::{
     parse_data_section, parse_elements_section, parse_export_section, parse_function_section,
@@ -9,7 +9,7 @@ use sections_translator::{
 };
 use wasmparser::{Parser, ParserInput, ParserState, SectionCode, WasmDecoder};
 
-/// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cretonne IR
+/// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cranelift IR
 /// [`Function`](../codegen/ir/function/struct.Function.html).
 /// Returns the functions and also the mappings for imported functions and signature between the
 /// indexes in the wasm module and the indexes inside each functions.

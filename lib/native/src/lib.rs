@@ -1,5 +1,5 @@
 //! Performs autodetection of the host for the purposes of running
-//! Cretonne to generate code to run on the same machine.
+//! Cranelift to generate code to run on the same machine.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces, unstable_features)]
@@ -14,13 +14,13 @@
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate cretonne_codegen;
+extern crate cranelift_codegen;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 extern crate raw_cpuid;
 extern crate target_lexicon;
 
-use cretonne_codegen::isa;
-use cretonne_codegen::settings::{self, Configurable};
+use cranelift_codegen::isa;
+use cranelift_codegen::settings::{self, Configurable};
 use target_lexicon::Triple;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]

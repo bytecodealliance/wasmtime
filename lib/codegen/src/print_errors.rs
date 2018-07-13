@@ -65,7 +65,7 @@ fn pretty_function_error(
     }
 }
 
-/// Pretty-print a Cretonne error.
+/// Pretty-print a Cranelift error.
 pub fn pretty_error(func: &ir::Function, isa: Option<&TargetIsa>, err: CodegenError) -> String {
     if let CodegenError::Verifier(e) = err {
         pretty_verifier_error(func, isa, &e)

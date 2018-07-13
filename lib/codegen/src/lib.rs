@@ -1,4 +1,4 @@
-//! Cretonne code generation library.
+//! Cranelift code generation library.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
@@ -56,11 +56,11 @@ pub use legalizer::legalize_function;
 pub use verifier::verify_function;
 pub use write::write_function;
 
-/// Version number of the cretonne-codegen crate.
+/// Version number of the cranelift-codegen crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[macro_use]
-pub extern crate cretonne_entity as entity;
+pub extern crate cranelift_entity as entity;
 
 #[macro_use]
 pub mod dbg;

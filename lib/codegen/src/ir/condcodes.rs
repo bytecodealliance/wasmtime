@@ -1,4 +1,4 @@
-//! Condition codes for the Cretonne code generator.
+//! Condition codes for the Cranelift code generator.
 //!
 //! A condition code here is an enumerated type that determined how to compare two numbers. There
 //! are different rules for comparing integers and floating point numbers, so they use different

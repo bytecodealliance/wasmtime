@@ -61,7 +61,7 @@ RV32.enc(base.iconst.i32, Iz, OPIMM(0b000))
 RV64.enc(base.iconst.i32, Iz, OPIMM(0b000))
 RV64.enc(base.iconst.i64, Iz, OPIMM(0b000))
 
-# Dynamic shifts have the same masking semantics as the cton base instructions.
+# Dynamic shifts have the same masking semantics as the clif base instructions.
 for inst,           inst_imm,      f3,    f7 in [
         (base.ishl, base.ishl_imm, 0b001, 0b0000000),
         (base.ushr, base.ushr_imm, 0b101, 0b0000000),

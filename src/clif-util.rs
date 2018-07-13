@@ -10,9 +10,9 @@
 
 #[macro_use]
 extern crate cfg_if;
-extern crate cretonne_codegen;
-extern crate cretonne_filetests;
-extern crate cretonne_reader;
+extern crate cranelift_codegen;
+extern crate cranelift_filetests;
+extern crate cranelift_reader;
 extern crate docopt;
 extern crate filecheck;
 #[macro_use]
@@ -23,14 +23,14 @@ extern crate term;
 
 cfg_if! {
     if #[cfg(feature = "wasm")] {
-        extern crate cretonne_wasm;
+        extern crate cranelift_wasm;
         extern crate wabt;
         mod wasm;
     }
 }
 extern crate target_lexicon;
 
-use cretonne_codegen::{timing, VERSION};
+use cranelift_codegen::{timing, VERSION};
 use docopt::Docopt;
 use std::io::{self, Write};
 use std::process;
@@ -42,33 +42,33 @@ mod rsfilecheck;
 mod utils;
 
 const USAGE: &str = "
-Cretonne code generator utility
+Cranelift code generator utility
 
 Usage:
-    cton-util test [-vT] <file>...
-    cton-util cat <file>...
-    cton-util filecheck [-v] <file>
-    cton-util print-cfg <file>...
-    cton-util compile [-vpT] [--set <set>]... [--target <triple>] <file>...
-    cton-util wasm [-ctvpTs] [--set <set>]... [--target <triple>] <file>...
-    cton-util --help | --version
+    clif-util test [-vT] <file>...
+    clif-util cat <file>...
+    clif-util filecheck [-v] <file>
+    clif-util print-cfg <file>...
+    clif-util compile [-vpT] [--set <set>]... [--target <triple>] <file>...
+    clif-util wasm [-ctvpTs] [--set <set>]... [--target <triple>] <file>...
+    clif-util --help | --version
 
 Options:
     -v, --verbose   be more verbose
     -T, --time-passes
                     print pass timing report
     -t, --just-decode
-                    just decode WebAssembly to Cretonne IR
+                    just decode WebAssembly to Cranelift IR
     -s, --print-size
                     prints generated code size
     -c, --check-translation
-                    just checks the correctness of Cretonne IR translated from WebAssembly
-    -p, --print     print the resulting Cretonne IR
+                    just checks the correctness of Cranelift IR translated from WebAssembly
+    -p, --print     print the resulting Cranelift IR
     -h, --help      print this help message
-    --set=<set>     configure Cretonne settings
+    --set=<set>     configure Cranelift settings
     --target=<triple>
-                    specify the Cretonne target
-    --version       print the Cretonne version
+                    specify the Cranelift target
+    --version       print the Cranelift version
 
 ";
 
@@ -95,19 +95,19 @@ struct Args {
 pub type CommandResult = Result<(), String>;
 
 /// Parse the command line arguments and run the requested command.
-fn cton_util() -> CommandResult {
+fn clif_util() -> CommandResult {
     // Parse command line arguments.
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| {
             d.help(true)
-                .version(Some(format!("Cretonne {}", VERSION)))
+                .version(Some(format!("Cranelift {}", VERSION)))
                 .deserialize()
         })
         .unwrap_or_else(|e| e.exit());
 
     // Find the sub-command to execute.
     let result = if args.cmd_test {
-        cretonne_filetests::run(args.flag_verbose, &args.arg_file).map(|_time| ())
+        cranelift_filetests::run(args.flag_verbose, &args.arg_file).map(|_time| ())
     } else if args.cmd_cat {
         cat::run(&args.arg_file)
     } else if args.cmd_filecheck {
@@ -135,7 +135,7 @@ fn cton_util() -> CommandResult {
         );
 
         #[cfg(not(feature = "wasm"))]
-        let result = Err("Error: cton-util was compiled without wasm support.".to_owned());
+        let result = Err("Error: clif-util was compiled without wasm support.".to_owned());
 
         result
     } else {
@@ -151,7 +151,7 @@ fn cton_util() -> CommandResult {
 }
 
 fn main() {
-    if let Err(mut msg) = cton_util() {
+    if let Err(mut msg) = clif_util() {
         if !msg.ends_with('\n') {
             msg.push('\n');
         }

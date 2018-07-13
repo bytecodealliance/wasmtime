@@ -1,6 +1,6 @@
-//! Cretonne instruction builder.
+//! Cranelift instruction builder.
 //!
-//! A `Builder` provides a convenient interface for inserting instructions into a Cretonne
+//! A `Builder` provides a convenient interface for inserting instructions into a Cranelift
 //! function. Many of its methods are generated from the meta language instruction definitions.
 
 use ir;

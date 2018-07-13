@@ -1,9 +1,9 @@
 //! The `cat` sub-command.
 //!
-//! Read a sequence of Cretonne IR files and print them again to stdout. This has the effect of
+//! Read a sequence of Cranelift IR files and print them again to stdout. This has the effect of
 //! normalizing formatting and removing comments.
 
-use cretonne_reader::parse_functions;
+use cranelift_reader::parse_functions;
 use utils::read_to_string;
 use CommandResult;
 

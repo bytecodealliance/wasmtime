@@ -1,13 +1,13 @@
 //! The `print-cfg` sub-command.
 //!
-//! Read a series of Cretonne IR files and print their control flow graphs
+//! Read a series of Cranelift IR files and print their control flow graphs
 //! in graphviz format.
 
 use std::borrow::Cow;
 
-use cretonne_codegen::cfg_printer::CFGPrinter;
-use cretonne_codegen::ir::Function;
-use cretonne_reader::TestCommand;
+use cranelift_codegen::cfg_printer::CFGPrinter;
+use cranelift_codegen::ir::Function;
+use cranelift_reader::TestCommand;
 use subtest::{self, Context, SubTest, SubtestResult};
 
 /// Object implementing the `test print-cfg` sub-test.

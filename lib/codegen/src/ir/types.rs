@@ -1,4 +1,4 @@
-//! Common types for the Cretonne code generator.
+//! Common types for the Cranelift code generator.
 
 use std::default::Default;
 use std::fmt::{self, Debug, Display, Formatter};

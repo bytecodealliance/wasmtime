@@ -1,9 +1,9 @@
 //! `SubTest` trait.
 
-use cretonne_codegen::ir::Function;
-use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::settings::{Flags, FlagsOrIsa};
-use cretonne_reader::{Comment, Details};
+use cranelift_codegen::ir::Function;
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::settings::{Flags, FlagsOrIsa};
+use cranelift_reader::{Comment, Details};
 use filecheck::{Checker, CheckerBuilder, NO_VARIABLES};
 use std::borrow::Cow;
 
@@ -40,7 +40,7 @@ impl<'a> Context<'a> {
 
 /// Common interface for implementations of test commands.
 ///
-/// Each `.cton` test file may contain multiple test commands, each represented by a `SubTest`
+/// Each `.clif` test file may contain multiple test commands, each represented by a `SubTest`
 /// trait object.
 pub trait SubTest {
     /// Name identifying this subtest. Typically the same as the test command.

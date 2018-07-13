@@ -11,7 +11,7 @@
 //!
 //! # Example
 //! ```
-//! use cretonne_codegen::settings::{self, Configurable};
+//! use cranelift_codegen::settings::{self, Configurable};
 //!
 //! let mut b = settings::builder();
 //! b.set("opt_level", "fastest");

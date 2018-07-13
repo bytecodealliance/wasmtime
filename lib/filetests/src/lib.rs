@@ -18,12 +18,12 @@
 )]
 
 #[macro_use(dbg)]
-extern crate cretonne_codegen;
-extern crate cretonne_reader;
+extern crate cranelift_codegen;
+extern crate cranelift_reader;
 extern crate filecheck;
 extern crate num_cpus;
 
-use cretonne_reader::TestCommand;
+use cranelift_reader::TestCommand;
 use runner::TestRunner;
 use std::path::Path;
 use std::time;
@@ -52,13 +52,13 @@ mod test_verifier;
 /// The result of running the test in a file.
 type TestResult = Result<time::Duration, String>;
 
-/// Main entry point for `cton-util test`.
+/// Main entry point for `clif-util test`.
 ///
-/// Take a list of filenames which can be either `.cton` files or directories.
+/// Take a list of filenames which can be either `.clif` files or directories.
 ///
 /// Files are interpreted as test cases and executed immediately.
 ///
-/// Directories are scanned recursively for test cases ending in `.cton`. These test cases are
+/// Directories are scanned recursively for test cases ending in `.clif`. These test cases are
 /// executed on background threads.
 ///
 pub fn run(verbose: bool, files: &[String]) -> TestResult {
@@ -79,7 +79,7 @@ pub fn run(verbose: bool, files: &[String]) -> TestResult {
 /// Create a new subcommand trait object to match `parsed.command`.
 ///
 /// This function knows how to create all of the possible `test <foo>` commands that can appear in
-/// a `.cton` test file.
+/// a `.clif` test file.
 fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<subtest::SubTest>> {
     match parsed.command {
         "binemit" => test_binemit::subtest(parsed),

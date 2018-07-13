@@ -64,7 +64,7 @@ impl Opcode {
     }
 }
 
-// This trait really belongs in lib/reader where it is used by the `.cton` file parser, but since
+// This trait really belongs in lib/reader where it is used by the `.clif` file parser, but since
 // it critically depends on the `opcode_name()` function which is needed here anyway, it lives in
 // this module. This also saves us from running the build script twice to generate code for the two
 // separate crates.

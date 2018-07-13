@@ -1,11 +1,11 @@
-//! CLI tool to read Cretonne IR files and compile them into native code.
+//! CLI tool to read Cranelift IR files and compile them into native code.
 
-use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::print_errors::pretty_error;
-use cretonne_codegen::settings::FlagsOrIsa;
-use cretonne_codegen::Context;
-use cretonne_codegen::{binemit, ir};
-use cretonne_reader::parse_test;
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::print_errors::pretty_error;
+use cranelift_codegen::settings::FlagsOrIsa;
+use cranelift_codegen::Context;
+use cranelift_codegen::{binemit, ir};
+use cranelift_reader::parse_test;
 use std::path::Path;
 use std::path::PathBuf;
 use utils::{parse_sets_and_triple, read_to_string};

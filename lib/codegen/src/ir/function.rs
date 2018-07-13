@@ -23,7 +23,7 @@ use write::write_function;
 /// The clone will have all the same entity numbers as the original.
 #[derive(Clone)]
 pub struct Function {
-    /// Name of this function. Mostly used by `.cton` files.
+    /// Name of this function. Mostly used by `.clif` files.
     pub name: ExternalName,
 
     /// Signature of this function.
@@ -68,7 +68,7 @@ pub struct Function {
     /// Source locations.
     ///
     /// Track the original source location for each instruction. The source locations are not
-    /// interpreted by Cretonne, only preserved.
+    /// interpreted by Cranelift, only preserved.
     pub srclocs: SourceLocs,
 }
 

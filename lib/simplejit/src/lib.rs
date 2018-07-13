@@ -1,4 +1,4 @@
-//! Top-level lib.rs for `cretonne_simplejit`.
+//! Top-level lib.rs for `cranelift_simplejit`.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces, unstable_features)]
@@ -12,9 +12,9 @@
     )
 )]
 
-extern crate cretonne_codegen;
-extern crate cretonne_module;
-extern crate cretonne_native;
+extern crate cranelift_codegen;
+extern crate cranelift_module;
+extern crate cranelift_native;
 extern crate errno;
 extern crate libc;
 extern crate region;

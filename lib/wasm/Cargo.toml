@@ -1,17 +1,17 @@
 [package]
-name = "cretonne-wasm"
+name = "cranelift-wasm"
 version = "0.13.0"
-authors = ["The Cretonne Project Developers"]
-description = "Translator from WebAssembly to Cretonne IR"
-repository = "https://github.com/cretonne/cretonne"
+authors = ["The Cranelift Project Developers"]
+description = "Translator from WebAssembly to Cranelift IR"
+repository = "https://github.com/cranelift/cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 keywords = ["webassembly", "wasm"]
 
 [dependencies]
 wasmparser = { version = "0.17.0", default-features = false }
-cretonne-codegen = { path = "../codegen", version = "0.13.0", default-features = false }
-cretonne-frontend = { path = "../frontend", version = "0.13.0", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "0.13.0", default-features = false }
+cranelift-frontend = { path = "../frontend", version = "0.13.0", default-features = false }
 hashmap_core = { version = "0.1.8", optional = true }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
@@ -22,9 +22,9 @@ wabt = "0.4"
 
 [features]
 default = ["std"]
-std = ["cretonne-codegen/std", "cretonne-frontend/std", "wasmparser/std", "target-lexicon/std"]
-core = ["hashmap_core", "cretonne-codegen/core", "cretonne-frontend/core", "wasmparser/core"]
+std = ["cranelift-codegen/std", "cranelift-frontend/std", "wasmparser/std", "target-lexicon/std"]
+core = ["hashmap_core", "cranelift-codegen/core", "cranelift-frontend/core", "wasmparser/core"]
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "cretonne/cretonne" }
+travis-ci = { repository = "cranelift/cranelift" }

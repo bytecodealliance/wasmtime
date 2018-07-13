@@ -5,14 +5,14 @@
 //! In: Jhala R., De Bosschere K. (eds) Compiler Construction. CC 2013.
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
-use cretonne_codegen::cursor::{Cursor, FuncCursor};
-use cretonne_codegen::entity::{EntityMap, EntityRef, PrimaryMap};
-use cretonne_codegen::ir::immediates::{Ieee32, Ieee64};
-use cretonne_codegen::ir::instructions::BranchInfo;
-use cretonne_codegen::ir::types::{F32, F64};
-use cretonne_codegen::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
-use cretonne_codegen::packed_option::PackedOption;
-use cretonne_codegen::packed_option::ReservedValue;
+use cranelift_codegen::cursor::{Cursor, FuncCursor};
+use cranelift_codegen::entity::{EntityMap, EntityRef, PrimaryMap};
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
+use cranelift_codegen::ir::instructions::BranchInfo;
+use cranelift_codegen::ir::types::{F32, F64};
+use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
+use cranelift_codegen::packed_option::PackedOption;
+use cranelift_codegen::packed_option::ReservedValue;
 use std::mem;
 use std::u32;
 use std::vec::Vec;
@@ -233,7 +233,7 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
     }
 }
 /// The following methods are the API of the SSA builder. Here is how it should be used when
-/// translating to Cretonne IR:
+/// translating to Cranelift IR:
 ///
 /// - for each sequence of contiguous instructions (with no branches), create a corresponding
 ///   basic block with `declare_ebb_body_block` or `declare_ebb_header_block` depending on the
@@ -715,13 +715,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use cretonne_codegen::cursor::{Cursor, FuncCursor};
-    use cretonne_codegen::entity::EntityRef;
-    use cretonne_codegen::ir::instructions::BranchInfo;
-    use cretonne_codegen::ir::types::*;
-    use cretonne_codegen::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
-    use cretonne_codegen::settings;
-    use cretonne_codegen::verify_function;
+    use cranelift_codegen::cursor::{Cursor, FuncCursor};
+    use cranelift_codegen::entity::EntityRef;
+    use cranelift_codegen::ir::instructions::BranchInfo;
+    use cranelift_codegen::ir::types::*;
+    use cranelift_codegen::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
+    use cranelift_codegen::settings;
+    use cranelift_codegen::verify_function;
     use ssa::SSABuilder;
     use Variable;
 

@@ -64,7 +64,7 @@
 //! LLVM's register allocator computes liveness per *virtual register*, where a virtual register is
 //! a disjoint union of related SSA values that should be assigned to the same physical register.
 //! It uses a compact data structure very similar to our `LiveRange`. The important difference is
-//! that Cretonne's `LiveRange` only describes a single SSA value, while LLVM's `LiveInterval`
+//! that Cranelift's `LiveRange` only describes a single SSA value, while LLVM's `LiveInterval`
 //! describes the live range of a virtual register *and* which one of the related SSA values is
 //! live at any given program point.
 //!
@@ -93,11 +93,11 @@
 //!   functions.
 //! - A single live range can be recomputed after making modifications to the IR. No global
 //!   algorithm is necessary. This feature depends on having use-def chains for virtual registers
-//!   which Cretonne doesn't.
+//!   which Cranelift doesn't.
 //!
-//! Cretonne uses a very similar data structures and algorithms to LLVM, with the important
+//! Cranelift uses a very similar data structures and algorithms to LLVM, with the important
 //! difference that live ranges are computed per SSA value instead of per virtual register, and the
-//! uses in Cretonne IR refers to SSA values instead of virtual registers. This means that Cretonne
+//! uses in Cranelift IR refers to SSA values instead of virtual registers. This means that Cranelift
 //! can skip the last step of reconstructing SSA form for the virtual register uses.
 //!
 //! ## Fast Liveness Checking for SSA-Form Programs
@@ -112,27 +112,27 @@
 //! then allows liveness queries for any (value, program point) pair. Each query traverses the use
 //! chain of the value and performs lookups in the precomputed bit-vectors.
 //!
-//! I did not seriously consider this analysis for Cretonne because:
+//! I did not seriously consider this analysis for Cranelift because:
 //!
-//! - It depends critically on use chains which Cretonne doesn't have.
+//! - It depends critically on use chains which Cranelift doesn't have.
 //! - Popular variables like the `this` pointer in a C++ method can have very large use chains.
 //!   Traversing such a long use chain on every liveness lookup has the potential for some nasty
 //!   quadratic behavior in unfortunate cases.
 //! - It says "fast" in the title, but the paper only claims to be 16% faster than a data-flow
 //!   based approach, which isn't that impressive.
 //!
-//! Nevertheless, the property of only depending in the CFG structure is very useful. If Cretonne
+//! Nevertheless, the property of only depending in the CFG structure is very useful. If Cranelift
 //! gains use chains, this approach would be worth a proper evaluation.
 //!
 //!
-//! # Cretonne's liveness analysis
+//! # Cranelift's liveness analysis
 //!
 //! The algorithm implemented in this module is similar to LLVM's with these differences:
 //!
 //! - The `LiveRange` data structure describes the liveness of a single SSA value, not a virtual
 //!   register.
-//! - Instructions in Cretonne IR contains references to SSA values, not virtual registers.
-//! - All live ranges are computed in one traversal of the program. Cretonne doesn't have use
+//! - Instructions in Cranelift IR contains references to SSA values, not virtual registers.
+//! - All live ranges are computed in one traversal of the program. Cranelift doesn't have use
 //!   chains, so it is not possible to compute the live range for a single SSA value independently.
 //!
 //! The liveness computation visits all instructions in the program. The order is not important for
@@ -150,18 +150,18 @@
 //! visited. No data about each value beyond the live range is needed between visiting uses, so
 //! nothing is lost by computing the live range of all values simultaneously.
 //!
-//! ## Cache efficiency of Cretonne vs LLVM
+//! ## Cache efficiency of Cranelift vs LLVM
 //!
 //! Since LLVM computes the complete live range of a virtual register in one go, it can keep the
 //! whole `LiveInterval` for the register in L1 cache. Since it is visiting the instructions in use
 //! chain order, some cache thrashing can occur as a result of pulling instructions into cache
 //! somewhat chaotically.
 //!
-//! Cretonne uses a transposed algorithm, visiting instructions in order. This means that each
+//! Cranelift uses a transposed algorithm, visiting instructions in order. This means that each
 //! instruction is brought into cache only once, and it is likely that the other instructions on
 //! the same cache line will be visited before the line is evicted.
 //!
-//! Cretonne's problem is that the `LiveRange` structs are visited many times and not always
+//! Cranelift's problem is that the `LiveRange` structs are visited many times and not always
 //! regularly. We should strive to make the `LiveRange` struct as small as possible such that
 //! multiple related values can live on the same cache line.
 //!

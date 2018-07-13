@@ -67,7 +67,7 @@ VARIABLE_ARGS = OperandKind(
 
 
 # Instances of immediate operand types are provided in the
-# `cretonne.immediates` module.
+# `cranelift.immediates` module.
 class ImmediateKind(OperandKind):
     """
     The kind of an immediate instruction operand.
@@ -152,7 +152,7 @@ class ImmediateKind(OperandKind):
 
 
 # Instances of entity reference operand types are provided in the
-# `cretonne.entities` module.
+# `cranelift.entities` module.
 class EntityRefKind(OperandKind):
     """
     The kind of an entity reference instruction operand.

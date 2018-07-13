@@ -14,7 +14,7 @@ except ImportError:
 
 class Setting(object):
     """
-    A named setting variable that can be configured externally to Cretonne.
+    A named setting variable that can be configured externally to Cranelift.
 
     Settings are normally not named when they are created. They get their name
     from the `extract_names` method.

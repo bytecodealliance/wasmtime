@@ -1,7 +1,7 @@
 """
-Cretonne DSL classes.
+Cranelift DSL classes.
 
-This module defines the classes that are used to define Cretonne instructions
+This module defines the classes that are used to define Cranelift instructions
 and other entitties.
 """
 from __future__ import absolute_import
