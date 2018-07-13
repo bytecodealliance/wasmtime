@@ -5,7 +5,7 @@ version = "0.13.0"
 description = "Low-level code generator library"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
-repository = "https://github.com/cranelift/cranelift"
+repository = "https://github.com/CraneStation/cranelift"
 readme = "README.md"
 keywords = ["compile", "compiler", "jit"]
 build = "build.rs"
@@ -31,4 +31,4 @@ core = ["hashmap_core"]
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "cranelift/cranelift" }
+travis-ci = { repository = "CraneStation/cranelift" }

@@ -5,7 +5,7 @@ version = "0.13.0"
 description = "Data structures using entity references as mapping keys"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
-repository = "https://github.com/cranelift/cranelift"
+repository = "https://github.com/CraneStation/cranelift"
 readme = "README.md"
 keywords = ["entity", "set", "map"]
 
@@ -15,4 +15,4 @@ std = []
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "cranelift/cranelift" }
+travis-ci = { repository = "CraneStation/cranelift" }

@@ -31,4 +31,4 @@ for crate in entity codegen frontend native reader wasm module simplejit faerie 
     echo cargo publish --manifest-path "lib/$crate/Cargo.toml"
 done
 echo
-echo Then, go to https://github.com/cranelift/cranelift/releases/ and define a new release.
+echo Then, go to https://github.com/CraneStation/cranelift/releases/ and define a new release.

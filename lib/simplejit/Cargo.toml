@@ -3,7 +3,7 @@ name = "cranelift-simplejit"
 version = "0.13.0"
 authors = ["The Cranelift Project Developers"]
 description = "A simple JIT library backed by Cranelift"
-repository = "https://github.com/cranelift/cranelift"
+repository = "https://github.com/CraneStation/cranelift"
 documentation = "https://cranelift.readthedocs.io/"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
@@ -27,4 +27,4 @@ core = ["cranelift-codegen/core", "cranelift-module/core", "cranelift-native/cor
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "cranelift/cranelift" }
+travis-ci = { repository = "CraneStation/cranelift" }
