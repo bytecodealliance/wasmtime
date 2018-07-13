@@ -31,7 +31,7 @@ serde_derive = "1.0.8"
 term = "0.5.1"
 capstone = { version = "0.4", optional = true }
 wabt = { version = "0.4", optional = true }
-target-lexicon = "0.0.2"
+target-lexicon = "0.0.3"
 
 [features]
 default = ["disas", "wasm"]

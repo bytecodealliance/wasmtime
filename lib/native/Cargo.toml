@@ -9,7 +9,7 @@ readme = "README.md"
 
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.14.0", default-features = false }
-target-lexicon = { version = "0.0.2", default-features = false }
+target-lexicon = { version = "0.0.3", default-features = false }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 # Due to https://github.com/gz/rust-cpuid/issues/27, stay at 3.x for now.

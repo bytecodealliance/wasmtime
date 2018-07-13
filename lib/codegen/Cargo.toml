@@ -15,7 +15,7 @@ cranelift-entity = { path = "../entity", version = "0.14.0", default-features = 
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 hashmap_core = { version = "0.1.8", optional = true }
-target-lexicon = { version = "0.0.2", default-features = false }
+target-lexicon = { version = "0.0.3", default-features = false }
 # It is a goal of the cranelift-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
