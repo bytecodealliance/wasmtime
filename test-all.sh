@@ -3,10 +3,12 @@ set -euo pipefail
 
 # This is the top-level test script:
 #
+# - Check code formatting.
 # - Make a debug build.
 # - Make a release build.
 # - Run unit tests for all Rust crates (including the filetests)
 # - Build API documentation.
+# - Optionally, run clippy and fuzzing.
 #
 # All tests run by this script should be passing at all times.
 
@@ -85,7 +87,11 @@ if rustup toolchain list | grep -q nightly; then
         echo "installing cargo-fuzz"
         cargo +nightly install cargo-fuzz
     fi
-    ASAN_OPTIONS=detect_leaks=0 cargo +nightly fuzz run fuzz_translate_module "$topdir/fuzz/corpus/fuzz_translate_module/ffaefab69523eb11935a9b420d58826c8ea65c4c"
+
+    fuzz_module="ffaefab69523eb11935a9b420d58826c8ea65c4c"
+    ASAN_OPTIONS=detect_leaks=0 \
+    cargo +nightly fuzz run fuzz_translate_module \
+        "$topdir/fuzz/corpus/fuzz_translate_module/$fuzz_module"
 else
     echo "nightly toolchain not found, skipping fuzz target integration test"
 fi

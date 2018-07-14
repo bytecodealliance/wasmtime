@@ -1,5 +1,10 @@
 #!/bin/bash
 set -euo pipefail
+
+# This is a convenience script for maintainers publishing a new version of
+# Cranelift to crates.io. To use, bump the version number below, run the
+# script, and then run the commands that the script prints.
+
 topdir=$(dirname "$0")
 cd "$topdir"
 
@@ -12,9 +17,12 @@ version="0.14.0"
 echo "Updating crate versions to $version"
 for crate in . lib/*; do
     # Update the version number of this crate to $version.
-    sed -i.bk -e "s/^version = .*/version = \"$version\"/" "$crate/Cargo.toml"
+    sed -i.bk -e "s/^version = .*/version = \"$version\"/" \
+        "$crate/Cargo.toml"
+
     # Update the required version number of any cranelift* dependencies.
-    sed -i.bk -e "/^cranelift/s/version = \"[^\"]*\"/version = \"$version\"/" "$crate/Cargo.toml"
+    sed -i.bk -e "/^cranelift/s/version = \"[^\"]*\"/version = \"$version\"/" \
+        "$crate/Cargo.toml"
 done
 
 # Update our local Cargo.lock (not checked in).
@@ -27,8 +35,10 @@ cargo update
 
 echo git commit -a -m "\"Bump version to $version"\"
 echo git push
-for crate in entity codegen frontend native reader wasm module simplejit faerie umbrella ; do
+for crate in \
+    entity codegen frontend native \
+    reader wasm module simplejit \
+    faerie umbrella
+do
     echo cargo publish --manifest-path "lib/$crate/Cargo.toml"
 done
-echo
-echo Then, go to https://github.com/CraneStation/cranelift/releases/ and define a new release.
