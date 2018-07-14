@@ -55,8 +55,9 @@ Cranelift requires Python 2.7 or Python 3 to build.
 Planned uses
 ------------
 
-Cranelift is designed to be a code generator for WebAssembly, but it is general enough to be useful
-elsewhere too. The initial planned uses that affected its design are:
+Cranelift is designed to be a code generator for WebAssembly, but it is general
+enough to be useful elsewhere too. The initial planned uses that affected its
+design are:
 
 1. `WebAssembly compiler for the SpiderMonkey engine in Firefox
    <spidermonkey.rst#phase-1-webassembly>`_.
@@ -67,23 +68,17 @@ elsewhere too. The initial planned uses that affected its design are:
 Building Cranelift
 ------------------
 
-Cranelift is using the Cargo package manager format. First, ensure you have
-installed a current stable rust (stable, beta, and nightly should all work, but
-only stable and beta are tested consistently). Then, change the working
-directory to your clone of cranelift and run::
+Cranelift uses a `conventional Cargo build process
+<https://doc.rust-lang.org/cargo/guide/working-on-an-existing-project.html>`_.
 
-    cargo build
+Cranelift consists of a collection of crates, and uses a `Cargo Workspace
+<https://doc.rust-lang.org/book/second-edition/ch14-03-cargo-workspaces.html>`_,
+so for some cargo commands, such as
+``cargo test``, the ``--all`` is needed to tell cargo to visit all
+of the crates.
 
-This will create a *target/debug* directory where you can find the generated
-binary.
-
-To build the optimized binary for release::
-
-    cargo build --release
-
-You can then run tests with::
-
-    ./test-all.sh
+``test-all.sh`` at the top level is a script which runs all the cargo
+tests and also performs code format, lint, and documentation checks.
 
 Building with `no_std`
 ----------------------
