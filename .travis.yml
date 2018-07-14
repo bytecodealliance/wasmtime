@@ -1,3 +1,5 @@
+# Travis CI script. See https://travis-ci.org/ for more info.
+
 language: rust
 rust:
     - stable
@@ -7,6 +9,8 @@ rust:
     - nightly
 matrix:
     allow_failures:
+        # We try to be compatible with beta and nightly, but they occasionally
+        # fail, so we don't allow them to hold up people using stable.
         - rust: beta
         - rust: nightly
 dist: trusty
