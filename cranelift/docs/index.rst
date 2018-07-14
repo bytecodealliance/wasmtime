@@ -1,5 +1,5 @@
 Cranelift Code Generator
-=======================
+========================
 
 Contents:
 
