@@ -1,6 +1,6 @@
-*************************
+**************************
 Cranelift compared to LLVM
-*************************
+**************************
 
 `LLVM <https://llvm.org>`_ is a collection of compiler components implemented as
 a set of C++ libraries. It can be used to build both JIT compilers and static
