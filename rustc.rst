@@ -1,6 +1,6 @@
-=================
+==================
 Cranelift in Rustc
-=================
+==================
 
 One goal for Cranelift is to be usable as a backend suitable for compiling Rust
 in debug mode. This mode doesn't require a lot of mid-level optimization, and it

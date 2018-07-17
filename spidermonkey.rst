@@ -1,6 +1,6 @@
-========================
+=========================
 Cranelift in SpiderMonkey
-========================
+=========================
 
 `SpiderMonkey <https://developer.mozilla.org/en-US/docs/Mozilla/Projects/SpiderMonkey>`_ is the
 JavaScript and WebAssembly engine in Firefox. Cranelift is designed to be used in SpiderMonkey with
