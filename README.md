@@ -54,11 +54,11 @@ Cranelift is designed to be a code generator for WebAssembly, but it is
 general enough to be useful elsewhere too. The initial planned uses that
 affected its design are:
 
-1.  [WebAssembly compiler for the SpiderMonkey engine in
+ - [WebAssembly compiler for the SpiderMonkey engine in
     Firefox](spidermonkey.md#phase-1-webassembly).
-2.  [Backend for the IonMonkey JavaScript JIT compiler in
+ - [Backend for the IonMonkey JavaScript JIT compiler in
     Firefox](spidermonkey.md#phase-2-ionmonkey).
-3.  [Debug build backend for the Rust compiler](rustc.md).
+ - [Debug build backend for the Rust compiler](rustc.md).
 
 Building Cranelift
 ------------------
