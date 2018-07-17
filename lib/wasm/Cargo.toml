@@ -9,7 +9,7 @@ readme = "README.md"
 keywords = ["webassembly", "wasm"]
 
 [dependencies]
-wasmparser = { version = "0.17.0", default-features = false }
+wasmparser = { version = "0.17.1", default-features = false }
 cranelift-codegen = { path = "../codegen", version = "0.15.0", default-features = false }
 cranelift-frontend = { path = "../frontend", version = "0.15.0", default-features = false }
 hashmap_core = { version = "0.1.8", optional = true }
