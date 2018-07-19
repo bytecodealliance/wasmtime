@@ -544,10 +544,9 @@ where
             Some(entry) => self.position.ebb.unwrap() == entry,
         };
         !is_entry && self.func_ctx.ssa.is_sealed(self.position.ebb.unwrap())
-            && self.func_ctx
+            && !self.func_ctx
                 .ssa
-                .predecessors(self.position.ebb.unwrap())
-                .is_empty()
+                .has_any_predecessors(self.position.ebb.unwrap())
     }
 
     /// Returns `true` if and only if no instructions have been added since the last call to
