@@ -38,6 +38,7 @@ where
 {
     // Records for every variable and for every relevant block, the last definition of
     // the variable in the block.
+    // TODO: Consider a sparse representation rather than EntityMap-of-EntityMap.
     variables: EntityMap<Variable, EntityMap<Block, PackedOption<Value>>>,
     // Records the position of the basic blocks and the list of values used but not defined in the
     // block.
