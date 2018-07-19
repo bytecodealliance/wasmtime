@@ -3,9 +3,9 @@
 use cranelift_codegen::timing;
 use environ::{ModuleEnvironment, WasmError, WasmResult};
 use sections_translator::{
-    parse_data_section, parse_elements_section, parse_export_section, parse_function_section,
-    parse_function_signatures, parse_global_section, parse_import_section, parse_memory_section,
-    parse_start_section, parse_table_section,
+    parse_code_section, parse_data_section, parse_elements_section, parse_export_section,
+    parse_function_section, parse_function_signatures, parse_global_section, parse_import_section,
+    parse_memory_section, parse_start_section, parse_table_section,
 };
 use wasmparser::{Parser, ParserInput, ParserState, SectionCode, WasmDecoder};
 
@@ -94,19 +94,7 @@ pub fn translate_module<'data>(
             ParserState::BeginSection {
                 code: SectionCode::Code,
                 ..
-            } => loop {
-                match *parser.read() {
-                    ParserState::BeginFunctionBody { .. } => {}
-                    ParserState::EndSection => break,
-                    ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
-                    ref s => panic!("wrong content in code section: {:?}", s),
-                }
-                let mut reader = parser.create_binary_reader();
-                let size = reader.bytes_remaining();
-                environ.define_function_body(reader
-                    .read_bytes(size)
-                    .map_err(WasmError::from_binary_reader_error)?)?;
-            },
+            } => parse_code_section(&mut parser, environ)?,
             ParserState::EndSection => {
                 next_input = ParserInput::Default;
             }

@@ -397,3 +397,24 @@ pub fn parse_elements_section(
     }
     Ok(())
 }
+
+/// Parses every function body in the code section and defines the corresponding function.
+pub fn parse_code_section<'data>(
+    parser: &mut Parser<'data>,
+    environ: &mut ModuleEnvironment<'data>,
+) -> WasmResult<()> {
+    loop {
+        match *parser.read() {
+            ParserState::BeginFunctionBody { .. } => {}
+            ParserState::EndSection => break,
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("wrong content in code section: {:?}", s),
+        }
+        let mut reader = parser.create_binary_reader();
+        let size = reader.bytes_remaining();
+        environ.define_function_body(reader
+            .read_bytes(size)
+            .map_err(WasmError::from_binary_reader_error)?)?;
+    }
+    Ok(())
+}
