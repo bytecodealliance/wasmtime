@@ -18,6 +18,8 @@
 // The build script expects to be run from the directory where this build.rs file lives. The
 // current directory is used to find the sources.
 
+extern crate cranelift_codegen_meta as meta;
+
 use std::env;
 use std::process;
 
@@ -66,11 +68,34 @@ fn main() {
         .arg("-B")
         .arg(build_script)
         .arg("--out-dir")
-        .arg(out_dir)
+        .arg(out_dir.clone())
         .status()
         .expect("Failed to launch second-level build script; is python installed?");
     if !status.success() {
         process::exit(status.code().unwrap());
+    }
+
+    // DEVELOPMENT:
+    // ------------------------------------------------------------------------
+    // Now that the Python build process is complete, generate files that are
+    // emitted by the `cretonne_codegen_meta` crate.
+    // ------------------------------------------------------------------------
+
+    // Identify the directory of the Rust codegen-meta external crate.
+    let rust_meta_dir = crate_dir
+        .parent()
+        .map(|d| d.join("codegen-meta"))
+        .unwrap_or_else(|| {
+            eprintln!("Error: Could not find path to lib/codegen-meta crate.");
+            process::exit(1);
+        });
+
+    if let Err(err) = meta::gen_types::generate("new_types.rs", &out_dir) {
+        eprintln!("Error: {}", err);
+        process::exit(1);
+    } else if let Err(err) = meta::gen_build_deps::generate(&rust_meta_dir) {
+        eprintln!("Error: {}", err);
+        process::exit(1);
     }
 }
 
