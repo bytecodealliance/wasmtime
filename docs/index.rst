@@ -41,7 +41,7 @@ Rust Crate Documentation
 `cranelift-faerie <https://docs.rs/cranelift-faerie/>`_
     This crate provides a faerie-based backend for `cranelift-module`, which
     emits native object files using the
-    `faerie <https://crates.io/crates/faerie/>`_ library.
+    `faerie <https://github.com/m4b/faerie>`_ library.
 
 `cranelift-simplejit <https://docs.rs/cranelift-simplejit/>`_
     This crate provides a simple JIT backend for `cranelift-module`, which
