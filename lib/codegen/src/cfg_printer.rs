@@ -2,7 +2,7 @@
 
 use std::fmt::{Display, Formatter, Result, Write};
 
-use flowgraph::ControlFlowGraph;
+use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir::instructions::BranchInfo;
 use ir::Function;
 
@@ -61,7 +61,7 @@ impl<'a> CFGPrinter<'a> {
 
     fn cfg_connections(&self, w: &mut Write) -> Result {
         for ebb in &self.func.layout {
-            for (parent, inst) in self.cfg.pred_iter(ebb) {
+            for BasicBlock { ebb: parent, inst } in self.cfg.pred_iter(ebb) {
                 writeln!(w, "    {}:{} -> {}", parent, inst, ebb)?;
             }
         }

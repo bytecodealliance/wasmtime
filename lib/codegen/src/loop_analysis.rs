@@ -4,7 +4,7 @@
 use dominator_tree::DominatorTree;
 use entity::EntityMap;
 use entity::{Keys, PrimaryMap};
-use flowgraph::ControlFlowGraph;
+use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir::{Ebb, Function, Layout};
 use packed_option::PackedOption;
 use std::vec::Vec;
@@ -137,7 +137,10 @@ impl LoopAnalysis {
     ) {
         // We traverse the CFG in reverse postorder
         for &ebb in domtree.cfg_postorder().iter().rev() {
-            for (_, pred_inst) in cfg.pred_iter(ebb) {
+            for BasicBlock {
+                inst: pred_inst, ..
+            } in cfg.pred_iter(ebb)
+            {
                 // If the ebb dominates one of its predecessors it is a back edge
                 if domtree.dominates(ebb, pred_inst, layout) {
                     // This ebb is a loop header, so we create its associated loop
@@ -163,7 +166,11 @@ impl LoopAnalysis {
         // We handle each loop header in reverse order, corresponding to a pseudo postorder
         // traversal of the graph.
         for lp in self.loops().rev() {
-            for (pred, pred_inst) in cfg.pred_iter(self.loops[lp].header) {
+            for BasicBlock {
+                ebb: pred,
+                inst: pred_inst,
+            } in cfg.pred_iter(self.loops[lp].header)
+            {
                 // We follow the back edges
                 if domtree.dominates(self.loops[lp].header, pred_inst, layout) {
                     stack.push(pred);
@@ -213,7 +220,7 @@ impl LoopAnalysis {
                 // Now we have handled the popped node and need to continue the DFS by adding the
                 // predecessors of that node
                 if let Some(continue_dfs) = continue_dfs {
-                    for (pred, _) in cfg.pred_iter(continue_dfs) {
+                    for BasicBlock { ebb: pred, .. } in cfg.pred_iter(continue_dfs) {
                         stack.push(pred)
                     }
                 }

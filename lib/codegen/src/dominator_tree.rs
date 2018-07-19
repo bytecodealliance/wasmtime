@@ -177,19 +177,19 @@ impl DominatorTree {
         layout: &Layout,
     ) -> BasicBlock {
         loop {
-            match self.rpo_cmp_ebb(a.0, b.0) {
+            match self.rpo_cmp_ebb(a.ebb, b.ebb) {
                 Ordering::Less => {
                     // `a` comes before `b` in the RPO. Move `b` up.
-                    let idom = self.nodes[b.0].idom.expect("Unreachable basic block?");
-                    b = (
+                    let idom = self.nodes[b.ebb].idom.expect("Unreachable basic block?");
+                    b = BasicBlock::new(
                         layout.inst_ebb(idom).expect("Dangling idom instruction"),
                         idom,
                     );
                 }
                 Ordering::Greater => {
                     // `b` comes before `a` in the RPO. Move `a` up.
-                    let idom = self.nodes[a.0].idom.expect("Unreachable basic block?");
-                    a = (
+                    let idom = self.nodes[a.ebb].idom.expect("Unreachable basic block?");
+                    a = BasicBlock::new(
                         layout.inst_ebb(idom).expect("Dangling idom instruction"),
                         idom,
                     );
@@ -198,10 +198,13 @@ impl DominatorTree {
             }
         }
 
-        debug_assert_eq!(a.0, b.0, "Unreachable block passed to common_dominator?");
+        debug_assert_eq!(
+            a.ebb, b.ebb,
+            "Unreachable block passed to common_dominator?"
+        );
 
         // We're in the same EBB. The common dominator is the earlier instruction.
-        if layout.cmp(a.1, b.1) == Ordering::Less {
+        if layout.cmp(a.inst, b.inst) == Ordering::Less {
             a
         } else {
             b
@@ -420,7 +423,7 @@ impl DominatorTree {
         // Note that during the first pass, `rpo_number` is 1 for reachable blocks that haven't
         // been visited yet, 0 for unreachable blocks.
         let mut reachable_preds = cfg.pred_iter(ebb)
-            .filter(|&(pred, _)| self.nodes[pred].rpo_number > 1);
+            .filter(|&BasicBlock { ebb: pred, .. }| self.nodes[pred].rpo_number > 1);
 
         // The RPO must visit at least one predecessor before this node.
         let mut idom = reachable_preds
@@ -431,7 +434,7 @@ impl DominatorTree {
             idom = self.common_dominator(idom, pred, layout);
         }
 
-        idom.1
+        idom.inst
     }
 }
 

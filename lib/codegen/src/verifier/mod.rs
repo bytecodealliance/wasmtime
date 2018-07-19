@@ -60,7 +60,7 @@ use self::flags::verify_flags;
 use dbg::DisplayList;
 use dominator_tree::DominatorTree;
 use entity::SparseSet;
-use flowgraph::ControlFlowGraph;
+use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir;
 use ir::entities::AnyEntity;
 use ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
@@ -990,8 +990,12 @@ impl<'a> Verifier<'a> {
                 return err!(ebb, "cfg had unexpected successor(s) {:?}", excess_succs);
             }
 
-            expected_preds.extend(self.expected_cfg.pred_iter(ebb).map(|(_, inst)| inst));
-            got_preds.extend(cfg.pred_iter(ebb).map(|(_, inst)| inst));
+            expected_preds.extend(
+                self.expected_cfg
+                    .pred_iter(ebb)
+                    .map(|BasicBlock { inst, .. }| inst),
+            );
+            got_preds.extend(cfg.pred_iter(ebb).map(|BasicBlock { inst, .. }| inst));
 
             let missing_preds: Vec<Inst> = expected_preds.difference(&got_preds).cloned().collect();
             if !missing_preds.is_empty() {
