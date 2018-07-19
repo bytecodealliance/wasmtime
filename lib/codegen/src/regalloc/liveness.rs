@@ -176,7 +176,7 @@
 //! There is some room for improvement.
 
 use entity::SparseMap;
-use flowgraph::ControlFlowGraph;
+use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir::dfg::ValueDef;
 use ir::{Ebb, Function, Inst, Layout, ProgramPoint, Value};
 use isa::{EncInfo, OperandConstraint, TargetIsa};
@@ -272,7 +272,11 @@ fn extend_to_use(
     while let Some(livein) = worklist.pop() {
         // We've learned that the value needs to be live-in to the `livein` EBB.
         // Make sure it is also live at all predecessor branches to `livein`.
-        for (pred, branch) in cfg.pred_iter(livein) {
+        for BasicBlock {
+            ebb: pred,
+            inst: branch,
+        } in cfg.pred_iter(livein)
+        {
             if lr.extend_in_ebb(pred, branch, &func.layout, forest) {
                 // This predecessor EBB also became live-in. We need to process it later.
                 worklist.push(pred);

@@ -1,7 +1,7 @@
 //! Verify CPU flags values.
 
 use entity::{EntityMap, SparseSet};
-use flowgraph::ControlFlowGraph;
+use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir;
 use ir::instructions::BranchInfo;
 use isa;
@@ -61,7 +61,7 @@ impl<'a> FlagsVerifier<'a> {
                     // Revisit any predecessor blocks the first time we see a live-in for `ebb`.
                     None => {
                         self.livein[ebb] = value.into();
-                        for (pred, _) in self.cfg.pred_iter(ebb) {
+                        for BasicBlock { ebb: pred, .. } in self.cfg.pred_iter(ebb) {
                             worklist.insert(pred);
                         }
                     }

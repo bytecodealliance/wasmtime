@@ -65,7 +65,7 @@
 //! instructions. These loops will remain in the program.
 
 use cursor::{Cursor, CursorPosition, FuncCursor};
-use flowgraph::ControlFlowGraph;
+use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir::{self, Ebb, Inst, InstBuilder, InstructionData, Opcode, Type, Value, ValueDef};
 use std::iter;
 use std::vec::Vec;
@@ -126,7 +126,7 @@ fn split_any(
 
     // We have split the value requested, and now we may need to fix some EBB predecessors.
     while let Some(repair) = repairs.pop() {
-        for (_, inst) in cfg.pred_iter(repair.ebb) {
+        for BasicBlock { inst, .. } in cfg.pred_iter(repair.ebb) {
             let branch_opc = pos.func.dfg[inst].opcode();
             debug_assert!(
                 branch_opc.is_branch(),

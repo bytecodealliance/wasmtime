@@ -1,6 +1,6 @@
 //! Liveness verifier.
 
-use flowgraph::ControlFlowGraph;
+use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir::entities::AnyEntity;
 use ir::{ExpandedProgramPoint, Function, Inst, ProgramOrder, ProgramPoint, Value};
 use isa::TargetIsa;
@@ -194,7 +194,7 @@ impl<'a> LivenessVerifier<'a> {
             // Check all the EBBs in the interval independently.
             loop {
                 // If `val` is live-in at `ebb`, it must be live at all the predecessors.
-                for (_, pred) in self.cfg.pred_iter(ebb) {
+                for BasicBlock { inst: pred, .. } in self.cfg.pred_iter(ebb) {
                     if !self.live_at_use(lr, pred) {
                         return err!(
                             pred,

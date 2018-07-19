@@ -31,7 +31,20 @@ use std::mem;
 use timing;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
-pub type BasicBlock = (Ebb, Inst);
+#[derive(PartialEq, Eq)]
+pub struct BasicBlock {
+    /// Enclosing Ebb key.
+    pub ebb: Ebb,
+    /// Last instruction in the basic block.
+    pub inst: Inst,
+}
+
+impl BasicBlock {
+    /// Convenient method to construct new BasicBlock.
+    pub fn new(ebb: Ebb, inst: Inst) -> Self {
+        Self { ebb, inst }
+    }
+}
 
 /// A container for the successors and predecessors of some Ebb.
 #[derive(Clone, Default)]
@@ -110,11 +123,11 @@ impl ControlFlowGraph {
         for inst in func.layout.ebb_insts(ebb) {
             match func.dfg.analyze_branch(inst) {
                 BranchInfo::SingleDest(dest, _) => {
-                    self.add_edge((ebb, inst), dest);
+                    self.add_edge(BasicBlock::new(ebb, inst), dest);
                 }
                 BranchInfo::Table(jt) => {
                     for (_, dest) in func.jump_tables[jt].entries() {
-                        self.add_edge((ebb, inst), dest);
+                        self.add_edge(BasicBlock::new(ebb, inst), dest);
                     }
                 }
                 BranchInfo::NotABranch => {}
@@ -148,12 +161,12 @@ impl ControlFlowGraph {
     }
 
     fn add_edge(&mut self, from: BasicBlock, to: Ebb) {
-        self.data[from.0]
+        self.data[from.ebb]
             .successors
             .insert(to, &mut self.succ_forest, &());
         self.data[to]
             .predecessors
-            .insert(from.1, from.0, &mut self.pred_forest, &());
+            .insert(from.inst, from.ebb, &mut self.pred_forest, &());
     }
 
     /// Get an iterator over the CFG predecessors to `ebb`.
@@ -186,7 +199,7 @@ impl<'a> Iterator for PredIter<'a> {
     type Item = BasicBlock;
 
     fn next(&mut self) -> Option<BasicBlock> {
-        self.0.next().map(|(i, e)| (e, i))
+        self.0.next().map(|(i, e)| BasicBlock::new(e, i))
     }
 }
 
@@ -268,10 +281,22 @@ mod tests {
             assert_eq!(ebb1_predecessors.len(), 2);
             assert_eq!(ebb2_predecessors.len(), 2);
 
-            assert_eq!(ebb1_predecessors.contains(&(ebb0, jmp_ebb0_ebb1)), true);
-            assert_eq!(ebb1_predecessors.contains(&(ebb1, br_ebb1_ebb1)), true);
-            assert_eq!(ebb2_predecessors.contains(&(ebb0, br_ebb0_ebb2)), true);
-            assert_eq!(ebb2_predecessors.contains(&(ebb1, jmp_ebb1_ebb2)), true);
+            assert_eq!(
+                ebb1_predecessors.contains(&BasicBlock::new(ebb0, jmp_ebb0_ebb1)),
+                true
+            );
+            assert_eq!(
+                ebb1_predecessors.contains(&BasicBlock::new(ebb1, br_ebb1_ebb1)),
+                true
+            );
+            assert_eq!(
+                ebb2_predecessors.contains(&BasicBlock::new(ebb0, br_ebb0_ebb2)),
+                true
+            );
+            assert_eq!(
+                ebb2_predecessors.contains(&BasicBlock::new(ebb1, jmp_ebb1_ebb2)),
+                true
+            );
 
             assert_eq!(ebb0_successors, [ebb1, ebb2]);
             assert_eq!(ebb1_successors, [ebb1, ebb2]);
@@ -297,10 +322,22 @@ mod tests {
             assert_eq!(ebb1_predecessors.len(), 2);
             assert_eq!(ebb2_predecessors.len(), 1);
 
-            assert_eq!(ebb1_predecessors.contains(&(ebb0, br_ebb0_ebb1)), true);
-            assert_eq!(ebb1_predecessors.contains(&(ebb1, br_ebb1_ebb1)), true);
-            assert_eq!(ebb2_predecessors.contains(&(ebb0, br_ebb0_ebb2)), false);
-            assert_eq!(ebb2_predecessors.contains(&(ebb1, jmp_ebb1_ebb2)), true);
+            assert_eq!(
+                ebb1_predecessors.contains(&BasicBlock::new(ebb0, br_ebb0_ebb1)),
+                true
+            );
+            assert_eq!(
+                ebb1_predecessors.contains(&BasicBlock::new(ebb1, br_ebb1_ebb1)),
+                true
+            );
+            assert_eq!(
+                ebb2_predecessors.contains(&BasicBlock::new(ebb0, br_ebb0_ebb2)),
+                false
+            );
+            assert_eq!(
+                ebb2_predecessors.contains(&BasicBlock::new(ebb1, jmp_ebb1_ebb2)),
+                true
+            );
 
             assert_eq!(ebb0_successors.collect::<Vec<_>>(), [ebb1]);
             assert_eq!(ebb1_successors.collect::<Vec<_>>(), [ebb1, ebb2]);

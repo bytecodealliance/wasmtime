@@ -9,7 +9,7 @@ use cursor::{Cursor, EncCursor};
 #[cfg(feature = "std")]
 use dbg::DisplayList;
 use dominator_tree::{DominatorTree, DominatorTreePreorder};
-use flowgraph::ControlFlowGraph;
+use flowgraph::{BasicBlock, ControlFlowGraph};
 use fx::FxHashMap;
 use ir::{self, InstBuilder, ProgramOrder};
 use ir::{Ebb, ExpandedProgramPoint, Function, Inst, Value};
@@ -174,7 +174,11 @@ impl<'a> Context<'a> {
         debug_assert_eq!(num_params, self.func.dfg.num_ebb_params(ebb));
         // The only way a parameter value can interfere with a predecessor branch is if the EBB is
         // dominating the predecessor branch. That is, we are looking for loop back-edges.
-        for (pred_ebb, pred_inst) in self.cfg.pred_iter(ebb) {
+        for BasicBlock {
+            ebb: pred_ebb,
+            inst: pred_inst,
+        } in self.cfg.pred_iter(ebb)
+        {
             // The quick pre-order dominance check is accurate because the EBB parameter is defined
             // at the top of the EBB before any branches.
             if !self.preorder.dominates(ebb, pred_ebb) {
@@ -211,7 +215,11 @@ impl<'a> Context<'a> {
     fn union_pred_args(&mut self, ebb: Ebb, argnum: usize) {
         let param = self.func.dfg.ebb_params(ebb)[argnum];
 
-        for (pred_ebb, pred_inst) in self.cfg.pred_iter(ebb) {
+        for BasicBlock {
+            ebb: pred_ebb,
+            inst: pred_inst,
+        } in self.cfg.pred_iter(ebb)
+        {
             let arg = self.func.dfg.inst_variable_args(pred_inst)[argnum];
 
             // Never coalesce incoming function parameters on the stack. These parameters are
@@ -484,7 +492,11 @@ impl<'a> Context<'a> {
         // not loop backedges.
         debug_assert!(self.predecessors.is_empty());
         debug_assert!(self.backedges.is_empty());
-        for (pred_ebb, pred_inst) in self.cfg.pred_iter(ebb) {
+        for BasicBlock {
+            ebb: pred_ebb,
+            inst: pred_inst,
+        } in self.cfg.pred_iter(ebb)
+        {
             if self.preorder.dominates(ebb, pred_ebb) {
                 self.backedges.push(pred_inst);
             } else {
@@ -915,7 +927,10 @@ impl VirtualCopies {
                 }
 
                 // This EBB hasn't been seen before.
-                for (_, pred_inst) in cfg.pred_iter(ebb) {
+                for BasicBlock {
+                    inst: pred_inst, ..
+                } in cfg.pred_iter(ebb)
+                {
                     self.branches.push((pred_inst, ebb));
                 }
                 last_ebb = Some(ebb);
