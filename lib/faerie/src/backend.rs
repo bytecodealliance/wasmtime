@@ -225,7 +225,7 @@ impl Backend for FaerieBackend {
                 .link(faerie::Link {
                     from: name,
                     to,
-                    at: offset as usize,
+                    at: u64::from(offset),
                 })
                 .map_err(|e| ModuleError::Backend(e.to_string()))?;
         }
@@ -239,7 +239,7 @@ impl Backend for FaerieBackend {
                 .link(faerie::Link {
                     from: name,
                     to,
-                    at: offset as usize,
+                    at: u64::from(offset),
                 })
                 .map_err(|e| ModuleError::Backend(e.to_string()))?;
         }
@@ -389,7 +389,7 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
                 faerie::Link {
                     from: self.name,
                     to: &ref_name,
-                    at: offset as usize,
+                    at: u64::from(offset),
                 },
                 faerie::RelocOverride {
                     reloc: raw_reloc,

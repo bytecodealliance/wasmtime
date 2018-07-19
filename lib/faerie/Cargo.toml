@@ -11,8 +11,8 @@ readme = "README.md"
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.16.1" }
 cranelift-module = { path = "../module", version = "0.16.1" }
-faerie = "0.4.3"
-goblin = "0.0.15"
+faerie = "0.4.4"
+goblin = "0.0.17"
 failure = "0.1.1"
 target-lexicon = "0.0.3"
 
