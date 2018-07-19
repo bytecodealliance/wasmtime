@@ -11,7 +11,7 @@ readme = "README.md"
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.16.1", default-features = false }
 cranelift-entity = { path = "../entity", version = "0.16.1", default-features = false }
-hashmap_core = { version = "0.1.8", optional = true }
+hashmap_core = { version = "0.1.9", optional = true }
 failure = "0.1.1"
 
 [features]

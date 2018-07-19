@@ -12,7 +12,7 @@ keywords = ["webassembly", "wasm"]
 wasmparser = { version = "0.17.2", default-features = false }
 cranelift-codegen = { path = "../codegen", version = "0.16.1", default-features = false }
 cranelift-frontend = { path = "../frontend", version = "0.16.1", default-features = false }
-hashmap_core = { version = "0.1.8", optional = true }
+hashmap_core = { version = "0.1.9", optional = true }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 target-lexicon = { version = "0.0.3", default-features = false }
