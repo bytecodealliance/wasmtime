@@ -93,7 +93,7 @@ impl<Variable> BlockData<Variable> {
             BlockData::EbbBody { .. } => panic!("you can't add a predecessor to a body block"),
             BlockData::EbbHeader(ref mut data) => {
                 debug_assert!(!data.sealed, "sealed blocks cannot accept new predecessors");
-                data.predecessors.push((pred, inst));
+                data.predecessors.push(PredBlock::new(pred, inst));
             }
         }
     }
@@ -105,17 +105,28 @@ impl<Variable> BlockData<Variable> {
                 // in all non-pathological cases
                 let pred: usize = data.predecessors
                     .iter()
-                    .position(|pair| pair.1 == inst)
+                    .position(|&PredBlock { branch, .. }| branch == inst)
                     .expect("the predecessor you are trying to remove is not declared");
-                data.predecessors.swap_remove(pred).0
+                data.predecessors.swap_remove(pred).block
             }
         }
     }
 }
 
+struct PredBlock {
+    block: Block,
+    branch: Inst,
+}
+
+impl PredBlock {
+    fn new(block: Block, branch: Inst) -> Self {
+        Self { block, branch }
+    }
+}
+
 struct EbbHeaderBlockData<Variable> {
     // The predecessors of the Ebb header block, with the block and branch instruction.
-    predecessors: Vec<(Block, Inst)>,
+    predecessors: Vec<PredBlock>,
     // A ebb header block is sealed if all of its predecessors have been declared.
     sealed: bool,
     // The ebb which this block is part of.
@@ -307,7 +318,7 @@ where
                 if data.sealed {
                     if data.predecessors.len() == 1 {
                         // Only one predecessor, straightforward case
-                        UseVarCases::SealedOnePredecessor(data.predecessors[0].0)
+                        UseVarCases::SealedOnePredecessor(data.predecessors[0].block)
                     } else {
                         let val = func.dfg.append_ebb_param(data.ebb, ty);
                         UseVarCases::SealedMultiplePredecessors(val, data.ebb)
@@ -504,7 +515,7 @@ where
             self.predecessors(dest_ebb)
                 .iter()
                 .rev()
-                .map(|&(pred, _)| Call::UseVar(pred)),
+                .map(|&PredBlock { block: pred, .. }| Call::UseVar(pred)),
         );
         self.calls = calls;
     }
@@ -580,7 +591,11 @@ where
                 // to keep the ebb argument. To avoid borrowing `self` for the whole loop,
                 // temporarily detach the predecessors list and replace it with an empty list.
                 let mut preds = mem::replace(self.predecessors_mut(dest_ebb), Vec::new());
-                for &mut (ref mut pred_block, ref mut last_inst) in &mut preds {
+                for &mut PredBlock {
+                    block: ref mut pred_block,
+                    branch: ref mut last_inst,
+                } in &mut preds
+                {
                     // We already did a full `use_var` above, so we can do just the fast path.
                     let pred_val = self.variables
                         .get(temp_arg_var)
@@ -657,7 +672,7 @@ where
     }
 
     /// Returns the list of `Ebb`s that have been declared as predecessors of the argument.
-    pub fn predecessors(&self, ebb: Ebb) -> &[(Block, Inst)] {
+    fn predecessors(&self, ebb: Ebb) -> &[PredBlock] {
         let block = self.header_block(ebb);
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("should not happen"),
@@ -665,8 +680,13 @@ where
         }
     }
 
+    /// Returns whether the given Ebb has any predecessor or not.
+    pub fn has_any_predecessors(&self, ebb: Ebb) -> bool {
+        !self.predecessors(ebb).is_empty()
+    }
+
     /// Same as predecessors, but for &mut.
-    pub fn predecessors_mut(&mut self, ebb: Ebb) -> &mut Vec<(Block, Inst)> {
+    fn predecessors_mut(&mut self, ebb: Ebb) -> &mut Vec<PredBlock> {
         let block = self.header_block(ebb);
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("should not happen"),
