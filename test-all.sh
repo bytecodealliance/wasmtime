@@ -75,10 +75,10 @@ if rustup toolchain list | grep -q nightly; then
         cargo +nightly install cargo-fuzz
     fi
 
-    fuzz_module="ffaefab69523eb11935a9b420d58826c8ea65c4c"
+    fuzz_module="8f0d725b20dcea52335cf521a5bb083833a5241f"
     ASAN_OPTIONS=detect_leaks=0 \
-    cargo +nightly fuzz run fuzz_translate_module \
-        "$topdir/fuzz/corpus/fuzz_translate_module/$fuzz_module"
+    cargo +nightly fuzz run compile \
+        "$topdir/fuzz/corpus/compile/$fuzz_module"
 else
     echo "nightly toolchain not found, skipping fuzz target integration test"
 fi
