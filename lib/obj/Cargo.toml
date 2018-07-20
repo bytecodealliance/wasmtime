@@ -3,6 +3,7 @@ name = "wasmtime_obj"
 version = "0.0.0"
 authors = ["The Cretonne Project Developers"]
 publish = false
+license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
 cretonne-codegen = "0.13.0"
