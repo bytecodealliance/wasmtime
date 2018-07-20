@@ -75,7 +75,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = match state.get_global(builder.func, global_index, environ) {
                 GlobalVariable::Const(val) => val,
                 GlobalVariable::Memory { gv, ty } => {
-                    let addr = builder.ins().global_value(environ.native_pointer(), gv);
+                    let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::new();
                     flags.set_notrap();
                     flags.set_aligned();
@@ -88,7 +88,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             match state.get_global(builder.func, global_index, environ) {
                 GlobalVariable::Const(_) => panic!("global #{} is a constant", global_index),
                 GlobalVariable::Memory { gv, .. } => {
-                    let addr = builder.ins().global_value(environ.native_pointer(), gv);
+                    let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::new();
                     flags.set_notrap();
                     flags.set_aligned();
@@ -1024,7 +1024,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     let addr32 = state.pop1();
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ);
-    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.native_pointer(), builder);
+    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.pointer_type(), builder);
     // Note that we don't set `is_aligned` here, even if the load instruction's
     // alignment immediate says it's aligned, because WebAssembly's immediate
     // field is just a hint, while Cranelift's aligned flag needs a guarantee.
@@ -1048,7 +1048,7 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
 
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ);
-    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.native_pointer(), builder);
+    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.pointer_type(), builder);
     // See the comments in `translate_load` about the flags.
     let flags = MemFlags::new();
     builder

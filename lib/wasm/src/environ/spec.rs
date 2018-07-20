@@ -85,7 +85,7 @@ pub trait FuncEnvironment {
     /// Get the Cranelift integer type to use for native pointers.
     ///
     /// This returns `I64` for 64-bit architectures and `I32` for 32-bit architectures.
-    fn native_pointer(&self) -> ir::Type {
+    fn pointer_type(&self) -> ir::Type {
         ir::Type::int(u16::from(self.triple().pointer_width().unwrap().bits())).unwrap()
     }
 

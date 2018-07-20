@@ -141,7 +141,7 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
     fn vmctx_sig(&self, sigidx: SignatureIndex) -> ir::Signature {
         let mut sig = self.mod_info.signatures[sigidx].clone();
         sig.params.push(ir::AbiParam::special(
-            self.native_pointer(),
+            self.pointer_type(),
             ir::ArgumentPurpose::VMContext,
         ));
         sig
@@ -217,7 +217,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         // The `callee` value is an index into a table of function pointers.
         // Apparently, that table is stored at absolute address 0 in this dummy environment.
         // TODO: Generate bounds checking code.
-        let ptr = self.native_pointer();
+        let ptr = self.pointer_type();
         let callee_offset = if ptr == I32 {
             pos.ins().imul_imm(callee, 4)
         } else {
