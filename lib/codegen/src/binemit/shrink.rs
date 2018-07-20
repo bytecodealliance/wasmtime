@@ -54,7 +54,7 @@ pub fn shrink_instructions(func: &mut Function, isa: &TargetIsa) {
                 if best_enc != enc {
                     func.encodings[inst] = best_enc;
 
-                    dbg!(
+                    debug!(
                         "Shrunk [{}] to [{}] in {}, reducing the size from {} to {}",
                         encinfo.display(enc),
                         encinfo.display(best_enc),

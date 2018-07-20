@@ -316,7 +316,7 @@ impl Layout {
                 next_inst = self.insts[inst].next.expand();
             }
         }
-        dbg!("Renumbered {} program points", seq / MAJOR_STRIDE);
+        debug!("Renumbered {} program points", seq / MAJOR_STRIDE);
     }
 }
 

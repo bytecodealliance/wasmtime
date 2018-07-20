@@ -49,6 +49,10 @@ extern crate failure_derive;
 #[cfg_attr(test, macro_use)]
 extern crate target_lexicon;
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate log;
+
 pub use context::Context;
 pub use legalizer::legalize_function;
 pub use verifier::verify_function;
@@ -60,13 +64,11 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[macro_use]
 pub extern crate cranelift_entity as entity;
 
-#[macro_use]
-pub mod dbg;
-
 pub mod bforest;
 pub mod binemit;
 pub mod cfg_printer;
 pub mod cursor;
+pub mod dbg;
 pub mod dominator_tree;
 pub mod flowgraph;
 pub mod ir;

@@ -34,6 +34,8 @@ term = "0.5.1"
 capstone = { version = "0.4", optional = true }
 wabt = { version = "0.4", optional = true }
 target-lexicon = "0.0.3"
+pretty_env_logger = "0.2.4"
+file-per-thread-logger = "0.1.1"
 
 [features]
 default = ["disas", "wasm"]

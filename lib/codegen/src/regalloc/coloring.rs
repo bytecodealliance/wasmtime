@@ -124,7 +124,7 @@ impl Coloring {
         tracker: &mut LiveValueTracker,
     ) {
         let _tt = timing::ra_coloring();
-        dbg!("Coloring for:\n{}", func.display(isa));
+        debug!("Coloring for:\n{}", func.display(isa));
         let mut ctx = Context {
             usable_regs: isa.allocatable_registers(func),
             cur: EncCursor::new(func, isa),
@@ -156,7 +156,7 @@ impl<'a> Context<'a> {
 
     /// Visit `ebb`, assuming that the immediate dominator has already been visited.
     fn visit_ebb(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
-        dbg!("Coloring {}:", ebb);
+        debug!("Coloring {}:", ebb);
         let mut regs = self.visit_ebb_header(ebb, tracker);
         tracker.drop_dead_params();
         self.divert.clear();
@@ -216,7 +216,7 @@ impl<'a> Context<'a> {
         let mut regs = AvailableRegs::new(&self.usable_regs);
 
         for lv in live.iter().filter(|lv| !lv.is_dead) {
-            dbg!(
+            debug!(
                 "Live-in: {}:{} in {}",
                 lv.value,
                 lv.affinity.display(&self.reginfo),
@@ -294,7 +294,7 @@ impl<'a> Context<'a> {
         tracker: &mut LiveValueTracker,
         regs: &mut AvailableRegs,
     ) -> bool {
-        dbg!(
+        debug!(
             "Coloring {}\n    from {}",
             self.cur.display_inst(inst),
             regs.input.display(&self.reginfo),
@@ -362,7 +362,7 @@ impl<'a> Context<'a> {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
                 let reg = self.divert.reg(lv.value, &self.cur.func.locations);
-                dbg!(
+                debug!(
                     "    kill {} in {} ({} {})",
                     lv.value,
                     self.reginfo.display_regunit(reg),
@@ -380,7 +380,7 @@ impl<'a> Context<'a> {
         }
 
         // This aligns with the "    from" line at the top of the function.
-        dbg!("    glob {}", regs.global.display(&self.reginfo));
+        debug!("    glob {}", regs.global.display(&self.reginfo));
 
         // This flag is set when the solver failed to find a solution for the global defines that
         // doesn't interfere with `regs.global`. We need to rewrite all of `inst`s global defines
@@ -419,7 +419,7 @@ impl<'a> Context<'a> {
         // Finally, we've fully programmed the constraint solver.
         // We expect a quick solution in most cases.
         let output_regs = self.solver.quick_solve(&regs.global).unwrap_or_else(|_| {
-            dbg!("quick_solve failed for {}", self.solver);
+            debug!("quick_solve failed for {}", self.solver);
             self.iterate_solution(throughs, &regs.global, &mut replace_global_defines)
         });
 
@@ -454,7 +454,7 @@ impl<'a> Context<'a> {
         regs.input = output_regs;
         for lv in defs {
             let loc = self.cur.func.locations[lv.value];
-            dbg!(
+            debug!(
                 "    color {} -> {}{}",
                 lv.value,
                 loc.display(&self.reginfo),
@@ -700,7 +700,7 @@ impl<'a> Context<'a> {
                 ConstraintKind::FixedReg(reg) | ConstraintKind::FixedTied(reg) => {
                     self.add_fixed_output(lv.value, op.regclass, reg, throughs);
                     if !lv.is_local && !global_regs.is_avail(op.regclass, reg) {
-                        dbg!(
+                        debug!(
                             "Fixed output {} in {}:{} is not available in global regs",
                             lv.value,
                             op.regclass,
@@ -736,7 +736,7 @@ impl<'a> Context<'a> {
                     let rc = self.reginfo.rc(rci);
                     self.add_fixed_output(lv.value, rc, reg, throughs);
                     if !lv.is_local && !global_regs.is_avail(rc, reg) {
-                        dbg!(
+                        debug!(
                             "ABI output {} in {}:{} is not available in global regs",
                             lv.value,
                             rc,
@@ -812,7 +812,7 @@ impl<'a> Context<'a> {
                         // We need to make sure that fixed output register is compatible with the
                         // global register set.
                         if !lv.is_local && !global_regs.is_avail(op.regclass, reg) {
-                            dbg!(
+                            debug!(
                                 "Tied output {} in {}:{} is not available in global regs",
                                 lv.value,
                                 op.regclass,
@@ -848,7 +848,7 @@ impl<'a> Context<'a> {
                     debug_assert!(added, "Ran out of registers in {}", rc);
                 }
                 Err(SolverError::Global(_value)) => {
-                    dbg!(
+                    debug!(
                         "Not enough global registers for {}, trying as local",
                         _value
                     );
@@ -863,7 +863,7 @@ impl<'a> Context<'a> {
 
     /// Try to add an `rc` variable to the solver from the `throughs` set.
     fn try_add_var(&mut self, rc: RegClass, throughs: &[LiveValue]) -> bool {
-        dbg!("Trying to add a {} reg from {} values", rc, throughs.len());
+        debug!("Trying to add a {} reg from {} values", rc, throughs.len());
 
         for lv in throughs {
             if let Affinity::Reg(rci) = lv.affinity {
@@ -995,7 +995,7 @@ impl<'a> Context<'a> {
     /// the constraints on the instruction operands.
     ///
     fn replace_global_defines(&mut self, inst: Inst, tracker: &mut LiveValueTracker) {
-        dbg!("Replacing global defs on {}", self.cur.display_inst(inst));
+        debug!("Replacing global defs on {}", self.cur.display_inst(inst));
 
         // We'll insert copies *after `inst`. Our caller will move the cursor back.
         self.cur.next_inst();
@@ -1042,14 +1042,14 @@ impl<'a> Context<'a> {
             lv.endpoint = copy;
             lv.is_local = true;
 
-            dbg!(
+            debug!(
                 "  + {} with {} in {}",
                 self.cur.display_inst(copy),
                 local,
                 loc.display(&self.reginfo)
             );
         }
-        dbg!("Done: {}", self.cur.display_inst(inst));
+        debug!("Done: {}", self.cur.display_inst(inst));
     }
 
     /// Process kills on a ghost instruction.
