@@ -1,5 +1,5 @@
-use cretonne_codegen::settings;
-use cretonne_codegen::settings::Configurable;
+use cranelift_codegen::settings;
+use cranelift_codegen::settings::Configurable;
 use faerie::Artifact;
 use wasmtime_runtime;
 

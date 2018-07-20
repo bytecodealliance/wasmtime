@@ -1,5 +1,5 @@
-extern crate cretonne_codegen;
-extern crate cretonne_wasm;
+extern crate cranelift_codegen;
+extern crate cranelift_wasm;
 extern crate faerie;
 extern crate wasmtime_runtime;
 

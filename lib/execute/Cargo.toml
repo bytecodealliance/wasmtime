@@ -1,14 +1,14 @@
 [package]
 name = "wasmtime_execute"
 version = "0.0.0"
-authors = ["The Cretonne Project Developers"]
+authors = ["The Cranelift Project Developers"]
 publish = false
-description = "JIT-style runtime support for WebAsssembly code in Cretonne"
+description = "JIT-style runtime support for WebAsssembly code in Cranelift"
 repository = "https://github.com/sunfishcode/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
-cretonne-codegen = "0.13.0"
-cretonne-wasm = "0.13.0"
+cranelift-codegen = "0.16.1"
+cranelift-wasm = "0.16.1"
 region = "0.3.0"
 wasmtime_runtime = { path = "../runtime" }

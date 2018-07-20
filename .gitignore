@@ -7,6 +7,6 @@ tags
 target
 Cargo.lock
 .*.rustfmt
-cretonne.dbg*
+cranelift.dbg*
 .mypy_cache
 rusty-tags.*

@@ -1,12 +1,12 @@
 [package]
 name = "wasmtime_obj"
 version = "0.0.0"
-authors = ["The Cretonne Project Developers"]
+authors = ["The Cranelift Project Developers"]
 publish = false
 license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
-cretonne-codegen = "0.13.0"
-cretonne-wasm = "0.13.0"
+cranelift-codegen = "0.16.1"
+cranelift-wasm = "0.16.1"
 wasmtime_runtime = { path = "../runtime" }
-faerie = "0.4.2"
+faerie = "0.4.4"

@@ -1,8 +1,8 @@
 //! An `Instance` contains all the runtime state used by execution of a wasm
 //! module.
 
-use cretonne_codegen::ir;
-use cretonne_wasm::GlobalIndex;
+use cranelift_codegen::ir;
+use cranelift_wasm::GlobalIndex;
 use module::{Module, TableElements};
 use DataInitializer;
 

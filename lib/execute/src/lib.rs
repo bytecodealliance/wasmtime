@@ -1,14 +1,14 @@
-//! JIT-style runtime for WebAssembly using Cretonne.
+//! JIT-style runtime for WebAssembly using Cranelift.
 
 #![deny(missing_docs)]
 
-extern crate cretonne_codegen;
-extern crate cretonne_wasm;
+extern crate cranelift_codegen;
+extern crate cranelift_wasm;
 extern crate region;
 extern crate wasmtime_runtime;
 
-use cretonne_codegen::binemit::Reloc;
-use cretonne_codegen::isa::TargetIsa;
+use cranelift_codegen::binemit::Reloc;
+use cranelift_codegen::isa::TargetIsa;
 use region::protect;
 use region::Protection;
 use std::mem::transmute;

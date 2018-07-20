@@ -1,7 +1,7 @@
 [package]
 name = "wasmtime_fuzz"
 version = "0.0.1"
-authors = ["The Cretonne Project Developers"]
+authors = ["The Cranelift Project Developers"]
 publish = false
 
 [package.metadata]
@@ -13,13 +13,13 @@ path = "../lib/runtime"
 [dependencies.wasmtime_execute]
 path = "../lib/execute"
 
-[dependencies.cretonne-codegen]
+[dependencies.cranelift-codegen]
 version = "0.8.0"
 
-[dependencies.cretonne-wasm]
+[dependencies.cranelift-wasm]
 version = "0.8.0"
 
-[dependencies.cretonne-native]
+[dependencies.cranelift-native]
 version = "0.8.0"
 
 [dependencies.libfuzzer-sys]

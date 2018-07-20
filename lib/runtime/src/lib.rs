@@ -1,12 +1,12 @@
-//! Standalone runtime for WebAssembly using Cretonne. Provides functions to translate
+//! Standalone runtime for WebAssembly using Cranelift. Provides functions to translate
 //! `get_global`, `set_global`, `current_memory`, `grow_memory`, `call_indirect` that hardcode in
 //! the translation the base addresses of regions of memory that will hold the globals, tables and
 //! linear memories.
 
 #![deny(missing_docs)]
 
-extern crate cretonne_codegen;
-extern crate cretonne_wasm;
+extern crate cranelift_codegen;
+extern crate cranelift_wasm;
 extern crate target_lexicon;
 extern crate wasmparser;
 
@@ -18,25 +18,25 @@ pub use compilation::Compilation;
 pub use instance::Instance;
 pub use module::Module;
 
-use cretonne_codegen::binemit;
-use cretonne_codegen::cursor::FuncCursor;
-use cretonne_codegen::ir;
-use cretonne_codegen::ir::immediates::Offset32;
-use cretonne_codegen::ir::types::*;
-use cretonne_codegen::ir::{
+use cranelift_codegen::binemit;
+use cranelift_codegen::cursor::FuncCursor;
+use cranelift_codegen::ir;
+use cranelift_codegen::ir::immediates::Offset32;
+use cranelift_codegen::ir::types::*;
+use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef,
     Function, InstBuilder, Signature,
 };
-use cretonne_codegen::isa;
-use cretonne_codegen::settings;
-use cretonne_wasm::{
+use cranelift_codegen::isa;
+use cranelift_codegen::settings;
+use cranelift_wasm::{
     FuncTranslator, FunctionIndex, Global, GlobalIndex, GlobalVariable, Memory, MemoryIndex,
     SignatureIndex, Table, TableIndex, WasmResult,
 };
 use target_lexicon::Triple;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
-pub fn get_func_name(func_index: FunctionIndex) -> cretonne_codegen::ir::ExternalName {
+pub fn get_func_name(func_index: FunctionIndex) -> cranelift_codegen::ir::ExternalName {
     debug_assert!(func_index as u32 as FunctionIndex == func_index);
     ir::ExternalName::user(0, func_index as u32)
 }
@@ -140,7 +140,7 @@ impl<'data> LazyContents<'data> {
 }
 
 /// Object containing the standalone runtime information. To be passed after creation as argument
-/// to `cretonne_wasm::translatemodule`.
+/// to `cranelift_wasm::translatemodule`.
 pub struct ModuleEnvironment<'data, 'module> {
     /// Compilation setting flags.
     pub isa: &'module isa::TargetIsa,
@@ -167,7 +167,7 @@ impl<'data, 'module> ModuleEnvironment<'data, 'module> {
     }
 
     fn native_pointer(&self) -> ir::Type {
-        use cretonne_wasm::FuncEnvironment;
+        use cranelift_wasm::FuncEnvironment;
         self.func_env().native_pointer()
     }
 
@@ -192,10 +192,10 @@ pub struct FuncEnvironment<'module_environment> {
     /// The module-level environment which this function-level environment belongs to.
     pub module: &'module_environment Module,
 
-    /// The Cretonne global holding the base address of the memories vector.
+    /// The Cranelift global holding the base address of the memories vector.
     pub memories_base: Option<ir::GlobalValue>,
 
-    /// The Cretonne global holding the base address of the globals vector.
+    /// The Cranelift global holding the base address of the globals vector.
     pub globals_base: Option<ir::GlobalValue>,
 
     /// The external function declaration for implementing wasm's `current_memory`.
@@ -230,7 +230,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 }
 
-impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {
+impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {
     fn flags(&self) -> &settings::Flags {
         &self.isa.flags()
     }
@@ -322,7 +322,7 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
-        // TODO: Cretonne's call_indirect doesn't implement bounds checking
+        // TODO: Cranelift's call_indirect doesn't implement bounds checking
         // or signature checking, so we need to implement it ourselves.
         debug_assert_eq!(table_index, 0, "non-default tables not supported yet");
         let real_call_args = FuncEnvironment::get_real_call_args(pos.func, call_args);
@@ -401,11 +401,13 @@ impl<'module_environment> cretonne_wasm::FuncEnvironment for FuncEnvironment<'mo
 }
 
 /// This trait is useful for
-/// `cretonne_wasm::translatemodule` because it
+/// `cranelift_wasm::translatemodule` because it
 /// tells how to translate runtime-dependent wasm instructions. These functions should not be
 /// called by the user.
-impl<'data, 'module> cretonne_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data, 'module> {
-    fn get_func_name(&self, func_index: FunctionIndex) -> cretonne_codegen::ir::ExternalName {
+impl<'data, 'module> cranelift_wasm::ModuleEnvironment<'data>
+    for ModuleEnvironment<'data, 'module>
+{
+    fn get_func_name(&self, func_index: FunctionIndex) -> cranelift_codegen::ir::ExternalName {
         get_func_name(func_index)
     }
 
@@ -458,7 +460,7 @@ impl<'data, 'module> cretonne_wasm::ModuleEnvironment<'data> for ModuleEnvironme
         self.module.globals.push(global);
     }
 
-    fn get_global(&self, global_index: GlobalIndex) -> &cretonne_wasm::Global {
+    fn get_global(&self, global_index: GlobalIndex) -> &cranelift_wasm::Global {
         &self.module.globals[global_index]
     }
 
@@ -581,7 +583,7 @@ impl<'data, 'module> ModuleTranslation<'data, 'module> {
         let mut relocations = Vec::new();
         for (i, input) in self.lazy.function_body_inputs.iter().enumerate() {
             let func_index = i + self.module.imported_funcs.len();
-            let mut context = cretonne_codegen::Context::new();
+            let mut context = cranelift_codegen::Context::new();
             context.func.name = get_func_name(func_index);
             context.func.signature =
                 self.module.signatures[self.module.functions[func_index]].clone();

@@ -1,13 +1,13 @@
 //! CLI tool to use the functions provided by the [wasmtime](../wasmtime/index.html)
 //! crate.
 //!
-//! Reads Wasm binary files (one Wasm module per file), translates the functions' code to Cretonne
+//! Reads Wasm binary files (one Wasm module per file), translates the functions' code to Cranelift
 //! IL. Can also executes the `start` function of the module by laying out the memories, globals
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
-extern crate cretonne_codegen;
-extern crate cretonne_native;
-extern crate cretonne_wasm;
+extern crate cranelift_codegen;
+extern crate cranelift_native;
+extern crate cranelift_wasm;
 extern crate docopt;
 extern crate wasmtime_execute;
 extern crate wasmtime_runtime;
@@ -15,10 +15,10 @@ extern crate wasmtime_runtime;
 extern crate serde_derive;
 extern crate tempdir;
 
-use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::settings;
-use cretonne_codegen::settings::Configurable;
-use cretonne_wasm::translate_module;
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::settings;
+use cranelift_codegen::settings::Configurable;
+use cranelift_wasm::translate_module;
 use docopt::Docopt;
 use std::error::Error;
 use std::fs::File;
@@ -33,8 +33,8 @@ use wasmtime_execute::{compile_module, execute};
 use wasmtime_runtime::{Instance, Module, ModuleEnvironment};
 
 const USAGE: &str = "
-Wasm to Cretonne IL translation utility.
-Takes a binary WebAssembly module and returns its functions in Cretonne IL format.
+Wasm to Cranelift IL translation utility.
+Takes a binary WebAssembly module and returns its functions in Cranelift IL format.
 The translation is dependent on the environment chosen.
 
 Usage:
@@ -45,7 +45,7 @@ Options:
     -o, --optimize      runs optimization passes on the translated functions
     -m, --memory        interactive memory inspector after execution
     -h, --help          print this help message
-    --version           print the Cretonne version
+    --version           print the Cranelift version
 ";
 
 #[derive(Deserialize, Debug, Clone)]
@@ -70,7 +70,7 @@ fn main() {
                 .deserialize()
         })
         .unwrap_or_else(|e| e.exit());
-    let (mut flag_builder, isa_builder) = cretonne_native::builders().unwrap_or_else(|_| {
+    let (mut flag_builder, isa_builder) = cranelift_native::builders().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
     });
 
@@ -101,7 +101,7 @@ fn main() {
 fn handle_module(args: &Args, path: PathBuf, isa: &TargetIsa) -> Result<(), String> {
     let mut data = read_to_end(path.clone()).map_err(|err| String::from(err.description()))?;
     if !data.starts_with(&[b'\0', b'a', b's', b'm']) {
-        let tmp_dir = TempDir::new("cretonne-wasm").unwrap();
+        let tmp_dir = TempDir::new("cranelift-wasm").unwrap();
         let file_path = tmp_dir.path().join("module.wasm");
         File::create(file_path.clone()).unwrap();
         Command::new("wat2wasm")

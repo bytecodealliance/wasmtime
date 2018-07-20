@@ -1,10 +1,10 @@
 [package]
 name = "wasmtime_tools"
-authors = ["The Cretonne Project Developers"]
+authors = ["The Cranelift Project Developers"]
 version = "0.0.0"
 description = "Command-line interface for the wasmtime crate"
 license = "Apache-2.0 WITH LLVM-exception"
-documentation = "https://cretonne.readthedocs.io/"
+documentation = "https://cranelift.readthedocs.io/"
 repository = "https://github.com/sunfishcode/wasmtime"
 publish = false
 
@@ -17,11 +17,11 @@ name = "wasm2obj"
 path = "src/wasm2obj.rs"
 
 [dependencies]
-cretonne-codegen = "0.13.0"
-cretonne-frontend = "0.13.0"
-cretonne-reader = "0.13.0"
-cretonne-wasm = "0.13.0"
-cretonne-native = "0.13.0"
+cranelift-codegen = "0.16.1"
+cranelift-frontend = "0.16.1"
+cranelift-reader = "0.16.1"
+cranelift-wasm = "0.16.1"
+cranelift-native = "0.16.1"
 wasmtime_runtime = { path = "lib/runtime" }
 wasmtime_execute = { path = "lib/execute" }
 wasmtime_obj = { path = "lib/obj" }
@@ -29,6 +29,6 @@ docopt = "1.0.0"
 serde = "1.0.55"
 serde_derive = "1.0.55"
 tempdir = "*"
-faerie = "0.4.2"
+faerie = "0.4.4"
 
 [workspace]

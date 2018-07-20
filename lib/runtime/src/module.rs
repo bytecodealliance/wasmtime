@@ -1,8 +1,8 @@
 //! A `Module` contains all the relevant information translated from a
 //! WebAssembly module.
 
-use cretonne_codegen::ir;
-use cretonne_wasm::{
+use cranelift_codegen::ir;
+use cranelift_wasm::{
     FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
 use std::collections::HashMap;

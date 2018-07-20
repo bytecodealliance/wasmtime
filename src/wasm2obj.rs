@@ -1,12 +1,12 @@
 //! Translation from wasm to native object files.
 //!
-//! Reads a Wasm binary file, translates the functions' code to Cretonne
+//! Reads a Wasm binary file, translates the functions' code to Cranelift
 //! IL, then translates it to native code, and writes it out to a native
 //! object file with relocations.
 
-extern crate cretonne_codegen;
-extern crate cretonne_native;
-extern crate cretonne_wasm;
+extern crate cranelift_codegen;
+extern crate cranelift_native;
+extern crate cranelift_wasm;
 extern crate docopt;
 extern crate wasmtime_obj;
 extern crate wasmtime_runtime;
@@ -14,8 +14,8 @@ extern crate wasmtime_runtime;
 extern crate serde_derive;
 extern crate faerie;
 
-use cretonne_codegen::settings;
-use cretonne_wasm::translate_module;
+use cranelift_codegen::settings;
+use cranelift_wasm::translate_module;
 use docopt::Docopt;
 use faerie::Artifact;
 use std::error::Error;
@@ -41,7 +41,7 @@ Usage:
 Options:
     -v, --verbose       displays the module and translated functions
     -h, --help          print this help message
-    --version           print the Cretonne version
+    --version           print the Cranelift version
 ";
 
 #[derive(Deserialize, Debug, Clone)]
@@ -85,7 +85,7 @@ fn handle_module(path: PathBuf, output: &str) -> Result<(), String> {
     };
 
     // FIXME: Make the target a parameter.
-    let (flag_builder, isa_builder) = cretonne_native::builders().unwrap_or_else(|_| {
+    let (flag_builder, isa_builder) = cranelift_native::builders().unwrap_or_else(|_| {
         panic!("host machine is not a supported target");
     });
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
