@@ -72,7 +72,7 @@ impl Reload {
         tracker: &mut LiveValueTracker,
     ) {
         let _tt = timing::ra_reload();
-        dbg!("Reload for:\n{}", func.display(isa));
+        debug!("Reload for:\n{}", func.display(isa));
         let mut ctx = Context {
             cur: EncCursor::new(func, isa),
             encinfo: isa.encoding_info(),
@@ -119,7 +119,7 @@ impl<'a> Context<'a> {
     }
 
     fn visit_ebb(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
-        dbg!("Reloading {}:", ebb);
+        debug!("Reloading {}:", ebb);
         self.visit_ebb_header(ebb, tracker);
         tracker.drop_dead_params();
 

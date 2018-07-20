@@ -12,6 +12,7 @@
 extern crate cfg_if;
 extern crate cranelift_codegen;
 extern crate cranelift_filetests;
+extern crate file_per_thread_logger;
 extern crate cranelift_reader;
 extern crate docopt;
 extern crate filecheck;
@@ -19,6 +20,7 @@ extern crate filecheck;
 extern crate serde_derive;
 #[cfg(feature = "disas")]
 extern crate capstone;
+extern crate pretty_env_logger;
 extern crate term;
 
 cfg_if! {
@@ -31,6 +33,7 @@ cfg_if! {
 }
 extern crate target_lexicon;
 
+use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
 use cranelift_codegen::{timing, VERSION};
 use docopt::Docopt;
 use std::io::{self, Write};
@@ -46,16 +49,17 @@ const USAGE: &str = "
 Cranelift code generator utility
 
 Usage:
-    clif-util test [-vT] <file>...
-    clif-util cat <file>...
-    clif-util filecheck [-v] <file>
-    clif-util print-cfg <file>...
-    clif-util compile [-vpT] [--set <set>]... [--target <triple>] <file>...
-    clif-util wasm [-ctvpTs] [--set <set>]... [--target <triple>] <file>...
+    clif-util test [-vTd] <file>...
+    clif-util cat [-d] <file>...
+    clif-util filecheck [-vd] <file>
+    clif-util print-cfg [-d] <file>...
+    clif-util compile [-vpTd] [--set <set>]... [--target <triple>] <file>...
+    clif-util wasm [-ctvpTsd] [--set <set>]... [--target <triple>] <file>...
     clif-util --help | --version
 
 Options:
     -v, --verbose   be more verbose
+    -d, --debug     enable debug output on stderr/stdout
     -T, --time-passes
                     print pass timing report
     -t, --just-decode
@@ -90,6 +94,7 @@ struct Args {
     flag_target: String,
     flag_time_passes: bool,
     flag_print_size: bool,
+    flag_debug: bool,
 }
 
 /// A command either succeeds or fails with an error message.
@@ -105,6 +110,12 @@ fn clif_util() -> CommandResult {
                 .deserialize()
         })
         .unwrap_or_else(|e| e.exit());
+
+    if args.flag_debug {
+        pretty_env_logger::init();
+    } else {
+        file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
+    }
 
     // Find the sub-command to execute.
     let result = if args.cmd_test {

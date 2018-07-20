@@ -90,7 +90,7 @@ impl Spilling {
         tracker: &mut LiveValueTracker,
     ) {
         let _tt = timing::ra_spilling();
-        dbg!("Spilling for:\n{}", func.display(isa));
+        debug!("Spilling for:\n{}", func.display(isa));
         let reginfo = isa.register_info();
         let usable_regs = isa.allocatable_registers(func);
         let mut ctx = Context {
@@ -118,7 +118,7 @@ impl<'a> Context<'a> {
     }
 
     fn visit_ebb(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
-        dbg!("Spilling {}:", ebb);
+        debug!("Spilling {}:", ebb);
         self.cur.goto_top(ebb);
         self.visit_ebb_header(ebb, tracker);
         tracker.drop_dead_params();
@@ -198,14 +198,12 @@ impl<'a> Context<'a> {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
                 'try_take: while let Err(mask) = self.pressure.take_transient(rc) {
-                    dbg!("Need {} reg for EBB param {}", rc, lv.value);
+                    debug!("Need {} reg for EBB param {}", rc, lv.value);
                     match self.spill_candidate(mask, liveins) {
                         Some(cand) => {
-                            dbg!(
+                            debug!(
                                 "Spilling live-in {} to make room for {} EBB param {}",
-                                cand,
-                                rc,
-                                lv.value
+                                cand, rc, lv.value
                             );
                             self.spill_reg(cand);
                         }
@@ -213,7 +211,7 @@ impl<'a> Context<'a> {
                             // We can't spill any of the live-in registers, so we have to spill an
                             // EBB argument. Since the current spill metric would consider all the
                             // EBB arguments equal, just spill the present register.
-                            dbg!("Spilling {} EBB argument {}", rc, lv.value);
+                            debug!("Spilling {} EBB argument {}", rc, lv.value);
 
                             // Since `spill_reg` will free a register, add the current one here.
                             self.pressure.take(rc);
@@ -237,7 +235,7 @@ impl<'a> Context<'a> {
         constraints: &RecipeConstraints,
         tracker: &mut LiveValueTracker,
     ) {
-        dbg!("Inst {}, {}", self.cur.display_inst(inst), self.pressure);
+        debug!("Inst {}, {}", self.cur.display_inst(inst), self.pressure);
         debug_assert_eq!(self.cur.current_inst(), Some(inst));
         debug_assert_eq!(self.cur.current_ebb(), Some(ebb));
 
@@ -279,7 +277,7 @@ impl<'a> Context<'a> {
             if op.kind != ConstraintKind::Stack {
                 // Add register def to pressure, spill if needed.
                 while let Err(mask) = self.pressure.take_transient(op.regclass) {
-                    dbg!("Need {} reg from {} throughs", op.regclass, throughs.len());
+                    debug!("Need {} reg from {} throughs", op.regclass, throughs.len());
                     match self.spill_candidate(mask, throughs) {
                         Some(cand) => self.spill_reg(cand),
                         None => panic!(
@@ -333,7 +331,7 @@ impl<'a> Context<'a> {
 
             // Only collect the interesting register uses.
             if reguse.fixed || reguse.tied || reguse.spilled {
-                dbg!("  reguse: {}", reguse);
+                debug!("  reguse: {}", reguse);
                 self.reg_uses.push(reguse);
             }
         }
@@ -406,7 +404,7 @@ impl<'a> Context<'a> {
             if need_copy || ru.spilled {
                 let rc = self.reginfo.rc(ru.rci);
                 while let Err(mask) = self.pressure.take_transient(rc) {
-                    dbg!("Copy of {} reg causes spill", rc);
+                    debug!("Copy of {} reg causes spill", rc);
                     // Spill a live register that is *not* used by the current instruction.
                     // Spilling a use wouldn't help.
                     //
@@ -489,7 +487,7 @@ impl<'a> Context<'a> {
             let rc = self.reginfo.rc(rci);
             self.pressure.free(rc);
             self.spills.push(value);
-            dbg!("Spilled {}:{} -> {}", value, rc, self.pressure);
+            debug!("Spilled {}:{} -> {}", value, rc, self.pressure);
         } else {
             panic!("Cannot spill {} that was already on the stack", value);
         }

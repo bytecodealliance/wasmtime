@@ -116,7 +116,7 @@ impl Coalescing {
         virtregs: &mut VirtRegs,
     ) {
         let _tt = timing::ra_cssa();
-        dbg!("Coalescing for:\n{}", func.display(isa));
+        debug!("Coalescing for:\n{}", func.display(isa));
         self.preorder.compute(domtree, &func.layout);
         let mut context = Context {
             isa,
@@ -185,7 +185,7 @@ impl<'a> Context<'a> {
                 continue;
             }
 
-            dbg!(
+            debug!(
                 " - checking {} params at back-edge {}: {}",
                 num_params,
                 pred_ebb,
@@ -229,7 +229,7 @@ impl<'a> Context<'a> {
                 if Some(def_ebb) == self.func.layout.entry_block()
                     && self.func.signature.params[def_num].location.is_stack()
                 {
-                    dbg!("-> isolating function stack parameter {}", arg);
+                    debug!("-> isolating function stack parameter {}", arg);
                     let new_arg = self.isolate_arg(pred_ebb, pred_inst, argnum, arg);
                     self.virtregs.union(param, new_arg);
                     continue;
@@ -296,7 +296,7 @@ impl<'a> Context<'a> {
         let inst = pos.built_inst();
         self.liveness.move_def_locally(param, inst);
 
-        dbg!(
+        debug!(
             "-> inserted {}, following {}({}: {})",
             pos.display_inst(inst),
             ebb,
@@ -365,7 +365,7 @@ impl<'a> Context<'a> {
 
         pos.func.dfg.inst_variable_args_mut(pred_inst)[argnum] = copy;
 
-        dbg!(
+        debug!(
             "-> inserted {}, before {}: {}",
             pos.display_inst(inst),
             pred_ebb,
@@ -381,7 +381,7 @@ impl<'a> Context<'a> {
     /// closure of the relation formed by EBB parameter-argument pairs found by `union_find_ebb()`.
     fn finish_union_find(&mut self) {
         self.virtregs.finish_union_find(None);
-        dbg!("After union-find phase:{}", self.virtregs);
+        debug!("After union-find phase:{}", self.virtregs);
     }
 }
 
@@ -412,7 +412,7 @@ impl<'a> Context<'a> {
     fn check_vreg(&mut self, vreg: VirtReg) -> bool {
         // Order the values according to the dominator pre-order of their definition.
         let values = self.virtregs.sort_values(vreg, self.func, self.preorder);
-        dbg!("Checking {} = {}", vreg, DisplayList(values));
+        debug!("Checking {} = {}", vreg, DisplayList(values));
 
         // Now push the values in order to the dominator forest.
         // This gives us the closest dominating value def for each of the values.
@@ -434,7 +434,7 @@ impl<'a> Context<'a> {
             let ctx = self.liveness.context(&self.func.layout);
             if self.liveness[parent.value].overlaps_def(node.def, node.ebb, ctx) {
                 // The two values are interfering, so they can't be in the same virtual register.
-                dbg!("-> interference: {} overlaps def of {}", parent, value);
+                debug!("-> interference: {} overlaps def of {}", parent, value);
                 return false;
             }
         }
@@ -458,7 +458,7 @@ impl<'a> Context<'a> {
             self.cfg,
             self.preorder,
         );
-        dbg!(
+        debug!(
             "Synthesizing {} from {} branches and params {}",
             vreg,
             self.vcopies.branches.len(),
@@ -546,7 +546,7 @@ impl<'a> Context<'a> {
         }
 
         let _vreg = self.virtregs.unify(self.values);
-        dbg!("-> merged into {} = {}", _vreg, DisplayList(self.values));
+        debug!("-> merged into {} = {}", _vreg, DisplayList(self.values));
         true
     }
 
@@ -568,7 +568,7 @@ impl<'a> Context<'a> {
         // registers and the filtered virtual copies.
         let v0 = self.virtregs.congruence_class(&param);
         let v1 = self.virtregs.congruence_class(&arg);
-        dbg!(
+        debug!(
             " - set 0: {}\n - set 1: {}",
             DisplayList(v0),
             DisplayList(v1)
@@ -621,7 +621,7 @@ impl<'a> Context<'a> {
                 if node.set_id != parent.set_id
                     && self.liveness[parent.value].reaches_use(inst, node.ebb, ctx)
                 {
-                    dbg!(
+                    debug!(
                         " - interference: {} overlaps vcopy at {}:{}",
                         parent,
                         node.ebb,
@@ -646,7 +646,7 @@ impl<'a> Context<'a> {
                 && self.liveness[parent.value].overlaps_def(node.def, node.ebb, ctx)
             {
                 // The two values are interfering.
-                dbg!(" - interference: {} overlaps def of {}", parent, node.value);
+                debug!(" - interference: {} overlaps def of {}", parent, node.value);
                 return false;
             }
         }

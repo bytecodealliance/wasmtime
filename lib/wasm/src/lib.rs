@@ -24,7 +24,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[macro_use(dbg)]
 extern crate cranelift_codegen;
 #[macro_use]
 extern crate cranelift_entity;
@@ -35,6 +34,9 @@ extern crate wasmparser;
 extern crate failure;
 #[macro_use]
 extern crate failure_derive;
+
+#[macro_use]
+extern crate log;
 
 mod code_translator;
 mod environ;

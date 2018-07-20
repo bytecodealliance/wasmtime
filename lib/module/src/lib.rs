@@ -20,12 +20,13 @@
 #[cfg_attr(test, macro_use)]
 extern crate alloc;
 
-#[macro_use]
 extern crate cranelift_codegen;
 #[macro_use]
 extern crate cranelift_entity;
 #[macro_use]
 extern crate failure;
+#[macro_use]
+extern crate log;
 
 mod backend;
 mod data_context;
