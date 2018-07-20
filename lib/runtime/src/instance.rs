@@ -85,7 +85,7 @@ impl Instance {
     pub fn inspect_memory(&self, memory_index: usize, address: usize, len: usize) -> &[u8] {
         &self.memories
             .get(memory_index)
-            .expect(format!("no memory for index {}", memory_index).as_str())
+            .unwrap_or_else(|| panic!("no memory for index {}", memory_index))
             [address..address + len]
     }
 

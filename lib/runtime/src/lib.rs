@@ -156,7 +156,7 @@ impl<'data, 'module> ModuleEnvironment<'data, 'module> {
     /// Allocates the runtime data structures with the given isa.
     pub fn new(isa: &'module isa::TargetIsa, module: &'module mut Module) -> Self {
         Self {
-            isa: isa,
+            isa,
             module,
             lazy: LazyContents::new(),
         }
@@ -242,16 +242,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
         let ptr_size = self.ptr_size();
         let globals_base = self.globals_base.unwrap_or_else(|| {
-            let offset = 0 * ptr_size;
-            let offset32 = offset as i32;
-            debug_assert_eq!(offset32 as usize, offset);
             let new_base = func.create_global_value(ir::GlobalValueData::VMContext {
-                offset: Offset32::new(offset32),
+                offset: Offset32::new(0),
             });
             self.globals_base = Some(new_base);
             new_base
         });
-        let offset = index as usize * 8;
+        let offset = index as usize * ptr_size;
         let offset32 = offset as i32;
         debug_assert_eq!(offset32 as usize, offset);
         let gv = func.create_global_value(ir::GlobalValueData::Deref {
@@ -284,15 +281,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             base: heap_base_addr,
             offset: Offset32::new(0),
         });
-        let h = func.create_heap(ir::HeapData {
+        func.create_heap(ir::HeapData {
             base: ir::HeapBase::GlobalValue(heap_base),
             min_size: 0.into(),
             guard_size: 0x8000_0000.into(),
             style: ir::HeapStyle::Static {
                 bound: 0x1_0000_0000.into(),
             },
-        });
-        h
+        })
     }
 
     fn make_indirect_sig(&mut self, func: &mut ir::Function, index: SignatureIndex) -> ir::SigRef {

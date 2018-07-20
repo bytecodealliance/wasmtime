@@ -13,7 +13,7 @@ use region::protect;
 use region::Protection;
 use std::mem::transmute;
 use std::ptr::write_unaligned;
-use wasmtime_runtime::Compilation;
+use wasmtime_runtime::{Compilation, Relocation};
 
 /// Executes a module that has been translated with the `standalone::Runtime` runtime implementation.
 pub fn compile_module<'data, 'module>(
@@ -35,7 +35,7 @@ pub fn compile_module<'data, 'module>(
 }
 
 /// Performs the relocations inside the function bytecode, provided the necessary metadata
-fn relocate(compilation: &mut Compilation, relocations: &wasmtime_runtime::Relocations) {
+fn relocate(compilation: &mut Compilation, relocations: &[Vec<Relocation>]) {
     // The relocations are relative to the relocation's address plus four bytes
     // TODO: Support architectures other than x64, and other reloc kinds.
     for (i, function_relocs) in relocations.iter().enumerate() {
