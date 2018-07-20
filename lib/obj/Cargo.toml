@@ -1,5 +1,5 @@
 [package]
-name = "wasmtime_obj"
+name = "wasmtime-obj"
 version = "0.0.0"
 authors = ["The Cranelift Project Developers"]
 publish = false
@@ -8,5 +8,5 @@ license = "Apache-2.0 WITH LLVM-exception"
 [dependencies]
 cranelift-codegen = "0.16.1"
 cranelift-wasm = "0.16.1"
-wasmtime_runtime = { path = "../runtime" }
+wasmtime-runtime = { path = "../runtime" }
 faerie = "0.4.4"

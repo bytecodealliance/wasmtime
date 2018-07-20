@@ -1,5 +1,5 @@
 [package]
-name = "wasmtime_execute"
+name = "wasmtime-execute"
 version = "0.0.0"
 authors = ["The Cranelift Project Developers"]
 publish = false
@@ -11,4 +11,4 @@ license = "Apache-2.0 WITH LLVM-exception"
 cranelift-codegen = "0.16.1"
 cranelift-wasm = "0.16.1"
 region = "0.3.0"
-wasmtime_runtime = { path = "../runtime" }
+wasmtime-runtime = { path = "../runtime" }

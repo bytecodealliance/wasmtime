@@ -1,29 +1,19 @@
 [package]
-name = "wasmtime_fuzz"
-version = "0.0.1"
+name = "wasmtime-fuzz"
+version = "0.0.0"
 authors = ["The Cranelift Project Developers"]
 publish = false
 
 [package.metadata]
 cargo-fuzz = true
 
-[dependencies.wasmtime_runtime]
-path = "../lib/runtime"
-
-[dependencies.wasmtime_execute]
-path = "../lib/execute"
-
-[dependencies.cranelift-codegen]
-version = "0.8.0"
-
-[dependencies.cranelift-wasm]
-version = "0.8.0"
-
-[dependencies.cranelift-native]
-version = "0.8.0"
-
-[dependencies.libfuzzer-sys]
-git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
+[dependencies]
+wasmtime-runtime = { path = "../lib/runtime" }
+wasmtime-execute = { path = "../lib/execute" }
+cranelift-codegen = "0.16.1"
+cranelift-wasm = "0.16.1"
+cranelift-native = "0.16.1"
+libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
 
 # Prevent this from interfering with workspaces
 [workspace]

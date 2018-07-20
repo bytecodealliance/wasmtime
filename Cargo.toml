@@ -1,5 +1,5 @@
 [package]
-name = "wasmtime_tools"
+name = "wasmtime-tools"
 authors = ["The Cranelift Project Developers"]
 version = "0.0.0"
 description = "Command-line interface for the wasmtime crate"
@@ -22,9 +22,9 @@ cranelift-frontend = "0.16.1"
 cranelift-reader = "0.16.1"
 cranelift-wasm = "0.16.1"
 cranelift-native = "0.16.1"
-wasmtime_runtime = { path = "lib/runtime" }
-wasmtime_execute = { path = "lib/execute" }
-wasmtime_obj = { path = "lib/obj" }
+wasmtime-runtime = { path = "lib/runtime" }
+wasmtime-execute = { path = "lib/execute" }
+wasmtime-obj = { path = "lib/obj" }
 docopt = "1.0.0"
 serde = "1.0.55"
 serde_derive = "1.0.55"
