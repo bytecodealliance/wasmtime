@@ -1,18 +1,37 @@
+# Travis CI script. See https://travis-ci.org/ for more info.
+
 language: rust
 rust:
     - stable
+    # The version of rust in the latest Ubuntu LTS, currently Bionic.
+    - 1.25.0
     - beta
+    - nightly
+matrix:
+    allow_failures:
+        # We try to be compatible with beta and nightly, but they occasionally
+        # fail, so we don't allow them to hold up people using stable.
+        - rust: beta
+        - rust: nightly
 dist: trusty
 sudo: false
-addons:
-    apt:
-        packages:
-            - python3-pip
-install:
-    - pip3 install --user --upgrade mypy flake8
-    - travis_wait ./check-rustfmt.sh --install
+before_script:
+    # If an old version of rustfmt from cargo is already installed, uninstall
+    # it, since it can prevent the installation of the new version from rustup.
+    - cargo uninstall rustfmt || true
+    - cargo install --list
+    # If we're testing beta or nightly, we still need to install the stable
+    # toolchain so that we can run the stable version of rustfmt.
+    - rustup toolchain install stable
+    # Install the stable version of rustfmt.
+    - rustup component add --toolchain=stable rustfmt-preview
+    - rustup component list --toolchain=stable
+    - rustup show
+    - rustfmt +stable --version || echo fail
+    # Sometimes the component isn't actually ready after being installed, and
+    # rustup update makes it ready.
+    - rustup update
+    - rustfmt +stable --version
 script: ./test-all.sh
 cache:
     cargo: true
-    directories:
-        - $HOME/.cache/pip

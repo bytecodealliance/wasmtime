@@ -1,9 +1,10 @@
 *.pyc
-**/*.rs.bk
+*.bk
 *.swp
 *.swo
+*.swx
 tags
-/target/
+target
 Cargo.lock
 .*.rustfmt
 cretonne.dbg*
