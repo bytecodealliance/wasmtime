@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-codegen"
-version = "0.16.1"
+version = "0.17.0-alpha"
 description = "Low-level code generator library"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
@@ -11,7 +11,7 @@ keywords = ["compile", "compiler", "jit"]
 build = "build.rs"
 
 [dependencies]
-cranelift-entity = { path = "../entity", version = "0.16.1", default-features = false }
+cranelift-entity = { path = "../entity", version = "0.17.0-alpha", default-features = false }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 hashmap_core = { version = "0.1.9", optional = true }
@@ -22,7 +22,7 @@ target-lexicon = { version = "0.0.3", default-features = false }
 # accomodated in `tests`.
 
 [build-dependencies]
-cranelift-codegen-meta = { path = "../codegen-meta", version = "0.15.0" }
+cranelift-codegen-meta = { path = "../codegen-meta", version = "0.17.0-alpha" }
 
 [features]
 # The "std" feature enables use of libstd. The "core" feature enables use
