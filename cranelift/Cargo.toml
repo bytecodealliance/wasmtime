@@ -1,7 +1,7 @@
 [package]
 name = "cranelift-tools"
 authors = ["The Cranelift Project Developers"]
-version = "0.16.1"
+version = "0.17.0-alpha"
 description = "Binaries for testing the Cranelift libraries"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
@@ -14,16 +14,16 @@ path = "src/clif-util.rs"
 
 [dependencies]
 cfg-if = "0.1"
-cranelift-codegen = { path = "lib/codegen", version = "0.16.1" }
-cranelift-reader = { path = "lib/reader", version = "0.16.1" }
-cranelift-frontend = { path = "lib/frontend", version = "0.16.1" }
-cranelift-wasm = { path = "lib/wasm", version = "0.16.1", optional = true }
-cranelift-native = { path = "lib/native", version = "0.16.1" }
-cranelift-filetests = { path = "lib/filetests", version = "0.16.1" }
-cranelift-module = { path = "lib/module", version = "0.16.1" }
-cranelift-faerie = { path = "lib/faerie", version = "0.16.1" }
-cranelift-simplejit = { path = "lib/simplejit", version = "0.16.1" }
-cranelift = { path = "lib/umbrella", version = "0.16.1" }
+cranelift-codegen = { path = "lib/codegen", version = "0.17.0-alpha" }
+cranelift-reader = { path = "lib/reader", version = "0.17.0-alpha" }
+cranelift-frontend = { path = "lib/frontend", version = "0.17.0-alpha" }
+cranelift-wasm = { path = "lib/wasm", version = "0.17.0-alpha", optional = true }
+cranelift-native = { path = "lib/native", version = "0.17.0-alpha" }
+cranelift-filetests = { path = "lib/filetests", version = "0.17.0-alpha" }
+cranelift-module = { path = "lib/module", version = "0.17.0-alpha" }
+cranelift-faerie = { path = "lib/faerie", version = "0.17.0-alpha" }
+cranelift-simplejit = { path = "lib/simplejit", version = "0.17.0-alpha" }
+cranelift = { path = "lib/umbrella", version = "0.17.0-alpha" }
 filecheck = "0.3.0"
 docopt = "1"
 serde = "1.0.8"
