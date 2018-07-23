@@ -21,8 +21,9 @@ target-lexicon = { version = "0.0.3", default-features = false }
 # machine code. Integration tests that need external dependencies can be
 # accomodated in `tests`.
 
-[build-dependencies]
-cranelift-codegen-meta = { path = "../codegen-meta", version = "0.17.0-alpha" }
+# Temporarily disable this while we work out how to publish this crate.
+#[build-dependencies]
+#cranelift-codegen-meta = { path = "../codegen-meta", version = "0.17.0-alpha" }
 
 [features]
 # The "std" feature enables use of libstd. The "core" feature enables use
