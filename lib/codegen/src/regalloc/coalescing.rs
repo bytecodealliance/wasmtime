@@ -1012,7 +1012,7 @@ impl VirtualCopies {
     /// Returns `None` if none of the currently active parameters are defined at `ebb`. Otherwise
     /// returns `(set_id, argnum)` for an active parameter defined at `ebb`.
     fn lookup(&self, ebb: Ebb) -> Option<(u8, usize)> {
-        self.filter.get(&ebb).map(|t| *t)
+        self.filter.get(&ebb).cloned()
     }
 
     /// Get an iterator of dom-forest nodes corresponding to the current filter.

@@ -204,16 +204,16 @@ impl Pressure {
     ///
     /// This does not check if there are enough registers available.
     pub fn take(&mut self, rc: RegClass) {
-        self.toprc
-            .get_mut(rc.toprc as usize)
-            .map(|t| t.base_count += 1);
+        if let Some(t) = self.toprc.get_mut(rc.toprc as usize) {
+            t.base_count += 1;
+        }
     }
 
     /// Free a register in `rc`.
     pub fn free(&mut self, rc: RegClass) {
-        self.toprc
-            .get_mut(rc.toprc as usize)
-            .map(|t| t.base_count -= 1);
+        if let Some(t) = self.toprc.get_mut(rc.toprc as usize) {
+            t.base_count -= 1;
+        }
     }
 
     /// Reset all counts to 0, both base and transient.
@@ -230,9 +230,10 @@ impl Pressure {
     pub fn take_transient(&mut self, rc: RegClass) -> Result<(), RegClassMask> {
         let mask = self.check_avail(rc);
         if mask == 0 {
-            self.toprc
-                .get_mut(rc.toprc as usize)
-                .map(|t| t.transient_count += 1);
+            if let Some(t) = self.toprc.get_mut(rc.toprc as usize) {
+                t.transient_count += 1;
+            }
+
             Ok(())
         } else {
             Err(mask)

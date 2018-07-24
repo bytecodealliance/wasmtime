@@ -61,7 +61,7 @@ fn pretty_function_error(
                 )
             }
         }
-        _ => write!(w, "{}", "\n"),
+        _ => writeln!(w),
     }
 }
 
