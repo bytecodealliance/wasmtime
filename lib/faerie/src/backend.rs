@@ -157,7 +157,7 @@ impl Backend for FaerieBackend {
                 artifact: &mut self.artifact,
                 name,
                 namespace,
-                libcall_names: &self.libcall_names,
+                libcall_names: &*self.libcall_names,
             };
 
             if let Some(ref mut trap_manifest) = self.trap_manifest {
@@ -347,7 +347,7 @@ struct FaerieRelocSink<'a> {
     artifact: &'a mut faerie::Artifact,
     name: &'a str,
     namespace: &'a ModuleNamespace<'a, FaerieBackend>,
-    libcall_names: &'a Box<Fn(ir::LibCall) -> String>,
+    libcall_names: &'a Fn(ir::LibCall) -> String,
 }
 
 impl<'a> RelocSink for FaerieRelocSink<'a> {

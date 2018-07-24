@@ -218,7 +218,7 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
     if let ValueDef::Result(result_inst, _) = pos.func.dfg.value_def(info.arg) {
         match pos.func.dfg[result_inst] {
             InstructionData::Binary { opcode, args } if opcode == Opcode::Iadd => {
-                info.add_args = Some(args.clone());
+                info.add_args = Some(args);
             }
             _ => return,
         }
