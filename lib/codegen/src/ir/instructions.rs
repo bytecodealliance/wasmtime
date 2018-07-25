@@ -447,7 +447,7 @@ impl ValueTypeSet {
     /// Is `scalar` part of the base type set?
     ///
     /// Note that the base type set does not have to be included in the type set proper.
-    fn is_base_type(&self, scalar: Type) -> bool {
+    fn is_base_type(self, scalar: Type) -> bool {
         let l2b = scalar.log2_lane_bits();
         if scalar.is_int() {
             self.ints.contains(l2b)
@@ -461,7 +461,7 @@ impl ValueTypeSet {
     }
 
     /// Does `typ` belong to this set?
-    pub fn contains(&self, typ: Type) -> bool {
+    pub fn contains(self, typ: Type) -> bool {
         let l2l = typ.log2_lane_count();
         self.lanes.contains(l2l) && self.is_base_type(typ.lane_type())
     }
@@ -469,7 +469,7 @@ impl ValueTypeSet {
     /// Get an example member of this type set.
     ///
     /// This is used for error messages to avoid suggesting invalid types.
-    pub fn example(&self) -> Type {
+    pub fn example(self) -> Type {
         let t = if self.ints.max().unwrap_or(0) > 5 {
             types::I32
         } else if self.floats.max().unwrap_or(0) > 5 {

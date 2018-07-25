@@ -59,9 +59,9 @@ impl Builder {
     }
 
     /// Extract contents of builder once everything is configured.
-    pub fn state_for(&self, name: &str) -> &[u8] {
+    pub fn state_for(self, name: &str) -> Box<[u8]> {
         assert_eq!(name, self.template.name);
-        &self.bytes[..]
+        self.bytes
     }
 
     /// Set the value of a single bit.
@@ -301,8 +301,8 @@ pub mod detail {
     impl Detail {
         /// Check if a detail is a Detail::Preset. Useful because the Descriptor
         /// offset field has a different meaning when the detail is a preset.
-        pub fn is_preset(&self) -> bool {
-            match *self {
+        pub fn is_preset(self) -> bool {
+            match self {
                 Detail::Preset => true,
                 _ => false,
             }
