@@ -123,11 +123,11 @@ impl ControlFlowGraph {
         for inst in func.layout.ebb_insts(ebb) {
             match func.dfg.analyze_branch(inst) {
                 BranchInfo::SingleDest(dest, _) => {
-                    self.add_edge(BasicBlock::new(ebb, inst), dest);
+                    self.add_edge(ebb, inst, dest);
                 }
                 BranchInfo::Table(jt) => {
                     for (_, dest) in func.jump_tables[jt].entries() {
-                        self.add_edge(BasicBlock::new(ebb, inst), dest);
+                        self.add_edge(ebb, inst, dest);
                     }
                 }
                 BranchInfo::NotABranch => {}
@@ -160,13 +160,13 @@ impl ControlFlowGraph {
         self.compute_ebb(func, ebb);
     }
 
-    fn add_edge(&mut self, from: BasicBlock, to: Ebb) {
-        self.data[from.ebb]
+    fn add_edge(&mut self, from: Ebb, from_inst: Inst, to: Ebb) {
+        self.data[from]
             .successors
             .insert(to, &mut self.succ_forest, &());
         self.data[to]
             .predecessors
-            .insert(from.inst, from.ebb, &mut self.pred_forest, &());
+            .insert(from_inst, from, &mut self.pred_forest, &());
     }
 
     /// Get an iterator over the CFG predecessors to `ebb`.
