@@ -97,6 +97,7 @@ impl VirtRegs {
     ///
     /// If `value` belongs to a virtual register, the congruence class is the values of the virtual
     /// register. Otherwise it is just the value itself.
+    #[cfg_attr(feature = "cargo-clippy", allow(trivially_copy_pass_by_ref))]
     pub fn congruence_class<'a, 'b>(&'a self, value: &'b Value) -> &'b [Value]
     where
         'a: 'b,

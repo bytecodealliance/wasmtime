@@ -39,22 +39,22 @@ fn pretty_function_error(
     match err.location {
         ir::entities::AnyEntity::Inst(inst) => {
             if inst == cur_inst {
-                write!(
+                writeln!(
                     w,
-                    "{1:0$}{2}\n",
+                    "{1:0$}{2}",
                     indent,
                     "",
                     func.dfg.display_inst(cur_inst, isa)
                 )?;
-                write!(w, "{1:0$}{2}", indent, "", "^")?;
+                write!(w, "{1:0$}^", indent, "")?;
                 for _c in cur_inst.to_string().chars() {
                     write!(w, "~")?;
                 }
-                write!(w, "\n\nverifier {}\n\n", err.to_string())
+                writeln!(w, "\n\nverifier {}\n", err.to_string())
             } else {
                 write!(
                     w,
-                    "{1:0$}{2}\n",
+                    "{1:0$}{2}",
                     indent,
                     "",
                     func.dfg.display_inst(cur_inst, isa)
