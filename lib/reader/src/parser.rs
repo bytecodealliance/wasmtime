@@ -123,12 +123,13 @@ impl<'a> Context<'a> {
 
     // Allocate a new stack slot.
     fn add_ss(&mut self, ss: StackSlot, data: StackSlotData, loc: Location) -> ParseResult<()> {
+        self.map.def_ss(ss, loc)?;
         while self.function.stack_slots.next_key().index() <= ss.index() {
             self.function
                 .create_stack_slot(StackSlotData::new(StackSlotKind::SpillSlot, 0));
         }
         self.function.stack_slots[ss] = data;
-        self.map.def_ss(ss, loc)
+        Ok(())
     }
 
     // Resolve a reference to a stack slot.
@@ -142,6 +143,7 @@ impl<'a> Context<'a> {
 
     // Allocate a global value slot.
     fn add_gv(&mut self, gv: GlobalValue, data: GlobalValueData, loc: Location) -> ParseResult<()> {
+        self.map.def_gv(gv, loc)?;
         while self.function.global_values.next_key().index() <= gv.index() {
             self.function.create_global_value(GlobalValueData::Sym {
                 name: ExternalName::testcase(""),
@@ -149,7 +151,7 @@ impl<'a> Context<'a> {
             });
         }
         self.function.global_values[gv] = data;
-        self.map.def_gv(gv, loc)
+        Ok(())
     }
 
     // Resolve a reference to a global value.
@@ -163,6 +165,7 @@ impl<'a> Context<'a> {
 
     // Allocate a heap slot.
     fn add_heap(&mut self, heap: Heap, data: HeapData, loc: Location) -> ParseResult<()> {
+        self.map.def_heap(heap, loc)?;
         while self.function.heaps.next_key().index() <= heap.index() {
             self.function.create_heap(HeapData {
                 base: HeapBase::ReservedReg,
@@ -174,7 +177,7 @@ impl<'a> Context<'a> {
             });
         }
         self.function.heaps[heap] = data;
-        self.map.def_heap(heap, loc)
+        Ok(())
     }
 
     // Resolve a reference to a heap.
@@ -188,12 +191,13 @@ impl<'a> Context<'a> {
 
     // Allocate a new signature.
     fn add_sig(&mut self, sig: SigRef, data: Signature, loc: Location) -> ParseResult<()> {
+        self.map.def_sig(sig, loc)?;
         while self.function.dfg.signatures.next_key().index() <= sig.index() {
             self.function
                 .import_signature(Signature::new(CallConv::Fast));
         }
         self.function.dfg.signatures[sig] = data;
-        self.map.def_sig(sig, loc)
+        Ok(())
     }
 
     // Resolve a reference to a signature.
@@ -207,6 +211,7 @@ impl<'a> Context<'a> {
 
     // Allocate a new external function.
     fn add_fn(&mut self, fn_: FuncRef, data: ExtFuncData, loc: Location) -> ParseResult<()> {
+        self.map.def_fn(fn_, loc)?;
         while self.function.dfg.ext_funcs.next_key().index() <= fn_.index() {
             self.function.import_function(ExtFuncData {
                 name: ExternalName::testcase(""),
@@ -215,7 +220,7 @@ impl<'a> Context<'a> {
             });
         }
         self.function.dfg.ext_funcs[fn_] = data;
-        self.map.def_fn(fn_, loc)
+        Ok(())
     }
 
     // Resolve a reference to a function.
@@ -256,11 +261,12 @@ impl<'a> Context<'a> {
 
     // Allocate a new EBB.
     fn add_ebb(&mut self, ebb: Ebb, loc: Location) -> ParseResult<Ebb> {
+        self.map.def_ebb(ebb, loc)?;
         while self.function.dfg.num_ebbs() <= ebb.index() {
             self.function.dfg.make_ebb();
         }
         self.function.layout.append_ebb(ebb);
-        self.map.def_ebb(ebb, loc).and(Ok(ebb))
+        Ok(ebb)
     }
 }
 
@@ -2447,6 +2453,99 @@ mod tests {
         let ebb4_args = func.dfg.ebb_params(ebb4);
         assert_eq!(ebb4_args.len(), 1);
         assert_eq!(func.dfg.value_type(ebb4_args[0]), types::I32);
+    }
+
+    #[test]
+    fn duplicate_ebb() {
+        let ParseError { location, message } = Parser::new(
+            "function %ebbs() system_v {
+                ebb0:
+                ebb0:
+                    return 2",
+        ).parse_function(None)
+            .unwrap_err();
+
+        assert_eq!(location.line_number, 3);
+        assert_eq!(message, "duplicate entity: ebb0");
+    }
+
+    #[test]
+    fn duplicate_jt() {
+        let ParseError { location, message } = Parser::new(
+            "function %ebbs() system_v {
+                jt0 = jump_table 0, 0
+                jt0 = jump_table 0, 0",
+        ).parse_function(None)
+            .unwrap_err();
+
+        assert_eq!(location.line_number, 3);
+        assert_eq!(message, "duplicate entity: jt0");
+    }
+
+    #[test]
+    fn duplicate_ss() {
+        let ParseError { location, message } = Parser::new(
+            "function %ebbs() system_v {
+                ss0 = explicit_slot 8
+                ss0 = explicit_slot 8",
+        ).parse_function(None)
+            .unwrap_err();
+
+        assert_eq!(location.line_number, 3);
+        assert_eq!(message, "duplicate entity: ss0");
+    }
+
+    #[test]
+    fn duplicate_gv() {
+        let ParseError { location, message } = Parser::new(
+            "function %ebbs() system_v {
+                gv0 = vmctx+64
+                gv0 = vmctx+64",
+        ).parse_function(None)
+            .unwrap_err();
+
+        assert_eq!(location.line_number, 3);
+        assert_eq!(message, "duplicate entity: gv0");
+    }
+
+    #[test]
+    fn duplicate_heap() {
+        let ParseError { location, message } = Parser::new(
+            "function %ebbs() system_v {
+                heap0 = static gv0, min 0x1000, bound 0x10_0000, guard 0x1000
+                heap0 = static gv0, min 0x1000, bound 0x10_0000, guard 0x1000",
+        ).parse_function(None)
+            .unwrap_err();
+
+        assert_eq!(location.line_number, 3);
+        assert_eq!(message, "duplicate entity: heap0");
+    }
+
+    #[test]
+    fn duplicate_sig() {
+        let ParseError { location, message } = Parser::new(
+            "function %ebbs() system_v {
+                sig0 = ()
+                sig0 = ()",
+        ).parse_function(None)
+            .unwrap_err();
+
+        assert_eq!(location.line_number, 3);
+        assert_eq!(message, "duplicate entity: sig0");
+    }
+
+    #[test]
+    fn duplicate_fn() {
+        let ParseError { location, message } = Parser::new(
+            "function %ebbs() system_v {
+                sig0 = ()
+                fn0 = %foo sig0
+                fn0 = %foo sig0",
+        ).parse_function(None)
+            .unwrap_err();
+
+        assert_eq!(location.line_number, 4);
+        assert_eq!(message, "duplicate entity: fn0");
     }
 
     #[test]
