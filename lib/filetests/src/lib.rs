@@ -6,9 +6,7 @@
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces, unstable_features)]
 #![cfg_attr(feature="cargo-clippy", allow(
-        type_complexity,
-// Rustfmt 0.9.0 is at odds with this lint:
-        block_in_if_condition_stmt))]
+        type_complexity))]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(

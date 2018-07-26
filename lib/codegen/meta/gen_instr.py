@@ -631,7 +631,7 @@ def gen_member_inits(iform, fmt):
     # Immediate operands.
     # We have local variables with the same names as the members.
     for f in iform.imm_fields:
-        fmt.line('{}: {},'.format(f.member, f.member))
+        fmt.line('{},'.format(f.member))
 
     # Value operands.
     if iform.has_value_list:

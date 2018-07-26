@@ -5,8 +5,6 @@
 #![cfg_attr(feature = "std", warn(unstable_features))]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(feature="cargo-clippy", allow(
-// Rustfmt 0.9.0 is at odds with this lint:
-                block_in_if_condition_stmt,
 // Produces only a false positive:
                 while_let_loop,
 // Produces many false positives, but did produce some valid lints, now fixed:
@@ -28,8 +26,6 @@
                 new_without_default,
                 new_without_default_derive,
                 should_implement_trait,
-                redundant_field_names,
-                useless_let_if_seq,
                 len_without_is_empty))]
 #![cfg_attr(
     feature = "cargo-clippy",
