@@ -17,7 +17,7 @@ pub fn expand_heap_addr(
     _isa: &TargetIsa,
 ) {
     // Unpack the instruction.
-    let (heap, offset, size) = match func.dfg[inst] {
+    let (heap, offset, access_size) = match func.dfg[inst] {
         ir::InstructionData::HeapAddr {
             opcode,
             heap,
@@ -32,10 +32,10 @@ pub fn expand_heap_addr(
 
     match func.heaps[heap].style {
         ir::HeapStyle::Dynamic { bound_gv } => {
-            dynamic_addr(inst, heap, offset, size, bound_gv, func)
+            dynamic_addr(inst, heap, offset, access_size, bound_gv, func)
         }
         ir::HeapStyle::Static { bound } => {
-            static_addr(inst, heap, offset, size, bound.into(), func, cfg)
+            static_addr(inst, heap, offset, access_size, bound.into(), func, cfg)
         }
     }
 }
@@ -45,34 +45,34 @@ fn dynamic_addr(
     inst: ir::Inst,
     heap: ir::Heap,
     offset: ir::Value,
-    size: u32,
+    access_size: u32,
     bound_gv: ir::GlobalValue,
     func: &mut ir::Function,
 ) {
-    let size = i64::from(size);
+    let access_size = i64::from(access_size);
     let offset_ty = func.dfg.value_type(offset);
     let addr_ty = func.dfg.value_type(func.dfg.first_result(inst));
     let min_size = func.heaps[heap].min_size.into();
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
-    // Start with the bounds check. Trap if `offset + size > bound`.
+    // Start with the bounds check. Trap if `offset + access_size > bound`.
     let bound = pos.ins().global_value(addr_ty, bound_gv);
     let oob;
-    if size == 1 {
+    if access_size == 1 {
         // `offset > bound - 1` is the same as `offset >= bound`.
         oob = pos.ins()
             .icmp(IntCC::UnsignedGreaterThanOrEqual, offset, bound);
-    } else if size <= min_size {
-        // We know that bound >= min_size, so here we can compare `offset > bound - size` without
+    } else if access_size <= min_size {
+        // We know that bound >= min_size, so here we can compare `offset > bound - access_size` without
         // wrapping.
-        let adj_bound = pos.ins().iadd_imm(bound, -size);
+        let adj_bound = pos.ins().iadd_imm(bound, -access_size);
         oob = pos.ins()
             .icmp(IntCC::UnsignedGreaterThan, offset, adj_bound);
     } else {
         // We need an overflow check for the adjusted offset.
-        let size_val = pos.ins().iconst(offset_ty, size);
-        let (adj_offset, overflow) = pos.ins().iadd_cout(offset, size_val);
+        let access_size_val = pos.ins().iconst(offset_ty, access_size);
+        let (adj_offset, overflow) = pos.ins().iadd_cout(offset, access_size_val);
         pos.ins().trapnz(overflow, ir::TrapCode::HeapOutOfBounds);
         oob = pos.ins()
             .icmp(IntCC::UnsignedGreaterThan, adj_offset, bound);
@@ -87,19 +87,19 @@ fn static_addr(
     inst: ir::Inst,
     heap: ir::Heap,
     offset: ir::Value,
-    size: u32,
+    access_size: u32,
     bound: i64,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
 ) {
-    let size = i64::from(size);
+    let access_size = i64::from(access_size);
     let offset_ty = func.dfg.value_type(offset);
     let addr_ty = func.dfg.value_type(func.dfg.first_result(inst));
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
-    // Start with the bounds check. Trap if `offset + size > bound`.
-    if size > bound {
+    // Start with the bounds check. Trap if `offset + access_size > bound`.
+    if access_size > bound {
         // This will simply always trap since `offset >= 0`.
         pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
         pos.func.dfg.replace(inst).iconst(addr_ty, 0);
@@ -114,7 +114,7 @@ fn static_addr(
     }
 
     // Check `offset > limit` which is now known non-negative.
-    let limit = bound - size;
+    let limit = bound - access_size;
 
     // We may be able to omit the check entirely for 32-bit offsets if the heap bound is 4 GB or
     // more.
