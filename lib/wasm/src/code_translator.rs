@@ -631,17 +631,21 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = state.pop1();
             state.push1(builder.ins().fcvt_to_uint(I32, val));
         }
-        Operator::I64TruncSSatF64
-        | Operator::I64TruncSSatF32
-        | Operator::I32TruncSSatF64
-        | Operator::I32TruncSSatF32
-        | Operator::I64TruncUSatF64
-        | Operator::I64TruncUSatF32
-        | Operator::I32TruncUSatF64
-        | Operator::I32TruncUSatF32 => {
-            return Err(WasmError::Unsupported(
-                "proposed saturating conversion operators",
-            ));
+        Operator::I64TruncSSatF64 | Operator::I64TruncSSatF32 => {
+            let val = state.pop1();
+            state.push1(builder.ins().fcvt_to_sint_sat(I64, val));
+        }
+        Operator::I32TruncSSatF64 | Operator::I32TruncSSatF32 => {
+            let val = state.pop1();
+            state.push1(builder.ins().fcvt_to_sint_sat(I32, val));
+        }
+        Operator::I64TruncUSatF64 | Operator::I64TruncUSatF32 => {
+            let val = state.pop1();
+            state.push1(builder.ins().fcvt_to_uint_sat(I64, val));
+        }
+        Operator::I32TruncUSatF64 | Operator::I32TruncUSatF32 => {
+            let val = state.pop1();
+            state.push1(builder.ins().fcvt_to_uint_sat(I32, val));
         }
         Operator::F32ReinterpretI32 => {
             let val = state.pop1();

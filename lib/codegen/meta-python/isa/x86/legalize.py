@@ -94,9 +94,11 @@ x86_expand.custom_legalize(insts.fmax, 'expand_minmax')
 
 # Conversions from unsigned need special handling.
 x86_expand.custom_legalize(insts.fcvt_from_uint, 'expand_fcvt_from_uint')
-# Conversions from float to int can trap.
+# Conversions from float to int can trap and modify the control flow graph.
 x86_expand.custom_legalize(insts.fcvt_to_sint, 'expand_fcvt_to_sint')
 x86_expand.custom_legalize(insts.fcvt_to_uint, 'expand_fcvt_to_uint')
+x86_expand.custom_legalize(insts.fcvt_to_sint_sat, 'expand_fcvt_to_sint_sat')
+x86_expand.custom_legalize(insts.fcvt_to_uint_sat, 'expand_fcvt_to_uint_sat')
 
 # Count leading and trailing zeroes, for baseline x86_64
 c_minus_one = Var('c_minus_one')

@@ -69,6 +69,54 @@ ebb0(v0: f64):
     return v1
 }
 
+function %i32_trunc_s_sat_f32(f32) -> i32 {
+ebb0(v0: f32):
+    v1 = fcvt_to_sint_sat.i32 v0
+    return v1
+}
+
+function %i32_trunc_u_sat_f32(f32) -> i32 {
+ebb0(v0: f32):
+    v1 = fcvt_to_uint_sat.i32 v0
+    return v1
+}
+
+function %i32_trunc_s_sat_f64(f64) -> i32 {
+ebb0(v0: f64):
+    v1 = fcvt_to_sint_sat.i32 v0
+    return v1
+}
+
+function %i32_trunc_u_sat_f64(f64) -> i32 {
+ebb0(v0: f64):
+    v1 = fcvt_to_uint_sat.i32 v0
+    return v1
+}
+
+function %i64_trunc_s_sat_f32(f32) -> i64 {
+ebb0(v0: f32):
+    v1 = fcvt_to_sint_sat.i64 v0
+    return v1
+}
+
+function %i64_trunc_u_sat_f32(f32) -> i64 {
+ebb0(v0: f32):
+    v1 = fcvt_to_uint_sat.i64 v0
+    return v1
+}
+
+function %i64_trunc_s_sat_f64(f64) -> i64 {
+ebb0(v0: f64):
+    v1 = fcvt_to_sint_sat.i64 v0
+    return v1
+}
+
+function %i64_trunc_u_sat_f64(f64) -> i64 {
+ebb0(v0: f64):
+    v1 = fcvt_to_uint_sat.i64 v0
+    return v1
+}
+
 function %f32_trunc_f64(f64) -> f32 {
 ebb0(v0: f64):
     v1 = fdemote.f32 v0

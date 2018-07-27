@@ -322,14 +322,13 @@ fn expand_fcvt_to_sint(
     use ir::condcodes::{FloatCC, IntCC};
     use ir::immediates::{Ieee32, Ieee64};
 
-    let x;
-    match func.dfg[inst] {
+    let x = match func.dfg[inst] {
         ir::InstructionData::Unary {
             opcode: ir::Opcode::FcvtToSint,
             arg,
-        } => x = arg,
+        } => arg,
         _ => panic!("Need fcvt_to_sint: {}", func.dfg.display_inst(inst, None)),
-    }
+    };
     let old_ebb = func.layout.pp_ebb(inst);
     let xty = func.dfg.value_type(x);
     let result = func.dfg.first_result(inst);
@@ -367,15 +366,16 @@ fn expand_fcvt_to_sint(
     let mut overflow_cc = FloatCC::LessThan;
     let output_bits = ty.lane_bits();
     let flimit = match xty {
-        // An f32 can represent `i16::min_value() - 1` exactly with precision to spare, so
-        // there are values less than -2^(N-1) that convert correctly to INT_MIN.
-        ir::types::F32 => pos.ins().f32const(if output_bits < 32 {
-            overflow_cc = FloatCC::LessThanOrEqual;
-            Ieee32::fcvt_to_sint_negative_overflow(output_bits)
-        } else {
-            Ieee32::pow2(output_bits - 1).neg()
-        }),
-        ir::types::F64 => {
+        ir::types::F32 =>
+            // An f32 can represent `i16::min_value() - 1` exactly with precision to spare, so
+            // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+            pos.ins().f32const(if output_bits < 32 {
+                overflow_cc = FloatCC::LessThanOrEqual;
+                Ieee32::fcvt_to_sint_negative_overflow(output_bits)
+            } else {
+                Ieee32::pow2(output_bits - 1).neg()
+            }),
+        ir::types::F64 =>
             // An f64 can represent `i32::min_value() - 1` exactly with precision to spare, so
             // there are values less than -2^(N-1) that convert correctly to INT_MIN.
             pos.ins().f64const(if output_bits < 64 {
@@ -383,8 +383,7 @@ fn expand_fcvt_to_sint(
                 Ieee64::fcvt_to_sint_negative_overflow(output_bits)
             } else {
                 Ieee64::pow2(output_bits - 1).neg()
-            })
-        }
+            }),
         _ => panic!("Can't convert {}", xty),
     };
     let overflow = pos.ins().fcmp(overflow_cc, x, flimit);
@@ -406,6 +405,122 @@ fn expand_fcvt_to_sint(
     cfg.recompute_ebb(pos.func, done);
 }
 
+fn expand_fcvt_to_sint_sat(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    _isa: &isa::TargetIsa,
+) {
+    use ir::condcodes::{FloatCC, IntCC};
+    use ir::immediates::{Ieee32, Ieee64};
+
+    let x = match func.dfg[inst] {
+        ir::InstructionData::Unary {
+            opcode: ir::Opcode::FcvtToSintSat,
+            arg,
+        } => arg,
+        _ => panic!(
+            "Need fcvt_to_sint_sat: {}",
+            func.dfg.display_inst(inst, None)
+        ),
+    };
+
+    let old_ebb = func.layout.pp_ebb(inst);
+    let xty = func.dfg.value_type(x);
+    let result = func.dfg.first_result(inst);
+    let ty = func.dfg.value_type(result);
+
+    // Final EBB after the bad value checks.
+    let done_ebb = func.dfg.make_ebb();
+    func.dfg.clear_results(inst);
+    func.dfg.attach_ebb_param(done_ebb, result);
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    // The `x86_cvtt2si` performs the desired conversion, but it doesn't trap on NaN or
+    // overflow. It produces an INT_MIN result instead.
+    let cvtt2si = pos.ins().x86_cvtt2si(ty, x);
+
+    let is_done = pos
+        .ins()
+        .icmp_imm(IntCC::NotEqual, cvtt2si, 1 << (ty.lane_bits() - 1));
+    pos.ins().brnz(is_done, done_ebb, &[cvtt2si]);
+
+    // We now have the following possibilities:
+    //
+    // 1. INT_MIN was actually the correct conversion result.
+    // 2. The input was NaN -> replace the result value with 0.
+    // 3. The input was out of range -> saturate the result to the min/max value.
+
+    // Check for NaN, which is truncated to 0.
+    let zero = pos.ins().iconst(ty, 0);
+    let is_nan = pos.ins().fcmp(FloatCC::Unordered, x, x);
+    pos.ins().brnz(is_nan, done_ebb, &[zero]);
+
+    // Check for case 1: INT_MIN is the correct result.
+    // Determine the smallest floating point number that would convert to INT_MIN.
+    let mut overflow_cc = FloatCC::LessThan;
+    let output_bits = ty.lane_bits();
+    let flimit = match xty {
+        ir::types::F32 =>
+            // An f32 can represent `i16::min_value() - 1` exactly with precision to spare, so
+            // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+            pos.ins().f32const(if output_bits < 32 {
+                overflow_cc = FloatCC::LessThanOrEqual;
+                Ieee32::fcvt_to_sint_negative_overflow(output_bits)
+            } else {
+                Ieee32::pow2(output_bits - 1).neg()
+            }),
+        ir::types::F64 =>
+            // An f64 can represent `i32::min_value() - 1` exactly with precision to spare, so
+            // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+            pos.ins().f64const(if output_bits < 64 {
+                overflow_cc = FloatCC::LessThanOrEqual;
+                Ieee64::fcvt_to_sint_negative_overflow(output_bits)
+            } else {
+                Ieee64::pow2(output_bits - 1).neg()
+            }),
+        _ => panic!("Can't convert {}", xty),
+    };
+
+    let overflow = pos.ins().fcmp(overflow_cc, x, flimit);
+    let min_imm = match ty {
+        ir::types::I32 => i32::min_value() as i64,
+        ir::types::I64 => i64::min_value(),
+        _ => panic!("Don't know the min value for {}", ty),
+    };
+    let min_value = pos.ins().iconst(ty, min_imm);
+    pos.ins().brnz(overflow, done_ebb, &[min_value]);
+
+    // Finally, we could have a positive value that is too large.
+    let fzero = match xty {
+        ir::types::F32 => pos.ins().f32const(Ieee32::with_bits(0)),
+        ir::types::F64 => pos.ins().f64const(Ieee64::with_bits(0)),
+        _ => panic!("Can't convert {}", xty),
+    };
+
+    let max_imm = match ty {
+        ir::types::I32 => i32::max_value() as i64,
+        ir::types::I64 => i64::max_value(),
+        _ => panic!("Don't know the max value for {}", ty),
+    };
+    let max_value = pos.ins().iconst(ty, max_imm);
+
+    let overflow = pos.ins().fcmp(FloatCC::GreaterThanOrEqual, x, fzero);
+    pos.ins().brnz(overflow, done_ebb, &[max_value]);
+
+    // Recycle the original instruction.
+    pos.func.dfg.replace(inst).jump(done_ebb, &[cvtt2si]);
+
+    // Finally insert a label for the completion.
+    pos.next_inst();
+    pos.insert_ebb(done_ebb);
+
+    cfg.recompute_ebb(pos.func, old_ebb);
+    cfg.recompute_ebb(pos.func, done_ebb);
+}
+
 fn expand_fcvt_to_uint(
     inst: ir::Inst,
     func: &mut ir::Function,
@@ -415,14 +530,14 @@ fn expand_fcvt_to_uint(
     use ir::condcodes::{FloatCC, IntCC};
     use ir::immediates::{Ieee32, Ieee64};
 
-    let x;
-    match func.dfg[inst] {
+    let x = match func.dfg[inst] {
         ir::InstructionData::Unary {
             opcode: ir::Opcode::FcvtToUint,
             arg,
-        } => x = arg,
+        } => arg,
         _ => panic!("Need fcvt_to_uint: {}", func.dfg.display_inst(inst, None)),
-    }
+    };
+
     let old_ebb = func.layout.pp_ebb(inst);
     let xty = func.dfg.value_type(x);
     let result = func.dfg.first_result(inst);
@@ -474,6 +589,96 @@ fn expand_fcvt_to_uint(
     let is_neg = pos.ins().ifcmp_imm(lres, 0);
     pos.ins()
         .trapif(IntCC::SignedLessThan, is_neg, ir::TrapCode::IntegerOverflow);
+    let lfinal = pos.ins().iadd_imm(lres, 1 << (ty.lane_bits() - 1));
+
+    // Recycle the original instruction as a jump.
+    pos.func.dfg.replace(inst).jump(done, &[lfinal]);
+
+    // Finally insert a label for the completion.
+    pos.next_inst();
+    pos.insert_ebb(done);
+
+    cfg.recompute_ebb(pos.func, old_ebb);
+    cfg.recompute_ebb(pos.func, large);
+    cfg.recompute_ebb(pos.func, done);
+}
+
+fn expand_fcvt_to_uint_sat(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    _isa: &isa::TargetIsa,
+) {
+    use ir::condcodes::{FloatCC, IntCC};
+    use ir::immediates::{Ieee32, Ieee64};
+
+    let x = match func.dfg[inst] {
+        ir::InstructionData::Unary {
+            opcode: ir::Opcode::FcvtToUintSat,
+            arg,
+        } => arg,
+        _ => panic!(
+            "Need fcvt_to_uint_sat: {}",
+            func.dfg.display_inst(inst, None)
+        ),
+    };
+
+    let old_ebb = func.layout.pp_ebb(inst);
+    let xty = func.dfg.value_type(x);
+    let result = func.dfg.first_result(inst);
+    let ty = func.dfg.value_type(result);
+
+    // EBB handling numbers >= 2^(N-1).
+    let large = func.dfg.make_ebb();
+
+    // Final EBB after the bad value checks.
+    let done = func.dfg.make_ebb();
+
+    // Move the `inst` result value onto the `done` EBB.
+    func.dfg.clear_results(inst);
+    func.dfg.attach_ebb_param(done, result);
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    // Start by materializing the floating point constant 2^(N-1) where N is the number of bits in
+    // the destination integer type.
+    let pow2nm1 = match xty {
+        ir::types::F32 => pos.ins().f32const(Ieee32::pow2(ty.lane_bits() - 1)),
+        ir::types::F64 => pos.ins().f64const(Ieee64::pow2(ty.lane_bits() - 1)),
+        _ => panic!("Can't convert {}", xty),
+    };
+    let zero = pos.ins().iconst(ty, 0);
+    let is_large = pos.ins().ffcmp(x, pow2nm1);
+    pos.ins()
+        .brff(FloatCC::GreaterThanOrEqual, is_large, large, &[]);
+
+    // We need to generate zero when `x` is NaN, so reuse the flags from the previous comparison.
+    pos.ins().brff(FloatCC::Unordered, is_large, done, &[zero]);
+
+    // Now we know that x < 2^(N-1) and not NaN. If the result of the cvtt2si is positive, we're
+    // done; otherwise saturate to the minimum unsigned value, that is 0.
+    let sres = pos.ins().x86_cvtt2si(ty, x);
+    let is_neg = pos.ins().ifcmp_imm(sres, 0);
+    pos.ins()
+        .brif(IntCC::SignedGreaterThanOrEqual, is_neg, done, &[sres]);
+    pos.ins().jump(done, &[zero]);
+
+    // Handle the case where x >= 2^(N-1) and not NaN.
+    pos.insert_ebb(large);
+    let adjx = pos.ins().fsub(x, pow2nm1);
+    let lres = pos.ins().x86_cvtt2si(ty, adjx);
+    let max_value = pos.ins().iconst(
+        ty,
+        match ty {
+            ir::types::I32 => u32::max_value() as i64,
+            ir::types::I64 => u64::max_value() as i64,
+            _ => panic!("Can't convert {}", ty),
+        },
+    );
+    let is_neg = pos.ins().ifcmp_imm(lres, 0);
+    pos.ins()
+        .brif(IntCC::SignedLessThan, is_neg, done, &[max_value]);
     let lfinal = pos.ins().iadd_imm(lres, 1 << (ty.lane_bits() - 1));
 
     // Recycle the original instruction as a jump.
