@@ -1879,6 +1879,14 @@ fcvt_to_uint = Instruction(
         """,
         ins=x, outs=a, can_trap=True)
 
+fcvt_to_uint_sat = Instruction(
+        'fcvt_to_uint_sat', r"""
+        Convert floating point to unsigned integer as fcvt_to_uint does, but
+        saturates the input instead of trapping. NaN and negative values are
+        converted to 0.
+        """,
+        ins=x, outs=a)
+
 fcvt_to_sint = Instruction(
         'fcvt_to_sint', r"""
         Convert floating point to signed integer.
@@ -1890,6 +1898,13 @@ fcvt_to_sint = Instruction(
         The result type must have the same number of vector lanes as the input.
         """,
         ins=x, outs=a, can_trap=True)
+
+fcvt_to_sint_sat = Instruction(
+        'fcvt_to_sint_sat', r"""
+        Convert floating point to signed integer as fcvt_to_sint does, but
+        saturates the input instead of trapping. NaN values are converted to 0.
+        """,
+        ins=x, outs=a)
 
 x = Operand('x', Int)
 a = Operand('a', FloatTo)
