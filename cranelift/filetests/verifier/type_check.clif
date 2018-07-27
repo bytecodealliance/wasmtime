@@ -44,7 +44,7 @@ function %type_mismatch_controlling_variable() {
 function %fn_call_too_few_args() {
     fn2 = %great_fn(i32, f32)
     ebb0:
-        call fn2() ; error: mismatched argument count, got 0, expected 2
+        call fn2() ; error: mismatched argument count for `call fn2()`: got 0, expected 2
         return
 }
 
@@ -53,7 +53,7 @@ function %fn_call_too_many_args() {
     ebb0:
         v0 = iconst.i64 56
         v1 = f32const 0.0
-        call fn5(v0, v1) ; error: mismatched argument count, got 2, expected 0
+        call fn5(v0, v1) ; error: mismatched argument count for `call fn5(v0, v1)`: got 2, expected 0
         return
 }
 

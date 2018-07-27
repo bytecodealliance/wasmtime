@@ -135,5 +135,5 @@ fn run_one_test<'a>(
     }
 
     test.run(func, context)
-        .map_err(|e| format!("{}: {}", name, e))
+        .map_err(|e| format!("{}:\n{}", name, e))
 }

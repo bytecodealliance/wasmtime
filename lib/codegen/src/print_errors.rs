@@ -18,6 +18,16 @@ pub fn pretty_verifier_error(
     err: &VerifierError,
 ) -> String {
     let mut w = String::new();
+
+    match err.location {
+        ir::entities::AnyEntity::Inst(_) => {}
+        _ => {
+            // Print the error, because the pretty_function_error below won't do it since it isn't
+            // tied to an instruction.
+            writeln!(w, "verifier error summary: {}\n", err.to_string()).unwrap();
+        }
+    }
+
     decorate_function(
         &mut |w, func, isa, inst, indent| pretty_function_error(w, func, isa, inst, indent, err),
         &mut w,
@@ -37,31 +47,27 @@ fn pretty_function_error(
     err: &VerifierError,
 ) -> fmt::Result {
     match err.location {
-        ir::entities::AnyEntity::Inst(inst) => {
-            if inst == cur_inst {
-                writeln!(
-                    w,
-                    "{1:0$}{2}",
-                    indent,
-                    "",
-                    func.dfg.display_inst(cur_inst, isa)
-                )?;
-                write!(w, "{1:0$}^", indent, "")?;
-                for _c in cur_inst.to_string().chars() {
-                    write!(w, "~")?;
-                }
-                writeln!(w, "\n\nverifier {}\n", err.to_string())
-            } else {
-                write!(
-                    w,
-                    "{1:0$}{2}",
-                    indent,
-                    "",
-                    func.dfg.display_inst(cur_inst, isa)
-                )
+        ir::entities::AnyEntity::Inst(inst) if inst == cur_inst => {
+            writeln!(
+                w,
+                "{1:0$}{2}",
+                indent,
+                "",
+                func.dfg.display_inst(cur_inst, isa)
+            )?;
+            write!(w, "{1:0$}^", indent, "")?;
+            for _c in cur_inst.to_string().chars() {
+                write!(w, "~")?;
             }
+            writeln!(w, " verifier {}\n", err.to_string())
         }
-        _ => writeln!(w),
+        _ => writeln!(
+            w,
+            "{1:0$}{2}",
+            indent,
+            "",
+            func.dfg.display_inst(cur_inst, isa)
+        ),
     }
 }
 
