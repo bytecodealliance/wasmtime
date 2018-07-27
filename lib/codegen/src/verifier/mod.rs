@@ -820,7 +820,8 @@ impl<'a> Verifier<'a> {
         if i != variable_args.len() {
             return err!(
                 inst,
-                "mismatched argument count, got {}, expected {}",
+                "mismatched argument count for `{}`: got {}, expected {}",
+                self.func.dfg.display_inst(inst, None),
                 variable_args.len(),
                 i
             );
