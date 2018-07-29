@@ -159,8 +159,12 @@ impl<B> ModuleFunction<B>
 where
     B: Backend,
 {
-    fn merge(&mut self, linkage: Linkage) {
+    fn merge(&mut self, linkage: Linkage, sig: &ir::Signature) -> Result<(), ModuleError> {
         self.decl.linkage = Linkage::merge(self.decl.linkage, linkage);
+        if &self.decl.signature != sig {
+            return Err(ModuleError::IncompatibleDeclaration(self.decl.name.clone()));
+        }
+        Ok(())
     }
 }
 
@@ -357,7 +361,7 @@ where
             Occupied(entry) => match *entry.get() {
                 FuncOrDataId::Func(id) => {
                     let existing = &mut self.contents.functions[id];
-                    existing.merge(linkage);
+                    existing.merge(linkage, signature)?;
                     self.backend.declare_function(name, existing.decl.linkage);
                     Ok(id)
                 }
