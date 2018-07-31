@@ -18,8 +18,7 @@
 // The build script expects to be run from the directory where this build.rs file lives. The
 // current directory is used to find the sources.
 
-// Temporarily disable this while we work out how to publish this crate.
-//extern crate cranelift_codegen_meta as meta;
+extern crate cranelift_meta as meta;
 
 use std::env;
 use std::process;
@@ -57,8 +56,8 @@ fn main() {
         crate_dir.join("build.rs").to_str().unwrap()
     );
 
-    // Scripts are in `$crate_dir/meta`.
-    let meta_dir = crate_dir.join("meta");
+    // Scripts are in `$crate_dir/meta-python`.
+    let meta_dir = crate_dir.join("meta-python");
     let build_script = meta_dir.join("build.py");
 
     // Launch build script with Python. We'll just find python in the path.
@@ -79,7 +78,7 @@ fn main() {
     // DEVELOPMENT:
     // ------------------------------------------------------------------------
     // Now that the Python build process is complete, generate files that are
-    // emitted by the `cretonne_codegen_meta` crate.
+    // emitted by the `meta` crate.
     // ------------------------------------------------------------------------
     // Temporarily disable this while we work out how to publish this crate.
     //if let Err(err) = meta::gen_types::generate("new_types.rs", &out_dir) {
