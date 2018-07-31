@@ -689,15 +689,12 @@ trap when accessed.
 
     Declare a static heap in the preamble.
 
-    :arg Base: Global value holding the heap's base address or
-            ``reserved_reg``.
+    :arg Base: Global value holding the heap's base address.
     :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
             size will never trap.
     :arg BoundBytes: Fixed heap bound in bytes. This defines the amount of
             address space reserved for the heap, not including the guard pages.
     :arg GuardBytes: Size of the guard pages in bytes.
-
-The ``reserved_reg`` option is not yet implemented.
 
 Dynamic heaps
 ~~~~~~~~~~~~~
@@ -710,14 +707,11 @@ is resized. The bound of a dynamic heap is stored in a global value.
 
     Declare a dynamic heap in the preamble.
 
-    :arg Base: Global value holding the heap's base address or
-            ``reserved_reg``.
+    :arg Base: Global value holding the heap's base address.
     :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
             size will never trap.
     :arg BoundGV: Global value containing the current heap bound in bytes.
     :arg GuardBytes: Size of the guard pages in bytes.
-
-The ``reserved_reg`` option is not yet implemented.
 
 Heap examples
 ~~~~~~~~~~~~~

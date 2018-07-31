@@ -154,11 +154,7 @@ fn offset_addr(
     }
 
     // Add the heap base address base
-    match pos.func.heaps[heap].base {
-        ir::HeapBase::ReservedReg => unimplemented!(),
-        ir::HeapBase::GlobalValue(base_gv) => {
-            let base = pos.ins().global_value(addr_ty, base_gv);
-            pos.func.dfg.replace(inst).iadd(base, offset);
-        }
-    }
+    let base_gv = pos.func.heaps[heap].base;
+    let base = pos.ins().global_value(addr_ty, base_gv);
+    pos.func.dfg.replace(inst).iadd(base, offset);
 }

@@ -7,8 +7,8 @@ use std::fmt;
 /// Information about a heap declaration.
 #[derive(Clone)]
 pub struct HeapData {
-    /// Method for determining the heap base address.
-    pub base: HeapBase,
+    /// The address of the start of the heap's storage.
+    pub base: GlobalValue,
 
     /// Guaranteed minimum heap size in bytes. Heap accesses before `min_size` don't need bounds
     /// checking.
@@ -19,18 +19,6 @@ pub struct HeapData {
 
     /// Heap style, with additional style-specific info.
     pub style: HeapStyle,
-}
-
-/// Method for determining the base address of a heap.
-#[derive(Clone)]
-pub enum HeapBase {
-    /// The heap base lives in a reserved register.
-    ///
-    /// This feature is not yet implemented.
-    ReservedReg,
-
-    /// The heap base is a global value.
-    GlobalValue(GlobalValue),
 }
 
 /// Style of heap including style-specific information.
@@ -57,12 +45,7 @@ impl fmt::Display for HeapData {
             HeapStyle::Static { .. } => "static",
         })?;
 
-        match self.base {
-            HeapBase::ReservedReg => write!(f, " reserved_reg")?,
-            HeapBase::GlobalValue(gv) => write!(f, " {}", gv)?,
-        }
-
-        write!(f, ", min {}", self.min_size)?;
+        write!(f, " {}, min {}", self.base, self.min_size)?;
         match self.style {
             HeapStyle::Dynamic { bound_gv } => write!(f, ", bound {}", bound_gv)?,
             HeapStyle::Static { bound } => write!(f, ", bound {}", bound)?,
