@@ -8,9 +8,8 @@ use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, Va
 use cranelift_codegen::ir::types::VOID;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentLoc, Ebb, ExtFuncData, ExternalName, FuncRef, Function,
-    GlobalValue, GlobalValueData, Heap, HeapBase, HeapData, HeapStyle, JumpTable, JumpTableData,
-    MemFlags, Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Type, Value,
-    ValueLoc,
+    GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
+    Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Type, Value, ValueLoc,
 };
 use cranelift_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -168,7 +167,7 @@ impl<'a> Context<'a> {
         self.map.def_heap(heap, loc)?;
         while self.function.heaps.next_key().index() <= heap.index() {
             self.function.create_heap(HeapData {
-                base: HeapBase::ReservedReg,
+                base: GlobalValue::reserved_value(),
                 min_size: Imm64::new(0),
                 guard_size: Imm64::new(0),
                 style: HeapStyle::Static {
@@ -1123,8 +1122,7 @@ impl<'a> Parser<'a> {
     // heap-decl ::= * Heap(heap) "=" heap-desc
     // heap-desc ::= heap-style heap-base { "," heap-attr }
     // heap-style ::= "static" | "dynamic"
-    // heap-base ::= "reserved_reg"
-    //             | GlobalValue(base)
+    // heap-base ::= GlobalValue(base)
     // heap-attr ::= "min" Imm64(bytes)
     //             | "max" Imm64(bytes)
     //             | "guard" Imm64(bytes)
@@ -1136,17 +1134,12 @@ impl<'a> Parser<'a> {
         let style_name = self.match_any_identifier("expected 'static' or 'dynamic'")?;
 
         // heap-desc ::= heap-style * heap-base { "," heap-attr }
-        // heap-base ::= * "reserved_reg"
-        //             | * GlobalValue(base)
+        // heap-base ::= * GlobalValue(base)
         let base = match self.token() {
-            Some(Token::Identifier("reserved_reg")) => HeapBase::ReservedReg,
-            Some(Token::GlobalValue(base_num)) => {
-                let base_gv = match GlobalValue::with_number(base_num) {
-                    Some(gv) => gv,
-                    None => return err!(self.loc, "invalid global value number for heap base"),
-                };
-                HeapBase::GlobalValue(base_gv)
-            }
+            Some(Token::GlobalValue(base_num)) => match GlobalValue::with_number(base_num) {
+                Some(gv) => gv,
+                None => return err!(self.loc, "invalid global value number for heap base"),
+            },
             _ => return err!(self.loc, "expected heap base"),
         };
         self.consume();

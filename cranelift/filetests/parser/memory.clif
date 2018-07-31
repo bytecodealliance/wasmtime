@@ -52,11 +52,11 @@ ebb0:
 
 ; Declare static heaps.
 function %sheap(i32, i64 vmctx) -> i64 {
-    heap1 = static reserved_reg, min 0x1_0000, bound 0x1_0000_0000, guard 0x8000_0000
+    heap1 = static gv5, min 0x1_0000, bound 0x1_0000_0000, guard 0x8000_0000
     heap2 = static gv5, guard 0x1000, bound 0x1_0000
     gv5 = vmctx+64
 
-    ; check: heap1 = static reserved_reg, min 0x0001_0000, bound 0x0001_0000_0000, guard 0x8000_0000
+    ; check: heap1 = static gv5, min 0x0001_0000, bound 0x0001_0000_0000, guard 0x8000_0000
     ; check: heap2 = static gv5, min 0, bound 0x0001_0000, guard 4096
 ebb0(v1: i32, v2: i64):
     v3 = heap_addr.i64 heap1, v1, 0
@@ -66,12 +66,12 @@ ebb0(v1: i32, v2: i64):
 
 ; Declare dynamic heaps.
 function %dheap(i32, i64 vmctx) -> i64 {
-    heap1 = dynamic reserved_reg, min 0x1_0000, bound gv6, guard 0x8000_0000
+    heap1 = dynamic gv5, min 0x1_0000, bound gv6, guard 0x8000_0000
     heap2 = dynamic gv5, bound gv6, guard 0x1000
     gv5 = vmctx+64
     gv6 = vmctx+72
 
-    ; check: heap1 = dynamic reserved_reg, min 0x0001_0000, bound gv6, guard 0x8000_0000
+    ; check: heap1 = dynamic gv5, min 0x0001_0000, bound gv6, guard 0x8000_0000
     ; check: heap2 = dynamic gv5, min 0, bound gv6, guard 4096
 ebb0(v1: i32, v2: i64):
     v3 = heap_addr.i64 heap2, v1, 0

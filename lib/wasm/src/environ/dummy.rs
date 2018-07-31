@@ -172,7 +172,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         let gv = func.create_global_value(ir::GlobalValueData::VMContext { offset: 0.into() });
 
         func.create_heap(ir::HeapData {
-            base: ir::HeapBase::GlobalValue(gv),
+            base: gv,
             min_size: 0.into(),
             guard_size: 0x8000_0000.into(),
             style: ir::HeapStyle::Static {

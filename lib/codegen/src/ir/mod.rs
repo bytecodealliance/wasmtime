@@ -31,7 +31,7 @@ pub use ir::extfunc::{AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData,
 pub use ir::extname::ExternalName;
 pub use ir::function::Function;
 pub use ir::globalvalue::GlobalValueData;
-pub use ir::heap::{HeapBase, HeapData, HeapStyle};
+pub use ir::heap::{HeapData, HeapStyle};
 pub use ir::instructions::{InstructionData, Opcode, ValueList, ValueListPool, VariableArgs};
 pub use ir::jumptable::JumpTableData;
 pub use ir::layout::Layout;
