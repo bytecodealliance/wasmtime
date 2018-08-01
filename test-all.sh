@@ -27,8 +27,7 @@ function banner {
 # Run rustfmt if we have it.
 banner "Rust formatting"
 if type rustfmt > /dev/null; then
-    # In newer versions of rustfmt, replace --write-mode=diff with --check.
-    if ! "$topdir/format-all.sh" --write-mode=diff ; then
+    if ! "$topdir/format-all.sh" --write-mode=check ; then
         echo "Formatting diffs detected! Run \"cargo fmt --all\" to correct."
         exit 1
     fi
