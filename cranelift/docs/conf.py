@@ -21,9 +21,9 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('.'))
 
-# Also add the meta directory to sys.path so autodoc can find the Cranelift meta
+# Also add the meta-python directory to sys.path so autodoc can find the Cranelift meta
 # language definitions.
-sys.path.insert(0, os.path.abspath('../lib/codegen/meta'))
+sys.path.insert(0, os.path.abspath('../lib/codegen/meta-python'))
 
 # -- General configuration ------------------------------------------------
 

@@ -1,6 +1,6 @@
-****************
+*****************
 Testing Cranelift
-****************
+*****************
 
 Cranelift is tested at multiple levels of abstraction and integration. When
 possible, Rust unit tests are used to verify single functions and types. When
@@ -109,7 +109,7 @@ header:
     isa_spec      : "isa" isa_name { `option` } "\n"
 
 The options given on the ``isa`` line modify the ISA-specific settings defined in
-:file:`lib/codegen/meta/isa/*/settings.py`.
+:file:`lib/codegen/meta-python/isa/*/settings.py`.
 
 All types of tests allow shared Cranelift settings to be modified:
 
@@ -119,7 +119,7 @@ All types of tests allow shared Cranelift settings to be modified:
     option        : flag | setting "=" value
 
 The shared settings available for all target ISAs are defined in
-:file:`lib/codegen/meta/base/settings.py`.
+:file:`lib/codegen/meta-python/base/settings.py`.
 
 The ``set`` lines apply settings cumulatively::
 
