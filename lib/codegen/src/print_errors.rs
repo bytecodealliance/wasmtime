@@ -5,6 +5,7 @@ use ir::entities::Inst;
 use ir::function::Function;
 use isa::{RegInfo, TargetIsa};
 use result::CodegenError;
+use std::boxed::Box;
 use std::fmt;
 use std::fmt::Write;
 use std::string::{String, ToString};
