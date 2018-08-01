@@ -74,6 +74,7 @@ pub mod print_errors;
 pub mod settings;
 pub mod timing;
 pub mod verifier;
+pub mod write;
 
 pub use entity::packed_option;
 
@@ -100,7 +101,6 @@ mod simple_gvn;
 mod stack_layout;
 mod topo_order;
 mod unreachable_code;
-mod write;
 
 pub use result::{CodegenError, CodegenResult};
 
