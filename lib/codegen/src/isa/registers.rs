@@ -17,19 +17,19 @@ pub type RegUnit = u16;
 /// The size of this type is determined by the target ISA that has the most register units defined.
 /// Currently that is arm32 which has 64+16 units.
 ///
-/// This type should be coordinated with meta/cdsl/registers.py.
+/// This type should be coordinated with meta-python/cdsl/registers.py.
 pub type RegUnitMask = [u32; 3];
 
 /// A bit mask indexed by register classes.
 ///
 /// The size of this type is determined by the ISA with the most register classes.
 ///
-/// This type should be coordinated with meta/cdsl/isa.py.
+/// This type should be coordinated with meta-python/cdsl/isa.py.
 pub type RegClassMask = u32;
 
 /// Guaranteed maximum number of top-level register classes with pressure tracking in any ISA.
 ///
-/// This can be increased, but should be coordinated with meta/cdsl/isa.py.
+/// This can be increased, but should be coordinated with meta-python/cdsl/isa.py.
 pub const MAX_TRACKED_TOPRCS: usize = 4;
 
 /// The register units in a target ISA are divided into disjoint register banks. Each bank covers a
