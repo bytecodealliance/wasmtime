@@ -149,7 +149,7 @@ fn handle_module(
         if flag_check_translation {
             context
                 .verify(fisa)
-                .map_err(|err| pretty_verifier_error(&context.func, fisa.isa, &err))?;
+                .map_err(|err| pretty_verifier_error(&context.func, fisa.isa, None, &err))?;
         } else {
             let compiled_size = context
                 .compile(isa)

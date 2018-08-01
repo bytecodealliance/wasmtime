@@ -9,35 +9,63 @@ use packed_option::ReservedValue;
 use std::fmt::{self, Write};
 use std::string::String;
 
-fn write_function_plain(
-    w: &mut Write,
-    func: &Function,
-    isa: Option<&TargetIsa>,
-    inst: Inst,
-    indent: usize,
-) -> fmt::Result {
-    write_instruction(w, func, isa, inst, indent)?;
-    Ok(())
+/// A `FuncWriter` is used to decorate functions during printing
+pub trait FuncWriter {
+    /// Write the given inst to w
+    fn write_instruction(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        isa: Option<&TargetIsa>,
+        inst: Inst,
+        ident: usize,
+    ) -> fmt::Result;
+
+    /// Write the preamble to w
+    fn write_preamble(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        regs: Option<&RegInfo>,
+    ) -> Result<bool, fmt::Error>;
+}
+
+/// A `PlainWriter` doesn't decorate the function
+pub struct PlainWriter;
+
+impl FuncWriter for PlainWriter {
+    fn write_instruction(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        isa: Option<&TargetIsa>,
+        inst: Inst,
+        indent: usize,
+    ) -> fmt::Result {
+        write_instruction(w, func, isa, inst, indent)
+    }
+
+    fn write_preamble(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        regs: Option<&RegInfo>,
+    ) -> Result<bool, fmt::Error> {
+        write_preamble(w, func, regs)
+    }
 }
 
 /// Write `func` to `w` as equivalent text.
 /// Use `isa` to emit ISA-dependent annotations.
 pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -> fmt::Result {
-    decorate_function(
-        &mut |w, func, isa, inst, indent| write_function_plain(w, func, isa, inst, indent),
-        w,
-        func,
-        isa,
-    )
+    decorate_function(&mut PlainWriter, w, func, isa)
 }
 
 /// Writes 'func' to 'w' as text.
 /// write_function_plain is passed as 'closure' to print instructions as text.
 /// pretty_function_error is passed as 'closure' to add error decoration.
-pub fn decorate_function<
-    WL: FnMut(&mut Write, &Function, Option<&TargetIsa>, Inst, usize) -> fmt::Result,
->(
-    closure: &mut WL,
+pub fn decorate_function<FW: FuncWriter>(
+    func_w: &mut FW,
     w: &mut Write,
     func: &Function,
     isa: Option<&TargetIsa>,
@@ -48,12 +76,12 @@ pub fn decorate_function<
     write!(w, "function ")?;
     write_spec(w, func, regs)?;
     writeln!(w, " {{")?;
-    let mut any = write_preamble(w, func, regs)?;
+    let mut any = func_w.write_preamble(w, func, regs)?;
     for ebb in &func.layout {
         if any {
             writeln!(w)?;
         }
-        decorate_ebb(closure, w, func, isa, ebb)?;
+        decorate_ebb(func_w, w, func, isa, ebb)?;
         any = true;
     }
     writeln!(w, "}}")
@@ -120,7 +148,7 @@ fn write_preamble(
 //
 // Basic blocks
 
-pub fn write_arg(
+fn write_arg(
     w: &mut Write,
     func: &Function,
     regs: Option<&RegInfo>,
@@ -135,6 +163,12 @@ pub fn write_arg(
     Ok(())
 }
 
+/// Write out the basic block header, outdented:
+///
+///    ebb1:
+///    ebb1(v1: i32):
+///    ebb10(v4: f64, v5: b1):
+///
 pub fn write_ebb_header(
     w: &mut Write,
     func: &Function,
@@ -142,13 +176,6 @@ pub fn write_ebb_header(
     ebb: Ebb,
     indent: usize,
 ) -> fmt::Result {
-    // Write out the basic block header, outdented:
-    //
-    //    ebb1:
-    //    ebb1(v1: i32):
-    //    ebb10(v4: f64, v5: b1):
-    //
-
     // The `indent` is the instruction indentation. EBB headers are 4 spaces out from that.
     write!(w, "{1:0$}{2}", indent - 4, "", ebb)?;
 
@@ -171,10 +198,8 @@ pub fn write_ebb_header(
     writeln!(w, "):")
 }
 
-pub fn decorate_ebb<
-    WL: FnMut(&mut Write, &Function, Option<&TargetIsa>, Inst, usize) -> fmt::Result,
->(
-    closure: &mut WL,
+fn decorate_ebb<FW: FuncWriter>(
+    func_w: &mut FW,
     w: &mut Write,
     func: &Function,
     isa: Option<&TargetIsa>,
@@ -189,7 +214,7 @@ pub fn decorate_ebb<
 
     write_ebb_header(w, func, isa, ebb, indent)?;
     for inst in func.layout.ebb_insts(ebb) {
-        closure(w, func, isa, inst, indent)?;
+        func_w.write_instruction(w, func, isa, inst, indent)?;
     }
 
     Ok(())
@@ -556,8 +581,9 @@ impl<'a> fmt::Display for DisplayValuesWithDelimiter<'a> {
 
 #[cfg(test)]
 mod tests {
+    use cursor::{Cursor, CursorPosition, FuncCursor};
     use ir::types;
-    use ir::{ExternalName, Function, StackSlotData, StackSlotKind};
+    use ir::{ExternalName, Function, InstBuilder, StackSlotData, StackSlotKind};
     use std::string::ToString;
 
     #[test]
@@ -591,6 +617,16 @@ mod tests {
         assert_eq!(
             f.to_string(),
             "function %foo() fast {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n}\n"
+        );
+
+        {
+            let mut cursor = FuncCursor::new(&mut f);
+            cursor.set_position(CursorPosition::After(ebb));
+            cursor.ins().return_(&[])
+        };
+        assert_eq!(
+            f.to_string(),
+            "function %foo() fast {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n    return\n}\n"
         );
     }
 }
