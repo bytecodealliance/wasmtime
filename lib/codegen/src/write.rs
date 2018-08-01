@@ -148,12 +148,7 @@ fn write_preamble(
 //
 // Basic blocks
 
-fn write_arg(
-    w: &mut Write,
-    func: &Function,
-    regs: Option<&RegInfo>,
-    arg: Value,
-) -> fmt::Result {
+fn write_arg(w: &mut Write, func: &Function, regs: Option<&RegInfo>, arg: Value) -> fmt::Result {
     write!(w, "{}: {}", arg, func.dfg.value_type(arg))?;
     let loc = func.locations[arg];
     if loc.is_assigned() {
