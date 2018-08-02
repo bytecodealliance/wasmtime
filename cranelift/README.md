@@ -132,6 +132,3 @@ generator](https://www.sphinx-doc.org/):
     $ cd cranelift/docs
     $ make html
     $ open _build/html/index.html
-
-We don't support Sphinx versions before 1.4 since the format of index
-tuples has changed.
