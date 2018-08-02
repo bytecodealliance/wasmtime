@@ -5,6 +5,7 @@
 //! flexibility. However, once register allocation is done, this is no longer important, and we
 //! can switch to smaller encodings when possible.
 
+use ir::instructions::InstructionData;
 use ir::Function;
 use isa::TargetIsa;
 use regalloc::RegDiversions;
@@ -22,6 +23,25 @@ pub fn shrink_instructions(func: &mut Function, isa: &TargetIsa) {
         for inst in func.layout.ebb_insts(ebb) {
             let enc = func.encodings[inst];
             if enc.is_legal() {
+                // regmove/regfill/regspill are special instructions with register immediates
+                // that represented as normal operands, so the normal predicates below don't
+                // handle them correctly.
+                //
+                // Also, they need to be presented to the `RegDiversions` to update the
+                // location tracking.
+                //
+                // TODO: Eventually, we want the register allocator to avoid leaving these special
+                // instructions behind, but for now, just temporarily avoid trying to shrink them.
+                match func.dfg[inst] {
+                    InstructionData::RegMove { .. }
+                    | InstructionData::RegFill { .. }
+                    | InstructionData::RegSpill { .. } => {
+                        divert.apply(&func.dfg[inst]);
+                        continue;
+                   }
+                   _ => ()
+                }
+
                 let ctrl_type = func.dfg.ctrl_typevar(inst);
 
                 // Pick the last encoding with constraints that are satisfied.
@@ -43,7 +63,6 @@ pub fn shrink_instructions(func: &mut Function, isa: &TargetIsa) {
                     );
                 }
             }
-            divert.apply(&func.dfg[inst]);
         }
     }
 }
