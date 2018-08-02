@@ -7,7 +7,8 @@
 use cranelift_codegen::Context;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
-use cranelift_wasm::{translate_module, DummyEnvironment, ModuleEnvironment};
+use cranelift_entity::EntityRef;
+use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ModuleEnvironment};
 use std::error::Error;
 use std::path::Path;
 use std::path::PathBuf;
@@ -107,17 +108,17 @@ fn handle_module(
         }
 
         let num_func_imports = dummy_environ.get_num_func_imports();
-        for (def_index, func) in dummy_environ.info.function_bodies.iter().enumerate() {
-            let func_index = num_func_imports + def_index;
+        for (def_index, func) in dummy_environ.info.function_bodies.iter() {
+            let func_index = num_func_imports + def_index.index();
             let mut context = Context::new();
             context.func = func.clone();
             if let Some(start_func) = dummy_environ.info.start_func {
-                if func_index == start_func {
+                if func_index == start_func.index() {
                     println!("; Selected as wasm start function");
                 }
             }
             vprintln!(flag_verbose, "");
-            for export_name in &dummy_environ.info.functions[func_index].export_names {
+            for export_name in &dummy_environ.info.functions[FuncIndex::new(func_index)].export_names {
                 println!("; Exported as \"{}\"", export_name);
             }
             println!("{}", context.func.display(None));
@@ -142,10 +143,10 @@ fn handle_module(
     let num_func_imports = dummy_environ.get_num_func_imports();
     let mut total_module_code_size = 0;
     let mut context = Context::new();
-    for (def_index, func) in dummy_environ.info.function_bodies.iter().enumerate() {
+    for (def_index, func) in dummy_environ.info.function_bodies.iter() {
         context.func = func.clone();
 
-        let func_index = num_func_imports + def_index;
+        let func_index = num_func_imports + def_index.index();
         if flag_check_translation {
             context
                 .verify(fisa)
@@ -162,7 +163,7 @@ fn handle_module(
                 total_module_code_size += compiled_size;
                 println!(
                     "Function #{} bytecode size: {} bytes",
-                    func_index, dummy_environ.func_bytecode_sizes[def_index]
+                    func_index, dummy_environ.func_bytecode_sizes[def_index.index()]
                 );
             }
         }
@@ -170,11 +171,11 @@ fn handle_module(
         if flag_print {
             vprintln!(flag_verbose, "");
             if let Some(start_func) = dummy_environ.info.start_func {
-                if func_index == start_func {
+                if func_index == start_func.index() {
                     println!("; Selected as wasm start function");
                 }
             }
-            for export_name in &dummy_environ.info.functions[func_index].export_names {
+            for export_name in &dummy_environ.info.functions[FuncIndex::new(func_index)].export_names {
                 println!("; Exported as \"{}\"", export_name);
             }
             println!("{}", context.func.display(fisa.isa));

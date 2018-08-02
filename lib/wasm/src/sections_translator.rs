@@ -8,11 +8,12 @@
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
 use cranelift_codegen::ir::{self, AbiParam, Signature};
+use cranelift_entity::EntityRef;
 use environ::{ModuleEnvironment, WasmError, WasmResult};
 use std::str::from_utf8;
 use std::vec::Vec;
 use translation_utils::{
-    type_to_type, FunctionIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
+    type_to_type, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
     SignatureIndex, Table, TableElementType, TableIndex,
 };
 use wasmparser;
@@ -150,12 +151,12 @@ pub fn parse_export_section<'data>(
                 // assume valid UTF-8 and use `from_utf8_unchecked` if performance
                 // becomes a concern here.
                 let name = from_utf8(field).unwrap();
-                let func_index = index as FunctionIndex;
+                let func_index = FuncIndex::new(index as usize);
                 match *kind {
                     ExternalKind::Function => environ.declare_func_export(func_index, name),
-                    ExternalKind::Table => environ.declare_table_export(func_index, name),
-                    ExternalKind::Memory => environ.declare_memory_export(func_index, name),
-                    ExternalKind::Global => environ.declare_global_export(func_index, name),
+                    ExternalKind::Table => environ.declare_table_export(func_index.index(), name),
+                    ExternalKind::Memory => environ.declare_memory_export(func_index.index(), name),
+                    ExternalKind::Global => environ.declare_global_export(func_index.index(), name),
                 }
             }
             ParserState::EndSection => break,
@@ -171,7 +172,7 @@ pub fn parse_start_section(parser: &mut Parser, environ: &mut ModuleEnvironment)
     loop {
         match *parser.read() {
             ParserState::StartSectionEntry(index) => {
-                environ.declare_start_func(index as FunctionIndex);
+                environ.declare_start_func(DefinedFuncIndex::new(index as usize));
             }
             ParserState::EndSection => break,
             ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
@@ -382,8 +383,8 @@ pub fn parse_elements_section(
         };
         match *parser.read() {
             ParserState::ElementSectionEntryBody(ref elements) => {
-                let elems: Vec<FunctionIndex> =
-                    elements.iter().map(|&x| x as FunctionIndex).collect();
+                let elems: Vec<FuncIndex> =
+                    elements.iter().map(|&x| FuncIndex::new(x as usize)).collect();
                 environ.declare_table_elements(table_index, base, offset, elems)
             }
             ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),

@@ -11,6 +11,7 @@ keywords = ["webassembly", "wasm"]
 [dependencies]
 wasmparser = { version = "0.17.2", default-features = false }
 cranelift-codegen = { path = "../codegen", version = "0.18.1", default-features = false }
+cranelift-entity = { path = "../entity", version = "0.18.1", default-features = false }
 cranelift-frontend = { path = "../frontend", version = "0.18.1", default-features = false }
 hashmap_core = { version = "0.1.9", optional = true }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }

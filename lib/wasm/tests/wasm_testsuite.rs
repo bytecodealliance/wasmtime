@@ -75,7 +75,7 @@ fn handle_module(path: &Path, flags: &Flags) {
     };
     let mut dummy_environ = DummyEnvironment::with_triple_flags(triple!("riscv64"), flags.clone());
     translate_module(&data, &mut dummy_environ).unwrap();
-    for func in &dummy_environ.info.function_bodies {
+    for func in dummy_environ.info.function_bodies.values() {
         verifier::verify_function(func, flags)
             .map_err(|err| panic!(pretty_verifier_error(func, None, None, &err)))
             .unwrap();

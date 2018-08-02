@@ -6,7 +6,7 @@ use cranelift_codegen::settings::Flags;
 use std::vec::Vec;
 use target_lexicon::Triple;
 use translation_utils::{
-    FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+    DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
 use wasmparser::BinaryReaderError;
 
@@ -137,7 +137,7 @@ pub trait FuncEnvironment {
     ///
     /// The function's signature will only be used for direct calls, even if the module has
     /// indirect calls with the same WebAssembly type.
-    fn make_direct_func(&mut self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef;
+    fn make_direct_func(&mut self, func: &mut ir::Function, index: FuncIndex) -> ir::FuncRef;
 
     /// Translate a `call_indirect` WebAssembly instruction at `pos`.
     ///
@@ -169,7 +169,7 @@ pub trait FuncEnvironment {
     fn translate_call(
         &mut self,
         mut pos: FuncCursor,
-        _callee_index: FunctionIndex,
+        _callee_index: FuncIndex,
         callee: ir::FuncRef,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
@@ -222,7 +222,7 @@ pub trait ModuleEnvironment<'data> {
     fn flags(&self) -> &Flags;
 
     /// Return the name for the given function index.
-    fn get_func_name(&self, func_index: FunctionIndex) -> ir::ExternalName;
+    fn get_func_name(&self, func_index: FuncIndex) -> ir::ExternalName;
 
     /// Declares a function signature to the environment.
     fn declare_signature(&mut self, sig: &ir::Signature);
@@ -245,7 +245,7 @@ pub trait ModuleEnvironment<'data> {
     fn declare_func_type(&mut self, sig_index: SignatureIndex);
 
     /// Return the signature index for the given function index.
-    fn get_func_type(&self, func_index: FunctionIndex) -> SignatureIndex;
+    fn get_func_type(&self, func_index: FuncIndex) -> SignatureIndex;
 
     /// Declares a global to the environment.
     fn declare_global(&mut self, global: Global);
@@ -261,7 +261,7 @@ pub trait ModuleEnvironment<'data> {
         table_index: TableIndex,
         base: Option<GlobalIndex>,
         offset: usize,
-        elements: Vec<FunctionIndex>,
+        elements: Vec<FuncIndex>,
     );
     /// Declares a memory to the environment
     fn declare_memory(&mut self, memory: Memory);
@@ -275,7 +275,7 @@ pub trait ModuleEnvironment<'data> {
     );
 
     /// Declares a function export to the environment.
-    fn declare_func_export(&mut self, func_index: FunctionIndex, name: &'data str);
+    fn declare_func_export(&mut self, func_index: FuncIndex, name: &'data str);
     /// Declares a table export to the environment.
     fn declare_table_export(&mut self, table_index: TableIndex, name: &'data str);
     /// Declares a memory export to the environment.
@@ -284,7 +284,7 @@ pub trait ModuleEnvironment<'data> {
     fn declare_global_export(&mut self, global_index: GlobalIndex, name: &'data str);
 
     /// Declares a start function.
-    fn declare_start_func(&mut self, index: FunctionIndex);
+    fn declare_start_func(&mut self, index: DefinedFuncIndex);
 
     /// Provides the contents of a function body.
     fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()>;

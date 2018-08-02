@@ -26,6 +26,7 @@ use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
 use cranelift_codegen::packed_option::ReservedValue;
+use cranelift_entity::EntityRef;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use environ::{FuncEnvironment, GlobalVariable, WasmError, WasmResult};
 use state::{ControlStackFrame, TranslationState};
@@ -33,7 +34,7 @@ use std::collections::{hash_map, HashMap};
 use std::vec::Vec;
 use std::{i32, u32};
 use translation_utils::{f32_translation, f64_translation, num_return_values, type_to_type};
-use translation_utils::{FunctionIndex, MemoryIndex, SignatureIndex, TableIndex};
+use translation_utils::{FuncIndex, MemoryIndex, SignatureIndex, TableIndex};
 use wasmparser::{MemoryImmediate, Operator};
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored
@@ -358,7 +359,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (fref, num_args) = state.get_direct_func(builder.func, function_index, environ);
             let call = environ.translate_call(
                 builder.cursor(),
-                function_index as FunctionIndex,
+                FuncIndex::new(function_index as usize),
                 fref,
                 state.peekn(num_args),
             )?;

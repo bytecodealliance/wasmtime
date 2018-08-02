@@ -23,6 +23,7 @@ extern crate term;
 
 cfg_if! {
     if #[cfg(feature = "wasm")] {
+        extern crate cranelift_entity;
         extern crate cranelift_wasm;
         extern crate wabt;
         mod wasm;

@@ -26,6 +26,8 @@
 
 #[macro_use(dbg)]
 extern crate cranelift_codegen;
+#[macro_use]
+extern crate cranelift_entity;
 extern crate cranelift_frontend;
 extern crate target_lexicon;
 extern crate wasmparser;
@@ -48,7 +50,7 @@ pub use environ::{
 pub use func_translator::FuncTranslator;
 pub use module_translator::translate_module;
 pub use translation_utils::{
-    FunctionIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex, SignatureIndex, Table,
+    DefinedFuncIndex, FuncIndex, Global, GlobalIndex, GlobalInit,  Memory, MemoryIndex, SignatureIndex, Table,
     TableIndex,
 };
 

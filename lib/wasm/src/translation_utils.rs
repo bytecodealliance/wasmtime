@@ -3,8 +3,16 @@ use cranelift_codegen::ir;
 use std::u32;
 use wasmparser;
 
-/// Index of a function (imported or defined) inside the WebAssembly module.
-pub type FunctionIndex = usize;
+/// Index type of a function (imported or defined) inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct FuncIndex(u32);
+entity_impl!(FuncIndex);
+
+/// Index type of a defined function inside the WebAssembly module. 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct DefinedFuncIndex(u32);
+entity_impl!(DefinedFuncIndex);
+
 /// Index of a table (imported or defined) inside the WebAssembly module.
 pub type TableIndex = usize;
 /// Index of a global variable (imported or defined) inside the WebAssembly module.
