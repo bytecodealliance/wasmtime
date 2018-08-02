@@ -80,7 +80,7 @@ open :class:`InstructionGroup`.
 .. autoclass:: InstructionGroup
     :members:
 
-The basic Cranelift instruction set described in :doc:`langref` is defined by the
+The basic Cranelift instruction set described in :doc:`ir` is defined by the
 Python module :mod:`base.instructions`. This module has a global value
 :data:`base.instructions.GROUP` which is an :class:`InstructionGroup` instance
 containing all the base instructions.

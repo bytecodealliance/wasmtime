@@ -6,8 +6,8 @@ Contents:
 .. toctree::
    :maxdepth: 1
 
-   langref
-   metaref
+   ir
+   meta
    testing
    regalloc
    compare-llvm

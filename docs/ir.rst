@@ -1,6 +1,6 @@
-****************************
-Cranelift Language Reference
-****************************
+**********************
+Cranelift IR Reference
+**********************
 
 .. default-domain:: clif
 .. highlight:: clif
