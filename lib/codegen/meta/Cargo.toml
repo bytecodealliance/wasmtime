@@ -1,5 +1,5 @@
 [package]
-name = "cranelift-meta"
+name = "meta"
 authors = ["The Cranelift Project Developers"]
 version = "0.0.0"
 description = "Metaprogram for cranelift-codegen code generator library"
