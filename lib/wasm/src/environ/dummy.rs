@@ -5,19 +5,20 @@ use cranelift_codegen::ir::immediates::Imm64;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::settings;
+use cranelift_entity::{EntityRef, PrimaryMap};
 use environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, WasmResult};
 use func_translator::FuncTranslator;
 use std::string::String;
 use std::vec::Vec;
 use target_lexicon::Triple;
 use translation_utils::{
-    FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+    DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
 use wasmparser;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
-fn get_func_name(func_index: FunctionIndex) -> ir::ExternalName {
-    ir::ExternalName::user(0, func_index as u32)
+fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
+    ir::ExternalName::user(0, func_index.index() as u32)
 }
 
 /// A collection of names under which a given entity is exported.
@@ -55,10 +56,10 @@ pub struct DummyModuleInfo {
     pub imported_funcs: Vec<(String, String)>,
 
     /// Functions, imported and local.
-    pub functions: Vec<Exportable<SignatureIndex>>,
+    pub functions: PrimaryMap<FuncIndex, Exportable<SignatureIndex>>,
 
     /// Function bodies.
-    pub function_bodies: Vec<ir::Function>,
+    pub function_bodies: PrimaryMap<DefinedFuncIndex, ir::Function>,
 
     /// Tables as provided by `declare_table`.
     pub tables: Vec<Exportable<Table>>,
@@ -70,7 +71,7 @@ pub struct DummyModuleInfo {
     pub globals: Vec<Exportable<Global>>,
 
     /// The start function.
-    pub start_func: Option<FunctionIndex>,
+    pub start_func: Option<DefinedFuncIndex>,
 }
 
 impl DummyModuleInfo {
@@ -81,8 +82,8 @@ impl DummyModuleInfo {
             flags,
             signatures: Vec::new(),
             imported_funcs: Vec::new(),
-            functions: Vec::new(),
-            function_bodies: Vec::new(),
+            functions: PrimaryMap::new(),
+            function_bodies: PrimaryMap::new(),
             tables: Vec::new(),
             memories: Vec::new(),
             globals: Vec::new(),
@@ -215,7 +216,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         func.import_signature(self.vmctx_sig(index))
     }
 
-    fn make_direct_func(&mut self, func: &mut ir::Function, index: FunctionIndex) -> ir::FuncRef {
+    fn make_direct_func(&mut self, func: &mut ir::Function, index: FuncIndex) -> ir::FuncRef {
         let sigidx = self.mod_info.functions[index].entity;
         // A real implementation would probably add a `vmctx` argument.
         // And maybe attempt some signature de-duplication.
@@ -275,7 +276,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     fn translate_call(
         &mut self,
         mut pos: FuncCursor,
-        _callee_index: FunctionIndex,
+        _callee_index: FuncIndex,
         callee: ir::FuncRef,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
@@ -319,7 +320,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         &self.info.flags
     }
 
-    fn get_func_name(&self, func_index: FunctionIndex) -> ir::ExternalName {
+    fn get_func_name(&self, func_index: FuncIndex) -> ir::ExternalName {
         get_func_name(func_index)
     }
 
@@ -356,7 +357,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info.functions.push(Exportable::new(sig_index));
     }
 
-    fn get_func_type(&self, func_index: FunctionIndex) -> SignatureIndex {
+    fn get_func_type(&self, func_index: FuncIndex) -> SignatureIndex {
         self.info.functions[func_index].entity
     }
 
@@ -376,7 +377,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         _table_index: TableIndex,
         _base: Option<GlobalIndex>,
         _offset: usize,
-        _elements: Vec<FunctionIndex>,
+        _elements: Vec<FuncIndex>,
     ) {
         // We do nothing
     }
@@ -393,7 +394,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         // We do nothing
     }
 
-    fn declare_func_export(&mut self, func_index: FunctionIndex, name: &'data str) {
+    fn declare_func_export(&mut self, func_index: FuncIndex, name: &'data str) {
         self.info.functions[func_index]
             .export_names
             .push(String::from(name));
@@ -417,7 +418,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             .push(String::from(name));
     }
 
-    fn declare_start_func(&mut self, func_index: FunctionIndex) {
+    fn declare_start_func(&mut self, func_index: DefinedFuncIndex) {
         debug_assert!(self.info.start_func.is_none());
         self.info.start_func = Some(func_index);
     }
@@ -425,9 +426,9 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     fn define_function_body(&mut self, body_bytes: &'data [u8]) -> WasmResult<()> {
         let func = {
             let mut func_environ = DummyFuncEnvironment::new(&self.info);
-            let function_index = self.get_num_func_imports() + self.info.function_bodies.len();
-            let name = get_func_name(function_index);
-            let sig = func_environ.vmctx_sig(self.get_func_type(function_index));
+            let func_index = FuncIndex::new(self.get_num_func_imports() + self.info.function_bodies.len());
+            let name = get_func_name(func_index);
+            let sig = func_environ.vmctx_sig(self.get_func_type(func_index));
             let mut func = ir::Function::with_name_signature(name, sig);
             let reader = wasmparser::BinaryReader::new(body_bytes);
             self.trans

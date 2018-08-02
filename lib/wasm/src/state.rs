@@ -4,10 +4,11 @@
 //! value and control stacks during the translation of a single function.
 
 use cranelift_codegen::ir::{self, Ebb, Inst, Value};
+use cranelift_entity::EntityRef;
 use environ::{FuncEnvironment, GlobalVariable};
 use std::collections::HashMap;
 use std::vec::Vec;
-use translation_utils::{FunctionIndex, GlobalIndex, MemoryIndex, SignatureIndex, TableIndex};
+use translation_utils::{FuncIndex, GlobalIndex, MemoryIndex, SignatureIndex, TableIndex};
 
 /// A control stack frame can be an `if`, a `block` or a `loop`, each one having the following
 /// fields:
@@ -151,7 +152,7 @@ pub struct TranslationState {
     // Imported and local functions that have been created by
     // `FuncEnvironment::make_direct_func()`.
     // Stores both the function reference and the number of WebAssembly arguments
-    functions: HashMap<FunctionIndex, (ir::FuncRef, usize)>,
+    functions: HashMap<FuncIndex, (ir::FuncRef, usize)>,
 }
 
 impl TranslationState {
@@ -349,7 +350,7 @@ impl TranslationState {
         index: u32,
         environ: &mut FE,
     ) -> (ir::FuncRef, usize) {
-        let index = index as FunctionIndex;
+        let index = FuncIndex::new(index as usize);
         *self.functions.entry(index).or_insert_with(|| {
             let fref = environ.make_direct_func(func, index);
             let sig = func.dfg.ext_funcs[fref].signature;
