@@ -103,7 +103,8 @@ impl<Variable> BlockData<Variable> {
             BlockData::EbbHeader(ref mut data) => {
                 // This a linear complexity operation but the number of predecessors is low
                 // in all non-pathological cases
-                let pred: usize = data.predecessors
+                let pred: usize = data
+                    .predecessors
                     .iter()
                     .position(|&PredBlock { branch, .. }| branch == inst)
                     .expect("the predecessor you are trying to remove is not declared");
@@ -597,7 +598,8 @@ where
                 } in &mut preds
                 {
                     // We already did a full `use_var` above, so we can do just the fast path.
-                    let pred_val = self.variables
+                    let pred_val = self
+                        .variables
                         .get(temp_arg_var)
                         .unwrap()
                         .get(*pred_block)

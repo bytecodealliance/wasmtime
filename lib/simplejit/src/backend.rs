@@ -122,7 +122,8 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         code_size: u32,
     ) -> ModuleResult<Self::CompiledFunction> {
         let size = code_size as usize;
-        let ptr = self.code_memory
+        let ptr = self
+            .code_memory
             .allocate(size)
             .expect("TODO: handle OOM etc.");
         let mut reloc_sink = SimpleJITRelocSink::new();
@@ -155,10 +156,12 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
         let size = init.size();
         let storage = match writable {
-            Writability::Readonly => self.writable_memory
+            Writability::Readonly => self
+                .writable_memory
                 .allocate(size)
                 .expect("TODO: handle OOM etc."),
-            Writability::Writable => self.writable_memory
+            Writability::Writable => self
+                .writable_memory
                 .allocate(size)
                 .expect("TODO: handle OOM etc."),
         };

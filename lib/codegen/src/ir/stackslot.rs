@@ -309,7 +309,8 @@ impl StackSlots {
         let size = spill_size(ty);
 
         // Find the smallest existing slot that can fit the type.
-        if let Some(&ss) = self.emergency
+        if let Some(&ss) = self
+            .emergency
             .iter()
             .filter(|&&ss| self[ss].size >= size && !in_use.contains(&ss.into()))
             .min_by_key(|&&ss| self[ss].size)
@@ -318,7 +319,8 @@ impl StackSlots {
         }
 
         // Alternatively, use the largest available slot and make it larger.
-        if let Some(&ss) = self.emergency
+        if let Some(&ss) = self
+            .emergency
             .iter()
             .filter(|&&ss| !in_use.contains(&ss.into()))
             .max_by_key(|&&ss| self[ss].size)

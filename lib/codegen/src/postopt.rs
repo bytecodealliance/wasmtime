@@ -334,7 +334,8 @@ pub fn do_postopt(func: &mut Function, isa: &TargetIsa) {
                 optimize_cpu_flags(&mut pos, inst, last_flags_clobber, isa);
 
                 // Track the most recent seen instruction that clobbers the flags.
-                if let Some(constraints) = isa.encoding_info()
+                if let Some(constraints) = isa
+                    .encoding_info()
                     .operand_constraints(pos.func.encodings[inst])
                 {
                     if constraints.clobbers_flags {

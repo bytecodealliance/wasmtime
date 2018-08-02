@@ -93,7 +93,8 @@ impl SubTest for TestDomtree {
 
         // Now we know that everything in `expected` is consistent with `domtree`.
         // All other EBB's should be either unreachable or the entry block.
-        for ebb in func.layout
+        for ebb in func
+            .layout
             .ebbs()
             .skip(1)
             .filter(|ebb| !expected.contains_key(ebb))

@@ -49,7 +49,8 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResu
                 incoming_min = min(incoming_min, slot.offset.unwrap());
             }
             StackSlotKind::OutgoingArg => {
-                let offset = slot.offset
+                let offset = slot
+                    .offset
                     .unwrap()
                     .checked_add(slot.size as StackOffset)
                     .ok_or(CodegenError::ImplLimitExceeded)?;

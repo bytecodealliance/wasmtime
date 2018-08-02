@@ -152,7 +152,8 @@ impl VirtRegs {
         });
 
         // Determine the insertion position for `single`.
-        let index = match self.values(vreg)
+        let index = match self
+            .values(vreg)
             .binary_search_by(|&v| preorder.pre_cmp_def(v, single, func))
         {
             Ok(_) => panic!("{} already in {}", single, vreg),

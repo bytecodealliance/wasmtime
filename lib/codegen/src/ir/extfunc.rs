@@ -62,7 +62,8 @@ impl Signature {
     /// Even if there are no stack arguments, this will set `params` to `Some(0)` instead
     /// of `None`. This indicates that the signature has been legalized.
     pub fn compute_argument_bytes(&mut self) {
-        let bytes = self.params
+        let bytes = self
+            .params
             .iter()
             .filter_map(|arg| match arg.location {
                 ArgumentLoc::Stack(offset) if offset >= 0 => {

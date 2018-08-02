@@ -340,7 +340,8 @@ impl Liveness {
     where
         PP: Into<ProgramPoint>,
     {
-        let old = self.ranges
+        let old = self
+            .ranges
             .insert(LiveRange::new(value, def.into(), affinity));
         debug_assert!(old.is_none(), "{} already has a live range", value);
     }

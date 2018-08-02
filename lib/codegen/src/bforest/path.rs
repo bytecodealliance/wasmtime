@@ -621,7 +621,8 @@ impl<F: Forest> Path<F> {
 
     /// Update the critical key for the right sibling node at `level`.
     fn update_right_crit_key(&self, level: usize, crit_key: F::Key, pool: &mut NodePool<F>) {
-        let bl = self.right_sibling_branch_level(level, pool)
+        let bl = self
+            .right_sibling_branch_level(level, pool)
             .expect("No right sibling exists");
         match pool[self.node[bl]] {
             NodeData::Inner { ref mut keys, .. } => {

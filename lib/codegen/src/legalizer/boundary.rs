@@ -187,7 +187,8 @@ fn legalize_inst_results<ResType>(pos: &mut FuncCursor, mut get_abi_type: ResTyp
 where
     ResType: FnMut(&Function, usize) -> AbiParam,
 {
-    let call = pos.current_inst()
+    let call = pos
+        .current_inst()
         .expect("Cursor must point to a call instruction");
 
     // We theoretically allow for call instructions that return a number of fixed results before
@@ -419,7 +420,8 @@ fn legalize_inst_arguments<ArgType>(
 ) where
     ArgType: FnMut(&Function, usize) -> AbiParam,
 {
-    let inst = pos.current_inst()
+    let inst = pos
+        .current_inst()
         .expect("Cursor must point to a call instruction");
 
     // Lift the value list out of the call instruction so we modify it.
@@ -550,7 +552,8 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
 
     // Count the special-purpose return values (`link`, `sret`, and `vmctx`) that were appended to
     // the legalized signature.
-    let special_args = func.signature
+    let special_args = func
+        .signature
         .returns
         .iter()
         .rev()
@@ -591,7 +594,8 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
             // A `link`/`sret`/`vmctx` return value can only appear in a signature that has a
             // unique matching argument. They are appended at the end, so search the signature from
             // the end.
-            let idx = pos.func
+            let idx = pos
+                .func
                 .signature
                 .params
                 .iter()
@@ -599,7 +603,8 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
                 .expect("No matching special purpose argument.");
             // Get the corresponding entry block value and add it to the return instruction's
             // arguments.
-            let val = pos.func
+            let val = pos
+                .func
                 .dfg
                 .ebb_params(pos.func.layout.entry_block().unwrap())[idx];
             debug_assert_eq!(pos.func.dfg.value_type(val), arg.value_type);
@@ -641,9 +646,11 @@ fn spill_entry_params(func: &mut Function, entry: Ebb) {
 /// or calls between writing the stack slots and the call instruction. Writing the slots earlier
 /// could help reduce register pressure before the call.
 fn spill_call_arguments(pos: &mut FuncCursor) -> bool {
-    let inst = pos.current_inst()
+    let inst = pos
+        .current_inst()
         .expect("Cursor must point to a call instruction");
-    let sig_ref = pos.func
+    let sig_ref = pos
+        .func
         .dfg
         .call_signature(inst)
         .expect("Call instruction expected.");

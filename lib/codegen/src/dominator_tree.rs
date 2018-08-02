@@ -422,7 +422,8 @@ impl DominatorTree {
         // Get an iterator with just the reachable, already visited predecessors to `ebb`.
         // Note that during the first pass, `rpo_number` is 1 for reachable blocks that haven't
         // been visited yet, 0 for unreachable blocks.
-        let mut reachable_preds = cfg.pred_iter(ebb)
+        let mut reachable_preds = cfg
+            .pred_iter(ebb)
             .filter(|&BasicBlock { ebb: pred, .. }| self.nodes[pred].rpo_number > 1);
 
         // The RPO must visit at least one predecessor before this node.
@@ -453,7 +454,8 @@ impl DominatorTree {
         }
         // We use the RPO comparison on the postorder list so we invert the operands of the
         // comparison
-        let old_ebb_postorder_index = self.postorder
+        let old_ebb_postorder_index = self
+            .postorder
             .as_slice()
             .binary_search_by(|probe| self.rpo_cmp_ebb(old_ebb, *probe))
             .expect("the old ebb is not declared to the dominator tree");

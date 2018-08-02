@@ -191,7 +191,8 @@ impl<'a> Verifier<'a> {
             }
 
             if let ir::GlobalValueData::VMContext { .. } = self.func.global_values[cur] {
-                if self.func
+                if self
+                    .func
                     .special_param(ir::ArgumentPurpose::VMContext)
                     .is_none()
                 {
@@ -253,7 +254,8 @@ impl<'a> Verifier<'a> {
 
         let fixed_results = inst_data.opcode().constraints().fixed_results();
         // var_results is 0 if we aren't a call instruction
-        let var_results = dfg.call_signature(inst)
+        let var_results = dfg
+            .call_signature(inst)
             .map_or(0, |sig| dfg.signatures[sig].returns.len());
         let total_results = fixed_results + var_results;
 
@@ -498,7 +500,8 @@ impl<'a> Verifier<'a> {
                 }
                 // Defining instruction dominates the instruction that uses the value.
                 if is_reachable {
-                    if !self.expected_domtree
+                    if !self
+                        .expected_domtree
                         .dominates(def_inst, loc_inst, &self.func.layout)
                     {
                         return err!(loc_inst, "uses value from non-dominating {}", def_inst);
@@ -529,7 +532,8 @@ impl<'a> Verifier<'a> {
                 }
                 // The defining EBB dominates the instruction using this value.
                 if is_reachable
-                    && !self.expected_domtree
+                    && !self
+                        .expected_domtree
                         .dominates(ebb, loc_inst, &self.func.layout)
                 {
                     return err!(loc_inst, "uses value arg from non-dominating {}", ebb);
@@ -604,7 +608,8 @@ impl<'a> Verifier<'a> {
         }
         // We verify rpo_cmp on pairs of adjacent ebbs in the postorder
         for (&prev_ebb, &next_ebb) in domtree.cfg_postorder().iter().adjacent_pairs() {
-            if self.expected_domtree
+            if self
+                .expected_domtree
                 .rpo_cmp(prev_ebb, next_ebb, &self.func.layout) != Ordering::Greater
             {
                 return err!(
@@ -743,7 +748,8 @@ impl<'a> Verifier<'a> {
     fn typecheck_variable_args(&self, inst: Inst) -> VerifierResult<()> {
         match self.func.dfg.analyze_branch(inst) {
             BranchInfo::SingleDest(ebb, _) => {
-                let iter = self.func
+                let iter = self
+                    .func
                     .dfg
                     .ebb_params(ebb)
                     .iter()
@@ -1038,11 +1044,12 @@ impl<'a> Verifier<'a> {
 
         let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
-            let mut encodings = isa.legal_encodings(
-                &self.func,
-                &self.func.dfg[inst],
-                self.func.dfg.ctrl_typevar(inst),
-            ).peekable();
+            let mut encodings =
+                isa.legal_encodings(
+                    &self.func,
+                    &self.func.dfg[inst],
+                    self.func.dfg.ctrl_typevar(inst),
+                ).peekable();
 
             if encodings.peek().is_none() {
                 return err!(

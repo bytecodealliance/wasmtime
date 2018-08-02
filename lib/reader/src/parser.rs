@@ -644,10 +644,12 @@ impl<'a> Parser<'a> {
         if let Some(Token::Name(name)) = self.token() {
             self.consume();
             match isa {
-                Some(isa) => isa.register_info()
+                Some(isa) => isa
+                    .register_info()
                     .parse_regunit(name)
                     .ok_or_else(|| self.error("invalid register name")),
-                None => name.parse()
+                None => name
+                    .parse()
                     .map_err(|_| self.error("invalid register number")),
             }
         } else {
@@ -1032,7 +1034,8 @@ impl<'a> Parser<'a> {
                     self.parse_jump_table_decl()
                         .and_then(|(jt, dat)| ctx.add_jt(jt, dat, self.loc))
                 }
-                Some(Token::Identifier("stack_limit")) => self.parse_stack_limit_decl()
+                Some(Token::Identifier("stack_limit")) => self
+                    .parse_stack_limit_decl()
                     .and_then(|gv| ctx.set_stack_limit(gv, self.loc)),
                 // More to come..
                 _ => return Ok(()),
@@ -1053,7 +1056,8 @@ impl<'a> Parser<'a> {
         let kind = self.match_enum("expected stack slot kind")?;
 
         // stack-slot-decl ::= StackSlot(ss) "=" stack-slot-kind * Bytes {"," stack-slot-flag}
-        let bytes: i64 = self.match_imm64("expected byte-size in stack_slot decl")?
+        let bytes: i64 = self
+            .match_imm64("expected byte-size in stack_slot decl")?
             .into();
         if bytes < 0 {
             return err!(self.loc, "negative stack slot size");
@@ -1708,7 +1712,8 @@ impl<'a> Parser<'a> {
         }
 
         if let Some(result_locations) = result_locations {
-            for (&value, loc) in ctx.function
+            for (&value, loc) in ctx
+                .function
                 .dfg
                 .inst_results(inst)
                 .iter()
